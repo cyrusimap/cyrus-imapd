@@ -61,29 +61,6 @@
 #include "xstrlcat.h"
 #include "xmalloc.h"
 
-enum {
-    STMT_BEGIN,
-    STMT_COMMIT,
-    STMT_ROLLBACK,
-    STMT_INSERT_ALARM,
-    STMT_INSERT_RECIPIENT,
-    STMT_DELETE,
-    STMT_DELETEALL,
-    STMT_DELETEMAILBOX,
-    STMT_DELETEUSER,
-    STMT_SELECT_ALARM,
-    STMT_SELECT_RECIPIENT
-};
-
-#define NUM_STMT 11
-
-struct caldav_alarm_db {
-    sqlite3	    *db;
-    int		    refcount;
-    sqlite3_stmt    *stmt[NUM_STMT];
-    int		    in_transaction;
-};
-
 static struct namespace caldav_alarm_namespace;
 
 EXPORTED int caldav_alarm_init(void)
@@ -96,19 +73,15 @@ EXPORTED int caldav_alarm_init(void)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    /* XXX initializes sqlite, but we're not really supposed to know that */
-    return dav_init();
+    return sqldb_init();
 }
 
 
 EXPORTED int caldav_alarm_done(void)
 {
-    /* XXX shuts down sqlite, but we're not really supposed to know that */
-    return dav_done();
+    return sqldb_done();
 }
 
-
-#define CMD_DROP "DROP TABLE IF EXISTS alarms;"
 
 #define CMD_CREATE					\
     "CREATE TABLE IF NOT EXISTS alarms ("		\
@@ -129,114 +102,55 @@ EXPORTED int caldav_alarm_done(void)
     ");"						\
     "CREATE INDEX IF NOT EXISTS idx_alarm_id ON alarm_recipients ( alarmid );"
 
-static struct caldav_alarm_db *my_alarmdb;
+#define DBVERSION 1
+
+struct sqldb_upgrade upgrade[] = {
+    /* XXX - insert upgrade rows here, i.e.
+     * { 2, CMD_UPGRADEv2, &upgrade_v2_callback },
+     */
+    /* always finish with an empty row */
+    { 0, NULL, NULL }
+};
+
+static sqldb_t *my_alarmdb;
+int refcount;
 static struct mboxlock *my_alarmdb_lock;
 
 /* get a database handle to the alarm db */
-EXPORTED struct caldav_alarm_db *caldav_alarm_open()
+EXPORTED sqldb_t *caldav_alarm_open()
 {
-    if (my_alarmdb) {
-	my_alarmdb->refcount++;
+    /* already running?  Bonus */
+    if (refcount) {
+	refcount++;
 	return my_alarmdb;
     }
 
-    sqlite3 *db;
-    const char *cmds = CMD_CREATE;
-
-    char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
-
+    /* we need exclusivity! */
     int r = mboxname_lock("$CALDAVALARMDB", &my_alarmdb_lock, LOCK_EXCLUSIVE);
     if (r)
 	return NULL;
 
-    int rc = sqlite3_open(dbfilename, &db);
-    if (rc != SQLITE_OK) {
-	syslog(LOG_ERR, "IOERROR: caldav_alarm_open (open): %s", db ? sqlite3_errmsg(db) : "failed");
-	sqlite3_close(db);
-	free(dbfilename);
-	mboxname_release(&my_alarmdb_lock);
-	return NULL;
-    }
-
+    char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
+    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade);
     free(dbfilename);
 
-    rc = sqlite3_exec(db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
-    if (rc) goto fail;
+    if (!my_alarmdb) mboxname_release(&my_alarmdb_lock);
 
-    if (cmds) {
-	rc = sqlite3_exec(db, cmds, NULL, NULL, NULL);
-	if (rc) goto fail;
-    }
-
-    my_alarmdb = xzmalloc(sizeof(struct caldav_alarm_db));
-    my_alarmdb->db = db;
-    my_alarmdb->refcount = 1;
-    my_alarmdb->in_transaction = 0;
-
+    refcount = 1;
     return my_alarmdb;
 
-fail:
-    syslog(LOG_ERR, "IOERROR: caldav_alarm_open (exec): %s", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    mboxname_release(&my_alarmdb_lock);
-    return NULL;
 }
 
 /* close this handle */
-EXPORTED int caldav_alarm_close(struct caldav_alarm_db *alarmdb)
+EXPORTED int caldav_alarm_close(sqldb_t *alarmdb)
 {
     assert(my_alarmdb == alarmdb);
 
-    if (--(my_alarmdb->refcount)) return 0;
+    if (--refcount) return 0;
 
-    int i;
-    for (i = 0; i < NUM_STMT; i++) {
-	sqlite3_stmt *stmt = my_alarmdb->stmt[i];
-	if (stmt) sqlite3_finalize(stmt);
-    }
-
-    sqlite3_close(my_alarmdb->db);
-
+    sqldb_close(&my_alarmdb);
     mboxname_release(&my_alarmdb_lock);
 
-    free(my_alarmdb);
-    my_alarmdb = NULL;
-
-    return 0;
-}
-
-#define CMD_BEGIN "BEGIN TRANSACTION;"
-
-EXPORTED int caldav_alarm_begin(struct caldav_alarm_db *alarmdb)
-{
-    int rc = dav_exec(alarmdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		      &alarmdb->stmt[STMT_BEGIN]);
-    if (rc) return rc;
-    alarmdb->in_transaction = 1;
-    return 0;
-}
-
-
-#define CMD_COMMIT "COMMIT TRANSACTION;"
-
-EXPORTED int caldav_alarm_commit(struct caldav_alarm_db *alarmdb)
-{
-    int rc = dav_exec(alarmdb->db, CMD_COMMIT, NULL, NULL, NULL,
-		      &alarmdb->stmt[STMT_COMMIT]);
-    if (rc) return rc;
-    alarmdb->in_transaction = 0;
-    return 0;
-}
-
-
-#define CMD_ROLLBACK "ROLLBACK TRANSACTION;"
-
-EXPORTED int caldav_alarm_rollback(struct caldav_alarm_db *alarmdb)
-{
-    int rc = dav_exec(alarmdb->db, CMD_ROLLBACK, NULL, NULL, NULL,
-		      &alarmdb->stmt[STMT_ROLLBACK]);
-    if (rc) return rc;
-    alarmdb->in_transaction = 0;
     return 0;
 }
 
@@ -255,12 +169,12 @@ EXPORTED int caldav_alarm_rollback(struct caldav_alarm_db *alarmdb)
     ";"
 
 /* add a calendar alarm */
-EXPORTED int caldav_alarm_add(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata)
+EXPORTED int caldav_alarm_add(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata)
 {
     assert(alarmdb);
     assert(alarmdata);
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":mailbox",	SQLITE_TEXT,	{ .s = alarmdata->mailbox				} },
 	{ ":resource",	SQLITE_TEXT,	{ .s = alarmdata->resource				} },
 	{ ":action",	SQLITE_INTEGER,	{ .i = alarmdata->action				} },
@@ -271,48 +185,38 @@ EXPORTED int caldav_alarm_add(struct caldav_alarm_db *alarmdb, struct caldav_ala
 	{ NULL,		SQLITE_NULL,	{ .s = NULL						} }
     };
 
-    int in_transaction = 0;
     int rc = 0;
 
-    if (!alarmdb->in_transaction) {
-	rc = caldav_alarm_begin(alarmdb);
-	if (rc)
-	    return rc;
-	in_transaction = 1;
-    }
+    rc = sqldb_begin(alarmdb, "addalarm");
+    if (rc) return rc;
 
     /* XXX deal with SQLITE_FULL */
-    rc = dav_exec(alarmdb->db, CMD_INSERT_ALARM, bval, NULL, NULL, &alarmdb->stmt[STMT_INSERT_ALARM]);
+    rc = sqldb_exec(alarmdb, CMD_INSERT_ALARM, bval, NULL, NULL);
     if (rc) {
-	if (in_transaction)
-	    caldav_alarm_rollback(alarmdb);
+	sqldb_rollback(alarmdb, "addalarm");
 	return rc;
     }
 
-    alarmdata->rowid = sqlite3_last_insert_rowid(alarmdb->db);
+    alarmdata->rowid = sqldb_lastid(alarmdb);
 
     int i;
     for (i = 0; i < strarray_size(&alarmdata->recipients); i++) {
 	const char *email = strarray_nth(&alarmdata->recipients, i);
 
-	struct bind_val rbval[] = {
+	struct sqldb_bindval rbval[] = {
 	    { ":alarmid",   SQLITE_INTEGER, { .i = alarmdata->rowid	} },
 	    { ":email",	    SQLITE_TEXT,    { .s = email		} },
 	    { NULL,	    SQLITE_NULL,    { .s = NULL			} }
 	};
 
-	rc = dav_exec(alarmdb->db, CMD_INSERT_RECIPIENT, rbval, NULL, NULL, &alarmdb->stmt[STMT_INSERT_RECIPIENT]);
+	rc = sqldb_exec(alarmdb, CMD_INSERT_RECIPIENT, rbval, NULL, NULL);
 	if (rc) {
-	    if (in_transaction)
-		caldav_alarm_rollback(alarmdb);
+	    sqldb_rollback(alarmdb, "addalarm");
 	    return rc;
 	}
     }
 
-    if (in_transaction)
-	return caldav_alarm_commit(alarmdb);
-
-    return 0;
+    return sqldb_commit(alarmdb, "addalarm");
 }
 
 #define CMD_DELETE		\
@@ -321,17 +225,17 @@ EXPORTED int caldav_alarm_add(struct caldav_alarm_db *alarmdb, struct caldav_ala
     ";"
 
 /* delete a single alarm */
-static int caldav_alarm_delete_row(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata)
+static int caldav_alarm_delete_row(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata)
 {
     assert(alarmdb);
     assert(alarmdata);
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = alarmdata->rowid } },
 	{ NULL,	    SQLITE_NULL,    { .s = NULL		    } }
     };
 
-    return dav_exec(alarmdb->db, CMD_DELETE, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETE]);
+    return sqldb_exec(alarmdb, CMD_DELETE, bval, NULL, NULL);
 }
 
 #define CMD_DELETEALL		\
@@ -341,18 +245,18 @@ static int caldav_alarm_delete_row(struct caldav_alarm_db *alarmdb, struct calda
     ";"
 
 /* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delete_all(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata)
+EXPORTED int caldav_alarm_delete_all(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata)
 {
     assert(alarmdb);
     assert(alarmdata);
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":mailbox",	SQLITE_TEXT, { .s = alarmdata->mailbox  } },
 	{ ":resource",	SQLITE_TEXT, { .s = alarmdata->resource } },
 	{ NULL,		SQLITE_NULL, { .s = NULL		} }
     };
 
-    return dav_exec(alarmdb->db, CMD_DELETEALL, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETEALL]);
+    return sqldb_exec(alarmdb, CMD_DELETEALL, bval, NULL, NULL);
 }
 
 #define CMD_DELETEMAILBOX		\
@@ -361,16 +265,16 @@ EXPORTED int caldav_alarm_delete_all(struct caldav_alarm_db *alarmdb, struct cal
     ";"
 
 /* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delmbox(struct caldav_alarm_db *alarmdb, const char *mboxname)
+EXPORTED int caldav_alarm_delmbox(sqldb_t *alarmdb, const char *mboxname)
 {
     assert(alarmdb);
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":mailbox",	SQLITE_TEXT, { .s = mboxname  } },
 	{ NULL,		SQLITE_NULL, { .s = NULL	} }
     };
 
-    return dav_exec(alarmdb->db, CMD_DELETEMAILBOX, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETEMAILBOX]);
+    return sqldb_exec(alarmdb, CMD_DELETEMAILBOX, bval, NULL, NULL);
 }
 
 #define CMD_DELETEUSER		\
@@ -379,7 +283,7 @@ EXPORTED int caldav_alarm_delmbox(struct caldav_alarm_db *alarmdb, const char *m
     ";"
 
 /* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delete_user(struct caldav_alarm_db *alarmdb, const char *userid)
+EXPORTED int caldav_alarm_delete_user(sqldb_t *alarmdb, const char *userid)
 {
     assert(alarmdb);
     char mailboxname[MAX_MAILBOX_NAME];
@@ -394,12 +298,12 @@ EXPORTED int caldav_alarm_delete_user(struct caldav_alarm_db *alarmdb, const cha
     mailboxname[len+1] = '%';
     mailboxname[len+2] = '\0';
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":prefix",	SQLITE_TEXT, { .s = mailboxname  } },
 	{ NULL,		SQLITE_NULL, { .s = NULL		} }
     };
 
-    return dav_exec(alarmdb->db, CMD_DELETEUSER, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETEUSER]);
+    return sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
 }
 
 enum trigger_type {
@@ -698,19 +602,18 @@ EXPORTED int caldav_alarm_process()
     icaltimetype before = icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
     icaltime_adjust(&before, 0, 0, 0, 60);
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":before",	SQLITE_TEXT,	{ .s = icaltime_as_ical_string(before)	} },
 	{ NULL,		SQLITE_NULL,	{ .s = NULL				} }
     };
 
     struct alarmdata_list *list = NULL, *scan;
 
-    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+    sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb)
 	return HTTP_SERVER_ERROR;
 
-    int rc = dav_exec(alarmdb->db, CMD_SELECT_ALARM, bval, &alarm_read_cb, &list,
-		  &alarmdb->stmt[STMT_SELECT_ALARM]);
+    int rc = sqldb_exec(alarmdb, CMD_SELECT_ALARM, bval, &alarm_read_cb, &list);
     if (rc)
 	goto done;
 
@@ -790,14 +693,13 @@ EXPORTED int caldav_alarm_process()
 	    goto done_item;
 
 	/* fill out recipients */
-	struct bind_val rbval[] = {
+	struct sqldb_bindval rbval[] = {
 	    { ":alarmid",	SQLITE_INTEGER,	{ .i = scan->data.rowid	} },
 	    { NULL,		SQLITE_NULL,	{ .s = NULL		} }
 	};
 
-	rc = dav_exec(alarmdb->db, CMD_SELECT_RECIPIENT, rbval, recipient_read_cb,
-		      &scan->data.recipients,
-		      &alarmdb->stmt[STMT_SELECT_RECIPIENT]);
+	rc = sqldb_exec(alarmdb, CMD_SELECT_RECIPIENT, rbval, recipient_read_cb,
+		      &scan->data.recipients);
 
 	struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
 	mboxevent_extract_icalcomponent(event, ical, userid, buf_cstring(&calname_buf),

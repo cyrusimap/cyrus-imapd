@@ -1886,13 +1886,13 @@ EXPORTED struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
     return mailbox->local_caldav;
 }
 
-EXPORTED struct caldav_alarm_db *mailbox_open_caldav_alarm(struct mailbox *mailbox)
+EXPORTED sqldb_t *mailbox_open_caldav_alarm(struct mailbox *mailbox)
 {
     if (!mailbox->local_caldav_alarm) {
 	mailbox->local_caldav_alarm = caldav_alarm_open();
-	int r = caldav_alarm_begin(mailbox->local_caldav_alarm);
+	int r = sqldb_begin(mailbox->local_caldav_alarm, "alarm");
 	if (r) {
-	    caldav_alarm_rollback(mailbox->local_caldav_alarm);
+	    sqldb_rollback(mailbox->local_caldav_alarm, "alarm");
 	    caldav_alarm_close(mailbox->local_caldav_alarm);
 	    mailbox->local_caldav_alarm = NULL;
 	}
@@ -3059,7 +3059,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	if (!cdata->dav.imap_uid) goto done;
 
 	/* remove associated alarms */
-	struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+	sqldb_t *alarmdb = caldav_alarm_open();
 	struct caldav_alarm_data alarmdata = {
 	    .mailbox    = cdata->dav.mailbox,
 	    .resource   = cdata->dav.resource,
@@ -3101,7 +3101,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
 	caldav_make_entry(ical, cdata);
 
-	struct caldav_alarm_db *alarmdb = mailbox_open_caldav_alarm(mailbox);
+	sqldb_t *alarmdb = mailbox_open_caldav_alarm(mailbox);
 
 	struct caldav_alarm_data alarmdata = {
 	    .mailbox    = cdata->dav.mailbox,
@@ -3253,7 +3253,7 @@ static int mailbox_commit_dav(struct mailbox *mailbox)
     }
 
     if (mailbox->local_caldav_alarm) {
-	r = caldav_alarm_commit(mailbox->local_caldav_alarm);
+	r = sqldb_commit(mailbox->local_caldav_alarm, "alarm");
 	if (r) return r;
 	caldav_alarm_close(mailbox->local_caldav_alarm);
 	mailbox->local_caldav_alarm = NULL;
@@ -3288,7 +3288,7 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
     }
 
     if (mailbox->local_caldav_alarm) {
-	r = caldav_alarm_rollback(mailbox->local_caldav_alarm);
+	r = sqldb_rollback(mailbox->local_caldav_alarm, "alarm");
 	if (r) return r;
 	caldav_alarm_close(mailbox->local_caldav_alarm);
 	mailbox->local_caldav_alarm = NULL;
@@ -4955,7 +4955,7 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
 	if (r) return r;
     }
 
-    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+    sqldb_t *alarmdb = caldav_alarm_open();
     if (alarmdb) {
 	int r = caldav_alarm_delmbox(alarmdb, mailbox->name);
 	caldav_alarm_close(alarmdb);

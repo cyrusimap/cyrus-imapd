@@ -46,10 +46,8 @@
 
 #include <config.h>
 
-#include <sqlite3.h>
+#include "sqldb.h"
 #include "strarray.h"
-
-struct caldav_alarm_db;
 
 enum caldav_alarm_action {
     CALDAV_ALARM_ACTION_NONE	= 0,
@@ -79,30 +77,25 @@ int caldav_alarm_init(void);
 int caldav_alarm_done(void);
 
 /* get a database handle to the alarm db */
-struct caldav_alarm_db *caldav_alarm_open(void);
+sqldb_t *caldav_alarm_open(void);
 
 /* close this handle */
-int caldav_alarm_close(struct caldav_alarm_db *alarmdb);
-
-/* transactions */
-int caldav_alarm_begin(struct caldav_alarm_db *alarmdb);
-int caldav_alarm_commit(struct caldav_alarm_db *alarmdb);
-int caldav_alarm_rollback(struct caldav_alarm_db *alarmdb);
+int caldav_alarm_close(sqldb_t *alarmdb);
 
 /* add a calendar alarm */
-int caldav_alarm_add(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata);
+int caldav_alarm_add(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata);
 
 /* delete all alarms matching the event */
-int caldav_alarm_delete_all(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata);
+int caldav_alarm_delete_all(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata);
 
 /* delete all alarms for a user */
-int caldav_alarm_delete_user(struct caldav_alarm_db *alarmdb, const char *userid);
+int caldav_alarm_delete_user(sqldb_t *alarmdb, const char *userid);
 
 /* fill alarmdata with data for next alarm of given type for given entry */
 int caldav_alarm_prepare(icalcomponent *ical, struct caldav_alarm_data *alarmdata, enum caldav_alarm_action action, icaltimetype after);
 
 /* delete entire mailbox's alarms */
-int caldav_alarm_delmbox(struct caldav_alarm_db *alarmdb, const char *mboxname);
+int caldav_alarm_delmbox(sqldb_t *alarmdb, const char *mboxname);
 
 /* clean up alarmdata after prepare */
 void caldav_alarm_fini(struct caldav_alarm_data *alarmdata);

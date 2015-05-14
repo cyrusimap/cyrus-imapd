@@ -54,6 +54,7 @@
 #include "ptrarray.h"
 #include "quota.h"
 #include "sequence.h"
+#include "sqldb.h"
 #include "util.h"
 
 #define MAX_MAILBOX_NAME 490
@@ -256,7 +257,7 @@ struct mailbox {
 
 #ifdef WITH_DAV
     struct caldav_db *local_caldav;
-    struct caldav_alarm_db *local_caldav_alarm;
+    sqldb_t *local_caldav_alarm;
     struct carddav_db *local_carddav;
     struct webdav_db *local_webdav;
 #endif
@@ -500,7 +501,7 @@ extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
 struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
-struct caldav_alarm_db *mailbox_open_caldav_alarm(struct mailbox *mailbox);
+sqldb_t *mailbox_open_caldav_alarm(struct mailbox *mailbox);
 struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);
 struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox);
 
