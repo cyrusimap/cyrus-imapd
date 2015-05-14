@@ -95,6 +95,8 @@ int sqldb_begin(sqldb_t *open, const char *name);
 int sqldb_commit(sqldb_t *open, const char *name);
 int sqldb_rollback(sqldb_t *open, const char *name);
 
+int sqldb_lastid(sqldb_t *open);
+
 int sqldb_close(sqldb_t **openp);
 
 #endif /* SQLDB_H */

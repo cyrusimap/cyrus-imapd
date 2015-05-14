@@ -361,6 +361,11 @@ EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
     return _onecmd(open, "ROLLBACK TO SAVEPOINT", name);
 }
 
+EXPORTED int sqldb_lastid(sqldb_t *open)
+{
+    return sqlite3_last_insert_rowid(open->db);
+}
+
 EXPORTED int sqldb_close(sqldb_t **dbp)
 {
     sqldb_t *open, *prev = NULL;
