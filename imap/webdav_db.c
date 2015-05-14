@@ -129,7 +129,6 @@ EXPORTED struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox)
     if (!db) return NULL;
 
     webdavdb = xzmalloc(sizeof(struct webdav_db));
-    webdavdb->userid = xstrdup(userid);
     webdavdb->db = db;
 
     return webdavdb;
