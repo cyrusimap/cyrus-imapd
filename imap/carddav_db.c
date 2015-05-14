@@ -58,35 +58,10 @@
 #include "xmalloc.h"
 
 
-enum {
-    STMT_SELRSRC,
-    STMT_SELUID,
-    STMT_SELMBOX,
-    STMT_INSERT,
-    STMT_DELETE,
-    STMT_DELMBOX,
-    STMT_BEGIN,
-    STMT_COMMIT,
-    STMT_ROLLBACK,
-    STMT_INSERT_EMAIL,
-    STMT_INSERT_GROUP,
-    STMT_GETUID_GROUPS,
-    STMT_GETEMAIL_EXISTS,
-    STMT_GETEMAIL_GROUPS,
-    STMT_GETGROUP_EXISTS,
-    STMT_GETGROUP_MEMBERS,
-    STMT_GETEMAIL2UIDS,
-    STMT_GETUID2GROUPS,
-    STMT_GETCARDS,
-    STMT_GETUPDATES,
-    NUM_STMT
-};
-
 #define NUM_BUFS 10
 
 struct carddav_db {
-    sqlite3 *db;			/* DB handle */
-    sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
+    sqldb_t *db;			/* DB handle */
     struct buf bufs[NUM_BUFS];		/* buffers for copies of column text */
     char *userid;
 };
@@ -94,20 +69,20 @@ struct carddav_db {
 
 EXPORTED int carddav_init(void)
 {
-    return dav_init();
+    return sqldb_init();
 }
 
 
 EXPORTED int carddav_done(void)
 {
-    return dav_done();
+    return sqldb_done();
 }
 
 EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
 {
     struct carddav_db *carddavdb = NULL;
 
-    sqlite3 *db = dav_open_userid(userid);
+    sqldb_t *db = dav_open_userid(userid);
     if (!db) return NULL;
 
     carddavdb = xzmalloc(sizeof(struct carddav_db));
@@ -125,7 +100,7 @@ EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
     if (userid)
 	return carddav_open_userid(userid);
 
-    sqlite3 *db = dav_open_mailbox(mailbox);
+    sqldb_t *db = dav_open_mailbox(mailbox);
     if (!db) return NULL;
 
     carddavdb = xzmalloc(sizeof(struct carddav_db));
@@ -147,12 +122,7 @@ EXPORTED int carddav_close(struct carddav_db *carddavdb)
 	buf_free(&carddavdb->bufs[i]);
     }
 
-    for (i = 0; i < NUM_STMT; i++) {
-	sqlite3_stmt *stmt = carddavdb->stmt[i];
-	if (stmt) sqlite3_finalize(stmt);
-    }
-
-    r = dav_close(carddavdb->db);
+    r = sqldb_close(&carddavdb->db);
 
     free(carddavdb->userid);
     free(carddavdb);
@@ -160,31 +130,19 @@ EXPORTED int carddav_close(struct carddav_db *carddavdb)
     return r;
 }
 
-
-#define CMD_BEGIN "BEGIN TRANSACTION;"
-
 EXPORTED int carddav_begin(struct carddav_db *carddavdb)
 {
-    return dav_exec(carddavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		    &carddavdb->stmt[STMT_BEGIN]);
+    return sqldb_begin(carddavdb->db, "carddav");
 }
-
-
-#define CMD_COMMIT "COMMIT TRANSACTION;"
 
 EXPORTED int carddav_commit(struct carddav_db *carddavdb)
 {
-    return dav_exec(carddavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-		    &carddavdb->stmt[STMT_COMMIT]);
+    return sqldb_commit(carddavdb->db, "carddav");
 }
-
-
-#define CMD_ROLLBACK "ROLLBACK TRANSACTION;"
 
 EXPORTED int carddav_abort(struct carddav_db *carddavdb)
 {
-    return dav_exec(carddavdb->db, CMD_ROLLBACK, NULL, NULL, NULL,
-		    &carddavdb->stmt[STMT_ROLLBACK]);
+    return sqldb_rollback(carddavdb->db, "carddav");
 }
 
 
@@ -289,7 +247,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   struct carddav_data **result,
 			   int tombstones)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":mailbox",  SQLITE_TEXT, { .s = mailbox	 } },
 	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
@@ -299,8 +257,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 
     *result = memset(&cdata, 0, sizeof(struct carddav_data));
 
-    r = dav_exec(carddavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock,
-		 &carddavdb->stmt[STMT_SELRSRC]);
+    r = sqldb_exec(carddavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock);
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
     /* always mailbox and resource so error paths don't fail */
@@ -317,7 +274,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
 		                struct carddav_data **result)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":vcard_uid", SQLITE_TEXT, { .s = vcard_uid		 } },
 	{ NULL,	        SQLITE_NULL, { .s = NULL		 } } };
     static struct carddav_data cdata;
@@ -326,8 +283,7 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 
     *result = memset(&cdata, 0, sizeof(struct carddav_data));
 
-    r = dav_exec(carddavdb->db, CMD_SELUID, bval, &read_cb, &rrock,
-		 &carddavdb->stmt[STMT_SELUID]);
+    r = sqldb_exec(carddavdb->db, CMD_SELUID, bval, &read_cb, &rrock);
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
     return r;
@@ -341,14 +297,13 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
 		   void *rock)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
 
-    return dav_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
-		    &carddavdb->stmt[STMT_SELMBOX]);
+    return sqldb_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
 }
 
 #define CMD_GETUID_GROUPS \
@@ -367,7 +322,7 @@ static int addarray_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":uid", SQLITE_TEXT, { .s = uid } },
 	{ NULL,   SQLITE_NULL, { .s = NULL  } }
     };
@@ -377,8 +332,7 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
 
     groups = strarray_new();
 
-    r = dav_exec(carddavdb->db, CMD_GETUID_GROUPS, bval, &addarray_cb, groups,
-		 &carddavdb->stmt[STMT_GETUID_GROUPS]);
+    r = sqldb_exec(carddavdb->db, CMD_GETUID_GROUPS, bval, &addarray_cb, groups);
     if (r) {
 	/* XXX syslog */
     }
@@ -422,7 +376,7 @@ static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *email)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":email", SQLITE_TEXT, { .s = email } },
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
@@ -431,8 +385,7 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
     strarray_t *groups;
     int r;
 
-    r = dav_exec(carddavdb->db, CMD_GETEMAIL_EXISTS, bval, &emailexists_cb, &exists,
-		 &carddavdb->stmt[STMT_GETEMAIL_EXISTS]);
+    r = sqldb_exec(carddavdb->db, CMD_GETEMAIL_EXISTS, bval, &emailexists_cb, &exists);
     if (r) {
 	/* XXX syslog */
 	return NULL;
@@ -443,8 +396,7 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 
     groups = strarray_new();
 
-    r = dav_exec(carddavdb->db, CMD_GETEMAIL_GROUPS, bval, &addarray_cb, groups,
-		 &carddavdb->stmt[STMT_GETEMAIL_GROUPS]);
+    r = sqldb_exec(carddavdb->db, CMD_GETEMAIL_GROUPS, bval, &addarray_cb, groups);
     if (r) {
 	/* XXX syslog */
     }
@@ -455,15 +407,14 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *email,
 					   const char *mboxname)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":email", SQLITE_TEXT,   { .s = email } },
 	{ ":mailbox", SQLITE_TEXT, { .s = mboxname } },
 	{ NULL,     SQLITE_NULL,   { .s = NULL  } }
     };
     strarray_t *uids = strarray_new();
 
-    dav_exec(carddavdb->db, CMD_GETEMAIL2UIDS, bval, &addarray_cb, uids,
-	     &carddavdb->stmt[STMT_GETEMAIL2UIDS]);
+    sqldb_exec(carddavdb->db, CMD_GETEMAIL2UIDS, bval, &addarray_cb, uids);
 
     return uids;
 }
@@ -471,7 +422,7 @@ EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const c
 EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *member_uid,
 					   const char *mboxname, const char *otheruser)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":member_uid", SQLITE_TEXT, { .s = member_uid } },
 	{ ":mailbox", SQLITE_TEXT,    { .s = mboxname } },
 	{ ":otheruser",  SQLITE_TEXT, { .s = otheruser } },
@@ -479,8 +430,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
     };
     strarray_t *groups = strarray_new();
 
-    dav_exec(carddavdb->db, CMD_GETUID2GROUPS, bval, &addarray_cb, groups,
-	     &carddavdb->stmt[STMT_GETUID2GROUPS]);
+    sqldb_exec(carddavdb->db, CMD_GETUID2GROUPS, bval, &addarray_cb, groups);
 
     return groups;
 }
@@ -515,7 +465,7 @@ static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":mailbox", SQLITE_TEXT,    { .s = mailbox } },
 	{ ":group",   SQLITE_TEXT,    { .s = group   } },
 	{ ":kind",    SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
@@ -526,8 +476,7 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
     strarray_t *members;
     int r;
 
-    r = dav_exec(carddavdb->db, CMD_GETGROUP_EXISTS, bval, &groupexists_cb, &exists,
-		 &carddavdb->stmt[STMT_GETGROUP_EXISTS]);
+    r = sqldb_exec(carddavdb->db, CMD_GETGROUP_EXISTS, bval, &groupexists_cb, &exists);
     if (r) {
 	/* XXX syslog */
 	return NULL;
@@ -538,8 +487,7 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
 
     members = strarray_new();
 
-    r = dav_exec(carddavdb->db, CMD_GETGROUP_MEMBERS, bval, &groupmembers_cb, members,
-		 &carddavdb->stmt[STMT_GETGROUP_MEMBERS]);
+    r = sqldb_exec(carddavdb->db, CMD_GETGROUP_MEMBERS, bval, &groupmembers_cb, members);
     if (r) {
 	/* XXX syslog */
     }
@@ -554,7 +502,7 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
 
 static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":objid",	   SQLITE_INTEGER, { .i = cdata->dav.rowid	  } },
 	{ ":pos",	   SQLITE_INTEGER, { .i = 0			  } },
 	{ ":email",	   SQLITE_TEXT,	   { .s = NULL			  } },
@@ -568,8 +516,7 @@ static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_dat
 	bval[1].val.i = i;
 	bval[2].val.s = strarray_safenth(&cdata->emails, i*2);
 	bval[3].val.i = *pref ? 1 : 0;
-	r = dav_exec(carddavdb->db, CMD_INSERT_EMAIL, bval, NULL, NULL,
-		    &carddavdb->stmt[STMT_INSERT_EMAIL]);
+	r = sqldb_exec(carddavdb->db, CMD_INSERT_EMAIL, bval, NULL, NULL);
 	if (r) return r;
     }
 
@@ -582,7 +529,7 @@ static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_dat
 
 static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":objid",	   SQLITE_INTEGER, { .i = cdata->dav.rowid	  } },
 	{ ":pos",	   SQLITE_INTEGER, { .i = 0			  } },
 	{ ":member_uid",   SQLITE_TEXT,	   { .s = NULL			  } },
@@ -595,8 +542,7 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
 	bval[1].val.i = i;
 	bval[2].val.s = strarray_safenth(&cdata->member_uids, 2*i);
 	bval[3].val.s = strarray_safenth(&cdata->member_uids, 2*i+1);
-	r = dav_exec(carddavdb->db, CMD_INSERT_GROUP, bval, NULL, NULL,
-		    &carddavdb->stmt[STMT_INSERT_GROUP]);
+	r = sqldb_exec(carddavdb->db, CMD_INSERT_GROUP, bval, NULL, NULL);
 	if (r) return r;
     }
 
@@ -615,7 +561,7 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
 
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":alive",	   SQLITE_INTEGER, { .i = cdata->dav.alive	  } },
 	{ ":creationdate", SQLITE_INTEGER, { .i = cdata->dav.creationdate } },
 	{ ":mailbox",	   SQLITE_TEXT,	   { .s = cdata->dav.mailbox	  } },
@@ -640,11 +586,10 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
 	if (r) return r;
     }
 
-    r = dav_exec(carddavdb->db, CMD_INSERT, bval, NULL, NULL,
-		 &carddavdb->stmt[STMT_INSERT]);
+    r = sqldb_exec(carddavdb->db, CMD_INSERT, bval, NULL, NULL);
     if (r) return r;
 
-    cdata->dav.rowid = sqlite3_last_insert_rowid(carddavdb->db);
+    cdata->dav.rowid = sqldb_lastid(carddavdb->db);
 
     r = carddav_write_emails(carddavdb, cdata);
     if (r) return r;
@@ -660,13 +605,12 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
 
 EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
 	{ NULL,	    SQLITE_NULL,    { .s = NULL  } } };
     int r;
 
-    r = dav_exec(carddavdb->db, CMD_DELETE, bval, NULL, NULL,
-		 &carddavdb->stmt[STMT_DELETE]);
+    r = sqldb_exec(carddavdb->db, CMD_DELETE, bval, NULL, NULL);
     if (r) return r;
 
     return 0;
@@ -677,13 +621,12 @@ EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
 
 EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
 {
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     int r;
 
-    r = dav_exec(carddavdb->db, CMD_DELMBOX, bval, NULL, NULL,
-		 &carddavdb->stmt[STMT_DELMBOX]);
+    r = sqldb_exec(carddavdb->db, CMD_DELMBOX, bval, NULL, NULL);
     if (r) return r;
 
     return 0;
@@ -836,7 +779,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_
     }
     const char *abookname = mboxname_abook(req->userid, addressbookId);
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":kind",    SQLITE_INTEGER, { .i = 1         } },
 	{ ":mailbox", SQLITE_TEXT,    { .s = abookname } },
 	{ NULL,       SQLITE_NULL,    { .s = NULL      } }
@@ -868,8 +811,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_
 	}
     }
 
-    r = dav_exec(carddavdb->db, CMD_GETCARDS, bval, &getgroups_cb, &rock,
-		 &carddavdb->stmt[STMT_GETCARDS]);
+    r = sqldb_exec(carddavdb->db, CMD_GETCARDS, bval, &getgroups_cb, &rock);
     mailbox_close(&rock.mailbox);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
@@ -962,14 +904,13 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
     modseq_t oldmodseq = str2uint64(since);
     rock.changed = json_array();
     rock.removed = json_array();
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":modseq", SQLITE_INTEGER, { .i = oldmodseq } },
 	{ ":kind",   SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
 	{ NULL,      SQLITE_NULL,    { .s = NULL  } }
     };
 
-    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getupdates_cb, &rock,
-		 &carddavdb->stmt[STMT_GETUPDATES]);
+    r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &getupdates_cb, &rock);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
 	/* XXX - free memory */
@@ -1906,7 +1847,7 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
     }
     const char *abookname = mboxname_abook(req->userid, addressbookId);
 
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":kind",    SQLITE_INTEGER, { .i = 0         } },
 	{ ":mailbox", SQLITE_TEXT,    { .s = abookname } },
 	{ NULL,       SQLITE_NULL,    { .s = NULL      } }
@@ -1956,8 +1897,7 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
 	}
     }
 
-    r = dav_exec(carddavdb->db, CMD_GETCARDS, bval, &getcontacts_cb, &rock,
-		 &carddavdb->stmt[STMT_GETCARDS]);
+    r = sqldb_exec(carddavdb->db, CMD_GETCARDS, bval, &getcontacts_cb, &rock);
     mailbox_close(&rock.mailbox);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
@@ -2005,14 +1945,13 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
     modseq_t oldmodseq = str2uint64(since);
     rock.changed = json_array();
     rock.removed = json_array();
-    struct bind_val bval[] = {
+    struct sqldb_bindval bval[] = {
 	{ ":modseq", SQLITE_INTEGER, { .i = oldmodseq } },
 	{ ":kind",   SQLITE_INTEGER, { .i = 0 } },
 	{ NULL,      SQLITE_NULL,    { .s = NULL  } }
     };
 
-    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getupdates_cb, &rock,
-		 &carddavdb->stmt[STMT_GETUPDATES]);
+    r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &getupdates_cb, &rock);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
 	/* XXX - free memory */
