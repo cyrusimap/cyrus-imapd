@@ -337,8 +337,9 @@ static int _onecmd(sqldb_t *open, const char *cmd, const char *name)
 EXPORTED int sqldb_begin(sqldb_t *open, const char *name)
 {
     if (!name) name = "DUMMY";
-    strarray_append(&open->trans, name);
-    return _onecmd(open, "SAVEPOINT", name);
+    int r = _onecmd(open, "SAVEPOINT", name);
+    if (!r) strarray_push(&open->trans, name);
+    return r;
 }
 
 EXPORTED int sqldb_commit(sqldb_t *open, const char *name)
@@ -346,9 +347,10 @@ EXPORTED int sqldb_commit(sqldb_t *open, const char *name)
     assert(open->trans.count);
     char *prev = strarray_pop(&open->trans);
     if (name) assert(!strcmp(prev, name));
+    int r = _onecmd(open, "RELEASE SAVEPOINT", prev);
+    if (r) strarray_push(&open->trans, prev);
     free(prev);
-    if (!name) name = "DUMMY";
-    return _onecmd(open, "RELEASE SAVEPOINT", name);
+    return r;
 }
 
 EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
@@ -356,10 +358,39 @@ EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
     assert(open->trans.count);
     char *prev = strarray_pop(&open->trans);
     if (name) assert(!strcmp(prev, name));
+    int r = _onecmd(open, "ROLLBACK TO SAVEPOINT", prev);
+    if (r) strarray_push(&open->trans, prev);
     free(prev);
-    if (!name) name = "DUMMY";
-    return _onecmd(open, "ROLLBACK TO SAVEPOINT", name);
+    return r;
 }
+
+EXPORTED int sqldb_writelock(sqldb_t *open)
+{
+    assert (!open->writelock);
+    assert (!open->trans.count);
+    int r = sqldb_exec(open, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+    if (!r) open->writelock = 1;
+    return r;
+}
+
+EXPORTED int sqldb_writecommit(sqldb_t *open)
+{
+    if (!open->writelock) return 0;
+    strarray_truncate(&open->trans, 0);
+    int r = sqldb_exec(open, "COMMIT;", NULL, NULL, NULL);
+    if (!r) open->writelock = 0;
+    return r;
+}
+
+EXPORTED int sqldb_writeabort(sqldb_t *open)
+{
+    if (!open->writelock) return 0;
+    strarray_truncate(&open->trans, 0);
+    int r = sqldb_exec(open, "ROLLBACK;", NULL, NULL, NULL);
+    if (!r) open->writelock = 0;
+    return r;
+}
+
 
 EXPORTED int sqldb_lastid(sqldb_t *open)
 {

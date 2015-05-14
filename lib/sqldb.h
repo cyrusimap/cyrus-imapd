@@ -64,6 +64,7 @@ struct sqldb {
     char *fname;
     int version;
     int refcount;
+    int writelock;
     strarray_t trans;
     ptrarray_t stmts;
     struct sqldb *next;
@@ -94,6 +95,10 @@ int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bval[],
 int sqldb_begin(sqldb_t *open, const char *name);
 int sqldb_commit(sqldb_t *open, const char *name);
 int sqldb_rollback(sqldb_t *open, const char *name);
+
+int sqldb_writelock(sqldb_t *open);
+int sqldb_writecommit(sqldb_t *open);
+int sqldb_writeabort(sqldb_t *open);
 
 int sqldb_lastid(sqldb_t *open);
 
