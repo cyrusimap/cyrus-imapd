@@ -1338,13 +1338,15 @@ lib_libcyrus_la_SOURCES = \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
 	lib/signals.c \
-	lib/sqldb.c \
 	lib/stristr.c \
 	lib/times.c \
 	lib/tok.c \
 	lib/wildmat.c
 if USE_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
+endif
+if HTTPD
+lib_libcyrus_la_SOURCES += lib/sqldb.c
 endif
 if GMTOFF_TM
 lib_libcyrus_la_SOURCES += lib/gmtoff_tm.c
