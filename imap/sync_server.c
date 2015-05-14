@@ -295,7 +295,6 @@ int service_init(int argc __attribute__((unused)),
     }
 
 #ifdef WITH_DAV
-    dav_init();
     caldav_init();
     carddav_init();
 #endif
@@ -456,7 +455,6 @@ void shut_down(int code)
 #ifdef WITH_DAV
     carddav_done();
     caldav_done();
-    dav_done();
 #endif
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {

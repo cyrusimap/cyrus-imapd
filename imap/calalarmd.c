@@ -82,7 +82,6 @@ static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
     caldav_done();
-    dav_done();
     annotatemore_close();
     mboxlist_close();
     mboxlist_done();
@@ -122,7 +121,6 @@ int main(int argc, char **argv)
 
     annotatemore_open();
 
-    dav_init();
     caldav_init();
 
     mboxevent_init();
