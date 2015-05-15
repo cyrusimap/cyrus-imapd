@@ -172,11 +172,10 @@ static void usage(void)
  */
 static int do_timestamp(char *name)
 {
-    unsigned recno;
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
-    struct index_record record;
+    const struct index_record *record;
     char olddate[RFC822_DATETIME_MAX+1];
     char newdate[RFC822_DATETIME_MAX+1];
 
@@ -191,29 +190,27 @@ static int do_timestamp(char *name)
     r = mailbox_open_iwl(name, &mailbox);
     if (r) return r;
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
-
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    while ((record = mailbox_iter_step(iter))) {
 	/* 1 day is close enough */
-	if (labs(record.internaldate - record.gmtime) < 86400)
+	if (labs(record->internaldate - record->gmtime) < 86400)
 	    continue;
 
-	time_to_rfc822(record.internaldate, olddate, sizeof(olddate));
-	time_to_rfc822(record.gmtime, newdate, sizeof(newdate));
-	printf("  %u: %s => %s\n", record.uid, olddate, newdate);
+	struct index_record copyrecord = *record;
+
+	time_to_rfc822(copyrecord.internaldate, olddate, sizeof(olddate));
+	time_to_rfc822(copyrecord.gmtime, newdate, sizeof(newdate));
+	printf("  %u: %s => %s\n", copyrecord.uid, olddate, newdate);
 
 	/* switch internaldate */
-	record.internaldate = record.gmtime;
+	copyrecord.internaldate = copyrecord.gmtime;
 
-	r = mailbox_rewrite_index_record(mailbox, &record);
+	r = mailbox_rewrite_index_record(mailbox, &copyrecord);
 	if (r) goto done;
     }
 
  done:
+    mailbox_iter_done(&iter);
     mailbox_close(&mailbox);
 
     return r;
