@@ -184,7 +184,7 @@ static int expunge_userflags(struct mailbox *mailbox, struct expire_rock *erock)
  * mailbox_expunge() callback to expunge expired articles.
  */
 static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
-			  struct index_record *record,
+			  const struct index_record *record,
 			  void *rock)
 {
     struct expire_rock *erock = (struct expire_rock *) rock;
@@ -207,7 +207,7 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
  * mailbox_expunge() callback to *only* count userflags.
  */
 static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
-			    struct index_record *record,
+			    const struct index_record *record,
 			    void *rock)
 {
     struct expire_rock *erock = (struct expire_rock *) rock;

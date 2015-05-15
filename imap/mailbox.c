@@ -1368,7 +1368,7 @@ EXPORTED int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum)
 }
 
 int mailbox_record_hasflag(struct mailbox *mailbox,
-			   struct index_record *record,
+			   const struct index_record *record,
 			   const char *flag)
 {
     int userflag;
@@ -2610,7 +2610,7 @@ static void mailbox_quota_dirty(struct mailbox *mailbox)
 }
 
 static void header_update_counts(struct index_header *i,
-				 struct index_record *record,
+				 const struct index_record *record,
 				 int is_add)
 {
     int num = is_add ? 1 : -1;
@@ -2713,7 +2713,7 @@ static uint32_t crc_annot(unsigned int uid, const char *entry,
 }
 
 static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
-			      struct index_record *record)
+			      const struct index_record *record)
 {
     uint32_t crc = 0;
 
@@ -2782,7 +2782,7 @@ static int calc_one_annot(const char *mailbox __attribute__((unused)),
 }
 
 static void mailbox_annot_update_counts(struct mailbox *mailbox,
-					struct index_record *record,
+					const struct index_record *record,
 					int is_add)
 {
     struct annot_calc_rock cr = { 0, 0 };
@@ -2858,7 +2858,7 @@ EXPORTED struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int force)
 }
 
 static void mailbox_index_update_counts(struct mailbox *mailbox,
-					struct index_record *record,
+					const struct index_record *record,
 					int is_add)
 {
     mailbox_quota_dirty(mailbox);
@@ -2901,13 +2901,12 @@ EXPORTED int mailbox_index_recalc(struct mailbox *mailbox)
     /* and make sure it stays locked for the whole process */
     annotate_state_begin(astate);
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto out;
-
-	mailbox_index_update_counts(mailbox, &record, 1);
-	mailbox_annot_update_counts(mailbox, &record, 1);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    while ((record = mailbox_iter_step(iter))) {
+	mailbox_index_update_counts(mailbox, record, 1);
+	mailbox_annot_update_counts(mailbox, record, 1);
     }
+    mailbox_iter_done(&iter);
 
 out:
     return r;
@@ -2915,8 +2914,8 @@ out:
 
 #ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
-				 struct index_record *old,
-				 struct index_record *new)
+				  const struct index_record *old,
+				  const struct index_record *new)
 {
     const char *userid = mboxname_to_userid(mailbox->name);
     struct carddav_db *carddavdb = NULL;
@@ -3012,8 +3011,8 @@ done:
 }
 
 static int mailbox_update_caldav(struct mailbox *mailbox,
-				 struct index_record *old,
-				 struct index_record *new)
+				 const struct index_record *old,
+				 const struct index_record *new)
 {
     const char *userid = mboxname_to_userid(mailbox->name);
     struct caldav_db *caldavdb = NULL;
@@ -3142,8 +3141,8 @@ done:
 }
 
 static int mailbox_update_webdav(struct mailbox *mailbox,
-				 struct index_record *old,
-				 struct index_record *new)
+				 const struct index_record *old,
+				 const struct index_record *new)
 {
     const char *userid = mboxname_to_userid(mailbox->name);
     struct webdav_db *webdavdb = NULL;
@@ -3232,8 +3231,8 @@ done:
 }
 
 static int mailbox_update_dav(struct mailbox *mailbox,
-			      struct index_record *old,
-			      struct index_record *new)
+			      const struct index_record *old,
+			      const struct index_record *new)
 {
     if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
 	return mailbox_update_carddav(mailbox, old, new);
@@ -3318,8 +3317,8 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 #endif // WITH_DAV
 
 EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
-				 struct index_record *old,
-				 struct index_record *new)
+				 const struct index_record *old,
+				 const struct index_record *new)
 {
     int r = 0;
     struct mboxname_parts parts;
@@ -3332,7 +3331,7 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
     int *delta_counts = NULL;
     int i;
     modseq_t modseq = 0;
-    struct index_record *record = NULL;
+    const struct index_record *record = NULL;
     struct conversations_state *cstate = NULL;
 
     if (!mailbox_has_conversations(mailbox))
@@ -4227,7 +4226,7 @@ fail:
  * Used by mailbox_rename() to expunge all messages in INBOX
  */
 static unsigned expungeall(struct mailbox *mailbox __attribute__((unused)),
-			   struct index_record *record __attribute__((unused)),
+			   const struct index_record *record __attribute__((unused)),
 			   void *rock __attribute__((unused)))
 {
     return 1;
@@ -4238,7 +4237,7 @@ static unsigned expungeall(struct mailbox *mailbox __attribute__((unused)),
  * to expunge \Deleted messages.
  */
 static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
-			       struct index_record *record,
+			       const struct index_record *record,
 			       void *rock __attribute__((unused)))
 {
     if (record->system_flags & FLAG_DELETED)
@@ -4248,7 +4247,7 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
 }
 
 EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
-					 struct index_record *record,
+					 const struct index_record *record,
 					 void *rock)
 {
     int archive_days = config_getint(IMAPOPT_ARCHIVE_DAYS);

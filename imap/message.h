@@ -175,7 +175,7 @@ extern void message_parse_env_address(char *str, struct address *addr);
 
 extern char *parse_nstring(char **str);
 
-extern void message_read_bodystructure(struct index_record *record,
+extern void message_read_bodystructure(const struct index_record *record,
 				       struct body **body);
 
 extern int message_update_conversations(struct conversations_state *, struct index_record *, conversation_t **);

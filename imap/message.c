@@ -2922,7 +2922,7 @@ static void message_read_binarybody(struct body *body, const char **sect)
  * Read cached envelope, binary bodystructure response and binary bodystructure
  * of the specified record.  Populates 'body' which must be freed by the caller.
  */
-EXPORTED void message_read_bodystructure(struct index_record *record, struct body **body)
+EXPORTED void message_read_bodystructure(const struct index_record *record, struct body **body)
 {
     struct protstream *strm;
     struct body toplevel;
@@ -2969,7 +2969,7 @@ static void de_nstring_buf(struct buf *src, struct buf *dst)
     buf_cstring(dst);
 }
 
-static void message1_get_subject(struct index_record *record, struct buf *buf)
+static void message1_get_subject(const struct index_record *record, struct buf *buf)
 {
     struct buf tmp = BUF_INITIALIZER;
     buf_copy(&tmp, cacheitem_buf(record, CACHE_SUBJECT));

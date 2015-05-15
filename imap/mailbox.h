@@ -466,7 +466,7 @@ unsigned mailbox_cached_header(const char *s);
 unsigned mailbox_cached_header_inline(const char *text);
 
 typedef unsigned mailbox_decideproc_t(struct mailbox *mailbox,
-				      struct index_record *index,
+				      const struct index_record *index,
 				      void *rock);
 
 typedef void mailbox_notifyproc_t(const char *mboxname);
@@ -484,7 +484,7 @@ extern const char *mailbox_record_fname(struct mailbox *mailbox,
 					const struct index_record *record);
 extern const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid);
 extern unsigned mailbox_should_archive(struct mailbox *mailbox,
-				       struct index_record *record,
+				       const struct index_record *record,
 				       void *rock);
 
 /* map individual messages in */
@@ -541,7 +541,7 @@ extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 			     int *flagnum, int create);
 extern int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum);
 extern int mailbox_record_hasflag(struct mailbox *mailbox,
-				  struct index_record *record,
+				  const struct index_record *record,
 				  const char *flag);
 extern strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
 					 const struct index_record *record,
@@ -629,8 +629,8 @@ extern int mailbox_cid_rename(struct mailbox *mailbox,
 			      conversation_id_t from_cid,
 			      conversation_id_t to_cid);
 extern int mailbox_update_conversations(struct mailbox *mailbox,
-					struct index_record *old,
-					struct index_record *new);
+					const struct index_record *old,
+					const struct index_record *new);
 extern int mailbox_add_conversations(struct mailbox *mailbox);
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);

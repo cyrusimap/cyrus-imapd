@@ -97,8 +97,8 @@ static int forceall = 0;
 
 static int purge_me(char *, int, int, void *);
 static unsigned purge_check(struct mailbox *mailbox,
-		     struct index_record *record,
-		     void *rock);
+			    const struct index_record *record,
+			    void *rock);
 static int usage(const char *name);
 static void print_stats(mbox_stats_t *stats);
 
@@ -283,7 +283,7 @@ static void deleteit(bit32 msgsize, mbox_stats_t *stats)
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 static unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
-		     struct index_record *record,
+		     const struct index_record *record,
 		     void *deciderock)
 {
   time_t my_time;
