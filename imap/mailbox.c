@@ -6393,6 +6393,7 @@ EXPORTED struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
     struct mailbox_iter *iter = xzmalloc(sizeof(struct mailbox_iter));
     iter->mailbox = mailbox;
     iter->changedsince = changedsince;
+    iter->num_records = mailbox->i.num_records;
 
     /* calculate which system_flags to skip over */
     if (flags & ITER_SKIP_UNLINKED)
@@ -6413,15 +6414,16 @@ EXPORTED void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid)
 
 EXPORTED const struct index_record *mailbox_iter_step(struct mailbox_iter *iter)
 {
-    struct mailbox *mailbox = iter->mailbox;
-    for (iter->recno++; iter->recno <= mailbox->i.num_records; iter->recno++) {
-	int r = mailbox_read_index_record(mailbox, iter->recno, &iter->record);
+    for (iter->recno++; iter->recno <= iter->num_records; iter->recno++) {
+	int r = mailbox_read_index_record(iter->mailbox, iter->recno, &iter->record);
 	if (r) continue;
 	if (!iter->record.uid) continue; /* can happen on damaged mailboxes */
 	if ((iter->record.system_flags & iter->skipflags)) continue;
 	if (iter->record.modseq <= iter->changedsince) continue;
 	return &iter->record;
     }
+
+    /* guess we're done */
     return NULL;
 }
 

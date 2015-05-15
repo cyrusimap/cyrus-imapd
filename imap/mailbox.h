@@ -286,6 +286,7 @@ struct mailbox_iter {
     struct index_record record;
     modseq_t changedsince;
     uint32_t recno;
+    uint32_t num_records;
     unsigned skipflags;
 };
 
