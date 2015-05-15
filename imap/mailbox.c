@@ -425,18 +425,18 @@ static struct buf *cache_buf(struct index_record *record)
     return &staticbuf;
 }
 
-EXPORTED const char *cacheitem_base(struct index_record *record, int field)
+EXPORTED const char *cacheitem_base(const struct index_record *record, int field)
 {
     const char *base = record->crec.buf->s;
     return base + record->crec.item[field].offset;
 }
 
-EXPORTED unsigned cacheitem_size(struct index_record *record, int field)
+EXPORTED unsigned cacheitem_size(const struct index_record *record, int field)
 {
     return record->crec.item[field].len;
 }
 
-EXPORTED struct buf *cacheitem_buf(struct index_record *record, int field)
+EXPORTED struct buf *cacheitem_buf(const struct index_record *record, int field)
 {
     static struct buf staticbuf;
 
