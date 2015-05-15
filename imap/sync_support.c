@@ -157,7 +157,7 @@ static int sync_getline(struct protstream *in, struct buf *buf)
 
 void sync_print_flags(struct dlist *kl,
 		      struct mailbox *mailbox,
-		      struct index_record *record)
+		      const struct index_record *record)
 {
     int flag;
     struct dlist *fl = dlist_newlist(kl, "FLAGS");
@@ -289,7 +289,7 @@ struct sync_msgid_list *sync_msgid_list_create(int hash_size)
 }
 
 struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *l,
-				     struct message_guid *guid)
+				     const struct message_guid *guid)
 {
     struct sync_msgid *msgid;
     int offset;
@@ -342,7 +342,7 @@ void sync_msgid_list_free(struct sync_msgid_list **lp)
 }
 
 struct sync_msgid *sync_msgid_lookup(const struct sync_msgid_list *l,
-				     struct message_guid *guid)
+				     const struct message_guid *guid)
 {
     int offset = message_guid_hash(guid, l->hash_size);
     struct sync_msgid *msgid;
@@ -1328,7 +1328,7 @@ struct dlist *sync_parseline(struct protstream *in)
 }
 
 static int sync_send_file(struct mailbox *mailbox,
-			  struct index_record *record,
+			  const struct index_record *record,
 			  struct sync_msgid_list *part_list,
 			  struct dlist *kupload)
 {
@@ -1659,7 +1659,7 @@ int read_annotations(const struct mailbox *mailbox,
  * structure with the given @parent.
  */
 void encode_annotations(struct dlist *parent,
-			struct index_record *record,
+			const struct index_record *record,
 			const struct sync_annot_list *sal)
 {
     const struct sync_annot *sa;

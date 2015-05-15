@@ -63,7 +63,7 @@ int sync_getflags(struct dlist *kl,
 
 void sync_print_flags(struct dlist *kl,
 		      struct mailbox *mailbox,
-		      struct index_record *record);
+		      const struct index_record *record);
 
 char *sync_encode_options(int options);
 int sync_parse_options(const char *source);
@@ -104,13 +104,13 @@ struct sync_msgid_list {
 struct sync_msgid_list *sync_msgid_list_create(int hash_size);
 
 struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *list,
-				     struct message_guid *guid);
+				     const struct message_guid *guid);
 
 void sync_msgid_remove(struct sync_msgid_list *l,
-		       struct message_guid *guid);
+		       const struct message_guid *guid);
 
 struct sync_msgid *sync_msgid_lookup(const struct sync_msgid_list *list,
-				     struct message_guid *guid);
+				     const struct message_guid *guid);
 
 void sync_msgid_list_free(struct sync_msgid_list **list);
 
@@ -420,7 +420,7 @@ int read_annotations(const struct mailbox *,
 		     const struct index_record *,
 		     struct sync_annot_list **);
 void encode_annotations(struct dlist *parent,
-			struct index_record *record,
+			const struct index_record *record,
 			const struct sync_annot_list *);
 int decode_annotations(/*const*/struct dlist *,
 		       struct sync_annot_list **,
