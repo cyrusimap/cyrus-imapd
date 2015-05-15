@@ -258,7 +258,10 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 
 	/* got a match */
 	i++;
-	if (mailbox_read_index_record(state->mailbox, im->recno, &record))
+	memset(&record, 0, sizeof(struct index_record));
+	record.recno = im->recno;
+	record.uid = im->uid;
+	if (mailbox_reload_index_record(state->mailbox, &record))
 	    continue;
 
 	printf("\n--%s\n", boundary);
