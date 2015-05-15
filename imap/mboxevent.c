@@ -657,7 +657,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     if (mailboxname) {
 	mbentry_t *mbentry = NULL;
 	r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-	if (!r)
+	if (!r && mbentry->uniqueid != NULL)
 	    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
 	mboxlist_entry_free(&mbentry);
     }
