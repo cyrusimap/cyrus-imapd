@@ -100,8 +100,7 @@ static void list_expunged(const char *mboxname)
 {
     struct mailbox *mailbox = NULL;
     struct index_record *records = NULL;
-    struct index_record *record;
-    uint32_t recno;
+    const struct index_record *record;
     int alloc = 0;
     int num = 0;
     int i;
@@ -116,26 +115,22 @@ static void list_expunged(const char *mboxname)
 
     /* first pass - read the records.  Don't print until we release the
      * lock */
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((record = mailbox_iter_step(iter))) {
+	/* still active */
+	if (!(record->system_flags & FLAG_EXPUNGED))
+	    continue;
+
 	/* pre-allocate more space */
 	if (alloc <= num) {
 	    alloc += 64;
 	    records = xrealloc(records, sizeof(struct index_record) * alloc);
 	}
-	record = &records[num];
 
-	if (mailbox_read_index_record(mailbox, recno, record))
-	    continue;
-
-	/* still active */
-	if (!(record->system_flags & FLAG_EXPUNGED))
-	    continue;
-	/* no file, unrescuable */
-	if (record->system_flags & FLAG_UNLINKED)
-	    continue;
-
+	records[num] = *record;
 	num++;
     }
+    mailbox_iter_done(&iter);
 
     mailbox_unlock_index(mailbox, NULL);
 
@@ -173,8 +168,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 		     unsigned nuids, time_t time_since, unsigned *numrestored,
 		     const char *mboxname)
 {
-    uint32_t recno;
-    struct index_record record;
+    const struct index_record *record;
     struct index_record newrecord;
     annotate_state_t *astate = NULL;
     unsigned uidnum = 0;
@@ -185,37 +179,32 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 
     *numrestored = 0;
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((record = mailbox_iter_step(iter))) {
 	/* still active */
-	if (!(record.system_flags & FLAG_EXPUNGED))
-	    continue;
-	/* no file, unrescuable */
-	if (record.system_flags & FLAG_UNLINKED)
+	if (!(record->system_flags & FLAG_EXPUNGED))
 	    continue;
 
 	if (mode == MODE_UID) {
-	    while (uidnum < nuids && record.uid > uids[uidnum])
+	    while (uidnum < nuids && record->uid > uids[uidnum])
 		uidnum++;
 	    if (uidnum >= nuids)
 		continue;
-	    if (record.uid != uids[uidnum])
+	    if (record->uid != uids[uidnum])
 		continue;
 	    /* otherwise we want this one */
 	}
 	else if (mode == MODE_TIME) {
-	    if (record.last_updated < time_since)
+	    if (record->last_updated < time_since)
 		continue;
 	    /* otherwise we want this one */
 	}
 
 	/* work on a copy */
-	newrecord = record;
+	newrecord = *record;
 
 	/* duplicate the old filename */
-	fname = mailbox_record_fname(mailbox, &record);
+	fname = mailbox_record_fname(mailbox, record);
 	xstrncpy(oldfname, fname, MAX_MAILBOX_PATH);
 
 	/* bump the UID, strip the flags */
@@ -248,22 +237,24 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 	if (r) goto done;
 
 	/* and copy over any annotations */
-	r = annotate_msg_copy(mailbox, record.uid,
+	r = annotate_msg_copy(mailbox, record->uid,
 			      mailbox, newrecord.uid,
 			      userid);
 	if (r) goto done;
 
 	if (verbose)
 	    printf("Unexpunged %s: %u => %u\n",
-		   mboxname, record.uid, newrecord.uid);
+		   mboxname, record->uid, newrecord.uid);
 
 	/* mark the old one unlinked so we don't see it again */
-	record.system_flags |= FLAG_UNLINKED | FLAG_NEEDS_CLEANUP;
-	r = mailbox_rewrite_index_record(mailbox, &record);
+	struct index_record oldrecord = *record;
+	oldrecord.system_flags |= FLAG_UNLINKED | FLAG_NEEDS_CLEANUP;
+	r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 	if (r) goto done;
 
 	(*numrestored)++;
     }
+    mailbox_iter_done(&iter);
 
     /* better get that seen to */
     if (*numrestored)
