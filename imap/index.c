@@ -928,16 +928,12 @@ struct seqset *index_vanished(struct index_state *state,
 	struct seqset *msgnolist;
 	struct seqset *uidlist;
 	uint32_t msgno;
-	uint32_t recno;
 	unsigned uid;
-	struct index_record record;
 
 	syslog(LOG_NOTICE, "inefficient qresync ("
 	       MODSEQ_FMT " > " MODSEQ_FMT ") %s",
 	       mailbox->i.deletedmodseq, params->modseq,
 	       mailbox->name);
-
-	recno = 1;
 
 	/* use the sequence to uid mapping provided by the client to
 	 * skip over any initial matches - see RFC 5162 section 3.1 */
@@ -949,14 +945,16 @@ struct seqset *index_vanished(struct index_state *state,
 		/* first non-match, we'll start here */
 		if (state->map[msgno-1].uid != uid)
 		    break;
-		/* ok, they matched - so we can start at the recno and UID
-		 * first past the match */
+		/* ok, they matched - so we can start after here */
 		prevuid = uid;
-		recno = state->map[msgno-1].recno + 1;
 	    }
 	    seqset_free(msgnolist);
 	    seqset_free(uidlist);
 	}
+
+	const struct index_record *record;
+	struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, ITER_SKIP_EXPUNGED);
+	mailbox_iter_startuid(iter, prevuid);
 
 	/* possible efficiency improvement - use "seq_getnext" on seq
 	 * to avoid incrementing through every single number for prevuid.
@@ -967,17 +965,14 @@ struct seqset *index_vanished(struct index_state *state,
 	/* for the rest of the mailbox, we're just going to have to assume
 	 * every record in the requested range which DOESN'T exist has been
 	 * expunged, so build a complete sequence */
-	for (; recno <= mailbox->i.num_records; recno++) {
-	    if (mailbox_read_index_record(mailbox, recno, &record))
-		continue;
-	    if (record.system_flags & FLAG_EXPUNGED)
-		continue;
-	    while (++prevuid < record.uid) {
+	while ((record = mailbox_iter_step(iter))) {
+	    while (++prevuid < record->uid) {
 		if (!params->sequence || seqset_ismember(seq, prevuid))
 		    seqset_add(outlist, prevuid, 1);
 	    }
-	    prevuid = record.uid;
+	    prevuid = record->uid;
 	}
+	mailbox_iter_done(&iter);
 
 	/* include the space past the final record up to last_uid as well */
 	while (++prevuid <= mailbox->i.last_uid) {
