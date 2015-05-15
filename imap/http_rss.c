@@ -654,8 +654,10 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     buf_reset(msg_buf);
 
     /* Fetch index record for the message */
-    if (uid) r = mailbox_find_index_record(mailbox, uid, record, NULL);
-    else r = mailbox_read_index_record(mailbox, recno, record);
+    memset(record, 0, sizeof(struct index_record));
+    record->recno = recno;
+    record->uid = uid;
+    r = mailbox_reload_index_record(mailbox, record);
     if ((r == CYRUSDB_NOTFOUND) ||
 	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
 	txn->error.desc = "Message has been removed\r\n";
