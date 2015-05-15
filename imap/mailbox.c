@@ -3550,6 +3550,12 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     return 0;
 }
 
+EXPORTED int mailbox_reload_index_record(struct mailbox *mailbox,
+					 struct index_record *record)
+{
+    return mailbox_read_index_record(mailbox, record->recno, record);
+}
+
 /*
  * Rewrite an index record in a mailbox - updates all
  * necessary tracking fields automatically.
