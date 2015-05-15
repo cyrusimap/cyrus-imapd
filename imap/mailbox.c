@@ -6405,6 +6405,12 @@ EXPORTED struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
     return iter;
 }
 
+EXPORTED void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid)
+{
+    struct mailbox *mailbox = iter->mailbox;
+    iter->recno = uid ? mailbox_finduid(mailbox, uid-1) : 0;
+}
+
 EXPORTED const struct index_record *mailbox_iter_step(struct mailbox_iter *iter)
 {
     struct mailbox *mailbox = iter->mailbox;
