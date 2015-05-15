@@ -6443,6 +6443,7 @@ EXPORTED const struct index_record *mailbox_iter_step(struct mailbox_iter *iter)
     for (iter->recno++; iter->recno <= mailbox->i.num_records; iter->recno++) {
 	int r = mailbox_read_index_record(mailbox, iter->recno, &iter->record);
 	if (r) continue;
+	if (!iter->record.uid) continue; /* can happen on damaged mailboxes */
 	if ((iter->record.system_flags & iter->skipflags)) continue;
 	if (iter->record.modseq <= iter->changedsince) continue;
 	return &iter->record;
