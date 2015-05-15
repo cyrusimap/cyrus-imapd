@@ -10685,23 +10685,22 @@ static int xfer_backport_seen_item(struct xfer_item *item,
 {
     struct mailbox *mailbox = item->mailbox;
     struct seqset *outlist = NULL;
-    struct index_record record;
+    const struct index_record *record;
     struct seendata sd = SEENDATA_INITIALIZER;
-    unsigned recno;
     int r;
 
     outlist = seqset_init(mailbox->i.last_uid, SEQ_MERGE);
 
-    for (recno = 1; recno < mailbox->i.num_records; recno++) {
-	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue;
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-	if (record.system_flags & FLAG_SEEN)
-	    seqset_add(outlist, record.uid, 1);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+
+    while ((record = mailbox_iter_step(iter))) {
+	if (record->system_flags & FLAG_SEEN)
+	    seqset_add(outlist, record->uid, 1);
 	else
-	    seqset_add(outlist, record.uid, 0);
+	    seqset_add(outlist, record->uid, 0);
     }
+
+    mailbox_iter_done(&iter);
 
     sd.lastread = mailbox->i.recenttime;
     sd.lastuid = mailbox->i.recentuid;
