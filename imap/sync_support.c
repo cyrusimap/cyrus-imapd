@@ -1406,18 +1406,13 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
     if (printrecords) {
 	const struct index_record *record;
-	struct dlist *il;
 	struct dlist *rl = dlist_newlist(kl, "RECORD");
-	int send_file;
+	modseq_t modseq = remote ? remote->highestmodseq : 0;
 
-	iter = mailbox_iter_init(mailbox, 0, 0);
+	iter = mailbox_iter_init(mailbox, modseq, 0);
 	while ((record = mailbox_iter_step(iter))) {
 	    /* start off thinking we're sending the file too */
-	    send_file = 1;
-
-	    /* seen it already! SKIP */
-	    if (remote && record->modseq <= remote->highestmodseq)
-		continue;
+	    int send_file = 1;
 
 	    /* does it exist at the other end?  Don't send it */
 	    if (remote && record->uid <= remote->last_uid)
@@ -1436,7 +1431,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 		if (r) goto done;
 	    }
 
-	    il = dlist_newkvlist(rl, "RECORD");
+	    struct dlist *il = dlist_newkvlist(rl, "RECORD");
 	    dlist_setnum32(il, "UID", record->uid);
 	    dlist_setnum64(il, "MODSEQ", record->modseq);
 	    dlist_setdate(il, "LAST_UPDATED", record->last_updated);
