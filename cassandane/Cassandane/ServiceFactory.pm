@@ -64,7 +64,7 @@ sub create
     elsif ($name =~ m/sync/)
     {
 	return Cassandane::Service->new(
-				argv => ['sync_server'],
+				argv => ['imapd'],
 				%params);
     }
     elsif ($name =~ m/lmtp/)
