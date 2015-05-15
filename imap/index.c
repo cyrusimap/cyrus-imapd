@@ -182,19 +182,21 @@ static const struct thread_algorithm thread_algs[] = {
 
 static int index_reload_record(struct index_state *state,
 			       uint32_t msgno,
-			       struct index_record *recordp)
+			       struct index_record *record)
 {
     struct index_map *im = &state->map[msgno-1];
     int r = 0;
     int i;
 
+    memset(record, 0, sizeof(struct index_record));
     if (!im->recno) {
 	/* doh, gotta just fill in what we know */
-	memset(recordp, 0, sizeof(struct index_record));
-	recordp->uid = im->uid;
+	record->uid = im->uid;
     }
     else {
-	r = mailbox_read_index_record(state->mailbox, im->recno, recordp);
+	record->recno = im->recno;
+	record->uid = im->uid;
+	r = mailbox_reload_index_record(state->mailbox, record);
     }
     /* NOTE: we have released the cyrus.index lock at this point, but are
      * still holding the mailbox name relock.  This means nobody can rewrite
@@ -212,37 +214,37 @@ static int index_reload_record(struct index_state *state,
     if (r) return r;
 
     /* better be! */
-    assert(recordp->uid == im->uid);
+    assert(record->uid == im->uid);
 
     /* restore mutable fields */
-    recordp->modseq = im->modseq;
-    recordp->system_flags = im->system_flags;
-    recordp->cache_offset = im->cache_offset;
+    record->modseq = im->modseq;
+    record->system_flags = im->system_flags;
+    record->cache_offset = im->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	recordp->user_flags[i] = im->user_flags[i];
+	record->user_flags[i] = im->user_flags[i];
 
     return 0;
 }
 
 static int index_rewrite_record(struct index_state *state,
 				uint32_t msgno,
-				struct index_record *recordp)
+				struct index_record *record)
 {
     struct index_map *im = &state->map[msgno-1];
     int i;
     int r;
 
-    assert(recordp->uid == im->uid);
+    assert(record->uid == im->uid);
 
-    r = mailbox_rewrite_index_record(state->mailbox, recordp);
+    r = mailbox_rewrite_index_record(state->mailbox, record);
     if (r) return r;
 
     /* update tracking of mutable fields */
-    im->modseq = recordp->modseq;
-    im->system_flags = recordp->system_flags;
-    im->cache_offset = recordp->cache_offset;
+    im->modseq = record->modseq;
+    im->system_flags = record->system_flags;
+    im->cache_offset = record->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	im->user_flags[i] = recordp->user_flags[i];
+	im->user_flags[i] = record->user_flags[i];
 
     return 0;
 }
