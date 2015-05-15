@@ -2907,7 +2907,7 @@ out:
 #ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
 				  const struct index_record *old,
-				  const struct index_record *new)
+				  struct index_record *new)
 {
     const char *userid = mboxname_to_userid(mailbox->name);
     struct carddav_db *carddavdb = NULL;
@@ -3004,7 +3004,7 @@ done:
 
 static int mailbox_update_caldav(struct mailbox *mailbox,
 				 const struct index_record *old,
-				 const struct index_record *new)
+				 struct index_record *new)
 {
     const char *userid = mboxname_to_userid(mailbox->name);
     struct caldav_db *caldavdb = NULL;
@@ -3134,7 +3134,7 @@ done:
 
 static int mailbox_update_webdav(struct mailbox *mailbox,
 				 const struct index_record *old,
-				 const struct index_record *new)
+				 struct index_record *new)
 {
     const char *userid = mboxname_to_userid(mailbox->name);
     struct webdav_db *webdavdb = NULL;
@@ -3224,7 +3224,7 @@ done:
 
 static int mailbox_update_dav(struct mailbox *mailbox,
 			      const struct index_record *old,
-			      const struct index_record *new)
+			      struct index_record *new)
 {
     if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
 	return mailbox_update_carddav(mailbox, old, new);
@@ -3308,9 +3308,9 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
 #endif // WITH_DAV
 
-EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
-				 const struct index_record *old,
-				 const struct index_record *new)
+static int mailbox_update_conversations(struct mailbox *mailbox,
+					const struct index_record *old,
+					struct index_record *new)
 {
     int r = 0;
     struct mboxname_parts parts;
@@ -3528,7 +3528,7 @@ EXPORTED int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t newmod
  * support for transactional mailbox updates later.  For now,
  * we expect callers to have already done all sanity checking */
 static int mailbox_update_indexes(struct mailbox *mailbox,
-				  struct index_record *old,
+				  const struct index_record *old,
 				  struct index_record *new)
 {
     int r = 0;
@@ -4794,8 +4794,10 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((record = mailbox_iter_step(iter))) {
-	r = mailbox_update_dav(mailbox, NULL, record);
+	struct index_record copyrecord = *record;
+	r = mailbox_update_dav(mailbox, NULL, &copyrecord);
 	if (r) break;
+	/* in THEORY there maybe changes here that we should be saving... */
     }
     mailbox_iter_done(&iter);
 
@@ -4818,7 +4820,15 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
 	if (!record->cid)
 	    continue;
 
-	r = mailbox_update_conversations(mailbox, NULL, record);
+	struct index_record copyrecord = *record;
+	r = mailbox_update_conversations(mailbox, NULL, &copyrecord);
+	if (r) break;
+
+	if (copyrecord.cid == record->cid)
+	    continue;
+
+	/* we had a cid change? */
+	r = mailbox_rewrite_index_record(mailbox, &copyrecord);
 	if (r) break;
     }
     mailbox_iter_done(&iter);
