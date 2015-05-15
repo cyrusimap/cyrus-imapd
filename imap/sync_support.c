@@ -4257,7 +4257,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 	}
 
 	/* no more replica records, but still master records */
-	if (mrecord) {
+	else if (mrecord) {
 	    /* if the replica has seen this UID, we need to renumber.
 	     * Otherwise it will replicate fine as-is */
 	    if (mrecord->uid <= last_uid) {
