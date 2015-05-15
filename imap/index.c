@@ -180,9 +180,9 @@ static const struct thread_algorithm thread_algs[] = {
     { NULL, NULL }
 };
 
-static int index_reload_record(struct index_state *state,
-			       uint32_t msgno,
-			       struct index_record *record)
+EXPORTED int index_reload_record(struct index_state *state,
+				 uint32_t msgno,
+				 struct index_record *record)
 {
     struct index_map *im = &state->map[msgno-1];
     int r = 0;

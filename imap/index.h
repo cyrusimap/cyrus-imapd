@@ -329,4 +329,9 @@ extern int index_getuidsequence(struct index_state *state,
 extern const char *index_mboxname(const struct index_state *state);
 extern int index_hasrights(const struct index_state *state, int rights);
 
+extern int index_reload_record(struct index_state *state,
+			       uint32_t msgno,
+			       struct index_record *record);
+
+
 #endif /* INDEX_H */
