@@ -3775,13 +3775,14 @@ static int mailbox_full_update(struct sync_folder *local,
     }
 
     if (mailbox->i.highestmodseq < highestmodseq) {
-	mailbox_modseq_dirty(mailbox);
-	/* highestmodseq on replica is dirty - we must go to at least 
-	 * one higher! */
+	/* highestmodseq on replica is dirty - we must copy and then dirty
+	 * so we go one higher! */
 	syslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica %s"
 	       ", updating " MODSEQ_FMT " => " MODSEQ_FMT,
 	       mailbox->name, mailbox->i.highestmodseq, highestmodseq+1);
-	mailbox->i.highestmodseq = highestmodseq+1;
+	mailbox->modseq_dirty = 0;
+	mailbox->i.highestmodseq = highestmodseq;
+	mailbox_modseq_dirty(mailbox);
     }
 
     r = mailbox_update_loop(mailbox, kr->head, last_uid,
