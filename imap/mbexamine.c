@@ -196,14 +196,14 @@ static int do_examine(char *name,
 		      int maycreate __attribute__((unused)),
 		      void *rock __attribute__((unused)))
 {
-    unsigned i, msgno, recno;
+    unsigned i, msgno;
     int r = 0;
     int flag = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
-    struct index_record record;
+    const struct index_record *record;
     int j;
-    
+
     signals_poll();
 
     /* Convert internal name to external */
@@ -271,16 +271,11 @@ static int do_examine(char *name,
     printf("\n Message Info:\n");
 
     msgno = 1;
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue;
-
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    while ((record = mailbox_iter_step(iter))) {
 	if (wantvalue) {
 	    if (wantuid) {
-		if (record.uid != wantvalue) continue;
+		if (record->uid != wantvalue) continue;
 	    } else {
 		if (msgno != wantvalue) continue;
 	    }
@@ -288,51 +283,53 @@ static int do_examine(char *name,
 	}
 
 	printf("%06u> UID:%08u   INT_DATE:%lu SENTDATE:%lu SIZE:%-6u\n",
-	       msgno, record.uid, record.internaldate,
-	       record.sentdate, record.size);
+	       msgno, record->uid, record->internaldate,
+	       record->sentdate, record->size);
 	printf("      > HDRSIZE:%-6u LASTUPD :%lu SYSFLAGS:%08X",
-	       record.header_size, record.last_updated,
-	       record.system_flags);
+	       record->header_size, record->last_updated,
+	       record->system_flags);
 	if (mailbox->i.minor_version >= 5)
-	    printf("   LINES:%-6u\n", record.content_lines);
+	    printf("   LINES:%-6u\n", record->content_lines);
 
 	if (mailbox->i.minor_version >= 6)
-	    printf("      > CACHEVER:%-2u", record.cache_version);
+	    printf("      > CACHEVER:%-2u", record->cache_version);
 
 	if (mailbox->i.minor_version >= 7) {
-	    printf(" GUID:%s", message_guid_encode(&record.guid));
+	    printf(" GUID:%s", message_guid_encode(&record->guid));
 	}
 
 	if (mailbox->i.minor_version >= 8) {
-	    printf(" MODSEQ:" MODSEQ_FMT, record.modseq);
+	    printf(" MODSEQ:" MODSEQ_FMT, record->modseq);
 	}
 
 	if (mailbox->i.minor_version >= 13) {
-	    printf("  THRID: %llx", record.cid);
+	    printf("  THRID: %llx", record->cid);
 	}
 
 	printf("\n");
 
 	printf("      > USERFLAGS:");
 	for (j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {
-	    printf(" %08X", record.user_flags[j]);
+	    printf(" %08X", record->user_flags[j]);
 	}
 	printf("\n");
 
-	if (!mailbox_cacherecord(mailbox, &record)) {
-	    print_rec("Envel", cacheitem_buf(&record, CACHE_ENVELOPE));
-	    print_rec("BdyStr", cacheitem_buf(&record, CACHE_BODYSTRUCTURE));
-	    print_rec("Body", cacheitem_buf(&record, CACHE_BODY));
-	    print_rec("CacHdr", cacheitem_buf(&record, CACHE_HEADERS));
-	    print_rec("From", cacheitem_buf(&record, CACHE_FROM));
-	    print_rec("To", cacheitem_buf(&record, CACHE_TO));
-	    print_rec("Cc", cacheitem_buf(&record, CACHE_CC));
-	    print_rec("Bcc", cacheitem_buf(&record, CACHE_BCC));
-	    print_rec("Subjct", cacheitem_buf(&record, CACHE_SUBJECT));
+	if (!mailbox_cacherecord(mailbox, record)) {
+	    print_rec("Envel", cacheitem_buf(record, CACHE_ENVELOPE));
+	    print_rec("BdyStr", cacheitem_buf(record, CACHE_BODYSTRUCTURE));
+	    print_rec("Body", cacheitem_buf(record, CACHE_BODY));
+	    print_rec("CacHdr", cacheitem_buf(record, CACHE_HEADERS));
+	    print_rec("From", cacheitem_buf(record, CACHE_FROM));
+	    print_rec("To", cacheitem_buf(record, CACHE_TO));
+	    print_rec("Cc", cacheitem_buf(record, CACHE_CC));
+	    print_rec("Bcc", cacheitem_buf(record, CACHE_BCC));
+	    print_rec("Subjct", cacheitem_buf(record, CACHE_SUBJECT));
 	}
 
 	if (flag) break;
     }
+
+    mailbox_iter_done(&iter);
 
     if (wantvalue && !flag) {
 	printf("Desired message not found\n");
@@ -352,11 +349,10 @@ static int do_quota(char *name,
 		    int maycreate __attribute__((unused)),
 		    void *rock __attribute__((unused)))
 {
-    uint32_t recno;
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
-    struct index_record record;
+    const struct index_record *record;
     quota_t total = 0;
     const char *fname;
     struct stat sbuf;
@@ -377,14 +373,9 @@ static int do_quota(char *name,
 	goto done;
     }
 
-    for(recno = 1; recno <= mailbox->i.num_records; recno++) {
-	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue;
-
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-
-	fname = mailbox_record_fname(mailbox, &record);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    while ((record = mailbox_iter_step(iter))) {
+	fname = mailbox_record_fname(mailbox, record);
 
 	if (stat(fname, &sbuf) != 0) {
 	    syslog(LOG_WARNING,
@@ -392,14 +383,15 @@ static int do_quota(char *name,
 	    continue;
 	}
 
-	if (record.size != (unsigned) sbuf.st_size) {
-	    printf("  Message %u has INCORRECT size in index record\n", record.uid);
+	if (record->size != (unsigned) sbuf.st_size) {
+	    printf("  Message %u has INCORRECT size in index record\n", record->uid);
 	    r = 0;
 	    goto done;
 	}
 
 	total += sbuf.st_size;
     }
+    mailbox_iter_done(&iter);
 
     if (mailbox->i.quota_mailbox_used != total) {
 	printf("  Mailbox has INCORRECT total quota usage\n");
