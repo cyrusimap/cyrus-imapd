@@ -66,10 +66,10 @@ void message_guid_generate(struct message_guid *guid,
 void message_guid_copy(struct message_guid *dst, const struct message_guid *src);
 
 /* Compare a pair of GUIDs: Returns 1 => match. */
-int message_guid_equal(struct message_guid *guid1,
-			 struct message_guid *guid2);
-int message_guid_cmp(struct message_guid *guid1,
-		     struct message_guid *guid2);
+int message_guid_equal(const struct message_guid *guid1,
+		       const struct message_guid *guid2);
+int message_guid_cmp(const struct message_guid *guid1,
+		     const struct message_guid *guid2);
 
 /* Convert GUID into hash value for hash table lookup
  * Returns: positive int in range [0, hash_size-1]
@@ -80,7 +80,7 @@ unsigned long message_guid_hash(const struct message_guid *guid, int hash_size);
 void message_guid_set_null(struct message_guid *guid);
 
 /* Returns 1 if GUID is NULL value */
-int message_guid_isnull(struct message_guid *guid);
+int message_guid_isnull(const struct message_guid *guid);
 
 /* Export Message GUID as byte sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)

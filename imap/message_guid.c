@@ -301,14 +301,14 @@ EXPORTED void message_guid_copy(struct message_guid *dst, const struct message_g
  *
  ************************************************************************/
 
-EXPORTED int message_guid_equal(struct message_guid *g1,
-		       struct message_guid *g2)
+EXPORTED int message_guid_equal(const struct message_guid *g1,
+				const struct message_guid *g2)
 {
     return (memcmp(g1->value, g2->value, MESSAGE_GUID_SIZE) == 0);
 }
 
-EXPORTED int message_guid_cmp(struct message_guid *g1,
-		       struct message_guid *g2)
+EXPORTED int message_guid_cmp(const struct message_guid *g1,
+			      const struct message_guid *g2)
 {
     return memcmp(g1->value, g2->value, MESSAGE_GUID_SIZE);
 }
@@ -358,17 +358,19 @@ EXPORTED void message_guid_set_null(struct message_guid *guid)
  *
  ************************************************************************/
 
-EXPORTED int message_guid_isnull(struct message_guid *guid)
+EXPORTED int message_guid_isnull(const struct message_guid *guid)
 {
     if (guid->status == GUID_UNKNOWN) {
-	unsigned char *p = guid->value;
+	/* allow internal recalculation while still being const */
+	struct message_guid *backdoor = (struct message_guid *)guid;
+	const unsigned char *p = guid->value;
 	int i;
 
 	for (i = 0; (i < MESSAGE_GUID_SIZE) && !*p++; i++);
-	guid->status = (i == MESSAGE_GUID_SIZE) ? GUID_NULL : GUID_NONNULL;
+	backdoor->status = (i == MESSAGE_GUID_SIZE) ? GUID_NULL : GUID_NONNULL;
     }
 
-    return(guid->status == GUID_NULL);
+    return (guid->status == GUID_NULL);
 }
 
 /* message_guid_export() *************************************************
