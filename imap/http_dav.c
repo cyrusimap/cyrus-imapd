@@ -5378,7 +5378,7 @@ int report_sync_col(struct transaction_t *txn,
 	char *p, *resource = NULL;
 	struct dav_data ddata;
 
-	if (mailbox_read_index_record(mailbox, istate.map[msgno-1].recno, &thisrecord))
+	if (index_reload_record(&istate, msgno, &thisrecord))
 	    continue;
 
 	/* Get resource filename from Content-Disposition header */
