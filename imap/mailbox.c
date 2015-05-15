@@ -403,18 +403,18 @@ HIDDEN unsigned mailbox_cached_header_inline(const char *text)
     return BIT32_MAX;
 }
 
-static const char *cache_base(struct index_record *record)
+static const char *cache_base(const struct index_record *record)
 {
     const char *base = record->crec.buf->s;
     return base + record->crec.offset;
 }
 
-static size_t cache_len(struct index_record *record)
+static size_t cache_len(const struct index_record *record)
 {
     return record->crec.len;
 }
 
-static struct buf *cache_buf(struct index_record *record)
+static struct buf *cache_buf(const struct index_record *record)
 {
     static struct buf staticbuf;
 
@@ -585,7 +585,7 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
 }
 
 static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
-					    struct index_record *record)
+					    const struct index_record *record)
 {
     const char *fname;
 
@@ -598,7 +598,7 @@ static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
 }
 
 static struct mappedfile *repack_cachefile(struct mailbox_repack *repack,
-					   struct index_record *record)
+					   const struct index_record *record)
 {
     const char *fname;
 
@@ -653,7 +653,7 @@ static int mailbox_append_cache(struct mailbox *mailbox,
 }
 
 EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
-				 struct index_record *record)
+				 const struct index_record *record)
 {
     struct mappedfile *cachefile;
     bit32 crc;
@@ -672,8 +672,12 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
     if (!record->cache_offset)
 	goto err;
 
+    /* we do something nasty here to work around lazy loading while still
+     * giving const protection to records which are only used for read */
+    struct index_record *backdoor = (struct index_record *)record;
+
     /* try to parse the cache record */
-    r = cache_parserecord(cachefile, record->cache_offset, &record->crec);
+    r = cache_parserecord(cachefile, record->cache_offset, &backdoor->crec);
     if (r) goto err;
 
     /* old-style record */
@@ -708,14 +712,14 @@ err:
 	    return IMAP_IOERROR;
 	}
 
-	r = message_parse(fname, record);
+	r = message_parse(fname, backdoor);
 	if (r) {
 	    syslog(LOG_ERR, "IOERROR: failed to parse message for %s uid %u",
 		   mailbox->name, record->uid);
 	    return r;
 	}
 
-	record->cache_offset = 0;
+	backdoor->cache_offset = 0;
     }
 
     return 0;

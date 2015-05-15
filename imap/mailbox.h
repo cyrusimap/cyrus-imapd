@@ -492,7 +492,7 @@ extern int mailbox_map_record(struct mailbox *mailbox, const struct index_record
 
 /* cache record API */
 int mailbox_cacherecord(struct mailbox *mailbox,
-			struct index_record *record);
+			const struct index_record *record);
 char *mailbox_cache_get_msgid(struct mailbox *mailbox,
 			      struct index_record *record);
 
