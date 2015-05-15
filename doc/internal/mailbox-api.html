@@ -207,6 +207,7 @@ uint32_t recno;
 struct index_record record;
 int make_changes;
 
+/* DEPRECATED */
 for (recno = 1; recno &lt;= mailbox-&gt;i.num_records; recno++) {
     if (mailbox_read_index_record(mailbox, recno, &amp;record))
         fatal("invalid record", EC_SOFTWARE); // or return an error
@@ -216,6 +217,19 @@ for (recno = 1; recno &lt;= mailbox-&gt;i.num_records; recno++) {
     if (make_changes)
         mailbox_rewrite_index_record(mailbox, &amp;record);
 }
+
+/* the new way */
+int make_change;
+const struct index_record *record;
+struct mailbox_iter *iter;
+
+iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+while ((record = mailbox_iter_step(iter))) {
+    make_changes = do_stuff(mailbox, record);
+    if (make_changes)
+        mailbox_rewrite_index_record(mailbox, record);
+}
+mailbox_iter_done(&amp;iter);
 </pre>
 
 <p>NOTE: <tt>mailbox_rewrite_index_record</tt> doesn't need a recno,
