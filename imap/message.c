@@ -3379,7 +3379,7 @@ static int message_need(message_t *m, unsigned int need)
     if (is_missing(M_RECORD|M_UID)) {
 	r = message_need(m, M_MAILBOX);
 	if (r) return r;
-	r = mailbox_read_index_record(m->mailbox, m->record.recno, &m->record);
+	r = mailbox_reload_index_record(m->mailbox, &m->record);
 	if (r) return r;
 	found(M_RECORD|M_UID);
     }
