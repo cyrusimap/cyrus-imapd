@@ -6366,11 +6366,13 @@ int dav_store_resource(struct transaction_t *txn,
 		txn->error.desc = "append_commit() failed\r\n";
 	    }
 	    else {
-		struct index_record newrecord;
-
 		/* Read index record for new message (always the last one) */
-		mailbox_read_index_record(mailbox, mailbox->i.num_records,
-					  &newrecord);
+		struct index_record newrecord;
+		memset(&newrecord, 0, sizeof(struct index_record));
+		newrecord.recno = mailbox->i.num_records;
+		newrecord.uid = mailbox->i.last_uid;
+
+		mailbox_reload_index_record(mailbox, &newrecord);
 
 		if (oldrecord) {
 		    /* Now that we have the replacement message in place
