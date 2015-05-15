@@ -1,0 +1,30 @@
+
+==============
+??
+
+commit 0fac0a0
+Author:     ellie timoney <ellie@fastmail.com>
+AuthorDate: Fri May 15 10:58:38 2015 +1000
+Commit:     ellie timoney <ellie@fastmail.com>
+CommitDate: Fri May 15 10:58:38 2015 +1000
+
+    ptclient: fixed typo
+
+    introduced by adab408
+
+commit dd9a2e1 (phab/cyrus-imapd-2.5, cyrus-imapd-2.5)
+Author:     Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen@kolabsys.com>
+AuthorDate: Wed May 13 14:46:06 2015 +0200
+Commit:     Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen@kolabsys.com>
+CommitDate: Wed May 13 14:46:06 2015 +0200
+
+    Oops, LOG_ERROR -> LOG_ERR
+
+commit adab408
+Author:     Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen@kolabsys.com>
+AuthorDate: Wed May 13 14:20:23 2015 +0200
+Commit:     Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen@kolabsys.com>
+CommitDate: Wed May 13 14:20:23 2015 +0200
+
+    Use all member attribute values of groups found without a sizelimit, if the sizelimit is indeed configured
+
