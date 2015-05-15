@@ -1960,7 +1960,7 @@ static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
  * If no message with UID 'uid', returns the message with
  * the higest UID not greater than 'uid'.
  */
-EXPORTED uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
+static uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
 {
     uint32_t low = 1;
     uint32_t high = mailbox->i.num_records;

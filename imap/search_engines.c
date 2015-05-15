@@ -196,30 +196,22 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 				   struct mailbox *mailbox,
 				   int flags)
 {
-    uint32_t recno;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
     int r2;
-    int first = 1;
     int was_partial = 0;
     int batch_size = search_batch_size();
     ptrarray_t batch = PTRARRAY_INITIALIZER;
-    struct index_record record;
+    const struct index_record *record;
     int incremental = (flags & SEARCH_UPDATE_INCREMENTAL);
 
     r = rx->begin_mailbox(rx, mailbox, flags);
     if (r) goto done;
 
-    first = mailbox_finduid(mailbox, rx->first_unindexed_uid(rx));
-    if (!first) first = 1; /* empty mailbox */
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
 
-    for (recno = first; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) continue;
-
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-
-	if (rx->is_indexed(rx, record.uid))
+    while ((record = mailbox_iter_step(iter))) {
+	if (rx->is_indexed(rx, record->uid))
 	    continue;
 
 	if (incremental && batch.count >= batch_size) {
@@ -229,8 +221,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	    break;
 	}
 
-	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
+	ptrarray_append(&batch, message_new_from_record(mailbox, record));
     }
+    mailbox_iter_done(&iter);
 
     if (batch.count)
 	r = flush_batch(rx, mailbox, &batch);
