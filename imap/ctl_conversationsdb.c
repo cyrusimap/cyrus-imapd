@@ -149,25 +149,24 @@ static int zero_cid_cb(const char *mboxname,
 		       void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
-    struct index_record record;
+    const struct index_record *record;
     int r;
-    uint32_t recno;
 
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) return r;
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((record = mailbox_iter_step(iter))) {
 	/* already zero, fine */
-	if (record.cid == NULLCONVERSATION)
+	if (record->cid == NULLCONVERSATION)
 	    continue;
-    
-	record.cid = NULLCONVERSATION;
-	r = mailbox_rewrite_index_record(mailbox, &record);
+
+	struct index_record oldrecord = *record;
+	oldrecord.cid = NULLCONVERSATION;
+	r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 	if (r) goto done;
     }
+    mailbox_iter_done(&iter);
 
  done:
     mailbox_close(&mailbox);
@@ -200,8 +199,7 @@ static int build_cid_cb(const char *mboxname,
 		        void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
-    struct index_record record;
-    uint32_t recno;
+    const struct index_record *record;
     int r;
     struct conversations_state *cstate = conversations_get_mbox(mboxname);
 
@@ -210,27 +208,24 @@ static int build_cid_cb(const char *mboxname,
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) return r;
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((record = mailbox_iter_step(iter))) {
 	/* already assigned, fine */
-	if (record.cid != NULLCONVERSATION)
+	if (record->cid != NULLCONVERSATION)
 	    continue;
 
-	/* no file, can't calculate */
-	if (record.system_flags & FLAG_UNLINKED)
-	    continue;
-
-	r = mailbox_cacherecord(mailbox, &record);
+	struct index_record oldrecord = *record;
+	r = mailbox_cacherecord(mailbox, &oldrecord);
 	if (r) goto done;
 
-	r = message_update_conversations(cstate, &record, NULL);
+	r = message_update_conversations(cstate, &oldrecord, NULL);
 	if (r) goto done;
 
-	r = mailbox_rewrite_index_record(mailbox, &record);
+	r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 	if (r) goto done;
     }
+
+    mailbox_iter_done(&iter);
 
  done:
     mailbox_close(&mailbox);
