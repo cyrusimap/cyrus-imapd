@@ -1896,7 +1896,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	return;
     }
 
-    if (mailbox_read_index_record(group_state->mailbox, msgno, &record)) {
+    if (index_reload_record(group_state, msgno, &record)) {
 	prot_printf(nntp_out, "403 Could not read index record\r\n");
 	return;
     }
