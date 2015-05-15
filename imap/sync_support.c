@@ -1409,17 +1409,9 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 	struct dlist *il;
 	struct dlist *rl = dlist_newlist(kl, "RECORD");
 	int send_file;
-	uint32_t prevuid = 0;
 
 	iter = mailbox_iter_init(mailbox, 0, 0);
 	while ((record = mailbox_iter_step(iter))) {
-	    if  (record->uid <= prevuid) {
-		syslog(LOG_ERR, "SYNCERROR: corrupt mailbox %s %u, ordering",
-		       mailbox->name, record->recno);
-		return IMAP_IOERROR;
-	    }
-	    prevuid = record->uid;
-
 	    /* start off thinking we're sending the file too */
 	    send_file = 1;
 
