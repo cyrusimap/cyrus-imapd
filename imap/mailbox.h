@@ -523,9 +523,6 @@ extern int mailbox_refresh_index_header(struct mailbox *mailbox);
 extern int mailbox_write_header(struct mailbox *mailbox, int force);
 extern void mailbox_index_dirty(struct mailbox *mailbox);
 extern void mailbox_modseq_dirty(struct mailbox *mailbox);
-extern int mailbox_read_index_record(struct mailbox *mailbox,
-				     uint32_t recno,
-				     struct index_record *record);
 extern int mailbox_reload_index_record(struct mailbox *mailbox,
 				     struct index_record *record);
 extern int mailbox_rewrite_index_record(struct mailbox *mailbox,

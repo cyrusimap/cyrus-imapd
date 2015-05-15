@@ -1811,9 +1811,9 @@ static int _commit_changes(struct mailbox *mailbox)
 /*
  * Read an index record from a mailbox
  */
-EXPORTED int mailbox_read_index_record(struct mailbox *mailbox,
-			      uint32_t recno,
-			      struct index_record *record)
+static int mailbox_read_index_record(struct mailbox *mailbox,
+				     uint32_t recno,
+				     struct index_record *record)
 {
     const char *buf;
     unsigned offset;
