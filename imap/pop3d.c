@@ -846,7 +846,9 @@ static int expunge_deleted(void)
 	    continue;
 
 	/* error reading? abort */
-	r = mailbox_read_index_record(popd_mailbox, popd_map[msgno-1].recno, &record);
+	memset(&record, 0, sizeof(struct index_record));
+	record.recno = popd_map[msgno-1].recno;
+	r = mailbox_reload_index_record(popd_mailbox, &record);
 	if (r) break;
 
 	/* already expunged? skip */
@@ -2016,7 +2018,9 @@ static int blat(int msgno, int lines)
 
     /* XXX - map file */
 
-    if (mailbox_read_index_record(popd_mailbox, popd_map[msgno-1].recno, &record)) {
+    memset(&record, 0, sizeof(struct index_record));
+    record.recno = popd_map[msgno-1].recno;
+    if (mailbox_reload_index_record(popd_mailbox, &record)) {
 	prot_printf(popd_out, "-ERR [SYS/PERM] Could not read index record\r\n");
 	return IMAP_IOERROR;
     }
@@ -2159,8 +2163,9 @@ static int update_seen(void)
     for (msgno = 1; msgno <= popd_exists; msgno++) {
 	if (!popd_map[msgno-1].seen)
 	    continue; /* don't even need to check */
-	if (mailbox_read_index_record(popd_mailbox, popd_map[msgno-1].recno,
-				      &record))
+	memset(&record, 0, sizeof(struct index_record));
+	record.recno = popd_map[msgno-1].recno;
+	if (mailbox_reload_index_record(popd_mailbox, &record))
 	    continue;
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue; /* already expunged */
