@@ -329,36 +329,45 @@ struct sync_msgid_list *sync_msgid_list_create(int hash_size)
     l->hash_size = hash_size;
     l->hash      = xzmalloc(hash_size * sizeof(struct sync_msgid *));
     l->count     = 0;
-    l->marked    = 0;
+    l->toupload  = 0;
 
     return(l);
 }
 
-struct sync_msgid *sync_msgid_add(struct sync_msgid_list *l,
-				  struct message_guid *guid)
+struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *l,
+				     struct message_guid *guid)
 {
-    struct sync_msgid *result;
+    struct sync_msgid *msgid;
     int offset;
 
     if (message_guid_isnull(guid))
-        return(NULL);
+	return NULL;
 
-    result = xzmalloc(sizeof(struct sync_msgid));
     offset = message_guid_hash(guid, l->hash_size);
 
-    message_guid_copy(&result->guid, guid);
+    /* do we already have it?  Don't add it again */
+    for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
+	if (message_guid_equal(&msgid->guid, guid))
+	    return msgid;
+    }
+
+    msgid = xzmalloc(sizeof(struct sync_msgid));
+    msgid->need_upload = 1;
+    message_guid_copy(&msgid->guid, guid);
 
     l->count++;
+    l->toupload++;
+
     if (l->tail)
-        l->tail = l->tail->next = result;
+        l->tail = l->tail->next = msgid;
     else
-        l->head = l->tail = result;
+        l->head = l->tail = msgid;
 
     /* Insert at start of list */
-    result->hash_next = l->hash[offset];
-    l->hash[offset]   = result;
+    msgid->hash_next = l->hash[offset];
+    l->hash[offset]   = msgid;
 
-    return(result);
+    return msgid;
 }
 
 void sync_msgid_remove(struct sync_msgid_list *l,
@@ -407,6 +416,7 @@ struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *l,
         if (message_guid_equal(&msgid->guid, guid))
             return(msgid);
     }
+
     return(NULL);
 }
 
@@ -1364,12 +1374,11 @@ static int sync_send_file(struct mailbox *mailbox,
 			  struct sync_msgid_list *part_list,
 			  struct dlist *kupload)
 {
-    struct sync_msgid *msgid;
+    struct sync_msgid *msgid = sync_msgid_insert(part_list, &record->guid);
     const char *fname;
 
-    /* is it already reserved? */
-    msgid = sync_msgid_lookup(part_list, &record->guid);
-    if (msgid && msgid->mark) 
+    /* already uploaded, great */
+    if (!msgid->need_upload)
 	return 0;
 
     /* we'll trust that it exists - if not, we'll bail later,
@@ -1378,6 +1387,11 @@ static int sync_send_file(struct mailbox *mailbox,
     if (!fname) return IMAP_MAILBOX_BADNAME;
 
     dlist_file(kupload, "MESSAGE", topart, &record->guid, record->size, fname);
+
+    /* note that we will be sending it, so it doesn't need to be
+     * sent again */
+    msgid->need_upload = 0;
+    part_list->toupload--;
 
     return 0;
 }
@@ -1612,20 +1626,24 @@ static void reserve_folder(const char *part, const char *mboxname,
 
     /* Open and lock mailbox */
     r = mailbox_open_irl(mboxname, &mailbox);
-    
     if (r) return;
 
-    for (recno = 1; 
-	 part_list->marked < part_list->count && recno <= mailbox->i.num_records;
-	 recno++) {
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	/* ok to skip errors here - just means they'll be uploaded
+	 * rather than reserved */
 	if (mailbox_read_index_record(mailbox, recno, &record))
 	    continue;
 
 	if (record.system_flags & FLAG_UNLINKED)
 	    continue;
 
+	/* do we need it? */
 	item = sync_msgid_lookup(part_list, &record.guid);
-	if (!item || item->mark)
+	if (!item)
+	    continue;
+
+	/* have we already found it? */
+	if (!item->need_upload)
 	    continue;
 
 	/* Attempt to reserve this message */
@@ -1652,8 +1670,11 @@ static void reserve_folder(const char *part, const char *mboxname,
 	    continue;
 	}
 
-	item->mark = 1;
-	part_list->marked++;
+	item->need_upload = 0;
+	part_list->toupload--;
+
+	/* already found everything, drop out */
+	if (!part_list->toupload) break;
     }
 
     mailbox_close(&mailbox);
@@ -1684,7 +1705,7 @@ int sync_apply_reserve(struct dlist *kl,
     for (i = gl->head; i; i = i->next) {
 	if (!i->sval || !message_guid_decode(&tmp_guid, i->sval))
 	    goto parse_err;
-	sync_msgid_add(part_list, &tmp_guid);
+	sync_msgid_insert(part_list, &tmp_guid);
     }
 
     /* need a list so we can mark items */
@@ -1692,9 +1713,8 @@ int sync_apply_reserve(struct dlist *kl,
 	sync_name_list_add(folder_names, i->sval);
     }
 
-    for (folder = folder_names->head; 
-	 part_list->marked < part_list->count && folder;
-	 folder = folder->next) {
+    for (folder = folder_names->head; folder; folder = folder->next) {
+	if (!part_list->toupload) break;
 	if (mboxlist_lookup(folder->name, &mbentry, 0) ||
 	    strcmp(mbentry.partition, partition))
 	    continue; /* try folders on the same partition first! */
@@ -1703,12 +1723,12 @@ int sync_apply_reserve(struct dlist *kl,
     }
 
     /* if we have other folders, check them now */
-    for (folder = folder_names->head; 
-	 part_list->marked < part_list->count && folder;
-	 folder = folder->next) {
+    for (folder = folder_names->head; folder; folder = folder->next) {
+	if (!part_list->toupload) break;
 	if (folder->mark)
 	    continue;
 	reserve_folder(partition, folder->name, part_list);
+	folder->mark = 1;
     }
 
     /* check if we missed any */
@@ -1717,9 +1737,10 @@ int sync_apply_reserve(struct dlist *kl,
 	if (!message_guid_decode(&tmp_guid, i->sval))
 	    continue;
 	item = sync_msgid_lookup(part_list, &tmp_guid);
-	if (item && !item->mark)
+	if (item->need_upload)
 	    dlist_atom(kout, "GUID", i->sval);
     }
+
     if (kout->head)
 	sync_send_response(kout, sstate->pout);
     dlist_free(&kout);
@@ -2675,12 +2696,10 @@ int sync_apply_message(struct dlist *kin,
 	    continue;
 
 	part_list = sync_reserve_partlist(reserve_list, ki->part);
-	msgid = sync_msgid_lookup(part_list, &ki->gval);
-	if (!msgid) 
-	    msgid = sync_msgid_add(part_list, &ki->gval);
-	if (!msgid->mark) {
-	    msgid->mark = 1;
-	    part_list->marked++;
+	msgid = sync_msgid_insert(part_list, &ki->gval);
+	if (msgid->need_upload) {
+	    msgid->need_upload = 0;
+	    part_list->toupload--;
 	}
     }
 
@@ -2751,7 +2770,7 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
 	if (record.uid <= last_uid)
 	    continue;
 
-	sync_msgid_add(part_list, &record.guid);
+	sync_msgid_insert(part_list, &record.guid);
     }
     
     return(0);
@@ -2845,14 +2864,12 @@ static int mark_missing (struct dlist *kin,
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
         }
 
+	/* afraid we will need this after all */
 	msgid = sync_msgid_lookup(part_list, &tmp_guid);
-	if (!msgid) {
-	    syslog(LOG_ERR, "SYNCERROR: reserve: Got unexpected GUID %s", ki->sval);
-	    return IMAP_PROTOCOL_BAD_PARAMETERS;
+	if (msgid && !msgid->need_upload) {
+	    msgid->need_upload = 1;
+	    part_list->toupload++;
 	}
-
-	msgid->mark = 0;
-	part_list->marked--;
     }
 
     return 0;
@@ -2871,7 +2888,7 @@ int sync_reserve_partition(char *partition,
     struct dlist *ki;
     int r;
 
-    if (!part_list->count)
+    if (!part_list->toupload)
 	return 0; /* nothing to reserve */
 
     if (!replica_folders->head)
@@ -2886,9 +2903,11 @@ int sync_reserve_partition(char *partition,
 
     ki = dlist_list(kl, "GUID");
     for (msgid = part_list->head; msgid; msgid = msgid->next) {
+	if (!msgid->need_upload) continue;
 	dlist_atom(ki, "GUID", message_guid_encode(&msgid->guid));
-	msgid->mark = 1;
-	part_list->marked++;
+	/* we will re-add the "need upload" if we get a MISSING response */
+	msgid->need_upload = 0;
+	part_list->toupload--;
     }
 
     sync_send_apply(kl, sync_be->out);
@@ -3945,18 +3964,7 @@ static int update_mailbox_once(struct sync_folder *local,
 	if (!local->mailbox) mailbox_unlock_index(mailbox, NULL);
 	sync_send_apply(kupload, sync_be->out);
 	r = sync_parse_response("MESSAGE", sync_be->in, NULL);
-	if (!r) {
-	    /* update our list of reserved messages on the replica */
-	    struct dlist *ki;
-	    struct sync_msgid *msgid;
-	    for (ki = kupload->head; ki; ki = ki->next) {
-		msgid = sync_msgid_lookup(part_list, &ki->gval);
-		if (!msgid)
-		    msgid = sync_msgid_add(part_list, &ki->gval);
-		msgid->mark = 1;
-		part_list->marked++; 
-	    }
-	}
+	if (r) goto done; /* abort earlier */
     }
 
     /* close before sending the apply - all data is already read */
