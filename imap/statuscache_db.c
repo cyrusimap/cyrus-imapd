@@ -207,8 +207,7 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
     else if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
 	/* Read \Seen state */
 	struct seqset *seq = NULL;
-	uint32_t recno;
-	struct index_record record;
+	const struct index_record *record;
 	int internalseen = mailbox_internal_seen(mailbox, userid);
 	unsigned recentuid;
 
@@ -228,22 +227,20 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
 	    seen_freedata(&sd);
 	}
 
-	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	    if (mailbox_read_index_record(mailbox, recno, &record))
-		continue;
-	    if (record.system_flags & FLAG_EXPUNGED)
-		continue;
-	    if (record.uid > recentuid)
+	struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+	while ((record = mailbox_iter_step(iter))) {
+	    if (record->uid > recentuid)
 		numrecent++;
 	    if (internalseen) {
-		if (!(record.system_flags & FLAG_SEEN))
+		if (!(record->system_flags & FLAG_SEEN))
 		    numunseen++;
 	    }
 	    else {
-		if (!seqset_ismember(seq, record.uid))
+		if (!seqset_ismember(seq, record->uid))
 		    numunseen++;
 	    }
 	}
+	mailbox_iter_done(&iter);
 
 	/* we've calculated the correct values for both */
 	c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
