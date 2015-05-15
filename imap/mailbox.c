@@ -6414,6 +6414,46 @@ close:
     return r;
 }
 
+EXPORTED struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
+						modseq_t changedsince,
+						unsigned flags)
+{
+    struct mailbox_iter *iter = xzmalloc(sizeof(struct mailbox_iter));
+    iter->mailbox = mailbox;
+    iter->changedsince = changedsince;
+
+    /* calculate which system_flags to skip over */
+    if (flags & ITER_SKIP_UNLINKED)
+	iter->skipflags |= FLAG_UNLINKED;
+    if (flags & ITER_SKIP_EXPUNGED)
+	iter->skipflags |= FLAG_EXPUNGED;
+    if (flags & ITER_SKIP_DELETED)
+	iter->skipflags |= FLAG_DELETED;
+
+    return iter;
+}
+
+EXPORTED const struct index_record *mailbox_iter_step(struct mailbox_iter *iter)
+{
+    struct mailbox *mailbox = iter->mailbox;
+    for (iter->recno++; iter->recno <= mailbox->i.num_records; iter->recno++) {
+	int r = mailbox_read_index_record(mailbox, iter->recno, &iter->record);
+	if (r) continue;
+	if ((iter->record.system_flags & iter->skipflags)) continue;
+	if (iter->record.modseq <= iter->changedsince) continue;
+	return &iter->record;
+    }
+    return NULL;
+}
+
+EXPORTED void mailbox_iter_done(struct mailbox_iter **iterp)
+{
+    struct mailbox_iter *iter = *iterp;
+    if (!iter) return;
+    free(iter);
+    *iterp = NULL;
+}
+
 /*
  * Gets messages usage.
  */

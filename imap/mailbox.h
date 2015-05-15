@@ -277,6 +277,18 @@ struct mailbox {
     uint32_t index_change_count;
 };
 
+#define ITER_SKIP_UNLINKED (1<<0)
+#define ITER_SKIP_EXPUNGED (1<<1)
+#define ITER_SKIP_DELETED (1<<2)
+
+struct mailbox_iter {
+    struct mailbox *mailbox;
+    struct index_record record;
+    modseq_t changedsince;
+    uint32_t recno;
+    unsigned skipflags;
+};
+
 /* Offsets of index/expunge header fields
  *
  * NOTE: Since we might be using a 64-bit MODSEQ in the index record,
@@ -601,6 +613,12 @@ void mailbox_annot_changed(struct mailbox *mailbox,
 extern int mailbox_get_annotate_state(struct mailbox *mailbox,
 				      unsigned int uid,
 				      struct annotate_state **statep);
+
+extern struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
+					      modseq_t changedsince,
+					      unsigned flags);
+extern const struct index_record *mailbox_iter_step(struct mailbox_iter *iter);
+extern void mailbox_iter_done(struct mailbox_iter **iterp);
 
 struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);
 
