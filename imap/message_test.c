@@ -215,7 +215,9 @@ int main(int argc, char **argv)
 	    return 1;
 	}
 
-	r = mailbox_read_index_record(mailbox, recno, &record);
+	memset(&record, 0, sizeof(struct index_record));
+	record.recno = recno;
+	r = mailbox_reload_index_record(mailbox, &record);
 	if (r) {
 	    fprintf(stderr, "Failed to read index record %u of %s: %s\n",
 		    recno, mboxname, error_message(r));
