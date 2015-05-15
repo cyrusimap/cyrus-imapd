@@ -136,7 +136,7 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 /* XXX - these two functions should be out in append.c or reserve.c
  * or something more general */
 EXPORTED const char *dlist_reserve_path(const char *part, int isarchive,
-					struct message_guid *guid)
+					const struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
     const char *base = isarchive ? config_archivepartitiondir(part)
@@ -355,7 +355,7 @@ void dlist_makehex64(struct dlist *dl, bit64 val)
     dl->nval = val;
 }
 
-void dlist_makeguid(struct dlist *dl, struct message_guid *guid)
+void dlist_makeguid(struct dlist *dl, const struct message_guid *guid)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -369,7 +369,7 @@ void dlist_makeguid(struct dlist *dl, struct message_guid *guid)
 }
 
 void dlist_makefile(struct dlist *dl,
-		    const char *part, struct message_guid *guid,
+		    const char *part, const struct message_guid *guid,
 		    unsigned long size, const char *fname)
 {
     if (!dl) return;
@@ -478,7 +478,7 @@ EXPORTED struct dlist *dlist_setmap(struct dlist *parent, const char *name,
 }
 
 EXPORTED struct dlist *dlist_setguid(struct dlist *parent, const char *name,
-			    struct message_guid *guid)
+				     const struct message_guid *guid)
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makeguid(dl, guid);
@@ -486,8 +486,8 @@ EXPORTED struct dlist *dlist_setguid(struct dlist *parent, const char *name,
 }
 
 EXPORTED struct dlist *dlist_setfile(struct dlist *parent, const char *name,
-			    const char *part, struct message_guid *guid,
-			    size_t size, const char *fname)
+				     const char *part, const struct message_guid *guid,
+				     size_t size, const char *fname)
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makefile(dl, part, guid, size, fname);
@@ -552,7 +552,7 @@ struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
 }
 
 struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
-			    struct message_guid *guid)
+			       const struct message_guid *guid)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makeguid(dl, guid);
@@ -560,8 +560,8 @@ struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
 }
 
 struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
-			    const char *part, struct message_guid *guid,
-			    size_t size, const char *fname)
+			       const char *part, const struct message_guid *guid,
+			       size_t size, const char *fname)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makefile(dl, part, guid, size, fname);

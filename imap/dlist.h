@@ -96,7 +96,7 @@ struct dlist {
     char *part; /* so what if we're big! */
 };
 
-const char *dlist_reserve_path(const char *part, int isarchive, struct message_guid *guid);
+const char *dlist_reserve_path(const char *part, int isarchive, const struct message_guid *guid);
 
 /* set fields */
 void dlist_makeatom(struct dlist *dl, const char *val);
@@ -106,9 +106,9 @@ void dlist_makenum64(struct dlist *dl, bit64 val);
 void dlist_makedate(struct dlist *dl, time_t val);
 void dlist_makehex64(struct dlist *dl, bit64 val);
 void dlist_makemap(struct dlist *dl, const char *val, size_t len);
-void dlist_makeguid(struct dlist *dl, struct message_guid *guid);
+void dlist_makeguid(struct dlist *dl, const struct message_guid *guid);
 void dlist_makefile(struct dlist *dl,
-		    const char *part, struct message_guid *guid,
+		    const char *part, const struct message_guid *guid,
 		    unsigned long size, const char *fname);
 
 /* parse fields */
@@ -160,9 +160,9 @@ struct dlist *dlist_sethex64(struct dlist *parent, const char *name,
 struct dlist *dlist_setmap(struct dlist *parent, const char *name,
 			   const char *val, size_t len);
 struct dlist *dlist_setguid(struct dlist *parent, const char *name,
-			    struct message_guid *guid);
+			    const struct message_guid *guid);
 struct dlist *dlist_setfile(struct dlist *parent, const char *name,
-			    const char *part, struct message_guid *guid,
+			    const char *part, const struct message_guid *guid,
 			    size_t size, const char *fname);
 
 struct dlist *dlist_updateatom(struct dlist *parent, const char *name,
@@ -180,9 +180,9 @@ struct dlist *dlist_updatehex64(struct dlist *parent, const char *name,
 struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
 			      const char *val, size_t len);
 struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
-			       struct message_guid *guid);
+			       const struct message_guid *guid);
 struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
-			       const char *part, struct message_guid *guid,
+			       const char *part, const struct message_guid *guid,
 			       size_t size, const char *fname);
 
 int dlist_getatom(struct dlist *parent, const char *name,
