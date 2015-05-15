@@ -1368,6 +1368,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 {
     struct sync_annot_list *annots = NULL;
     struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
+    struct mailbox_iter *iter = NULL;
     modseq_t xconvmodseq = 0;
     int r = 0;
 
@@ -1404,37 +1405,30 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     sync_annot_list_free(&annots);
 
     if (printrecords) {
-	struct index_record record;
+	const struct index_record *record;
 	struct dlist *il;
 	struct dlist *rl = dlist_newlist(kl, "RECORD");
-	uint32_t recno;
 	int send_file;
 	uint32_t prevuid = 0;
 
-	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	    /* we can't send bogus records */
-	    if (mailbox_read_index_record(mailbox, recno, &record)) {
-		syslog(LOG_ERR, "SYNCERROR: corrupt mailbox %s %u, IOERROR",
-		       mailbox->name, recno);
-		return IMAP_IOERROR;
-	    }
-
-	    if  (record.uid <= prevuid) {
+	iter = mailbox_iter_init(mailbox, 0, 0);
+	while ((record = mailbox_iter_step(iter))) {
+	    if  (record->uid <= prevuid) {
 		syslog(LOG_ERR, "SYNCERROR: corrupt mailbox %s %u, ordering",
-		       mailbox->name, recno);
+		       mailbox->name, record->recno);
 		return IMAP_IOERROR;
 	    }
-	    prevuid = record.uid;
+	    prevuid = record->uid;
 
 	    /* start off thinking we're sending the file too */
 	    send_file = 1;
 
 	    /* seen it already! SKIP */
-	    if (remote && record.modseq <= remote->highestmodseq)
+	    if (remote && record->modseq <= remote->highestmodseq)
 		continue;
 
 	    /* does it exist at the other end?  Don't send it */
-	    if (remote && record.uid <= remote->last_uid)
+	    if (remote && record->uid <= remote->last_uid)
 		send_file = 0;
 
 	    /* if we're not uploading messages... don't send file */
@@ -1442,32 +1436,33 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 		send_file = 0;
 
 	    /* if we don't HAVE the file we can't send it */
-	    if (record.system_flags & FLAG_UNLINKED)
+	    if (record->system_flags & FLAG_UNLINKED)
 		send_file = 0;
 
 	    if (send_file) {
-		r = sync_send_file(mailbox, &record, part_list, kupload);
+		r = sync_send_file(mailbox, record, part_list, kupload);
 		if (r) goto done;
 	    }
 
 	    il = dlist_newkvlist(rl, "RECORD");
-	    dlist_setnum32(il, "UID", record.uid);
-	    dlist_setnum64(il, "MODSEQ", record.modseq);
-	    dlist_setdate(il, "LAST_UPDATED", record.last_updated);
-	    sync_print_flags(il, mailbox, &record);
-	    dlist_setdate(il, "INTERNALDATE", record.internaldate);
-	    dlist_setnum32(il, "SIZE", record.size);
-	    dlist_setatom(il, "GUID", message_guid_encode(&record.guid));
+	    dlist_setnum32(il, "UID", record->uid);
+	    dlist_setnum64(il, "MODSEQ", record->modseq);
+	    dlist_setdate(il, "LAST_UPDATED", record->last_updated);
+	    sync_print_flags(il, mailbox, record);
+	    dlist_setdate(il, "INTERNALDATE", record->internaldate);
+	    dlist_setnum32(il, "SIZE", record->size);
+	    dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
-	    r = read_annotations(mailbox, &record, &annots);
+	    r = read_annotations(mailbox, record, &annots);
 	    if (r) goto done;
 
-	    encode_annotations(il, &record, annots);
+	    encode_annotations(il, record, annots);
 	    sync_annot_list_free(&annots);
 	}
     }
 
 done:
+    mailbox_iter_done(&iter);
     return r;
 }
 
@@ -1857,12 +1852,10 @@ static void reserve_folder(const char *part, const char *mboxname,
 		    struct sync_msgid_list *part_list)
 {
     struct mailbox *mailbox = NULL;
-    struct index_record record;
-    struct index_record record2;
+    const struct index_record *record;
     int r;
     struct sync_msgid *item;
     const char *mailbox_msg_path, *stage_msg_path;
-    uint32_t recno;
 
     /* Open and lock mailbox */
     r = mailbox_open_irl(mboxname, &mailbox);
@@ -1871,17 +1864,10 @@ static void reserve_folder(const char *part, const char *mboxname,
 
     /* XXX - this is just on the replica, but still - we shouldn't hold
      * the lock for so long */
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	/* ok to skip errors here - just means they'll be uploaded
-	 * rather than reserved */
-	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue;
-
-	if (record.system_flags & FLAG_UNLINKED)
-	    continue;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((record = mailbox_iter_step(iter))) {
 	/* do we need it? */
-	item = sync_msgid_lookup(part_list, &record.guid);
+	item = sync_msgid_lookup(part_list, &record->guid);
 	if (!item)
 	    continue;
 
@@ -1890,10 +1876,11 @@ static void reserve_folder(const char *part, const char *mboxname,
 	    continue;
 
 	/* Attempt to reserve this message */
-	mailbox_msg_path = mailbox_record_fname(mailbox, &record);
-	stage_msg_path = dlist_reserve_path(part, record.system_flags & FLAG_ARCHIVED, &record.guid);
+	mailbox_msg_path = mailbox_record_fname(mailbox, record);
+	stage_msg_path = dlist_reserve_path(part, record->system_flags & FLAG_ARCHIVED, &record->guid);
 
 	/* check that the sha1 of the file on disk is correct */
+	struct index_record record2;
 	memset(&record2, 0, sizeof(struct index_record));
 	r = message_parse(mailbox_msg_path, &record2);
 	if (r) {
@@ -1901,7 +1888,7 @@ static void reserve_folder(const char *part, const char *mboxname,
 		   mailbox_msg_path);
 	    continue;
 	}
-	if (!message_guid_equal(&record.guid, &record2.guid)) {
+	if (!message_guid_equal(&record->guid, &record2.guid)) {
 	    syslog(LOG_ERR, "IOERROR: GUID mismatch on parse for %s",
 		   mailbox_msg_path);
 	    continue;
@@ -1913,15 +1900,17 @@ static void reserve_folder(const char *part, const char *mboxname,
 	    continue;
 	}
 
-	item->size = record.size;
+	item->size = record->size;
 	item->fname = xstrdup(stage_msg_path); /* track the correct location */
-	item->is_archive = record.system_flags & FLAG_ARCHIVED ? 1 : 0;
+	item->is_archive = record->system_flags & FLAG_ARCHIVED ? 1 : 0;
 	item->need_upload = 0;
 	part_list->toupload--;
 
 	/* already found everything, drop out */
 	if (!part_list->toupload) break;
     }
+
+    mailbox_iter_done(&iter);
 
     mailbox_close(&mailbox);
 }
@@ -2034,8 +2023,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 				  struct sync_msgid_list *part_list)
 {
     struct index_record mrecord;
-    struct index_record rrecord;
-    uint32_t recno = 1;
+    const struct index_record *rrecord;
     struct dlist *ki;
     struct sync_annot_list *mannots = NULL;
     struct sync_annot_list *rannots = NULL;
@@ -2043,7 +2031,9 @@ static int mailbox_compare_update(struct mailbox *mailbox,
     int i;
     int has_append = 0;
 
-    rrecord.uid = 0;
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+
+    rrecord = mailbox_iter_step(iter);
     for (ki = kr->head; ki; ki = ki->next) {
 	sync_annot_list_free(&mannots);
 	sync_annot_list_free(&rannots);
@@ -2054,33 +2044,21 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    return IMAP_PROTOCOL_ERROR;
 	}
 
-	while (rrecord.uid < mrecord.uid) {
-	    /* hit the end?  Magic marker */
-	    if (recno > mailbox->i.num_records) {
-		rrecord.uid = UINT32_MAX;
-		break;
-	    }
-
+	while (rrecord && rrecord->uid < mrecord.uid) {
 	    /* read another record */
-	    r = mailbox_read_index_record(mailbox, recno, &rrecord);
-	    if (r) {
-		syslog(LOG_ERR, "IOERROR: failed to read record %s %u",
-		       mailbox->name, recno);
-		goto out;
-	    }
-	    recno++;
+	    rrecord = mailbox_iter_step(iter);
 	}
 
 	/* found a match, check for updates */
-	if (rrecord.uid == mrecord.uid) {
+	if (rrecord && rrecord->uid == mrecord.uid) {
 	    /* if they're both EXPUNGED then ignore everything else */
 	    if ((mrecord.system_flags & FLAG_EXPUNGED) &&
-		(rrecord.system_flags & FLAG_EXPUNGED))
+		(rrecord->system_flags & FLAG_EXPUNGED))
 		continue;
 
 	    /* GUID mismatch is an error straight away, it only ever happens if we
 	     * had a split brain - and it will take a full sync to sort out the mess */
-	    if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
+	    if (!message_guid_equal(&mrecord.guid, &rrecord->guid)) {
 		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
 		       mailbox->name, mrecord.uid);
 		r = IMAP_SYNC_CHECKSUM;
@@ -2088,14 +2066,14 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    }
 
 	    /* higher modseq on the replica is an error */
-	    if (rrecord.modseq > mrecord.modseq) {
+	    if (rrecord->modseq > mrecord.modseq) {
 		if (opt_force) {
 		    syslog(LOG_NOTICE, "forcesync: higher modseq on replica %s %u (" MODSEQ_FMT " > " MODSEQ_FMT ")",
-			   mailbox->name, mrecord.uid, rrecord.modseq, mrecord.modseq);
+			   mailbox->name, mrecord.uid, rrecord->modseq, mrecord.modseq);
 		}
 		else {
 		    syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u (" MODSEQ_FMT " > " MODSEQ_FMT ")",
-			   mailbox->name, mrecord.uid, rrecord.modseq, mrecord.modseq);
+			   mailbox->name, mrecord.uid, rrecord->modseq, mrecord.modseq);
 		    r = IMAP_SYNC_CHECKSUM;
 		    goto out;
 		}
@@ -2104,7 +2082,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    /* if it's already expunged on the replica, but alive on the master,
 	     * that's bad */
 	    if (!(mrecord.system_flags & FLAG_EXPUNGED) &&
-		 (rrecord.system_flags & FLAG_EXPUNGED)) {
+		 (rrecord->system_flags & FLAG_EXPUNGED)) {
 		syslog(LOG_ERR, "SYNCERROR: expunged on replica %s %u",
 		       mailbox->name, mrecord.uid);
 		r = IMAP_SYNC_CHECKSUM;
@@ -2114,34 +2092,35 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    /* skip out on the first pass */
 	    if (!doupdate) continue;
 
-	    rrecord.cid = mrecord.cid;
-	    rrecord.modseq = mrecord.modseq;
-	    rrecord.last_updated = mrecord.last_updated;
-	    rrecord.internaldate = mrecord.internaldate;
-	    rrecord.system_flags = (mrecord.system_flags & FLAGS_GLOBAL) |
-				   (rrecord.system_flags & FLAGS_LOCAL);
+	    struct index_record copy = *rrecord;
+	    copy.cid = mrecord.cid;
+	    copy.modseq = mrecord.modseq;
+	    copy.last_updated = mrecord.last_updated;
+	    copy.internaldate = mrecord.internaldate;
+	    copy.system_flags = (mrecord.system_flags & FLAGS_GLOBAL) |
+				(rrecord->system_flags & FLAGS_LOCAL);
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++)
-		rrecord.user_flags[i] = mrecord.user_flags[i];
+		copy.user_flags[i] = mrecord.user_flags[i];
 
-	    r = read_annotations(mailbox, &rrecord, &rannots);
+	    r = read_annotations(mailbox, &copy, &rannots);
 	    if (r) {
 		syslog(LOG_ERR, "Failed to read local annotations %s %u: %s",
-		       mailbox->name, recno, error_message(r));
+		       mailbox->name, rrecord->recno, error_message(r));
 		goto out;
 	    }
 
-	    r = apply_annotations(mailbox, &rrecord, rannots, mannots, 0);
+	    r = apply_annotations(mailbox, &copy, rannots, mannots, 0);
 	    if (r) {
 		syslog(LOG_ERR, "Failed to write merged annotations %s %u: %s",
-		       mailbox->name, recno, error_message(r));
+		       mailbox->name, rrecord->recno, error_message(r));
 		goto out;
 	    }
 
-	    rrecord.silent = 1;
-	    r = mailbox_rewrite_index_record(mailbox, &rrecord);
+	    copy.silent = 1;
+	    r = mailbox_rewrite_index_record(mailbox, &copy);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %u",
-		       mailbox->name, recno);
+		       mailbox->name, rrecord->recno);
 		goto out;
 	    }
 	}
@@ -2164,7 +2143,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    r = sync_append_copyfile(mailbox, &mrecord, mannots, part_list);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to append file %s %d",
-		       mailbox->name, recno);
+		       mailbox->name, mrecord.uid);
 		goto out;
 	    }
 
@@ -2178,6 +2157,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
     r = 0;
 
 out:
+    mailbox_iter_done(&iter);
     sync_annot_list_free(&mannots);
     sync_annot_list_free(&rannots);
     return r;
@@ -3149,8 +3129,7 @@ int sync_apply_expunge(struct dlist *kin,
     struct dlist *ul;
     struct dlist *ui;
     struct mailbox *mailbox = NULL;
-    struct index_record record;
-    uint32_t recno;
+    const struct index_record *record;
     int r = 0;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
@@ -3171,19 +3150,19 @@ int sync_apply_expunge(struct dlist *kin,
 
     ui = ul->head;
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
-	if (record.system_flags & FLAG_EXPUNGED) continue;
-	while (ui && dlist_num(ui) < record.uid) ui = ui->next;
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    while ((record = mailbox_iter_step(iter))) {
+	while (ui && dlist_num(ui) < record->uid) ui = ui->next;
 	if (!ui) break; /* no point continuing */
-	if (record.uid == dlist_num(ui)) {
-	    record.system_flags |= FLAG_EXPUNGED;
-	    record.silent = 1; /* so the next sync will succeed */
-	    r = mailbox_rewrite_index_record(mailbox, &record);
+	if (record->uid == dlist_num(ui)) {
+	    struct index_record oldrecord = *record;
+	    oldrecord.system_flags |= FLAG_EXPUNGED;
+	    oldrecord.silent = 1; /* so the next sync will succeed */
+	    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 	    if (r) goto done;
 	}
     }
+    mailbox_iter_done(&iter);
 
 done:
     mailbox_close(&mailbox);
@@ -3264,29 +3243,17 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
 			       unsigned last_uid,
 			       struct sync_msgid_list *part_list)
 {
-    struct index_record record;
-    uint32_t recno;
-    int r;
+    const struct index_record *record;
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-
-	if (r) {
-	    syslog(LOG_ERR,
-		   "IOERROR: reading index entry for recno %u of %s: %m",
-		   recno, mailbox->name);
-	    return IMAP_IOERROR;
-	}
-
-	if (record.system_flags & FLAG_UNLINKED)
-	    continue;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((record = mailbox_iter_step(iter))) {
 	/* skip over records already on replica */
-	if (record.uid <= last_uid)
+	if (record->uid <= last_uid)
 	    continue;
 
-	sync_msgid_insert(part_list, &record.guid);
+	sync_msgid_insert(part_list, &record->guid);
     }
+    mailbox_iter_done(&iter);
 
     return(0);
 }
@@ -3843,64 +3810,56 @@ static int update_quota_work(struct quota *client,
 
 static int copy_local(struct mailbox *mailbox, unsigned uid)
 {
-    uint32_t recno;
+    char *oldfname, *newfname;
+    struct index_record newrecord;
     struct index_record oldrecord;
     int r;
     annotate_state_t *astate = NULL;
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &oldrecord);
-	if (r) return r;
-
-	/* found the record, renumber it */
-	if (oldrecord.uid == uid) {
-	    char *oldfname, *newfname;
-	    struct index_record newrecord;
-
-	    /* create the new record as a clone of the old record */
-	    newrecord = oldrecord;
-	    newrecord.uid = mailbox->i.last_uid + 1;
-
-	    /* copy the file in to place */
-	    oldfname = xstrdup(mailbox_record_fname(mailbox, &oldrecord));
-	    newfname = xstrdup(mailbox_record_fname(mailbox, &newrecord));
-	    r = mailbox_copyfile(oldfname, newfname, 0);
-	    free(oldfname);
-	    free(newfname);
-	    if (r) return r;
-
-	    /* append the new record */
-	    r = mailbox_append_index_record(mailbox, &newrecord);
-	    if (r) return r;
-
-	    /* ensure we have an astate connected to the destination
-	     * mailbox, so that the annotation txn will be committed
-	     * when we close the mailbox */
-	    r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
-	    if (r) return r;
-
-	    /* Copy across any per-message annotations */
-	    r = annotate_msg_copy(mailbox, oldrecord.uid,
-				  mailbox, newrecord.uid,
-				  NULL);
-	    if (r) return r;
-
-	    /* and expunge the old record */
-	    oldrecord.system_flags |= FLAG_EXPUNGED;
-	    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-
-	    /* done - return */
-	    return r;
-	}
+    if (mailbox_find_index_record(mailbox, uid, &oldrecord, NULL)) {
+	/* not finding the record is an error! (should never happen) */
+	syslog(LOG_ERR, "IOERROR: copy_local didn't find the record for %u", uid);
+	return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    /* not finding the record is an error! (should never happen) */
-    syslog(LOG_ERR, "IOERROR: copy_local didn't find the record for %u", uid);
-    return IMAP_MAILBOX_NONEXISTENT;
+    /* create the new record as a clone of the old record */
+    newrecord = oldrecord;
+    newrecord.uid = mailbox->i.last_uid + 1;
+
+    /* copy the file in to place */
+    oldfname = xstrdup(mailbox_record_fname(mailbox, &oldrecord));
+    newfname = xstrdup(mailbox_record_fname(mailbox, &newrecord));
+    r = mailbox_copyfile(oldfname, newfname, 0);
+    free(oldfname);
+    free(newfname);
+    if (r) return r;
+
+    /* append the new record */
+    r = mailbox_append_index_record(mailbox, &newrecord);
+    if (r) return r;
+
+    /* ensure we have an astate connected to the destination
+     * mailbox, so that the annotation txn will be committed
+     * when we close the mailbox */
+    r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
+    if (r) return r;
+
+    /* Copy across any per-message annotations */
+    r = annotate_msg_copy(mailbox, oldrecord.uid,
+			  mailbox, newrecord.uid,
+			  NULL);
+    if (r) return r;
+
+    /* and expunge the old record */
+    oldrecord.system_flags |= FLAG_EXPUNGED;
+    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+
+    /* done - return */
+    return r;
 }
 
 static int fetch_file(struct mailbox *mailbox, unsigned uid,
-		      struct index_record *rp, struct sync_msgid_list *part_list,
+		      const struct index_record *rp, struct sync_msgid_list *part_list,
 		      struct backend *sync_be)
 {
     const char *cmd = "FETCH";
@@ -4040,7 +3999,7 @@ static int copyback_one_record(struct mailbox *mailbox,
     return 0;
 }
 
-static int renumber_one_record(struct index_record *mp,
+static int renumber_one_record(const struct index_record *mp,
 			       struct dlist *kaction)
 {
     /* don't want to renumber expunged records */
@@ -4235,53 +4194,52 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 			       struct sync_msgid_list *part_list,
 			       struct backend *sync_be)
 {
-    struct index_record mrecord;
+    const struct index_record *mrecord;
     struct index_record rrecord;
-    uint32_t recno = 1;
-    uint32_t old_num_records = mailbox->i.num_records;
     struct sync_annot_list *mannots = NULL;
     struct sync_annot_list *rannots = NULL;
     int r;
 
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    mrecord = mailbox_iter_step(iter);
+
     /* while there are more records on either master OR replica,
      * work out what to do with them */
-    while (ki || recno <= old_num_records) {
+    while (ki || mrecord) {
 
 	sync_annot_list_free(&mannots);
 	sync_annot_list_free(&rannots);
 
 	/* most common case - both a master AND a replica record exist */
-	if (ki && recno <= old_num_records) {
-	    r = mailbox_read_index_record(mailbox, recno, &mrecord);
-	    if (r) goto out;
-	    r = read_annotations(mailbox, &mrecord, &mannots);
+	if (ki && mrecord) {
+	    r = read_annotations(mailbox, mrecord, &mannots);
 	    if (r) goto out;
 	    r = parse_upload(ki, mailbox, &rrecord, &rannots);
 	    if (r) goto out;
 
 	    /* same UID - compare the records */
-	    if (rrecord.uid == mrecord.uid) {
+	    if (rrecord.uid == mrecord->uid) {
 		r = compare_one_record(mailbox,
-				       &mrecord, &rrecord,
+				       (struct index_record *)mrecord, &rrecord,
 				       mannots, rannots,
 				       kaction, part_list,
 				       sync_be);
 		if (r) goto out;
 		/* increment both */
-		recno++;
+		mrecord = mailbox_iter_step(iter);
 		ki = ki->next;
 	    }
-	    else if (rrecord.uid > mrecord.uid) {
+	    else if (rrecord.uid > mrecord->uid) {
 		/* record only exists on the master */
-		if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
+		if (!(mrecord->system_flags & FLAG_EXPUNGED)) {
 		    syslog(LOG_ERR, "SYNCERROR: only exists on master %s %u (%s)",
-			   mailbox->name, mrecord.uid,
-			   message_guid_encode(&mrecord.guid));
-		    r = renumber_one_record(&mrecord, kaction);
+			   mailbox->name, mrecord->uid,
+			   message_guid_encode(&mrecord->guid));
+		    r = renumber_one_record(mrecord, kaction);
 		    if (r) goto out;
 		}
 		/* only increment master */
-		recno++;
+		mrecord = mailbox_iter_step(iter);
 	    }
 	    else {
 		/* record only exists on the replica */
@@ -4299,25 +4257,23 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 	}
 
 	/* no more replica records, but still master records */
-	else if (recno <= old_num_records) {
-	    r = mailbox_read_index_record(mailbox, recno, &mrecord);
-	    if (r) goto out;
+	if (mrecord) {
 	    /* if the replica has seen this UID, we need to renumber.
 	     * Otherwise it will replicate fine as-is */
-	    if (mrecord.uid <= last_uid) {
-		r = renumber_one_record(&mrecord, kaction);
+	    if (mrecord->uid <= last_uid) {
+		r = renumber_one_record(mrecord, kaction);
 		if (r) goto out;
 	    }
-	    else if (mrecord.modseq <= highestmodseq) {
+	    else if (mrecord->modseq <= highestmodseq) {
 		if (kaction) {
 		    /* bump our modseq so we sync */
 		    syslog(LOG_NOTICE, "SYNCNOTICE: bumping modseq %s %u",
-			   mailbox->name, mrecord.uid);
-		    r = mailbox_rewrite_index_record(mailbox, &mrecord);
+			   mailbox->name, mrecord->uid);
+		    r = mailbox_rewrite_index_record(mailbox, (struct index_record *)mrecord);
 		    if (r) goto out;
 		}
 	    }
-	    recno++;
+	    mrecord = mailbox_iter_step(iter);
 	}
 
 	/* record only exists on the replica */
@@ -4339,6 +4295,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
     r = 0;
 
 out:
+    mailbox_iter_done(&iter);
     sync_annot_list_free(&mannots);
     sync_annot_list_free(&rannots);
     return r;
