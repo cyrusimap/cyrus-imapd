@@ -3054,7 +3054,6 @@ int mailbox_create(const char *name,
 		   int options,
 		   unsigned uidvalidity,
 		   struct mailbox **mailboxptr)
-    
 {
     int r = 0;
     char quotaroot[MAX_MAILBOX_BUFFER];
@@ -3464,6 +3463,7 @@ int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 int mailbox_rename_copy(struct mailbox *oldmailbox, 
 			const char *newname,
 			const char *newpartition,
+			unsigned uidvalidity,
 			const char *userid, int ignorequota,
 			struct mailbox **newmailboxptr)
 {
@@ -3476,7 +3476,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* Create new mailbox */
     r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
 		       oldmailbox->acl, NULL, oldmailbox->i.options,
-		       time(0), &newmailbox);
+		       uidvalidity, &newmailbox);
 
     if (r) return r;
 

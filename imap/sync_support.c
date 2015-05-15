@@ -593,8 +593,9 @@ struct sync_rename_list *sync_rename_list_create(void)
 }
 
 struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
-					      const char *uniqueid, const char *oldname,
-					      const char *newname, const char *partition)
+					 const char *uniqueid, const char *oldname,
+					 const char *newname, const char *partition,
+					 unsigned uidvalidity)
 {
     struct sync_rename *result
         = xzmalloc(sizeof(struct sync_rename));
@@ -611,6 +612,7 @@ struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
     result->oldname = xstrdup(oldname);
     result->newname = xstrdup(newname);
     result->part = xstrdup(partition);
+    result->uidvalidity = uidvalidity;
     result->done = 0;
 
     return result;
@@ -2294,6 +2296,7 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     const char *oldmboxname;
     const char *newmboxname;
     const char *partition;
+    uint32_t uidvalidity = 0;
 
     if (!dlist_getatom(kin, "OLDMBOXNAME", &oldmboxname))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -2302,7 +2305,11 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     if (!dlist_getatom(kin, "PARTITION", &partition))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /* optional */
+    dlist_getnum(kin, "UIDVALIDITY", &uidvalidity);
+
     return mboxlist_renamemailbox(oldmboxname, newmboxname, partition,
+				  uidvalidity,
                                   1, sstate->userid, sstate->authstate,
 				  sstate->local_only, 1, 1);
 }
@@ -3049,7 +3056,8 @@ static int user_reset(char *userid, struct backend *sync_be)
     return sync_parse_response(cmd, sync_be->in, NULL);
 }
 
-static int folder_rename(char *oldname, char *newname, char *partition,
+static int folder_rename(char *oldname, char *newname,
+			 char *partition, unsigned uidvalidity,
 			 struct backend *sync_be, unsigned flags)
 {
     const char *cmd = (flags & SYNC_FLAG_LOCALONLY) ? "LOCAL_RENAME" : "RENAME";
@@ -3059,6 +3067,8 @@ static int folder_rename(char *oldname, char *newname, char *partition,
     dlist_atom(kl, "OLDMBOXNAME", oldname);
     dlist_atom(kl, "NEWMBOXNAME", newname);
     dlist_atom(kl, "PARTITION", partition);
+    dlist_num(kl, "UIDVALIDITY", uidvalidity);
+
     sync_send_apply(kl, sync_be->out);
     dlist_free(&kl);
 
@@ -4213,7 +4223,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
 	part = topart ? topart : mfolder->part;
 	if (strcmp(mfolder->name, rfolder->name) || strcmp(part, rfolder->part))
 	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name, 
-				 mfolder->name, part);
+				 mfolder->name, part, mfolder->uidvalidity);
     }
 
     /* Delete folders on server which no longer exist on client */
@@ -4247,7 +4257,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
 
 	    /* Found unprocessed item which should rename cleanly */
 	    r = folder_rename(item->oldname, item->newname, item->part,
-			      sync_be, flags);
+			      item->uidvalidity, sync_be, flags);
 	    if (r) {
 		syslog(LOG_ERR, "do_folders(): failed to rename: %s -> %s ",
 		       item->oldname, item->newname);

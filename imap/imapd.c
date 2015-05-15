@@ -5418,7 +5418,7 @@ static int renmbox(char *name,
     strcpy(text->newmailboxname + text->nl, name + text->ol);
 
     r = mboxlist_renamemailbox(name, text->newmailboxname,
-			       text->partition,
+			       text->partition, 0 /* uidvalidity */,
 			       1, imapd_userid, imapd_authstate, 0, 0,
                                text->rename_user);
     
@@ -5716,7 +5716,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
     /* attempt to rename the base mailbox */
     if (!r) {
-	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
+	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname,
+				   partition, 0 /* uidvalidity */,
 				   imapd_userisadmin, imapd_userid,
 				   imapd_authstate, 0, 0, rename_user);
 	/* it's OK to not exist if there are subfolders */
