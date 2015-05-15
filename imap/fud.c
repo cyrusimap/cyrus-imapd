@@ -425,22 +425,19 @@ static int handle_request(const char *who, const char *name,
 
     lastarrived = mailbox->i.last_appenddate;
     {
-	struct index_record record;
-	uint32_t recno;
-	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	    if (mailbox_read_index_record(mailbox, recno, &record))
-		continue;
-	    if (record.system_flags & FLAG_EXPUNGED)
-		continue;
-	    if (record.uid > recentuid) numrecent++;
+	const struct index_record *record;
+	struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+	while ((record = mailbox_iter_step(iter))) {
+	    if (record->uid > recentuid) numrecent++;
 	}
+	mailbox_iter_done(&iter);
     }
 
     mailbox_close(&mailbox);
 
     send_reply(sfrom, sfromsiz, REQ_OK, who, name, numrecent,
 	       lastread, lastarrived);
-    
+
     return 0;
 }
 
