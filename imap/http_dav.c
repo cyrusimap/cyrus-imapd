@@ -5184,12 +5184,11 @@ int report_sync_col(struct transaction_t *txn,
     modseq_t highestmodseq = 0;
     modseq_t respmodseq = 0;
     uint32_t limit = -1;
-    uint32_t recno;
     uint32_t msgno;
     uint32_t nresp = 0;
     xmlNodePtr node;
     struct index_state istate;
-    struct index_record record;
+    const struct index_record *record;
     char tokenuri[MAX_MAILBOX_PATH+1];
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
@@ -5305,46 +5304,40 @@ int report_sync_col(struct transaction_t *txn,
 			  sizeof(struct index_map));
 
     /* Find which resources we need to report */
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	/* XXX  Corrupted record?  Should we bail? */
-	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue;
-
-	/* Resource not added/removed since last sync */
-	if (record.modseq <= syncmodseq)
-	    continue;
-
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, syncmodseq, 0);
+    while ((record = mailbox_iter_step(iter))) {
 	if ((unbind_flag >= 0) &&
-	    record.user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
+	    record->user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
 	    /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
 	    continue;
 	}
 
-	if ((record.modseq - syncmodseq == 1) &&
+	if ((record->modseq - syncmodseq == 1) &&
 	    (unchanged_flag >= 0) &&
-	    (record.user_flags[unchanged_flag / 32] &
+	    (record->user_flags[unchanged_flag / 32] &
 	     (1 << (unchanged_flag & 31)))) {
 	    /* Resource has just had VTIMEZONEs stripped - ignore it */
 	    continue;
 	}
 
-	if ((record.modseq <= basemodseq) &&
-	    (record.system_flags & FLAG_EXPUNGED)) {
+	if ((record->modseq <= basemodseq) &&
+	    (record->system_flags & FLAG_EXPUNGED)) {
 	    /* Initial sync - ignore unmapped resources */
 	    continue;
 	}
 
 	/* copy data into map (just like index.c - XXX helper fn? */
-	istate.map[nresp].recno = recno;
-	istate.map[nresp].uid = record.uid;
-	istate.map[nresp].modseq = record.modseq;
-	istate.map[nresp].system_flags = record.system_flags;
+	istate.map[nresp].recno = record->recno;
+	istate.map[nresp].uid = record->uid;
+	istate.map[nresp].modseq = record->modseq;
+	istate.map[nresp].system_flags = record->system_flags;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	    istate.map[nresp].user_flags[i] = record.user_flags[i];
-	istate.map[nresp].cache_offset = record.cache_offset;
+	    istate.map[nresp].user_flags[i] = record->user_flags[i];
+	istate.map[nresp].cache_offset = record->cache_offset;
 
 	nresp++;
     }
+    mailbox_iter_done(&iter);
 
     if (limit < nresp) {
 	/* Need to truncate the responses */
@@ -5378,12 +5371,14 @@ int report_sync_col(struct transaction_t *txn,
 	respmodseq = highestmodseq;
     }
 
+    /* XXX - this is crappy - re-reading the messages again */
     /* Report the resources within the client requested limit (if any) */
+    struct index_record thisrecord;
     for (msgno = 1; msgno <= nresp; msgno++) {
 	char *p, *resource = NULL;
 	struct dav_data ddata;
 
-	if (mailbox_read_index_record(mailbox, istate.map[msgno-1].recno, &record))
+	if (mailbox_read_index_record(mailbox, istate.map[msgno-1].recno, &thisrecord))
 	    continue;
 
 	/* Get resource filename from Content-Disposition header */
@@ -5401,15 +5396,15 @@ int report_sync_col(struct transaction_t *txn,
 	memset(&ddata, 0, sizeof(struct dav_data));
 	ddata.resource = resource;
 
-	if (record.system_flags & FLAG_EXPUNGED) {
+	if (thisrecord.system_flags & FLAG_EXPUNGED) {
 	    /* report as NOT FOUND
 	       IMAP UID of 0 will cause index record to be ignored
 	       propfind_by_resource() will append our resource name */
 	    fctx->proc_by_resource(fctx, &ddata);
 	}
 	else {
-	    fctx->record = &record;
-	    ddata.imap_uid = record.uid;
+	    fctx->record = &thisrecord;
+	    ddata.imap_uid = thisrecord.uid;
 	    fctx->proc_by_resource(fctx, &ddata);
 	}
     }
