@@ -579,8 +579,7 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
 static void index_refresh_locked(struct index_state *state)
 {
     struct mailbox *mailbox = state->mailbox;
-    struct index_record record;
-    uint32_t recno = 1;
+    const struct index_record *record;
     uint32_t msgno = 1;
     uint32_t firstnotseen = 0;
     uint32_t numrecent = 0;
@@ -622,16 +621,10 @@ static void index_refresh_locked(struct index_state *state)
     seenlist = _readseen(state, &recentuid);
 
     /* walk through all records */
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue; /* bogus read... should probably be fatal */
-
-	/* skip over map records where the mailbox doesn't have any
-	 * data at all for the record any more (this can only happen
-	 * after a repack), otherwise there will still be a readable
-	 * record, which is handled below */
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((record = mailbox_iter_step(iter))) {
 	im = &state->map[msgno-1];
-	while (msgno <= state->exists && im->uid < record.uid) {
+	while (msgno <= state->exists && im->uid < record->uid) {
 	    /* NOTE: this same logic is repeated below for messages
 	     * past the end of recno (repack removing the trailing
 	     * records).  Make sure to keep them in sync */
@@ -661,25 +654,25 @@ static void index_refresh_locked(struct index_state *state)
 	 * never been told to this connection, so it doesn't need to
 	 * get its own msgno */
 	if (!state->want_expunged
-	    && (msgno > state->exists || record.uid < im->uid)
-	    && (record.system_flags & FLAG_EXPUNGED))
+	    && (msgno > state->exists || record->uid < im->uid)
+	    && (record->system_flags & FLAG_EXPUNGED))
 	    continue;
 
 	/* make sure our UID map is consistent */
 	if (msgno <= state->exists) {
-	    assert(im->uid == record.uid);
+	    assert(im->uid == record->uid);
 	}
 	else {
-	    im->uid = record.uid;
+	    im->uid = record->uid;
 	}
 
 	/* copy all mutable fields */
-	im->recno = recno;
-	im->modseq = record.modseq;
-	im->system_flags = record.system_flags;
-	im->cache_offset = record.cache_offset;
+	im->recno = record->recno;
+	im->modseq = record->modseq;
+	im->system_flags = record->system_flags;
+	im->cache_offset = record->cache_offset;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	    im->user_flags[i] = record.user_flags[i];
+	    im->user_flags[i] = record->user_flags[i];
 
 	/* for expunged records, just track the modseq */
 	if (im->system_flags & FLAG_EXPUNGED) {
@@ -733,6 +726,7 @@ static void index_refresh_locked(struct index_state *state)
 	    fatal(buf, EC_IOERR);
 	}
     }
+    mailbox_iter_done(&iter);
 
     /* may be trailing records which need to be considered for
      * delayed_modseq purposes, and to get the count right for
@@ -895,10 +889,8 @@ struct seqset *index_vanished(struct index_state *state,
 			      struct vanished_params *params)
 {
     struct mailbox *mailbox = state->mailbox;
-    struct index_record record;
     struct seqset *outlist;
     struct seqset *seq;
-    uint32_t recno;
 
     /* check uidvalidity match */
     if (params->uidvalidity_is_max) {
@@ -919,23 +911,24 @@ struct seqset *index_vanished(struct index_state *state,
     if (params->modseq >= mailbox->i.deletedmodseq) {
 	/* all records are significant */
 	/* List only expunged UIDs with MODSEQ > requested */
-	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	    if (mailbox_read_index_record(mailbox, recno, &record))
+	const struct index_record *record;
+	struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, 0);
+	while ((record = mailbox_iter_step(iter))) {
+	    if (!(record->system_flags & FLAG_EXPUNGED))
 		continue;
-	    if (!(record.system_flags & FLAG_EXPUNGED))
-		continue;
-	    if (record.modseq <= params->modseq)
-		continue;
-	    if (!params->sequence || seqset_ismember(seq, record.uid))
-		seqset_add(outlist, record.uid, 1);
+	    if (!params->sequence || seqset_ismember(seq, record->uid))
+		seqset_add(outlist, record->uid, 1);
 	}
+	mailbox_iter_done(&iter);
     }
     else {
 	unsigned prevuid = 0;
 	struct seqset *msgnolist;
 	struct seqset *uidlist;
 	uint32_t msgno;
+	uint32_t recno;
 	unsigned uid;
+	struct index_record record;
 
 	syslog(LOG_NOTICE, "inefficient qresync ("
 	       MODSEQ_FMT " > " MODSEQ_FMT ") %s",
