@@ -628,9 +628,6 @@ extern int mailbox_add_dav(struct mailbox *mailbox);
 extern int mailbox_cid_rename(struct mailbox *mailbox,
 			      conversation_id_t from_cid,
 			      conversation_id_t to_cid);
-extern int mailbox_update_conversations(struct mailbox *mailbox,
-					const struct index_record *old,
-					const struct index_record *new);
 extern int mailbox_add_conversations(struct mailbox *mailbox);
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
