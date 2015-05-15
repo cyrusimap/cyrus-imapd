@@ -3867,7 +3867,8 @@ done:
     if (mailbox && !local->mailbox) mailbox_close(&mailbox);
     dlist_free(&kin);
     dlist_free(&kaction);
-    dlist_free(&kuids);
+    /* kuids points into the tree rooted at kexpunge
+     * so we don't need to free it explicitly here */
 
     return r;
 }
