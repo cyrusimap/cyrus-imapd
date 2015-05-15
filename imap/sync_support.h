@@ -60,7 +60,6 @@ time_t sync_parsedate(const char *s);
 int sync_getflags(struct dlist *kl,
 		  struct mailbox *mailbox,
 		  struct index_record *record);
-unsigned sync_mailbox_finduid(struct mailbox *mailbox, unsigned uid);
 
 void sync_print_flags(struct dlist *kl,
 		      struct mailbox *mailbox,
