@@ -102,6 +102,7 @@ void dlist_print(const struct dlist *dl, int printkeys, struct protstream *out);
 char dlist_parse(struct dlist **dlp, int parsekeys, struct protstream *in);
 
 void dlist_stitch(struct dlist *dl, struct dlist *child);
+struct dlist *dlist_splice(struct dlist *parent, int num);
 int dlist_getatom(struct dlist *dl, const char *name, const char **val);
 int dlist_getbuf(struct dlist *dl,
 		 const char *name, const char **val, size_t *len);
