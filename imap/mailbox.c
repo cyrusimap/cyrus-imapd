@@ -243,7 +243,7 @@ static const char *mailbox_archive_fname(struct mailbox *mailbox, uint32_t uid)
 }
 
 EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
-					  struct index_record *record)
+					  const struct index_record *record)
 {
     if (record->system_flags & FLAG_ARCHIVED)
 	return mailbox_archive_fname(mailbox, record->uid);
@@ -776,7 +776,7 @@ EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
     mailbox->header_dirty = 1;
 }
 
-EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf)
+EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf)
 {
     const char *fname;
     struct stat sbuf;
