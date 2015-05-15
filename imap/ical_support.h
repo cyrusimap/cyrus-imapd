@@ -53,7 +53,7 @@
 #include "mailbox.h"
 
 extern icalcomponent *record_to_ical(struct mailbox *mailbox,
-				     struct index_record *record);
+				     const struct index_record *record);
 
 extern const char *get_icalcomponent_errstr(icalcomponent *ical);
 

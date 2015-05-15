@@ -52,7 +52,7 @@
 #ifdef HAVE_ICAL
 
 icalcomponent *record_to_ical(struct mailbox *mailbox,
-			      struct index_record *record)
+			      const struct index_record *record)
 {
     struct buf buf = BUF_INITIALIZER;
     icalcomponent *ical = NULL;
