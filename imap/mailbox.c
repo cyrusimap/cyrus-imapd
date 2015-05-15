@@ -3553,7 +3553,10 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 EXPORTED int mailbox_reload_index_record(struct mailbox *mailbox,
 					 struct index_record *record)
 {
-    return mailbox_read_index_record(mailbox, record->recno, record);
+    if (record->recno)
+	return mailbox_read_index_record(mailbox, record->recno, record);
+    else
+	return mailbox_find_index_record(mailbox, record->uid, record, NULL);
 }
 
 /*
