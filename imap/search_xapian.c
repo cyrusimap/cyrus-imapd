@@ -1805,9 +1805,8 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
     size_t datalen = 0;
     struct seqset *seq = NULL;
     struct mailbox *mailbox = NULL;
-    struct index_record record;
+    const struct index_record *record;
     int verbose = SEARCH_VERBOSE(filter->flags);
-    unsigned recno;
     int r;
 
     r = mailbox_open_irl(mboxname, &mailbox);
@@ -1839,19 +1838,17 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
     if (verbose)
 	printf("Vectoring %s\n", mboxname);
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
 
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-
+    while ((record = mailbox_iter_step(iter))) {
 	/* we don't expect it to be in this index, don't check for it */
-	if (!seqset_ismember(seq, record.uid))
+	if (!seqset_ismember(seq, record->uid))
 	    continue;
 
-	bv_set(&mbdata->uids, record.uid);
+	bv_set(&mbdata->uids, record->uid);
     }
+
+    mailbox_iter_done(&iter);
 
     /* yay, we have succeeded */
     hash_insert(mboxname, mbdata, &filter->mboxes);
@@ -2059,9 +2056,8 @@ static int reindex_mb(void *rock,
     xapian_update_receiver_t *tr = NULL;
     struct mailbox *mailbox = NULL;
     ptrarray_t batch = PTRARRAY_INITIALIZER;
-    struct index_record record;
+    const struct index_record *record;
     int verbose = SEARCH_VERBOSE(filter->flags);
-    uint32_t recno;
     int r = 0;
     int i;
     char *dot;
@@ -2082,21 +2078,18 @@ static int reindex_mb(void *rock,
 
     if (mailbox->i.uidvalidity != uidvalidity) goto done; /* returns 0, nothing to index */
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
 
-	/* don't index EXPUNGED records */
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-
+    while ((record = mailbox_iter_step(iter))) {
 	/* it wasn't in the previous index, skip it */
-	if (!seqset_ismember(seq, record.uid))
+	if (!seqset_ismember(seq, record->uid))
 	    continue;
 
 	/* add the record to the list */
-	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
+	ptrarray_append(&batch, message_new_from_record(mailbox, record));
     }
+
+    mailbox_iter_done(&iter);
 
     if (batch.count) {
 	tr = (xapian_update_receiver_t *)begin_update(verbose);
