@@ -1229,8 +1229,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     struct buf *buf = &resp_body->payload;
     struct mailbox *mailbox = NULL;
     static char etag[33];
-    uint32_t recno;
-    struct index_record record;
+    const struct index_record *record;
     struct hash_table tzid_table;
     static const char *displayname_annot =
 	ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -1316,15 +1315,13 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     sep = mime->begin_stream(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
-    for (r = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+
+    while ((record = mailbox_iter_step(iter))) {
 	icalcomponent *ical;
 
-	if (mailbox_read_index_record(mailbox, recno, &record)) continue;
-
-	if (record.system_flags & (FLAG_EXPUNGED | FLAG_DELETED)) continue;
-
 	/* Map and parse existing iCalendar resource */
-	ical = record_to_ical(mailbox, &record);
+	ical = record_to_ical(mailbox, record);
 
 	if (ical) {
 	    icalcomponent *comp;
@@ -1363,6 +1360,8 @@ static int dump_calendar(struct transaction_t *txn, int rights)
 	    icalcomponent_free(ical);
 	}
     }
+
+    mailbox_iter_done(&iter);
 
     free_hash_table(&tzid_table, NULL);
 
