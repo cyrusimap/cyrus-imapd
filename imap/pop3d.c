@@ -1875,8 +1875,8 @@ int openinbox(void)
     }
     else {
 	/* local mailbox */
-	uint32_t recno, exists;
-	struct index_record record;
+	uint32_t exists;
+	const struct index_record *record;
 	int minpoll;
 
 	popd_login_time = time(0);
@@ -1922,28 +1922,22 @@ int openinbox(void)
 					 sizeof(struct msg));
 	config_popuseimapflags = config_getswitch(IMAPOPT_POPUSEIMAPFLAGS);
 	exists = 0;
-	for (recno = 1; recno <= popd_mailbox->i.num_records; recno++) {
-	    if (mailbox_read_index_record(popd_mailbox, recno, &record))
-		break;
 
-	    if (record.system_flags & FLAG_EXPUNGED)
-		continue;
+	unsigned iterflags = ITER_SKIP_EXPUNGED;
+	if (config_popuseimapflags) iterflags |= ITER_SKIP_DELETED;
 
-	    if (config_popuseimapflags &&
-		(record.system_flags & FLAG_DELETED)) {
-		/* Ignore \Deleted messages */
-		continue;
-	    }
+	struct mailbox_iter *iter = mailbox_iter_init(popd_mailbox, 0, iterflags);
 
+	while ((record = mailbox_iter_step(iter))) {
 	    if (popd_mailbox->i.pop3_show_after &&
-		record.internaldate <= popd_mailbox->i.pop3_show_after) {
+		record->internaldate <= popd_mailbox->i.pop3_show_after) {
 		/* Ignore messages older than the "show after" date */
 		continue;
 	    }
 
-	    popd_map[exists].recno = recno;
-	    popd_map[exists].uid = record.uid;
-	    popd_map[exists].size = record.size;
+	    popd_map[exists].recno = record->recno;
+	    popd_map[exists].uid = record->uid;
+	    popd_map[exists].size = record->size;
 	    popd_map[exists].deleted = 0;
 	    popd_map[exists].seen = 0;
 	    exists++;
@@ -1951,6 +1945,9 @@ int openinbox(void)
 	    if (exists >= popd_mailbox->i.exists)
 		break; /* we're full! */
 	}
+
+	mailbox_iter_done(&iter);
+
 	popd_exists = exists;
 
 	/* finished our initial read */
