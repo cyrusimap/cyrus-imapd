@@ -128,7 +128,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     if (wdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	oldrecord = &record;
-	mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord, 0);
+	mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
     }
 
     /* Get filename of attachment */

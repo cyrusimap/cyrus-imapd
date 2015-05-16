@@ -680,7 +680,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	oldrecord = &record;
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord, 0);
+	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
     }
 
     /* Create and cache RFC 5322 header fields for resource */

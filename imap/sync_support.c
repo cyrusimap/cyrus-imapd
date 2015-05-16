@@ -3803,7 +3803,7 @@ static int copy_local(struct mailbox *mailbox, unsigned uid)
     int r;
     annotate_state_t *astate = NULL;
 
-    if (mailbox_find_index_record(mailbox, uid, &oldrecord, NULL)) {
+    if (mailbox_find_index_record(mailbox, uid, &oldrecord)) {
 	/* not finding the record is an error! (should never happen) */
 	syslog(LOG_ERR, "IOERROR: copy_local didn't find the record for %u", uid);
 	return IMAP_MAILBOX_NONEXISTENT;

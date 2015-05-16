@@ -663,7 +663,7 @@ EXPORTED int caldav_alarm_process()
 
 	struct index_record record;
 	memset(&record, 0, sizeof(struct index_record));
-	rc = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
+	rc = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 	if (rc) {
 	    /* XXX no index record? item deleted or transient error? */
 	    scan->do_delete = 0;

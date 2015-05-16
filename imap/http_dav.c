@@ -3191,7 +3191,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec, NULL);
+	r = mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -3336,8 +3336,7 @@ static int delete_cb(void *rock, void *data)
     }
 
     /* Fetch index record for the resource */
-    r = mailbox_find_index_record(drock->mailbox, ddata->imap_uid,
-				  &record, NULL);
+    r = mailbox_find_index_record(drock->mailbox, ddata->imap_uid, &record);
     if (r) {
 	drock->txn->error.desc = error_message(r);
 	return HTTP_SERVER_ERROR;
@@ -3480,7 +3479,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     memset(&record, 0, sizeof(struct index_record));
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -3646,7 +3645,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     memset(&record, 0, sizeof(struct index_record));
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -3821,7 +3820,7 @@ int meth_lock(struct transaction_t *txn, void *params)
 	/* Locking existing resource */
 
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord, NULL);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -4198,7 +4197,7 @@ int propfind_by_resource(void *rock, void *data)
     fctx->data = data;
     if (ddata->imap_uid && !fctx->record) {
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record, NULL);
+	r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record);
 	/* XXX  Check errors */
 
 	fctx->record = r ? NULL : &record;
@@ -4753,7 +4752,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
 	memset(&record, 0, sizeof(struct index_record));
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
 	if (r) {
 	    ret = HTTP_NOT_FOUND;
 	    goto done;
@@ -4953,7 +4952,7 @@ int meth_put(struct transaction_t *txn, void *params)
 	/* Overwriting existing resource */
 
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord, NULL);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
 	if (r) {
 	    syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
 		   txn->req_tgt.mbentry->name, ddata->imap_uid, error_message(r));
@@ -6160,7 +6159,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;

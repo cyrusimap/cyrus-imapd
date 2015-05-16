@@ -1650,7 +1650,7 @@ static void sched_deliver_local(const char *recipient,
 	struct index_record record;
 
 	/* Load message containing the resource and parse iCal data */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 	ical = record_to_ical(mailbox, &record);
 
 	for (comp = icalcomponent_get_first_component(sched_data->itip,

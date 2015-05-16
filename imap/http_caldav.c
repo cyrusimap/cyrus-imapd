@@ -1858,7 +1858,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	    caldav_lookup_resource(caldavdb, mailbox->name,
 				   cdata->dav.resource, data, /*tombstones*/0);
 
-	    mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record, NULL);
+	    mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record);
 
 	    /* Fill in new ETag and Last-Modified */
 	    txn->resp_body.etag = message_guid_encode(&record->guid);
@@ -1934,7 +1934,7 @@ static void decrement_refcount(const char *managed_id,
 	/* Delete attachment resource */
 	struct index_record record;
 
-	mailbox_find_index_record(attachments, wdata->dav.imap_uid, &record, 0);
+	mailbox_find_index_record(attachments, wdata->dav.imap_uid, &record);
 	record.system_flags |= FLAG_EXPUNGED;
 
 	r = mailbox_rewrite_index_record(attachments, &record);
@@ -2070,7 +2070,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Fetch index record for the cal resource */
     memset(&record, 0, sizeof(struct index_record));
-    r = mailbox_find_index_record(calendar, cdata->dav.imap_uid, &record, NULL);
+    r = mailbox_find_index_record(calendar, cdata->dav.imap_uid, &record);
     if (r) {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -2640,7 +2640,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 		struct index_record record;
 
 		/* Load message containing the resource and parse iCal data */
-		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
+		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 		if (r) {
 		    txn->error.desc = "Failed to read record \r\n";
 		    ret = HTTP_SERVER_ERROR;
@@ -2764,8 +2764,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 		struct index_record record;
 
 		/* Load message containing the resource and parse iCal data */
-		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
-					      &record, NULL);
+		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 		if (r) {
 		    txn->error.desc = "Failed to read record";
 		    ret = HTTP_SERVER_ERROR;
@@ -3298,8 +3297,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
 	if (!fctx->record) {
 	    /* Fetch index record for the resource */
-	    r = mailbox_find_index_record(fctx->mailbox,
-					  cdata->dav.imap_uid, &record, NULL);
+	    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record);
 	    /* XXX  Check errors */
 
 	    fctx->record = r ? NULL : &record;
@@ -4620,7 +4618,7 @@ static int busytime_by_resource(void *rock, void *data)
     if (!cdata->dav.imap_uid) return 0;
 
     /* Fetch index record for the resource */
-    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record, NULL);
+    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record);
     if (r) return 0;
 
     fctx->record = &record;
@@ -5154,7 +5152,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 	}
 	/* Fetch index record for the resource */
 	oldrecord = &record;
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord, NULL);
+	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
     }
 
     /* Remove all X-LIC-ERROR properties */

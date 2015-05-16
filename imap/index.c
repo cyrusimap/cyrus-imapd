@@ -2469,7 +2469,7 @@ EXPORTED int index_snippets(struct index_state *state,
 	    message_t *msg;
 
 	    /* This UID didn't appear in the old index file */
-	    r = mailbox_find_index_record(mailbox, uid, &record, NULL);
+	    r = mailbox_find_index_record(mailbox, uid, &record);
 	    if (r) continue;
 
 	    msg = message_new_from_record(mailbox, &record);

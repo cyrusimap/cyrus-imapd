@@ -361,7 +361,7 @@ static int index_single_message(const char *mboxname, uint32_t uid)
 
     if (rx->is_indexed(rx, uid)) goto out;
 
-    r = mailbox_find_index_record(mailbox, uid, &record, NULL);
+    r = mailbox_find_index_record(mailbox, uid, &record);
     if (r) goto out;
 
     if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED)) goto out;

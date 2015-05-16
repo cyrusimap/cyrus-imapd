@@ -685,7 +685,7 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
 	if (r) return r;
     }
 
-    r = mailbox_find_index_record(grock->mailbox, uid, &record, NULL);
+    r = mailbox_find_index_record(grock->mailbox, uid, &record);
     if (r) return r;
 
     /* XXX - this could definitely be refactored from here and mailbox.c */
@@ -1098,7 +1098,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	if (r) return r;
     }
 
-    r = mailbox_find_index_record(grock->mailbox, uid, &record, NULL);
+    r = mailbox_find_index_record(grock->mailbox, uid, &record);
     if (r) return r;
 
     /* XXX - this could definitely be refactored from here and mailbox.c */
@@ -1670,7 +1670,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    struct vparse_state vparser;
 	    struct index_record record;
 
-	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
+	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 	    if (r) goto done;
 
 	    /* Load message containing the resource and parse vcard data */
@@ -2561,7 +2561,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    struct vparse_state vparser;
 	    struct index_record record;
 
-	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
+	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 	    if (r) goto done;
 
 	    /* Load message containing the resource and parse vcard data */
@@ -2858,7 +2858,7 @@ EXPORTED int carddav_remove(struct mailbox *mailbox, uint32_t olduid)
     int userflag;
     int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
     struct index_record oldrecord;
-    if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord, NULL);
+    if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
     if (!r && !(oldrecord.system_flags & FLAG_EXPUNGED)) {
 	oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
 	oldrecord.system_flags |= FLAG_EXPUNGED;

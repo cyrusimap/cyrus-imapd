@@ -1988,8 +1988,7 @@ static uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
  * or an IMAP error code on failure.
  */
 EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
-				       struct index_record *record,
-				       const struct index_record *oldrecord)
+				       struct index_record *record)
 {
     const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;
     const char *low = base;
@@ -2006,35 +2005,6 @@ EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
     }
 
     if (uid > mailbox->i.last_uid) return IMAP_NOTFOUND;
-
-    if (oldrecord) {
-	const char *oldmem = base + (oldrecord->recno-1) * size;
-	if (uid == oldrecord->uid) {
-	    /* already found it */
-	    if (record != oldrecord)
-		memcpy(record, oldrecord, sizeof(struct index_record));
-	    return 0;
-	}
-	else if (uid == oldrecord->uid+1) {
-	    /* are we at the end? */
-	    if (oldrecord->recno == mailbox->i.num_records)
-		return IMAP_NOTFOUND;
-	    /* Optimise for the common case of moving up by one uid.
-	     * The index file is in UID order so the record we want
-	     * is either the next one or is not present. */
-	    low = oldmem + size;
-	    num_records = 1;
-	}
-	else if (uid < oldrecord->uid) {
-	    /* target is before the old record */
-	    num_records = oldrecord->recno-1;
-	}
-	else {
-	    /* target is after the old record */
-	    low = oldmem + size;
-	    num_records -= oldrecord->recno;
-	}
-    }
 
     mem =  bsearch(&uid, low, num_records, size, rec_compar);
     if (!mem) return IMAP_NOTFOUND;
@@ -2740,7 +2710,7 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
     if (uid) {
 	/* check that the record isn't already expunged */
 	struct index_record record;
-	int r = mailbox_find_index_record(mailbox, uid, &record, NULL);
+	int r = mailbox_find_index_record(mailbox, uid, &record);
 	if (r || record.system_flags & FLAG_EXPUNGED)
 	    return;
 	if (oldval->len)
@@ -3556,7 +3526,7 @@ EXPORTED int mailbox_reload_index_record(struct mailbox *mailbox,
     if (record->recno)
 	return mailbox_read_index_record(mailbox, record->recno, record);
     else
-	return mailbox_find_index_record(mailbox, record->uid, record, NULL);
+	return mailbox_find_index_record(mailbox, record->uid, record);
 }
 
 /*
