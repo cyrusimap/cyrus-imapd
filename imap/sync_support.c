@@ -3116,7 +3116,6 @@ int sync_apply_expunge(struct dlist *kin,
     struct dlist *ul;
     struct dlist *ui;
     struct mailbox *mailbox = NULL;
-    const struct index_record *record;
     int r = 0;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
@@ -3135,21 +3134,15 @@ int sync_apply_expunge(struct dlist *kin,
 	goto done;
     }
 
-    ui = ul->head;
-
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    while ((record = mailbox_iter_step(iter))) {
-	while (ui && dlist_num(ui) < record->uid) ui = ui->next;
-	if (!ui) break; /* no point continuing */
-	if (record->uid == dlist_num(ui)) {
-	    struct index_record oldrecord = *record;
-	    oldrecord.system_flags |= FLAG_EXPUNGED;
-	    oldrecord.silent = 1; /* so the next sync will succeed */
-	    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-	    if (r) goto done;
-	}
+    for (ui = ul->head; ui; ui = ui->next) {
+	struct index_record oldrecord;
+	r = mailbox_find_index_record(mailbox, dlist_num(ui), &oldrecord);
+	if (r) continue; /* skip */
+	oldrecord.system_flags |= FLAG_EXPUNGED;
+	oldrecord.silent = 1; /* so the next sync will succeed */
+	r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+	if (r) goto done;
     }
-    mailbox_iter_done(&iter);
 
 done:
     mailbox_close(&mailbox);
@@ -3233,11 +3226,8 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
     const struct index_record *record;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    mailbox_iter_startuid(iter, last_uid+1); /* only read new records */
     while ((record = mailbox_iter_step(iter))) {
-	/* skip over records already on replica */
-	if (record->uid <= last_uid)
-	    continue;
-
 	sync_msgid_insert(part_list, &record->guid);
     }
     mailbox_iter_done(&iter);
