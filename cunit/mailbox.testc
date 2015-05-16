@@ -1,0 +1,159 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include "cunit/cunit.h"
+#include "assert.h"
+#include "xmalloc.h"
+#include "retry.h"
+#include "util.h"
+#include "imap/global.h"
+#include "libcyr_cfg.h"
+#include "imap/annotate.h"
+#include "imap/mboxlist.h"
+#include "imap/imap_err.h"
+
+#define DBDIR		"test-dbdir"
+#define MBOXNAME_INT	"user.smurf"
+#define PARTITION	"default"
+#define ACL		"anyone\tlrswipkxtecdan\t"
+
+static int isadmin;
+static const char *userid;
+static struct auth_state *auth_state;
+
+static void config_read_string(const char *s)
+{
+    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
+    int fd = mkstemp(fname);
+    retry_write(fd, s, strlen(s));
+    config_reset();
+    config_read(fname, 0);
+    unlink(fname);
+    free(fname);
+    close(fd);
+}
+
+static int fexists(const char *fname)
+{
+    struct stat sb;
+    int r;
+
+    r = stat(fname, &sb);
+    if (r < 0)
+	r = -errno;
+    return r;
+}
+
+
+static void test_mailbox_thing(void)
+{
+    int r;
+    struct mailbox *mailbox = NULL;
+
+    r = mailbox_open_iwl(MBOXNAME_INT, &mailbox);
+    r = 1;
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    /* XXX - add tests here */
+
+    mailbox_close(&mailbox);
+}
+
+static int set_up(void)
+{
+    int r;
+    struct mboxlist_entry mbentry;
+    struct mailbox *mailbox;
+    const char * const *d;
+    static const char * const dirs[] = {
+	DBDIR,
+	DBDIR"/db",
+	DBDIR"/conf",
+	DBDIR"/data",
+	DBDIR"/data/user",
+	DBDIR"/data/user/smurf",
+	NULL
+    };
+
+    r = system("rm -rf " DBDIR);
+    if (r)
+	return r;
+    r = fexists(DBDIR);
+    if (r != -ENOENT)
+	return ENOTDIR;
+
+    for (d = dirs ; *d ; d++) {
+	r = mkdir(*d, 0777);
+	if (r < 0) {
+	    int e = errno;
+	    perror(*d);
+	    return e;
+	}
+    }
+
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+	"configdirectory: "DBDIR"/conf\n"
+	"defaultpartition: "PARTITION"\n"
+	"partition-"PARTITION": "DBDIR"/data\n"
+    );
+
+    cyrusdb_init();
+    config_mboxlist_db = "skiplist";
+    config_annotation_db = "skiplist";
+    config_quota_db = "skiplist";
+
+    userid = "smurf";
+    isadmin = 0;
+    auth_state = auth_newstate(userid);
+
+    quotadb_init(0);
+    quotadb_open(NULL);
+
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
+    memset(&mbentry, 0, sizeof(mbentry));
+    mbentry.name = MBOXNAME_INT;
+    mbentry.mbtype = 0;
+    mbentry.partition = PARTITION;
+    mbentry.acl = ACL;
+    r = mboxlist_update(&mbentry, /*localonly*/1);
+    if (r)
+	return r;
+
+    r = mailbox_create(MBOXNAME_INT, /*mbtype*/0, PARTITION, ACL,
+		       /*uniqueid*/NULL,
+		       /*options*/0, /*uidvalidity*/0,
+		       /*highestmodseq*/0, &mailbox);
+    if (r)
+	return r;
+    mailbox_close(&mailbox);
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    mboxlist_close();
+    mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
+
+    annotate_done();
+
+    auth_freestate(auth_state);
+
+    cyrusdb_done();
+    config_mboxlist_db = NULL;
+    config_annotation_db = NULL;
+
+    r = system("rm -rf " DBDIR);
+    if (r) r = -1;
+
+    return r;
+}
+/* vim: set ft=c: */
