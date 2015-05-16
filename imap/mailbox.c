@@ -1933,18 +1933,6 @@ EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
 }
 #endif
 
-/*
- * bsearch() comparison function for searching on UID.
- */
-static int rec_compar(const void *key, const void *mem)
-{
-    uint32_t uid = *((uint32_t *) key);
-    uint32_t recuid = ntohl(*((bit32 *)((const char *)mem+OFFSET_UID)));
-    if (uid < recuid) return -1;
-    return (uid > recuid);
-}
-
-
 static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
 {
     struct index_record record;
@@ -1990,30 +1978,18 @@ static uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
 EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 				       struct index_record *record)
 {
-    const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;
-    const char *low = base;
-    size_t num_records = mailbox->i.num_records;
-    size_t size = mailbox->i.record_size;
-    size_t i;
+    uint32_t recno = mailbox_finduid(mailbox, uid);
+    /* no records? */
+    if (!recno) return IMAP_NOTFOUND;
 
-    /* first we need to search the in-memory cache */
-    for (i = 1; i <= mailbox->index_change_count; i++) {
-	if (uid == mailbox->index_changes[i-1].record.uid) {
-	    *record = mailbox->index_changes[i-1].record;
-	    return 0;
-	}
-    }
+    int r = mailbox_read_index_record(mailbox, recno, record);
+    /* failed read? */
+    if (r) return r;
 
-    if (uid > mailbox->i.last_uid) return IMAP_NOTFOUND;
+    /* wasn't the actual record? */
+    if (record->uid != uid) return IMAP_NOTFOUND;
 
-    mem =  bsearch(&uid, low, num_records, size, rec_compar);
-    if (!mem) return IMAP_NOTFOUND;
-
-    /* XXX - could avoid the secondary lookup here by parsing out the record
-     * directly from the disk */
-
-    int recno = ((mem - base) / size) + 1;
-    return mailbox_read_index_record(mailbox, recno, record);
+    return 0;
 }
 
 /*
