@@ -2882,44 +2882,55 @@ int sync_reserve_partition(char *partition,
 			   struct backend *sync_be)
 {
     const char *cmd = "RESERVE";
-    struct sync_msgid *msgid;
+    struct sync_msgid *msgid = part_list->head;
     struct sync_folder *folder;
-    struct dlist *kl;
+    struct dlist *kl = NULL;
     struct dlist *kin = NULL;
     struct dlist *ki;
-    int r;
-
-    if (!part_list->toupload)
-	return 0; /* nothing to reserve */
+    int r = 0;
 
     if (!replica_folders->head)
 	return 0; /* nowhere to reserve */
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "PARTITION", partition);
+    while (msgid) {
+	int n = 0;
 
-    ki = dlist_list(kl, "MBOXNAME");
-    for (folder = replica_folders->head; folder; folder = folder->next)
-	dlist_atom(ki, "MBOXNAME", folder->name);
+	if (!part_list->toupload)
+	    goto done; /* got them all */
 
-    ki = dlist_list(kl, "GUID");
-    for (msgid = part_list->head; msgid; msgid = msgid->next) {
-	if (!msgid->need_upload) continue;
-	dlist_atom(ki, "GUID", message_guid_encode(&msgid->guid));
-	/* we will re-add the "need upload" if we get a MISSING response */
-	msgid->need_upload = 0;
-	part_list->toupload--;
+	kl = dlist_new(cmd);
+	dlist_atom(kl, "PARTITION", partition);
+
+	ki = dlist_list(kl, "MBOXNAME");
+	for (folder = replica_folders->head; folder; folder = folder->next)
+	    dlist_atom(ki, "MBOXNAME", folder->name);
+
+	ki = dlist_list(kl, "GUID");
+	for (; msgid; msgid = msgid->next) {
+	    if (!msgid->need_upload) continue;
+	    if (n > 8192) break;
+	    dlist_atom(ki, "GUID", message_guid_encode(&msgid->guid));
+	    /* we will re-add the "need upload" if we get a MISSING response */
+	    msgid->need_upload = 0;
+	    part_list->toupload--;
+	    n++;
+	}
+
+	sync_send_apply(kl, sync_be->out);
+
+	r = sync_parse_response(cmd, sync_be->in, &kin);
+	if (r) goto done;
+
+	r = mark_missing(kin, part_list);
+	if (r) goto done;
+
+	dlist_free(&kl);
+	dlist_free(&kin);
     }
 
-    sync_send_apply(kl, sync_be->out);
+  done:
     dlist_free(&kl);
-
-    r = sync_parse_response(cmd, sync_be->in, &kin);
-    if (r) return r;
-
-    r = mark_missing(kin, part_list);
     dlist_free(&kin);
-
     return r;
 }
 
