@@ -4795,7 +4795,7 @@ static int mailbox_delete_conversations(struct mailbox *mailbox)
 {
     struct conversations_state *cstate;
     const struct index_record *record;
-    int r;
+    int r = 0;
 
     if (!mailbox_has_conversations(mailbox))
 	return 0;
