@@ -332,6 +332,7 @@ void sync_msgid_list_free(struct sync_msgid_list **lp)
     current = l->head;
     while (current) {
 	next = current->next;
+	free(current->fname);
 	free(current);
 	current = next;
     }
@@ -1352,7 +1353,7 @@ static int sync_send_file(struct mailbox *mailbox,
     /* note that we will be sending it, so it doesn't need to be
      * sent again */
     msgid->size = record->size;
-    msgid->fname = xstrdup(fname);
+    if (!msgid->fname) msgid->fname = xstrdup(fname);
     msgid->need_upload = 0;
     msgid->is_archive = record->system_flags & FLAG_ARCHIVED ? 1 : 0;
     part_list->toupload--;
@@ -3173,7 +3174,7 @@ int sync_apply_message(struct dlist *kin,
 	    continue;
 
 	msgid->size = size;
-	msgid->fname = xstrdup(fname);
+	if (!msgid->fname) msgid->fname = xstrdup(fname);
 	msgid->need_upload = 0;
 	part_list->toupload--;
     }
@@ -3882,7 +3883,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned uid,
 	msgid = sync_msgid_insert(part_list, &rp->guid);
 	msgid->need_upload = 1;
 	msgid->size = size;
-	msgid->fname = xstrdup(fname);
+	if (!msgid->fname) msgid->fname = xstrdup(fname);
     }
     else {
 	r = IMAP_MAILBOX_NONEXISTENT;
