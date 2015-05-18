@@ -454,6 +454,11 @@ static int mboxlist_mylookup(const char *name,
     return mboxlist_parse_entry(mbentryptr, name, 0, data, datalen);
 }
 
+EXPORTED int mboxlist_delete(const char *name, int force)
+{
+    return cyrusdb_delete(mbdb, name, strlen(name), NULL, force);
+}
+
 /*
  * Lookup 'name' in the mailbox list, ignoring reserved records
  */
