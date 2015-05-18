@@ -134,7 +134,6 @@ AC_PROG_INSTALL
 AC_USE_SYSTEM_EXTENSIONS
 AC_ISC_POSIX
 AC_PROG_AWK
-AC_C_CONST
 AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
