@@ -291,7 +291,7 @@ static int expire(void *rock, const char *key, size_t keylen,
 	    if (verbose)
 		fprintf(stderr, "Removing stale tombstone for %s\n", mbentry->name);
 	    syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
-	    cyrusdb_delete(mbdb, key, keylen, NULL, /*force*/1);
+	    mboxlist_delete(mbentry->name, /*force*/1);
 	}
 	goto done;
     }
