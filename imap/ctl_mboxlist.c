@@ -87,8 +87,6 @@
 extern int optind;
 extern char *optarg;
 
-const int PER_COMMIT = 1000;
-
 enum mboxop { DUMP,
 	      M_POPULATE,
 	      RECOVER,
@@ -99,8 +97,6 @@ enum mboxop { DUMP,
 
 struct dumprock {
     enum mboxop op;
-
-    struct txn *tid;
 
     const char *partition;
     int purge;
@@ -177,212 +173,63 @@ static int dump_cb(void *rockp,
 		   const char *data, size_t datalen)
 {
     struct dumprock *d = (struct dumprock *) rockp;
-    int r = 0;
-    char *p;
-    char *name, *server, *part;
-    char *acl = NULL;
-    uint32_t mbtype = 0;
-    struct dlist *dl = NULL;
-
-    /* \0 terminate 'name' */
-    name = xstrndup(key, keylen);
-
-    // this is a dlist
-    if (data[0] == '%') {
-	char *mbtype_str = NULL;    // placeholder for string obtained from dlist
-
-	r = dlist_parsemap(&dl, 0, data, datalen);
-
-	if (!r) {
-	    // The mailbox type is always there too... as a string
-	    //
-	    // Do this here first, then see below for ACL and partition
-	    r = dlist_getatom(dl, "T", (const char **)&mbtype_str);
-
-	    if (!r) {
-		// That's OK, the mailbox is local (0)
-		mbtype = 0;
-	    }
-
-	    mbtype = mboxlist_string_to_mbtype(mbtype_str);
-
-	    struct dlist *dl_acl = dlist_getchild(dl, "A");
-	    struct dlist *dl_ace;
-
-	    if (dl_acl) {
-		for (dl_ace = dl_acl->head; dl_ace; dl_ace = dl_ace->next) {
-		    const char *tmp;
-		    r = dlist_getatom(dl_acl, dl_ace->name, &tmp);
-
-		    if (!r) {
-			syslog(
-				LOG_ERR,
-				"Failed to dlist_getatom for (A)CL "
-				"dlist_kvlist key '%s' (%s:%d)",
-				dl_ace->name,
-				__FILE__,
-				__LINE__
-			    );
-
-			continue;
-		    } // if (r = dlist_getatom())
-
-		    if (dl_ace->name && tmp) {
-			if (acl != NULL) {
-			    // Temporary placeholder for the original
-			    char *_acl = xstrdup(acl);
-			    acl = xmalloc(strlen(acl) + 2 + strlen(dl_ace->name) + strlen(tmp) + 1);
-			    sprintf(acl, "%s\t%s\t%s", _acl, dl_ace->name, tmp);
-			    free(_acl);
-			} else {
-			    acl = xmalloc(1 + strlen(dl_ace->name) + strlen(tmp) + 1);
-			    sprintf(acl, "%s\t%s", dl_ace->name, tmp);
-			}
-		    }
-		}
-	    } else { // (dl_acl)
-		if (!(mbtype & MBTYPE_DELETED))
-		    syslog(LOG_NOTICE, "Mailbox without an ACL: '%s'", name);
-	    }
-
-	    // The partition is always there...
-	    r = dlist_getatom(dl, "P", (const char **)&part);
-
-	    if (!r && !(mbtype & MBTYPE_DELETED)) {
-		syslog(
-			LOG_ERR,
-			"No partition for mailbox '%s'",
-			name
-		    );
-
-		part = NULL;
-	    }
-
-	    // If the mailbox is 'remote', the 'server' field matters
-	    if (mbtype & MBTYPE_REMOTE) {
-		r = dlist_getatom(dl, "S", (const char **)&server);
-
-		if (!r) {
-		    syslog(
-			    LOG_ERR,
-			    "Failed to obtain (S)erver from dlist "
-			    "(%s:%d)",
-			    __FILE__,
-			    __LINE__
-			);
-
-		}
-
-
-		if (server == config_servername) {
-		    syslog(
-			    LOG_WARNING,
-			    "Mailbox %s is marked remote, but the server "
-			    "on which it is supposed to reside equals "
-			    "our server name.",
-			    name
-			);
-		}
-
-		// Since we have a server, make it part of the location
-		char *tmp = xstrdup(part);
-		part = strconcat(server, "!", tmp, NULL);
-		free(tmp);
-
-	    } // (mbtype & MBTYPE_REMOTE)
-
-	    // Reset r **NOT** to the return value of ffin dlist functions
-	    r = 0;
-
-	} // if (r = dlist_parsemap())
-	else {
-	    syslog(
-		    LOG_ERR,
-		    "Failed to parse dlist (%s:%d)",
-		    __FILE__,
-		    __LINE__
-		);
-	}
-
-    } // (data[0] == '%')
-    else {
-	/* Get mailbox type */
-	mbtype = strtol(data, &p, 10);
-
-	p = strchr(data, ' ');
-	if (p == NULL) {
-	    abort();
-	}
-	p++;
-	acl = strchr(p, ' ');
-	if (acl == NULL) {
-	    abort();
-	}
-
-	/* grab 'part', \0 terminate */
-	part = xstrndup(p, acl - p);
-
-	/* \0 terminate 'acl' */
-	p = acl + 1;
-	acl = xstrndup(p, datalen - (p - data));
-    }
+    struct mboxlist_entry *mbentry = NULL;
+    int r = mboxlist_parse_entry(&mbentry, key, keylen, data, datalen);
 
     switch (d->op) {
     case DUMP:
-	if (!d->partition || !strcmpsafe(d->partition, part)) {
-	    printf("%s\t%d %s %s\n", name, mbtype, part, acl);
+	if (!d->partition || !strcmpsafe(d->partition, mbentry->partition)) {
+	    printf("%s\t%d %s %s\n", mbentry->name, mbentry->mbtype,
+				     mbentry->partition, mbentry->acl);
 	    if (d->purge) {
-		cyrusdb_delete(mbdb, key, keylen, &(d->tid), 0);
+		mboxlist_delete(mbentry->name, 0);
 	    }
 	}
 	break;
-    case M_POPULATE: 
+    case M_POPULATE:
     {
-	if (mbtype & MBTYPE_DELETED)
+	if (mbentry->mbtype & MBTYPE_DELETED)
 	    return 0;
 
-	char *realpart = xmalloc(strlen(config_servername) + 1
-				 + strlen(part) + 1);
+	/* realpart is 'hostname!partition' */
+	char *realpart = strconcat(mbentry->server, "!", mbentry->partition, (const char *)NULL);
 	int skip_flag = 0;
 
 	/* If it is marked MBTYPE_MOVING, and it DOES match the entry,
 	 * we need to unmark it.  If it does not match the entry in our
 	 * list, then we assume that it successfully made the move and
 	 * we delete it from the local disk */
-	
-	/* realpart is 'hostname!partition' */
-	sprintf(realpart, "%s!%s", config_servername, part);
 
 	/* If they match, then we should check that we actually need
 	 * to update it.  If they *don't* match, then we believe that we
 	 * need to send fresh data.  There will be no point at which something
 	 * is in the act_head list that we do not have locally, because that
 	 * is a condition of being in the act_head list */
-	if (act_head && !strcmp(name, act_head->mailbox)) {
+	if (act_head && !strcmp(mbentry->name, act_head->mailbox)) {
 	    struct mb_node *tmp;
-	    
+
 	    /* If this mailbox was moving, we want to unmark the movingness,
 	     * since the MUPDATE server agreed that it lives here. */
 	    /* (and later also force an mupdate push) */
-	    if (mbtype & MBTYPE_MOVING) {
+	    if (mbentry->mbtype & MBTYPE_MOVING) {
 		struct mb_node *next;
 
 		if (warn_only) {
-		    printf("Remove remote flag on: %s\n", name);
+		    printf("Remove remote flag on: %s\n", mbentry->name);
 		} else {
 		    next = xzmalloc(sizeof(struct mb_node));
-		    strlcpy(next->mailbox, name, sizeof(next->mailbox));
+		    strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
 		    next->next = unflag_head;
 		    unflag_head = next;
 		}
-		
+
 		/* No need to update mupdate NOW, we'll get it when we
 		 * untag the mailbox */
 		skip_flag = 1;
 	    } else if (act_head->acl) {
 		if (
 			!strcmp(realpart, act_head->location) &&
-			!strcmp(acl, act_head->acl)
+			!strcmp(mbentry->acl, act_head->acl)
 		    ) {
 
 		    /* Do not update if location does match, and there is an acl,
@@ -407,7 +254,7 @@ static int dump_cb(void *rockp,
 	    /* if this is okay, we found it (so it is on another host, since
 	     * it wasn't in our list in this position) */
 	    if (!local_authoritative &&
-	       !mupdate_find(d->h, name, &mdata)) {
+	       !mupdate_find(d->h, mbentry->name, &mdata)) {
 		/* since it lives on another server, schedule it for a wipe */
 		struct mb_node *next;
 
@@ -423,48 +270,48 @@ static int dump_cb(void *rockp,
 			    act_head->mailbox, act_head->location, act_head->acl );
 		    }
 		    fprintf( stderr, "mailboxes.db said: %s %s %s\n",
-			    name, realpart, acl );
+			    mbentry->name, realpart, mbentry->acl );
 		    fprintf( stderr, "mupdate says: %s %s %s\n",
 			    mdata->mailbox, mdata->location, mdata->acl );
 		    fatal("mupdate said not us before it said us", EC_SOFTWARE);
 		}
-		
+
 		/*
 		 * Where does "unified" murder fit into ctl_mboxlist?
 		 * 1. Only check locally hosted mailboxes.
 		 * 2. Check everything.
 		 * Either way, this check is just wrong!
 		 */
-		if (config_mupdate_config != 
+		if (config_mupdate_config !=
 		    IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 		    /* But not for a unified configuration */
 		    if (warn_only) {
-			printf("Remove Local Mailbox: %s\n", name);
+			printf("Remove Local Mailbox: %s\n", mbentry->name);
 		    } else {
 			next = xzmalloc(sizeof(struct mb_node));
-			strlcpy(next->mailbox, name, sizeof(next->mailbox));
+			strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
 			next->next = wipe_head;
 			wipe_head = next;
 		    }
 		}
-		
-		skip_flag = 1;		
+
+		skip_flag = 1;
 	    } else {
 		/* Check that it isn't flagged moving */
-		if (mbtype & MBTYPE_MOVING) {
+		if (mbentry->mbtype & MBTYPE_MOVING) {
 		    /* it's flagged moving, we'll fix it later (and
 		     * push it then too) */
 		    struct mb_node *next;
-		    
+
 		    if (warn_only) {
-			printf("Remove remote flag on: %s\n", name);
+			printf("Remove remote flag on: %s\n", mbentry->name);
 		    } else {
 			next = xzmalloc(sizeof(struct mb_node));
-			strlcpy(next->mailbox, name, sizeof(next->mailbox));
+			strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
 			next->next = unflag_head;
 			unflag_head = next;
 		    }
-		    
+
 		    /* No need to update mupdate now, we'll get it when we
 		     * untag the mailbox */
 		    skip_flag = 1;
@@ -477,31 +324,31 @@ static int dump_cb(void *rockp,
 	    break;
 	}
 	if (warn_only) {
-	    printf("Force Activate: %s\n", name);
+	    printf("Force Activate: %s\n", mbentry->name);
 	    free(realpart);
 	    break;
 	}
 
-	r = mupdate_activate(d->h,name,realpart,acl);
+	r = mupdate_activate(d->h, mbentry->name, realpart, mbentry->acl);
 
 	if (r == MUPDATE_NOCONN) {
-	    fprintf(stderr, "permanant failure storing '%s'\n", name);
+	    fprintf(stderr, "permanant failure storing '%s'\n", mbentry->name);
 	    r = IMAP_IOERROR;
 	} else if (r == MUPDATE_FAIL) {
 	    fprintf(stderr,
 		    "temporary failure storing '%s' (update continuing)\n",
-		    name);
+		    mbentry->name);
 	    r = 0;
        } else if (r) {
            fprintf(
                    stderr,
                    "error storing '%s' (update continuing): %s\n",
-                   name,
+                   mbentry->name,
                    error_message(r)
                );
            r = 0;
 	}
-	    
+
 	free(realpart);
 
 	break;
@@ -512,9 +359,7 @@ static int dump_cb(void *rockp,
 	break;
     }
 
-    free(name);
-    free(part);
-    free(acl);
+    mboxlist_entry_free(&mbentry);
 
     return r;
 }
@@ -565,7 +410,6 @@ static void do_dump(enum mboxop op, const char *part, int purge)
     d.op = op;
     d.partition = part;
     d.purge = purge;
-    d.tid = NULL;
     
     if (op == M_POPULATE) {
 	ret = mupdate_connect(NULL, NULL, &(d.h), NULL);
@@ -605,12 +449,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
     }
 
     /* Dump Database */
-    cyrusdb_foreach(mbdb, "", 0, NULL, &dump_cb, &d, NULL);
-
-    if (d.tid) {
-	cyrusdb_commit(mbdb, d.tid);
-	d.tid = NULL;
-    }
+    mboxlist_allmbox("", &dump_cb, &d, /*incdel*/1);
 
     if (op == M_POPULATE) {
 	/* Remove MBTYPE_MOVING flags (unflag_head) */
@@ -704,18 +543,11 @@ static void do_undump(void)
     int r = 0;
     char buf[16384];
     int line = 0;
-    char last_commit[MAX_MAILBOX_BUFFER];
-    char *key=NULL, *data=NULL;
-    int keylen, datalen;
-    int untilCommit = PER_COMMIT;
-    struct txn *tid = NULL;
-    
-    last_commit[0] = '\0';
+    const char *name, *partition, *acl;
+    int mbtype;
+    char *p;
 
     while (fgets(buf, sizeof(buf), stdin)) {
-	char *name, *partition, *acl;
-	char *p;
-	int mbtype = 0, tries = 0;
 	mbentry_t *newmbentry = NULL;
 
 	line++;
@@ -754,66 +586,19 @@ static void do_undump(void)
 	    continue;
 	}
 
-	key = name;
-	keylen = strlen(key);
-
 	/* generate a new entry */
 	newmbentry = mboxlist_entry_create();
+	newmbentry->name = xstrdup(name);
 	newmbentry->mbtype = mbtype;
 	newmbentry->partition = xstrdupnull(partition);
 	newmbentry->acl = xstrdupnull(acl);
+	/* XXX - still missing all the new fields */
 
-	data = mboxlist_entry_cstring(newmbentry);
-	datalen = strlen(data);
-
+	r = mboxlist_update(newmbentry, /*localonly*/1);
 	mboxlist_entry_free(&newmbentry);
-
-	tries = 0;
-    retry:
-	r = cyrusdb_store(mbdb, key, keylen, data, datalen, &tid);
-	switch (r) {
-	case 0:
-	    break;
-	case CYRUSDB_AGAIN:
-	    if (tries++ < 5) {
-		fprintf(stderr, "warning: DB_LOCK_DEADLOCK; retrying\n");
-		goto retry;
-	    }
-	    fprintf(stderr, "error: too many deadlocks, aborting\n");
-	    break;
-	default:
-	    r = IMAP_IOERROR;
-	    break;
-	}
-
-	free(data);
-
-	if (--untilCommit == 0) {
-	    /* commit */
-	    r = cyrusdb_commit(mbdb, tid);
-	    if (r) break;
-	    tid = NULL;
-	    untilCommit = PER_COMMIT;
-	    strlcpy(last_commit,key,sizeof(last_commit));
-	}
 
 	if (r) break;
     }
-
-    if (!r && tid) {
-	/* commit the last transaction */
-	r=cyrusdb_commit(mbdb, tid);
-    }
-
-    if (r) {
-	if (tid) cyrusdb_abort(mbdb, tid);
-	fprintf(stderr, "db error: %s\n", cyrusdb_strerror(r));
-	if (key) fprintf(stderr, "was processing mailbox: %s\n", key);
-	if (last_commit[0]) fprintf(stderr, "last commit was at: %s\n",
-				   last_commit);
-	else fprintf(stderr, "no commits\n");
-    }
-    
 
     return;
 }
@@ -1087,7 +872,7 @@ static void do_verify(void)
 
     qsort(found.data, found.size, sizeof(struct found_data), compar_mbox);
 
-    cyrusdb_foreach(mbdb, "", 0, NULL, &verify_cb, &found, NULL);
+    mboxlist_allmbox("", &verify_cb, &found, /*incdel*/1);
 }
 
 static void usage(void)
