@@ -332,9 +332,6 @@ static struct capa_struct base_capabilities[] = {
     { "URLAUTH",               2 },
     { "URLAUTH=BINARY",        2 },
 #endif
-#ifdef ENABLE_X_NETSCAPE_HACK
-    { "X-NETSCAPE",            2 },
-#endif
 
 /* keep this to mark the end of the list */
     { 0,                       0 }
@@ -410,10 +407,6 @@ static void cmd_resetkey(char *tag, char *mailbox, char *mechanism);
 
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *tag, char *alg);
-#endif
-
-#ifdef ENABLE_X_NETSCAPE_HACK
-void cmd_netscrape(char* tag);
 #endif
 
 static void cmd_getannotation(const char* tag, char *mboxpat);
@@ -1766,13 +1759,6 @@ static void cmdloop(void)
 
 		/* xxxx snmp_increment(NOOP_COUNT, 1); */
 	    }
-#ifdef ENABLE_X_NETSCAPE_HACK
-	    else if (!strcmp(cmd.s, "Netscape")) {
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-		cmd_netscrape(tag.s);
-	    }
-#endif
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Namespace")) {
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -8670,27 +8656,6 @@ static void cmd_status(char *tag, char *name)
     mboxlist_entry_free(&mbentry);
     return;
 }
-
-#ifdef ENABLE_X_NETSCAPE_HACK
-/*
- * Reply to Netscape's crock with a crock of my own
- */
-void cmd_netscrape(char *tag)
-{
-    const char *url;
-
-    url = config_getstring(IMAPOPT_NETSCAPEURL);
-
-    /* I only know of three things to reply with: */
-    prot_printf(imapd_out,
-		"* OK [NETSCAPE] Carnegie Mellon Cyrus IMAP\r\n"
-		"* VERSION %s\r\n",
-		cyrus_version());
-    if (url) prot_printf(imapd_out, "* ACCOUNT-URL %s\r\n", url);
-    prot_printf(imapd_out, "%s OK %s\r\n",
-		tag, error_message(IMAP_OK_COMPLETED));
-}
-#endif /* ENABLE_X_NETSCAPE_HACK */
 
 /* Callback for cmd_namespace to be passed to mboxlist_findall.
  * For each top-level mailbox found, print a bit of the response

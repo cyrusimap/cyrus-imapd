@@ -1500,12 +1500,6 @@ AC_ARG_ENABLE(oldsievename,
 	fi,
 	AC_MSG_RESULT(no))
 
-AC_ARG_ENABLE(netscapehack,
-	[AS_HELP_STRING([--enable-netscapehack], [enable Netscape hack for the menu option in Communicator to Administrate Mail])],
-	if test "$enableval" = yes; then
-		AC_DEFINE(ENABLE_X_NETSCAPE_HACK,[],[Enable Netscape Menu Option Hack?])
-	fi)
-
 CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
