@@ -86,7 +86,7 @@
 
 cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
-EXPORTED struct db *mbdb;
+static struct db *mbdb;
 
 static int mboxlist_dbopen = 0;
 

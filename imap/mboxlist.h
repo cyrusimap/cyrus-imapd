@@ -51,8 +51,6 @@
 #include "mboxevent.h"
 #include "mboxname.h"
 
-extern struct db *mbdb;
-
 /*
  * Maximum length of partition name. [config.c has a limit of 70]
  */
