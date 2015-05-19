@@ -747,7 +747,12 @@ if test "x$enable_afs" = "xyes"; then
     ])
 
     CFLAGS="${CFLAGS} -I${with_afs_incdir}"
-    AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a  ${with_afs_libdir}/afs/liblwp.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libafscom_err.a -lresolv"
+    AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libafscom_err.a -lresolv"
+    if test -f ${with_afs_libdir}/afs/liblwp.a; then
+      AFS_LIBS="$AFS_LIBS ${with_afs_libdir}/afs/liblwp.a"
+    elif test -f ${with_afs_libdir}/liblwp.a; then
+      AFS_LIBS="$AFS_LIBS ${with_afs_libdir}/liblwp.a"
+    fi
     if test -f ${with_afs_libdir}/afs/libaudit.a; then
       AFS_LIBS="$AFS_LIBS ${with_afs_libdir}/afs/libaudit.a"
     fi
