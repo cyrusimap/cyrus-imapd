@@ -167,7 +167,11 @@ struct event_parameter {
     enum event_param id;
     const char *name;
     enum event_param_type type;
-    uint64_t value;
+    union {
+	char *s;
+	uint64_t u;
+	strarray_t *a;
+    } value;
     int filled;
 };
 
