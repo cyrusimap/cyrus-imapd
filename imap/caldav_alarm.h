@@ -48,6 +48,7 @@
 
 #include "sqldb.h"
 #include "strarray.h"
+#include <libical/ical.h>
 
 enum caldav_alarm_action {
     CALDAV_ALARM_ACTION_NONE	= 0,
