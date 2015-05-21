@@ -56,6 +56,7 @@
 #include "imap_err.h"
 #include "http_err.h"
 #include "libconfig.h"
+#include "mboxevent.h"
 #include "mboxname.h"
 #include "util.h"
 #include "xstrlcat.h"
@@ -591,6 +592,90 @@ static int recipient_read_cb(sqlite3_stmt *stmt, void *rock)
     strarray_append(recipients, (const char *) sqlite3_column_text(stmt, 0));
 
     return 0;
+}
+
+/*
+ * Extract data from the given ical object
+ */
+static void mboxevent_extract_icalcomponent(struct mboxevent *event,
+					    icalcomponent *ical,
+					    const char *userid,
+					    const char *calname,
+					    enum caldav_alarm_action action,
+					    icaltimetype alarmtime,
+					    const char *timezone,
+					    icaltimetype start,
+					    icaltimetype end,
+					    strarray_t *recipients)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+
+    icalproperty *prop;
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALARM_TIME,
+		      xstrdup(icaltime_as_ical_string(alarmtime)));
+
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, xstrdup(calname));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ACTION, xstrdup(
+	action == CALDAV_ALARM_ACTION_DISPLAY	? "display" :
+	action == CALDAV_ALARM_ACTION_EMAIL	? "email" :
+						  ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_SUMMARY,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_DESCRIPTION,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_LOCATION,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ORGANIZER,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
+		      xstrdup(timezone));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_START,
+		      xstrdup(icaltime_as_ical_string(start)));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_END,
+		      xstrdup(icaltime_as_ical_string(end)));
+    FILL_UNSIGNED_PARAM(event, EVENT_CALENDAR_ALLDAY,
+		        icaltime_is_date(start) ? 1 : 0);
+
+    strarray_t *attendee_names = strarray_new();
+    strarray_t *attendee_emails = strarray_new();
+    strarray_t *attendee_status = strarray_new();
+    prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+    while (prop) {
+	const char *email = icalproperty_get_value_as_string(prop);
+	if (!email)
+	    continue;
+	strarray_append(attendee_emails, email);
+
+	const char *name = icalproperty_get_parameter_as_string(prop, "CN");
+	strarray_append(attendee_names, name ? name : "");
+
+	const char *partstat = icalproperty_get_parameter_as_string(prop, "PARTSTAT");
+	strarray_append(attendee_status, partstat ? partstat : "");
+
+	prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
+    }
+
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_NAMES, attendee_names);
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_EMAILS, attendee_emails);
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_STATUS, attendee_status);
 }
 
 /* process alarms with triggers within before a given time */

@@ -49,10 +49,6 @@
 
 #include "mailbox.h"
 #include "mboxname.h"
-#ifdef WITH_DAV
-#include "caldav_db.h"
-#include "caldav_alarm.h"
-#endif
 
 /*
  * event types defined in RFC 5423 - Internet Message Store Events
@@ -192,6 +188,16 @@ struct mboxevent {
 };
 
 
+#define FILL_STRING_PARAM(e,p,v) e->params[p].value.s = v; \
+				 e->params[p].type = EVENT_PARAM_STRING; \
+				 e->params[p].filled = 1
+#define FILL_ARRAY_PARAM(e,p,v) e->params[p].value.a = v; \
+				 e->params[p].type = EVENT_PARAM_ARRAY; \
+				 e->params[p].filled = 1
+#define FILL_UNSIGNED_PARAM(e,p,v) e->params[p].value.u = v; \
+				  e->params[p].type = EVENT_PARAM_INT; \
+				  e->params[p].filled = 1
+
 /*
  * Call this initializer once only at start
  */
@@ -321,24 +327,6 @@ void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox)
  */
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox);
-
-#ifdef WITH_DAV
-/*
- * Extract data from the given ical object
- */
-void mboxevent_extract_icalcomponent(struct mboxevent *event,
-                                     icalcomponent *ical,
-                                     const char *userid,
-                                     const char *calname,
-                                     enum caldav_alarm_action action,
-                                     icaltimetype alarmtime,
-                                     const char *timezone,
-                                     icaltimetype start,
-                                     icaltimetype end,
-                                     strarray_t *recipients
-                                     );
-#endif /* WITH_DAV */
-
 
 /*
  * set the client tag used by vnd.fastmail.clientTagj
