@@ -220,18 +220,12 @@ static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
     return 0;	/* always keep the message */
 }
 
-static int archive(void *rock, const char *key, size_t keylen,
-			       const char *data, size_t datalen)
+static int archive(const mbentry_t *mbentry, void *rock)
 {
-    mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
 
     if (sigquit)
 	return 1;
-
-    /* Skip mailboxes with errors */
-    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
-	goto done; /* xxx - syslog? */
 
     if (mbentry->mbtype & MBTYPE_DELETED)
 	goto done;
@@ -249,7 +243,6 @@ static int archive(void *rock, const char *key, size_t keylen,
 
 done:
     mailbox_close(&mailbox);
-    mboxlist_entry_free(&mbentry);
 
     /* move on to the next mailbox regardless of errors */
     return 0;
@@ -261,10 +254,8 @@ done:
  * - build a hash table of mailboxes in which we expired messages,
  * - and perform a cleanup of expunged messages
  */
-static int expire(void *rock, const char *key, size_t keylen,
-			      const char *data, size_t datalen)
+static int expire(const mbentry_t *mbentry, void *rock)
 {
-    mbentry_t *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
     char *buf;
     struct buf attrib = BUF_INITIALIZER;
@@ -278,8 +269,6 @@ static int expire(void *rock, const char *key, size_t keylen,
 	/* don't care if we leak some memory, we are shutting down */
 	return 1;
     }
-    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
-	goto done; /* xxx - syslog? */
 
     /* Skip remote mailboxes */
     if (mbentry->mbtype & MBTYPE_REMOTE)
@@ -377,25 +366,18 @@ static int expire(void *rock, const char *key, size_t keylen,
     }
 
 done:
-    mboxlist_entry_free(&mbentry);
     mailbox_close(&mailbox);
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }
 
-static int delete(void *rock, const char *key, size_t keylen,
-			      const char *data, size_t datalen)
+static int delete(const mbentry_t *mbentry, void *rock)
 {
     struct delete_rock *drock = (struct delete_rock *) rock;
-    mbentry_t *mbentry = NULL;
     time_t timestamp;
 
     if (sigquit)
 	return 1;
-
-    /* Skip mailboxes with errors */
-    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
-	goto done; /* xxx - syslog? */
 
     if (mbentry->mbtype & MBTYPE_DELETED)
 	goto done;
@@ -417,27 +399,19 @@ static int delete(void *rock, const char *key, size_t keylen,
     strarray_append(&drock->to_delete, mbentry->name);
 
 done:
-    mboxlist_entry_free(&mbentry);
-
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }
 
-static int expire_conversations(void *rock, const char *key, size_t keylen,
-				const char *data, size_t datalen)
+static int expire_conversations(const mbentry_t *mbentry, void *rock)
 {
     struct conversations_rock *crock = (struct conversations_rock *)rock;
     struct conversations_state *state = NULL;
     unsigned int nseen = 0, ndeleted = 0;
-    mbentry_t *mbentry = NULL;
     char *filename = NULL;
 
     if (sigquit)
 	return 1;
-
-    /* Skip mailboxes with errors */
-    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
-	goto done; /* xxx - syslog? */
 
     if (mbentry->mbtype & MBTYPE_DELETED)
 	goto done;
@@ -468,7 +442,6 @@ static int expire_conversations(void *rock, const char *key, size_t keylen,
 
 done:
     free(filename);
-    mboxlist_entry_free(&mbentry);
     return 0;
 }
 

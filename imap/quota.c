@@ -103,9 +103,7 @@ static void reportquota(void);
 static int buildquotalist(char *domain, char **roots, int nroots);
 static int fixquotas(char *domain, char **roots, int nroots);
 static int fixquota_dopass(char *domain, char **roots, int nroots,
-			   foreach_cb *pass);
-static int fixquota_dombox(void *rock, const char *name, size_t namelen,
-			  const char *val, size_t vallen);
+			   mboxlist_cb *pass);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 static int fixquota_finish(int thisquota);
 static int (*compar)(const char *s1, const char *s2);
@@ -429,28 +427,24 @@ static int findroot(const char *name, int *thisquota)
 /*
  * Pass 2: account for mailbox 'name' when fixing the quota roots
  */
-static int fixquota_dombox(void *rock,
-			   const char *name, size_t namelen,
-			   const char *val __attribute__((unused)),
-			   size_t vallen __attribute__((unused)))
+static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
     const char *prefix = (const char *)rock;
     size_t prefixlen = (prefix ? strlen(prefix) : 0);
     struct mailbox *mailbox = NULL;
     int thisquota = -1;
-    char *mboxname = xstrndup(name, namelen);
     struct txn *txn = NULL;
 
     while (quota_todo < quota_num) {
 	const char *root = quotaroots[quota_todo].name;
 
 	/* in the future, definitely don't close yet */
-	if (compar(mboxname, root) < 0)
+	if (compar(mbentry->name, root) < 0)
 	    break;
 
 	/* inside the first root, don't close yet */
-	if (mboxname_is_prefix(mboxname, root))
+	if (mboxname_is_prefix(mbentry->name, root))
 	    break;
 
 	/* finished, close out now */
@@ -459,17 +453,17 @@ static int fixquota_dombox(void *rock,
 	if (r) goto done;
     }
 
-    test_sync_wait(mboxname);
+    test_sync_wait(mbentry->name);
 
-    r = findroot(mboxname, &thisquota);
+    r = findroot(mbentry->name, &thisquota);
     if (r) {
-	errmsg("failed finding quotaroot for mailbox '%s'", name, r);
+	errmsg("failed finding quotaroot for mailbox '%s'", mbentry->name, r);
 	goto done;
     }
 
-    r = mailbox_open_iwl(mboxname, &mailbox);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
-	errmsg("failed opening header for mailbox '%s'", name, r);
+	errmsg("failed opening header for mailbox '%s'", mbentry->name, r);
 	goto done;
     }
 
@@ -509,7 +503,7 @@ static int fixquota_dombox(void *rock,
 
 	/* and mention that this mailbox has been scanned */
 	free(localq.scanmbox);
-	localq.scanmbox = xstrdup(mboxname);
+	localq.scanmbox = xstrdup(mbentry->name);
 
 	r = quota_write(&localq, &txn);
 	quota_free(&localq);
@@ -524,8 +518,7 @@ static int fixquota_dombox(void *rock,
 
 done:
     mailbox_close(&mailbox);
-    test_sync_done(mboxname);
-    free(mboxname);
+    test_sync_done(mbentry->name);
 
     return r;
 }
@@ -609,7 +602,7 @@ done:
  * Run a pass over all the quota roots
  */
 int fixquota_dopass(char *domain, char **roots, int nroots,
-		    foreach_cb *cb)
+		    mboxlist_cb *cb)
 {
     int i, r = 0;
     char buf[MAX_MAILBOX_BUFFER], *tail;

@@ -1862,16 +1862,10 @@ done:
     return r;
 }
 
-static int mbox_vector_cb(void *rock,
-			  const char *key, size_t keylen,
-			  const char *val __attribute__((unused)),
-			  size_t vallen __attribute__((unused)))
+static int mbox_vector_cb(const mbentry_t *mbentry, void *rock)
 {
-    char *mboxname = xstrndup(key, keylen);
     struct mbfilter *filter = (struct mbfilter *)rock;
-    int r = mbox_vector(mboxname, filter);
-    free(mboxname);
-    return r;
+    return mbox_vector(mbentry->name, filter);
 }
 
 static int build_mbfilter(const char *userid, struct mbfilter *filter)

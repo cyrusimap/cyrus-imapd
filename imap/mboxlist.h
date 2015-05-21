@@ -218,11 +218,13 @@ int mboxlist_findparent(const char *mboxname,
 
 /* direct access to subs DB */
 typedef int user_cb(const char *userid, void *rock);
-int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock);
-int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock, int incdel);
 int mboxlist_alluser(user_cb *proc, void *rock);
-int mboxlist_allusermbox(const char *userid, foreach_cb *proc, void *rock,
-			 int include_deleted);
+
+typedef int mboxlist_cb(const mbentry_t *mbentry, void *rock);
+int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int incdel);
+int mboxlist_allusermbox(const char *userid, mboxlist_cb *proc, void *rock, int incdel);
+
+strarray_t *mboxlist_sublist(const char *userid);
 
 /* Find subscribed mailboxes that match 'pattern'. */
 int mboxlist_findsub(struct namespace *namespace,

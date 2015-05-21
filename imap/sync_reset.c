@@ -127,10 +127,10 @@ EXPORTED void fatal(const char* s, int code)
 
 static int reset_single(const char *userid)
 {
-    struct sync_name_list *sublist = sync_name_list_create();
     struct sync_name_list *mblist = sync_name_list_create();
     struct sync_name *item;
     int r = 0;
+    int i;
 
     /* XXX: adding an entry to userdeny_db here would avoid the need to
      * protect against new logins with external proxy rules - Cyrus could
@@ -139,15 +139,15 @@ static int reset_single(const char *userid)
     /* first, disconnect all current connections for this user */
     proc_killuser(userid);
 
-    r = mboxlist_allsubs(userid, addmbox_sub, sublist);
-    if (r) goto fail;
+    strarray_t *sublist = mboxlist_sublist(userid);
 
     /* ignore failures here - the subs file gets deleted soon anyway */
-    for (item = sublist->head; item; item = item->next) {
-	(void)mboxlist_changesub(item->name, userid, sync_authstate, 0, 0, 0);
+    for (i = 0; i < sublist->count; i++) {
+	const char *name = strarray_nth(sublist, i);
+	(void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
     }
 
-    r = mboxlist_allusermbox(userid, addmbox_sub, mblist, /*incdel*/1);
+    r = mboxlist_allusermbox(userid, addmbox_cb, mblist, /*incdel*/1);
     if (r) goto fail;
 
     for (item = mblist->head; item; item = item->next) {
@@ -165,7 +165,6 @@ static int reset_single(const char *userid)
     r = user_deletedata(userid, 1);
 
  fail:
-    sync_name_list_free(&sublist);
     sync_name_list_free(&mblist);
 
     return r;

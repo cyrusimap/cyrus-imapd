@@ -753,18 +753,10 @@ static int subquery_run_global(search_query_t *query, const char *mboxname)
     return r;
 }
 
-static int subquery_run_global_cb(void *rock,
-				  const char *key, size_t keylen,
-				  const char *val __attribute((unused)),
-				  size_t vallen __attribute((unused)))
+static int subquery_run_global_cb(const mbentry_t *mbentry, void *rock)
 {
     search_query_t *query = rock;
-    char *mboxname = xstrndup(key, keylen);
-    int r;
-
-    r = subquery_run_global(query, mboxname);
-    free(mboxname);
-    return r;
+    return subquery_run_global(query, mbentry->name);
 }
 
 static search_subquery_t *subquery_new(void)

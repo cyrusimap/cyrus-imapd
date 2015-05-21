@@ -402,9 +402,7 @@ struct dlist *sync_parseline(struct protstream *in);
 /* ====================================================================== */
 
 int addmbox(char *name, int matchlen, int maycreate, void *rock);
-int addmbox_sub(void *rockp, const char *key, size_t keylen,
-		const char *data __attribute__((unused)),
-		size_t datalen __attribute__((unused)));
+int addmbox_cb(const mbentry_t *mbentry, void *rock);
 
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 		 struct index_record *record,

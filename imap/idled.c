@@ -87,11 +87,7 @@ EXPORTED void fatal(const char *msg, int err)
     exit(err);
 }
 
-static int mbox_count_cb(void *rockp,
-			 const char *key __attribute__((unused)),
-			 size_t keylen __attribute__((unused)),
-			 const char *data __attribute__((unused)),
-			 size_t datalen __attribute__((unused)))
+static int mbox_count_cb(const mbentry_t *mbentry __attribute__((unused)), void *rockp)
 {
     int *ip = (int *) rockp;
     (*ip)++;

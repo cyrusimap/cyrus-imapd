@@ -70,21 +70,16 @@ static void usage(void)
 }
 
 /* Callback for use by delete_seen */
-static int deluserseen(void *rock __attribute__((unused)),
-		       const char *key,
-		       size_t keylen,
-		       const char *val __attribute__((unused)),
-		       size_t vallen  __attribute__((unused)))
+static int deluserseen(const mbentry_t *mbentry, void *rock __attribute__((unused)))
 {
-    char *name = xstrndup(key, keylen);
     struct mailbox *mailbox = NULL;
     const char *userid;
     int r = 0;
 
-    r = mailbox_open_irl(name, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) goto done;
 
-    userid = mboxname_to_userid(name);
+    userid = mboxname_to_userid(mbentry->name);
     if (userid) {
 	printf("removing seen for %s on %s\n", userid, mailbox->name);
 	if (do_remove) seen_delete_mailbox(userid, mailbox);
@@ -93,7 +88,6 @@ static int deluserseen(void *rock __attribute__((unused)),
     mailbox_close(&mailbox);
 
 done:
-    free(name);
     return r;
 }
 

@@ -1234,40 +1234,6 @@ void sync_action_list_free(struct sync_action_list **lp)
     *lp = NULL;
 }
 
-int addmbox(char *name,
-	    int matchlen __attribute__((unused)),
-	    int maycreate __attribute__((unused)),
-	    void *rock)
-{
-    struct sync_name_list *list = (struct sync_name_list *) rock;
-    mbentry_t *mbentry = NULL;
-
-    if (mboxlist_lookup(name, &mbentry, NULL))
-	return 0;
-
-    /* only want normal mailboxes... */
-    if (!(mbentry->mbtype & (MBTYPE_RESERVE | MBTYPE_MOVING | MBTYPE_REMOTE)))
-	sync_name_list_add(list, name);
-
-    mboxlist_entry_free(&mbentry);
-
-    return 0;
-}
-
-int addmbox_sub(void *rock, const char *key, size_t keylen,
-		const char *data __attribute__((unused)),
-		size_t datalen __attribute__((unused)))
-{
-    struct sync_name_list *list = (struct sync_name_list *) rock;
-
-    /* XXX - double malloc because of list_add, clean up later */
-    char *name = xstrndup(key, keylen);
-    sync_name_list_add(list, name);
-    free(name);
-
-    return 0;
-}
-
 /* NOTE - we don't prot_flush here, as we always send an OK at the
  * end of a response anyway */
 void sync_send_response(struct dlist *kl, struct protstream *out)
@@ -2614,21 +2580,20 @@ static int user_getseen(const char *userid, struct protstream *pout)
 
 static int user_getsub(const char *userid, struct protstream *pout)
 {
-    struct sync_name_list *list = sync_name_list_create();
-    struct sync_name *item;
-    struct dlist *kl;
+    struct dlist *kl = dlist_newlist(NULL, "LSUB");
+    strarray_t *sublist = mboxlist_sublist(userid);
+    int i;
 
-    mboxlist_allsubs(userid, addmbox_sub, list);
-
-    kl = dlist_newlist(NULL, "LSUB");
-    for (item = list->head; item; item = item->next) {
-	dlist_setatom(kl, "MBOXNAME", item->name);
+    for (i = 0; i < sublist->count; i++) {
+	const char *name = strarray_nth(sublist, i);
+	dlist_setatom(kl, "MBOXNAME", name);
     }
+
     if (kl->head)
 	sync_send_response(kl, pout);
 
     dlist_free(&kl);
-    sync_name_list_free(&list);
+    strarray_free(sublist);
 
     return 0;
 }
@@ -2987,53 +2952,52 @@ int sync_apply_seen(struct dlist *kin,
     return r;
 }
 
+EXPORTED int addmbox_cb(const mbentry_t *mbentry, void *rock)
+{
+    strarray_t *list = (strarray_t *)rock;
+    strarray_append(list, mbentry->name);
+    return 0;
+}
+
 int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 {
-    struct sync_name_list *list = sync_name_list_create();
-    struct sync_name *item;
     const char *userid = kin->sval;
-    char buf[MAX_MAILBOX_NAME];
     int r = 0;
+    int i;
 
     /* Nuke subscriptions */
-    mboxlist_allsubs(userid, addmbox_sub, list);
-
     /* ignore failures here - the subs file gets deleted soon anyway */
-    for (item = list->head; item; item = item->next) {
-	mboxlist_changesub(item->name, userid, sstate->authstate, 0, 0, 0);
+    strarray_t *list = mboxlist_sublist(userid);
+    for (i = 0; i < list->count; i++) {
+	const char *name = strarray_nth(list, i);
+	mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0);
     }
-    sync_name_list_free(&list);
 
-    /* Nuke normal folders */
-    list = sync_name_list_create();
+    strarray_truncate(list, 0);
+    r = mboxlist_allusermbox(userid, addmbox_cb, list, /*incdel*/0);
+    if (r) goto done;
 
-    (*sstate->namespace->mboxname_tointernal)(sstate->namespace, "INBOX",
-					   userid, buf);
-    strlcat(buf, ".*", sizeof(buf));
-    r = (*sstate->namespace->mboxlist_findall)(sstate->namespace, buf,
-					    sstate->userisadmin,
-					    sstate->userid, sstate->authstate,
-					    addmbox, (void *)list);
-    if (r) goto fail;
-
-    for (item = list->head; item; item = item->next) {
-	r = mboxlist_deletemailbox(item->name, sstate->userisadmin,
+    /* skip first item (INBOX) */
+    for (i = 1; i < list->count; i++) {
+	const char *name = strarray_nth(list, i);
+	r = mboxlist_deletemailbox(name, sstate->userisadmin,
 				   sstate->userid, sstate->authstate,
 				   NULL, 0, sstate->local_only, 1);
-	if (r) goto fail;
+	if (r) goto done;
     }
 
-    /* Nuke inbox (recursive nuke possible?) */
-    (*sstate->namespace->mboxname_tointernal)(sstate->namespace, "INBOX",
-					   userid, buf);
-    r = mboxlist_deletemailbox(buf, sstate->userisadmin, sstate->userid,
-			       sstate->authstate, NULL, 0, sstate->local_only, 0);
-    if (r && (r != IMAP_MAILBOX_NONEXISTENT)) goto fail;
+    /* Nuke INBOX last */
+    if (list->count) {
+	const char *name = strarray_nth(list, 0);
+	r = mboxlist_deletemailbox(name, sstate->userisadmin, sstate->userid,
+				   sstate->authstate, NULL, 0, sstate->local_only, 0);
+	if (r) goto done;
+    }
 
     r = user_deletedata(userid, 1);
 
- fail:
-    sync_name_list_free(&list);
+ done:
+    strarray_free(list);
 
     return r;
 }
@@ -5021,19 +4985,15 @@ struct mboxinfo {
     struct sync_name_list *quotalist;
 };
 
-static int do_mailbox_info(void *rock,
-			   const char *key, size_t keylen,
-			   const char *data __attribute__((unused)),
-			   size_t datalen __attribute__((unused)))
+static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
 {
     struct mailbox *mailbox = NULL;
     struct mboxinfo *info = (struct mboxinfo *)rock;
-    char *name = xstrndup(key, keylen);
     int r = 0;
 
     /* XXX - check for deleted? */
 
-    r = mailbox_open_irl(name, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = 0;
@@ -5050,13 +5010,10 @@ static int do_mailbox_info(void *rock,
 	    sync_name_list_add(info->quotalist, mailbox->quotaroot);
     }
 
-    mailbox_close(&mailbox);
-
-    addmbox(name, 0, 0, info->mboxlist);
+    sync_name_list_add(info->mboxlist, mbentry->name);
 
 done:
-    free(name);
-
+    mailbox_close(&mailbox);
     return r;
 }
 
@@ -5097,12 +5054,10 @@ static int do_user_main(const char *user,
 			unsigned flags)
 {
     int r = 0;
-    struct sync_name_list *mboxname_list = sync_name_list_create();
-    struct sync_name_list *master_quotaroots = sync_name_list_create();
     struct mboxinfo info;
 
-    info.mboxlist = mboxname_list;
-    info.quotalist = master_quotaroots;
+    info.mboxlist = sync_name_list_create();
+    info.quotalist = sync_name_list_create();
 
     r = mboxlist_allusermbox(user, do_mailbox_info, &info, /*incdel*/1);
 
@@ -5110,13 +5065,13 @@ static int do_user_main(const char *user,
      * anything not mentioned here on the replica - at least until we get
      * real tombstones */
     flags |= SYNC_FLAG_DELETE_REMOTE;
-    if (!r) r = do_folders(mboxname_list, replica_folders, sync_be, flags);
-    if (!r) r = sync_do_user_quota(master_quotaroots, replica_quota, sync_be);
+    if (!r) r = do_folders(info.mboxlist, replica_folders, sync_be, flags);
+    if (!r) r = sync_do_user_quota(info.quotalist, replica_quota, sync_be);
 
-    sync_name_list_free(&mboxname_list);
-    sync_name_list_free(&master_quotaroots);
+    sync_name_list_free(&info.mboxlist);
+    sync_name_list_free(&info.quotalist);
 
-    if (r) syslog(LOG_ERR, "IOERROR: %s", error_message(r));
+    if (r) syslog(LOG_ERR, "IOERROR: do_user_main: %s", error_message(r));
 
     return r;
 }
@@ -5124,13 +5079,13 @@ static int do_user_main(const char *user,
 int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
 		     struct backend *sync_be, unsigned flags)
 {
-    struct sync_name_list *master_subs = sync_name_list_create();
-    struct sync_name *msubs, *rsubs;
+    struct sync_name *rsubs;
     int r = 0;
+    int i;
 
     /* Includes subsiduary nodes automatically */
-    r = mboxlist_allsubs(userid, addmbox_sub, master_subs);
-    if (r) {
+    strarray_t *msubs = mboxlist_sublist(userid);
+    if (!msubs) {
 	syslog(LOG_ERR, "IOERROR: fetching subscriptions for %s", userid);
 	r = IMAP_IOERROR;
 	goto bail;
@@ -5138,13 +5093,14 @@ int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
 
     /* add any folders that need adding, and mark any which
      * still exist */
-    for (msubs = master_subs->head; msubs; msubs = msubs->next) {
-	rsubs = sync_name_lookup(replica_subs, msubs->name);
+    for (i = 0; i < msubs->count; i++) {
+	const char *name = strarray_nth(msubs, i);
+	rsubs = sync_name_lookup(replica_subs, name);
 	if (rsubs) {
 	    rsubs->mark = 1;
 	    continue;
 	}
-	r = sync_set_sub(userid, msubs->name, 1, sync_be, flags);
+	r = sync_set_sub(userid, name, 1, sync_be, flags);
 	if (r) goto bail;
     }
 
@@ -5157,7 +5113,7 @@ int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
     }
 
  bail:
-    sync_name_list_free(&master_subs);
+    strarray_free(msubs);
     return r;
 }
 

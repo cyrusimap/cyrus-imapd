@@ -216,20 +216,11 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
 /*
  * mboxlist_findall() callback function to create DAV DB entries for a mailbox
  */
-static int _dav_reconstruct_mb(void *rock __attribute__((unused)),
-			       const char *key,
-			       size_t keylen,
-			       const char *data __attribute__((unused)),
-			       size_t datalen __attribute__((unused)))
+static int _dav_reconstruct_mb(const mbentry_t *mbentry, void *rock __attribute__((unused)))
 {
     int r = 0;
-    char *name = xstrndup(key, keylen);
-    mbentry_t *mbentry = NULL;
 
     signals_poll();
-
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) goto done;
 
 #ifdef WITH_DAV
     if (mbentry->mbtype & MBTYPES_DAV) {
@@ -241,8 +232,6 @@ static int _dav_reconstruct_mb(void *rock __attribute__((unused)),
     }
 #endif
 
-done:
-    mboxlist_entry_free(&mbentry);
     return r;
 }
 

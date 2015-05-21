@@ -113,8 +113,8 @@ static struct namespace recon_namespace;
 
 /* forward declarations */
 static void do_mboxlist(void);
+static int do_reconstruct_p(const mbentry_t *mbentry, void *rock);
 static int do_reconstruct(const char *name, int matchlen, int maycreate, void *rock);
-static int do_reconstruct_p(void *rock, const char *key, size_t keylen, const char *data, size_t datalen);
 static void usage(void);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
@@ -406,18 +406,10 @@ static void usage(void)
 /*
  *
  */
-static int do_reconstruct_p(void *rock, const char *key, size_t keylen,
-                            const char *data, size_t datalen)
+static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
 {
-    mbentry_t *mbentry = NULL;
-
-    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
-	return 0;
-
     if (!(mbentry->mbtype & MBTYPE_DELETED))
-	do_reconstruct(mbentry->name, keylen, 0, rock);
-
-    mboxlist_entry_free(&mbentry);
+	do_reconstruct(mbentry->name, strlen(mbentry->name), 0, rock);
 
     return 0;
 }

@@ -749,11 +749,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     return r;
 }
 
-static int cleanup_seen_cb(void *rock,
-			   const char *key,
-			   size_t keylen,
-			   const char *val __attribute__((unused)),
-			   size_t vallen __attribute__((unused)))
+static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
 {
     struct seen *seendb = (struct seen *)rock;
     int r;
@@ -761,9 +757,8 @@ static int cleanup_seen_cb(void *rock,
     struct mailbox *mailbox = NULL;
     struct seendata sd = SEENDATA_INITIALIZER;
     const struct index_record *record;
-    char *name = xstrndup(key, keylen);
 
-    r = mailbox_open_iwl(name, &mailbox);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
 
     /* read in the seen data from the seendb */
@@ -795,7 +790,6 @@ static int cleanup_seen_cb(void *rock,
 	mailbox->i.recenttime = sd.lastread;
 
  done:
-    free(name);
     seqset_free(seq);
     mailbox_close(&mailbox);
     return r;

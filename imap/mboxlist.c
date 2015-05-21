@@ -2291,35 +2291,67 @@ static int find_cb(void *rockp,
     return r;
 }
 
-static int skipdel_cb(void *rock __attribute__((unused)),
+struct allmb_rock {
+    struct mboxlist_entry *mbentry;
+    int incdel;
+    mboxlist_cb *proc;
+    void *rock;
+};
+
+static int allmbox_cb(void *rock,
 		      const char *key,
 		      size_t keylen,
 		      const char *data,
 		      size_t datalen)
 {
-    mbentry_t *mbentry = NULL;
-    int r;
-    int res = 1;
+    struct allmb_rock *mbrock = (struct allmb_rock *)rock;
 
-    r = mboxlist_parse_entry(&mbentry, key, keylen, data, datalen);
-    if (r) return 0;
+    if (!mbrock->mbentry) {
+	int r = mboxlist_parse_entry(&mbrock->mbentry, key, keylen, data, datalen);
+	if (r) return r;
+    }
 
-    if (mbentry->mbtype & MBTYPE_DELETED)
-	res = 0;
-
-    mboxlist_entry_free(&mbentry);
-
-    return res;
+    return mbrock->proc(mbrock->mbentry, mbrock->rock);
 }
 
-EXPORTED int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock,
+static int allmbox_p(void *rock,
+		     const char *key,
+		     size_t keylen,
+		     const char *data,
+		     size_t datalen)
+{
+    struct allmb_rock *mbrock = (struct allmb_rock *)rock;
+    int r;
+
+    /* free previous record */
+    mboxlist_entry_free(&mbrock->mbentry);
+
+    r = mboxlist_parse_entry(&mbrock->mbentry, key, keylen, data, datalen);
+    if (r) return 0;
+
+    if (!mbrock->incdel && (mbrock->mbentry->mbtype & MBTYPE_DELETED))
+	return 0;
+
+    return 1; /* process this record */
+}
+
+EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock,
 			      int incdel)
 {
     char *search = prefix ? (char *)prefix : "";
+    struct allmb_rock mbrock;
 
-    return cyrusdb_foreach(mbdb, search, strlen(search),
-			   incdel ? NULL : skipdel_cb,
-			   proc, rock, 0);
+    mbrock.mbentry = NULL;
+    mbrock.incdel = incdel;
+    mbrock.proc = proc;
+    mbrock.rock = rock;
+
+    int r = cyrusdb_foreach(mbdb, search, strlen(search),
+			    allmbox_p, allmbox_cb, &mbrock, 0);
+
+    mboxlist_entry_free(&mbrock.mbentry);
+
+    return r;
 }
 
 struct alluser_rock {
@@ -2328,14 +2360,10 @@ struct alluser_rock {
     void *rock;
 };
 
-static int alluser_cb(void *rock,
-		      const char *key, size_t keylen,
-		      const char *val __attribute__((unused)),
-		      size_t vallen __attribute__((unused)))
+static int alluser_cb(const mbentry_t *mbentry, void *rock)
 {
     struct alluser_rock *urock = (struct alluser_rock *)rock;
-    char *mboxname = xstrndup(key, keylen);
-    const char *userid = mboxname_to_userid(mboxname);
+    const char *userid = mboxname_to_userid(mbentry->name);
     int r = 0;
 
     if (userid) {
@@ -2346,7 +2374,6 @@ static int alluser_cb(void *rock,
 	}
     }
 
-    free(mboxname);
     return r;
 }
 
@@ -2357,14 +2384,15 @@ EXPORTED int mboxlist_alluser(user_cb *proc, void *rock)
     urock.prev = NULL;
     urock.proc = proc;
     urock.rock = rock;
-    r = cyrusdb_foreach(mbdb, "", 0, skipdel_cb, alluser_cb, &urock, NULL);
+    r = mboxlist_allmbox("", alluser_cb, &urock, /*incdel*/0);
     free(urock.prev);
     return r;
 }
 
-EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
+EXPORTED int mboxlist_allusermbox(const char *userid, mboxlist_cb *proc,
 				  void *rock, int incdel)
 {
+    struct allmb_rock mbrock;
     char *inbox = mboxname_user_mbox(userid, 0);
     size_t inboxlen = strlen(inbox);
     char *search = strconcat(inbox, ".", (char *)NULL);
@@ -2372,11 +2400,16 @@ EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
     size_t datalen = 0;
     int r;
 
+    mbrock.mbentry = NULL;
+    mbrock.incdel = incdel;
+    mbrock.proc = proc;
+    mbrock.rock = rock;
+
     r = cyrusdb_fetch(mbdb, inbox, inboxlen, &data, &datalen, NULL);
     if (!r) {
 	/* process inbox first */
-	if (incdel || skipdel_cb(rock, inbox, inboxlen, data, datalen))
-	    r = proc(rock, inbox, inboxlen, data, datalen);
+	if (allmbox_p(&mbrock, inbox, inboxlen, data, datalen))
+	    r = allmbox_cb(&mbrock, inbox, inboxlen, data, datalen);
     }
     else if (r == CYRUSDB_NOTFOUND) {
 	/* don't process inbox! */
@@ -2385,9 +2418,7 @@ EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
     if (r) goto done;
 
     /* process all the sub folders */
-    r = cyrusdb_foreach(mbdb, search, strlen(search),
-			incdel ? NULL : skipdel_cb,
-			proc, rock, 0);
+    r = cyrusdb_foreach(mbdb, search, strlen(search), allmbox_p, allmbox_cb, &mbrock, 0);
     if (r) goto done;
 
     /* don't check if delayed delete is enabled, maybe the caller wants to
@@ -2395,13 +2426,12 @@ EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
     if (incdel) {
 	const char *prefix = config_getstring(IMAPOPT_DELETEDPREFIX);
 	char *name = strconcat(prefix, ".", inbox, ".", (char *)NULL);
-	r = cyrusdb_foreach(mbdb, name, strlen(name),
-			    incdel ? NULL : skipdel_cb,
-			    proc, rock, 0);
+	r = cyrusdb_foreach(mbdb, name, strlen(name), allmbox_p, allmbox_cb, &mbrock, 0);
 	free(name);
     }
 
 done:
+    mboxlist_entry_free(&mbrock.mbentry);
     free(search);
     free(inbox);
     return r;
@@ -3428,20 +3458,36 @@ EXPORTED int mboxlist_findsub(struct namespace *namespace,
     return r;
 }
 
-EXPORTED int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock)
+static int subsadd_cb(void *rock, const char *key, size_t keylen,
+		      const char *val __attribute__((unused)),
+		      size_t vallen __attribute__((unused)))
+{
+    strarray_t *list = (strarray_t *)rock;
+    strarray_appendm(list, xstrndup(key, keylen));
+    return 0;
+}
+
+EXPORTED strarray_t *mboxlist_sublist(const char *userid)
 {
     struct db *subs = NULL;
+    strarray_t *list = strarray_new();
     int r;
 
     /* open subs DB */
     r = mboxlist_opensubs(userid, &subs);
-    if (r) return r;
+    if (r) goto done;
 
-    r = cyrusdb_foreach(subs, "", 0, NULL, proc, rock, 0);
+    /* faster to do it all in a single slurp! */
+    r = cyrusdb_foreach(subs, "", 0, subsadd_cb, NULL, list, 0);
 
     mboxlist_closesubs(subs);
 
-    return r;
+done:
+    if (r) {
+	strarray_free(list);
+	return NULL;
+    }
+    return list;
 }
 
 HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,

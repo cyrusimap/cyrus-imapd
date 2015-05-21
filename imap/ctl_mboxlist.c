@@ -168,13 +168,10 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
     return 0;
 }
 
-static int dump_cb(void *rockp,
-		   const char *key, size_t keylen,
-		   const char *data, size_t datalen)
+static int dump_cb(const mbentry_t *mbentry, void *rockp)
 {
     struct dumprock *d = (struct dumprock *) rockp;
-    struct mboxlist_entry *mbentry = NULL;
-    int r = mboxlist_parse_entry(&mbentry, key, keylen, data, datalen);
+    int r = 0;
 
     switch (d->op) {
     case DUMP:
@@ -358,8 +355,6 @@ static int dump_cb(void *rockp,
 	abort();
 	break;
     }
-
-    mboxlist_entry_free(&mbentry);
 
     return r;
 }
@@ -703,10 +698,7 @@ static int compar_mbox(const void *v1, const void *v2)
     else return 0;
 }
 
-static int verify_cb(void *rockp,
-		     const char *key, size_t keylen,
-		     const char *data __attribute__((unused)),
-		     size_t dataleni __attribute__((unused)))
+static int verify_cb(const mbentry_t *mbentry, void *rockp)
 {
     // This function is called for every entry in the database,
     // and supplied an inventory in &found. *data however does
@@ -714,21 +706,6 @@ static int verify_cb(void *rockp,
 
     struct found_list *found = (struct found_list *) rockp;
     int r = 0;
-    char *name, *part;
-    mbentry_t *mbentry = NULL;
-
-    /* \0 terminate 'name' */
-    name = xstrndup(key, keylen);
-
-    // Look up the mailbox db entry
-    r = mboxlist_lookup(name, &mbentry, NULL);
-
-    if (!r && mbentry->partition)
-	part = xstrdup(mbentry->partition);
-    else
-	part = NULL;
-
-    mboxlist_entry_free(&mbentry);
 
     if (r) {
 	printf("'%s' has a directory '%s' but no DB entry\n",
@@ -743,12 +720,10 @@ static int verify_cb(void *rockp,
 	    if (
 		    (found->idx >= found->size) ||		/* end of array */
 		    !(found->data[found->idx].type & MBOX) ||	/* end of mailboxes */
-		    (r = strcmp(name, found->data[found->idx].mboxname)) < 0
+		    (r = strcmp(mbentry->name, found->data[found->idx].mboxname)) < 0
 	    ) {
 		printf("'%s' has a DB entry but no directory on partition '%s'\n",
-			name,
-			part
-		    );
+			mbentry->name, mbentry->partition);
 
 	    }
 	    else if (r > 0) {
@@ -763,12 +738,6 @@ static int verify_cb(void *rockp,
 	} while (r > 0);
 
     }
-
-    if (name)
-	free(name);
-
-    if (part)
-	free(part);
 
     return 0;
 }

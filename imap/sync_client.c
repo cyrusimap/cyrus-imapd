@@ -994,21 +994,17 @@ static int do_mailbox(const char *mboxname, unsigned flags)
     return r;
 }
 
-static int cb_allmbox(void *rock __attribute__((unused)),
-		      const char *key, size_t keylen,
-		      const char *val __attribute__((unused)),
-		      size_t vallen __attribute__((unused)))
+static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
 {
-    char *mboxname = xstrndup(key, keylen);
     const char *userid;
     int r = 0;
 
-    userid = mboxname_to_userid(mboxname);
+    userid = mboxname_to_userid(mbentry->name);
 
     if (userid) {
 	/* skip deleted mailboxes only because the are out of order, and you would
 	 * otherwise have to sync the user twice thanks to our naive logic */
-	if (mboxname_isdeletedmailbox(mboxname, NULL))
+	if (mboxname_isdeletedmailbox(mbentry->name, NULL))
 	    goto done;
 
 	/* only sync if we haven't just done the user */
@@ -1028,18 +1024,16 @@ static int cb_allmbox(void *rock __attribute__((unused)),
     else {
 	/* all shared mailboxes, including DELETED ones, sync alone */
 	/* XXX: batch in hundreds? */
-	r = do_mailbox(mboxname, flags);
+	r = do_mailbox(mbentry->name, flags);
 	if (r) {
 	    if (verbose)
-		fprintf(stderr, "Error from do_user(%s): bailing out!\n", mboxname);
-	    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", mboxname);
+		fprintf(stderr, "Error from do_user(%s): bailing out!\n", mbentry->name);
+	    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", mbentry->name);
 	    goto done;
 	}
     }
 
 done:
-    free(mboxname);
-
     return r;
 }
 
