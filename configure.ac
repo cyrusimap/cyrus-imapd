@@ -51,6 +51,9 @@ AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([cmulocal])
 AC_CANONICAL_SYSTEM
 
+dnl in case the first use of PKG_CHECK_MODULES is inside a conditional
+PKG_PROG_PKG_CONFIG
+
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects])
 AC_CONFIG_LIBOBJ_DIR([lib])
 
