@@ -1259,7 +1259,6 @@ AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
 dnl
 dnl see if we're compiling with HTTP support
 dnl
-ENABLE_HTTP=no
 AC_ARG_ENABLE(http,
         [AS_HELP_STRING([--enable-http], [enable HTTP support])],, [enable_http="no";])
 AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no"])
@@ -1626,7 +1625,7 @@ AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
 
 AH_TOP([
 /*
- * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -1853,13 +1852,13 @@ fi
 
 AC_OUTPUT
 echo "
-Cyrus Imapd configured components
+Cyrus Server configured components
 
    event notification: $enable_event_notification
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled
-   http:               $enable_http
+   httpd:              $enable_http
    kerberos V4:        $krb4
    murder:             $enable_murder
    nntpd:              $enable_nntp
