@@ -55,6 +55,7 @@
 #include <sys/wait.h>
 
 #include "assert.h"
+#include "caldav_alarm.h"
 #include "cyrusdb.h"
 #include "dav_db.h"
 #include "global.h"

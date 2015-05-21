@@ -84,6 +84,10 @@
 #include "util.h"
 #include "xmalloc.h"
 
+#ifdef WITH_DAV
+#include "caldav_alarm.h"
+#endif
+
 #define FNAME_SUBSSUFFIX "sub"
 
 #if 0

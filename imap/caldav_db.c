@@ -48,6 +48,7 @@
 
 #include <libical/ical.h>
 
+#include "caldav_alarm.h"
 #include "caldav_db.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
