@@ -570,6 +570,8 @@ static void do_undump(void)
 	    /* skip trailing space */
 	    if (*p == ' ') p++;
 	}
+	else mbtype = 0;
+
 	partition = p;
 	for (; *p && (*p != ' ') && (*p != '\t'); p++) ;
 	if (!*p) {
