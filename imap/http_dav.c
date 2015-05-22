@@ -5075,8 +5075,9 @@ int report_sync_col(struct transaction_t *txn,
 	record = &istate.map[recno-1].record;
 
 	/* Get resource filename from Content-Disposition header */
-	if ((p = index_getheader(&istate, recno, "Content-Disposition"))) {
-	    resource = strstr(p, "filename=") + 9;
+	if ((p = index_getheader(&istate, recno, "Content-Disposition")) &&
+	    (p = strstr(p, "filename="))) {
+	    resource = p + 9;
 	}
 	if (!resource) continue;  /* No filename */
 
