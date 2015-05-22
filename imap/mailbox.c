@@ -659,6 +659,10 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
     bit32 crc;
     int r = 0;
 
+    /* we do something nasty here to work around lazy loading while still
+     * giving const protection to records which are only used for read */
+    struct index_record *backdoor = (struct index_record *)record;
+
     /* do we already have a record loaded? */
     if (record->crec.len)
 	return 0;
@@ -671,10 +675,6 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
     /* do we have an offset? */
     if (!record->cache_offset)
 	goto err;
-
-    /* we do something nasty here to work around lazy loading while still
-     * giving const protection to records which are only used for read */
-    struct index_record *backdoor = (struct index_record *)record;
 
     /* try to parse the cache record */
     r = cache_parserecord(cachefile, record->cache_offset, &backdoor->crec);
