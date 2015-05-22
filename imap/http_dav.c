@@ -5381,8 +5381,9 @@ int report_sync_col(struct transaction_t *txn,
 	    continue;
 
 	/* Get resource filename from Content-Disposition header */
-	if ((p = index_getheader(&istate, msgno, "Content-Disposition"))) {
-	    resource = strstr(p, "filename=") + 9;
+	if ((p = index_getheader(&istate, msgno, "Content-Disposition")) &&
+	    (p = strstr(p, "filename="))) {
+	    resource = p + 9;
 	}
 	if (!resource) continue;  /* No filename */
 
