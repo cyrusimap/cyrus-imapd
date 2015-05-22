@@ -366,7 +366,7 @@ static int ptsmodule_connect(void)
 		       (long)ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
 	}
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_TIMELIMIT, &(ptsm->size_limit));
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_SIZELIMIT, &(ptsm->size_limit));
 	if (rc != LDAP_OPT_SUCCESS) {
 		syslog(LOG_WARNING, "Unable to set LDAP_OPT_SIZELIMIT %d.", ptsm->size_limit);
 	}
