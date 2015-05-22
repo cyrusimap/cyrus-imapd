@@ -33,3 +33,5 @@ Bug fixes
 * Improved consistency of event notification parameters
 * Fixed bug: no longer run out of memory in mupdate with twoskip (mmap leak)
 * Fixed bug: no longer crash on ctl_mboxlist -d for remote mailboxes
+* Fixed bug: no longer include RFC 5322 header fields when fetching CALDAV:calendar-data
+* Fixed bug: properly handle same XML namespace used with 2 different prefixes in requests
