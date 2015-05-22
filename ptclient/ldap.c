@@ -299,21 +299,21 @@ static int ptsmodule_connect(void)
 	if (ISSET(ptsm->tls_cacert_file)) {
 		rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTFILE, ptsm->tls_cacert_file);
 		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTFILE (%s).", ldap_err2string (rc));
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTFILE (%s).", ldap_err2string (rc));
 		}
 	}
 
 	if (ISSET(ptsm->tls_cacert_dir)) {
 		rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTDIR, ptsm->tls_cacert_dir);
 		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTDIR (%s).", ldap_err2string (rc));
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTDIR (%s).", ldap_err2string (rc));
 		}
 	}
 
 	if (ptsm->tls_check_peer != 0) {
 		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_REQUIRE_CERT, &ptsm->tls_check_peer);
 		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_REQUIRE_CERT (%s).", ldap_err2string (rc));
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_REQUIRE_CERT (%s).", ldap_err2string (rc));
 		}
 	}
 
@@ -321,21 +321,21 @@ static int ptsmodule_connect(void)
 		/* set cipher suite, certificate and private key: */
 		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CIPHER_SUITE, ptsm->tls_ciphers);
 		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CIPHER_SUITE (%s).", ldap_err2string (rc));
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CIPHER_SUITE (%s).", ldap_err2string (rc));
 		}
 	}
 
 	if (ISSET(ptsm->tls_cert)) {
 		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CERTFILE, ptsm->tls_cert);
 		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CERTFILE (%s).", ldap_err2string (rc));
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CERTFILE (%s).", ldap_err2string (rc));
 		}
 	}
 
 	if (ISSET(ptsm->tls_key)) {
 		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_KEYFILE, ptsm->tls_key);
 		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_KEYFILE (%s).", ldap_err2string (rc));
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_KEYFILE (%s).", ldap_err2string (rc));
 		}
 	}
 
@@ -366,11 +366,6 @@ static int ptsmodule_connect(void)
 		       (long)ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
 	}
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_TIMELIMIT, &(ptsm->size_limit));
-	if (rc != LDAP_OPT_SUCCESS) {
-		syslog(LOG_WARNING, "Unable to set LDAP_OPT_SIZELIMIT %d.", ptsm->size_limit);
-	}
-
 	rc = ldap_set_option(ptsm->ld, LDAP_OPT_TIMELIMIT, &(ptsm->time_limit));
 	if (rc != LDAP_OPT_SUCCESS) {
 		syslog(LOG_WARNING, "Unable to set LDAP_OPT_TIMELIMIT %d.", ptsm->time_limit);
@@ -385,6 +380,10 @@ static int ptsmodule_connect(void)
 	if (rc != LDAP_OPT_SUCCESS) {
 		syslog(LOG_WARNING, "Unable to set LDAP_OPT_REFERRALS.");
 	}
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_SIZELIMIT, &(ptsm->size_limit));
+	if (rc != LDAP_OPT_SUCCESS)
+		syslog(LOG_WARNING, "Unable to set LDAP_OPT_SIZELIMIT %d.", ptsm->size_limit);
 
 	rc = ldap_set_option(ptsm->ld, LDAP_OPT_RESTART, ptsm->restart ? LDAP_OPT_ON : LDAP_OPT_OFF);
 	if (rc != LDAP_OPT_SUCCESS) {
@@ -1071,46 +1070,46 @@ static int ptsmodule_make_authstate_attribute(
     }
 
     if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
-        int i, numvals;
+    int i, numvals;
 
-        vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
-        if (vals != NULL) {
-            numvals = ldap_count_values(vals);
+    vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
+    if (vals != NULL) {
+        numvals = ldap_count_values( vals );
 
-            *dsize = sizeof(struct auth_state) +
-                (numvals * sizeof(struct auth_ident));
-            *newstate = xmalloc(*dsize);
-            if (*newstate == NULL) {
-                *reply = "no memory";
-                rc = PTSM_FAIL;
-                goto done;
-            }
-
-            (*newstate)->ngroups = numvals;
-            (*newstate)->userid.id[0] = '\0';
-            for (i = 0; i < numvals; i++) {
-                unsigned int j;
-                strcpy((*newstate)->groups[i].id, "group:");
-                rdn = ldap_explode_rdn(vals[i],1);
-                for (j = 0; j < strlen(rdn[0]); j++) {
-                    if (Uisupper(rdn[0][j]))
-                        rdn[0][j]=tolower(rdn[0][j]);
-                }
-                strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
-                (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
-            }
-
-            ldap_value_free(rdn);
-            ldap_value_free(vals);
-            vals = NULL;
+        *dsize = sizeof(struct auth_state) +
+             (numvals * sizeof(struct auth_ident));
+        *newstate = xmalloc(*dsize);
+        if (*newstate == NULL) {
+            *reply = "no memory";
+            rc = PTSM_FAIL;
+            goto done;
         }
 
-        if ((char *)ptsm->user_attribute) {
-            vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->user_attribute);
-            if (vals != NULL) {
-                numvals = ldap_count_values(vals);
+        (*newstate)->ngroups = numvals;
+        (*newstate)->userid.id[0] = '\0';
+        for (i = 0; i < numvals; i++) {
+            unsigned int j;
+            strcpy((*newstate)->groups[i].id, "group:");
+            rdn = ldap_explode_rdn(vals[i],1);
+            for (j = 0; j < strlen(rdn[0]); j++) {
+              if (Uisupper(rdn[0][j]))
+                  rdn[0][j]=tolower(rdn[0][j]);
+            }
+            strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
+            (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+        }
 
-                if (numvals == 1) {
+        ldap_value_free(rdn);
+        ldap_value_free(vals);
+        vals = NULL;
+    }
+
+    if ((char *)ptsm->user_attribute) {
+        vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->user_attribute);
+        if (vals != NULL) {
+            numvals = ldap_count_values( vals );
+
+                if (numvals==1) {
                     if(!*newstate) {
                         *dsize = sizeof(struct auth_state);
                         *newstate = xmalloc(*dsize);
@@ -1202,13 +1201,13 @@ static int ptsmodule_make_authstate_filter(
         goto done;
     }
 
-    rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id, dn, &base);
+    rc = ptsmodule_expand_tokens(ptsm->member_base, canon_id, dn, &base);
     if (rc != PTSM_OK) {
         *reply = "ptsmodule_expand_tokens() failed for member search base";
         goto done;
     }
 
-    rc = ldap_search_st(ptsm->ld, base, ptsm->group_scope, filter, attrs, 0, &(ptsm->timeout), &res);
+    rc = ldap_search_st(ptsm->ld, base, ptsm->member_scope, filter, attrs, 0, &(ptsm->timeout), &res);
     if (rc != LDAP_SUCCESS) {
         *reply = "ldap_search(filter) failed";
         if (rc == LDAP_SERVER_DOWN) {
@@ -1217,7 +1216,6 @@ static int ptsmodule_make_authstate_filter(
             rc = PTSM_RETRY;
         } else
             rc = PTSM_FAIL;
-
         goto done;
     }
 
@@ -1228,16 +1226,14 @@ static int ptsmodule_make_authstate_filter(
         goto done;
     }
 
-    *dsize = sizeof(struct auth_state) + (n * sizeof(struct auth_ident));
-
+    *dsize = sizeof(struct auth_state) +
+             (n * sizeof(struct auth_ident));
     *newstate = xmalloc(*dsize);
-
     if (*newstate == NULL) {
         *reply = "no memory";
         rc = PTSM_FAIL;
         goto done;
     }
-
     (*newstate)->ngroups = n;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
@@ -1246,37 +1242,31 @@ static int ptsmodule_make_authstate_filter(
     for (i = 0, entry = ldap_first_entry(ptsm->ld, res); entry != NULL;
          i++, entry = ldap_next_entry(ptsm->ld, entry)) {
 
-	vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
-	if (vals == NULL) {
-	    syslog(LOG_ERROR, "Multiple values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
-	    continue;
-	}
+    vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
+    if (vals == NULL)
+        continue;
 
-	if (ldap_count_values(vals) < 1 ) {
-	    syslog(LOG_ERROR, "No values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
-	} else if (ldap_count_values(vals) > 1) {
-	    syslog(LOG_ERROR, "Too many values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
-	} else {
-	    *reply = "too many values";
-	    rc = PTSM_FAIL;
-	    ldap_value_free(vals);
-	    vals = NULL;
-	    goto done;
-	}
+    if ( ldap_count_values( vals ) != 1 ) {
+        *reply = "too many values";
+        rc = PTSM_FAIL;
+        ldap_value_free(vals);
+        vals = NULL;
+        goto done;
+    }
 
-	strcpy((*newstate)->groups[i].id, "group:");
+    strcpy((*newstate)->groups[i].id, "group:");
 
-	unsigned int j;
-	for (j =0; j < strlen(vals[0]); j++) {
-	    if(Uisupper(vals[0][j]))
-		vals[0][j]=tolower(vals[0][j]);
-	}
+    unsigned int j;
+    for (j =0; j < strlen(vals[0]); j++) {
+      if(Uisupper(vals[0][j]))
+        vals[0][j]=tolower(vals[0][j]);
+    }
 
-	strlcat((*newstate)->groups[i].id, vals[0], sizeof((*newstate)->groups[i].id));
-	(*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+    strlcat((*newstate)->groups[i].id, vals[0], sizeof((*newstate)->groups[i].id));
+    (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
 
-	ldap_value_free(vals);
-	vals = NULL;
+    ldap_value_free(vals);
+    vals = NULL;
     }
 
     rc = PTSM_OK;
