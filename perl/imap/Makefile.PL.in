@@ -45,6 +45,23 @@ my $LIB_SASL = "@LIB_SASL@" || "-lsasl2";
 # the contents of the Makefile that is written.
 $libs = "-lcyrus";
 
+# override default xs.c rule with a VPATH-aware version
+sub MY::xs_c
+{
+    return <<'EOT';
+
+.xs.c: .xs
+	$(XSUBPPRUN) $(XSPROTOARG) $(XSUBPPARGS) $(XSUBPP_EXTRA_ARGS) $< > $*.xsc && $(MV) $*.xsc $@
+
+EOT
+}
+
+# xs_c above is adequate, override this to get it out of the way
+sub MY::xs_o
+{
+    ;
+}
+
 sub MY::postamble
 {
     return <<'EOT';
