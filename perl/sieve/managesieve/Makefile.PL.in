@@ -45,6 +45,23 @@ my $LIB_SASL = "@LIB_SASL@" || "-lsasl2";
 
 $libs = "-lcyrus";
 
+# override default xs.c rule with a VPATH-aware version
+sub MY::xs_c
+{
+    return <<'EOT';
+
+.xs.c: .xs
+	$(XSUBPPRUN) $(XSPROTOARG) $(XSUBPPARGS) $(XSUBPP_EXTRA_ARGS) $< > $*.xsc && $(MV) $*.xsc $@
+
+EOT
+}
+
+# xs_c above is adequate, override this to get it out of the way
+sub MY::xs_o
+{
+    ;
+}
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
@@ -55,7 +72,7 @@ WriteMakefile(
     'LIBS'	=> ["$LIB_SASL @SSL_LIBS@ @LIB_RT@ @LIB_UUID@ @ZLIB@"],
     'CCFLAGS'	=> '@GCOV_CFLAGS@',
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CPPFLAGS@",
+    'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CPPFLAGS@",
     'OBJECT'    => 'managesieve.o',
     'LD'	=> $Config{ld} . ' @GCOV_LDFLAGS@',
     # This is a disgusting hack to effectively disable the stupid

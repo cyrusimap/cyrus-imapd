@@ -54,7 +54,7 @@ extern "C" {
 #include <sys/file.h>
 #include <sys/socket.h>
 
-#include "managesieve.h"
+#include "managesieve/managesieve.h"
 
 typedef struct xscyrus *Sieveobj;
 static char *globalerr = NULL;
