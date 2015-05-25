@@ -99,7 +99,7 @@ void message_guid_import(struct message_guid *guid,
 /* Returns ptr to '\0' terminated static char * which can be strdup()ed
  * NULL => error. Should be impossible as entire range covered
  */
-char *message_guid_encode(const struct message_guid *guid);
+const char *message_guid_encode(const struct message_guid *guid);
 
 /* Sets Message GUID from text form. Returns 1 if valid
  * Returns: Cyrus error code, 0 on sucess

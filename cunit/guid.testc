@@ -65,7 +65,7 @@ static void test_encode(void)
 	0x23,0xf3,0x61,0x42,0x6f,0x24,0xdb,0x56,0xd7,0x45
     };
     struct message_guid guid;
-    char *s;
+    const char *s;
     int r;
 
     memset(&guid, 0x45, sizeof(guid));
