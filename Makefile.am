@@ -1265,30 +1265,22 @@ imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
 imap_unexpunge_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/unexpunge.c
 imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
+# $(COMPILE_ET) creates its output files in the directory it's run from,
+# so do a tricky directory change
 imap/imap_err.h imap/imap_err.c: imap/imap_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)$(COMPILE_ET) $< && \
-	mv $(top_builddir)/imap_err.h $(top_builddir)/imap/imap_err.h && \
-	mv $(top_builddir)/imap_err.c $(top_builddir)/imap/imap_err.c
+	$(AM_V_GEN)(cd $(<D) && $(COMPILE_ET) $(<F))
 
 imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)$(COMPILE_ET) $< && \
-	mv $(top_builddir)/mupdate_err.h $(top_builddir)/imap/mupdate_err.h && \
-	mv $(top_builddir)/mupdate_err.c $(top_builddir)/imap/mupdate_err.c
+	$(AM_V_GEN)(cd $(<D) && $(COMPILE_ET) $(<F))
 
 imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)$(COMPILE_ET) $< && \
-	mv $(top_builddir)/nntp_err.h $(top_builddir)/imap/nntp_err.h && \
-	mv $(top_builddir)/nntp_err.c $(top_builddir)/imap/nntp_err.c
+	$(AM_V_GEN)(cd $(<D) && $(COMPILE_ET) $(<F))
 
 imap/http_err.h imap/http_err.c: imap/http_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)$(COMPILE_ET) $< && \
-	mv $(top_builddir)/http_err.h $(top_builddir)/imap/http_err.h && \
-	mv $(top_builddir)/http_err.c $(top_builddir)/imap/http_err.c
+	$(AM_V_GEN)(cd $(<D) && $(COMPILE_ET) $(<F))
 
 imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)$(COMPILE_ET) $< && \
-	mv $(top_builddir)/tz_err.h $(top_builddir)/imap/tz_err.h && \
-	mv $(top_builddir)/tz_err.c $(top_builddir)/imap/tz_err.c
+	$(AM_V_GEN)(cd $(<D) && $(COMPILE_ET) $(<F))
 
 # xxd cannot have path details in its input filename, otherwise it junks up
 # the variable names in the output file.  so do a tricky directory change.
@@ -1639,7 +1631,7 @@ sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
+	$(AM_V_GEN)(cd $(<D) && $(COMPILE_ET) $(<F))
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = sieve/libcyrus_sieve.la $(LD_UTILITY_ADD)
