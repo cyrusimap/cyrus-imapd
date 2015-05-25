@@ -60,7 +60,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "http_dav.h"
-#include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"
 #include "message_guid.h"
@@ -70,6 +69,9 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "zoneinfo_db.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 extern int optind;
 extern char *optarg;

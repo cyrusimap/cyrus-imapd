@@ -79,8 +79,6 @@
 #include "acl.h"
 #include "exitcodes.h"
 #include "imapd.h"
-#include "imap_err.h"
-#include "http_err.h"
 #include "proc.h"
 #include "version.h"
 #include "xstrlcpy.h"
@@ -96,6 +94,10 @@
 #include "tok.h"
 #include "wildmat.h"
 #include "md5.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/http_err.h"
 
 #ifdef WITH_DAV
 #include "http_dav.h"

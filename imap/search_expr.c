@@ -51,7 +51,6 @@
 #endif
 
 #include "assert.h"
-#include "imap_err.h"
 #include "search_expr.h"
 #include "index.h"
 #include "message.h"
@@ -61,6 +60,9 @@
 #include "lsort.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define DEBUG 0
 

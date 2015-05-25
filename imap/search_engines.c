@@ -50,12 +50,14 @@
 #include <unistd.h>
 #endif
 
-#include "imap_err.h"
 #include "index.h"
 #include "message.h"
 #include "global.h"
 #include "search_engines.h"
 #include "ptrarray.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #ifdef USE_SQUAT
 extern const struct search_engine squat_search_engine;

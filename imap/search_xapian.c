@@ -56,7 +56,6 @@
 
 #include "assert.h"
 #include "bitvector.h"
-#include "imap_err.h"
 #include "global.h"
 #include "ptrarray.h"
 #include "user.h"
@@ -71,6 +70,9 @@
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
 #include "command.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define INDEXEDDB_VERSION	2
 #define INDEXEDDB_FNAME		"/cyrus.indexed.db"

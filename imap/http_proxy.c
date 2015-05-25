@@ -53,9 +53,7 @@
 #include <sasl/saslutil.h>
 
 #include "httpd.h"
-#include "http_err.h"
 #include "http_proxy.h"
-#include "imap_err.h"
 #include "iptostring.h"
 #include "mupdate-client.h"
 #include "prot.h"
@@ -67,6 +65,10 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 #include <libxml/uri.h>
 

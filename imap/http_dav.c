@@ -62,16 +62,13 @@
  *
  */
 
-
 #include "http_dav.h"
 #include "annotate.h"
 #include "acl.h"
 #include "append.h"
 #include "caldav_db.h"
 #include "global.h"
-#include "http_err.h"
 #include "http_proxy.h"
-#include "imap_err.h"
 #include "index.h"
 #include "proxy.h"
 #include "times.h"
@@ -83,8 +80,11 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
-#include <libxml/uri.h>
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
+#include <libxml/uri.h>
 
 #define SYNC_TOKEN_URL_SCHEME "data:,"
 

@@ -54,7 +54,6 @@
 #endif
 
 #include "index.h"
-#include "imap_err.h"
 #include "global.h"
 #include "retry.h"
 #include "command.h"
@@ -67,6 +66,10 @@
 #include "xstats.h"
 #include "search_engines.h"
 #include "cyr_lock.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/imap_err.h"
 
 #include <mysql/mysql.h>
 

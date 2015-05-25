@@ -43,11 +43,14 @@
 
 
 #include "carddav_db.h"
-#include "http_err.h"
 #include "http_dav.h"
-#include <jansson.h>
 #include "util.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+
+#include <jansson.h>
 
 static int meth_get_db(struct transaction_t *txn, void *params);
 

@@ -60,7 +60,6 @@
 #include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
-#include "http_err.h"
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "jcal.h"
@@ -68,13 +67,15 @@
 #include "strhash.h"
 #include "times.h"
 #include "tok.h"
-#include "tz_err.h"
 #include "util.h"
 #include "version.h"
 #include "xcal.h"
 #include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/tz_err.h"
 
 #define TZDIST_WELLKNOWN_URI "/.well-known/timezone"
 

@@ -63,9 +63,7 @@
 #include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
-#include "http_err.h"
 #include "http_proxy.h"
-#include "imap_err.h"
 #include "index.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -83,6 +81,10 @@
 #include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 static struct carddav_db *auth_carddavdb = NULL;
 

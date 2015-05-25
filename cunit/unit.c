@@ -55,7 +55,8 @@
 #include "cunit.h"
 #include "xmalloc.h"
 
-#include "registers.h"
+/* generated headers are not necessarily in current directory */
+#include "cunit/registers.h"
 
 int verbose = 0;
 int num_testspecs = 0;

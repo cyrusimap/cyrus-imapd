@@ -58,10 +58,8 @@
 #include "annotate.h"
 #include "duplicate.h"
 #include "exitcodes.h"
-#include "imap_err.h"
 #include "global.h"
 #include "hash.h"
-#include "imap_err.h"
 #include "libcyr_cfg.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
@@ -69,6 +67,9 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "strarray.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /* global state */
 static volatile sig_atomic_t sigquit = 0;

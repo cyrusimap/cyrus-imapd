@@ -4,9 +4,11 @@
 #include <syslog.h>
 
 extern "C" {
-#include "imap_err.h"
 #include "xmalloc.h"
 #include "xapian_wrap.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 };
 
 #include <xapian.h>

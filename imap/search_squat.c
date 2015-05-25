@@ -61,7 +61,9 @@
 #include "xstrlcat.h"
 #include "bitvector.h"
 
-#include "imap_err.h"
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+
 #include "search_engines.h"
 #include "squat.h"
 

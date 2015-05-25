@@ -48,12 +48,14 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "imparse.h"
-#include "imap_err.h"
 #include "search_expr.h"
 #include "imapd.h"	/* for struct searchargs */
 #include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /*
  * Parse a word

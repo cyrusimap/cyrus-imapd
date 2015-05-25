@@ -60,7 +60,6 @@
 #include "dlist.h"
 #include "exitcodes.h"
 #include "hash.h"
-#include "imap_err.h"
 #include "global.h"
 #include "imapd.h"
 #include "lsort.h"
@@ -83,6 +82,9 @@
 #include "times.h"
 
 #include "conversations.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define CONVERSATION_ID_STRMAX	    (1+sizeof(conversation_id_t)*2)
 

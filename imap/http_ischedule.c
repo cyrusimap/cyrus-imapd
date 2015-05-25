@@ -55,7 +55,6 @@
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
-#include "http_err.h"
 #include "http_proxy.h"
 #include "jcal.h"
 #include "map.h"
@@ -65,6 +64,10 @@
 #include "xmalloc.h"
 #include "xcal.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+
 #include <sasl/saslutil.h>
 
 #define ISCHED_WELLKNOWN_URI "/.well-known/ischedule"

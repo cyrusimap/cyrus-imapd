@@ -48,12 +48,14 @@
 
 #include "httpd.h"
 #include "http_dav.h"
-#include "http_err.h"
 #include "mailbox.h"
 #include "spool.h"
 #include "tok.h"
 #include "util.h"
 #include "webdav_db.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 
 static int webdav_parse_path(const char *path,
 			     struct request_target_t *tgt, const char **errstr);

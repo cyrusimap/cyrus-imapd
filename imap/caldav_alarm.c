@@ -53,14 +53,16 @@
 #include "exitcodes.h"
 #include "httpd.h"
 #include "http_dav.h"
-#include "imap_err.h"
-#include "http_err.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "mboxname.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 static struct namespace caldav_alarm_namespace;
 

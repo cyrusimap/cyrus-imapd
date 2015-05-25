@@ -73,9 +73,7 @@
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
-#include "http_err.h"
 #include "http_proxy.h"
-#include "imap_err.h"
 #include "index.h"
 #include "ical_support.h"
 #include "jcal.h"
@@ -99,6 +97,9 @@
 #include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 #define TZ_STRIP (1<<9)
 
@@ -1544,7 +1545,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
     struct list_cal_rock lrock;
     const char *proto = NULL;
     const char *host = NULL;
-#include "http_caldav_js.h"
+#include "imap/http_caldav_js.h"
 
     /* Check rights */
     if ((rights & DACL_READ) != DACL_READ) {

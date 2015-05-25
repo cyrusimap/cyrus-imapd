@@ -63,7 +63,6 @@
 #include "exitcodes.h"
 #include "hash.h"
 #include "hashu64.h"
-#include "imap_err.h"
 #include "global.h"
 #include "times.h"
 #include "imapd.h"
@@ -86,6 +85,9 @@
 
 #include "index.h"
 #include "sync_log.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 EXPORTED unsigned client_capa;
 

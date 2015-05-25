@@ -49,11 +49,12 @@
 #include <string.h>
 #include <syslog.h>
 
-#include "http_err.h"
 #include "http_client.h"
 #include "prot.h"
 #include "tok.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 
 /* Compare Content-Types */
 int is_mediatype(const char *pat, const char *type)

@@ -53,12 +53,14 @@
 #include <unistd.h>
 #endif
 
-#include "imap_err.h"
 #include "global.h"
 #include "retry.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static int sphinxmgr_request(const char *req, size_t reqsize,
 			     char *reply, size_t maxreply)

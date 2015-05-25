@@ -55,7 +55,6 @@
 #include "bsearch.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap_err.h"
 #include "index.h"
 #include "search_engines.h"
 #include "conversations.h"
@@ -65,6 +64,9 @@
 #include "sysexits.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static int usage(const char *name);
 

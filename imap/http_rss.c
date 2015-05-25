@@ -56,9 +56,7 @@
 #include "charset.h"
 #include "global.h"
 #include "httpd.h"
-#include "http_err.h"
 #include "http_proxy.h"
-#include "imap_err.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -73,6 +71,10 @@
 #include "wildmat.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 #define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
 #define GUID_URL_SCHEME	"data:,"

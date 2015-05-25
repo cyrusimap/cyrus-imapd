@@ -57,7 +57,6 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
-#include "http_err.h"
 #include "http_proxy.h"
 #include "http_jmap.h"
 #include "mailbox.h"
@@ -68,6 +67,8 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 
 struct namespace jmap_namespace;
 
