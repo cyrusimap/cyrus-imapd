@@ -1291,7 +1291,7 @@ imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
 	mv $(top_builddir)/tz_err.c $(top_builddir)/imap/tz_err.c
 
 imap/http_caldav_js.h: imap/http_caldav.js
-	$(AM_V_GEN)cd imap && xxd -i http_caldav.js > http_caldav_js.h
+	$(AM_V_GEN)xxd -i $< > $@
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
