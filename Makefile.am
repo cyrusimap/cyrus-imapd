@@ -1290,8 +1290,10 @@ imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
 	mv $(top_builddir)/tz_err.h $(top_builddir)/imap/tz_err.h && \
 	mv $(top_builddir)/tz_err.c $(top_builddir)/imap/tz_err.c
 
+# xxd cannot have path details in its input filename, otherwise it junks up
+# the variable names in the output file.  so do a tricky directory change.
 imap/http_caldav_js.h: imap/http_caldav.js
-	$(AM_V_GEN)xxd -i $< > $@
+	$(AM_V_GEN)(cd $(<D) && xxd -i $(<F)) > $@
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
