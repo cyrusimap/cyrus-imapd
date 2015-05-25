@@ -6398,10 +6398,14 @@ int dav_store_resource(struct transaction_t *txn,
 
 		if (!r) {
 		    struct resp_body_t *resp_body = &txn->resp_body;
+		    static char *newetag;
+
+		    if (newetag) free(newetag);
+		    newetag = xstrdupnull(message_guid_encode(&newrecord.guid));
 
 		    /* Tell client about the new resource */
 		    resp_body->lastmod = newrecord.internaldate;
-		    resp_body->etag = message_guid_encode(&newrecord.guid);
+		    resp_body->etag = newetag;
 		}
 	    }
 	}
