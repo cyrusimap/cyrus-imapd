@@ -61,7 +61,6 @@
 #include "global.h"
 #include "mboxlist.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "seen.h"
 #include "mboxname.h"
@@ -74,6 +73,9 @@
 #include "user.h"
 #include "sync_support.h"
 /*#include "cdb.h"*/
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /* Static global variables and support routines for sync_reset */
 

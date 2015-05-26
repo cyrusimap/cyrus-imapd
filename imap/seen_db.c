@@ -62,10 +62,12 @@
 #include "global.h"
 #include "xmalloc.h"
 #include "mailbox.h"
-#include "imap/imap_err.h"
 #include "seen.h"
 #include "sync_log.h"
 #include "imparse.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
 #define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */

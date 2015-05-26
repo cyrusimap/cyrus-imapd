@@ -82,7 +82,6 @@
 #include "idle.h"
 #include "global.h"
 #include "times.h"
-#include "imap/imap_err.h"
 #include "proxy.h"
 #include "imap_proxy.h"
 #include "imapd.h"
@@ -116,6 +115,8 @@
 #include "ptrarray.h"
 #include "xstats.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 #include "imap/pushstats.h"		/* SNMP interface */
 
 #include "iostat.h"

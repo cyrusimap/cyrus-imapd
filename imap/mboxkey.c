@@ -63,8 +63,10 @@
 #include "global.h"
 #include "xmalloc.h"
 #include "mailbox.h"
-#include "imap/imap_err.h"
 #include "mboxkey.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define FNAME_MBOXKEYSUFFIX ".mboxkey" /* per user mailbox key extension */
 

@@ -47,8 +47,10 @@
 
 #include <config.h>
 
-#include "imap/imap_err.h"
 #include "exitcodes.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 EXPORTED int convert_code(int r)
 {

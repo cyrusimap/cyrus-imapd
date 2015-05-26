@@ -75,7 +75,6 @@
 #include "exitcodes.h"
 #include "index.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "message.h"
 #include "message_guid.h"
@@ -85,6 +84,9 @@
 #include "times.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 extern int optind;
 extern char *optarg;

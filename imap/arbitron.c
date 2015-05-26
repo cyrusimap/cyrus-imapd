@@ -57,7 +57,6 @@
 #include "global.h"
 #include "exitcodes.h"
 #include "hash.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "mpool.h"
 #include "mboxlist.h"
@@ -65,6 +64,9 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define DB (config_seenstate_db)
 #define SUBDB (config_subscription_db)

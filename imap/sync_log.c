@@ -61,13 +61,15 @@
 #include "exitcodes.h"
 #include "sync_log.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;

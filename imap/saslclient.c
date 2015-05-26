@@ -49,10 +49,11 @@
 #include <sasl/saslutil.h>
 
 #include "xmalloc.h"
-#include "imap/imap_err.h"
 #include "saslclient.h"
 #include "global.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static int mysasl_simple_cb(void *context, int id, const char **result,
 			    unsigned int *len)

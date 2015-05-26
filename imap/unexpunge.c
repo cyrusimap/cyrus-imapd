@@ -56,7 +56,6 @@
 #include "annotate.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "index.h"
 #include "libcyr_cfg.h"
 #include "map.h"
@@ -65,6 +64,9 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "sync_log.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /* current namespace */
 static struct namespace unex_namespace;

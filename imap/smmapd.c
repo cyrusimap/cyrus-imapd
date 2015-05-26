@@ -88,7 +88,6 @@
 #include "append.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "mboxlist.h"
 #include "mupdate-client.h"
 #include "proc.h"
@@ -98,6 +97,9 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 const char *BB;
 static int forcedowncase;

@@ -67,12 +67,14 @@
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "partlist.h"
 #include "xstrlcat.h"
 #include "user.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #include "mboxname.h"
 #include "mupdate-client.h"

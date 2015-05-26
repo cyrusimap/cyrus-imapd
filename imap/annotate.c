@@ -70,7 +70,6 @@
 #include "imapd.h"
 #include "global.h"
 #include "times.h"
-#include "imap/imap_err.h"
 #include "mboxlist.h"
 #include "partlist.h"
 #include "util.h"
@@ -80,6 +79,9 @@
 #include "xstrlcat.h"
 #include "tok.h"
 #include "quota.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #include "annotate.h"
 #include "sync_log.h"

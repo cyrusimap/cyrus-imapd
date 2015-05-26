@@ -64,7 +64,6 @@
 
 #include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -72,6 +71,9 @@
 #include "prot.h"
 #include "proxy.h"
 #include "version.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 extern int optind;
 extern char *optarg;

@@ -64,13 +64,15 @@
 #include "mboxlist.h"
 #include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxname.h"
 #include "proc.h"
 #include "seen.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define REQ_OK		0
 #define REQ_DENY	1

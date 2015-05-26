@@ -61,7 +61,6 @@
 #include "crc32.h"
 #include "dlist.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "prot.h"
 #include "hash.h"
 #include "map.h"
@@ -79,9 +78,12 @@
 #include "ptrarray.h"
 #include "global.h"
 #include "retry.h"
-#include "imap/rfc822_header.h"
 #include "rfc822tok.h"
 #include "times.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/rfc822_header.h"
 
 static int message_map_file(message_t *m, const char *fname);
 static int message_parse_cbodystructure(message_t *m);

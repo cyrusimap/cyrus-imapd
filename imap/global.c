@@ -66,12 +66,10 @@
 #include "exitcodes.h"
 #include "gmtoff.h"
 #include "iptostring.h"
-#include "imap/imap_err.h"
 #include "global.h"
 #include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
-#include "imap/mupdate_err.h"
 #include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
 #include "strarray.h"
@@ -79,6 +77,10 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/mupdate_err.h"
 
 static enum {
     NOT_RUNNING = 0,

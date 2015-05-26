@@ -84,9 +84,8 @@
 #endif
 #include "crc32.h"
 #include "hash.h"
-#include "imap/global.h"
+#include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "map.h"
 #include "message.h"
@@ -102,6 +101,9 @@
 #include "seen.h"
 #include "util.h"
 #include "sync_log.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 extern int optind;
 extern char *optarg;

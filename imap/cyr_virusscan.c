@@ -55,7 +55,6 @@
 #include "global.h"
 #include "exitcodes.h"
 #include "append.h"
-#include "imap/imap_err.h"
 #include "index.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -64,6 +63,9 @@
 #include "util.h"
 #include "sync_log.h"
 #include "times.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 struct infected_msg {
     char *mboxname;

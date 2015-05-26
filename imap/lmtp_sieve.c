@@ -61,11 +61,9 @@
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
 #include "lmtpengine.h"
-#include "imap/lmtpstats.h"
 #include "notify.h"
 #include "prot.h"
 #include "times.h"
@@ -76,6 +74,10 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/lmtpstats.h"
 
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;

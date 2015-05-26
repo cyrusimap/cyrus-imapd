@@ -72,14 +72,16 @@
 #include "times.h"
 #include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
-#include "imap/mupdate_err.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "version.h"
 
-#include "lmtpengine.h"
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 #include "imap/lmtpstats.h"
+#include "imap/mupdate_err.h"
+
+#include "lmtpengine.h"
 #include "tls.h"
 #include "telemetry.h"
 

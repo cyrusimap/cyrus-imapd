@@ -68,7 +68,6 @@
 #include "mboxlist.h"
 #include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "search_engines.h"
 #include "sync_log.h"
 #include "mailbox.h"
@@ -83,6 +82,9 @@
 #include "index.h"
 #include "message.h"
 #include "util.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 extern char *optarg;
 extern int optind;

@@ -70,7 +70,6 @@
 #endif
 
 #include "global.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "mboxkey.h"
 #include "mboxlist.h"
@@ -83,6 +82,9 @@
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #ifdef WITH_DAV
 #include "caldav_alarm.h"

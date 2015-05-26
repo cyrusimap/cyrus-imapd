@@ -84,14 +84,12 @@
 #include "global.h"
 #include "hash.h"
 #include "idle.h"
-#include "imap/imap_err.h"
 #include "index.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
 #include "mkgmtime.h"
 #include "mupdate-client.h"
-#include "imap/nntp_err.h"
 #include "partlist.h"
 #include "proc.h"
 #include "prot.h"
@@ -110,6 +108,10 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/nntp_err.h"
 
 extern int optind;
 extern char *optarg;

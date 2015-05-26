@@ -79,7 +79,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "idle.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxevent.h"
@@ -100,9 +99,12 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/lmtpstats.h"
+
 #include "lmtpd.h"
 #include "lmtpengine.h"
-#include "imap/lmtpstats.h"
 #ifdef USE_SIEVE
 #include "lmtp_sieve.h"
 

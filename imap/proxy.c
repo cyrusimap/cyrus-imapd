@@ -52,11 +52,13 @@
 #include "backend.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "mupdate-client.h"
 #include "proxy.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 EXPORTED void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
 		   const char *server, const char *authas)

@@ -74,7 +74,6 @@
 
 #include "exitcodes.h"
 #include "imapd.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "version.h"
@@ -88,6 +87,9 @@
 #include "proxy.h"
 #include "seen.h"
 #include "userdeny.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #include "sync_log.h"
 #include "statuscache.h"

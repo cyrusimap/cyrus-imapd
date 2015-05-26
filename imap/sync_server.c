@@ -83,7 +83,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "hash.h"
-#include "imap/imap_err.h"
 #include "imparse.h"
 #include "mailbox.h"
 #include "map.h"
@@ -102,6 +101,9 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #include "message_guid.h"
 #include "sync_support.h"

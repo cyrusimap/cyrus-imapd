@@ -54,7 +54,6 @@
 #include "backend.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "imap_proxy.h"
 #include "proxy.h"
 #include "mboxname.h"
@@ -63,6 +62,9 @@
 #include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 extern unsigned int proxy_cmdcnt;
 extern struct protstream *imapd_in, *imapd_out;

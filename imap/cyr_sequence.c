@@ -57,9 +57,11 @@
 #include <sys/msg.h>
 
 #include "sequence.h"
-#include "imap/imap_err.h"
 #include "global.h"
 #include "util.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static void usage(const char *name)
 {

@@ -54,7 +54,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "index.h"
-#include "imap/imap_err.h"
 #include "imapurl.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -62,6 +61,8 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static int verbose = 0;
 

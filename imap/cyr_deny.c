@@ -58,10 +58,12 @@
 #include "libcyr_cfg.h"
 #include "proc.h"
 #include "userdeny.h"
-#include "imap/imap_err.h"
 #include "util.h"
 #include "ptrarray.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static void usage(void)
 {

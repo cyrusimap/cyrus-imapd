@@ -69,11 +69,13 @@
 
 #include "assert.h"
 #include "xmalloc.h"
-#include "imap/imap_err.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "util.h"
 #include "cyrusdb.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #include "duplicate.h"
 

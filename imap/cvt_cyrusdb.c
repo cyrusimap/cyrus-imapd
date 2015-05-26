@@ -58,11 +58,13 @@
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "global.h"
 #include "mailbox.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 int main(int argc, char *argv[])
 {

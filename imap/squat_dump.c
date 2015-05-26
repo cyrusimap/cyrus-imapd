@@ -66,7 +66,6 @@
 #include "assert.h"
 #include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -75,6 +74,9 @@
 #include "mboxname.h"
 #include "squat.h"
 #include "util.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 extern char *optarg;
 extern int optind;

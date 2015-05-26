@@ -54,7 +54,6 @@
 #include "dlist.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "mboxname.h"
 #include "mboxevent.h"
@@ -63,6 +62,9 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "strarray.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define QDB config_quota_db
 

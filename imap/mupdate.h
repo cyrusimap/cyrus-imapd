@@ -56,8 +56,10 @@
 #include "mailbox.h"
 #include "mpool.h"
 #include "mupdate-client.h"
-#include "imap/mupdate_err.h"
 #include "global.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/mupdate_err.h"
 
 struct mupdate_handle_s {
     struct backend *conn;

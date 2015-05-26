@@ -77,7 +77,6 @@
 #include "assert.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mpool.h"
@@ -89,6 +88,9 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /* Sent to clients that we can't accept a connection for. */
 static const char SERVER_UNABLE_STRING[] = "* BYE \"Server Unable\"\r\n";

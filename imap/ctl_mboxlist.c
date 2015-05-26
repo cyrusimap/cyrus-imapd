@@ -74,8 +74,6 @@
 #include "annotate.h"
 #include "dlist.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
-#include "imap/mupdate_err.h"
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
@@ -83,6 +81,10 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+#include "imap/mupdate_err.h"
 
 extern int optind;
 extern char *optarg;

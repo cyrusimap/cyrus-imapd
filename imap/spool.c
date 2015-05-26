@@ -52,9 +52,11 @@
 #include "spool.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "imap/imap_err.h"
 #include "global.h"
 #include "strarray.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 hdrcache_t spool_new_hdrcache(void)
 {

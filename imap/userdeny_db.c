@@ -54,10 +54,12 @@
 #include "cyrusdb.h"
 #include "global.h"
 #include "userdeny.h"
-#include "imap/imap_err.h"
 #include "tok.h"
 #include "wildmat.h"
 #include "xstrlcpy.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define FNAME_USERDENYDB "/user_deny.db"
 #define USERDENY_VERSION 2

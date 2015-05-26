@@ -59,7 +59,6 @@
 #include "global.h"
 #include "assert.h"
 #include "mboxlist.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"
@@ -70,6 +69,9 @@
 #include "message.h"
 #include "util.h"
 #include "prot.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #include "dlist.h"
 

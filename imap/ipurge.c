@@ -57,12 +57,14 @@
 /* cyrus includes */
 #include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "util.h"
 #include "sync_log.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /* globals for getopt routines */
 extern char *optarg;

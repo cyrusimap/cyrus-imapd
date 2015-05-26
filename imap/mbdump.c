@@ -64,7 +64,6 @@
 #endif
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "map.h"
 #include "mappedfile.h"
 #include "mbdump.h"
@@ -79,6 +78,9 @@
 #include "user.h"
 #include "util.h"
 #include "index.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static int dump_file(int first, int sync,
 		     struct protstream *pin, struct protstream *pout,

@@ -54,12 +54,14 @@
 #include <signal.h>
 #include <string.h>
 
-#include "imap/imap_err.h"
 #include "assert.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "idlemsg.h"
 #include "global.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /* UNIX socket variables */
 static int idle_sock = -1;

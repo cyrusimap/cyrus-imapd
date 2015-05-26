@@ -64,6 +64,8 @@
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "mboxlist.h"
+
+/* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
 #ifdef USE_SIEVE

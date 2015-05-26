@@ -60,7 +60,6 @@
 
 #include "mboxname.h"
 #include "mboxlist.h"
-#include "imap/imap_err.h"
 #include "global.h"
 #include "retry.h"
 #include "command.h"
@@ -69,6 +68,9 @@
 #include "xmalloc.h"
 #include "hash.h"
 #include "exitcodes.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 /* Various locations, relative to the Sphinx base directory */
 #define SOCKET_PATH	    "/searchd.sock"

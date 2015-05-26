@@ -52,8 +52,10 @@
 #include "xmalloc.h"
 #include "global.h"
 #include "exitcodes.h"
-#include "imap/imap_err.h"
 #include "smtpclient.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 EXPORTED pid_t open_sendmail(const char *argv[], FILE **sm)
 {

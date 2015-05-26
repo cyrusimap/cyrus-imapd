@@ -85,7 +85,6 @@
 #include "md5.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap/imap_err.h"
 #include "imparse.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
@@ -109,6 +108,9 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "xstats.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 struct mailboxlist {
     struct mailboxlist *next;
