@@ -1764,8 +1764,9 @@ install-exec-hook:
 if PERL
 	for s in installsieve sieveshell; \
 	do \
-	  $(PERL_PREINSTALL) < perl/sieve/scripts/$$s.pl > perl/sieve/scripts/$$s ;\
-	  $(INSTALL) -m 755 perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
+	  $(MKDIR_P) $(top_builddir)/perl/sieve/scripts ; \
+	  $(PERL_PREINSTALL) < $(top_srcdir)/perl/sieve/scripts/$$s.pl > $(top_builddir)/perl/sieve/scripts/$$s ;\
+	  $(INSTALL) -m 755 $(top_builddir)/perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
 	done
 endif
 
