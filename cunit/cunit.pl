@@ -885,7 +885,7 @@ sub add_sources(@)
     foreach my $path (@args)
     {
 	die "$path: not a C source file"
-	    unless ($path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
+	    unless (-f $path && $path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
 	project_add_suite(suite_new($path, $here));
     }
 
