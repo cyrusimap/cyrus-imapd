@@ -1116,11 +1116,13 @@ endif # SIEVE
 
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
 
-imap/lmtpstats.c: imap/lmtpstats.snmp snmp/snmpgen
-	$(AM_V_GEN)cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/lmtpstats.snmp
+SNMPGEN = $(abs_top_srcdir)/snmp/snmpgen
+
+imap/lmtpstats.c: imap/lmtpstats.snmp $(SNMPGEN)
+	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
 imap/pushstats.c: imap/pushstats.snmp snmp/snmpgen
-	$(AM_V_GEN)cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/pushstats.snmp
+	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
 imap_mbexamine_LDADD = $(LD_UTILITY_ADD)
