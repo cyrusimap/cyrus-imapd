@@ -88,5 +88,9 @@ VPATH=@top_srcdir@/perl/sieve/managesieve
 
 check:
 
+dvi:
+
+installcheck:
+
 EOT
 }

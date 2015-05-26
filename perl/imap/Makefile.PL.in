@@ -73,6 +73,10 @@ cyradm: cyradm.sh
 
 check:
 
+dvi:
+
+installcheck:
+
 EOT
 }
 
