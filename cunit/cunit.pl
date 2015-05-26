@@ -309,7 +309,10 @@ sub suite_name_to_var($)
 sub suite_new($$)
 {
     my ($relpath, $basedir) = @_;
+
+    # recalculate relpath to ensure canonical value
     my ($abspath, $whatever) = path_absrel($relpath, $basedir);
+    $relpath = path_relativise($abspath, $basedir);
 
     my $suite =
     {
@@ -539,8 +542,11 @@ sub suite_find($)
 
     foreach my $suite (@suites)
     {
+	# canonicalise path before comparison
+	my ($abs, $rel) = path_absrel($path, $suite->{basedir});
+
 	return $suite
-	    if ($suite->{relpath} eq $path);
+	    if ($suite->{relpath} eq $rel);
     }
     return undef;
 }
