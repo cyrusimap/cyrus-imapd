@@ -677,7 +677,7 @@ endif
 
 cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
 
-CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
+CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
 
 .testc.o:
 	$(CUNIT_PL) --generate-wrapper $<
@@ -686,7 +686,7 @@ CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
 
 $(CUNIT_PROJECT):
 	@$(RM) $@
-	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(cunit_TESTS)
+	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
 
 cunit/registers.h: $(CUNIT_PROJECT)
 	$(AM_V_GEN)$(CUNIT_PL) --generate-register-function $@
