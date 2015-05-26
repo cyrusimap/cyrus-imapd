@@ -144,10 +144,11 @@ sub fullpath {
 
 sub shortpath {
   my $Self = shift;
-  my $path = shift;
+  my $origpath = shift;
   my $basepath = $Self->{basepath};
-  $path =~ s{^$basepath/}{};
-  return $path;
+  my $path = $origpath;
+  $path =~ s{^$basepath/?}{};
+  return ($path eq '' ? $origpath : $path);
 }
 
 =head2 $Self->Request($method, $path, $content, %headers)
