@@ -191,28 +191,18 @@ sub path_absrel($$)
     if ($path =~ m/^\//)
     {
 	# Given an absolute path
-	$abspath = $path;
+	$abspath = path_sanitise($path);
 	# Calculate the relative path from the absolute path.
-	# Note, this only gives a true relative path if we're
-	# in the same directory.
-	if (substr($abspath,0,length($basedir)+1) eq "$basedir/")
-	{
-	    $relpath = substr($abspath,length($basedir)+1);
-	}
-	else
-	{
-	    # Fallback
-	    $relpath = $abspath;
-	}
+	$relpath = path_relativise($abspath, $basedir);
     }
     else
     {
 	# Given a relative path
 	$relpath = $path;
 	# Calculate the absolute path
-	$abspath = "$basedir/$relpath";
+	$abspath = path_sanitise("$basedir/$relpath");
     }
-    return (path_sanitise($abspath), $relpath);
+    return ($abspath, $relpath);
 }
 
 #
