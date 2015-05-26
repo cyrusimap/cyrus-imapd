@@ -439,6 +439,14 @@ sub GetPublicCalendars {
   return \@Calendars;
 }
 
+sub GetCalendar {
+  my ($Self, $CalendarId) = @_;
+  my $Calendars = $Self->GetCalendars();
+  die "No calendars" unless ($Calendars and @$Calendars);
+  my ($Calendar) = grep { $_->{id} eq $CalendarId } @$Calendars;
+  return $Calendar;
+}
+
 sub GetCalendars {
   my ($Self, %Args) = @_;
 
