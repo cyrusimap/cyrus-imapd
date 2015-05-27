@@ -300,6 +300,7 @@ EXPORTED int index_open(const char *name, struct index_init *init,
 	state->mboxname = xstrdup(name);
 	state->out = init->out;
 	state->userid = xstrdupnull(init->userid);
+	state->want_dav = init->want_dav;
 	state->want_expunged = init->want_expunged;
 
 	if (state->examining) {
@@ -324,8 +325,13 @@ EXPORTED int index_open(const char *name, struct index_init *init,
     }
 
     if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
-	r = IMAP_MAILBOX_BADTYPE;
-	goto fail;
+	if (state->want_dav && (state->mailbox->mbtype & MBTYPES_DAV)) {
+	    /* User logged in using imapmagicplus token "dav" */
+	}
+	else {
+	    r = IMAP_MAILBOX_BADTYPE;
+	    goto fail;
+	}
     }
 
     /* initialise the index_state */

@@ -86,6 +86,7 @@ struct index_init {
     struct protstream *out;
     int examine_mode;
     int select;
+    int want_dav;
     int want_expunged;
     struct vanished_params vanished;
     struct seqset *vanishedlist;
@@ -128,6 +129,7 @@ struct index_state {
     char *mboxname;
     struct protstream *out;
     struct auth_state *authstate;
+    int want_dav;
     int want_expunged;
     unsigned num_expunged;
 };

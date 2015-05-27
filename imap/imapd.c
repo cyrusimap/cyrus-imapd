@@ -517,10 +517,9 @@ static int imapd_canon_user(sasl_conn_t *conn, void *context,
 	userbuf[ulen] = '\0';
 	user = userbuf;
 
-	/* See if we're using the magic plus
-	   (currently we don't support anything after '+') */
-	if ((p = strchr(userbuf, '+')) && 
-	    (n = config_virtdomains ? strcspn(p, "@") : strlen(p)) == 1) {
+	/* See if we're using the magic plus */
+	if ((p = strchr(userbuf, '+'))) {
+	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
 	    if (flags & SASL_CU_AUTHZID) {
 		/* make a copy of the magic plus */
@@ -4120,6 +4119,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.out = imapd_out;
     init.examine_mode = cmd[0] == 'E';
     init.select = 1;
+    if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
 
     r = index_open(mailboxname, &init, &imapd_index);
     if (!r) doclose = 1;
@@ -7369,7 +7369,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
     else
 	prot_ungetc(c, imapd_in);
 
-    if (imapd_magicplus) listargs->sel |= LIST_SEL_SUBSCRIBED;
+    if (!strcmpsafe(imapd_magicplus, "+")) listargs->sel |= LIST_SEL_SUBSCRIBED;
 
     /* Read in reference name */
     c = getastring(imapd_in, imapd_out, &reference);
