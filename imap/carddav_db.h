@@ -151,7 +151,7 @@ int carddav_store(struct mailbox *mailbox, struct vparse_card *card,
 		  const char *resource,
 		  strarray_t *flags, struct entryattlist *annots,
 		  const char *userid, struct auth_state *authstate);
-int carddav_remove(struct mailbox *mailbox, uint32_t olduid);
+int carddav_remove(struct mailbox *mailbox, uint32_t olduid, int isreplace);
 
 
 #endif /* CARDDAV_DB_H */

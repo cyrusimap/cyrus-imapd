@@ -1742,7 +1742,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    }
 
 	    r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, NULL, NULL, req->userid, req->authstate);
-	    if (!r) r = carddav_remove(mailbox, olduid);
+	    if (!r) r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
 	    mailbox_close(&newmailbox);
 
 	    vparse_free(&vparser);
@@ -1794,7 +1794,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    /* XXX - alive check */
 
-	    r = carddav_remove(mailbox, olduid);
+	    r = carddav_remove(mailbox, olduid, /*isreplace*/0);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, cdata->dav.imap_uid);
 		goto done;
@@ -2603,7 +2603,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		continue;
 	    }
 	    r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, flags, annots, req->userid, req->authstate);
-	    if (!r) r = carddav_remove(mailbox, olduid);
+	    if (!r) r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
 	    mailbox_close(&newmailbox);
 	    strarray_free(flags);
 	    freeentryatts(annots);
@@ -2658,7 +2658,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	    /* XXX - fricking mboxevent */
 
-	    r = carddav_remove(mailbox, olduid);
+	    r = carddav_remove(mailbox, olduid, /*isreplace*/0);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: setContacts remove failed for %s %u", mailbox->name, olduid);
 		goto done;
@@ -2852,7 +2852,7 @@ done:
     return r;
 }
 
-EXPORTED int carddav_remove(struct mailbox *mailbox, uint32_t olduid)
+EXPORTED int carddav_remove(struct mailbox *mailbox, uint32_t olduid, int isreplace)
 {
 
     int userflag;
@@ -2860,7 +2860,7 @@ EXPORTED int carddav_remove(struct mailbox *mailbox, uint32_t olduid)
     struct index_record oldrecord;
     if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
     if (!r && !(oldrecord.system_flags & FLAG_EXPUNGED)) {
-	oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+	if (isreplace) oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
 	oldrecord.system_flags |= FLAG_EXPUNGED;
 	r = mailbox_rewrite_index_record(mailbox, &oldrecord);
     }
