@@ -323,6 +323,11 @@ EXPORTED int index_open(const char *name, struct index_init *init,
 	if (r) goto fail;
     }
 
+    if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
+	r = IMAP_MAILBOX_BADTYPE;
+	goto fail;
+    }
+
     /* initialise the index_state */
     index_refresh_locked(state);
 
@@ -337,6 +342,7 @@ EXPORTED int index_open(const char *name, struct index_init *init,
     return 0;
 
 fail:
+    mailbox_close(&state->mailbox);
     free(state->mboxname);
     free(state->userid);
     free(state);
