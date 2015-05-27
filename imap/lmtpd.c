@@ -1111,7 +1111,7 @@ int autocreate_inbox(const char *user, const char *domain)
     /*
      * Check for autocreatequota and createonpost
      */
-    if (!config_getint(IMAPOPT_AUTOCREATE_QUOTA)) {
+    if (config_getint(IMAPOPT_AUTOCREATE_QUOTA) < 0) {
 	free(username);
 	return IMAP_MAILBOX_NONEXISTENT;
     }
