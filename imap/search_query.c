@@ -472,11 +472,6 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 	goto out;
     }
     if (r) goto out;
-    if (state->mailbox->mbtype) {
-	/* Silently ignore any Calendar/Contacts mailboxes (for now) */
-	r = 0;
-	goto out;
-    }
 
     if (!state->exists) goto out;
 
