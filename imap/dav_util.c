@@ -49,6 +49,7 @@
 #include "global.h"
 #include "mailbox.h"
 #include "mboxname.h"
+#include "user.h"
 #include "util.h"
 
 /* Create filename corresponding to DAV DB for mailbox */
@@ -65,20 +66,5 @@ EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
 /* Create filename corresponding to DAV DB for userid */
 EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
 {
-    char c, *domain;
-
-    buf_reset(fname);
-    if (config_virtdomains && (domain = strchr(userid, '@'))) {
-	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-	*domain = '\0';  /* split user@domain */
-	c = (char) dir_hash_c(userid, config_fulldirhash);
-	buf_printf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
-		   domain+1, FNAME_USERDIR, c, userid, FNAME_DAVSUFFIX);
-	*domain = '@';  /* reassemble user@domain */
-    }
-    else {
-	c = (char) dir_hash_c(userid, config_fulldirhash);
-	buf_printf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-		   FNAME_DAVSUFFIX);
-    }
+    buf_setcstr(fname, user_hash_meta(userid, FNAME_DAVSUFFIX));
 }

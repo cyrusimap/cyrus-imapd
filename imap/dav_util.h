@@ -47,7 +47,7 @@
 #include "mailbox.h"
 #include "util.h"
 
-#define FNAME_DAVSUFFIX ".dav" /* per-user DAV DB extension */
+#define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
 
 /* Create filename corresponding to DAV DB for mailbox */
 void dav_getpath(struct buf *fname, struct mailbox *mailbox);

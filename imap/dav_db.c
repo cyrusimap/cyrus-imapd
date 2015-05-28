@@ -62,8 +62,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-#define FNAME_DAVSUFFIX ".dav" /* per-user DAV DB extension */
-
 #define CMD_CREATE_CAL							\
     "CREATE TABLE IF NOT EXISTS ical_objs ("				\
     " rowid INTEGER PRIMARY KEY,"					\
