@@ -217,7 +217,6 @@ struct index_change {
 
 struct mailbox {
     int index_fd;
-    int lock_fd;
     int header_fd;
 
     ptrarray_t caches;
