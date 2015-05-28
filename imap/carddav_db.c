@@ -938,6 +938,10 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
 	struct jmap_req subreq = *req; // struct copy, woot
 	subreq.args = json_pack("{}");
 	json_object_set(subreq.args, "ids", rock.changed);
+	json_t *abookid = json_object_get(req->args, "addressbookId");
+	if (abookid) {
+	    json_object_set(subreq.args, "addressbookId", abookid);
+	}
 	r = carddav_getContactGroups(carddavdb, &subreq);
 	json_decref(subreq.args);
     }
@@ -1981,6 +1985,10 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 	subreq.args = json_pack("{}");
 	json_object_set(subreq.args, "ids", rock.changed);
 	if (doprops) json_object_set(subreq.args, "properties", doprops);
+	json_t *abookid = json_object_get(req->args, "addressbookId");
+	if (abookid) {
+	    json_object_set(subreq.args, "addressbookId", abookid);
+	}
 	r = carddav_getContacts(carddavdb, &subreq);
 	json_decref(subreq.args);
     }
