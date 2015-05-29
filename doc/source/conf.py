@@ -60,6 +60,7 @@ master_doc = 'index'
 project = u'Cyrus IMAP and SASL'
 copyright = u'1993-2015, The Cyrus Team'
 
+
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
@@ -119,6 +120,7 @@ html_theme = 'sphinxdoc'
 # documentation.
 #html_theme_options = {}
 
+
 # Add any paths that contain custom themes here, relative to this directory.
 html_theme_path = ["themes"]
 
@@ -131,12 +133,12 @@ html_theme_path = ["themes"]
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = None
+#html_logo = "themes/images/logo.gif"
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-#html_favicon = None
+html_favicon = "_static/favicon.ico"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

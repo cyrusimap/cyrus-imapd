@@ -1,5 +1,25 @@
 {% extends "!layout.html" %}
 {% set css_files = css_files + [ '_static/cyrus.css' ] %}
+
+
+{% block header %}
+<div class="pageheader">
+  <ul>
+    <li><a href="{{ pathto('index') }}">Home</a></li>
+    <li><a href="{{ pathto('imap/installation') }}">Download</a></li>
+    <li><a href="{{ pathto('overview/about_cyrus') }}">About</a></li>
+    <li><a href="{{ pathto('imap/developer') }}">Extend/Develop</a></li>
+  </ul>
+  <div>
+    <a href="{{ pathto('index') }}">
+      <img src="{{ pathto('_static/logo.gif', 1) }}" alt="CYRUS" />
+    </a>
+  </div>
+</div>
+<div style="clear: both;"></div>
+{% endblock %}
+
+
 {% block footer %}
 {{ super() }}
 <script type="text/javascript">
