@@ -751,7 +751,7 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt)
 	    break;
 	case '\n':
 	    buf_putc(tgt->buf, '\\');
-	    buf_putc(tgt->buf, 'N');
+	    buf_putc(tgt->buf, 'n');
 	    break;
 	case ';':
 	case ',':
