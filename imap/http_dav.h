@@ -104,7 +104,8 @@ enum {
 					   DAV:read-current-user-privilege-set
 					   and CALDAV:read-free-busy) */
 #define DACL_WRITECONT	ACL_INSERT	/* DAV:write-content */
-#define DACL_WRITEPROPS	ACL_WRITE	/* DAV:write-properties */
+#define DACL_WRITEPROPS	(ACL_WRITE\
+			 |ACL_ANNOTATEMSG)	/* DAV:write-properties */
 #define DACL_BIND	(DACL_MKCOL\
 			 |DACL_ADDRSRC)	/* DAV:bind */
 #define DACL_UNBIND	(DACL_RMCOL\
