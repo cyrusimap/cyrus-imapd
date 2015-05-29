@@ -5,16 +5,17 @@ Cyrus IMAP and SASL
 Welcome to the Cyrus IMAP and SASL documentation site, provided to you
 by the `Cyrus Foundation`_.
 
-Cyrus IMAP
-==========
+
+Cyrus IMAP  
+==========  
 
 The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
 
 .. toctree::
     :maxdepth: 1
 
-    imap/introduction
     imap/installation
+    imap/introduction
     imap/features
     imap/deployment
     imap/admin
@@ -62,5 +63,22 @@ Feedback
     feedback-bugs
     feedback-irc
     feedback-mailing-lists
+	
+About
+=====
+
+.. toctree::
+	:maxdepth: 1
+	
+	overview/about_cyrus
+	
+.. toctree::
+	:hidden:
+	
+	overview/what_is_cyrus
+	overview/who_is_cyrus
+	overview/cyrus_roadmap
+	overview/cyrus_bylaws
+	overview/cyrus_history
 
 .. _Cyrus Foundation: https://cyrus.foundation
