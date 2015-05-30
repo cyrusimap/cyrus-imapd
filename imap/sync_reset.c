@@ -129,8 +129,6 @@ EXPORTED void fatal(const char* s, int code)
 
 static int reset_single(const char *userid)
 {
-    struct sync_name_list *mblist = sync_name_list_create();
-    struct sync_name *item;
     int r = 0;
     int i;
 
@@ -142,6 +140,7 @@ static int reset_single(const char *userid)
     proc_killuser(userid);
 
     strarray_t *sublist = mboxlist_sublist(userid);
+    strarray_t *mblist = strarray_new();
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (i = 0; i < sublist->count; i++) {
@@ -152,22 +151,24 @@ static int reset_single(const char *userid)
     r = mboxlist_allusermbox(userid, addmbox_cb, mblist, /*incdel*/1);
     if (r) goto fail;
 
-    for (item = mblist->head; item; item = item->next) {
-	r = mboxlist_deletemailbox(item->name, 1, sync_userid,
+    for (i = 0; i < mblist->count; i++) {
+	const char *name = strarray_nth(mblist, i);
+	r = mboxlist_deletemailbox(name, 1, sync_userid,
 				   sync_authstate, NULL, 0, 1, 0);
 	if (r == IMAP_MAILBOX_NONEXISTENT) {
-	    printf("skipping already removed mailbox %s\n", item->name);
+	    printf("skipping already removed mailbox %s\n", name);
 	}
 	else if (r) goto fail;
 	/* XXX - cheap and nasty hack around actually cleaning up the entry */
-	r = mboxlist_deleteremote(item->name, NULL);
+	r = mboxlist_deleteremote(name, NULL);
 	if (r) goto fail;
     }
 
     r = user_deletedata(userid, 1);
 
  fail:
-    sync_name_list_free(&mblist);
+    strarray_free(mblist);
+    strarray_free(sublist);
 
     return r;
 }
