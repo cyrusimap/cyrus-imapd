@@ -901,10 +901,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 	mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
     }
 
-    /* straight to archive? */
-    if (mailbox_should_archive(mailbox, &record, NULL))
-	record.system_flags |= FLAG_ARCHIVED;
-
     /* Create message file */
     as->nummsg++;
     fname = mailbox_record_fname(mailbox, &record);
