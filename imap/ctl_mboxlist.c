@@ -191,7 +191,8 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
 	    return 0;
 
 	/* realpart is 'hostname!partition' */
-	char *realpart = strconcat(mbentry->server, "!", mbentry->partition, (const char *)NULL);
+	char *realpart =
+	    strconcat(config_servername, "!", mbentry->partition, (char *)NULL);
 	int skip_flag = 0;
 
 	/* If it is marked MBTYPE_MOVING, and it DOES match the entry,
