@@ -387,7 +387,10 @@ static int do_restart()
 
     if (sync_out->userdata) {
 	/* IMAP flavor (w/ tag) */
-	prot_printf(sync_out, "R%d SYNC", restartcnt++);
+	struct buf *tag = (struct buf *) sync_out->userdata;
+	buf_reset(tag);
+	buf_printf(tag, "R%d", restartcnt++);
+	prot_printf(sync_out, "%s SYNC", buf_cstring(tag));
     }
     prot_printf(sync_out, "RESTART\r\n");
     prot_flush(sync_out);
