@@ -138,7 +138,7 @@ sub test_ordering
     my $Calendars = $CardDAV->GetAddressBooks();
     my $names = join(',', grep { m/NAME/ } map { $_->{name} } @$Calendars);
 
-    $self->assert_str_equals($names, "FIRSTNAME,SECONDNAME");
+    $self->assert_str_equals("FIRSTNAME,SECONDNAME", $names);
 }
 
 1;
