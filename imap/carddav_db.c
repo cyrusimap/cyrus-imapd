@@ -1146,7 +1146,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
     if (_wantprop(grock->props, "x-importance")) {
 	double val = 0;
-	const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
+	const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
 	buf_reset(&buf);
 	annotatemore_msg_lookup(grock->mailbox->name, record.uid,
@@ -2305,7 +2305,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
 	}
 	else if (!strcmp(key, "x-importance")) {
 	    double dval = json_number_value(jval);
-	    const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
+	    const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
 	    const char *attrib = "value.shared";
 	    if (dval) {
 		struct buf buf = BUF_INITIALIZER;

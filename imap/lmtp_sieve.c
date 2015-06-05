@@ -876,7 +876,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
 	strlcat(namebuf, mailbox, sizeof(namebuf));
 
 	if (annotatemore_lookup(namebuf,
-				"/vendor/cmu/cyrus-imapd/sieve", "",
+				IMAP_ANNOT_NS "sieve", "",
 				&attrib) != 0 || !attrib.s) {
 	    /* no sieve script annotation */
 	    return 1; /* do normal delivery actions */

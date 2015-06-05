@@ -1633,7 +1633,7 @@ void encode_annotations(struct dlist *parent,
 	if (!annots)
 	    annots = dlist_newlist(parent, "ANNOTATIONS");
 	aa = dlist_newkvlist(annots, NULL);
-	dlist_setatom(aa, "ENTRY", "/vendor/cmu/cyrus-imapd/thrid");
+	dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
 	dlist_setatom(aa, "USERID", NULL);
 	dlist_sethex64(aa, "VALUE", record->cid);
     }
@@ -1668,7 +1668,7 @@ int decode_annotations(/*const*/struct dlist *annots,
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
 	if (!dlist_getbuf(aa, "VALUE", &value))
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
-	if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/thrid")) {
+	if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) {
 	    if (record) {
 		const char *p = buf_cstring(&value);
 		parsehex(p, &p, 16, &record->cid);

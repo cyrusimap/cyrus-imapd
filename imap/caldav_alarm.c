@@ -711,7 +711,8 @@ EXPORTED int caldav_alarm_process()
 	icalcomponent *ical = NULL;
 	struct buf msg_buf = BUF_INITIALIZER;
 	struct buf calname_buf = BUF_INITIALIZER;
-	static const char *displayname_annot = ANNOT_NS "<" XML_NS_DAV ">displayname";
+	static const char *displayname_annot =
+	    DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
 
 	syslog(LOG_DEBUG,
 	       "processing alarm rowid %llu mailbox %s resource %s action %d nextalarm %s tzid %s start %s end %s",

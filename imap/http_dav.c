@@ -2099,7 +2099,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     /* otherwise it's a database annotation */
 
     buf_reset(&pctx->buf);
-    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
+    buf_printf(&pctx->buf, DAV_ANNOT_NS "<%s>%s",
 	       (const char *) prop->ns->href, prop->name);
 
     if (set) {
@@ -2169,7 +2169,7 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
     /* otherwise it's a DB annotation */
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
+    buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
 	       (const char *) ns->href, name);
 
     r = annotatemore_msg_lookup(fctx->mailbox->name, fctx->record->uid,
@@ -2202,7 +2202,7 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 	return propfind_fromresource(name, ns, fctx, prop, resp, propstat, rock);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
+    buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
 	       (const char *) ns->href, name);
 
     if (fctx->mailbox && !fctx->record &&
@@ -2245,7 +2245,7 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
 	return proppatch_toresource(prop, set, pctx, propstat, NULL);
 
     buf_reset(&pctx->buf);
-    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
+    buf_printf(&pctx->buf, DAV_ANNOT_NS "<%s>%s",
 	       (const char *) prop->ns->href, prop->name);
 
     if (set) {
@@ -2294,7 +2294,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
     if (*userid && strcmp(userid, arock->fctx->userid)) return 0;
 
     /* Split entry into namespace href and name ( <href>name ) */
-    buf_setcstr(&arock->fctx->buf, entry + strlen(ANNOT_NS) + 1);
+    buf_setcstr(&arock->fctx->buf, entry + strlen(DAV_ANNOT_NS) + 1);
     href = (char *) buf_cstring(&arock->fctx->buf);
     if ((name = strchr(href, '>'))) *name++ = '\0';
     else if ((name = strchr(href, ':'))) *name++ = '\0';

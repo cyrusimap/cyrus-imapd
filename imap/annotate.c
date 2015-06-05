@@ -1845,7 +1845,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_todb,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/annotsize",
+	IMAP_ANNOT_NS "annotsize",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1854,7 +1854,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	/*set*/NULL,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/duplicatedeliver",
+	IMAP_ANNOT_NS "duplicatedeliver",
 	ATTRIB_TYPE_BOOLEAN,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1863,7 +1863,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_mailboxopt,
 	(void *)OPT_IMAP_DUPDELIVER
     },{
-	"/vendor/cmu/cyrus-imapd/expire",
+	IMAP_ANNOT_NS "expire",
 	ATTRIB_TYPE_UINT,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1872,7 +1872,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_todb,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/lastpop",
+	IMAP_ANNOT_NS "lastpop",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1881,7 +1881,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	/*set*/NULL,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/lastupdate",
+	IMAP_ANNOT_NS "lastupdate",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1890,7 +1890,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	/*set*/NULL,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/news2mail",
+	IMAP_ANNOT_NS "news2mail",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1899,7 +1899,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_todb,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/partition",
+	IMAP_ANNOT_NS "partition",
 	/* _get_partition does its own access control check */
 	ATTRIB_TYPE_STRING | ATTRIB_NO_FETCH_ACL_CHECK,
         BACKEND_ONLY,
@@ -1909,7 +1909,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	/*set*/NULL,
         NULL
     },{
-	"/vendor/cmu/cyrus-imapd/pop3newuidl",
+	IMAP_ANNOT_NS "pop3newuidl",
 	ATTRIB_TYPE_BOOLEAN,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1918,7 +1918,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_mailboxopt,
 	(void *)OPT_POP3_NEW_UIDL
     },{
-	"/vendor/cmu/cyrus-imapd/pop3showafter",
+	IMAP_ANNOT_NS "pop3showafter",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1927,7 +1927,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_pop3showafter,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/server",
+	IMAP_ANNOT_NS "server",
 	/* _get_server does its own access control check */
 	ATTRIB_TYPE_STRING | ATTRIB_NO_FETCH_ACL_CHECK,
 	PROXY_ONLY,
@@ -1937,7 +1937,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	/*set*/NULL,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/sharedseen",
+	IMAP_ANNOT_NS "sharedseen",
 	ATTRIB_TYPE_BOOLEAN,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1946,7 +1946,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_mailboxopt,
         (void *)OPT_IMAP_SHAREDSEEN
     },{
-	"/vendor/cmu/cyrus-imapd/sieve",
+	IMAP_ANNOT_NS "sieve",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1955,7 +1955,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_todb,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/size",
+	IMAP_ANNOT_NS "size",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1964,7 +1964,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	/*set*/NULL,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/squat",
+	IMAP_ANNOT_NS "squat",
 	ATTRIB_TYPE_BOOLEAN,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -1973,7 +1973,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	annotation_set_todb,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/uniqueid",
+	IMAP_ANNOT_NS "uniqueid",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -2036,7 +2036,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
     },{
 	/* The "usemodseq" was added with conversations support, to allow
 	 * a single value to show any changes to anything about a user */
-	"/vendor/cmu/cyrus-imapd/usermodseq",
+	IMAP_ANNOT_NS "usermodseq",
 	ATTRIB_TYPE_UINT,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_PRIV,
@@ -2047,7 +2047,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
     },{
 	/* The "usemodseq" was added with conversations support, to allow
 	 * a single value to show any changes to anything about a user */
-	"/vendor/cmu/cyrus-imapd/usercounters",
+	IMAP_ANNOT_NS "usercounters",
 	ATTRIB_TYPE_UINT,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_PRIV,
@@ -2056,7 +2056,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
 	/*set*/NULL,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/expire",
+	IMAP_ANNOT_NS "expire",
 	ATTRIB_TYPE_UINT,
 	PROXY_AND_BACKEND,
 	ATTRIB_VALUE_SHARED,
@@ -2065,7 +2065,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
 	annotation_set_todb,
 	NULL
     },{
-	"/vendor/cmu/cyrus-imapd/freespace",
+	IMAP_ANNOT_NS "freespace",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
@@ -2074,7 +2074,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
 	/*set*/NULL,
 	NULL
     },{
-    "/vendor/cmu/cyrus-imapd/freespace/total",
+    IMAP_ANNOT_NS "freespace/total",
     ATTRIB_TYPE_STRING,
     BACKEND_ONLY,
     ATTRIB_VALUE_SHARED,
@@ -2083,7 +2083,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
     /*set*/NULL,
     NULL
     },{
-    "/vendor/cmu/cyrus-imapd/freespace/percent/most",
+    IMAP_ANNOT_NS "freespace/percent/most",
     ATTRIB_TYPE_STRING,
     BACKEND_ONLY,
     ATTRIB_VALUE_SHARED,
@@ -2092,7 +2092,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
     /*set*/NULL,
     NULL
     },{
-	"/vendor/cmu/cyrus-imapd/shutdown",
+	IMAP_ANNOT_NS "shutdown",
 	ATTRIB_TYPE_STRING,
 	PROXY_AND_BACKEND,
 	ATTRIB_VALUE_SHARED,
@@ -2101,7 +2101,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
 	annotation_set_tofile,
 	(void *)"shutdown"
     },{
-	"/vendor/cmu/cyrus-imapd/squat",
+	IMAP_ANNOT_NS "squat",
 	ATTRIB_TYPE_BOOLEAN,
 	PROXY_AND_BACKEND,
 	ATTRIB_VALUE_SHARED,
@@ -3015,7 +3015,7 @@ static int find_desc_store(annotate_state_t *state,
 
     /* check for DAV annotations */
     if (state->mailbox && (state->mailbox->mbtype & MBTYPES_DAV) &&
-	!strncmp(name, "/vendor/cmu/cyrus-httpd/", 24)) {
+	!strncmp(name, DAV_ANNOT_NS, strlen(DAV_ANNOT_NS))) {
 	*descp = db_entry;
 	return 0;
     }
@@ -3037,12 +3037,12 @@ static int find_desc_store(annotate_state_t *state,
     if (!config_getswitch(IMAPOPT_ANNOTATION_ALLOW_UNDEFINED))
 	return IMAP_PERMISSION_DENIED;
 
-    /* check for /flags and /vendor/cyrus */
+    /* check for /flags and /vendor/cmu */
     if (scope == ANNOTATION_SCOPE_MESSAGE &&
 	!strncmp(name, "/flags/", 7))
 	return IMAP_PERMISSION_DENIED;
 
-    if (!strncmp(name, "/vendor/cmu/cyrus-imapd/", 24))
+    if (!strncmp(name, IMAP_ANNOT_NS, strlen(IMAP_ANNOT_NS)))
 	return IMAP_PERMISSION_DENIED;
 
     *descp = db_entry;
@@ -3613,8 +3613,8 @@ static void init_annotation_definitions(void)
 	if (!(p = get_token(&state, ".-_/:"))) goto bad;
 	/* TV-TODO: should test for empty */
 
-	if (!strncmp(p, "/vendor/cmu/cyrus-imapd/", 24)) {
-	    parse_error(&state, "annotation under /vendor/cmu/cyrus-imapd/");
+	if (!strncmp(p, IMAP_ANNOT_NS, strlen(IMAP_ANNOT_NS))) {
+	    parse_error(&state, "annotation under " IMAP_ANNOT_NS);
 	    goto bad;
 	}
 	ae->name = xstrdup(p);

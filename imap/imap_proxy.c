@@ -1379,13 +1379,13 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
 	if (part_list->mode == PART_SELECT_MODE_FREESPACE_MOST) {
 	    prot_printf(be->out,
 		"%s GETANNOTATION \"\" "
-		"\"/vendor/cmu/cyrus-imapd/freespace/total\" "
+		"\"" IMAP_ANNOT_NS "freespace/total\" "
 		"\"value.shared\"\r\n", mytag);
 	}
 	else {
 	    prot_printf(be->out,
 		"%s GETANNOTATION \"\" "
-		"\"/vendor/cmu/cyrus-imapd/freespace/percent/most\" "
+		"\"" IMAP_ANNOT_NS "freespace/percent/most\" "
 		"\"value.shared\"\r\n", mytag);
 	}
 	prot_flush(be->out);
@@ -1400,12 +1400,12 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
 	    if (part_list->mode == PART_SELECT_MODE_FREESPACE_MOST) {
 		c = chomp(be->in,
 		    "ANNOTATION \"\" "
-		    "\"/vendor/cmu/cyrus-imapd/freespace/total\" "
+		    "\"" IMAP_ANNOT_NS "freespace/total\" "
 		    "(\"value.shared\" ");
 	    } else {
 		c = chomp(be->in,
 		    "ANNOTATION \"\" "
-		    "\"/vendor/cmu/cyrus-imapd/freespace/percent/most\" "
+		    "\"" IMAP_ANNOT_NS "freespace/percent/most\" "
 		    "(\"value.shared\" ");
 	    }
 	    if ((c == EOF) || (c != '\"')) {

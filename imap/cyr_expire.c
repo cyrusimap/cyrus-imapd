@@ -295,7 +295,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
     if (!erock->skip_annotate) {
 	do {
 	    buf_free(&attrib);
-	    r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/expire", "",
+	    r = annotatemore_lookup(buf, IMAP_ANNOT_NS "expire", "",
 				    &attrib);
 
 	    if (r ||				/* error */

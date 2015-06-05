@@ -210,7 +210,7 @@ static int index_one(const char *name, int blocking)
 	/* since mailboxes inherit /vendor/cmu/cyrus-imapd/squat,
 	   we need to iterate all the way up to "" (server entry) */
 	while (1) {
-	    r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/squat", "",
+	    r = annotatemore_lookup(buf, IMAP_ANNOT_NS "squat", "",
 				    &attrib);
 
 	    if (r ||				/* error */

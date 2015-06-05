@@ -62,8 +62,6 @@
 #define DFLAG_UNBIND	"DAV:unbind"
 #define DFLAG_UNCHANGED	"DAV:unchanged"
 
-#define ANNOT_NS	"/vendor/cmu/cyrus-httpd/"
-
 #define SERVER_INFO	".server-info"
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"

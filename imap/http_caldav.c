@@ -1233,7 +1233,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     const struct index_record *record;
     struct hash_table tzid_table;
     static const char *displayname_annot =
-	ANNOT_NS "<" XML_NS_DAV ">displayname";
+	DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct buf attrib = BUF_INITIALIZER;
     const char **hdr, *sep;
     struct mime_type_t *mime = NULL;
@@ -1420,7 +1420,7 @@ static int list_cal_cb(char *name,
     size_t len;
     int r, rights, any_rights = 0;
     static const char *displayname_annot =
-	ANNOT_NS "<" XML_NS_DAV ">displayname";
+	DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct buf displayname = BUF_INITIALIZER;
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
@@ -3476,11 +3476,11 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	/* check for renamed calendars - property on the homeset */
 	mailboxname = caldav_mboxname(httpd_userid, NULL);
 	if (!strcmp(cal, SCHED_DEFAULT))
-	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+	    annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
 	else if (!strcmp(cal, SCHED_INBOX))
-	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-inbox";
+	    annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-inbox";
 	else if (!strcmp(cal, SCHED_OUTBOX))
-	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
+	    annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
 
 	if (annotname) {
 	    r = annotatemore_lookupmask(mailboxname, annotname,
@@ -3560,7 +3560,7 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 {
     struct buf attrib = BUF_INITIALIZER;
     const char *prop_annot =
-	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+	DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     unsigned long types = 0;
     xmlNodePtr set, node;
     const struct cal_comp_t *comp;
@@ -3637,7 +3637,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	if (!cur) {
 	    /* All component types are valid */
 	    const char *prop_annot =
-		ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+		DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
 	    annotate_state_t *astate = NULL;
 
 	    buf_reset(&pctx->buf);
@@ -3855,7 +3855,7 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 {
     struct buf attrib = BUF_INITIALIZER;
     const char *prop_annot =
-	ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+	DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
     xmlNodePtr node;
     int r = 0;
 
@@ -3887,7 +3887,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
 	const char *prop_annot =
-	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+	    DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 	annotate_state_t *astate = NULL;
 	buf_reset(&pctx->buf);
 
@@ -3957,7 +3957,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 
     if (propstat) {
 	const char *prop_annot =
-	    ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+	    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
 
 	if (fctx->mailbox && !fctx->record) {
 	    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
@@ -3971,7 +3971,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 	}
 	else if ((namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
 	    /*  Check for CALDAV:calendar-timezone-id */
-	    prop_annot = ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+	    prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
 	    buf_free(&attrib);
 	    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
@@ -4084,7 +4084,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	if (valid) {
 	    /* Remove CALDAV:calendar-timezone-id */
 	    const char *prop_annot =
-		ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+		DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 	    annotate_state_t *astate = NULL;
 	    int r;
 
@@ -4134,7 +4134,7 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
 
     if (propstat) {
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
+	buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
 		   (const char *) ns->href, name);
 
 	if (fctx->mailbox && !fctx->record) {
@@ -4146,7 +4146,7 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
 	if (!attrib.len && xmlStrcmp(ns->href, BAD_CAST XML_NS_CALDAV)) {
 	    /* Check for CALDAV:calendar-availability */
 	    buf_reset(&fctx->buf);
-	    buf_printf(&fctx->buf, ANNOT_NS "<%s>%s", XML_NS_CALDAV, name);
+	    buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s", XML_NS_CALDAV, name);
 
 	    if (fctx->mailbox && !fctx->record) {
 		r = annotatemore_lookupmask(fctx->mailbox->name,
@@ -4303,7 +4303,7 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
 			 void *rock __attribute__((unused)))
 {
     const char *prop_annot =
-	ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+	DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
     struct buf attrib = BUF_INITIALIZER;
     const char *value = NULL;
     int r = 0;
@@ -4321,7 +4321,7 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
     }
     else {
 	/*  Check for CALDAV:calendar-timezone */
-	prop_annot = ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+	prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
 
 	if (fctx->mailbox && !fctx->record) {
 	    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
@@ -4392,7 +4392,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 	if (valid) {
 	    /* Remove CALDAV:calendar-timezone */
 	    const char *prop_annot =
-		ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+		DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
 	    annotate_state_t *astate = NULL;
 
 	    buf_reset(&pctx->buf);
@@ -4657,7 +4657,7 @@ static int busytime_by_collection(char *mboxname, int matchlen,
 	/* Check if the collection is marked as transparent */
 	struct buf attrib = BUF_INITIALIZER;
 	const char *prop_annot =
-	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+	    DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 
 	if (!annotatemore_lookupmask(mboxname, prop_annot, httpd_userid, &attrib)) {
 	    if (!strcmp(buf_cstring(&attrib), "transparent")) {
@@ -4893,7 +4893,7 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
 	/* Check for CALDAV:calendar-availability on user's Inbox */
 	struct buf attrib = BUF_INITIALIZER;
 	const char *prop_annot =
-	    ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
+	    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
 	const char *userid = mboxname_to_userid(mailboxname);
 	const char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
 	if (!annotatemore_lookup(mboxname, prop_annot,
@@ -5101,7 +5101,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     unsigned mykind = 0, tzbyref = 0;
     const char *organizer = NULL;
     const char *prop_annot =
-	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+	DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     struct buf attrib = BUF_INITIALIZER;
     struct caldav_data *cdata;
     const char *uid;

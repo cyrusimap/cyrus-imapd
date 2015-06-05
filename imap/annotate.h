@@ -53,6 +53,9 @@
 
 #define FNAME_GLOBALANNOTATIONS "/annotations.db"
 
+#define IMAP_ANNOT_NS		"/vendor/cmu/cyrus-imapd/"
+#define DAV_ANNOT_NS		"/vendor/cmu/cyrus-httpd/"
+
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
     char *s;                   /* String */

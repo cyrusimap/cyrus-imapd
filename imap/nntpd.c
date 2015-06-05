@@ -3851,7 +3851,7 @@ static void news2mail(message_data_t *msg)
 	/* see if we want to send this to a mailing list */
 	buf_free(&attrib);
 	r = annotatemore_lookup(msg->rcpt.data[n],
-				"/vendor/cmu/cyrus-imapd/news2mail", "",
+				IMAP_ANNOT_NS "news2mail", "",
 				&attrib);
 	if (r) continue;
 
