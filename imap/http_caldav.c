@@ -1625,13 +1625,8 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
-    /* Generate list of calendars */
-    txn->req_tgt.mbentry->name = xrealloc(txn->req_tgt.mbentry->name,
-					  strlen(txn->req_tgt.mbentry->name)+3);
-    strcat(txn->req_tgt.mbentry->name, ".%");
-
     memset(&lrock, 0, sizeof(struct list_cal_rock));
-    mboxlist_findall(NULL, txn->req_tgt.mbentry->name, 1, httpd_userid,
+    mboxlist_findall(&httpd_namespace, "user.*", httpd_userisadmin, httpd_userid,
 		     httpd_authstate, list_cal_cb, &lrock);
 
     /* Sort calendars by displayname */
@@ -4535,12 +4530,7 @@ static int report_cal_query(struct transaction_t *txn,
 	}
 	else {
 	    /* Add responses for all contained calendar collections */
-	    txn->req_tgt.mbentry->name =
-		xrealloc(txn->req_tgt.mbentry->name,
-			 strlen(txn->req_tgt.mbentry->name)+3);
-	    strcat(txn->req_tgt.mbentry->name, ".%");
-	    mboxlist_findall(NULL,  /* internal namespace */
-			     txn->req_tgt.mbentry->name, 1, httpd_userid, 
+	    mboxlist_findall(&httpd_namespace, "user.*", httpd_userisadmin, httpd_userid,
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
@@ -4877,10 +4867,7 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
 	}
 	else {
 	    /* Get busytime for all contained calendar collections */
-	    char mboxpat[MAX_MAILBOX_BUFFER+1];
-	    snprintf(mboxpat, sizeof(mboxpat), "%s.%%", mailboxname);
-	    mboxlist_findall(NULL,  /* internal namespace */
-			     mboxpat, 1, httpd_userid, 
+	    mboxlist_findall(&httpd_namespace, "user.*", httpd_userisadmin, httpd_userid,
 			     httpd_authstate, busytime_by_collection, fctx);
 	}
 

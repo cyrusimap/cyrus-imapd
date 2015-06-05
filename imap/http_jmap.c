@@ -356,7 +356,7 @@ static int getMailboxes(struct jmap_req *req)
     list = json_array();
 
     /* Generate list of mailboxes */
-    mboxlist_findall(&jmap_namespace, "*", httpd_userisadmin, req->userid,
+    mboxlist_findall(&jmap_namespace, "user.*", httpd_userisadmin, httpd_userid,
 		     httpd_authstate, &getMailboxes_cb, list);
 
     mailboxes = json_array_get(item, 1);

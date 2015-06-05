@@ -4579,19 +4579,9 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	    propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, &fctx);
 	}
 	else {
-	    char *base = NULL;
-	    /* Add responses for all contained calendar collections */
-	    struct mboxname_parts parts;
-	    mboxname_userid_to_parts(httpd_userid, &parts);
-	    if (parts.domain)
-		base = strconcat(parts.domain, "!user.*", (const char *)NULL);
-	    else
-		base = xstrdup("user.*");
-	    mboxname_free_parts(&parts);
-	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 base, 1, NULL,
+	    /* Add responses for all calendar collections */
+	    r = mboxlist_findall(&httpd_namespace, "user.*", httpd_userisadmin, httpd_userid,
 				 httpd_authstate, propfind_by_collection, &fctx);
-	    free(base);
 	}
 
 	if (fctx.davdb) fctx.close_db(fctx.davdb);
@@ -5488,13 +5478,8 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 	    propfind_by_collection(fctx->req_tgt->mbentry->name, 0, 0, fctx);
 	}
 	else {
-	    /* Add responses for all contained calendar collections */
-	    fctx->req_tgt->mbentry->name =
-		xrealloc(fctx->req_tgt->mbentry->name,
-			 strlen(fctx->req_tgt->mbentry->name)+3);
-	    strcat(fctx->req_tgt->mbentry->name, ".%");
-	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 fctx->req_tgt->mbentry->name, 1, httpd_userid, 
+	    /* Add responses for all calendar collections */
+	    r = mboxlist_findall(&httpd_namespace, "user.*", httpd_userisadmin, httpd_userid,
 				 httpd_authstate, propfind_by_collection, fctx);
 	}
 
@@ -5788,10 +5773,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
 
     /* Only search DAV:principal-collection-set */
     if (apply_prin_set || !fctx->req_tgt->userid) {
-	/* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
-
-	ret = mboxlist_findall(NULL,  /* internal namespace */
-			       "user.%", 1, httpd_userid, 
+	/* Add responses for all calendar collections */
+	ret = mboxlist_findall(&httpd_namespace, "user.*", httpd_userisadmin, httpd_userid,
 			       httpd_authstate, principal_search, fctx);
     }
 

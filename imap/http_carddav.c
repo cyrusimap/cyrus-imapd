@@ -969,13 +969,7 @@ static int report_card_query(struct transaction_t *txn,
 	}
 	else {
 	    /* Add responses for all contained addressbook collections */
-	    /* XXX - support cross-user propfind here, just like caldav */
-	    txn->req_tgt.mbentry->name =
-		xrealloc(txn->req_tgt.mbentry->name,
-			 strlen(txn->req_tgt.mbentry->name)+3);
-	    strcat(txn->req_tgt.mbentry->name, ".%");
-	    mboxlist_findall(NULL,  /* internal namespace */
-			     txn->req_tgt.mbentry->name, 1, httpd_userid, 
+	    mboxlist_findall(&httpd_namespace, "user.*", httpd_userisadmin, httpd_userid,
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
