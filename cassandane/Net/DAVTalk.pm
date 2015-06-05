@@ -425,6 +425,122 @@ sub ns {
   return $prev;
 }
 
+
+
+# merge existing and new shareWith params and commit to DAV
+#
+# UpdateShareACL($DAV, $Path, $NewObj, $OldObj);
+#
+# $DAV    - Net::DAVTalk or subclass object
+# $Path   - path to resource (under user principal)
+# $NewObj - object with wanted state
+# $OldObj - object with existing state
+#
+# objects have this structure:
+#
+# {
+#   mayRead         => [true|false],
+#   mayWrite        => [true|false],
+#   mayAdmin        => [true|false],
+#   mayReadFreeBusy => [true|false], (calendar only)
+#   shareWith => [
+#     {
+#       email  => 'user@example.com',
+#       mayXXX => [true|false],
+#       ...
+#     }, {
+#       ...
+#     },
+#   ]
+# }
+#
+# see the AJAX API docs for more info
+
+sub UpdateShareACL {
+  my ($Self, $Path, $NewObj, $OldObj) = @_;
+  $OldObj ||= {};
+
+  # We only ever update ACLs if explicity set
+  return unless exists $NewObj->{shareWith};
+
+  my $Old = $OldObj->{shareWith} || [];
+  my $New = $NewObj->{shareWith} || [];
+
+  # ACL -> DAV properties
+  my @allprops = qw(
+    D:write-properties
+    D:write-content
+    D:read
+    D:unbind
+    CY:remove-resource
+    CY:admin
+  );
+  my %acls = (
+    mayRead => [qw(D:write-properties D:read)],
+    mayWrite => [qw(D:write-content D:write-properties CY:remove-resource)],
+    mayAdmin => [qw(CY:admin D:unbind)],
+  );
+
+  # extras for calendar
+  if ($Self->isa("Net::CalDAVTalk")) {
+    push @allprops, "C:read-free-busy";
+    $acls{mayReadFreeBusy} = [qw(C:read-free-busy D:write-properties)];
+  }
+
+  my %set;
+  my $dirty = 0;
+
+  my %NewMap = map { $_->{email} => $_ } @$New;
+  my %OldMap = map { $_->{email} => $_ } @$Old;
+
+  # Merge these two, figure what's changed, write the appropriate DAV ACL command,
+  my %keys = (%OldMap, %NewMap);
+  foreach my $email (sort keys %keys) {
+    my %newe = map { $_ => 1 } map { @{$acls{$_}||[]} }
+               grep { $NewMap{$email}{$_} } keys %acls;
+    my %olde = map { $_ => 1 } map { @{$acls{$_}||[]} }
+               grep { $OldMap{$email}{$_} } keys %acls;
+    foreach my $prop (@allprops) {
+      $dirty = 1 if !!$newe{$prop} != !!$olde{$prop}; # bang bang
+      if ($newe{$prop}) {
+        push @{$set{"/dav/principals/user/$email"}}, $prop;
+      }
+    }
+  }
+
+  # own privileges as well
+  my %newe = map { $_ => 1 } map { @{$acls{$_}||[]} }
+             grep { exists $NewObj->{$_} ? $NewObj->{$_} : $OldObj->{$_} } keys %acls;
+  my %olde = map { $_ => 1 } map { @{$acls{$_}||[]} }
+             grep { $OldObj->{$_} } keys %acls;
+  foreach my $prop (@allprops) {
+    $dirty = 1 if !!$newe{$prop} != !!$olde{$prop}; # bang bang
+    if ($newe{$prop}) {
+      push @{$set{""}}, $prop;
+    }
+  }
+
+  return unless $dirty;
+
+  my @aces;
+  foreach my $uri (sort keys %set) {
+    my $Prin = $uri eq '' ? x('D:self') : x('D:href', $uri);
+    push @aces,
+       x('D:ace',
+         x('D:principal', $Prin),
+         x('D:grant', map { x('D:privilege', x($_)) } @{$set{$uri}}),
+       );
+  }
+
+  $Self->Request(
+    'ACL',
+    "$Path/",
+     x('D:acl', $DAV->NS(), @aces),
+  );
+}
+
+1;
+
 1;
 
 =head2 function2
