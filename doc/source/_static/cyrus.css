@@ -88,9 +88,13 @@ div.body h1, div.body h2, div.body h3 {
 }
 
 div.highlight {
-    border-left: 0.5em solid #666666;
+/*   border-left: 0.5em solid #666666; */
     padding: 0;
     margin: 1em 0 0.5em 0;
+}
+
+.highlight {
+	background: #eeeeee;
 }
 
 div.highlight pre {
@@ -120,7 +124,8 @@ div.sphinxsidebar h3, div.sphinxsidebar h4 {
 }
 
 ol.arabic li {
-    margin-top: 1em;
+    margin-top: 0.5em;
+	line-height: 110%
 }
 
 p.caption {

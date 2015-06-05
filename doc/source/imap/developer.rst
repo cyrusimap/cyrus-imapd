@@ -4,6 +4,11 @@
 Developer Guide
 ===============
 
+Getting Started
+================
+.. toctree::
+	developer/installguide
+
 Resources
 =========
 
