@@ -2986,10 +2986,11 @@ done:
     return r;
 }
 
-static int find_desc_store(int scope,
+static int find_desc_store(annotate_state_t *state,
 			   const char *name,
 			   const annotate_entrydesc_t **descp)
 {
+    int scope = state->which;
     const ptrarray_t *descs;
     const annotate_entrydesc_t *db_entry;
     annotate_entrydesc_t *desc;
@@ -3012,6 +3013,14 @@ static int find_desc_store(int scope,
 	return IMAP_INTERNAL;
     }
 
+    /* check for DAV annotations */
+    if (state->mailbox && (state->mailbox->mbtype & MBTYPES_DAV) &&
+	!strncmp(name, "/vendor/cmu/cyrus-httpd/", 24)) {
+	*descp = db_entry;
+	return 0;
+    }
+
+    /* check known IMAP annotations */
     for (i = 0 ; i < descs->count ; i++) {
 	desc = descs->data[i];
 	if (strcmp(name, desc->name))
@@ -3055,7 +3064,7 @@ EXPORTED int annotate_state_store(annotate_state_t *state, struct entryattlist *
 	struct annotate_entry_list *nentry = NULL;
 
 	/* See if we support this entry */
-	r = find_desc_store(state->which, e->entry, &desc);
+	r = find_desc_store(state, e->entry, &desc);
 	if (r)
 	    goto cleanup;
 
