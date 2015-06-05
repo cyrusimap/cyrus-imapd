@@ -134,6 +134,17 @@ sub UpdateAddressBook {
   return 1;
 }
 
+sub GetAddressBook {
+  my ($Self, $Id, %Args) = @_;
+
+  my $Data = $Self->GetAddressBooks(%Args);
+
+  die "Can't read data" unless $Data;
+  my ($AddressBook) = grep { $_->{path} eq $Id } @$Data;
+
+  return $AddressBook;
+}
+
 sub GetAddressBooks {
   my ($Self, %Args) = @_;
 

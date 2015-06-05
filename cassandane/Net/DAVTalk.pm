@@ -466,6 +466,10 @@ sub UpdateShareACL {
   my $Old = $OldObj->{shareWith} || [];
   my $New = $NewObj->{shareWith} || [];
 
+  $Self->ns(CY => 'http://cyrusimap.org/ns/');
+  $Self->ns(UF => 'http://cyrusimap.org/ns/userflag/');
+  $Self->ns(SF => 'http://cyrusimap.org/ns/sysflag/');
+
   # ACL -> DAV properties
   my @allprops = qw(
     D:write-properties
@@ -535,7 +539,7 @@ sub UpdateShareACL {
   $Self->Request(
     'ACL',
     "$Path/",
-     x('D:acl', $DAV->NS(), @aces),
+     x('D:acl', $Self->NS(), @aces),
   );
 }
 
