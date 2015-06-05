@@ -321,7 +321,7 @@ static const struct precond_t {
     { "supported-filter", NS_CALDAV },
     { "valid-filter", NS_CALDAV },
 
-    /* RSCALE (draft-ietf-calext-rscale) preconditions */
+    /* RSCALE (RFC 7529) preconditions */
     { "supported-rscale", NS_CALDAV },
 
     /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */

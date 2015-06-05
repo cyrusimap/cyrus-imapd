@@ -201,7 +201,7 @@ enum {
     CALDAV_SUPP_FILTER,
     CALDAV_VALID_FILTER,
 
-    /* RSCALE (draft-ietf-calext-rscale) preconditions */
+    /* RSCALE (RFC 7529) preconditions */
     CALDAV_SUPP_RSCALE,
 
     /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */
