@@ -40,11 +40,15 @@ Continue with :ref:`imap-installation-diy-build-dependencies`.
 From Tarball
 ============
 
+Download the `latest stable tarball`_ : version |imap_current_stable_version|.
+
 Extract the tarball:
 
 .. parsed-literal::
 
     $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
+	
+.. _latest stable tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
 
