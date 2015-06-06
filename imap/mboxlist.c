@@ -2580,10 +2580,10 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
      * search for those mailboxes next
      */
     if (userid &&
-	(!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1) ||
-	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
+	(!strncmp(usermboxname+domainlen, pattern, MIN(prefixlen, usermboxnamelen-domainlen-1)) ||
+	 !strncasecmp("inbox.", pattern, MIN(prefixlen, 6)))) {
 
-	if (!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1)) {
+	if (!strncmp(usermboxname+domainlen, pattern, MIN(prefixlen, usermboxnamelen-domainlen-1))) {
 	    /* switch to pattern with domain prepended */
 	    glob_free(&cbrock.g);
 	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
