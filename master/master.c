@@ -1884,31 +1884,26 @@ static void limit_fds(rlim_t x)
 {
     struct rlimit rl;
 
-    rl.rlim_cur = x;
-    rl.rlim_max = x;
-    if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
-	syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %ld: %m", x);
-
 #ifdef HAVE_GETRLIMIT
-
-	if (!getrlimit(RLIMIT_NUMFDS, &rl)) {
-	    syslog(LOG_ERR, "retrying with %ld (current max)", rl.rlim_max);
-	    rl.rlim_cur = rl.rlim_max;
-	    if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
-		syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %ld: %m", x);
-	    }
-	}
+    if (!getrlimit(RLIMIT_NUMFDS, &rl)) {
+	rl.rlim_cur = (x == RLIM_INFINITY || x > rl.rlim_max) ? rl.rlim_max : x;
     }
-
+    else
+#endif /* HAVE_GETRLIMIT */
+    {
+	rl.rlim_cur = rl.rlim_max = x;
+    }
 
     if (verbose > 1) {
-	getrlimit(RLIMIT_NUMFDS, &rl);
-	syslog(LOG_DEBUG, "set maximum file descriptors to %ld/%ld", rl.rlim_cur,
-	       rl.rlim_max);
+	syslog(LOG_DEBUG, "set maximum file descriptors to %ld/%ld",
+	       rl.rlim_cur, rl.rlim_max);
     }
-#else
+
+    if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
+	syslog(LOG_ERR,
+	       "setrlimit: Unable to set file descriptors limit to %ld: %m",
+	       rl.rlim_cur);
     }
-#endif /* HAVE_GETRLIMIT */
 }
 #else
 static void limit_fds(rlim_t x)
