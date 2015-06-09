@@ -36,7 +36,7 @@ sub cleanup_file {
 sub stream_clean {
   my ($ih, $oh) = @_;
   while (<$ih>) {
-    print $oh clean_line($_);
+    print $oh clean_line($_) . "\n";
   }
   return 1;
 }
@@ -45,6 +45,7 @@ sub clean_line {
   my $line = shift;
   use bytes;
   $line =~ s/[ \t]+$//;
+  $line =~ s/[\r\n]//g;
   my $op = 0;
   my $out = "";
   foreach my $i (0..(length($line)-1)) {
