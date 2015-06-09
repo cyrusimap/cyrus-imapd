@@ -741,8 +741,12 @@ static void my_caldav_reset(void)
 static void my_caldav_shutdown(void)
 {
     if (rscale_calendars) icalarray_free(rscale_calendars);
+    rscale_calendars = NULL;
+
     buf_free(&ical_prodid_buf);
+
     freestrlist(cua_domains);
+    cua_domains = NULL;
 
     my_caldav_reset();
     webdav_done();
