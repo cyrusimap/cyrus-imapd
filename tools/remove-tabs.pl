@@ -13,6 +13,7 @@ sub cleanup {
   while (defined($_ = $d->read)) {
     next if m/^\./;
     next if m/^Makefile/;
+    next if m/\.tgz$/;
     cleanup("$name/$_");
   }
 }
