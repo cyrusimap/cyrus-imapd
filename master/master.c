@@ -595,12 +595,16 @@ static void service_create(struct service *s)
 
 	/* set IP ToS if supported */
 #if defined(SOL_IP) && defined(IP_TOS)
-	r = setsockopt(s->socket, SOL_IP, IP_TOS,
-		       (void *) &config_qosmarking, sizeof(config_qosmarking));
-	if (r < 0) {
-	    syslog(LOG_WARNING, "unable to setsocketopt(IP_TOS) service %s/%s: %m",
-		s->name, s->familyname);
-	}
+        if (s->family == AF_INET || s->family == AF_INET6) {
+            r = setsockopt(s->socket, SOL_IP, IP_TOS,
+                           (void *) &config_qosmarking,
+                           sizeof(config_qosmarking));
+            if (r < 0) {
+                syslog(LOG_WARNING,
+                       "unable to setsocketopt(IP_TOS) service %s/%s: %m",
+                       s->name, s->familyname);
+            }
+        }
 #endif
 
 	oldumask = umask((mode_t) 0); /* for linux */

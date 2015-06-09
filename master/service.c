@@ -289,6 +289,8 @@ int main(int argc, char **argv, char **envp)
     int reuse_timeout = REUSE_TIMEOUT;
     int soctype;
     socklen_t typelen = sizeof(soctype);
+    struct sockaddr socname;
+    socklen_t addrlen = sizeof(struct sockaddr);
     strarray_t newargv = STRARRAY_INITIALIZER;
     int id;
     char path[PATH_MAX];
@@ -410,6 +412,12 @@ int main(int argc, char **argv, char **envp)
     if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
 		   (char *) &soctype, &typelen) < 0) {
 	syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
+	if (MESSAGE_MASTER_ON_EXIT) 
+	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	return 1;
+    }
+    if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
+	syslog(LOG_ERR, "getsockname: failed: %m");
 	if (MESSAGE_MASTER_ON_EXIT) 
 	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
@@ -545,7 +553,7 @@ int main(int argc, char **argv, char **envp)
 	alarm(0);
 
 	/* tcp only */
-	if(soctype == SOCK_STREAM) {
+	if(soctype == SOCK_STREAM && socname.sa_family != AF_UNIX) {
 	    libwrap_init(&request, service);
 
 	    if (!libwrap_ask(&request, fd)) {
