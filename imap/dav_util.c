@@ -66,5 +66,11 @@ EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
 /* Create filename corresponding to DAV DB for userid */
 EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
 {
-    buf_setcstr(fname, user_hash_meta(userid, FNAME_DAVSUFFIX));
+    char *path = user_hash_meta(userid, FNAME_DAVSUFFIX);
+
+    if (buf_cstringnull(fname)) {
+        buf_setcstr(fname, path);
+        free(path);
+    }
+    else buf_initm(fname, path, strlen(path));
 }
