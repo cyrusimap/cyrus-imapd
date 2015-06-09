@@ -532,7 +532,7 @@ static void my_caldav_init(struct buf *serverinfo)
     tok_t tok;
 
     buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
-    buf_printf(serverinfo, " Libical/%s", ICAL_VERSION);
+    buf_printf(serverinfo, " LibICal/%s", ICAL_VERSION);
 #ifdef HAVE_RSCALE
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
 	icalarray_sort(rscale_calendars, &rscale_cmp);
