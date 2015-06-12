@@ -19,6 +19,7 @@ import os
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('exts'))
 
 # -- General configuration ------------------------------------------------
 
@@ -36,6 +37,8 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.todo',
 ]
+
+extensions.append('sphinxlocal.builders.manpage')
 
 mathjax_path = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
 
@@ -247,7 +250,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -258,7 +262,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -269,7 +274,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -280,7 +286,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -291,7 +298,19 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ctl_zoneinfo',
+            'ctl_zoneinfo',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -302,7 +321,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -313,7 +333,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -324,7 +345,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -335,7 +357,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -346,7 +369,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -368,7 +392,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -489,7 +514,186 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/squatter',
+            'squatter',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ctl_conversationsdb',
+            'ctl_conversationsdb',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/sync_client',
+            'sync_client',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyr_synclog',
+            'cyr_synclog',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/deliver',
+            'deliver',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyr_deny',
+            'cyr_deny',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyrus-master',
+            'cyrus-master',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mbexamine',
+            'mbexamine',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mbpath',
+            'mbpath',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mbtool',
+            'mbtool',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mkimap',
+            'mkimap',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/quota',
+            'quota',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/reconstruct',
+            'reconstruct',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyrfetchnews',
+            'cyrfetchnews',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/fud',
+            'fud',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/httpd',
+            'httpd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -638,8 +842,17 @@ rst_prolog += """
 .. |imap_version_master_renamed| replace:: 3.0
 """
 
+# Bloilerplate configuration file texts.
 rst_prolog += """
-.. |cli-dash-c-text| replace:: Use the specified configuration file ``config-file`` rather than the default :manpage:`imapd.conf(5)`.
+.. |default-conf-text| replace:: reads its configuration options out of the :manpage:`imapd.conf(5)` file unless specified otherwise by **-C**.
+.. |cli-dash-c-text| replace:: Use the specified configuration file *config-file* rather than the default :manpage:`imapd.conf(5)`.
+.. |def-confdir-text| replace:: The *configdirectory* option in :manpage:`imapd.conf(5)` is used to determine the default location of the
+"""
+
+# New feature version disclaimer for 3.0 (big changes)
+rst_prolog += """
+.. |v3-new-feature| replace:: This feature was introduced in version 3.0.
+.. |v3-new-command| replace:: This command was introduced in version 3.0.
 """
 
 rst_prolog += """

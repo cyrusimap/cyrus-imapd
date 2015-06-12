@@ -1,23 +1,33 @@
 .. _imap-admin-commands-cvt_cyrusdb:
 
 ===============
-``cvt_cyrusdb``
+**cvt_cyrusdb**
 ===============
 
-intro
+Convert a database file between cyrus database formats
 
 Synopsis
 ========
 
 .. parsed-literal::
 
-    cvt_cyrusdb [OPTIONS]
+    **cvt_cyrusdb** [ **-C** *config-file* ] *old-file* *old-fileformat* *new-file* *new-file-format*
 
 Description
 ===========
 
-The ``cvt_cyrusdb`` program outputs a list of files and/or directories
-that it expects to exist, but that in fact do not.
+**cvt_cyrusdb** is used to convert a cyrusdb file between different 
+database backends.  Note that you should not attempt to use the same 
+file for input and output.
+
+Running without any options will list the available database backends.
+
+**cvt_cyrusdb** |default-conf-text|
+
+.. NOTE::
+    Note that the file locations are NOT read out of the configuration 
+    file, and must be supplied on the command line.
+
 
 Options
 =======
@@ -31,5 +41,42 @@ Options
 Examples
 ========
 
+.. parsed-literal::
+
+    **cvt_cyrusdb**
+
+..
+
+        Display list of available backends.
+
+.. only:: html
+
+    ::
+    
+        Usage: /usr/lib/cyrus/bin/cvt_cyrusdb [-C altconfig] <old db> <old db backend> <new db> <new db backend>
+        Usable Backends:  berkeley, berkeley-nosync, berkeley-hash, berkeley-hash-nosync, flat, skiplist, quotalegacy
+
+.. parsed-literal::
+
+    **cvt_cyrusdb** /var/lib/imap/mailboxes.db skiplist /tmp/mailboxes.db berkeley-nosync
+
+..
+
+        Convert */var/lib/imap/mailboxes.db* from **skiplist** format to
+        */tmp/mailboxes.db* in **berkeley-nosync** format.
+
+.. only:: html
+
+    :: 
+
+        Converting from /var/lib/imap/mailboxes.db (skiplist) to /tmp/mailboxes.db (berkeley-nosync)
+
+Files
+=====
+
+/etc/imapd.conf
+
 See Also
 ========
+
+:manpage:`imapd.conf(5)`

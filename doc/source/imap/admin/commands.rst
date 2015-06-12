@@ -14,9 +14,34 @@ List of Command-line Utilities
 .. toctree::
     :maxdepth: 1
 
+    commands/arbitron
     commands/chk_cyrus
     commands/ctl_cyrusdb
+    commands/ctl_conversationsdb
+    commands/ctl_deliver
+    commands/ctl_mboxlist
+    commands/cvt_cyrusdb
     commands/cyradm
+    commands/cyrfetchnews
+    commands/cyrus-master
+    commands/cyr_dbtool
+    commands/cyr_deny
+    commands/cyr_df
+    commands/cyr_expire
+    commands/cyr_info
+    commands/cyr_synclog
+    commands/deliver
+    commands/fud
+    commands/httpd
+    commands/ipurge
+    commands/mbexamine
+    commands/mbpath
+    commands/mbtool
+    commands/mkimap
+    commands/quota
+    commands/reconstruct
+    commands/squatter
+    commands/sync_client
     commands/unexpunge
 
 Work-in-Progress
@@ -29,47 +54,24 @@ the form of actual man-pages.
 .. toctree::
     :maxdepth: 1
 
-    commands/ctl_deliver
-    commands/ctl_mboxlist
-    commands/cvt_cyrusdb
-    commands/cyr_dbtool
-    commands/cyr_df
-    commands/cyr_expire
-    commands/cyr_info
-    commands/cyrus-master
-    commands/ipurge
-    commands/master
-    commands/mbexamine
-    commands/mbpath
-    commands/mbtool
-    commands/mkimap
     commands/ptdump
     commands/ptexpire
     commands/ptloader
-    commands/quota
-    commands/reconstruct
-    commands/tls_prune
 
 .. toctree::
     :maxdepth: 1
     :hidden:
 
-    commands/arbitron
     commands/arbitronsort.pl
     commands/compile_st.pl
     commands/convert-sieve.pl
     commands/cvt_cyrusdb_all
-    commands/cyr_deny
     commands/cyr_sequence
-    commands/cyr_synclog
     commands/cyr_systemd_helper
     commands/cyr_userseen
     commands/cyrdump
-    commands/cyrfetchnews
-    commands/deliver
     commands/dohash
     commands/fixsearchpath.pl
-    commands/fud
     commands/idled
     commands/imapd
     commands/lmtpd
@@ -87,8 +89,6 @@ the form of actual man-pages.
     commands/sievec
     commands/sieved
     commands/smmapd
-    commands/squatter
-    commands/sync_client
     commands/sync_reset
     commands/sync_server
     commands/timsieved

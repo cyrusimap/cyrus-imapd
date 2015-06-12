@@ -1,23 +1,27 @@
 .. _imap-admin-commands-mbpath:
 
 ==========
-``mbpath``
+**mbpath**
 ==========
 
-intro
+Translate mailbox names to filesystem paths
 
 Synopsis
 ========
 
 .. parsed-literal::
 
-    mbpath [OPTIONS]
+    **mbpath** [ **-C** *config-file* ] [ **-q** ] [ **-s** ] [ **-m** ] [ *mailbox-names*... ]
 
 Description
 ===========
 
-The ``mbpath`` program outputs a list of files and/or directories
-that it expects to exist, but that in fact do not.
+Given a mailbox name or a space separated list of mailbox names, 
+**mbpath** outputs the filesystem path to the mailbox.
+
+
+**mbpath** |default-conf-text| It uses <configdirectory>/mailboxes.db 
+to locate the mailbox on disk.
 
 Options
 =======
@@ -28,8 +32,57 @@ Options
 
     |cli-dash-c-text|
 
+.. option:: -q
+
+    Suppress any error output.
+
+.. option:: -s
+
+    If any error occurs, stop processing the list of mailboxes and exit.
+
+.. option:: -m
+
+    Output the path to the metadata files (if different from the 
+    message files).
+
 Examples
 ========
 
+.. parsed-literal::
+
+    **mbpath** *user.jsmith*
+
+..
+
+        Display the path for mailbox *user.jsmith*.
+
+.. only:: html
+
+    ::
+
+        /var/spool/imap/user/jsmith
+
+.. parsed-literal::
+
+    **mbpath -m** *user.jsmith*
+
+..
+
+        Display the metadata path for mailbox *user.jsmith*.
+
+.. only:: html
+
+    ::
+
+        /var/spool/meta/imap/user/jsmith
+
+Files
+=====
+
+/etc/imapd.conf,
+<configdirectory>/mailboxes.db
+
 See Also
 ========
+
+:manpage:`imapd.conf(5)`

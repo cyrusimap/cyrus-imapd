@@ -1,7 +1,7 @@
 .. _imap-admin-commands-ctl_cyrusdb:
 
 ===============
-``ctl_cyrusdb``
+**ctl_cyrusdb**
 ===============
 
 Perform administrative operations directly on Cyrus IMAP databases.
@@ -11,14 +11,17 @@ Synopsis
 
 .. parsed-literal::
 
-    ctl_cyrusdb [OPTIONS]
+    **ctl_cyrusdb** [ **-C** *config-file* ] **-c**
+    **ctl_cyrusdb** [ **-C** *config-file* ] **-r** [ **-x** ]
 
 Description
 ===========
 
-``ctl_cyrusdb`` is used to perform various administrative operations on
+**ctl_cyrusdb** is used to perform various administrative operations on
 the Cyrus IMAP databases.
 
+**ctl_cyrusdb** |default-conf-text|
+|def-confdir-text| Cyrus databases.
 
 Options
 =======
@@ -34,6 +37,10 @@ Options
     Recover the database after an application or system failure. Also
     performs database cleanups like removing mailbox reservations (and
     the associated mailbox files).
+    
+    All mailbox files are also checked to make sure the file format 
+    matches the configured database type in imapd.conf.  If not, the 
+    file is automatically converted using the same logic as cvt_cyrusdb.
 
 .. option:: -x
 
@@ -53,9 +60,57 @@ Options
 Examples
 ========
 
+.. parsed-literal::
+
+    **ctl_cyrusdb -r**
+
+..
+
+        Recover databases, performing cleanup.  This is commonly used in 
+        the **START** section of :manpage:`cyrus.conf(5)`.
+
+.. only:: html
+
+    ::
+
+        START {
+            # do not delete this entry!
+            recover     cmd="/usr/local/bin/ctl_cyrusdb -r"
+          <...>
+    
+
+.. parsed-literal::
+
+    **ctl_cyrusdb -x -r**
+
+..
+
+        Recover database only.
+
+
+.. parsed-literal::
+
+    **ctl_cyrusdb -c**
+
+..
+
+        Checkpoint databases.  Commonly used in the **EVENTS** section of 
+        :manpage:`cyrus.conf(5)`.
+
+.. only:: html
+
+    ::
+
+        EVENTS {
+            # this is required
+            checkpoint	cmd="/usr/local/bin/ctl_cyrusdb -c" period=30
+          <...>
+    
+Files
+=====
+/etc/imapd.conf
+/etc/cyrus.conf
+
 See Also
 ========
-
-    *   :manpage:`cyrus.conf(5)`
-    *   :manpage:`imapd.conf(5)`
-    *   :ref:`imap-admin-commands-cyrus-master`
+:manpage:`cyrus.conf(5)`, :manpage:`imapd.conf(5)`, :manpage:`master(8)`
