@@ -604,6 +604,11 @@ rst_prolog = """
 .. |imap_tikanga_stock_version| replace:: 2.3.7
 .. |imap_santiago_stock_version| replace:: 2.3.16
 .. |imap_maipo_stock_version| replace:: 2.4.17
+.. |imap_precise_stock_version| replace:: 2.4.12-2
+.. |imap_trusty_stock_version| replace:: 2.4.17+caldav~beta9-3
+.. |imap_utopic_stock_version| replace:: 2.4.17+caldav~beta10-5
+.. |imap_vivid_stock_version| replace:: 2.4.17+caldav~beta10-17
+.. |imap_wily_stock_version| replace:: 2.4.17+caldav~beta10-17
 """
 
 rst_prolog += """
