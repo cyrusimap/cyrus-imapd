@@ -9,4 +9,3 @@ Other Cyrus IMAP 3.0 Releases
     :glob:
 
     x/?.?.?
-    x/?.?.??

@@ -1,8 +1,8 @@
 About Cyrus
-=======
+===========
 
 What is Cyrus
------------
+-------------
 
 Electronic mail is a major infrastructure service of most organizations. At Carnegie Mellon the use of electronic mail has overshadowed the use of all other distributed services since the early 1990s. At that time, the Andrew Mail and Bulletin Board System (AMS) was a universally available service, and departments without AMS ran their own mail systems. AMS has since been deprecated, and Project Cyrus is now the campus-wide mail system.
 

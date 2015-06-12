@@ -208,7 +208,7 @@ Cyrus IMAP can do so in either one of three topologies:
     *backend* are server roles, and while these roles may be performed
     by separate servers, such as in a
     :ref:`imap-features-murder-discrete`, but they need not be, such as
-    in a :ref:`imap-features-unified-murder`.
+    in a :ref:`imap-features-murder-unified`.
 
 All Cyrus IMAP Murder topologies exchange information about where
 mailboxes reside through the MUPDATE protocol (:rfc:`3656`).
@@ -387,3 +387,13 @@ Back to :ref:`imap-features`
 
     Including but not limited to ``SELECT``, ``UID MOVE``, ``RENAME``,
     etc.
+
+.. glossary::
+
+    frontend
+	  the user interface
+
+.. glossary::    
+	
+	backend
+	  the server components

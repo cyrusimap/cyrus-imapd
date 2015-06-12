@@ -300,7 +300,7 @@ listquotaroot
 login
 -----
 
-See :ref:`authenticate<cyradm_authenticate>`
+See :ref:`authenticate<imap-admin-commands-cyradm-authenticate>`
 
 .. _imap-admin-commands-cyradm-mboxcfg:
 

@@ -1,3 +1,5 @@
+.. _imap-admin-sop-restoring-expunged-messages:
+
 ============================================
 Deleting and Undeleting Messages and Folders
 ============================================

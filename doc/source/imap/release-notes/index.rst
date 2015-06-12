@@ -9,7 +9,7 @@ Currently Supported Versions
     :maxdepth: 1
     :glob:
 
-    *-current
+    2.5/x/?.?.?
 
 Currently Supported Product Series
 ==================================
@@ -25,8 +25,7 @@ Currently Supported Product Series
     2.4-dav/x/?.?.??-caldav-beta?
     2.4-dav/x/?.?.??-caldav-beta??
     2.5/x/?.?.?
-    2.5/x/?.?.??
-
+    
 All Versions Going Back Way Back When
 =====================================
 
@@ -38,7 +37,7 @@ All Versions Going Back Way Back When
     2.0/*
     2.1/*
     2.2/*
-
+	
 .. toctree::
     :hidden:
 

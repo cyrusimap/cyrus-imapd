@@ -207,7 +207,7 @@ following commands are run automatically:
         imap/rfc822_header.h`
 
 These *should* not fail, but if they do, it's probably your fault. See
-:ref:`imap-developer-make-pre-configure-fails`.
+:ref:`imap-developer-pre-configure-fails`.
 
 .. NOTE::
 

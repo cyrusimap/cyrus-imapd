@@ -1,5 +1,6 @@
 .. Cyrus SASL guide documentation master file, created by
    sphinx-quickstart on Sun May 18 01:11:31 2014.
+.. _sasl:   
 
 Cyrus SASL documentation
 ========================

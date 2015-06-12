@@ -1,3 +1,5 @@
+.. _sop_reloading:
+
 Reloading Cyrus IMAP Services
 =============================
 

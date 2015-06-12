@@ -48,6 +48,7 @@ the form of actual man-pages.
     commands/ptloader
     commands/quota
     commands/reconstruct
+    commands/tls_prune
 
 .. toctree::
     :maxdepth: 1

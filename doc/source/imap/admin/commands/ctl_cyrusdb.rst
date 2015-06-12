@@ -1,8 +1,8 @@
 .. _imap-admin-commands-ctl_cyrusdb:
 
-=============
+===============
 ``ctl_cyrusdb``
-=============
+===============
 
 Perform administrative operations directly on Cyrus IMAP databases.
 

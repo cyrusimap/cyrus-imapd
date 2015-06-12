@@ -27,7 +27,7 @@ To transition from the traditional Cyrus IMAP mailbox spool directory tree layou
  
          # su -s /bin/bash - cyrus -c '/usr/lib/cyrus-imapd/mkimap /etc/imapd.conf'
  
-     Reload the Cyrus IMAP service. Please refer to :doc:`Reloading Cyrus IMAP Services<sop-reloading>` for more details on doing so.
+     Reload the Cyrus IMAP service. Please refer to :doc:`Reloading Cyrus IMAP Services<sop_reloading>` for more details on doing so.
 
      Rename all mailboxes, using the new partition as the location for the renamed mailbox. One example rename command is included below::
  

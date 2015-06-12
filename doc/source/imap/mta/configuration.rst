@@ -8,4 +8,4 @@ Configuring the MTA
     :maxdepth: 1
     :glob:
 
-    configuring/*
+..    configuring/*

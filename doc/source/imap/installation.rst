@@ -23,3 +23,8 @@ Build and Install Yourself
     :maxdepth: 2
 
     installation/diy
+	
+.. toctree::
+    :hidden:
+
+    mta/index	

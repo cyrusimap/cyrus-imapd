@@ -43,6 +43,6 @@ Two means exist to suppress sharing folders between users:
     :hidden:
     :glob:
 
-    access-control/*
+..    access-control/*
 
 Back to :ref:`imap-features`

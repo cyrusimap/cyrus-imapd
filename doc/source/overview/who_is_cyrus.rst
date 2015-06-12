@@ -12,7 +12,10 @@ These are the core organizations who are providing dedicated resources to the Cy
 FastMail_ is a leading e-mail hosting provider that runs on Cyrus software.
 
 *	Bron Gondwana
-*	Greg Banks
+*   Ellie Timoney
+*   Conrad Kleinespel
+*   Chris Davies
+*   Nicola Nye
 
 **Kolab Systems**
 
@@ -33,11 +36,15 @@ FastMail_ is a leading e-mail hosting provider that runs on Cyrus software.
 *	Ken Murchison
 *	Dave McMurtrie
 
+
 Individual contributors and past contributors
 ---------------------------------------------
 
 There are also individuals who have dedicated their time to Project Cyrus in various ways including answering questions on the mailing lists and IRC channel, writing code, testing new releases, etc. This isn't going to be a complete list by any stretch. If I left anyone off this list it's because I have a bad memory and not because your contribution wasn't appreciated.
 
+*    Raymond Poitras
+*   Jean-Francois Smigielski
+*   Nic Bernstein
 *	Wes Craig
 *	Benn Oshrin
 *	Matt Selsky
@@ -69,6 +76,7 @@ There are also individuals who have dedicated their time to Project Cyrus in var
 * Chris Newman
 * Laurie D. Mann
 * Simon Matter
+*	Greg Banks
 
 .. _Carnegie Mellon University: http://www.cmu.edu/
 .. _FastMail: http://www.fastmail.com/

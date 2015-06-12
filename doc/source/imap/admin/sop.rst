@@ -10,6 +10,7 @@ Standard Operating Procedures
     sop/altnamespace
     sop/databases
     sop/deleting
+
     sop/reconstructing
     sop/squatter
     sop/replication

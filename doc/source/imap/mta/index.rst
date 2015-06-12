@@ -6,4 +6,4 @@ Supported Mail Transfer Agents
     :maxdepth: 1
     :glob:
 
-    mta/*
+    configuration

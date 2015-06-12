@@ -118,7 +118,7 @@ Running cassandane tests:
 
 	cd /path/to/cassandane
 	./testrunner.pl -f pretty -j 8
-	
+
 Read the script to see other options. If you're having problems, add more ``-v`` options to the testrunner to get more info out.
 
 Arcanist

@@ -13,6 +13,10 @@ Administrator Guide
     admin/commands
     admin/pycommands
     admin/access-control
+    admin/administration-running
+    admin/administration-tools
+    admin/packagers
+    admin/config	
 
 References
 ==========

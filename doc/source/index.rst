@@ -64,6 +64,11 @@ Feedback
     feedback-irc
     feedback-mailing-lists
 	
+.. toctree::
+    :hidden:
+	
+    feedback
+	
 About
 =====
 

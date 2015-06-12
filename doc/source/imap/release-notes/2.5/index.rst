@@ -9,4 +9,4 @@ Other Cyrus IMAP 2.5 Releases
     :glob:
 
     x/?.?.?
-    x/?.?.??
+

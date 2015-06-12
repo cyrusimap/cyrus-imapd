@@ -15,7 +15,7 @@ Cyrus IMAP supports the following platforms;
     * `Red Hat Enterprise Linux <http://redhat.com>`__
     * `SUSE Linux <http://www.suse.com>`__
 
-    Should your Linux distribution not be listed here, please refer to :doc:`../feedback` for ways of contacting the Cyrus IMAP team.
+    Should your Linux distribution not be listed here, please refer to :ref:`feedback` for ways of contacting the Cyrus IMAP team.
 
 * Solaris
 

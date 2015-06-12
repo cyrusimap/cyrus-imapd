@@ -958,6 +958,7 @@ chunks, which may not be what you require at that moment.
     The :term:`MTBF` of a stable filesystem has most often been subject
     to the failure of the underlying disk, with the filesystem unable to
     recover (in time) from the underlying disk failing (partly).
+	
 
 .. _DRBD: http://www.drbd.org/
 .. _OSI model for networking: http://en.wikipedia.org/wiki/OSI_model

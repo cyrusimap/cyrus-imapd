@@ -21,4 +21,6 @@ Contents
    deployment/known_protocol_limitations
    deployment/authentication_and_authorization
    deployment/performance_recommendations
+   deployment/storage
+   deployment/supported-platforms
 
