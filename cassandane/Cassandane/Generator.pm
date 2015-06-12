@@ -48,7 +48,7 @@ use Cassandane::Message;
 use Digest::MD5 qw(md5_hex);
 use Cassandane::Util::SHA;
 
-our $admin = 'gnb@fastmail.fm';
+our $admin = 'qa@cyrus.foundation';
 
 our @girls_forenames = (
     # Top 10 girl baby names in 2006 according to
