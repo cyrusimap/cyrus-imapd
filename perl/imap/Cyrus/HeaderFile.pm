@@ -75,7 +75,7 @@ calls $class->new() with the filehandle.
 sub new_file {
   my $class = shift;
   my $file = shift;
-  my $lockopts = shift; 
+  my $lockopts = shift;
 
   my $fh;
   if ($lockopts) {
@@ -133,7 +133,7 @@ sub make_header {
 $HL1
 $HL2
 $HL3
-$ds->{QuotaRoot}	$ds->{UniqueId}
+$ds->{QuotaRoot}        $ds->{UniqueId}
 $flags
 $acl
 EOF

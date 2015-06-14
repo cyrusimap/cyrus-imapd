@@ -44,9 +44,9 @@
 #define INCLUDED_BSEARCH_H
 
 extern int bsearch_mem_mbox(const char *word,
-			    const char *base, unsigned long len,
-			    unsigned long hint,
-			    unsigned long *linelenp);
+                            const char *base, unsigned long len,
+                            unsigned long hint,
+                            unsigned long *linelenp);
 
 extern int bsearch_compare_mbox(const char *s1, const char *s2);
 

@@ -1,5 +1,5 @@
 /*NEW
-  
+
  * test.c -- tester for libcyrus_sieve
  * Larry Greenfield
  *
@@ -112,73 +112,73 @@ static int parseheader(FILE *f, char **headname, char **contents)
     /* there are two ways out of this loop, both via gotos:
        either we successfully read a character (got_header)
        or we hit an error (ph_error) */
-    while ((c = getc(f))) {	/* examine each character */
-	switch (s) {
-	case HDR_NAME_START:
-	    if (c == '\r' || c == '\n') {
-		/* no header here! */
-		goto ph_error;
-	    }
-	    if (!isalpha(c))
-		goto ph_error;
-	    buf_putc(&name, TOLOWER(c));
-	    s = HDR_NAME;
-	    break;
+    while ((c = getc(f))) {     /* examine each character */
+        switch (s) {
+        case HDR_NAME_START:
+            if (c == '\r' || c == '\n') {
+                /* no header here! */
+                goto ph_error;
+            }
+            if (!isalpha(c))
+                goto ph_error;
+            buf_putc(&name, TOLOWER(c));
+            s = HDR_NAME;
+            break;
 
-	case HDR_NAME:
-	    if (c == ' ' || c == '\t' || c == ':') {
-		buf_cstring(&name);
-		s = (c == ':' ? HDR_CONTENT_START : COLON);
-		break;
-	    }
-	    if (iscntrl(c)) {
-		goto ph_error;
-	    }
-	    buf_putc(&name, TOLOWER(c));
-	    break;
+        case HDR_NAME:
+            if (c == ' ' || c == '\t' || c == ':') {
+                buf_cstring(&name);
+                s = (c == ':' ? HDR_CONTENT_START : COLON);
+                break;
+            }
+            if (iscntrl(c)) {
+                goto ph_error;
+            }
+            buf_putc(&name, TOLOWER(c));
+            break;
 
-	case COLON:
-	    if (c == ':') {
-		s = HDR_CONTENT_START;
-	    } else if (c != ' ' && c != '\t') {
-		goto ph_error;
-	    }
-	    break;
+        case COLON:
+            if (c == ':') {
+                s = HDR_CONTENT_START;
+            } else if (c != ' ' && c != '\t') {
+                goto ph_error;
+            }
+            break;
 
-	case HDR_CONTENT_START:
-	    if (c == ' ' || c == '\t') /* eat the whitespace */
-		break;
-	    buf_reset(&body);
-	    s = HDR_CONTENT;
-	    /* falls through! */
-	case HDR_CONTENT:
-	    if (c == '\r' || c == '\n') {
-		int peek = getc(f);
+        case HDR_CONTENT_START:
+            if (c == ' ' || c == '\t') /* eat the whitespace */
+                break;
+            buf_reset(&body);
+            s = HDR_CONTENT;
+            /* falls through! */
+        case HDR_CONTENT:
+            if (c == '\r' || c == '\n') {
+                int peek = getc(f);
 
-		/* we should peek ahead to see if it's folded whitespace */
-		if (c == '\r' && peek == '\n') {
-		    c = getc(f);
-		} else {
-		    c = peek; /* single newline seperator */
-		}
-		if (c != ' ' && c != '\t') {
-		    /* this is the end of the header */
-		    buf_cstring(&body);
-		    ungetc(c, f);
-		    goto got_header;
-		}
+                /* we should peek ahead to see if it's folded whitespace */
+                if (c == '\r' && peek == '\n') {
+                    c = getc(f);
+                } else {
+                    c = peek; /* single newline seperator */
+                }
+                if (c != ' ' && c != '\t') {
+                    /* this is the end of the header */
+                    buf_cstring(&body);
+                    ungetc(c, f);
+                    goto got_header;
+                }
                 /* http://www.faqs.org/rfcs/rfc2822.html
-		 *
-		 * > Unfolding is accomplished by simply removing any CRLF
-		 * > that is immediately followed by WSP
-		 *
-		 * So keep the actual WSP character
-		 */
-	    }
-	    /* just an ordinary character */
-	    buf_putc(&body, c);
-	    break;
-	}
+                 *
+                 * > Unfolding is accomplished by simply removing any CRLF
+                 * > that is immediately followed by WSP
+                 *
+                 * So keep the actual WSP character
+                 */
+            }
+            /* just an ordinary character */
+            buf_putc(&body, c);
+            break;
+        }
     }
 
     /* if we fall off the end of the loop, we hit some sort of error
@@ -202,18 +202,18 @@ static void fill_cache(message_data_t *m)
 
     /* let's fill that header cache */
     for (;;) {
-	char *name, *body;
-	strarray_t *contents;
+        char *name, *body;
+        strarray_t *contents;
 
-	if (parseheader(m->data, &name, &body) < 0) {
-	    break;
-	}
-	/* put it in the hash table */
-	contents = (strarray_t *)hash_lookup(name, &m->cache);
-	if (!contents)
-	    contents = hash_insert(name, strarray_new(), &m->cache);
-	strarray_appendm(contents, body);
-	free(name);
+        if (parseheader(m->data, &name, &body) < 0) {
+            break;
+        }
+        /* put it in the hash table */
+        contents = (strarray_t *)hash_lookup(name, &m->cache);
+        if (!contents)
+            contents = hash_insert(name, strarray_new(), &m->cache);
+        strarray_appendm(contents, body);
+        free(name);
     }
 
     m->cache_full = 1;
@@ -226,14 +226,14 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
     message_data_t *m = (message_data_t *)mc;
 
     if (!strcasecmp(field, "from")) {
-	*contents = (const char **)m->env_from->data;
-	return SIEVE_OK;
+        *contents = (const char **)m->env_from->data;
+        return SIEVE_OK;
     } else if (!strcasecmp(field, "to")) {
-	*contents = (const char **)m->env_to->data;
-	return SIEVE_OK;
+        *contents = (const char **)m->env_to->data;
+        return SIEVE_OK;
     } else {
-	*contents = NULL;
-	return SIEVE_FAIL;
+        *contents = NULL;
+        return SIEVE_FAIL;
     }
 }
 
@@ -247,7 +247,7 @@ static int getheader(void *v, const char *phead, const char ***body)
     *body = NULL;
 
     if (!m->cache_full) {
-	fill_cache(m);
+        fill_cache(m);
     }
 
     /* copy header parameter so we can mangle it */
@@ -257,14 +257,14 @@ static int getheader(void *v, const char *phead, const char ***body)
     /* check the cache */
     contents = (strarray_t *)hash_lookup(head, &m->cache);
     if (contents)
-	*body = (const char **) contents->data;
+        *body = (const char **) contents->data;
 
     free(head);
 
     if (*body) {
-  	return SIEVE_OK;
+        return SIEVE_OK;
     } else {
-	return SIEVE_FAIL;
+        return SIEVE_FAIL;
     }
 }
 
@@ -306,22 +306,22 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
     int r = 0;
 
     if (!m->content.body) {
-	/* parse the message body if we haven't already */
-	r = message_parse_file(m->data, &m->content.base,
-			       &m->content.len, &m->content.body);
+        /* parse the message body if we haven't already */
+        r = message_parse_file(m->data, &m->content.base,
+                               &m->content.len, &m->content.body);
     }
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
     if (!r) message_fetch_part(&m->content, content_types,
-			       (struct bodypart ***) parts);
+                               (struct bodypart ***) parts);
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
 static int getinclude(void *sc __attribute__((unused)),
-		      const char *script,
-		      int isglobal __attribute__((unused)),
-		      char *fpath, size_t size)
+                      const char *script,
+                      int isglobal __attribute__((unused)),
+                      char *fpath, size_t size)
 {
     strlcpy(fpath, script, size);
     strlcat(fpath, ".bc", size);
@@ -330,7 +330,7 @@ static int getinclude(void *sc __attribute__((unused)),
 }
 
 static int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
-		    void *mc, const char **errmsg __attribute__((unused)))
+                    void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -342,8 +342,8 @@ static int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int discard(void *ac __attribute__((unused)),
-		   void *ic, void *sc __attribute__((unused)),
-		   void *mc, const char **errmsg __attribute__((unused)))
+                   void *ic, void *sc __attribute__((unused)),
+                   void *mc, const char **errmsg __attribute__((unused)))
 {
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
@@ -354,7 +354,7 @@ static int discard(void *ac __attribute__((unused)),
 }
 
 static int reject(void *ac, void *ic, void *sc __attribute__((unused)),
-	          void *mc, const char **errmsg __attribute__((unused)))
+                  void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -366,7 +366,7 @@ static int reject(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
-		    void *mc, const char **errmsg __attribute__((unused)))
+                    void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -375,18 +375,18 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     printf("filing message '%s' into '%s'\n", m->name, fc->mailbox);
 
     if (fc->imapflags->count) {
-	char *s = strarray_join(fc->imapflags, "' '");
-	if (s) {
-	    printf("\twith flags '%s'\n", s);
-	    free(s);
-	}
+        char *s = strarray_join(fc->imapflags, "' '");
+        if (s) {
+            printf("\twith flags '%s'\n", s);
+            free(s);
+        }
     }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
-	        void *mc, const char **errmsg __attribute__((unused)))
+                void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -394,19 +394,19 @@ static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
 
     printf("keeping message '%s'\n", m->name);
     if (kc->imapflags->count) {
-	char *s = strarray_join(kc->imapflags, "' '");
-	if (s) {
-	    printf("\twith flags '%s'\n", s);
-	    free(s);
-	}
+        char *s = strarray_join(kc->imapflags, "' '");
+        if (s) {
+            printf("\twith flags '%s'\n", s);
+            free(s);
+        }
     }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
-	          void *mc __attribute__((unused)),
-	          const char **errmsg __attribute__((unused)))
+                  void *mc __attribute__((unused)),
+                  const char **errmsg __attribute__((unused)))
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     int *force_fail = (int*) ic;
@@ -414,16 +414,16 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
 
     printf("notify ");
     if (nc->method) {
-	const char **opts = nc->options;
+        const char **opts = nc->options;
 
-	printf("%s(", nc->method);
-	while (opts && *opts) {
-	    if (flag) printf(", ");
-	    printf("%s", *opts);
-	    opts++;
-	    flag = 1;
-	}
-	printf("), ");
+        printf("%s(", nc->method);
+        while (opts && *opts) {
+            if (flag) printf(", ");
+            printf("%s", *opts);
+            opts++;
+            flag = 1;
+        }
+        printf("), ");
     }
     printf("msg = '%s' with priority = %s\n",nc->message, nc->priority);
 
@@ -431,8 +431,8 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int mysieve_error(int lineno, const char *msg,
-			 void *i __attribute__((unused)),
-		         void *s __attribute__((unused)))
+                         void *i __attribute__((unused)),
+                         void *s __attribute__((unused)))
 {
     fprintf(stderr, "line %d: %s\r\n", lineno, msg);
 
@@ -440,9 +440,9 @@ static int mysieve_error(int lineno, const char *msg,
 }
 
 static int mysieve_execute_error(const char *msg,
-				 void *i __attribute__((unused)),
-			         void *s __attribute__((unused)),
-			         void *m __attribute__((unused)))
+                                 void *i __attribute__((unused)),
+                                 void *s __attribute__((unused)),
+                                 void *m __attribute__((unused)))
 {
     fprintf(stderr, "%s\r\n", msg);
 
@@ -451,25 +451,25 @@ static int mysieve_execute_error(const char *msg,
 
 
 static int autorespond(void *ac, void *ic __attribute__((unused)),
-		       void *sc __attribute__((unused)),
-		       void *mc __attribute__((unused)),
-		       const char **errmsg __attribute__((unused)))
+                       void *sc __attribute__((unused)),
+                       void *mc __attribute__((unused)),
+                       const char **errmsg __attribute__((unused)))
 {
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     char yn;
     int i;
 
     if (vacation_answer)
-	yn = vacation_answer;
+        yn = vacation_answer;
     else {
     printf("Have I already responded to '");
     for (i = 0; i < SIEVE_HASHLEN; i++) {
-	printf("%x", arc->hash[i]);
+        printf("%x", arc->hash[i]);
     }
     if (arc->seconds % DAY2SEC)
-	printf("' in %d seconds? ", arc->seconds);
+        printf("' in %d seconds? ", arc->seconds);
     else
-	printf("' in %d days? ", arc->seconds / DAY2SEC);
+        printf("' in %d days? ", arc->seconds / DAY2SEC);
     scanf(" %c", &yn);
     }
 
@@ -480,23 +480,23 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
 }
 
 static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
-			 void *mc, const char **errmsg __attribute__((unused)))
+                         void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
 
     printf("echo '%s' | mail -s '%s' '%s' for message '%s' (from: %s)\n",
-	   src->msg, src->subj, src->addr, m->name, src->fromaddr);
+           src->msg, src->subj, src->addr, m->name, src->fromaddr);
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 static sieve_vacation_t vacation = {
-    0,				/* min response */
-    0,				/* max response */
-    &autorespond,		/* autorespond() */
-    &send_response		/* send_response() */
+    0,                          /* min response */
+    0,                          /* max response */
+    &autorespond,               /* autorespond() */
+    &send_response              /* send_response() */
 };
 
 static int usage(const char *argv0) __attribute__((noreturn));
@@ -529,36 +529,36 @@ int main(int argc, char *argv[])
     strarray_append(&e_to, "");
 
     while ((c = getopt(argc, argv, "v:fe:t:r:")) != EOF)
-	switch (c) {
-	case 'v':
-	    script = optarg;
-	    break;
-	case 'f':
-	    force_fail = 1;
-	    break;
-	case 'e':
-	    strarray_fini(&e_from);
-	    strarray_append(&e_from, optarg);
-	    break;
-	case 't':
-	    strarray_fini(&e_to);
-	    strarray_append(&e_to, optarg);
-	    break;
-	case 'r':
-	    vacation_answer = optarg[0];
-	    break;
-	default:
-	    usage(argv[0]);
-	    break;
-	}
+        switch (c) {
+        case 'v':
+            script = optarg;
+            break;
+        case 'f':
+            force_fail = 1;
+            break;
+        case 'e':
+            strarray_fini(&e_from);
+            strarray_append(&e_from, optarg);
+            break;
+        case 't':
+            strarray_fini(&e_to);
+            strarray_append(&e_to, optarg);
+            break;
+        case 'r':
+            vacation_answer = optarg[0];
+            break;
+        default:
+            usage(argv[0]);
+            break;
+        }
 
     if (!script) {
-	if ((argc - optind) < 2)
-	    usage(argv[0]);
-	else {
-	    message = argv[optind];
-	    script = argv[optind+1];
-	}
+        if ((argc - optind) < 2)
+            usage(argv[0]);
+        else {
+            message = argv[optind];
+            script = argv[optind+1];
+        }
     }
 
     i = sieve_interp_alloc(&force_fail);
@@ -577,8 +577,8 @@ int main(int argc, char *argv[])
 
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {
-	printf("sieve_register_vacation() returns %d\n", res);
-	exit(1);
+        printf("sieve_register_vacation() returns %d\n", res);
+        exit(1);
     }
 
     strarray_append(&mark, "\\flagged");
@@ -590,52 +590,52 @@ int main(int argc, char *argv[])
 
     res = sieve_script_load(script, &exe);
     if (res != SIEVE_OK) {
-	printf("sieve_script_load() returns %d\n", res);
-	exit(1);
+        printf("sieve_script_load() returns %d\n", res);
+        exit(1);
     }
 
     if (message) {
-	FILE *f;
+        FILE *f;
 
-	fd = open(message, O_RDONLY);
-	res = fstat(fd, &sbuf);
-	if (res != 0) {
-	    perror("fstat");
-	}
+        fd = open(message, O_RDONLY);
+        res = fstat(fd, &sbuf);
+        if (res != 0) {
+            perror("fstat");
+        }
 
-	f = fdopen(fd, "r");
-	if (f) m = new_msg(f, sbuf.st_size, message);
-	if (!f || !m) {
-	    printf("can not open message '%s'\n", message);
-	    exit(1);
-	}
+        f = fdopen(fd, "r");
+        if (f) m = new_msg(f, sbuf.st_size, message);
+        if (!f || !m) {
+            printf("can not open message '%s'\n", message);
+            exit(1);
+        }
 
-	m->env_from = &e_from;
-	m->env_to = &e_to;
+        m->env_from = &e_from;
+        m->env_to = &e_to;
 
-	res = sieve_execute_bytecode(exe, i, NULL, m);
-	if (res != SIEVE_OK) {
-	    printf("sieve_execute_bytecode() returns %d\n", res);
-	    exit(1);
-	}
+        res = sieve_execute_bytecode(exe, i, NULL, m);
+        if (res != SIEVE_OK) {
+            printf("sieve_execute_bytecode() returns %d\n", res);
+            exit(1);
+        }
 
-	fclose(f);
-	close(fd);
+        fclose(f);
+        close(fd);
     }
     /*used to be sieve_script_free*/
     res = sieve_script_unload(&exe);
     if (res != SIEVE_OK) {
-	printf("sieve_script_unload() returns %d\n", res);
-	exit(1);
+        printf("sieve_script_unload() returns %d\n", res);
+        exit(1);
     }
     res = sieve_interp_free(&i);
     if (res != SIEVE_OK) {
-	printf("sieve_interp_free() returns %d\n", res);
-	exit(1);
+        printf("sieve_interp_free() returns %d\n", res);
+        exit(1);
     }
 
     if (m)
-	free_msg(m);
+        free_msg(m);
     strarray_fini(&e_from);
     strarray_fini(&e_to);
     strarray_fini(&mark);

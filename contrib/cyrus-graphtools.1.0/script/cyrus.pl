@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # This will read information from the cyrus MIB for all devices specified
-# in cyrusrc 
+# in cyrusrc
 #
 # Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
 #
@@ -55,14 +55,14 @@ sub get_data{
     $MAX = 0;
     %walk=snmp_walk($hname, $HOSTS{$hname}, $MASTER);
     foreach $OID (sort keys %walk){
-      @O = split /\./, $OID; 
+      @O = split /\./, $OID;
       $RVAL=$walk{$OID};
       chomp $RVAL;
       if($O[-1] > $MAX){
         $MAX = $O[-1];
       }
       $STUFF{"$O[$#O-1]-$O[$#O]"} = $RVAL;
-    } #foreach oid 
+    } #foreach oid
 
     for($i=1; $i<=$MAX; $i++){
       $blah[0]=$STUFF{"3-$i"};
@@ -97,15 +97,15 @@ sub populate_dbs{
 sub snmp_walk{
   my ($server, $comm, $rootoid) = @_;
   my %walk=();
-  my $sess = new SNMP::Session ( DestHost => $server, 
+  my $sess = new SNMP::Session ( DestHost => $server,
                                  Community => $comm,
-                                 UseNumeric => 1, 
+                                 UseNumeric => 1,
                                  UseLongNames => 1
                                );
 
   my @orig=split /\./, $rootoid;  # original oid for comparison
 
-  my $var = new SNMP::Varbind(["$rootoid"]); 
+  my $var = new SNMP::Varbind(["$rootoid"]);
   my $val = $sess->getnext($var);
   my $name = $var->[$SNMP::Varbind::tag_f];
   $name .= ".$var->[$SNMP::Varbind::iid_f]" if $var->[$SNMP::Varbind::iid_f];

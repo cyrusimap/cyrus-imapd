@@ -57,7 +57,7 @@ sub usage {
 }
 
 GetOptions("u|user=s" => \$user,
-	   "m|min=i" => \$min);
+           "m|min=i" => \$min);
 
 if (@ARGV) {
     $server = shift(@ARGV);
@@ -92,29 +92,29 @@ $cyrus->authenticate(-user => $user, -maxssf => 0); #xxx hangs when have a secur
 #list mailboxes in inbox.*
 my @info = ();
 $cyrus->addcallback({-trigger => 'LIST',
-		     -callback => sub {
-		        my %d = @_;
-			next unless $d{-text} =~ s/^\(([^\)]*)\) //;
-			my $attrs = $1;
-			my $sep = '';
-			# NIL or (attrs) "sep" "str"
-			if ($d{-text} =~ /^N/) {
-			  return if $d{-text} !~ s/^NIL//;
-			}
-			elsif ($d{-text} =~ s/\"\\?(.)\"//) {
-			  $sep = $1;
-			}
-			return unless $d{-text} =~ s/^ //;
-			my $mbox;
-			if ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
-			  ($mbox = $1) =~ s/\\(.)/$1/g;
-			} else {
-			  $d{-text} =~ /^([]!\#-[^-~]+)/;
-			  $mbox = $1;
-			}
-			push @{$d{-rock}}, $mbox;
-		      },
-		      -rock => \@info});
+                     -callback => sub {
+                        my %d = @_;
+                        next unless $d{-text} =~ s/^\(([^\)]*)\) //;
+                        my $attrs = $1;
+                        my $sep = '';
+                        # NIL or (attrs) "sep" "str"
+                        if ($d{-text} =~ /^N/) {
+                          return if $d{-text} !~ s/^NIL//;
+                        }
+                        elsif ($d{-text} =~ s/\"\\?(.)\"//) {
+                          $sep = $1;
+                        }
+                        return unless $d{-text} =~ s/^ //;
+                        my $mbox;
+                        if ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
+                          ($mbox = $1) =~ s/\\(.)/$1/g;
+                        } else {
+                          $d{-text} =~ /^([]!\#-[^-~]+)/;
+                          $mbox = $1;
+                        }
+                        push @{$d{-rock}}, $mbox;
+                      },
+                      -rock => \@info});
 
 my ($rc, $msg) = $cyrus->send('', '', "LIST * $where");
 $cyrus->addcallback({-trigger => 'LIST'});
@@ -136,7 +136,7 @@ foreach $a (@info) {
       $fromlis{$per} = $dat{$per};
     }
   }
-  
+
 }
 
 @sorted = sort {
@@ -172,31 +172,31 @@ sub coll {
   $flags = 1;
 
   print "fetching in $mb...\n";
-  
-  $cyrus->addcallback({-trigger => 'FETCH', -flags => $flags,
-		       -callback => sub {
-			 my %d = @_;
-			 my $msgno = 1;
-			 $msgno = $d{-msgno};
 
-			 my $size = 0;
-			 if ( $d{-text} =~ /.*(From:)(.*)\<(.*\@.*)\>/i)
-			   {
-			       $addr = $3;
-			   } elsif ( $d{-text} =~ /.*(From:)\s*\".*\"\s*(.*\@.*)/i) {
-			       $addr = $2;
-			   } elsif ( $d{-text} =~ /.*(From:)\s*(\S+\@\S+)\s*/i) {
-			       $addr = $2;
-			   } else {
-			     #print "no From header found in msgno $msgno ($d{-text})\n";
-			       $addr = "<none>";
-			   }
-			   $addr =~ tr/[A-Z]/[a-z]/;
-			   if ($addr =~ /(.*)\+.*@(.*)/) {
-				   $addr = "$1\@$2";
-			   }
+  $cyrus->addcallback({-trigger => 'FETCH', -flags => $flags,
+                       -callback => sub {
+                         my %d = @_;
+                         my $msgno = 1;
+                         $msgno = $d{-msgno};
+
+                         my $size = 0;
+                         if ( $d{-text} =~ /.*(From:)(.*)\<(.*\@.*)\>/i)
+                           {
+                               $addr = $3;
+                           } elsif ( $d{-text} =~ /.*(From:)\s*\".*\"\s*(.*\@.*)/i) {
+                               $addr = $2;
+                           } elsif ( $d{-text} =~ /.*(From:)\s*(\S+\@\S+)\s*/i) {
+                               $addr = $2;
+                           } else {
+                             #print "no From header found in msgno $msgno ($d{-text})\n";
+                               $addr = "<none>";
+                           }
+                           $addr =~ tr/[A-Z]/[a-z]/;
+                           if ($addr =~ /(.*)\+.*@(.*)/) {
+                                   $addr = "$1\@$2";
+                           }
                ${$d{-rock}}{$addr}++;
-		    }, 
+                    },
   -rock => \%dat});
 
   ($rc, $msg) = $cyrus->send('', '', 'UID FETCH 1:* (BODY[HEADER.FIELDS (FROM)])');
@@ -207,5 +207,5 @@ sub coll {
   }
 
   (%dat);
-} 
+}
 

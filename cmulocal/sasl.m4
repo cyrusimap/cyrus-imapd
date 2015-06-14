@@ -48,42 +48,42 @@ AC_DEFUN([CMU_SASL], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(sasl,
             [AS_HELP_STRING([--with-sasl=DIR], [Compile with libsasl in DIR])],
-	    with_sasl="$withval",
+            with_sasl="$withval",
             with_sasl="yes")
 
-	SASLFLAGS=""
-	LIB_SASL=""
+        SASLFLAGS=""
+        LIB_SASL=""
 
-	cmu_saved_CPPFLAGS=$CPPFLAGS
-	cmu_saved_LDFLAGS=$LDFLAGS
-	cmu_saved_LIBS=$LIBS
-	if test -d ${with_sasl}; then
+        cmu_saved_CPPFLAGS=$CPPFLAGS
+        cmu_saved_LDFLAGS=$LDFLAGS
+        cmu_saved_LIBS=$LIBS
+        if test -d ${with_sasl}; then
           ac_cv_sasl_where_lib=${with_sasl}/$CMU_LIB_SUBDIR
           ac_cv_sasl_where_inc=${with_sasl}/include
 
-	  SASLFLAGS="-I$ac_cv_sasl_where_inc"
-	  LIB_SASL="-L$ac_cv_sasl_where_lib"
-	  CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
-	  LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
-	fi
+          SASLFLAGS="-I$ac_cv_sasl_where_inc"
+          LIB_SASL="-L$ac_cv_sasl_where_lib"
+          CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
+          LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
+        fi
 
-	AC_CHECK_HEADER(sasl.h,
-	  AC_CHECK_LIB(sasl, sasl_getprop, 
+        AC_CHECK_HEADER(sasl.h,
+          AC_CHECK_LIB(sasl, sasl_getprop,
                        ac_cv_found_sasl=yes,
-		       ac_cv_found_sasl=no), ac_cv_found_sasl=no)
+                       ac_cv_found_sasl=no), ac_cv_found_sasl=no)
 
-	LIBS="$cmu_saved_LIBS"
-	LDFLAGS="$cmu_saved_LDFLAGS"
-	CPPFLAGS="$cmu_saved_CPPFLAGS"
-	if test "$ac_cv_found_sasl" = yes; then
-	  LIB_SASL="$LIB_SASL -lsasl"
-	else
-	  LIB_SASL=""
-	  SASLFLAGS=""
-	fi
-	AC_SUBST(LIB_SASL)
-	AC_SUBST(SASLFLAGS)
-	])
+        LIBS="$cmu_saved_LIBS"
+        LDFLAGS="$cmu_saved_LDFLAGS"
+        CPPFLAGS="$cmu_saved_CPPFLAGS"
+        if test "$ac_cv_found_sasl" = yes; then
+          LIB_SASL="$LIB_SASL -lsasl"
+        else
+          LIB_SASL=""
+          SASLFLAGS=""
+        fi
+        AC_SUBST(LIB_SASL)
+        AC_SUBST(SASLFLAGS)
+        ])
 
 AC_DEFUN([CMU_SASL_REQUIRED],
 [AC_REQUIRE([CMU_SASL])

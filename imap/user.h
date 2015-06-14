@@ -59,11 +59,11 @@ int user_deletedata(const char *userid, int wipe_user);
  * from 'olduser' to 'newuser'.
  */
 int user_renamedata(char *olduser, char *newuser, char *userid,
-		    struct auth_state *authstate);
+                    struct auth_state *authstate);
 
 /* Rename ACL for 'olduser' to 'newuser' on mailbox 'name'. */
 int user_renameacl(struct namespace *namespace, char *name,
-		   char *olduser, char *newuser);
+                   char *olduser, char *newuser);
 
 /* Copy a quotaroot from mailbox 'oldname' to 'newname' */
 int user_copyquotaroot(char *oldname, char *newname);

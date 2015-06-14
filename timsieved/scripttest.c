@@ -55,7 +55,7 @@
 #include "timsieved/codes.h"
 #include "timsieved/scripttest.h"
 
-/* to make larry's stupid functions happy :) */ 
+/* to make larry's stupid functions happy :) */
 static void foo(void)
 {
     fatal("stub function called", 0);
@@ -63,24 +63,24 @@ static void foo(void)
 
 
 static sieve_vacation_t vacation = {
-    0,				/* min response */
-    0,				/* max response */
-    (sieve_callback *) &foo,	/* autorespond() */
-    (sieve_callback *) &foo	/* send_response() */
+    0,                          /* min response */
+    0,                          /* max response */
+    (sieve_callback *) &foo,    /* autorespond() */
+    (sieve_callback *) &foo     /* send_response() */
 };
 
-static int sieve_notify(void *ac __attribute__((unused)), 
-			void *interp_context __attribute__((unused)), 
-			void *script_context __attribute__((unused)),
-			void *message_context __attribute__((unused)),
-			const char **errmsg __attribute__((unused)))
+static int sieve_notify(void *ac __attribute__((unused)),
+                        void *interp_context __attribute__((unused)),
+                        void *script_context __attribute__((unused)),
+                        void *message_context __attribute__((unused)),
+                        const char **errmsg __attribute__((unused)))
 {
     fatal("stub function called", 0);
     return SIEVE_FAIL;
 }
 
 static int mysieve_error(int lineno, const char *msg,
-		  void *i __attribute__((unused)), void *s)
+                  void *i __attribute__((unused)), void *s)
 {
     struct buf *errors = (struct buf *)s;
     buf_printf(errors, "line %d: %s\r\n", lineno, msg);
@@ -109,8 +109,8 @@ int build_sieve_interp(void)
 
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        return TIMSIEVE_FAIL;
     }
 
     sieve_register_notify(interp, &sieve_notify);
@@ -134,15 +134,15 @@ int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
     res = sieve_script_parse(interp, stream, &errors, &s);
 
     if (res == SIEVE_OK) {
-	if(ret) {
-	    *ret = s;
-	} else {
-	    sieve_script_free(&s);
-	}
+        if(ret) {
+            *ret = s;
+        } else {
+            sieve_script_free(&s);
+        }
     }
     else {
-	sieve_script_free(&s);
-	*errstr = buf_release(&errors);
+        sieve_script_free(&s);
+        *errstr = buf_release(&errors);
     }
     buf_free(&errors);
     return (res == SIEVE_OK) ? TIMSIEVE_OK : TIMSIEVE_FAIL;

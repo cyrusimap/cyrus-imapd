@@ -79,14 +79,14 @@ static void test_heap(void)
 static void test_set(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
+#define WORD0   "lorem"
 #define WORD0REP "DeLorean"
 #define WORD0REP2 "Jiggawatts"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
 #define WORD2REP "DOLORES"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -148,14 +148,14 @@ static void test_set(void)
 static void test_setm(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
+#define WORD0   "lorem"
 #define WORD0REP "DeLorean"
 #define WORD0REP2 "Jiggawatts"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
 #define WORD2REP "DOLORES"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -217,11 +217,11 @@ static void test_setm(void)
 static void test_insert(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -279,11 +279,11 @@ static void test_insert(void)
 static void test_insertm(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -344,9 +344,9 @@ static void test_insertm(void)
 static void test_bad_index(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
     char *s = xstrdup(WORD0);
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
@@ -411,9 +411,9 @@ static void test_bad_index(void)
 static void test_sparse_set(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -439,11 +439,11 @@ static void test_join(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
     char *s;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -506,8 +506,8 @@ static void test_join_initial_null(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
     char *s;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -552,11 +552,11 @@ static void test_join_initial_null(void)
 static void test_split(void)
 {
     strarray_t *sa;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     /* 5 words, space separator */
     sa = strarray_split(WORD0" "WORD1" "WORD2" "WORD3" "WORD4, " ", 0);
@@ -612,7 +612,7 @@ static void test_split(void)
 
     /* nsplit - specify a byte range to copy and split */
     sa = strarray_nsplit(WORD0" "WORD1" "WORD2" "WORD3" "WORD4,
-			 sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2), " ", 0);
+                         sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2), " ", 0);
     CU_ASSERT_PTR_NOT_NULL(sa);
     CU_ASSERT_EQUAL(sa->count, 3);
     CU_ASSERT(sa->alloc >= sa->count);
@@ -660,11 +660,11 @@ static void test_remove(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
     char *s;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -746,11 +746,11 @@ static void test_takevf(void)
 {
     strarray_t *sa;
     char **ss;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     /* 5 words, space separator */
     sa = strarray_split(WORD0" "WORD1" "WORD2" "WORD3" "WORD4, " ", 0);
@@ -791,11 +791,11 @@ static void test_takevf(void)
 static void test_truncate(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -868,14 +868,14 @@ static void test_find(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
     int i;
-#define WORD0	"lorem"
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD1u	"IPSUM"
-#define WORD1c	"Ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD1u  "IPSUM"
+#define WORD1c  "Ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -944,17 +944,17 @@ static void test_find_case(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
     int i;
-#define WORD0	"Lorem"
-#define WORD0u	"LOREM"
-#define WORD0l	"lorem"
-#define WORD0i	"lOREM"
-#define WORD1	"iPSum"
-#define WORD1u	"IPSUM"
-#define WORD1l	"ipsum"
-#define WORD1i	"IpsUM"
-#define WORD2	"DOLOR"
-#define WORD3	"sit"
-#define WORD4	"ameT"
+#define WORD0   "Lorem"
+#define WORD0u  "LOREM"
+#define WORD0l  "lorem"
+#define WORD0i  "lOREM"
+#define WORD1   "iPSum"
+#define WORD1u  "IPSUM"
+#define WORD1l  "ipsum"
+#define WORD1i  "IpsUM"
+#define WORD2   "DOLOR"
+#define WORD3   "sit"
+#define WORD4   "ameT"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -1078,11 +1078,11 @@ static void test_dup(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
     strarray_t *dup;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -1143,11 +1143,11 @@ static void test_dup(void)
 static void test_remove_all(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -1205,11 +1205,11 @@ static void test_pop(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
     char *s;
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -1310,10 +1310,10 @@ static void test_pop(void)
 static void test_sortuniq(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"INBOX"
-#define WORD1	"INBOX.a folder"
-#define WORD2	"INBOX.a.sub"
-#define WORD3	"INBOX.a.aaa"
+#define WORD0   "INBOX"
+#define WORD1   "INBOX.a folder"
+#define WORD2   "INBOX.a.sub"
+#define WORD3   "INBOX.a.aaa"
 
     /* initialise */
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
@@ -1367,9 +1367,9 @@ static void test_sortuniq(void)
 static void test_add(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD0u	"LOREM"
-#define WORD1	"ipsum"
+#define WORD0   "lorem"
+#define WORD0u  "LOREM"
+#define WORD1   "ipsum"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));
@@ -1442,9 +1442,9 @@ static void test_add(void)
 static void test_add_case(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
-#define WORD0	"lorem"
-#define WORD0u	"LOREM"
-#define WORD1	"ipsum"
+#define WORD0   "lorem"
+#define WORD0u  "LOREM"
+#define WORD1   "ipsum"
 
     CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT(sa.alloc >= strarray_size(&sa));

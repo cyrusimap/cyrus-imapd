@@ -48,15 +48,15 @@ sub read_conf {
 
     open CONF, $file or die "can't open $file";
     while (<CONF>) {
-	if (/^#/) { 
-	    next; 
-	}
-	if (/\@include:\s+(.*)$/) {
-	    push @configs, $1;
-	}
-	if (/^configdirectory:\s+(.*)$/) {
-	    $confdir = $1;
-	}
+        if (/^#/) {
+            next;
+        }
+        if (/\@include:\s+(.*)$/) {
+            push @configs, $1;
+        }
+        if (/^configdirectory:\s+(.*)$/) {
+            $confdir = $1;
+        }
     }
     close CONF;
 }
@@ -85,7 +85,7 @@ foreach $new_file (`find -name "*.ics"`) {
 #    print "File: $new_file\n";
 
     open (NEWZONEFILE, "$new_file")
-	|| die "Can't open file: $NEW_ZONEINFO_DIR/$new_file";
+        || die "Can't open file: $NEW_ZONEINFO_DIR/$new_file";
     undef $/;
     $new_contents = <NEWZONEFILE>;
     $/ = $input_record_separator;
@@ -100,77 +100,77 @@ foreach $new_file (`find -name "*.ics"`) {
     # If the ics file exists in the master copy we have to compare them,
     # otherwise we can just copy the new file into the master directory.
     if (-l $new_file) {
-	$link_to = readlink($new_file);
+        $link_to = readlink($new_file);
 
-	if (! -e $master_file || ! -l $master_file ||
-	    (readlink($master_file) ne $link_to)) {
+        if (! -e $master_file || ! -l $master_file ||
+            (readlink($master_file) ne $link_to)) {
 
-	    print "Linking $new_file to $link_to...\n";
+            print "Linking $new_file to $link_to...\n";
 
-	    if ($DO_UPDATES) {
-		unlink($master_file);
-		symlink($link_to, $master_file);
-	    }
-	}
+            if ($DO_UPDATES) {
+                unlink($master_file);
+                symlink($link_to, $master_file);
+            }
+        }
     } elsif (-e $master_file) {
-	open (MASTERZONEFILE, "$master_file")
-	    || die "Can't open file: $master_file";
-	undef $/;
-	$master_contents = <MASTERZONEFILE>;
-	$/ = $input_record_separator;
-	close (MASTERZONEFILE);
-	
-	$new_contents_copy = $new_contents;
+        open (MASTERZONEFILE, "$master_file")
+            || die "Can't open file: $master_file";
+        undef $/;
+        $master_contents = <MASTERZONEFILE>;
+        $/ = $input_record_separator;
+        close (MASTERZONEFILE);
 
-	# Strip the TZID from both contents.
-#	$new_contents_copy =~ s/^TZID:\S+\r$//m;
-#	$new_tzid = $&;
-#	$master_contents =~ s/^TZID:\S+\r$//m;
-#	$master_tzid = $&;
+        $new_contents_copy = $new_contents;
 
-	# Strip the PRODID from both contents.
-	$new_contents_copy =~ s/^PRODID:.*$//m;
-	$master_contents =~ s/^PRODID:.*$//m;
+        # Strip the TZID from both contents.
+#       $new_contents_copy =~ s/^TZID:\S+\r$//m;
+#       $new_tzid = $&;
+#       $master_contents =~ s/^TZID:\S+\r$//m;
+#       $master_tzid = $&;
 
-	# Strip the LAST-MODIFIED from both contents.
-	$new_contents_copy =~ s/^LAST-MODIFIED:(\S+)\r$//m;
-	$master_contents =~ s/^LAST-MODIFIED:(\S+)\r$//m;
+        # Strip the PRODID from both contents.
+        $new_contents_copy =~ s/^PRODID:.*$//m;
+        $master_contents =~ s/^PRODID:.*$//m;
 
-#	print "Matched: $master_tzid\n";
+        # Strip the LAST-MODIFIED from both contents.
+        $new_contents_copy =~ s/^LAST-MODIFIED:(\S+)\r$//m;
+        $master_contents =~ s/^LAST-MODIFIED:(\S+)\r$//m;
+
+#       print "Matched: $master_tzid\n";
 
 
-	if ($new_contents_copy ne $master_contents) {
-	    print "$new_file has changed. Updating...\n";
-	    $copy_to_master = 1;
+        if ($new_contents_copy ne $master_contents) {
+            print "$new_file has changed. Updating...\n";
+            $copy_to_master = 1;
 
-	    if ($LIBICAL_VERSIONING) {
-		# We bump the version number in the new file.
-#		$master_tzid =~ m%_(\d+)/%;
-		$version_num = $1;
-#		print "Version: $version_num\n";
+            if ($LIBICAL_VERSIONING) {
+                # We bump the version number in the new file.
+#               $master_tzid =~ m%_(\d+)/%;
+                $version_num = $1;
+#               print "Version: $version_num\n";
 
-		$version_num++;
-		$new_tzid =~ s%_(\d+)/%_$version_num/%;
+                $version_num++;
+                $new_tzid =~ s%_(\d+)/%_$version_num/%;
 
-#		print "New TZID: $new_tzid\n";
-		$new_contents =~ s/^TZID:\S+$/$new_tzid/m;
-	    }
-	}
+#               print "New TZID: $new_tzid\n";
+                $new_contents =~ s/^TZID:\S+$/$new_tzid/m;
+            }
+        }
 
     } else {
-	print "$new_file doesn't exist in master directory. Copying...\n";
-	$copy_to_master = 1;
+        print "$new_file doesn't exist in master directory. Copying...\n";
+        $copy_to_master = 1;
     }
 
     if ($copy_to_master) {
-#	print "Updating: $new_file\n";
+#       print "Updating: $new_file\n";
 
-	if ($DO_UPDATES) {
-	    open (MASTERZONEFILE, ">$master_file")
-		|| die "Can't create file: $master_file";
-	    print MASTERZONEFILE $new_contents;
-	    close (MASTERZONEFILE);
-	}
+        if ($DO_UPDATES) {
+            open (MASTERZONEFILE, ">$master_file")
+                || die "Can't create file: $master_file";
+            print MASTERZONEFILE $new_contents;
+            close (MASTERZONEFILE);
+        }
     }
 
 }

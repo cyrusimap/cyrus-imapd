@@ -46,8 +46,8 @@
 #include <config.h>
 
 char* notify_null(const char *class, const char *priority,
-		  const char *user, const char *mailbox,
-		  int nopt, char **options,
-		  const char *message, const char *fname);
+                  const char *user, const char *mailbox,
+                  int nopt, char **options,
+                  const char *message, const char *fname);
 
 #endif /* _NOTIFY_NULL_H_ */

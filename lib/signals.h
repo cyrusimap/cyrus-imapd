@@ -53,7 +53,7 @@ void signals_reset_sighup_handler(int restartable);
 void signals_set_shutdown(shutdownfn *s);
 int signals_poll(void);
 int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
-		   fd_set *efds, struct timeval *tout);
+                   fd_set *efds, struct timeval *tout);
 void signals_clear(int sig);
 int signals_cancelled();
 

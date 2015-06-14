@@ -249,28 +249,28 @@ static void test_shrink_expand(void)
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 58));
 
     for (i = 55 ; i >= 4 ; i--) {
-	/* explicitly shrink the vector - bits off
-	 * the end are now gone */
-	bv_setsize(&bv, i);
-	CU_ASSERT_EQUAL(i, bv.length);
-	CU_ASSERT_EQUAL(1, bv_isset(&bv, i-2));
-	CU_ASSERT_EQUAL(1, bv_isset(&bv, i-1));
-	CU_ASSERT_EQUAL(0, bv_isset(&bv, i));
-	CU_ASSERT_EQUAL(0, bv_isset(&bv, i+1));
-	CU_ASSERT_EQUAL(0, bv_isset(&bv, i+2));
+        /* explicitly shrink the vector - bits off
+         * the end are now gone */
+        bv_setsize(&bv, i);
+        CU_ASSERT_EQUAL(i, bv.length);
+        CU_ASSERT_EQUAL(1, bv_isset(&bv, i-2));
+        CU_ASSERT_EQUAL(1, bv_isset(&bv, i-1));
+        CU_ASSERT_EQUAL(0, bv_isset(&bv, i));
+        CU_ASSERT_EQUAL(0, bv_isset(&bv, i+1));
+        CU_ASSERT_EQUAL(0, bv_isset(&bv, i+2));
 
-	/* implicitly expand the vector - old bits
-	 * do not come back */
-	bv_set(&bv, 58);
-	CU_ASSERT_EQUAL(59, bv.length);
-	CU_ASSERT_EQUAL(1, bv_isset(&bv, 0));
-	CU_ASSERT_EQUAL(1, bv_isset(&bv, i-2));
-	CU_ASSERT_EQUAL(1, bv_isset(&bv, i-1));
-	CU_ASSERT_EQUAL(0, bv_isset(&bv, i));
-	CU_ASSERT_EQUAL(0, bv_isset(&bv, i+1));
-	CU_ASSERT_EQUAL(0, bv_isset(&bv, i+2));
+        /* implicitly expand the vector - old bits
+         * do not come back */
+        bv_set(&bv, 58);
+        CU_ASSERT_EQUAL(59, bv.length);
+        CU_ASSERT_EQUAL(1, bv_isset(&bv, 0));
+        CU_ASSERT_EQUAL(1, bv_isset(&bv, i-2));
+        CU_ASSERT_EQUAL(1, bv_isset(&bv, i-1));
+        CU_ASSERT_EQUAL(0, bv_isset(&bv, i));
+        CU_ASSERT_EQUAL(0, bv_isset(&bv, i+1));
+        CU_ASSERT_EQUAL(0, bv_isset(&bv, i+2));
 
-	bv_setall(&bv);
+        bv_setall(&bv);
     }
 
     bv_free(&bv);
@@ -394,19 +394,19 @@ static void test_next_set(void)
 {
 #define TESTCASE(...) \
     { \
-	static const int _in[] = {__VA_ARGS__}; \
-	bitvector_t bv = BV_INITIALIZER; \
-	int bit = -1; \
-	int i; \
-	for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
-	    bv_set(&bv, _in[i]); \
-	for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) { \
-	    bit = bv_next_set(&bv, bit+1); \
-	    CU_ASSERT_EQUAL(bit, _in[i]); \
-	} \
-	bit = bv_next_set(&bv, bit+1); \
-	CU_ASSERT_EQUAL(bit, -1); \
-	bv_free(&bv); \
+        static const int _in[] = {__VA_ARGS__}; \
+        bitvector_t bv = BV_INITIALIZER; \
+        int bit = -1; \
+        int i; \
+        for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
+            bv_set(&bv, _in[i]); \
+        for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) { \
+            bit = bv_next_set(&bv, bit+1); \
+            CU_ASSERT_EQUAL(bit, _in[i]); \
+        } \
+        bit = bv_next_set(&bv, bit+1); \
+        CU_ASSERT_EQUAL(bit, -1); \
+        bv_free(&bv); \
     }
 
     /* empty vector never reports any set bits */
@@ -436,20 +436,20 @@ static void test_prev_set(void)
 {
 #define TESTCASE(...) \
     { \
-	static const int _in[] = {__VA_ARGS__}; \
-	bitvector_t bv = BV_INITIALIZER; \
-	int bit; \
-	int i; \
-	for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
-	    bv_set(&bv, _in[i]); \
-	bit = bv.length; \
-	for (i = (int)VECTOR_SIZE(_in)-1 ; i >= 0 ; i--) { \
-	    bit = bv_prev_set(&bv, bit-1); \
-	    CU_ASSERT_EQUAL(bit, _in[i]); \
-	} \
-	bit = bv_prev_set(&bv, bit-1); \
-	CU_ASSERT_EQUAL(bit, -1); \
-	bv_free(&bv); \
+        static const int _in[] = {__VA_ARGS__}; \
+        bitvector_t bv = BV_INITIALIZER; \
+        int bit; \
+        int i; \
+        for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
+            bv_set(&bv, _in[i]); \
+        bit = bv.length; \
+        for (i = (int)VECTOR_SIZE(_in)-1 ; i >= 0 ; i--) { \
+            bit = bv_prev_set(&bv, bit-1); \
+            CU_ASSERT_EQUAL(bit, _in[i]); \
+        } \
+        bit = bv_prev_set(&bv, bit-1); \
+        CU_ASSERT_EQUAL(bit, -1); \
+        bv_free(&bv); \
     }
 
     /* empty vector never reports any set bits */
@@ -479,15 +479,15 @@ static void test_count(void)
 {
 #define TESTCASE(...) \
     { \
-	static const int _in[] = {__VA_ARGS__}; \
-	bitvector_t bv = BV_INITIALIZER; \
-	int count; \
-	int i; \
-	for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
-	    bv_set(&bv, _in[i]); \
-	count = bv_count(&bv); \
-	CU_ASSERT_EQUAL(count, VECTOR_SIZE(_in)); \
-	bv_free(&bv); \
+        static const int _in[] = {__VA_ARGS__}; \
+        bitvector_t bv = BV_INITIALIZER; \
+        int count; \
+        int i; \
+        for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
+            bv_set(&bv, _in[i]); \
+        count = bv_count(&bv); \
+        CU_ASSERT_EQUAL(count, VECTOR_SIZE(_in)); \
+        bv_free(&bv); \
     }
 
     /* empty vector */

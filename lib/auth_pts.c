@@ -105,7 +105,7 @@ static int timeout_select(int sock, int op, int sec)
   tv.tv_sec = sec;
   tv.tv_usec = 0;
 
-  syslog(LOG_DEBUG, "timeout_select: sock = %d, rp = 0x%lx, wp = 0x%lx, sec = %d", 
+  syslog(LOG_DEBUG, "timeout_select: sock = %d, rp = 0x%lx, wp = 0x%lx, sec = %d",
          sock, (unsigned long)rp, (unsigned long)wp, sec);
 
   if ((r = select(sock+1, rp, wp, NULL, &tv)) == 0) {
@@ -183,37 +183,37 @@ static void myfreestate(struct auth_state *auth_state);
  *      3       User is identifer
  */
 static int mymemberof(struct auth_state *auth_state,
-		  const char *identifier)
+                  const char *identifier)
 {
     int i;
     unsigned idhash = strhash(identifier);
     static unsigned anyonehash = 0;
 
     anyonehash = !anyonehash ? strhash("anyone") : anyonehash;
-    
-    if (!auth_state) {
-	/* special case anonymous */
-	if (!strcmp(identifier, "anyone")) return 1;
-	else if (!strcmp(identifier, "anonymous")) return 3;
 
-	/* "anonymous" is not a member of any group */
-	else return 0;
+    if (!auth_state) {
+        /* special case anonymous */
+        if (!strcmp(identifier, "anyone")) return 1;
+        else if (!strcmp(identifier, "anonymous")) return 3;
+
+        /* "anonymous" is not a member of any group */
+        else return 0;
     }
 
     /* is 'identifier' "anyone"? */
     if (idhash == anyonehash &&
-	!strcmp(identifier, "anyone")) return 1;
-    
+        !strcmp(identifier, "anyone")) return 1;
+
     /* is 'identifier' me? */
     if (idhash == auth_state->userid.hash &&
-	!strcmp(identifier, auth_state->userid.id)) return 3;
-    
+        !strcmp(identifier, auth_state->userid.id)) return 3;
+
     /* is it a group i'm a member of ? */
     for (i=0; i < auth_state->ngroups; i++)
         if (idhash == auth_state->groups[i].hash &&
             !strcmp(identifier, auth_state->groups[i].id))
             return 2;
-  
+
     return 0;
 }
 
@@ -223,28 +223,28 @@ static int mymemberof(struct auth_state *auth_state,
  * or NULL if 'identifier' is invalid.
  */
 static const char *mycanonifyid(const char *identifier,
-		      size_t len __attribute__((unused)))
+                      size_t len __attribute__((unused)))
 {
     static char retbuf[PTS_DB_KEYSIZE];
 
     if(canonuser_id &&
        (!strcmp(identifier, canonuser_id) || !strcmp(identifier, retbuf))) {
-	/* It's the currently cached user, return the previous result */
-	return retbuf;
+        /* It's the currently cached user, return the previous result */
+        return retbuf;
     } else if(canonuser_id) {
-	/* We've got a new one, invalidate our cache */
-	free(canonuser_id);
-	myfreestate(canonuser_cache);
+        /* We've got a new one, invalidate our cache */
+        free(canonuser_id);
+        myfreestate(canonuser_cache);
 
-	canonuser_id = NULL;
-	canonuser_cache = NULL;
+        canonuser_id = NULL;
+        canonuser_cache = NULL;
     }
 
     if(!strcmp(identifier, "anyone") ||
        !strcmp(identifier, "anonymous")) {
         /* we can fill this in ourselves - no cacheing */
-	strlcpy(retbuf, identifier, sizeof(retbuf));
-	return retbuf;
+        strlcpy(retbuf, identifier, sizeof(retbuf));
+        return retbuf;
     }
 
     if (!strcmp(identifier, "")) {
@@ -271,24 +271,24 @@ static const char *mycanonifyid(const char *identifier,
     return retbuf;
 }
 
-/* 
+/*
  * Produce an auth_state structure for the given identifier
  */
-static struct auth_state *mynewstate(const char *identifier) 
+static struct auth_state *mynewstate(const char *identifier)
 {
     struct auth_state *output = NULL;
 
-    if(canonuser_id && 
+    if(canonuser_id &&
        (!strcmp(identifier, canonuser_id) ||
         !strcmp(identifier, canonuser_cache->userid.id))) {
-	/* It's the currently cached user, return the previous result */
-	free(canonuser_id);
-	canonuser_id = NULL;
+        /* It's the currently cached user, return the previous result */
+        free(canonuser_id);
+        canonuser_id = NULL;
 
-	output = canonuser_cache;
-	canonuser_cache = NULL;
+        output = canonuser_cache;
+        canonuser_cache = NULL;
         return output;
-    } 
+    }
 
     /*
      * If anyone or anonymous, just pass through. Otherwise, try to load the
@@ -327,7 +327,7 @@ static struct auth_state *mynewstate(const char *identifier)
 static const char *the_ptscache_db = NULL;
 
 /* Returns 0 on success */
-static int ptload(const char *identifier, struct auth_state **state) 
+static int ptload(const char *identifier, struct auth_state **state)
 {
     struct auth_state *fetched = NULL;
     size_t id_len;
@@ -344,44 +344,44 @@ static int ptload(const char *identifier, struct auth_state **state)
     int niov, n;
     unsigned int start;
     const char *config_dir =
-	libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
+        libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
 
     /* xxx this sucks, but it seems to be the only way to satisfy the linker */
     if(the_ptscache_db == NULL) {
-	the_ptscache_db = libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB);
+        the_ptscache_db = libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB);
     }
 
     if(!state || *state) {
-	fatal("bad state pointer passed to ptload()", EC_TEMPFAIL);
+        fatal("bad state pointer passed to ptload()", EC_TEMPFAIL);
     }
 
     fname = libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB_PATH);
-    
+
     if (!fname) {
-	tofree = strconcat(config_dir, PTS_DBFIL, (char *)NULL);
-	fname = tofree;
+        tofree = strconcat(config_dir, PTS_DBFIL, (char *)NULL);
+        fname = tofree;
     }
     r = cyrusdb_open(the_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-	       cyrusdb_strerror(ret));
-	free(tofree);
-	*state = NULL;
-	return -1;
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+               cyrusdb_strerror(ret));
+        free(tofree);
+        *state = NULL;
+        return -1;
     }
     free(tofree);
     tofree = NULL;
 
     id_len = strlen(identifier);
     if(id_len > PTS_DB_KEYSIZE) {
-	syslog(LOG_ERR, "identifier too long in auth_newstate");
+        syslog(LOG_ERR, "identifier too long in auth_newstate");
         *state = NULL;
-	return -1;
+        return -1;
     }
-      
+
     /* fetch the current record for the user */
     r = cyrusdb_fetch(ptdb, identifier, id_len,
-			       &data, &dsize, NULL);
+                               &data, &dsize, NULL);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
                cyrusdb_strerror(r));
@@ -394,21 +394,21 @@ static int ptload(const char *identifier, struct auth_state **state)
      * ask the ptloader to reload it and reread it */
     fetched = (struct auth_state *) data;
 
-    if(fetched) {        
-	time_t now = time(NULL);
-	int timeout = libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT);
-	
-	syslog(LOG_DEBUG,
-	       "ptload(): fetched cache record (%s)" \
-	       "(mark %ld, current %ld, limit %ld)", identifier,
-	       fetched->mark, now, now - timeout);
+    if(fetched) {
+        time_t now = time(NULL);
+        int timeout = libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT);
 
-	if (fetched->mark > (now - timeout)) {
-	    /* not expired; let's return it */
-	    goto done;
-	}
+        syslog(LOG_DEBUG,
+               "ptload(): fetched cache record (%s)" \
+               "(mark %ld, current %ld, limit %ld)", identifier,
+               fetched->mark, now, now - timeout);
+
+        if (fetched->mark > (now - timeout)) {
+            /* not expired; let's return it */
+            goto done;
+        }
     }
-    
+
     syslog(LOG_DEBUG, "ptload(): pinging ptloader");
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -418,11 +418,11 @@ static int ptload(const char *identifier, struct auth_state **state)
         rc = -1;
         goto done;
     }
-        
+
     fname = libcyrus_config_getstring(CYRUSOPT_PTLOADER_SOCK);
     if (!fname) {
-	tofree = strconcat(config_dir, PTS_DBSOCKET, (char *)NULL);
-	fname = tofree;
+        tofree = strconcat(config_dir, PTS_DBSOCKET, (char *)NULL);
+        fname = tofree;
     }
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
@@ -432,8 +432,8 @@ static int ptload(const char *identifier, struct auth_state **state)
     free(tofree);
 
     if (r == -1) {
-	syslog(LOG_ERR, "ptload(): can't connect to ptloader server: %m");
-	close(s);
+        syslog(LOG_ERR, "ptload(): can't connect to ptloader server: %m");
+        close(s);
         rc = -1;
         goto done;
     }
@@ -450,7 +450,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
     retry_writev(s, iov, niov);
     syslog(LOG_DEBUG, "ptload sent data");
-        
+
     start = 0;
     while (start < sizeof(response) - 1) {
       if (timeout_select(s, TS_READ, PT_TIMEOUT_SEC) < 0) {
@@ -462,28 +462,28 @@ static int ptload(const char *identifier, struct auth_state **state)
       if (n < 1) break;
       start += n;
     }
-        
+
     close(s);
     syslog(LOG_DEBUG, "ptload read data back");
-        
+
     if (start <= 1 || strncmp(response, "OK", 2)) {
        if(start > 1) {
-	   syslog(LOG_ERR,
-		  "ptload(): bad response from ptloader server: %s", response);
+           syslog(LOG_ERR,
+                  "ptload(): bad response from ptloader server: %s", response);
        } else {
-	   syslog(LOG_ERR, "ptload(): empty response from ptloader server");
+           syslog(LOG_ERR, "ptload(): empty response from ptloader server");
        }
        rc = -1;
        goto done;
     }
 
     /* fetch the current record for the user */
-    r = cyrusdb_fetch(ptdb, identifier, id_len, 
-			       &data, &dsize, NULL);
+    r = cyrusdb_fetch(ptdb, identifier, id_len,
+                               &data, &dsize, NULL);
     if (r != 0 || !data) {
-	syslog(LOG_ERR, "ptload(): error fetching record: %s"
-	       "(did ptloader add the record?)",
-	       cyrusdb_strerror(r));
+        syslog(LOG_ERR, "ptload(): error fetching record: %s"
+               "(did ptloader add the record?)",
+               cyrusdb_strerror(r));
       data = NULL;
       rc = -1;
       goto done;
@@ -518,7 +518,7 @@ static void myfreestate(struct auth_state *auth_state)
 
 HIDDEN struct auth_mech auth_pts =
 {
-    "pts",		/* name */
+    "pts",              /* name */
 
     &mycanonifyid,
     &mymemberof,

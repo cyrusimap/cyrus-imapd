@@ -18,90 +18,90 @@ myhostname.cmu.edu\
 
 
 
-*** Makefile.old	Mon Feb 28 00:50:47 2000
---- Makefile	Thu Feb 10 23:39:19 2000
+*** Makefile.old        Mon Feb 28 00:50:47 2000
+--- Makefile    Thu Feb 10 23:39:19 2000
 ***************
 *** 19,25 ****
-  
-  SRC 		= article.c \
-  		  buffer.c \
-- 		  connection.c \
-  		  endpoint.c \
-  		  host.c \
-  		  innlistener.c \
+
+  SRC           = article.c \
+                  buffer.c \
+-                 connection.c \
+                  endpoint.c \
+                  host.c \
+                  innlistener.c \
 --- 19,24 ----
 ***************
 *** 51,61 ****
 --- 50,62 ----
-  		  config_l.o config_y.o
-  
-  INNFEED_BIN	= $D$(PATHBIN)/innfeed
-+ IMAPFEED_BIN	= $D$(PATHBIN)/imapfeed
-  
-  STARTINNFEED	= $D$(PATHBIN)/startinnfeed
-  
-  
-  ALL_INSTALLED	= $D$(PATHBIN)/innfeed $D$(PATHBIN)/startinnfeed \
-+ 		  $D$(PATHBIN)/imapfeed \
-  		  $D$(PATHBIN)/procbatch $D$(PATHBIN)/innfeed-convcfg
-  
+                  config_l.o config_y.o
+
+  INNFEED_BIN   = $D$(PATHBIN)/innfeed
++ IMAPFEED_BIN  = $D$(PATHBIN)/imapfeed
+
+  STARTINNFEED  = $D$(PATHBIN)/startinnfeed
+
+
+  ALL_INSTALLED = $D$(PATHBIN)/innfeed $D$(PATHBIN)/startinnfeed \
++                 $D$(PATHBIN)/imapfeed \
+                  $D$(PATHBIN)/procbatch $D$(PATHBIN)/innfeed-convcfg
+
   MAN_INSTALLED   = $D$(MANDIR)/man1/innfeed.1 $D$(MANDIR)/man5/innfeed.conf.5
 ***************
 *** 95,101 ****
-  DEPENDFLAGS	= -s -c '$(CC) -E'
-  
+  DEPENDFLAGS   = -s -c '$(CC) -E'
+
   .c.o:
-! 	$(COMPILE.c) $< $(OUTPUT_OPTION)
-  
+!       $(COMPILE.c) $< $(OUTPUT_OPTION)
+
   .c.E:
-  	$(CPP.c) $< $(OUTPUT_OPTION)
+        $(CPP.c) $< $(OUTPUT_OPTION)
 --- 96,102 ----
-  DEPENDFLAGS	= -s -c '$(CC) -E'
-  
+  DEPENDFLAGS   = -s -c '$(CC) -E'
+
   .c.o:
-! 	$(COMPILE.c) $(SASLFLAGS) $< $(OUTPUT_OPTION)
-  
+!       $(COMPILE.c) $(SASLFLAGS) $< $(OUTPUT_OPTION)
+
   .c.E:
-  	$(CPP.c) $< $(OUTPUT_OPTION)
+        $(CPP.c) $< $(OUTPUT_OPTION)
 ***************
 *** 103,114 ****
   .sh:
-  	$(RM) $@ ; $(CP) $< $@ ; $(CHMOD) a-w,a+x $@
-  
+        $(RM) $@ ; $(CP) $< $@ ; $(CHMOD) a-w,a+x $@
+
 ! all: innfeed startinnfeed
-  
+
   install: $(ALL_INSTALLED)
-  
+
 ! innfeed: $(OBJS) version.o $(MALLOC) $(LIBNEWS)
-! 	$(LINK.c) -o $@ $(OBJS) version.o $(LIBNEWS) $(LIBNEWS) $(LIBS)
-  
+!       $(LINK.c) -o $@ $(OBJS) version.o $(LIBNEWS) $(LIBNEWS) $(LIBS)
+
   $D$(PATHBIN)/innfeed: innfeed
-  	$(LIBTOOL) ../installit.sh $(OWNER) -m 550 -b .OLD $? $@
+        $(LIBTOOL) ../installit.sh $(OWNER) -m 550 -b .OLD $? $@
 --- 104,118 ----
   .sh:
-  	$(RM) $@ ; $(CP) $< $@ ; $(CHMOD) a-w,a+x $@
-  
-! all: innfeed startinnfeed imapfeed 
-  
+        $(RM) $@ ; $(CP) $< $@ ; $(CHMOD) a-w,a+x $@
+
+! all: innfeed startinnfeed imapfeed
+
   install: $(ALL_INSTALLED)
-  
+
 ! innfeed: $(OBJS) version.o connection.o $(MALLOC) $(LIBNEWS)
-! 	$(LINK.c) -o $@ $(OBJS) version.o connection.o $(LIBNEWS) $(LIBNEWS) $(LIBS)
-! 
+!       $(LINK.c) -o $@ $(OBJS) version.o connection.o $(LIBNEWS) $(LIBNEWS) $(LIBS)
+!
 ! imapfeed: $(OBJS) version.o imap_connection.o $(MALLOC) $(LIBNEWS)
-! 	$(LINK.c) -o $@ $(OBJS) version.o imap_connection.o $(LIBNEWS) $(LIBNEWS) $(LIBS) $(LIB_SASL)
-  
+!       $(LINK.c) -o $@ $(OBJS) version.o imap_connection.o $(LIBNEWS) $(LIBNEWS) $(LIBS) $(LIB_SASL)
+
   $D$(PATHBIN)/innfeed: innfeed
-  	$(LIBTOOL) ../installit.sh $(OWNER) -m 550 -b .OLD $? $@
+        $(LIBTOOL) ../installit.sh $(OWNER) -m 550 -b .OLD $? $@
 ***************
 *** 135,140 ****
 --- 139,145 ----
-  		echo "" ; echo "" ;\
-  	fi
-  
-+ 
-  objs:	$(OBJS)
-  
+                echo "" ; echo "" ;\
+        fi
+
++
+  objs: $(OBJS)
+
   tags: $(SRC) $(INCS)
 ***************
 *** 227,232 ****
@@ -117,8 +117,8 @@ myhostname.cmu.edu\
 
 
 polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c main.old main.c
-*** main.old	Mon Feb 28 00:51:23 2000
---- main.c	Tue Feb  1 00:33:54 2000
+*** main.old    Mon Feb 28 00:51:23 2000
+--- main.c      Tue Feb  1 00:33:54 2000
 ***************
 *** 103,108 ****
 --- 103,113 ----
@@ -130,18 +130,18 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c main.old main.c
 + char *deliver_authname = NULL;
 + char *deliver_password = NULL;
 + char *deliver_realm    = NULL;
-  
+
   /* imports */
   extern char *versionInfo ;
 ***************
 *** 162,168 ****
     struct rlimit rl;
     bool val;
-  
-- 
+
+-
     strcpy (dateString,ctime(&now)) ;
     dateString [24] = '\0' ;
-  
+
 --- 167,172 ----
 ***************
 *** 842,847 ****
@@ -149,106 +149,106 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c main.old main.c
         logFile = buildFilename (innconf->pathlog,p) ;
         FREE (p) ;
       }
-+ 
++
 +    /* For imap/lmtp delivering */
 +   if (getString (topScope,"deliver-username",&p, NO_INHERIT))
-+     {   
++     {
 +         deliver_username = p;
 +       /* don't need to free */
 +     }
-+ 
++
 +   if (getString (topScope,"deliver-authname",&p, NO_INHERIT))
 +     {
 +       deliver_authname = p;
 +       /* don't need to free */
 +     }
-+ 
++
 +   if (getString (topScope,"deliver-password",&p, NO_INHERIT))
 +     {
 +       deliver_password = p;
 +       /* don't need to free */
 +     }
-+ 
++
 +   if (getString (topScope,"deliver-realm",&p, NO_INHERIT))
 +     {
 +       deliver_realm = p;
 +       /* don't need to free */
 +     }
-+ 
-    
-  
++
+
+
     return 1 ;
 
-polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c startinnfeed.old startinnfeed.c 
-*** startinnfeed.old	Mon Feb 28 00:50:28 2000
---- startinnfeed.c	Mon Feb 28 14:06:28 2000
+polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c startinnfeed.old startinnfeed.c
+*** startinnfeed.old    Mon Feb 28 00:50:28 2000
+--- startinnfeed.c      Mon Feb 28 14:06:28 2000
 ***************
 *** 78,86 ****
-    else 
+    else
       {
         char **evp = NULL ;
-  
+
 !       innfeed = NEW(char, (strlen(innconf->pathbin)+1+strlen(INNFEED)+1));
 !       sprintf(innfeed, "%s/%s", innconf->pathbin, INNFEED);
         av[0] = (char *) innfeed;
-  
+
   #if defined (USE_DMALLOC)
 --- 78,98 ----
-    else 
+    else
       {
         char **evp = NULL ;
 +       char *execname = INNFEED;
-+       
++
 +       if (ac == 2)
-+       {	  
-+ 	  if (strcmp(av[1], "imapfeed") == 0) {
-+ 	      execname = imapfeed;
-+ 	      av[1] = NULL;
-+ 	  } else {
-+ 	      syslog(LOG_ERR, "Only imapfeed is a valid argument to startinnfeed");
-+ 	      exit(1);
-+ 	  }
++       {
++         if (strcmp(av[1], "imapfeed") == 0) {
++             execname = imapfeed;
++             av[1] = NULL;
++         } else {
++             syslog(LOG_ERR, "Only imapfeed is a valid argument to startinnfeed");
++             exit(1);
++         }
 +       }
-  
+
 !       innfeed = NEW(char, (strlen(innconf->pathbin)+1+strlen(execname)+1));
 !       sprintf(innfeed, "%s/%s", innconf->pathbin, execname);
         av[0] = (char *) innfeed;
-  
+
   #if defined (USE_DMALLOC)
 
-polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_connection.c 
-*** /dev/null	Mon Dec 31 23:00:00 1979
---- imap_connection.c	Mon Feb 28 00:45:20 2000
+polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_connection.c
+*** /dev/null   Mon Dec 31 23:00:00 1979
+--- imap_connection.c   Mon Feb 28 00:45:20 2000
 ***************
 *** 0 ****
 --- 1,4408 ----
 + /* feed articles to an IMAP server via LMTP and IMAP
 +    Tim Martin
-+ 
++
 +    Instead of feeding articles via nntp to another host this feeds the
 +    messages via lmtp to a host and the control messages (cancel's
 +    etc..) it preforms via IMAP. This means it has 2 active connections
 +    at any given time and 2 queues.
-+ 
++
 +    When an article comes in it is immediatly placed in the lmtp
 +    queue. When an article is picked off the lmtp queue for processing
 +    first check if it's a control message. if so place it in the IMAP
 +    queue. If not attempt to deliver via lmtp.
-+ 
++
 +    This attempts to follow the exact same api as connection.c.
-+    
++
 +    TODO:
-+    
-+    feed to smtp 
++
++    feed to smtp
 +    security layers?  <--punt on for now
 +    authname/password per connection object
 +    untagged IMAP messages
 + */
-+ 
++
 + #ifdef HAVE_SASL
 + #include <sasl.h>
 + #endif /* HAVE_SASL */
-+ 
++
 + #include <netinet/in.h>
 + #include <netdb.h>
 + #include <sys/socket.h>
@@ -256,9 +256,9 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + #include <netinet/in.h>
 + #include <netdb.h>
 + #include <time.h>
-+ 
++
 + #include <errno.h>
-+ 
++
 + #include "buffer.h"
 + #include "connection.h"
 + #include "endpoint.h"
@@ -267,220 +267,220 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + #include "msgs.h"
 + #include "configfile.h"
 + #include "clibrary.h"
-+ 
-+ 
-+ 
++
++
++
 + #define IMAP_PORT 143
-+ 
++
 + #ifdef SMTPMODE
 + #define LMTP_PORT 25
 + #else
 + #define LMTP_PORT 2003
 + #endif /* SMTPMODE */
-+ 
++
 + /* The name to prepend to deliver directly to newsgroup bboards */
 + #define NEWS_USERNAME "bb"
-+ 
++
 + #define IMAP_TAGLENGTH 6
-+ 
++
 + #define QUEUE_MAX_SIZE 250
-+ 
++
 + #define DOSOMETHING_TIMEOUT 60
-+ 
-+ 
-+ 
++
++
++
 + /* external */
 + extern char *deliver_username;
 + extern char *deliver_authname;
 + extern char *deliver_password;
 + extern char *deliver_realm;
-+ 
-+ 
++
++
 + char hostname[MAXHOSTNAMELEN];
 + char *mailfrom_name = ""; /* default to no return path */
-+ 
++
 + /* states the imap connection may be in */
 + typedef enum {
-+ 
++
 +     IMAP_DISCONNECTED = 1,
 +     IMAP_WAITING,
-+     
++
 +     IMAP_CONNECTED_NOTAUTH,
-+ 
++
 +     IMAP_READING_INTRO,
-+ 
++
 +     IMAP_WRITING_CAPABILITY,
 +     IMAP_READING_CAPABILITY,
-+ 
++
 +     IMAP_WRITING_STARTAUTH,
 +     IMAP_READING_STEPAUTH,
 +     IMAP_WRITING_STEPAUTH,
-+ 
++
 +     IMAP_IDLE_AUTHED,
-+ 
++
 +     IMAP_WRITING_CREATE,
 +     IMAP_READING_CREATE,
-+ 
++
 +     IMAP_WRITING_DELETE,
 +     IMAP_READING_DELETE,
-+ 
++
 +     IMAP_WRITING_SELECT,
 +     IMAP_READING_SELECT,
-+ 
++
 +     IMAP_WRITING_SEARCH,
 +     IMAP_READING_SEARCH,
-+ 
++
 +     IMAP_WRITING_STORE,
 +     IMAP_READING_STORE,
-+     
++
 +     IMAP_WRITING_CLOSE,
 +     IMAP_READING_CLOSE,
-+ 
++
 +     IMAP_WRITING_QUIT,
 +     IMAP_READING_QUIT
-+    
++
 + } imap_state_t;
-+ 
++
 + typedef enum {
 +     LMTP_DISCONNECTED = 1,
 +     LMTP_WAITING,
-+ 
++
 +     LMTP_CONNECTED_NOTAUTH,
-+ 
++
 +     LMTP_READING_INTRO,
-+ 
++
 +     LMTP_WRITING_LHLO,
 +     LMTP_READING_LHLO,
-+ 
++
 +     LMTP_WRITING_STARTAUTH,
 +     LMTP_READING_STEPAUTH,
 +     LMTP_WRITING_STEPAUTH,
-+ 
++
 +     LMTP_AUTHED_IDLE,
-+    
++
 +     LMTP_READING_MAILFROM,
 +     LMTP_READING_RCPTTO,
 +     LMTP_READING_DATA,
 +     LMTP_READING_CONTENTS,
-+ 
++
 +     LMTP_WRITING_UPTODATA,
 +     LMTP_WRITING_CONTENTS,
-+ 
++
 +     LMTP_WRITING_QUIT,
 +     LMTP_READING_QUIT
-+ 
++
 + } lmtp_state_t;
-+ 
++
 + typedef struct imap_capabilities_s {
-+ 
++
 +     int imap4;         /* does server support imap4bis? */
 +     int logindisabled; /* does the server allow the login command? */
-+ 
++
 +     char *saslmechs;   /* supported SASL mechanisms */
-+ 
++
 + } imap_capabilities_t;
-+ 
++
 + typedef struct lmtp_capabilities_s {
-+ 
++
 +     int Eightbitmime;
 +     int EnhancedStatusCodes;
 +     int pipelining;
-+ 
++
 +     char *saslmechs;
-+ 
++
 + } lmtp_capabilities_t;
-+ 
++
 + typedef enum {
 +     STAT_CONT = 0,
 +     STAT_NO = 1,
 +     STAT_OK = 2,
 +     STAT_FAIL = 3
 + } imt_stat;
-+ 
++
 + /* Message types */
 + typedef enum {
-+ 
++
 +     DELIVER,
 +     CREATE_FOLDER,
 +     CANCEL_MSG,
 +     DELETE_FOLDER
-+ 
++
 + } control_type_t;
-+ 
++
 + typedef struct control_item_s {
-+ 
++
 +     Article article;
 +     char *folder;
 +     char *msgid;                 /* only for cancel's */
 +     unsigned long  uid;          /* only for cancel's */
-+ 
++
 + } control_item_t;
-+ 
++
 + typedef struct article_queue_s {
-+ 
++
 +     control_type_t type;
-+ 
++
 +     time_t arrived;
 +     time_t nextsend; /* time we should next try to send article */
-+ 
++
 +     int trys;
-+ 
++
 +     int counts_toward_size;
-+ 
++
 +     union {
-+ 	Article article;
-+ 	control_item_t *control;
-+ 	void *generic;
++       Article article;
++       control_item_t *control;
++       void *generic;
 +     } data;
-+ 
++
 +     struct article_queue_s *next;
-+ 
++
 + } article_queue_t;
-+ 
++
 + typedef struct Q_s {
-+ 
++
 +     article_queue_t *head;
-+ 
++
 +     article_queue_t *tail;
-+ 
++
 +     int size;
-+ 
++
 + } Q_t;
-+ 
++
 + typedef struct connection_s {
-+ 
++
 +     /* common stuff */
 +     char *ServerName;
-+ 
++
 +     char *lmtp_respBuffer;         /* buffer all responses are read into */
 +     Buffer lmtp_rBuffer;           /* buffer all responses are read into */
-+ 
++
 +     Host myHost ;                   /* the host who owns the connection */
-+     
++
 +     time_t timeCon ;                /* the time the connect happened (last auth suceeded) */
-+ 
++
 +     int issue_quit;                 /* Three states:
-+ 				     *   0 - don't do anything
-+ 				     *   1 - after issue quit enter wait state
-+ 				     *   2 - after issue quit reconnect
-+ 				     *   3 - after issue quit delete connection
-+ 				     *   4 - nuke cxn
-+ 				     */
-+ 
-+     /* Statistics */    
++                                    *   0 - don't do anything
++                                    *   1 - after issue quit enter wait state
++                                    *   2 - after issue quit reconnect
++                                    *   3 - after issue quit delete connection
++                                    *   4 - nuke cxn
++                                    */
++
++     /* Statistics */
 +     int lmtp_suceeded;
 +     int lmtp_failed;
-+ 
++
 +     int cancel_suceeded;
 +     int cancel_failed;
-+     
++
 +     int create_suceeded;
 +     int create_failed;
-+     
++
 +     int remove_suceeded;
 +     int remove_failed;
-+ 
-+     
++
++
 +     /* LMTP stuff */
 +     int lmtp_port;
 +     lmtp_state_t lmtp_state;
@@ -488,97 +488,97 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     sasl_conn_t *saslconn_lmtp;
 + #endif /* HAVE_SASL */
 +     int sockfd_lmtp;
-+ 
++
 +     time_t lmtp_timeCon ;
-+ 
++
 +     EndPoint lmtp_endpoint;
 +     u_int ident ;               /* an identifier for syslogging. */
-+ 
++
 +     lmtp_capabilities_t *lmtp_capabilities;
-+ 
++
 +     int lmtp_have_mailfrom;
 +     int lmtp_disconnects;
 +     char *lmtp_tofree_str;
-+ 
++
 +     article_queue_t *current_article;
 +     Buffer *current_bufs;
 +     int     current_rcpts_issued;
 +     int     current_rcpts_okayed;
-+ 
++
 +     /* Timer for the max amount of time to wait for a response from the
 +        remote */
 +     u_int lmtp_readTimeout ;
 +     TimeoutId lmtp_readBlockedTimerId ;
-+ 
++
 +     /* Timer for the max amount of time to wait for a any amount of data
 +        to be written to the remote */
 +     u_int lmtp_writeTimeout ;
 +     TimeoutId lmtp_writeBlockedTimerId ;
-+ 
++
 +     /* Timer for the number of seconds to sleep before attempting a
 +        reconnect. */
 +     u_int lmtp_sleepTimeout ;
 +     TimeoutId lmtp_sleepTimerId ;
-+ 
++
 +     /* Timer for max amount between queueing some articles and trying to send them */
 +     u_int dosomethingTimeout ;
 +     TimeoutId dosomethingTimerId ;
-+ 
++
 +     Q_t lmtp_todeliver_q;
-+ 
-+ 
-+ 
++
++
++
 +     /* IMAP stuff */
 +     int imap_port;
 + #ifdef HAVE_SASL
 +     sasl_conn_t *imap_saslconn;
 + #endif /* HAVE_SASL */
-+ 
++
 +     char *imap_respBuffer;
 +     Buffer imap_rBuffer;
 +     EndPoint imap_endpoint;
-+ 
++
 +     imap_capabilities_t *imap_capabilities;
-+     
++
 +     int imap_sockfd;
-+ 
++
 +     time_t imap_timeCon ;
-+ 
++
 +     imap_state_t imap_state;
 +     int imap_disconnects;
 +     char *imap_tofree_str;
-+ 
++
 +     char imap_currentTag[IMAP_TAGLENGTH];
 +     int  imap_tag_num;
-+ 
++
 +     /* Timer for the max amount of time to wait for a response from the
 +        remote */
 +     u_int imap_readTimeout ;
 +     TimeoutId imap_readBlockedTimerId ;
-+ 
++
 +     /* Timer for the max amount of time to wait for a any amount of data
 +        to be written to the remote */
 +     u_int imap_writeTimeout ;
 +     TimeoutId imap_writeBlockedTimerId ;
-+ 
++
 +     /* Timer for the number of seconds to sleep before attempting a
 +        reconnect. */
 +     u_int imap_sleepTimeout ;
 +     TimeoutId imap_sleepTimerId ;
-+ 
++
 +     Q_t imap_controlMsg_q;
-+ 
++
 +     article_queue_t *current_control;
-+ 
++
 +     struct connection_s *next;
-+ 
++
 + } connection_t;
-+ 
++
 + static Connection gCxnList = NULL ;
 + static u_int gCxnCount= 0 ;
 + static u_int max_reconnect_period = MAX_RECON_PER ;
 + static u_int init_reconnect_period = INIT_RECON_PER;
-+ 
++
 + typedef enum {
 +     RET_OK = 0,
 +     RET_FAIL = 1,
@@ -588,110 +588,110 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     RET_NO,
 +     RET_ARTICLE_BAD
 + } conn_ret;
-+ 
-+ 
++
++
 + /********** Private Function Declarations *************/
-+ 
++
 + static void lmtp_readCB (EndPoint e, IoStatus i, Buffer *b, void *d);
 + static void imap_readCB (EndPoint e, IoStatus i, Buffer *b, void *d);
 + static void imap_writeCB (EndPoint e, IoStatus i, Buffer *b, void *d);
 + static void lmtp_writeCB (EndPoint e, IoStatus i, Buffer *b, void *d);
-+ 
++
 + static conn_ret lmtp_Connect(connection_t *cxn);
 + static conn_ret imap_Connect(connection_t *cxn);
-+ 
++
 + static void prepareReopenCbk (Connection cxn, int type);
-+ 
++
 + static void lmtp_readTimeoutCbk (TimeoutId id, void *data);
 + static void imap_readTimeoutCbk (TimeoutId id, void *data);
-+ 
++
 + static void dosomethingTimeoutCbk (TimeoutId id, void *data);
-+ 
++
 + static conn_ret WriteToWire_imapstr(connection_t *cxn, char *str, int slen);
 + static conn_ret WriteToWire_lmtpstr(connection_t *cxn, char *str, int slen);
-+ 
-+ static conn_ret WriteToWire(connection_t *cxn, EndpRWCB callback, 
-+ 			    EndPoint endp, Buffer *array);
++
++ static conn_ret WriteToWire(connection_t *cxn, EndpRWCB callback,
++                           EndPoint endp, Buffer *array);
 + static void lmtp_sendmessage(connection_t *cxn, Article justadded);
 + static conn_ret imap_ProcessQueue(connection_t *cxn);
-+ 
++
 + static conn_ret FindHeader(Buffer *bufs, char *header, char **start, char **end);
 + static conn_ret PopFromQueue(Q_t *q, article_queue_t **item);
 + static void QueueForgetAbout(connection_t *cxn, article_queue_t *item, int failed);
-+ 
++
 + static void delConnection (Connection cxn);
-+ 
++
 + static void DeferAllArticles(connection_t *cxn, Q_t *q);
-+ 
++
 + static void lmtp_Disconnect(connection_t *cxn);
 + static void imap_Disconnect(connection_t *cxn);
 + static conn_ret imap_listenintro(connection_t *cxn);
-+ 
++
 + static void imap_writeTimeoutCbk (TimeoutId id, void *data);
 + static void lmtp_writeTimeoutCbk (TimeoutId id, void *data);
-+ 
++
 + /******************** PRIVATE FUNCTIONS ***************************/
-+ 
++
 + static char *imap_stateToString(int state)
 + {
 +     switch (state)
-+ 	{
-+ 	case IMAP_DISCONNECTED: return "Disconnected";   
-+ 	case IMAP_WAITING: return "Waiting";
-+ 	case IMAP_CONNECTED_NOTAUTH: return "Connected but not Authenticated";
-+ 	case IMAP_READING_INTRO: return "Reading Intro line";
-+ 	case IMAP_WRITING_CAPABILITY: return "Writing capability";
-+ 	case IMAP_READING_CAPABILITY: return "Reading capability";
-+ 	case IMAP_WRITING_STARTAUTH: return "Writing Startauth";
-+ 	case IMAP_READING_STEPAUTH: return "Reading Stepauth";
-+ 	case IMAP_WRITING_STEPAUTH: return "Writing Stepauth";
-+ 	case IMAP_IDLE_AUTHED: return "Idle. Authenticated";
-+ 	case IMAP_WRITING_CREATE: return "Writing create";
-+ 	case IMAP_READING_CREATE: return "Reading create response";
-+ 	case IMAP_WRITING_DELETE: return "Writing Delete command";
-+ 	case IMAP_READING_DELETE: return "Reading Delete response";	       
-+ 	case IMAP_WRITING_SELECT: return "Writing Select";
-+ 	case IMAP_READING_SELECT: return "Reading Select response";
-+ 	case IMAP_WRITING_SEARCH: return "Writing Search";
-+ 	case IMAP_READING_SEARCH: return "Reading Search response";
-+ 	case IMAP_WRITING_STORE: return "Writing Store";
-+ 	case IMAP_READING_STORE: return "Reading Store response";	    
-+ 	case IMAP_WRITING_CLOSE: return "Writing Close";
-+ 	case IMAP_READING_CLOSE: return "Reading Close response";
-+ 	case IMAP_WRITING_QUIT: return "Writing Quit";
-+ 	case IMAP_READING_QUIT: return "Reading Quit";
-+ 	default: return "Unknown state";
-+ 	}
++       {
++       case IMAP_DISCONNECTED: return "Disconnected";
++       case IMAP_WAITING: return "Waiting";
++       case IMAP_CONNECTED_NOTAUTH: return "Connected but not Authenticated";
++       case IMAP_READING_INTRO: return "Reading Intro line";
++       case IMAP_WRITING_CAPABILITY: return "Writing capability";
++       case IMAP_READING_CAPABILITY: return "Reading capability";
++       case IMAP_WRITING_STARTAUTH: return "Writing Startauth";
++       case IMAP_READING_STEPAUTH: return "Reading Stepauth";
++       case IMAP_WRITING_STEPAUTH: return "Writing Stepauth";
++       case IMAP_IDLE_AUTHED: return "Idle. Authenticated";
++       case IMAP_WRITING_CREATE: return "Writing create";
++       case IMAP_READING_CREATE: return "Reading create response";
++       case IMAP_WRITING_DELETE: return "Writing Delete command";
++       case IMAP_READING_DELETE: return "Reading Delete response";
++       case IMAP_WRITING_SELECT: return "Writing Select";
++       case IMAP_READING_SELECT: return "Reading Select response";
++       case IMAP_WRITING_SEARCH: return "Writing Search";
++       case IMAP_READING_SEARCH: return "Reading Search response";
++       case IMAP_WRITING_STORE: return "Writing Store";
++       case IMAP_READING_STORE: return "Reading Store response";
++       case IMAP_WRITING_CLOSE: return "Writing Close";
++       case IMAP_READING_CLOSE: return "Reading Close response";
++       case IMAP_WRITING_QUIT: return "Writing Quit";
++       case IMAP_READING_QUIT: return "Reading Quit";
++       default: return "Unknown state";
++       }
 + }
-+ 
++
 + static char *lmtp_stateToString(int state)
 + {
 +     switch(state)
-+ 	{
-+ 	case LMTP_DISCONNECTED: return "Disconnected";
-+ 	case LMTP_WAITING: return "Waiting";
-+ 	case LMTP_CONNECTED_NOTAUTH: return "Connected but not authenticated";
-+ 	case LMTP_READING_INTRO: return "Reading intro";
-+ 	case LMTP_WRITING_LHLO: return "Writing LHLO";
-+ 	case LMTP_READING_LHLO: return "Reading LHLO response";
-+ 	case LMTP_WRITING_STARTAUTH: return "Writing Start Auth";
-+ 	case LMTP_READING_STEPAUTH: return "Reading stepauth";
-+ 	case LMTP_WRITING_STEPAUTH: return "writing stepauth";
-+ 	case LMTP_AUTHED_IDLE: return "Idle. Authenticated";  
-+ 	case LMTP_READING_MAILFROM: return "Reading mailfrom";
-+ 	case LMTP_READING_RCPTTO: return "Reading RCPTTO response";
-+ 	case LMTP_READING_DATA: return "Reading DATA response";
-+ 	case LMTP_READING_CONTENTS: return "Reading contents response";
-+ 	case LMTP_WRITING_UPTODATA: return "Writing MAIL FROM, RCPTTO, DATA commands";
-+ 	case LMTP_WRITING_CONTENTS: return "Writing contents of message";
-+ 	case LMTP_WRITING_QUIT: return "Writing Quit";
-+ 	case LMTP_READING_QUIT: return "Reading Quit";
-+ 	default: return "Unknown state";
-+ 	}
++       {
++       case LMTP_DISCONNECTED: return "Disconnected";
++       case LMTP_WAITING: return "Waiting";
++       case LMTP_CONNECTED_NOTAUTH: return "Connected but not authenticated";
++       case LMTP_READING_INTRO: return "Reading intro";
++       case LMTP_WRITING_LHLO: return "Writing LHLO";
++       case LMTP_READING_LHLO: return "Reading LHLO response";
++       case LMTP_WRITING_STARTAUTH: return "Writing Start Auth";
++       case LMTP_READING_STEPAUTH: return "Reading stepauth";
++       case LMTP_WRITING_STEPAUTH: return "writing stepauth";
++       case LMTP_AUTHED_IDLE: return "Idle. Authenticated";
++       case LMTP_READING_MAILFROM: return "Reading mailfrom";
++       case LMTP_READING_RCPTTO: return "Reading RCPTTO response";
++       case LMTP_READING_DATA: return "Reading DATA response";
++       case LMTP_READING_CONTENTS: return "Reading contents response";
++       case LMTP_WRITING_UPTODATA: return "Writing MAIL FROM, RCPTTO, DATA commands";
++       case LMTP_WRITING_CONTENTS: return "Writing contents of message";
++       case LMTP_WRITING_QUIT: return "Writing Quit";
++       case LMTP_READING_QUIT: return "Reading Quit";
++       default: return "Unknown state";
++       }
 + }
-+ 
++
 + /******************************* Queue functions ***********************************/
-+ 
++
 + /*
 +  * Add a message to a generic queue
 +  *
@@ -705,55 +705,55 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  *            once towards the queue
 +  *  must    - wheather we must take it even though it may put us over our max size
 +  */
-+ 
++
 + static conn_ret AddToQueue(Q_t *q, void *item, control_type_t type, int addsmsg, bool must)
 + {
 +     article_queue_t *newentry;
-+ 
++
 +     if (must == false)
 +     {
-+ 	if (q->size >= QUEUE_MAX_SIZE)
++       if (q->size >= QUEUE_MAX_SIZE)
 +         {
-+ 	    return RET_EXCEEDS_SIZE;
-+ 	}
++           return RET_EXCEEDS_SIZE;
++       }
 +     } else {
-+ 	if (q->size >= QUEUE_MAX_SIZE * 10)
++       if (q->size >= QUEUE_MAX_SIZE * 10)
 +         {
-+ 	    d_printf(0,"Queue has grown way too much. Dropping article\n");
-+ 	    return RET_FAIL;
-+ 	}
++           d_printf(0,"Queue has grown way too much. Dropping article\n");
++           return RET_FAIL;
++       }
 +     }
-+ 
++
 +     /* add to the end of our queue */
 +     newentry = (article_queue_t *) malloc(sizeof(article_queue_t));
-+ 
++
 +     newentry->type = type;
-+ 
++
 +     /* send as soon as possible */
 +     newentry->nextsend = newentry->arrived = time(NULL);
-+ 
++
 +     newentry->trys = 0;
-+ 
++
 +     newentry->data.generic = item;
 +     newentry->next = NULL;
 +     newentry->counts_toward_size = addsmsg;
-+ 
++
 +     /* add to end of queue */
 +     if (q->tail == NULL)
 +     {
-+ 	q->head = newentry;
-+ 	q->tail = newentry;
++       q->head = newentry;
++       q->tail = newentry;
 +     } else {
-+ 
-+ 	q->tail->next = newentry;
-+ 	q->tail = newentry;
++
++       q->tail->next = newentry;
++       q->tail = newentry;
 +     }
-+ 
++
 +     q->size+=addsmsg;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + /*
 +  * Pop an item from the queue
 +  *
@@ -761,70 +761,70 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  * item - where the item shall be placed upon sucess
 +  *
 +  */
-+ 
++
 + static conn_ret PopFromQueue(Q_t *q, article_queue_t **item)
 + {
 +     article_queue_t *todel;
-+     
++
 +     /* if queue empty return error */
 +     if ( q->head == NULL)
 +     {
-+ 	return RET_QUEUE_EMPTY;
++       return RET_QUEUE_EMPTY;
 +     }
-+     
++
 +     /* set what we return */
 +     *item = q->head;
-+ 
++
 +     q->head = q->head->next;
 +     if (q->head == NULL) q->tail = NULL;
-+ 
++
 +     q->size-=(*item)->counts_toward_size;
-+     
++
 +     return RET_OK;
 + }
-+ 
++
 + /*
 +  * ReQueue an item. Will either put it back in the queue for another try
 +  * or forget about it
 +  *
 +  *  cxn     - our connection object (needed so forget about things)
-+  *  q       - the queue to requeue to 
++  *  q       - the queue to requeue to
 +  *  entry   - the item to put back
 +  */
-+ 
++
 + static void ReQueue(connection_t *cxn, Q_t *q, article_queue_t *entry)
 + {
 +     /* look at the time it's been here */
 +     entry->nextsend = time(NULL) + (entry->trys *30); /* xxx better formula? */
-+ 
++
 +     entry->trys++;
-+     
++
 +     /* give up after 5 tries xxx configurable??? */
 +     if (entry->trys == 5)
 +     {
-+ 	QueueForgetAbout(cxn, entry,1);
-+ 	return;
++       QueueForgetAbout(cxn, entry,1);
++       return;
 +     }
-+ 
-+ 
++
++
 +     /* ok let's add back to the end of the queue */
 +     entry->next = NULL;
-+ 
++
 +     /* add to end of queue */
 +     if (q->tail == NULL)
 +     {
-+ 	q->head = entry;
-+ 	q->tail = entry;
++       q->head = entry;
++       q->tail = entry;
 +     } else {
-+ 	q->tail->next = entry;
-+ 	q->tail = entry;
++       q->tail->next = entry;
++       q->tail = entry;
 +     }
-+ 
++
 +     q->size+=entry->counts_toward_size;
 + }
-+ 
-+ 
-+ 
++
++
++
 + /*
 +  * Forget about an item. Tells host object if we suceeded/failed/etc with the message
 +  *
@@ -838,116 +838,116 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  *   2 - Try to give back to host
 +  *   3 - Article missing (i.e. can't find on disk)
 +  */
-+ 
++
 + static void QueueForgetAbout(connection_t *cxn, article_queue_t *item, int failed)
 + {
 +     Article art = NULL;
-+     
++
 +     switch (item->type)
-+ 	{
-+ 	case DELIVER:
-+ 	    if (failed>0)
-+ 		cxn->lmtp_failed++;
-+ 	    art = item->data.article;
-+ 	    break;
-+ 
-+ 	case CANCEL_MSG:
-+ 	    if (failed>0)
-+ 		cxn->cancel_failed++;
-+ 	    free(item->data.control->msgid);
-+ 	    free(item->data.control->folder);
-+ 
-+ 	    if (item->counts_toward_size == 1)
-+ 		art = item->data.control->article;
-+ 
-+ 	    free(item->data.control );
-+ 	    break;
-+ 
-+ 	case CREATE_FOLDER: 
-+ 	    if (failed>0)
-+ 		cxn->create_failed++;
-+ 	    free(item->data.control->folder);
-+ 
-+ 	    art = item->data.control->article;
-+ 
-+ 	    free(item->data.control );
-+ 	    break;
-+  
-+ 	case DELETE_FOLDER:
-+ 	    if (failed>0)
-+ 		cxn->remove_failed++;
-+ 	    free(item->data.control->folder);
-+ 
-+ 	    art = item->data.control->article;
-+ 
-+ 	    free(item->data.control );
-+ 	    break;
-+ 
-+ 	default:
-+ 	    d_printf(0,"Unknown type to forget about\n");
-+ 	    break;
-+ 	}
-+ 
++       {
++       case DELIVER:
++           if (failed>0)
++               cxn->lmtp_failed++;
++           art = item->data.article;
++           break;
++
++       case CANCEL_MSG:
++           if (failed>0)
++               cxn->cancel_failed++;
++           free(item->data.control->msgid);
++           free(item->data.control->folder);
++
++           if (item->counts_toward_size == 1)
++               art = item->data.control->article;
++
++           free(item->data.control );
++           break;
++
++       case CREATE_FOLDER:
++           if (failed>0)
++               cxn->create_failed++;
++           free(item->data.control->folder);
++
++           art = item->data.control->article;
++
++           free(item->data.control );
++           break;
++
++       case DELETE_FOLDER:
++           if (failed>0)
++               cxn->remove_failed++;
++           free(item->data.control->folder);
++
++           art = item->data.control->article;
++
++           free(item->data.control );
++           break;
++
++       default:
++           d_printf(0,"Unknown type to forget about\n");
++           break;
++       }
++
 +     if (art!=NULL)
-+ 	switch (failed)
-+ 	    {
-+ 	    case 0:
-+ 		hostArticleAccepted (cxn->myHost, cxn, art);
-+ 		break;
-+ 	    case 1:
-+ 		hostArticleRejected (cxn->myHost, cxn, art);
-+ 		break;
-+ 	    case 2:
-+ 		hostTakeBackArticle (cxn->myHost, cxn, art);
-+ 		break;
-+ 	    case 3:
-+ 		hostArticleIsMissing(cxn->myHost, cxn, art);
-+ 		break;
-+ 	    default:
-+ 		d_printf(0,"Not understood\n");
-+ 	    
-+ 	    }
-+ 
++       switch (failed)
++           {
++           case 0:
++               hostArticleAccepted (cxn->myHost, cxn, art);
++               break;
++           case 1:
++               hostArticleRejected (cxn->myHost, cxn, art);
++               break;
++           case 2:
++               hostTakeBackArticle (cxn->myHost, cxn, art);
++               break;
++           case 3:
++               hostArticleIsMissing(cxn->myHost, cxn, art);
++               break;
++           default:
++               d_printf(0,"Not understood\n");
++
++           }
++
 +     free(item);
 + }
-+ 
++
 + /*
 +  * How much space is available in the queue
 +  */
-+ 
++
 + static int QueueSpace(Q_t *q)
 + {
 +     int ret = QUEUE_MAX_SIZE - q->size;
 +     if (ret < 0) ret = 0;
 +     return ret;
 + }
-+ 
++
 + /*
 +  * How many items are in the queue
 +  */
-+ 
++
 + static int QueueItems(Q_t *q)
 + {
 +     return q->size;
 + }
-+ 
-+ 
++
++
 + /***************************** END Queue functions ***********************************/
-+ 
++
 + /***************************** Generic Parse Functions *******************************/
-+ 
++
 + /* returns the end of the header */
-+ 
++
 + static char *GetUntil(char *str)
 + {
 +     while (((*str) != '\0') && ( (*str) != '\r') && ( (*str) != '\n'))
 +     {
-+ 	str++;
++       str++;
 +     }
-+ 
++
 +     return str;
 + }
-+ 
++
 + /*
 +  * Finds the given header in the message
 +  *  Returns NULL if not found
@@ -961,426 +961,426 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     char *str_base;
 +     char *str;
 +     int headerlen = strlen(header);
-+     
++
 +     if (bufs==NULL)
 +     {
-+ 	if (start)
-+ 	    *start=NULL; 
-+ 	return RET_ARTICLE_BAD; 
++       if (start)
++           *start=NULL;
++       return RET_ARTICLE_BAD;
 +     }
-+     
++
 +     b = bufs[0];
 +     size = bufferSize(b);
 +     str_base = bufferBase(b);
 +     str = str_base;
-+     
++
 +     while ( (((int)str) - ((int)str_base)) < size - headerlen)
 +     {
-+ 	if (*str == header[0])
-+ 	{
-+ 	    if ((strncasecmp(header, str, headerlen)==0) && ( *(str + headerlen)==':'))
-+ 	    {
-+ 		if (start)
-+ 		{
-+ 		    *start = str+headerlen+1;
-+ 
-+ 		    /* get rid of leading whitespace */
-+ 		    while ( isspace((int) **start))			
-+ 			(*start)++;
-+ 		}
-+ 		
-+ 		if (end)
-+ 		    *end = GetUntil(str+headerlen+1);
-+ 		
-+ 		return RET_OK;
-+ 	    }
-+ 	} /*else if (*str == '\n') { */
-+ 	    /* end of headers */
-+ 	/* return RET_NO;
-+ 	}*/
-+ 	/*	str = GetUntil(str);
-+ 		if (*str == '\n') str++; */
-+ 	str++;
++       if (*str == header[0])
++       {
++           if ((strncasecmp(header, str, headerlen)==0) && ( *(str + headerlen)==':'))
++           {
++               if (start)
++               {
++                   *start = str+headerlen+1;
++
++                   /* get rid of leading whitespace */
++                   while ( isspace((int) **start))
++                       (*start)++;
++               }
++
++               if (end)
++                   *end = GetUntil(str+headerlen+1);
++
++               return RET_OK;
++           }
++       } /*else if (*str == '\n') { */
++           /* end of headers */
++       /* return RET_NO;
++       }*/
++       /*      str = GetUntil(str);
++               if (*str == '\n') str++; */
++       str++;
 +     }
-+ 
++
 +     return RET_NO;
 + }
-+ 
++
 + static conn_ret GetLine(char *buf, char *ret, int retmaxsize)
 + {
 +     char *str_base;
 +     char *str;
-+ 
++
 +     int size = strlen(buf);
 +     str_base = buf;
 +     str = str_base;
-+ 
++
 +     while ( (*str) != '\0')
 +     {
-+ 	if ((*str) == '\n')
++       if ((*str) == '\n')
 +         {
-+ 	    if (str-str_base > retmaxsize)
-+ 	    {
-+ 		d_printf(0,"Max size exceeded! %s\n",str_base);
-+ 		return RET_FAIL;
-+ 	    }
-+ 
-+ 	    /* fill in the return string */
-+ 	    memcpy(ret, str_base, str-str_base);
-+ 	    ret[ str - str_base -1] = '\0';
-+ 
-+ 	    memcpy( str_base, str_base + (str-str_base)+1, size - (str-str_base));
-+ 	    str_base[size - (str-str_base)]='\0';
-+ 
-+ 	    return RET_OK;
-+ 	}
-+ 
-+ 	str++;
++           if (str-str_base > retmaxsize)
++           {
++               d_printf(0,"Max size exceeded! %s\n",str_base);
++               return RET_FAIL;
++           }
++
++           /* fill in the return string */
++           memcpy(ret, str_base, str-str_base);
++           ret[ str - str_base -1] = '\0';
++
++           memcpy( str_base, str_base + (str-str_base)+1, size - (str-str_base));
++           str_base[size - (str-str_base)]='\0';
++
++           return RET_OK;
++       }
++
++       str++;
 +     }
-+ 
++
 +     /* couldn't find a full line */
 +     return RET_NO_FULLLINE;
 + }
-+ 
-+ 
-+ 
++
++
++
 + /************************** END Generic Parse Functions *******************************/
-+ 
++
 + /************************ Writing to Network functions *****************/
-+ 
-+ static conn_ret WriteToWire(connection_t *cxn, EndpRWCB callback, 
-+ 			    EndPoint endp, Buffer *array)
++
++ static conn_ret WriteToWire(connection_t *cxn, EndpRWCB callback,
++                           EndPoint endp, Buffer *array)
 + {
-+ 
++
 +     if (array == NULL) return RET_FAIL;
-+ 
++
 +     prepareWrite (endp,
 +                   array,
 +                   NULL,
-+ 		  callback,
++                 callback,
 +                   cxn);
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret WriteToWire_str(connection_t *cxn, EndpRWCB callback,
-+ 				EndPoint endp, char *str, int slen)
++                               EndPoint endp, char *str, int slen)
 + {
 +     bool res;
 +     conn_ret result;
 +     Buffer buff;
 +     Buffer *writeArr;
 +     char *p;
-+ 
++
 +     if (slen==-1) slen = strlen(str);
-+ 
++
 +     buff = newBufferByCharP(str, slen+1, slen);
-+     ASSERT (buff != NULL);   
-+ 
++     ASSERT (buff != NULL);
++
 +     writeArr = makeBufferArray (buff, NULL) ;
-+ 
++
 +     result = WriteToWire(cxn, callback, endp, writeArr);
-+ 
++
 +     return result;
 + }
-+ 
++
 + static conn_ret WriteToWire_imapstr(connection_t *cxn, char *str, int slen)
 + {
 +     /* prepare the timeouts */
 +     clearTimer (cxn->imap_readBlockedTimerId) ;
-+     
++
 +     /* set up the write timer. */
 +     clearTimer (cxn->imap_writeBlockedTimerId) ;
-+ 
++
 +     if (cxn->imap_writeTimeout > 0)
-+ 	cxn->imap_writeBlockedTimerId = prepareSleep (imap_writeTimeoutCbk, cxn->imap_writeTimeout,
-+ 						 cxn);
++       cxn->imap_writeBlockedTimerId = prepareSleep (imap_writeTimeoutCbk, cxn->imap_writeTimeout,
++                                                cxn);
 +     cxn->imap_tofree_str = str;
 +     return WriteToWire_str(cxn, imap_writeCB, cxn->imap_endpoint, str, slen);
 + }
-+ 
++
 + static conn_ret WriteToWire_lmtpstr(connection_t *cxn, char *str, int slen)
 + {
 +     /* prepare the timeouts */
 +     clearTimer (cxn->lmtp_readBlockedTimerId) ;
-+     
++
 +     /* set up the write timer. */
 +     clearTimer (cxn->lmtp_writeBlockedTimerId) ;
-+ 
++
 +     if (cxn->lmtp_writeTimeout > 0)
-+ 	cxn->lmtp_writeBlockedTimerId = prepareSleep (lmtp_writeTimeoutCbk, cxn->lmtp_writeTimeout,
-+ 						 cxn) ;
-+ 
-+ 
-+ 
++       cxn->lmtp_writeBlockedTimerId = prepareSleep (lmtp_writeTimeoutCbk, cxn->lmtp_writeTimeout,
++                                                cxn) ;
++
++
++
 +     cxn->lmtp_tofree_str = str;
 +     return WriteToWire_str(cxn, lmtp_writeCB, cxn->lmtp_endpoint, str, slen);
 + }
-+ 
++
 + static conn_ret WriteArticle(connection_t *cxn, Buffer *array)
 + {
 +     int array_len = bufferArrayLen (array);
 +     int lup=0;
 +     int result;
-+ 
++
 +     for (lup=0;lup<array_len;lup++)
 +     {
-+ 	int current_size;
-+ 	Buffer current_buf;
-+ 	char *current_start;
-+ 
-+ 	current_buf = array[lup];
-+ 		
-+ 	current_size = bufferDataSize( current_buf );
-+ 	
-+ 	current_start = bufferBase( current_buf );
-+ 
++       int current_size;
++       Buffer current_buf;
++       char *current_start;
++
++       current_buf = array[lup];
++
++       current_size = bufferDataSize( current_buf );
++
++       current_start = bufferBase( current_buf );
++
 +     }
-+ 
++
 +     /* just call writetowire since it's easy */
 +     result = WriteToWire(cxn, lmtp_writeCB, cxn->lmtp_endpoint, array);
-+ 
++
 +     if (result!=RET_OK)
 +     {
-+ 	return result;
++       return result;
 +     }
-+ 
++
 +     cxn->lmtp_state = LMTP_WRITING_CONTENTS;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + /************************ END Writing to Network functions *****************/
-+ 
-+ 
-+ 
++
++
++
 + /*
 +  * Adds a cancel item to the control queue
 +  * Cancel item to delete message with <msgid> in <folder>
 +  *
 +  * cxn       - connection object
 +  * folder    - pointer to start of folder string (this is a pointer into the actual message buffer)
-+  * folderlen - length of folder string 
++  * folderlen - length of folder string
 +  * msgid     - pointer to start of msgid string (this is a pointer into the actual message buffer)
-+  * msgidlen  - length of msgid string 
++  * msgidlen  - length of msgid string
 +  * art       - the article for this control message (NULL if this cancel object lacks one)
 +  * must      - if must be accepted into queue
 +  */
-+ 
-+ static conn_ret addCancelItem(connection_t *cxn, char *folder, int folderlen, char *msgid, int msgidlen, 
-+ 			      Article art, int must)
++
++ static conn_ret addCancelItem(connection_t *cxn, char *folder, int folderlen, char *msgid, int msgidlen,
++                             Article art, int must)
 + {
 +     control_item_t *item;
 +     conn_ret result;
-+ 
++
 +     ASSERT(folder); ASSERT(msgid); ASSERT(cxn);
-+ 
++
 +     /* create the object */
 +     item = CALLOC (control_item_t, 1) ;
 +     ASSERT (item != NULL) ;
-+ 
++
 +     item->folder = calloc (folderlen+1, 1);
 +     ASSERT (item->folder != NULL);
 +     memcpy(item->folder, folder, folderlen);
 +     item->folder[folderlen] = '\0';
-+     
++
 +     item->msgid  = calloc (msgidlen+1, 1);
 +     ASSERT (item->msgid != NULL);
 +     memcpy(item->msgid, msgid, msgidlen);
 +     item->msgid[msgidlen] = '\0';
-+ 
++
 +     item->article = art;
-+     
++
 +     /* try to add to the queue (counts if art isn't null) */
 +     result = AddToQueue(&(cxn->imap_controlMsg_q), item, CANCEL_MSG, (art != NULL), must);
 +     if (result != RET_OK)
 +     {
-+ 	d_printf(1,"I thought we had space in queue but apparently not\n");
-+ 
-+ 	/* cleanup */
-+ 	free(item->folder);
-+ 	free(item->msgid);
-+ 	free(item);
-+ 
-+ 	return result;
++       d_printf(1,"I thought we had space in queue but apparently not\n");
++
++       /* cleanup */
++       free(item->folder);
++       free(item->msgid);
++       free(item);
++
++       return result;
 +     }
-+ 		
++
 +     return RET_OK;
 + }
-+ 
-+ static conn_ret AddControlMsg(connection_t *cxn, Article art, Buffer *bufs, char *control_header, 
-+ 			      char *control_header_end, bool must)
++
++ static conn_ret AddControlMsg(connection_t *cxn, Article art, Buffer *bufs, char *control_header,
++                             char *control_header_end, bool must)
 + {
 +     char *rcpt_list = NULL, *rcpt_list_end;
 +     char *orig_control_header;
 +     control_item_t *item;
 +     int res;
 +     conn_ret result;
-+ 
-+ 
++
++
 +     /* make sure contents ok; this also should load it into memory */
 +     res = artContentsOk (art);
 +     if (res==false)
 +     {
-+ 	d_printf(0,"Article seems bad\n");
-+ 	hostArticleIsMissing (cxn->myHost, cxn, art);
-+ 	return RET_FAIL;
++       d_printf(0,"Article seems bad\n");
++       hostArticleIsMissing (cxn->myHost, cxn, art);
++       return RET_FAIL;
 +     }
-+ 
++
 +     /* now let's look at the control to see what it is */
-+ 
++
 +     orig_control_header = control_header; /* save so we can free later */
-+ 
++
 +     if (strncasecmp(control_header,"newgroup",8)==0)
 +     {
-+ 	/* jump past "newgroup" */
-+ 	control_header+=8;
-+ 
-+ 	/* go past all white space */
-+ 	while (( (*control_header)==' ') && ((*control_header)=='\t') && (control_header!=control_header_end))
-+ 	{
-+ 	    control_header++;
-+ 	}
-+ 
-+ 	if (control_header == control_header_end)
-+ 	{
-+ 	    d_printf(0,"Control header contains newgroup with no group specified\n");
-+ 	    res = RET_FAIL;
-+ 	    goto cleanup;
-+ 	}
-+ 
-+ 	item = CALLOC (control_item_t, 1);
-+ 	ASSERT (item != NULL) ;
-+ 
-+ 	item->folder  = calloc (strlen(control_header)+1, 1);
-+ 	ASSERT (item->folder != NULL);
-+ 	strcpy(item->folder, control_header);
-+ 
-+ 	item->article = art;
-+ 
-+ 	result = AddToQueue(&(cxn->imap_controlMsg_q), item, CREATE_FOLDER,1,must);
-+ 	if (result != RET_OK)
-+ 	{
-+ 	    d_printf(1,"I thought we had space in queue but apparently not\n");
-+ 	    res = RET_FAIL;
-+ 	    goto cleanup;
-+ 	}
-+ 	
++       /* jump past "newgroup" */
++       control_header+=8;
++
++       /* go past all white space */
++       while (( (*control_header)==' ') && ((*control_header)=='\t') && (control_header!=control_header_end))
++       {
++           control_header++;
++       }
++
++       if (control_header == control_header_end)
++       {
++           d_printf(0,"Control header contains newgroup with no group specified\n");
++           res = RET_FAIL;
++           goto cleanup;
++       }
++
++       item = CALLOC (control_item_t, 1);
++       ASSERT (item != NULL) ;
++
++       item->folder  = calloc (strlen(control_header)+1, 1);
++       ASSERT (item->folder != NULL);
++       strcpy(item->folder, control_header);
++
++       item->article = art;
++
++       result = AddToQueue(&(cxn->imap_controlMsg_q), item, CREATE_FOLDER,1,must);
++       if (result != RET_OK)
++       {
++           d_printf(1,"I thought we had space in queue but apparently not\n");
++           res = RET_FAIL;
++           goto cleanup;
++       }
++
 +     } else if (strncasecmp(control_header,"rmgroup",7)==0)
 +     {
-+ 
-+ 	/* jump past "rmgroup" */
-+ 	control_header+=7;
-+ 
-+ 	while (( (*control_header)==' ') && (control_header!=control_header_end))
-+ 	{
-+ 	    control_header++;
-+ 	}
-+ 
-+ 	if (control_header == control_header_end)
-+ 	{
-+ 	    d_printf(0,"Control header contains rmgroup with no group specified\n");
-+ 	    res = RET_FAIL;
-+ 	    goto cleanup;
-+ 	}
-+ 
-+ 	item = CALLOC (control_item_t, 1);
-+ 	ASSERT (item != NULL) ;
-+ 
-+ 
-+ 	item->folder  = calloc (strlen(control_header)+1, 1);
-+ 	ASSERT (item->folder != NULL);
-+ 	strcpy(item->folder, control_header);
-+ 
-+ 	item->article = art;
-+ 
-+ 	result = AddToQueue(&(cxn->imap_controlMsg_q), item, DELETE_FOLDER,1,must);
-+ 	if (result != RET_OK)
-+ 	{
-+ 	    d_printf(1,"I thought we had space in queue but apparently not\n");
-+ 	    res = RET_FAIL;
-+ 	    goto cleanup;
-+ 	}
-+ 
++
++       /* jump past "rmgroup" */
++       control_header+=7;
++
++       while (( (*control_header)==' ') && (control_header!=control_header_end))
++       {
++           control_header++;
++       }
++
++       if (control_header == control_header_end)
++       {
++           d_printf(0,"Control header contains rmgroup with no group specified\n");
++           res = RET_FAIL;
++           goto cleanup;
++       }
++
++       item = CALLOC (control_item_t, 1);
++       ASSERT (item != NULL) ;
++
++
++       item->folder  = calloc (strlen(control_header)+1, 1);
++       ASSERT (item->folder != NULL);
++       strcpy(item->folder, control_header);
++
++       item->article = art;
++
++       result = AddToQueue(&(cxn->imap_controlMsg_q), item, DELETE_FOLDER,1,must);
++       if (result != RET_OK)
++       {
++           d_printf(1,"I thought we had space in queue but apparently not\n");
++           res = RET_FAIL;
++           goto cleanup;
++       }
++
 +     } else if (strncasecmp(control_header,"cancel",6)==0) {
-+ 	char *str, *laststart;
-+ 	int tmplen;
-+ 
-+ 	/* jump past "cancel" */
-+ 	control_header+=6;
-+ 
-+ 	while (( (*control_header)==' ') && (control_header!=control_header_end))
-+ 	{
-+ 	    control_header++;
-+ 	}
-+ 
-+ 	if (control_header == control_header_end)
-+ 	{
-+ 	    d_printf(0,"Control header contains cancel with no msgid specified\n");
-+ 	    res = RET_FAIL;
-+ 	    goto cleanup;
-+ 	}
-+ 
-+ 	result = FindHeader(bufs, "Newsgroups", &rcpt_list, &rcpt_list_end);
-+ 	if (result!=RET_OK)
-+ 	{
-+ 	    d_printf(0,"Cancel msg contains no newsgroups header\n");
-+ 	    res = RET_FAIL;
-+ 	    goto cleanup;
-+ 	}
-+ 
-+ 	str = rcpt_list;
-+ 	laststart = rcpt_list;
-+ 
-+ 	while ( str != rcpt_list_end)
-+ 	{
-+ 	    if ((*str) == ',')
-+ 	    {
-+ 		/* eliminate leading whitespace */
-+ 		while (((*laststart) ==' ') || ((*laststart)=='\t'))
-+ 		{
-+ 		    laststart++;
-+ 		}
-+ 
-+ 		res = addCancelItem(cxn, laststart, str - laststart, control_header, control_header_end - control_header,
-+ 				    NULL,must);
-+ 		if (res!=RET_OK) goto cleanup;
-+ 		
-+ 		laststart = str+1;
-+ 	    }
-+ 
-+ 	    str++;
-+ 	}
-+ 	
-+ 	if (laststart<str)
-+ 	{
-+ 
-+ 	    res = addCancelItem(cxn, laststart, str - laststart, control_header,
-+ 				control_header_end - control_header, art, must);
-+ 	    if (res!=RET_OK) goto cleanup;
-+ 	}
-+ 
++       char *str, *laststart;
++       int tmplen;
++
++       /* jump past "cancel" */
++       control_header+=6;
++
++       while (( (*control_header)==' ') && (control_header!=control_header_end))
++       {
++           control_header++;
++       }
++
++       if (control_header == control_header_end)
++       {
++           d_printf(0,"Control header contains cancel with no msgid specified\n");
++           res = RET_FAIL;
++           goto cleanup;
++       }
++
++       result = FindHeader(bufs, "Newsgroups", &rcpt_list, &rcpt_list_end);
++       if (result!=RET_OK)
++       {
++           d_printf(0,"Cancel msg contains no newsgroups header\n");
++           res = RET_FAIL;
++           goto cleanup;
++       }
++
++       str = rcpt_list;
++       laststart = rcpt_list;
++
++       while ( str != rcpt_list_end)
++       {
++           if ((*str) == ',')
++           {
++               /* eliminate leading whitespace */
++               while (((*laststart) ==' ') || ((*laststart)=='\t'))
++               {
++                   laststart++;
++               }
++
++               res = addCancelItem(cxn, laststart, str - laststart, control_header, control_header_end - control_header,
++                                   NULL,must);
++               if (res!=RET_OK) goto cleanup;
++
++               laststart = str+1;
++           }
++
++           str++;
++       }
++
++       if (laststart<str)
++       {
++
++           res = addCancelItem(cxn, laststart, str - laststart, control_header,
++                               control_header_end - control_header, art, must);
++           if (res!=RET_OK) goto cleanup;
++       }
++
 +     } else {
-+ 	d_printf(0,"DOn't understand control header [%s]\n",control_header);
-+ 	res = RET_FAIL;
++       d_printf(0,"DOn't understand control header [%s]\n",control_header);
++       res = RET_FAIL;
 +     }
-+ 
++
 +     res = RET_OK;
-+ 
++
 +  cleanup:
-+ 
++
 +     return res;
 + }
-+ 
++
 + /*
 +  * Show msg handling statistics
 +  */
-+ 
++
 + void show_stats(connection_t *cxn)
-+ {   
++ {
 +     d_printf(1,"host = %s; ident = %d\n",hostPeerName (cxn->myHost), cxn->ident);
 +     d_printf(1,"imap queue = %d lmtp queue = %d\n",QueueItems(&(cxn->imap_controlMsg_q)),
-+ 	     QueueItems(&(cxn->lmtp_todeliver_q)));
++            QueueItems(&(cxn->lmtp_todeliver_q)));
 +     d_printf(1,"imap state = %s\n",imap_stateToString(cxn->imap_state));
 +     d_printf(1,"lmtp state = %s\n",lmtp_stateToString(cxn->lmtp_state));
 +     d_printf(1,"delivered:  yes: %d no: %d\n",cxn->lmtp_suceeded, cxn->lmtp_failed);
@@ -1388,29 +1388,29 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     d_printf(1,"create:     yes: %d no: %d\n",cxn->create_suceeded, cxn->create_failed);
 +     d_printf(1,"remove:     yes: %d no: %d\n",cxn->remove_suceeded, cxn->remove_failed);
 + }
-+ 
++
 + /**************************** SASL helper functions ******************************/
-+ 
++
 + #ifdef HAVE_SASL
 + /* callback to get userid or authid */
 + static int getsimple(void *context __attribute__((unused)),
-+ 		     int id,
-+ 		     const char **result,
-+ 		     unsigned *len)
++                    int id,
++                    const char **result,
++                    unsigned *len)
 + {
 +   char *username;
 +   char *authid;
-+ 
++
 +   if (! result)
 +     return SASL_BADPARAM;
-+ 
++
 +   switch (id) {
 +   case SASL_CB_GETREALM:
 +       *result = deliver_realm;
 +       if (len)
-+ 	  *len = deliver_realm ? strlen(deliver_realm) : 0;
++         *len = deliver_realm ? strlen(deliver_realm) : 0;
 +       break;
-+ 
++
 +   case SASL_CB_USER:
 +     *result = deliver_username;
 +     if (len)
@@ -1432,34 +1432,34 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   }
 +   return SASL_OK;
 + }
-+ 
++
 + /* callback to get password */
 + static int
 + getsecret(sasl_conn_t *conn,
-+ 	  void *context __attribute__((unused)),
-+ 	  int id,
-+ 	  sasl_secret_t **psecret)
++         void *context __attribute__((unused)),
++         int id,
++         sasl_secret_t **psecret)
 + {
 +   if (! conn || ! psecret || id != SASL_CB_PASS)
 +     return SASL_BADPARAM;
-+ 
++
 +   if (deliver_password==NULL)
 +   {
 +       d_printf(0,"SASL requested a password but I don't have one\n");
 +       return SASL_FAIL;
 +   }
-+ 
++
 +   *psecret = (sasl_secret_t *) malloc(sizeof(sasl_secret_t)+strlen(deliver_password)+1);
 +   if (! *psecret)
 +     return SASL_FAIL;
-+ 
++
 +   strcpy((*psecret)->data, deliver_password);
 +   (*psecret)->len=strlen(deliver_password);
-+ 
++
 +   return SASL_OK;
 + }
-+ 
-+ 
++
++
 + /* callbacks we support */
 + static sasl_callback_t saslcallbacks[] = {
 +   {
@@ -1469,28 +1469,28 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   }, {
 +     SASL_CB_AUTHNAME, &getsimple, NULL
 +   }, {
-+     SASL_CB_PASS, &getsecret, NULL    
++     SASL_CB_PASS, &getsecret, NULL
 +   }, {
 +     SASL_CB_LIST_END, NULL, NULL
 +   }
 + };
-+ 
++
 + static sasl_security_properties_t *make_secprops(int min,int max)
 + {
 +   sasl_security_properties_t *ret=(sasl_security_properties_t *)
 +     malloc(sizeof(sasl_security_properties_t));
-+ 
++
 +   ret->maxbufsize=1024;
 +   ret->min_ssf=min;
 +   ret->max_ssf=max;
-+ 
++
 +   ret->security_flags=0;
 +   ret->property_names=NULL;
 +   ret->property_values=NULL;
-+ 
++
 +   return ret;
 + }
-+ 
++
 + static conn_ret SetSASLProperties(sasl_conn_t *conn, int sock, int minssf, int maxssf)
 + {
 +   int saslresult;
@@ -1498,7 +1498,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   int addrsize=sizeof(struct sockaddr_in);
 +   struct sockaddr_in saddr_l;
 +   struct sockaddr_in saddr_r;
-+ 
++
 +   /* create a security structure and give it to sasl */
 +   secprops = make_secprops(minssf, maxssf);
 +   if (secprops != NULL)
@@ -1506,66 +1506,66 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     sasl_setprop(conn, SASL_SEC_PROPS, secprops);
 +     free(secprops);
 +   }
-+ 
++
 +   if (getpeername(sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
 +     return RET_FAIL;
-+ 
++
 +   if (sasl_setprop(conn, SASL_IP_REMOTE, &saddr_r)!=SASL_OK)
 +     return RET_FAIL;
-+   
++
 +   addrsize=sizeof(struct sockaddr_in);
 +   if (getsockname(sock,(struct sockaddr *) &saddr_l,&addrsize)!=0)
 +     return RET_FAIL;
-+ 
++
 +   if (sasl_setprop(conn, SASL_IP_LOCAL, &saddr_l)!=SASL_OK)
 +     return RET_FAIL;
-+ 
++
 +   return RET_OK;
 + }
 + #endif /* HAVE_SASL */
-+ 
++
 + /************************** END SASL helper functions ******************************/
-+ 
++
 + /************************* Startup functions **********************************/
-+ 
++
 + static conn_ret Initialize(connection_t *cxn, int respTimeout)
 + {
 +     conn_ret saslresult;
-+ 
-+ 
++
++
 + #ifdef HAVE_SASL
 +     /* Initialize SASL */
 +     saslresult=sasl_client_init(saslcallbacks);
-+ 
++
 +     if (saslresult!=SASL_OK)
 +     {
-+ 	d_printf(0,"Error initializing SASL (%s)",
-+ 		 sasl_errstring(saslresult, NULL, NULL));
-+ 	return RET_FAIL;
++       d_printf(0,"Error initializing SASL (%s)",
++                sasl_errstring(saslresult, NULL, NULL));
++       return RET_FAIL;
 +     }
 + #endif /* HAVE_SASL */
-+ 
++
 +     d_printf(1,"initializing....\n");
-+ 
-+ 
-+ 
++
++
++
 +     cxn->lmtp_rBuffer = newBuffer(4096);
 +     if (cxn->lmtp_rBuffer == NULL)
 +     {
-+ 	d_printf(0,"Failure allocating buffer\n");
-+ 	return RET_FAIL;
++       d_printf(0,"Failure allocating buffer\n");
++       return RET_FAIL;
 +     }
 +     bufferAddNullByte(cxn->lmtp_rBuffer);
-+ 
-+ 
++
++
 +     cxn->imap_rBuffer = newBuffer(4096);
 +     if (cxn->imap_rBuffer == NULL)
 +     {
-+ 	d_printf(0,"Failure allocating buffer\n");
-+ 	return RET_FAIL;
++       d_printf(0,"Failure allocating buffer\n");
++       return RET_FAIL;
 +     }
 +     bufferAddNullByte(cxn->imap_rBuffer);
-+ 
++
 +     d_printf(1,"Timeout is %d\n",respTimeout);
 +     /* Initialize timeouts */
 +     cxn->lmtp_writeTimeout = respTimeout;
@@ -1576,302 +1576,302 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     cxn->lmtp_sleepTimeout = init_reconnect_period ;
 +     cxn->imap_sleepTimerId = 0 ;
 +     cxn->imap_sleepTimeout = init_reconnect_period ;
-+ 
++
 +     cxn->dosomethingTimeout = DOSOMETHING_TIMEOUT;
-+ 
++
 +     /* set up the write timer. */
 +     clearTimer (cxn->dosomethingTimerId) ;
-+ 
++
 +     if (cxn->dosomethingTimeout > 0)
-+ 	cxn->dosomethingTimerId = prepareSleep (dosomethingTimeoutCbk, 
-+ 						cxn->dosomethingTimeout, cxn);
-+ 
-+ 
-+ 
++       cxn->dosomethingTimerId = prepareSleep (dosomethingTimeoutCbk,
++                                               cxn->dosomethingTimeout, cxn);
++
++
++
 +     return RET_OK;
 + }
-+ 
-+ 
++
++
 + /* initialize the network */
-+ static conn_ret init_net(char *serverFQDN, 
-+ 			 int port,
-+ 			 int *sock)
++ static conn_ret init_net(char *serverFQDN,
++                        int port,
++                        int *sock)
 + {
 +   struct sockaddr_in addr;
 +   struct hostent *hp;
-+ 
++
 +   if ((hp = gethostbyname(serverFQDN)) == NULL) {
 +     perror("gethostbyname");
 +     return RET_FAIL;
 +   }
-+ 
++
 +   if (( (*sock) = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 +     perror("socket");
-+     return RET_FAIL;	
++     return RET_FAIL;
 +   }
-+ 
++
 +   addr.sin_family = AF_INET;
 +   memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
 +   addr.sin_port = htons(port);
-+ 
++
 +   if (connect( (*sock), (struct sockaddr *) &addr, sizeof (addr)) < 0) {
 +     perror("connect");
 +     return RET_FAIL;
 +   }
-+ 
++
 +   return RET_OK;
 + }
-+ 
-+ 
-+ 
++
++
++
 + static conn_ret SetupLMTPConnection(connection_t *cxn,
-+ 				    char *serverName,
-+ 				    int port)
++                                   char *serverName,
++                                   int port)
 + {
 +     int saslresult;
 +     conn_ret result;
-+ 
++
 +     cxn->lmtp_port = port;
-+ 
++
 +     if (serverName==NULL)
 +     {
-+ 	d_printf(0,"Servername is null");
-+ 	return RET_FAIL;	
++       d_printf(0,"Servername is null");
++       return RET_FAIL;
 +     }
-+ 
++
 +     d_printf(1,"lmtp Servername is [%s]",serverName);
-+ 
++
 + #ifdef HAVE_SASL
 +     /* Free the SASL connection if we already had one */
 +     if (cxn->saslconn_lmtp!=NULL)
 +     {
-+ 	sasl_dispose(&cxn->saslconn_lmtp);
++       sasl_dispose(&cxn->saslconn_lmtp);
 +     }
-+ 
++
 +     /* Start SASL */
 +     saslresult=sasl_client_new("lmtp",
-+ 			       serverName,
-+ 			       NULL,
-+ 			       0,
-+ 			       &cxn->saslconn_lmtp);
-+ 
++                              serverName,
++                              NULL,
++                              0,
++                              &cxn->saslconn_lmtp);
++
 +     if (saslresult != SASL_OK)
 +     {
-+ 	d_printf(0,"Error creating a new SASL connection (%s)",
-+ 		 sasl_errstring(saslresult,NULL,NULL));
-+ 	return RET_FAIL;
++       d_printf(0,"Error creating a new SASL connection (%s)",
++                sasl_errstring(saslresult,NULL,NULL));
++       return RET_FAIL;
 +     }
 + #endif /* HAVE_SASL */
-+ 
++
 +     /* Connect the Socket */
 +     result = init_net(serverName,
-+ 		      LMTP_PORT, /*port,*/
-+ 		      &(cxn->sockfd_lmtp));
-+    
++                     LMTP_PORT, /*port,*/
++                     &(cxn->sockfd_lmtp));
++
 +     if (result != RET_OK)
 +     {
-+ 	d_printf(0,"Unable to start network connection to lmtp host");
-+ 	return RET_FAIL;
++       d_printf(0,"Unable to start network connection to lmtp host");
++       return RET_FAIL;
 +     }
-+ 
++
 +     if (cxn->lmtp_respBuffer) free(cxn->lmtp_respBuffer);
 +     cxn->lmtp_respBuffer = (char *) malloc (4096);
 +     cxn->lmtp_respBuffer[0]='\0';
-+ 
++
 +     /* Free if we had an existing one */
 +     if (cxn->lmtp_endpoint != NULL)
 +     {
-+ 	delEndPoint(cxn->lmtp_endpoint);
-+ 	cxn->lmtp_endpoint = NULL;
++       delEndPoint(cxn->lmtp_endpoint);
++       cxn->lmtp_endpoint = NULL;
 +     }
-+ 
++
 +     cxn->lmtp_endpoint = newEndPoint(cxn->sockfd_lmtp);
 +     if (cxn->lmtp_endpoint == NULL)
 +     {
-+ 	d_printf(0,"Failure creating endpoint\n");
-+ 	return RET_FAIL;
++       d_printf(0,"Failure creating endpoint\n");
++       return RET_FAIL;
 +     }
-+ 
++
 + #ifdef HAVE_SASL
 +     /* Set the SASL properties */
-+     result = SetSASLProperties(cxn->saslconn_lmtp, cxn->sockfd_lmtp, 
-+ 			       0, 0);
-+     
++     result = SetSASLProperties(cxn->saslconn_lmtp, cxn->sockfd_lmtp,
++                              0, 0);
++
 +     if (result != RET_OK)
 +     {
-+ 	d_printf(0,"Error setting sasl properties");
-+ 
-+ 	return RET_FAIL;
++       d_printf(0,"Error setting sasl properties");
++
++       return RET_FAIL;
 +     }
 + #endif /* HAVE_SASL */
-+ 
-+ 
++
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret SetupIMAPConnection(connection_t *cxn,
-+ 				    char *serverName,
-+ 				    int port)
++                                   char *serverName,
++                                   int port)
 + {
 +     int saslresult;
 +     conn_ret result;
-+ 
++
 +     cxn->imap_port = port;
-+ 
++
 +     if (serverName==NULL)
 +     {
-+ 	d_printf(0,"Servername is null");	
-+ 	return RET_FAIL;	
++       d_printf(0,"Servername is null");
++       return RET_FAIL;
 +     }
-+ 
++
 +     d_printf(1,"imap server name is %s\n",serverName);
-+ 
++
 + #ifdef HAVE_SASL
 +     /* Free the SASL connection if we already had one */
 +     if (cxn->imap_saslconn!=NULL)
 +     {
-+ 	d_printf(1,"Disposing of IMAP connection\n");
-+ 	sasl_dispose(&cxn->imap_saslconn);
++       d_printf(1,"Disposing of IMAP connection\n");
++       sasl_dispose(&cxn->imap_saslconn);
 +     }
-+ 
++
 +     /* Start SASL */
 +     saslresult=sasl_client_new("imap",
-+ 			       serverName,
-+ 			       NULL,
-+ 			       0,
-+ 			       &cxn->imap_saslconn);
-+ 
++                              serverName,
++                              NULL,
++                              0,
++                              &cxn->imap_saslconn);
++
 +     if (saslresult != SASL_OK)
 +     {
-+ 	d_printf(0,"Error creating a new SASL connection (%s)",
-+ 		 sasl_errstring(saslresult,NULL,NULL));
-+ 	return RET_FAIL;
++       d_printf(0,"Error creating a new SASL connection (%s)",
++                sasl_errstring(saslresult,NULL,NULL));
++       return RET_FAIL;
 +     }
 + #endif /* HAVE_SASL */
-+ 
++
 +     /* Connect the Socket */
 +     result = init_net(serverName,
-+ 		      port,
-+ 		      &(cxn->imap_sockfd));
-+    
++                     port,
++                     &(cxn->imap_sockfd));
++
 +     if (result != RET_OK)
 +     {
-+ 	d_printf(0,"Unable to start network connection for IMAP");
-+ 	return RET_FAIL;
++       d_printf(0,"Unable to start network connection for IMAP");
++       return RET_FAIL;
 +     }
-+ 
++
 +     if (cxn->imap_respBuffer) free(cxn->imap_respBuffer);
 +     cxn->imap_respBuffer = (char *) malloc (4096);
 +     cxn->imap_respBuffer[0]='\0';
-+ 
++
 +     /* Free if we had an existing one */
 +     if (cxn->imap_endpoint != NULL)
 +     {
-+ 	delEndPoint(cxn->imap_endpoint);
-+ 	cxn->imap_endpoint = NULL;
++       delEndPoint(cxn->imap_endpoint);
++       cxn->imap_endpoint = NULL;
 +     }
-+ 
++
 +     cxn->imap_endpoint = newEndPoint(cxn->imap_sockfd);
 +     if (cxn->imap_endpoint == NULL)
 +     {
-+ 	d_printf(0,"Failure creating imap endpoint\n");
-+ 	return RET_FAIL;
++       d_printf(0,"Failure creating imap endpoint\n");
++       return RET_FAIL;
 +     }
-+ 
++
 + #ifdef HAVE_SASL
 +     /* Set the SASL properties */
-+     result = SetSASLProperties(cxn->imap_saslconn, cxn->imap_sockfd, 
-+ 			       0, 0);    
++     result = SetSASLProperties(cxn->imap_saslconn, cxn->imap_sockfd,
++                              0, 0);
 +     if (result != RET_OK)
 +     {
-+ 	d_printf(0,"Error setting sasl properties");
-+ 	return result;
++       d_printf(0,"Error setting sasl properties");
++       return result;
 +     }
 + #endif /* HAVE_SASL */
-+ 
-+ 
++
++
 +     return RET_OK;
 + }
-+ 
++
 + /************************* END Startup functions **********************************/
-+ 
++
 + /* Return the response code for this line
 +    -1 if it doesn't seem to have one
 + */
 + static int ask_code(char *str)
 + {
 +     int ret = 0;
-+     
++
 +     if (str==NULL) return -1;
-+ 
++
 +     if (strlen(str) < 3) return -1;
-+ 
++
 +     /* check to make sure 0-2 are digits */
 +     if ((isdigit((int) str[0])==0) ||
-+ 	(isdigit((int) str[1])==0) ||
-+ 	(isdigit((int) str[2])==0))
++       (isdigit((int) str[1])==0) ||
++       (isdigit((int) str[2])==0))
 +     {
-+ 	d_printf(0,"Response does not begin with a code [%s]\n",str);
-+ 	return -1;
++       d_printf(0,"Response does not begin with a code [%s]\n",str);
++       return -1;
 +     }
-+ 
-+ 
++
++
 +     ret = ((str[0]-'0')*100)+
-+ 	  ((str[1]-'0')*10)+
-+ 	  (str[2]-'0');
-+     
++         ((str[1]-'0')*10)+
++         (str[2]-'0');
++
 +     return ret;
 + }
-+ 
++
 + /* is this a continuation or not?
 +    220-fdfsd is        (1)
 +    220 fdsfs is not    (0)
 +  */
-+ 
++
 + static int ask_keepgoing(char *str)
 + {
 +     if (str==NULL) return 0;
 +     if (strlen(str) < 4) return 0;
-+ 
++
 +     if (str[3]=='-') return 1;
-+ 
++
 +     return 0;
 + }
-+ 
-+ 
++
++
 + static conn_ret lmtp_listenintro(connection_t *cxn)
 + {
 +     char *str;
 +     Buffer *readBuffers;
-+ 
++
 +     /* set up to receive */
 +     readBuffers = makeBufferArray (bufferTakeRef (cxn->lmtp_rBuffer), NULL) ;
-+     prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);    
-+ 
++     prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);
++
 +     cxn->lmtp_state = LMTP_READING_INTRO;
-+ 
++
 +     return RET_OK;
 + }
-+ 
-+ 
-+ 
++
++
++
 + /************************** IMAP functions ***********************/
-+ 
++
 + static conn_ret imap_Connect(connection_t *cxn)
 + {
 +     conn_ret result;
-+ 
++
 +     /* make the IMAP connection */
 +     result = SetupIMAPConnection(cxn,
-+ 				 cxn->ServerName,
-+ 				 IMAP_PORT); 
-+ 
++                                cxn->ServerName,
++                                IMAP_PORT);
++
 +     /* Listen to the intro and start the authenticating process */
 +     result = imap_listenintro(cxn);
-+ 
++
 +     return result;
 + }
-+ 
++
 + /*
 +  * This is called when the data write timeout for the remote
 +  * goes off. We tear down the connection and notify our host.
@@ -1880,18 +1880,18 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + {
 +   connection_t *cxn = (Connection) data ;
 +   const char *peerName ;
-+ 
++
 +   peerName = hostPeerName (cxn->myHost) ;
-+ 
++
 +   syslog (LOG_WARNING, "timeout for %s", peerName);
 +   d_printf (0,"%s: shutting down non-responsive connection (state=%d)\n",
 +            hostPeerName (cxn->myHost), cxn->imap_state) ;
-+ 
++
 +   cxnLogStats (cxn,true) ;
-+ 
++
 +   imap_Disconnect(cxn);
 + }
-+ 
++
 + /*
 +  * This is called when the timeout for the reponse from the remote
 +  * goes off. We tear down the connection and notify our host.
@@ -1900,17 +1900,17 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + {
 +   Connection cxn = (Connection) data ;
 +   const char *peerName ;
-+ 
++
 +   ASSERT (id == cxn->imap_readBlockedTimerId) ;
-+ 
++
 +   peerName = hostPeerName (cxn->myHost) ;
-+ 
++
 +   syslog (LOG_WARNING, RESPONSE_TIMEOUT, peerName, cxn->ident) ;
 +   d_printf (0,"%s:%d shutting down non-repsonsive imap connection\n",
 +            hostPeerName (cxn->myHost), cxn->ident) ;
-+ 
++
 +   cxnLogStats (cxn,true) ;
-+ 
++
 +   if (cxn->imap_state == IMAP_DISCONNECTED)
 +     {
 +       imap_Disconnect(cxn);
@@ -1919,22 +1919,22 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     }
 +   else {
 +       imap_Disconnect(cxn);
-+   }      
++   }
 + }
-+ 
++
 + /*
 +  * Called by the EndPoint class when the timer goes off
 +  */
 + void imap_reopenTimeoutCbk (TimeoutId id, void *data)
 + {
 +   Connection cxn = (Connection) data ;
-+ 
++
 +   ASSERT (id == cxn->imap_sleepTimerId) ;
-+ 
++
 +   cxn->imap_sleepTimerId = 0 ;
-+ 
++
 +   d_printf(1,"[imap] Reopen timeout\n");
-+   
++
 +   if (cxn->imap_state != IMAP_DISCONNECTED)
 +     {
 +       syslog (LOG_ERR,CXN_BAD_STATE,hostPeerName (cxn->myHost),
@@ -1942,92 +1942,92 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     }
 +   else {
 +       if (imap_Connect(cxn) != RET_OK)
-+ 	  prepareReopenCbk(cxn, 0);
++         prepareReopenCbk(cxn, 0);
 +   }
 + }
-+ 
++
 + static void imap_Disconnect(connection_t *cxn)
 + {
 +     clearTimer (cxn->imap_sleepTimerId) ;
 +     clearTimer (cxn->imap_readBlockedTimerId) ;
 +     clearTimer (cxn->imap_writeBlockedTimerId) ;
-+ 
++
 +     DeferAllArticles(cxn, &(cxn->imap_controlMsg_q)) ;      /* give any articles back to Host */
-+ 
++
 +     cxn->imap_state = IMAP_DISCONNECTED;
-+ 
++
 +     cxn->imap_disconnects++;
-+ 
++
 +     cxn->imap_respBuffer[0]='\0';
-+ 
++
 +     if (cxn->issue_quit == 0)
-+ 	prepareReopenCbk(cxn,0);
++       prepareReopenCbk(cxn,0);
 + }
-+ 
++
 + /************************** END IMAP functions ***********************/
-+ 
++
 + /************************ LMTP functions **************************/
-+ 
++
 + /*
 +  * Create a network lmtp connection
 +  * and start listening for the intro string
 +  *
 +  */
-+ 
++
 + static conn_ret lmtp_Connect(connection_t *cxn)
 + {
 +     conn_ret result;
-+ 
++
 +     /* make the LMTP connection */
 +     result = SetupLMTPConnection(cxn,
-+ 				 cxn->ServerName,
-+ 				 LMTP_PORT);
-+ 
++                                cxn->ServerName,
++                                LMTP_PORT);
++
 +     if (result!=RET_OK) return result;
-+ 
++
 +     /* Listen to the intro */
 +     result = lmtp_listenintro(cxn);
-+ 
++
 +     return result;
 + }
-+ 
-+ 
-+ 
++
++
++
 + static void lmtp_Disconnect(connection_t *cxn)
 + {
 +     clearTimer (cxn->lmtp_sleepTimerId) ;
 +     clearTimer (cxn->lmtp_readBlockedTimerId) ;
 +     clearTimer (cxn->lmtp_writeBlockedTimerId) ;
-+ 
++
 +     DeferAllArticles(cxn, &(cxn->lmtp_todeliver_q)) ;      /* give any articles back to Host */
-+ 
++
 +     cxn->lmtp_have_mailfrom = 0;
-+ 
++
 +     cxn->lmtp_state = LMTP_DISCONNECTED;
-+ 
++
 +     cxn->lmtp_disconnects++;
-+ 
++
 +     cxn->lmtp_respBuffer[0]='\0';
-+ 
++
 +     if (cxn->issue_quit == 0)
-+ 	prepareReopenCbk(cxn,1);
++       prepareReopenCbk(cxn,1);
 + }
-+ 
-+ 
-+ 
++
++
++
 + /*
 +  * Called by the EndPoint class when the timer goes off
 +  */
 + void lmtp_reopenTimeoutCbk (TimeoutId id, void *data)
 + {
 +   Connection cxn = (Connection) data ;
-+ 
++
 +   ASSERT (id == cxn->lmtp_sleepTimerId) ;
-+ 
++
 +   cxn->lmtp_sleepTimerId = 0 ;
-+ 
++
 +   d_printf(1,"[lmtp] Reopen timeout\n");
-+         
++
 +   if (cxn->lmtp_state != LMTP_DISCONNECTED)
 +     {
 +       syslog (LOG_ERR,CXN_BAD_STATE,hostPeerName (cxn->myHost),
@@ -2035,10 +2035,10 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     }
 +   else {
 +       if (lmtp_Connect(cxn) != RET_OK)
-+ 	  prepareReopenCbk(cxn, 1);
++         prepareReopenCbk(cxn, 1);
 +   }
 + }
-+ 
++
 + /*
 +  * Set up the callback used when the Connection is sleeping (i.e. will try
 +  * to reopen the connection).
@@ -2048,28 +2048,28 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + static void prepareReopenCbk (Connection cxn, int type)
 + {
 +     /* xxx check state */
-+ 
++
 +     d_printf (1,"%s:%d Setting up a reopen callback\n",
-+ 	      hostPeerName (cxn->myHost), cxn->ident) ;
-+ 
++             hostPeerName (cxn->myHost), cxn->ident) ;
++
 +     if (type == 0)
-+ 	cxn->imap_sleepTimerId = prepareSleep (imap_reopenTimeoutCbk, cxn->imap_sleepTimeout, cxn) ;
++       cxn->imap_sleepTimerId = prepareSleep (imap_reopenTimeoutCbk, cxn->imap_sleepTimeout, cxn) ;
 +     else
-+ 	cxn->lmtp_sleepTimerId = prepareSleep (lmtp_reopenTimeoutCbk, cxn->lmtp_sleepTimeout, cxn) ;
-+     
++       cxn->lmtp_sleepTimerId = prepareSleep (lmtp_reopenTimeoutCbk, cxn->lmtp_sleepTimeout, cxn) ;
++
 +     /* bump the sleep timer amount each time to wait longer and longer. Gets
 +        reset in resetConnection() */
 +     if (type == 0) {
-+ 	cxn->imap_sleepTimeout *= 2 ;
-+ 	if (cxn->imap_sleepTimeout > max_reconnect_period)
-+ 	    cxn->imap_sleepTimeout = max_reconnect_period ;
++       cxn->imap_sleepTimeout *= 2 ;
++       if (cxn->imap_sleepTimeout > max_reconnect_period)
++           cxn->imap_sleepTimeout = max_reconnect_period ;
 +     } else {
-+ 	cxn->lmtp_sleepTimeout *= 2 ;
-+ 	if (cxn->lmtp_sleepTimeout > max_reconnect_period)
-+ 	    cxn->lmtp_sleepTimeout = max_reconnect_period ;
++       cxn->lmtp_sleepTimeout *= 2 ;
++       if (cxn->lmtp_sleepTimeout > max_reconnect_period)
++           cxn->lmtp_sleepTimeout = max_reconnect_period ;
 +     }
 + }
-+ 
++
 + /*
 +  * This is called when the timeout for the reponse from the remote
 +  * goes off. We tear down the connection and notify our host.
@@ -2078,17 +2078,17 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + {
 +   Connection cxn = (Connection) data ;
 +   const char *peerName ;
-+ 
++
 +   ASSERT (id == cxn->lmtp_readBlockedTimerId) ;
-+ 
++
 +   peerName = hostPeerName (cxn->myHost) ;
-+ 
++
 +   syslog (LOG_WARNING, RESPONSE_TIMEOUT, peerName, cxn->ident) ;
 +   d_printf (0,"%s:%d shutting down non-repsonsive lmtp connection\n",
 +            hostPeerName (cxn->myHost), cxn->ident) ;
-+ 
++
 +   cxnLogStats (cxn,true) ;
-+ 
++
 +   if (cxn->lmtp_state == LMTP_DISCONNECTED)
 +     {
 +       imap_Disconnect(cxn);
@@ -2097,11 +2097,11 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     }
 +   else {
 +       lmtp_Disconnect(cxn);
-+   }      
++   }
 + }
-+ 
-+ 
-+ 
++
++
++
 + /*
 +  * This is called when the data write timeout for the remote
 +  * goes off. We tear down the connection and notify our host.
@@ -2110,77 +2110,77 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + {
 +   connection_t *cxn = (Connection) data ;
 +   const char *peerName ;
-+ 
++
 +   peerName = hostPeerName (cxn->myHost) ;
-+ 
++
 +   syslog (LOG_WARNING, "timeout for %s", peerName);
 +   d_printf (0,"%s: shutting down non-responsive connection (state = %d)\n",
 +            hostPeerName (cxn->myHost), cxn->lmtp_state) ;
-+ 
++
 +   cxnLogStats (cxn,true) ;
-+ 
++
 +   lmtp_Disconnect(cxn);
 + }
-+ 
++
 + /************************ END LMTP functions **************************/
-+ 
++
 + /************************** LMTP write functions ********************/
-+ 
++
 + static conn_ret lmtp_IssueQuit(connection_t *cxn)
 + {
 +     int result;
 +     char *p;
-+ 
++
 +     /* say hello */
 +     p = (char *) malloc(20);
-+ 
++
 +     sprintf (p, "QUIT\r\n", hostname); /* our domain name */
-+ 
++
 +     result = WriteToWire_lmtpstr(cxn, p, strlen(p));
 +     if (result!=RET_OK) return result;
-+ 
++
 +     cxn->lmtp_state = LMTP_WRITING_QUIT;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret lmtp_getcapabilities(connection_t *cxn)
 + {
 +     int result;
 +     char *p;
-+ 
++
 +     if (cxn->lmtp_capabilities != NULL)
 +     {
-+ 	free( cxn->lmtp_capabilities->saslmechs);
-+ 	free( cxn->lmtp_capabilities );
-+ 	cxn->lmtp_capabilities = NULL;
++       free( cxn->lmtp_capabilities->saslmechs);
++       free( cxn->lmtp_capabilities );
++       cxn->lmtp_capabilities = NULL;
 +     }
-+ 
++
 +     cxn->lmtp_capabilities = CALLOC (lmtp_capabilities_t, 1);
 +     ASSERT (cxn->lmtp_capabilities != NULL) ;
-+ 
++
 +     /* say hello */
 +     p = (char *) malloc(20+strlen(hostname));
-+ 
++
 + #ifdef SMTPMODE
 +     sprintf (p, "EHLO %s\r\n", hostname); /* our domain name */
 + #else
 +     sprintf (p, "LHLO %s\r\n", hostname); /* our domain name */
 + #endif /* SMTPMODE */
-+ 
++
 +     result = WriteToWire_lmtpstr(cxn, p, strlen(p));
 +     if (result!=RET_OK) return result;
-+ 
++
 +     cxn->lmtp_state = LMTP_WRITING_LHLO;
-+ 
-+     return RET_OK;    
++
++     return RET_OK;
 + }
-+ 
++
 + #ifdef HAVE_SASL
 + static conn_ret lmtp_authenticate(connection_t *cxn)
 + {
 +     int saslresult;
-+     
++
 +     const char *mechusing;
 +     char *out;
 +     unsigned int outlen;
@@ -2190,282 +2190,282 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     int inbase64len;
 +     int status;
 +     int result;
-+ 
++
 +     char *p;
-+ 
++
 +     sasl_interact_t *client_interact=NULL;
-+ 
-+ 
++
++
 +     cxn->lmtp_have_mailfrom = 0;
-+ 
-+     saslresult=sasl_client_start(cxn->saslconn_lmtp, 
-+ 				 cxn->lmtp_capabilities->saslmechs,
-+ 				 NULL, &client_interact,
-+ 				 &out, &outlen,
-+ 				 &mechusing);
-+ 
-+ 
-+ 
-+     if ((saslresult != SASL_OK) && 
-+ 	(saslresult != SASL_CONTINUE)) {
-+ 
-+ 	d_printf(0,"Error calling sasl_client_start (%s)\n",sasl_errstring(saslresult, NULL, NULL));
-+ 	return RET_FAIL;
++
++     saslresult=sasl_client_start(cxn->saslconn_lmtp,
++                                cxn->lmtp_capabilities->saslmechs,
++                                NULL, &client_interact,
++                                &out, &outlen,
++                                &mechusing);
++
++
++
++     if ((saslresult != SASL_OK) &&
++       (saslresult != SASL_CONTINUE)) {
++
++       d_printf(0,"Error calling sasl_client_start (%s)\n",sasl_errstring(saslresult, NULL, NULL));
++       return RET_FAIL;
 +     }
-+ 
++
 +     d_printf(1,"Decided to use mech=%s\n",mechusing);
-+ 
++
 +     p = (char *) malloc(strlen(mechusing)+(outlen*2+10)+30);
-+ 
++
 +     if (out!=NULL)
 +     {
-+ 
-+ 	/* convert to base64 */
-+ 	inbase64 = (char *) malloc(outlen*2+10);
-+ 
-+ 	saslresult = sasl_encode64(out, outlen,
-+ 				   inbase64, outlen*2+10, (unsigned *) &inbase64len);
-+ 	if (saslresult != SASL_OK) return RET_FAIL;
-+ 
-+ 	sprintf (p, "AUTH %s %s\r\n",mechusing,inbase64);
++
++       /* convert to base64 */
++       inbase64 = (char *) malloc(outlen*2+10);
++
++       saslresult = sasl_encode64(out, outlen,
++                                  inbase64, outlen*2+10, (unsigned *) &inbase64len);
++       if (saslresult != SASL_OK) return RET_FAIL;
++
++       sprintf (p, "AUTH %s %s\r\n",mechusing,inbase64);
 +     } else {
-+ 	sprintf (p, "AUTH %s\r\n",mechusing);
++       sprintf (p, "AUTH %s\r\n",mechusing);
 +     }
-+ 
++
 +     result = WriteToWire_lmtpstr(cxn, p, strlen(p));
-+ 
++
 +     cxn->lmtp_state = LMTP_WRITING_STARTAUTH;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static imt_stat lmtp_getauthline(char *str, char **line, int *linelen)
 + {
 +   char buf[4096];
 +   int saslresult;
 +   int response_code = -1;
-+   
++
 +   response_code = ask_code(str);
-+ 
++
 +   if (response_code == 334) {
-+       
++
 +       /* continue */
-+ 
++
 +   } else if (response_code == 235) {
-+ 
++
 +       /* woohoo! authentication complete */
 +       return STAT_OK;
-+ 
++
 +   } else {
 +       /* failure of some sort */
 +       d_printf(0,"LMTP Authentication failure (%d)\n",response_code);
 +       return STAT_NO;
 +   }
-+ 
++
 +   str += 4; /* jump past the "334 " */
-+ 
++
 +   *line = (char *) malloc(strlen(str)+30);
 +   if ((*line)==NULL) {
 +       return STAT_NO;
 +   }
-+ 
-+   /* decode this line */      
-+   saslresult = sasl_decode64(str, strlen(str), 
-+ 			     *line, (unsigned *) linelen);
++
++   /* decode this line */
++   saslresult = sasl_decode64(str, strlen(str),
++                            *line, (unsigned *) linelen);
 +   if (saslresult != SASL_OK) {
 +       d_printf(0,"LMTP base64 decoding error\n");
 +       return STAT_NO;
 +   }
-+ 
++
 +   return STAT_CONT;
 + }
 + #endif /* HAVE_SASL */
-+ 
++
 + static void lmtp_writeCB (EndPoint e, IoStatus i, Buffer *b, void *d)
 + {
 +     connection_t *cxn = (connection_t *) d;
 +     Buffer *readBuffers;
-+ 
++
 +     clearTimer (cxn->lmtp_writeBlockedTimerId) ;
-+ 
++
 +     /* Free the string that was written */
 +     freeBufferArray (b);
 +     if (cxn->lmtp_tofree_str!=NULL)
 +     {
-+ 	free(cxn->lmtp_tofree_str);
-+ 	cxn->lmtp_tofree_str=NULL;
++       free(cxn->lmtp_tofree_str);
++       cxn->lmtp_tofree_str=NULL;
 +     }
-+ 
++
 +     /* set up to receive */
 +     readBuffers = makeBufferArray (bufferTakeRef (cxn->lmtp_rBuffer), NULL) ;
 +     prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);
-+ 
++
 +    /* set up the response timer. */
 +     clearTimer (cxn->lmtp_readBlockedTimerId) ;
-+ 
++
 +     if (cxn->lmtp_readTimeout > 0)
-+ 	cxn->lmtp_readBlockedTimerId = prepareSleep (lmtp_readTimeoutCbk, 
-+ 						     cxn->lmtp_readTimeout, cxn) ;
-+ 
-+ 
++       cxn->lmtp_readBlockedTimerId = prepareSleep (lmtp_readTimeoutCbk,
++                                                    cxn->lmtp_readTimeout, cxn) ;
++
++
 +     switch (cxn->lmtp_state)
-+ 	{
-+ 	    
-+ 	case LMTP_WRITING_LHLO:
-+ 	    
-+ 	    cxn->lmtp_state = LMTP_READING_LHLO;
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_WRITING_STARTAUTH:
-+ 	case LMTP_WRITING_STEPAUTH:
-+ 
-+ 	    cxn->lmtp_state = LMTP_READING_STEPAUTH;
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_WRITING_UPTODATA:
-+ 
-+ 	    /* expect result to mail from */
-+ 	    if (cxn->lmtp_have_mailfrom==1)
-+ 	    {
-+ 		cxn->lmtp_state = LMTP_READING_RCPTTO;
-+ 	    } else {
-+ 		cxn->lmtp_state = LMTP_READING_MAILFROM;
-+ 	    }
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_WRITING_CONTENTS:
-+ 	    /* so we sent the whole DATA command
-+ 	       let's see what the server responded */
-+ 
-+ 	    cxn->lmtp_state = LMTP_READING_CONTENTS;
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_WRITING_QUIT:
-+ 	    cxn->lmtp_state = LMTP_READING_QUIT;
-+ 	    break;
-+ 
-+ 	default:
-+ 
-+ 	    d_printf(0,"LMTP: Unknown state. Internal error\n");
-+ 
-+ 	    break;
-+ 	}
++       {
++
++       case LMTP_WRITING_LHLO:
++
++           cxn->lmtp_state = LMTP_READING_LHLO;
++
++           break;
++
++       case LMTP_WRITING_STARTAUTH:
++       case LMTP_WRITING_STEPAUTH:
++
++           cxn->lmtp_state = LMTP_READING_STEPAUTH;
++
++           break;
++
++       case LMTP_WRITING_UPTODATA:
++
++           /* expect result to mail from */
++           if (cxn->lmtp_have_mailfrom==1)
++           {
++               cxn->lmtp_state = LMTP_READING_RCPTTO;
++           } else {
++               cxn->lmtp_state = LMTP_READING_MAILFROM;
++           }
++
++           break;
++
++       case LMTP_WRITING_CONTENTS:
++           /* so we sent the whole DATA command
++              let's see what the server responded */
++
++           cxn->lmtp_state = LMTP_READING_CONTENTS;
++
++           break;
++
++       case LMTP_WRITING_QUIT:
++           cxn->lmtp_state = LMTP_READING_QUIT;
++           break;
++
++       default:
++
++           d_printf(0,"LMTP: Unknown state. Internal error\n");
++
++           break;
++       }
 + }
-+ 
++
 + /************************** END LMTP write functions ********************/
-+ 
++
 + /************************** IMAP sending functions ************************/
-+ 
-+ 
++
++
 + static void imap_writeCB (EndPoint e, IoStatus i, Buffer *b, void *d)
 + {
 +     connection_t *cxn = (connection_t *) d;
 +     Buffer *readBuffers;
-+ 
++
 +     clearTimer (cxn->imap_writeBlockedTimerId) ;
-+ 
++
 +     /* free the string we just wrote out */
 +     freeBufferArray (b);
 +     if (cxn->imap_tofree_str!=NULL)
 +     {
-+ 	free(cxn->imap_tofree_str);
-+ 	cxn->imap_tofree_str=NULL;
++       free(cxn->imap_tofree_str);
++       cxn->imap_tofree_str=NULL;
 +     }
-+ 
++
 +     /* set up to receive */
 +     readBuffers = makeBufferArray (bufferTakeRef (cxn->imap_rBuffer), NULL) ;
 +     prepareRead(cxn->imap_endpoint, readBuffers, imap_readCB, cxn, 5);
-+ 
++
 +     /* set up the response timer. */
 +     clearTimer (cxn->imap_readBlockedTimerId) ;
-+ 
++
 +     if (cxn->imap_readTimeout > 0)
-+ 	cxn->imap_readBlockedTimerId = prepareSleep (imap_readTimeoutCbk, 
-+ 						     cxn->imap_readTimeout, cxn) ;
-+ 
++       cxn->imap_readBlockedTimerId = prepareSleep (imap_readTimeoutCbk,
++                                                    cxn->imap_readTimeout, cxn) ;
++
 +     switch (cxn->imap_state)
-+ 	{
-+ 	    
-+ 	case IMAP_WRITING_CAPABILITY:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_CAPABILITY;
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_STEPAUTH:
-+ 	case IMAP_WRITING_STARTAUTH:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_STEPAUTH;
-+ 
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_CREATE:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_CREATE;
-+ 
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_DELETE:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_DELETE;
-+ 
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_SELECT:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_SELECT;
-+ 
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_SEARCH:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_SEARCH;
-+ 
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_STORE:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_STORE;
-+ 
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_CLOSE:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_CLOSE;
-+ 
-+ 	    break;
-+ 
-+ 	case IMAP_WRITING_QUIT:
-+ 
-+ 	    cxn->imap_state = IMAP_READING_QUIT;
-+ 
-+ 	    break;
-+ 
-+ 	default:
-+ 	    d_printf(0,"invalid imap state\n");
-+ 	    imap_Disconnect(cxn);
-+ 	    break;
-+ 	    
-+ 	}
++       {
++
++       case IMAP_WRITING_CAPABILITY:
++
++           cxn->imap_state = IMAP_READING_CAPABILITY;
++           break;
++
++       case IMAP_WRITING_STEPAUTH:
++       case IMAP_WRITING_STARTAUTH:
++
++           cxn->imap_state = IMAP_READING_STEPAUTH;
++
++           break;
++
++       case IMAP_WRITING_CREATE:
++
++           cxn->imap_state = IMAP_READING_CREATE;
++
++           break;
++
++       case IMAP_WRITING_DELETE:
++
++           cxn->imap_state = IMAP_READING_DELETE;
++
++           break;
++
++       case IMAP_WRITING_SELECT:
++
++           cxn->imap_state = IMAP_READING_SELECT;
++
++           break;
++
++       case IMAP_WRITING_SEARCH:
++
++           cxn->imap_state = IMAP_READING_SEARCH;
++
++           break;
++
++       case IMAP_WRITING_STORE:
++
++           cxn->imap_state = IMAP_READING_STORE;
++
++           break;
++
++       case IMAP_WRITING_CLOSE:
++
++           cxn->imap_state = IMAP_READING_CLOSE;
++
++           break;
++
++       case IMAP_WRITING_QUIT:
++
++           cxn->imap_state = IMAP_READING_QUIT;
++
++           break;
++
++       default:
++           d_printf(0,"invalid imap state\n");
++           imap_Disconnect(cxn);
++           break;
++
++       }
 + }
-+ 
++
 + /*
 +  * Tag is already allocated
 +  */
-+ 
++
 + static void imap_GetTag(connection_t *cxn)
 + {
 +     sprintf(cxn->imap_currentTag,"%06d",cxn->imap_tag_num);
 +     cxn->imap_tag_num++;
 +     if (cxn->imap_tag_num >= 999999)
 +     {
-+ 	cxn->imap_tag_num = 0;
++       cxn->imap_tag_num = 0;
 +     }
 + }
-+ 
++
 + #ifdef HAVE_SASL
 + static conn_ret imap_sendAuthStep(connection_t *cxn, char *str)
 + {
@@ -2477,59 +2477,59 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     unsigned int outlen;
 +     char *inbase64;
 +     unsigned int inbase64len;
-+ 
++
 +     /* base64 decode it */
-+ 
-+     saslresult = sasl_decode64(str, strlen(str), 
-+ 			       in, &inlen);
++
++     saslresult = sasl_decode64(str, strlen(str),
++                              in, &inlen);
 +     if (saslresult != SASL_OK) {
-+ 	d_printf(0,"IMAP base64 decoding error\n");
-+ 	return RET_FAIL;
++       d_printf(0,"IMAP base64 decoding error\n");
++       return RET_FAIL;
 +     }
-+ 
++
 +     saslresult=sasl_client_step(cxn->imap_saslconn,
-+ 				in,
-+ 				inlen,
-+ 				NULL,
-+ 				&out,
-+ 				&outlen);
-+ 
++                               in,
++                               inlen,
++                               NULL,
++                               &out,
++                               &outlen);
++
 +     /* check if sasl suceeded */
 +     if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
-+ 
-+ 	d_printf(0,"sasl_client_step failed with %s\n",
-+ 		 sasl_errstring(saslresult,NULL,NULL));
-+ 	cxn->imap_state = IMAP_CONNECTED_NOTAUTH;
-+ 	return RET_FAIL;
++
++       d_printf(0,"sasl_client_step failed with %s\n",
++                sasl_errstring(saslresult,NULL,NULL));
++       cxn->imap_state = IMAP_CONNECTED_NOTAUTH;
++       return RET_FAIL;
 +     }
-+ 
++
 +     inbase64 = (char *) malloc(outlen*2+10);
-+ 
++
 +     /* convert to base64 */
 +     saslresult = sasl_encode64(out, outlen,
-+ 			       inbase64, outlen*2, (unsigned *) &inbase64len);
-+ 
++                              inbase64, outlen*2, (unsigned *) &inbase64len);
++
 +     if (saslresult != SASL_OK) return RET_FAIL;
-+ 
++
 +     /* append endline */
 +     strcpy(inbase64 + inbase64len, "\r\n");
 +     inbase64len+=2;
-+     
++
 +     if (out!=NULL) free(out);
-+ 		    
++
 +     /* send to server */
 +     result = WriteToWire_imapstr(cxn,inbase64, inbase64len);
-+     
++
 +     cxn->imap_state = IMAP_WRITING_STEPAUTH;
-+ 
++
 +     return result;
 + }
 + #endif /* HAVE_SASL */
-+ 
++
 + static conn_ret imap_sendAuthenticate(connection_t *cxn)
 + {
 +     int saslresult;
-+     
++
 +     const char *mechusing;
 +     char *out;
 +     unsigned int outlen;
@@ -2539,335 +2539,335 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     int inbase64len;
 +     int status;
 +     int result;
-+ 
++
 +     char *p;
-+ 
++
 + #ifdef HAVE_SASL
 +     sasl_interact_t *client_interact=NULL;
-+ 
++
 +     d_printf(1,"[imap] Mechs = %s\n",cxn->imap_capabilities->saslmechs);
-+ 
-+     saslresult=sasl_client_start(cxn->imap_saslconn, 
-+ 				 cxn->imap_capabilities->saslmechs,
-+ 				 NULL, &client_interact,
-+ 				 &out, &outlen,
-+ 				 &mechusing);
-+ 
-+ 
-+ 
++
++     saslresult=sasl_client_start(cxn->imap_saslconn,
++                                cxn->imap_capabilities->saslmechs,
++                                NULL, &client_interact,
++                                &out, &outlen,
++                                &mechusing);
++
++
++
 +     /* If no mechs try "login" */
 +     if (saslresult == SASL_NOMECH)
 +     {
-+ 
++
 + #else /* HAVE_SASL */
-+ 
++
 +      { /* always do login */
-+ 
++
 + #endif /* HAVE_SASL */
-+ 	d_printf(1,"No mechanism found. Trying login method\n");
-+ 
-+ 	if (cxn->imap_capabilities->logindisabled==1)
-+ 	{
-+ 	    d_printf(0,"Login command w/o security layer not allowed on this server\n");
-+ 	    return RET_FAIL;
-+ 	}
-+ 
-+ 	if (deliver_authname==NULL)
-+ 	{
-+ 	    d_printf(0,"[imap] Unable to log in b/c authname not specified\n");
-+ 	    return RET_FAIL;
-+ 	}
-+ 
-+ 	if (deliver_password==NULL)
-+ 	{
-+ 	    d_printf(0,"[imap] Unable to log in b/c password not specified\n");
-+ 	    return RET_FAIL;
-+ 	}
-+ 
-+ 	p = (char *) malloc(strlen(cxn->imap_currentTag)+strlen(deliver_authname)+
-+ 			    strlen(deliver_password)+30); 
-+ 
-+ 	imap_GetTag(cxn);
-+        
-+ 	sprintf (p, "%s LOGIN %s \"%s\"\r\n",cxn->imap_currentTag, deliver_authname, deliver_password);
-+ 	
-+ 	result = WriteToWire_imapstr(cxn, p, strlen(p));
-+ 	
-+ 	cxn->imap_state = IMAP_WRITING_STARTAUTH;
-+ 	
-+ 	return RET_OK;       
++       d_printf(1,"No mechanism found. Trying login method\n");
++
++       if (cxn->imap_capabilities->logindisabled==1)
++       {
++           d_printf(0,"Login command w/o security layer not allowed on this server\n");
++           return RET_FAIL;
++       }
++
++       if (deliver_authname==NULL)
++       {
++           d_printf(0,"[imap] Unable to log in b/c authname not specified\n");
++           return RET_FAIL;
++       }
++
++       if (deliver_password==NULL)
++       {
++           d_printf(0,"[imap] Unable to log in b/c password not specified\n");
++           return RET_FAIL;
++       }
++
++       p = (char *) malloc(strlen(cxn->imap_currentTag)+strlen(deliver_authname)+
++                           strlen(deliver_password)+30);
++
++       imap_GetTag(cxn);
++
++       sprintf (p, "%s LOGIN %s \"%s\"\r\n",cxn->imap_currentTag, deliver_authname, deliver_password);
++
++       result = WriteToWire_imapstr(cxn, p, strlen(p));
++
++       cxn->imap_state = IMAP_WRITING_STARTAUTH;
++
++       return RET_OK;
 +     }
-+ 
++
 + #ifdef HAVE_SASL
-+     if ((saslresult != SASL_OK) && 
-+ 	(saslresult != SASL_CONTINUE)) {
-+ 
-+ 	d_printf(0,"[imap] Error calling sasl_client_start (%s) mechusing = %s\n",
-+ 		 sasl_errstring(saslresult, NULL, NULL), mechusing);
-+ 	return RET_FAIL;
++     if ((saslresult != SASL_OK) &&
++       (saslresult != SASL_CONTINUE)) {
++
++       d_printf(0,"[imap] Error calling sasl_client_start (%s) mechusing = %s\n",
++                sasl_errstring(saslresult, NULL, NULL), mechusing);
++       return RET_FAIL;
 +     }
 + #endif /* HAVE_SASL */
-+ 
++
 +     d_printf(1,"[imap] Trying to authenticate to imap with %s mechanism\n",mechusing);
-+ 
-+     p = (char *) malloc(strlen(cxn->imap_currentTag)+strlen(mechusing)+40); 
-+ 
++
++     p = (char *) malloc(strlen(cxn->imap_currentTag)+strlen(mechusing)+40);
++
 +     imap_GetTag(cxn);
-+ 
++
 +     sprintf (p, "%s AUTHENTICATE %s\r\n",cxn->imap_currentTag, mechusing);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, p, strlen(p));
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_STARTAUTH;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_CreateGroup(connection_t *cxn, char *bboard)
 + {
 +     conn_ret result;
 +     char *tosend;
 +     int newlen=strlen(bboard);
-+ 
++
 +     d_printf(1,"Ok creating group [%s]\n",bboard);
-+ 
++
 +     imap_GetTag(cxn);
-+ 
++
 +     tosend = (char *) malloc(30+newlen);
-+ 
++
 +     sprintf(tosend,"%s CREATE %s\r\n",cxn->imap_currentTag,bboard);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result!=RET_OK) return result;
-+     
++
 +     cxn->imap_state = IMAP_WRITING_CREATE;
-+     
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_DeleteGroup(connection_t *cxn, char *bboard)
 + {
 +     conn_ret result;
 +     char *tosend;
 +     int newlen=strlen(bboard);
-+ 
++
 +     d_printf(1,"Ok removing [%s]\n",bboard);
-+ 
++
 +     imap_GetTag(cxn);
-+ 
++
 +     tosend = (char *) malloc(30+newlen);
-+ 
++
 +     sprintf(tosend,"%s DELETE %s\r\n",cxn->imap_currentTag,bboard);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result!=RET_OK) return result;
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_DELETE;
-+     
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_CancelMsg(connection_t *cxn, char *newsgroup)
 + {
 +     conn_ret result;
 +     char *tosend;
-+ 
++
 +     ASSERT(newsgroup);
-+ 
++
 +     tosend = (char *) malloc(7+10+strlen(newsgroup)+100);
-+ 
++
 +     imap_GetTag(cxn);
-+ 
++
 +     /* select mbox */
 +     sprintf(tosend,"%s SELECT %s\r\n",cxn->imap_currentTag, newsgroup);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result != RET_OK) return result;
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_SELECT;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_sendSearch(connection_t *cxn, char *msgid)
 + {
 +     conn_ret result;
 +     char *tosend;
-+ 
++
 +     ASSERT(msgid);
-+ 
++
 +     tosend = (char *) malloc(7+40+strlen(msgid));
-+ 
++
 +     imap_GetTag(cxn);
-+ 
++
 +     /* preform search */
 +     sprintf(tosend,"%s UID SEARCH header \"Message-ID\" \"%s\"\r\n",cxn->imap_currentTag, msgid);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result != RET_OK) return result;
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_SEARCH;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_sendKill(connection_t *cxn, unsigned uid)
 + {
 +     conn_ret result;
 +     char *tosend;
-+ 
++
 +     tosend = (char *) malloc(7+50+20);
-+ 
++
 +     imap_GetTag(cxn);
-+        
++
 +     sprintf(tosend,"%s UID STORE %d +FLAGS.SILENT (\\Deleted)\r\n",cxn->imap_currentTag, uid);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result != RET_OK) return result;
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_STORE;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_sendClose(connection_t *cxn)
 + {
 +     char *tosend;
 +     conn_ret result;
-+ 
++
 +     tosend = (char *) malloc(7+10);
-+ 
-+     imap_GetTag(cxn);       
-+ 
++
++     imap_GetTag(cxn);
++
 +     sprintf(tosend,"%s CLOSE\r\n",cxn->imap_currentTag);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result != RET_OK) return result;
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_CLOSE;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_sendQuit(connection_t *cxn)
 + {
 +     char *tosend;
 +     conn_ret result;
-+ 
++
 +     tosend = (char *) malloc(7+12);
-+ 
-+     imap_GetTag(cxn);       
-+ 
++
++     imap_GetTag(cxn);
++
 +     sprintf(tosend,"%s LOGOUT\r\n",cxn->imap_currentTag);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result != RET_OK) return result;
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_QUIT;
-+ 
++
 +     return RET_OK;
 + }
-+    	
-+ 
++
++
 + static conn_ret imap_sendCapability(connection_t *cxn)
 + {
 +     conn_ret result;
 +     char *tosend;
-+ 
++
 +     imap_GetTag(cxn);
-+ 
++
 +     tosend = (char *) malloc(5+13+5);
-+ 
++
 +     sprintf(tosend,"%s CAPABILITY\r\n",cxn->imap_currentTag);
-+ 
++
 +     result = WriteToWire_imapstr(cxn, tosend, -1);
 +     if (result != RET_OK) return result;
-+ 
++
 +     cxn->imap_state = IMAP_WRITING_CAPABILITY;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + /************************** END IMAP sending functions ************************/
-+ 
++
 + /************************** IMAP reading functions ***************************/
-+ 
++
 + static conn_ret imap_listenintro(connection_t *cxn)
 + {
 +     char *str;
 +     Buffer *readBuffers;
-+ 
++
 +     /* set up to receive */
 +     readBuffers = makeBufferArray (bufferTakeRef (cxn->imap_rBuffer), NULL) ;
-+     prepareRead(cxn->imap_endpoint, readBuffers, imap_readCB, cxn, 5);    
-+ 
++     prepareRead(cxn->imap_endpoint, readBuffers, imap_readCB, cxn, 5);
++
 +     cxn->imap_state = IMAP_READING_INTRO;
-+ 
++
 +     return RET_OK;
 + }
-+ 
++
 + static conn_ret imap_ParseCapability(char *string, imap_capabilities_t **caps)
 + {
 +     char *str = string;
 +     char *start = str;
-+ 
++
 +     /* allocate the caps structure if it doesn't already exist */
 +     if ( (*caps) == NULL)
 +     {
-+ 	(*caps) = (imap_capabilities_t *) malloc( sizeof(imap_capabilities_t));
-+ 	memset( (*caps), 0, sizeof(imap_capabilities_t));
++       (*caps) = (imap_capabilities_t *) malloc( sizeof(imap_capabilities_t));
++       memset( (*caps), 0, sizeof(imap_capabilities_t));
 +     }
-+ 
++
 +     while ( (*str) != '\0')
 +     {
-+ 
-+ 	while (((*str) != '\0') && ((*str)!=' '))
-+ 	{
-+ 	    str++;
-+ 	}
-+ 	
-+ 	if ( (*str) != '\0')
-+ 	{
-+ 	    *str = '\0';
-+ 	    str++;
-+ 	}
-+ 
-+ 	if ( strcasecmp(start,"IMAP4")==0)
-+ 	{
-+ 	    (*caps)->imap4 = 1;
-+ 	} else if (strcasecmp(start,"LOGINDISABLED")==0) {
-+ 	    (*caps)->logindisabled = 1;
-+ 	} else if ( strncmp(start, "AUTH=", 5)==0) {
-+ 	    
-+ 	    if ( (*caps)->saslmechs == NULL)
-+ 	    {
-+ 		(*caps)->saslmechs = (char *) malloc(strlen(start+5)+1);
-+ 		strcpy( (*caps)->saslmechs, start+5);
-+ 	    } else {
-+ 
-+ 		(*caps)->saslmechs = (char *) realloc((*caps)->saslmechs, 
-+ 						      strlen((*caps)->saslmechs)+1+strlen(start+5)+1);
-+ 
-+ 		strcat( (*caps)->saslmechs, " ");
-+ 		strcat( (*caps)->saslmechs, start+5);
-+ 	    }
-+ 	}
-+ 	
-+ 	start = str;
-+           
++
++       while (((*str) != '\0') && ((*str)!=' '))
++       {
++           str++;
++       }
++
++       if ( (*str) != '\0')
++       {
++           *str = '\0';
++           str++;
++       }
++
++       if ( strcasecmp(start,"IMAP4")==0)
++       {
++           (*caps)->imap4 = 1;
++       } else if (strcasecmp(start,"LOGINDISABLED")==0) {
++           (*caps)->logindisabled = 1;
++       } else if ( strncmp(start, "AUTH=", 5)==0) {
++
++           if ( (*caps)->saslmechs == NULL)
++           {
++               (*caps)->saslmechs = (char *) malloc(strlen(start+5)+1);
++               strcpy( (*caps)->saslmechs, start+5);
++           } else {
++
++               (*caps)->saslmechs = (char *) realloc((*caps)->saslmechs,
++                                                     strlen((*caps)->saslmechs)+1+strlen(start+5)+1);
++
++               strcat( (*caps)->saslmechs, " ");
++               strcat( (*caps)->saslmechs, start+5);
++           }
++       }
++
++       start = str;
++
 +     }
-+ 
++
 +     d_printf(1,"[imap] parsed capabilities: saslmechs = %s\n",(*caps)->saslmechs);
-+ 
++
 +     return RET_OK;
 + }
-+ 
-+ 
++
++
 + static void imap_readCB (EndPoint e, IoStatus i, Buffer *b, void *d)
 + {
 +     connection_t *cxn = (connection_t *) d;
 +     Buffer *modeCmdBuffers, *readBuffers ;
-+ 
++
 +     int okno;
 +     char *str;
 +     char strbuf[4096];
@@ -2875,419 +2875,419 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     conn_ret ret;
 +     char *p;
 +     int result;
-+ 
++
 +     int oldsize;
 +     char *old;
-+ 
++
 +     p = bufferBase(b[0]);
-+ 
++
 +     /* Add what we got to our internal read buffer */
 +     bufferAddNullByte (b[0]) ;
-+ 
++
 +     if (i != IoDone)
-+ 	{
-+ 	    errno = endPointErrno (e);
-+ 
-+ 	    d_printf(0,"IO not done: errno = %s\n",strerror(errno));
-+ 	    freeBufferArray (b);
-+ 	    imap_Disconnect(cxn);
-+ 	    return;
-+ 	}
-+ 
++       {
++           errno = endPointErrno (e);
++
++           d_printf(0,"IO not done: errno = %s\n",strerror(errno));
++           freeBufferArray (b);
++           imap_Disconnect(cxn);
++           return;
++       }
++
 +     if (strchr (p, '\n') == NULL)
-+ 	{
-+ 	    /* partial read. expand buffer and retry */
-+ 
-+ 	    d_printf(0,"Partial. retry [%s]\n",p);
-+ 	    if (expandBuffer (b[0], BUFFER_EXPAND_AMOUNT)==false)
-+ 		{
-+ 		    d_printf(0,"expanding buffer returned false\n");
-+ 		    imap_Disconnect(cxn);
-+ 		    return;
-+ 		}
-+ 	    readBuffers = makeBufferArray (bufferTakeRef (b[0]), NULL) ;
-+ 	
-+ 	    if ( !prepareRead (e, readBuffers, imap_readCB, cxn, 1) )
-+ 		{
-+ 		    imap_Disconnect(cxn);
-+ 		}
-+ 
-+ 	    freeBufferArray (b);
-+ 	    return;
-+ 	}
-+ 
++       {
++           /* partial read. expand buffer and retry */
++
++           d_printf(0,"Partial. retry [%s]\n",p);
++           if (expandBuffer (b[0], BUFFER_EXPAND_AMOUNT)==false)
++               {
++                   d_printf(0,"expanding buffer returned false\n");
++                   imap_Disconnect(cxn);
++                   return;
++               }
++           readBuffers = makeBufferArray (bufferTakeRef (b[0]), NULL) ;
++
++           if ( !prepareRead (e, readBuffers, imap_readCB, cxn, 1) )
++               {
++                   imap_Disconnect(cxn);
++               }
++
++           freeBufferArray (b);
++           return;
++       }
++
 +     clearTimer (cxn->imap_readBlockedTimerId) ;
-+ 
++
 +     /* we got something. add to our buffer and free b */
-+ 
++
 +     strcat(cxn->imap_respBuffer, p);
-+ 
++
 +     bufferSetDataSize( b[0], 0);
-+ 
++
 +     freeBufferArray (b);
-+ 
-+ 
-+ 
++
++
++
 +     /* goto here to take another step */
 +  reset:
-+ 
++
 +     /* see if we have a full line */
 +     ret = GetLine( cxn->imap_respBuffer , strbuf, sizeof(strbuf));
 +     str = strbuf;
 +     linestart = str;
-+ 
++
 +     /* if we don't have a full line */
 +     if ( ret == RET_NO_FULLLINE)
-+ 	{
-+ 
-+ 	    readBuffers = makeBufferArray (bufferTakeRef (cxn->imap_rBuffer), NULL) ;
-+ 
-+ 	    if ( !prepareRead (e, readBuffers, imap_readCB, cxn, 1) )
-+ 		{
-+ 		    imap_Disconnect(cxn);
-+ 		}
-+ 	    return;
-+ 
-+ 	} else if (ret!=RET_OK)
-+ 	    {
-+ 		return;
-+ 	    }
-+ 
++       {
++
++           readBuffers = makeBufferArray (bufferTakeRef (cxn->imap_rBuffer), NULL) ;
++
++           if ( !prepareRead (e, readBuffers, imap_readCB, cxn, 1) )
++               {
++                   imap_Disconnect(cxn);
++               }
++           return;
++
++       } else if (ret!=RET_OK)
++           {
++               return;
++           }
++
 +     /* if untagged */
 +     if ((str[0]=='*') && (str[1]==' '))
 +     {
-+ 	str+=2;
-+ 	
-+ 	/* now figure out what kind of untagged it is */
-+ 	if (strncasecmp(str,"CAPABILITY ",11)==0)
-+ 	{
-+ 	    str+=11;
-+ 	    
-+ 	    imap_ParseCapability(str,&(cxn->imap_capabilities));
-+ 	    
-+ 	} else if (strncasecmp(str,"SEARCH",6)==0) {
-+ 
-+ 	    str+=6;
-+ 	    
-+ 	    if ( (*str) == ' ')
-+ 	    {
-+ 		str++;
-+ 		
-+ 		cxn->current_control->data.control->uid = atoi(str);
-+ 		
-+ 		d_printf(1,"i think the UID = %d\n",cxn->current_control->data.control->uid);
-+ 	    } else {
-+ 		/* it's probably a blank uid (i.e. message doesn't exist) */
-+ 		cxn->current_control->data.control->uid = -1;
-+ 	    }
-+ 
-+ 	    
-+ 	} else if (strncasecmp(str,"OK ",3)==0) {
-+ 	    
-+ 	    if (cxn->imap_state==IMAP_READING_INTRO)
-+ 	    {
-+ 		imap_sendCapability(cxn); /* xxx errors */
-+ 		return;
-+ 		
-+ 	    } else {
-+ 		
-+ 	    }
-+ 	    
-+ 	    
-+ 	} else {
-+ 	    /* untagged command not understood */
-+ 	}
-+ 
-+ 	/* always might be more to look at */
-+ 	goto reset;
-+ 
++       str+=2;
++
++       /* now figure out what kind of untagged it is */
++       if (strncasecmp(str,"CAPABILITY ",11)==0)
++       {
++           str+=11;
++
++           imap_ParseCapability(str,&(cxn->imap_capabilities));
++
++       } else if (strncasecmp(str,"SEARCH",6)==0) {
++
++           str+=6;
++
++           if ( (*str) == ' ')
++           {
++               str++;
++
++               cxn->current_control->data.control->uid = atoi(str);
++
++               d_printf(1,"i think the UID = %d\n",cxn->current_control->data.control->uid);
++           } else {
++               /* it's probably a blank uid (i.e. message doesn't exist) */
++               cxn->current_control->data.control->uid = -1;
++           }
++
++
++       } else if (strncasecmp(str,"OK ",3)==0) {
++
++           if (cxn->imap_state==IMAP_READING_INTRO)
++           {
++               imap_sendCapability(cxn); /* xxx errors */
++               return;
++
++           } else {
++
++           }
++
++
++       } else {
++           /* untagged command not understood */
++       }
++
++       /* always might be more to look at */
++       goto reset;
++
 +     } else if ((str[0]=='+') && (str[1]==' ')) {
-+ 
-+ 	str+=2;
-+ 
-+ 	if (cxn->imap_state == IMAP_READING_STEPAUTH)
-+ 	{
++
++       str+=2;
++
++       if (cxn->imap_state == IMAP_READING_STEPAUTH)
++       {
 + #ifdef HAVE_SASL
-+ 	    if (imap_sendAuthStep(cxn, str)!=RET_OK)
-+ 	    {
-+ 		imap_Disconnect(cxn);
-+ 	    }
++           if (imap_sendAuthStep(cxn, str)!=RET_OK)
++           {
++               imap_Disconnect(cxn);
++           }
 + #else
-+ 	    d_printf(0,"Invalid state\n");
-+ 	    imap_Disconnect(cxn);
++           d_printf(0,"Invalid state\n");
++           imap_Disconnect(cxn);
 + #endif /* HAVE_SASL */
-+ 
-+ 	    return;
-+ 	} else {
-+ 	    d_printf(0,"+ response unexpected\n");
-+ 	    imap_Disconnect(cxn);
-+ 	    return;
-+ 	}
-+ 	
-+ 
-+     } else if (strncmp(str, cxn->imap_currentTag, IMAP_TAGLENGTH)==0) {	/* see if it matches our tag */
-+ 	str +=IMAP_TAGLENGTH;
-+ 	
-+ 	if (str[0]!=' ')
-+ 	{
-+ 	    d_printf(0,"Tag with no space afterward\n");
-+ 	    imap_Disconnect(cxn);
-+ 	    return;	    
-+ 	}
-+ 	str++;
-+ 
-+ 	/* should be OK/NO */
-+ 	if (strncmp(str,"OK",2)==0)
-+ 	{
-+ 	    okno = 1;
-+ 	} else {
-+ 	    okno = 0;
-+ 	}
-+ 	
-+ 	switch(cxn->imap_state)
-+ 	    {
-+ 	    case IMAP_READING_CAPABILITY:
-+ 
-+ 		if (okno==1) {
-+ 		    if (imap_sendAuthenticate(cxn)!=RET_OK)
-+ 		    {
-+ 			d_printf(0,"IMAP sendauthenticate failed\n");
-+ 			imap_Disconnect(cxn);
-+ 		    }
-+ 		    return;
-+ 		} else {
-+ 		    d_printf(0,"CAPABILITY gave a NO response\n");
-+ 		    imap_Disconnect(cxn);
-+ 		}
-+ 		return;
-+ 		
-+ 		break;
-+ 	    case IMAP_READING_STEPAUTH:
-+ 		
-+ 		if (okno == 1) {
-+ 
-+ 		    cxn->imap_sleepTimeout = init_reconnect_period ;
-+ 
-+ 		    cxn->imap_timeCon = theTime () ;
-+ 		    cxn->timeCon = theTime () ;
-+ 		    
-+ 		    d_printf(0,"%s:%d IMAP authentication succeeded!\n",
-+ 			     hostPeerName (cxn->myHost), cxn->ident);
-+ 
-+ 		    cxn->imap_disconnects=0;
-+ 		    
-+ 		    cxn->imap_state = IMAP_IDLE_AUTHED;
-+ 
-+ 		    /* try to send a message if we have one */
-+ 		    
-+ 		    imap_ProcessQueue(cxn);
-+ 		} else {
-+ 		    d_printf(0,"IMAP Authentication failed with [%s]\n",str);
-+ 		    imap_Disconnect(cxn);
-+ 		}
-+ 
-+ 		return;
-+ 
-+ 		break;
-+ 		
-+ 	    case IMAP_READING_CREATE:
-+ 
-+ 		    if (okno==1) {
-+ 			
-+ 			d_printf(1,"Create successful\n");
-+ 			cxn->create_suceeded++;
-+ 
-+ 			/* we can delete article now */
-+ 			QueueForgetAbout(cxn, cxn->current_control,0);
-+ 
-+ 		    } else {
-+ 			d_printf(1,"Create failed with [%s] for %s\n",str,
-+ 				 cxn->current_control->data.control->folder);
-+ 
-+ 			ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
-+ 		    }
-+ 
-+ 		    imap_ProcessQueue(cxn);
-+ 			
-+ 		    break;
-+ 		    
-+ 	    case IMAP_READING_DELETE:
-+ 
-+ 		    if (okno==1) {
-+ 			
-+ 			d_printf(1,"Delete successful\n");
-+ 			cxn->remove_suceeded++;
-+ 
-+ 			/* we can delete article now */
-+ 			QueueForgetAbout(cxn, cxn->current_control,0);
-+ 
-+ 		    } else {
-+ 			d_printf(1,"Delete mailbox failed with [%s] for %s\n",str,
-+ 				 cxn->current_control->data.control->folder);
-+ 
-+ 			ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
-+ 			
-+ 		    }
-+ 
-+ 		    imap_ProcessQueue(cxn);
-+ 		    return;
-+ 			
-+ 		    break;
-+ 
-+ 	    case IMAP_READING_SELECT:
-+ 
-+ 		    if (okno==1) {
-+ 
-+ 			imap_sendSearch(cxn, cxn->current_control->data.control->msgid);
-+ 			return;
-+ 
-+ 		    } else {
-+ 			d_printf(1,"Select failed with [%s] for %s\n",str,
-+ 				 cxn->current_control->data.control->folder);
-+ 
-+ 			ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
-+ 			
-+ 			cxn->imap_state = IMAP_IDLE_AUTHED;
-+ 
-+ 			imap_ProcessQueue(cxn);
-+ 			return;
-+ 		    }
-+ 
-+ 		    break;
-+ 
-+ 	    case IMAP_READING_SEARCH:
-+ 
-+ 		    /* if no message let's forget about it */
-+ 		    if (cxn->current_control->data.control->uid == -1)
-+ 			{
-+ 			    d_printf(1,"Search didn't find the message\n");
-+ 			    ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
-+ 			    if (imap_sendClose(cxn) != RET_OK)
-+ 				imap_Disconnect(cxn);
-+ 			    return;
-+ 			}
-+ 
-+ 		    if (okno==1) {
-+ 
-+ 			/* we got a uid. let's delete it */
-+ 			if (imap_sendKill(cxn, cxn->current_control->data.control->uid) != RET_OK)
-+ 			    imap_Disconnect(cxn);
-+ 			return;
-+ 
-+ 		    } else {
-+ 			d_printf(1,"Received NO response to SEARCH command\n");
-+ 			ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
-+ 
-+ 			if (imap_sendClose(cxn) != RET_OK)
-+ 			    imap_Disconnect(cxn);
-+ 			return;
-+ 		    }
-+ 
-+ 		    break;
-+ 
-+ 	    case IMAP_READING_STORE:
-+ 
-+ 		    if (okno==1) {
-+ 
-+ 			d_printf(1,"Processed a Cancel fully\n");
-+ 
-+ 			/* we can delete article now */
-+ 			QueueForgetAbout(cxn, cxn->current_control,0);
-+ 
-+ 			cxn->cancel_suceeded++;
-+ 
-+ 			if (imap_sendClose(cxn) != RET_OK)
-+ 			    imap_Disconnect(cxn);
-+ 			return;
-+ 
-+ 		    } else {
-+ 
-+ 			d_printf(1,"Store failed\n");
-+ 			ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
-+ 
-+ 			if (imap_sendClose(cxn) != RET_OK)
-+ 			    imap_Disconnect(cxn);
-+ 			return;
-+ 		    }
-+ 
-+ 		    break;
-+ 
-+ 	    case IMAP_READING_CLOSE:
-+ 
-+ 		    if (okno==1) {
-+ 			
-+ 		    } else {
-+ 			/* we can't do anything about it */
-+ 			d_printf(1,"Close failed\n");	
-+ 		    }
-+ 
-+ 		    cxn->imap_state = IMAP_IDLE_AUTHED;
-+ 
-+ 		    imap_ProcessQueue(cxn);		    
-+ 		    return;
-+ 
-+ 
-+ 		    break;
-+ 
-+ 	    case IMAP_READING_QUIT:
-+ 		
-+ 		/* we don't care if the server said OK or NO just
-+ 		   that it said something */
-+ 
-+ 		d_printf(1,"Read quit\n");
-+ 		
-+ 		cxn->imap_state = IMAP_DISCONNECTED;
-+ 
-+ 		switch (cxn->issue_quit)
-+ 		    {
-+ 		    case 1:
-+ 			if (cxn->lmtp_state == LMTP_DISCONNECTED)
-+ 			{
-+ 			    cxn->lmtp_state = LMTP_WAITING;
-+ 			    cxn->imap_state = IMAP_WAITING;
-+ 			    cxn->issue_quit = 0;
-+ 			    hostCxnWaiting (cxn->myHost,cxn) ;  /* tell our Host we're waiting */
-+ 			}
-+ 			break;
-+ 		    case 2:
-+ 			if (cxn->lmtp_state == LMTP_DISCONNECTED)
-+ 			{
-+ 			    cxn->issue_quit = 0;
-+ 			    
-+ 			    if (imap_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,0);
-+ 			    if (lmtp_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,1);
-+ 			}
-+ 			break;
-+ 		    case 3:
-+ 			if (cxn->lmtp_state == LMTP_DISCONNECTED)
-+ 			{
-+ 			    delConnection(cxn);
-+ 			}
-+ 			break;
-+ 
-+ 		    }
-+ 
-+ 		break;
-+ 		    
-+ 
-+ 	    default:
-+ 		d_printf(0,"I don't understand state %d [%s]\n",cxn->imap_state,str);
-+ 		imap_Disconnect(cxn);
-+ 		break;
-+ 	    }
-+ 	    
-+ 
++
++           return;
++       } else {
++           d_printf(0,"+ response unexpected\n");
++           imap_Disconnect(cxn);
++           return;
++       }
++
++
++     } else if (strncmp(str, cxn->imap_currentTag, IMAP_TAGLENGTH)==0) {       /* see if it matches our tag */
++       str +=IMAP_TAGLENGTH;
++
++       if (str[0]!=' ')
++       {
++           d_printf(0,"Tag with no space afterward\n");
++           imap_Disconnect(cxn);
++           return;
++       }
++       str++;
++
++       /* should be OK/NO */
++       if (strncmp(str,"OK",2)==0)
++       {
++           okno = 1;
++       } else {
++           okno = 0;
++       }
++
++       switch(cxn->imap_state)
++           {
++           case IMAP_READING_CAPABILITY:
++
++               if (okno==1) {
++                   if (imap_sendAuthenticate(cxn)!=RET_OK)
++                   {
++                       d_printf(0,"IMAP sendauthenticate failed\n");
++                       imap_Disconnect(cxn);
++                   }
++                   return;
++               } else {
++                   d_printf(0,"CAPABILITY gave a NO response\n");
++                   imap_Disconnect(cxn);
++               }
++               return;
++
++               break;
++           case IMAP_READING_STEPAUTH:
++
++               if (okno == 1) {
++
++                   cxn->imap_sleepTimeout = init_reconnect_period ;
++
++                   cxn->imap_timeCon = theTime () ;
++                   cxn->timeCon = theTime () ;
++
++                   d_printf(0,"%s:%d IMAP authentication succeeded!\n",
++                            hostPeerName (cxn->myHost), cxn->ident);
++
++                   cxn->imap_disconnects=0;
++
++                   cxn->imap_state = IMAP_IDLE_AUTHED;
++
++                   /* try to send a message if we have one */
++
++                   imap_ProcessQueue(cxn);
++               } else {
++                   d_printf(0,"IMAP Authentication failed with [%s]\n",str);
++                   imap_Disconnect(cxn);
++               }
++
++               return;
++
++               break;
++
++           case IMAP_READING_CREATE:
++
++                   if (okno==1) {
++
++                       d_printf(1,"Create successful\n");
++                       cxn->create_suceeded++;
++
++                       /* we can delete article now */
++                       QueueForgetAbout(cxn, cxn->current_control,0);
++
++                   } else {
++                       d_printf(1,"Create failed with [%s] for %s\n",str,
++                                cxn->current_control->data.control->folder);
++
++                       ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
++                   }
++
++                   imap_ProcessQueue(cxn);
++
++                   break;
++
++           case IMAP_READING_DELETE:
++
++                   if (okno==1) {
++
++                       d_printf(1,"Delete successful\n");
++                       cxn->remove_suceeded++;
++
++                       /* we can delete article now */
++                       QueueForgetAbout(cxn, cxn->current_control,0);
++
++                   } else {
++                       d_printf(1,"Delete mailbox failed with [%s] for %s\n",str,
++                                cxn->current_control->data.control->folder);
++
++                       ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
++
++                   }
++
++                   imap_ProcessQueue(cxn);
++                   return;
++
++                   break;
++
++           case IMAP_READING_SELECT:
++
++                   if (okno==1) {
++
++                       imap_sendSearch(cxn, cxn->current_control->data.control->msgid);
++                       return;
++
++                   } else {
++                       d_printf(1,"Select failed with [%s] for %s\n",str,
++                                cxn->current_control->data.control->folder);
++
++                       ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
++
++                       cxn->imap_state = IMAP_IDLE_AUTHED;
++
++                       imap_ProcessQueue(cxn);
++                       return;
++                   }
++
++                   break;
++
++           case IMAP_READING_SEARCH:
++
++                   /* if no message let's forget about it */
++                   if (cxn->current_control->data.control->uid == -1)
++                       {
++                           d_printf(1,"Search didn't find the message\n");
++                           ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
++                           if (imap_sendClose(cxn) != RET_OK)
++                               imap_Disconnect(cxn);
++                           return;
++                       }
++
++                   if (okno==1) {
++
++                       /* we got a uid. let's delete it */
++                       if (imap_sendKill(cxn, cxn->current_control->data.control->uid) != RET_OK)
++                           imap_Disconnect(cxn);
++                       return;
++
++                   } else {
++                       d_printf(1,"Received NO response to SEARCH command\n");
++                       ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
++
++                       if (imap_sendClose(cxn) != RET_OK)
++                           imap_Disconnect(cxn);
++                       return;
++                   }
++
++                   break;
++
++           case IMAP_READING_STORE:
++
++                   if (okno==1) {
++
++                       d_printf(1,"Processed a Cancel fully\n");
++
++                       /* we can delete article now */
++                       QueueForgetAbout(cxn, cxn->current_control,0);
++
++                       cxn->cancel_suceeded++;
++
++                       if (imap_sendClose(cxn) != RET_OK)
++                           imap_Disconnect(cxn);
++                       return;
++
++                   } else {
++
++                       d_printf(1,"Store failed\n");
++                       ReQueue(cxn, &(cxn->imap_controlMsg_q), cxn->current_control);
++
++                       if (imap_sendClose(cxn) != RET_OK)
++                           imap_Disconnect(cxn);
++                       return;
++                   }
++
++                   break;
++
++           case IMAP_READING_CLOSE:
++
++                   if (okno==1) {
++
++                   } else {
++                       /* we can't do anything about it */
++                       d_printf(1,"Close failed\n");
++                   }
++
++                   cxn->imap_state = IMAP_IDLE_AUTHED;
++
++                   imap_ProcessQueue(cxn);
++                   return;
++
++
++                   break;
++
++           case IMAP_READING_QUIT:
++
++               /* we don't care if the server said OK or NO just
++                  that it said something */
++
++               d_printf(1,"Read quit\n");
++
++               cxn->imap_state = IMAP_DISCONNECTED;
++
++               switch (cxn->issue_quit)
++                   {
++                   case 1:
++                       if (cxn->lmtp_state == LMTP_DISCONNECTED)
++                       {
++                           cxn->lmtp_state = LMTP_WAITING;
++                           cxn->imap_state = IMAP_WAITING;
++                           cxn->issue_quit = 0;
++                           hostCxnWaiting (cxn->myHost,cxn) ;  /* tell our Host we're waiting */
++                       }
++                       break;
++                   case 2:
++                       if (cxn->lmtp_state == LMTP_DISCONNECTED)
++                       {
++                           cxn->issue_quit = 0;
++
++                           if (imap_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,0);
++                           if (lmtp_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,1);
++                       }
++                       break;
++                   case 3:
++                       if (cxn->lmtp_state == LMTP_DISCONNECTED)
++                       {
++                           delConnection(cxn);
++                       }
++                       break;
++
++                   }
++
++               break;
++
++
++           default:
++               d_printf(0,"I don't understand state %d [%s]\n",cxn->imap_state,str);
++               imap_Disconnect(cxn);
++               break;
++           }
++
++
 +     } else {
-+ 	d_printf(0,"tag doesn't match\n");
-+ 	imap_Disconnect(cxn);
++       d_printf(0,"tag doesn't match\n");
++       imap_Disconnect(cxn);
 +     }
-+     
++
 + }
-+ 
++
 + /************************** END IMAP reading functions ***************************/
-+ 
++
 + /*************************** LMTP reading functions ****************************/
-+ 
++
 + static void lmtp_readCB (EndPoint e, IoStatus i, Buffer *b, void *d)
 + {
 +     connection_t *cxn = (connection_t *) d;
@@ -3307,466 +3307,466 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + #ifdef HAVE_SASL
 +     sasl_interact_t *client_interact=NULL;
 + #endif /* HAVE_SASL */
-+ 
++
 +     char *p = bufferBase(b[0]);
-+ 
++
 +     bufferAddNullByte (b[0]) ;
-+ 
++
 +     if (i != IoDone)
 +     {
-+ 	d_printf(0,"IO not done\n");
-+ 
-+ 	freeBufferArray (b);
-+ 	lmtp_Disconnect(cxn);
-+ 	return;
++       d_printf(0,"IO not done\n");
++
++       freeBufferArray (b);
++       lmtp_Disconnect(cxn);
++       return;
 +     }
-+ 
++
 +     if (strchr (p, '\n') == NULL)
 +     {
-+ 	/* partial read. expand buffer and retry */
-+ 
-+ 	d_printf(0,"Partial. retry\n");
-+ 	expandBuffer (b[0], BUFFER_EXPAND_AMOUNT) ;
-+ 	readBuffers = makeBufferArray (bufferTakeRef (b[0]), NULL) ;
-+ 	
-+ 	if ( !prepareRead (e, readBuffers, lmtp_readCB, cxn, 1) )
-+ 	{
-+ 	    lmtp_Disconnect(cxn);
++       /* partial read. expand buffer and retry */
++
++       d_printf(0,"Partial. retry\n");
++       expandBuffer (b[0], BUFFER_EXPAND_AMOUNT) ;
++       readBuffers = makeBufferArray (bufferTakeRef (b[0]), NULL) ;
++
++       if ( !prepareRead (e, readBuffers, lmtp_readCB, cxn, 1) )
++       {
++           lmtp_Disconnect(cxn);
 +         }
-+ 
-+ 	freeBufferArray (b);
-+ 	return;
++
++       freeBufferArray (b);
++       return;
 +     }
-+ 
++
 +     clearTimer (cxn->lmtp_readBlockedTimerId) ;
-+ 
++
 +     /* Add what we got to our internal read buffer */
 +     strcat(cxn->lmtp_respBuffer, p);
-+ 
++
 +     bufferSetDataSize( b[0], 0);
-+ 
++
 +     freeBufferArray (b);
-+ 
++
 +  reset:
-+ 
++
 +     /* see if we have a full line */
 +     ret = GetLine( cxn->lmtp_respBuffer, str, sizeof(str));
-+ 
++
 +     /* get a line */
 +     if (ret!=RET_OK)
 +     {
-+ 	if (ret!=RET_NO_FULLLINE)
-+ 	{
-+ 	    /* was a more serious error */
-+ 	    d_printf(0,"Internal error getting line from server\n");
-+ 	    lmtp_Disconnect(cxn);
-+ 	    return;	    
-+ 	}
-+ 
-+ 	/* set up to receive some more */
-+ 	readBuffers = makeBufferArray (bufferTakeRef (cxn->lmtp_rBuffer), NULL) ;
-+ 	prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);
-+ 	return;
++       if (ret!=RET_NO_FULLLINE)
++       {
++           /* was a more serious error */
++           d_printf(0,"Internal error getting line from server\n");
++           lmtp_Disconnect(cxn);
++           return;
++       }
++
++       /* set up to receive some more */
++       readBuffers = makeBufferArray (bufferTakeRef (cxn->lmtp_rBuffer), NULL) ;
++       prepareRead(cxn->lmtp_endpoint, readBuffers, lmtp_readCB, cxn, 5);
++       return;
 +     }
-+ 
++
 +     switch (cxn->lmtp_state)
-+ 	{
-+ 
-+ 	case LMTP_READING_INTRO:
-+ 	    
-+ 	    if (ask_code(str)!=220)
-+ 	    {
-+ 		d_printf(0,"Initial server msg does not start with 220 (began with %d)\n",
-+ 			 ask_code(str));
-+ 		lmtp_Disconnect(cxn);
-+ 		return;
-+ 	    }
-+ 
-+ 	    /* the initial intro could have many lines via
++       {
++
++       case LMTP_READING_INTRO:
++
++           if (ask_code(str)!=220)
++           {
++               d_printf(0,"Initial server msg does not start with 220 (began with %d)\n",
++                        ask_code(str));
++               lmtp_Disconnect(cxn);
++               return;
++           }
++
++           /* the initial intro could have many lines via
 +                continuations. see if we need to read more */
-+ 	    if (ask_keepgoing(str)==1)
-+ 	    {
-+ 		goto reset;
-+ 	    }
-+ 
-+ 	    result = lmtp_getcapabilities(cxn);
-+ 
-+ 	    if (result != RET_OK)
-+ 	    {
-+ 		d_printf(0,"lmtp_getcapabilities() failure\n");
-+ 		lmtp_Disconnect(cxn);
-+ 		return;
-+ 	    }
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_READING_LHLO:
-+ 
-+ 	    /* recieve the response(s) */
-+ 	    response_code = ask_code(str);
-+ 	    
-+ 	    if (response_code != 250) /* was none */
-+ 	    {
-+ 		d_printf(0,"Response code unexpected (%d)\n",response_code);
-+ 		lmtp_Disconnect(cxn);
-+ 		return;
-+ 	    }
-+ 	    
-+ 	    /* look for one we know about; ignore all others */
-+ 	    if (strncmp(str+4,"8BITMIME",strlen("8BITMIME"))==0)
-+ 	    {
-+ 		cxn->lmtp_capabilities->Eightbitmime = 1;
-+ 	    } else if (strncmp(str+4, "ENHANCEDSTATUSCODES",
-+ 			       strlen("ENHANCEDSTATUSCODES"))==0) {
-+ 		cxn->lmtp_capabilities->EnhancedStatusCodes = 1;
-+ 	    } else if (strncmp(str+4, "AUTH",4)==0) {
-+ 		
-+ 		cxn->lmtp_capabilities->saslmechs = (char *) malloc(strlen(str+4+5)+5);
-+ 		ASSERT (cxn->lmtp_capabilities->saslmechs != NULL) ;	    
-+ 		
-+ 		/* copy string removing endline */
-+ 		strcpy(cxn->lmtp_capabilities->saslmechs, str+4+5);
-+ 		
-+ 	    } else if (strncmp(str+4,"PIPELINING",strlen("PIPELINING"))==0) {
-+ 		cxn->lmtp_capabilities->pipelining = 1;
-+ 	    } else {
-+ 		/* don't care; ignore */
-+ 	    }
-+ 	    
-+ 	    /* see if this is the last line of the capability */
-+ 	    if (ask_keepgoing(str)==1)
-+ 	    {
-+ 		goto reset;
-+ 	    } else {
-+ 		
-+ 		/* we require a few capabilities */
++           if (ask_keepgoing(str)==1)
++           {
++               goto reset;
++           }
++
++           result = lmtp_getcapabilities(cxn);
++
++           if (result != RET_OK)
++           {
++               d_printf(0,"lmtp_getcapabilities() failure\n");
++               lmtp_Disconnect(cxn);
++               return;
++           }
++
++           break;
++
++       case LMTP_READING_LHLO:
++
++           /* recieve the response(s) */
++           response_code = ask_code(str);
++
++           if (response_code != 250) /* was none */
++           {
++               d_printf(0,"Response code unexpected (%d)\n",response_code);
++               lmtp_Disconnect(cxn);
++               return;
++           }
++
++           /* look for one we know about; ignore all others */
++           if (strncmp(str+4,"8BITMIME",strlen("8BITMIME"))==0)
++           {
++               cxn->lmtp_capabilities->Eightbitmime = 1;
++           } else if (strncmp(str+4, "ENHANCEDSTATUSCODES",
++                              strlen("ENHANCEDSTATUSCODES"))==0) {
++               cxn->lmtp_capabilities->EnhancedStatusCodes = 1;
++           } else if (strncmp(str+4, "AUTH",4)==0) {
++
++               cxn->lmtp_capabilities->saslmechs = (char *) malloc(strlen(str+4+5)+5);
++               ASSERT (cxn->lmtp_capabilities->saslmechs != NULL) ;
++
++               /* copy string removing endline */
++               strcpy(cxn->lmtp_capabilities->saslmechs, str+4+5);
++
++           } else if (strncmp(str+4,"PIPELINING",strlen("PIPELINING"))==0) {
++               cxn->lmtp_capabilities->pipelining = 1;
++           } else {
++               /* don't care; ignore */
++           }
++
++           /* see if this is the last line of the capability */
++           if (ask_keepgoing(str)==1)
++           {
++               goto reset;
++           } else {
++
++               /* we require a few capabilities */
 + #ifndef SMTPMODE
-+ 		if (cxn->lmtp_capabilities->pipelining!=1)
-+ 		{
-+ 		    d_printf(0,"We require the capability PIPELINING\n");
-+ 		    
-+ 		    lmtp_Disconnect(cxn);
-+ 		    return;
-+ 		}
++               if (cxn->lmtp_capabilities->pipelining!=1)
++               {
++                   d_printf(0,"We require the capability PIPELINING\n");
++
++                   lmtp_Disconnect(cxn);
++                   return;
++               }
 + #endif /* SMTPMODE */
-+ #ifdef HAVE_SASL		
-+ 		/* start the authentication */
-+ 		result = lmtp_authenticate(cxn);
-+ 
-+ 		if (result != RET_OK)
-+ 		{
-+ 		    d_printf(0,"lmtp_authenticate returned error\n");
-+ 		    lmtp_Disconnect(cxn);
-+ 		    return;
-+ 		}
-+ #else
-+ 		cxn->lmtp_state = LMTP_AUTHED_IDLE;
-+ 		d_printf(0,"Even though we can't authenticate. we're going to try to feed anyway\n");
-+ 		/* We just assume we don't need to authenticate (great assumption huh?) */
-+ 		hostRemoteStreams (cxn->myHost, cxn, true) ;
-+ 
-+ 		cxn->lmtp_timeCon = theTime () ;
-+ 		cxn->timeCon = theTime () ;
-+ 		
-+ 
-+ 
-+ 
-+ 		/* try to send a message if we have one */
-+ 		lmtp_sendmessage(cxn,NULL);
-+ 		return;
-+ #endif /* HAVE_SASL */
-+ 
-+ 		
-+ 	    }
-+ 	    
-+ 	    
-+ 	    break;
-+ 
 + #ifdef HAVE_SASL
-+ 	case LMTP_READING_STEPAUTH:
-+ 	    
-+ 	    inlen = 0;
-+ 	    status = lmtp_getauthline(str, &in, &inlen);
-+ 
-+ 	    switch (status)
-+ 		{
-+ 
-+ 		case STAT_CONT:
-+ 
-+ 		    saslresult=sasl_client_step(cxn->saslconn_lmtp,
-+ 						in,
-+ 						inlen,
-+ 						&client_interact,
-+ 						&out,
-+ 						&outlen);
-+ 
-+ 		    free(in);
-+ 
-+ 		    /* check if sasl suceeded */
-+ 		    if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
-+ 
-+ 			d_printf(0,"sasl_client_step returned error (%s)\n",
-+ 				 sasl_errstring(saslresult,NULL,NULL));
-+ 
-+ 			lmtp_Disconnect(cxn);
-+ 			return;
-+ 		    }
-+ 
-+ 		    /* convert to base64 */
-+ 		    inbase64 = (char *) malloc(outlen*2+10);
-+ 
-+ 		    saslresult = sasl_encode64(out, outlen,
-+ 					       inbase64, outlen*2+10, (unsigned *) &inbase64len);
-+ 
-+ 		    free(out);
-+ 		    
-+ 		    if (saslresult != SASL_OK)
-+ 		    {
-+ 			d_printf(0,"sasl_encode64 returned error (%s)\n",
-+ 				 sasl_errstring(saslresult,NULL,NULL));
-+ 
-+ 			lmtp_Disconnect(cxn);
-+ 			return;
-+ 		    }
-+ 
-+ 		    /* add an endline */
-+ 		    strcpy(inbase64 + inbase64len, "\r\n");
-+ 
-+ 		    /* send to server */
-+ 		    result = WriteToWire_lmtpstr(cxn,inbase64, inbase64len+2);
-+ 
-+ 		    if (result != RET_OK)
-+ 		    {
-+ 			d_printf(0,"WriteToWrite failure\n");
-+ 			lmtp_Disconnect(cxn);
-+ 			return;
-+ 		    }
-+ 
-+ 		    cxn->lmtp_state = LMTP_WRITING_STEPAUTH;
-+ 		    break;
-+ 		    
-+ 		case STAT_OK:
-+ 
-+ 		    cxn->lmtp_sleepTimeout = init_reconnect_period ;
-+       
-+ 		    d_printf(0,"%s:%d LMTP authenticated succeeded\n",
-+ 			     hostPeerName (cxn->myHost), cxn->ident);
-+ 
-+ 		    cxn->lmtp_disconnects=0;
-+ 
-+ 		    hostRemoteStreams (cxn->myHost, cxn, true) ;
-+ 
-+ 		    cxn->lmtp_timeCon = theTime () ;
-+ 		    cxn->timeCon = theTime () ;
-+ 
-+ 		    cxn->lmtp_state = LMTP_AUTHED_IDLE;
-+ 
-+ 
-+ 		    /* try to send a message if we have one */
-+ 		    lmtp_sendmessage(cxn,NULL);
-+ 		    return;
-+ 
-+ 		    break;
-+ 
-+ 		default:
-+ 		    d_printf(0,"lmtp failed authentication\n");
-+ 		    lmtp_Disconnect(cxn);
-+ 		    return;
-+ 		}
-+ 
-+ 	    break;
-+ #endif /* HAVE_SASL */
-+ 		    
-+ 	case LMTP_READING_MAILFROM:
-+ 
-+ 	    if (ask_code(str)!=250)
-+ 	    {
-+ 		d_printf(0,"MAILFROM failed with (%d)\n",ask_code(str));
-+ 		lmtp_Disconnect(cxn);
-+ 		return;
-+ 	    }
-+ 
-+ 	    /* we pipelined so next we recieve the rcpt's */
-+ 	    cxn->lmtp_state = LMTP_READING_RCPTTO;
-+ 
-+ 	    goto reset;
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_READING_RCPTTO:
-+ 
-+ 	    if (ask_code(str)!=250)
-+ 	    {
-+ 		d_printf(1,"RCPTTO failed with (%d) %s\n",ask_code(str), str);
-+ 
-+ 		cxn->current_rcpts_issued--;
-+ 		
-+ 	    } else {
-+ 		cxn->current_rcpts_okayed++;
-+ 	    }
-+ 
-+ 	    /* if issued equals number okayed then we're done */
-+ 	    if ( cxn->current_rcpts_okayed == cxn->current_rcpts_issued)
-+ 	    {
-+ 		cxn->lmtp_state = LMTP_READING_DATA;
-+ 	    } else {
-+ 		/* stay in same state */
-+ 	    }
-+ 
-+ 	    goto reset;
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_READING_DATA:
-+ 
-+ 	    if (cxn->current_rcpts_issued == 0)
-+ 	    {
-+ 		d_printf(1,"None of the rcpts were accepted for this message. Re-queueing\n");
-+ 
-+ 		ReQueue(cxn, &(cxn->lmtp_todeliver_q), cxn->current_article);
-+ 
-+ 		cxn->lmtp_have_mailfrom = 1;
-+ 
-+ 		cxn->lmtp_state = LMTP_AUTHED_IDLE;
-+ 		lmtp_sendmessage(cxn,NULL);
-+ 	    } else {
-+ 
-+ 		cxn->lmtp_have_mailfrom = 0;
-+ 
-+ 		if (WriteArticle(cxn, cxn->current_bufs) != RET_OK)
-+ 		{
-+ 		    d_printf(0,"Error writing article\n");
-+ 		    lmtp_Disconnect(cxn);
-+ 		    return;
-+ 		}
-+ 		
-+ 		cxn->lmtp_state = LMTP_WRITING_CONTENTS;
-+ 	    }
-+ 
-+ 	    break;
-+ 
-+ 	case LMTP_READING_CONTENTS:
-+ 
-+ 	    /* need 1 response from server for every rcpt */
-+ 	    cxn->current_rcpts_issued--;
-+ 	    
-+ 	    if (ask_code(str)!=250)
-+ 	    {
-+ 		d_printf(1,"DATA failed with %d (%s)\n",ask_code(str), str);
-+ 		cxn->current_rcpts_okayed--;
-+ 	    }
-+ 
-+ 
-+ 	    if (cxn->current_rcpts_issued>0)
-+ 	    {
-+ 		goto reset;
-+ 	    }
-+ 
-+ 	    /*
-+ 	     * current_rcpts_okayed is number that suceeded
-+ 	     *
-+ 	     */
-+ 
-+ 	    if (cxn->current_rcpts_okayed==0)
-+ 	    {
-+ 		cxn->lmtp_state = LMTP_AUTHED_IDLE;
-+ 
-+ 	    } else {
-+ 
-+ 		cxn->lmtp_state = LMTP_AUTHED_IDLE;
-+ 		cxn->lmtp_suceeded++;	    
-+ 		d_printf(1,"Woohoo! message accepted\n");
-+ 	    }
-+ 
-+ 	    /* we can delete article now */
-+ 	    QueueForgetAbout(cxn, cxn->current_article,0);
-+ 
-+ #ifdef SMTPMODE
-+ 	    lmtp_Disconnect(cxn);
++               /* start the authentication */
++               result = lmtp_authenticate(cxn);
++
++               if (result != RET_OK)
++               {
++                   d_printf(0,"lmtp_authenticate returned error\n");
++                   lmtp_Disconnect(cxn);
++                   return;
++               }
 + #else
-+ 	    /* try to send another if we have one and we're still idle
-+ 	     * forgetting the msg might have made us unidle
-+ 	     */
-+ 	    if (cxn->lmtp_state == LMTP_AUTHED_IDLE)
-+ 	    {
-+ 		lmtp_sendmessage(cxn,NULL);
-+ 	    }
++               cxn->lmtp_state = LMTP_AUTHED_IDLE;
++               d_printf(0,"Even though we can't authenticate. we're going to try to feed anyway\n");
++               /* We just assume we don't need to authenticate (great assumption huh?) */
++               hostRemoteStreams (cxn->myHost, cxn, true) ;
++
++               cxn->lmtp_timeCon = theTime () ;
++               cxn->timeCon = theTime () ;
++
++
++
++
++               /* try to send a message if we have one */
++               lmtp_sendmessage(cxn,NULL);
++               return;
++ #endif /* HAVE_SASL */
++
++
++           }
++
++
++           break;
++
++ #ifdef HAVE_SASL
++       case LMTP_READING_STEPAUTH:
++
++           inlen = 0;
++           status = lmtp_getauthline(str, &in, &inlen);
++
++           switch (status)
++               {
++
++               case STAT_CONT:
++
++                   saslresult=sasl_client_step(cxn->saslconn_lmtp,
++                                               in,
++                                               inlen,
++                                               &client_interact,
++                                               &out,
++                                               &outlen);
++
++                   free(in);
++
++                   /* check if sasl suceeded */
++                   if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
++
++                       d_printf(0,"sasl_client_step returned error (%s)\n",
++                                sasl_errstring(saslresult,NULL,NULL));
++
++                       lmtp_Disconnect(cxn);
++                       return;
++                   }
++
++                   /* convert to base64 */
++                   inbase64 = (char *) malloc(outlen*2+10);
++
++                   saslresult = sasl_encode64(out, outlen,
++                                              inbase64, outlen*2+10, (unsigned *) &inbase64len);
++
++                   free(out);
++
++                   if (saslresult != SASL_OK)
++                   {
++                       d_printf(0,"sasl_encode64 returned error (%s)\n",
++                                sasl_errstring(saslresult,NULL,NULL));
++
++                       lmtp_Disconnect(cxn);
++                       return;
++                   }
++
++                   /* add an endline */
++                   strcpy(inbase64 + inbase64len, "\r\n");
++
++                   /* send to server */
++                   result = WriteToWire_lmtpstr(cxn,inbase64, inbase64len+2);
++
++                   if (result != RET_OK)
++                   {
++                       d_printf(0,"WriteToWrite failure\n");
++                       lmtp_Disconnect(cxn);
++                       return;
++                   }
++
++                   cxn->lmtp_state = LMTP_WRITING_STEPAUTH;
++                   break;
++
++               case STAT_OK:
++
++                   cxn->lmtp_sleepTimeout = init_reconnect_period ;
++
++                   d_printf(0,"%s:%d LMTP authenticated succeeded\n",
++                            hostPeerName (cxn->myHost), cxn->ident);
++
++                   cxn->lmtp_disconnects=0;
++
++                   hostRemoteStreams (cxn->myHost, cxn, true) ;
++
++                   cxn->lmtp_timeCon = theTime () ;
++                   cxn->timeCon = theTime () ;
++
++                   cxn->lmtp_state = LMTP_AUTHED_IDLE;
++
++
++                   /* try to send a message if we have one */
++                   lmtp_sendmessage(cxn,NULL);
++                   return;
++
++                   break;
++
++               default:
++                   d_printf(0,"lmtp failed authentication\n");
++                   lmtp_Disconnect(cxn);
++                   return;
++               }
++
++           break;
++ #endif /* HAVE_SASL */
++
++       case LMTP_READING_MAILFROM:
++
++           if (ask_code(str)!=250)
++           {
++               d_printf(0,"MAILFROM failed with (%d)\n",ask_code(str));
++               lmtp_Disconnect(cxn);
++               return;
++           }
++
++           /* we pipelined so next we recieve the rcpt's */
++           cxn->lmtp_state = LMTP_READING_RCPTTO;
++
++           goto reset;
++
++           break;
++
++       case LMTP_READING_RCPTTO:
++
++           if (ask_code(str)!=250)
++           {
++               d_printf(1,"RCPTTO failed with (%d) %s\n",ask_code(str), str);
++
++               cxn->current_rcpts_issued--;
++
++           } else {
++               cxn->current_rcpts_okayed++;
++           }
++
++           /* if issued equals number okayed then we're done */
++           if ( cxn->current_rcpts_okayed == cxn->current_rcpts_issued)
++           {
++               cxn->lmtp_state = LMTP_READING_DATA;
++           } else {
++               /* stay in same state */
++           }
++
++           goto reset;
++
++           break;
++
++       case LMTP_READING_DATA:
++
++           if (cxn->current_rcpts_issued == 0)
++           {
++               d_printf(1,"None of the rcpts were accepted for this message. Re-queueing\n");
++
++               ReQueue(cxn, &(cxn->lmtp_todeliver_q), cxn->current_article);
++
++               cxn->lmtp_have_mailfrom = 1;
++
++               cxn->lmtp_state = LMTP_AUTHED_IDLE;
++               lmtp_sendmessage(cxn,NULL);
++           } else {
++
++               cxn->lmtp_have_mailfrom = 0;
++
++               if (WriteArticle(cxn, cxn->current_bufs) != RET_OK)
++               {
++                   d_printf(0,"Error writing article\n");
++                   lmtp_Disconnect(cxn);
++                   return;
++               }
++
++               cxn->lmtp_state = LMTP_WRITING_CONTENTS;
++           }
++
++           break;
++
++       case LMTP_READING_CONTENTS:
++
++           /* need 1 response from server for every rcpt */
++           cxn->current_rcpts_issued--;
++
++           if (ask_code(str)!=250)
++           {
++               d_printf(1,"DATA failed with %d (%s)\n",ask_code(str), str);
++               cxn->current_rcpts_okayed--;
++           }
++
++
++           if (cxn->current_rcpts_issued>0)
++           {
++               goto reset;
++           }
++
++           /*
++            * current_rcpts_okayed is number that suceeded
++            *
++            */
++
++           if (cxn->current_rcpts_okayed==0)
++           {
++               cxn->lmtp_state = LMTP_AUTHED_IDLE;
++
++           } else {
++
++               cxn->lmtp_state = LMTP_AUTHED_IDLE;
++               cxn->lmtp_suceeded++;
++               d_printf(1,"Woohoo! message accepted\n");
++           }
++
++           /* we can delete article now */
++           QueueForgetAbout(cxn, cxn->current_article,0);
++
++ #ifdef SMTPMODE
++           lmtp_Disconnect(cxn);
++ #else
++           /* try to send another if we have one and we're still idle
++            * forgetting the msg might have made us unidle
++            */
++           if (cxn->lmtp_state == LMTP_AUTHED_IDLE)
++           {
++               lmtp_sendmessage(cxn,NULL);
++           }
 + #endif
-+ 	    
-+ 	    break;
-+ 
-+ 	case LMTP_READING_QUIT:
-+ 
-+ 	    d_printf(1,"LMTP read quit\n");
-+ 
-+ 	    cxn->lmtp_state = LMTP_DISCONNECTED;	    
-+ 
-+ 	    switch (cxn->issue_quit)
-+ 		{
-+ 		case 1:
-+ 		    if (cxn->imap_state == IMAP_DISCONNECTED)
-+ 		    {
-+ 			cxn->lmtp_state = LMTP_WAITING;
-+ 			cxn->imap_state = IMAP_WAITING;
-+ 			cxn->issue_quit = 0;
-+ 			hostCxnWaiting (cxn->myHost,cxn) ;  /* tell our Host we're waiting */
-+ 		    }
-+ 		    break;
-+ 		case 2:
-+ 		    if (cxn->imap_state == IMAP_DISCONNECTED)
-+ 		    {
-+ 			cxn->issue_quit = 0;
-+ 			if (imap_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,0);
-+ 			if (lmtp_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,1);
-+ 		    }
-+ 		    break;
-+ 		case 3:
-+ 		    if (cxn->imap_state == IMAP_DISCONNECTED)
-+ 		    {
-+ 			delConnection(cxn);
-+ 		    }
-+ 		    break;
-+ 		}
-+ 
-+ 	    break;
-+ 
-+ 	default:
-+ 
-+ 	    d_printf(0,"Bad state in lmtp_readCB %d\n",cxn->lmtp_state);
-+ 	    lmtp_Disconnect(cxn);
-+ 	    return;
-+ 	}
-+ 
-+ 
++
++           break;
++
++       case LMTP_READING_QUIT:
++
++           d_printf(1,"LMTP read quit\n");
++
++           cxn->lmtp_state = LMTP_DISCONNECTED;
++
++           switch (cxn->issue_quit)
++               {
++               case 1:
++                   if (cxn->imap_state == IMAP_DISCONNECTED)
++                   {
++                       cxn->lmtp_state = LMTP_WAITING;
++                       cxn->imap_state = IMAP_WAITING;
++                       cxn->issue_quit = 0;
++                       hostCxnWaiting (cxn->myHost,cxn) ;  /* tell our Host we're waiting */
++                   }
++                   break;
++               case 2:
++                   if (cxn->imap_state == IMAP_DISCONNECTED)
++                   {
++                       cxn->issue_quit = 0;
++                       if (imap_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,0);
++                       if (lmtp_Connect(cxn)!=RET_OK) prepareReopenCbk(cxn,1);
++                   }
++                   break;
++               case 3:
++                   if (cxn->imap_state == IMAP_DISCONNECTED)
++                   {
++                       delConnection(cxn);
++                   }
++                   break;
++               }
++
++           break;
++
++       default:
++
++           d_printf(0,"Bad state in lmtp_readCB %d\n",cxn->lmtp_state);
++           lmtp_Disconnect(cxn);
++           return;
++       }
++
++
 + }
-+ 
++
 + /*
 +  * Add a rcpt to:<foo> to the string
 +  *
 +  */
-+ 
++
 + static void addrcpt(char *newrcpt, int newrcptlen, char **out, int *outalloc)
 + {
 +     int size = strlen(*out);
 +     int newsize = size + 9+strlen(NEWS_USERNAME)+1+newrcptlen+3;
-+ 
++
 +     /* see if we need to grow the string */
 +     if (newsize > *outalloc)
 +     {
-+ 	(*outalloc)+=200;
-+ 	(*out) = realloc(*out, *outalloc);
-+ 	ASSERT(*out);
++       (*outalloc)+=200;
++       (*out) = realloc(*out, *outalloc);
++       ASSERT(*out);
 +     }
-+ 
++
 +     sprintf((*out)+size,"RCPT TO:<%s+",NEWS_USERNAME);
 +     size+=9+strlen(NEWS_USERNAME)+1;
-+     
++
 +     memcpy((*out)+size, newrcpt, newrcptlen);
 +     size+=newrcptlen;
-+     
-+     strcpy((*out)+size,">\r\n");    
++
++     strcpy((*out)+size,">\r\n");
 + }
-+ 
++
 + /*
 +  * Takes the newsgroups header value and makes it into a list of RCPT TO:'s we can send over the wire
 +  *
@@ -3774,7 +3774,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  *  in_end - end of newsgroups header
 +  *  num    - number of rcpt's we created
 +  */
-+ 
++
 + static char *ConvertRcptList(char *in, char *in_end, int *num)
 + {
 +     int retalloc = 400;
@@ -3782,116 +3782,116 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     char *str = in;
 +     char *laststart = in;
 +     int len;
-+ 
++
 +     (*num) = 0;
-+ 
-+     /* start it off empty */     
++
++     /* start it off empty */
 +     strcpy(ret,"");
-+     
++
 +     while ( str !=  in_end)
 +     {
-+ 	if ((*str) == ',')
-+ 	{
-+ 	    /* eliminate leading whitespace */
-+ 	    while (((*laststart) ==' ') || ((*laststart)=='\t'))
-+ 	    {
-+ 		laststart++;
-+ 	    }
-+ 
++       if ((*str) == ',')
++       {
++           /* eliminate leading whitespace */
++           while (((*laststart) ==' ') || ((*laststart)=='\t'))
++           {
++               laststart++;
++           }
++
 + #ifndef SMTPMODE
-+ 	    addrcpt(laststart, str - laststart, &ret, &retalloc);
-+ 	    (*num)++;
++           addrcpt(laststart, str - laststart, &ret, &retalloc);
++           (*num)++;
 + #endif /* SMTPMODE */
-+ 	    laststart = str+1;
-+ 	}
-+ 
-+ 	str++;
++           laststart = str+1;
++       }
++
++       str++;
 +     }
-+ 
++
 +     if (laststart<str)
 +     {
-+ 	addrcpt(laststart, str - laststart, &ret, &retalloc);
-+ 	(*num)++;
++       addrcpt(laststart, str - laststart, &ret, &retalloc);
++       (*num)++;
 +     }
-+ 
++
 +     return ret;
 + }
-+ 
++
 + /*************************** END LMTP reading functions ****************************/
-+ 
-+ 
-+ 
++
++
++
 + /*
 +  * Process the control message queue. If we run out ask the host for more.
 +  *
 +  *  cxn       - connection object
 +  */
-+ 
++
 + static conn_ret imap_ProcessQueue(connection_t *cxn)
 + {
 +     article_queue_t *item;
 +     int result;
 +     bool res;
 +     char *control_header;
-+ 
++
 +  retry:
-+ 
++
 +     /* pull an article off the queue */
 +     result = PopFromQueue(&(cxn->imap_controlMsg_q), &item);
-+ 
++
 +     if (result==RET_QUEUE_EMPTY)
 +     {
-+ 	if (cxn->issue_quit)
-+ 	{
-+ 	    imap_sendQuit(cxn);
-+ 	    return;
-+ 	}
-+ 
-+ 	cxn->imap_state = IMAP_IDLE_AUTHED;
-+ 
-+ 	/* now we wait for articles from our Host, or we have some
-+ 	   articles already. On infrequently used connections, the
-+ 	   network link is torn down and rebuilt as needed. So we may
-+ 	   be rebuilding the connection here in which case we have an
-+ 	   article to send. */
-+ 
-+ 	/* make sure imap has _lots_ of space too */
-+ 	if ((QueueItems(&(cxn->lmtp_todeliver_q)) == 0) && 
-+ 	    (QueueItems(&(cxn->imap_controlMsg_q)) == 0))
-+ 	{
-+ 	    if (hostGimmeArticle (cxn->myHost,cxn)==true)
-+ 		goto retry;
-+ 	}
-+ 
-+ 	return RET_OK;
++       if (cxn->issue_quit)
++       {
++           imap_sendQuit(cxn);
++           return;
++       }
++
++       cxn->imap_state = IMAP_IDLE_AUTHED;
++
++       /* now we wait for articles from our Host, or we have some
++          articles already. On infrequently used connections, the
++          network link is torn down and rebuilt as needed. So we may
++          be rebuilding the connection here in which case we have an
++          article to send. */
++
++       /* make sure imap has _lots_ of space too */
++       if ((QueueItems(&(cxn->lmtp_todeliver_q)) == 0) &&
++           (QueueItems(&(cxn->imap_controlMsg_q)) == 0))
++       {
++           if (hostGimmeArticle (cxn->myHost,cxn)==true)
++               goto retry;
++       }
++
++       return RET_OK;
 +     }
-+ 
++
 +     cxn->current_control = item;
-+ 
++
 +     switch (item->type)
-+ 	{
-+ 	case CREATE_FOLDER:
-+ 	    imap_CreateGroup(cxn, item->data.control->folder);
-+ 	    break;
-+ 
-+ 	case CANCEL_MSG:
-+ 
-+ 	    imap_CancelMsg(cxn, item->data.control->folder);
-+ 
-+ 	    break;
-+ 
-+ 	case DELETE_FOLDER:
-+ 	    imap_DeleteGroup(cxn, item->data.control->folder); 
-+ 	    break;
-+ 	default:
-+ 	    break;
-+ 	}
-+ 
++       {
++       case CREATE_FOLDER:
++           imap_CreateGroup(cxn, item->data.control->folder);
++           break;
++
++       case CANCEL_MSG:
++
++           imap_CancelMsg(cxn, item->data.control->folder);
++
++           break;
++
++       case DELETE_FOLDER:
++           imap_DeleteGroup(cxn, item->data.control->folder);
++           break;
++       default:
++           break;
++       }
++
 +     return RET_OK;
 + }
-+ 
-+ 
-+ 
++
++
++
 + /*
 +  *
 +  * Pulls a message off the queue and trys to start sending it. If the
@@ -3903,7 +3903,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  * cxn       - connection object
 +  * justadded - the article that was just added to the queue
 +  */
-+ 
++
 + static void lmtp_sendmessage(connection_t *cxn, Article justadded)
 + {
 +     bool res;
@@ -3914,213 +3914,213 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     Buffer *bufs;
 +     char *control_header = NULL;
 +     char *control_header_end = NULL;
-+ 
++
 +     article_queue_t *item;
 +     char *rcpt_list, *rcpt_list_end;
-+ 
++
 +     /* retry point */
 +  retry:
-+ 
++
 +     /* pull an article off the queue */
 +     result = PopFromQueue(&(cxn->lmtp_todeliver_q), &item);
-+ 
++
 +     if (result==RET_QUEUE_EMPTY)
 +     {
-+ 
-+ 	if (cxn->issue_quit)
-+ 	{
-+ 	    lmtp_IssueQuit(cxn);
-+ 	    return;
-+ 	}
-+ 	/* now we wait for articles from our Host, or we have some
-+ 	   articles already. On infrequently used connections, the
-+ 	   network link is torn down and rebuilt as needed. So we may
-+ 	   be rebuilding the connection here in which case we have an
-+ 	   article to send. */
-+ 
-+ 	/* make sure imap has space too */
-+ 	if ((QueueItems(&(cxn->lmtp_todeliver_q)) == 0) && 
-+ 	    (QueueItems(&(cxn->imap_controlMsg_q)) == 0))
-+ 	{
-+ 	    if (hostGimmeArticle (cxn->myHost,cxn)==true)
-+ 		goto retry;
-+ 	}
-+ 
-+ 	return;
++
++       if (cxn->issue_quit)
++       {
++           lmtp_IssueQuit(cxn);
++           return;
++       }
++       /* now we wait for articles from our Host, or we have some
++          articles already. On infrequently used connections, the
++          network link is torn down and rebuilt as needed. So we may
++          be rebuilding the connection here in which case we have an
++          article to send. */
++
++       /* make sure imap has space too */
++       if ((QueueItems(&(cxn->lmtp_todeliver_q)) == 0) &&
++           (QueueItems(&(cxn->imap_controlMsg_q)) == 0))
++       {
++           if (hostGimmeArticle (cxn->myHost,cxn)==true)
++               goto retry;
++       }
++
++       return;
 +     }
-+ 
++
 +     /* make sure contents ok; this also should load it into memory */
 +     res = artContentsOk (item->data.article);
 +     if (res==false)
 +     {
-+ 	if (justadded == item->data.article) {
-+ 	    ReQueue(cxn, &(cxn->lmtp_todeliver_q), item);
-+ 	    return;
-+ 	    
-+ 	} else {
-+ 	    /* tell to reject taking this message */
-+ 	    QueueForgetAbout(cxn,item,3);
-+ 	}
-+ 
-+ 	goto retry;
++       if (justadded == item->data.article) {
++           ReQueue(cxn, &(cxn->lmtp_todeliver_q), item);
++           return;
++
++       } else {
++           /* tell to reject taking this message */
++           QueueForgetAbout(cxn,item,3);
++       }
++
++       goto retry;
 +     }
-+ 
++
 +     /* Check if it's a control message */
 +     bufs = artGetNntpBuffers (item->data.article);
 +     if (bufs == NULL)
 +     {
-+ 	/* tell to reject taking this message */
-+ 	QueueForgetAbout(cxn,item,3);
-+ 	goto retry;
++       /* tell to reject taking this message */
++       QueueForgetAbout(cxn,item,3);
++       goto retry;
 +     }
-+ 
++
 +     result = FindHeader(bufs, "Control", &control_header, &control_header_end);
-+ 
++
 +     if (result == RET_OK)
 +     {
-+ 	result = AddControlMsg(cxn, item->data.article, bufs, control_header,control_header_end, 1);
-+ 
-+ 	if (result != RET_OK)
-+ 	{
-+ 	    d_printf(1,"Error adding to control queue\n");
-+ 	    ReQueue(cxn, &(cxn->lmtp_todeliver_q), item);
-+ 	    return;
-+ 	}
-+ 
-+ 	switch(cxn->imap_state)
-+ 	    {
-+ 	    case IMAP_IDLE_AUTHED:
-+ 		/* we're idle. let's process the queue */
-+ 		imap_ProcessQueue(cxn);
-+ 		break;
-+ 	    case IMAP_DISCONNECTED:
-+ 	    case IMAP_WAITING:
-+ 		/* Let's connect. Once we're connected we can worry about the message */
-+ 		if (imap_Connect(cxn) != RET_OK) prepareReopenCbk(cxn,0);
-+ 		break;
-+ 	    default:
-+ 		/* we're doing something right now */
-+ 		break;
-+ 
-+ 	    }
-+ 	
-+ 	/* all we did was add a control message. we still want to get an lmtp message */
-+ 	goto retry;
++       result = AddControlMsg(cxn, item->data.article, bufs, control_header,control_header_end, 1);
++
++       if (result != RET_OK)
++       {
++           d_printf(1,"Error adding to control queue\n");
++           ReQueue(cxn, &(cxn->lmtp_todeliver_q), item);
++           return;
++       }
++
++       switch(cxn->imap_state)
++           {
++           case IMAP_IDLE_AUTHED:
++               /* we're idle. let's process the queue */
++               imap_ProcessQueue(cxn);
++               break;
++           case IMAP_DISCONNECTED:
++           case IMAP_WAITING:
++               /* Let's connect. Once we're connected we can worry about the message */
++               if (imap_Connect(cxn) != RET_OK) prepareReopenCbk(cxn,0);
++               break;
++           default:
++               /* we're doing something right now */
++               break;
++
++           }
++
++       /* all we did was add a control message. we still want to get an lmtp message */
++       goto retry;
 +     }
-+ 
++
 +     if (cxn->current_bufs!=NULL)
 +     {
-+ 	/*	freeBufferArray(cxn->current_bufs); */
-+ 	cxn->current_bufs = NULL;
++       /*      freeBufferArray(cxn->current_bufs); */
++       cxn->current_bufs = NULL;
 +     }
 +     cxn->current_bufs = bufs;
 +     cxn->current_article = item;
-+     
++
 +     /* we make use of pipelining here
 +        send:
 +          mail from
-+ 	 rctp to
-+ 	 data
++        rctp to
++        data
 +     */
-+ 
++
 +     /* find out who it's going to */
 +     result = FindHeader(cxn->current_bufs, "Newsgroups", &rcpt_list, &rcpt_list_end);
-+ 
++
 +     if ((result != RET_OK) || (rcpt_list == NULL))
 +     {
-+ 	d_printf(1,"Didn't find Newsgroups header\n");
-+ 	QueueForgetAbout(cxn, cxn->current_article,1);
-+ 	goto retry;	
++       d_printf(1,"Didn't find Newsgroups header\n");
++       QueueForgetAbout(cxn, cxn->current_article,1);
++       goto retry;
 +     }
-+ 
++
 +     /* free's original rcpt_list */
 +     rcpt_list = ConvertRcptList(rcpt_list, rcpt_list_end, &cxn->current_rcpts_issued);
 +     cxn->current_rcpts_okayed = 0;
-+     
-+ 
-+ 
++
++
++
 +     if (cxn->lmtp_have_mailfrom==1)
 +     {
-+ 	p = (char *) malloc (strlen(rcpt_list)+50);	
-+ 	sprintf (p, "%sDATA\r\n", rcpt_list);
++       p = (char *) malloc (strlen(rcpt_list)+50);
++       sprintf (p, "%sDATA\r\n", rcpt_list);
 +     } else {
-+ 	p = (char *) malloc (strlen(rcpt_list)+strlen(mailfrom_name)+50);
-+ 	sprintf (p, "MAIL FROM:<%s>\r\n%sDATA\r\n", mailfrom_name,rcpt_list);
++       p = (char *) malloc (strlen(rcpt_list)+strlen(mailfrom_name)+50);
++       sprintf (p, "MAIL FROM:<%s>\r\n%sDATA\r\n", mailfrom_name,rcpt_list);
 +     }
-+ 
++
 +     cxn->lmtp_state = LMTP_WRITING_UPTODATA;
-+     
++
 +     result = WriteToWire_lmtpstr(cxn, p, strlen(p));
-+ 
++
 +     if (result != RET_OK)
 +     {
-+ 	d_printf(0,"Failed trying to write\n");
-+ 	lmtp_Disconnect(cxn);
-+ 	return;
++       d_printf(0,"Failed trying to write\n");
++       lmtp_Disconnect(cxn);
++       return;
 +     }
 + }
-+ 
++
 + /*
 +  * Called by the EndPoint class when the timer goes off
 +  */
 + static void dosomethingTimeoutCbk (TimeoutId id, void *data)
 + {
 +   Connection cxn = (Connection) data ;
-+ 
++
 +   ASSERT (id == cxn->dosomethingTimerId) ;
-+ 
++
 +   show_stats(cxn);
-+ 
++
 +   /* we're disconnected but there are things to send */
-+   if ((cxn->lmtp_state == LMTP_DISCONNECTED) && 
++   if ((cxn->lmtp_state == LMTP_DISCONNECTED) &&
 +       QueueItems(&(cxn->lmtp_todeliver_q)) > 0)
 +       lmtp_Connect(cxn);
-+ 
++
 +   if ((cxn->imap_state == IMAP_DISCONNECTED) &&
 +       (QueueItems(&(cxn->imap_controlMsg_q)) > 0))
 +       imap_Connect(cxn);
-+ 
-+ 
++
++
 +   /* if we're idle and there are items to send let's send them */
-+   if ((cxn->lmtp_state == LMTP_AUTHED_IDLE) && 
++   if ((cxn->lmtp_state == LMTP_AUTHED_IDLE) &&
 +       QueueItems(&(cxn->lmtp_todeliver_q)) > 0)
 +       lmtp_sendmessage(cxn,NULL);
-+ 
++
 +   if ((cxn->imap_state == IMAP_IDLE_AUTHED) &&
 +       (QueueItems(&(cxn->imap_controlMsg_q)) > 0))
 +       imap_ProcessQueue(cxn);
-+ 
++
 +   /* set up the timer. */
 +   clearTimer (cxn->dosomethingTimerId) ;
-+ 
-+   cxn->dosomethingTimerId = prepareSleep (dosomethingTimeoutCbk, 
-+ 					  cxn->dosomethingTimeout, cxn);  
++
++   cxn->dosomethingTimerId = prepareSleep (dosomethingTimeoutCbk,
++                                         cxn->dosomethingTimeout, cxn);
 + }
-+ 
++
 + /* Give all articles in the queue back to the host. We're probably
 +  * going to exit soon.
 +  * */
-+ 
++
 + static void DeferAllArticles(connection_t *cxn, Q_t *q)
 + {
 +     article_queue_t *cur;
 +     conn_ret ret;
-+     
++
 +     while (1)
 +     {
-+ 	ret = PopFromQueue(q, &cur);
-+ 	if (ret == RET_QUEUE_EMPTY) return;
-+ 
-+ 	if (ret == RET_OK)
++       ret = PopFromQueue(q, &cur);
++       if (ret == RET_QUEUE_EMPTY) return;
++
++       if (ret == RET_OK)
 +         {
-+ 	    QueueForgetAbout(cxn, cur,2);	    
-+ 	} else {
-+ 	    d_printf(0,"Error emptying queue\n");	    
-+ 	    return;
-+ 	}
++           QueueForgetAbout(cxn, cur,2);
++       } else {
++           d_printf(0,"Error emptying queue\n");
++           return;
++       }
 +     }
 + }
-+ 
++
 + /*
 +  * Does the actual deletion of a connection and all its private data.
 +  */
@@ -4128,13 +4128,13 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + {
 +   bool shutDown;
 +   Connection c, q;
-+ 
++
 +   if (cxn == NULL)
 +     return ;
-+ 
++
 +   d_printf (1,"Deleting connection: %s:%d\n",
 +            hostPeerName (cxn->myHost),cxn->ident) ;
-+ 
++
 +   for (c = gCxnList, q = NULL ; c != NULL ; q = c, c = c->next)
 +     if (c == cxn)
 +       {
@@ -4144,25 +4144,25 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +           q->next = c->next ;
 +         break ;
 +       }
-+   
++
 +   ASSERT (c != NULL) ;
-+  
++
 +   if (cxn->lmtp_endpoint != NULL)
 +     delEndPoint (cxn->lmtp_endpoint) ;
 +   if (cxn->imap_endpoint != NULL)
 +     delEndPoint (cxn->imap_endpoint) ;
-+ 
++
 +   delBuffer (cxn->imap_rBuffer) ;
 +   delBuffer (cxn->lmtp_rBuffer) ;
-+ 
++
 +   /* tell the Host we're outta here. */
 +   shutDown = hostCxnGone (cxn->myHost, cxn) ;
-+ 
++
 +   cxn->ident = 0 ;
 +   cxn->timeCon = 0 ;
-+ 
++
 +   FREE (cxn->ServerName) ;
-+ 
++
 +   clearTimer (cxn->imap_readBlockedTimerId) ;
 +   clearTimer (cxn->imap_writeBlockedTimerId) ;
 +   clearTimer (cxn->lmtp_readBlockedTimerId) ;
@@ -4170,38 +4170,38 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   clearTimer (cxn->imap_sleepTimerId);
 +   clearTimer (cxn->lmtp_sleepTimerId);
 +   clearTimer (cxn->dosomethingTimerId);
-+ 
++
 +   FREE(cxn->imap_respBuffer);
 +   FREE(cxn->lmtp_respBuffer);
-+ 
++
 +   FREE (cxn) ;
-+ 
++
 +   if (shutDown)
 +     {
 +       /* exit program if that was the last connexion for the last host */
 +       /* XXX what about if there are ever multiple listeners?
-+ 	 XXX    this will be executed if all hosts on only one of the 
-+ 	 XXX    listeners have gone */
++        XXX    this will be executed if all hosts on only one of the
++        XXX    listeners have gone */
 +       time_t now = theTime () ;
 +       char dateString [30] ;
-+ 
++
 +       strcpy (dateString,ctime (&now)) ;
 +       dateString [24] = '\0' ;
-+       
++
 +       syslog (LOG_NOTICE,STOPPING_PROGRAM,dateString) ;
-+ 
++
 +       exit (0) ;
 +     }
 + }
-+ 
-+ 
++
++
 + /******************** PUBLIC FUNCTIONS ****************************/
-+ 
-+ 
-+ 
++
++
++
 +   /*
 +    * Create a new Connection.
-+    * 
++    *
 +    * HOST is the host object we're owned by.
 +    * IDENT is an identifier to be added to syslog entries so we can tell
 +    *    what's happening on different connections to the same peer.
@@ -4216,7 +4216,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +    *     with old NNTP servers that hold history files open. Value of 0 means
 +    *     no close down.
 +    */
-+ 
++
 + Connection newConnection (Host host,
 +                           u_int ident,
 +                           const char *ipname,
@@ -4226,69 +4226,69 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                           u_int closePeriod,
 +                           double lowPassLow,
 +                           double lowPassHigh,
-+ 			  double lowPassFilter)
++                         double lowPassFilter)
 + {
 +     Connection cxn;
 +     /* check arguements */
-+ 
++
 +     /* allocate connection structure */
 +     cxn = CALLOC (connection_t, 1) ;
 +     ASSERT (cxn != NULL) ;
-+ 
++
 +     cxn->ident = ident ;
-+ 
++
 +     cxn->ServerName = malloc( strlen(ipname)+1);
 +     strcpy(cxn->ServerName, ipname);
-+ 
++
 +     cxn->myHost = host ;
-+ 
++
 +     /* setup mailfrom user */
 +     if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
 +     {
-+ 	d_printf(0,"gethostname failed\n");
-+ 	return NULL;
++       d_printf(0,"gethostname failed\n");
++       return NULL;
 +     }
-+ 
++
 +     mailfrom_name = (char *) malloc (20+strlen(hostname));
 +     ASSERT (mailfrom_name != NULL);
-+    
++
 +     sprintf(mailfrom_name,"news@%s",hostname);
-+ 
++
 +     cxn->next = gCxnList ;
 +     gCxnList = cxn ;
 +     gCxnCount++ ;
-+ 
++
 +     /* init stuff */
 +     Initialize(cxn, respTimeout);
-+ 
++
 +     return cxn;
 + }
-+ 
-+ 
++
++
 + /* Causes the Connection to build the network connection. */
 + bool cxnConnect (Connection cxn)
 + {
 +     conn_ret result;
-+ 
++
 +     d_printf(1,"Connecting...\n");
-+ 
++
 +     /* make the lmtp connection */
 +     if (lmtp_Connect(cxn) != RET_OK) return false;
-+ 
++
 +     if (imap_Connect(cxn) != RET_OK) return false;
-+ 
++
 +     return true;
 + }
-+ 
-+ 
++
++
 + void QuitIfIdle(Connection cxn)
 + {
 +     if ((cxn->lmtp_state == LMTP_AUTHED_IDLE) && (QueueItems(&(cxn->lmtp_todeliver_q))<=0))
-+ 	lmtp_IssueQuit(cxn);
++       lmtp_IssueQuit(cxn);
 +     if ((cxn->imap_state == IMAP_IDLE_AUTHED) && (QueueItems(&(cxn->imap_controlMsg_q))<=0))
-+ 	imap_sendQuit(cxn);
++       imap_sendQuit(cxn);
 + }
-+ 
++
 +   /* puts the connection into the wait state (i.e. waits for an article
 +      before initiating a connect). Can only be called right after
 +      newConnection returns, or while the Connection is in the (internal)
@@ -4296,62 +4296,62 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + void cxnWait (Connection cxn)
 + {
 +     cxn->issue_quit = 1;
-+ 
++
 +     QuitIfIdle(cxn);
 + }
-+ 
++
 +   /* The Connection will disconnect as if cxnDisconnect were called and then
 +      it automatically reconnects to the remote. */
 + void cxnFlush (Connection cxn)
 + {
 +     cxn->issue_quit = 2;
-+ 
++
 +     QuitIfIdle(cxn);
 + }
-+ 
-+ 
-+ 
++
++
++
 +   /* The Connection sends remaining articles, then issues a QUIT and then
 +      deletes itself */
 + void cxnClose (Connection cxn)
 + {
 +     d_printf(0,"%s:%d Closing cxn\n",hostPeerName (cxn->myHost), cxn->ident);
 +     cxn->issue_quit = 3;
-+ 
++
 +     QuitIfIdle(cxn);
 + }
-+ 
++
 +   /* The Connection drops all queueed articles, then issues a QUIT and then
 +      deletes itself */
 + void cxnTerminate (Connection cxn)
 + {
 +     d_printf(0,"%s:%d Terminate\n",hostPeerName (cxn->myHost), cxn->ident);
-+ 
++
 +     DeferAllArticles(cxn, &(cxn->lmtp_todeliver_q)) ;      /* give any articles back to Host */
 +     DeferAllArticles(cxn, &(cxn->imap_controlMsg_q)) ;     /* give any articles back to Host */
-+ 
-+     cxn->issue_quit = 3;    
-+ 
++
++     cxn->issue_quit = 3;
++
 +     QuitIfIdle(cxn);
 + }
-+ 
++
 +   /* Blow away the connection gracelessly and immedately clean up */
 + void cxnNuke (Connection cxn)
 + {
 +     d_printf(0,"%s:%d Nuking connection\n",cxn->ServerName, cxn->ident);
-+ 
++
 +     cxn->issue_quit = 4;
-+ 
++
 +     DeferAllArticles(cxn, &(cxn->lmtp_todeliver_q)) ;      /* give any articles back to Host */
-+     DeferAllArticles(cxn, &(cxn->imap_controlMsg_q)) ;     /* give any articles back to Host */    
-+ 
++     DeferAllArticles(cxn, &(cxn->imap_controlMsg_q)) ;     /* give any articles back to Host */
++
 +     imap_Disconnect(cxn);
 +     lmtp_Disconnect(cxn);
-+ 
-+     hostCxnDead (cxn->myHost,cxn);    
++
++     hostCxnDead (cxn->myHost,cxn);
 +     delConnection(cxn);
 + }
-+ 
++
 + /*
 +  * must
 +  *   true  - must queue article. Don't try sending
@@ -4360,44 +4360,44 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  * Always adds to lmtp queue even if control message
 +  *
 +  */
-+ 
++
 + bool ProcessArticle(Connection cxn, Article art, bool must)
 + {
 +     conn_ret result;
-+ 
++
 +     /* if it's a regular message let's add it to the queue */
 +     result = AddToQueue(&(cxn->lmtp_todeliver_q), art, DELIVER,1,must);
-+ 
++
 +     if (result == RET_EXCEEDS_SIZE) {
-+ 	return false;
++       return false;
 +     }
-+ 
++
 +     if (result != RET_OK)
 +     {
-+ 	d_printf(0,"Error adding to delivery queue\n");
-+ 	return must;
++       d_printf(0,"Error adding to delivery queue\n");
++       return must;
 +     }
-+ 
++
 +     if (must == true) return true;
-+ 
++
 +     switch (cxn->lmtp_state)
-+ 	{
-+ 	case LMTP_WAITING:
-+ 	case LMTP_DISCONNECTED:	    
-+ 	    if (lmtp_Connect(cxn) != RET_OK) prepareReopenCbk(cxn,1);
-+ 	    break;
-+ 	    
-+ 	case LMTP_AUTHED_IDLE:
-+ 	    lmtp_sendmessage(cxn,art);
-+ 	    break;
-+ 	default:
-+ 	    /* currently doing something */
-+ 	    break;
-+ 	}
-+     
++       {
++       case LMTP_WAITING:
++       case LMTP_DISCONNECTED:
++           if (lmtp_Connect(cxn) != RET_OK) prepareReopenCbk(cxn,1);
++           break;
++
++       case LMTP_AUTHED_IDLE:
++           lmtp_sendmessage(cxn,art);
++           break;
++       default:
++           /* currently doing something */
++           break;
++       }
++
 +     return true;
 + }
-+ 
++
 +   /* Tells the Connection to take the article and handle its
 +      transmission. If it can't (due to queue size or whatever), then the
 +      function returns false. The connection assumes ownership of the
@@ -4406,38 +4406,38 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + {
 +     /* if we're closing down always refuse */
 +     if (cxn->issue_quit == 1) return false;
-+ 
++
 +     return ProcessArticle (cxn,art,false);
 + }
-+ 
++
 +   /* Tell the Connection to take the article (if it can) for later
 +      processing. Assumes ownership of it if it takes it. */
 + bool cxnQueueArticle (Connection cxn, Article art)
 + {
 +     return ProcessArticle (cxn,art,true);
 + }
-+ 
++
 + /* generate a syslog message for the connections activity. Called by Host. */
 + void cxnLogStats (Connection cxn, bool final)
 + {
 +   const char *peerName ;
 +   time_t now = theTime() ;
-+ 
++
 +   ASSERT (cxn != NULL) ;
-+ 
++
 +   peerName = hostPeerName (cxn->myHost) ;
-+ 
++
 +   syslog (LOG_NOTICE,
-+ 	  "Host: %s:%d  status: %s  time: %d  Delivered (%d of %d) Cancelled (%d of %d) Created (%d of %d) Deleted (%d of %d)",
-+ 	  peerName, cxn->ident,
++         "Host: %s:%d  status: %s  time: %d  Delivered (%d of %d) Cancelled (%d of %d) Created (%d of %d) Deleted (%d of %d)",
++         peerName, cxn->ident,
 +           (final ? "final" : "checkpoint"), (long) (now - cxn->timeCon),
-+ 	  cxn->lmtp_suceeded, cxn->lmtp_suceeded + cxn->lmtp_failed,
-+ 	  cxn->cancel_suceeded, cxn->cancel_suceeded + cxn->cancel_failed,
-+ 	  cxn->create_suceeded, cxn->create_suceeded + cxn->create_failed,
-+ 	  cxn->remove_suceeded, cxn->remove_suceeded + cxn->remove_failed);
-+ 
++         cxn->lmtp_suceeded, cxn->lmtp_suceeded + cxn->lmtp_failed,
++         cxn->cancel_suceeded, cxn->cancel_suceeded + cxn->cancel_failed,
++         cxn->create_suceeded, cxn->create_suceeded + cxn->create_failed,
++         cxn->remove_suceeded, cxn->remove_suceeded + cxn->remove_failed);
++
 +   show_stats(cxn);
-+ 
++
 +   if (final)
 +   {
 +       cxn->lmtp_suceeded   = 0;
@@ -4448,72 +4448,72 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +       cxn->create_failed   = 0;
 +       cxn->remove_suceeded = 0;
 +       cxn->remove_failed   = 0;
-+ 
++
 +       if (cxn->timeCon > 0)
 +         cxn->timeCon = theTime() ;
 +     }
-+ 
++
 + }
-+ 
++
 +   /* return the number of articles the connection can be given. This lets
 +      the host shovel in as many as possible. May be zero. */
 + size_t cxnQueueSpace (Connection cxn)
 + {
 +     int lmtpsize;
 +     int imapsize;
-+ 
++
 +     lmtpsize = QueueSpace(&(cxn->lmtp_todeliver_q));
 +     imapsize = QueueSpace(&(cxn->imap_controlMsg_q));
-+ 
++
 +     if (lmtpsize >=1) lmtpsize--;
 +     if (imapsize >=1) imapsize--;
-+ 
++
 +     d_printf(1,"Q Space lmtp size = %d state = %d\n",lmtpsize,cxn->lmtp_state);
-+     d_printf(1,"Q Space imap size = %d state = %d\n",imapsize,cxn->imap_state); 
-+ 
++     d_printf(1,"Q Space imap size = %d state = %d\n",imapsize,cxn->imap_state);
++
 +     /* return the smaller of our 2 queues */
 +     if (lmtpsize < imapsize)
-+ 	return lmtpsize;
++       return lmtpsize;
 +     else
-+ 	return imapsize;
++       return imapsize;
 + }
-+ 
++
 +   /* adjust the mode no-CHECK filter values */
 + void cxnSetCheckThresholds (Connection cxn,
-+ 			    double lowFilter, double highFilter,
-+ 			    double lowPassFilter)
++                           double lowFilter, double highFilter,
++                           double lowPassFilter)
 + {
 +     d_printf(1,"Threshold change. This means nothing to me\n");
 + }
-+ 
++
 + /* print some debugging info. */
 + void gPrintCxnInfo (FILE *fp, u_int indentAmt)
 + {
 +   char indent [INDENT_BUFFER_SIZE] ;
 +   u_int i ;
 +   Connection cxn ;
-+ 
++
 +   for (i = 0 ; i < MIN(INDENT_BUFFER_SIZE - 1,indentAmt) ; i++)
 +     indent [i] = ' ' ;
 +   indent [i] = '\0' ;
-+ 
++
 +   fprintf (fp,"%sGlobal Connection list : (count %d) {\n",
 +            indent,gCxnCount) ;
 +   for (cxn = gCxnList ; cxn != NULL ; cxn = cxn->next)
 +     printCxnInfo (cxn,fp,indentAmt + INDENT_INCR) ;
 +   fprintf (fp,"%s}\n",indent) ;
 + }
-+ 
++
 + void printCxnInfo (Connection cxn, FILE *fp, u_int indentAmt)
 + {
 +   char indent [INDENT_BUFFER_SIZE] ;
 +   u_int i ;
 +   article_queue_t *artH ;
-+ 
++
 +   for (i = 0 ; i < MIN(INDENT_BUFFER_SIZE - 1,indentAmt) ; i++)
 +     indent [i] = ' ' ;
 +   indent [i] = '\0' ;
-+ 
++
 +   fprintf (fp,"%sConnection : %p {\n",indent,cxn) ;
 +   fprintf (fp,"%s    host : %p\n",indent, (void *) cxn->myHost) ;
 +   fprintf (fp,"%s    endpoint (imap): %p\n",indent,cxn->imap_endpoint) ;
@@ -4525,50 +4525,50 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   fprintf (fp,"%s    ip-name (lmtp): %s\n", indent, cxn->ServerName) ;
 +   fprintf (fp,"%s    port-number (imap) : %d\n",indent,cxn->imap_port) ;
 +   fprintf (fp,"%s    port-number (lmtp) : %d\n",indent,cxn->lmtp_port) ;
-+ 
++
 +   fprintf (fp,"%s    Issuing Quit : %d\n",indent, cxn->issue_quit) ;
-+ 
++
 +   fprintf (fp,"%s    time-connected (imap) : %ld\n",indent,(long) cxn->imap_timeCon) ;
 +   fprintf (fp,"%s    time-connected (lmtp) : %ld\n",indent,(long) cxn->lmtp_timeCon) ;
 +   fprintf (fp,"%s    articles from INN : %d\n",indent,
-+ 	   cxn->lmtp_suceeded+
-+ 	   cxn->lmtp_failed+
-+ 	   cxn->cancel_suceeded+
-+ 	   cxn->cancel_failed+
-+ 	   cxn->create_suceeded+
-+ 	   cxn->create_failed+
-+ 	   cxn->remove_suceeded+
-+ 	   cxn->remove_failed+
-+ 	   QueueSpace(&(cxn->lmtp_todeliver_q))+
-+ 	   QueueSpace(&(cxn->imap_controlMsg_q))
-+ 	   );
++          cxn->lmtp_suceeded+
++          cxn->lmtp_failed+
++          cxn->cancel_suceeded+
++          cxn->cancel_failed+
++          cxn->create_suceeded+
++          cxn->create_failed+
++          cxn->remove_suceeded+
++          cxn->remove_failed+
++          QueueSpace(&(cxn->lmtp_todeliver_q))+
++          QueueSpace(&(cxn->imap_controlMsg_q))
++          );
 +   fprintf(fp,"%s    LMTP STATS: yes: %d no: %d\n",cxn->lmtp_suceeded, cxn->lmtp_failed);
 +   fprintf(fp,"%s    control:    yes: %d no: %d\n",cxn->cancel_suceeded, cxn->cancel_failed);
 +   fprintf(fp,"%s    create:     yes: %d no: %d\n",cxn->create_suceeded, cxn->create_failed);
 +   fprintf(fp,"%s    remove:     yes: %d no: %d\n",cxn->remove_suceeded, cxn->remove_failed);
-+ 
++
 +   fprintf (fp,"%s    response-timeout : %d\n",indent,cxn->imap_readTimeout) ;
 +   fprintf (fp,"%s    response-callback : %d\n",indent,cxn->imap_readBlockedTimerId) ;
-+ 
++
 +   fprintf (fp,"%s    write-timeout : %d\n",indent,cxn->imap_writeTimeout) ;
 +   fprintf (fp,"%s    write-callback : %d\n",indent,cxn->imap_writeBlockedTimerId) ;
-+ 
++
 +   fprintf (fp,"%s    reopen wait : %d\n",indent,cxn->imap_sleepTimeout) ;
 +   fprintf (fp,"%s    reopen id : %d\n",indent,cxn->imap_sleepTimerId) ;
-+ 
++
 +   fprintf (fp,"%s    IMAP queue {\n",indent) ;
 +   for (artH = cxn->imap_controlMsg_q.head; artH != NULL ; artH = artH->next)
 +     printArticleInfo (artH->data.article,fp,indentAmt + INDENT_INCR) ;
 +   fprintf (fp,"%s    }\n",indent) ;
-+ 
++
 +   fprintf (fp,"%s    LMTP queue {\n",indent) ;
 +   for (artH = cxn->lmtp_todeliver_q.head ; artH != NULL ; artH = artH->next)
 +     printArticleInfo (artH->data.control->article,fp,indentAmt + INDENT_INCR) ;
 +   fprintf (fp,"%s    }\n",indent) ;
-+ 
++
 +   fprintf (fp,"%s}\n",indent) ;
 + }
-+ 
++
 + /* config file load callback */
 + int cxnConfigLoadCbk (void *data)
 + {
@@ -4576,9 +4576,9 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   char *sv ;
 +   int rval = 1 ;
 +   FILE *fp = (FILE *) data ;
-+ 
++
 +   (void) data ;                 /* keep lint happy */
-+       
++
 +   if (getInteger (topScope,"max-reconnect-time",&iv,NO_INHERIT))
 +     {
 +       if (iv < 1)
@@ -4592,7 +4592,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   else
 +     iv = MAX_RECON_PER ;
 +   max_reconnect_period = (u_int) iv ;
-+ 
++
 +   if (getInteger (topScope,"initial-reconnect-time",&iv,NO_INHERIT))
 +     {
 +       if (iv < 1)
@@ -4606,27 +4606,27 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   else
 +     iv = INIT_RECON_PER ;
 +   init_reconnect_period = (u_int) iv ;
-+ 
++
 +   return rval ;
 + }
-+ 
++
 + /* check connection state is in cxnWaitingS, cxnConnectingS or cxnIdleS */
 + bool cxnCheckstate (Connection cxn)
 + {
 +     d_printf(1,"Being asked to check state\n");
-+ 
++
 +     /* return false if either connection is doing something */
-+ 
++
 +     if (cxn->imap_state > IMAP_IDLE_AUTHED)
 +     {
-+ 	return false;
++       return false;
 +     }
-+ 
++
 +     if (cxn->lmtp_state > LMTP_AUTHED_IDLE)
 +     {
-+ 	return false;
++       return false;
 +     }
-+ 
++
 +     return true;
 + }
-+ 
++

@@ -95,13 +95,13 @@ EXPORTED void sync_log_init(void)
      */
     i = strarray_find(channels, "\"\"", 0);
     if (i >= 0)
-	strarray_set(channels, i, NULL);
+        strarray_set(channels, i, NULL);
 
     strarray_free(unsuppressable);
     unsuppressable = NULL;
     conf = config_getstring(IMAPOPT_SYNC_LOG_UNSUPPRESSABLE_CHANNELS);
     if (conf)
-	unsuppressable = strarray_split(conf, " ", 0);
+        unsuppressable = strarray_split(conf, " ", 0);
 }
 
 EXPORTED void sync_log_suppress(void)
@@ -123,11 +123,11 @@ static char *sync_log_fname(const char *channel)
     static char buf[MAX_MAILBOX_PATH];
 
     if (channel)
-	snprintf(buf, MAX_MAILBOX_PATH,
-		 "%s/sync/%s/log", config_dir, channel);
+        snprintf(buf, MAX_MAILBOX_PATH,
+                 "%s/sync/%s/log", config_dir, channel);
     else
-	snprintf(buf, MAX_MAILBOX_PATH,
-		 "%s/sync/log", config_dir);
+        snprintf(buf, MAX_MAILBOX_PATH,
+                 "%s/sync/log", config_dir);
 
     return buf;
 }
@@ -135,12 +135,12 @@ static char *sync_log_fname(const char *channel)
 static int sync_log_enabled(const char *channel)
 {
     if (!config_getswitch(IMAPOPT_SYNC_LOG))
-	return 0;	/* entire mechanism is disabled */
+        return 0;       /* entire mechanism is disabled */
     if (!sync_log_suppressed)
-	return 1;	/* _suppress() wasn't called */
+        return 1;       /* _suppress() wasn't called */
     if (unsuppressable && strarray_find(unsuppressable, channel, 0) >= 0)
-	return 1;	/* channel is unsuppressable */
-    return 0;		/* suppressed */
+        return 1;       /* channel is unsuppressable */
+    return 0;           /* suppressed */
 }
 
 static void sync_log_base(const char *channel, const char *string)
@@ -156,45 +156,45 @@ static void sync_log_base(const char *channel, const char *string)
     fname = sync_log_fname(channel);
 
     while (retries++ < SYNC_LOG_RETRIES) {
-	fd = open(fname, O_WRONLY|O_APPEND|O_CREAT, 0640);
-	if (fd < 0 && errno == ENOENT) {
-	    if (!cyrus_mkdir(fname, 0755)) {
-		fd = open(fname, O_WRONLY|O_APPEND|O_CREAT, 0640);
-	    }
-	}
-	if (fd < 0) {
-	    syslog(LOG_ERR, "sync_log(): Unable to write to log file %s: %s",
-		   fname, strerror(errno));
-	    return;
-	}
+        fd = open(fname, O_WRONLY|O_APPEND|O_CREAT, 0640);
+        if (fd < 0 && errno == ENOENT) {
+            if (!cyrus_mkdir(fname, 0755)) {
+                fd = open(fname, O_WRONLY|O_APPEND|O_CREAT, 0640);
+            }
+        }
+        if (fd < 0) {
+            syslog(LOG_ERR, "sync_log(): Unable to write to log file %s: %s",
+                   fname, strerror(errno));
+            return;
+        }
 
-	if (lock_blocking(fd, fname) == -1) {
-	    syslog(LOG_ERR, "sync_log(): Failed to lock %s for %s: %m",
-		   fname, string);
-	    xclose(fd);
-	    return;
-	}
+        if (lock_blocking(fd, fname) == -1) {
+            syslog(LOG_ERR, "sync_log(): Failed to lock %s for %s: %m",
+                   fname, string);
+            xclose(fd);
+            return;
+        }
 
-	/* Check that the file wasn't renamed after it was opened above */
-	if ((fstat(fd, &sbuffd) == 0) &&
-	    (stat(fname, &sbuffile) == 0) &&
-	    (sbuffd.st_ino == sbuffile.st_ino))
-	    break;
+        /* Check that the file wasn't renamed after it was opened above */
+        if ((fstat(fd, &sbuffd) == 0) &&
+            (stat(fname, &sbuffile) == 0) &&
+            (sbuffd.st_ino == sbuffile.st_ino))
+            break;
 
-	lock_unlock(fd, fname);
-	xclose(fd);
+        lock_unlock(fd, fname);
+        xclose(fd);
     }
     if (retries >= SYNC_LOG_RETRIES) {
-	xclose(fd);
-	syslog(LOG_ERR,
-	       "sync_log(): Failed to lock %s for %s after %d attempts",
-	       fname, string, retries);
-	return;
+        xclose(fd);
+        syslog(LOG_ERR,
+               "sync_log(): Failed to lock %s for %s after %d attempts",
+               fname, string, retries);
+        return;
     }
 
     if (retry_write(fd, string, strlen(string)) < 0)
-	syslog(LOG_ERR, "write() to %s failed: %s",
-	       fname, strerror(errno));
+        syslog(LOG_ERR, "write() to %s failed: %s",
+               fname, strerror(errno));
 
     (void)fsync(fd); /* paranoia */
     lock_unlock(fd, fname);
@@ -214,41 +214,41 @@ static const char *sync_quote_name(const char *name)
 
     /* degenerate case - no name is the empty string, quote it */
     if (!name || !*name) {
-	need_quote = 1;
-	goto end;
+        need_quote = 1;
+        goto end;
     }
 
     for (src = 0; name[src]; src++) {
-	c = name[src];
-	if ((c == '\r') || (c == '\n'))
-	    fatal("Illegal line break in folder name", EC_IOERR);
+        c = name[src];
+        if ((c == '\r') || (c == '\n'))
+            fatal("Illegal line break in folder name", EC_IOERR);
 
-	/* quoteable characters */
-	if ((c == '\\') || (c == '\"') || (c == '{') || (c == '}')) {
-	    need_quote = 1;
-	    buf[dst++] = '\\';
-	}
+        /* quoteable characters */
+        if ((c == '\\') || (c == '\"') || (c == '{') || (c == '}')) {
+            need_quote = 1;
+            buf[dst++] = '\\';
+        }
 
-	/* non-atom characters */
-	else if ((c == ' ') || (c == '\t') || (c == '(') || (c == ')')) {
-	    need_quote = 1;
-	}
+        /* non-atom characters */
+        else if ((c == ' ') || (c == '\t') || (c == '(') || (c == ')')) {
+            need_quote = 1;
+        }
 
-	buf[dst++] = c;
+        buf[dst++] = c;
 
-	if (dst > MAX_MAILBOX_BUFFER)
-	    fatal("word too long", EC_IOERR);
+        if (dst > MAX_MAILBOX_BUFFER)
+            fatal("word too long", EC_IOERR);
     }
 
 end:
     if (need_quote) {
-	buf[dst++] = '\"';
-	buf[dst] = '\0';
-	return buf;
+        buf[dst++] = '\"';
+        buf[dst] = '\0';
+        return buf;
     }
     else {
-	buf[dst] = '\0';
-	return buf + 1; /* skip initial quote */
+        buf[dst] = '\0';
+        return buf + 1; /* skip initial quote */
     }
 }
 
@@ -263,25 +263,25 @@ static char *va_format(const char *fmt, va_list ap)
     const char *p;
 
     for (len = 0, p = fmt; *p && len < BUFSIZE; p++) {
-	if (*p != '%') {
-	    buf[len++] = *p;
-	    continue;
-	}
-	switch (*++p) {
-	case 'd':
-	    ival = va_arg(ap, int);
-	    len += snprintf(buf+len, BUFSIZE-len, "%d", ival);
-	    break;
-	case 's':
-	    sval = va_arg(ap, const char *);
-	    sval = sync_quote_name(sval);
-	    strlcpy(buf+len, sval, BUFSIZE-len);
-	    len += strlen(sval);
-	    break;
-	default:
-	    buf[len++] = *p;
-	    break;
-	}
+        if (*p != '%') {
+            buf[len++] = *p;
+            continue;
+        }
+        switch (*++p) {
+        case 'd':
+            ival = va_arg(ap, int);
+            len += snprintf(buf+len, BUFSIZE-len, "%d", ival);
+            break;
+        case 's':
+            sval = va_arg(ap, const char *);
+            sval = sync_quote_name(sval);
+            strlcpy(buf+len, sval, BUFSIZE-len);
+            len += strlen(sval);
+            break;
+        default:
+            buf[len++] = *p;
+            break;
+        }
     }
 
     if (buf[len-1] != '\n') buf[len++] = '\n';
@@ -303,7 +303,7 @@ EXPORTED void sync_log(const char *fmt, ...)
     va_end(ap);
 
     for (i = 0 ; i < channels->count ; i++)
-	sync_log_base(channels->data[i], val);
+        sync_log_base(channels->data[i], val);
 }
 
 EXPORTED void sync_log_channel(const char *channel, const char *fmt, ...)
@@ -327,23 +327,23 @@ struct sync_log_reader
      * This object works in three modes:
      *
      * - initialised with a sync log channel
-     *	    - standard mode used by sync_client
-     *	    - slr->log_file != NULL
-     *	    - slr->work_file is the name of a rename()d
-     *	      file that needs to be unlink()ed.
+     *      - standard mode used by sync_client
+     *      - slr->log_file != NULL
+     *      - slr->work_file is the name of a rename()d
+     *        file that needs to be unlink()ed.
      *
      * - initialised with a saved file name
-     *	    - used by the sync_client -f option
-     *	    - slr->log_file = NULL
-     *	    - slr->work_file is the file given us by the user
-     *	      which it's important that we do not unlink()
+     *      - used by the sync_client -f option
+     *      - slr->log_file = NULL
+     *      - slr->work_file is the file given us by the user
+     *        which it's important that we do not unlink()
      *
      * - initialised with a file descriptor
-     *	    - slr->log_file = NULL
-     *	    - slr->work_file = NULL
-     *	    - slr->fd is a file descriptor, probably stdin,
-     *	      and possibly a pipe
-     *	    - we cannot unlink() anything even if we wanted to.
+     *      - slr->log_file = NULL
+     *      - slr->work_file = NULL
+     *      - slr->fd is a file descriptor, probably stdin,
+     *        and possibly a pipe
+     *      - we cannot unlink() anything even if we wanted to.
      */
     char *log_file;
     char *work_file;
@@ -447,59 +447,59 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
     int r;
 
     if (slr->input) {
-	r = sync_log_reader_end(slr);
-	if (r) return r;
+        r = sync_log_reader_end(slr);
+        if (r) return r;
     }
 
     if (stat(slr->work_file, &sbuf) == 0) {
-	/* Existing work log file - process this first */
-	syslog(LOG_NOTICE,
-	       "Reprocessing sync log file %s", slr->work_file);
+        /* Existing work log file - process this first */
+        syslog(LOG_NOTICE,
+               "Reprocessing sync log file %s", slr->work_file);
     }
     else if (!slr->log_file) {
-	syslog(LOG_ERR, "Failed to stat %s: %m",
-	       slr->log_file);
-	return IMAP_IOERROR;
+        syslog(LOG_ERR, "Failed to stat %s: %m",
+               slr->log_file);
+        return IMAP_IOERROR;
     }
     else {
-	/* Check for sync_log file */
-	if (stat(slr->log_file, &sbuf) < 0) {
-	    if (errno == ENOENT)
-		return IMAP_AGAIN;  /* no problem, try again later */
-	    syslog(LOG_ERR, "Failed to stat %s: %m",
-		   slr->log_file);
-	    return IMAP_IOERROR;
-	}
+        /* Check for sync_log file */
+        if (stat(slr->log_file, &sbuf) < 0) {
+            if (errno == ENOENT)
+                return IMAP_AGAIN;  /* no problem, try again later */
+            syslog(LOG_ERR, "Failed to stat %s: %m",
+                   slr->log_file);
+            return IMAP_IOERROR;
+        }
 
-	/* Move sync_log to our work file */
-	if (rename(slr->log_file, slr->work_file) < 0) {
-	    syslog(LOG_ERR, "Rename %s -> %s failed: %m",
-		   slr->log_file, slr->work_file);
-	    return IMAP_IOERROR;
-	}
+        /* Move sync_log to our work file */
+        if (rename(slr->log_file, slr->work_file) < 0) {
+            syslog(LOG_ERR, "Rename %s -> %s failed: %m",
+                   slr->log_file, slr->work_file);
+            return IMAP_IOERROR;
+        }
     }
 
     if (slr->fd < 0) {
-	int fd = open(slr->work_file, O_RDWR, 0);
-	if (fd < 0) {
-	    syslog(LOG_ERR, "Failed to open %s: %m", slr->work_file);
-	    return IMAP_IOERROR;
-	}
+        int fd = open(slr->work_file, O_RDWR, 0);
+        if (fd < 0) {
+            syslog(LOG_ERR, "Failed to open %s: %m", slr->work_file);
+            return IMAP_IOERROR;
+        }
 
-	if (lock_blocking(fd, slr->work_file) < 0) {
-	    syslog(LOG_ERR, "Failed to lock %s: %m", slr->work_file);
-	    close(fd);
-	    return IMAP_IOERROR;
-	}
+        if (lock_blocking(fd, slr->work_file) < 0) {
+            syslog(LOG_ERR, "Failed to lock %s: %m", slr->work_file);
+            close(fd);
+            return IMAP_IOERROR;
+        }
 
-	slr->fd = fd;
-	slr->fd_is_ours = 1;
+        slr->fd = fd;
+        slr->fd_is_ours = 1;
 
-	/* we can unlock immediately, since we have serialised
-	 * any process which held the lock over the rename.  All
-	 * future attempts to lock this inode will stat and notice
-	 * the rename, so they won't write any more */
-	lock_unlock(slr->fd, slr->work_file);
+        /* we can unlock immediately, since we have serialised
+         * any process which held the lock over the rename.  All
+         * future attempts to lock this inode will stat and notice
+         * the rename, so they won't write any more */
+        lock_unlock(slr->fd, slr->work_file);
     }
 
     slr->input = prot_new(slr->fd, /*write*/0);
@@ -520,28 +520,28 @@ EXPORTED const char *sync_log_reader_get_file_name(const sync_log_reader_t *slr)
 EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
 {
     if (!slr->input)
-	return 0;
+        return 0;
 
     if (slr->input) {
-	prot_free(slr->input);
-	slr->input = NULL;
+        prot_free(slr->input);
+        slr->input = NULL;
     }
 
     if (slr->fd_is_ours && slr->fd >= 0) {
-	lock_unlock(slr->fd, slr->work_file);
-	close(slr->fd);
-	slr->fd = -1;
+        lock_unlock(slr->fd, slr->work_file);
+        close(slr->fd);
+        slr->fd = -1;
     }
 
     if (slr->log_file) {
-	/* We were initialised with a sync log channel, whose
-	 * log file we rename()d to the work file.  Now that
-	 * we've done with the work file we can unlink it.
-	 * Further checks at this point are just paranoia. */
-	if (slr->work_file && unlink(slr->work_file) < 0) {
-	    syslog(LOG_ERR, "Unlink %s failed: %m", slr->work_file);
-	    return IMAP_IOERROR;
-	}
+        /* We were initialised with a sync log channel, whose
+         * log file we rename()d to the work file.  Now that
+         * we've done with the work file we can unlink it.
+         * Further checks at this point are just paranoia. */
+        if (slr->work_file && unlink(slr->work_file) < 0) {
+            syslog(LOG_ERR, "Unlink %s failed: %m", slr->work_file);
+            return IMAP_IOERROR;
+        }
     }
 
     return 0;
@@ -557,47 +557,47 @@ EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
  * IMAP error code on failure.
  */
 EXPORTED int sync_log_reader_getitem(sync_log_reader_t *slr,
-				     const char *args[3])
+                                     const char *args[3])
 {
     int c;
     const char *arg1s = NULL;
     const char *arg2s = NULL;
 
     if (!slr->input)
-	return EOF;
+        return EOF;
 
     for (;;) {
-	if ((c = getword(slr->input, &slr->type)) == EOF)
-	    return EOF;
+        if ((c = getword(slr->input, &slr->type)) == EOF)
+            return EOF;
 
-	/* Ignore blank lines */
-	if (c == '\r') c = prot_getc(slr->input);
-	if (c == '\n')
-	    continue;
+        /* Ignore blank lines */
+        if (c == '\r') c = prot_getc(slr->input);
+        if (c == '\n')
+            continue;
 
-	if (c != ' ') {
-	    syslog(LOG_ERR, "Invalid input");
-	    eatline(slr->input, c);
-	    continue;
-	}
+        if (c != ' ') {
+            syslog(LOG_ERR, "Invalid input");
+            eatline(slr->input, c);
+            continue;
+        }
 
-	if ((c = getastring(slr->input, 0, &slr->arg1)) == EOF) return EOF;
-	arg1s = slr->arg1.s;
+        if ((c = getastring(slr->input, 0, &slr->arg1)) == EOF) return EOF;
+        arg1s = slr->arg1.s;
 
-	arg2s = NULL;
-	if (c == ' ') {
-	    if ((c = getastring(slr->input, 0, &slr->arg2)) == EOF) return EOF;
-	    arg2s = slr->arg2.s;
-	}
+        arg2s = NULL;
+        if (c == ' ') {
+            if ((c = getastring(slr->input, 0, &slr->arg2)) == EOF) return EOF;
+            arg2s = slr->arg2.s;
+        }
 
-	if (c == '\r') c = prot_getc(slr->input);
-	if (c != '\n') {
-	    syslog(LOG_ERR, "Garbage at end of input line");
-	    eatline(slr->input, c);
-	    continue;
-	}
+        if (c == '\r') c = prot_getc(slr->input);
+        if (c != '\n') {
+            syslog(LOG_ERR, "Garbage at end of input line");
+            eatline(slr->input, c);
+            continue;
+        }
 
-	break;
+        break;
     }
 
     ucase(slr->type.s);

@@ -735,7 +735,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "httpdocroot", NULL, STRING }
 /* If set, http will serve the static content (html/text/jpeg/gif
    files, etc) rooted at this directory.  Otherwise, httpd will not
-   serve any static content. */ 
+   serve any static content. */
 
 { "httpkeepalive", 20, INT }
 /* Set the length of the HTTP server's keepalive heartbeat in seconds.
@@ -762,7 +762,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    sent across the wire. */
 
 { "httptimeout", 5, INT }
-/* Set the length of the HTTP server's inactivity autologout timer,    
+/* Set the length of the HTTP server's inactivity autologout timer,
    in minutes.  The default is 5.  The minimum value is 0, which will
    disable persistent connections. */
 
@@ -1407,7 +1407,7 @@ If all partitions are over that limit, this feature is not used anymore.
 
 { "proc_path", NULL, STRING }
 /* Path to proc directory.  Default is NULL - must be an absolute path
-   if specified.  If not specified, the path $confdir/proc/ will be 
+   if specified.  If not specified, the path $confdir/proc/ will be
    used. */
 
 { "proxy_authname", "proxy", STRING }

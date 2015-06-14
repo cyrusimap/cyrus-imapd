@@ -49,7 +49,7 @@ struct auth_mech {
     const char *name;
 
     const char *(*canonifyid)(const char *identifier, size_t len);
-    int (*memberof)(struct auth_state *auth_state, 
+    int (*memberof)(struct auth_state *auth_state,
              const char *identifier);
     struct auth_state *(*newstate)(const char *identifier);
     void (*freestate)(struct auth_state *auth_state);
@@ -71,8 +71,8 @@ extern struct auth_mech auth_krb5;
 /* len: length of id, or 0 to do strlen(identifier) */
 const char *auth_canonifyid(const char *identifier, size_t len);
 
-int auth_memberof(struct auth_state *auth_state, 
- 	 const char *identifier);
+int auth_memberof(struct auth_state *auth_state,
+         const char *identifier);
 struct auth_state *auth_newstate(const char *identifier);
 void auth_freestate(struct auth_state *auth_state);
 

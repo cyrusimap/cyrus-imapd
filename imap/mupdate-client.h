@@ -51,30 +51,30 @@ typedef struct mupdate_handle_s mupdate_handle;
 
 /* connect & authenticate to an mupdate server */
 int mupdate_connect(const char *server, const char *port,
-		    mupdate_handle **handle, sasl_callback_t *cbs);
+                    mupdate_handle **handle, sasl_callback_t *cbs);
 
 /* disconnect from mupdate server */
 void mupdate_disconnect(mupdate_handle **h);
 
 /* activate a mailbox */
-int mupdate_activate(mupdate_handle *handle, 
-		     const char *mailbox, const char *location,
-		     const char *acl);
+int mupdate_activate(mupdate_handle *handle,
+                     const char *mailbox, const char *location,
+                     const char *acl);
 
 /* reserve a piece of namespace */
 int mupdate_reserve(mupdate_handle *handle,
-		    const char *mailbox, const char *location);
+                    const char *mailbox, const char *location);
 
 /* deactivate a mailbox (ACTIVE->RESERVE) */
 int mupdate_deactivate(mupdate_handle *handle,
-		       const char *mailbox, const char *location);
+                       const char *mailbox, const char *location);
 
 /* delete a mailbox */
 int mupdate_delete(mupdate_handle *handle,
-		   const char *mailbox);
+                   const char *mailbox);
 
 enum mbtype {
-    ACTIVE, RESERVE 
+    ACTIVE, RESERVE
 };
 
 /* mailbox data structure */
@@ -90,7 +90,7 @@ struct mupdate_mailboxdata {
  * until the next mupdate_* call on this mupdate_handle.
  */
 int mupdate_find(mupdate_handle *handle, const char *mailbox,
-		 struct mupdate_mailboxdata **target);
+                 struct mupdate_mailboxdata **target);
 
 /* Callbacks for mupdate_scarf and mupdate_list */
 /* cmd is one of DELETE, MAILBOX, RESERVE */
@@ -103,11 +103,11 @@ typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
 /* perform an MUPDATE LIST operation (callback is called for
  * each remote mailbox) */
 int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
-		 const char *prefix, void *context);
+                 const char *prefix, void *context);
 
 /* ping the mupdate server with a NOOP. */
 int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
-		 void *context);
+                 void *context);
 
 /* ping a local slave */
 void kick_mupdate(void);

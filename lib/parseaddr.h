@@ -49,7 +49,7 @@ struct address {
     const char *mailbox;
     const char *domain;
     struct address *next;
-    char *freeme;		/* If non-nil, free */
+    char *freeme;               /* If non-nil, free */
 };
 
 struct address_itr {

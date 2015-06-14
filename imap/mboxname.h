@@ -52,8 +52,8 @@
 #define DOTCHAR '^'
 
 /* list of our namespaces */
-enum { NAMESPACE_INBOX = 0, 
-       NAMESPACE_USER = 1, 
+enum { NAMESPACE_INBOX = 0,
+       NAMESPACE_USER = 1,
        NAMESPACE_SHARED = 2 };
 
 /* structure holding server namespace info */
@@ -65,41 +65,41 @@ struct namespace {
     int accessible[3];
     /* Convert the external mailbox 'name' to an internal name. */
     int (*mboxname_tointernal)(struct namespace *namespace, const char *name,
-			       const char *userid, char *result);
+                               const char *userid, char *result);
     /* Convert the internal mailbox 'name' to an external name. */
     int (*mboxname_toexternal)(struct namespace *namespace, const char *name,
-			       const char *userid, char *result);
+                               const char *userid, char *result);
     int (*mboxlist_findall)(struct namespace *namespace,
-			    const char *pattern, int isadmin, const char *userid, 
-			    struct auth_state *auth_state, int (*proc)(),
-			    void *rock);
+                            const char *pattern, int isadmin, const char *userid,
+                            struct auth_state *auth_state, int (*proc)(),
+                            void *rock);
     int (*mboxlist_findsub)(struct namespace *namespace,
-			    const char *pattern, int isadmin, const char *userid, 
-			    struct auth_state *auth_state, int (*proc)(),
-			    void *rock, int force);
+                            const char *pattern, int isadmin, const char *userid,
+                            struct auth_state *auth_state, int (*proc)(),
+                            void *rock, int force);
 };
 
 #define NAMESPACE_INITIALIZER { '.', 0, 0, \
-				{ "INBOX.", "user.", "" }, \
-				{ 0, 0, 0, }, \
-				NULL, NULL, NULL, NULL }
+                                { "INBOX.", "user.", "" }, \
+                                { 0, 0, 0, }, \
+                                NULL, NULL, NULL, NULL }
 
 struct mboxlock {
     char *name;
     int lock_fd;
-    int locktype;	/* LOCK_NONE or LOCK_SHARED or LOCK_EXCLUSIVE */
+    int locktype;       /* LOCK_NONE or LOCK_SHARED or LOCK_EXCLUSIVE */
 };
 
 struct mboxname_parts {
     const char *domain;
-    const char *userid;	    /* userid WITHOUT the domain */
+    const char *userid;     /* userid WITHOUT the domain */
     const char *box;
     int is_deleted;
     char *freeme;
 };
 
 int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
-		  int locktype);
+                  int locktype);
 void mboxname_release(struct mboxlock **mboxlockptr);
 
 /* Create namespace based on config options. */
@@ -114,7 +114,7 @@ struct namespace *mboxname_get_adminnamespace();
  * length is the length of the string to translate (0 = strlen(name)).
  */
 char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
-				  int length);
+                                  int length);
 
 /*
  * Translate separator charactors in a mailboxname from its internal
@@ -191,7 +191,7 @@ char *mboxname_cal(const char *userid, const char *collection);
  * Check whether two mboxnames have the same userid.
  */
 int mboxname_parts_same_userid(struct mboxname_parts *a,
-			       struct mboxname_parts *b);
+                               struct mboxname_parts *b);
 int mboxname_same_userid(const char *mboxname1, const char *mboxname2);
 
 
@@ -200,19 +200,19 @@ int mboxname_same_userid(const char *mboxname1, const char *mboxname2);
  * zero) for a particular mailbox on partition.
  */
 char *mboxname_datapath(const char *partition,
-			const char *mboxname,
-			const char *uniqueid,
-			unsigned long uid);
+                        const char *mboxname,
+                        const char *uniqueid,
+                        unsigned long uid);
 
 char *mboxname_archivepath(const char *partition,
-			   const char *mboxname,
-			   const char *uniqueid,
-			   unsigned long uid);
+                           const char *mboxname,
+                           const char *uniqueid,
+                           unsigned long uid);
 
 char *mboxname_metapath(const char *partition,
-			const char *mboxname,
-			const char *uniqueid,
-			int metafile, int isnew);
+                        const char *mboxname,
+                        const char *uniqueid,
+                        int metafile, int isnew);
 
 char *mboxname_lockpath(const char *mboxname);
 char *mboxname_lockpath_suffix(const char *mboxname, const char *suffix);
@@ -234,7 +234,7 @@ void mboxname_todeleted(const char *name, char *result, int withtime);
 int mboxname_make_parent(char *namebuf);
 
 char *mboxname_conf_getpath(struct mboxname_parts *parts,
-			    const char *suffix);
+                            const char *suffix);
 
 /* ======================== COUNTERS ==================== */
 

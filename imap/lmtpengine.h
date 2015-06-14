@@ -54,17 +54,17 @@ typedef struct message_data message_data_t;
 typedef struct address_data address_data_t;
 
 struct message_data {
-    struct protstream *data;	/* message in temp file */
-    FILE *f;			/* FILE * corresponding */
+    struct protstream *data;    /* message in temp file */
+    FILE *f;                    /* FILE * corresponding */
 
-    char *id;			/* message id */
-    int size;			/* size of message */
+    char *id;                   /* message id */
+    int size;                   /* size of message */
 
     /* msg envelope */
-    char *return_path;		/* where to return message */
-    address_data_t **rcpt;	/* to recipients of this message */
-    int rcpt_num;		/* number of recipients */
-    char *date; 		/* date field of header */
+    char *return_path;          /* where to return message */
+    address_data_t **rcpt;      /* to recipients of this message */
+    int rcpt_num;               /* number of recipients */
+    char *date;                 /* date field of header */
 
     /* auth state */
     char *authuser;
@@ -86,7 +86,7 @@ int msg_getnumrcpt(message_data_t *m);
 
 /* return delivery destination of recipient 'rcpt_num' */
 void msg_getrcpt(message_data_t *m, int rcpt_num,
-		 const char **user, const char **domain, const char **mailbox);
+                 const char **user, const char **domain, const char **mailbox);
 
 /* return entire recipient of 'rcpt_num' */
 const char *msg_getrcptall(message_data_t *m, int rcpt_num);
@@ -107,32 +107,32 @@ struct addheader {
 };
 
 struct lmtp_func {
-    int (*deliver)(message_data_t *m, 
-		   char *authuser, struct auth_state *authstate);
+    int (*deliver)(message_data_t *m,
+                   char *authuser, struct auth_state *authstate);
     int (*verify_user)(const char *user, const char *domain, char *mailbox,
-		       quota_t quotastorage_check, /* user must have this much storage quota left
-					   (-1 means don't care about quota) */
-		       quota_t quotamessage_check, /* user must have this much message quota left
-					   (-1 means don't care about quota) */
-		       struct auth_state *authstate);
+                       quota_t quotastorage_check, /* user must have this much storage quota left
+                                           (-1 means don't care about quota) */
+                       quota_t quotamessage_check, /* user must have this much message quota left
+                                           (-1 means don't care about quota) */
+                       struct auth_state *authstate);
     void (*shutdown)(int code);
     FILE *(*spoolfile)(message_data_t *m);
     void (*removespool)(message_data_t *m);
     struct namespace *namespace; /* mailbox namespace that we're working in */
     struct addheader *addheaders; /* add these headers to all messages */
-    int addretpath;		/* should i add a return-path header? */
-    int preauth;		/* preauth connection? */
+    int addretpath;             /* should i add a return-path header? */
+    int preauth;                /* preauth connection? */
 };
 
 /* run LMTP on 'pin' and 'pout', doing callbacks to 'func' where appropriate
- * 
+ *
  * will call signals_poll() on occasion.
  * will return when connection closes.
  */
 void lmtpmode(struct lmtp_func *func,
-	      struct protstream *pin, 
-	      struct protstream *pout,
-	      int fd);
+              struct protstream *pin,
+              struct protstream *pout,
+              int fd);
 
 /************** client-side LMTP ****************/
 
@@ -140,34 +140,34 @@ void lmtpmode(struct lmtp_func *func,
 
 enum {
     /* LMTP capabilities */
-    CAPA_PIPELINING	= (1 << 3),
-    CAPA_IGNOREQUOTA	= (1 << 4)
+    CAPA_PIPELINING     = (1 << 3),
+    CAPA_IGNOREQUOTA    = (1 << 4)
 };
 
 struct lmtp_txn {
     const char *from;
     const char *auth;
-    int isdotstuffed;		/* 1 if 'data' is a dotstuffed stream
+    int isdotstuffed;           /* 1 if 'data' is a dotstuffed stream
                                    (including end-of-file \r\n.\r\n) */
     int tempfail_unknown_mailbox; /* 1 if '550 5.1.1 unknown mailbox'
-				   * should be masked as a temporary failure */
+                                   * should be masked as a temporary failure */
     struct protstream *data;
     int rcpt_num;
     struct lmtp_rcpt {
-	char *addr;
-	int ignorequota;
-	enum {
-	    RCPT_GOOD,
-	    RCPT_TEMPFAIL,
-	    RCPT_PERMFAIL
-	} result;
-	int r;			/* if non-zero, 
-				   a more descriptive error code */
+        char *addr;
+        int ignorequota;
+        enum {
+            RCPT_GOOD,
+            RCPT_TEMPFAIL,
+            RCPT_PERMFAIL
+        } result;
+        int r;                  /* if non-zero,
+                                   a more descriptive error code */
     } rcpt[1];
 };
 
 #define LMTP_TXN_ALLOC(n) (xmalloc(sizeof(struct lmtp_txn) + \
-				   ((n) * (sizeof(struct lmtp_rcpt)))))
+                                   ((n) * (sizeof(struct lmtp_rcpt)))))
 
 int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn);
 

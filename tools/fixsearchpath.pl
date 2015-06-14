@@ -78,19 +78,19 @@ my $boilerplate = << 'EOT'
 my $__cyrus_destdir = '';
 BEGIN {
     if ($0 =~ m/\//) {
-	my $d = $0;
+        my $d = $0;
 EOT
 ;
-$boilerplate .= "	my \$bindir = " . quote($configure_bindir) . ";\n";
+$boilerplate .= "       my \$bindir = " . quote($configure_bindir) . ";\n";
 $boilerplate .= << 'EOT'
-	# remove the filename, $d is now the installed bindir
-	$d =~ s/\/[^\/]+$//;
-	# check if the path ends in the configured bindir
-	my $len = length($d)-length($bindir);
-	if (substr($d, $len) eq $bindir) {
-	    # if so then the installed destdir is what remains
-	    $__cyrus_destdir = substr($d, 0, $len);
-	}
+        # remove the filename, $d is now the installed bindir
+        $d =~ s/\/[^\/]+$//;
+        # check if the path ends in the configured bindir
+        my $len = length($d)-length($bindir);
+        if (substr($d, $len) eq $bindir) {
+            # if so then the installed destdir is what remains
+            $__cyrus_destdir = substr($d, 0, $len);
+        }
     }
 };
 EOT
@@ -99,10 +99,10 @@ EOT
 foreach my $dv (@dirvars) {
     my $dir = $Config{$dv->{dir}};
     if ($configure_prefix ne $perl_prefix) {
-	# Expect to be installed into a non-default location
-	# because Cyrus was built with a non-default --prefix
-	my $install_prefix = normalise($Config{$dv->{prefix}});
-	$dir = $configure_prefix . substr($dir, length($install_prefix))
+        # Expect to be installed into a non-default location
+        # because Cyrus was built with a non-default --prefix
+        my $install_prefix = normalise($Config{$dv->{prefix}});
+        $dir = $configure_prefix . substr($dir, length($install_prefix))
     }
     $boilerplate .= 'use lib $__cyrus_destdir . ' . quote($dir) .  ";\n";
 }
@@ -112,8 +112,8 @@ $boilerplate .= "##\n\n";
 while (<STDIN>)
 {
     if (defined $boilerplate && m/^use\s/) {
-	print $boilerplate;
-	$boilerplate = undef;
+        print $boilerplate;
+        $boilerplate = undef;
     }
     print $_;
 }

@@ -66,7 +66,7 @@ use Getopt::Long;
 my $opt_extra = undef;
 
 $ret = GetOptions("extra:s");
-if (!$ret || $#ARGV != 0) { 
+if (!$ret || $#ARGV != 0) {
     print STDERR "snmpgen [--extra=trailer.in] app.snmp\n";
     exit;
 }
@@ -100,14 +100,14 @@ push @Varlist, "LISTEND";
 #first find the BASE
 while (defined ($line = <INPUT>)) {
     $linenum++;
-    
+
     if ($line =~ /^#/) {
-	# comment
-	next;
+        # comment
+        next;
     }
     if ($line =~ /^\s*$/) {
-	# just whitespace. ignore
-	next;
+        # just whitespace. ignore
+        next;
     }
 
     if ($line =~ /^define\s+(\w+)\s+((\d|\.|\[\w+\])+)/)
@@ -118,18 +118,18 @@ while (defined ($line = <INPUT>)) {
       #resolve definitions
       while ($defoid =~ /(\[(\w+)\])/)
       {
-	my $f = 0;
-	foreach my $a (keys %Definelist)
-	{
-	  if ($a eq $2)
-	  {
-	    $defoid =~ s/\[\w+\]/$Definelist{$a}/;
-	    $f = 1;
-	  }
-	}	
-	if ($f == 0) {
-	  die "Unable to resolve definition $2";
-	}
+        my $f = 0;
+        foreach my $a (keys %Definelist)
+        {
+          if ($a eq $2)
+          {
+            $defoid =~ s/\[\w+\]/$Definelist{$a}/;
+            $f = 1;
+          }
+        }
+        if ($f == 0) {
+          die "Unable to resolve definition $2";
+        }
       }
 
       $Definelist{$defname} = $defoid;
@@ -142,52 +142,52 @@ while (defined ($line = <INPUT>)) {
     }
 
     if ($line =~ /^BASE\s+((\d+|\.|\{\w+\}|\[\w+\])+)/) {
-	$base = $1;
+        $base = $1;
 
-	#resolve definitions
-	while ($base =~ /(\[(\w+)\])/)
-	{
-	  my $f = 0;
-	  foreach my $a (keys %Definelist)
-	  {
-	    if ($a eq $2)
-	    {
-	      $base =~ s/\[\w+\]/$Definelist{$a}/;
-	      $f = 1;
-	    }
-	  }	
-	  if ($f == 0) {
-	    die "Unable to resolve definition $2";
-	  }
-	}
+        #resolve definitions
+        while ($base =~ /(\[(\w+)\])/)
+        {
+          my $f = 0;
+          foreach my $a (keys %Definelist)
+          {
+            if ($a eq $2)
+            {
+              $base =~ s/\[\w+\]/$Definelist{$a}/;
+              $f = 1;
+            }
+          }
+          if ($f == 0) {
+            die "Unable to resolve definition $2";
+          }
+        }
 
-	#add lowest base to register list	
-	if ($base =~ /((\d+\.)+\d+)/) {
-	  push @Registerlist, $1;
-	}
+        #add lowest base to register list
+        if ($base =~ /((\d+\.)+\d+)/) {
+          push @Registerlist, $1;
+        }
 
-	undef @baseVlist;
-	#xxx check all vars in varlist
-	while ($base =~ /(\{(\w+)\})/)
-	{
-	  push @baseVlist, $2;
-	  $base =~ s/\{\w+\}/%d/;	  	  
-	}
+        undef @baseVlist;
+        #xxx check all vars in varlist
+        while ($base =~ /(\{(\w+)\})/)
+        {
+          push @baseVlist, $2;
+          $base =~ s/\{\w+\}/%d/;
+        }
 
-	$basecount = 0;	
-	next;
+        $basecount = 0;
+        next;
     }
 
     chomp $line;
     ($type, $name, $desc, $oid, $dummy) = split(/\s*,\s*/, $line, 5);
 
     if (!(defined $oid) || (defined $dummy)) {
-	die "syntax error on line $linenum\n";
+        die "syntax error on line $linenum\n";
     }
 
     if ($oid eq "auto") {
-	$oid = $base . ".$basecount";
-	$basecount++;
+        $oid = $base . ".$basecount";
+        $basecount++;
     } else {
         $oid = $base . "." . $oid;
     }
@@ -197,7 +197,7 @@ while (defined ($line = <INPUT>)) {
     $O{$name} = $oid;
     $Ovlist{$name} = [ @baseVlist ];
 }
-    
+
 open (OUTPUT_H, ">$outheader");
 
 print OUTPUT_H <<EOF
@@ -207,9 +207,9 @@ print OUTPUT_H <<EOF
  * Copyright 2000 Carnegie Mellon University
  *
  * No warranty, yadda yadda
- */                                       
-                                          
-#ifndef ${basename}_H    
+ */
+
+#ifndef ${basename}_H
 #define ${basename}_H
 
 EOF
@@ -274,8 +274,8 @@ print OUTPUT_H <<EOF
 
 int snmp_connect(void);
 
-int snmp_close(void);          
-                                    
+int snmp_close(void);
+
 /* only valid on counters */
 int snmp_increment(${basename}_t cmd, int);
 int snmp_increment_args(${basename}_t cmd, int incr, ...);
@@ -288,16 +288,16 @@ int snmp_set_str(${basename}_t cmd, char *value);
 int snmp_set_oid(${basename}_t cmd, char *str);
 
 int snmp_set_time(${basename}_t cmd, time_t t);
-                                    
-const char *snmp_getdescription(${basename}_t cmd); 
- 
-const char *snmp_getoid(const char *name, ${basename}_t cmd, char* buf, int buflen); 
+
+const char *snmp_getdescription(${basename}_t cmd);
+
+const char *snmp_getoid(const char *name, ${basename}_t cmd, char* buf, int buflen);
 
 void snmp_setvariable(${basename}_variable_t, int);
 
 #endif /* USING_SNMPGEN */
- 
-#endif /* ${basename}_H */ 
+
+#endif /* ${basename}_H */
 
 EOF
 ;
@@ -312,9 +312,9 @@ print OUTPUT_C <<EOF
 #ifdef USING_SNMPGEN
 
 /* We disable this code for now since it doesn't actually work and wastes
- * resources.  At some point in time, we'll make it work again as it would 
- * be useful to gather aggregate statistics on what commands are being used 
- * so we can better tune the server.  This change closes bug #1191. 
+ * resources.  At some point in time, we'll make it work again as it would
+ * be useful to gather aggregate statistics on what commands are being used
+ * so we can better tune the server.  This change closes bug #1191.
  * New bug 1267 opened to re-enable the feature.
  */
 
@@ -364,7 +364,7 @@ print OUTPUT_C <<EOF
 }
 
 const char *snmp_getoid(const char *name __attribute__((unused)),
-			${basename}_t evt, char *buf, int buflen)
+                        ${basename}_t evt, char *buf, int buflen)
 {
     switch (evt) {
 EOF
@@ -385,7 +385,7 @@ foreach my $a (keys %T)
 $snmp.= "    default: return \"0.0.0\";\n";
 $snmp.= "  }\n";
 $snmp.= "}\n";
-    
+
 print OUTPUT_C <<EOF
     }
     return NULL;
@@ -402,7 +402,7 @@ static void snmp_send(char *str)
     if (mysock == -1) return;
 
     if (sendto(mysock, str, strlen(str), 0, (struct sockaddr *) &remote, sockaddr_len) == -1) {
-	return;
+        return;
     }
 
     return;
@@ -415,7 +415,7 @@ int snmp_connect(void)
     int lup;
 
     if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
-	return 1;
+        return 1;
     }
 
     for (lup=0;lup < $#Varlist+1; lup++)
@@ -446,7 +446,7 @@ print OUTPUT_C <<EOF
 int snmp_close(void)
 {
     if (mysock > -1)
-	close(mysock);
+        close(mysock);
 
     return 0;
 }
@@ -470,7 +470,7 @@ int snmp_increment_args(${basename}_t cmd, int incr, ...)
           if (vval!=VARIABLE_LISTEND)
           {
               ival = va_arg(ap, int); /* get the next arg */
-              variable_tmpvalue[vval] = ival;              
+              variable_tmpvalue[vval] = ival;
           }
 
       } while ( vval != VARIABLE_LISTEND);
@@ -480,7 +480,7 @@ int snmp_increment_args(${basename}_t cmd, int incr, ...)
     snprintf(tosend, sizeof(tosend),"C %s %d\\n",snmp_getoid(NULL,cmd,buf,sizeof(buf)), incr);
 
     if (sendto(mysock, tosend, strlen(tosend), 0, (struct sockaddr *) &remote, sockaddr_len) == -1) {
-	return 1;
+        return 1;
     }
 
     /* set tmp variables back */
@@ -492,7 +492,7 @@ int snmp_increment_args(${basename}_t cmd, int incr, ...)
           if (vval!=VARIABLE_LISTEND)
           {
               ival = va_arg(ap, int); /* get the next arg */
-              variable_tmpvalue[vval] = -1;              
+              variable_tmpvalue[vval] = -1;
           }
 
       } while ( vval != VARIABLE_LISTEND);
@@ -512,7 +512,7 @@ int snmp_increment(${basename}_t cmd, int incr)
     snprintf(tosend, sizeof(tosend),"C %s %d\\n",snmp_getoid(NULL,cmd,buf,sizeof(buf)), incr);
 
     if (sendto(mysock, tosend, strlen(tosend), 0, (struct sockaddr *) &remote, sockaddr_len) == -1) {
-	return 1;
+        return 1;
     }
 
     return 0;
@@ -528,7 +528,7 @@ int snmp_set(${basename}_t cmd, int value)
     snprintf(tosend, sizeof(tosend),"I %s %d\\n",snmp_getoid(NULL,cmd,buf,sizeof(buf)), value);
 
     if (sendto(mysock, tosend, strlen(tosend), 0, (struct sockaddr *) &remote, sockaddr_len) == -1) {
-	return 1;
+        return 1;
     }
 
     return 1;
@@ -544,7 +544,7 @@ int snmp_set_str(${basename}_t cmd, char *value)
     snprintf(tosend, sizeof(tosend),"S %s %s\\n",snmp_getoid(NULL,cmd,buf,sizeof(buf)), value);
 
     if (sendto(mysock, tosend, strlen(tosend), 0, (struct sockaddr *) &remote, sockaddr_len) == -1) {
-	return 1;
+        return 1;
     }
 
     return 1;
@@ -560,7 +560,7 @@ int snmp_set_time(${basename}_t cmd, time_t t)
     snprintf(tosend, sizeof(tosend),"T %s %lu\\n",snmp_getoid(NULL,cmd,buf,sizeof(buf)), t);
 
     if (sendto(mysock, tosend, strlen(tosend), 0, (struct sockaddr *) &remote, sockaddr_len) == -1) {
-	return 1;
+        return 1;
     }
 
     return 1;
@@ -590,7 +590,7 @@ if (defined $opt_extra) {
        print OUTPUT_C;
    }
    close INPUT_IN;
-} 
+}
 
 close OUTPUT_C;
 

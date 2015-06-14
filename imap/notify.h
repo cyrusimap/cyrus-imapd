@@ -44,9 +44,9 @@
 #define NOTIFY_H
 
 void notify(const char *method,
-	    const char *class, const char *priority,
-	    const char *user, const char *mailbox,
-	    int nopt, const char **options,
-	    const char *message, const char *fname);
+            const char *class, const char *priority,
+            const char *user, const char *mailbox,
+            int nopt, const char **options,
+            const char *message, const char *fname);
 
 #endif /* NOTIFY_H */

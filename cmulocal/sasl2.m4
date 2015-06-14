@@ -137,7 +137,7 @@ if test "$gssapi" != no; then
 
     gss_failed=0
 
-# Check for CyberSafe with two libraries first, than fall back to a single 
+# Check for CyberSafe with two libraries first, than fall back to a single
 # library (older CyberSafe)
 
     unset ac_cv_lib_gss_csf_gss_acq_user
@@ -292,18 +292,18 @@ int main(void)
     gss_OID_set mech_set;
     OM_uint32 min_stat;
     int have_spnego = 0;
-                                                                               
+
     if (gss_indicate_mechs(&min_stat, &mech_set) == GSS_S_COMPLETE) {
-	gss_test_oid_set_member(&min_stat, &spnego_oid, mech_set, &have_spnego);
-	gss_release_oid_set(&min_stat, &mech_set);
+        gss_test_oid_set_member(&min_stat, &spnego_oid, mech_set, &have_spnego);
+        gss_release_oid_set(&min_stat, &mech_set);
     }
 
     return (!have_spnego);  // 0 = success, 1 = failure
 }
-],	
-	[ AC_DEFINE(HAVE_GSS_SPNEGO,,[Define if your GSSAPI implementation supports SPNEGO])
-	AC_MSG_RESULT(yes) ],
-	AC_MSG_RESULT(no))
+],
+        [ AC_DEFINE(HAVE_GSS_SPNEGO,,[Define if your GSSAPI implementation supports SPNEGO])
+        AC_MSG_RESULT(yes) ],
+        AC_MSG_RESULT(no))
   LIBS="$cmu_save_LIBS"
 
 else
@@ -393,7 +393,7 @@ if test ${with_staticsasl} != "no"; then
     LIB_SASL="$LIB_SASL $GSSAPIBASE_STATIC_LIBS"
   else
     SASL_GSSAPI_LIBS_SET=""
-    cmu_saved_LIBS="$GSSAPIBASE_STATIC_LIBS $cmu_saved_LIBS" 
+    cmu_saved_LIBS="$GSSAPIBASE_STATIC_LIBS $cmu_saved_LIBS"
   fi
 fi
 
@@ -413,7 +413,7 @@ fi
 # be sure to check for a SASLv2 specific function
 AC_CHECK_HEADER(sasl/sasl.h,
                 [AC_CHECK_HEADER(sasl/saslutil.h,
-                                 [AC_CHECK_LIB(sasl2, prop_get, 
+                                 [AC_CHECK_LIB(sasl2, prop_get,
                                                ac_cv_found_sasl=yes,
                                                ac_cv_found_sasl=no)],
                                  ac_cv_found_sasl=no)],
@@ -436,7 +436,7 @@ fi
 
 if test "x$SASL_GSSAPI_LIBS_SET" != "x"; then
   SASL_GSSAPI_LIBS_SET=""
-  cmu_saved_LIBS="$GSSAPIBASE_LIBS $cmu_saved_LIBS" 
+  cmu_saved_LIBS="$GSSAPIBASE_LIBS $cmu_saved_LIBS"
 fi
 
 LIBS="$cmu_saved_LIBS"

@@ -7,14 +7,14 @@
 #include "strarray.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
-#include "lib/util.h"	    /* for VECTOR_SIZE */
-//#include "message.h"	    /* for VECTOR_SIZE */
+#include "lib/util.h"       /* for VECTOR_SIZE */
+//#include "message.h"      /* for VECTOR_SIZE */
 #include "xmalloc.h"
 
-#define DBDIR	"test-dbdir"
-#define DBNAME	DBDIR "/conversations.db"
-#define DBNAME2	DBDIR "/conversations2.db"
-#define DBNAME3	DBDIR "/conversations.db"
+#define DBDIR   "test-dbdir"
+#define DBNAME  DBDIR "/conversations.db"
+#define DBNAME2 DBDIR "/conversations2.db"
+#define DBNAME3 DBDIR "/conversations.db"
 
 static void test_open(void)
 {
@@ -198,7 +198,7 @@ static void test_prune(void)
      * stable with respect to timing artifacts, such as clock
      * granularity, by careful choice of sleep times. */
     r = conversations_prune(state, stamp2+(stamp3-stamp2)/2,
-			    &nseen, &ndeleted);
+                            &nseen, &ndeleted);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT(nseen >= 3);
     CU_ASSERT(ndeleted >= 2);
@@ -365,7 +365,7 @@ static int num_folders(conversation_t *conv)
     if (!conv) return 0;
 
     for (folder = conv->folders ; folder ; folder = folder->next)
-	n++;
+        n++;
 
     return n;
 }
@@ -406,17 +406,17 @@ static void test_cid_rename(void)
     CU_ASSERT_PTR_NOT_NULL(conv);
 
     conversation_update(state, conv, FOLDER1, /*num_records*/3,
-			/*exists*/3, /*unseen*/0,
-			/*size*/0, /*counts*/NULL,
-			/*modseq*/1);
+                        /*exists*/3, /*unseen*/0,
+                        /*size*/0, /*counts*/NULL,
+                        /*modseq*/1);
     conversation_update(state, conv, FOLDER2, /*num_records*/3,
-			/*exists*/2, /*unseen*/0,
-			/*size*/0, /*counts*/NULL,
-			/*modseq*/8);
+                        /*exists*/2, /*unseen*/0,
+                        /*size*/0, /*counts*/NULL,
+                        /*modseq*/8);
     conversation_update(state, conv, FOLDER3, /*num_records*/13,
-			/*exists*/10, /*unseen*/0,
-			/*size*/0, /*counts*/NULL,
-			/*modseq*/5);
+                        /*exists*/10, /*unseen*/0,
+                        /*size*/0, /*counts*/NULL,
+                        /*modseq*/5);
 
     r = conversation_save(state, C_CID1, conv);
     CU_ASSERT_EQUAL(r, 0);
@@ -519,13 +519,13 @@ static void test_folder_rename(void)
     CU_ASSERT_PTR_NOT_NULL(conv);
 
     conversation_update(state, conv, FOLDER1, /*num_records*/3,
-			/*exists*/3, /*unseen*/0,
-			/*size*/0, /*counts*/NULL,
-			/*modseq*/1);
+                        /*exists*/3, /*unseen*/0,
+                        /*size*/0, /*counts*/NULL,
+                        /*modseq*/1);
     conversation_update(state, conv, FOLDER2, /*num_records*/3,
-			/*exists*/2, /*unseen*/0,
-			/*size*/0, /*counts*/NULL,
-			/*modseq*/8);
+                        /*exists*/2, /*unseen*/0,
+                        /*size*/0, /*counts*/NULL,
+                        /*modseq*/8);
 
     r = conversation_save(state, C_CID, conv);
     CU_ASSERT_EQUAL(r, 0);
@@ -650,9 +650,9 @@ static void test_folders(void)
     counts[1] = 0;
 
     conversation_update(state, conv, FOLDER1, /*num_records*/13,
-			/*exists*/7, /*unseen*/5,
-			/*size*/0, counts,
-			/*modseq*/4);
+                        /*exists*/7, /*unseen*/5,
+                        /*size*/0, counts,
+                        /*modseq*/4);
 
     /* make sure the data we just passed to conversation_update()
      * is present in the structure */
@@ -714,9 +714,9 @@ static void test_folders(void)
     counts[1] = 2;
     /* some more updates should succeed */
     conversation_update(state, conv, FOLDER2,/*num_records*/2,
-			/*exists*/1, /*unseen*/0,
-			/*size*/0, counts,
-			/*modseq*/7);
+                        /*exists*/1, /*unseen*/0,
+                        /*size*/0, counts,
+                        /*modseq*/7);
 
     CU_ASSERT_EQUAL(conv->dirty, 1);
     CU_ASSERT_EQUAL(conv->num_records, 15);
@@ -746,9 +746,9 @@ static void test_folders(void)
 
     counts[1] = 5;
     conversation_update(state, conv, FOLDER3,/*num_records*/10,
-			/*exists*/10, /*unseen*/0,
-			/*size*/0, counts,
-			/*modseq*/55);
+                        /*exists*/10, /*unseen*/0,
+                        /*size*/0, counts,
+                        /*modseq*/55);
 
     CU_ASSERT_EQUAL(conv->dirty, 1);
     CU_ASSERT_EQUAL(conv->num_records, 25);
@@ -863,9 +863,9 @@ static void test_folders(void)
     counts[0] = -1;
     counts[1] = 0;
     conversation_update(state, conv, FOLDER1,/*num_records*/-13,
-			/*exists*/-7, /*unseen*/0,
-			/*size*/0, counts,
-			/*modseq*/56);
+                        /*exists*/-7, /*unseen*/0,
+                        /*size*/0, counts,
+                        /*modseq*/56);
 
     CU_ASSERT_EQUAL(conv->num_records, 12);
     CU_ASSERT_EQUAL(conv->exists, 11);
@@ -874,7 +874,7 @@ static void test_folders(void)
     CU_ASSERT_EQUAL(conv->counts[1], 7);
     CU_ASSERT_EQUAL(conv->modseq, 56);
     CU_ASSERT_EQUAL(num_folders(conv), 3);  /* struct still in place
-					       with all counters zero */
+                                               with all counters zero */
     folder = conversation_find_folder(state, conv, FOLDER1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(folder);
     CU_ASSERT_EQUAL(folder->num_records, 0);
@@ -981,15 +981,15 @@ static void test_folder_ordering(void)
     conv = conversation_new(state);
 
     conversation_update(state, conv, FOLDER1, /*num_records*/1,
-			/*exists*/1, /*unseen*/0,
-			/*size*/0, counts,
-			/*modseq*/1);
+                        /*exists*/1, /*unseen*/0,
+                        /*size*/0, counts,
+                        /*modseq*/1);
 
     /* add folders out of order */
     conversation_update(state, conv, FOLDER3,/*num_records*/10,
-			/*exists*/10, /*unseen*/0,
-			/*size*/0, counts,
-			/*modseq*/55);
+                        /*exists*/10, /*unseen*/0,
+                        /*size*/0, counts,
+                        /*modseq*/55);
 
     /* save and reload here just to be sure */
     r = conversation_save(state, C_CID, conv);
@@ -1001,9 +1001,9 @@ static void test_folder_ordering(void)
     CU_ASSERT_PTR_NOT_NULL(conv);
 
     conversation_update(state, conv, FOLDER2,/*num_records*/2,
-			/*exists*/1, /*unseen*/0,
-			/*size*/0, counts,
-			/*modseq*/7);
+                        /*exists*/1, /*unseen*/0,
+                        /*size*/0, counts,
+                        /*modseq*/7);
 
     CU_ASSERT_EQUAL(conv->dirty, 1);
 
@@ -1126,9 +1126,9 @@ static void __test_senders(void)
     conversation_add_sender(conv, NAME3, NULL, MAILBOX3, DOMAIN3);
 
     conversation_update(state, conv, FOLDER, /*num_records*/1,
-			/*exists*/1, /*unseen*/0,
-			/*size*/0, counts,
-			/*modseq*/1);
+                        /*exists*/1, /*unseen*/0,
+                        /*size*/0, counts,
+                        /*modseq*/1);
 
     /* there's no function for getting sender data, oh well */
     sender1 = conv->senders;
@@ -1236,31 +1236,31 @@ static void __test_senders(void)
 #endif /* TEST_SENDERS_COMPILES */
 
 static void gen_msgid_cid(int i, char *msgid, int msgidlen,
-			  conversation_id_t *cidp)
+                          conversation_id_t *cidp)
 {
     static const char * const domains[] = {
-	"fastmail.fm",
-	"example.com",
-	"gmail.com",
-	"yahoo.com",
-	"hotmail.com"
+        "fastmail.fm",
+        "example.com",
+        "gmail.com",
+        "yahoo.com",
+        "hotmail.com"
     };
     snprintf(msgid, msgidlen, "<%04d.1298269537@%s>",
-	    i, domains[i % VECTOR_SIZE(domains)]);
+            i, domains[i % VECTOR_SIZE(domains)]);
 
     *cidp = 0xfeeddeadbeef0000ULL | (unsigned int)i;
 }
 
 static void gen_cid_folder(int i, conversation_id_t *cidp,
-			   strarray_t *mboxnames)
+                           strarray_t *mboxnames)
 {
     int n;
     int j;
     static const char * const folders[] = {
-	"user.foo.INBOX",
-	"user.foo.Manilla",
-	"user.foo.VanillaGorilla",
-	"user.foo.SarsparillaGorilla"
+        "user.foo.INBOX",
+        "user.foo.Manilla",
+        "user.foo.VanillaGorilla",
+        "user.foo.SarsparillaGorilla"
     };
 
     *cidp = 0xfeeddeadbeef0000ULL | (unsigned int)i;
@@ -1269,8 +1269,8 @@ static void gen_cid_folder(int i, conversation_id_t *cidp,
     n = 1 + (17 - i) % (VECTOR_SIZE(folders)-1);
     CU_ASSERT(n > 0);
     for (j = 0 ; j < n ; j++)
-	strarray_append(mboxnames,
-			folders[(j + i/2) % VECTOR_SIZE(folders)]);
+        strarray_append(mboxnames,
+                        folders[(j + i/2) % VECTOR_SIZE(folders)]);
 }
 
 static void test_dump(void)
@@ -1288,8 +1288,8 @@ static void test_dump(void)
     conv_folder_t *folder;
     int i;
     int j;
-#define N_MSGID_TO_CID	500
-#define N_CID_TO_FOLDER	333
+#define N_MSGID_TO_CID  500
+#define N_CID_TO_FOLDER 333
     struct stat sb;
 
     strcpy(filename, "/tmp/cyrus-conv.datXXXXXX");
@@ -1305,25 +1305,25 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
-	gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
-	r = conversations_add_msgid(state, msgid, cid);
-	CU_ASSERT_EQUAL(r, 0);
+        gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
+        r = conversations_add_msgid(state, msgid, cid);
+        CU_ASSERT_EQUAL(r, 0);
     }
     for (i = 0 ; i < N_CID_TO_FOLDER ; i++) {
-	gen_cid_folder(i, &cid, &mboxnames);
-	conv = conversation_new(state);
-	CU_ASSERT_PTR_NOT_NULL(conv);
-	for (j = 0 ; j < mboxnames.count ; j++) {
-	    conversation_update(state, conv, mboxnames.data[j],
-				/*num_records*/1,
-				/*exists*/1, /*unseen*/0,
-				/*size*/0, /*counts*/NULL,
-				/*modseq*/100);
-	}
-	r = conversation_save(state, cid, conv);
-	CU_ASSERT_EQUAL(r, 0);
-	conversation_free(conv);
-	conv = NULL;
+        gen_cid_folder(i, &cid, &mboxnames);
+        conv = conversation_new(state);
+        CU_ASSERT_PTR_NOT_NULL(conv);
+        for (j = 0 ; j < mboxnames.count ; j++) {
+            conversation_update(state, conv, mboxnames.data[j],
+                                /*num_records*/1,
+                                /*exists*/1, /*unseen*/0,
+                                /*size*/0, /*counts*/NULL,
+                                /*modseq*/100);
+        }
+        r = conversation_save(state, cid, conv);
+        CU_ASSERT_EQUAL(r, 0);
+        conversation_free(conv);
+        conv = NULL;
     }
 
     r = conversations_commit(&state);
@@ -1363,18 +1363,18 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
-	gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
-	arrayu64_truncate(&cids, 0);
-	r = conversations_get_msgid(state, msgid, &cids);
-	CU_ASSERT_EQUAL(r, 0);
-	CU_ASSERT_EQUAL(arrayu64_nth(&cids, 0), NULLCONVERSATION);
+        gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
+        arrayu64_truncate(&cids, 0);
+        r = conversations_get_msgid(state, msgid, &cids);
+        CU_ASSERT_EQUAL(r, 0);
+        CU_ASSERT_EQUAL(arrayu64_nth(&cids, 0), NULLCONVERSATION);
     }
     for (i = 0 ; i < N_CID_TO_FOLDER ; i++) {
-	gen_cid_folder(i, &cid, &mboxnames);
-	conv = NULL;
-	r = conversation_load(state, cid, &conv);
-	CU_ASSERT_EQUAL(r, 0);
-	CU_ASSERT_PTR_NULL(conv);
+        gen_cid_folder(i, &cid, &mboxnames);
+        conv = NULL;
+        r = conversation_load(state, cid, &conv);
+        CU_ASSERT_EQUAL(r, 0);
+        CU_ASSERT_PTR_NULL(conv);
     }
 
     /* now undump */
@@ -1389,27 +1389,27 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
-	gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
-	arrayu64_truncate(&cids, 0);
-	r = conversations_get_msgid(state, msgid, &cids);
-	CU_ASSERT_EQUAL(r, 0);
-	CU_ASSERT_EQUAL(cid, arrayu64_nth(&cids, 0));
+        gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
+        arrayu64_truncate(&cids, 0);
+        r = conversations_get_msgid(state, msgid, &cids);
+        CU_ASSERT_EQUAL(r, 0);
+        CU_ASSERT_EQUAL(cid, arrayu64_nth(&cids, 0));
     }
     for (i = 0 ; i < N_CID_TO_FOLDER ; i++) {
-	gen_cid_folder(i, &cid, &mboxnames);
-	conv = NULL;
-	r = conversation_load(state, cid, &conv);
-	CU_ASSERT_EQUAL(r, 0);
-	CU_ASSERT_PTR_NOT_NULL_FATAL(conv);
-	CU_ASSERT_EQUAL(conv->modseq, 100);
-	CU_ASSERT_EQUAL(mboxnames.count, num_folders(conv));
-	for (j = 0 ; j < mboxnames.count ; j++) {
-	    folder = conversation_find_folder(state, conv, mboxnames.data[j]);
-	    CU_ASSERT_PTR_NOT_NULL(folder);
-	    CU_ASSERT_EQUAL(folder->modseq, 100);
-	}
-	conversation_free(conv);
-	conv = NULL;
+        gen_cid_folder(i, &cid, &mboxnames);
+        conv = NULL;
+        r = conversation_load(state, cid, &conv);
+        CU_ASSERT_EQUAL(r, 0);
+        CU_ASSERT_PTR_NOT_NULL_FATAL(conv);
+        CU_ASSERT_EQUAL(conv->modseq, 100);
+        CU_ASSERT_EQUAL(mboxnames.count, num_folders(conv));
+        for (j = 0 ; j < mboxnames.count ; j++) {
+            folder = conversation_find_folder(state, conv, mboxnames.data[j]);
+            CU_ASSERT_PTR_NOT_NULL(folder);
+            CU_ASSERT_EQUAL(folder->modseq, 100);
+        }
+        conversation_free(conv);
+        conv = NULL;
     }
 
     r = conversations_abort(&state);
@@ -1426,43 +1426,43 @@ static void test_dump(void)
 
 #define TESTCASE(in, exp) \
     { \
-	struct buf b = BUF_INITIALIZER; \
-	static const char _in[] = in; \
-	static const char _exp[] = exp; \
+        struct buf b = BUF_INITIALIZER; \
+        static const char _in[] = in; \
+        static const char _exp[] = exp; \
  \
-	buf_appendcstr(&b, _in); \
-	conversation_normalise_subject(&b); \
-	CU_ASSERT_EQUAL(b.len, sizeof(_exp)-1); \
-	CU_ASSERT_STRING_EQUAL(b.s, _exp); \
+        buf_appendcstr(&b, _in); \
+        conversation_normalise_subject(&b); \
+        CU_ASSERT_EQUAL(b.len, sizeof(_exp)-1); \
+        CU_ASSERT_STRING_EQUAL(b.s, _exp); \
  \
-	buf_free(&b); \
+        buf_free(&b); \
     }
 
 
 static void test_subject_normalise(void)
 {
     TESTCASE("understanding merge history",
-	     "understandingmergehistory");
+             "understandingmergehistory");
     TESTCASE("Re: Alias of constant passed to sub",
-	     "Aliasofconstantpassedtosub");
+             "Aliasofconstantpassedtosub");
     TESTCASE("Re: RE: Re: Perl_peep recursion exceeds",
-	     "Perl_peeprecursionexceeds");
+             "Perl_peeprecursionexceeds");
     TESTCASE("Fwd: Re: Sv: Re: SV: vms rename Unix mode fixes",
-	     "vmsrenameUnixmodefixes");
+             "vmsrenameUnixmodefixes");
     TESTCASE("[PATCH] merging make_ext and make_ext_cross",
-	     "mergingmake_extandmake_ext_cross");
+             "mergingmake_extandmake_ext_cross");
     TESTCASE("Re: [PATCH] Parallel testing conflict",
-	     "Paralleltestingconflict");
+             "Paralleltestingconflict");
     TESTCASE("Re: [PATCH] Fwd: deprecate UNIVERSAL->import",
-	     "deprecateUNIVERSAL->import");
+             "deprecateUNIVERSAL->import");
     TESTCASE("how about the weather [SEC=UNOFFICIAL]",
-	     "howabouttheweather");
+             "howabouttheweather");
     TESTCASE("subj gets long fast [SEC=UNCLASSIFIED] [DLM=Sensitive:Personal]",
-	     "subjgetslongfast");
+             "subjgetslongfast");
     TESTCASE("inter[SEC=UNCLASSIFIED]jection",
-	     "inter[SEC=UNCLASSIFIED]jection");
+             "inter[SEC=UNCLASSIFIED]jection");
     TESTCASE("walks, talks, doesn't quack [SEC=UN",
-	     "walks,talks,doesn'tquack[SEC=UN");
+             "walks,talks,doesn'tquack[SEC=UN");
 }
 
 #undef TESTCASE
@@ -1474,20 +1474,20 @@ static int set_up(void)
 
     r = system("rm -rf " DBDIR);
     if (r)
-	return r;
+        return r;
 
     r = mkdir(DBDIR, 0777);
     if (r < 0) {
-	int e = errno;
-	perror(DBDIR);
-	return e;
+        int e = errno;
+        perror(DBDIR);
+        return e;
     }
 
     r = mkdir(DBDIR "/db", 0777);
     if (r < 0) {
-	int e = errno;
-	perror(DBDIR "/db");
-	return e;
+        int e = errno;
+        perror(DBDIR "/db");
+        return e;
     }
 
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);

@@ -269,7 +269,7 @@ static struct
 } conf;
 
 static void toexternal_helper(const char *intname,
-			      const char *extname_expected)
+                              const char *extname_expected)
 {
     struct namespace ns;
     char extname[MAX_MAILBOX_NAME];

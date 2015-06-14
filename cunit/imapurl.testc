@@ -110,10 +110,10 @@ static void test_fromurl_encuser(void)
 static void test_fromurl_options(void)
 {
     static const char URL[] = "imap://wooster@jeeves/deverill"
-			      ";UIDVALIDITY=7890"
-			      "/;UID=123456"
-			      "/;SECTION=1.4"
-			      "/;PARTIAL=1.1023";
+                              ";UIDVALIDITY=7890"
+                              "/;UID=123456"
+                              "/;SECTION=1.4"
+                              "/;PARTIAL=1.1023";
     struct imapurl iurl;
     int r;
 
@@ -140,9 +140,9 @@ static void test_fromurl_options(void)
 static void test_fromurl_urlauth(void)
 {
     static const char URL[] = "imap://wooster@jeeves/deverill"
-			      "/;UID=123456"
-			      ";EXPIRE=2010-11-24T06:57:26Z"
-			      ";URLAUTH=submit+fred:internal:91354a473744909de610943775f92038";
+                              "/;UID=123456"
+                              ";EXPIRE=2010-11-24T06:57:26Z"
+                              ";URLAUTH=submit+fred:internal:91354a473744909de610943775f92038";
     struct imapurl iurl;
     int r;
 
@@ -161,7 +161,7 @@ static void test_fromurl_urlauth(void)
     CU_ASSERT_STRING_EQUAL(iurl.urlauth.access, "submit+fred");
     CU_ASSERT_STRING_EQUAL(iurl.urlauth.mech, "internal");
     CU_ASSERT_STRING_EQUAL(iurl.urlauth.token,
-			    "91354a473744909de610943775f92038");
+                            "91354a473744909de610943775f92038");
     CU_ASSERT_EQUAL(iurl.urlauth.expire, 1290581846);
     CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 90);
     free(iurl.freeme);
@@ -175,7 +175,7 @@ static void test_fromurl_urlauth(void)
 // TODO: lowercase option names
 // TODO: relative urls
 // TODO: it doesn't seem like it parses a host port
-//	 specially, it will be accidentally appended to .server
+//       specially, it will be accidentally appended to .server
 // TODO: no / before ;
 // TODO: invalidly formatted uidvalidity
 // TODO: invalidly formatted uid
@@ -231,10 +231,10 @@ static void test_tourl_user(void)
 static void test_tourl_options(void)
 {
     static const char URL[] = "imap://jeeves/deverill"
-			      ";UIDVALIDITY=7890"
-			      "/;UID=123456"
-			      "/;SECTION=1.4"
-			      "/;PARTIAL=1.1023";
+                              ";UIDVALIDITY=7890"
+                              "/;UID=123456"
+                              "/;SECTION=1.4"
+                              "/;PARTIAL=1.1023";
     struct imapurl iurl;
     char buf[300];
 
@@ -255,9 +255,9 @@ static void test_tourl_options(void)
 static void test_tourl_urlauth(void)
 {
     static const char URL[] = "imap://jeeves/deverill"
-			      "/;UID=123456"
-			      ";EXPIRE=2010-11-24T06:57:26Z"
-			      ";URLAUTH=submit+fred:internal:91354a473744909de610943775f92038";
+                              "/;UID=123456"
+                              ";EXPIRE=2010-11-24T06:57:26Z"
+                              ";URLAUTH=submit+fred:internal:91354a473744909de610943775f92038";
     struct imapurl iurl;
     char buf[300];
 

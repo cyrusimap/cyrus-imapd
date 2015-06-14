@@ -9,7 +9,7 @@ CMU_INIT_AUTOMAKE
   automake runs aclocal, aclocal'll continue to pick up these macros.
 
 CMU_ADD_LIBPATH
-  Add -L(arg), and possibly -R(arg) (or whatever the runpath is) to 
+  Add -L(arg), and possibly -R(arg) (or whatever the runpath is) to
   LDFLAGS.
 
 CMU_ADD_LIBPATH_TO
@@ -66,6 +66,6 @@ CMU_SASL
 
 CMU_KRB4
   This attempts to find Kerberos 4 libraries and set up CFLAGS and LIBS
-  appropriately. It also updates and substitutes RPATH for shared library 
+  appropriately. It also updates and substitutes RPATH for shared library
   stuff.
 

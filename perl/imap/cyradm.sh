@@ -217,7 +217,7 @@ Sets the number of days after which messages will be expired from the mailbox.
 
 =item C<news2mail>
 
-Sets an email address to which messages injected into the server via NNTP 
+Sets an email address to which messages injected into the server via NNTP
 will be sent.
 
 =item C<pop3showafter>
@@ -246,7 +246,7 @@ Indicates that the mailbox should have a squat index created for it.
 
 Sets the annotation I</explicit/annotation> on I<mailbox> to I<value>.
 
-=back 
+=back
 
 =item C<renamemailbox> [C<--partition> I<partition>] I<oldname> I<newname>
 
@@ -375,7 +375,7 @@ server (unless overridden by a mailbox annotation).
 Indicates that all mailboxes should have a squat indexes created for
 them (unless overridden by a mailbox annotation).
 
-=back 
+=back
 
 =item C<setquota> I<root> I<resource> I<value> [I<resource> I<value> ...]
 

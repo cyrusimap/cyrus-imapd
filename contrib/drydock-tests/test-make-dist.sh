@@ -1,5 +1,5 @@
 #!/bin/bash
-# 
+#
 # This script applies the standard operating procedure to build a
 # release tarball.
 

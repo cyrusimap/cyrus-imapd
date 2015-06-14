@@ -39,18 +39,18 @@
 #ifdef HAVE_SSL
 #include <openssl/md5.h>
 
-#define MD5Init			    MD5_Init
-#define MD5Update		    MD5_Update
-#define MD5Final		    MD5_Final
+#define MD5Init                     MD5_Init
+#define MD5Update                   MD5_Update
+#define MD5Final                    MD5_Final
 
 #else
 
 #include <sasl/md5global.h>
 #include <sasl/md5.h>
 
-#define MD5Init			    _sasl_MD5Init
-#define MD5Update(c,d,l)	    _sasl_MD5Update(c, (unsigned char*)d, l)
-#define MD5Final		    _sasl_MD5Final
+#define MD5Init                     _sasl_MD5Init
+#define MD5Update(c,d,l)            _sasl_MD5Update(c, (unsigned char*)d, l)
+#define MD5Final                    _sasl_MD5Final
 
 #endif /* !HAVE_SSL */
 

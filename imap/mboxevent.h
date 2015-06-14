@@ -164,15 +164,15 @@ struct event_parameter {
     const char *name;
     enum event_param_type type;
     union {
-	char *s;
-	uint64_t u;
-	strarray_t *a;
+        char *s;
+        uint64_t u;
+        strarray_t *a;
     } value;
     int filled;
 };
 
 struct mboxevent {
-    enum event_type type;	/* event type */
+    enum event_type type;       /* event type */
 
     /* array of event parameters */
     struct event_parameter params[MAX_PARAM+1];
@@ -189,14 +189,14 @@ struct mboxevent {
 
 
 #define FILL_STRING_PARAM(e,p,v) e->params[p].value.s = v; \
-				 e->params[p].type = EVENT_PARAM_STRING; \
-				 e->params[p].filled = 1
+                                 e->params[p].type = EVENT_PARAM_STRING; \
+                                 e->params[p].filled = 1
 #define FILL_ARRAY_PARAM(e,p,v) e->params[p].value.a = v; \
-				 e->params[p].type = EVENT_PARAM_ARRAY; \
-				 e->params[p].filled = 1
+                                 e->params[p].type = EVENT_PARAM_ARRAY; \
+                                 e->params[p].filled = 1
 #define FILL_UNSIGNED_PARAM(e,p,v) e->params[p].value.u = v; \
-				  e->params[p].type = EVENT_PARAM_INT; \
-				  e->params[p].filled = 1
+                                  e->params[p].type = EVENT_PARAM_INT; \
+                                  e->params[p].filled = 1
 
 /*
  * Call this initializer once only at start
@@ -265,7 +265,7 @@ void mboxevent_set_access(struct mboxevent *event,
  * Shortcut to setting event notification parameters
  */
 void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
-			   const char *rights);
+                           const char *rights);
 
 /*
  * Extract data from the given record to fill these event parameters :
@@ -285,7 +285,7 @@ void mboxevent_extract_record(struct mboxevent *event,
  * Called once per message and always before mboxevent_extract_mailbox
  */
 void mboxevent_extract_copied_record(struct mboxevent *event,
-				     const struct mailbox *mailbox, struct index_record *record);
+                                     const struct mailbox *mailbox, struct index_record *record);
 
 /*
  * Extract message content to include to event notification

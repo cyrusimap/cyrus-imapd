@@ -56,7 +56,7 @@
  * sha1.c
  *
  * Originally witten by Steve Reid <steve@edmweb.com>
- * 
+ *
  * Modified by Aaron D. Gifford <agifford@infowest.com>
  *
  * NO COPYRIGHT - THIS IS 100% IN THE PUBLIC DOMAIN
@@ -89,7 +89,7 @@ typedef uint8_t sha1_byte;    /* single byte type */
 typedef struct _SHA_CTX {
     sha1_quadbyte   state[5];
     sha1_quadbyte   count[2];
-    sha1_byte	buffer[SHA1_BLOCK_LENGTH];
+    sha1_byte   buffer[SHA1_BLOCK_LENGTH];
 } SHA_CTX;
 
 
@@ -206,7 +206,7 @@ static void SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int le
 /* Add padding and return the message digest. */
 static void SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) {
     sha1_quadbyte   i, j;
-    sha1_byte	finalcount[8];
+    sha1_byte   finalcount[8];
 
     for (i = 0; i < 8; i++) {
         finalcount[i] = (sha1_byte)((context->count[(i >= 4 ? 0 : 1)]
@@ -231,7 +231,7 @@ static void SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) {
 }
 
 static void our_sha1(const unsigned char *buf, unsigned long len,
-		     sha1_byte dest[SHA1_DIGEST_LENGTH])
+                     sha1_byte dest[SHA1_DIGEST_LENGTH])
 {
     SHA_CTX ctx;
 
@@ -275,7 +275,7 @@ static void our_sha1(const unsigned char *buf, unsigned long len,
  ************************************************************************/
 
 EXPORTED void message_guid_generate(struct message_guid *guid,
-			   const char *msg_base, unsigned long msg_len)
+                           const char *msg_base, unsigned long msg_len)
 {
     guid->status = GUID_NULL;
     memset(guid->value, 0, MESSAGE_GUID_SIZE);
@@ -302,13 +302,13 @@ EXPORTED void message_guid_copy(struct message_guid *dst, const struct message_g
  ************************************************************************/
 
 EXPORTED int message_guid_equal(const struct message_guid *g1,
-				const struct message_guid *g2)
+                                const struct message_guid *g2)
 {
     return (memcmp(g1->value, g2->value, MESSAGE_GUID_SIZE) == 0);
 }
 
 EXPORTED int message_guid_cmp(const struct message_guid *g1,
-			      const struct message_guid *g2)
+                              const struct message_guid *g2)
 {
     return memcmp(g1->value, g2->value, MESSAGE_GUID_SIZE);
 }
@@ -330,12 +330,12 @@ EXPORTED unsigned long message_guid_hash(const struct message_guid *guid, int ha
 
     if (hash_size > 1024) {
         /* Pair up chars to get 16 bit values */
-        for (i = 0; i < MESSAGE_GUID_SIZE; i += 2) 
-	    result += (s[i] << 8) + s[i+1];
-    } 
-    else 
-	for (i = 0; i < MESSAGE_GUID_SIZE; i++)
-	    result += s[i];
+        for (i = 0; i < MESSAGE_GUID_SIZE; i += 2)
+            result += (s[i] << 8) + s[i+1];
+    }
+    else
+        for (i = 0; i < MESSAGE_GUID_SIZE; i++)
+            result += s[i];
 
     return (result % hash_size);
 }
@@ -361,13 +361,13 @@ EXPORTED void message_guid_set_null(struct message_guid *guid)
 EXPORTED int message_guid_isnull(const struct message_guid *guid)
 {
     if (guid->status == GUID_UNKNOWN) {
-	/* allow internal recalculation while still being const */
-	struct message_guid *backdoor = (struct message_guid *)guid;
-	const unsigned char *p = guid->value;
-	int i;
+        /* allow internal recalculation while still being const */
+        struct message_guid *backdoor = (struct message_guid *)guid;
+        const unsigned char *p = guid->value;
+        int i;
 
-	for (i = 0; (i < MESSAGE_GUID_SIZE) && !*p++; i++);
-	backdoor->status = (i == MESSAGE_GUID_SIZE) ? GUID_NULL : GUID_NONNULL;
+        for (i = 0; (i < MESSAGE_GUID_SIZE) && !*p++; i++);
+        backdoor->status = (i == MESSAGE_GUID_SIZE) ? GUID_NULL : GUID_NONNULL;
     }
 
     return (guid->status == GUID_NULL);
@@ -393,7 +393,7 @@ EXPORTED void message_guid_export(const struct message_guid *guid, unsigned char
  ************************************************************************/
 
 EXPORTED void message_guid_import(struct message_guid *guid,
-			 const unsigned char *buf)
+                         const unsigned char *buf)
 {
     assert(guid);
     guid->status = GUID_UNKNOWN;
@@ -422,7 +422,7 @@ EXPORTED const char *message_guid_encode(const struct message_guid *guid)
  *
  * Sets Message GUID from text form. Returns 1 if valid
  * Returns: boolean success
- * 
+ *
  ************************************************************************/
 
 EXPORTED int message_guid_decode(struct message_guid *guid, const char *text)

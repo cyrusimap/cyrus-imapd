@@ -63,10 +63,10 @@
  *   SEQ_SPARSE - the behaviour you expected
  *
  *   SEQ_MERGE - assumes that seqset_add() is going to be called
- *		 with monotonically increasing numbers, and treats
- *		 interior ranges of numbers which were not explicitly
- *		 excluded (with ismember=0) as if they had been
- *		 included.  Used to reduce fragmentation in SEEN lists.
+ *               with monotonically increasing numbers, and treats
+ *               interior ranges of numbers which were not explicitly
+ *               excluded (with ismember=0) as if they had been
+ *               included.  Used to reduce fragmentation in SEEN lists.
  */
 EXPORTED struct seqset *seqset_init(unsigned maxval, int flags)
 {
@@ -75,7 +75,7 @@ EXPORTED struct seqset *seqset_init(unsigned maxval, int flags)
     /* make sure flags are sane - be explicit about what
      * sort of list we're building */
     if (flags != SEQ_SPARSE && flags != SEQ_MERGE)
-	fatal("invalid flags", EC_SOFTWARE);
+        fatal("invalid flags", EC_SOFTWARE);
 
     seq->maxval = maxval;
     seq->flags = flags;
@@ -93,26 +93,26 @@ EXPORTED void seqset_add(struct seqset *seq, unsigned num, int ismember)
     if (!seq) return;
 
     if (num <= seq->prev)
-	fatal("numbers out of order", EC_SOFTWARE);
+        fatal("numbers out of order", EC_SOFTWARE);
 
     if (!ismember) {
-	seq->prev = num;
-	return;
+        seq->prev = num;
+        return;
     }
 
     /* as if the previous number was given to us */
     if (seq->flags & SEQ_SPARSE)
-	seq->prev = num - 1;
+        seq->prev = num - 1;
 
     /* do we need to add a new set? */
     if (!seq->set || seq->set[seq->len-1].high < seq->prev) {
-	if (seq->len == seq->alloc) {
-	    seq->alloc += SETGROWSIZE;
-	    seq->set =
-		xrealloc(seq->set, seq->alloc * sizeof(struct seq_range));
-	}
-	seq->set[seq->len].low = num;
-	seq->len++;
+        if (seq->len == seq->alloc) {
+            seq->alloc += SETGROWSIZE;
+            seq->set =
+                xrealloc(seq->set, seq->alloc * sizeof(struct seq_range));
+        }
+        seq->set[seq->len].low = num;
+        seq->len++;
     }
     /* update the final high value */
     seq->set[seq->len-1].high = num;
@@ -129,7 +129,7 @@ EXPORTED unsigned int seq_lastnum(const char *list, const char **numstart)
     uint32_t retval = 0;
 
     if (numstart)
-	*numstart = list;
+        *numstart = list;
 
     /* empty */
     if (!list) return 0;
@@ -137,17 +137,17 @@ EXPORTED unsigned int seq_lastnum(const char *list, const char **numstart)
 
     /* find the end of the string */
     tail = list + strlen(list);
-    
+
     /* work back until first non-digit */
     while (tail > list && cyrus_isdigit(tail[-1]))
-	tail--;
+        tail--;
 
     /* read the number */
     if (parseuint32(tail, NULL, &retval))
-	retval = 0;
+        retval = 0;
 
     if (numstart)
-	*numstart = tail;
+        *numstart = tail;
 
     return retval;
 }
@@ -180,21 +180,21 @@ static void seqset_simplify(struct seqset *set)
     unsigned i;
 
     /* nothing to simplify */
-    if (!set->len) 
-	return;
+    if (!set->len)
+        return;
 
     /* Sort the ranges using our special comparator */
     qsort(set->set, set->len, sizeof(struct seq_range), comp_coalesce);
 
     /* Merge intersecting/adjacent ranges */
     for (i = 1; i < set->len; i++) {
-	if ((int)(set->set[i].low - set->set[out].high) <= 1) {
-	    set->set[out].high = set->set[i].high;
-	} else {
-	    out++;
-	    set->set[out].low = set->set[i].low;
-	    set->set[out].high = set->set[i].high;
-	}
+        if ((int)(set->set[i].low - set->set[out].high) <= 1) {
+            set->set[out].high = set->set[i].high;
+        } else {
+            out++;
+            set->set[out].low = set->set[i].low;
+            set->set[out].high = set->set[i].high;
+        }
     }
 
     /* final length */
@@ -206,19 +206,19 @@ static int read_num(const char **input, unsigned maxval, unsigned *res)
     const char *ptr = *input;
 
     if (*ptr == '*') {
-	*res = maxval ? maxval : UINT_MAX;
-	ptr++;
-	*input = ptr;
-	return 0;
+        *res = maxval ? maxval : UINT_MAX;
+        ptr++;
+        *input = ptr;
+        return 0;
     }
     else if (cyrus_isdigit((int) *ptr)) {
-	*res = 0;
-	while (cyrus_isdigit((int) *ptr)) {
-	    *res = (*res)*10 + *ptr - '0';
-	    ptr++;
-	}
-	*input = ptr;
-	return 0;
+        *res = 0;
+        while (cyrus_isdigit((int) *ptr)) {
+            *res = (*res)*10 + *ptr - '0';
+            ptr++;
+        }
+        *input = ptr;
+        return 0;
     }
 
     /* not expected */
@@ -229,8 +229,8 @@ static int read_num(const char **input, unsigned maxval, unsigned *res)
  * Parse a sequence into an array of sorted & merged ranges.
  */
 EXPORTED struct seqset *seqset_parse(const char *sequence,
-			    struct seqset *set,
-			    unsigned maxval)
+                            struct seqset *set,
+                            unsigned maxval)
 {
     unsigned start = 0, end = 0;
 
@@ -240,33 +240,33 @@ EXPORTED struct seqset *seqset_parse(const char *sequence,
     if (!set) set = seqset_init(maxval, SEQ_SPARSE);
 
     while (*sequence) {
-	if (read_num(&sequence, maxval, &start))
-	    fatal("invalid sequence", EC_SOFTWARE);
-	if (*sequence == ':') {
-	    sequence++;
-	    if (read_num(&sequence, maxval, &end))
-		fatal("invalid sequence", EC_SOFTWARE);
-	}
-	else 
-	    end = start;
-	if (start > end) {
-	    unsigned i = end;
-	    end = start;
-	    start = i;
-	}
+        if (read_num(&sequence, maxval, &start))
+            fatal("invalid sequence", EC_SOFTWARE);
+        if (*sequence == ':') {
+            sequence++;
+            if (read_num(&sequence, maxval, &end))
+                fatal("invalid sequence", EC_SOFTWARE);
+        }
+        else
+            end = start;
+        if (start > end) {
+            unsigned i = end;
+            end = start;
+            start = i;
+        }
 
-	if (set->len == set->alloc) {
-	    set->alloc += SETGROWSIZE;
-	    set->set = xrealloc(set->set, set->alloc * sizeof(struct seq_range));
-	}
-	set->set[set->len].low = start;
-	set->set[set->len].high = end;
-	set->len++;
+        if (set->len == set->alloc) {
+            set->alloc += SETGROWSIZE;
+            set->set = xrealloc(set->set, set->alloc * sizeof(struct seq_range));
+        }
+        set->set[set->len].low = start;
+        set->set[set->len].high = end;
+        set->len++;
 
-	if (*sequence == ',')
-	    sequence++;
-	/* could test for invalid chars here, but the number parser next
-	 * time through will grab them, so no need */
+        if (*sequence == ',')
+            sequence++;
+        /* could test for invalid chars here, but the number parser next
+         * time through will grab them, so no need */
     }
 
     seqset_simplify(set);
@@ -298,31 +298,31 @@ EXPORTED int seqset_ismember(struct seqset *seq, unsigned num)
 
     /* Short circuit if we're outside all ranges */
     if ((num < seq->set[0].low) || (num > seq->set[seq->len-1].high)) {
-	return 0;
+        return 0;
     }
 
     /* Move one set ahead if necessary (avoids bsearch in the common case of
        incrementing through the list) */
     if (num > seq->set[seq->current].high) {
-	if (seq->current + 1 >= seq->len)
-	    return 0; /* no more sequences! */
-	if (num < seq->set[seq->current+1].low)
-	    return 0; /* in the gap still */
-	seq->current++; /* move ahead */
+        if (seq->current + 1 >= seq->len)
+            return 0; /* no more sequences! */
+        if (num < seq->set[seq->current+1].low)
+            return 0; /* in the gap still */
+        seq->current++; /* move ahead */
     }
 
     /* maybe we're in this range */
     if (num >= seq->set[seq->current].low &&
         num <= seq->set[seq->current].high)
-	return 1;
+        return 1;
 
     /* Fall back to full search */
     found = bsearch(&key, seq->set, seq->len,
-		    sizeof(struct seq_range), comp_subset);
+                    sizeof(struct seq_range), comp_subset);
     if (found) {
-	/* track the range we found ourselves in */
-	seq->current = found - seq->set;
-	return 1;
+        /* track the range we found ourselves in */
+        seq->current = found - seq->set;
+        return 1;
     }
 
     return 0;
@@ -376,13 +376,13 @@ EXPORTED unsigned seqset_getnext(struct seqset *seq)
     num = seq->prev + 1;
 
     for (i = seq->current; i < seq->len; i++) {
-	if (num < seq->set[i].low)
-	    num = seq->set[i].low;
-	if (num <= seq->set[i].high) {
-	    seq->current = i;
-	    seq->prev = num;
-	    return num;
-	}
+        if (num < seq->set[i].low)
+            num = seq->set[i].low;
+        if (num <= seq->set[i].high) {
+            seq->current = i;
+            seq->prev = num;
+            return num;
+        }
     }
 
     seq->prev = UINT_MAX;
@@ -396,13 +396,13 @@ EXPORTED unsigned seqset_getnext(struct seqset *seq)
 EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
 {
     if (a->len + b->len > a->alloc) {
-	a->alloc = a->len + b->len;
-	a->set =
-	    xrealloc(a->set, a->alloc * sizeof(struct seq_range));
+        a->alloc = a->len + b->len;
+        a->set =
+            xrealloc(a->set, a->alloc * sizeof(struct seq_range));
     }
     /* call them char * so the maths works out right */
     memcpy((char *)a->set + a->len * sizeof(struct seq_range),
-	   (char *)b->set, b->len * sizeof(struct seq_range));
+           (char *)b->set, b->len * sizeof(struct seq_range));
     a->len += b->len;
 
     seqset_simplify(a);
@@ -411,9 +411,9 @@ EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
 static void format_num(struct buf *buf, unsigned i)
 {
     if (i == UINT_MAX)
-	buf_putc(buf, '*');
+        buf_putc(buf, '*');
     else
-	buf_printf(buf, "%u", i);
+        buf_printf(buf, "%u", i);
 }
 
 /*
@@ -429,19 +429,19 @@ EXPORTED char *seqset_cstring(const struct seqset *seq)
     if (!seq->len) return NULL;
 
     for (i = 0; i < seq->len; i++) {
-	/* join with comma if not the first item */
-	if (i) buf_putc(&buf, ',');
+        /* join with comma if not the first item */
+        if (i) buf_putc(&buf, ',');
 
-	/* single value only */
-	if (seq->set[i].low == seq->set[i].high)
-	    format_num(&buf, seq->set[i].low);
+        /* single value only */
+        if (seq->set[i].low == seq->set[i].high)
+            format_num(&buf, seq->set[i].low);
 
-	/* value range */
-	else {
-	    format_num(&buf, seq->set[i].low);
-	    buf_putc(&buf, ':');
-	    format_num(&buf, seq->set[i].high);
-	}
+        /* value range */
+        else {
+            format_num(&buf, seq->set[i].low);
+            buf_putc(&buf, ':');
+            format_num(&buf, seq->set[i].high);
+        }
     }
 
     return buf_release(&buf);
@@ -456,7 +456,7 @@ EXPORTED struct seqset *seqset_dup(const struct seqset *l)
 
     newl = (struct seqset *)xmemdup(l, sizeof(*l));
     newl->set = (struct seq_range *)xmemdup(newl->set,
-		    newl->alloc * sizeof(struct seq_range));
+                    newl->alloc * sizeof(struct seq_range));
 
     return newl;
 }

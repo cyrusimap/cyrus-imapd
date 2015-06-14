@@ -1,6 +1,6 @@
 does authenticating leak memory?  (mechanism name parameter in yacc
 not freed?)
-	- leg 9/29/99
+        - leg 9/29/99
 
 document the sieve quotas in:
-	sieve.html (yet to be written)
+        sieve.html (yet to be written)

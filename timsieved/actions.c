@@ -70,7 +70,7 @@
 #include "timsieved/codes.h"
 #include "timsieved/scripttest.h"
 
-/* after a user has authentication, our current directory is their Sieve 
+/* after a user has authentication, our current directory is their Sieve
    directory! */
 
 extern int sieved_userisadmin;
@@ -83,7 +83,7 @@ int actions_init(void)
   int sieve_usehomedir = 0;
 
   sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-  
+
   if (!sieve_usehomedir) {
       sieve_dir_config = (char *) config_getstring(IMAPOPT_SIEVEDIR);
   } else {
@@ -92,7 +92,7 @@ int actions_init(void)
 
       return TIMSIEVE_FAIL;
   }
-  
+
   return TIMSIEVE_OK;
 }
 
@@ -100,10 +100,10 @@ int actions_setuser(const char *userid)
 {
   char userbuf[1024], *user, *domain = NULL;
   size_t size = 1024, len;
-  int result;  
+  int result;
 
   char *sieve_dir = (char *) xzmalloc(size+1);
-  
+
   sieved_userid = xstrdup(userid);
   user = (char *) userid;
   if (config_virtdomains && strchr(user, '@')) {
@@ -118,7 +118,7 @@ int actions_setuser(const char *userid)
   if (domain) {
       char dhash = (char) dir_hash_c(domain, config_fulldirhash);
       len += snprintf(sieve_dir+len, size-len, "%s%c/%s",
-		      FNAME_DOMAINDIR, dhash, domain);
+                      FNAME_DOMAINDIR, dhash, domain);
   }
 
   if (sieved_userisadmin) {
@@ -135,9 +135,9 @@ int actions_setuser(const char *userid)
       if (!result) result = mkdir(sieve_dir, 0755);
       if (!result) result = chdir(sieve_dir);
       if (result) {
-	  syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
-	  free(sieve_dir);
-	  return TIMSIEVE_FAIL;
+          syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
+          free(sieve_dir);
+          return TIMSIEVE_FAIL;
       }
   }
 
@@ -164,38 +164,38 @@ static int scriptname_valid(const struct buf *name)
   for (lup=0;lup<name->len;lup++)
   {
       if ((ptr[lup]=='/') || (ptr[lup]=='\0'))
-	  return TIMSIEVE_FAIL;
+          return TIMSIEVE_FAIL;
   }
-  
+
   return TIMSIEVE_OK;
 }
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
-		 int starttls_done, int authenticated, sasl_ssf_t sasl_ssf)
+                 int starttls_done, int authenticated, sasl_ssf_t sasl_ssf)
 {
     const char *sasllist;
     int mechcount;
 
     /* implementation */
     prot_printf(conn,
-		"\"IMPLEMENTATION\" \"Cyrus timsieved%s %s\"\r\n",
-		config_mupdate_server ? " (Murder)" : "", cyrus_version());
-    
+                "\"IMPLEMENTATION\" \"Cyrus timsieved%s %s\"\r\n",
+                config_mupdate_server ? " (Murder)" : "", cyrus_version());
+
     /* SASL */
     if ((!authenticated || sasl_ssf) &&
-	sasl_listmech(saslconn, NULL, 
-		    "\"SASL\" \"", " ", "\"\r\n",
-		    &sasllist,
-		      NULL, &mechcount) == SASL_OK/* && mechcount > 0*/)
+        sasl_listmech(saslconn, NULL,
+                    "\"SASL\" \"", " ", "\"\r\n",
+                    &sasllist,
+                      NULL, &mechcount) == SASL_OK/* && mechcount > 0*/)
     {
       prot_printf(conn,"%s",sasllist);
     }
-    
+
     /* Sieve capabilities */
     prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions(interp));
 
     if (tls_enabled() && !starttls_done && !authenticated) {
-	prot_printf(conn, "\"STARTTLS\"\r\n");
+        prot_printf(conn, "\"STARTTLS\"\r\n");
     }
     prot_printf(conn, "\"UNAUTHENTICATE\"\r\n");
 
@@ -207,8 +207,8 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 int getscript(struct protstream *conn, const struct buf *name)
 {
   FILE *stream;
-  struct stat filestats;	/* returned by stat */
-  int size;			/* size of the file */
+  struct stat filestats;        /* returned by stat */
+  int size;                     /* size of the file */
   int result;
   int cnt;
 
@@ -246,21 +246,21 @@ int getscript(struct protstream *conn, const struct buf *name)
       int amount=BLOCKSIZE;
 
       if (size-cnt < BLOCKSIZE)
-	  amount=size-cnt;
+          amount=size-cnt;
 
       if (fread(buf, 1, BLOCKSIZE, stream) == 0) {
-	  if (ferror(stream)) {
-	      fatal("fatal error (fread)", 0);
-	  }
+          if (ferror(stream)) {
+              fatal("fatal error (fread)", 0);
+          }
       }
-    
+
       prot_write(conn, buf, amount);
-      
+
       cnt += amount;
   }
 
   prot_printf(conn,"\r\n");
-  
+
   prot_printf(conn, "OK\r\n");
 
   fclose(stream);
@@ -268,7 +268,7 @@ int getscript(struct protstream *conn, const struct buf *name)
   return TIMSIEVE_OK;
 }
 
-/* counts the number of scripts user has that are DIFFERENT from name. 
+/* counts the number of scripts user has that are DIFFERENT from name.
    used for enforcing quotas */
 static int countscripts(char *name)
 {
@@ -277,25 +277,25 @@ static int countscripts(char *name)
     size_t length;
     int number=0;
     char myname[1024];
-    
+
     snprintf(myname, 1023, "%s.script", name);
-    
+
     if ((dp = opendir(".")) == NULL) {
-	return -1;
+        return -1;
     }
-    
+
     while ((dir=readdir(dp)) != NULL) {
-	length=strlen(dir->d_name);
-	if (length >= strlen(".script") && 
-	    (strcmp(dir->d_name + (length - 7), ".script") == 0)) {
-	    /* this is a sieve script */
-	    if (strcmp(myname, dir->d_name) != 0) {
-		/* and it's different from me */
-		number++;
-	    }
-	}
+        length=strlen(dir->d_name);
+        if (length >= strlen(".script") &&
+            (strcmp(dir->d_name + (length - 7), ".script") == 0)) {
+            /* this is a sieve script */
+            if (strcmp(myname, dir->d_name) != 0) {
+                /* and it's different from me */
+                number++;
+            }
+        }
     }
-    
+
     closedir(dp);
 
     return number;
@@ -304,7 +304,7 @@ static int countscripts(char *name)
 
 /* save name as a sieve script */
 int putscript(struct protstream *conn, const struct buf *name,
-	      const struct buf *data, int verify_only)
+              const struct buf *data, int verify_only)
 {
   FILE *stream;
   const char *dataptr;
@@ -333,10 +333,10 @@ int putscript(struct protstream *conn, const struct buf *name,
 
       if (countscripts(name->s)+1 > maxscripts)
       {
-	  prot_printf(conn,
-		      "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
-		      maxscripts);
-	  return TIMSIEVE_FAIL;
+          prot_printf(conn,
+                      "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
+                      maxscripts);
+          return TIMSIEVE_FAIL;
       }
 
       snprintf(path, 1023, "%s.script.NEW", name->s);
@@ -347,22 +347,22 @@ int putscript(struct protstream *conn, const struct buf *name,
 
   if (stream == NULL) {
       prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
-		  path);
+                  path);
       return TIMSIEVE_NOEXIST;
   }
 
   dataptr = data->s;
 
   /* copy data to file - replacing any lone \r or \n with the
-   * \r\n pair so notify messages are SMTP compatible */ 
+   * \r\n pair so notify messages are SMTP compatible */
   for (i = 0; i < data->len; i++) {
       if (last_was_r) {
-	  if (dataptr[i] != '\n')
-	      putc('\n', stream);
+          if (dataptr[i] != '\n')
+              putc('\n', stream);
       }
       else {
-	  if (dataptr[i] == '\n')
-	      putc('\r', stream);
+          if (dataptr[i] == '\n')
+              putc('\r', stream);
       }
       putc(dataptr[i], stream);
       last_was_r = (dataptr[i] == '\r');
@@ -378,11 +378,11 @@ int putscript(struct protstream *conn, const struct buf *name,
 
   if (result != TIMSIEVE_OK) {
       if (errstr && *errstr) {
-	  prot_printf(conn, "NO ");
-	  prot_printstring(conn, errstr);
-	  prot_printf(conn, "\r\n");
+          prot_printf(conn, "NO ");
+          prot_printstring(conn, errstr);
+          prot_printf(conn, "\r\n");
       } else {
-	  prot_printf(conn, "NO \"parse failed\"\r\n");
+          prot_printf(conn, "NO \"parse failed\"\r\n");
       }
       free(errstr);
       fclose(stream);
@@ -392,39 +392,39 @@ int putscript(struct protstream *conn, const struct buf *name,
 
   fflush(stream);
   fclose(stream);
-  
+
   if (!verify_only) {
       int fd;
       bytecode_info_t *bc;
-      
+
       /* Now, generate the bytecode */
       if(sieve_generate_bytecode(&bc, s) == -1) {
-	  unlink(path);
-	  sieve_script_free(&s);
-	  prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
-	  return TIMSIEVE_FAIL;
+          unlink(path);
+          sieve_script_free(&s);
+          prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
+          return TIMSIEVE_FAIL;
       }
 
       /* Now, open the new file */
       snprintf(bc_path, 1023, "%s.bc.NEW", name->s);
       fd = open(bc_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
       if(fd < 0) {
-	  unlink(path);
-	  sieve_free_bytecode(&bc);
-	  sieve_script_free(&s);
-	  prot_printf(conn, "NO \"couldn't open bytecode file\"\r\n");
-	  return TIMSIEVE_FAIL;
+          unlink(path);
+          sieve_free_bytecode(&bc);
+          sieve_script_free(&s);
+          prot_printf(conn, "NO \"couldn't open bytecode file\"\r\n");
+          return TIMSIEVE_FAIL;
       }
-	  
+
       /* Now, emit the bytecode */
       if(sieve_emit_bytecode(fd, bc) == -1) {
-	  close(fd);
-	  unlink(path);
-	  unlink(bc_path);
-	  sieve_free_bytecode(&bc);
-	  sieve_script_free(&s);
-	  prot_printf(conn, "NO \"bytecode emit failed\"\r\n");
-	  return TIMSIEVE_FAIL;
+          close(fd);
+          unlink(path);
+          unlink(bc_path);
+          sieve_free_bytecode(&bc);
+          sieve_script_free(&s);
+          prot_printf(conn, "NO \"bytecode emit failed\"\r\n");
+          return TIMSIEVE_FAIL;
       }
 
       sieve_free_bytecode(&bc);
@@ -451,14 +451,14 @@ int putscript(struct protstream *conn, const struct buf *name,
 static int deleteactive(struct protstream *conn)
 {
     if (unlink("defaultbc") != 0) {
-	if (errno == ENOENT) {
-	    /* RFC 5804, 2.8 SETACTIVE Command:
-	     * Disabling an active script when there is no script active is
-	     * not an error and MUST result in an OK reply. */
-	    return TIMSIEVE_OK;
-	}
-	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
-	return TIMSIEVE_FAIL;
+        if (errno == ENOENT) {
+            /* RFC 5804, 2.8 SETACTIVE Command:
+             * Disabling an active script when there is no script active is
+             * not an error and MUST result in an OK reply. */
+            return TIMSIEVE_OK;
+        }
+        prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
+        return TIMSIEVE_FAIL;
     }
     sync_log_sieve(sieved_userid);
 
@@ -479,17 +479,17 @@ static int isactive(char *name)
     link_len = readlink("defaultbc", activelink, sizeof(activelink)-1);
     if (link_len == -1)
     {
-	if (errno != ENOENT)
-	    syslog(LOG_ERR, "readlink(defaultbc): %m");
+        if (errno != ENOENT)
+            syslog(LOG_ERR, "readlink(defaultbc): %m");
 
-	return FALSE;
+        return FALSE;
     }
     activelink[link_len] = '\0';
 
     if (!strcmp(filename, activelink)) {
-	return TRUE;
+        return TRUE;
     } else {
-	return FALSE;
+        return FALSE;
     }
 }
 
@@ -517,7 +517,7 @@ int deletescript(struct protstream *conn, const struct buf *name)
 
   if (result != 0) {
       if (result == ENOENT)
-	  prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", name->s);
+          prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", name->s);
       else
           prot_printf(conn,"NO \"Error deleting script\"\r\n");
       return TIMSIEVE_FAIL;
@@ -549,33 +549,33 @@ int listscripts(struct protstream *conn)
 
     if (dp==NULL)
     {
-	prot_printf(conn,"NO \"Error opening directory\"\r\n");
-	return TIMSIEVE_FAIL;
+        prot_printf(conn,"NO \"Error opening directory\"\r\n");
+        return TIMSIEVE_FAIL;
     }
 
     while ((dir=readdir(dp)) != NULL) /* while there are files here */
     {
-	length=strlen(dir->d_name);
-	if (length >= strlen(".script")) /* if ends in .script */
-	{
-	    if (strcmp(dir->d_name + (length - 7), ".script")==0)
-	    {
-		char *namewo = xstrndup(dir->d_name, length-7);
+        length=strlen(dir->d_name);
+        if (length >= strlen(".script")) /* if ends in .script */
+        {
+            if (strcmp(dir->d_name + (length - 7), ".script")==0)
+            {
+                char *namewo = xstrndup(dir->d_name, length-7);
 
-		if (isactive(namewo))
-		    prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
-		else
-		    prot_printf(conn,"\"%s\"\r\n", namewo);
+                if (isactive(namewo))
+                    prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
+                else
+                    prot_printf(conn,"\"%s\"\r\n", namewo);
 
-		free(namewo);
-	    }
-	}
+                free(namewo);
+            }
+        }
     }
 
     closedir(dp);
 
     prot_printf(conn,"OK\r\n");
-  
+
     return TIMSIEVE_OK;
 }
 
@@ -589,10 +589,10 @@ static int exists(char *str)
 
     snprintf(filename, 1023, "%s.script", str);
 
-    result = stat(filename,&filestats);  
+    result = stat(filename,&filestats);
 
     if (result != 0) {
-	return FALSE;
+        return FALSE;
     }
 
     return TRUE;
@@ -607,30 +607,30 @@ int setactive(struct protstream *conn, const struct buf *name)
 
     /* if string name is empty, disable active script */
     if (!name->len) {
-	if (deleteactive(conn) != TIMSIEVE_OK)
-	    return TIMSIEVE_FAIL;
+        if (deleteactive(conn) != TIMSIEVE_OK)
+            return TIMSIEVE_FAIL;
 
-	prot_printf(conn,"OK\r\n");
-	return TIMSIEVE_OK;
+        prot_printf(conn,"OK\r\n");
+        return TIMSIEVE_OK;
     }
 
     result = scriptname_valid(name);
     if (result!=TIMSIEVE_OK)
     {
-	prot_printf(conn,"NO \"Invalid script name\"\r\n");
-	return result;
+        prot_printf(conn,"NO \"Invalid script name\"\r\n");
+        return result;
     }
 
     if (exists(name->s)==FALSE)
     {
-	prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
-	return TIMSIEVE_NOEXIST;
+        prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
+        return TIMSIEVE_NOEXIST;
     }
 
     /* if script already is the active one just say ok */
     if (isactive(name->s)==TRUE) {
-	prot_printf(conn,"OK\r\n");
-	return TIMSIEVE_OK;
+        prot_printf(conn,"OK\r\n");
+        return TIMSIEVE_OK;
     }
 
     /* get the name of the active sieve script */
@@ -642,17 +642,17 @@ int setactive(struct protstream *conn, const struct buf *name)
     */
     result = symlink(filename, "defaultbc.NEW");
     if (result) {
-	syslog(LOG_ERR, "symlink(%s, defaultbc.NEW): %m", filename);
-	prot_printf(conn, "NO \"Can't make link\"\r\n");    
-	return TIMSIEVE_FAIL;
+        syslog(LOG_ERR, "symlink(%s, defaultbc.NEW): %m", filename);
+        prot_printf(conn, "NO \"Can't make link\"\r\n");
+        return TIMSIEVE_FAIL;
     }
 
     result = rename("defaultbc.NEW", "defaultbc");
     if (result) {
-	unlink("defaultbc.NEW");
-	syslog(LOG_ERR, "rename(defaultbc.NEW, defaultbc): %m");
-	prot_printf(conn,"NO \"Error renaming\"\r\n");
-	return TIMSIEVE_FAIL;
+        unlink("defaultbc.NEW");
+        syslog(LOG_ERR, "rename(defaultbc.NEW, defaultbc): %m");
+        prot_printf(conn,"NO \"Error renaming\"\r\n");
+        return TIMSIEVE_FAIL;
     }
     sync_log_sieve(sieved_userid);
 
@@ -669,8 +669,8 @@ int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigne
     result = scriptname_valid(sieve_name);
     if (result!=TIMSIEVE_OK)
     {
-	prot_printf(conn,"NO \"Invalid script name\"\r\n");
-	return result;
+        prot_printf(conn,"NO \"Invalid script name\"\r\n");
+        return result;
     }
 
     /* see if the size of the script is too big */
@@ -679,11 +679,11 @@ int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigne
 
     if (num > maxscriptsize)
     {
-	prot_printf(conn,
-		    "NO (QUOTA/MAXSIZE) \"Script size is too large. "
-		    "Max script size is %ld bytes\"\r\n",
-		    maxscriptsize);
-	return TIMSIEVE_FAIL;
+        prot_printf(conn,
+                    "NO (QUOTA/MAXSIZE) \"Script size is too large. "
+                    "Max script size is %ld bytes\"\r\n",
+                    maxscriptsize);
+        return TIMSIEVE_FAIL;
     }
 
     /* see if this would put the user over quota */
@@ -691,10 +691,10 @@ int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigne
 
     if (countscripts(sieve_name->s)+1 > maxscripts)
     {
-	prot_printf(conn,
-		    "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
-		    maxscripts);
-	return TIMSIEVE_FAIL;
+        prot_printf(conn,
+                    "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
+                    maxscripts);
+        return TIMSIEVE_FAIL;
     }
 
 

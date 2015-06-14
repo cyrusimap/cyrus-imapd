@@ -88,9 +88,9 @@ AC_DEFUN([CMU_LIBHEIMDAL_LIBDES], [
               else
                   AC_MSG_RESULT([unknown])
                   AC_MSG_ERROR([Could not use -ldes])
-              fi 
-          fi 
-      fi 
+              fi
+          fi
+      fi
   else
      AC_MSG_RESULT([no])
   fi
@@ -101,96 +101,96 @@ AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_USE_COMERR])
 AC_ARG_WITH(LIBHEIMDAL,
-	[AS_HELP_STRING([--with-libheimdal=PREFIX], [Compile with Heimdal support])],
-	[if test "X$with_libheimdal" = "X"; then
-		with_libheimdal=yes
-	fi])
+        [AS_HELP_STRING([--with-libheimdal=PREFIX], [Compile with Heimdal support])],
+        [if test "X$with_libheimdal" = "X"; then
+                with_libheimdal=yes
+        fi])
 AC_ARG_WITH(libheimdal-lib,
-	[AS_HELP_STRING([--with-libheimdal-lib=DIR], [use heimdal libraries in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-libheimdal-lib])
-	fi])
+        [AS_HELP_STRING([--with-libheimdal-lib=DIR], [use heimdal libraries in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-libheimdal-lib])
+        fi])
 AC_ARG_WITH(libheimdal-include,
-	[AS_HELP_STRING([--with-libheimdal-include=DIR], [use heimdal headers in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-libheimdal-include])
-	fi])
+        [AS_HELP_STRING([--with-libheimdal-include=DIR], [use heimdal headers in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-libheimdal-include])
+        fi])
 
-	if test "X$with_libheimdal" != "X"; then
-	  if test "$with_libheimdal" != "yes" -a "$with_libheimdal" != "no"; then
-	    ac_cv_libheimdal_where_lib=$with_libheimdal/$CMU_LIB_SUBDIR
-	    ac_cv_libheimdal_where_inc=$with_libheimdal/include
-	  fi
-	fi
+        if test "X$with_libheimdal" != "X"; then
+          if test "$with_libheimdal" != "yes" -a "$with_libheimdal" != "no"; then
+            ac_cv_libheimdal_where_lib=$with_libheimdal/$CMU_LIB_SUBDIR
+            ac_cv_libheimdal_where_inc=$with_libheimdal/include
+          fi
+        fi
 
-	if test "$with_libheimdal" != "no"; then
-	  if test "X$with_libheimdal_lib" != "X"; then
-	    ac_cv_libheimdal_where_lib=$with_libheimdal_lib
-	  fi
-	  if test "X$ac_cv_libheimdal_where_lib" = "X"; then
-	    CMU_LIBHEIMDAL_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/heimdal/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
-	  fi
+        if test "$with_libheimdal" != "no"; then
+          if test "X$with_libheimdal_lib" != "X"; then
+            ac_cv_libheimdal_where_lib=$with_libheimdal_lib
+          fi
+          if test "X$ac_cv_libheimdal_where_lib" = "X"; then
+            CMU_LIBHEIMDAL_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/heimdal/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
+          fi
 
-	  if test "X$with_libheimdal_include" != "X"; then
-	    ac_cv_libheimdal_where_inc=$with_libheimdal_include
-	  fi
-	  if test "X$ac_cv_libheimdal_where_inc" = "X"; then
-	    CMU_LIBHEIMDAL_INC_WHERE(/usr/athena/include /usr/heimdal/include /usr/local/include)
-	  fi
-	fi
+          if test "X$with_libheimdal_include" != "X"; then
+            ac_cv_libheimdal_where_inc=$with_libheimdal_include
+          fi
+          if test "X$ac_cv_libheimdal_where_inc" = "X"; then
+            CMU_LIBHEIMDAL_INC_WHERE(/usr/athena/include /usr/heimdal/include /usr/local/include)
+          fi
+        fi
 
-	AC_MSG_CHECKING(whether to include heimdal)
-	if test "X$ac_cv_libheimdal_where_lib" = "X" -a "X$ac_cv_libheimdal_where_inc" = "X"; then
-	  ac_cv_found_libheimdal=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_libheimdal=yes
-	  AC_MSG_RESULT(yes)
-	  LIBHEIMDAL_INC_DIR=$ac_cv_libheimdal_where_inc
-	  LIBHEIMDAL_LIB_DIR=$ac_cv_libheimdal_where_lib
-	  CMU_LIBHEIMDAL_LIBDES($LIBHEIMDAL_LIB_DIR)
-	  LIBHEIMDAL_INC_FLAGS="-I${LIBHEIMDAL_INC_DIR}"
-	  LIBHEIMDAL_LIB_FLAGS="-L${LIBHEIMDAL_LIB_DIR} -lkadm5clnt -lkrb5 -lasn1 ${HEIM_LIBDES} -lroken $LIB_SOCKET"
-	  AC_SUBST(LIBHEIMDAL_INC_FLAGS)
-	  AC_SUBST(LIBHEIMDAL_LIB_FLAGS)
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${LIBHEIMDAL_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${LIBHEIMDAL_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${LIBHEIMDAL_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${LIBHEIMDAL_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${LIBHEIMDAL_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+        AC_MSG_CHECKING(whether to include heimdal)
+        if test "X$ac_cv_libheimdal_where_lib" = "X" -a "X$ac_cv_libheimdal_where_inc" = "X"; then
+          ac_cv_found_libheimdal=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_libheimdal=yes
+          AC_MSG_RESULT(yes)
+          LIBHEIMDAL_INC_DIR=$ac_cv_libheimdal_where_inc
+          LIBHEIMDAL_LIB_DIR=$ac_cv_libheimdal_where_lib
+          CMU_LIBHEIMDAL_LIBDES($LIBHEIMDAL_LIB_DIR)
+          LIBHEIMDAL_INC_FLAGS="-I${LIBHEIMDAL_INC_DIR}"
+          LIBHEIMDAL_LIB_FLAGS="-L${LIBHEIMDAL_LIB_DIR} -lkadm5clnt -lkrb5 -lasn1 ${HEIM_LIBDES} -lroken $LIB_SOCKET"
+          AC_SUBST(LIBHEIMDAL_INC_FLAGS)
+          AC_SUBST(LIBHEIMDAL_LIB_FLAGS)
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${LIBHEIMDAL_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${LIBHEIMDAL_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${LIBHEIMDAL_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${LIBHEIMDAL_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${LIBHEIMDAL_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${LIBHEIMDAL_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

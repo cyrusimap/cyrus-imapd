@@ -107,7 +107,7 @@ enum cyrus_opt {
     CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
 
     CYRUSOPT_LAST
-    
+
 };
 
 union cyrus_config_value {

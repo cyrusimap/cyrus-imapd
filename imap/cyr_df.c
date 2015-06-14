@@ -70,28 +70,28 @@ int main(int argc, char *argv[])
     int meta = 0;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((opt = getopt(argc, argv, "C:m")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 'm': /* check metapartitions */
-	    meta = 1;
-	    break;
+        case 'm': /* check metapartitions */
+            meta = 1;
+            break;
 
-	default:
-	    usage();
-	}
+        default:
+            usage();
+        }
     }
 
     cyrus_init(alt_config, "cyr_df", 0, 0);
 
     printf("%-12s %12s %12s %12s %3s %s\n", "Partition",
-	   "1k-blocks", "Used", "Available", "Use%", "Location");
+           "1k-blocks", "Used", "Available", "Use%", "Location");
 
     config_foreachoverflowstring(get_part_stats, &meta);
 
@@ -104,9 +104,9 @@ int main(int argc, char *argv[])
 static void usage(void)
 {
     fprintf(stderr,
-	    "usage: cyr_df [-C <alt_config>] [-m]\n");
+            "usage: cyr_df [-C <alt_config>] [-m]\n");
     exit(EC_USAGE);
-}    
+}
 
 
 /*
@@ -123,7 +123,7 @@ static void get_part_stats(const char *key, const char *val, void *rock)
 
     if (meta) {
         if (strncmp("meta", key, 4)) return;
-	key += 4;
+        key += 4;
     }
     if (strncmp("partition-", key, 10)) return;
 
@@ -134,12 +134,12 @@ static void get_part_stats(const char *key, const char *val, void *rock)
 
     blocks_used = s.f_blocks - s.f_bfree;
     blocks_percent_used = (long)
-	(blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
+        (blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
 
     printf("%-12s %12ld %12ld %12ld %3ld%% %s\n",
-	   part,
-	   (long) (s.f_blocks * (s.f_frsize / 1024.0)),
-	   (long) ((s.f_blocks - s.f_bfree) * (s.f_frsize / 1024.0)),
-	   (long) (s.f_bavail * (s.f_frsize / 1024.0)),
-	   blocks_percent_used, path);
+           part,
+           (long) (s.f_blocks * (s.f_frsize / 1024.0)),
+           (long) ((s.f_blocks - s.f_bfree) * (s.f_frsize / 1024.0)),
+           (long) (s.f_bavail * (s.f_frsize / 1024.0)),
+           blocks_percent_used, path);
 }

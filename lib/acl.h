@@ -52,43 +52,43 @@
 #define ACL_MAXSTR 32
 
 /* ACL bits */
-#define ACL_LOOKUP	0x000001L
-#define ACL_READ	0x000002L
-#define ACL_SETSEEN	0x000004L
-#define ACL_WRITE	0x000008L
-#define ACL_INSERT	0x000010L
-#define ACL_POST	0x000020L
-#define ACL_CREATE	0x000040L
-#define ACL_DELETEMBOX	0x000080L
-#define ACL_DELETEMSG	0x000100L
-#define ACL_EXPUNGE	0x000200L
-#define ACL_ADMIN 	0x000400L
-#define ACL_ANNOTATEMSG	0x000800L
-#define ACL_USER1	0x001000L
-#define ACL_USER2	0x002000L
-#define ACL_USER3	0x004000L
-#define ACL_USER4	0x008000L
-#define ACL_USER5	0x010000L
-#define ACL_USER6	0x020000L
-#define ACL_USER7	0x040000L
-#define ACL_USER8	0x080000L
-#define ACL_USER9	0x100000L
-#define ACL_USER0	0x200000L
+#define ACL_LOOKUP      0x000001L
+#define ACL_READ        0x000002L
+#define ACL_SETSEEN     0x000004L
+#define ACL_WRITE       0x000008L
+#define ACL_INSERT      0x000010L
+#define ACL_POST        0x000020L
+#define ACL_CREATE      0x000040L
+#define ACL_DELETEMBOX  0x000080L
+#define ACL_DELETEMSG   0x000100L
+#define ACL_EXPUNGE     0x000200L
+#define ACL_ADMIN       0x000400L
+#define ACL_ANNOTATEMSG 0x000800L
+#define ACL_USER1       0x001000L
+#define ACL_USER2       0x002000L
+#define ACL_USER3       0x004000L
+#define ACL_USER4       0x008000L
+#define ACL_USER5       0x010000L
+#define ACL_USER6       0x020000L
+#define ACL_USER7       0x040000L
+#define ACL_USER8       0x080000L
+#define ACL_USER9       0x100000L
+#define ACL_USER0       0x200000L
 
 /* ALL: all non-user ACLs */
-#define ACL_ALL		(ACL_LOOKUP|ACL_READ|ACL_SETSEEN|ACL_WRITE\
-			|ACL_INSERT|ACL_POST|ACL_CREATE|ACL_DELETEMBOX\
-			|ACL_DELETEMSG|ACL_EXPUNGE|ACL_ADMIN\
-			|ACL_ANNOTATEMSG)
+#define ACL_ALL         (ACL_LOOKUP|ACL_READ|ACL_SETSEEN|ACL_WRITE\
+                        |ACL_INSERT|ACL_POST|ACL_CREATE|ACL_DELETEMBOX\
+                        |ACL_DELETEMSG|ACL_EXPUNGE|ACL_ADMIN\
+                        |ACL_ANNOTATEMSG)
 /* FULL: ALL ACLs including user ACLs */
-#define ACL_FULL	(ACL_USER1|ACL_USER2|ACL_USER3|ACL_USER4|ACL_USER5\
-			|ACL_USER6|ACL_USER7|ACL_USER8|ACL_USER9|ACL_USER0\
-			|ACL_ALL)
+#define ACL_FULL        (ACL_USER1|ACL_USER2|ACL_USER3|ACL_USER4|ACL_USER5\
+                        |ACL_USER6|ACL_USER7|ACL_USER8|ACL_USER9|ACL_USER0\
+                        |ACL_ALL)
 
 /* READ-WRITE: removed from regular ACL if you EXAMINE a mailbox,
    so that nothing accidentally tries to write */
 #define ACL_READ_WRITE (ACL_SETSEEN|ACL_WRITE|ACL_INSERT\
-		       |ACL_DELETEMSG|ACL_EXPUNGE|ACL_ANNOTATEMSG)
+                       |ACL_DELETEMSG|ACL_EXPUNGE|ACL_ANNOTATEMSG)
 
 #define ACL_MODE_SET 0
 #define ACL_MODE_ADD 1
@@ -120,8 +120,8 @@ extern int cyrus_acl_myrights(struct auth_state *auth_state, const char *acl);
  * obtained from malloc().  returns -1 on error, 0 on success */
 
 extern int cyrus_acl_set(char **acl, const char *identifier,
-		   int mode, int access,
-		   cyrus_acl_canonproc_t *canonproc, void *canonrock);
+                   int mode, int access,
+                   cyrus_acl_canonproc_t *canonproc, void *canonrock);
 
 /*  cyrus_acl_remove(acl, identifier, canonproc, canonrock)
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
@@ -129,7 +129,7 @@ extern int cyrus_acl_set(char **acl, const char *identifier,
  *  returns -1 on error, 0 on success
  */
 extern int cyrus_acl_remove(char **acl, const char *identifier,
-		      cyrus_acl_canonproc_t *canonproc, void *canonrock);
+                      cyrus_acl_canonproc_t *canonproc, void *canonrock);
 
 /* look up a user to see if they are a system user */
 extern int is_system_user(const char *userid);

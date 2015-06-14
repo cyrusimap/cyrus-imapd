@@ -59,30 +59,30 @@ EXPORTED const char *map_method_desc = "shared";
  * Create/refresh mapping of file
  */
 EXPORTED void map_refresh(int fd, int onceonly, const char **base,
-		 size_t *len, size_t newlen,
-		 const char *name, const char *mboxname)
+                 size_t *len, size_t newlen,
+                 const char *name, const char *mboxname)
 {
     struct stat sbuf;
     char buf[256];
 
     if (newlen == MAP_UNKNOWN_LEN) {
-	if (fstat(fd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-		   mboxname ? " for " : "", mboxname ? mboxname : "");
-	    snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
-	    fatal(buf, EC_IOERR);
-	}
-	newlen = sbuf.st_size;
+        if (fstat(fd, &sbuf) == -1) {
+            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
+                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
+            fatal(buf, EC_IOERR);
+        }
+        newlen = sbuf.st_size;
     }
-	    
+
     /* Already mapped in */
     if (*len >= newlen) return;
 
     if (*len) munmap((char *)*base, *len);
 
     if (!onceonly) {
-	newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
-    }	
+        newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
+    }
 
     *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED
 #ifdef MAP_FILE
@@ -91,12 +91,12 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
 #ifdef MAP_VARIABLE
 | MAP_VARIABLE
 #endif
-			 , fd, 0L);
+                         , fd, 0L);
     if (*base == (char *)-1) {
-	syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
-	       mboxname ? " for " : "", mboxname ? mboxname : "");
-	snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
-	fatal(buf, EC_IOERR);
+        syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
+               mboxname ? " for " : "", mboxname ? mboxname : "");
+        snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
+        fatal(buf, EC_IOERR);
     }
     *len = newlen;
 }

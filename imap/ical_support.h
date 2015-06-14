@@ -53,12 +53,12 @@
 #include "mailbox.h"
 
 extern icalcomponent *record_to_ical(struct mailbox *mailbox,
-				     const struct index_record *record);
+                                     const struct index_record *record);
 
 extern const char *get_icalcomponent_errstr(icalcomponent *ical);
 
 extern void icalcomponent_remove_invitee(icalcomponent *comp,
-					 icalproperty *prop);
+                                         icalproperty *prop);
 extern icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp);
 extern icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp);
 extern const char *icalproperty_get_invitee(icalproperty *prop);
@@ -91,7 +91,7 @@ extern icalproperty *icalproperty_new_tzuntil(struct icaltimetype v);
 /* Functions to replace those not available in libical < v2.0 */
 
 extern icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop,
-							      const char *name);
+                                                              const char *name);
 
 extern icalparameter *icalparameter_new_filename(const char *fname);
 

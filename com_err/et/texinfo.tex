@@ -2,7 +2,7 @@
 
 %   Copyright (C) 1985, 1986, 1988 Richard M. Stallman
 
-%		       NO WARRANTY
+%                      NO WARRANTY
 
 %  BECAUSE THIS PROGRAM IS LICENSED FREE OF CHARGE, WE PROVIDE ABSOLUTELY
 %NO WARRANTY, TO THE EXTENT PERMITTED BY APPLICABLE STATE LAW.  EXCEPT
@@ -26,7 +26,7 @@
 %PROGRAM, EVEN IF YOU HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH
 %DAMAGES, OR FOR ANY CLAIM BY ANY OTHER PARTY.
 
-%		GENERAL PUBLIC LICENSE TO COPY
+%               GENERAL PUBLIC LICENSE TO COPY
 
 %  1. You may copy and distribute verbatim copies of this source file
 %as you receive it, in any medium, provided that you conspicuously
@@ -142,7 +142,7 @@
 \newdimen\cornerlong \newdimen\cornerthick
 \newdimen \topandbottommargin
 \newdimen \outerhsize \newdimen \outervsize
-\cornerlong=1pc\cornerthick=.3pt	% These set size of cropmarks
+\cornerlong=1pc\cornerthick=.3pt        % These set size of cropmarks
 \outerhsize=7in
 \outervsize=9.5in
 \topandbottommargin=.75in
@@ -167,8 +167,8 @@
 % site of the centerlined box.  (P. A. MacKay, 12 November, 1986)
 %
 \def\croppageout#1{\hoffset=0pt % make sure this doesn't mess things up
-		 \shipout
-		 \vbox to \outervsize{\hsize=\outerhsize
+                 \shipout
+                 \vbox to \outervsize{\hsize=\outerhsize
                  \vbox{\line{\ewtop\hfill\ewtop}}
                  \nointerlineskip
                  \line{\vbox{\moveleft\cornerthick\nstop}
@@ -176,20 +176,20 @@
                        \vbox{\moveright\cornerthick\nstop}}
                  \vskip \topandbottommargin
                  \centerline{\ifodd\pageno\hskip\bindingoffset\fi
-			\vbox{
-			{\let\hsize=\pagewidth \makeheadline}
-			\pagebody{#1}
-			{\let\hsize=\pagewidth \makefootline}}
-			\ifodd\pageno\else\hskip\bindingoffset\fi}
-		 \vskip \topandbottommargin plus1fill minus1fill
+                        \vbox{
+                        {\let\hsize=\pagewidth \makeheadline}
+                        \pagebody{#1}
+                        {\let\hsize=\pagewidth \makefootline}}
+                        \ifodd\pageno\else\hskip\bindingoffset\fi}
+                 \vskip \topandbottommargin plus1fill minus1fill
                  \boxmaxdepth\cornerthick
                  \line{\vbox{\moveleft\cornerthick\nsbot}
                        \hfill
                        \vbox{\moveright\cornerthick\nsbot}}
                  \nointerlineskip
                  \vbox{\line{\ewbot\hfill\ewbot}}
-	}
-  \advancepageno 
+        }
+  \advancepageno
   \ifnum\outputpenalty>-20000 \else\dosupereject\fi}
 %
 % Do @cropmarks to get crop marks
@@ -422,7 +422,7 @@
 % Instead of cmb10, you many want to use cmbx10.
 % cmbx10 is a prettier font on its own, but cmb10
 % looks better when embedded in a line with cmr10.
-\font\tenbf=cmb10 scaled \magstephalf 
+\font\tenbf=cmb10 scaled \magstephalf
 \font\tenit=cmti10 scaled \magstephalf
 \font\tensl=cmsl10 scaled \magstephalf
 \font\tensf=cmss10 scaled \magstephalf
@@ -765,14 +765,14 @@ July\or August\or September\or October\or November\or December\fi
 % It automatically defines \fooindex such that
 % \fooindex ...rest of line... puts an entry in the index foo.
 % It also defines \fooindfile to be the number of the output channel for
-% the file that	accumulates this index.  The file's extension is foo.
+% the file that accumulates this index.  The file's extension is foo.
 % The name of an index should be no more than 2 characters long
 % for the sake of vms.
 
 \def\newindex #1{
 \expandafter\newwrite \csname#1indfile\endcsname% Define number for output file
-\openout \csname#1indfile\endcsname \jobname.#1	% Open the file
-\expandafter\xdef\csname#1index\endcsname{%	% Define \xxxindex
+\openout \csname#1indfile\endcsname \jobname.#1 % Open the file
+\expandafter\xdef\csname#1index\endcsname{%     % Define \xxxindex
 \noexpand\doindex {#1}}
 }
 
@@ -784,8 +784,8 @@ July\or August\or September\or October\or November\or December\fi
 
 \def\newcodeindex #1{
 \expandafter\newwrite \csname#1indfile\endcsname% Define number for output file
-\openout \csname#1indfile\endcsname \jobname.#1	% Open the file
-\expandafter\xdef\csname#1index\endcsname{%	% Define \xxxindex
+\openout \csname#1indfile\endcsname \jobname.#1 % Open the file
+\expandafter\xdef\csname#1index\endcsname{%     % Define \xxxindex
 \noexpand\docodeindex {#1}}
 }
 
@@ -794,14 +794,14 @@ July\or August\or September\or October\or November\or December\fi
 % @synindex foo bar    makes index foo feed into index bar.
 % Do this instead of @defindex foo if you don't want it as a separate index.
 \def\synindex #1 #2 {%
-\expandafter\xdef\csname#1index\endcsname{%	% Define \xxxindex
+\expandafter\xdef\csname#1index\endcsname{%     % Define \xxxindex
 \noexpand\doindex {#2}}%
 }
 
 % @syncodeindex foo bar   similar, but put all entries made for index foo
 % inside @code.
 \def\syncodeindex #1 #2 {%
-\expandafter\xdef\csname#1index\endcsname{%	% Define \xxxindex
+\expandafter\xdef\csname#1index\endcsname{%     % Define \xxxindex
 \noexpand\docodeindex {#2}}%
 }
 
@@ -906,7 +906,7 @@ July\or August\or September\or October\or November\or December\fi
 %  \secondary {subtopic}{pagelist}
 %     for each subtopic.
 
-% Define the user-accessible indexing commands 
+% Define the user-accessible indexing commands
 % @findex, @vindex, @kindex, @cindex.
 
 \def\findex {\fnindex}
@@ -993,7 +993,7 @@ July\or August\or September\or October\or November\or December\fi
   \onepageout\pagesofar \unvbox255 \penalty\outputpenalty}
 \def\pagesofar{\unvbox\partialpage %
   \hsize=\doublecolumnhsize % have to restore this since output routine
-%	      changes it to set cropmarks (P. A. MacKay, 12 Nov. 1986)
+%             changes it to set cropmarks (P. A. MacKay, 12 Nov. 1986)
   \wd0=\hsize \wd2=\hsize \hbox to\pagewidth{\box0\hfil\box2}}
 \def\balancecolumns{\setbox0=\vbox{\unvbox255} \dimen@=\ht0
   \advance\dimen@ by\topskip \advance\dimen@ by-\baselineskip
@@ -1299,7 +1299,7 @@ July\or August\or September\or October\or November\or December\fi
 \ifnum\pageno>0 %
 \pagealignmacro %
 \immediate\closeout \contentsfile%
-\pageno=-1		% Request roman numbered pages
+\pageno=-1              % Request roman numbered pages
 \fi}
 
 \outer\def\contents{%
@@ -1307,7 +1307,7 @@ July\or August\or September\or October\or November\or December\fi
 \unnumbchapmacro{Table of Contents}
 \def\thischapter{Table of Contents}
 {\catcode`\\=0
-\catcode`\{=1		% Set up to handle contents files properly
+\catcode`\{=1           % Set up to handle contents files properly
 \catcode`\}=2
 \catcode`\@=11
 \input \jobname.toc
@@ -1319,7 +1319,7 @@ July\or August\or September\or October\or November\or December\fi
 \unnumbchapmacro{Summary Table of Contents}
 \def\thischapter{Summary Table of Contents}
 {\catcode`\\=0
-\catcode`\{=1		% Set up to handle contents files properly
+\catcode`\{=1           % Set up to handle contents files properly
 \catcode`\}=2
 \catcode`\@=11
 \def\smallbreak{}
@@ -1441,7 +1441,7 @@ July\or August\or September\or October\or November\or December\fi
 % by adding a space to the end of each line.
 \let\par=\lisppar
 \def\Elisp{\endgroup\afterenvbreak}%
-\parskip=0pt \advance \rightskip by \lispnarrowing 
+\parskip=0pt \advance \rightskip by \lispnarrowing
 \advance \leftskip by \lispnarrowing
 \parindent=0pt
 \let\exdent=\internalexdent
@@ -1460,7 +1460,7 @@ July\or August\or September\or October\or November\or December\fi
 % @smallbook command is given.
 
 \def\smalllispx{\aboveenvbreak\begingroup\inENV
-%			This group ends at the end of the @lisp body
+%                       This group ends at the end of the @lisp body
 \hfuzz=12truept % Don't be fussy
 % Make spaces be word-separators rather than space tokens.
 \sepspaces %
@@ -1470,7 +1470,7 @@ July\or August\or September\or October\or November\or December\fi
 % by adding a space to the end of each line.
 \let\par=\lisppar
 \def\Esmalllisp{\endgroup\afterenvbreak}%
-\parskip=0pt \advance \rightskip by \lispnarrowing 
+\parskip=0pt \advance \rightskip by \lispnarrowing
 \advance \leftskip by \lispnarrowing
 \parindent=0pt
 \let\exdent=\internalexdent
@@ -1489,7 +1489,7 @@ July\or August\or September\or October\or November\or December\fi
 % by adding a space to the end of each line.
 \let\par=\lisppar
 \def\Edisplay{\endgroup\afterenvbreak}%
-\parskip=0pt \advance \rightskip by \lispnarrowing 
+\parskip=0pt \advance \rightskip by \lispnarrowing
 \advance \leftskip by \lispnarrowing
 \parindent=0pt
 \let\exdent=\internalexdent
@@ -1550,7 +1550,7 @@ July\or August\or September\or October\or November\or December\fi
 \singlespace
 \parindent=0pt
 \def\Equotation{\par\endgroup\afterenvbreak}%
-\advance \rightskip by \lispnarrowing 
+\advance \rightskip by \lispnarrowing
 \advance \leftskip by \lispnarrowing}
 
 \message{defuns,}

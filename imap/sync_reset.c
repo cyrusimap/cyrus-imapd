@@ -115,7 +115,7 @@ static int usage(const char *name)
 {
     fprintf(stderr,
             "usage: %s [-C <alt_config>] [-v] [-f] user...\n", name);
- 
+
     exit(EC_USAGE);
 }
 
@@ -144,24 +144,24 @@ static int reset_single(const char *userid)
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (i = 0; i < sublist->count; i++) {
-	const char *name = strarray_nth(sublist, i);
-	(void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
+        const char *name = strarray_nth(sublist, i);
+        (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
     }
 
     r = mboxlist_allusermbox(userid, addmbox_cb, mblist, /*incdel*/1);
     if (r) goto fail;
 
     for (i = 0; i < mblist->count; i++) {
-	const char *name = strarray_nth(mblist, i);
-	r = mboxlist_deletemailbox(name, 1, sync_userid,
-				   sync_authstate, NULL, 0, 1, 0);
-	if (r == IMAP_MAILBOX_NONEXISTENT) {
-	    printf("skipping already removed mailbox %s\n", name);
-	}
-	else if (r) goto fail;
-	/* XXX - cheap and nasty hack around actually cleaning up the entry */
-	r = mboxlist_deleteremote(name, NULL);
-	if (r) goto fail;
+        const char *name = strarray_nth(mblist, i);
+        r = mboxlist_deletemailbox(name, 1, sync_userid,
+                                   sync_authstate, NULL, 0, 1, 0);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            printf("skipping already removed mailbox %s\n", name);
+        }
+        else if (r) goto fail;
+        /* XXX - cheap and nasty hack around actually cleaning up the entry */
+        r = mboxlist_deleteremote(name, NULL);
+        if (r) goto fail;
     }
 
     r = user_deletedata(userid, 1);
@@ -185,7 +185,7 @@ main(int argc, char **argv)
     int i;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     setbuf(stdout, NULL);
@@ -204,9 +204,9 @@ main(int argc, char **argv)
             force++;
             break;
 
-	case 'L': /* local mailbox operations only */
-	    local_only++;
-	    break;
+        case 'L': /* local mailbox operations only */
+            local_only++;
+            break;
 
         default:
             usage("sync_reset");

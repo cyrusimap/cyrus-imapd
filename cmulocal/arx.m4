@@ -57,97 +57,97 @@ AC_DEFUN([CMU_ARX_LIB_WHERE], [
 AC_DEFUN([CMU_USE_ARX], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(arx,
-	[AS_HELP_STRING([--with-arx=PREFIX], [Compile with arx support])],
-	[if test "X$with_arx" = "X"; then
-		with_arx=yes
-	fi])
+        [AS_HELP_STRING([--with-arx=PREFIX], [Compile with arx support])],
+        [if test "X$with_arx" = "X"; then
+                with_arx=yes
+        fi])
 AC_ARG_WITH(arx-lib,
-	[AS_HELP_STRING([--with-arx-lib=dir], [use arx libraries in dir])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-arx-lib])
-	fi])
+        [AS_HELP_STRING([--with-arx-lib=dir], [use arx libraries in dir])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-arx-lib])
+        fi])
 AC_ARG_WITH(arx-include,
-	[AS_HELP_STRING([--with-arx-include=dir], [use arx headers in dir])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-arx-include])
-	fi])
+        [AS_HELP_STRING([--with-arx-include=dir], [use arx headers in dir])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-arx-include])
+        fi])
 
-	if test "X$with_arx" != "X"; then
-	  if test "$with_arx" != "yes"; then
-	    ac_cv_arx_where_lib=$with_arx/${CMU_LIB_SUBDIR}
-	    ac_cv_arx_where_inc=$with_arx/include
-	  fi
-	fi
+        if test "X$with_arx" != "X"; then
+          if test "$with_arx" != "yes"; then
+            ac_cv_arx_where_lib=$with_arx/${CMU_LIB_SUBDIR}
+            ac_cv_arx_where_inc=$with_arx/include
+          fi
+        fi
 
-	if test "X$with_arx_lib" != "X"; then
-	  ac_cv_arx_where_lib=$with_arx_lib
-	fi
-	if test "X$ac_cv_arx_where_lib" = "X"; then
-	  CMU_ARX_LIB_WHERE(/usr/athena/${CMU_LIB_SUBDIR} /usr/local/${CMU_LIB_SUBDIR} /usr/${CMU_LIB_SUBDIR})
-	fi
+        if test "X$with_arx_lib" != "X"; then
+          ac_cv_arx_where_lib=$with_arx_lib
+        fi
+        if test "X$ac_cv_arx_where_lib" = "X"; then
+          CMU_ARX_LIB_WHERE(/usr/athena/${CMU_LIB_SUBDIR} /usr/local/${CMU_LIB_SUBDIR} /usr/${CMU_LIB_SUBDIR})
+        fi
 
-	if test "X$with_arx_include" != "X"; then
-	  ac_cv_arx_where_inc=$with_arx_include
-	fi
-	if test "X$ac_cv_arx_where_inc" = "X"; then
-	  CMU_ARX_INC_WHERE(/usr/athena/include /usr/local/include)
-	fi
+        if test "X$with_arx_include" != "X"; then
+          ac_cv_arx_where_inc=$with_arx_include
+        fi
+        if test "X$ac_cv_arx_where_inc" = "X"; then
+          CMU_ARX_INC_WHERE(/usr/athena/include /usr/local/include)
+        fi
 
-	AC_MSG_CHECKING(whether to include arx)
-	if test "X$ac_cv_arx_where_lib" = "X" -o "X$ac_cv_arx_where_inc" = "X"; then
-	  ac_cv_found_arx=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_arx=yes
-	  AC_MSG_RESULT(yes)
-	  ARX_INC_DIR=$ac_cv_arx_where_inc
-	  ARX_LIB_DIR=$ac_cv_arx_where_lib
-	  ARX_INC_FLAGS="-I${ARX_INC_DIR}"
-	  ARX_LIB_FLAGS="-L${ARX_LIB_DIR} -larx"
-	  ARX_LD_FLAGS="-L${ARX_LIB_DIR}"
+        AC_MSG_CHECKING(whether to include arx)
+        if test "X$ac_cv_arx_where_lib" = "X" -o "X$ac_cv_arx_where_inc" = "X"; then
+          ac_cv_found_arx=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_arx=yes
+          AC_MSG_RESULT(yes)
+          ARX_INC_DIR=$ac_cv_arx_where_inc
+          ARX_LIB_DIR=$ac_cv_arx_where_lib
+          ARX_INC_FLAGS="-I${ARX_INC_DIR}"
+          ARX_LIB_FLAGS="-L${ARX_LIB_DIR} -larx"
+          ARX_LD_FLAGS="-L${ARX_LIB_DIR}"
           dnl Do not force configure.in to put these in CFLAGS and LIBS unconditionally
           dnl Allow makefile substitutions....
           AC_SUBST(ARX_INC_FLAGS)
           AC_SUBST(ARX_LIB_FLAGS)
           AC_SUBST(ARX_LD_FLAGS)
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${ARX_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${ARX_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${ARX_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${ARX_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${ARX_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${ARX_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${ARX_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${ARX_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${ARX_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${ARX_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${ARX_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${ARX_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${ARX_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${ARX_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${ARX_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${ARX_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${ARX_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${ARX_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

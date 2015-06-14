@@ -35,7 +35,7 @@ ac_cv_krb_set_key_proto=yes)
 ])
 CPPFLAGS="${cmu_save_CPPFLAGS}"
 if test "$ac_cv_krb_set_key_proto" = yes; then
-	AC_DEFINE(HAVE_KRB_SET_KEY_PROTO)dnl
+        AC_DEFINE(HAVE_KRB_SET_KEY_PROTO)dnl
 fi
 AC_MSG_RESULT($ac_cv_krb_set_key_proto)
 ])
@@ -54,7 +54,7 @@ ac_cv_krb4_32_defn=no)
 ])
 CPPFLAGS="${cmu_save_CPPFLAGS}"
 if test "$ac_cv_krb4_32_defn" = yes; then
-	AC_DEFINE(HAVE_KRB4_32_DEFINE)dnl
+        AC_DEFINE(HAVE_KRB4_32_DEFINE)dnl
 fi
 AC_MSG_RESULT($ac_cv_krb4_32_defn)
 ])
@@ -74,7 +74,7 @@ ac_cv_krb_rd_req_proto=yes)
 ])
 CPPFLAGS="${cmu_save_CPPFLAGS}"
 if test "$ac_cv_krb_rd_req_proto" = yes; then
-	AC_DEFINE(HAVE_KRB_RD_REQ_PROTO)dnl
+        AC_DEFINE(HAVE_KRB_RD_REQ_PROTO)dnl
 fi
 AC_MSG_RESULT($ac_cv_krb_rd_req_proto)
 ])
@@ -146,38 +146,38 @@ AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(krb4,
-	[AS_HELP_STRING([--with-krb4=PREFIX], [Compile with Kerberos 4 support])],
-	[if test "X$with_krb4" = "X"; then
-		with_krb4=yes
-	fi])
+        [AS_HELP_STRING([--with-krb4=PREFIX], [Compile with Kerberos 4 support])],
+        [if test "X$with_krb4" = "X"; then
+                with_krb4=yes
+        fi])
 AC_ARG_WITH(krb4-lib,
-	[AS_HELP_STRING([--with-krb4-lib=DIR], [use kerberos 4 libraries in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-krb4-lib])
-	fi])
+        [AS_HELP_STRING([--with-krb4-lib=DIR], [use kerberos 4 libraries in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-krb4-lib])
+        fi])
 AC_ARG_WITH(krb4-include,
-	[AS_HELP_STRING([--with-krb4-include=DIR], [use kerberos 4 headers in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-krb4-include])
-	fi])
+        [AS_HELP_STRING([--with-krb4-include=DIR], [use kerberos 4 headers in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-krb4-include])
+        fi])
 
-	if test "X$with_krb4" != "X"; then
-	  if test "$with_krb4" != "yes" -a "$with_krb4" != "no"; then
-	    ac_cv_krb_where_lib=$with_krb4/$CMU_LIB_SUBDIR
-	    ac_cv_krb_where_inc=$with_krb4/include
-	  fi
-	fi
-       
-	if test "$with_krb4" != "no"; then
-	  if test "X$with_krb4_lib" != "X"; then
-	    ac_cv_krb_where_lib=$with_krb4_lib
-	  fi
-	  if test "X$with_krb4_include" != "X"; then
-	    ac_cv_krb_where_inc=$with_krb4_include
-	  fi
-	  if test "X$ac_cv_krb_where_inc" = "X"; then
-	    CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
-	  fi
+        if test "X$with_krb4" != "X"; then
+          if test "$with_krb4" != "yes" -a "$with_krb4" != "no"; then
+            ac_cv_krb_where_lib=$with_krb4/$CMU_LIB_SUBDIR
+            ac_cv_krb_where_inc=$with_krb4/include
+          fi
+        fi
+
+        if test "$with_krb4" != "no"; then
+          if test "X$with_krb4_lib" != "X"; then
+            ac_cv_krb_where_lib=$with_krb4_lib
+          fi
+          if test "X$with_krb4_include" != "X"; then
+            ac_cv_krb_where_inc=$with_krb4_include
+          fi
+          if test "X$ac_cv_krb_where_inc" = "X"; then
+            CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
+          fi
 
           AC_MSG_CHECKING([if libdes is needed])
           AC_TRY_LINK([],[des_quad_cksum();],KRB_DES_LIB="",KRB_DES_LIB="maybe")
@@ -207,78 +207,78 @@ AC_ARG_WITH(krb4-include,
                       else
                           AC_MSG_RESULT([unknown])
                           AC_MSG_ERROR([Could not use -ldes])
-                      fi 
-                  fi 
-              fi 
+                      fi
+                  fi
+              fi
           else
              AC_MSG_RESULT([no])
           fi
           if test "X$ac_cv_krb_where_lib" = "X"; then
             CMU_KRB_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
           fi
-	fi
-	  LIBS="${cmu_save_LIBS}"
+        fi
+          LIBS="${cmu_save_LIBS}"
 
 
-	AC_MSG_CHECKING([whether to include kerberos 4])
-	if test "X$ac_cv_krb_where_lib" = "X" -o "X$ac_cv_krb_where_inc" = "X"; then
-	  ac_cv_found_krb=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_krb=yes
-	  AC_MSG_RESULT(yes)
-	  KRB_INC_DIR=$ac_cv_krb_where_inc
-	  KRB_LIB_DIR=$ac_cv_krb_where_lib
-	  KRB_INC_FLAGS="-I${KRB_INC_DIR}"
-	  KRB_LIB_FLAGS="-L${KRB_LIB_DIR} -lkrb ${KRB_LIBDES}"
-	  LIBS="${cmu_save_LIBS} ${KRB_LIB_FLAGS}"
-	  AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
-	  AC_CHECK_LIB(crypt, crypt, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lcrypt",,"${KRB_LIB_FLAGS}")
-	  LIBS="${LIBS} ${KRB_LIB_FLAGS}"
-	  AC_CHECK_FUNCS(krb_get_int krb_life_to_time)
+        AC_MSG_CHECKING([whether to include kerberos 4])
+        if test "X$ac_cv_krb_where_lib" = "X" -o "X$ac_cv_krb_where_inc" = "X"; then
+          ac_cv_found_krb=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_krb=yes
+          AC_MSG_RESULT(yes)
+          KRB_INC_DIR=$ac_cv_krb_where_inc
+          KRB_LIB_DIR=$ac_cv_krb_where_lib
+          KRB_INC_FLAGS="-I${KRB_INC_DIR}"
+          KRB_LIB_FLAGS="-L${KRB_LIB_DIR} -lkrb ${KRB_LIBDES}"
+          LIBS="${cmu_save_LIBS} ${KRB_LIB_FLAGS}"
+          AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
+          AC_CHECK_LIB(crypt, crypt, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lcrypt",,"${KRB_LIB_FLAGS}")
+          LIBS="${LIBS} ${KRB_LIB_FLAGS}"
+          AC_CHECK_FUNCS(krb_get_int krb_life_to_time)
           AC_SUBST(KRB_INC_FLAGS)
           AC_SUBST(KRB_LIB_FLAGS)
-	  LIBS="${cmu_save_LIBS}"
-	  AC_DEFINE(HAVE_KRB4,,[Kerberos V4 is present])dnl zephyr uses this
-	  AC_DEFINE(KERBEROS,,[Use kerberos 4. find out what needs this symbol])
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${KRB_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${KRB_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${KRB_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${KRB_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${KRB_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${KRB_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${KRB_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${KRB_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${KRB_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+          LIBS="${cmu_save_LIBS}"
+          AC_DEFINE(HAVE_KRB4,,[Kerberos V4 is present])dnl zephyr uses this
+          AC_DEFINE(KERBEROS,,[Use kerberos 4. find out what needs this symbol])
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${KRB_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${KRB_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${KRB_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${KRB_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${KRB_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${KRB_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${KRB_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${KRB_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${KRB_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

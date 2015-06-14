@@ -54,7 +54,7 @@ union byteswap_64_u {
 };
 
 /* Function to byteswap 64bit unsigned integers on
- * little endian machines to big endian network order. 
+ * little endian machines to big endian network order.
  * On big endian machines this will be a null macro.
  * The macro htonll() is defined in byteorder64.h,
  * and if needed refers to _htonll() here.
@@ -74,7 +74,7 @@ EXPORTED unsigned long long _htonll(unsigned long long x)
 
 
 /* Function to byteswap big endian 64bit unsigned integers
- * back to little endian host order on little endian machines. 
+ * back to little endian host order on little endian machines.
  * As above, on big endian machines this will be a null macro.
  * The macro ntohll() is defined in byteorder64.h, and if needed,
  * refers to _ntohll() here.

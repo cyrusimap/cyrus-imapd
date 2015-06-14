@@ -1,16 +1,16 @@
 Return-Path: <ken@oceana.com>
 Received: from mail3.andrew.cmu.edu ([unix socket])
-	by mail3.andrew.cmu.edu (Cyrus v2.1.1-053) with LMTP; Sun, 03 Feb 2002 10:37:49 -0500
+        by mail3.andrew.cmu.edu (Cyrus v2.1.1-053) with LMTP; Sun, 03 Feb 2002 10:37:49 -0500
 X-Sieve: CMU Sieve 2.0
 Received: from mx1.andrew.cmu.edu (MX1.ANDREW.CMU.EDU [128.2.10.111])
-	by mail3.andrew.cmu.edu (8.12.2.Beta3/8.12.2.Beta3) with ESMTP id g13FbmZ5001152
-	for <leg+@mail3.andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:48 -0500 (EST)
+        by mail3.andrew.cmu.edu (8.12.2.Beta3/8.12.2.Beta3) with ESMTP id g13FbmZ5001152
+        for <leg+@mail3.andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:48 -0500 (EST)
 Received: from eagle.oceana.com (eagle.oceana.com [208.17.123.12])
-	by mx1.andrew.cmu.edu (8.12.2.Beta3/8.12.2.Beta3) with ESMTP id g13FblJw022603
-	for <leg+@andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:47 -0500
+        by mx1.andrew.cmu.edu (8.12.2.Beta3/8.12.2.Beta3) with ESMTP id g13FblJw022603
+        for <leg+@andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:47 -0500
 Received: from oceana.com (ppp4.oceana.com [192.168.10.246])
-	by eagle.oceana.com (8.12.2/8.12.2) with ESMTP id g13FbkNT024933
-	for <leg+@andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:47 -0500
+        by eagle.oceana.com (8.12.2/8.12.2) with ESMTP id g13FbkNT024933
+        for <leg+@andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:47 -0500
 Message-ID: <3C5D5966.C5318D4C@oceana.com>
 Date: Sun, 03 Feb 2002 10:38:14 -0500
 From: Ken Murchison <ken@oceana.com>
@@ -27,10 +27,10 @@ Content-Transfer-Encoding: 7bit
 
 
 Lawrence Greenfield wrote:
-> 
+>
 > Can you give me some details on how the event API in the prot layer
 > works?  I'm a little unclear about the memory management, what should
-> be returned from the event callback, 
+> be returned from the event callback,
 
 Either the event pointer (if the event is still active), or NULL (if the
 event has been removed by the callback).
@@ -66,7 +66,7 @@ return NULL.
 If you see and flaws in this API, feel free to go ahead and change it.
 
 Ken
--- 
+--
 Kenneth Murchison     Oceana Matrix Ltd.
 Software Engineer     21 Princeton Place
 716-662-8973 x26      Orchard Park, NY 14127

@@ -55,91 +55,91 @@ AC_DEFUN([CMU_XAU], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(Xau,
-	[AS_HELP_STRING([--with-Xau=PREFIX], [Compile with Xau support])],
-	[if test "X$with_Xau" = "X"; then
-		with_Xau=yes
-	fi])
+        [AS_HELP_STRING([--with-Xau=PREFIX], [Compile with Xau support])],
+        [if test "X$with_Xau" = "X"; then
+                with_Xau=yes
+        fi])
 AC_ARG_WITH(Xau-lib,
-	[AS_HELP_STRING([--with-Xau-lib=DIR], [use Xau libraries in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-Xau-lib])
-	fi])
+        [AS_HELP_STRING([--with-Xau-lib=DIR], [use Xau libraries in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-Xau-lib])
+        fi])
 AC_ARG_WITH(Xau-include,
-	[AS_HELP_STRING([--with-Xau-include=DIR], [use Xau headers in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-Xau-include])
-	fi])
+        [AS_HELP_STRING([--with-Xau-include=DIR], [use Xau headers in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-Xau-include])
+        fi])
 
-	if test "X$with_Xau" != "X"; then
-	  if test "$with_Xau" != "yes"; then
-	    ac_cv_Xau_where_lib=$with_Xau/$CMU_LIB_SUBDIR
-	    ac_cv_Xau_where_inc=$with_Xau/include
-	  fi
-	fi
+        if test "X$with_Xau" != "X"; then
+          if test "$with_Xau" != "yes"; then
+            ac_cv_Xau_where_lib=$with_Xau/$CMU_LIB_SUBDIR
+            ac_cv_Xau_where_inc=$with_Xau/include
+          fi
+        fi
 
-	if test "X$with_Xau_lib" != "X"; then
-	  ac_cv_Xau_where_lib=$with_Xau_lib
-	fi
-	if test "X$ac_cv_Xau_where_lib" = "X"; then
-	  CMU_XAU_LIB_WHERE(/usr/X11R6/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/openwin/$CMU_LIB_SUBDIR)
-	fi
+        if test "X$with_Xau_lib" != "X"; then
+          ac_cv_Xau_where_lib=$with_Xau_lib
+        fi
+        if test "X$ac_cv_Xau_where_lib" = "X"; then
+          CMU_XAU_LIB_WHERE(/usr/X11R6/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/openwin/$CMU_LIB_SUBDIR)
+        fi
 
-	if test "X$with_Xau_include" != "X"; then
-	  ac_cv_Xau_where_inc=$with_Xau_include
-	fi
-	if test "X$ac_cv_Xau_where_inc" = "X"; then
-	  CMU_XAU_INC_WHERE(/usr/X11R6/include /usr/local/include /usr/openwin/include)
-	fi
+        if test "X$with_Xau_include" != "X"; then
+          ac_cv_Xau_where_inc=$with_Xau_include
+        fi
+        if test "X$ac_cv_Xau_where_inc" = "X"; then
+          CMU_XAU_INC_WHERE(/usr/X11R6/include /usr/local/include /usr/openwin/include)
+        fi
 
-	AC_MSG_CHECKING(whether to include Xau)
-	if test "X$ac_cv_Xau_where_lib" = "X" -a "X$ac_cv_Xau_where_inc" = "X"; then
-	  ac_cv_found_Xau=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_Xau=yes
-	  AC_MSG_RESULT(yes)
-	  XAU_INC_DIR=$ac_cv_Xau_where_inc
-	  XAU_LIB_DIR=$ac_cv_Xau_where_lib
-	  XAU_INC_FLAGS="-I${XAU_INC_DIR}"
-	  XAU_LIB_FLAGS="-L${XAU_LIB_DIR} -lXau"
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${XAU_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${XAU_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${XAU_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${XAU_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${XAU_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${XAU_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${XAU_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${XAU_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${XAU_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+        AC_MSG_CHECKING(whether to include Xau)
+        if test "X$ac_cv_Xau_where_lib" = "X" -a "X$ac_cv_Xau_where_inc" = "X"; then
+          ac_cv_found_Xau=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_Xau=yes
+          AC_MSG_RESULT(yes)
+          XAU_INC_DIR=$ac_cv_Xau_where_inc
+          XAU_LIB_DIR=$ac_cv_Xau_where_lib
+          XAU_INC_FLAGS="-I${XAU_INC_DIR}"
+          XAU_LIB_FLAGS="-L${XAU_LIB_DIR} -lXau"
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${XAU_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${XAU_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${XAU_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${XAU_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${XAU_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${XAU_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${XAU_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${XAU_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${XAU_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

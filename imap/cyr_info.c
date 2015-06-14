@@ -86,10 +86,10 @@ static void usage(void)
 }
 
 static int print_procinfo(pid_t pid,
-			  const char *servicename, const char *host,
-			  const char *user, const char *mailbox,
-			  const char *cmdname,
-			  void *rock __attribute__((unused)))
+                          const char *servicename, const char *host,
+                          const char *user, const char *mailbox,
+                          const char *cmdname,
+                          void *rock __attribute__((unused)))
 {
     printf("%d %s %s", (int)pid, servicename, host);
     if (user) printf(" %s", user);
@@ -105,7 +105,7 @@ static void do_proc(void)
 }
 
 static void print_overflow(const char *key, const char *val,
-			  void *rock __attribute__((unused)))
+                          void *rock __attribute__((unused)))
 {
     printf("%s: %s\n", key, val);
 }
@@ -118,73 +118,73 @@ static void do_conf(int only_changed)
     /* XXX: this is semi-sorted, but the overflow strings aren't sorted at all */
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-	switch (imapopts[i].t) {
-	    case OPT_BITFIELD:
-		if (only_changed) {
-		    if (imapopts[i].def.x == imapopts[i].val.x) break;
-		}
-		printf("%s:", imapopts[i].optname);
-		for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		    if (imapopts[i].val.x & (1<<j)) {
-			printf(" %s", imapopts[i].enum_options[j].name);
-		    }
-		}
-		printf("\n");
-		break;
+        switch (imapopts[i].t) {
+            case OPT_BITFIELD:
+                if (only_changed) {
+                    if (imapopts[i].def.x == imapopts[i].val.x) break;
+                }
+                printf("%s:", imapopts[i].optname);
+                for (j = 0; imapopts[i].enum_options[j].name; j++) {
+                    if (imapopts[i].val.x & (1<<j)) {
+                        printf(" %s", imapopts[i].enum_options[j].name);
+                    }
+                }
+                printf("\n");
+                break;
 
-	    case OPT_ENUM:
-		if (only_changed) {
-		    if (imapopts[i].def.e == imapopts[i].val.e) break;
-		}
-		printf("%s:", imapopts[i].optname);
-		for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
-			printf(" %s", imapopts[i].enum_options[j].name);
-			break;
-		    }
-		}
-		printf("\n");
-		break;
+            case OPT_ENUM:
+                if (only_changed) {
+                    if (imapopts[i].def.e == imapopts[i].val.e) break;
+                }
+                printf("%s:", imapopts[i].optname);
+                for (j = 0; imapopts[i].enum_options[j].name; j++) {
+                    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
+                        printf(" %s", imapopts[i].enum_options[j].name);
+                        break;
+                    }
+                }
+                printf("\n");
+                break;
 
-	    case OPT_INT:
-		if (only_changed) {
-		    if (imapopts[i].def.i == imapopts[i].val.i) break;
-		}
-		printf("%s: %ld\n", imapopts[i].optname, imapopts[i].val.i);
-		break;
+            case OPT_INT:
+                if (only_changed) {
+                    if (imapopts[i].def.i == imapopts[i].val.i) break;
+                }
+                printf("%s: %ld\n", imapopts[i].optname, imapopts[i].val.i);
+                break;
 
-	    case OPT_STRING:
-	    case OPT_STRINGLIST:
-		if (only_changed) {
-		    const char *defvalue = imapopts[i].def.s;
-		    char *freeme = NULL;
+            case OPT_STRING:
+            case OPT_STRINGLIST:
+                if (only_changed) {
+                    const char *defvalue = imapopts[i].def.s;
+                    char *freeme = NULL;
 
-		    if (defvalue &&
-			!strncasecmp(defvalue, "{configdirectory}", 17))
-		    {
-			freeme = strconcat(imapopts[IMAPOPT_CONFIGDIRECTORY].val.s,
-					   defvalue+17, (char *)NULL);
-			defvalue = freeme;
-		    }
-		    if (!strcmpsafe(defvalue, imapopts[i].val.s)) {
-			free(freeme);
-			break;
-		    }
-		    free(freeme);
-		}
-		printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s ? imapopts[i].val.s : "");
-		break;
+                    if (defvalue &&
+                        !strncasecmp(defvalue, "{configdirectory}", 17))
+                    {
+                        freeme = strconcat(imapopts[IMAPOPT_CONFIGDIRECTORY].val.s,
+                                           defvalue+17, (char *)NULL);
+                        defvalue = freeme;
+                    }
+                    if (!strcmpsafe(defvalue, imapopts[i].val.s)) {
+                        free(freeme);
+                        break;
+                    }
+                    free(freeme);
+                }
+                printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s ? imapopts[i].val.s : "");
+                break;
 
-	    case OPT_SWITCH:
-		if (only_changed) {
-		    if (imapopts[i].def.b == imapopts[i].val.b) break;
-		}
-		printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.b ? "yes" : "no");
-		break;
+            case OPT_SWITCH:
+                if (only_changed) {
+                    if (imapopts[i].def.b == imapopts[i].val.b) break;
+                }
+                printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.b ? "yes" : "no");
+                break;
 
-	    default:
-		abort();
-	}
+            default:
+                abort();
+        }
     }
 
     /* and the overflows */
@@ -199,44 +199,44 @@ static void do_defconf(void)
     /* XXX: this is semi-sorted, but the overflow strings aren't sorted at all */
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-	switch (imapopts[i].t) {
-	    case OPT_BITFIELD:
-		printf("%s:", imapopts[i].optname);
-		for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		    if (imapopts[i].def.x & (1<<j)) {
-			printf(" %s", imapopts[i].enum_options[j].name);
-		    }
-		}
-		printf("\n");
-		break;
+        switch (imapopts[i].t) {
+            case OPT_BITFIELD:
+                printf("%s:", imapopts[i].optname);
+                for (j = 0; imapopts[i].enum_options[j].name; j++) {
+                    if (imapopts[i].def.x & (1<<j)) {
+                        printf(" %s", imapopts[i].enum_options[j].name);
+                    }
+                }
+                printf("\n");
+                break;
 
-	    case OPT_ENUM:
-		printf("%s:", imapopts[i].optname);
-		for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
-			printf(" %s", imapopts[i].enum_options[j].name);
-			break;
-		    }
-		}
-		printf("\n");
-		break;
+            case OPT_ENUM:
+                printf("%s:", imapopts[i].optname);
+                for (j = 0; imapopts[i].enum_options[j].name; j++) {
+                    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
+                        printf(" %s", imapopts[i].enum_options[j].name);
+                        break;
+                    }
+                }
+                printf("\n");
+                break;
 
-	    case OPT_INT:
-		printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
-		break;
+            case OPT_INT:
+                printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
+                break;
 
-	    case OPT_STRING:
-	    case OPT_STRINGLIST:
-		printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.s ? imapopts[i].def.s : "");
-		break;
+            case OPT_STRING:
+            case OPT_STRINGLIST:
+                printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.s ? imapopts[i].def.s : "");
+                break;
 
-	    case OPT_SWITCH:
-		printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.b ? "yes" : "no");
-		break;
+            case OPT_SWITCH:
+                printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.b ? "yes" : "no");
+                break;
 
-	    default:
-		abort();
-	}
+            default:
+                abort();
+        }
     }
 }
 
@@ -248,14 +248,14 @@ static int known_overflowkey(const char *key)
 
     /* only valid if there's a partition with the same name */
     if (!strncmp(key, "metapartition-", 14)) {
-	if (config_getoverflowstring(key+4, NULL))
-	    return 1;
+        if (config_getoverflowstring(key+4, NULL))
+            return 1;
     }
 
     match = strstr(key, "searchpartition-");
     if (match) {
-	if (config_getoverflowstring(match+6, NULL))
-	    return 1;
+        if (config_getoverflowstring(match+6, NULL))
+            return 1;
     }
 
     return 0;
@@ -266,8 +266,8 @@ static int known_regularkey(const char *key)
     int i;
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-	if (!strcmp(imapopts[i].optname, key))
-	    return 1;
+        if (!strcmp(imapopts[i].optname, key))
+            return 1;
     }
 
     return 0;
@@ -277,9 +277,9 @@ static int known_saslkey(const char *key __attribute__((unused)))
 {
     /* XXX - we don't know all the sasl keys, assume it's OK! */
     return 1;
-} 
+}
 
-static void lint_callback(const char *key, const char *val, void *rock) 
+static void lint_callback(const char *key, const char *val, void *rock)
 {
     struct service_item *known_services = (struct service_item *)rock;
     struct service_item *svc;
@@ -287,23 +287,23 @@ static void lint_callback(const char *key, const char *val, void *rock)
     if (known_overflowkey(key)) return;
 
     if (!strncmp(key, "sasl_", 5)) {
-	if (known_saslkey(key+5)) return;
+        if (known_saslkey(key+5)) return;
     }
 
     for (svc = known_services; svc; svc = svc->next) {
-	if (!strncmp(key, svc->prefix, svc->prefixlen)) {
-	    /* check if it's a known key */
-	    if (known_regularkey(key+svc->prefixlen)) return;
-	    if (known_overflowkey(key+svc->prefixlen)) return;
-	}
+        if (!strncmp(key, svc->prefix, svc->prefixlen)) {
+            /* check if it's a known key */
+            if (known_regularkey(key+svc->prefixlen)) return;
+            if (known_overflowkey(key+svc->prefixlen)) return;
+        }
     }
 
     printf("%s: %s\n", key, val);
 }
 
 static void add_service(const char *name,
-			struct entry *e __attribute__((unused)),
-			void *rock)
+                        struct entry *e __attribute__((unused)),
+                        void *rock)
 {
     struct service_item **ksp = (struct service_item **)rock;
     struct service_item *knew = xmalloc(sizeof(struct service_item));
@@ -327,10 +327,10 @@ static void do_lint(void)
 
     /* clean up */
     while (ks) {
-	struct service_item *next = ks->next;
-	free(ks->prefix);
-	free(ks);
-	ks = next;
+        struct service_item *next = ks->next;
+        free(ks->prefix);
+        free(ks);
+        ks = next;
     }
 }
 
@@ -378,51 +378,51 @@ int main(int argc, char *argv[])
     char *srvname = "cyr_info";
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((opt = getopt(argc, argv, "C:M:n:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 'M': /* alt cyrus.conf file */
-	    MASTER_CONFIG_FILENAME = optarg;
-	    break;
+        case 'M': /* alt cyrus.conf file */
+            MASTER_CONFIG_FILENAME = optarg;
+            break;
 
-	case 'n':
-	    srvname = optarg;
-	    break;
+        case 'n':
+            srvname = optarg;
+            break;
 
-	default:
-	    usage();
-	    break;
-	}
+        default:
+            usage();
+            break;
+        }
     }
 
     cyrus_init(alt_config, srvname, 0, 0);
 
     if (optind >= argc)
-	usage();
+        usage();
 
     if (!strcmp(argv[optind], "proc"))
-	do_proc();
+        do_proc();
     else if (!strcmp(argv[optind], "conf-all"))
-	do_conf(0);
+        do_conf(0);
     else if (!strcmp(argv[optind], "conf"))
-	do_conf(1);
+        do_conf(1);
     else if (!strcmp(argv[optind], "conf-default"))
-	do_defconf();
+        do_defconf();
     else if (!strcmp(argv[optind], "conf-lint"))
-	do_lint();
+        do_lint();
     else if (!strcmp(argv[optind], "reid")) {
-	if (optind + 1 >= argc)
-	    usage();
-	do_reid(argv[optind+1]);
+        if (optind + 1 >= argc)
+            usage();
+        do_reid(argv[optind+1]);
     }
     else
-	usage();
+        usage();
 
     cyrus_done();
 

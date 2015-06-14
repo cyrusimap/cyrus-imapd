@@ -4,16 +4,16 @@
 #include "hash.h"
 
 static void count_cb(const char *key __attribute__((unused)),
-	             void *data __attribute__((unused)),
-		     void *rock)
+                     void *data __attribute__((unused)),
+                     void *rock)
 {
     unsigned int *countp = (unsigned int *)rock;
     (*countp)++;
 }
 
 static void printer_cb(const char *key,
-	               void *data,
-		       void *rock)
+                       void *data,
+                       void *rock)
 {
     strarray_t *sa = (strarray_t *)rock;
     struct buf buf = BUF_INITIALIZER;
@@ -22,16 +22,16 @@ static void printer_cb(const char *key,
 }
 
 
-#define KEY0	"Yale"
-#define KEY1	"Lockwood"
-#define KEY2	"Skeleton"
+#define KEY0    "Yale"
+#define KEY1    "Lockwood"
+#define KEY2    "Skeleton"
 static const char * const values[] = {
     "Paper", "Glass", "Wood", "Diamond"
 };
-#define VALUE0	    ((void *)values[0])
-#define VALUE1	    ((void *)values[1])
-#define VALUE2	    ((void *)values[2])
-#define VALUE3	    ((void *)values[3])
+#define VALUE0      ((void *)values[0])
+#define VALUE1      ((void *)values[1])
+#define VALUE2      ((void *)values[2])
+#define VALUE3      ((void *)values[3])
 
 static void test_old(void)
 {
@@ -39,17 +39,17 @@ static void test_old(void)
     hash_table table;
 
     static const char * const strings[] = {
-	"1","2","3","4","5","A decently long string",
-	NULL
+        "1","2","3","4","5","A decently long string",
+        NULL
     };
 
     static const char * const junk[] = {
-	"The first data",
-	"The second data",
-	"The third data",
-	"The fourth data",
-	"The fifth datum",
-	"The sixth piece of data"
+        "The first data",
+        "The second data",
+        "The third data",
+        "The fourth data",
+        "The fifth datum",
+        "The sixth piece of data"
     };
 
     int i;
@@ -59,35 +59,35 @@ static void test_old(void)
     construct_hash_table(&table, 200, 1);
 
     for (i = 0 ; NULL != strings[i] ; i++ ) {
-	j = hash_insert(strings[i], (void *)junk[i], &table);
-	CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
+        j = hash_insert(strings[i], (void *)junk[i], &table);
+        CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
     }
 
     for (i = 0 ; NULL != strings[i] ; i++) {
-	j = hash_lookup(strings[i], &table);
-	CU_ASSERT_PTR_NOT_NULL(j);
-	CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
+        j = hash_lookup(strings[i], &table);
+        CU_ASSERT_PTR_NOT_NULL(j);
+        CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
     }
 
     for (i = 0 ; NULL != strings[i] ; i++) {
-	strarray_truncate(&sa, 0);
-	hash_enumerate(&table, printer_cb, &sa);
-	CU_ASSERT_EQUAL(6-i, sa.count);
-	if (i < 1) CU_ASSERT(strarray_find(&sa, "1=The first data", 0) >= 0);
-	if (i < 2) CU_ASSERT(strarray_find(&sa, "2=The second data", 0) >= 0);
-	if (i < 3) CU_ASSERT(strarray_find(&sa, "3=The third data", 0) >= 0);
-	if (i < 4) CU_ASSERT(strarray_find(&sa, "4=The fourth data", 0) >= 0);
-	if (i < 5) CU_ASSERT(strarray_find(&sa, "5=The fifth datum", 0) >= 0);
-	if (i < 6) CU_ASSERT(strarray_find(&sa, "A decently long string=The sixth piece of data", 0) >= 0);
-	strarray_fini(&sa);
+        strarray_truncate(&sa, 0);
+        hash_enumerate(&table, printer_cb, &sa);
+        CU_ASSERT_EQUAL(6-i, sa.count);
+        if (i < 1) CU_ASSERT(strarray_find(&sa, "1=The first data", 0) >= 0);
+        if (i < 2) CU_ASSERT(strarray_find(&sa, "2=The second data", 0) >= 0);
+        if (i < 3) CU_ASSERT(strarray_find(&sa, "3=The third data", 0) >= 0);
+        if (i < 4) CU_ASSERT(strarray_find(&sa, "4=The fourth data", 0) >= 0);
+        if (i < 5) CU_ASSERT(strarray_find(&sa, "5=The fifth datum", 0) >= 0);
+        if (i < 6) CU_ASSERT(strarray_find(&sa, "A decently long string=The sixth piece of data", 0) >= 0);
+        strarray_fini(&sa);
 
-	j = hash_del((char *)strings[i], &table);
-	CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
+        j = hash_del((char *)strings[i], &table);
+        CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
     }
 
     for (i = 0 ; NULL != strings[i] ; i++) {
-	j = hash_lookup(strings[i], &table);
-	CU_ASSERT_PTR_NULL(j);
+        j = hash_lookup(strings[i], &table);
+        CU_ASSERT_PTR_NULL(j);
     }
 
     free_hash_table(&table, NULL);
@@ -212,22 +212,22 @@ static void test_many(void)
 
     /* insert lots of entries into the table */
     for (i = 0 ; i < N ; i++) {
-	d = hash_insert(key(i), value(i), &ht);
-	CU_ASSERT_PTR_EQUAL(value(i), d);
+        d = hash_insert(key(i), value(i), &ht);
+        CU_ASSERT_PTR_EQUAL(value(i), d);
     }
 
     /* lookup all the entries in the hash table */
     for (i = 0 ; i < N ; i++) {
-	d = hash_lookup(key(i), &ht);
-	CU_ASSERT_PTR_EQUAL(value(i), d);
+        d = hash_lookup(key(i), &ht);
+        CU_ASSERT_PTR_EQUAL(value(i), d);
     }
 
     /* lookup and delete entries that aren't there */
     for (i = N ; i < 2*N ; i++) {
-	d = hash_lookup(key(i), &ht);
-	CU_ASSERT_PTR_NULL(d);
-	d = hash_del(key(i), &ht);
-	CU_ASSERT_PTR_NULL(d);
+        d = hash_lookup(key(i), &ht);
+        CU_ASSERT_PTR_NULL(d);
+        d = hash_del(key(i), &ht);
+        CU_ASSERT_PTR_NULL(d);
     }
     d = hash_del("Not here please stop looking", &ht);
     CU_ASSERT_PTR_NULL(d);
@@ -241,14 +241,14 @@ static void test_many(void)
 
     /* delete from the hash table */
     for (i = 0 ; i < N ; i++) {
-	d = hash_del(key(i), &ht);
-	CU_ASSERT_PTR_EQUAL(value(i), d);
+        d = hash_del(key(i), &ht);
+        CU_ASSERT_PTR_EQUAL(value(i), d);
     }
 
     /* all the entries should be gone */
     for (i = 0 ; i < N ; i++) {
-	d = hash_lookup(key(i), &ht);
-	CU_ASSERT_PTR_NULL(d);
+        d = hash_lookup(key(i), &ht);
+        CU_ASSERT_PTR_NULL(d);
     }
 
     /* enumerate the hash table: should be empty now */
@@ -277,8 +277,8 @@ static void test_freeing_nonempty(void)
 
     /* insert lots of entries into the table */
     for (i = 0 ; i < N ; i++) {
-	d = hash_insert(key(i), value(i), &ht);
-	CU_ASSERT_PTR_EQUAL(value(i), d);
+        d = hash_insert(key(i), value(i), &ht);
+        CU_ASSERT_PTR_EQUAL(value(i), d);
     }
 
     /* enumerate the hash table */

@@ -90,14 +90,14 @@ if test "${WASH_CYRUS_DEBUG}" = "t"; then
     DEBUG="--enable-debug"
 fi
 
-case `uname` in	
-    Linux) 
-	LDFLAGS="${LDFLAGS}"
-	LIBS="-lnsl" # for libwrap
+case `uname` in
+    Linux)
+        LDFLAGS="${LDFLAGS}"
+        LIBS="-lnsl" # for libwrap
     ;;
     SunOS)
         LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
-	LIBS="-lkstat -ldoor"
+        LIBS="-lkstat -ldoor"
     ;;
     *)
         CC=cc
@@ -106,13 +106,13 @@ esac
 
 case `sys` in
     i386_fc3)
-	LIBS="$LIBS -ldes"
-	OS_CONFIG="--with-krbdes"
+        LIBS="$LIBS -ldes"
+        OS_CONFIG="--with-krbdes"
     ;;
     sun4x_s10)
-	LIBS="$LIBS -ldes"
-	OS_CONFIG="--with-krbdes"
-    ;; 
+        LIBS="$LIBS -ldes"
+        OS_CONFIG="--with-krbdes"
+    ;;
 esac
 
 
@@ -122,7 +122,7 @@ WITHAUTH="--with-auth=pts --with-afs=/usr/local --enable-krb5afspts --without-kr
 SSL_CONFIG="--with-openssl=/usr/local/lib"
 
 # the defaults are good enough for us
-DB_CONFIG="" 
+DB_CONFIG=""
 
 # the following is for staticly linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"

@@ -60,8 +60,8 @@ EXPORTED const char *map_method_desc = "nommap";
  */
 void
 EXPORTED map_refresh(int fd, int onceonly, const char **base,
-		     size_t *len, size_t newlen, const char *name,
-		     const char *mboxname)
+                     size_t *len, size_t newlen, const char *name,
+                     const char *mboxname)
 {
     char *p;
     int n, left;
@@ -69,20 +69,20 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     char buf[80];
 
     if (newlen == MAP_UNKNOWN_LEN) {
-	if (fstat(fd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-		   mboxname ? " for " : "", mboxname ? mboxname : "");
-	    snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
-	    fatal(buf, EC_IOERR);
-	}
-	newlen = sbuf.st_size;
+        if (fstat(fd, &sbuf) == -1) {
+            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
+                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
+            fatal(buf, EC_IOERR);
+        }
+        newlen = sbuf.st_size;
     }
 
     /* Need a larger buffer */
     if (*len < newlen) {
-	if (*len) free((char *)*base);
-	*len = newlen + (onceonly ? 0 : SLOP);
-	*base = xmalloc(*len);
+        if (*len) free((char *)*base);
+        *len = newlen + (onceonly ? 0 : SLOP);
+        *base = xmalloc(*len);
     }
 
     lseek(fd, 0L, 0);
@@ -90,23 +90,23 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     p = (char*) *base;
 
     while (left) {
-	n = read(fd, p, left);
-	if (n <= 0) {
-	    if (n == 0) {
-		syslog(LOG_ERR, "IOERROR: reading %s file%s%s: end of file",
-		       name,
-		       mboxname ? " for " : "", mboxname ? mboxname : "");
-	    }
-	    else {
-		syslog(LOG_ERR, "IOERROR: reading %s file%s%s: %m",
-		       name, 
-		       mboxname ? " for " : "", mboxname ? mboxname : "");
-	    }
-	    snprintf(buf, sizeof(buf), "failed to read %s file", name);
-	    fatal(buf, EC_IOERR);
-	}
-	p += n;
-	left -= n;
+        n = read(fd, p, left);
+        if (n <= 0) {
+            if (n == 0) {
+                syslog(LOG_ERR, "IOERROR: reading %s file%s%s: end of file",
+                       name,
+                       mboxname ? " for " : "", mboxname ? mboxname : "");
+            }
+            else {
+                syslog(LOG_ERR, "IOERROR: reading %s file%s%s: %m",
+                       name,
+                       mboxname ? " for " : "", mboxname ? mboxname : "");
+            }
+            snprintf(buf, sizeof(buf), "failed to read %s file", name);
+            fatal(buf, EC_IOERR);
+        }
+        p += n;
+        left -= n;
     }
 }
 

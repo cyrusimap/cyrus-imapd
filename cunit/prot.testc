@@ -11,18 +11,18 @@
     int _fd = mkstemp(_fname)
 #define BEGIN \
     { \
-	int r = ftruncate(_fd, 0); \
-	CU_ASSERT_EQUAL_FATAL(r, 0); \
-	lseek(_fd, (off_t)0, SEEK_SET); \
+        int r = ftruncate(_fd, 0); \
+        CU_ASSERT_EQUAL_FATAL(r, 0); \
+        lseek(_fd, (off_t)0, SEEK_SET); \
     }
 #define END(b, n) \
     { \
-	struct stat _sb; \
-	lseek(_fd, (off_t)0, SEEK_SET); \
-	if (fstat(_fd, &_sb) < 0) CU_FAIL_FATAL("fstat"); \
-	(n) = read(_fd, (b), _sb.st_size); \
-	if ((n) < _sb.st_size) CU_FAIL_FATAL("short read"); \
-	if ((n) >= 0) (b)[(n)] = '\0'; \
+        struct stat _sb; \
+        lseek(_fd, (off_t)0, SEEK_SET); \
+        if (fstat(_fd, &_sb) < 0) CU_FAIL_FATAL("fstat"); \
+        (n) = read(_fd, (b), _sb.st_size); \
+        if ((n) < _sb.st_size) CU_FAIL_FATAL("short read"); \
+        if ((n) >= 0) (b)[(n)] = '\0'; \
     }
 #define EPILOG \
     unlink(_fname); \
@@ -115,7 +115,7 @@ static void test_printstring(void)
 
     /* Boring but overly long string */
     for (i = 0 ; i<500 ; i++)
-	buf_appendcstr(&b, "blah ");
+        buf_appendcstr(&b, "blah ");
     buf_cstring(&b);
     BEGIN;
     prot_printstring(p, b.s);
@@ -225,7 +225,7 @@ static void test_printmap(void)
 
     /* Boring but overly long string */
     for (i = 0 ; i<500 ; i++)
-	buf_appendcstr(&b, "blah ");
+        buf_appendcstr(&b, "blah ");
     buf_cstring(&b);
     BEGIN;
     prot_printmap(p, b.s, b.len);

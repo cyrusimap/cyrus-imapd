@@ -58,7 +58,7 @@ EXPORTED int cyrus_mutex_unlock(void *mutex __attribute__((unused)))
 {
     return SASL_OK;
 }
-  
+
 EXPORTED void cyrus_mutex_free(void *mutex __attribute__((unused)))
 {
     return;

@@ -64,25 +64,25 @@ EXPORTED pid_t open_sendmail(const char *argv[], FILE **sm)
     pid_t p;
 
     if (pipe(fds)) {
-	printf("451 lmtpd: didn't start pipe()?!?\r\n");
-	fatal("couldn't start pipe()", EC_OSERR);
+        printf("451 lmtpd: didn't start pipe()?!?\r\n");
+        fatal("couldn't start pipe()", EC_OSERR);
     }
     if ((p = fork()) == 0) {
-	/* i'm the child! run sendmail! */
-	close(fds[1]);
-	/* make the pipe be stdin */
-	dup2(fds[0], 0);
-	execv(config_getstring(IMAPOPT_SENDMAIL), (char **) argv);
+        /* i'm the child! run sendmail! */
+        close(fds[1]);
+        /* make the pipe be stdin */
+        dup2(fds[0], 0);
+        execv(config_getstring(IMAPOPT_SENDMAIL), (char **) argv);
 
-	/* if we're here we suck */
-	printf("451 lmtpd: didn't exec() sendmail?!?\r\n");
-	exit(EXIT_FAILURE);
+        /* if we're here we suck */
+        printf("451 lmtpd: didn't exec() sendmail?!?\r\n");
+        exit(EXIT_FAILURE);
     }
 
     if (p < 0) {
-	/* failure */
-	*sm = NULL;
-	return p;
+        /* failure */
+        *sm = NULL;
+        return p;
     }
 
     /* parent */
@@ -93,7 +93,7 @@ EXPORTED pid_t open_sendmail(const char *argv[], FILE **sm)
     return p;
 }
 
-/* sendmail_errstr.  create a descriptive message given 'sm_stat': 
+/* sendmail_errstr.  create a descriptive message given 'sm_stat':
    the exit code from wait() from sendmail.
 
    not thread safe, but probably ok */
@@ -102,24 +102,24 @@ EXPORTED char *sendmail_errstr(int sm_stat)
     static char errstr[200];
 
     if (WIFEXITED(sm_stat)) {
-	snprintf(errstr, sizeof errstr,
-		 "Sendmail process terminated normally, exit status %d\n",
-		 WEXITSTATUS(sm_stat));
+        snprintf(errstr, sizeof errstr,
+                 "Sendmail process terminated normally, exit status %d\n",
+                 WEXITSTATUS(sm_stat));
     } else if (WIFSIGNALED(sm_stat)) {
-	snprintf(errstr, sizeof errstr,
-		"Sendmail process terminated abnormally, signal = %d %s\n",
-		WTERMSIG(sm_stat),
+        snprintf(errstr, sizeof errstr,
+                "Sendmail process terminated abnormally, signal = %d %s\n",
+                WTERMSIG(sm_stat),
 #ifdef WCOREDUMP
-		WCOREDUMP(sm_stat) ? " -- core file generated" :
+                WCOREDUMP(sm_stat) ? " -- core file generated" :
 #endif
-		"");
+                "");
     } else if (WIFSTOPPED(sm_stat)) {
-	snprintf(errstr, sizeof errstr,
-		 "Sendmail process stopped, signal = %d\n",
-		WTERMSIG(sm_stat));
+        snprintf(errstr, sizeof errstr,
+                 "Sendmail process stopped, signal = %d\n",
+                WTERMSIG(sm_stat));
     } else {
-	return NULL;
+        return NULL;
     }
-    
+
     return errstr;
 }

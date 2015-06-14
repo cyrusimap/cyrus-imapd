@@ -12,11 +12,11 @@ AC_DEFUN([CMU_PTHREADS], [
    AC_DEFINE(_REENTRANT)
    case "$host_os" in
    solaris2*)
- 	AC_DEFINE(_POSIX_PTHREAD_SEMANTICS)
- 	AC_DEFINE(__EXTENSIONS__)
- 	;;
+        AC_DEFINE(_POSIX_PTHREAD_SEMANTICS)
+        AC_DEFINE(__EXTENSIONS__)
+        ;;
    irix6*)
- 	AC_DEFINE(_SGI_REENTRANT_FUNCTIONS)
- 	;;
+        AC_DEFINE(_SGI_REENTRANT_FUNCTIONS)
+        ;;
    esac
 ])

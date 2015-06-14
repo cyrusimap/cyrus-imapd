@@ -27,13 +27,13 @@
 
 #include <glib.h>
 
-void		output_vtimezone_files		(char		*directory,
-						 GArray		*zone_data,
-						 GHashTable	*rule_data,
-						 GHashTable	*link_data,
-						 GHashTable	*zones_hash,
-						 int		 max_until_year);
+void            output_vtimezone_files          (char           *directory,
+                                                 GArray         *zone_data,
+                                                 GHashTable     *rule_data,
+                                                 GHashTable     *link_data,
+                                                 GHashTable     *zones_hash,
+                                                 int             max_until_year);
 
-void		ensure_directory_exists		(char		*directory);
+void            ensure_directory_exists         (char           *directory);
 
 #endif /* _VZIC_OUTPUT_H_ */

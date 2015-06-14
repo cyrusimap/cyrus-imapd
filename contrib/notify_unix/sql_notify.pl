@@ -1,9 +1,9 @@
-#	<P>The script <TT>mysql_notify.pl</TT> also logs the notification, but in addition
-#	it looks up the username in a DB table in order to get additional information
-#	about the user. This could be used, for example, to get a user's instant messaging
-#	address from a database in order to send a notification message.
-#	<TT>mysql_notify.pl</TT> requires a file <TT>/etc/notify</TT> that contains
-#	three lines: the DSN, username, and password to connect to the database.
+#       <P>The script <TT>mysql_notify.pl</TT> also logs the notification, but in addition
+#       it looks up the username in a DB table in order to get additional information
+#       about the user. This could be used, for example, to get a user's instant messaging
+#       address from a database in order to send a notification message.
+#       <TT>mysql_notify.pl</TT> requires a file <TT>/etc/notify</TT> that contains
+#       three lines: the DSN, username, and password to connect to the database.
 
 use IO::Socket;
 use DBI;
@@ -107,7 +107,7 @@ sub sql_notify {
   $User =~ s/\s$//;
 
   my @rows = get_rows($User);
-  $#rows<1 || 
+  $#rows<1 ||
     syslog LOG_ERR, "Non-unique rows for user $User";
   my $row = $rows[0];
   # Do the notification, if we successfully looked up the user in the DB

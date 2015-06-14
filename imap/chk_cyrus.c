@@ -72,9 +72,9 @@ static void usage(void)
 static const char *check_part = NULL; /* partition we are checking */
 
 static int chkmbox(char *name,
-		   int matchlen __attribute__((unused)),
-		   int maycreate __attribute__((unused)),
-		   void *rock __attribute__((unused))) 
+                   int matchlen __attribute__((unused)),
+                   int maycreate __attribute__((unused)),
+                   void *rock __attribute__((unused)))
 {
     int r;
     mbentry_t *mbentry = NULL;
@@ -84,14 +84,14 @@ static int chkmbox(char *name,
     /* xxx reserved mailboxes? */
 
     if (r) {
-	fprintf(stderr, "bad mailbox %s in chkmbox\n", name);
-	fatal("fatal error",EC_TEMPFAIL);
+        fprintf(stderr, "bad mailbox %s in chkmbox\n", name);
+        fatal("fatal error",EC_TEMPFAIL);
     }
 
     /* are we on the partition we are checking? */
     if (check_part && strcmp(mbentry->partition, check_part)) {
-	mboxlist_entry_free(&mbentry);
-	return 0;
+        mboxlist_entry_free(&mbentry);
+        return 0;
     }
 
     fprintf(stderr, "checking: %s\n", name);
@@ -103,7 +103,7 @@ static int chkmbox(char *name,
     return 0;
 }
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
     char *alt_config = NULL;
     char pattern[2] = { '*', '\0' };
@@ -113,31 +113,31 @@ int main(int argc, char **argv)
     int opt;
 
     while ((opt = getopt(argc, argv, "C:P:M:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 'P':
-	    if(mailbox) {
-		usage();
-		exit(EC_USAGE);
-	    }
-	    check_part = optarg;
-	    break;
+        case 'P':
+            if(mailbox) {
+                usage();
+                exit(EC_USAGE);
+            }
+            check_part = optarg;
+            break;
 
-	case 'M':
-	    if(check_part) {
-		usage();
-		exit(EC_USAGE);
-	    }
-	    mailbox = optarg;
-	    break;
+        case 'M':
+            if(check_part) {
+                usage();
+                exit(EC_USAGE);
+            }
+            mailbox = optarg;
+            break;
 
-	default:
-	    usage();
-	    /* NOTREACHED */
-	}
+        default:
+            usage();
+            /* NOTREACHED */
+        }
     }
 
     cyrus_init(alt_config, "chk_cyrus", 0, CONFIG_NEED_PARTITION_DATA);
@@ -146,21 +146,21 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
 
     if(mailbox) {
-	fprintf(stderr, "Examining mailbox: %s\n", mailbox);
-	chkmbox((char *)mailbox,0,0,NULL);
+        fprintf(stderr, "Examining mailbox: %s\n", mailbox);
+        chkmbox((char *)mailbox,0,0,NULL);
     } else {
-	fprintf(stderr, "Examining partition: %s\n",
-		(check_part ? check_part : "ALL PARTITIONS"));
-	
-	/* build a list of mailboxes - we're using internal names here */
-	mboxlist_findall(NULL, pattern, 1, NULL,
-			 NULL, chkmbox, NULL);
+        fprintf(stderr, "Examining partition: %s\n",
+                (check_part ? check_part : "ALL PARTITIONS"));
+
+        /* build a list of mailboxes - we're using internal names here */
+        mboxlist_findall(NULL, pattern, 1, NULL,
+                         NULL, chkmbox, NULL);
     }
-    
+
     mboxlist_close();
     mboxlist_done();
 
     cyrus_done();
-    
+
     return 0;
 }

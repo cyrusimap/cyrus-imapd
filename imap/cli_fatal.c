@@ -54,7 +54,7 @@ EXPORTED void fatal(const char *message, int code)
     static int recurse_code = 0;
 
     if (recurse_code) {
-	exit(code);
+        exit(code);
     }
 
     recurse_code = code;

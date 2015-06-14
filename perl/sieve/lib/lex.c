@@ -61,15 +61,15 @@ static int lexer_state = LEXER_STATE_NORMAL;
 
 #define ACAP_MAX_QSTR_LEN 4096
 
-#define ERR() {								\
-		lexer_state=LEXER_STATE_RECOVER;                        \
-		return SIEVE_FAIL;                                       \
-  	      }
+#define ERR() {                                                         \
+                lexer_state=LEXER_STATE_RECOVER;                        \
+                return SIEVE_FAIL;                                       \
+              }
 
-#define ERR_PUSHBACK() {				\
-    		prot_ungetc(ch, stream);                \
-		ERR();					\
-  	      }
+#define ERR_PUSHBACK() {                                \
+                prot_ungetc(ch, stream);                \
+                ERR();                                  \
+              }
 
 static int token_lookup(const char *str)
 {
@@ -95,7 +95,7 @@ static int token_lookup(const char *str)
 int yylex(lexstate_t * lvalp, void * client)
 {
   int ch;
-  char buffer[ACAP_MAX_QSTR_LEN];	/* big enough for everything */
+  char buffer[ACAP_MAX_QSTR_LEN];       /* big enough for everything */
 
   char *buff_ptr = buffer; /* ptr into the buffer */
   char *buff_end = buffer + ACAP_MAX_QSTR_LEN -1;
@@ -105,7 +105,7 @@ int yylex(lexstate_t * lvalp, void * client)
   int result = SIEVE_OK;
 
   struct protstream *stream=(struct protstream *) client;
-  
+
   while (1)
   {
 
@@ -116,120 +116,120 @@ int yylex(lexstate_t * lvalp, void * client)
     ch = prot_getc(stream);
 
     if (ch == -1)
-	return SIEVE_FAIL;
+        return SIEVE_FAIL;
 
     switch (lexer_state)
     {
-    
+
 
     case LEXER_STATE_RECOVER:
       if (ch == '\r')
-	lexer_state=LEXER_STATE_RECOVER_CR;
+        lexer_state=LEXER_STATE_RECOVER_CR;
       break;
     case LEXER_STATE_RECOVER_CR:
       if (ch == '\n')
-	lexer_state=LEXER_STATE_NORMAL;
+        lexer_state=LEXER_STATE_NORMAL;
       return EOL;
     case LEXER_STATE_CR:
       if (ch == '\n') {
-	lexer_state=LEXER_STATE_NORMAL;
-	return EOL;
+        lexer_state=LEXER_STATE_NORMAL;
+        return EOL;
       }
       /* otherwise, life is bad */
       ERR_PUSHBACK();
     case LEXER_STATE_QSTR:
       if (ch == '\"') {
-	/* End of the string */
-	lvalp->str = xstrndup(buffer, buff_ptr - buffer);
-	lexer_state=LEXER_STATE_NORMAL;
-	return STRING;
+        /* End of the string */
+        lvalp->str = xstrndup(buffer, buff_ptr - buffer);
+        lexer_state=LEXER_STATE_NORMAL;
+        return STRING;
       }
       if (ch == '\0'
-	  || 0x7F < ((unsigned char)ch))
-	ERR_PUSHBACK();
+          || 0x7F < ((unsigned char)ch))
+        ERR_PUSHBACK();
       /* Otherwise, we're appending a character */
       if (buff_end <= buff_ptr)
-	ERR_PUSHBACK();		/* too long! */
+        ERR_PUSHBACK();         /* too long! */
       if (ch == '\\') {
-	ch=prot_getc(stream);
+        ch=prot_getc(stream);
 
-	if (result != SIEVE_OK)
-	  ERR();
-	if (ch != '\"' && ch != '\\')
-	  ERR_PUSHBACK();
+        if (result != SIEVE_OK)
+          ERR();
+        if (ch != '\"' && ch != '\\')
+          ERR_PUSHBACK();
       }
       *buff_ptr++ = ch;
       break;
     case LEXER_STATE_LITERAL:
       if (('0' <= ch) && (ch <= '9')) {
-	unsigned long   newcount = count * 10 + (ch - '0');
+        unsigned long   newcount = count * 10 + (ch - '0');
 
-	if (newcount < count)
-	  ERR_PUSHBACK();	/* overflow */
+        if (newcount < count)
+          ERR_PUSHBACK();       /* overflow */
 
-	count = newcount;
-	break;
+        count = newcount;
+        break;
       }
 
       if (ch != '}')
-	ERR_PUSHBACK();
+        ERR_PUSHBACK();
       ch=prot_getc(stream);
       if (ch < 0)
-	ERR();
+        ERR();
       if (ch != '\r')
-	ERR_PUSHBACK();
+        ERR_PUSHBACK();
       ch=prot_getc(stream);
       if (ch < 0)
-	ERR();
+        ERR();
       if (ch != '\n')
-	ERR_PUSHBACK();
+        ERR_PUSHBACK();
 
       lvalp->str = (char *)xmalloc(count+1);
       /* there is a literal string on the wire. let's read it */
       {
-	char           *it = lvalp->str,
-	               *end = it + count;
+        char           *it = lvalp->str,
+                       *end = it + count;
 
-	while (it < end) {
-	  *it=prot_getc(stream);
-	  it++;
-	}
-	*it = '\0';
+        while (it < end) {
+          *it=prot_getc(stream);
+          it++;
+        }
+        *it = '\0';
       }
       lexer_state=LEXER_STATE_NORMAL;
       return STRING;
     case LEXER_STATE_NUMBER:
       if (('0' <= ch) && (ch <= '9')) {
-	unsigned long   newcount = count * 10 + (ch - '0');
+        unsigned long   newcount = count * 10 + (ch - '0');
 
-	if (newcount < count)
-	  ERR_PUSHBACK();	/* overflow */
-	count = newcount;
+        if (newcount < count)
+          ERR_PUSHBACK();       /* overflow */
+        count = newcount;
       } else {
-	lvalp->number = count;
-	lexer_state=LEXER_STATE_NORMAL;
-	prot_ungetc(ch, stream);
-	return NUMBER;
+        lvalp->number = count;
+        lexer_state=LEXER_STATE_NORMAL;
+        prot_ungetc(ch, stream);
+        return NUMBER;
       }
       break;
     case LEXER_STATE_NORMAL:
       if (isalpha((unsigned char) ch)) {
-	lexer_state=LEXER_STATE_ATOM;
-	*buff_ptr++ = tolower(ch);
-	break;
+        lexer_state=LEXER_STATE_ATOM;
+        *buff_ptr++ = tolower(ch);
+        break;
       }
       switch (ch) {
       case '(':
-	return '(';
+        return '(';
       case ')':
-	return ')';
+        return ')';
       case ' ':
-	return ' ';
+        return ' ';
       case '\"':
-	lexer_state=LEXER_STATE_QSTR;
-	break;
+        lexer_state=LEXER_STATE_QSTR;
+        break;
       case '*':
-	return '*';
+        return '*';
       case '0': /* fall through all numbers */
       case '1':
       case '2':
@@ -240,43 +240,43 @@ int yylex(lexstate_t * lvalp, void * client)
       case '7':
       case '8':
       case '9':
-	count = ch - '0';
-	lexer_state=LEXER_STATE_NUMBER;
-	break;
+        count = ch - '0';
+        lexer_state=LEXER_STATE_NUMBER;
+        break;
       case '{':
-	count = 0;
-	lexer_state=LEXER_STATE_LITERAL;
-	break;
+        count = 0;
+        lexer_state=LEXER_STATE_LITERAL;
+        break;
       case '\r':
-	lexer_state=LEXER_STATE_CR;
-	break;
+        lexer_state=LEXER_STATE_CR;
+        break;
       case '\n':
-	lexer_state=LEXER_STATE_NORMAL;
-	return EOL;
-	break;
+        lexer_state=LEXER_STATE_NORMAL;
+        return EOL;
+        break;
       default:
-	ERR_PUSHBACK();
+        ERR_PUSHBACK();
       }
       break;
     case LEXER_STATE_ATOM:
       if (!(isalpha((unsigned char) ch) || ch == '/')) {
-	int token;
+        int token;
 
-	*buff_ptr = '\0';
+        *buff_ptr = '\0';
 
-	/* We've got the atom. */
-	token = token_lookup(buffer);
+        /* We've got the atom. */
+        token = token_lookup(buffer);
 
-	if (token!=-1) {
-	  lexer_state=LEXER_STATE_NORMAL;
-	  prot_ungetc(ch, stream);
+        if (token!=-1) {
+          lexer_state=LEXER_STATE_NORMAL;
+          prot_ungetc(ch, stream);
 
-	  return token;
-	} else
-	  ERR_PUSHBACK();
+          return token;
+        } else
+          ERR_PUSHBACK();
       }
       if (buff_end <= buff_ptr)
-	ERR_PUSHBACK();		/* atom too long */
+        ERR_PUSHBACK();         /* atom too long */
       *buff_ptr++ = tolower(ch);
       break;
     }

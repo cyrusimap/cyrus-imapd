@@ -105,17 +105,17 @@ sub send {
       # #astring
       my $spc = '';
       if (ref($rest[0]) =~ /(^|=)HASH($|\()/) {
-	my %vals = %{shift(@rest)};
-	foreach (keys %vals) {
-	  $res .= $self->_stringize($_) . ' ' .
-	          $self->_stringize($vals{$_}) . $spc;
-	  $spc = ' ';
-	}
+        my %vals = %{shift(@rest)};
+        foreach (keys %vals) {
+          $res .= $self->_stringize($_) . ' ' .
+                  $self->_stringize($vals{$_}) . $spc;
+          $spc = ' ';
+        }
       } else {
-	foreach (@{shift(@rest)}) {
-	  $res .= $self->_stringize($_) . $spc;
-	  $spc = ' ';
-	}
+        foreach (@{shift(@rest)}) {
+          $res .= $self->_stringize($_) . $spc;
+          $spc = ' ';
+        }
       }
     }
     else {
@@ -137,10 +137,10 @@ sub _cc {
   } else {
     foreach (map {unpack 'C', $_} split(//, $_[0])) {
       if ($_==0 || $_==10 || $_==13 || $_==34 || $_==92 || $_>=128) {
-	$res = 0;
+        $res = 0;
       }
       elsif ($_<33 || $_==37 || $_==40 || $_==41 || $_==42 || $_==123) {
-	$res = 1 if $res == 2;
+        $res = 1 if $res == 2;
       }
     }
     $res;
@@ -221,16 +221,16 @@ sub authenticate {
 
   # Fetch all relevent capabilities
   $self->addcallback({-trigger => 'CAPABILITY',
-		      -callback => sub {my %a = @_;
-					map {
-					    $starttls = 1
-						if /^STARTTLS$/i;
-					    $logindisabled = 1
-						if /^LOGINDISABLED$/i;
-					    $availmechs .= $_ . ' '
-						if s/^AUTH=//;
-					}
-					split(/ /, $a{-text})}});
+                      -callback => sub {my %a = @_;
+                                        map {
+                                            $starttls = 1
+                                                if /^STARTTLS$/i;
+                                            $logindisabled = 1
+                                                if /^LOGINDISABLED$/i;
+                                            $availmechs .= $_ . ' '
+                                                if s/^AUTH=//;
+                                        }
+                                        split(/ /, $a{-text})}});
   $self->send(undef, undef, 'CAPABILITY');
 
   $opts{-mechanism} = $availmechs if !defined($opts{-mechanism});
@@ -240,25 +240,25 @@ sub authenticate {
   if (defined($opts{-tlskey}) ||
       (!($availmechs =~ /(\b|^)$opts{-mechanism}($|\b)/i) && $logindisabled)) {
       if (!havetls() || !$starttls) {
-	  if ($logindisabled) {
-	      warn "Login disabled.\n"
-	  } else {
-	      warn "TLS disabled.\n";
-	  }
-	  return undef;
+          if ($logindisabled) {
+              warn "Login disabled.\n"
+          } else {
+              warn "TLS disabled.\n";
+          }
+          return undef;
       }
 
       if (!defined($opts{-tlskey})) {
-	  $opts{-tlskey} = "";
+          $opts{-tlskey} = "";
       }
       if (!defined($opts{-cafile})) {
-	  $opts{-cafile} = "";
+          $opts{-cafile} = "";
       }
       if (!defined($opts{-capath})) {
-	  $opts{-capath} = "";
+          $opts{-capath} = "";
       }
       if ($opts{-notls}) {
-	  $opts{-tlskey} = undef;
+          $opts{-tlskey} = undef;
       }
 
       $self->_starttls($opts{-tlskey}, $opts{-tlskey}, $opts{-cafile}, $opts{-capath});
@@ -278,8 +278,8 @@ sub authenticate {
     # the GSSAPI mechanism).
     no warnings 'uninitialized';
     $rc = $self->_authenticate($opts{-mechanism}, $opts{-service},
-			       $opts{-authz}, $opts{-user}, $opts{-password},
-			       $opts{-minssf}, $opts{-maxssf});
+                               $opts{-authz}, $opts{-user}, $opts{-password},
+                               $opts{-minssf}, $opts{-maxssf});
   }
 
   if (!$rc && $logindisabled) {
@@ -303,19 +303,19 @@ sub authenticate {
     # suck...
     if (!defined($opts{-password})) {
       my $tty = (IO::File->new('/dev/tty', O_RDWR) ||
-		 *STDERR || *STDIN || *STDOUT);
+                 *STDERR || *STDIN || *STDOUT);
       $tty->autoflush(1);
       $tty->print("IMAP Password: ");
       my $ostty;
       chomp($ostty = `stty -g`);
       system "stty -echo -icanon min 1 time 0 2>/dev/null || " .
-	     "stty -echo cbreak";
+             "stty -echo cbreak";
       chomp($opts{-password} = $tty->getline);
       $tty->print("\013\010");
       system "stty $ostty";
     }
     my ($kw, $text) = $self->send(undef, undef, 'LOGIN %s %s',
-				  $opts{-user}, $opts{-password});
+                                  $opts{-user}, $opts{-password});
     $opts{-password} = "\0" x length($opts{-password});
     if ($kw eq 'OK') {
       $rc = 1;
@@ -351,7 +351,7 @@ Cyrus::IMAP - Interface to Cyrus imclient library
   $client->authenticate;
   $flags = Cyrus::IMAP::CALLBACK_NUMBERED || Cyrus::IMAP::CALLBACK_NOLITERAL;
   $client->addcallback({-trigger => $str, -flags => $flags,
-			-callback => \&cb, -rock => \$var}, ...);
+                        -callback => \&cb, -rock => \$var}, ...);
   $client->send(\&callback, \&cbdata, $format, ...);
   $client->processoneevent;
   ($result, $text) = $client->send(undef, undef, $format, ...);
@@ -368,11 +368,11 @@ options when talking to a Cyrus imapd.
 In the normal case, one will attach to a Cyrus server and authenticate
 using the best available method:
 
-	my $client = Cyrus::IMAP::new('imap');
-	$client->authenticate;
-	if (!$client->send('', '', 'CREATE %s', 'user.' . $username)) {
-	  warn "createmailbox user.$username: $@";
-	}
+        my $client = Cyrus::IMAP::new('imap');
+        $client->authenticate;
+        if (!$client->send('', '', 'CREATE %s', 'user.' . $username)) {
+          warn "createmailbox user.$username: $@";
+        }
 
 In simple mode as used above, C<send()> is invoked with C<undef>, C<0>, or
 C<''> for the callback and rock (callback data) arguments; it returns a list

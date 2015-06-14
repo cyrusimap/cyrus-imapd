@@ -1,8 +1,8 @@
 #!/bin/sh
 
 #
-# This is internal documentation for Computing Services at 
-# Carnegie Mellon University. 
+# This is internal documentation for Computing Services at
+# Carnegie Mellon University.
 #
 # Please refer to doc/readme.html for the 'real' README.
 #
@@ -21,7 +21,7 @@ to build configure:
    sh SMakefile
 
 to build:
-   smake init all 
+   smake init all
 
 then, as admin (suid binaries on AFS)
    smake -d install
@@ -129,7 +129,7 @@ Locality Name (eg, city) []:Pittsburgh
 Organization Name (eg, company) [Internet Widgits Pty Ltd]:Carnegie Mellon University
 Organizational Unit Name (eg, section) []:Andrew Systems Group
 Common Name (eg, YOUR name) []:mail-fe3.andrew.cmu.edu
-Email Address []:advisor@andrew.cmu.edu 
+Email Address []:advisor@andrew.cmu.edu
 
 - is it a backend? run tools/mkimap (as cyrus!)
 

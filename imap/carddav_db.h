@@ -85,22 +85,22 @@ int carddav_close(struct carddav_db *carddavdb);
 /* lookup an entry from 'carddavdb' by resource
    (optionally inside a transaction for updates) */
 int carddav_lookup_resource(struct carddav_db *carddavdb,
-			   const char *mailbox, const char *resource,
-			   struct carddav_data **result,
-			   int tombstones);
+                           const char *mailbox, const char *resource,
+                           struct carddav_data **result,
+                           int tombstones);
 
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */
 int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
-		       struct carddav_data **result);
+                       struct carddav_data **result);
 
 /* check if an email address exists on any card.
    returns the groups its in (if any) */
 strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
 strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *key,
-				  const char *mboxname);
+                                  const char *mboxname);
 strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
-				  const char *mboxname, const char *otheruser);
+                                  const char *mboxname, const char *otheruser);
 
 /* checks if a group exists (by id).
    returns emails of its members (if any) */
@@ -123,8 +123,8 @@ int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *req);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
-		   int (*cb)(void *rock, void *data),
-		   void *rock);
+                   int (*cb)(void *rock, void *data),
+                   void *rock);
 
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
@@ -148,9 +148,9 @@ int carddav_abort(struct carddav_db *carddavdb);
 void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
 
 int carddav_store(struct mailbox *mailbox, struct vparse_card *card,
-		  const char *resource,
-		  strarray_t *flags, struct entryattlist *annots,
-		  const char *userid, struct auth_state *authstate);
+                  const char *resource,
+                  strarray_t *flags, struct entryattlist *annots,
+                  const char *userid, struct auth_state *authstate);
 int carddav_remove(struct mailbox *mailbox, uint32_t olduid, int isreplace);
 
 

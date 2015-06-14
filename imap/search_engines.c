@@ -92,27 +92,27 @@ static const struct search_engine *engine(void)
     switch (config_getenum(IMAPOPT_SEARCH_ENGINE)) {
 #ifdef USE_XAPIAN
     case IMAP_ENUM_SEARCH_ENGINE_XAPIAN:
-	return &xapian_search_engine;
+        return &xapian_search_engine;
 #endif
 #ifdef USE_SPHINX
     case IMAP_ENUM_SEARCH_ENGINE_SPHINX:
-	return &sphinx_search_engine;
+        return &sphinx_search_engine;
 #endif
 #ifdef USE_SQUAT
     case IMAP_ENUM_SEARCH_ENGINE_SQUAT:
-	return &squat_search_engine;
+        return &squat_search_engine;
 #endif
     default:
-	return &default_search_engine;
+        return &default_search_engine;
     }
 }
 
 EXPORTED const char *search_part_as_string(int part)
 {
     static const char *names[SEARCH_NUM_PARTS] = {
-	/* ANY */NULL, "FROM", "TO", "CC",
-	"BCC", "SUBJECT", "LISTID", "TYPE",
-	"HEADERS", "BODY"
+        /* ANY */NULL, "FROM", "TO", "CC",
+        "BCC", "SUBJECT", "LISTID", "TYPE",
+        "HEADERS", "BODY"
     };
 
     return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
@@ -123,7 +123,7 @@ EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts
 {
     const struct search_engine *se = engine();
     return (se->begin_search ?
-	    se->begin_search(mailbox, opts) : NULL);
+            se->begin_search(mailbox, opts) : NULL);
 }
 
 EXPORTED void search_end_search(search_builder_t *bx)
@@ -144,7 +144,7 @@ static int search_batch_size(void)
 {
     const struct search_engine *se = engine();
     return (se->flags & SEARCH_FLAG_CAN_BATCH ?
-	    config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
+            config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
 }
 
 /*
@@ -155,8 +155,8 @@ static int search_batch_size(void)
  * Returns an IMAP error code or 0 on success.
  */
 static int flush_batch(search_text_receiver_t *rx,
-		       struct mailbox *mailbox,
-		       ptrarray_t *batch)
+                       struct mailbox *mailbox,
+                       ptrarray_t *batch)
 {
     int i;
     int r = 0;
@@ -166,39 +166,39 @@ static int flush_batch(search_text_receiver_t *rx,
 
     /* prefetch files */
     for (i = 0 ; i < batch->count ; i++) {
-	message_t *msg = ptrarray_nth(batch, i);
-	const char *fname;
+        message_t *msg = ptrarray_nth(batch, i);
+        const char *fname;
 
-	r = message_get_fname(msg, &fname);
-	if (r) return r;
-	r = warmup_file(fname, 0, 0);
-	if (r) return r; /* means we failed to open a file,
-			    so we'll fail later anyway */
+        r = message_get_fname(msg, &fname);
+        if (r) return r;
+        r = warmup_file(fname, 0, 0);
+        if (r) return r; /* means we failed to open a file,
+                            so we'll fail later anyway */
     }
 
     for (i = 0 ; i < batch->count ; i++) {
-	message_t *msg = ptrarray_nth(batch, i);
-	if (!r)
-	    r = index_getsearchtext(msg, rx, 0);
-	message_unref(&msg);
+        message_t *msg = ptrarray_nth(batch, i);
+        if (!r)
+            r = index_getsearchtext(msg, rx, 0);
+        message_unref(&msg);
     }
     ptrarray_truncate(batch, 0);
 
     if (r) return r;
 
     if (rx->flush) {
-	r = rx->flush(rx);
-	if (r) return r;
+        r = rx->flush(rx);
+        if (r) return r;
     }
 
     return r;
 }
 
 EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
-				   struct mailbox *mailbox,
-				   int flags)
+                                   struct mailbox *mailbox,
+                                   int flags)
 {
-    int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
+    int r = 0;                  /* Using IMAP_* not SQUAT_* return codes here */
     int r2;
     int was_partial = 0;
     int batch_size = search_batch_size();
@@ -213,22 +213,22 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
 
     while ((record = mailbox_iter_step(iter))) {
-	if (rx->is_indexed(rx, record->uid))
-	    continue;
+        if (rx->is_indexed(rx, record->uid))
+            continue;
 
-	if (incremental && batch.count >= batch_size) {
-	    syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
-		   batch.count, mailbox->name);
-	    was_partial = 1;
-	    break;
-	}
+        if (incremental && batch.count >= batch_size) {
+            syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
+                   batch.count, mailbox->name);
+            was_partial = 1;
+            break;
+        }
 
-	ptrarray_append(&batch, message_new_from_record(mailbox, record));
+        ptrarray_append(&batch, message_new_from_record(mailbox, record));
     }
     mailbox_iter_done(&iter);
 
     if (batch.count)
-	r = flush_batch(rx, mailbox, &batch);
+        r = flush_batch(rx, mailbox, &batch);
 
  done:
     ptrarray_fini(&batch);
@@ -248,13 +248,13 @@ EXPORTED int search_end_update(search_text_receiver_t *rx)
 }
 
 EXPORTED search_text_receiver_t *search_begin_snippets(void *internalised,
-						       int verbose,
-						       search_snippet_cb_t proc,
-						       void *rock)
+                                                       int verbose,
+                                                       search_snippet_cb_t proc,
+                                                       void *rock)
 {
     const struct search_engine *se = engine();
     return (se->begin_snippets ? se->begin_snippets(internalised,
-				    verbose, proc, rock) : NULL);
+                                    verbose, proc, rock) : NULL);
 }
 
 EXPORTED int search_end_snippets(search_text_receiver_t *rx)
@@ -267,7 +267,7 @@ EXPORTED char *search_describe_internalised(void *internalised)
 {
     const struct search_engine *se = engine();
     return (se->describe_internalised ?
-	    se->describe_internalised(internalised) : 0);
+            se->describe_internalised(internalised) : 0);
 }
 
 EXPORTED void search_free_internalised(void *internalised)
@@ -289,17 +289,17 @@ EXPORTED int search_stop_daemon(int verbose)
 }
 
 EXPORTED int search_list_files(const char *userid,
-			       strarray_t *files)
+                               strarray_t *files)
 {
     const struct search_engine *se = engine();
     return (se->list_files ? se->list_files(userid, files) : 0);
 }
 
 EXPORTED int search_compact(const char *userid,
-			    const char *tempdir,
-			    const strarray_t *srctiers,
-			    const char *desttier,
-			    int flags)
+                            const char *tempdir,
+                            const strarray_t *srctiers,
+                            const char *desttier,
+                            int flags)
 {
     const struct search_engine *se = engine();
     return (se->compact ? se->compact(userid, tempdir, srctiers, desttier, flags) : 0);
@@ -320,7 +320,7 @@ const char *search_op_as_string(int op)
     case SEARCH_OP_OR: return "OR";
     case SEARCH_OP_NOT: return "NOT";
     default:
-	snprintf(buf, sizeof(buf), "(%d)", op);
-	return buf;
+        snprintf(buf, sizeof(buf), "(%d)", op);
+        return buf;
     }
 }

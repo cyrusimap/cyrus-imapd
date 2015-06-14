@@ -3,13 +3,13 @@
 
 case "$1" in
 'start')
-	/usr/bin/notify.pl
-	;;
+        /usr/bin/notify.pl
+        ;;
 'stop')
-	kill -INT `cat /tmp/notify_unix.pid`
-	;;
+        kill -INT `cat /tmp/notify_unix.pid`
+        ;;
 *)
-	echo "Usage: $0 { start | stop }"
-	;;
+        echo "Usage: $0 { start | stop }"
+        ;;
 esac
 exit 0

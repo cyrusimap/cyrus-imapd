@@ -52,7 +52,7 @@
  * Does not handle mlen=0.
  */
 void *memmem(const void *vb, size_t len,
-	     const void *vm, size_t mlen)
+             const void *vm, size_t mlen)
 {
     /* use unsigned char* not void* so ptr arithmetic works portably */
     const unsigned char *b = vb;
@@ -61,11 +61,11 @@ void *memmem(const void *vb, size_t len,
     const unsigned char *p;
 
     while (b < end) {
-	p = memchr(b, *m, end-b);
-	if (!p) return NULL;
-	if (p + mlen > end) return NULL;
-	if (!memcmp(p, m, mlen)) return (void *)p;
-	b = p+1;
+        p = memchr(b, *m, end-b);
+        if (!p) return NULL;
+        if (p + mlen > end) return NULL;
+        if (!memcmp(p, m, mlen)) return (void *)p;
+        b = p+1;
     }
     return NULL;
 }

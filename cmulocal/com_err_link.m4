@@ -61,96 +61,96 @@ AC_DEFUN([CMU_COMERR_LIB_WHERE], [
 AC_DEFUN([CMU_USE_COMERR], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(comerr,
-	[AS_HELP_STRING([--with-comerr=PREFIX], [Compile with com_err support])],
-	[if test "X$with_comerr" = "X"; then
-		with_comerr=yes
-	fi])
+        [AS_HELP_STRING([--with-comerr=PREFIX], [Compile with com_err support])],
+        [if test "X$with_comerr" = "X"; then
+                with_comerr=yes
+        fi])
 AC_ARG_WITH(comerr-lib,
-	[AS_HELP_STRING([--with-comerr-lib=DIR], [use com_err libraries in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-comerr-lib])
-	fi])
+        [AS_HELP_STRING([--with-comerr-lib=DIR], [use com_err libraries in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-comerr-lib])
+        fi])
 AC_ARG_WITH(comerr-include,
-	[AS_HELP_STRING([--with-comerr-include=DIR], [use com_err headers in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-comerr-include])
-	fi])
+        [AS_HELP_STRING([--with-comerr-include=DIR], [use com_err headers in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-comerr-include])
+        fi])
 
-	if test "X$with_comerr" != "X"; then
-	  if test "$with_comerr" != "yes"; then
-	    ac_cv_comerr_where_lib=$with_comerr/$CMU_LIB_SUBDIR
-	    ac_cv_comerr_where_inc=$with_comerr/include
-	  fi
-	fi
+        if test "X$with_comerr" != "X"; then
+          if test "$with_comerr" != "yes"; then
+            ac_cv_comerr_where_lib=$with_comerr/$CMU_LIB_SUBDIR
+            ac_cv_comerr_where_inc=$with_comerr/include
+          fi
+        fi
 
-	if test "X$with_comerr_lib" != "X"; then
-	  ac_cv_comerr_where_lib=$with_comerr_lib
-	fi
-	if test "X$ac_cv_comerr_where_lib" = "X"; then
-	  CMU_COMERR_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
-	fi
+        if test "X$with_comerr_lib" != "X"; then
+          ac_cv_comerr_where_lib=$with_comerr_lib
+        fi
+        if test "X$ac_cv_comerr_where_lib" = "X"; then
+          CMU_COMERR_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
+        fi
 
-	if test "X$with_comerr_include" != "X"; then
-	  ac_cv_comerr_where_inc=$with_comerr_include
-	fi
-	if test "X$ac_cv_comerr_where_inc" = "X"; then
-	  CMU_COMERR_INC_WHERE(/usr/athena/include /usr/local/include)
-	fi
+        if test "X$with_comerr_include" != "X"; then
+          ac_cv_comerr_where_inc=$with_comerr_include
+        fi
+        if test "X$ac_cv_comerr_where_inc" = "X"; then
+          CMU_COMERR_INC_WHERE(/usr/athena/include /usr/local/include)
+        fi
 
-	AC_MSG_CHECKING(whether to include com_err)
-	if test "X$ac_cv_comerr_where_lib" = "X" -a "X$ac_cv_comerr_where_inc" = "X"; then
-	  ac_cv_found_com_err=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_com_err=yes
-	  AC_MSG_RESULT(yes)
-	  COMERR_INC_DIR=$ac_cv_comerr_where_inc
-	  COMERR_LIB_DIR=$ac_cv_comerr_where_lib
-	  test "$COMERR_INC_DIR"  && COMERR_INC_FLAGS="-I${COMERR_INC_DIR}"
-	  COMERR_LIB_FLAGS="-lcom_err"
-	  test "$COMERR_LIB_DIR"  && COMERR_LIB_FLAGS="-L${COMERR_LIB_DIR} -lcom_err"
+        AC_MSG_CHECKING(whether to include com_err)
+        if test "X$ac_cv_comerr_where_lib" = "X" -a "X$ac_cv_comerr_where_inc" = "X"; then
+          ac_cv_found_com_err=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_com_err=yes
+          AC_MSG_RESULT(yes)
+          COMERR_INC_DIR=$ac_cv_comerr_where_inc
+          COMERR_LIB_DIR=$ac_cv_comerr_where_lib
+          test "$COMERR_INC_DIR"  && COMERR_INC_FLAGS="-I${COMERR_INC_DIR}"
+          COMERR_LIB_FLAGS="-lcom_err"
+          test "$COMERR_LIB_DIR"  && COMERR_LIB_FLAGS="-L${COMERR_LIB_DIR} -lcom_err"
           dnl Do not force configure.in to put these in CFLAGS and LIBS unconditionally
           dnl Allow makefile substitutions....
           AC_SUBST(COMERR_INC_FLAGS)
           AC_SUBST(COMERR_LIB_FLAGS)
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${COMERR_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${COMERR_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${COMERR_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${COMERR_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${COMERR_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${COMERR_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${COMERR_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${COMERR_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${COMERR_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${COMERR_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${COMERR_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${COMERR_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${COMERR_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${COMERR_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${COMERR_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${COMERR_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${COMERR_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${COMERR_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

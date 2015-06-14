@@ -65,8 +65,8 @@ EXPORTED void* xzmalloc(unsigned size)
 
     ret = malloc(size);
     if (ret != NULL) {
-	memset(ret, 0, size);
-	return ret;
+        memset(ret, 0, size);
+        return ret;
     }
 
     fatal("Virtual memory exhausted", EC_TEMPFAIL);

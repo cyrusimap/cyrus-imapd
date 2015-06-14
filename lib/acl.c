@@ -60,44 +60,44 @@ EXPORTED int cyrus_acl_strtomask(const char *str)
     long result = 0;
 
     while (*str) {
-	switch (*str) {
-	    case 'l': result |= ACL_LOOKUP; break;
-	    case 'r': result |= ACL_READ; break;
-	    case 's': result |= ACL_SETSEEN; break;
-	    case 'w': result |= ACL_WRITE; break;
-	    case 'i': result |= ACL_INSERT; break;
-	    case 'p': result |= ACL_POST; break;
-	    case 'c': /* legacy CREATE macro - build member rights */
-		legacy_create = ACL_CREATE; break;
-	    case 'k': result |= ACL_CREATE; break;
-	    case 'x': result |= ACL_DELETEMBOX; break;
-	    case 't': result |= ACL_DELETEMSG; break;
-	    case 'e': result |= ACL_EXPUNGE; break;
-	    case 'd': /* legacy DELETE macro - build member rights */
-		legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE); break;
-	    case 'a': result |= ACL_ADMIN; break;
-	    case 'n': result |= ACL_ANNOTATEMSG; break;
-	    case '0': result |= ACL_USER0; break;
-	    case '1': result |= ACL_USER1; break;
-	    case '2': result |= ACL_USER2; break;
-	    case '3': result |= ACL_USER3; break;
-	    case '4': result |= ACL_USER4; break;
-	    case '5': result |= ACL_USER5; break;
-	    case '6': result |= ACL_USER6; break;
-	    case '7': result |= ACL_USER7; break;
-	    case '8': result |= ACL_USER8; break;
-	    case '9': result |= ACL_USER9; break;
-	}
+        switch (*str) {
+            case 'l': result |= ACL_LOOKUP; break;
+            case 'r': result |= ACL_READ; break;
+            case 's': result |= ACL_SETSEEN; break;
+            case 'w': result |= ACL_WRITE; break;
+            case 'i': result |= ACL_INSERT; break;
+            case 'p': result |= ACL_POST; break;
+            case 'c': /* legacy CREATE macro - build member rights */
+                legacy_create = ACL_CREATE; break;
+            case 'k': result |= ACL_CREATE; break;
+            case 'x': result |= ACL_DELETEMBOX; break;
+            case 't': result |= ACL_DELETEMSG; break;
+            case 'e': result |= ACL_EXPUNGE; break;
+            case 'd': /* legacy DELETE macro - build member rights */
+                legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE); break;
+            case 'a': result |= ACL_ADMIN; break;
+            case 'n': result |= ACL_ANNOTATEMSG; break;
+            case '0': result |= ACL_USER0; break;
+            case '1': result |= ACL_USER1; break;
+            case '2': result |= ACL_USER2; break;
+            case '3': result |= ACL_USER3; break;
+            case '4': result |= ACL_USER4; break;
+            case '5': result |= ACL_USER5; break;
+            case '6': result |= ACL_USER6; break;
+            case '7': result |= ACL_USER7; break;
+            case '8': result |= ACL_USER8; break;
+            case '9': result |= ACL_USER9; break;
+        }
 
-	if (*str++ == *deleteright) {
-	    switch (*deleteright) {
-	    case 'c': /* legacy CREATE macro - build member rights */
-		legacy_create |= ACL_DELETEMBOX; break;
-	    case 'd': /* legacy DELETE macro - build member rights */
-		legacy_delete |= ACL_DELETEMBOX; break;
-	    default: result |= ACL_DELETEMBOX; break;
-	    }
-	}
+        if (*str++ == *deleteright) {
+            switch (*deleteright) {
+            case 'c': /* legacy CREATE macro - build member rights */
+                legacy_create |= ACL_DELETEMBOX; break;
+            case 'd': /* legacy DELETE macro - build member rights */
+                legacy_delete |= ACL_DELETEMBOX; break;
+            default: result |= ACL_DELETEMBOX; break;
+            }
+        }
     }
 
     /* If the rights string contained a legacy macro, but none of its
@@ -136,12 +136,12 @@ EXPORTED char *cyrus_acl_masktostr(int acl, char *str)
     if (acl & ACL_DELETEMSG) *pos++ = 't';
     if (acl & ACL_EXPUNGE) *pos++ = 'e';
     if (acl & legacy_create) {
-	/* legacy CREATE macro member right(s) - add macro */
-	*pos++ = 'c';
+        /* legacy CREATE macro member right(s) - add macro */
+        *pos++ = 'c';
     }
     if (acl & legacy_delete) {
-	/* legacy DELETE macro member right(s) - add macro */
-	*pos++ = 'd';
+        /* legacy DELETE macro member right(s) - add macro */
+        *pos++ = 'd';
     }
     if (acl & ACL_ADMIN) *pos++ = 'a';
     if (acl & ACL_ANNOTATEMSG) *pos++ = 'n';

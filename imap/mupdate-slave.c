@@ -79,8 +79,8 @@ static int open_kick_socket(void)
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
-	syslog(LOG_ERR, "socket: %m");
-	fatal("socket failed", EC_OSERR);
+        syslog(LOG_ERR, "socket: %m");
+        fatal("socket failed", EC_OSERR);
     }
 
     strlcpy(fnamebuf, config_dir, sizeof(fnamebuf));
@@ -96,13 +96,13 @@ static int open_kick_socket(void)
     umask(oldumask); /* for Linux */
     chmod(fnamebuf, 0777); /* for DUX */
     if (r == -1) {
-	syslog(LOG_ERR, "bind: %s: %m", fnamebuf);
-	fatal("bind failed", EC_OSERR);
+        syslog(LOG_ERR, "bind: %s: %m", fnamebuf);
+        fatal("bind failed", EC_OSERR);
     }
     r = listen(s, 10);
     if (r == -1) {
-	syslog(LOG_ERR, "listen: %m");
-	fatal("listen failed", EC_OSERR);
+        syslog(LOG_ERR, "listen: %m");
+        fatal("listen failed", EC_OSERR);
     }
 
     return s;
@@ -112,7 +112,7 @@ static int open_kick_socket(void)
  * the array fd_list (atleast max_fds big), and the number of connections
  * into num_fds */
 static int get_kick_fds(int kicksock,
-			int *fd_list, int *num_fds, int max_fds)
+                        int *fd_list, int *num_fds, int max_fds)
 {
     fd_set read_set;
     int highest_fd = kicksock + 1;
@@ -128,29 +128,29 @@ static int get_kick_fds(int kicksock,
 
     for (*num_fds = 0; *num_fds < max_fds; (*num_fds)++) {
         int gotdata;
-	fd_set rset;
+        fd_set rset;
 
-	rset = read_set;
-	gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
+        rset = read_set;
+        gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
 
-	if (gotdata == -1) {
-	  /* Select Error! */
-	  syslog(LOG_ERR, "kicksock select failed");
-	  return -1;
-	} else if (gotdata != 0 && FD_ISSET(kicksock, &rset)) {
-	  struct sockaddr_un clientaddr;
-	  int len = sizeof(clientaddr);
+        if (gotdata == -1) {
+          /* Select Error! */
+          syslog(LOG_ERR, "kicksock select failed");
+          return -1;
+        } else if (gotdata != 0 && FD_ISSET(kicksock, &rset)) {
+          struct sockaddr_un clientaddr;
+          int len = sizeof(clientaddr);
 
-	  fd_list[*num_fds] = accept(kicksock,
-		(struct sockaddr *)&clientaddr, (socklen_t *)&len);
-	  if (fd_list[*num_fds] == -1) {
-	    syslog(LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
-	    return -1;
-	  }
-	} else {
-	  /* Timeout Expired, we're done! */
-	  break;
-	}
+          fd_list[*num_fds] = accept(kicksock,
+                (struct sockaddr *)&clientaddr, (socklen_t *)&len);
+          if (fd_list[*num_fds] == -1) {
+            syslog(LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
+            return -1;
+          }
+        } else {
+          /* Timeout Expired, we're done! */
+          break;
+        }
     }
 
     return 0;
@@ -170,7 +170,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     struct mpool *pool;
     int r;
     enum mupdate_cmd_response response;
-    
+
     if (!handle || !handle->saslcompleted) return;
 
     pool = new_mpool(131072); /* Arbitrary, but large (128k) */
@@ -178,8 +178,8 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     /* first get the list of remote mailboxes from the mupdate master */
     r = mupdate_synchronize_remote(handle, &remote_boxes, pool);
     if (r) {
-	free_mpool(pool);
-	return;
+        free_mpool(pool);
+        return;
     }
 
     /* don't handle connections (and drop current connections)
@@ -192,7 +192,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     if (r) return;
 
     mupdate_signal_db_synced();
-    
+
     /* Okay, we're all set to go */
     mupdate_ready();
 
@@ -205,85 +205,85 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
     /* Now just listen to the rest of the updates */
     while (1) {
-	struct timeval tv;
+        struct timeval tv;
 
-	tv.tv_sec = pingtimeout;
-	tv.tv_usec = 0;
+        tv.tv_sec = pingtimeout;
+        tv.tv_usec = 0;
 
-	prot_flush(handle->conn->out);
+        prot_flush(handle->conn->out);
 
-	rset = read_set;
+        rset = read_set;
 
-	gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
+        gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
 
-	if (gotdata == -1) {
-	    /* Oops? */
-	    syslog(LOG_ERR, "select failed");
-	    break;
-	} else if (gotdata != 0) {
-	    if (FD_ISSET(handle->conn->sock, &rset)) {
-		/* If there is a fatal error, die, other errors ignore */
-		response = MUPDATE_NONE;
-		if ((r = mupdate_scarf(handle, cmd_change, NULL, 
-				  waiting_for_noop, &response)) != 0) {
-		    syslog(LOG_ERR, "mupdate_scarf: %d", r);
-		    break;
-		}
-	    } 
-	    
-	    /* If we were waiting on a noop, we no longer are.
-	     * If we have been kicked, tell them we're done now */
-	    if (waiting_for_noop) {
-		if (response != MUPDATE_OK) {
-		    syslog(LOG_ERR, "update/noop sync error %d", response);
-		    break;
-		}
-		waiting_for_noop = 0;
+        if (gotdata == -1) {
+            /* Oops? */
+            syslog(LOG_ERR, "select failed");
+            break;
+        } else if (gotdata != 0) {
+            if (FD_ISSET(handle->conn->sock, &rset)) {
+                /* If there is a fatal error, die, other errors ignore */
+                response = MUPDATE_NONE;
+                if ((r = mupdate_scarf(handle, cmd_change, NULL,
+                                  waiting_for_noop, &response)) != 0) {
+                    syslog(LOG_ERR, "mupdate_scarf: %d", r);
+                    break;
+                }
+            }
 
-		for (; num_kick_fds; num_kick_fds--) {
-		    if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
-			syslog(LOG_WARNING,
-			       "can't write to IPC socket (ignoring)");
-		    }
-		    (void)close(kick_fds[num_kick_fds-1]);
-		}
-	    }
-	    
-	    if (waiting_for_noop == 0 && FD_ISSET(kicksock, &rset)) {
-	        /* We were kicked--collect outstanding kicks! */
-	        if (get_kick_fds(kicksock,
-				kick_fds, &num_kick_fds, KICK_FDS_LEN)) {
-		    /* Nonzero return code -- Error */
-		    break;
-		}
+            /* If we were waiting on a noop, we no longer are.
+             * If we have been kicked, tell them we're done now */
+            if (waiting_for_noop) {
+                if (response != MUPDATE_OK) {
+                    syslog(LOG_ERR, "update/noop sync error %d", response);
+                    break;
+                }
+                waiting_for_noop = 0;
 
-		prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
-		if (prot_flush(handle->conn->out) == EOF) {
-		    syslog(LOG_ERR, "connection to master failed.");
-		    break;
-		}
-		waiting_for_noop = 1;
-	    }
-	} else /* (gotdata == 0) */ {
-	    /* Timeout, send a NOOP */
-	    if (!waiting_for_noop) {
-		prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
-		if (prot_flush(handle->conn->out) == EOF) {
-		    syslog(LOG_ERR, "connection to master failed.");
-		    break;
-		}
-		waiting_for_noop = 1;
-	    } else {
-		/* We were already waiting on a noop! */
-		syslog(LOG_ERR, "connection to master timed out.");
-		break;
-	    }
-	}
+                for (; num_kick_fds; num_kick_fds--) {
+                    if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
+                        syslog(LOG_WARNING,
+                               "can't write to IPC socket (ignoring)");
+                    }
+                    (void)close(kick_fds[num_kick_fds-1]);
+                }
+            }
+
+            if (waiting_for_noop == 0 && FD_ISSET(kicksock, &rset)) {
+                /* We were kicked--collect outstanding kicks! */
+                if (get_kick_fds(kicksock,
+                                kick_fds, &num_kick_fds, KICK_FDS_LEN)) {
+                    /* Nonzero return code -- Error */
+                    break;
+                }
+
+                prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
+                if (prot_flush(handle->conn->out) == EOF) {
+                    syslog(LOG_ERR, "connection to master failed.");
+                    break;
+                }
+                waiting_for_noop = 1;
+            }
+        } else /* (gotdata == 0) */ {
+            /* Timeout, send a NOOP */
+            if (!waiting_for_noop) {
+                prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
+                if (prot_flush(handle->conn->out) == EOF) {
+                    syslog(LOG_ERR, "connection to master failed.");
+                    break;
+                }
+                waiting_for_noop = 1;
+            } else {
+                /* We were already waiting on a noop! */
+                syslog(LOG_ERR, "connection to master timed out.");
+                break;
+            }
+        }
     } /* Loop */
 
     /* Don't leak the descriptors! */
     for (; num_kick_fds; num_kick_fds--) {
-	(void)close(kick_fds[num_kick_fds-1]);
+        (void)close(kick_fds[num_kick_fds-1]);
     }
     (void)close(kicksock);
     return;
@@ -298,38 +298,38 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     srand(time(NULL) * getpid());
 
     if(!config_mupdate_server) {
-	fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
+        fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
     }
 
     retry_delay = config_getint(IMAPOPT_MUPDATE_RETRY_DELAY);
     if(retry_delay < 0) {
-	fatal("invalid value for mupdate_retry_delay", EC_UNAVAILABLE);
+        fatal("invalid value for mupdate_retry_delay", EC_UNAVAILABLE);
     }
 
     while(1) {
-	ret = mupdate_connect(config_mupdate_server, NULL, &h, NULL);
-	if(ret) {
-	    syslog(LOG_ERR,"couldn't connect to mupdate server");
-	    goto retry;
-	}
-   
-	syslog(LOG_ERR, "successful mupdate connection to %s",
-	       config_mupdate_server);
+        ret = mupdate_connect(config_mupdate_server, NULL, &h, NULL);
+        if(ret) {
+            syslog(LOG_ERR,"couldn't connect to mupdate server");
+            goto retry;
+        }
 
-	mupdate_listen(h, retry_delay);
+        syslog(LOG_ERR, "successful mupdate connection to %s",
+               config_mupdate_server);
+
+        mupdate_listen(h, retry_delay);
 
     retry:
-	/* Cleanup */
-	mupdate_disconnect(&h);
+        /* Cleanup */
+        mupdate_disconnect(&h);
 
-	real_delay = retry_delay + (rand() % (retry_delay / 2));
-	
-	syslog(LOG_ERR,
-	       "retrying connection to mupdate server in %d seconds",
-	       real_delay);
+        real_delay = retry_delay + (rand() % (retry_delay / 2));
 
-	/* Wait before retrying */
-	sleep(real_delay);
+        syslog(LOG_ERR,
+               "retrying connection to mupdate server in %d seconds",
+               real_delay);
+
+        /* Wait before retrying */
+        sleep(real_delay);
     }
 
     return NULL;
@@ -338,29 +338,29 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
 {
     int kicksock, kickconn = -1;
-    
+
     kicksock = open_kick_socket();
 
     /* Now just listen to the rest of the updates */
     while(1) {
         struct sockaddr_un clientaddr;
-	int len;
-      
-	/* Only handle one kick at a time -- they're fast */
-	len = sizeof(clientaddr);
-	kickconn =
-	    accept(kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
-	
-	if (kickconn == -1) {
-	  syslog(LOG_WARNING, "accept(): %m");
-	  break;
-	} else {
-	  if (write(kickconn, "ok", 2) < 0) {
-	    syslog(LOG_WARNING, "can't write to IPC socket?");
-	  }
-	  close(kickconn);
-	  kickconn = -1;
-	}
+        int len;
+
+        /* Only handle one kick at a time -- they're fast */
+        len = sizeof(clientaddr);
+        kickconn =
+            accept(kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
+
+        if (kickconn == -1) {
+          syslog(LOG_WARNING, "accept(): %m");
+          break;
+        } else {
+          if (write(kickconn, "ok", 2) < 0) {
+            syslog(LOG_WARNING, "can't write to IPC socket?");
+          }
+          close(kickconn);
+          kickconn = -1;
+        }
     } /* Loop */
 
     /* Don't leak the descriptor! */

@@ -58,7 +58,7 @@ void artificial_matchall(int days);
 
 void
 callback_list(struct imclient *imclient,
-	      void *rock,
-	      struct imclient_reply *reply);
+              void *rock,
+              struct imclient_reply *reply);
 
 #endif /* READCONFIG_H */

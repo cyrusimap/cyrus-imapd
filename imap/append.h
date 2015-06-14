@@ -1,4 +1,4 @@
-/* append.h -- Description of messages to be copied 
+/* append.h -- Description of messages to be copied
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -63,11 +63,11 @@ struct appendstate {
     char userid[MAX_MAILBOX_BUFFER];
 
     enum { APPEND_READY, APPEND_DONE } s;
-				/* current state of append */
+                                /* current state of append */
 
     int nummsg;    /* number of messages appended pending commit.
-		      from as->baseuid ... m.baseuid + nummsg - 1 */
-    unsigned baseuid; 
+                      from as->baseuid ... m.baseuid + nummsg - 1 */
+    unsigned baseuid;
 
     /* set seen on these message on commit */
     int internalseen;
@@ -88,23 +88,23 @@ struct appendstate {
 struct stagemsg;
 
 extern int append_check(const char *name,
-			struct auth_state *auth_state,
-			long aclcheck,
-			const quota_t quotacheck[QUOTA_NUMRESOURCES]);
+                        struct auth_state *auth_state,
+                        long aclcheck,
+                        const quota_t quotacheck[QUOTA_NUMRESOURCES]);
 
 /* appendstate must be allocated by client */
 extern int append_setup(struct appendstate *as, const char *name,
-			const char *userid, struct auth_state *auth_state,
-			long aclcheck,
-			const quota_t quotacheck[QUOTA_NUMRESOURCES],
-			struct namespace *, int isadmin, enum event_type event_type);
+                        const char *userid, struct auth_state *auth_state,
+                        long aclcheck,
+                        const quota_t quotacheck[QUOTA_NUMRESOURCES],
+                        struct namespace *, int isadmin, enum event_type event_type);
 extern int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
-			     const char *userid,
-			     struct auth_state *auth_state,
-			     long aclcheck,
-			     const quota_t quotacheck[QUOTA_NUMRESOURCES],
-			     struct namespace *namespace,
-			     int isadmin, enum event_type event_type);
+                             const char *userid,
+                             struct auth_state *auth_state,
+                             long aclcheck,
+                             const quota_t quotacheck[QUOTA_NUMRESOURCES],
+                             struct namespace *namespace,
+                             int isadmin, enum event_type event_type);
 
 extern uint32_t append_uidvalidity(struct appendstate *as);
 
@@ -113,35 +113,35 @@ extern int append_abort(struct appendstate *as);
 
 /* creates a new stage and returns stage file corresponding to mailboxname */
 extern FILE *append_newstage(const char *mailboxname, time_t internaldate,
-			     int msgnum, struct stagemsg **stagep);
+                             int msgnum, struct stagemsg **stagep);
 
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage(struct appendstate *mailbox, struct body **body,
-			    struct stagemsg *stage, time_t internaldate,
-			    const strarray_t *flags, int nolink,
-			    struct entryattlist *annotations);
+                            struct stagemsg *stage, time_t internaldate,
+                            const strarray_t *flags, int nolink,
+                            struct entryattlist *annotations);
 
 /* removes the stage (frees memory, deletes the staging files) */
 extern int append_removestage(struct stagemsg *stage);
 
 extern int append_fromstream(struct appendstate *as, struct body **body,
-			     struct protstream *messagefile,
-			     unsigned long size, time_t internaldate,
-			     const strarray_t *flags);
+                             struct protstream *messagefile,
+                             unsigned long size, time_t internaldate,
+                             const strarray_t *flags);
 
 extern int append_copy(struct mailbox *mailbox,
-		       struct appendstate *append_mailbox,
-		       int nummsg, struct index_record *records,
-		       int nolink, int is_same_user);
+                       struct appendstate *append_mailbox,
+                       int nummsg, struct index_record *records,
+                       int nolink, int is_same_user);
 
 extern int append_collectnews(struct appendstate *mailbox,
-			      const char *group, unsigned long feeduid);
+                              const char *group, unsigned long feeduid);
 
 #define append_getuidvalidity(as) ((as)->m.uidvalidity);
 #define append_getlastuid(as) ((as)->m.last_uid);
 
 extern int append_run_annotator(struct appendstate *as,
-				struct index_record *record);
+                                struct index_record *record);
 
 extern const char *append_stagefname(struct stagemsg *stage);
 

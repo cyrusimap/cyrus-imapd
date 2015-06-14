@@ -51,7 +51,7 @@ my $server;
 my $where;
 
 GetOptions("u|user=s" => \$user,
-	   "v|verbose!" => \$verbose) or pod2usage(2);
+           "v|verbose!" => \$verbose) or pod2usage(2);
 
 if (@ARGV) {
     $server = shift(@ARGV);
@@ -75,29 +75,29 @@ $cyrus->authenticate(-user => $user); #to debug -maxsff => 0
 #list mailboxes in inbox.*
 my @info = ();
 $cyrus->addcallback({-trigger => 'LIST',
-		     -callback => sub {
-		        my %d = @_;
-			next unless $d{-text} =~ s/^\(([^\)]*)\) //;
-			my $attrs = $1;
-			my $sep = '';
-			# NIL or (attrs) "sep" "str"
-			if ($d{-text} =~ /^N/) {
-			  return if $d{-text} !~ s/^NIL//;
-			}
-			elsif ($d{-text} =~ s/\"\\?(.)\"//) {
-			  $sep = $1;
-			}
-			return unless $d{-text} =~ s/^ //;
-			my $mbox;
-			if ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
-			  ($mbox = $1) =~ s/\\(.)/$1/g;
-			} else {
-			  $d{-text} =~ /^([]!\#-[^-~]+)/;
-			  $mbox = $1;
-			}
-			push @{$d{-rock}}, $mbox;
-		      },
-		      -rock => \@info});
+                     -callback => sub {
+                        my %d = @_;
+                        next unless $d{-text} =~ s/^\(([^\)]*)\) //;
+                        my $attrs = $1;
+                        my $sep = '';
+                        # NIL or (attrs) "sep" "str"
+                        if ($d{-text} =~ /^N/) {
+                          return if $d{-text} !~ s/^NIL//;
+                        }
+                        elsif ($d{-text} =~ s/\"\\?(.)\"//) {
+                          $sep = $1;
+                        }
+                        return unless $d{-text} =~ s/^ //;
+                        my $mbox;
+                        if ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
+                          ($mbox = $1) =~ s/\\(.)/$1/g;
+                        } else {
+                          $d{-text} =~ /^([]!\#-[^-~]+)/;
+                          $mbox = $1;
+                        }
+                        push @{$d{-rock}}, $mbox;
+                      },
+                      -rock => \@info});
 
 my ($rc, $msg) = $cyrus->send('', '', "LIST \"\" $where*");
 $cyrus->addcallback({-trigger => 'LIST'});
@@ -113,15 +113,15 @@ foreach my $a (@info) {
     my ($b, $c) = sizeofmailbox($a);
 
     my @z = split(/\./, $a);
-    
+
     my $str = "";
     foreach my $y (@z) {
-	if ($str ne "") {
-	    $str=$str.".";
-	}
-	$str=$str.$y;
-	$mb_size{$str} += $b;
-	$mb_msgs{$str} += $c;
+        if ($str ne "") {
+            $str=$str.".";
+        }
+        $str=$str.$y;
+        $mb_size{$str} += $b;
+        $mb_msgs{$str} += $c;
     }
 }
 
@@ -138,10 +138,10 @@ sub sizeofmailbox {
   #select something
   my @info = ();
   $cyrus->addcallback({-trigger => 'FLAGS',
-		       -callback => sub {
-			 
-		       },
-		       -rock => \@info});
+                       -callback => sub {
+
+                       },
+                       -rock => \@info});
   print STDERR "$mb...\n" if $verbose;
   my ($rc, $msg) = $cyrus->send('', '', "EXAMINE \"$mb\"");
   if ($rc eq 'OK') {
@@ -152,32 +152,32 @@ sub sizeofmailbox {
   #list size of all msgs
   my $totalsize = 0;
   my $flags = 1;
-  
+
   my %info = ();
   $info{'totalsize'} = 0;
   $info{'messages'} = 0;
-  
+
   $cyrus->addcallback({-trigger => 'FETCH', -flags => $flags,
-		       -callback => sub {
-			 my %d = @_;
-			 my $msgno = 1;
-			 $msgno = $d{-msgno};
-			 
-			 my $size = 0;
-			 if ( $d{-text} =~ /\(RFC822.SIZE (\d+)\)/)
-			   {			 
-			     $size = $1;
-			   }
-			 ${$d{-rock}}{'totalsize'} += $size;
-		         ${$d{-rock}}{'messages'}++;
-		    }, 
+                       -callback => sub {
+                         my %d = @_;
+                         my $msgno = 1;
+                         $msgno = $d{-msgno};
+
+                         my $size = 0;
+                         if ( $d{-text} =~ /\(RFC822.SIZE (\d+)\)/)
+                           {
+                             $size = $1;
+                           }
+                         ${$d{-rock}}{'totalsize'} += $size;
+                         ${$d{-rock}}{'messages'}++;
+                    },
   -rock => \%info});
 
   ($rc, $msg) = $cyrus->send('', '', 'FETCH 1:* RFC822.SIZE');
   $cyrus->addcallback({-trigger => 'FETCH'});
 
   ($info{'totalsize'}, $info{'messages'});
-} 
+}
 
 sub showsize {
 

@@ -74,7 +74,7 @@
  * make sure all the mailbox upgrade and downgrade code in mailbox.c is
  * changed to be able to convert both backwards and forwards between the
  * new version and all supported previous versions */
-#define MAILBOX_MINOR_VERSION	13
+#define MAILBOX_MINOR_VERSION   13
 #define MAILBOX_CACHE_MINOR_VERSION 3
 
 #define FNAME_HEADER "/cyrus.header"
@@ -105,7 +105,7 @@ enum meta_filename {
 #define LOCK_NONE 0
 #define LOCK_SHARED 1
 #define LOCK_EXCLUSIVE 2
-#define LOCK_NONBLOCK	4   /* flag to OR in */
+#define LOCK_NONBLOCK   4   /* flag to OR in */
 #define LOCK_NONBLOCKING (LOCK_NONBLOCK|LOCK_EXCLUSIVE)
 
 #define NUM_CACHE_FIELDS 10
@@ -221,7 +221,7 @@ struct mailbox {
 
     ptrarray_t caches;
     const char *index_base;
-    size_t index_len;	/* mapped size */
+    size_t index_len;   /* mapped size */
 
     int index_locktype; /* 0 = none, 1 = shared, 2 = exclusive */
     int is_readonly; /* true = open index and cache files readonly */
@@ -320,11 +320,11 @@ struct mailbox_iter {
 #define OFFSET_RECENTUID 104       /* last UID the owner was told about */
 #define OFFSET_RECENTTIME 108      /* last timestamp for seen data */
 #define OFFSET_POP3_SHOW_AFTER 112 /* time after which to show messages
-				    * to POP3 */
+                                    * to POP3 */
 #define OFFSET_QUOTA_ANNOT_USED 116 /* bytes of per-mailbox and per-message
-				     * annotations for this mailbox */
-			  /* Spares - only use these if the index */
-			  /*  record size remains the same */
+                                     * annotations for this mailbox */
+                          /* Spares - only use these if the index */
+                          /*  record size remains the same */
 #define OFFSET_SYNCCRCS_ANNOT 120 /* SYNC_CRC of the annotations */
 #define OFFSET_HEADER_CRC 124 /* includes all zero for the spares! */
 /* NEXT UPDATE - add Bug #3562 "TOTAL_MAILBOX_USED" field, 64 bit
@@ -374,26 +374,26 @@ struct mailbox_iter {
 #define FLAGS_LOCAL    (FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED)
 #define FLAGS_GLOBAL   (FLAGS_SYSTEM|FLAG_EXPUNGED)
 
-#define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
+#define OPT_POP3_NEW_UIDL (1<<0)        /* added for Outlook stupidity */
 /* NOTE: not used anymore - but don't reuse it */
-#define OPT_IMAP_CONDSTORE (1<<1)	/* added for CONDSTORE extension */
+#define OPT_IMAP_CONDSTORE (1<<1)       /* added for CONDSTORE extension */
 
 /* these two are annotations, if you add more, update annotate.c
  * struct annotate_mailbox_flags */
-#define OPT_IMAP_SHAREDSEEN (1<<2)	/* added for shared \Seen flag */
-#define OPT_IMAP_DUPDELIVER (1<<3)	/* added to allow duplicate delivery */
-#define OPT_MAILBOX_NEEDS_UNLINK (1<<29)	/* files to be unlinked */
-#define OPT_MAILBOX_NEEDS_REPACK (1<<30)	/* repacking to do */
-#define OPT_MAILBOX_DELETED (1U<<31)	/* mailbox is deleted an awaiting cleanup */
+#define OPT_IMAP_SHAREDSEEN (1<<2)      /* added for shared \Seen flag */
+#define OPT_IMAP_DUPDELIVER (1<<3)      /* added to allow duplicate delivery */
+#define OPT_MAILBOX_NEEDS_UNLINK (1<<29)        /* files to be unlinked */
+#define OPT_MAILBOX_NEEDS_REPACK (1<<30)        /* repacking to do */
+#define OPT_MAILBOX_DELETED (1U<<31)    /* mailbox is deleted an awaiting cleanup */
 
 #define MAILBOX_OPTIONS_MASK (OPT_POP3_NEW_UIDL | \
-			      OPT_IMAP_SHAREDSEEN | \
-			      OPT_IMAP_DUPDELIVER)
+                              OPT_IMAP_SHAREDSEEN | \
+                              OPT_IMAP_DUPDELIVER)
 #define MAILBOX_CLEANUP_MASK (OPT_MAILBOX_NEEDS_UNLINK | \
-			      OPT_MAILBOX_NEEDS_REPACK | \
-			      OPT_MAILBOX_DELETED)
+                              OPT_MAILBOX_NEEDS_REPACK | \
+                              OPT_MAILBOX_DELETED)
 #define MAILBOX_OPT_VALID (MAILBOX_OPTIONS_MASK | \
-			   MAILBOX_CLEANUP_MASK)
+                           MAILBOX_CLEANUP_MASK)
 
 /* reconstruct flags */
 #define RECONSTRUCT_QUIET           (1<<1)
@@ -417,7 +417,7 @@ extern const int MAILBOX_NUM_CACHE_HEADERS;
 /* Aligned buffer for manipulating index header/record fields */
 typedef union {
     unsigned char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
-		      INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
+                      INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
     bit64 align8; /* align on 8-byte boundary */
 } indexbuffer_t;
 
@@ -466,8 +466,8 @@ unsigned mailbox_cached_header(const char *s);
 unsigned mailbox_cached_header_inline(const char *text);
 
 typedef unsigned mailbox_decideproc_t(struct mailbox *mailbox,
-				      const struct index_record *index,
-				      void *rock);
+                                      const struct index_record *index,
+                                      void *rock);
 
 typedef void mailbox_notifyproc_t(const char *mboxname);
 
@@ -481,20 +481,20 @@ extern const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile);
 extern int mailbox_meta_rename(struct mailbox *mailbox, int metafile);
 
 extern const char *mailbox_record_fname(struct mailbox *mailbox,
-					const struct index_record *record);
+                                        const struct index_record *record);
 extern const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid);
 extern unsigned mailbox_should_archive(struct mailbox *mailbox,
-				       const struct index_record *record,
-				       void *rock);
+                                       const struct index_record *record,
+                                       void *rock);
 
 /* map individual messages in */
 extern int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf);
 
 /* cache record API */
 int mailbox_cacherecord(struct mailbox *mailbox,
-			const struct index_record *record);
+                        const struct index_record *record);
 char *mailbox_cache_get_msgid(struct mailbox *mailbox,
-			      struct index_record *record);
+                              struct index_record *record);
 
 /* field-based lookup functions */
 const char *cacheitem_base(const struct index_record *record, int field);
@@ -503,12 +503,12 @@ struct buf *cacheitem_buf(const struct index_record *record, int field);
 
 /* opening and closing */
 extern int mailbox_open_iwl(const char *name,
-			    struct mailbox **mailboxptr);
+                            struct mailbox **mailboxptr);
 extern int mailbox_open_irlnb(const char *name, struct mailbox **);
 extern int mailbox_open_irl(const char *name,
-			    struct mailbox **mailboxptr);
+                            struct mailbox **mailboxptr);
 extern int mailbox_open_exclusive(const char *name,
-			          struct mailbox **mailboxptr);
+                                  struct mailbox **mailboxptr);
 extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
@@ -523,28 +523,28 @@ extern int mailbox_write_header(struct mailbox *mailbox, int force);
 extern void mailbox_index_dirty(struct mailbox *mailbox);
 extern void mailbox_modseq_dirty(struct mailbox *mailbox);
 extern int mailbox_reload_index_record(struct mailbox *mailbox,
-				     struct index_record *record);
+                                     struct index_record *record);
 extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
-				        struct index_record *record);
+                                        struct index_record *record);
 extern int mailbox_append_index_record(struct mailbox *mailbox,
-				       struct index_record *record);
+                                       struct index_record *record);
 extern int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
-				     struct index_record *record);
+                                     struct index_record *record);
 
 extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
-			   int dirty_modseq);
+                           int dirty_modseq);
 extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
-			     int *flagnum, int create);
+                             int *flagnum, int create);
 extern int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum);
 extern int mailbox_record_hasflag(struct mailbox *mailbox,
-				  const struct index_record *record,
-				  const char *flag);
+                                  const struct index_record *record,
+                                  const char *flag);
 extern strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
-					 const struct index_record *record,
-					 const char *userid);
+                                         const struct index_record *record,
+                                         const char *userid);
 extern struct entryattlist *mailbox_extract_annots(const struct mailbox *mailbox,
-						   const struct index_record *record);
+                                                   const struct index_record *record);
 extern int mailbox_commit(struct mailbox *mailbox);
 extern int mailbox_abort(struct mailbox *mailbox);
 
@@ -558,32 +558,32 @@ extern int mailbox_lock_index(struct mailbox *mailbox, int locktype);
 extern int mailbox_index_islocked(struct mailbox *mailbox, int write);
 
 extern int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
-				   unsigned *ndeleted);
+                                   unsigned *ndeleted);
 extern int mailbox_expunge(struct mailbox *mailbox,
-			   mailbox_decideproc_t *decideproc, void *deciderock,
-			   unsigned *nexpunged, int event_type);
+                           mailbox_decideproc_t *decideproc, void *deciderock,
+                           unsigned *nexpunged, int event_type);
 extern void mailbox_archive(struct mailbox *mailbox,
-			    mailbox_decideproc_t *decideproc, void *deciderock);
+                            mailbox_decideproc_t *decideproc, void *deciderock);
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
-			   mailbox_decideproc_t *decideproc, void *deciderock);
+                           mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 /* unlock and immediately lock again with the same type */
 extern int mailbox_yield_index(struct mailbox *mailbox);
 
 extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, const char *acl,
-			  const char *uniqueid, int options, unsigned uidvalidity,
-			  modseq_t highestmodseq,
-			  struct mailbox **mailboxptr);
+                          const char *uniqueid, int options, unsigned uidvalidity,
+                          modseq_t highestmodseq,
+                          struct mailbox **mailboxptr);
 
 extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
-			      const char *newname, const char *newuniqueid);
+                              const char *newname, const char *newuniqueid);
 extern int mailbox_delete_cleanup(const char *part, const char *name, const char *uniqueid);
 
 extern int mailbox_rename_copy(struct mailbox *oldmailbox,
-			       const char *newname, const char *newpart,
-			       unsigned uidvalidity,
-			       const char *userid, int ignorequota,
-			       struct mailbox **newmailboxptr);
+                               const char *newname, const char *newpart,
+                               unsigned uidvalidity,
+                               const char *userid, int ignorequota,
+                               struct mailbox **newmailboxptr);
 extern int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox);
 
 
@@ -597,23 +597,23 @@ extern int mailbox_setversion(struct mailbox *mailbox, int version);
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 
 #define mailbox_quota_check(mailbox, delta) \
-	(mailbox->quotaroot ? quota_check_useds((mailbox)->quotaroot, delta) : 0)
+        (mailbox->quotaroot ? quota_check_useds((mailbox)->quotaroot, delta) : 0)
 void mailbox_get_usage(struct mailbox *mailbox,
-			quota_t usage[QUOTA_NUMRESOURCES]);
+                        quota_t usage[QUOTA_NUMRESOURCES]);
 void mailbox_annot_changed(struct mailbox *mailbox,
-			   unsigned int uid,
-			   const char *entry,
-			   const char *userid,
-			   const struct buf *oldval,
-			   const struct buf *newval);
+                           unsigned int uid,
+                           const char *entry,
+                           const char *userid,
+                           const struct buf *oldval,
+                           const struct buf *newval);
 
 extern int mailbox_get_annotate_state(struct mailbox *mailbox,
-				      unsigned int uid,
-				      struct annotate_state **statep);
+                                      unsigned int uid,
+                                      struct annotate_state **statep);
 
 extern struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
-					      modseq_t changedsince,
-					      unsigned flags);
+                                              modseq_t changedsince,
+                                              unsigned flags);
 extern void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid);
 extern const struct index_record *mailbox_iter_step(struct mailbox_iter *iter);
 extern void mailbox_iter_done(struct mailbox_iter **iterp);
@@ -624,8 +624,8 @@ extern int mailbox_add_dav(struct mailbox *mailbox);
 
 /* Rename a CID.  Note - this is just one mailbox! */
 extern int mailbox_cid_rename(struct mailbox *mailbox,
-			      conversation_id_t from_cid,
-			      conversation_id_t to_cid);
+                              conversation_id_t from_cid,
+                              conversation_id_t to_cid);
 extern int mailbox_add_conversations(struct mailbox *mailbox);
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);

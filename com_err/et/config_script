@@ -40,9 +40,9 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 # This program takes a shell script and configures for the following
-# variables:	@DIR@
-#		@AWK@
-#		@SED@
+# variables:    @DIR@
+#               @AWK@
+#               @SED@
 #
 # Usage: config_script <filename> [<awk>] [<sed>]
 #
@@ -56,9 +56,9 @@ TMP=`echo  $1 | sed -e 's;[^/]*$;;' -e 's/^$/./'`
 DIR=`cd ${TMP}; pwd`
 
 if test "${AWK}x" = "x" ; then
-	AWK=awk
+        AWK=awk
 fi
 if test "${SED}x" = "x" ; then
-	SED=sed
+        SED=sed
 fi
 sed -e "s;@DIR@;${DIR};" -e "s;@AWK@;${AWK};" -e "s;@SED@;${SED};" $FILE

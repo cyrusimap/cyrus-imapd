@@ -18,20 +18,20 @@ EXPORTED variable_list_t *varlist_new(void) {
 
 EXPORTED variable_list_t *varlist_select(variable_list_t *vl, const char *name) {
     if (!vl) {
-	return NULL;
+        return NULL;
     }
     if ((!name && !vl->name) || ((name && vl->name) && !strcasecmp(name, vl->name))) {
-	return vl;
+        return vl;
     }
     return varlist_select(vl->next, name);
 }
 
 EXPORTED variable_list_t *varlist_end(variable_list_t *vl) {
     if (!vl) {
-	return NULL;
+        return NULL;
     }
     if (!vl->next) {
-	return vl;
+        return vl;
     }
     return varlist_end(vl->next);
 }
@@ -39,22 +39,22 @@ EXPORTED variable_list_t *varlist_end(variable_list_t *vl) {
 
 EXPORTED variable_list_t *varlist_extend(variable_list_t *vl) {
     if (!vl) {
-	return NULL;
+        return NULL;
     }
     return (varlist_end(vl))->next = varlist_new();
 }
 
 EXPORTED void varlist_fini(variable_list_t *vl) {
     if (!vl) {
-	return;
+        return;
     }
     if (vl->name) {
-	free(vl->name);
-	vl->name = NULL;
+        free(vl->name);
+        vl->name = NULL;
     }
     if (vl->var) {
-	strarray_fini(vl->var);
-	vl->var = NULL;
+        strarray_fini(vl->var);
+        vl->var = NULL;
     }
     varlist_free(vl->next);
     vl->next = NULL;
@@ -63,14 +63,14 @@ EXPORTED void varlist_fini(variable_list_t *vl) {
 EXPORTED void varlist_free(variable_list_t *vl) {
     variable_list_t *next = NULL;
     if (!vl) {
-	return;
+        return;
     }
     next = vl->next;
     if (vl->name) {
-	free(vl->name);
+        free(vl->name);
     }
     if (vl->var) {
-	strarray_free(vl->var);
+        strarray_free(vl->var);
     }
     free(vl);
     varlist_free(next);

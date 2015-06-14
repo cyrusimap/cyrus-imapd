@@ -74,8 +74,8 @@ static void usage(void)
 }
 
 static int list_one(const char *user, const char *services,
-		    const char *message,
-		    void *rock __attribute__((unused)))
+                    const char *message,
+                    void *rock __attribute__((unused)))
 {
     printf("%-30s %-20s %s\n", user, services, message);
     return 0;
@@ -107,17 +107,17 @@ struct kill_rock
  * to kill all the processes for the user, and hope any others will reconnect.
  */
 static int gather_one(pid_t pid,
-		      const char *servicename __attribute__((unused)),
-		      const char *clienthost __attribute__((unused)),
-		      const char *userid,
-		      const char *mailbox __attribute__((unused)),
-		      const char *cmdname __attribute__((unused)),
-		      void *rock)
+                      const char *servicename __attribute__((unused)),
+                      const char *clienthost __attribute__((unused)),
+                      const char *userid,
+                      const char *mailbox __attribute__((unused)),
+                      const char *cmdname __attribute__((unused)),
+                      void *rock)
 {
     struct kill_rock *kr = (struct kill_rock *)rock;
 
     if (!strcmp(userid, kr->user))
-	ptrarray_append(&kr->pids, xmemdup(&pid, sizeof(pid)));
+        ptrarray_append(&kr->pids, xmemdup(&pid, sizeof(pid)));
     return 0;
 }
 
@@ -143,33 +143,33 @@ static void kill_existing_services(const char *user)
      */
     for (;;) {
 
-	/* send all the pids a signal */
-	for (i = 0 ; i < kr.pids.count ; i++) {
-	    pidp = (int *)kr.pids.data[i];
-	    sig = (probing ? 0 : (prejudice ? SIGKILL : SIGTERM));
-	    r = kill(*pidp, sig);
-	    if (r < 0) {
-		/* gone (yay!) or some error */
-		ptrarray_remove(&kr.pids, i);
-		free(pidp);
-		continue;
-	    }
-	}
-	if (!kr.pids.count)
-	    break;
+        /* send all the pids a signal */
+        for (i = 0 ; i < kr.pids.count ; i++) {
+            pidp = (int *)kr.pids.data[i];
+            sig = (probing ? 0 : (prejudice ? SIGKILL : SIGTERM));
+            r = kill(*pidp, sig);
+            if (r < 0) {
+                /* gone (yay!) or some error */
+                ptrarray_remove(&kr.pids, i);
+                free(pidp);
+                continue;
+            }
+        }
+        if (!kr.pids.count)
+            break;
 
-	probing = 1;
+        probing = 1;
 
-	sleep(delay);
-	delay *= 2;
-	if (delay > 8) {
-	    if (prejudice++) {
-		syslog(LOG_ALERT, "cannot kill some processes even with SIGKILL");
-		break;
-	    }
-	    delay = 1;
-	    probing = 0;
-	}
+        sleep(delay);
+        delay *= 2;
+        if (delay > 8) {
+            if (prejudice++) {
+                syslog(LOG_ALERT, "cannot kill some processes even with SIGKILL");
+                break;
+            }
+            delay = 1;
+            probing = 0;
+        }
     }
 
     ptrarray_fini(&kr.pids);
@@ -186,49 +186,49 @@ int main(int argc, char **argv)
     int r;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((opt = getopt(argc, argv, "C:alm:s:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 'a':
-	    if (mode != DENY) usage();
-	    mode = ALLOW;
-	    break;
+        case 'a':
+            if (mode != DENY) usage();
+            mode = ALLOW;
+            break;
 
-	case 'l':
-	    if (mode != DENY) usage();
-	    mode = LIST;
-	    break;
+        case 'l':
+            if (mode != DENY) usage();
+            mode = LIST;
+            break;
 
-	case 'm':
-	    message = optarg;
-	    break;
+        case 'm':
+            message = optarg;
+            break;
 
-	case 's':
-	    services = optarg;
-	    break;
+        case 's':
+            services = optarg;
+            break;
 
-	default:
-	    usage();
-	    break;
-	}
+        default:
+            usage();
+            break;
+        }
     }
     if (mode != DENY && (message || services))
-	usage();
+        usage();
 
     if (mode == LIST) {
-	if (optind != argc)
-	    usage();
+        if (optind != argc)
+            usage();
     }
     else {
-	if (optind != argc-1)
-	    usage();
-	user = argv[optind];
+        if (optind != argc-1)
+            usage();
+        user = argv[optind];
     }
 
     cyrus_init(alt_config, "cyr_deny", 0, 0);
@@ -237,36 +237,36 @@ int main(int argc, char **argv)
 
     r = denydb_open(/*create*/(mode == DENY));
     if (r) {
-	if (mode != DENY && r == IMAP_NOTFOUND)
-	    r = 0;
-	else
-	    fprintf(stderr, "cyr_deny: failed to open deny db: %s\n",
-		    error_message(r));
-	goto out;
+        if (mode != DENY && r == IMAP_NOTFOUND)
+            r = 0;
+        else
+            fprintf(stderr, "cyr_deny: failed to open deny db: %s\n",
+                    error_message(r));
+        goto out;
     }
 
     switch (mode) {
     case ALLOW:
-	r = denydb_delete(user);
-	if (r)
-	    fprintf(stderr, "cyr_deny: failed to allow access for %s: %s\n",
-		    user, error_message(r));
-	break;
+        r = denydb_delete(user);
+        if (r)
+            fprintf(stderr, "cyr_deny: failed to allow access for %s: %s\n",
+                    user, error_message(r));
+        break;
     case DENY:
-	r = denydb_set(user, services, message);
-	if (r)
-	    fprintf(stderr, "cyr_deny: failed to deny access for %s: %s\n",
-		    user, error_message(r));
-	else
-	    kill_existing_services(user);
-	break;
+        r = denydb_set(user, services, message);
+        if (r)
+            fprintf(stderr, "cyr_deny: failed to deny access for %s: %s\n",
+                    user, error_message(r));
+        else
+            kill_existing_services(user);
+        break;
     case LIST:
-	printf("%-30s %-20s %s\n", "Username", "Service(s)", "Message");
-	r = denydb_foreach(list_one, NULL);
-	if (r)
-	    fprintf(stderr, "cyr_deny: failed to list entries: %s\n",
-		    error_message(r));
-	break;
+        printf("%-30s %-20s %s\n", "Username", "Service(s)", "Message");
+        r = denydb_foreach(list_one, NULL);
+        if (r)
+            fprintf(stderr, "cyr_deny: failed to list entries: %s\n",
+                    error_message(r));
+        break;
     }
 
     denydb_close();

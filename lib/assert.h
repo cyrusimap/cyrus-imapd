@@ -44,10 +44,10 @@
 #define INCLUDED_ASSERT_H
 
 #ifdef __STDC__
-#define assert(ex)	{if (!(ex))assertionfailed(__FILE__, __LINE__, #ex);}
+#define assert(ex)      {if (!(ex))assertionfailed(__FILE__, __LINE__, #ex);}
 void assertionfailed(const char *file, int line, const char *expr);
 #else
-#define assert(ex)	{if (!(ex))assertionfailed(__FILE__, __LINE__, (char*)0);}
+#define assert(ex)      {if (!(ex))assertionfailed(__FILE__, __LINE__, (char*)0);}
 #endif
 
 #endif /* INCLUDED_ASSERT_H */

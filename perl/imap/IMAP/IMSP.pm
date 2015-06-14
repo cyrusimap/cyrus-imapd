@@ -2,13 +2,13 @@ package Cyrus::IMAP::IMSP;
 use strict;
 use Cyrus::IMAP;
 use vars qw($VERSION
-	    *get *set *unset);
+            *get *set *unset);
 
 $VERSION = '1.00';
 
 #
-# This is a derivative of the Cyrus::IMAP::Admin perl module, 
-# adapted to run the IMSP set, unset, and get commands 
+# This is a derivative of the Cyrus::IMAP::Admin perl module,
+# adapted to run the IMSP set, unset, and get commands
 # instead of various IMAP administrative commands.
 #
 
@@ -40,7 +40,7 @@ sub AUTOLOAD {
   goto &$AUTOLOAD;
 }
 
-# Set returns a standard result code. 
+# Set returns a standard result code.
 sub set {
   my ($self, $option, $value) = @_;
   $value = '' if !defined($value);
@@ -85,22 +85,22 @@ sub next_word {
 
   # Quoted
   if ($firstchar eq '"') {
-    s/^\"([^\"]*)\"// || 
+    s/^\"([^\"]*)\"// ||
       return "Bad format while decoding QUOTED-STRING in reply from GET";
     $firstword = $1;
-  } 
+  }
   # Literal
   elsif ($firstchar eq '{') {
-    s/^{([0-9]*)}\r\n// || 
+    s/^{([0-9]*)}\r\n// ||
       return "Bad format while decoding LITERAL in reply from GET";
     # Pull out the specified number of characters
     $firstword = substr($_, $[, $1);
     # Now remove those characters from the string
     substr($_, $[, $1) = '';
-  } 
+  }
   # Must be Atom
   else {
-    s/([^ ]*)// || 
+    s/([^ ]*)// ||
       return "Bad format while decoding ATOM in reply from GET";
     $firstword = $1;
   }
@@ -120,18 +120,18 @@ sub get {
   my ($self, $option) = @_;
   my %info = ();
   $self->addcallback({-trigger => 'OPTION',
-		      -callback => sub {
-			my %d = @_;
-			my $replyline = $d{-text};
-			(my $opt, $replyline) = next_word($replyline);
-			die $opt if (!defined $replyline);
-			(my $val, $replyline) = next_word($replyline);
-			die $val if (!defined $replyline);
-			(my $acc, $replyline) = next_word($replyline);
-			die $acc if (!defined $replyline);
-			$d{-rock}{$opt} = $val;
-		      },
-		      -rock => \%info});
+                      -callback => sub {
+                        my %d = @_;
+                        my $replyline = $d{-text};
+                        (my $opt, $replyline) = next_word($replyline);
+                        die $opt if (!defined $replyline);
+                        (my $val, $replyline) = next_word($replyline);
+                        die $val if (!defined $replyline);
+                        (my $acc, $replyline) = next_word($replyline);
+                        die $acc if (!defined $replyline);
+                        $d{-rock}{$opt} = $val;
+                      },
+                      -rock => \%info});
   my ($rc, $msg) = $self->send('', '', 'GET %s', $option);
   $self->addcallback({-trigger => 'OPTION'});
   if ($rc eq 'OK') {

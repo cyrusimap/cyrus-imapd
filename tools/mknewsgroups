@@ -68,18 +68,18 @@ use Cyrus::IMAP::Admin;
 
 $| = 1;
 
-my ($help, $noop, $config, $active, $user, $wild, $part, $acl, $pause) = 
+my ($help, $noop, $config, $active, $user, $wild, $part, $acl, $pause) =
     (0, 0, "/etc/imapd.conf", "./active", $ENV{USER}, "*", undef, "", 0);
 
 GetOptions("h|help!" => \$help,
-	   "n|noop!" => \$noop,
-	   "C|config=s" => \$config,
-	   "f|active=s" => \$active,
-	   "u|user=s" => \$user,
-	   "w|wild=s" => \$wild,
-	   "p|part=s" => \$part,
-	   "a|acl=s" => \$acl,
-	   "pause=s" => \$pause);
+           "n|noop!" => \$noop,
+           "C|config=s" => \$config,
+           "f|active=s" => \$active,
+           "u|user=s" => \$user,
+           "w|wild=s" => \$wild,
+           "p|part=s" => \$part,
+           "a|acl=s" => \$acl,
+           "pause=s" => \$pause);
 
 if ($help || !($server = shift)) {
     print "\n";
@@ -109,7 +109,7 @@ $wild =~ s/\*/\.\*/g;
 # split acl into a hash of ids and rights
 while ($acl =~ /^\s*([^\s]+)\s+([^\s]+)/) {
     $aclhash{$1} = $2;
-    $acl =~ s/^\s*([^\s]+)\s+([^\s]+)//;	# skip this id/rights pair
+    $acl =~ s/^\s*([^\s]+)\s+([^\s]+)//;        # skip this id/rights pair
 }
 
 my ($newsprefix, $unixhiersep) = (undef, 0);
@@ -117,16 +117,16 @@ my ($newsprefix, $unixhiersep) = (undef, 0);
 open CONF, $config or die "can't open $config";
 print "reading configure file...\n";
 while (<CONF>) {
-    if (/^#/) { 
-	next; 
+    if (/^#/) {
+        next;
     }
     if (/^newsprefix:\s+(.*)$/) {
-	$newsprefix = $1;
-	print "you are using \"$newsprefix\" as your news prefix.\n";
+        $newsprefix = $1;
+        print "you are using \"$newsprefix\" as your news prefix.\n";
     }
     if (/^unixhierarchysep:\s+(1|t|yes|on)/) {
-	$unixhiersep = 1;
-	print "i will deal with unix hierarchy separator.\n";
+        $unixhiersep = 1;
+        print "i will deal with unix hierarchy separator.\n";
     }
 }
 print "done\n";
@@ -147,45 +147,45 @@ while( <INPUT> )
 {
     chop;
     my $g;
-    
+
     if (/((\w|\.|\-|\+)+)\s+(.*)/) {
-	$mbox = $1;
+        $mbox = $1;
 
-	# compare group to each part of wildmat
-	my $match = 0;
-	foreach my $w (split(/,/, $wild)) {
-	    my $not = substr($w, 0, 1) eq "!";
-	    $w = substr($w, 1) if ($not);
-	    $match = !$not if ($mbox =~ /^$w$/);
-	}
+        # compare group to each part of wildmat
+        my $match = 0;
+        foreach my $w (split(/,/, $wild)) {
+            my $not = substr($w, 0, 1) eq "!";
+            $w = substr($w, 1) if ($not);
+            $match = !$not if ($mbox =~ /^$w$/);
+        }
 
-	if ($match) {
-	    # add newsprefix if necessary
-	    $mbox = $newsprefix . "." . $mbox if (defined($newsprefix));
+        if ($match) {
+            # add newsprefix if necessary
+            $mbox = $newsprefix . "." . $mbox if (defined($newsprefix));
 
-	    # switch to unixhiersep if necessary
-	    $mbox =~ s^\.^/^g if ($unixhiersep);
+            # switch to unixhiersep if necessary
+            $mbox =~ s^\.^/^g if ($unixhiersep);
 
-	    if ($noop) {
-		$part = "" if (!defined($part));
-		print "C01 CREATE \"$mbox\" $part\n";
-		my $n = 1;
-		while (($id,$rights) = each(%aclhash)) {
-		    printf "S%02d SETACL \"$mbox\" $id $rights\n", $n++;
-		}
-	    } else {
-		$g = 0;
-		print "creating $mbox... ";
-		if ($client->create($mbox, $part)) {
-		    while (($id,$rights) = each(%aclhash)) {
-			$client->setacl($mbox, $id => $rights);
-		    }
-		    $g = 1;
-		}
-		print "done\n";
-		sleep($pause) if ($g);
-	    }
-	}
+            if ($noop) {
+                $part = "" if (!defined($part));
+                print "C01 CREATE \"$mbox\" $part\n";
+                my $n = 1;
+                while (($id,$rights) = each(%aclhash)) {
+                    printf "S%02d SETACL \"$mbox\" $id $rights\n", $n++;
+                }
+            } else {
+                $g = 0;
+                print "creating $mbox... ";
+                if ($client->create($mbox, $part)) {
+                    while (($id,$rights) = each(%aclhash)) {
+                        $client->setacl($mbox, $id => $rights);
+                    }
+                    $g = 1;
+                }
+                print "done\n";
+                sleep($pause) if ($g);
+            }
+        }
     }
 }
 

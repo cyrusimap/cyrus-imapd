@@ -4,8 +4,8 @@ dnl Rob Earhart
 AC_DEFUN([CMU_NANA], [
   AC_REQUIRE([AC_PROG_CC])
   AC_ARG_WITH(nana,
-	[AS_HELP_STRING([--with-nana], [use NANA [yes]])],,
-	with_nana=yes)
+        [AS_HELP_STRING([--with-nana], [use NANA [yes]])],,
+        with_nana=yes)
   if test "$GCC" != yes; then
     with_nana=no
   elif test "$with_nana" = yes; then
@@ -14,8 +14,8 @@ AC_DEFUN([CMU_NANA], [
       with_nana=no
     else
       AC_CHECK_HEADER(nana.h,
-		      AC_CHECK_LIB(nana, nana_error,,with_nana=no),
-		      with_nana=no)
+                      AC_CHECK_LIB(nana, nana_error,,with_nana=no),
+                      with_nana=no)
     fi
   else
     with_nana=no

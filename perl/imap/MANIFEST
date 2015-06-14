@@ -1,16 +1,16 @@
-README			Notes on this mess
-Changes			The evolution of this weirdness
-IMAP.pm			Cyrus::IMAP: Perl interface to Cyrus imclient library
-IMAP/Admin.pm		Cyrus::IMAP::Admin: administrative Cyrus functions
-IMAP/Shell.pm		Cyrus::IMAP::Shell: cyradm command shell
-IMAP/IMSP.pm		Cyrus::IMAP::IMSP: IMSP support routines
-IMAP.xs			Perl interface routines for Cyrus library
-MANIFEST		This file
-Makefile.PL		Build Makefile for Cyrus::IMAP
-cyrperl.h		Declarations shared between Cyrus.xs and xsutil.c
-xsutil.c		Callback and utility functions for Cyrus interface
-typemap			Typemap defining IMAP_Cyrus Perl "class"
-cyradm.sh		Shell script wrapper for Cyrus::IMAP::Shell
-examples/auditmbox.pl	(lame) Example of Cyrus::IMAP::Admin
-t/01-imclient.t		Test script for Cyrus::IMAP
-t/02-admin.t		(lame) Test script for Cyrus::IMAP::Admin
+README                  Notes on this mess
+Changes                 The evolution of this weirdness
+IMAP.pm                 Cyrus::IMAP: Perl interface to Cyrus imclient library
+IMAP/Admin.pm           Cyrus::IMAP::Admin: administrative Cyrus functions
+IMAP/Shell.pm           Cyrus::IMAP::Shell: cyradm command shell
+IMAP/IMSP.pm            Cyrus::IMAP::IMSP: IMSP support routines
+IMAP.xs                 Perl interface routines for Cyrus library
+MANIFEST                This file
+Makefile.PL             Build Makefile for Cyrus::IMAP
+cyrperl.h               Declarations shared between Cyrus.xs and xsutil.c
+xsutil.c                Callback and utility functions for Cyrus interface
+typemap                 Typemap defining IMAP_Cyrus Perl "class"
+cyradm.sh               Shell script wrapper for Cyrus::IMAP::Shell
+examples/auditmbox.pl   (lame) Example of Cyrus::IMAP::Admin
+t/01-imclient.t         Test script for Cyrus::IMAP
+t/02-admin.t            (lame) Test script for Cyrus::IMAP::Admin

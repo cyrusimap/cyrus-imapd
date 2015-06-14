@@ -88,22 +88,22 @@ AC_SUBST(git_version)
 dnl Useful hook for distributions
 AC_ARG_WITH(extraident,
         [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
-	[AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
+        [AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
 AM_MAINTAINER_MODE
 
 AC_ARG_ENABLE(coverage,
-	[AS_HELP_STRING([--enable-coverage],[enable C test coverage])],
-	[GCOV_CFLAGS="--coverage"
-	 GCOV_CXXFLAGS="--coverage"
-	 GCOV_LDFLAGS="--coverage"
-	 GCOV_LIBS="-lgcov"
-	],[
-	 GCOV_CFLAGS=
-	 GCOV_CXXFLAGS=
-	 GCOV_LDFLAGS=
-	 GCOV_LIBS=
-	])
+        [AS_HELP_STRING([--enable-coverage],[enable C test coverage])],
+        [GCOV_CFLAGS="--coverage"
+         GCOV_CXXFLAGS="--coverage"
+         GCOV_LDFLAGS="--coverage"
+         GCOV_LIBS="-lgcov"
+        ],[
+         GCOV_CFLAGS=
+         GCOV_CXXFLAGS=
+         GCOV_LDFLAGS=
+         GCOV_LIBS=
+        ])
 AC_SUBST(GCOV_CFLAGS)
 AC_SUBST(GCOV_CXXFLAGS)
 AC_SUBST(GCOV_LDFLAGS)
@@ -113,13 +113,13 @@ AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
 AC_ARG_WITH(cyrus-user,
-	[AS_HELP_STRING([--with-cyrus-user=USERID], [use USERID cyrus userid])],
-	cyrus_user="$withval",cyrus_user="cyrus")
+        [AS_HELP_STRING([--with-cyrus-user=USERID], [use USERID cyrus userid])],
+        cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
 AC_DEFINE_UNQUOTED(CYRUS_USER, "$cyrus_user",[What user will we run as?])
 AC_ARG_WITH(cyrus-group,
-	[AS_HELP_STRING([--with-cyrus-group=GROUPID], [use GROUPID cyrus group])],
-	cyrus_group="$withval",cyrus_group="mail")
+        [AS_HELP_STRING([--with-cyrus-group=GROUPID], [use GROUPID cyrus group])],
+        cyrus_group="$withval",cyrus_group="mail")
 AC_SUBST(cyrus_group)
 
 dnl allow users to override $sysconfdir, but retain old default (/etc)
@@ -139,7 +139,7 @@ AC_ISC_POSIX
 AC_PROG_AWK
 AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
-	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
+        AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 AC_C_INLINE
 
@@ -191,13 +191,13 @@ LIBS="$LIBS ${LIB_SOCKET}"
 dnl check for IPv6 functions (fall back to sasl's if we don't have them)
 cyrus_cv_getaddrinfo=yes
 IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,
-	AC_DEFINE(HAVE_GETADDRINFO,[],[Do we have a getaddrinfo?]),
-	cyrus_cv_getaddrinfo=no)], cyrus_cv_getaddrinfo=no)
+        AC_DEFINE(HAVE_GETADDRINFO,[],[Do we have a getaddrinfo?]),
+        cyrus_cv_getaddrinfo=no)], cyrus_cv_getaddrinfo=no)
 
 cyrus_cv_getnameinfo=yes
 IPv6_CHECK_FUNC(getnameinfo,
-	AC_DEFINE(HAVE_GETNAMEINFO,[],[Do we have a getnameinfo?]),
-	cyrus_cv_getnameinfo=no)
+        AC_DEFINE(HAVE_GETNAMEINFO,[],[Do we have a getnameinfo?]),
+        cyrus_cv_getnameinfo=no)
 
 AM_CONDITIONAL([IPV6_noGETADDRINFO], [test $cyrus_cv_getaddrinfo = no])
 AM_CONDITIONAL([IPV6_noGETNAMEINFO], [test $cyrus_cv_getnameinfo = no])
@@ -228,7 +228,7 @@ dnl legacy options --with-mysql-libdir and --with-mysql-incdir
 CYRUS_MYSQL_OPTS
 if test "$with_mysql_lib" != none ; then
     AC_MSG_NOTICE([Legacy option --with-mysql-libdir=DIR detected.]
-		  [You may wish to change to --with-mysql which works now.])
+                  [You may wish to change to --with-mysql which works now.])
     withval="$with_mysql_lib/.."
 else
     withval="no"
@@ -236,26 +236,26 @@ fi
 
 AC_MSG_CHECKING([whether to use MySQL])
 AC_ARG_WITH(mysql,
-	[AS_HELP_STRING([--with-mysql=DIR], [use MySQL (in DIR) [no]])])
+        [AS_HELP_STRING([--with-mysql=DIR], [use MySQL (in DIR) [no]])])
 with_mysql=$withval
 
 case "$with_mysql" in
   no)
-	# Explicitly disable MySQL
-	;;
+        # Explicitly disable MySQL
+        ;;
   yes)
-	# Find mysql_config in $PATH
-	mysql_config=mysql_config
-	;;
+        # Find mysql_config in $PATH
+        mysql_config=mysql_config
+        ;;
   *)
-	# Find mysql_config in the specified directory
-	mysql_config="$with_mysql/bin/mysql_config"
-	if test ! -x "$mysql_config" ; then
-	    AC_MSG_ERROR([The mysql_config program was not found]
-			 [in $with_mysql/bin, disabling MySQL support])
-	    with_mysql="no"
-	fi
-	;;
+        # Find mysql_config in the specified directory
+        mysql_config="$with_mysql/bin/mysql_config"
+        if test ! -x "$mysql_config" ; then
+            AC_MSG_ERROR([The mysql_config program was not found]
+                         [in $with_mysql/bin, disabling MySQL support])
+            with_mysql="no"
+        fi
+        ;;
 esac
 
 if test "$with_mysql" != "no"; then
@@ -273,23 +273,23 @@ dnl End MySQL Detection
 
 dnl PgSQL Detection
 AC_ARG_WITH(pgsql,
-	[AS_HELP_STRING([--with-pgsql=DIR], [use PostgreSQL (in DIR) [no]])],
-	with_pgsql=$withval, with_pgsql="no")
+        [AS_HELP_STRING([--with-pgsql=DIR], [use PostgreSQL (in DIR) [no]])],
+        with_pgsql=$withval, with_pgsql="no")
 
 case "$with_pgsql" in
   no)
-	use_pgsql="no"
-	;;
+        use_pgsql="no"
+        ;;
   yes)
-	use_pgsql="yes"
-	with_pgsql_lib=none
-	with_pgsql_inc=none
-	;;
+        use_pgsql="yes"
+        with_pgsql_lib=none
+        with_pgsql_inc=none
+        ;;
   *)
-	use_pgsql="yes"
-	with_pgsql_lib="$with_pgsql/lib"
-	with_pgsql_inc="$with_pgsql/include"
-	;;
+        use_pgsql="yes"
+        with_pgsql_lib="$with_pgsql/lib"
+        with_pgsql_inc="$with_pgsql/include"
+        ;;
 esac
 
 if test "$use_pgsql" != "no"; then
@@ -317,23 +317,23 @@ dnl End PgSQL Detection
 
 dnl SQLite Detection
 AC_ARG_WITH(sqlite,
-	[AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
-	with_sqlite=$withval, with_sqlite=no)
+        [AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
+        with_sqlite=$withval, with_sqlite=no)
 
 case "$with_sqlite" in
   no)
-	use_sqlite="no"
-	;;
+        use_sqlite="no"
+        ;;
   yes)
-	use_sqlite="yes"
-	with_sqlite_lib=none
-	with_sqlite_inc=none
-	;;
+        use_sqlite="yes"
+        with_sqlite_lib=none
+        with_sqlite_inc=none
+        ;;
   *)
-	use_sqlite="yes"
-	with_sqlite_lib="$with_sqlite/lib"
-	with_sqlite_inc="$with_sqlite/include"
-	;;
+        use_sqlite="yes"
+        with_sqlite_lib="$with_sqlite/lib"
+        with_sqlite_inc="$with_sqlite/include"
+        ;;
 esac
 
 if test "$use_sqlite" != "no"; then
@@ -367,7 +367,7 @@ dnl
 
 enable_squat=yes
 AC_ARG_ENABLE(squat,
-	[  --disable-squat         disable Squat support])
+        [  --disable-squat         disable Squat support])
 if test "x$enable_squat" != xno ; then
     AC_DEFINE(USE_SQUAT,[],[Build in Squat support?])
 fi
@@ -379,11 +379,11 @@ dnl
 
 enable_squat=no
 AC_ARG_ENABLE(sphinx,
-	[  --enable-sphinx         disable Sphinx support],[
-	    enable_sphinx=$enableval
-	],[
-	    enable_sphinx=no
-	])
+        [  --enable-sphinx         disable Sphinx support],[
+            enable_sphinx=$enableval
+        ],[
+            enable_sphinx=no
+        ])
 if test "x$enable_sphinx" != xno ; then
     AC_DEFINE(USE_SPHINX,[],[Build in Sphinx support?])
 fi
@@ -401,49 +401,49 @@ dnl Search engines - Xapian
 dnl
 
 AC_ARG_ENABLE(xapian,
-	[  --enable-xapian         enable Xapian support],[
-	    enable_xapian=$enableval
-	],[
-	    enable_xapian=no
-	])
+        [  --enable-xapian         enable Xapian support],[
+            enable_xapian=$enableval
+        ],[
+            enable_xapian=no
+        ])
 if test "x$enable_xapian" != xno ; then
     AC_ARG_VAR(XAPIAN_CONFIG, [Location of xapian-config])
     AC_PATH_PROG(XAPIAN_CONFIG, xapian-config, [])
     if test -z "$XAPIAN_CONFIG"; then
-	AC_MSG_ERROR([Can't find Xapian library])
+        AC_MSG_ERROR([Can't find Xapian library])
     else
-	AC_MSG_CHECKING([$XAPIAN_CONFIG works])
-	dnl check for --ltlibs but not --libs as xapian-config --libs will
-	dnl fail if xapian isn't installed...
+        AC_MSG_CHECKING([$XAPIAN_CONFIG works])
+        dnl check for --ltlibs but not --libs as xapian-config --libs will
+        dnl fail if xapian isn't installed...
 
-	dnl run with exec to avoid leaking output on "real" bourne shells
-	if (exec >&5 2>&5 ; $XAPIAN_CONFIG --ltlibs --cxxflags; exit $?) then
-	    AC_MSG_RESULT(yes)
-	else
-	    AC_MSG_ERROR([\`$XAPIAN_CONFIG --ltlibs --cxxflags' doesn't work, aborting])
-	fi
+        dnl run with exec to avoid leaking output on "real" bourne shells
+        if (exec >&5 2>&5 ; $XAPIAN_CONFIG --ltlibs --cxxflags; exit $?) then
+            AC_MSG_RESULT(yes)
+        else
+            AC_MSG_ERROR([\`$XAPIAN_CONFIG --ltlibs --cxxflags' doesn't work, aborting])
+        fi
 
-	dnl If AC_PROG_LIBTOOL (or the deprecated older version AM_PROG_LIBTOOL)
-	dnl has already been expanded, enable libtool support now, otherwise add
-	dnl hooks to the end of AC_PROG_LIBTOOL and AM_PROG_LIBTOOL to enable it
-	dnl if either is expanded later.
-	XAPIAN_VERSION="`$XAPIAN_CONFIG --version|sed 's/.* //'`"
-	XAPIAN_CXXFLAGS="`$XAPIAN_CONFIG --cxxflags`"
-	AC_PROVIDE_IFELSE([AC_PROG_LIBTOOL],
-	    [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"],
-	    [AC_PROVIDE_IFELSE([AM_PROG_LIBTOOL],
-		[XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"],
-		dnl Pass magic option so xapian-config knows we called it (so it
-		dnl can choose a more appropriate error message if asked to link
-		dnl with an uninstalled libxapian). Also pass ac_top_srcdir
-		dnl so the error message can correctly say "configure.ac" or
-		dnl "configure.in" according to which is in use.
-		[XAPIAN_LIBS="`ac_top_srcdir=\"$ac_top_srcdir\" $XAPIAN_CONFIG --from-xo-lib-xapian --libs`"
-		define([AC_PROG_LIBTOOL], defn([AC_PROG_LIBTOOL])
-		       [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"])
-		define([AM_PROG_LIBTOOL], defn([AM_PROG_LIBTOOL])
-		       [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"])])])
-	AC_DEFINE(USE_XAPIAN,[],[Build in Xapian support?])
+        dnl If AC_PROG_LIBTOOL (or the deprecated older version AM_PROG_LIBTOOL)
+        dnl has already been expanded, enable libtool support now, otherwise add
+        dnl hooks to the end of AC_PROG_LIBTOOL and AM_PROG_LIBTOOL to enable it
+        dnl if either is expanded later.
+        XAPIAN_VERSION="`$XAPIAN_CONFIG --version|sed 's/.* //'`"
+        XAPIAN_CXXFLAGS="`$XAPIAN_CONFIG --cxxflags`"
+        AC_PROVIDE_IFELSE([AC_PROG_LIBTOOL],
+            [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"],
+            [AC_PROVIDE_IFELSE([AM_PROG_LIBTOOL],
+                [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"],
+                dnl Pass magic option so xapian-config knows we called it (so it
+                dnl can choose a more appropriate error message if asked to link
+                dnl with an uninstalled libxapian). Also pass ac_top_srcdir
+                dnl so the error message can correctly say "configure.ac" or
+                dnl "configure.in" according to which is in use.
+                [XAPIAN_LIBS="`ac_top_srcdir=\"$ac_top_srcdir\" $XAPIAN_CONFIG --from-xo-lib-xapian --libs`"
+                define([AC_PROG_LIBTOOL], defn([AC_PROG_LIBTOOL])
+                       [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"])
+                define([AM_PROG_LIBTOOL], defn([AM_PROG_LIBTOOL])
+                       [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"])])])
+        AC_DEFINE(USE_XAPIAN,[],[Build in Xapian support?])
     fi
     AC_SUBST(XAPIAN_CXXFLAGS)
     AC_SUBST(XAPIAN_LIBS)
@@ -458,45 +458,45 @@ AM_CONDITIONAL([SQUATTER],
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 AC_ARG_ENABLE(pcre,
-	[AS_HELP_STRING([--disable-pcre], [disable PCRE library])])
+        [AS_HELP_STRING([--disable-pcre], [disable PCRE library])])
 
 if test "$enable_sieve" != "no"; then
-	AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
+        AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
 
-	dnl Sieve configure stuff
-	AC_PROG_YACC
-	AM_PROG_LEX
+        dnl Sieve configure stuff
+        AC_PROG_YACC
+        AM_PROG_LEX
 
-	if test "$enable_pcre" != "no"; then
-	    AC_CHECK_HEADER(pcreposix.h)
-	    if test "$ac_cv_header_pcreposix_h" = "yes"; then
-		    AC_MSG_CHECKING(for utf8 enabled pcre)
-		    AC_CACHE_VAL(cyrus_cv_pcre_utf8, AC_TRY_CPP([#include <pcreposix.h>
+        if test "$enable_pcre" != "no"; then
+            AC_CHECK_HEADER(pcreposix.h)
+            if test "$ac_cv_header_pcreposix_h" = "yes"; then
+                    AC_MSG_CHECKING(for utf8 enabled pcre)
+                    AC_CACHE_VAL(cyrus_cv_pcre_utf8, AC_TRY_CPP([#include <pcreposix.h>
 #ifndef REG_UTF8
 #include </nonexistent>
 #endif],cyrus_cv_pcre_utf8=yes,cyrus_cv_pcre_utf8=no))
-		    AC_MSG_RESULT($cyrus_cv_pcre_utf8)
-	    else
-		    cyrus_cv_pcre_utf8="no"
-	    fi
-	fi
+                    AC_MSG_RESULT($cyrus_cv_pcre_utf8)
+            else
+                    cyrus_cv_pcre_utf8="no"
+            fi
+        fi
 
-	if test "$cyrus_cv_pcre_utf8" = "yes"; then
-		LIBS="$LIBS -lpcre -lpcreposix";
-		AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
-		AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
-	else
-		AC_CHECK_HEADERS(rxposix.h)
-		if test "$ac_cv_header_rxposix_h" = "yes"; then
-			LIBS="$LIBS -lrx"
-			AC_DEFINE(ENABLE_REGEX, [],
-				  [Do we have a regex library?])
-		else
-			AC_SEARCH_LIBS(regcomp, regex,
-					AC_DEFINE(ENABLE_REGEX, [],
-					[Do we have a regex library?]), [])
-		fi
-	fi
+        if test "$cyrus_cv_pcre_utf8" = "yes"; then
+                LIBS="$LIBS -lpcre -lpcreposix";
+                AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+                AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+        else
+                AC_CHECK_HEADERS(rxposix.h)
+                if test "$ac_cv_header_rxposix_h" = "yes"; then
+                        LIBS="$LIBS -lrx"
+                        AC_DEFINE(ENABLE_REGEX, [],
+                                  [Do we have a regex library?])
+                else
+                        AC_SEARCH_LIBS(regcomp, regex,
+                                        AC_DEFINE(ENABLE_REGEX, [],
+                                        [Do we have a regex library?]), [])
+                fi
+        fi
 fi
 
 AM_CONDITIONAL([SIEVE], [test "${enable_sieve}" != "no"])
@@ -518,68 +518,68 @@ AC_CHECK_FUNCS(shutdown)
 
 AC_EGREP_HEADER(socklen_t, sys/socket.h, AC_DEFINE(HAVE_SOCKLEN_T,[],[Do we have a socklen_t?]))
 AC_EGREP_HEADER(sockaddr_storage, sys/socket.h,
-		AC_DEFINE(HAVE_STRUCT_SOCKADDR_STORAGE,[],[Do we have a sockaddr_storage?]))
+                AC_DEFINE(HAVE_STRUCT_SOCKADDR_STORAGE,[],[Do we have a sockaddr_storage?]))
 AC_EGREP_HEADER(rlim_t, sys/resource.h, AC_DEFINE(HAVE_RLIM_T,[],[Do we have an rlim_t?]))
 
 dnl Bunch of setproctitle stuff
 spt_type=""
 AC_CHECK_FUNC(setproctitle,spt_type=SPT_BUILTIN)
 if test "$spt_type" = ""; then
-	dnl BSD/OS and FreeBSD put it in -lutil
-	AC_CHECK_LIB(util,setproctitle,spt_type=SPT_BUILTIN
-			LIBS="${LIBS} -lutil")
+        dnl BSD/OS and FreeBSD put it in -lutil
+        AC_CHECK_LIB(util,setproctitle,spt_type=SPT_BUILTIN
+                        LIBS="${LIBS} -lutil")
 fi
 if test "$spt_type" = ""; then
-	AC_CHECK_HEADER(sys/pstat.h,spt_type=SPT_PSTAT)
+        AC_CHECK_HEADER(sys/pstat.h,spt_type=SPT_PSTAT)
 fi
 if test "$spt_type" = ""; then
-	AC_CHECK_HEADER(sys/sysnews.h,spt_type=SPT_SYSMIPS)
+        AC_CHECK_HEADER(sys/sysnews.h,spt_type=SPT_SYSMIPS)
 fi
 if test "$spt_type" = ""; then
-	AC_MSG_CHECKING(for PS_STRINGS)
-	AC_CACHE_VAL(cyrus_cv_sys_psstrings, AC_TRY_CPP([
+        AC_MSG_CHECKING(for PS_STRINGS)
+        AC_CACHE_VAL(cyrus_cv_sys_psstrings, AC_TRY_CPP([
 #include <machine/vmparam.h>
 #include <sys/exec.h>
 #ifndef PS_STRINGS
 #include </nonexistent>
 #endif],cyrus_cv_sys_psstrings=yes,cyrus_cv_sys_psstrings=no))
-	if test $cyrus_cv_sys_psstrings = yes; then
-		spt_type=SPT_PSSTRINGS
-	fi
-	AC_MSG_RESULT($cyrus_cv_sys_psstrings)
+        if test $cyrus_cv_sys_psstrings = yes; then
+                spt_type=SPT_PSSTRINGS
+        fi
+        AC_MSG_RESULT($cyrus_cv_sys_psstrings)
 fi
 if test "$spt_type" = ""; then
-	AC_MSG_CHECKING(for SCO)
-	AC_CACHE_VAL(cyrus_cv_sys_sco, AC_TRY_CPP([
+        AC_MSG_CHECKING(for SCO)
+        AC_CACHE_VAL(cyrus_cv_sys_sco, AC_TRY_CPP([
 #ifndef _SCO_unix_
 #include </nonexistent>
 #endif],cyrus_cv_sys_sco=yes,cyrus_cv_sys_sco=no))
-	if test $cyrus_cv_sys_sco = yes; then
-		spt_type=SPT_SCO
-	fi
-	AC_MSG_RESULT($cyrus_cv_sys_sco)
+        if test $cyrus_cv_sys_sco = yes; then
+                spt_type=SPT_SCO
+        fi
+        AC_MSG_RESULT($cyrus_cv_sys_sco)
 fi
 if test "$spt_type" = ""; then
-	AC_MSG_CHECKING(for setproctitle usability)
-	AC_CACHE_VAL(cyrus_cv_sys_setproctitle, AC_TRY_CPP([
+        AC_MSG_CHECKING(for setproctitle usability)
+        AC_CACHE_VAL(cyrus_cv_sys_setproctitle, AC_TRY_CPP([
 #if defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
 #include </nonexistent>
 #endif],cyrus_cv_sys_setproctitle=yes,cyrus_cv_sys_setproctitle=no))
-	if test $cyrus_cv_sys_setproctitle = no; then
-		spt_type=SPT_NONE
-	fi
-	AC_MSG_RESULT($cyrus_cv_sys_setproctitle)
+        if test $cyrus_cv_sys_setproctitle = no; then
+                spt_type=SPT_NONE
+        fi
+        AC_MSG_RESULT($cyrus_cv_sys_setproctitle)
 fi
 if test "$spt_type" != ""; then
-	AC_DEFINE_UNQUOTED(SPT_TYPE,$spt_type,[Do we already have setproctitle?])
+        AC_DEFINE_UNQUOTED(SPT_TYPE,$spt_type,[Do we already have setproctitle?])
 fi
 
 AC_MSG_CHECKING(nonblocking method)
 AC_CACHE_VAL(cyrus_cv_sys_nonblock,AC_TRY_LINK([#include <sys/types.h>
 #include <sys/file.h>
 #include <fcntl.h>
-#ifndef	FNDELAY
-#define FNDELAY		O_NDELAY
+#ifndef FNDELAY
+#define FNDELAY         O_NDELAY
 #endif],[fcntl(0, F_GETFL, 0)&FNDELAY],
 cyrus_cv_sys_nonblock=fcntl,cyrus_cv_sys_nonblock=ioctl))
 AM_CONDITIONAL([NONBLOCK_FCNTL], [test "$cyrus_cv_sys_nonblock" = "fcntl"])
@@ -624,7 +624,7 @@ int main() {
 cyrus_cv_func_mmap_shared=no))
 AC_MSG_RESULT($cyrus_cv_func_mmap_shared)
 if test $cyrus_cv_func_mmap_shared = yes; then
-	found_map="shared"
+        found_map="shared"
 else
 AC_MSG_CHECKING(for stupid shared mmap)
 AC_CACHE_VAL(cyrus_cv_func_mmap_stupidshared,AC_TRY_RUN([
@@ -659,17 +659,17 @@ int main() {
 cyrus_cv_func_mmap_stupidshared=no))
 AC_MSG_RESULT($cyrus_cv_func_mmap_stupidshared)
 if test $cyrus_cv_func_mmap_stupidshared = yes; then
-	found_map="stupidshared"
+        found_map="stupidshared"
 else
-	AC_MSG_WARN([*** This system does not have a working mmap()])
-	AC_MSG_WARN(*** Expect a considerable performance penalty)
-	found_map=nommap
+        AC_MSG_WARN([*** This system does not have a working mmap()])
+        AC_MSG_WARN(*** Expect a considerable performance penalty)
+        found_map=nommap
 fi
 fi
 
 AC_ARG_WITH(mmap,
-	[AS_HELP_STRING([--with-mmap=TYPE], [force shared/stupidshared/nommap - JUST FOR TESTING])],
-	WITH_MAP="$withval",WITH_MAP="$found_map")
+        [AS_HELP_STRING([--with-mmap=TYPE], [force shared/stupidshared/nommap - JUST FOR TESTING])],
+        WITH_MAP="$withval",WITH_MAP="$found_map")
 AM_CONDITIONAL([MAP_SHARED], [test "$WITH_MAP" = "shared"])
 AM_CONDITIONAL([MAP_STUPIDSHARED], [test "$WITH_MAP" = "stupidshared"])
 
@@ -677,10 +677,10 @@ AC_ARG_WITH(lock,
   [AS_HELP_STRING([--with-lock=METHOD], [force use of METHOD for locking (flock or fcntl)])],
   WITH_LOCK="$withval", [
   AC_CHECK_FUNC(fcntl,WITH_LOCK="fcntl",[
-		AC_CHECK_FUNC(flock,WITH_LOCK="flock",[
-				AC_MSG_ERROR(unable to detect locking method)
-			      ])
-		])
+                AC_CHECK_FUNC(flock,WITH_LOCK="flock",[
+                                AC_MSG_ERROR(unable to detect locking method)
+                              ])
+                ])
   ])
 AM_CONDITIONAL([LOCK_FCNTL], [test $WITH_LOCK = "fcntl"])
 
@@ -688,8 +688,8 @@ dnl check for fdatasync (used by cyrusdb_skiplist)
 LIB_RT=""
 AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?]), [
   AC_CHECK_LIB(rt, fdatasync, [
-	LIB_RT="-lrt"
-	AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?])
+        LIB_RT="-lrt"
+        AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?])
   ])
 ])
 
@@ -705,7 +705,7 @@ cant_find_sigvec=no
 AC_CACHE_VAL(cyrus_cv_sigveclib,[
  dnl bsd classic flavor
  AC_CHECK_FUNC(sigvec, [
-	cyrus_cv_sigveclib=""
+        cyrus_cv_sigveclib=""
   ], [
   dnl hp flavor
   AC_CHECK_LIB(BSD, sigvec, cyrus_cv_sigveclib="-lBSD", [
@@ -725,28 +725,28 @@ AC_SUBST(cyrus_cv_sigveclib)
 # ok, we still look for this stuff because of checking groups, but
 # all authentication goes through SASL
 AC_ARG_ENABLE([afs],
-	[AS_HELP_STRING([--enable-afs], [Enable AFS with ptloader])])
+        [AS_HELP_STRING([--enable-afs], [Enable AFS with ptloader])])
 
 AC_ARG_WITH(afs-libdir,
-	[AS_HELP_STRING([--with-afs-libdir=DIR], [use AFS libraries from DIR [/usr/lib]])],
-	afs_libdir="${withval}", afs_libdir="/usr/lib")
- 
+        [AS_HELP_STRING([--with-afs-libdir=DIR], [use AFS libraries from DIR [/usr/lib]])],
+        afs_libdir="${withval}", afs_libdir="/usr/lib")
+
 AC_ARG_WITH(afs-incdir,
-	[AS_HELP_STRING([--with-afs-incdir=DIR], [use AFS headers from DIR [/usr/include]])],
-	afs_incdir="${withval}", afs_incdir="/usr/include")
+        [AS_HELP_STRING([--with-afs-incdir=DIR], [use AFS headers from DIR [/usr/include]])],
+        afs_incdir="${withval}", afs_incdir="/usr/include")
 
 AC_ARG_WITH(ldap,
-	[AS_HELP_STRING([--with-ldap=DIR], [use LDAP (in DIR) (experimental) [/usr/local]])],
-	with_ldap="${withval}", with_ldap="no")
-  
+        [AS_HELP_STRING([--with-ldap=DIR], [use LDAP (in DIR) (experimental) [/usr/local]])],
+        with_ldap="${withval}", with_ldap="no")
+
 dnl select mode of afspts
 AC_ARG_ENABLE(krb5afspts,
-	[AS_HELP_STRING([--enable-krb5afspts], [compile afskrb PTS module with krb5 support])])
+        [AS_HELP_STRING([--enable-krb5afspts], [compile afskrb PTS module with krb5 support])])
 
 if test "x$enable_afs" = "xyes"; then
 # krb5afspts is only valid if AFS is enabled, so check inside here.
     AS_IF([test "x$enable_krb5afspts" = "xyes"], [SASL_SET_GSSAPI_LIBS
-      AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])    
+      AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])
     ])
 
     CFLAGS="${CFLAGS} -I${with_afs_incdir}"
@@ -824,12 +824,12 @@ xyes)
     # --with-ldap=DIR
     # try to enable, search in given install directory
     if test "x$with_ldap" != "x" -a -d "$with_ldap"; then
-	ldap_cppflags="-I${with_ldap}/include"
-	ldap_ldflags="-L${with_ldap}/lib"
-	with_ldap=yes
+        ldap_cppflags="-I${with_ldap}/include"
+        ldap_ldflags="-L${with_ldap}/lib"
+        with_ldap=yes
     else
-	AC_WARN([Disabling LDAP - no include files found])
-	with_ldap=no
+        AC_WARN([Disabling LDAP - no include files found])
+        with_ldap=no
     fi
 esac
 
@@ -840,11 +840,11 @@ if test $with_ldap = yes; then
     LDFLAGS="$LDFLAGS $ldap_ldflags"
 
     AC_CHECK_LIB(ldap, ldap_initialize, [
-	AC_DEFINE(HAVE_LDAP,[],[Should we build the LDAP pts module?])
-	LDAP_CPPFLAGS="$ldap_cppflags"
-	LDAP_LDFLAGS="$ldap_ldflags"
-	LDAP_LIBS="-lldap -llber"
-	have_ldap=yes
+        AC_DEFINE(HAVE_LDAP,[],[Should we build the LDAP pts module?])
+        LDAP_CPPFLAGS="$ldap_cppflags"
+        LDAP_LDFLAGS="$ldap_ldflags"
+        LDAP_LIBS="-lldap -llber"
+        have_ldap=yes
     ],,-llber)
 
     CPPFLAGS="$save_CPPFLAGS"
@@ -901,23 +901,23 @@ AC_SUBST(LIB_CLAMAV)
 AM_CONDITIONAL([HAVE_CLAMAV], [test "$have_clamav" = "yes"])
 
 AC_ARG_ENABLE(server,
-	[AS_HELP_STRING([--disable-server], [disable compiling servers])])
+        [AS_HELP_STRING([--disable-server], [disable compiling servers])])
 AM_CONDITIONAL([SERVER], [test "$enable_server" != "no"])
 # We always output a server makefile (just because we can)
 
 dnl this is the new simple check for kerberos; since the person had to
 dnl compile SASL, we might as well use the same checks.
 AC_ARG_WITH(krb,
-	[AS_HELP_STRING([--with-krb=DIR], [use Kerberos from DIR])],
-	with_krb="$withval", with_krb="no")
+        [AS_HELP_STRING([--with-krb=DIR], [use Kerberos from DIR])],
+        with_krb="$withval", with_krb="no")
 
 AC_ARG_WITH(krbimpl,
-	[AS_HELP_STRING([--with-krbimpl=kth|mit], [assume Kerberos 4 from KTH or MIT])],
-	with_krbimpl="$withval", with_krbimpl="kth")
+        [AS_HELP_STRING([--with-krbimpl=kth|mit], [assume Kerberos 4 from KTH or MIT])],
+        with_krbimpl="$withval", with_krbimpl="kth")
 
 AC_ARG_ENABLE(statickrb,
-	[AS_HELP_STRING([--enable-statickrb], [link Kerberos statically])],
-	with_statickrb="yes", with_statickrb="no")
+        [AS_HELP_STRING([--enable-statickrb], [link Kerberos statically])],
+        with_statickrb="yes", with_statickrb="no")
 
 dnl In order to compile kerberos4, we need libkrb and libdes.
 
@@ -926,13 +926,13 @@ AC_CHECK_LIB(resolv,res_search)
 
 if test "$with_statickrb" = "yes" -a ! -d "$with_krb"; then
       AC_MSG_ERROR([--enable-statickrb specified but --with-krb did not specify a valid directory])
-fi 
+fi
 
 if test "$with_krb" != "no"; then
 dnl Do we need DES for kerberos?
 AC_ARG_WITH(krbdes,
-	[AS_HELP_STRING([--with-krbdes], [use Kerberos DES implementation [yes]])],
-	with_krbdes="$withval", with_krbdes="yes")
+        [AS_HELP_STRING([--with-krbdes], [use Kerberos DES implementation [yes]])],
+        with_krbdes="$withval", with_krbdes="yes")
 if test "$with_krbdes" = "yes"; then
   AC_CHECK_LIB(des,des_ecb_encrypt,
       if test "$with_statickrb" = "yes"; then
@@ -978,7 +978,7 @@ if test "$with_des" != no; then
           KRB_LIBS="$KRB_LIBS -l${KRBLIB}"
       fi,
                  AC_WARN(No Kerberos V4 found); krb4=no,
-      	   $KRB_LIBS),
+           $KRB_LIBS),
     krb4=no)
 else
   AC_WARN(No DES library found for Kerberos V4 support)
@@ -997,8 +997,8 @@ dnl
 dnl Test for OpenSSL
 dnl
 AC_ARG_WITH(openssl,
-	[AS_HELP_STRING([--with-openssl=DIR], [use OpenSSL from DIR])],
-	with_ssl="${withval}")
+        [AS_HELP_STRING([--with-openssl=DIR], [use OpenSSL from DIR])],
+        with_ssl="${withval}")
 
 SSL_CPPFLAGS=
 SSL_LIBS=
@@ -1019,13 +1019,13 @@ x|xyes)
     # --with-openssl=DIR
     # try to enable, search in given install directory
     if test -d "$with_ssl"; then
-	ssl_cppflags="-I${with_ssl}/include"
-	ssl_ldflags=
-	CMU_ADD_LIBPATH_TO(${with_ssl}/lib, ssl_ldflags)
-	with_ssl=yes
+        ssl_cppflags="-I${with_ssl}/include"
+        ssl_ldflags=
+        CMU_ADD_LIBPATH_TO(${with_ssl}/lib, ssl_ldflags)
+        with_ssl=yes
     else
-	AC_WARN([Disabling OpenSSL - no include files found])
-	with_ssl=no
+        AC_WARN([Disabling OpenSSL - no include files found])
+        with_ssl=no
     fi
 esac
 
@@ -1036,9 +1036,9 @@ if test "$with_ssl" != "no"; then
     LDFLAGS="$LDFLAGS $ssl_ldflags"
 
     AC_CHECK_HEADER(openssl/evp.h, [
-	with_ssl=yes
+        with_ssl=yes
     ],[
-	with_ssl=no
+        with_ssl=no
     ])
 
     dnl if openssl has been compiled with the rsaref2 libraries,
@@ -1051,18 +1051,18 @@ if test "$with_ssl" != "no"; then
        :
     ])
     AC_CHECK_LIB(crypto, BIO_accept,[
-	ssl_libs="-lcrypto $ssl_libs"
+        ssl_libs="-lcrypto $ssl_libs"
     ],[
-	with_ssl=no
+        with_ssl=no
     ], $ssl_libs)
     AC_CHECK_LIB(ssl, SSL_CTX_new, [
-	ssl_libs="-lssl $ssl_libs"
+        ssl_libs="-lssl $ssl_libs"
     ],[
-	with_ssl=no
+        with_ssl=no
     ], $ssl_libs)
 
     if test "$with_ssl" = "no"; then
-	AC_WARN([Disabling SSL - no library files found])
+        AC_WARN([Disabling SSL - no library files found])
     fi
     CPPFLAGS="$save_CPPFLAGS"
     LDFLAGS="$save_LDFLAGS"
@@ -1138,25 +1138,25 @@ dnl
 dnl Test for Zephyr
 dnl
 AC_ARG_WITH(zephyr,
-	[AS_HELP_STRING([--with-zephyr=DIR], [enable Zephyr notification (installed on DIR)])],
-	with_zephyr="${withval}")
+        [AS_HELP_STRING([--with-zephyr=DIR], [enable Zephyr notification (installed on DIR)])],
+        with_zephyr="${withval}")
 if test -z "$with_zephyr"; then
      if test -f /usr/local/lib/libzephyr.a; then
-	with_zephyr="/usr/local"
+        with_zephyr="/usr/local"
      elif test -f /usr/lib/libzephyr.a; then
         with_zephyr="/usr"
      fi
 fi
 ZEPHYR_LIBS=""
 case "$with_zephyr" in
-	no) true;;
-	""|yes) AC_CHECK_LIB(zephyr,ZInitialize,ZEPHYR_LIBS="-lzephyr",
-		with_zephyr="no",);;
+        no) true;;
+        ""|yes) AC_CHECK_LIB(zephyr,ZInitialize,ZEPHYR_LIBS="-lzephyr",
+                with_zephyr="no",);;
        *) ZEPHYR_LIBS="-lzephyr";;
 esac
 AC_SUBST(ZEPHYR_LIBS)
 if test "$with_zephyr" != "no"; then
-	AC_DEFINE(HAVE_ZEPHYR,[],[Build with Zephyr support?])
+        AC_DEFINE(HAVE_ZEPHYR,[],[Build with Zephyr support?])
 fi
 AM_CONDITIONAL([ZEPHYR], [test "$with_zephyr" != "no"])
 
@@ -1165,23 +1165,23 @@ dnl
 dnl Test for libcap (POSIX.1e - security API) on Linux systems
 dnl
 AC_ARG_WITH([libcap],
-	AS_HELP_STRING([--with-libcap], [Enable libcap system capabilities handling (Linux systems only)]),
-	with_libcap="${withval}")
+        AS_HELP_STRING([--with-libcap], [Enable libcap system capabilities handling (Linux systems only)]),
+        with_libcap="${withval}")
 
 have_libcap=no
 case $host_os in
 linux*)
-	if test "x$with_libcap" = "xyes"; then
-		AC_CHECK_LIB([cap], [cap_get_proc], have_libcap=yes, have_libcap=no)
-		AC_CHECK_HEADERS([sys/capability.h sys/prctl.h], , have_libcap=no)
-		if test "$have_libcap" = "yes"; then
-			AC_DEFINE(HAVE_LIBCAP, [], [Do we have libcap system capabilities handling (Linux systems only)?])
-			LIBS="$LIBS -lcap"
-		fi
-	fi
-	;;
+        if test "x$with_libcap" = "xyes"; then
+                AC_CHECK_LIB([cap], [cap_get_proc], have_libcap=yes, have_libcap=no)
+                AC_CHECK_HEADERS([sys/capability.h sys/prctl.h], , have_libcap=no)
+                if test "$have_libcap" = "yes"; then
+                        AC_DEFINE(HAVE_LIBCAP, [], [Do we have libcap system capabilities handling (Linux systems only)?])
+                        LIBS="$LIBS -lcap"
+                fi
+        fi
+        ;;
 *)
-	;;
+        ;;
 esac
 
 AC_MSG_CHECKING(for libcap)
@@ -1198,14 +1198,14 @@ AC_ARG_ENABLE(event-notification,
 
 if test "$enable_event_notification" != "no"; then
     PKG_CHECK_MODULES([JANSSON], [jansson >= 2.0],
-	[check_jansson=true] 
-	  dnl call AC_SUBST macro to support pkg-config version older that 0.24 without any bad consequence for recent version
-	  [AC_SUBST([JANSSON_LIBS])]
-	  [AC_SUBST([JANSSON_CFLAGS])]
-	  [AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])],
-	[check_jansson=false]
-	  [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])]
-	  enable_event_notification="no")
+        [check_jansson=true]
+          dnl call AC_SUBST macro to support pkg-config version older that 0.24 without any bad consequence for recent version
+          [AC_SUBST([JANSSON_LIBS])]
+          [AC_SUBST([JANSSON_CFLAGS])]
+          [AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])],
+        [check_jansson=false]
+          [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])]
+          enable_event_notification="no")
 fi
 AM_CONDITIONAL(JANSSON, test x$check_jansson = xtrue)
 
@@ -1213,9 +1213,9 @@ dnl
 dnl Set pidfile location
 dnl
 AC_ARG_WITH(pidfile,
-	[AS_HELP_STRING([--with-pidfile=DIR], [pidfile in DIR [/var/run/cyrus-master.pid]])],
-	[MASTERPIDFILE="$withval"],
-	[MASTERPIDFILE="/var/run/cyrus-master.pid"])
+        [AS_HELP_STRING([--with-pidfile=DIR], [pidfile in DIR [/var/run/cyrus-master.pid]])],
+        [MASTERPIDFILE="$withval"],
+        [MASTERPIDFILE="/var/run/cyrus-master.pid"])
 MASTERPIDFILE="\"$MASTERPIDFILE\""
 AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE,[Name of the pidfile for master])
 
@@ -1226,7 +1226,7 @@ AC_ARG_ENABLE(autocreate,
         [AS_HELP_STRING([--enable-autocreate], [enable autocreate support])],,[enable_autocreate="no";])
 AM_CONDITIONAL([AUTOCREATE], [test "$enable_autocreate" != "no"])
 if test "x$enable_autocreate" = "xyes"; then
-	AC_DEFINE(USE_AUTOCREATE,[],[Build with autocreate functionality])
+        AC_DEFINE(USE_AUTOCREATE,[],[Build with autocreate functionality])
 fi
 dnl
 dnl see if we're compiling with IMAP idled support
@@ -1248,8 +1248,8 @@ AC_ARG_ENABLE(murder,
         [AS_HELP_STRING([--enable-murder], [enable IMAP Murder support])],, [enable_murder="no";])
 AM_CONDITIONAL([MURDER], [test "$enable_murder" != "no"])
 if test "$enable_murder" != no; then
-	# for master/slave auto-selection
-	AC_CHECK_HEADERS(sys/sockio.h)
+        # for master/slave auto-selection
+        AC_CHECK_HEADERS(sys/sockio.h)
 fi
 
 dnl
@@ -1272,76 +1272,76 @@ if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
 dnl
-	PKG_CHECK_MODULES([XML2], [libxml-2.0],,
-		AC_MSG_ERROR([Need libxml-2.0 for http]))
+        PKG_CHECK_MODULES([XML2], [libxml-2.0],,
+                AC_MSG_ERROR([Need libxml-2.0 for http]))
 
-	AC_CHECK_LIB(xml2, xmlFirstElementChild, [
-		AC_DEFINE(HAVE_XML_FIRSTCHILD,[],
-			[Do we have support for xmlFirstElementChild()?])
+        AC_CHECK_LIB(xml2, xmlFirstElementChild, [
+                AC_DEFINE(HAVE_XML_FIRSTCHILD,[],
+                        [Do we have support for xmlFirstElementChild()?])
 
-		AC_CHECK_LIB(xml2, xmlBufferDetach,
-			AC_DEFINE(HAVE_XML_BUFFERDETACH,[],
-				[Do we have support for xmlBufferDetach()?]))
-		])
+                AC_CHECK_LIB(xml2, xmlBufferDetach,
+                        AC_DEFINE(HAVE_XML_BUFFERDETACH,[],
+                                [Do we have support for xmlBufferDetach()?]))
+                ])
 
-	PKG_CHECK_MODULES([SQLITE3], [sqlite3],
-		AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),
-		AC_MSG_ERROR([Need sqlite3 for http]))
+        PKG_CHECK_MODULES([SQLITE3], [sqlite3],
+                AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),
+                AC_MSG_ERROR([Need sqlite3 for http]))
 
-	PKG_CHECK_MODULES([ICAL], [libical],
-		AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?]),
-		AC_MSG_ERROR([Need libical for http]))
+        PKG_CHECK_MODULES([ICAL], [libical],
+                AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?]),
+                AC_MSG_ERROR([Need libical for http]))
 
-	AC_CHECK_LIB(ical, icalparameter_new_iana, [
-		AC_DEFINE(HAVE_IANA_PARAMS,[],
-			[Do we have support for IANA params?])
+        AC_CHECK_LIB(ical, icalparameter_new_iana, [
+                AC_DEFINE(HAVE_IANA_PARAMS,[],
+                        [Do we have support for IANA params?])
 
-		AC_CHECK_LIB(ical, icalparameter_new_schedulestatus,
-			AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
-				[Do we have built-in support for scheduling params?]))
+                AC_CHECK_LIB(ical, icalparameter_new_schedulestatus,
+                        AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
+                                [Do we have built-in support for scheduling params?]))
 
-		AC_CHECK_LIB(ical, icalparameter_new_managedid,
-			AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
-				[Do we have built-in support for managed attachment params?]))
+                AC_CHECK_LIB(ical, icalparameter_new_managedid,
+                        AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
+                                [Do we have built-in support for managed attachment params?]))
 
-		AC_CHECK_LIB(ical, icalproperty_new_tzuntil,
-			AC_DEFINE(HAVE_TZDIST_PROPS,[],
-				[Do we have built-in support for TZdist props?]))
-		],
-		AC_MSG_WARN([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
+                AC_CHECK_LIB(ical, icalproperty_new_tzuntil,
+                        AC_DEFINE(HAVE_TZDIST_PROPS,[],
+                                [Do we have built-in support for TZdist props?]))
+                ],
+                AC_MSG_WARN([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
 
-	AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
-		AC_DEFINE(HAVE_TZ_BY_REF,[],
-			[Build timezones by reference support into httpd?]),
-		AC_MSG_WARN([Your version of libical can not support timezones by reference.  Consider upgrading to libical >= 1.0.1]))
+        AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
+                AC_DEFINE(HAVE_TZ_BY_REF,[],
+                        [Build timezones by reference support into httpd?]),
+                AC_MSG_WARN([Your version of libical can not support timezones by reference.  Consider upgrading to libical >= 1.0.1]))
 
-	AC_CHECK_LIB(ical, icalcomponent_new_vavailability,
-		AC_DEFINE(HAVE_VAVAILABILITY,[],
-			[Build VAVAILABILITY support into httpd?]),
-		AC_MSG_WARN([Your version of libical can not support availability.  Consider upgrading to libical >= 1.0.1]))
+        AC_CHECK_LIB(ical, icalcomponent_new_vavailability,
+                AC_DEFINE(HAVE_VAVAILABILITY,[],
+                        [Build VAVAILABILITY support into httpd?]),
+                AC_MSG_WARN([Your version of libical can not support availability.  Consider upgrading to libical >= 1.0.1]))
 
-	AC_CHECK_LIB(ical, icalcomponent_new_vvoter,
-		AC_DEFINE(HAVE_VPOLL,[], [Build VPOLL support into httpd?]),
-		AC_MSG_WARN([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
+        AC_CHECK_LIB(ical, icalcomponent_new_vvoter,
+                AC_DEFINE(HAVE_VPOLL,[], [Build VPOLL support into httpd?]),
+                AC_MSG_WARN([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
 
-	AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
-		AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]),
-		AC_MSG_WARN([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
+        AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
+                AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]),
+                AC_MSG_WARN([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
 
-	PKG_CHECK_MODULES([JANSSON], [jansson],
-		AC_DEFINE(WITH_JSON,[],
-			[Build jCal/jCard/TZdist support into httpd?]),
-		AC_MSG_ERROR([Need jansson for http]))
+        PKG_CHECK_MODULES([JANSSON], [jansson],
+                AC_DEFINE(WITH_JSON,[],
+                        [Build jCal/jCard/TZdist support into httpd?]),
+                AC_MSG_ERROR([Need jansson for http]))
 
-	PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
-		AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
-			AC_DEFINE(WITH_DKIM,[],
-				[Build DKIM support into iSchedule?]),
-			AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
-		AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
+        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
+                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
+                        AC_DEFINE(WITH_DKIM,[],
+                                [Build DKIM support into iSchedule?]),
+                        AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
+                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
 
-	HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS}"
-	HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS}"
+        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
@@ -1361,54 +1361,54 @@ dnl There is also a broken re-implementation of compile_et, apparently derived
 dnl from the Kerberos project, being shipped in /usr/bin on MacOS X, see Bug #3711.
 dnl
 AC_ARG_WITH(com_err,
-	[AS_HELP_STRING([--with-com_err=DIR], [use com_err from path -- includes in DIR/include, libs in DIR/lib, and compile_et in DIR/bin])])
+        [AS_HELP_STRING([--with-com_err=DIR], [use com_err from path -- includes in DIR/include, libs in DIR/lib, and compile_et in DIR/bin])])
 if test -z "$with_com_err"; then
-	# no value supplied
-	AC_CHECK_LIB(com_err, com_err, [
-		# com_err is already in library path
-		# guess we're okay
-		# can use system com_err
-		with_com_err=""
-		AC_CHECK_HEADER(et/com_err.h,
-		  [AC_DEFINE(HAVE_ET_COM_ERR_H,[],[We need et/com_err.h])],
-		  [AC_CHECK_HEADER(com_err.h,[],[AC_MSG_ERROR([cannot locate com_err.h])])])
-		AC_PATH_PROG(COMPILE_ET, compile_et, [no compile et])
-	], [
-	if test -f /usr/local/include/com_err.h -o -f /usr/local/include/et/com_err.h; then
-		with_com_err="/usr/local"
-		AC_PATH_PROG(COMPILE_ET, /usr/local/bin/compile_et, [no compile et])
-	elif test -f /usr/include/com_err.h -o -f /usr/include/et/com_err.h; then
-		with_com_err="/usr"
-		AC_PATH_PROG(COMPILE_ET, /usr/bin/compile_et, [no compile et])
-	else
-		# use ours
-		with_com_err=yes
-	fi
-	])
+        # no value supplied
+        AC_CHECK_LIB(com_err, com_err, [
+                # com_err is already in library path
+                # guess we're okay
+                # can use system com_err
+                with_com_err=""
+                AC_CHECK_HEADER(et/com_err.h,
+                  [AC_DEFINE(HAVE_ET_COM_ERR_H,[],[We need et/com_err.h])],
+                  [AC_CHECK_HEADER(com_err.h,[],[AC_MSG_ERROR([cannot locate com_err.h])])])
+                AC_PATH_PROG(COMPILE_ET, compile_et, [no compile et])
+        ], [
+        if test -f /usr/local/include/com_err.h -o -f /usr/local/include/et/com_err.h; then
+                with_com_err="/usr/local"
+                AC_PATH_PROG(COMPILE_ET, /usr/local/bin/compile_et, [no compile et])
+        elif test -f /usr/include/com_err.h -o -f /usr/include/et/com_err.h; then
+                with_com_err="/usr"
+                AC_PATH_PROG(COMPILE_ET, /usr/bin/compile_et, [no compile et])
+        else
+                # use ours
+                with_com_err=yes
+        fi
+        ])
 
-	if test "${with_com_err}" = "no"; then
-	  AC_MSG_WARN([com_err is required; included version will be used.])
-	  with_com_err="yes"
-	fi
-	if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
-	  AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
-	  AC_MSG_WARN([Will build com_err from included sources.])
-	  with_com_err="yes" # build it ourselves
-	fi
+        if test "${with_com_err}" = "no"; then
+          AC_MSG_WARN([com_err is required; included version will be used.])
+          with_com_err="yes"
+        fi
+        if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
+          AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
+          AC_MSG_WARN([Will build com_err from included sources.])
+          with_com_err="yes" # build it ourselves
+        fi
 fi
 
 dnl Set up $COMPILE_ET first, we need to test it
 case "$with_com_err" in
     # built-in et
     yes) # use the com_err we're gonna build
-	COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
-	;;
-    "")	# no problem, we already have it in the paths
-	# we do nothing to pick it up
-	;;
-    *)	# use whatever they told us, or whatever we found
-	COMPILE_ET="${with_com_err}/bin/compile_et"
-	;;
+        COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
+        ;;
+    "") # no problem, we already have it in the paths
+        # we do nothing to pick it up
+        ;;
+    *)  # use whatever they told us, or whatever we found
+        COMPILE_ET="${with_com_err}/bin/compile_et"
+        ;;
 esac
 
 if test "$with_com_err" != yes ; then
@@ -1423,31 +1423,31 @@ if test "$with_com_err" != yes ; then
     "${COMPILE_ET}" $TEST1.et > /dev/null
     compile_et_ok=no
     if test -f $TEST1.h ; then
-	if test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "(-1904809472L)" ; then
-	    compile_et_ok=yes
-	fi
-	dnl Broken compile_et produces (2390157824L)
+        if test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "(-1904809472L)" ; then
+            compile_et_ok=yes
+        fi
+        dnl Broken compile_et produces (2390157824L)
     fi
     /bin/rm -f $TEST1.et $TEST1.h $TEST1.c
     if test "$compile_et_ok" = no ; then
-	# revert to the built-in compile_et
-	AC_MSG_WARN([It seems $COMPILE_ET is buggy, building our own])
-	with_com_err=yes
-	COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
+        # revert to the built-in compile_et
+        AC_MSG_WARN([It seems $COMPILE_ET is buggy, building our own])
+        with_com_err=yes
+        COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
     fi
 fi
 
 case "$with_com_err" in
   # built-in et
   yes) # use the com_err we're gonna build
-	  COM_ERR_LIBS="com_err/et/libcyrus_com_err.la"
-	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/com_err/et"
-	  ;;
+          COM_ERR_LIBS="com_err/et/libcyrus_com_err.la"
+          COM_ERR_CPPFLAGS="-I\${top_srcdir}/com_err/et"
+          ;;
   "")   # no problem, we already have it in the paths
-	# we do nothing to pick it up
-	COM_ERR_LIBS="-lcom_err" # hope it's not shared
-	# we already set COMPILE_ET, or we didn't get here
-	COM_ERR_CPPFLAGS=""
+        # we do nothing to pick it up
+        COM_ERR_LIBS="-lcom_err" # hope it's not shared
+        # we already set COMPILE_ET, or we didn't get here
+        COM_ERR_CPPFLAGS=""
       ;;
   *) # use whatever they told us, or whatever we found
      COM_ERR_LIBS="${with_com_err}/lib/libcom_err.a"
@@ -1469,7 +1469,7 @@ AC_SUBST(COM_ERR_CPPFLAGS)
 if test "$USE_MAINTAINER_MODE" = "yes" ; then
     AC_CHECK_PROG(GPERF,gperf,yes,no)
     if test "$GPERF" != "yes"; then
-	AC_MSG_ERROR([gperf is not installed on this system, but is required for maintainer mode build rules])
+        AC_MSG_ERROR([gperf is not installed on this system, but is required for maintainer mode build rules])
     fi
 fi
 
@@ -1483,7 +1483,7 @@ AC_MSG_RESULT($cyrus_cv_lib_syslog)
 AC_MSG_CHECKING(which syslog facility to use)
 SYSLOG_FACILITY=LOG_LOCAL6
 AC_ARG_WITH(syslogfacility,
-	[AS_HELP_STRING([--with-syslogfacility=FACILITY], [set the syslog facility to use (default LOCAL6)])],
+        [AS_HELP_STRING([--with-syslogfacility=FACILITY], [set the syslog facility to use (default LOCAL6)])],
                [ if test "$withval" != "yes" -a "$withval" != "no" ; then
                        SYSLOG_FACILITY=LOG_$withval
                fi; ])
@@ -1493,35 +1493,35 @@ AC_MSG_RESULT($SYSLOG_FACILITY)
 dnl Have to check getdtabalesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
-	[AS_HELP_STRING([--enable-cmulocal], [enable CMU-specific local support])])
+        [AS_HELP_STRING([--enable-cmulocal], [enable CMU-specific local support])])
 AM_CONDITIONAL([CMULOCAL], [test "$enable_cmulocal" = "yes"])
 AC_MSG_CHECKING(to use old sieve service name)
 AC_ARG_ENABLE(oldsievename,
-	[AS_HELP_STRING([--enable-oldsievename], [enable the use of 'imap' as the sieve service name])],
-	if test "$enableval" = yes; then
-		AC_MSG_RESULT(yes)
-		AC_DEFINE(OLD_SIEVE_SERVICE_NAME,[],[Use "imap" as sieve service name?])
-	else
-		AC_MSG_RESULT(no)
-	fi,
-	AC_MSG_RESULT(no))
+        [AS_HELP_STRING([--enable-oldsievename], [enable the use of 'imap' as the sieve service name])],
+        if test "$enableval" = yes; then
+                AC_MSG_RESULT(yes)
+                AC_DEFINE(OLD_SIEVE_SERVICE_NAME,[],[Use "imap" as sieve service name?])
+        else
+                AC_MSG_RESULT(no)
+        fi,
+        AC_MSG_RESULT(no))
 
 CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
 AC_ARG_WITH(perl,
-	[AS_HELP_STRING([--with-perl=PERL], [use PERL for perl])],
-	with_perl="$withval", with_perl="perl")
+        [AS_HELP_STRING([--with-perl=PERL], [use PERL for perl])],
+        with_perl="$withval", with_perl="perl")
 
 if test "${with_perl}" = yes; then
     with_perl="perl"
 fi
 if test "${with_perl}" != no; then
     if test ${using_static_sasl} = "staticonly"; then
-	AC_MSG_WARN([Cannot compile perl utilities using static libsasl])
-	with_perl="no"
-    else 
-	AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=notfound)
+        AC_MSG_WARN([Cannot compile perl utilities using static libsasl])
+        with_perl="no"
+    else
+        AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=notfound)
     fi
 fi
 AM_CONDITIONAL([PERL], [test "$with_perl" != "no" -a "$with_perl" != "notfound"])
@@ -1569,7 +1569,7 @@ for flag in ${ldflags} ${default_ldflags}; do
       isdir=yes
       ;;
 
-    -L*) 
+    -L*)
       # attached -L option: split off the directory
       larg=`echo $flag | sed -e 's:-L\(..*\):\1:'`
       libpath="${libpath} ${larg}"
@@ -1577,8 +1577,8 @@ for flag in ${ldflags} ${default_ldflags}; do
 
     *)
       if test $isdir = yes ; then
-	libpath="${libpath} ${flag}"
-	isdir=no
+        libpath="${libpath} ${flag}"
+        isdir=no
       fi
   esac
 done
@@ -1601,13 +1601,13 @@ if test "$enable_unit_tests" = "yes" ; then
     AC_CHECK_LIB(cunit,CU_initialize_registry,found_lib=yes,found_lib=no)
     AC_CHECK_HEADER([CUnit/CUnit.h],found_hdr=yes,found_hdr=no)
     if test "$found_lib$found_hdr" != "yesyes" ; then
-	AC_MSG_NOTICE([Disabling unit tests because the required CUnit library is not installed])
-	enable_unit_tests=no
+        AC_MSG_NOTICE([Disabling unit tests because the required CUnit library is not installed])
+        enable_unit_tests=no
     fi
     AC_CHECK_HEADER([CUnit/Basic.h],
-	AC_CHECK_TYPE([CU_SetUpFunc],AC_DEFINE(HAVE_CU_SETUPFUNC,[],[Do we have CU_SetUpFunc?]),,
-	    [#include <CUnit/Basic.h>])
-	,)
+        AC_CHECK_TYPE([CU_SetUpFunc],AC_DEFINE(HAVE_CU_SETUPFUNC,[],[Do we have CU_SetUpFunc?]),,
+            [#include <CUnit/Basic.h>])
+        ,)
 fi
 if test "$enable_unit_tests" = "yes" ; then
     dnl Valgrind is an amazingly useful tool for running tests.  It doesn't
@@ -1718,7 +1718,7 @@ typedef unsigned int socklen_t;
 typedef int rlim_t;
 #endif
 
-/* some potentially memory saving tradeoffs, 
+/* some potentially memory saving tradeoffs,
    preconfigured in memory-saving mode */
 
 /* save the cmdlines for the ID command */
@@ -1731,12 +1731,12 @@ typedef int rlim_t;
 #include <netinet/in.h>
 
 #ifndef HAVE_STRUCT_SOCKADDR_STORAGE
-#define	_SS_MAXSIZE	128	/* Implementation specific max size */
-#define	_SS_PADSIZE	(_SS_MAXSIZE - sizeof (struct sockaddr))
+#define _SS_MAXSIZE     128     /* Implementation specific max size */
+#define _SS_PADSIZE     (_SS_MAXSIZE - sizeof (struct sockaddr))
 
 struct sockaddr_storage {
-	struct	sockaddr ss_sa;
-	char		__ss_pad2[_SS_PADSIZE];
+        struct  sockaddr ss_sa;
+        char            __ss_pad2[_SS_PADSIZE];
 };
 # define ss_family ss_sa.sa_family
 # define HAVE_SS_FAMILY
@@ -1744,7 +1744,7 @@ struct sockaddr_storage {
 
 #ifndef AF_INET6
 /* Define it to something that should never appear */
-#define	AF_INET6	AF_MAX
+#define AF_INET6        AF_MAX
 #endif
 
 #if !defined(HAVE_GETADDRINFO) || !defined(HAVE_GETNAMEINFO)
@@ -1809,7 +1809,7 @@ extern void *memmem(const void *, size_t, const void *, size_t);
 /* compile time options; think carefully before modifying */
 enum {
     /* should we send an UNAVAILABLE message to master when
-     * a service is exiting (master is already going to be 
+     * a service is exiting (master is already going to be
      * informed of the exit by the SIGCHLD signal anyway) ? */
     MESSAGE_MASTER_ON_EXIT = 0,
 
@@ -1819,7 +1819,7 @@ enum {
     /* should we call fsync() to maybe help with softupdates? (it should) */
     APPEND_ULTRA_PARANOID = 1,
 
-    /* should we log extra information at the DEBUG level for DB stuff? 
+    /* should we log extra information at the DEBUG level for DB stuff?
      * 0 -> nothing; 1 -> some; higher -> even more */
     CONFIG_DB_VERBOSE = 1,
 

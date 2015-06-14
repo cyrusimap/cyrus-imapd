@@ -67,14 +67,14 @@ foreach $file (`find -name "*.ics"`) {
     $file =~ s/\s+$//;
 
     if ($file eq $output_file) {
-	next;
+        next;
     }
 
 #    print "File: $file\n";
 
     # Get the VTIMEZONE data.
     open (ZONEFILE, "$file")
-	|| die "Can't open file: $ZONEINFO_DIR/$file";
+        || die "Can't open file: $ZONEINFO_DIR/$file";
     undef $/;
     $vtimezone = <ZONEFILE>;
     $/ = $input_record_separator;
@@ -100,35 +100,35 @@ foreach $file (`find -name "*.ics"`) {
     # If there is an RRULE, we look for the first 2 TZOFFSETTO properties,
     # else we just get the first one.
     if ($vtimezone =~ m/RRULE/) {
-	$vtimezone =~ m/TZOFFSETTO:([+-]?\d+)/;
-	$tzoffsetto = $1;
-	$vtimezone =~ m/TZOFFSETFROM:([+-]?\d+)/;
-	$tzoffsetfrom = $1;
-	$tzoffset = "$tzoffsetfrom/$tzoffsetto";
+        $vtimezone =~ m/TZOFFSETTO:([+-]?\d+)/;
+        $tzoffsetto = $1;
+        $vtimezone =~ m/TZOFFSETFROM:([+-]?\d+)/;
+        $tzoffsetfrom = $1;
+        $tzoffset = "$tzoffsetfrom/$tzoffsetto";
     } else {
-	$vtimezone =~ m/TZOFFSETTO:([+-]?\d+)/s;
-	$tzoffset = $1;
+        $vtimezone =~ m/TZOFFSETTO:([+-]?\d+)/s;
+        $tzoffset = $1;
     }
 #    print "TZOFFSET: $tzoffset\n";
 
     # We put each event on a separate day in 2001 and Jan 2002.
     $day_num = $zone_num;
     if ($day_num >= 365) {
-	$year = 2002;
-	$day_num -= 365;
+        $year = 2002;
+        $day_num -= 365;
     } else {
-	$year = 2001;
+        $year = 2001;
     }
     $month = -1;
     for ($i = 0; $i < 12; $i++) {
-	if ($day_num < $days_in_month[$i]) {
-	    $month = $i;
-	    last;
-	}
-	$day_num -= $days_in_month[$i]
+        if ($day_num < $days_in_month[$i]) {
+            $month = $i;
+            last;
+        }
+        $day_num -= $days_in_month[$i]
     }
     if ($month == -1) {
-	die "month = -1";
+        die "month = -1";
     }
 
     $month++;
@@ -144,7 +144,7 @@ DTSTAMP:20010101T000000Z
 DTSTART;TZID=${tzid}:${date}T120000
 DTEND;TZID=${tzid}:${date}T130000
 RRULE:FREQ=MONTHLY;BYMONTHDAY=${day_num}
-SUMMARY:($tzoffset) ${location} 12:00-13:00 UTC 
+SUMMARY:($tzoffset) ${location} 12:00-13:00 UTC
 SEQUENCE:1
 END:VEVENT
 EOF

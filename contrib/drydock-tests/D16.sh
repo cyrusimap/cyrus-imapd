@@ -40,15 +40,15 @@ function test_path() {
     eval "$(grep -E '^(bin|sbin|libexec)dir=' config.log)"
 
     test "${prefix}" == "${expect_prefix}" ||
-	test_fail 'prefix' $expect_prefix $prefix
+        test_fail 'prefix' $expect_prefix $prefix
     test "${exec_prefix}" == "${expect_exec_prefix}" ||
-	test_fail 'exec_prefix' $expect_exec_prefix $exec_prefix
+        test_fail 'exec_prefix' $expect_exec_prefix $exec_prefix
     test "${bindir}" == "${expect_bindir}" ||
-	test_fail 'bindir' $expect_bindir $bindir
+        test_fail 'bindir' $expect_bindir $bindir
     test "${sbindir}" == "${expect_sbindir}" ||
-	test_fail 'sbindir' $expect_sbindir $sbindir
+        test_fail 'sbindir' $expect_sbindir $sbindir
     test "${libexecdir}" == "${expect_libexecdir}" ||
-	test_fail 'libexecdir' $expect_libexecdir $libexecdir
+        test_fail 'libexecdir' $expect_libexecdir $libexecdir
 }
 
 test_path \

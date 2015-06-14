@@ -77,10 +77,10 @@ sub ouch {
     my $msg = shift;
 
     if ($force) {
-	print "error: $msg\n";
+        print "error: $msg\n";
     } else {
-	print "fatal error: $msg\n";
-	exit 1;
+        print "fatal error: $msg\n";
+        exit 1;
     }
 }
 
@@ -89,30 +89,30 @@ sub read_conf {
 
     open CONF, $file or die "can't open $file";
     while (<CONF>) {
-	if (/^#/) { 
-	    next; 
-	}
-	if (/\@include:\s+(.*)$/) {
-	    push @configs, $1;
-	}
-        if (/^sievedir:\s+(.*)$/) {
-	    $sievedir = $1;
-	    print "you are using $sievedir as your sieve directory.\n";
+        if (/^#/) {
+            next;
         }
-	if (/^unixhierarchysep:\s*(1|t|yes|on)/) {
-	    $unixhierarchysep = 1;
-	}
-	if (/^altnamespace:\s*(1|t|yes|on)/) {
-	    $altnamespace = 1;
-	}
-	if (/^userprefix:\s*(.*)$/) {
-	    $userprefix = $1;
-	    print "you are using $userprefix as your other users prefix.\n";
-	}
-	if (/^sharedprefix:\s*(.*)$/) {
-	    $sharedprefix = $1;
-	    print "you are using $sharedprefix as your shared prefix.\n";
-	}
+        if (/\@include:\s+(.*)$/) {
+            push @configs, $1;
+        }
+        if (/^sievedir:\s+(.*)$/) {
+            $sievedir = $1;
+            print "you are using $sievedir as your sieve directory.\n";
+        }
+        if (/^unixhierarchysep:\s*(1|t|yes|on)/) {
+            $unixhierarchysep = 1;
+        }
+        if (/^altnamespace:\s*(1|t|yes|on)/) {
+            $altnamespace = 1;
+        }
+        if (/^userprefix:\s*(.*)$/) {
+            $userprefix = $1;
+            print "you are using $userprefix as your other users prefix.\n";
+        }
+        if (/^sharedprefix:\s*(.*)$/) {
+            $sharedprefix = $1;
+            print "you are using $sharedprefix as your shared prefix.\n";
+        }
     }
     close CONF;
 }
@@ -141,80 +141,80 @@ chdir $sievedir or die "couldn't change to $sievedir";
 foreach $i ("a".."z") {
     print "$i ";
     if (! chdir $i) {
-	ouch "couldn't chdir to $i";
-	next;
+        ouch "couldn't chdir to $i";
+        next;
     }
 
     # translate the scripts user by user
     opendir (D, ".");
     while ($d = readdir D) {
-	next if ($d =~ /^\./s);
-	if (! -d $d) {
-	    ouch "expected $d to be a directory";
-	    next;
-	}
+        next if ($d =~ /^\./s);
+        if (! -d $d) {
+            ouch "expected $d to be a directory";
+            next;
+        }
 
-	if (! chdir $d) {
-	    ouch "couldn't chdir to $d";
-	    next;
-	}
-	
-	# translate all of the user's scripts
-	opendir DIR, ".";
-	while ($file = readdir DIR) {
-	    next if (!($file =~ /\.script$/));
-	    
-	    # print "translating $file... ";
-	    if (!open(IN, $file)) {
-		ouch "cannot open $file for reading: $!";
-		next;
-	    }
-	    if (!open(OUT, ">.$file")) {
-		close(IN);
-		ouch "cannot create /.$file: $!";
-		next;
-	    }
+        if (! chdir $d) {
+            ouch "couldn't chdir to $d";
+            next;
+        }
 
-	    $inbox = "[Ii][Nn][Bb][Oo][Xx]";
-	    while (<IN>) {
-		# Alternate namespace
-		if ($altnamespace) {
-		    # INBOX
-		    if (/\s+fileinto\s+"$inbox"\s*;/) {
-			# do nothing
-		    }
-		    # Personal namespace
-		    elsif (/\s+fileinto\s+"($inbox\.[^"]*)"\s*;/) {
-			substr($_, index($_, $1), 6) = "";
-		    }
-		    # Other Users namespace
-		    elsif (/\s+fileinto\s+"(user\.[^"]*)"\s*;/) {
-			substr($_, index($_, $1), 4) = $userprefix;
-		    }
-		    # Shared namespace
-		    elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
-			substr($_, index($_, $1), 0) = $sharedprefix . ".";
-		    }
-		}
-		# Hierarchy separator
-		if ($unixhierarchysep) {
-		    if (/\s+fileinto\s+"([^"]*)"\s*;/) {
-			substr($_, index($_, $1)) =~ s~\.~/~g;
-		    }
-		}
-		print OUT $_;
-	    }
-	    close(IN);
-	    close(OUT);
+        # translate all of the user's scripts
+        opendir DIR, ".";
+        while ($file = readdir DIR) {
+            next if (!($file =~ /\.script$/));
 
-	    rename(".$file", "$file")
-		or ouch "couldn't move .$file to $file";
+            # print "translating $file... ";
+            if (!open(IN, $file)) {
+                ouch "cannot open $file for reading: $!";
+                next;
+            }
+            if (!open(OUT, ">.$file")) {
+                close(IN);
+                ouch "cannot create /.$file: $!";
+                next;
+            }
 
-	    # print "\n";
-	}
-	
-	closedir DIR;
-	chdir "..";
+            $inbox = "[Ii][Nn][Bb][Oo][Xx]";
+            while (<IN>) {
+                # Alternate namespace
+                if ($altnamespace) {
+                    # INBOX
+                    if (/\s+fileinto\s+"$inbox"\s*;/) {
+                        # do nothing
+                    }
+                    # Personal namespace
+                    elsif (/\s+fileinto\s+"($inbox\.[^"]*)"\s*;/) {
+                        substr($_, index($_, $1), 6) = "";
+                    }
+                    # Other Users namespace
+                    elsif (/\s+fileinto\s+"(user\.[^"]*)"\s*;/) {
+                        substr($_, index($_, $1), 4) = $userprefix;
+                    }
+                    # Shared namespace
+                    elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                        substr($_, index($_, $1), 0) = $sharedprefix . ".";
+                    }
+                }
+                # Hierarchy separator
+                if ($unixhierarchysep) {
+                    if (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                        substr($_, index($_, $1)) =~ s~\.~/~g;
+                    }
+                }
+                print OUT $_;
+            }
+            close(IN);
+            close(OUT);
+
+            rename(".$file", "$file")
+                or ouch "couldn't move .$file to $file";
+
+            # print "\n";
+        }
+
+        closedir DIR;
+        chdir "..";
     }
     closedir D;
 

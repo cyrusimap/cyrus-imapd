@@ -34,25 +34,25 @@
 
 #include <glib.h>
 
-void		dump_zone_data			(GArray		*zone_data,
-						 char		*filename);
-void		dump_rule_data			(GHashTable	*rule_data,
-						 char		*filename);
+void            dump_zone_data                  (GArray         *zone_data,
+                                                 char           *filename);
+void            dump_rule_data                  (GHashTable     *rule_data,
+                                                 char           *filename);
 
-void		dump_rule_array			(char		*name,
-						 GArray		*rule_array,
-						 FILE		*fp);
+void            dump_rule_array                 (char           *name,
+                                                 GArray         *rule_array,
+                                                 FILE           *fp);
 
-char*		dump_year			(int		year);
-char*		dump_day_coded			(DayCode	day_code,
-						 int		day_number,
-						 int		day_weekday);
-char*		dump_time			(int		 seconds,
-						 TimeCode	 time_code,
-						 gboolean	 use_zero);
+char*           dump_year                       (int            year);
+char*           dump_day_coded                  (DayCode        day_code,
+                                                 int            day_number,
+                                                 int            day_weekday);
+char*           dump_time                       (int             seconds,
+                                                 TimeCode        time_code,
+                                                 gboolean        use_zero);
 
-void		dump_time_zone_names		(GList		*names,
-						 char		*output_dir,
-						 GHashTable	*zones_hash);
+void            dump_time_zone_names            (GList          *names,
+                                                 char           *output_dir,
+                                                 GHashTable     *zones_hash);
 
 #endif /* _VZIC_DUMP_H_ */

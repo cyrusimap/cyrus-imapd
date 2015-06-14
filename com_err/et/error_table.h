@@ -75,12 +75,12 @@ struct et_list {
 };
 extern struct et_list * _et_list;
 
-#define	ERRCODE_RANGE	8	/* # of bits to shift table number */
-#define	BITS_PER_CHAR	6	/* # bits to shift per character in name */
+#define ERRCODE_RANGE   8       /* # of bits to shift table number */
+#define BITS_PER_CHAR   6       /* # bits to shift per character in name */
 
 #if defined(__STDC__) || defined(KRB5_PROVIDE_PROTOTYPES) || defined(_WINDOWS)
 extern const char *error_table_name (long);
-#else 
+#else
 extern const char *error_table_name ();
 #endif
 

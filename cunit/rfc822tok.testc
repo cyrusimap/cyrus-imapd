@@ -2,13 +2,13 @@
 #include "cunit/cunit.h"
 #include "rfc822tok.h"
 
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD2A	"do"
-#define WORD2B	"lor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD2A  "do"
+#define WORD2B  "lor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
 #define BADPOINTER  ((void *)0xdeadbeef)
 
@@ -156,10 +156,10 @@ static void test_whitespace(void)
 static void test_comments(void)
 {
     static const char PHRASE[] = WORD0"()"
-				 WORD1"( hello world )"
-				 WORD2" ( he\\l\\lo \\) world\r\n and friends) "
-				 WORD3" (hell(o( (w)or)ld))"
-				 WORD4;
+                                 WORD1"( hello world )"
+                                 WORD2" ( he\\l\\lo \\) world\r\n and friends) "
+                                 WORD3" (hell(o( (w)or)ld))"
+                                 WORD4;
     rfc822tok_t tok = RFC822TOK_INITIALIZER;
     char *p;
     int t;
@@ -202,9 +202,9 @@ static void test_comments(void)
 static void test_quoted_strings(void)
 {
     static const char PHRASE[] = "\""WORD0"\""
-				 "\""WORD1"\\x\" "
-				 "\""WORD2A"\\\""WORD2B"\" "
-				 "\""WORD3"  \r\n\t   \t"WORD4"\"";
+                                 "\""WORD1"\\x\" "
+                                 "\""WORD2A"\\\""WORD2B"\" "
+                                 "\""WORD3"  \r\n\t   \t"WORD4"\"";
     rfc822tok_t tok = RFC822TOK_INITIALIZER;
     char *p;
     int t;
@@ -242,8 +242,8 @@ static void test_quoted_strings(void)
 static void test_special_dot(void)
 {
     static const char PHRASE[] = WORD0" "
-				 WORD1"."WORD2"."WORD3" "
-				 WORD4;
+                                 WORD1"."WORD2"."WORD3" "
+                                 WORD4;
     rfc822tok_t tok = RFC822TOK_INITIALIZER;
     char *p;
     int t;
@@ -322,8 +322,8 @@ static void test_special_dot(void)
 static void test_special_equal(void)
 {
     static const char PHRASE[] = WORD0" "
-				 WORD1"="WORD2"="WORD3" "
-				 WORD4;
+                                 WORD1"="WORD2"="WORD3" "
+                                 WORD4;
     rfc822tok_t tok = RFC822TOK_INITIALIZER;
     char *p;
     int t;
@@ -407,23 +407,23 @@ struct token
 
 #define TESTCASE(in, inlen, exp) \
     do { \
-	const struct token *_exp = (exp); \
-	rfc822tok_t _tok = RFC822TOK_INITIALIZER; \
-	rfc822tok_init(&_tok, (in), (inlen), RFC822_SPECIAL_EQUAL); \
-	for (;; _exp++) { \
-	    char *_p = BADPOINTER; \
-	    int _t = rfc822tok_next(&_tok, &_p); \
-	    CU_ASSERT_EQUAL(_t, _exp->token); \
-	    CU_ASSERT_PTR_NOT_EQUAL(_p, BADPOINTER); \
-	    if (_t > 255) { \
-		CU_ASSERT_STRING_EQUAL(_p, _exp->text); \
-	    } \
-	    else { \
-		CU_ASSERT_PTR_NULL(_p); \
-	    } \
-	    if (_exp->token == EOF) break; \
-	} \
-	rfc822tok_fini(&_tok); \
+        const struct token *_exp = (exp); \
+        rfc822tok_t _tok = RFC822TOK_INITIALIZER; \
+        rfc822tok_init(&_tok, (in), (inlen), RFC822_SPECIAL_EQUAL); \
+        for (;; _exp++) { \
+            char *_p = BADPOINTER; \
+            int _t = rfc822tok_next(&_tok, &_p); \
+            CU_ASSERT_EQUAL(_t, _exp->token); \
+            CU_ASSERT_PTR_NOT_EQUAL(_p, BADPOINTER); \
+            if (_t > 255) { \
+                CU_ASSERT_STRING_EQUAL(_p, _exp->text); \
+            } \
+            else { \
+                CU_ASSERT_PTR_NULL(_p); \
+            } \
+            if (_exp->token == EOF) break; \
+        } \
+        rfc822tok_fini(&_tok); \
     } while(0)
 
 /* a real-world example */
@@ -431,83 +431,83 @@ static void test_content_type(void)
 {
     /* Examples from RFC2045 */
     {
-	static const char PHRASE[] = "Content-Type: text/plain; charset=us-ascii\r\n";
-	static const struct token EXP[] = {
-	    { RFC822_ATOM, "Content-Type" },
-	    { ':', NULL },
-	    { RFC822_ATOM, "text/plain" },
-	    { ';', NULL },
-	    { RFC822_ATOM, "charset" },
-	    { '=', NULL },
-	    { RFC822_ATOM, "us-ascii" },
-	    { EOF, NULL }};
-	TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
+        static const char PHRASE[] = "Content-Type: text/plain; charset=us-ascii\r\n";
+        static const struct token EXP[] = {
+            { RFC822_ATOM, "Content-Type" },
+            { ':', NULL },
+            { RFC822_ATOM, "text/plain" },
+            { ';', NULL },
+            { RFC822_ATOM, "charset" },
+            { '=', NULL },
+            { RFC822_ATOM, "us-ascii" },
+            { EOF, NULL }};
+        TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
     }
     {
-	static const char PHRASE[] = "Content-Type: text/plain; charset=us-ascii (Plain text)\r\n";
-	static const struct token EXP[] = {
-	    { RFC822_ATOM, "Content-Type" },
-	    { ':', NULL },
-	    { RFC822_ATOM, "text/plain" },
-	    { ';', NULL },
-	    { RFC822_ATOM, "charset" },
-	    { '=', NULL },
-	    { RFC822_ATOM, "us-ascii" },
-	    { EOF, NULL }};
-	TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
+        static const char PHRASE[] = "Content-Type: text/plain; charset=us-ascii (Plain text)\r\n";
+        static const struct token EXP[] = {
+            { RFC822_ATOM, "Content-Type" },
+            { ':', NULL },
+            { RFC822_ATOM, "text/plain" },
+            { ';', NULL },
+            { RFC822_ATOM, "charset" },
+            { '=', NULL },
+            { RFC822_ATOM, "us-ascii" },
+            { EOF, NULL }};
+        TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
     }
     {
-	static const char PHRASE[] = "Content-Type: text/plain; charset=\"us-ascii\"\r\n";
-	static const struct token EXP[] = {
-	    { RFC822_ATOM, "Content-Type" },
-	    { ':', NULL },
-	    { RFC822_ATOM, "text/plain" },
-	    { ';', NULL },
-	    { RFC822_ATOM, "charset" },
-	    { '=', NULL },
-	    { RFC822_QSTRING, "us-ascii" },
-	    { EOF, NULL }};
-	TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
+        static const char PHRASE[] = "Content-Type: text/plain; charset=\"us-ascii\"\r\n";
+        static const struct token EXP[] = {
+            { RFC822_ATOM, "Content-Type" },
+            { ':', NULL },
+            { RFC822_ATOM, "text/plain" },
+            { ';', NULL },
+            { RFC822_ATOM, "charset" },
+            { '=', NULL },
+            { RFC822_QSTRING, "us-ascii" },
+            { EOF, NULL }};
+        TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
     }
     {
-	static const char PHRASE[] = "Content-Type: \"text/plain\"; charset=\"us-ascii\"\r\n";
-	static const struct token EXP[] = {
-	    { RFC822_ATOM, "Content-Type" },
-	    { ':', NULL },
-	    { RFC822_QSTRING, "text/plain" },
-	    { ';', NULL },
-	    { RFC822_ATOM, "charset" },
-	    { '=', NULL },
-	    { RFC822_QSTRING, "us-ascii" },
-	    { EOF, NULL }};
-	TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
+        static const char PHRASE[] = "Content-Type: \"text/plain\"; charset=\"us-ascii\"\r\n";
+        static const struct token EXP[] = {
+            { RFC822_ATOM, "Content-Type" },
+            { ':', NULL },
+            { RFC822_QSTRING, "text/plain" },
+            { ';', NULL },
+            { RFC822_ATOM, "charset" },
+            { '=', NULL },
+            { RFC822_QSTRING, "us-ascii" },
+            { EOF, NULL }};
+        TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
     }
     /* some made-up examples */
     {
-	static const char PHRASE[] = "Content-Type  : text/plain ; charset = \"us-ascii\" \r\n";
-	static const struct token EXP[] = {
-	    { RFC822_ATOM, "Content-Type" },
-	    { ':', NULL },
-	    { RFC822_ATOM, "text/plain" },
-	    { ';', NULL },
-	    { RFC822_ATOM, "charset" },
-	    { '=', NULL },
-	    { RFC822_QSTRING, "us-ascii" },
-	    { EOF, NULL }};
-	TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
+        static const char PHRASE[] = "Content-Type  : text/plain ; charset = \"us-ascii\" \r\n";
+        static const struct token EXP[] = {
+            { RFC822_ATOM, "Content-Type" },
+            { ':', NULL },
+            { RFC822_ATOM, "text/plain" },
+            { ';', NULL },
+            { RFC822_ATOM, "charset" },
+            { '=', NULL },
+            { RFC822_QSTRING, "us-ascii" },
+            { EOF, NULL }};
+        TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
     }
     {
-	static const char PHRASE[] = "Content-Type: text/plain\r\n ; charset = us-ascii \r\n";
-	static const struct token EXP[] = {
-	    { RFC822_ATOM, "Content-Type" },
-	    { ':', NULL },
-	    { RFC822_ATOM, "text/plain" },
-	    { ';', NULL },
-	    { RFC822_ATOM, "charset" },
-	    { '=', NULL },
-	    { RFC822_ATOM, "us-ascii" },
-	    { EOF, NULL }};
-	TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
+        static const char PHRASE[] = "Content-Type: text/plain\r\n ; charset = us-ascii \r\n";
+        static const struct token EXP[] = {
+            { RFC822_ATOM, "Content-Type" },
+            { ':', NULL },
+            { RFC822_ATOM, "text/plain" },
+            { ';', NULL },
+            { RFC822_ATOM, "charset" },
+            { '=', NULL },
+            { RFC822_ATOM, "us-ascii" },
+            { EOF, NULL }};
+        TESTCASE(PHRASE, sizeof(PHRASE)-1, EXP);
     }
 }
 

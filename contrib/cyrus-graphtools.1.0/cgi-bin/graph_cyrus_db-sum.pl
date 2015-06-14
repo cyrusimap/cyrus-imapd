@@ -55,17 +55,17 @@ foreach $service( sort %hash){
     $cdef.=",$name,+";
   }
   chomp(@args1, @args2);
-  RRDs::graph("$picdir/$service-1.gif",@args1,"$cdef", 
+  RRDs::graph("$picdir/$service-1.gif",@args1,"$cdef",
               "AREA:sum#FF0000");
 #  RRDs::graph("$picdir/$service-1.gif",
 #              "DEF:mail1=$DDIR/mail1.andrew.cmu.edu\\\:$service.rrd:current:MAX",
 #              "DEF:mail2=$DDIR/mail2.andrew.cmu.edu\\\:$service.rrd:current:MAX",
 #              "CDEF:sum=mail1,mail2,+",
 #              "AREA:sum#FF0000");
-             
+
   $error1=RRDs::error;
-  RRDs::graph("$picdir/$service-2.gif", @args2, 
-               $cdef, "CDEF:throw=sum,10000,GT","CDEF:med=throw,0,sum,IF", 
+  RRDs::graph("$picdir/$service-2.gif", @args2,
+               $cdef, "CDEF:throw=sum,10000,GT","CDEF:med=throw,0,sum,IF",
                "CDEF:msum=med,300,* ", "AREA:msum#FF0000");
   $error2=RRDs::error;
   print("<br><img src=\"$hpicdir/$service-1.gif\">");

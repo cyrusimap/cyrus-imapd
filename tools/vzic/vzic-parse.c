@@ -34,47 +34,47 @@
 #include "vzic-parse.h"
 
 /* This is the maximum line length we allow. */
-#define MAX_LINE_LEN	1024
+#define MAX_LINE_LEN    1024
 
 /* The maximum number of fields on a line. */
-#define MAX_FIELDS	12
+#define MAX_FIELDS      12
 
-#define CREATE_SYMLINK	1
+#define CREATE_SYMLINK  1
 
 typedef enum
 {
-  ZONE_ID		= 0,	/* The 'Zone' at the start of the line. */
-  ZONE_NAME		= 1,
-  ZONE_GMTOFF		= 2,
-  ZONE_RULES_SAVE	= 3,
-  ZONE_FORMAT		= 4,
-  ZONE_UNTIL_YEAR	= 5,
-  ZONE_UNTIL_MONTH	= 6,
-  ZONE_UNTIL_DAY	= 7,
-  ZONE_UNTIL_TIME	= 8
+  ZONE_ID               = 0,    /* The 'Zone' at the start of the line. */
+  ZONE_NAME             = 1,
+  ZONE_GMTOFF           = 2,
+  ZONE_RULES_SAVE       = 3,
+  ZONE_FORMAT           = 4,
+  ZONE_UNTIL_YEAR       = 5,
+  ZONE_UNTIL_MONTH      = 6,
+  ZONE_UNTIL_DAY        = 7,
+  ZONE_UNTIL_TIME       = 8
 } ZoneFieldNumber;
 
 
 typedef enum
 {
-  RULE_ID		= 0,	/* The 'Rule' at the start of the line. */
-  RULE_NAME		= 1,
-  RULE_FROM		= 2,
-  RULE_TO		= 3,
-  RULE_TYPE		= 4,
-  RULE_IN		= 5,
-  RULE_ON		= 6,
-  RULE_AT		= 7,
-  RULE_SAVE		= 8,
-  RULE_LETTER_S		= 9
+  RULE_ID               = 0,    /* The 'Rule' at the start of the line. */
+  RULE_NAME             = 1,
+  RULE_FROM             = 2,
+  RULE_TO               = 3,
+  RULE_TYPE             = 4,
+  RULE_IN               = 5,
+  RULE_ON               = 6,
+  RULE_AT               = 7,
+  RULE_SAVE             = 8,
+  RULE_LETTER_S         = 9
 } RuleFieldNumber;
 
 
 typedef enum
 {
-  LINK_ID		= 0,	/* The 'Link' at the start of the line. */
-  LINK_FROM		= 1,
-  LINK_TO		= 2
+  LINK_ID               = 0,    /* The 'Link' at the start of the line. */
+  LINK_FROM             = 1,
+  LINK_TO               = 2
 } LinkFieldNumber;
 
 
@@ -85,16 +85,16 @@ struct _ParsingData
 {
   /* This is the line being parsed. buffer is a copy that we break into fields
      and sub-fields as it is parsed. */
-  char	line[MAX_LINE_LEN];
-  char	buffer[MAX_LINE_LEN];
+  char  line[MAX_LINE_LEN];
+  char  buffer[MAX_LINE_LEN];
 
   /* These are pointers to the start of each field in buffer. */
   char *fields[MAX_FIELDS];
-  int	num_fields;
+  int   num_fields;
 
   /* These are just for producing error messages. */
   char *filename;
-  int	line_number;
+  int   line_number;
 
 
   /* This is an array of ZoneData structs, 1 for each timezone read. */
@@ -111,52 +111,52 @@ struct _ParsingData
      timezone data to). */
   GHashTable *link_data;
 
-  int	max_until_year;
+  int   max_until_year;
 };
 
 
 /*
  * Parsing functions, used when reading the Olson timezone data file.
  */
-static void	parse_fields			(ParsingData	*data);
-static gboolean	parse_zone_line			(ParsingData	*data);
-static gboolean	parse_zone_continuation_line	(ParsingData	*data);
-static gboolean parse_zone_common		(ParsingData	*data,
-						 int		 offset);
-static void	parse_rule_line			(ParsingData	*data);
-static void	parse_link_line			(ParsingData	*data);
+static void     parse_fields                    (ParsingData    *data);
+static gboolean parse_zone_line                 (ParsingData    *data);
+static gboolean parse_zone_continuation_line    (ParsingData    *data);
+static gboolean parse_zone_common               (ParsingData    *data,
+                                                 int             offset);
+static void     parse_rule_line                 (ParsingData    *data);
+static void     parse_link_line                 (ParsingData    *data);
 
-static int	parse_year			(ParsingData	*data,
-						 char		*field,
-						 gboolean	 accept_only,
-						 int		 only_value);
-static int	parse_month			(ParsingData	*data,
-						 char		*field);
-static DayCode	parse_day			(ParsingData	*data,
-						 char		*field,
-						 int		*day,
-						 int		*weekday);
-static int	parse_weekday			(ParsingData	*data,
-						 char		*field);
-static int	parse_time			(ParsingData	*data,
-						 char		*field,
-						 TimeCode	*time_code);
-static int	parse_number			(ParsingData	*data,
-						 char	       **num);
-static int	parse_rules_save		(ParsingData	*data,
-						 char		*field,
-						 char	       **rules);
+static int      parse_year                      (ParsingData    *data,
+                                                 char           *field,
+                                                 gboolean        accept_only,
+                                                 int             only_value);
+static int      parse_month                     (ParsingData    *data,
+                                                 char           *field);
+static DayCode  parse_day                       (ParsingData    *data,
+                                                 char           *field,
+                                                 int            *day,
+                                                 int            *weekday);
+static int      parse_weekday                   (ParsingData    *data,
+                                                 char           *field);
+static int      parse_time                      (ParsingData    *data,
+                                                 char           *field,
+                                                 TimeCode       *time_code);
+static int      parse_number                    (ParsingData    *data,
+                                                 char          **num);
+static int      parse_rules_save                (ParsingData    *data,
+                                                 char           *field,
+                                                 char          **rules);
 
-static void	parse_coord			(char		*coord,
-						 int		 len,
-						 int		*result);
+static void     parse_coord                     (char           *coord,
+                                                 int             len,
+                                                 int            *result);
 
 void
-parse_olson_file		(char		*filename,
-				 GArray	       **zone_data,
-				 GHashTable    **rule_data,
-				 GHashTable    **link_data,
-				 int		*max_until_year)
+parse_olson_file                (char           *filename,
+                                 GArray        **zone_data,
+                                 GHashTable    **rule_data,
+                                 GHashTable    **link_data,
+                                 int            *max_until_year)
 {
   ParsingData data;
   FILE *fp;
@@ -200,7 +200,7 @@ parse_olson_file		(char		*filename,
       /* We don't care about Leap lines. */
     } else {
       fprintf (stderr, "%s:%i: Invalid line.\n%s\n", filename,
-	       data.line_number, data.line);
+               data.line_number, data.line);
       exit (1);
     }
   }
@@ -212,7 +212,7 @@ parse_olson_file		(char		*filename,
 
   if (zone_continues) {
     fprintf (stderr, "%s:%i: Zone continuation line expected.\n%s\n",
-	     filename, data.line_number, data.line);
+             filename, data.line_number, data.line);
     exit (1);
   }
 
@@ -227,7 +227,7 @@ parse_olson_file		(char		*filename,
 
 /* Converts the line into fields. */
 static void
-parse_fields			(ParsingData	*data)
+parse_fields                    (ParsingData    *data)
 {
   int i;
   char *p, *s, ch;
@@ -257,32 +257,32 @@ parse_fields			(ParsingData	*data)
     for (;;) {
       ch = *p;
       if (ch == '\0' || ch == '#') {
-	/* Don't move p on since this is the end of the line. */
-	*s = '\0';
-	break;
+        /* Don't move p on since this is the end of the line. */
+        *s = '\0';
+        break;
       } else if (isspace (ch)) {
-	*s = '\0';
-	p++;
-	break;
+        *s = '\0';
+        p++;
+        break;
       } else if (ch == '"') {
-	p++;
-	for (;;) {
-	  ch = *p;
-	  if (ch == '\0') {
-	    fprintf (stderr,
-		     "%s:%i: Closing quote character ('\"') missing.\n%s\n",
-		     data->filename, data->line_number, data->line);
-	    exit (1);
-	  } else if (ch == '"') {
-	    p++;
-	    break;
-	  } else {
-	    *s++ = ch;
-	  }
-	  p++;
-	}	  
+        p++;
+        for (;;) {
+          ch = *p;
+          if (ch == '\0') {
+            fprintf (stderr,
+                     "%s:%i: Closing quote character ('\"') missing.\n%s\n",
+                     data->filename, data->line_number, data->line);
+            exit (1);
+          } else if (ch == '"') {
+            p++;
+            break;
+          } else {
+            *s++ = ch;
+          }
+          p++;
+        }
       } else {
-	*s++ = ch;
+        *s++ = ch;
       }
       p++;
     }
@@ -298,16 +298,16 @@ parse_fields			(ParsingData	*data)
 
 
 static gboolean
-parse_zone_line			(ParsingData	*data)
+parse_zone_line                 (ParsingData    *data)
 {
   ZoneData zone;
 
   /* All 5 fields up to FORMAT must be present. */
   if (data->num_fields < 5 || data->num_fields > 9) {
-	fprintf (stderr, "%s:%i: Invalid Zone line - %i fields.\n%s\n",
-		 data->filename, data->line_number, data->num_fields,
-		 data->line);
-	exit (1);
+        fprintf (stderr, "%s:%i: Invalid Zone line - %i fields.\n%s\n",
+                 data->filename, data->line_number, data->num_fields,
+                 data->line);
+        exit (1);
   }
 
   zone.zone_name = g_strdup (data->fields[ZONE_NAME]);
@@ -320,15 +320,15 @@ parse_zone_line			(ParsingData	*data)
 
 
 static gboolean
-parse_zone_continuation_line	(ParsingData	*data)
+parse_zone_continuation_line    (ParsingData    *data)
 {
   /* All 3 fields up to FORMAT must be present. */
   if (data->num_fields < 3 || data->num_fields > 7) {
-	fprintf (stderr,
-		 "%s:%i: Invalid Zone continuation line - %i fields.\n%s\n",
-		 data->filename, data->line_number, data->num_fields,
-		 data->line);
-	exit (1);
+        fprintf (stderr,
+                 "%s:%i: Invalid Zone continuation line - %i fields.\n%s\n",
+                 data->filename, data->line_number, data->num_fields,
+                 data->line);
+        exit (1);
   }
 
   return parse_zone_common (data, -2);
@@ -336,19 +336,19 @@ parse_zone_continuation_line	(ParsingData	*data)
 
 
 static gboolean
-parse_zone_common		(ParsingData	*data,
-				 int		 offset)
+parse_zone_common               (ParsingData    *data,
+                                 int             offset)
 {
   ZoneData *zone;
   ZoneLineData zone_line;
   TimeCode time_code;
 
   zone_line.stdoff_seconds = parse_time (data,
-					 data->fields[ZONE_GMTOFF + offset],
-					 &time_code);
+                                         data->fields[ZONE_GMTOFF + offset],
+                                         &time_code);
   zone_line.save_seconds = parse_rules_save (data,
-					     data->fields[ZONE_RULES_SAVE + offset],
-					     &zone_line.rules);
+                                             data->fields[ZONE_RULES_SAVE + offset],
+                                             &zone_line.rules);
 
   if (!VzicPureOutput) {
     /* We round the UTC offsets to the nearest minute, to be compatible with
@@ -372,22 +372,22 @@ parse_zone_common		(ParsingData	*data,
   if (data->num_fields - offset >= 6) {
     zone_line.until_set = TRUE;
     zone_line.until_year = parse_year (data,
-				       data->fields[ZONE_UNTIL_YEAR + offset],
-				       FALSE, 0);
+                                       data->fields[ZONE_UNTIL_YEAR + offset],
+                                       FALSE, 0);
     zone_line.until_month = parse_month (data,
-					 data->fields[ZONE_UNTIL_MONTH + offset]);
+                                         data->fields[ZONE_UNTIL_MONTH + offset]);
     zone_line.until_day_code = parse_day (data,
-					  data->fields[ZONE_UNTIL_DAY + offset],
-					  &zone_line.until_day_number,
-					  &zone_line.until_day_weekday);
+                                          data->fields[ZONE_UNTIL_DAY + offset],
+                                          &zone_line.until_day_number,
+                                          &zone_line.until_day_weekday);
     zone_line.until_time_seconds = parse_time (data,
-					       data->fields[ZONE_UNTIL_TIME + offset],
-					       &zone_line.until_time_code);
+                                               data->fields[ZONE_UNTIL_TIME + offset],
+                                               &zone_line.until_time_code);
 
     /* We also want to know the maximum year used in any UNTIL value, so we
        know where to expand all the infinite Rule data to. */
     if (zone_line.until_year != YEAR_MAXIMUM
-	&& zone_line.until_year != YEAR_MINIMUM)
+        && zone_line.until_year != YEAR_MINIMUM)
       data->max_until_year = MAX (data->max_until_year, zone_line.until_year);
 
   } else {
@@ -404,7 +404,7 @@ parse_zone_common		(ParsingData	*data,
 
 
 static void
-parse_rule_line			(ParsingData	*data)
+parse_rule_line                 (ParsingData    *data)
 {
   GArray *rule_array;
   RuleData rule;
@@ -413,10 +413,10 @@ parse_rule_line			(ParsingData	*data)
 
   /* All 10 fields must be present. */
   if (data->num_fields != 10) {
-	fprintf (stderr, "%s:%i: Invalid Rule line - %i fields.\n%s\n",
-		 data->filename, data->line_number, data->num_fields,
-		 data->line);
-	exit (1);
+        fprintf (stderr, "%s:%i: Invalid Rule line - %i fields.\n%s\n",
+                 data->filename, data->line_number, data->num_fields,
+                 data->line);
+        exit (1);
   }
 
   name = data->fields[RULE_NAME];
@@ -432,15 +432,15 @@ parse_rule_line			(ParsingData	*data)
   rule.from_year = parse_year (data, data->fields[RULE_FROM], FALSE, 0);
   if (rule.from_year == YEAR_MAXIMUM) {
     fprintf (stderr, "%s:%i: Invalid Rule FROM value: '%s'\n",
-	     data->filename, data->line_number, data->fields[RULE_FROM]);
+             data->filename, data->line_number, data->fields[RULE_FROM]);
     exit (1);
   }
 
   rule.to_year = parse_year (data, data->fields[RULE_TO], TRUE,
-			     rule.from_year);
+                             rule.from_year);
   if (rule.to_year == YEAR_MINIMUM) {
     fprintf (stderr, "%s:%i: Invalid Rule TO value: %s\n",
-	     data->filename, data->line_number, data->fields[RULE_TO]);
+             data->filename, data->line_number, data->fields[RULE_TO]);
     exit (1);
   }
 
@@ -460,9 +460,9 @@ parse_rule_line			(ParsingData	*data)
 
   rule.in_month = parse_month (data, data->fields[RULE_IN]);
   rule.on_day_code = parse_day (data, data->fields[RULE_ON],
-				&rule.on_day_number, &rule.on_day_weekday);
+                                &rule.on_day_number, &rule.on_day_weekday);
   rule.at_time_seconds = parse_time (data, data->fields[RULE_AT],
-				     &rule.at_time_code);
+                                     &rule.at_time_code);
   rule.save_seconds = parse_time (data, data->fields[RULE_SAVE], &time_code);
 
   if (!strcmp (data->fields[RULE_LETTER_S], "-")) {
@@ -478,17 +478,17 @@ parse_rule_line			(ParsingData	*data)
 
 
 static void
-parse_link_line			(ParsingData	*data)
+parse_link_line                 (ParsingData    *data)
 {
   char *from, *to, *old_from;
   GList *zone_list;
 
   /* We must have 3 fields for a Link. */
   if (data->num_fields != 3) {
-	fprintf (stderr, "%s:%i: Invalid Rule line - %i fields.\n%s\n",
-		 data->filename, data->line_number, data->num_fields,
-		 data->line);
-	exit (1);
+        fprintf (stderr, "%s:%i: Invalid Rule line - %i fields.\n%s\n",
+                 data->filename, data->line_number, data->num_fields,
+                 data->line);
+        exit (1);
   }
 
   from = data->fields[LINK_FROM];
@@ -504,32 +504,32 @@ parse_link_line			(ParsingData	*data)
       int dirs = 0;
       int i;
       for (i = 0; i < len; i++) {
-	  dirs += to[i] == '/' ? 1 : 0;
+          dirs += to[i] == '/' ? 1 : 0;
       }
       if (dirs >= 0) {
-	  char rel_from[255];
-	  char to_dir[255];
-	  char to_path[255];
-	  if (dirs == 0) {
-	      sprintf(rel_from, "%s.ics", from);
-	  } else if (dirs == 1) {
-	      sprintf(rel_from, "../%s.ics", from);
-	  } else if (dirs == 2) {
-	      sprintf(rel_from, "../../%s.ics", from);
-	  } else {
-	      return;
-	  }
-	  sprintf(to_path, "%s/%s.ics", VzicOutputDir, to);
-	  strncpy(to_dir, to_path, 254);
-	  ensure_directory_exists(dirname(to_dir));
-	  //printf("Creating symlink from %s to %s\n", rel_from, to_path);
-	  symlink(rel_from, to_path);
+          char rel_from[255];
+          char to_dir[255];
+          char to_path[255];
+          if (dirs == 0) {
+              sprintf(rel_from, "%s.ics", from);
+          } else if (dirs == 1) {
+              sprintf(rel_from, "../%s.ics", from);
+          } else if (dirs == 2) {
+              sprintf(rel_from, "../../%s.ics", from);
+          } else {
+              return;
+          }
+          sprintf(to_path, "%s/%s.ics", VzicOutputDir, to);
+          strncpy(to_dir, to_path, 254);
+          ensure_directory_exists(dirname(to_dir));
+          //printf("Creating symlink from %s to %s\n", rel_from, to_path);
+          symlink(rel_from, to_path);
       }
   }
 #else
   if (g_hash_table_lookup_extended (data->link_data, from,
-				    (gpointer) &old_from,
-				    (gpointer) &zone_list)) {
+                                    (gpointer) &old_from,
+                                    (gpointer) &zone_list)) {
     from = old_from;
   } else {
     from = g_strdup (from);
@@ -544,17 +544,17 @@ parse_link_line			(ParsingData	*data)
 
 
 static int
-parse_year			(ParsingData	*data,
-				 char		*field,
-				 gboolean	 accept_only,
-				 int		 only_value)
+parse_year                      (ParsingData    *data,
+                                 char           *field,
+                                 gboolean        accept_only,
+                                 int             only_value)
 {
   int len, year = 0;
   char *p;
 
   if (!field) {
     fprintf (stderr, "%s:%i: Missing year.\n%s\n", data->filename,
-	     data->line_number, data->line);
+             data->line_number, data->line);
     exit (1);
   }
 
@@ -570,18 +570,18 @@ parse_year			(ParsingData	*data,
 
   for (p = field; *p; p++) {
     if (*p < '0' || *p > '9') {
-	fprintf (stderr, "%s:%i: Invalid year: %s\n%s\n", data->filename,
-		 data->line_number, field, data->line);
-	exit (1);
+        fprintf (stderr, "%s:%i: Invalid year: %s\n%s\n", data->filename,
+                 data->line_number, field, data->line);
+        exit (1);
     }
 
     year = year * 10 + *p - '0';
   }
 
   if (year < 1000 || year > 2038) {
-	fprintf (stderr, "%s:%i: Strange year: %s\n%s\n", data->filename,
-		 data->line_number, field, data->line);
-	exit (1);
+        fprintf (stderr, "%s:%i: Strange year: %s\n%s\n", data->filename,
+                 data->line_number, field, data->line);
+        exit (1);
   }
 
   return year;
@@ -590,12 +590,12 @@ parse_year			(ParsingData	*data,
 
 /* Parses a month name, returning 0 (Jan) to 11 (Dec). */
 static int
-parse_month			(ParsingData	*data,
-				 char		*field)
+parse_month                     (ParsingData    *data,
+                                 char           *field)
 {
   static char* months[] = { "january", "february", "march", "april", "may",
-			    "june", "july", "august", "september", "october",
-			    "november", "december" };
+                            "june", "july", "august", "september", "october",
+                            "november", "december" };
   char *p;
   int len, i;
 
@@ -614,7 +614,7 @@ parse_month			(ParsingData	*data,
   }
 
   fprintf (stderr, "%s:%i: Invalid month: %s\n%s\n", data->filename,
-	   data->line_number, field, data->line);
+           data->line_number, field, data->line);
   exit (1);
 }
 
@@ -622,10 +622,10 @@ parse_month			(ParsingData	*data,
 /* Parses a day specifier, returning a code representing the type of match
    together with a day of the month and a weekday number (0=Sun). */
 static DayCode
-parse_day			(ParsingData	*data,
-				 char		*field,
-				 int		*day,
-				 int		*weekday)
+parse_day                       (ParsingData    *data,
+                                 char           *field,
+                                 int            *day,
+                                 int            *weekday)
 {
   char *day_part, *p;
   DayCode day_code;
@@ -650,25 +650,25 @@ parse_day			(ParsingData	*data,
   for (p = field; *p; p++) {
     if (*p == '<' || *p == '>') {
       if (*(p + 1) == '=') {
-	day_code = (*p == '<') ? DAY_WEEKDAY_ON_OR_BEFORE
-	  : DAY_WEEKDAY_ON_OR_AFTER;
-	*p = '\0';
-	*weekday = parse_weekday (data, field);
-	day_part = p + 2;
-	break;
+        day_code = (*p == '<') ? DAY_WEEKDAY_ON_OR_BEFORE
+          : DAY_WEEKDAY_ON_OR_AFTER;
+        *p = '\0';
+        *weekday = parse_weekday (data, field);
+        day_part = p + 2;
+        break;
       }
-      
+
       fprintf (stderr, "%s:%i: Invalid day: %s\n%s\n", data->filename,
-	       data->line_number, field, data->line);
+               data->line_number, field, data->line);
       exit (1);
     }
   }
 
   for (p = day_part; *p; p++) {
     if (*p < '0' || *p > '9') {
-	fprintf (stderr, "%s:%i: Invalid day: %s\n%s\n", data->filename,
-		 data->line_number, field, data->line);
-	exit (1);
+        fprintf (stderr, "%s:%i: Invalid day: %s\n%s\n", data->filename,
+                 data->line_number, field, data->line);
+        exit (1);
     }
 
     *day = *day * 10 + *p - '0';
@@ -676,7 +676,7 @@ parse_day			(ParsingData	*data,
 
   if (*day < 1 || *day > 31) {
     fprintf (stderr, "%s:%i: Invalid day: %s\n%s\n", data->filename,
-	     data->line_number, field, data->line);
+             data->line_number, field, data->line);
     exit (1);
   }
 
@@ -686,11 +686,11 @@ parse_day			(ParsingData	*data,
 
 /* Parses a weekday name, returning 0 (Sun) to 6 (Sat). */
 static int
-parse_weekday			(ParsingData	*data,
-				 char		*field)
+parse_weekday                   (ParsingData    *data,
+                                 char           *field)
 {
   static char* weekdays[] = { "sunday", "monday", "tuesday", "wednesday",
-			      "thursday", "friday", "saturday" };
+                              "thursday", "friday", "saturday" };
   char *p;
   int len, i;
 
@@ -704,7 +704,7 @@ parse_weekday			(ParsingData	*data,
   }
 
   fprintf (stderr, "%s:%i: Invalid weekday: %s\n%s\n", data->filename,
-	   data->line_number, field, data->line);
+           data->line_number, field, data->line);
   exit (1);
 }
 
@@ -714,9 +714,9 @@ parse_weekday			(ParsingData	*data,
    local standard time, or universal time.
    The time can start with a '-' in which case it will be negative. */
 static int
-parse_time			(ParsingData	*data,
-				 char		*field,
-				 TimeCode	*time_code)
+parse_time                      (ParsingData    *data,
+                                 char           *field,
+                                 TimeCode       *time_code)
 {
   char *p;
   int hours = 0, minutes = 0, seconds = 0, result, negative = 0;
@@ -749,7 +749,7 @@ parse_time			(ParsingData	*data,
       || seconds < 0 || seconds > 59
       || (hours == 24 && (minutes != 0 || seconds != 0))) {
     fprintf (stderr, "%s:%i: Invalid time: %s\n%s\n", data->filename,
-	     data->line_number, field, data->line);
+             data->line_number, field, data->line);
     exit (1);
   }
 
@@ -789,7 +789,7 @@ parse_time			(ParsingData	*data,
   }
 
   fprintf (stderr, "%s:%i: Invalid time: %s\n%s\n", data->filename,
-	   data->line_number, field, data->line);
+           data->line_number, field, data->line);
   exit (1);
 }
 
@@ -797,8 +797,8 @@ parse_time			(ParsingData	*data,
 /* Parses a simple number and returns the result. The pointer argument
    is moved to the first character after the number. */
 static int
-parse_number			(ParsingData	*data,
-				 char	       **num)
+parse_number                    (ParsingData    *data,
+                                 char          **num)
 {
   char *p;
   int result;
@@ -816,7 +816,7 @@ parse_number			(ParsingData	*data,
 
   if (*p < '0' || *p > '9') {
     fprintf (stderr, "%s:%i: Invalid number: %s\n%s\n", data->filename,
-	     data->line_number, *num, data->line);
+             data->line_number, *num, data->line);
     exit (1);
   }
 
@@ -831,9 +831,9 @@ parse_number			(ParsingData	*data,
 
 
 static int
-parse_rules_save		(ParsingData	*data,
-				 char		*field,
-				 char	       **rules)
+parse_rules_save                (ParsingData    *data,
+                                 char           *field,
+                                 char          **rules)
 {
   TimeCode time_code;
 
@@ -858,7 +858,7 @@ parse_rules_save		(ParsingData	*data,
 
 
 GHashTable*
-parse_zone_tab			(char		*filename)
+parse_zone_tab                  (char           *filename)
 {
   GHashTable *zones_hash;
   ZoneDescription *zone_desc;
@@ -907,10 +907,10 @@ parse_zone_tab			(char		*filename)
 
 #if 0
     g_print ("Found zone: %s %i %02i %02i,%i %02i %02i\n", zone_name,
-	     zone_desc->latitude[0], zone_desc->latitude[1],
-	     zone_desc->latitude[2],
-	     zone_desc->longitude[0], zone_desc->longitude[1],
-	     zone_desc->longitude[2]);
+             zone_desc->latitude[0], zone_desc->latitude[1],
+             zone_desc->latitude[2],
+             zone_desc->longitude[0], zone_desc->longitude[1],
+             zone_desc->longitude[2]);
 #endif
   }
 
@@ -921,9 +921,9 @@ parse_zone_tab			(char		*filename)
 
 
 static void
-parse_coord			(char		*coord,
-				 int		 len,
-				 int		*result)
+parse_coord                     (char           *coord,
+                                 int             len,
+                                 int            *result)
 {
   int degrees = 0, minutes = 0, seconds = 0;
 

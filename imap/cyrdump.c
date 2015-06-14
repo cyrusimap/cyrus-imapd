@@ -67,8 +67,8 @@
 static int verbose = 0;
 
 static int dump_me(char *name, int matchlen, int maycreate, void *rock);
-static void print_seq(const char *tag, const char *attrib, 
-		      unsigned *seq, int n);
+static void print_seq(const char *tag, const char *attrib,
+                      unsigned *seq, int n);
 static int usage(const char *name);
 
 /* current namespace */
@@ -87,27 +87,27 @@ int main(int argc, char *argv[])
     struct incremental_record irec;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((option = getopt(argc, argv, "vC:")) != EOF) {
-	switch (option) {
-	case 'v':
-	    verbose++;
-	    break;
+        switch (option) {
+        case 'v':
+            verbose++;
+            break;
 
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	default:
-	    usage(argv[0]);
-	    break;
-	}
+        default:
+            usage(argv[0]);
+            break;
+        }
     }
 
     if (optind == argc) {
-	usage(argv[0]);
+        usage(argv[0]);
     }
 
     cyrus_init(alt_config, "dump", 0, CONFIG_NEED_PARTITION_DATA);
@@ -116,26 +116,26 @@ int main(int argc, char *argv[])
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&dump_namespace, 1)) != 0) {
-	syslog(LOG_ERR, "%s", error_message(r));
-	fatal(error_message(r), EC_CONFIG);
+        syslog(LOG_ERR, "%s", error_message(r));
+        fatal(error_message(r), EC_CONFIG);
     }
 
     irec.incruid = 0;
     for (i = optind; i < argc; i++) {
-	strlcpy(buf, argv[i], sizeof(buf));
-	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&dump_namespace, buf,
-				    config_virtdomains ?
-				    strcspn(buf, "@") : 0);
-	(*dump_namespace.mboxlist_findall)(&dump_namespace, buf, 1, 0, 0,
-					   dump_me, &irec);
+        strlcpy(buf, argv[i], sizeof(buf));
+        /* Translate any separators in mailboxname */
+        mboxname_hiersep_tointernal(&dump_namespace, buf,
+                                    config_virtdomains ?
+                                    strcspn(buf, "@") : 0);
+        (*dump_namespace.mboxlist_findall)(&dump_namespace, buf, 1, 0, 0,
+                                           dump_me, &irec);
     }
 
     mboxlist_close();
     mboxlist_done();
 
     cyrus_done();
-    
+
     return 0;
 }
 
@@ -149,9 +149,9 @@ static int usage(const char *name)
 static void generate_boundary(char *boundary, size_t size)
 {
     assert(size >= 100);
-    
-    snprintf(boundary, size, "dump-%ld-%ld-%ld", 
-	     (long) getpid(), (long) time(NULL), (long) rand());
+
+    snprintf(boundary, size, "dump-%ld-%ld-%ld",
+             (long) getpid(), (long) time(NULL), (long) rand());
 }
 
 static search_expr_t *systemflag_match(int flag)
@@ -163,7 +163,7 @@ static search_expr_t *systemflag_match(int flag)
 }
 
 static int dump_me(char *name, int matchlen __attribute__((unused)),
-		   int maycreate __attribute__((unused)), void *rock)
+                   int maycreate __attribute__((unused)), void *rock)
 {
     int r;
     char boundary[128];
@@ -179,10 +179,10 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 
     r = index_open(name, NULL, &state);
     if (r) {
-	if (verbose) {
-	    printf("error opening %s: %s\n", name, error_message(r));
-	}
-	return 0;
+        if (verbose) {
+            printf("error opening %s: %s\n", name, error_message(r));
+        }
+        return 0;
     }
 
     generate_boundary(boundary, sizeof(boundary));
@@ -238,47 +238,47 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 
     i = 0;
     while (uids[i] < irec->incruid && i < numuids) {
-	/* already dumped this message */
-	/* xxx could do binary search to get to the first
-	   undumped uid */
-	i++;
+        /* already dumped this message */
+        /* xxx could do binary search to get to the first
+           undumped uid */
+        i++;
     }
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	struct buf buf = BUF_INITIALIZER;
-	struct index_map *im = &state->map[msgno-1];
-	struct index_record record;
+        struct buf buf = BUF_INITIALIZER;
+        struct index_map *im = &state->map[msgno-1];
+        struct index_record record;
 
-	while (im->uid > uids[i] && i < numuids)
-	    i++;
-	if (i >= numuids)
-	    break;
+        while (im->uid > uids[i] && i < numuids)
+            i++;
+        if (i >= numuids)
+            break;
 
-	if (im->uid < uids[i])
-	    continue;
+        if (im->uid < uids[i])
+            continue;
 
-	/* got a match */
-	i++;
-	memset(&record, 0, sizeof(struct index_record));
-	record.recno = im->recno;
-	record.uid = im->uid;
-	if (mailbox_reload_index_record(state->mailbox, &record))
-	    continue;
+        /* got a match */
+        i++;
+        memset(&record, 0, sizeof(struct index_record));
+        record.recno = im->recno;
+        record.uid = im->uid;
+        if (mailbox_reload_index_record(state->mailbox, &record))
+            continue;
 
-	printf("\n--%s\n", boundary);
-	printf("Content-Type: message/rfc822\n");
-	printf("Content-ID: %d\n", uids[i]);
-	printf("\n");
-	r = mailbox_map_record(state->mailbox, &record, &buf);
-	if (r) {
-	    if (verbose) {
-		printf("error mapping message %u: %s\n", record.uid,
-		       error_message(r));
-	    }
-	    break;
-	}
-	fwrite(buf.s, 1, buf.len, stdout);
-	buf_free(&buf);
+        printf("\n--%s\n", boundary);
+        printf("Content-Type: message/rfc822\n");
+        printf("Content-ID: %d\n", uids[i]);
+        printf("\n");
+        r = mailbox_map_record(state->mailbox, &record, &buf);
+        if (r) {
+            if (verbose) {
+                printf("error mapping message %u: %s\n", record.uid,
+                       error_message(r));
+            }
+            break;
+        }
+        fwrite(buf.s, 1, buf.len, stdout);
+        buf_free(&buf);
     }
 
     printf("\n--%s--\n", boundary);
@@ -289,13 +289,13 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 }
 
 static void print_seq(const char *tag, const char *attrib,
-		      unsigned *seq, int n)
+                      unsigned *seq, int n)
 {
     int i;
 
     printf("  <%s%s%s>", tag, attrib ? " " : "", attrib ? attrib : "");
     for (i = 0; i < n; i++) {
-	printf("%u ", seq[i]);
+        printf("%u ", seq[i]);
     }
     printf("</%s>\n", tag);
 }

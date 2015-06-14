@@ -98,10 +98,10 @@ static unsigned char convert_to_compare[256] = {
  * by 'linelenp'.
  */
 HIDDEN int bsearch_mem_mbox(const char *word,
-		     const char *base,
-		     unsigned long len,
-		     unsigned long hint,
-		     unsigned long *linelenp)
+                     const char *base,
+                     unsigned long len,
+                     unsigned long hint,
+                     unsigned long *linelenp)
 {
     int firstsearch = 1;
     unsigned long start = 0, end = len - 1, mid, offset;
@@ -111,62 +111,62 @@ HIDDEN int bsearch_mem_mbox(const char *word,
     const char *wordp, *p;
 
     while (start < end + 1) {
-	if (firstsearch) {
-	    /* Use hint supplied by caller */
-	    firstsearch = 0;
-	    mid = offset = hint;
-	    if (mid <= start || mid > end) mid = offset = start;
-	}
-	else {
-	    /* Calculate position of middle of this range */
-	    offset = mid = (start + end)/2;
-	}
+        if (firstsearch) {
+            /* Use hint supplied by caller */
+            firstsearch = 0;
+            mid = offset = hint;
+            if (mid <= start || mid > end) mid = offset = start;
+        }
+        else {
+            /* Calculate position of middle of this range */
+            offset = mid = (start + end)/2;
+        }
 
-	if (mid) {
-	    p = memchr(base+mid, '\n', (end + 1) - mid);
-	    if (!p) {
-		end = mid - 1;
-		continue;
-	    }
-	    offset = p - base + 1;
-	}
+        if (mid) {
+            p = memchr(base+mid, '\n', (end + 1) - mid);
+            if (!p) {
+                end = mid - 1;
+                continue;
+            }
+            offset = p - base + 1;
+        }
 
-	p = memchr(base+offset, '\n', len-offset);
-	if (p) {
-	    linelen = p - (base+offset) + 1;
-	}
-	else {
-	    end = mid - 1;
-	    continue;
-	}
+        p = memchr(base+offset, '\n', len-offset);
+        if (p) {
+            linelen = p - (base+offset) + 1;
+        }
+        else {
+            end = mid - 1;
+            continue;
+        }
 
-	n = linelen;
-	wordp = word;
-	p = base+offset;
+        n = linelen;
+        wordp = word;
+        p = base+offset;
 
-	while (n-- > 0 && (cmp = TOCOMPARE(*wordp) - TOCOMPARE(*p)) == 0) {
-	    wordp++;
-	    p++;
-	}
-	if (n >= 0 && !*wordp) {
-	    cmp = TOCOMPARE('\t') - TOCOMPARE(*p);
-	}
-	else if (!cmp) {
-	    cmp = 1;
-	}
+        while (n-- > 0 && (cmp = TOCOMPARE(*wordp) - TOCOMPARE(*p)) == 0) {
+            wordp++;
+            p++;
+        }
+        if (n >= 0 && !*wordp) {
+            cmp = TOCOMPARE('\t') - TOCOMPARE(*p);
+        }
+        else if (!cmp) {
+            cmp = 1;
+        }
 
-	if (!cmp) {
-	    if (linelenp) *linelenp = linelen;
-	    return offset;
-	}
+        if (!cmp) {
+            if (linelenp) *linelenp = linelen;
+            return offset;
+        }
 
-	if (cmp < 0) {
-	    if (mid == 0) break;
-	    end = mid - 1;
-	}
-	else {
-	    start = offset + 1;
-	}
+        if (cmp < 0) {
+            if (mid == 0) break;
+            end = mid - 1;
+        }
+        else {
+            start = offset + 1;
+        }
     }
 
     /* Word was not found.  Return offset where word should be inserted */
@@ -183,16 +183,16 @@ EXPORTED int bsearch_compare_mbox(const char *s1, const char *s2)
     char c2;
 
     for (;;) {
-	if ((c2 = *s2) == 0) {
-	    return (unsigned char)*s1;
-	}
-	cmp = TOCOMPARE(*s1) - TOCOMPARE(c2);
-	if (cmp) return cmp;
-	if (TOCOMPARE(c2) == TOCOMPARE('\t')) {
-	    return 0;
-	}
-	s1++;
-	s2++;
+        if ((c2 = *s2) == 0) {
+            return (unsigned char)*s1;
+        }
+        cmp = TOCOMPARE(*s1) - TOCOMPARE(c2);
+        if (cmp) return cmp;
+        if (TOCOMPARE(c2) == TOCOMPARE('\t')) {
+            return 0;
+        }
+        s1++;
+        s2++;
     }
 }
 
@@ -245,10 +245,10 @@ HIDDEN int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2)
     int r = memcmp(s1, s2, min);
 
     if (!r) {
-	if (l1 > l2)
-	    r = 1;
-	else if (l2 > l1)
-	    r = -1;
+        if (l1 > l2)
+            r = 1;
+        else if (l2 > l1)
+            r = -1;
     }
 
     return r;

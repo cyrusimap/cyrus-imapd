@@ -67,7 +67,7 @@ if [ -n "$JENKINS_HOME" -a -n "$BUILD_ID" -a -n "$WORKSPACE" ] ; then
     umask 002
 else
     [ -n "$CYRUS_YES_I_KNOW_WHAT_IM_DOING" ] || \
-	fatal "Do not run $0 manually, use autoreconf -vi ; ./configure ; make"
+        fatal "Do not run $0 manually, use autoreconf -vi ; ./configure ; make"
     echo "Invoked manually"
     echo "(assumed, as one of \$JENKINS_HOME \$BUILD_ID or \$WORKSPACE is missing)"
     BUILD_ID=build$(date +%Y%m%dT%H%M%S)
@@ -165,7 +165,7 @@ if [ -d $CASSANDANE_SRC ]; then
 
 ## Not needed anymore, user cyrus is in group tomcat
 #     if [ -n "$COVERAGE" ]; then
-# 	chmod 666 $(find . -type f -name '*.gcda')
+#       chmod 666 $(find . -type f -name '*.gcda')
 #     fi
 
     # Shoot down any leftover processes - Cassandane sometimes
@@ -188,8 +188,8 @@ if [ -d $CASSANDANE_SRC ]; then
     # Build cassandane.ini
     sed -e 's|^##destdir =.*$|destdir = '$CYRUS_INST'|' \
         -e 's|^##pwcheck = .*$|pwcheck = sasldb|' \
-	< cassandane.ini.example \
-	> cassandane.ini
+        < cassandane.ini.example \
+        > cassandane.ini
 
     rm -rf reports.old
     mv -f reports reports.old

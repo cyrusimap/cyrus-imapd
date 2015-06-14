@@ -71,8 +71,8 @@ extern struct seqset *seqset_init(unsigned maxval, int flags);
 void seqset_add(struct seqset *seq, unsigned num, int ismember);
 
 extern struct seqset *seqset_parse(const char *sequence,
-				   struct seqset *set,
-				   unsigned maxval);
+                                   struct seqset *set,
+                                   unsigned maxval);
 extern void seqset_join(struct seqset *a, const struct seqset *b);
 extern int seqset_ismember(struct seqset *set, unsigned num);
 extern unsigned seqset_getnext(struct seqset *set);

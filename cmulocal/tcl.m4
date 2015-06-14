@@ -18,7 +18,7 @@ dnl   The command-line arguments are overcomplicated.
 dnl   There are doubtlessly others...
 
 dnl To use this macro, just do CMU_TCL.  It outputs
-dnl TCL_LIBS, TCL_CPPFLAGS, and TCL_DEFS and SUBSTs them.  
+dnl TCL_LIBS, TCL_CPPFLAGS, and TCL_DEFS and SUBSTs them.
 dnl If successful, these have stuff in them.  If not, they're empty.
 dnl If not successful, with_tcl has the value "no".
 
@@ -45,15 +45,15 @@ dnl
 
 dnl Check for some information from the user on what the world looks like
 AC_ARG_WITH(tclconfig,
-	[AS_HELP_STRING([--with-tclconfig=DIR], [use tclConfig.sh from DIR (configure gets Tcl configuration from here)])], 
+        [AS_HELP_STRING([--with-tclconfig=DIR], [use tclConfig.sh from DIR (configure gets Tcl configuration from here)])],
         dnl trim tclConfig.sh off the end so we can add it back on later.
-	TclLibBase=`echo ${withval} | sed s/tclConfig.sh\$//`)
+        TclLibBase=`echo ${withval} | sed s/tclConfig.sh\$//`)
 AC_ARG_WITH(tcl,
         [AS_HELP_STRING([--with-tcl=DIR], [use Tcl from DIR])],
-	TclLibBase="${withval}/lib")
+        TclLibBase="${withval}/lib")
 AC_ARG_WITH(tclsh,
         [AS_HELP_STRING([--with-tclsh=TCLSH], [use TCLSH as the tclsh program (let configure find Tcl using this program)])],
-	TCLSH="${withval}")
+        TCLSH="${withval}")
 
 if test "$TCLSH" = "no" -o "$with_tclconfig" = "no" ; then
   AC_MSG_WARN([Tcl disabled because tclsh or tclconfig specified as "no"])
@@ -99,7 +99,7 @@ if test "$with_tcl" != "no"; then
     # Check a list of places where the tclConfig.sh file might be.
     for tcldir in "${TclLibBase}" \
                   "${TclLibBase}/.." \
-		  "${TclLibBase}"`echo ${TCLSH} | sed s/sh//` ; do
+                  "${TclLibBase}"`echo ${TCLSH} | sed s/sh//` ; do
       if test -f "${tcldir}/tclConfig.sh"; then
         TclLibBase="${tcldir}"
         break
@@ -124,7 +124,7 @@ if test "$with_tcl" != "no"; then
 
     if test "${with_tcl}" != no ; then
       dnl Now, hunt for the Tcl include files, since we don't strictly
-      dnl know where they are; some folks put them (properly) in the 
+      dnl know where they are; some folks put them (properly) in the
       dnl default include path, or maybe in /usr/local; the *BSD folks
       dnl put them in other places.
       AC_MSG_CHECKING([where Tcl includes are])
@@ -142,7 +142,7 @@ if test "$with_tcl" != "no"; then
       fi
       AC_MSG_RESULT(${TCL_CPPFLAGS})
     fi
-    
+
     # Finally, pick up the Tcl configuration if we haven't found an
     # excuse not to.
     if test "${with_tcl}" != no; then

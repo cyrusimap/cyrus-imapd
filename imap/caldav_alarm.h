@@ -51,24 +51,24 @@
 #include <libical/ical.h>
 
 enum caldav_alarm_action {
-    CALDAV_ALARM_ACTION_NONE	= 0,
-    CALDAV_ALARM_ACTION_DISPLAY	= 1,
-    CALDAV_ALARM_ACTION_EMAIL	= 2,
+    CALDAV_ALARM_ACTION_NONE    = 0,
+    CALDAV_ALARM_ACTION_DISPLAY = 1,
+    CALDAV_ALARM_ACTION_EMAIL   = 2,
 
-    CALDAV_ALARM_ACTION_FIRST	= CALDAV_ALARM_ACTION_DISPLAY,
-    CALDAV_ALARM_ACTION_LAST	= CALDAV_ALARM_ACTION_EMAIL
+    CALDAV_ALARM_ACTION_FIRST   = CALDAV_ALARM_ACTION_DISPLAY,
+    CALDAV_ALARM_ACTION_LAST    = CALDAV_ALARM_ACTION_EMAIL
 };
 
 struct caldav_alarm_data {
-    sqlite3_int64		rowid;
-    const char			*mailbox;
-    const char			*resource;
-    enum caldav_alarm_action	action;
-    icaltimetype		nextalarm;
-    const char			*tzid;
-    icaltimetype		start;
-    icaltimetype		end;
-    strarray_t			recipients;
+    sqlite3_int64               rowid;
+    const char                  *mailbox;
+    const char                  *resource;
+    enum caldav_alarm_action    action;
+    icaltimetype                nextalarm;
+    const char                  *tzid;
+    icaltimetype                start;
+    icaltimetype                end;
+    strarray_t                  recipients;
 };
 
 /* prepare for caldav alarm operations in this process */

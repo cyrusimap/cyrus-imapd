@@ -65,11 +65,11 @@ EXPORTED int cyrus_mutex_unlock(void *mutex)
 {
     return pthread_mutex_unlock(mutex);
 }
-  
+
 EXPORTED void cyrus_mutex_free(void *mutex)
 {
     if(!mutex) return;
-    
+
     pthread_mutex_destroy(mutex);
     free(mutex);
 

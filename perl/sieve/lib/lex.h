@@ -1,4 +1,4 @@
-/* lex.h 
+/* lex.h
  * Tim Martin
  * 9/21/99
  */

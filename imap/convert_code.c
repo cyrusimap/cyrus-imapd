@@ -57,7 +57,7 @@ EXPORTED int convert_code(int r)
     switch (r) {
     case 0:
         return 0;
-        
+
     case IMAP_IOERROR:
         return EC_IOERR;
 
@@ -73,7 +73,7 @@ EXPORTED int convert_code(int r)
     case IMAP_MAILBOX_NONEXISTENT:
         return EC_UNAVAILABLE;
     }
-        
+
     /* Some error we're not expecting. */
     return EC_SOFTWARE;
-}       
+}

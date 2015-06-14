@@ -80,26 +80,26 @@ sub path_sanitise($)
     my @comps;
 
     die "$path: not an absolute path"
-	unless ($path =~ m/^\//);
+        unless ($path =~ m/^\//);
 
     foreach my $comp (split('/', $path))
     {
-	if ($comp eq "." || $comp eq "")
-	{
-	    next;
-	}
-	elsif ($comp eq "..")
-	{
-	    # Note: will silently fail if we try to pop more
-	    # components than we've added, which is exactly
-	    # the right behaviour for trying to walk past
-	    # the root directory with ".."s.
-	    pop(@comps);
-	}
-	else
-	{
-	    push(@comps, $comp);
-	}
+        if ($comp eq "." || $comp eq "")
+        {
+            next;
+        }
+        elsif ($comp eq "..")
+        {
+            # Note: will silently fail if we try to pop more
+            # components than we've added, which is exactly
+            # the right behaviour for trying to walk past
+            # the root directory with ".."s.
+            pop(@comps);
+        }
+        else
+        {
+            push(@comps, $comp);
+        }
     }
     return "/" . join("/",@comps);
 }
@@ -117,7 +117,7 @@ sub path_relativise($$)
     my @basecomps;
 
     die "$path: not an absolute path"
-	unless ($path =~ m/^\//);
+        unless ($path =~ m/^\//);
 
     @pathcomps = split("/", $path);
     @basecomps = split("/", $base);
@@ -125,19 +125,19 @@ sub path_relativise($$)
     # Remove the components of the common
     # ancestor of both paths
     while (defined $pathcomps[0] &&
-	   defined $basecomps[0] &&
-	   $pathcomps[0] eq $basecomps[0])
+           defined $basecomps[0] &&
+           $pathcomps[0] eq $basecomps[0])
     {
-	shift(@pathcomps);
-	shift(@basecomps);
+        shift(@pathcomps);
+        shift(@basecomps);
     }
 
     # Prepend enough ".."s to the path
     # to reach the common ancestor
     while (defined $basecomps[0])
     {
-	shift(@basecomps);
-	unshift(@pathcomps, "..");
+        shift(@basecomps);
+        unshift(@pathcomps, "..");
     }
 
     return join("/", @pathcomps);
@@ -156,9 +156,9 @@ sub path_common($$)
     my @common;
 
     die "$path1: not an absolute path"
-	unless ($path1 =~ m/^\//);
+        unless ($path1 =~ m/^\//);
     die "$path2: not an absolute path"
-	unless ($path2 =~ m/^\//);
+        unless ($path2 =~ m/^\//);
 
     @path1comps = split("/", $path1);
     @path2comps = split("/", $path2);
@@ -166,12 +166,12 @@ sub path_common($$)
     # Remove the components of the common
     # ancestor of both paths
     while (defined $path1comps[0] &&
-	   defined $path2comps[0] &&
-	   $path1comps[0] eq $path2comps[0])
+           defined $path2comps[0] &&
+           $path1comps[0] eq $path2comps[0])
     {
-	push(@common, $path1comps[0]);
-	shift(@path1comps);
-	shift(@path2comps);
+        push(@common, $path1comps[0]);
+        shift(@path1comps);
+        shift(@path2comps);
     }
 
     return join("/", @common);
@@ -190,17 +190,17 @@ sub path_absrel($$)
 
     if ($path =~ m/^\//)
     {
-	# Given an absolute path
-	$abspath = path_sanitise($path);
-	# Calculate the relative path from the absolute path.
-	$relpath = path_relativise($abspath, $basedir);
+        # Given an absolute path
+        $abspath = path_sanitise($path);
+        # Calculate the relative path from the absolute path.
+        $relpath = path_relativise($abspath, $basedir);
     }
     else
     {
-	# Given a relative path
-	$relpath = $path;
-	# Calculate the absolute path
-	$abspath = path_sanitise("$basedir/$relpath");
+        # Given a relative path
+        $relpath = $path;
+        # Calculate the absolute path
+        $abspath = path_sanitise("$basedir/$relpath");
     }
     return ($abspath, $relpath);
 }
@@ -306,16 +306,16 @@ sub suite_new($$)
 
     my $suite =
     {
-	basedir => $basedir,
-	relpath => $relpath,
-	abspath => $abspath,
-	name => suite_path_to_name($abspath),
-	wrap => suite_path_to_wrapper($relpath),
-	object => suite_path_to_object($relpath),
-	setupfn => undef,
-	teardownfn => undef,
-	params => [],
-	tests => []
+        basedir => $basedir,
+        relpath => $relpath,
+        abspath => $abspath,
+        name => suite_path_to_name($abspath),
+        wrap => suite_path_to_wrapper($relpath),
+        object => suite_path_to_object($relpath),
+        setupfn => undef,
+        teardownfn => undef,
+        params => [],
+        tests => []
     };
     $suite->{suitevar} = suite_name_to_var($suite->{name});
     return $suite;
@@ -347,17 +347,17 @@ sub suite_get_linkable($)
 
 # Any of these (case insensitive) names can be used as the setup function
 my %setup_names = (
-    'setup' => 1,	# standard name from Kent Beck's original paper
-    'set_up' => 1,	# standard, C style with underscore
-    'init' => 1,	# allowed in older versions of cunit.pl
-    'before' => 1,	# like jUnit's @Before annotation
+    'setup' => 1,       # standard name from Kent Beck's original paper
+    'set_up' => 1,      # standard, C style with underscore
+    'init' => 1,        # allowed in older versions of cunit.pl
+    'before' => 1,      # like jUnit's @Before annotation
 );
 # Any of these (case insensitive) names can be used as the teardown function
 my %teardown_names = (
-    'teardown' => 1,	# standard name from Kent Beck's original paper
-    'tear_down' => 1,	# standard, C style with underscore
-    'cleanup' => 1,	# allowed in older versions of cunit.pl
-    'after' => 1,	# like jUnit's @After annotation
+    'teardown' => 1,    # standard name from Kent Beck's original paper
+    'tear_down' => 1,   # standard, C style with underscore
+    'cleanup' => 1,     # allowed in older versions of cunit.pl
+    'after' => 1,       # like jUnit's @After annotation
 );
 
 #
@@ -369,32 +369,32 @@ sub suite_found_function
 
     if (defined $teardown_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
     {
-	vmsg("Found teardown function");
-	die "$suite->{abspath}: Too many teardown functions: " .
-	    "both \"$fn\" and \"$suite->{teardownfn}\" found"
-	    if defined($suite->{teardownfn});
-	$suite->{teardownfn} = $fn;
+        vmsg("Found teardown function");
+        die "$suite->{abspath}: Too many teardown functions: " .
+            "both \"$fn\" and \"$suite->{teardownfn}\" found"
+            if defined($suite->{teardownfn});
+        $suite->{teardownfn} = $fn;
     }
     elsif (defined $setup_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
     {
-	vmsg("Found setup function");
-	die "$suite->{abspath}: too many setup functions: both " .
-	    "\"$fn\" and \"$suite->{setupfn}\" found"
-	    if defined($suite->{setupfn});
-	$suite->{setupfn} = $fn;
+        vmsg("Found setup function");
+        die "$suite->{abspath}: too many setup functions: both " .
+            "\"$fn\" and \"$suite->{setupfn}\" found"
+            if defined($suite->{setupfn});
+        $suite->{setupfn} = $fn;
     }
     else
     {
-	my ($name) = ($fn =~ m/^test_*(\w+)/);
-	if (defined $name && (!defined($rtype) || $rtype eq 'void'))
-	{
-	    vmsg("Found test function \"$fn\" -> name \"$name\"");
-	    push(@{$suite->{tests}},
-		    {
-			name => $name,
-			func => $fn
-		    });
-	}
+        my ($name) = ($fn =~ m/^test_*(\w+)/);
+        if (defined $name && (!defined($rtype) || $rtype eq 'void'))
+        {
+            vmsg("Found test function \"$fn\" -> name \"$name\"");
+            push(@{$suite->{tests}},
+                    {
+                        name => $name,
+                        func => $fn
+                    });
+        }
     }
 }
 
@@ -407,7 +407,7 @@ sub suite_found_param
 
     die "$suite->{abspath}: parameter \"$param\" declared " .
         "more than once"
-	if grep { $_ eq $param } @{$suite->{params}};
+        if grep { $_ eq $param } @{$suite->{params}};
     vmsg("Found parameter \"$param\"");
 
     # Note: we preserve the order of discovery in the
@@ -421,13 +421,13 @@ sub suite_found_param
 # definitions of one of the signatures:
 #
 # [static] void test_WHATEVER(void)
-#	we map this to a CUnit test called "WHATEVER"
+#       we map this to a CUnit test called "WHATEVER"
 #
 # [static] void init(void)
-#	we use this as the suite's initialisation function
+#       we use this as the suite's initialisation function
 #
 # [static] void cleanup(void)
-#	we use this as the suite's cleanup function
+#       we use this as the suite's cleanup function
 #
 # The names of any such functions found are added to the
 # suite hash, using {setupfn}, {teardownfn} and {tests}.
@@ -449,60 +449,60 @@ sub suite_scan_for_tests($)
     my $rtype;
 
     open FH,'<',$suite->{abspath}
-	or die "Can't open $suite->{abspath} for reading: $!";
+        or die "Can't open $suite->{abspath} for reading: $!";
     while (<FH>)
     {
-	chomp;
+        chomp;
 
-	if ($state == 0)
-	{
-	    # Detect definitions of functions with the signature
-	    # void func(void), static void func(void), int func(void),
-	    # and static int func(void).
-	    ($rtype, $fn) = m/^(?:static\s+)(int|void)\s+(\w+)\s*\(\s*void\s*\)\s*$/;
-	    if (defined $fn)
-	    {
-		suite_found_function($suite, $rtype, $fn);
-		next;
-	    }
+        if ($state == 0)
+        {
+            # Detect definitions of functions with the signature
+            # void func(void), static void func(void), int func(void),
+            # and static int func(void).
+            ($rtype, $fn) = m/^(?:static\s+)(int|void)\s+(\w+)\s*\(\s*void\s*\)\s*$/;
+            if (defined $fn)
+            {
+                suite_found_function($suite, $rtype, $fn);
+                next;
+            }
 
-	    ($fn) = m/^(\w+)\s*\(\s*void\s*\)\s*$/;
-	    if (defined $fn)
-	    {
-		# old fashioned function declarations with no return type
-		suite_found_function($suite, undef, $fn);
-		next;
-	    }
+            ($fn) = m/^(\w+)\s*\(\s*void\s*\)\s*$/;
+            if (defined $fn)
+            {
+                # old fashioned function declarations with no return type
+                suite_found_function($suite, undef, $fn);
+                next;
+            }
 
-	    ($rtype) = m/^(?:static\s+)(int|void)\s*$/;
-	    if (defined $rtype)
-	    {
-		$state = 1;
-		next;
-	    }
+            ($rtype) = m/^(?:static\s+)(int|void)\s*$/;
+            if (defined $rtype)
+            {
+                $state = 1;
+                next;
+            }
 
-	    my ($param) = m/^(?:static\s+)char\s*\*\s*(\w+)\s*=\s*CUNIT_PARAM\s*\(/;
-	    if (defined $param)
-	    {
-		suite_found_param($suite, $param);
-		next;
-	    }
+            my ($param) = m/^(?:static\s+)char\s*\*\s*(\w+)\s*=\s*CUNIT_PARAM\s*\(/;
+            if (defined $param)
+            {
+                suite_found_param($suite, $param);
+                next;
+            }
 
-	}
-	elsif ($state == 1)
-	{
-	    # $rtype is left over from previous line
-	    ($fn) = m/^(\w+)\s*\(\s*void\s*\)\s*$/;
-	    if (defined $fn)
-	    {
-		# split-line declaration of the form:
-		# static void
-		# test_foo(void)
-		suite_found_function($suite, $rtype, $fn);
-		next;
-	    }
-	    $state = 0;
-	}
+        }
+        elsif ($state == 1)
+        {
+            # $rtype is left over from previous line
+            ($fn) = m/^(\w+)\s*\(\s*void\s*\)\s*$/;
+            if (defined $fn)
+            {
+                # split-line declaration of the form:
+                # static void
+                # test_foo(void)
+                suite_found_function($suite, $rtype, $fn);
+                next;
+            }
+            $state = 0;
+        }
     }
     close FH;
 
@@ -532,11 +532,11 @@ sub suite_find($)
 
     foreach my $suite (@suites)
     {
-	# canonicalise path before comparison
-	my ($abs, $rel) = path_absrel($path, $suite->{basedir});
+        # canonicalise path before comparison
+        my ($abs, $rel) = path_absrel($path, $suite->{basedir});
 
-	return $suite
-	    if ($suite->{relpath} eq $rel);
+        return $suite
+            if ($suite->{relpath} eq $rel);
     }
     return undef;
 }
@@ -560,23 +560,23 @@ sub library_new($$)
 
     if ($arg =~ m/\.[oa]$/)
     {
-	($abspath, $relpath) = path_absrel($arg, $basedir);
+        ($abspath, $relpath) = path_absrel($arg, $basedir);
     }
     elsif (my ($dir) = ($arg =~ m/^-L(.+)$/))
     {
-	($abspath, $relpath) = path_absrel($dir, $basedir);
+        ($abspath, $relpath) = path_absrel($dir, $basedir);
     }
     elsif (!($arg =~ m/^-[lBW]/))
     {
-	die "Don't know what to do with library \"$arg\"";
+        die "Don't know what to do with library \"$arg\"";
     }
 
     my $lib =
     {
-	arg => $arg,
-	basedir => $basedir,
-	relpath => $relpath,	# might be undef
-	abspath => $abspath,	# might be undef
+        arg => $arg,
+        basedir => $basedir,
+        relpath => $relpath,    # might be undef
+        abspath => $abspath,    # might be undef
     };
     return $lib;
 }
@@ -590,7 +590,7 @@ sub library_cmp($$)
 {
     my ($l1, $l2) = @_;
     return ($l1->{basedir} cmp $l2->{basedir} ||
-	    $l1->{arg} cmp $l2->{arg});
+            $l1->{arg} cmp $l2->{arg});
 }
 
 #
@@ -607,13 +607,13 @@ sub library_get_linkable($)
 
     if ($arg =~ m/\.[oa]$/)
     {
-	my ($abspath, $relpath) = path_absrel($arg, $lib->{basedir});
-	$arg = path_relativise($abspath, $here);
+        my ($abspath, $relpath) = path_absrel($arg, $lib->{basedir});
+        $arg = path_relativise($abspath, $here);
     }
     elsif (my ($dir) = ($arg =~ m/^-L(.+)$/))
     {
-	my ($abspath, $relpath) = path_absrel($dir, $lib->{basedir});
-	$arg = "-L" . path_relativise($abspath, $here);
+        my ($abspath, $relpath) = path_absrel($dir, $lib->{basedir});
+        $arg = "-L" . path_relativise($abspath, $here);
     }
     return $arg;
 }
@@ -661,20 +661,20 @@ sub atomic_rewrite_end($)
 
     if ( -f $real )
     {
-	$different = compare($real, $tmp);
+        $different = compare($real, $tmp);
     }
     if ($different == 1)
     {
-	rename($tmp, $real)
-	    or die "Cannot rename $tmp to $real: $!";
-	vmsg("rewrote $real");
-	return 1;
+        rename($tmp, $real)
+            or die "Cannot rename $tmp to $real: $!";
+        vmsg("rewrote $real");
+        return 1;
     }
     else
     {
-	unlink($tmp)
-	    or die "Cannot remove $tmp: $!";
-	return 0;
+        unlink($tmp)
+            or die "Cannot remove $tmp: $!";
+        return 0;
     }
 }
 
@@ -693,7 +693,7 @@ sub suite_generate_wrap($)
     my $cfile = $suite->{abspath};
 
     open WRAP,'>',$file
-	or die "Cannot open $file for writing: $!";
+        or die "Cannot open $file for writing: $!";
     print WRAP "/* Automatically generated by cunit.pl, do not edit */\n";
     print WRAP "#include \"$suite->{relpath}\"\n";
     print WRAP "#ifdef HAVE_CONFIG_H\n";
@@ -702,12 +702,12 @@ sub suite_generate_wrap($)
 
     if (scalar @{$suite->{params}})
     {
-	print WRAP "static struct cunit_param params[] = {\n";
-	map
-	{
-	    print WRAP "__CUNIT_DECLARE_PARAM($_),\n";
-	} @{$suite->{params}};
-	print WRAP "__CUNIT_LAST_PARAM };\n";
+        print WRAP "static struct cunit_param params[] = {\n";
+        map
+        {
+            print WRAP "__CUNIT_DECLARE_PARAM($_),\n";
+        } @{$suite->{params}};
+        print WRAP "__CUNIT_LAST_PARAM };\n";
     }
 
     my $setupfn = $suite->{setupfn};
@@ -715,44 +715,44 @@ sub suite_generate_wrap($)
 
     foreach my $test (@{$suite->{tests}})
     {
-	my $fn = $test->{func};
-	print WRAP "static void __cunit_$fn(void)\n";
-	print WRAP "{\n";
+        my $fn = $test->{func};
+        print WRAP "static void __cunit_$fn(void)\n";
+        print WRAP "{\n";
 
-	print WRAP "__cunit_params_begin(params);\ndo {\n"
-	    if (scalar @{$suite->{params}});
+        print WRAP "__cunit_params_begin(params);\ndo {\n"
+            if (scalar @{$suite->{params}});
 
-	print WRAP "     CU_syslogMatchReset();\n";
-	print WRAP "    if (__cunit_wrap_fixture(" .
-		   "\"$cfile:$setupfn\", $setupfn)) " .
-		   "CU_FAIL_FATAL(\"$setupfn failed\");\n"
-	    if defined $setupfn;
-	print WRAP "    __cunit_wrap_test(\"$cfile:$fn\", $fn);\n";
-	print WRAP "    if (__cunit_wrap_fixture(" .
-		   "\"$cfile:$teardownfn\", $teardownfn)) " .
-		   "CU_FAIL_FATAL(\"$teardownfn failed\");\n"
-	    if defined $teardownfn;
-	print WRAP "} while (__cunit_params_next(params));\n__cunit_params_end();\n"
-	    if (scalar @{$suite->{params}});
-	print WRAP "}\n";
+        print WRAP "     CU_syslogMatchReset();\n";
+        print WRAP "    if (__cunit_wrap_fixture(" .
+                   "\"$cfile:$setupfn\", $setupfn)) " .
+                   "CU_FAIL_FATAL(\"$setupfn failed\");\n"
+            if defined $setupfn;
+        print WRAP "    __cunit_wrap_test(\"$cfile:$fn\", $fn);\n";
+        print WRAP "    if (__cunit_wrap_fixture(" .
+                   "\"$cfile:$teardownfn\", $teardownfn)) " .
+                   "CU_FAIL_FATAL(\"$teardownfn failed\");\n"
+            if defined $teardownfn;
+        print WRAP "} while (__cunit_params_next(params));\n__cunit_params_end();\n"
+            if (scalar @{$suite->{params}});
+        print WRAP "}\n";
     }
 
     print WRAP "static CU_TestInfo _tests[] = {\n";
     foreach my $test (@{$suite->{tests}})
     {
-	print WRAP "    { \"$test->{name}\", __cunit_$test->{func} },\n";
+        print WRAP "    { \"$test->{name}\", __cunit_$test->{func} },\n";
     }
     print WRAP "    CU_TEST_INFO_NULL\n};\n";
 
     print WRAP "#ifdef HAVE_CU_SETUPFUNC\n";
 
     print WRAP "const CU_SuiteInfo $suite->{suitevar} = {" .
-	       "\"$suite->{name}\", NULL, NULL, NULL, NULL, _tests};\n";
+               "\"$suite->{name}\", NULL, NULL, NULL, NULL, _tests};\n";
 
     print WRAP "#else\n";
 
     print WRAP "const CU_SuiteInfo $suite->{suitevar} = {" .
-	       "\"$suite->{name}\", NULL, NULL, _tests};\n";
+               "\"$suite->{name}\", NULL, NULL, _tests};\n";
 
     print WRAP "#endif\n";
 
@@ -769,28 +769,28 @@ sub suite_generate_wrap($)
 sub project_load()
 {
     open PROJ,'<',$project
-	or return;	# TODO: should be silent on ENOENT only
+        or return;      # TODO: should be silent on ENOENT only
 
     # TODO: should check file version header
 
     while (<PROJ>)
     {
-	chomp;
-	next if (m/^#/);    # skip comments
-	my @a = split;
+        chomp;
+        next if (m/^#/);    # skip comments
+        my @a = split;
 
-	if ($a[0] eq 'suite')
-	{
-	    die "Invalid format"
-		unless scalar(@a) == 3;
-	    push(@suites, suite_new($a[1], $a[2]));
-	}
-	elsif ($a[0] eq 'library')
-	{
-	    die "Invalid format"
-		unless scalar(@a) == 3;
-	    push(@libraries, library_new($a[1], $a[2]));
-	}
+        if ($a[0] eq 'suite')
+        {
+            die "Invalid format"
+                unless scalar(@a) == 3;
+            push(@suites, suite_new($a[1], $a[2]));
+        }
+        elsif ($a[0] eq 'library')
+        {
+            die "Invalid format"
+                unless scalar(@a) == 3;
+            push(@libraries, library_new($a[1], $a[2]));
+        }
     }
     close PROJ;
 
@@ -843,17 +843,17 @@ sub project_save()
     my $file = atomic_rewrite_begin($project);
 
     open PROJ,'>',$file
-	or die "Failed to open $file for writing: $!";
+        or die "Failed to open $file for writing: $!";
 
     print PROJ "#CUnitProject-1.0\n";
 
     foreach my $suite (@suites)
     {
-	print PROJ "suite $suite->{relpath} $suite->{basedir}\n";
+        print PROJ "suite $suite->{relpath} $suite->{basedir}\n";
     }
     foreach my $lib (@libraries)
     {
-	print PROJ "library $lib->{arg} $lib->{basedir}\n";
+        print PROJ "library $lib->{arg} $lib->{basedir}\n";
     }
     close PROJ;
 
@@ -874,9 +874,9 @@ sub add_sources(@)
 
     foreach my $path (@args)
     {
-	die "$path: not a C source file"
-	    unless (-f $path && $path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
-	project_add_suite(suite_new($path, $here));
+        die "$path: not a C source file"
+            unless (-f $path && $path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
+        project_add_suite(suite_new($path, $here));
     }
 
     project_save();
@@ -897,7 +897,7 @@ sub add_libraries(@)
 
     foreach my $arg (@args)
     {
-	project_add_library(library_new($arg, $here));
+        project_add_library(library_new($arg, $here));
     }
 
     project_save();
@@ -916,30 +916,30 @@ sub generate_wrapper(@)
 
     foreach my $a (@args)
     {
-	my $suite = suite_find($a);
-	if (!defined $suite)
-	{
-	    print STDERR "$a: unknown suite, did you use --add-sources?\n";
-	    $nfails++;
-	    next;
-	}
-	my $ntests = suite_scan_for_tests($suite);
-	if ($ntests == 0)
-	{
-	    vmsg("No tests in $suite->{relpath}");
-	    if ( -f $suite->{wrap})
-	    {
-		vmsg("Removing stale $suite->{wrap}");
-		unlink($suite->wrap)
-		    or die "Cannot unlink $suite->{wrap}: $!";
-	    }
-	    next;
-	}
-	suite_generate_wrap($suite);
+        my $suite = suite_find($a);
+        if (!defined $suite)
+        {
+            print STDERR "$a: unknown suite, did you use --add-sources?\n";
+            $nfails++;
+            next;
+        }
+        my $ntests = suite_scan_for_tests($suite);
+        if ($ntests == 0)
+        {
+            vmsg("No tests in $suite->{relpath}");
+            if ( -f $suite->{wrap})
+            {
+                vmsg("Removing stale $suite->{wrap}");
+                unlink($suite->wrap)
+                    or die "Cannot unlink $suite->{wrap}: $!";
+            }
+            next;
+        }
+        suite_generate_wrap($suite);
     }
 
     exit 1
-	if ($nfails > 0);
+        if ($nfails > 0);
 }
 
 #
@@ -979,9 +979,9 @@ sub emit_final_makefile_bits()
     map { $seen{$_}++ } @all_linkables;
     foreach my $arg (@all_linkables)
     {
-	push (@linkables, $arg)
-	    if ($seen{$arg} == 1);
-	$seen{$arg}--;
+        push (@linkables, $arg)
+            if ($seen{$arg} == 1);
+        $seen{$arg}--;
     }
 
     @deplibs = grep { m/\.[oa]$/ } @linkables;
@@ -1005,32 +1005,32 @@ sub emit_partial_makefile_bits($)
 
     $cunit = "$0";
     $cunit .= " --project $project"
-	unless ($project eq $DEFAULT_PROJECT);
+        unless ($project eq $DEFAULT_PROJECT);
 
     print MAKE "CUNIT_TEST_WRAPS =";
     foreach my $suite (suites_for_here())
     {
-	print MAKE " $suite->{wrap}";
+        print MAKE " $suite->{wrap}";
     }
     print MAKE "\n";
 
     print MAKE "CUNIT_TEST_OBJS =";
     foreach my $suite (suites_for_here())
     {
-	print MAKE " $suite->{object}";
+        print MAKE " $suite->{object}";
     }
     print MAKE "\n";
 
     foreach my $suite (suites_for_here())
     {
-	print MAKE "$suite->{object}: $suite->{wrap} $suite->{relpath}\n";
+        print MAKE "$suite->{object}: $suite->{wrap} $suite->{relpath}\n";
     }
     print MAKE "\n";
 
     foreach my $suite (suites_for_here())
     {
-	print MAKE "$suite->{wrap}: $suite->{relpath}\n";
-	print MAKE "\t$cunit --generate-wrapper \$<\n";
+        print MAKE "$suite->{wrap}: $suite->{relpath}\n";
+        print MAKE "\t$cunit --generate-wrapper \$<\n";
     }
     print MAKE "\n";
 
@@ -1053,7 +1053,7 @@ sub generate_partial_makefile(@)
     my $file = atomic_rewrite_begin($makefile);
 
     open MAKE,'>',$file
-	or die "Cannot open $file for writing: $!";
+        or die "Cannot open $file for writing: $!";
 
     print MAKE "# Automatically generated by cunit.pl, do not edit\n";
     print MAKE "\n";
@@ -1083,7 +1083,7 @@ sub generate_final_makefile(@)
     my $file = atomic_rewrite_begin($makefile);
 
     open MAKE,'>',$file
-	or die "Cannot open $file for writing: $!";
+        or die "Cannot open $file for writing: $!";
 
     print MAKE "# Automatically generated by cunit.pl, do not edit\n";
     print MAKE "\n";
@@ -1106,7 +1106,7 @@ sub generate_makefile(@)
     my $file = atomic_rewrite_begin($makefile);
 
     open MAKE,'>',$file
-	or die "Cannot open $file for writing: $!";
+        or die "Cannot open $file for writing: $!";
 
     print MAKE "# Automatically generated by cunit.pl, do not edit\n";
     print MAKE "\n";
@@ -1131,13 +1131,13 @@ sub generate_register_function(@)
     my $file = atomic_rewrite_begin($cfile);
 
     open CFILE,'>',$file
-	or die "Cannot open $file for writing: $!";
+        or die "Cannot open $file for writing: $!";
 
     print CFILE "/* Automatically generated by cunit.pl, do not edit */\n";
 
     foreach my $suite (@suites)
     {
-	print CFILE "extern const CU_SuiteInfo $suite->{suitevar};\n";
+        print CFILE "extern const CU_SuiteInfo $suite->{suitevar};\n";
     }
 
     print CFILE "void register_cunit_suites(void)\n";
@@ -1145,8 +1145,8 @@ sub generate_register_function(@)
     print CFILE "    CU_SuiteInfo ss[2] = { CU_SUITE_INFO_NULL, CU_SUITE_INFO_NULL };\n";
     foreach my $suite (@suites)
     {
-	print CFILE "    ss[0] = $suite->{suitevar};\n";
-	print CFILE "    CU_register_suites(ss);\n";
+        print CFILE "    ss[0] = $suite->{suitevar};\n";
+        print CFILE "    CU_register_suites(ss);\n";
     }
     print CFILE "}\n";
 
@@ -1168,8 +1168,8 @@ sub usage()
     print STDERR "       cunit.pl [flags] --emit-register-function foo.c\n";
     print STDERR "\n";
     print STDERR "flags include:\n";
-    print STDERR "    --project PROJ, -p PROJ	    specify the project file (default is \"$DEFAULT_PROJECT\")\n";
-    print STDERR "    --verbose, -v		    be more verbose\n";
+    print STDERR "    --project PROJ, -p PROJ       specify the project file (default is \"$DEFAULT_PROJECT\")\n";
+    print STDERR "    --verbose, -v                 be more verbose\n";
     exit 1;
 }
 
@@ -1180,71 +1180,71 @@ while (my $a = shift)
 {
     if ($a eq '--project' || $a eq '-p')
     {
-	$project = shift;
-	usage() unless defined $project;
+        $project = shift;
+        usage() unless defined $project;
     }
     elsif ($a eq '--add-sources' || $a eq '-a')
     {
-	$modefn = \&add_sources;
-	$want_args = 1;
+        $modefn = \&add_sources;
+        $want_args = 1;
     }
     elsif ($a eq '--add-libraries' || $a eq '-A')
     {
-	$modefn = \&add_libraries;
-	$want_args = 2;
+        $modefn = \&add_libraries;
+        $want_args = 2;
     }
     elsif ($a eq '--generate-partial-makefile' || $a eq '-p')
     {
-	$modefn = \&generate_partial_makefile;
-	my $makefile = shift;
-	usage() unless defined $makefile;
-	push(@args, $makefile);
+        $modefn = \&generate_partial_makefile;
+        my $makefile = shift;
+        usage() unless defined $makefile;
+        push(@args, $makefile);
     }
     elsif ($a eq '--generate-final-makefile' || $a eq '-f')
     {
-	$modefn = \&generate_final_makefile;
-	my $makefile = shift;
-	usage() unless defined $makefile;
-	push(@args, $makefile);
+        $modefn = \&generate_final_makefile;
+        my $makefile = shift;
+        usage() unless defined $makefile;
+        push(@args, $makefile);
     }
     elsif ($a eq '--generate-makefile' || $a eq '-m')
     {
-	$modefn = \&generate_makefile;
-	my $makefile = shift;
-	usage() unless defined $makefile;
-	push(@args, $makefile);
+        $modefn = \&generate_makefile;
+        my $makefile = shift;
+        usage() unless defined $makefile;
+        push(@args, $makefile);
     }
     elsif ($a eq '--generate-wrapper' || $a eq '-w')
     {
-	$modefn = \&generate_wrapper;
-	$want_args = 1;
+        $modefn = \&generate_wrapper;
+        $want_args = 1;
     }
     elsif ($a eq '--generate-register-function' || $a eq '-r')
     {
-	$modefn = \&generate_register_function;
-	my $cfile = shift;
-	usage() unless defined $cfile;
-	push(@args, $cfile);
+        $modefn = \&generate_register_function;
+        my $cfile = shift;
+        usage() unless defined $cfile;
+        push(@args, $cfile);
     }
     elsif ($a eq '--verbose' || $a eq '-v')
     {
-	$verbose++;
+        $verbose++;
     }
     elsif ($a =~ /^-[lLBW]/ && $want_args == 2)
     {
-	push(@args, $a);
+        push(@args, $a);
     }
     elsif ($a =~ /^-/)
     {
-	usage();
+        usage();
     }
     elsif ($want_args)
     {
-	push(@args, $a);
+        push(@args, $a);
     }
     else
     {
-	usage();
+        usage();
     }
 }
 

@@ -1,4 +1,4 @@
-# 
+#
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -6,7 +6,7 @@
 # are met:
 #
 # 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer. 
+#    notice, this list of conditions and the following disclaimer.
 #
 # 2. Redistributions in binary form must reproduce the above copyright
 #    notice, this list of conditions and the following disclaimer in
@@ -16,7 +16,7 @@
 # 3. The name "Carnegie Mellon University" must not be used to
 #    endorse or promote products derived from this software without
 #    prior written permission. For permission or any other legal
-#    details, please contact  
+#    details, please contact
 #      Office of Technology Transfer
 #      Carnegie Mellon University
 #      5000 Forbes Avenue
@@ -40,10 +40,10 @@
 # A shell framework for IMAP::Cyrus::Admin
 #
 # run(*FH|'FH')
-#	read commands from the filehandle and pass to exec(); defaults to
-#	__DATA__
+#       read commands from the filehandle and pass to exec(); defaults to
+#       __DATA__
 # shell
-#	= run(*STDIN)
+#       = run(*STDIN)
 #
 # This isn't derived from CPAN.pm, first because I need to support the stuff
 # that makes it act at least somewhat like the old cyradm and second because
@@ -68,79 +68,79 @@ $VERSION = "1.00";
 
 # note aliases
 my %builtins = (exit =>
-		  [\&_sc_exit, '[number]', 'exit cyradm'],
-		quit => 'exit',
-		help =>
-		  [\&_sc_help, '[command]', 'show commands'],
-		'?' => 'help',
-		lam => 'listacl',
-		listacl =>
-		  [\&_sc_listacl, 'mailbox', 'list ACLs on mailbox'],
-		listaclmailbox => 'listacl',
-		lm => 'listmailbox',
-		listmailbox =>
-		  [\&_sc_list, '[-subscribed] [pattern [base]]',
-		   'list mailboxes'],
-		server =>
-		  [\&_sc_server, '[-noauthenticate] [server]',
-		   'show current server or connect to server'],
-		servername => 'server',
-		connect => 'server',
-		authenticate =>
-		  [\&_sc_auth,
-		   '[-minssf N] [-maxssf N] [-mechanisms list] [user]',
-		   'authenticate to server'],
-		auth => 'authenticate',
-		login => 'authenticate',
-		listquota =>
-		  [\&_sc_quota, 'root', 'list quotas on specified root'],
-		lq => 'listquota',
-		listquotaroot =>
-		  [\&_sc_quotaroot, 'mailbox',
-		   'show quota roots and quotas for mailbox'],
-		lqr => 'listquotaroot',
-		lqm => 'listquotaroot',
-		disconnect =>
-		  [\&_sc_disconn, '', 'disconnect from current server'],
-		disc => 'disconnect',
-		chdir =>
-		  [\&_sc_chdir, 'directory', 'change current directory'],
-		cd => 'chdir',
-		createmailbox =>
-		  [\&_sc_create, '[--partition partition] mailbox [partition]',
-		   'create mailbox'],
-		create => 'createmailbox',
-		cm => 'createmailbox',
-		deleteaclmailbox =>
-		  [\&_sc_deleteacl, 'mailbox id [id ...]',
-		   'remove ACLs from mailbox'],
-		deleteacl => 'deleteaclmailbox',
-		dam => 'deleteaclmailbox',
-		deletemailbox =>
-		  [\&_sc_delete, 'mailbox [host]', 'delete mailbox'],
-		delete => 'deletemailbox',
-		dm => 'deletemailbox',
-		renamemailbox =>
-		  [\&_sc_rename,
-		   '[--partition partition] oldname newname [partition]',
-		   'rename (and optionally relocate) mailbox'],
-		rename => 'renamemailbox',
-		renm => 'renamemailbox',
-		setaclmailbox =>
-		  [\&_sc_setacl, 'mailbox id rights [id rights ...]',
-		   'set ACLs on mailbox'],
-		setacl => 'setaclmailbox',
-		sam => 'setaclmailbox',
-		setquota =>
-		  [\&_sc_setquota,
-		   'mailbox resource value [resource value ...]',
-		   'set quota on mailbox or resource'],
-		sq => 'setquota',
-		#? alias
-		#? unalias
-		#? load
-		#? unload
-	       );
+                  [\&_sc_exit, '[number]', 'exit cyradm'],
+                quit => 'exit',
+                help =>
+                  [\&_sc_help, '[command]', 'show commands'],
+                '?' => 'help',
+                lam => 'listacl',
+                listacl =>
+                  [\&_sc_listacl, 'mailbox', 'list ACLs on mailbox'],
+                listaclmailbox => 'listacl',
+                lm => 'listmailbox',
+                listmailbox =>
+                  [\&_sc_list, '[-subscribed] [pattern [base]]',
+                   'list mailboxes'],
+                server =>
+                  [\&_sc_server, '[-noauthenticate] [server]',
+                   'show current server or connect to server'],
+                servername => 'server',
+                connect => 'server',
+                authenticate =>
+                  [\&_sc_auth,
+                   '[-minssf N] [-maxssf N] [-mechanisms list] [user]',
+                   'authenticate to server'],
+                auth => 'authenticate',
+                login => 'authenticate',
+                listquota =>
+                  [\&_sc_quota, 'root', 'list quotas on specified root'],
+                lq => 'listquota',
+                listquotaroot =>
+                  [\&_sc_quotaroot, 'mailbox',
+                   'show quota roots and quotas for mailbox'],
+                lqr => 'listquotaroot',
+                lqm => 'listquotaroot',
+                disconnect =>
+                  [\&_sc_disconn, '', 'disconnect from current server'],
+                disc => 'disconnect',
+                chdir =>
+                  [\&_sc_chdir, 'directory', 'change current directory'],
+                cd => 'chdir',
+                createmailbox =>
+                  [\&_sc_create, '[--partition partition] mailbox [partition]',
+                   'create mailbox'],
+                create => 'createmailbox',
+                cm => 'createmailbox',
+                deleteaclmailbox =>
+                  [\&_sc_deleteacl, 'mailbox id [id ...]',
+                   'remove ACLs from mailbox'],
+                deleteacl => 'deleteaclmailbox',
+                dam => 'deleteaclmailbox',
+                deletemailbox =>
+                  [\&_sc_delete, 'mailbox [host]', 'delete mailbox'],
+                delete => 'deletemailbox',
+                dm => 'deletemailbox',
+                renamemailbox =>
+                  [\&_sc_rename,
+                   '[--partition partition] oldname newname [partition]',
+                   'rename (and optionally relocate) mailbox'],
+                rename => 'renamemailbox',
+                renm => 'renamemailbox',
+                setaclmailbox =>
+                  [\&_sc_setacl, 'mailbox id rights [id rights ...]',
+                   'set ACLs on mailbox'],
+                setacl => 'setaclmailbox',
+                sam => 'setaclmailbox',
+                setquota =>
+                  [\&_sc_setquota,
+                   'mailbox resource value [resource value ...]',
+                   'set quota on mailbox or resource'],
+                sq => 'setquota',
+                #? alias
+                #? unalias
+                #? load
+                #? unload
+               );
 
 # ugh.  ugh.  suck.  aieee.
 my $use_rl = 'Cyrus::IMAP::DummyReadline';
@@ -248,15 +248,15 @@ sub _execvv {
       # process redirections in $fa
       # sorted so lower $lfa->[$fh]->fileno consumed before $fh!
       foreach my $fh (sort {$a->fileno <=> $b->fileno} @$lfa) {
-	if (!defined($fh)) {
-	  POSIX::close($fd);
-	} else {
-	  POSIX::dup2($fh->fileno, $fd);
-	}
-	$fd++;
+        if (!defined($fh)) {
+          POSIX::close($fd);
+        } else {
+          POSIX::dup2($fh->fileno, $fd);
+        }
+        $fd++;
       }
       foreach my $fh (@$lfa) {
-	POSIX::close($fd) if defined($fh) && $fh->fileno > $fd;
+        POSIX::close($fd) if defined($fh) && $fh->fileno > $fd;
       }
       # anything else left open is just lost.  sorry.
       exec $cmd;
@@ -330,17 +330,17 @@ sub _exec {
   while (($tok, $type) = _nexttoken(\$cmd) and defined($type)) {
     if (!$type) {
       if ($state eq '') {
-	# @@ here is where we should do aliasing, if we do it at all
-	push(@argv, $tok);
+        # @@ here is where we should do aliasing, if we do it at all
+        push(@argv, $tok);
       }
       else {
-	# at this point, $state is the redirection (/^([<>])\1?\&?$/) and
-	# $arg->[0] is the destination.  if $argv[$#argv] matches /^\d+$/,
-	# it is the affected file handle.
-	my $target;
-	$target = pop(@argv) if $argv[-1] =~ /^\d+$/;
-	_redir($lfa, $state, $tok, $target);
-	$state = '';
+        # at this point, $state is the redirection (/^([<>])\1?\&?$/) and
+        # $arg->[0] is the destination.  if $argv[$#argv] matches /^\d+$/,
+        # it is the affected file handle.
+        my $target;
+        $target = pop(@argv) if $argv[-1] =~ /^\d+$/;
+        _redir($lfa, $state, $tok, $target);
+        $state = '';
       }
     }
     elsif ($tok eq ';') {
@@ -350,13 +350,13 @@ sub _exec {
     }
     elsif ($tok eq '&') {
       if ($state ne '<' && $state ne '>') {
-	die "syntax error: cannot deal with \`&' here\n";
+        die "syntax error: cannot deal with \`&' here\n";
       }
       $state .= '&';
     }
     elsif ($tok eq '<' || $tok eq '>') {
       if ($state ne '' && ($state ne $tok || $state eq '<')) {
-	die "syntax error: cannot deal with \`$tok' here\n";
+        die "syntax error: cannot deal with \`$tok' here\n";
       }
       $state .= $tok;
     }
@@ -379,8 +379,8 @@ sub _run {
   $hfh = $use_rl->new('cyradm shell', $fin, $fstk->[1]);
   my $rc;
   while (defined ($line = $hfh->readline((defined $$cyradm ?
-					  $$cyradm->servername :
-					  'cyradm') . '> '))) {
+                                          $$cyradm->servername :
+                                          'cyradm') . '> '))) {
     local($@);
     if (!defined(eval { $rc = _exec($cyradm, $fstk, $line); })) {
       $fstk->[2]->print($@);
@@ -405,13 +405,13 @@ sub shell {
     ('', 143, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
      "$ENV{HOME}/.cyradmrc.pl", 1, undef);
   GetOptions('user|u=s' => \$user,
-	     'rc|r!' => \$dorc,
-	     'systemrc|S=s' => \$systemrc,
-	     'userrc' => \$userrc,
-	     'server|s=s' => \$server,
-	     'port|p=i' => \$port,
-	     'auth|a=s' => \$mech,
-	    );
+             'rc|r!' => \$dorc,
+             'systemrc|S=s' => \$systemrc,
+             'userrc' => \$userrc,
+             'server|s=s' => \$server,
+             'port|p=i' => \$port,
+             'auth|a=s' => \$mech,
+            );
   if ($server ne '' && @ARGV) {
     die "cyradm: may not specify server both with --server and bare arg\n";
   }
@@ -425,8 +425,8 @@ sub shell {
     $cyradm = Cyrus::IMAP::Admin->new($server, $port)
       or die "cyradm: cannot connect to server\n";
     $cyradm->addcallback({-trigger => 'EOF',
-			  -callback => \&_cb_eof,
-			  -rock => \$cyradm});
+                          -callback => \&_cb_eof,
+                          -rock => \$cyradm});
     print "trying to auth as [$user].\n";
     $cyradm->authenticate(-user => $user, -mechanism => $mech)
       or die "cyradm: cannot authenticate to server with $mech as $user\n";
@@ -490,11 +490,11 @@ sub _sc_help {
     my $cmd;
     foreach $cmd (keys %builtins) {
       if (ref($builtins{$cmd})) {
-	$cmds{$cmd} ||= [[], ''];
-	$cmds{$cmd}[1] = $builtins{$cmd}[2];
+        $cmds{$cmd} ||= [[], ''];
+        $cmds{$cmd}[1] = $builtins{$cmd}[2];
       } else {
-	$cmds{$builtins{$cmd}} ||= [[], ''];
-	push(@{$cmds{$builtins{$cmd}}[0]}, $cmd);
+        $cmds{$builtins{$cmd}} ||= [[], ''];
+        push(@{$cmds{$builtins{$cmd}}[0]}, $cmd);
       }
     }
     my $nwid = 0;
@@ -583,7 +583,7 @@ sub _sc_list {
   for ($l = 0; $l < int((@l + $n - 1) / $n); $l++) {
     for ($c = 0; $c < @l; $c += int((@l + $n - 1) / $n)) {
       if ($l + $c < @l) {
-	$lfh->[1]->print($l[$l + $c], ' ' x ($w + 1 - length($l[$l + $c])));
+        $lfh->[1]->print($l[$l + $c], ' ' x ($w + 1 - length($l[$l + $c])));
       }
     }
     $lfh->[1]->print("\n");
@@ -632,7 +632,7 @@ sub _sc_server {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt ne '' && '-noauthenticate' =~ /^\Q$opt/ ||
-	$opt eq '--noauthenticate') {
+        $opt eq '--noauthenticate') {
       $auth = 0;
       next;
     }
@@ -694,7 +694,7 @@ sub _sc_auth {
     }
     if ($opt =~ /^-/) {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
-	  "                    [-service name] [user]\n";
+          "                    [-service name] [user]\n";
     }
     else {
       push(@nargv, $opt);
@@ -715,7 +715,7 @@ sub _sc_auth {
   unless ($$cyrref->authenticate(%opts)) {
     my $sn = $$cyrref->servername;
     die "authenticate: authentication to server $sn failed\n";
-  } 
+  }
   0;
 }
 
@@ -744,8 +744,8 @@ sub _sc_quota {
   my %quota = $$cyrref->listquota(@nargv);
   foreach my $quota (keys %quota) {
     $lfh->[1]->print(" ", $quota, " ", $quota{$quota}[0], "/",
-		     $quota{$quota}[1], " (",
-		     $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
+                     $quota{$quota}[1], " (",
+                     $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
   }
   $lfh->[1]->print("\n");
   0;
@@ -779,8 +779,8 @@ sub _sc_quotaroot {
   foreach my $quota (keys %quota) {
     ($used, $tot) = split(/ /, $quota{$quota});
     $lfh->[1]->print(" ", $quota, " ", $quota{$quota}[0], "/",
-		     $quota{$quota}[1], " (",
-		     $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
+                     $quota{$quota}[1], " (",
+                     $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
   }
   $lfh->[1]->print("\n");
   0;
@@ -916,7 +916,7 @@ sub _sc_rename {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
       die "usage: renamemailbox [--partition name] oldname " .
-	  "newname [partition]\n";
+          "newname [partition]\n";
     }
     else {
       push(@nargv, $opt);
@@ -927,7 +927,7 @@ sub _sc_rename {
   $part = pop(@nargv) if @nargv > 2 && !defined($part);
   if (@nargv != 2) {
     die "usage: renamemailbox [--partition name] oldname " .
-	"newname [partition]\n";
+        "newname [partition]\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "renamemailbox: no connection to server\n";

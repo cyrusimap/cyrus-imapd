@@ -9,16 +9,16 @@ use CGI qw(:standard escapeHTML);
 use RRDs;
 srand(timelocal(localtime));
 
-%periods = (	"daily" => 86400,
-		"weekly" => 604800,
-		"monthly" => 2419200,
-		"yearly" => 31536000,
+%periods = (    "daily" => 86400,
+                "weekly" => 604800,
+                "monthly" => 2419200,
+                "yearly" => 31536000,
 );
 
 
 $DDIR="/data/cyrus";
 $SERVER=param("server");
-$SERVICE=param("service"); 
+$SERVICE=param("service");
 $FNAME="$SERVER-$SERVICE";
 $picdir="/usr/www/tree/current/tainted";
 $hpicdir="/current/tainted";

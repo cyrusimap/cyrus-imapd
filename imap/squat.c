@@ -58,15 +58,15 @@ struct _SquatSearchIndex {
   int         index_fd;               /* the index file */
   char const* data;                   /* where it's mmaped to */
   char const* doc_list;               /* where does the doc-list
-					 sequence start in memory */ 
+                                         sequence start in memory */
   char const* word_list;              /* where does the word trie
-					 offset table start in memory */ 
+                                         offset table start in memory */
   char const* doc_ID_list;            /* where does the doc-ID-list
-					 array start in memory */
+                                         array start in memory */
   char const* data_end;               /* the end of the mmaped file */
   unsigned char valid_char_bits[32];  /* which characters are valid in
-					 queries according to whoever
-					 created the index */
+                                         queries according to whoever
+                                         created the index */
 };
 
 /* For each 0 <= i < 256, bit_counts[i] is the number of bits set in i */
@@ -109,7 +109,7 @@ EXPORTED SquatSearchIndex* squat_search_open(int fd) {
   data_len = buf.st_size - SQUAT_SAFETY_ZONE;
   if ((size_t)data_len < sizeof(SquatDiskHeader)) {
     squat_set_last_error(SQUAT_ERR_INVALID_INDEX_FILE);
-    goto cleanup_index;    
+    goto cleanup_index;
   }
 
   index->data = mmap(NULL, data_len + SQUAT_SAFETY_ZONE, PROT_READ, MAP_SHARED, fd, 0);
@@ -241,7 +241,7 @@ static char const* lookup_word_docs(SquatSearchIndex* index,
       next_offset = squat_decode_I(&s);
       s = branch_start - next_offset;
       if (next_offset < 0 || s >= index->data_end) {
-	*invalid_file = 1;
+        *invalid_file = 1;
         return NULL; /* corrupt index */
       }
     } else {
@@ -250,7 +250,7 @@ static char const* lookup_word_docs(SquatSearchIndex* index,
       while (skip-- > 0) {
         char const* t = s;
         int v = (int)squat_decode_I(&t);
-          
+
         if ((v & 1) != 0) {
           s = t;  /* singleton; no more data to eat for this word */
         } else {
@@ -285,7 +285,7 @@ static int count_docs_containing_word(SquatSearchIndex* index,
     int size = i >> 1;
     char const* s = raw_doc_list;
     int count = 0;
-    
+
     if (raw_doc_list + size >= index->data_end) {
       return -1;
     }
@@ -313,9 +313,9 @@ static int count_docs_containing_word(SquatSearchIndex* index,
 typedef struct {
   int array_len;   /* The length of the array below */
   int* array_data; /* An array of document IDs, sorted by increasing
-		      document ID. It can also contain elements equal
-		      to -1, which means "no document".
-		   */
+                      document ID. It can also contain elements equal
+                      to -1, which means "no document".
+                   */
   int index;       /* The index of the 'current' document within the array. */
 } SquatDocSet;
 
@@ -325,15 +325,15 @@ typedef struct {
 */
 static int
 set_to_docs_containing_word(SquatSearchIndex* index __attribute__((unused)),
-			    SquatDocSet* set,
-			    char const* data __attribute__((unused)),
-			    int doc_count, char const* doc_list)
+                            SquatDocSet* set,
+                            char const* data __attribute__((unused)),
+                            int doc_count, char const* doc_list)
 {
   int i;
 
   set->array_len = doc_count;
   set->array_data = (int*)xmalloc(sizeof(int)*set->array_len);
-  
+
   i = (int)squat_decode_I(&doc_list);
   if ((i & 1) != 0) {
     set->array_data[0] = i >> 1;
@@ -342,7 +342,7 @@ set_to_docs_containing_word(SquatSearchIndex* index __attribute__((unused)),
     char const* s = doc_list;
     int last_doc = 0;
     int j = 0;
-    
+
     while (s - doc_list < size) {
       i = (int)squat_decode_I(&s);
       if ((i & 1) == 1) {
@@ -391,21 +391,21 @@ static void filter_doc(SquatDocSet* set, int doc) {
 */
 static void
 filter_to_docs_containing_word(SquatSearchIndex* index __attribute__((unused)),
-			       SquatDocSet* set,
-			       char const* data __attribute__((unused)),
-			       char const* doc_list)
+                               SquatDocSet* set,
+                               char const* data __attribute__((unused)),
+                               char const* doc_list)
 {
   int i = (int)squat_decode_I(&doc_list);
 
   set->index = 0;
 
   if ((i & 1) != 0) {
-    filter_doc(set, i >> 1); 
+    filter_doc(set, i >> 1);
   } else {
     int size = i >> 1;
     char const* s = doc_list;
     int last_doc = 0;
-    
+
     while (s - doc_list < size) {
       i = (int)squat_decode_I(&s);
       if ((i & 1) == 1) {
@@ -473,9 +473,9 @@ HIDDEN int squat_search_execute(SquatSearchIndex* index, char const* data,
   int data_len, SquatSearchResultCallback handler, void* closure) {
   int i;
   int min_doc_count_word; /* The subword of 'data' that appears in
-			     fewest documents */
+                             fewest documents */
   int min_doc_count;      /* The number of documents that include that
-			     subword */
+                             subword */
   SquatDocSet set;
   char const** run_starts;
 
@@ -514,7 +514,7 @@ HIDDEN int squat_search_execute(SquatSearchIndex* index, char const* data,
     goto cleanup_run_starts;
   } else if (min_doc_count == 0) {
       /* The first word of the substring isn't in any documents, so we
-	 can just stop now. */
+         can just stop now. */
     goto cleanup_run_starts_ok;
   }
   min_doc_count_word = 0;
@@ -644,7 +644,7 @@ static int squat_scan_leaf(char const* doc_list, char *name,
     int size = i >> 1;
     char const* s = doc_list;
     int last_doc = 0;
-    
+
     while (s - doc_list < size) {
       i = (int)squat_decode_I(&s);
       if ((i & 1) == 1) {
@@ -653,7 +653,7 @@ static int squat_scan_leaf(char const* doc_list, char *name,
       } else {
         int count = i >> 1;
         int delta = squat_decode_I(&s);
-              
+
         last_doc += delta;
         handler(closure, name, last_doc);
         while (--count > 0) {
@@ -734,7 +734,7 @@ static int squat_scan_recurse(char const* s, char const* data_end,
       }
     }
     s = start_of_list;
-    
+
     name[level] = ch;
     if (level < (SQUAT_WORD_SIZE-1)) {
       s = squat_decode_skip_I(s, skip);
@@ -751,7 +751,7 @@ static int squat_scan_recurse(char const* s, char const* data_end,
       while (skip-- > 0) {
         char const* t = s;
         int v = (int)squat_decode_I(&t);
-          
+
         if ((v & 1) != 0) {
           s = t;  /* singleton; no more data to eat for this word */
         } else {
@@ -864,7 +864,7 @@ EXPORTED int squat_scan(SquatSearchIndex* index, char first_char,
     return(r);
   if (!s)
     return SQUAT_OK;
-    
+
   memset(buf, 0, sizeof(buf));
   buf[0] = first_char;
 
@@ -923,7 +923,7 @@ squat_preload_data(char const* t, char const* s)
     len   -= size;
   }
 }
-                          
+
 EXPORTED int squat_count_docs(SquatSearchIndex* index, char first_char, int *counter)
 {
   char buf[SQUAT_WORD_SIZE+1];

@@ -84,8 +84,8 @@ extern int optind;
 static int usage(const char *name)
 {
     fprintf(stderr,
-	    "usage: %s [-C <alt_config>] mailbox [...]\n",
-	    name);
+            "usage: %s [-C <alt_config>] mailbox [...]\n",
+            name);
 
     exit(EC_USAGE);
 }
@@ -96,17 +96,17 @@ static const char *squat_strerror(int err)
 
     switch (err) {
     case SQUAT_ERR_SYSERR:
-	return strerror(errno);
+        return strerror(errno);
     default:
-	/* There are other error codes, but they only apply for searching,
-	   not index construction */
-	snprintf(buf, sizeof(buf), "unknown squat error %d", err);
-	return buf;
+        /* There are other error codes, but they only apply for searching,
+           not index construction */
+        snprintf(buf, sizeof(buf), "unknown squat error %d", err);
+        return buf;
     }
 }
 
 static int dump_doc(void *closure __attribute__((unused)),
-		    const SquatListDoc *doc)
+                    const SquatListDoc *doc)
 {
     printf("DOC %s %llu\n", doc->doc_name, doc->size);
     return SQUAT_CALLBACK_CONTINUE;
@@ -125,23 +125,23 @@ static int dump_one(char *name)
     /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
-	fprintf(stderr, "error opening looking up %s: %s\n",
-		name, error_message(r));
-	return 1;
+        fprintf(stderr, "error opening looking up %s: %s\n",
+                name, error_message(r));
+        return 1;
     }
 
     if (mbentry->mbtype & MBTYPE_REMOTE) {
-	mboxlist_entry_free(&mbentry);
-	return 0;
+        mboxlist_entry_free(&mbentry);
+        return 0;
     }
 
     mboxlist_entry_free(&mbentry);
 
     r = mailbox_open_irl(name, &mailbox);
     if (r) {
-	fprintf(stderr, "error opening mailbox %s: %s\n",
-		name, error_message(r));
-	return 1;
+        fprintf(stderr, "error opening mailbox %s: %s\n",
+                name, error_message(r));
+        return 1;
     }
 
     fname = xstrdup(mailbox_meta_fname(mailbox, META_SQUAT));
@@ -150,25 +150,25 @@ static int dump_one(char *name)
 
     fd = open(fname, O_RDONLY, 0);
     if (fd < 0) {
-	fprintf(stderr, "error opening file %s: %s\n",
-		fname, error_message(errno));
-	goto out;
+        fprintf(stderr, "error opening file %s: %s\n",
+                fname, error_message(errno));
+        goto out;
     }
 
     index = squat_search_open(fd);
     if (index == NULL) {
-	fprintf(stderr, "error opening index %s: %s\n",
-		fname, squat_strerror(squat_get_last_error()));
-	goto out;
+        fprintf(stderr, "error opening index %s: %s\n",
+                fname, squat_strerror(squat_get_last_error()));
+        goto out;
     }
 
     printf("MAILBOX %s\n", name);
 
     r = squat_search_list_docs(index, dump_doc, NULL);
     if (r != SQUAT_OK) {
-	fprintf(stderr, "error listing index %s: %s\n",
-		fname, squat_strerror(r));
-	goto out;
+        fprintf(stderr, "error listing index %s: %s\n",
+                fname, squat_strerror(r));
+        goto out;
     }
 
 out:
@@ -185,18 +185,18 @@ int main(int argc, char **argv)
     int i;
 
     if ((geteuid()) == 0 && (become_cyrus(/*ismaster*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
-	switch (opt) {
-	case 'C':		/* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C':               /* alt config file */
+            alt_config = optarg;
+            break;
 
-	default:
-	    usage(argv[0]);
-	}
+        default:
+            usage(argv[0]);
+        }
     }
 
     cyrus_init(alt_config, "squat_dump", 0, CONFIG_NEED_PARTITION_DATA);
@@ -205,10 +205,10 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
 
     if (optind == argc)
-	usage(argv[0]);
+        usage(argv[0]);
 
     for (i = optind; i < argc; i++)
-	dump_one(argv[i]);
+        dump_one(argv[i]);
 
     mboxlist_close();
     mboxlist_done();

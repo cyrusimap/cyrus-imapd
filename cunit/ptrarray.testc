@@ -3,16 +3,16 @@
 #include "cunit/cunit.h"
 #include "ptrarray.h"
 
-#define PTR0	    ((void *)0xcafebabe)
-#define PTR1	    ((void *)0xcafebabf)
-#define PTR2	    ((void *)0xcafebac0)
-#define PTR3	    ((void *)0xcafebac1)
-#define PTR4	    ((void *)0xcafebac2)
-#define PTR5	    ((void *)0xcafebac3)
+#define PTR0        ((void *)0xcafebabe)
+#define PTR1        ((void *)0xcafebabf)
+#define PTR2        ((void *)0xcafebac0)
+#define PTR3        ((void *)0xcafebac1)
+#define PTR4        ((void *)0xcafebac2)
+#define PTR5        ((void *)0xcafebac3)
 
-#define PTR0REP	    ((void *)0xc0ffee00)
+#define PTR0REP     ((void *)0xc0ffee00)
 #define PTR0REP2    ((void *)0xc0ffee01)
-#define PTR2REP	    ((void *)0xc0ffee02)
+#define PTR2REP     ((void *)0xc0ffee02)
 
 #define PTRNOTHERE  ((void *)0xdefaced0)
 

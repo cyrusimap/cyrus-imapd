@@ -82,7 +82,7 @@ AC_ARG_WITH(zephyr-include,
           fi
         fi
 
-        if test "$with_zephyr" != "no"; then 
+        if test "$with_zephyr" != "no"; then
           if test "X$with_zephyr_lib" != "X"; then
             ac_cv_zephyr_where_lib=$with_zephyr_lib
           fi
@@ -109,8 +109,8 @@ AC_ARG_WITH(zephyr-include,
           ZEPHYR_LIB_DIR=$ac_cv_zephyr_where_lib
           ZEPHYR_INC_FLAGS="-I${ZEPHYR_INC_DIR}"
           ZEPHYR_LIB_FLAGS="-L${ZEPHYR_LIB_DIR} -lzephyr"
-	  AC_SUBST(ZEPHYT_INC_FLAGS)
-	  AC_SUBST(ZEPHYR_LIB_FLAGS)
+          AC_SUBST(ZEPHYT_INC_FLAGS)
+          AC_SUBST(ZEPHYR_LIB_FLAGS)
           if test "X$RPATH" = "X"; then
                 RPATH=""
           fi
@@ -118,21 +118,21 @@ AC_ARG_WITH(zephyr-include,
             *-*-linux*)
               if test "X$RPATH" = "X"; then
                 RPATH="-Wl,-rpath,${ZEPHYR_LIB_DIR}"
-              else 
+              else
                 RPATH="${RPATH}:${ZEPHYR_LIB_DIR}"
               fi
               ;;
             *-*-hpux*)
               if test "X$RPATH" = "X"; then
                 RPATH="-Wl,+b${ZEPHYR_LIB_DIR}"
-              else 
+              else
                 RPATH="${RPATH}:${ZEPHYR_LIB_DIR}"
               fi
               ;;
             *-*-irix*)
               if test "X$RPATH" = "X"; then
                 RPATH="-Wl,-rpath,${ZEPHYR_LIB_DIR}"
-              else 
+              else
                 RPATH="${RPATH}:${ZEPHYR_LIB_DIR}"
               fi
               ;;
@@ -140,7 +140,7 @@ AC_ARG_WITH(zephyr-include,
               if test "$ac_cv_prog_gcc" = yes; then
                 if test "X$RPATH" = "X"; then
                   RPATH="-Wl,-R${ZEPHYR_LIB_DIR}"
-                else 
+                else
                   RPATH="${RPATH}:${ZEPHYR_LIB_DIR}"
                 fi
               else

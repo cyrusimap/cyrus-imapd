@@ -48,6 +48,6 @@
 
 sieve_interp_t *setup_sieve(void);
 int run_sieve(const char *user, const char *domain, const char *mailbox,
-	      sieve_interp_t *interp, deliver_data_t *mydata);
+              sieve_interp_t *interp, deliver_data_t *mydata);
 
 #endif /* LMTP_SIEVE_H */

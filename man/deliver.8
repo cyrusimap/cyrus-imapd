@@ -96,32 +96,32 @@ file unless specified otherwise by \fB-C\fR.
 Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-d
-Ignored for compatability with 
+Ignored for compatability with
 .B /bin/mail.
 .TP
 .BI \-r " address"
-Insert a 
-.B Return-Path: 
+Insert a
+.B Return-Path:
 header containing
 .I address
 .TP
 .BI \-f " address"
-Insert a 
-.B Return-Path: 
+Insert a
+.B Return-Path:
 header containing
 .I address
 .TP
 .BI \-m " mailbox"
-Deliver to 
+Deliver to
 .IR mailbox .
 If any
 .IR userid s
 are specified, attempts to deliver to
 .RI user. userid . mailbox
-for each 
+for each
 .IR userid .
 If the ACL on any such mailbox does not grant the sender the "p" right
-or if 
+or if
 .B \-m
 is not specified,
 then delivers to the INBOX for the

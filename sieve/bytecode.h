@@ -54,7 +54,7 @@
 
 
 /* yes, lots of these are superfluous, it's for clarity */
-typedef union 
+typedef union
 {
     int op; /* OPTYPE */
     int value;
@@ -78,7 +78,7 @@ struct bytecode_info
 /* For sanity during input on 64-bit platforms.
  * str should only be accessed as (char *)&str, but given the use of
  * unwrap_string, this should be OK */
-typedef union 
+typedef union
 {
     int op; /* OPTYPE */
     int value;
@@ -118,38 +118,38 @@ typedef union
 enum bytecode {
     B_STOP,
 
-    B_KEEP_ORIG,	/* legacy keep w/o support for :copy and :flags */
+    B_KEEP_ORIG,        /* legacy keep w/o support for :copy and :flags */
     B_DISCARD,
-    B_REJECT,		/* require reject */
-    B_FILEINTO_ORIG,	/* legacy fileinto w/o support for :copy */
-    B_REDIRECT_ORIG,	/* legacy redirect w/o support for :copy */
+    B_REJECT,           /* require reject */
+    B_FILEINTO_ORIG,    /* legacy fileinto w/o support for :copy */
+    B_REDIRECT_ORIG,    /* legacy redirect w/o support for :copy */
 
     B_IF,
-  
-    B_MARK,		/* require imapflags */
-    B_UNMARK,		/* require imapflags */
 
-    B_ADDFLAG,		/* require imap4flags */
-    B_SETFLAG,		/* require imap4flags */
-    B_REMOVEFLAG,	/* require imap4flags */
+    B_MARK,             /* require imapflags */
+    B_UNMARK,           /* require imapflags */
 
-    B_NOTIFY,		/* require notify */
-    B_DENOTIFY,		/* require notify */
+    B_ADDFLAG,          /* require imap4flags */
+    B_SETFLAG,          /* require imap4flags */
+    B_REMOVEFLAG,       /* require imap4flags */
 
-    B_VACATION_ORIG,	/* legacy vacation w/o support for :seconds */
+    B_NOTIFY,           /* require notify */
+    B_DENOTIFY,         /* require notify */
+
+    B_VACATION_ORIG,    /* legacy vacation w/o support for :seconds */
     B_NULL,
     B_JUMP,
 
-    B_INCLUDE,		/* require include */
-    B_RETURN,		/* require include */
+    B_INCLUDE,          /* require include */
+    B_RETURN,           /* require include */
 
-    B_FILEINTO_COPY,	/* legacy fileinto w/o support for :flags */
+    B_FILEINTO_COPY,    /* legacy fileinto w/o support for :flags */
     B_REDIRECT,
 
-    B_VACATION,		/* require vacation */
+    B_VACATION,         /* require vacation */
 
     B_KEEP,
-    B_FILEINTO		/* require fileinto */
+    B_FILEINTO          /* require fileinto */
 };
 
 enum bytecode_comps {
@@ -161,14 +161,14 @@ enum bytecode_comps {
     BC_ANYOF,
     BC_ALLOF,
     BC_ADDRESS_PRE_INDEX,
-    BC_ENVELOPE,	/* require envelope */
+    BC_ENVELOPE,        /* require envelope */
     BC_HEADER_PRE_INDEX,
     BC_BODY,            /* require body */
     BC_DATE,            /* require date */
     BC_CURRENTDATE,     /* require date */
     BC_ADDRESS,
     BC_HEADER,
-    BC_HASFLAG		/* require imap4flags */
+    BC_HASFLAG          /* require imap4flags */
 };
 
 /* currently one enum so as to help determine where values are being misused.
@@ -180,36 +180,36 @@ enum bytecode_tags {
 
     B_SIZE_PLACEHOLDER_1,
     B_SIZE_PLACEHOLDER_2,
-     
+
     /* Relational Match Types */
-    B_GT,		/* require relational */
-    B_GE,		/* require relational */
-    B_LT,		/* require relational */
-    B_LE,		/* require relational */
-    B_EQ,		/* require relational */
-    B_NE,		/* require relational */
- 
+    B_GT,               /* require relational */
+    B_GE,               /* require relational */
+    B_LT,               /* require relational */
+    B_LE,               /* require relational */
+    B_EQ,               /* require relational */
+    B_NE,               /* require relational */
+
     B_RELATIONAL_PLACEHOLDER_1,
     B_RELATIONAL_PLACEHOLDER_2,
-   
+
     /* Priorities */
-    B_LOW,		/* require notify */
-    B_NORMAL,		/* require notify */
-    B_HIGH,		/* require notify */
-    B_ANY,		/* require notify */
+    B_LOW,              /* require notify */
+    B_NORMAL,           /* require notify */
+    B_HIGH,             /* require notify */
+    B_ANY,              /* require notify */
 
     B_PRIORITY_PLACEHOLDER_1,
     B_PRIORITY_PLACEHOLDER_2,
     B_PRIORITY_PLACEHOLDER_3,
     B_PRIORITY_PLACEHOLDER_4,
-    
+
     /* Address Parts */
     B_ALL,
     B_LOCALPART,
     B_DOMAIN,
-    B_USER,		/* require subaddress */
-    B_DETAIL,		/* require subaddress */
-    
+    B_USER,             /* require subaddress */
+    B_DETAIL,           /* require subaddress */
+
     B_ADDRESS_PLACEHOLDER_1,
     B_ADDRESS_PLACEHOLDER_2,
     B_ADDRESS_PLACEHOLDER_3,
@@ -218,20 +218,20 @@ enum bytecode_tags {
     /* Comparators */
     B_ASCIICASEMAP,
     B_OCTET,
-    B_ASCIINUMERIC,	/* require comparator-i;ascii-numeric */
-    
+    B_ASCIINUMERIC,     /* require comparator-i;ascii-numeric */
+
     B_COMPARATOR_PLACEHOLDER_1,
     B_COMPARATOR_PLACEHOLDER_2,
     B_COMPARATOR_PLACEHOLDER_3,
     B_COMPARATOR_PLACEHOLDER_4,
- 
+
     /* Match Types */
     B_IS,
     B_CONTAINS,
     B_MATCHES,
-    B_REGEX,		/* require regex */
-    B_COUNT,		/* require relational */
-    B_VALUE,		/* require relational */
+    B_REGEX,            /* require regex */
+    B_COUNT,            /* require relational */
+    B_VALUE,            /* require relational */
 
     B_MATCH_PLACEHOLDER_1,
     B_MATCH_PLACEHOLDER_2,
@@ -239,9 +239,9 @@ enum bytecode_tags {
     B_MATCH_PLACEHOLDER_4,
 
     /* Body Transforms */
-    B_RAW,		/* require body */
-    B_TEXT,		/* require body */
-    B_CONTENT,		/* require body */
+    B_RAW,              /* require body */
+    B_TEXT,             /* require body */
+    B_CONTENT,          /* require body */
 
     B_TRANSFORM_PLACEHOLDER_1,
     B_TRANSFORM_PLACEHOLDER_2,
@@ -250,8 +250,8 @@ enum bytecode_tags {
     B_TRANSFORM_PLACEHOLDER_5,
 
     /* Script locations */
-    B_PERSONAL,		/* require include */
-    B_GLOBAL,		/* require include */
+    B_PERSONAL,         /* require include */
+    B_GLOBAL,           /* require include */
 
     B_LOCATION_PLACEHOLDER_1,
     B_LOCATION_PLACEHOLDER_2,

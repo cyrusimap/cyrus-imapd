@@ -116,9 +116,9 @@ extern const unsigned char convert_to_uppercase[256];
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
-/* Some BSDs don't print "NULL" for a NULL pointer string. */ 
+/* Some BSDs don't print "NULL" for a NULL pointer string. */
 #ifndef IS_NULL
-#define IS_NULL(s)	((s) == NULL ? "(NULL)" : (s))
+#define IS_NULL(s)      ((s) == NULL ? "(NULL)" : (s))
 #endif
 
 /* Calculate the number of entries in a vector */
@@ -159,7 +159,7 @@ int strcmpnull(const char *a, const char *b);
  *  returns NULL if not found, or key/value pair if found.
  */
 extern keyvalue *kv_bsearch (const char *key, keyvalue *kv, int nelem,
-			       int (*cmpf)(const char *s1, const char *s2));
+                               int (*cmpf)(const char *s1, const char *s2));
 
 /* Examine the name of a file, and return a single character
  *  (as an int) that can be used as the name of a hash
@@ -174,7 +174,7 @@ extern int dir_hash_c(const char *name, int full);
  */
 extern char *dir_hash_b(const char *name, int full, char buf[2]);
 
-/* 
+/*
  * create an [unlinked] temporary file and return the file descriptor.
  */
 extern int create_tempfile(const char *path);
@@ -241,7 +241,7 @@ struct buf {
     size_t alloc;
     unsigned flags;
 };
-#define BUF_INITIALIZER	{ NULL, 0, 0, 0 }
+#define BUF_INITIALIZER { NULL, 0, 0, 0 }
 
 #define buf_ensure(b, n) do { if ((b)->alloc < (b)->len + (n)) _buf_ensure((b), (n)); } while (0)
 #define buf_putc(b, c) do { buf_ensure((b), 1); (b)->s[(b)->len++] = (c); } while (0)
@@ -272,15 +272,15 @@ void buf_insertcstr(struct buf *buf, unsigned int off, const char *str);
 void buf_insertmap(struct buf *buf, unsigned int off, const char *base, int len);
 void buf_vprintf(struct buf *buf, const char *fmt, va_list args);
 void buf_printf(struct buf *buf, const char *fmt, ...)
-	        __attribute__((format(printf,2,3)));
+                __attribute__((format(printf,2,3)));
 int buf_replace_all(struct buf *buf, const char *match,
-		    const char *replace);
+                    const char *replace);
 int buf_replace_char(struct buf *buf, char match, char replace);
 #ifdef ENABLE_REGEX
 int buf_replace_all_re(struct buf *buf, const regex_t *,
-		       const char *replace);
+                       const char *replace);
 int buf_replace_one_re(struct buf *buf, const regex_t *,
-		       const char *replace);
+                       const char *replace);
 #endif
 void buf_remove(struct buf *buf, unsigned int off, unsigned int len);
 int buf_cmp(const struct buf *, const struct buf *);
@@ -291,7 +291,7 @@ void buf_init_ro(struct buf *buf, const char *base, size_t len);
 void buf_initm(struct buf *buf, char *base, int len);
 void buf_init_ro_cstr(struct buf *buf, const char *str);
 void buf_init_mmap(struct buf *buf, int onceonly, int fd,
-		   const char *fname, size_t size, const char *mboxname);
+                   const char *fname, size_t size, const char *mboxname);
 void buf_free(struct buf *buf);
 void buf_move(struct buf *dst, struct buf *src);
 const char *buf_lcase(struct buf *buf);
@@ -307,10 +307,10 @@ const char *buf_lcase(struct buf *buf);
  */
 char *strconcat(const char *s1, ...);
 
-#define BH_LOWER	    (0)
-#define BH_UPPER	    (1<<8)
-#define _BH_SEP		    (1<<9)
-#define BH_SEPARATOR(c)	    (_BH_SEP|((c)&0x7f))
+#define BH_LOWER            (0)
+#define BH_UPPER            (1<<8)
+#define _BH_SEP             (1<<9)
+#define BH_SEPARATOR(c)     (_BH_SEP|((c)&0x7f))
 #define _BH_GETSEP(flags)   (flags & _BH_SEP ? (char)(flags & 0x7f) : '\0')
 int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
 int hex_to_bin(const char *hex, size_t hexlen, void *bin);
@@ -337,11 +337,11 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
  * The argument may have side effects and must be an lvalue */
 #define xclose(fd) \
     do { \
-	int *_fdp = &(fd); \
-	if (*_fdp >= 0) { \
-	    close(*_fdp); \
-	    *_fdp = -1; \
-	} \
+        int *_fdp = &(fd); \
+        if (*_fdp >= 0) { \
+            close(*_fdp); \
+            *_fdp = -1; \
+        } \
     } while(0)
 
 /* A wrapper for strncpy() which ensures that the destination
@@ -352,10 +352,10 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
  * add the NUL termination semantic on top of strncpy(). */
 #define xstrncpy(d, s, n) \
     do { \
-	char *_d = (d); \
-	size_t _n = (n); \
-	strncpy(_d, (s), _n); \
-	_d[_n-1] = '\0'; \
+        char *_d = (d); \
+        size_t _n = (n); \
+        strncpy(_d, (s), _n); \
+        _d[_n-1] = '\0'; \
     } while(0)
 
 /* simple function to request a file gets pre-loaded by the OS */

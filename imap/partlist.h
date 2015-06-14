@@ -149,8 +149,8 @@ const char *partlist_local_select(void);
  * @return partition, or NULL if none found
  */
 const char *partlist_local_find_freespace_most(int percent, uint64_t *available,
-					       uint64_t *total, uint64_t *tavailable,
-					       uint64_t *ttotal);
+                                               uint64_t *total, uint64_t *tavailable,
+                                               uint64_t *ttotal);
 
 /**
  * \brief Frees local partition data.

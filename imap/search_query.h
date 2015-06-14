@@ -50,8 +50,8 @@
 #include "bitvector.h"
 #include "ptrarray.h"
 
-struct sortcrit;	    /* imapd.h */
-struct searchargs;	    /* imapd.h */
+struct sortcrit;            /* imapd.h */
+struct searchargs;          /* imapd.h */
 typedef struct search_subquery search_subquery_t;
 typedef struct search_query search_query_t;
 typedef struct search_folder search_folder_t;
@@ -69,8 +69,8 @@ struct search_folder {
 };
 
 struct search_subquery {
-    char *mboxname;		/* may be NULL */
-    search_expr_t *indexed;	/* may be NULL */
+    char *mboxname;             /* may be NULL */
+    search_expr_t *indexed;     /* may be NULL */
     search_expr_t *expr;
 };
 
@@ -155,12 +155,12 @@ struct search_query {
 };
 
 extern search_query_t *search_query_new(struct index_state *state,
-					struct searchargs *);
+                                        struct searchargs *);
 extern int search_query_run(search_query_t *query);
 extern void search_query_free(search_query_t *query);
 
 extern search_folder_t *search_query_find_folder(search_query_t *query,
-						 const char *mboxname);
+                                                 const char *mboxname);
 extern void search_folder_use_msn(search_folder_t *, struct index_state *);
 extern struct seqset *search_folder_get_seqset(const search_folder_t *);
 extern int search_folder_get_array(const search_folder_t *, unsigned int **);
@@ -169,8 +169,8 @@ extern uint32_t search_folder_get_max(const search_folder_t *);
 extern unsigned int search_folder_get_count(const search_folder_t *);
 #define search_folder_foreach(folder, u) \
     for ((u) = bv_next_set(&(folder)->uids, 0) ; \
-	 (u) != -1 ; \
-	 (u) = bv_next_set(&(folder)->uids, (u)+1))
+         (u) != -1 ; \
+         (u) = bv_next_set(&(folder)->uids, (u)+1))
 extern uint64_t search_folder_get_highest_modseq(const search_folder_t *);
 extern uint64_t search_folder_get_first_modseq(const search_folder_t *);
 extern uint64_t search_folder_get_last_modseq(const search_folder_t *);

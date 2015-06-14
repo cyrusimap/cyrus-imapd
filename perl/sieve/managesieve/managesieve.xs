@@ -70,7 +70,7 @@ void fatal(const char *s, int t)
 }
 
 static int perlsieve_getpass(sasl_conn_t *conn, void *context,
-			     int id, sasl_secret_t **psecret)
+                             int id, sasl_secret_t **psecret)
 {
     int count;
     dSP ;
@@ -88,7 +88,7 @@ static int perlsieve_getpass(sasl_conn_t *conn, void *context,
     count = perl_call_sv(func, G_SCALAR);
     SPAGAIN ;
     if (count != 1)
-	croak("Big trouble\n") ;
+        croak("Big trouble\n") ;
     tmp = POPp;
 
     /* copy result */
@@ -106,7 +106,7 @@ static int perlsieve_getpass(sasl_conn_t *conn, void *context,
 }
 
 static int perlsieve_simple(void *context, int id,
-			    unsigned char **result, unsigned *len)
+                            unsigned char **result, unsigned *len)
 {
     int count;
     dSP ;
@@ -117,24 +117,24 @@ static int perlsieve_simple(void *context, int id,
     SAVETMPS;
     PUSHMARK(sp) ;
     if (id == SASL_CB_USER) {
-	    XPUSHs(sv_2mortal(newSVpv("username", 0)));
-	    XPUSHs(sv_2mortal(newSVpv("Please enter your username", 0)));
+            XPUSHs(sv_2mortal(newSVpv("username", 0)));
+            XPUSHs(sv_2mortal(newSVpv("Please enter your username", 0)));
     } else if (id == SASL_CB_AUTHNAME) {
-	    XPUSHs(sv_2mortal(newSVpv("authname", 0)));
-	    XPUSHs(sv_2mortal(newSVpv("Please enter your authentication name", 0)));
+            XPUSHs(sv_2mortal(newSVpv("authname", 0)));
+            XPUSHs(sv_2mortal(newSVpv("Please enter your authentication name", 0)));
     } else if (id == SASL_CB_GETREALM) {
-	    XPUSHs(sv_2mortal(newSVpv("realm", 0)));
-	    XPUSHs(sv_2mortal(newSVpv("Please enter your realm", 0)));
+            XPUSHs(sv_2mortal(newSVpv("realm", 0)));
+            XPUSHs(sv_2mortal(newSVpv("Please enter your realm", 0)));
     } else {
-	    croak("Bad callback\n");
-	    return SASL_FAIL;
+            croak("Bad callback\n");
+            return SASL_FAIL;
     }
 
     PUTBACK ;
     count = perl_call_sv(func, G_SCALAR);
     SPAGAIN ;
     if (count != 1)
-	croak("Big trouble\n") ;
+        croak("Big trouble\n") ;
     tmp = POPp;
 
     /* copy result */
@@ -167,7 +167,7 @@ call_listcb(unsigned char *name, int isactive, void *rock)
 }
 
 
-MODULE = Cyrus::SIEVE::managesieve		PACKAGE = Cyrus::SIEVE::managesieve
+MODULE = Cyrus::SIEVE::managesieve              PACKAGE = Cyrus::SIEVE::managesieve
 PROTOTYPES: ENABLE
 
 
@@ -209,34 +209,34 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     /* see if we have server:port (or IPv6, etc)*/
     p = servername;
     if (*servername == '[') {
-	if ((p = strrchr(servername + 1, ']')) != NULL) {
-	    *p++ = '\0';
-	    servername++;			/* skip first bracket */
-	} else
-	    p = servername;
+        if ((p = strrchr(servername + 1, ']')) != NULL) {
+            *p++ = '\0';
+            servername++;                       /* skip first bracket */
+        } else
+            p = servername;
     }
     if ((p = strchr(p, ':'))) {
-	*p++ = '\0';
-	port = atoi(p);
+        *p++ = '\0';
+        port = atoi(p);
     } else {
-	/* map port -> num */
-	serv = getservbyname("sieve", "tcp");
-	if (serv == NULL) {
-	    port = 4190;
-	} else {
-	    port = ntohs(serv->s_port);
-	}
+        /* map port -> num */
+        serv = getservbyname("sieve", "tcp");
+        if (serv == NULL) {
+            port = 4190;
+        } else {
+            port = ntohs(serv->s_port);
+        }
     }
 
     if (init_net(servername, port, &obj)) {
-	globalerr = "network initialization failed";
-	XSRETURN_UNDEF;
+        globalerr = "network initialization failed";
+        XSRETURN_UNDEF;
     }
 
     if (init_sasl(obj, 128, callbacks)) {
-	globalerr = "sasl initialization failed";
-	sieve_free_net(obj);
-	XSRETURN_UNDEF;
+        globalerr = "sasl initialization failed";
+        sieve_free_net(obj);
+        XSRETURN_UNDEF;
     }
 
     ret = xmalloc(sizeof(struct xscyrus));
@@ -247,60 +247,60 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
 
     mechlist=read_capability(obj);
     if (!mechlist) {
-	globalerr = "sasl mech list empty";
-	free(ret);
-	XSRETURN_UNDEF;
+        globalerr = "sasl mech list empty";
+        free(ret);
+        XSRETURN_UNDEF;
     }
 
     mlist = (char*) xstrdup(mechlist);
 
     /* loop through all the mechanisms */
     do {
-	mtried = NULL;
-	r = auth_sasl(mlist, obj, &mtried, &ssf, &globalerr);
+        mtried = NULL;
+        r = auth_sasl(mlist, obj, &mtried, &ssf, &globalerr);
 
-	if (r) init_sasl(obj, 128, callbacks);
+        if (r) init_sasl(obj, 128, callbacks);
 
-	if (mtried) {
-	    char *newlist = (char*) xmalloc(strlen(mlist)+1);
-	    char *mtr = (char*) xstrdup(mtried);
-	    char *tmp;
+        if (mtried) {
+            char *newlist = (char*) xmalloc(strlen(mlist)+1);
+            char *mtr = (char*) xstrdup(mtried);
+            char *tmp;
 
-	    ucase(mtr);
-	    tmp = strstr(mlist,mtr);
-	    *tmp ='\0';
-	    strcpy(newlist, mlist);
-	    tmp++;
+            ucase(mtr);
+            tmp = strstr(mlist,mtr);
+            *tmp ='\0';
+            strcpy(newlist, mlist);
+            tmp++;
 
-	    tmp = strchr(tmp,' ');
-	    if (tmp) {
-		strcat(newlist,tmp);
-	    }
+            tmp = strchr(tmp,' ');
+            if (tmp) {
+                strcat(newlist,tmp);
+            }
 
-	    free(mtr);
-	    free(mlist);
-	    mlist = newlist;
-	}
+            free(mtr);
+            free(mlist);
+            mlist = newlist;
+        }
     } while (r && mtried);
 
     if (r) {
-	/* we failed */
-	safefree(ret->class);
-	free(ret);
-	free(mechlist);
-	XSRETURN_UNDEF;
+        /* we failed */
+        safefree(ret->class);
+        free(ret);
+        free(mechlist);
+        XSRETURN_UNDEF;
     }
 
     if (ssf) {
-	/* SASL security layer negotiated --
-	   check if SASL mech list changed */
-	if (detect_mitm(obj, mechlist)) {
-	    globalerr = "possible MITM attack: "
-		"list of available SASL mechamisms changed";
-	    free(ret);
-	    free(mechlist);
-	    XSRETURN_UNDEF;
-	}
+        /* SASL security layer negotiated --
+           check if SASL mech list changed */
+        if (detect_mitm(obj, mechlist)) {
+            globalerr = "possible MITM attack: "
+                "list of available SASL mechamisms changed";
+            free(ret);
+            free(mechlist);
+            XSRETURN_UNDEF;
+        }
     }
     free(mechlist);
 
@@ -360,7 +360,7 @@ int
 sieve_list(Sieveobj obj, SV *cb)
   CODE:
     RETVAL = isieve_list(obj->isieve, (isieve_listcb_t *) &call_listcb,
-			 cb, &obj->errstr);
+                         cb, &obj->errstr);
   OUTPUT:
     RETVAL
 

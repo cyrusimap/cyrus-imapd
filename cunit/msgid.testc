@@ -114,7 +114,7 @@ static void test_whitespace(void)
 #define C_MSGID3    "<1000A-0B-0000C@apple.com>"
 #define C_MSGID4    "<110309849374836@fastmail.fm>"
     static const char C_MSGIDS[] =
-	C_MSGID1 "     " C_MSGID2 "\t" C_MSGID3 "\t\r\n\t" C_MSGID4 "\r\n";
+        C_MSGID1 "     " C_MSGID2 "\t" C_MSGID3 "\t\r\n\t" C_MSGID4 "\r\n";
     char *s;
     char *m1;
     char *m2;
@@ -179,7 +179,7 @@ static void test_dups(void)
 #define C_MSGID1    "<204.05.00006@example.com>"
 #define C_MSGID2    "<207.08.09@gmail.com>"
     static const char C_MSGIDS[] =
-	C_MSGID1 " " C_MSGID2 " " C_MSGID2 " " C_MSGID1;
+        C_MSGID1 " " C_MSGID2 " " C_MSGID2 " " C_MSGID1;
     char *s;
     char *m1;
     char *m2;
@@ -243,11 +243,11 @@ static void test_eol(void)
 #define C_MSGID3    "<3000A-0B-0000C@apple.com>"
 #define C_MSGID4    "<310309849374836@fastmail.fm>"
     static const char C_MSGIDS[] =
-	C_MSGID1 "\r\n"
-	" " C_MSGID2 "\r\n"
-	"In-Reply-To: " C_MSGID3 "\r\n"
-	"Message-Id: " C_MSGID4 "\r\n"
-	"\r\n";
+        C_MSGID1 "\r\n"
+        " " C_MSGID2 "\r\n"
+        "In-Reply-To: " C_MSGID3 "\r\n"
+        "Message-Id: " C_MSGID4 "\r\n"
+        "\r\n";
     char *s;
     char *m1;
     char *m2;
@@ -293,7 +293,7 @@ static void test_noatsign(void)
 #define C_MSGID2    "<407.08.09-no-at-here-gmail.com>"
 #define C_MSGID3    "<4000A-0B-0000C@apple.com>"
     static const char C_MSGIDS[] =
-	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+        C_MSGID1 " " C_MSGID2 " " C_MSGID3;
     char *s;
     char *m1;
     char *m2;
@@ -339,7 +339,7 @@ static void test_quoted_localpart(void)
 #define C_MSGID2ret "<507>0 8@09@gmail.com>"
 #define C_MSGID3    "<5000A-0B-0000C@apple.com>"
     static const char C_MSGIDS[] =
-	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+        C_MSGID1 " " C_MSGID2 " " C_MSGID3;
     char *s;
     char *m1;
     char *m2;
@@ -395,7 +395,7 @@ static void test_escaped_quoted_localpart(void)
 #define C_MSGID2ret "<507>0\"8@09@gmail.com>"
 #define C_MSGID3    "<5000A-0B-0000C@apple.com>"
     static const char C_MSGIDS[] =
-	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+        C_MSGID1 " " C_MSGID2 " " C_MSGID3;
     char *s;
     char *m1;
     char *m2;
@@ -450,7 +450,7 @@ static void test_malformed_angles(void)
 #define C_MSGID2    "<607.08.09@gmail.com"
 #define C_MSGID3    "<6000A-0B-0000C@apple.com>"
     static const char C_MSGIDS[] =
-	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+        C_MSGID1 " " C_MSGID2 " " C_MSGID3;
     char *s;
     char *m1;
     char *m2;

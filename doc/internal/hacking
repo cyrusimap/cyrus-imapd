@@ -25,7 +25,7 @@ right now but hopefully that will improve with time ;)
     memcpy(buf, src, 4);
     buf[5] = '\0'
 
-  - you should try to avoid strncpy, since it is much slower than memcpy 
+  - you should try to avoid strncpy, since it is much slower than memcpy
     (it zero-fills the rest of the buffer) and isn't as safe as strlcpy.
 
   - Use of the functions in this way will reduce the confusion involved in
@@ -56,7 +56,7 @@ right now but hopefully that will improve with time ;)
 
 - Network Functions
   - Cyrus abstracts socket stream access to a concept we refer to as
-    "prot streams"  Prot Streams take care of all of the necessary 
+    "prot streams"  Prot Streams take care of all of the necessary
     SASL and TLS/SSL encrpytion that may need to happen before data
     goes out/comes in from the network.  The API is documented in
     lib/prot.h

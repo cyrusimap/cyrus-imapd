@@ -10,7 +10,7 @@ CMU Sieve 2.1
 CMU Sieve 2.0
 -------------
 
-- Compliant with draft-showalter-sieve-11.txt and 
+- Compliant with draft-showalter-sieve-11.txt and
   draft-showalter-sieve-vacation-03.txt.
 
 - Added support for the regex, imapflags, notify and subaddress extensions.
@@ -33,17 +33,17 @@ CMU Sieve 1.4
 Now included with imapd distribution (hell, why not?).
 
 Error returning and recovering:
-	added error recovering to the parser (but not much!)
-	added error messages to the parser
+        added error recovering to the parser (but not much!)
+        added error messages to the parser
 
 Working on error returning and error recovering.
-	run-time errors
-	detect some errors in lexer?
+        run-time errors
+        detect some errors in lexer?
 
 Working on even better parsing:
-	verify addresses could be addresses
-	verify mailboxes could be mailboxes
-	verify outgoing headers can be headers
+        verify addresses could be addresses
+        verify mailboxes could be mailboxes
+        verify outgoing headers can be headers
 
 CMU Sieve 1.3
 -------------
@@ -58,7 +58,7 @@ easier) and envelope and vacation support.
 
 Made it compile without libcyrus.
 It should compile without libcyrus, but then it does not implement the
-"address" test.	 That's just too much work to do when I have a neato
+"address" test.  That's just too much work to do when I have a neato
 library to do it for me.
 
 Todo:

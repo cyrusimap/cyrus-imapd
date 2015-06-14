@@ -53,6 +53,6 @@ assertionfailed(const char *file, int line, const char *expr)
     char buf[1024];
 
     snprintf(buf, sizeof(buf), "Internal error: assertion failed: %s: %d%s%s",
-	    file, line, expr ? ": " : "", expr ? expr : "");
+            file, line, expr ? ": " : "", expr ? expr : "");
     fatal(buf, EC_SOFTWARE);
 }

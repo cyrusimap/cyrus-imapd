@@ -17,10 +17,10 @@
   #include <net-snmp/utilities.h>
 
   extern int header_generic(struct variable *, oid *, size_t *, int,
-			    size_t *, WriteMethod **);
+                            size_t *, WriteMethod **);
 
   extern int header_simple_table(struct variable *, oid *, size_t *,
-				 int, size_t *, WriteMethod **, int);
+                                 int, size_t *, WriteMethod **, int);
 #else
 
 #ifdef IN_UCD_SNMP_SOURCE
@@ -53,7 +53,7 @@
 #include "master.h"
 #include "../xversion.h"
 
-/* 
+/*
  * cyrusMasterMIB_variables_oid:
  *   this is the top level oid that we want to register under.  This
  *   is essentially a prefix, with the suffix appearing in the
@@ -63,10 +63,10 @@
 oid cyrusMasterMIB_variables_oid[] = { 1,3,6,1,4,1,3,6,1 };
 
 
-/* 
+/*
  * variable4 cyrusMasterMIB_variables:
- *   this variable defines function callbacks and type return information 
- *   for the cyrusMasterMIB mib section 
+ *   this variable defines function callbacks and type return information
+ *   for the cyrusMasterMIB mib section
  */
 
 
@@ -99,16 +99,16 @@ static time_t startTime = 0;
  *   Initialization routine.  This is called when the agent starts up.
  *   At a minimum, registration of your variables should take place here.
  */
-void init_cyrusMasterMIB(void) 
+void init_cyrusMasterMIB(void)
 {
     /* register ourselves with the agent to handle our mib tree */
     REGISTER_MIB("cyrusMasterMIB", cyrusMasterMIB_variables, variable4,
-		 cyrusMasterMIB_variables_oid);
+                 cyrusMasterMIB_variables_oid);
 
 
     /* place any other initialization junk you need here */
     if (!startTime) {
-	startTime = time(NULL);
+        startTime = time(NULL);
     }
 }
 
@@ -126,11 +126,11 @@ void init_cyrusMasterMIB(void)
  *   and mibII directories.
  */
 unsigned char *
-var_cyrusMasterMIB(struct variable *vp, 
-                oid     *name, 
-                size_t  *length, 
-                int     exact, 
-                size_t  *var_len, 
+var_cyrusMasterMIB(struct variable *vp,
+                oid     *name,
+                size_t  *length,
+                int     exact,
+                size_t  *var_len,
                 WriteMethod **write_method)
 {
     /* variables we may use later */
@@ -140,29 +140,29 @@ var_cyrusMasterMIB(struct variable *vp,
     /* static struct counter64 c64; */
 
     if (header_generic(vp,name,length,exact,var_len,write_method)
-	== MATCH_FAILED )
-	return NULL;
+        == MATCH_FAILED )
+        return NULL;
 
-    /* 
+    /*
      * this is where we do the value assignments for the mib results.
      */
     switch(vp->magic) {
     case CYRUSMASTERINFODESCR:
-	strlcpy(string, "Cyrus IMAP server master process", sizeof(string));
-	*var_len = strlen(string);
-	return (unsigned char *) string;
-      
+        strlcpy(string, "Cyrus IMAP server master process", sizeof(string));
+        *var_len = strlen(string);
+        return (unsigned char *) string;
+
     case CYRUSMASTERINFOVERS:
-	strlcpy(string, _CYRUS_VERSION, sizeof(string));
-	*var_len = strlen(string);
-	return (unsigned char *) string;
-      
+        strlcpy(string, _CYRUS_VERSION, sizeof(string));
+        *var_len = strlen(string);
+        return (unsigned char *) string;
+
     case CYRUSMASTERINFOUPTIME:
-	long_ret = 100 * (time(NULL) - startTime);
-	return (unsigned char *) &long_ret;
-      
+        long_ret = 100 * (time(NULL) - startTime);
+        return (unsigned char *) &long_ret;
+
     default:
-	ERROR_MSG("");
+        ERROR_MSG("");
     }
     return NULL;
 }
@@ -175,11 +175,11 @@ var_cyrusMasterMIB(struct variable *vp,
  */
 unsigned char *
 var_serviceTable(struct variable *vp,
-    	    oid     *name,
-    	    size_t  *length,
-    	    int     exact,
-    	    size_t  *var_len,
-    	    WriteMethod **write_method)
+            oid     *name,
+            size_t  *length,
+            int     exact,
+            size_t  *var_len,
+            WriteMethod **write_method)
 {
     /* variables we may use later */
     static long long_ret;
@@ -188,57 +188,57 @@ var_serviceTable(struct variable *vp,
     /* static struct counter64 c64; */
     int index;
 
-    /* 
+    /*
      * This assumes that the table is a 'simple' table.
-     *	See the implementation documentation for the meaning of this.
-     *	You will need to provide the correct value for the TABLE_SIZE parameter
+     *  See the implementation documentation for the meaning of this.
+     *  You will need to provide the correct value for the TABLE_SIZE parameter
      *
      * If this table does not meet the requirements for a simple table,
-     *	you will need to provide the replacement code yourself.
-     *	Mib2c is not smart enough to write this for you.
+     *  you will need to provide the replacement code yourself.
+     *  Mib2c is not smart enough to write this for you.
      *    Again, see the implementation documentation for what is required.
      */
     if (header_simple_table(vp,name,length,exact,var_len,write_method, nservices)
-	== MATCH_FAILED )
-	return NULL;
+        == MATCH_FAILED )
+        return NULL;
 
 
     index = name[*length - 1];
 
-    /* 
+    /*
      * this is where we do the value assignments for the mib results.
      */
     switch(vp->magic) {
     case SERVICEFORKS:
-	long_ret = Services[index - 1].nforks;
-	return (unsigned char *) &long_ret;
-      
+        long_ret = Services[index - 1].nforks;
+        return (unsigned char *) &long_ret;
+
     case SERVICEACTIVE:
-	long_ret = Services[index - 1].nactive;
-	return (unsigned char *) &long_ret;
-      
+        long_ret = Services[index - 1].nactive;
+        return (unsigned char *) &long_ret;
+
     case SERVICENAME:
         if (Services[index - 1].name != NULL) {
-	   strlcpy(string, Services[index - 1].name, sizeof(string));
-	   if (Services[index - 1].family == AF_INET6) {
-	       strlcat(string, "[v6]", sizeof(string));
-	   }
+           strlcpy(string, Services[index - 1].name, sizeof(string));
+           if (Services[index - 1].family == AF_INET6) {
+               strlcat(string, "[v6]", sizeof(string));
+           }
         } else {
            strlcpy(string, "", sizeof(string));
         }
-	*var_len = strlen(string);
-	return (unsigned char *) string;
-      
+        *var_len = strlen(string);
+        return (unsigned char *) string;
+
     case SERVICEID:
-	long_ret = index;
-	return (unsigned char *) &long_ret;
+        long_ret = index;
+        return (unsigned char *) &long_ret;
 
     case SERVICECONNS:
-	long_ret = Services[index - 1].nconnections;
-	return (unsigned char *) &long_ret;
+        long_ret = Services[index - 1].nconnections;
+        return (unsigned char *) &long_ret;
 
     default:
-	ERROR_MSG("");
+        ERROR_MSG("");
     }
     return NULL;
 }

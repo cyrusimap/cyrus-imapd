@@ -46,9 +46,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#define TZ_UTC		"UTC+00"
-#define TZ_NEWYORK	"EST+05"
-#define TZ_MELBOURNE	"AEST-11"
+#define TZ_UTC          "UTC+00"
+#define TZ_NEWYORK      "EST+05"
+#define TZ_MELBOURNE    "AEST-11"
 
 extern void push_tz(const char *tz);
 extern void pop_tz(void);

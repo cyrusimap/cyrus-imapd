@@ -73,8 +73,8 @@ static search_expr_t *the_focus;
 static unsigned nnodes = 0;
 
 static void split(search_expr_t *e,
-		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
-		  void *rock);
+                  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
+                  void *rock);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
@@ -83,7 +83,7 @@ static search_expr_t *append(search_expr_t *parent, search_expr_t *child)
     search_expr_t **tailp;
 
     for (tailp = &parent->children ; *tailp ; tailp = &(*tailp)->next)
-	;
+        ;
     *tailp = child;
     child->next = NULL;
     child->parent = parent;
@@ -96,9 +96,9 @@ static search_expr_t *detachp(search_expr_t **prevp)
     search_expr_t *child = *prevp;
 
     if (child) {
-	*prevp = child->next;
-	child->next = NULL;
-	child->parent = NULL;
+        *prevp = child->next;
+        child->next = NULL;
+        child->parent = NULL;
     }
 
     return child;
@@ -109,7 +109,7 @@ static search_expr_t *detach(search_expr_t *parent, search_expr_t *child)
     search_expr_t **prevp;
 
     for (prevp = &parent->children ; *prevp && *prevp != child; prevp = &(*prevp)->next)
-	;
+        ;
     return detachp(prevp);
 }
 
@@ -129,8 +129,8 @@ static search_expr_t *elide(search_expr_t **prevp)
     *prevp = e->children;
 
     for (child = e->children ; child ; child = child->next) {
-	child->parent = e->parent;
-	prevp = &child->next;
+        child->parent = e->parent;
+        prevp = &child->next;
     }
     *prevp = e->next;
 
@@ -193,10 +193,10 @@ EXPORTED void search_expr_free(search_expr_t *e)
 {
     if (!e) return;
     while (e->children)
-	search_expr_free(detach(e, e->children));
+        search_expr_free(detach(e, e->children));
     if (e->attr) {
-	if (e->attr->internalise) e->attr->internalise(NULL, NULL, &e->internalised);
-	if (e->attr->free) e->attr->free(&e->value);
+        if (e->attr->internalise) e->attr->internalise(NULL, NULL, &e->internalised);
+        if (e->attr->free) e->attr->free(&e->value);
     }
     free(e);
 }
@@ -213,12 +213,12 @@ EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
     newe = search_expr_new(NULL, e->op);
     newe->attr = e->attr;
     if (newe->attr && newe->attr->duplicate)
-	newe->attr->duplicate(&newe->value, &e->value);
+        newe->attr->duplicate(&newe->value, &e->value);
     else
-	newe->value = e->value;
+        newe->value = e->value;
 
     for (child = e->children ; child ; child = child->next)
-	append(newe, search_expr_duplicate(child));
+        append(newe, search_expr_duplicate(child));
 
     return newe;
 }
@@ -230,8 +230,8 @@ EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
  * (which is typically an error code).
  */
 EXPORTED int search_expr_apply(search_expr_t *e,
-			       int (*cb)(search_expr_t *, void *),
-			       void *rock)
+                               int (*cb)(search_expr_t *, void *),
+                               void *rock)
 {
     search_expr_t *child;
     int r;
@@ -240,8 +240,8 @@ EXPORTED int search_expr_apply(search_expr_t *e,
     if (r) return r;
 
     for (child = e->children ; child ; child = child->next) {
-	r = search_expr_apply(child, cb, rock);
-	if (r) break;
+        r = search_expr_apply(child, cb, rock);
+        if (r) break;
     }
 
     return r;
@@ -270,14 +270,14 @@ static void serialise(const search_expr_t *e, struct buf *buf)
     buf_putc(buf, '(');
     buf_appendcstr(buf, op_as_string(e->op));
     if (e->attr) {
-	buf_putc(buf, ' ');
-	buf_appendcstr(buf, e->attr->name);
-	buf_putc(buf, ' ');
-	if (e->attr->serialise) e->attr->serialise(buf, &e->value);
+        buf_putc(buf, ' ');
+        buf_appendcstr(buf, e->attr->name);
+        buf_putc(buf, ' ');
+        if (e->attr->serialise) e->attr->serialise(buf, &e->value);
     }
     for (child = e->children ; child ; child = child->next) {
-	buf_putc(buf, ' ');
-	serialise(child, buf);
+        buf_putc(buf, ' ');
+        serialise(child, buf);
     }
     buf_putc(buf, ')');
 #if DEBUG
@@ -308,26 +308,26 @@ static int getseword(struct protstream *prot, char *buf, int maxlen)
 
     c = prot_getc(prot);
     if (c == '"')
-	quoted = 1;
+        quoted = 1;
     else
-	prot_ungetc(c, prot);
+        prot_ungetc(c, prot);
 
     while (maxlen > 1 &&
-	   (c = prot_getc(prot)) != EOF &&
-	   (quoted ?
-	       (c != '"') :
-	       (c != ' ' && c != ')'))) {
-	*buf++ = c;
-	maxlen--;
+           (c = prot_getc(prot)) != EOF &&
+           (quoted ?
+               (c != '"') :
+               (c != ' ' && c != ')'))) {
+        *buf++ = c;
+        maxlen--;
     }
     *buf = '\0';
     if (quoted && c != EOF)
-	c = prot_getc(prot);
+        c = prot_getc(prot);
     return c;
 }
 
 static search_expr_t *unserialise(search_expr_t *parent,
-				  struct protstream *prot)
+                                  struct protstream *prot)
 {
     int c;
     search_expr_t *e = NULL;
@@ -336,71 +336,71 @@ static search_expr_t *unserialise(search_expr_t *parent,
 
     c = prot_getc(prot);
     if (c != '(')
-	goto bad;
+        goto bad;
 
     c = getseword(prot, tmp, sizeof(tmp));
     if (c != ' ' && c != ')')
-	goto bad;
+        goto bad;
 
     for (op = 0 ; op < VECTOR_SIZE(op_strings) ; op++) {
-	if (!strcmp(tmp, op_strings[op]))
-	    break;
+        if (!strcmp(tmp, op_strings[op]))
+            break;
     }
     if (op == VECTOR_SIZE(op_strings))
-	goto bad;
+        goto bad;
 
     e = search_expr_new(parent, op);
     if (c == ')')
-	return e;    /* SEOP_TRUE, SEOP_FALSE */
+        return e;    /* SEOP_TRUE, SEOP_FALSE */
 
     switch (op) {
     case SEOP_AND:
     case SEOP_OR:
     case SEOP_NOT:
-	/* parse children */
-	for (;;) {
-	    if (unserialise(e, prot) == NULL)
-		goto bad;
-	    c = prot_getc(prot);
-	    if (c == ')')
-		break;
-	    if (c != ' ')
-		goto bad;
-	}
-	break;
+        /* parse children */
+        for (;;) {
+            if (unserialise(e, prot) == NULL)
+                goto bad;
+            c = prot_getc(prot);
+            if (c == ')')
+                break;
+            if (c != ' ')
+                goto bad;
+        }
+        break;
     case SEOP_LT:
     case SEOP_LE:
     case SEOP_GT:
     case SEOP_GE:
     case SEOP_MATCH:
     case SEOP_FUZZYMATCH:
-	/* parse attribute */
-	c = getseword(prot, tmp, sizeof(tmp));
-	if (c != ' ')
-	    goto bad;
-	e->attr = search_attr_find(tmp);
-	if (e->attr == NULL)
-	    goto bad;
-	/* parse value */
-	if (e->attr->unserialise)
-	    c = e->attr->unserialise(prot, &e->value);
-	if (c != ')')
-	    goto bad;
-	break;
+        /* parse attribute */
+        c = getseword(prot, tmp, sizeof(tmp));
+        if (c != ' ')
+            goto bad;
+        e->attr = search_attr_find(tmp);
+        if (e->attr == NULL)
+            goto bad;
+        /* parse value */
+        if (e->attr->unserialise)
+            c = e->attr->unserialise(prot, &e->value);
+        if (c != ')')
+            goto bad;
+        break;
     default:
-	c = prot_getc(prot);
-	if (c != ')')
-	    goto bad;
-	break;
+        c = prot_getc(prot);
+        if (c != ')')
+            goto bad;
+        break;
     }
 
     return e;
 
 bad:
     if (e) {
-	e->op = SEOP_UNKNOWN;
-	if (parent == NULL)
-	    search_expr_free(e);
+        e->op = SEOP_UNKNOWN;
+        if (parent == NULL)
+            search_expr_free(e);
     }
     return NULL;
 }
@@ -422,21 +422,21 @@ EXPORTED search_expr_t *search_expr_unserialise(const char *s)
 #if DEBUG
     if (!root) {
 #define MAX_CONTEXT 48
-	int off = ((const char *)prot->ptr - s);
-	int len = strlen(s);
-	int context_begin = off - MIN(off, MAX_CONTEXT);
-	int context_end = off + MIN((len-off), MAX_CONTEXT);
-	int i;
-	fputc('\n', stderr);
-	fprintf(stderr, "ERROR: failed to unserialise string at or near:\n");
-	if (context_begin) fputs("...", stderr);
-	fwrite(s+context_begin, 1, context_end-context_begin, stderr);
-	fputc('\n', stderr);
-	if (context_begin) fputs("---", stderr);
-	for (i = off - context_begin - 1 ; i > 0 ; i--)
-	    fputc('-', stderr);
-	fputc('^', stderr);
-	fputc('\n', stderr);
+        int off = ((const char *)prot->ptr - s);
+        int len = strlen(s);
+        int context_begin = off - MIN(off, MAX_CONTEXT);
+        int context_end = off + MIN((len-off), MAX_CONTEXT);
+        int i;
+        fputc('\n', stderr);
+        fprintf(stderr, "ERROR: failed to unserialise string at or near:\n");
+        if (context_begin) fputs("...", stderr);
+        fwrite(s+context_begin, 1, context_end-context_begin, stderr);
+        fputc('\n', stderr);
+        if (context_begin) fputs("---", stderr);
+        for (i = off - context_begin - 1 ; i > 0 ; i--)
+            fputc('-', stderr);
+        fputc('^', stderr);
+        fputc('\n', stderr);
     }
 #endif
 
@@ -462,13 +462,13 @@ static int dnf_depth(const search_expr_t *e)
     case SEOP_GE:
     case SEOP_MATCH:
     case SEOP_FUZZYMATCH:
-	return DNF_CMP;
+        return DNF_CMP;
     case SEOP_AND:
-	return DNF_AND;
+        return DNF_AND;
     case SEOP_OR:
-	return DNF_OR;
+        return DNF_OR;
     case SEOP_NOT:
-	return DNF_NOT;
+        return DNF_NOT;
     default: assert(0); return -1;
     }
     return -1;
@@ -483,17 +483,17 @@ static int has_enough_children(const search_expr_t *e)
     switch (e->op) {
     case SEOP_OR:
     case SEOP_AND:
-	min = 2;
-	break;
+        min = 2;
+        break;
     case SEOP_NOT:
-	min = 1;
-	break;
+        min = 1;
+        break;
     default:
-	return 1;
+        return 1;
     }
 
     for (child = e->children ; child ; child = child->next)
-	if (++n >= min) return 1;
+        if (++n >= min) return 1;
     return 0;
 }
 
@@ -508,7 +508,7 @@ static int apply_demorgan(search_expr_t **ep, search_expr_t **prevp)
 
     child->op = (child->op == SEOP_AND ? SEOP_OR : SEOP_AND);
     for (grandp = &child->children ; *grandp ; grandp = &(*grandp)->next)
-	interpolate(grandp, SEOP_NOT);
+        interpolate(grandp, SEOP_NOT);
     search_expr_free(elide(ep));
 
     return complexity_check(1);
@@ -528,11 +528,11 @@ static int apply_distribution(search_expr_t **ep, search_expr_t **prevp)
     or = detachp(prevp);
 
     while (complexity_check(r) >= 0) {
-	orchild = detachp(&or->children);
-	if (orchild == NULL) break;
-	newand = search_expr_duplicate(and);
-	append(newand, orchild);
-	append(newor, newand);
+        orchild = detachp(&or->children);
+        if (orchild == NULL) break;
+        newand = search_expr_duplicate(and);
+        append(newand, orchild);
+        append(newor, newand);
     }
 
     search_expr_free(and);
@@ -544,9 +544,9 @@ static int apply_distribution(search_expr_t **ep, search_expr_t **prevp)
 static int invert(search_expr_t **ep, search_expr_t **prevp)
 {
     if ((*ep)->op == SEOP_NOT)
-	return apply_demorgan(ep, prevp);
+        return apply_demorgan(ep, prevp);
     else
-	return apply_distribution(ep, prevp);
+        return apply_distribution(ep, prevp);
 }
 
 /* combine compatible boolean parent and child nodes */
@@ -554,15 +554,15 @@ static void combine(search_expr_t **ep, search_expr_t **prevp)
 {
     switch ((*ep)->op) {
     case SEOP_NOT:
-	search_expr_free(elide(prevp));
-	search_expr_free(elide(ep));
-	break;
+        search_expr_free(elide(prevp));
+        search_expr_free(elide(ep));
+        break;
     case SEOP_AND:
     case SEOP_OR:
-	search_expr_free(elide(prevp));
-	break;
+        search_expr_free(elide(prevp));
+        break;
     default:
-	break;
+        break;
     }
 }
 
@@ -583,35 +583,35 @@ restart:
 #if DEBUG
     the_focus = *ep;
     {
-	char *s = search_expr_serialise(*the_rootp);
-	fprintf(stderr, "normalise: tree=%s\n", s);
-	free(s);
+        char *s = search_expr_serialise(*the_rootp);
+        fprintf(stderr, "normalise: tree=%s\n", s);
+        free(s);
     }
 #endif
 
     if (!has_enough_children(*ep)) {
-	/* eliminate trivial nodes: AND and ORs with
-	 * a single child, NOTs with none */
-	search_expr_free(elide(ep));
-	goto restart;
+        /* eliminate trivial nodes: AND and ORs with
+         * a single child, NOTs with none */
+        search_expr_free(elide(ep));
+        goto restart;
     }
 
     depth = dnf_depth(*ep);
     for (prevp = &(*ep)->children ; *prevp ; prevp = &(*prevp)->next)
     {
-	int child_depth = dnf_depth(*prevp);
-	if (child_depth == depth) {
-	    combine(ep, prevp);
-	    goto restart;
-	}
-	if (child_depth < depth) {
-	    r = invert(ep, prevp);
-	    if (r < 0) return -1;
-	    goto restart;
-	}
-	r = normalise(prevp);
-	if (r < 0) return -1;
-	if (r > 0) goto restart;
+        int child_depth = dnf_depth(*prevp);
+        if (child_depth == depth) {
+            combine(ep, prevp);
+            goto restart;
+        }
+        if (child_depth < depth) {
+            r = invert(ep, prevp);
+            if (r < 0) return -1;
+            goto restart;
+        }
+        r = normalise(prevp);
+        if (r < 0) return -1;
+        if (r > 0) goto restart;
     }
 
     return complexity_check(changed);
@@ -636,33 +636,33 @@ static int compare(void *p1, void *p2, void *calldata)
     r = dnf_depth(e2) - dnf_depth(e1);
 
     if (!r)
-	r = (e1->attr ? e1->attr->cost : 0)
-	  - (e2->attr ? e2->attr->cost : 0);
+        r = (e1->attr ? e1->attr->cost : 0)
+          - (e2->attr ? e2->attr->cost : 0);
 
     if (!r)
-	r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
-		       e2->attr ? e2->attr->name : "zzz");
+        r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
+                       e2->attr ? e2->attr->name : "zzz");
 
     if (!r)
-	r = (int)e1->op - (int)e2->op;
+        r = (int)e1->op - (int)e2->op;
 
     if (!r) {
-	struct buf b1 = BUF_INITIALIZER;
-	struct buf b2 = BUF_INITIALIZER;
-	if (e1->attr && e1->attr->serialise)
-	    e1->attr->serialise(&b1, &e1->value);
-	if (e2->attr && e2->attr->serialise)
-	    e2->attr->serialise(&b2, &e2->value);
-	r = strcmp(buf_cstring(&b1), buf_cstring(&b2));
-	buf_free(&b1);
-	buf_free(&b2);
+        struct buf b1 = BUF_INITIALIZER;
+        struct buf b2 = BUF_INITIALIZER;
+        if (e1->attr && e1->attr->serialise)
+            e1->attr->serialise(&b1, &e1->value);
+        if (e2->attr && e2->attr->serialise)
+            e2->attr->serialise(&b2, &e2->value);
+        r = strcmp(buf_cstring(&b1), buf_cstring(&b2));
+        buf_free(&b1);
+        buf_free(&b2);
     }
 
     if (!r) {
-	if (e1->children || e2->children)
-	    r = compare((void *)(e1->children ? e1->children : e1),
-			(void *)(e2->children ? e2->children : e2),
-			calldata);
+        if (e1->children || e2->children)
+            r = compare((void *)(e1->children ? e1->children : e1),
+                        (void *)(e2->children ? e2->children : e2),
+                        calldata);
     }
 
     return r;
@@ -673,7 +673,7 @@ static void sort_children(search_expr_t *e)
     search_expr_t *child;
 
     for (child = e->children ; child ; child = child->next)
-	sort_children(child);
+        sort_children(child);
 
     e->children = lsort(e->children, getnext, setnext, compare, NULL);
 }
@@ -745,7 +745,7 @@ static int internalise(search_expr_t *e, void *rock)
 {
     struct index_state *state = rock;
     if (e->attr && e->attr->internalise)
-	e->attr->internalise(state, &e->value, &e->internalised);
+        e->attr->internalise(state, &e->value, &e->internalised);
     return 0;
 }
 
@@ -770,43 +770,43 @@ EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
     case SEOP_TRUE: return 1;
     case SEOP_FALSE: return 0;
     case SEOP_LT:
-	assert(e->attr);
-	assert(e->attr->cmp);
-	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) < 0);
+        assert(e->attr);
+        assert(e->attr->cmp);
+        return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) < 0);
     case SEOP_LE:
-	assert(e->attr);
-	assert(e->attr->cmp);
-	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) <= 0);
+        assert(e->attr);
+        assert(e->attr->cmp);
+        return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) <= 0);
     case SEOP_GT:
-	assert(e->attr);
-	assert(e->attr->cmp);
-	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) > 0);
+        assert(e->attr);
+        assert(e->attr->cmp);
+        return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) > 0);
     case SEOP_GE:
-	assert(e->attr);
-	assert(e->attr->cmp);
-	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) >= 0);
+        assert(e->attr);
+        assert(e->attr->cmp);
+        return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) >= 0);
     case SEOP_FUZZYMATCH:
-	/* FUZZYMATCH should never be evaluated, as such nodes are
-	 * picked out of the expression during query optimisation and
-	 * used to drive search engine lookups.  But the nearest
-	 * approximation would be MATCH. */
+        /* FUZZYMATCH should never be evaluated, as such nodes are
+         * picked out of the expression during query optimisation and
+         * used to drive search engine lookups.  But the nearest
+         * approximation would be MATCH. */
     case SEOP_MATCH:
-	assert(e->attr);
-	assert(e->attr->match);
-	return e->attr->match(m, &e->value, e->internalised, e->attr->data1);
+        assert(e->attr);
+        assert(e->attr->match);
+        return e->attr->match(m, &e->value, e->internalised, e->attr->data1);
     case SEOP_AND:
-	for (child = e->children ; child ; child = child->next)
-	    if (!search_expr_evaluate(m, child))
-		return 0;
-	return 1;
+        for (child = e->children ; child ; child = child->next)
+            if (!search_expr_evaluate(m, child))
+                return 0;
+        return 1;
     case SEOP_OR:
-	for (child = e->children ; child ; child = child->next)
-	    if (search_expr_evaluate(m, child))
-		return 1;
-	return 0;
+        for (child = e->children ; child ; child = child->next)
+            if (search_expr_evaluate(m, child))
+                return 1;
+        return 0;
     case SEOP_NOT:
-	assert(e->children);
-	return !search_expr_evaluate(m, e->children);
+        assert(e->children);
+        return !search_expr_evaluate(m, e->children);
     }
     return 0;
 }
@@ -868,16 +868,16 @@ static int get_countability(search_expr_t *e, void *rock)
     unsigned int *maskp = rock;
 
     if (e->op == SEOP_TRUE)
-	*maskp |= SEC_EXISTS;
+        *maskp |= SEC_EXISTS;
     else if (e->op == SEOP_FALSE)
-	*maskp |= SEC_EXISTS|SEC_NOT;
+        *maskp |= SEC_EXISTS|SEC_NOT;
     else if (e->op == SEOP_NOT)
-	*maskp |= SEC_NOT;
+        *maskp |= SEC_NOT;
     else if (e->attr) {
-	if (e->attr->get_countability)
-	    *maskp |= e->attr->get_countability(&e->value);
-	else
-	    *maskp |= SEC_UNCOUNTED;
+        if (e->attr->get_countability)
+            *maskp |= e->attr->get_countability(&e->value);
+        else
+            *maskp |= SEC_UNCOUNTED;
     }
 
     return 0;
@@ -914,7 +914,7 @@ EXPORTED unsigned int search_expr_get_countability(const search_expr_t *e)
     unsigned int mask = 0;
 
     if (!e)
-	return 0;
+        return 0;
 
     search_expr_apply((search_expr_t *)e, get_countability, &mask);
     return mask;
@@ -939,17 +939,17 @@ EXPORTED void search_expr_neutralise(search_expr_t *e)
 static int is_folder_node(const search_expr_t *e)
 {
     return (e->op == SEOP_MATCH &&
-	    e->attr &&
-	    !strcasecmp(e->attr->name, "folder"));
+            e->attr &&
+            !strcasecmp(e->attr->name, "folder"));
 }
 
 static int is_indexed_node(const search_expr_t *e)
 {
     if (e->op == SEOP_NOT)
-	return is_indexed_node(e->children);
+        return is_indexed_node(e->children);
     return (e->op == SEOP_FUZZYMATCH &&
-	    e->attr &&
-	    e->attr->part != SEARCH_PART_NONE);
+            e->attr &&
+            e->attr->part != SEARCH_PART_NONE);
 }
 
 static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unused)))
@@ -962,13 +962,13 @@ static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unus
  * satisfies the earliest of these conditions:
  *
  *  - contains at least one indexed match node
- *	(the callback's 'indexed' is non-NULL), or
+ *      (the callback's 'indexed' is non-NULL), or
  *
  *  - is limited to exactly one folder by a positive folder match node
- *	(the callback's 'mboxname' is non-NULL), or
+ *      (the callback's 'mboxname' is non-NULL), or
  *
  *  - applies to all folders and is not indexed
- *	(both the callback's 'mboxname' and 'indexed' are NULL)
+ *      (both the callback's 'mboxname' and 'indexed' are NULL)
  *
  * Destroys the original expression as a side effect.
  *
@@ -992,39 +992,39 @@ static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unus
  * are always normalised.
  */
 EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
-		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
-		  void *rock)
+                  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
+                  void *rock)
 {
     search_expr_t *copy = NULL;
 
     if (!search_expr_apply(e, is_folder_or_indexed, NULL)) {
-	/* The expression contains neither a folder match node nor an
-	 * indexable node, which means we can short circuit the whole
-	 * normalisation and splitting process.  This optimisation helps
-	 * us cope with the FM web frontends generating queries with
-	 *
-	 * or or or or to "word" cc "word" bcc "word" from "word" subject "word"
-	 *
-	 * for every "word" the user types into the Search box, by
-	 * avoiding the complexity explosion due to normalising all
-	 * those OR nodes.
-	 *
-	 * But - we still sort it.  */
-	sort_children(e);
-	cb(NULL, NULL, e, rock);
-	return;
+        /* The expression contains neither a folder match node nor an
+         * indexable node, which means we can short circuit the whole
+         * normalisation and splitting process.  This optimisation helps
+         * us cope with the FM web frontends generating queries with
+         *
+         * or or or or to "word" cc "word" bcc "word" from "word" subject "word"
+         *
+         * for every "word" the user types into the Search box, by
+         * avoiding the complexity explosion due to normalising all
+         * those OR nodes.
+         *
+         * But - we still sort it.  */
+        sort_children(e);
+        cb(NULL, NULL, e, rock);
+        return;
     }
 
     copy = search_expr_duplicate(e);
     nnodes = 0;
     if (search_expr_normalise(&copy) < 0)
     {
-	/* We blew the complexity limit because the expression has too
-	 * many ORs.  Rats.  Give up and scan folders with the original
-	 * expression */
-	search_expr_free(copy);
-	cb(NULL, NULL, e, rock);
-	return;
+        /* We blew the complexity limit because the expression has too
+         * many ORs.  Rats.  Give up and scan folders with the original
+         * expression */
+        search_expr_free(copy);
+        cb(NULL, NULL, e, rock);
+        return;
     }
 
     search_expr_free(e);
@@ -1032,101 +1032,101 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
 }
 
 static void split(search_expr_t *e,
-		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
-		  void *rock)
+                  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
+                  void *rock)
 {
     search_expr_t *child;
 
     if (e->op == SEOP_OR) {
-	/* top level node */
-	while ((child = detachp(&e->children)) != NULL)
-	    split(child, cb, rock);
-	search_expr_free(e);
+        /* top level node */
+        while ((child = detachp(&e->children)) != NULL)
+            split(child, cb, rock);
+        search_expr_free(e);
     }
     else if (e->op == SEOP_AND) {
-	search_expr_t **prevp;
-	search_expr_t **folder_prevp = NULL;
-	int nfolders = 0;
-	int nindexes = 0;
+        search_expr_t **prevp;
+        search_expr_t **folder_prevp = NULL;
+        int nfolders = 0;
+        int nindexes = 0;
 
-	for (prevp = &e->children ; *prevp ; prevp = &(*prevp)->next) {
-	    if (is_indexed_node(*prevp)) {
-		nindexes++;
-	    }
-	    if (is_folder_node(*prevp)) {
-		nfolders++;
-		folder_prevp = prevp;
-	    }
-	}
-	if (nindexes) {
-	    /*
-	     * The presence of indexable fields overrides all other
-	     * considerations; we assume it's easier to consult the
-	     * index and then filter out folders later.  Note that this
-	     * assumption is broken for SQUAT which is per-folder.
-	     *
-	     * We remove the indexed matches from the conjunction and
-	     * build a new conjunction containing only those matches.
-	     * Note that this assumes the search engine does not give
-	     * false positives, which is also broken for SQUAT.
-	     */
-	    search_expr_t *indexed = search_expr_new(NULL, SEOP_AND);
+        for (prevp = &e->children ; *prevp ; prevp = &(*prevp)->next) {
+            if (is_indexed_node(*prevp)) {
+                nindexes++;
+            }
+            if (is_folder_node(*prevp)) {
+                nfolders++;
+                folder_prevp = prevp;
+            }
+        }
+        if (nindexes) {
+            /*
+             * The presence of indexable fields overrides all other
+             * considerations; we assume it's easier to consult the
+             * index and then filter out folders later.  Note that this
+             * assumption is broken for SQUAT which is per-folder.
+             *
+             * We remove the indexed matches from the conjunction and
+             * build a new conjunction containing only those matches.
+             * Note that this assumes the search engine does not give
+             * false positives, which is also broken for SQUAT.
+             */
+            search_expr_t *indexed = search_expr_new(NULL, SEOP_AND);
 
-	    for (prevp = &e->children ; *prevp ; ) {
-		if (is_indexed_node(*prevp))
-		    append(indexed, detachp(prevp));
-		else
-		    prevp = &(*prevp)->next;
-	    }
-	    search_expr_normalise(&indexed);	/* in case of a trivial AND */
-	    if (!e->children) {
-		search_expr_free(e);
-		e = search_expr_new(NULL, SEOP_TRUE);
-	    }
-	    else
-		search_expr_normalise(&e);
-	    cb(NULL, indexed, e, rock);
-	}
-	else if (!nfolders) {
-	    /* No positive folder match: whole expression applies
-	     * to all folders */
-	    cb(NULL, NULL, e, rock);
-	}
-	else if (nfolders == 1) {
-	    /* Exactly one positive folder match: remainder of expression
-	     * applies to this specific folder */
-	    child = detachp(folder_prevp);
-	    /* normalise the remaining subtree - the top node might be
-	     * trivial now that we've detached the folder match */
-	    search_expr_normalise(&e);
-	    cb(child->value.s, NULL, e, rock);
-	    search_expr_free(child);
-	}
-	else {
-	    /* Two or more positive folder matches; this expression
-	     * will never match any messages because messages belong
-	     * to exactly one folder, so just delete it.
-	     * TODO need to uniquify the (match folder) nodes
-	     * before this will work properly */
-	    search_expr_free(e);
-	}
+            for (prevp = &e->children ; *prevp ; ) {
+                if (is_indexed_node(*prevp))
+                    append(indexed, detachp(prevp));
+                else
+                    prevp = &(*prevp)->next;
+            }
+            search_expr_normalise(&indexed);    /* in case of a trivial AND */
+            if (!e->children) {
+                search_expr_free(e);
+                e = search_expr_new(NULL, SEOP_TRUE);
+            }
+            else
+                search_expr_normalise(&e);
+            cb(NULL, indexed, e, rock);
+        }
+        else if (!nfolders) {
+            /* No positive folder match: whole expression applies
+             * to all folders */
+            cb(NULL, NULL, e, rock);
+        }
+        else if (nfolders == 1) {
+            /* Exactly one positive folder match: remainder of expression
+             * applies to this specific folder */
+            child = detachp(folder_prevp);
+            /* normalise the remaining subtree - the top node might be
+             * trivial now that we've detached the folder match */
+            search_expr_normalise(&e);
+            cb(child->value.s, NULL, e, rock);
+            search_expr_free(child);
+        }
+        else {
+            /* Two or more positive folder matches; this expression
+             * will never match any messages because messages belong
+             * to exactly one folder, so just delete it.
+             * TODO need to uniquify the (match folder) nodes
+             * before this will work properly */
+            search_expr_free(e);
+        }
     }
     else if (is_folder_node(e)) {
-	cb(e->value.s, NULL, search_expr_new(NULL, SEOP_TRUE), rock);
-	search_expr_free(e);
+        cb(e->value.s, NULL, search_expr_new(NULL, SEOP_TRUE), rock);
+        search_expr_free(e);
     }
     else if (is_indexed_node(e)) {
-	cb(NULL, e, search_expr_new(NULL, SEOP_TRUE), rock);
+        cb(NULL, e, search_expr_new(NULL, SEOP_TRUE), rock);
     }
     else {
-	cb(NULL, NULL, e, rock);
+        cb(NULL, NULL, e, rock);
     }
 }
 
 /* ====================================================================== */
 
 static int search_string_match(message_t *m, const union search_value *v,
-				void *internalised, void *data1)
+                                void *internalised, void *data1)
 {
     int r;
     struct buf buf = BUF_INITIALIZER;
@@ -1135,9 +1135,9 @@ static int search_string_match(message_t *m, const union search_value *v,
 
     r = getter(m, &buf);
     if (!r && buf.len)
-	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+        r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
     else
-	r = 0;
+        r = 0;
     buf_free(&buf);
 
     return r;
@@ -1159,19 +1159,19 @@ static int search_string_unserialise(struct protstream *prot, union search_value
 }
 
 static void search_string_internalise(struct index_state *state __attribute__((unused)),
-				      const union search_value *v, void **internalisedp)
+                                      const union search_value *v, void **internalisedp)
 {
     if (*internalisedp) {
-	charset_freepat(*internalisedp);
-	*internalisedp = NULL;
+        charset_freepat(*internalisedp);
+        *internalisedp = NULL;
     }
     if (v) {
-	*internalisedp = charset_compilepat(v->s);
+        *internalisedp = charset_compilepat(v->s);
     }
 }
 
 static void search_string_duplicate(union search_value *new,
-				    const union search_value *old)
+                                    const union search_value *old)
 {
     new->s = xstrdup(old->s);
 }
@@ -1185,8 +1185,8 @@ static void search_string_free(union search_value *v)
 /* ====================================================================== */
 
 static int search_listid_match(message_t *m, const union search_value *v,
-			       void *internalised,
-			       void *data1 __attribute__((unused)))
+                               void *internalised,
+                               void *data1 __attribute__((unused)))
 {
     int r;
     struct buf buf = BUF_INITIALIZER;
@@ -1194,14 +1194,14 @@ static int search_listid_match(message_t *m, const union search_value *v,
 
     r = message_get_listid(m, &buf);
     if (!r) {
-	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
-	if (r) goto out;    // success
+        r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+        if (r) goto out;    // success
     }
 
     r = message_get_mailinglist(m, &buf);
     if (!r) {
-	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
-	if (r) goto out;    // success
+        r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+        if (r) goto out;    // success
     }
 
     r = 0;  // failure
@@ -1214,8 +1214,8 @@ out:
 /* ====================================================================== */
 
 static int search_contenttype_match(message_t *m, const union search_value *v,
-				    void *internalised,
-				    void *data1 __attribute__((unused)))
+                                    void *internalised,
+                                    void *data1 __attribute__((unused)))
 {
     int r;
     comp_pat *pat = (comp_pat *)internalised;
@@ -1224,23 +1224,23 @@ static int search_contenttype_match(message_t *m, const union search_value *v,
     char combined[128];
 
     if (!message_get_leaf_types(m, &types)) {
-	for (i = 0 ; i < types.count ; i+= 2) {
-	    const char *type = types.data[i];
-	    const char *subtype = types.data[i+1];
+        for (i = 0 ; i < types.count ; i+= 2) {
+            const char *type = types.data[i];
+            const char *subtype = types.data[i+1];
 
-	    /* match against type */
-	    r = charset_searchstring(v->s, pat, type, strlen(type), charset_flags);
-	    if (r) goto out;	// success
+            /* match against type */
+            r = charset_searchstring(v->s, pat, type, strlen(type), charset_flags);
+            if (r) goto out;    // success
 
-	    /* match against subtype */
-	    r = charset_searchstring(v->s, pat, subtype, strlen(subtype), charset_flags);
-	    if (r) goto out;	// success
+            /* match against subtype */
+            r = charset_searchstring(v->s, pat, subtype, strlen(subtype), charset_flags);
+            if (r) goto out;    // success
 
-	    /* match against combined type_subtype */
-	    snprintf(combined, sizeof(combined), "%s_%s", type, subtype);
-	    r = charset_searchstring(v->s, pat, combined, strlen(combined), charset_flags);
-	    if (r) goto out;	// success
-	}
+            /* match against combined type_subtype */
+            snprintf(combined, sizeof(combined), "%s_%s", type, subtype);
+            r = charset_searchstring(v->s, pat, combined, strlen(combined), charset_flags);
+            if (r) goto out;    // success
+        }
     }
 
     r = 0;  // failure
@@ -1253,7 +1253,7 @@ out:
 /* ====================================================================== */
 
 static int search_header_match(message_t *m, const union search_value *v,
-			       void *internalised, void *data1)
+                               void *internalised, void *data1)
 {
     int r;
     struct buf buf = BUF_INITIALIZER;
@@ -1261,21 +1261,21 @@ static int search_header_match(message_t *m, const union search_value *v,
     comp_pat *pat = (comp_pat *)internalised;
 
     r = message_get_field(m, field,
-			  MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE,
-			  &buf);
+                          MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE,
+                          &buf);
     if (!r) {
-	if (*v->s) {
-	    r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
-	}
-	else {
-	    /* RFC3501: If the string to search is zero-length, this matches
-	     * all messages that have a header line with the specified
-	     * field-name regardless of the contents. */
-	    r = buf.len ? 1 : 0;
-	}
+        if (*v->s) {
+            r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+        }
+        else {
+            /* RFC3501: If the string to search is zero-length, this matches
+             * all messages that have a header line with the specified
+             * field-name regardless of the contents. */
+            r = buf.len ? 1 : 0;
+        }
     }
     else
-	r = 0;
+        r = 0;
     buf_free(&buf);
 
     return r;
@@ -1284,33 +1284,33 @@ static int search_header_match(message_t *m, const union search_value *v,
 /* ====================================================================== */
 
 static void internalise_sequence(const union search_value *v,
-				 void **internalisedp, unsigned maxval)
+                                 void **internalisedp, unsigned maxval)
 {
     if (*internalisedp) {
-	seqset_free(*internalisedp);
-	*internalisedp = NULL;
+        seqset_free(*internalisedp);
+        *internalisedp = NULL;
     }
     if (v) {
-	*internalisedp = seqset_parse(v->s, NULL, maxval);
+        *internalisedp = seqset_parse(v->s, NULL, maxval);
     }
 }
 
 static void search_msgno_internalise(struct index_state *state,
-				     const union search_value *v, void **internalisedp)
+                                     const union search_value *v, void **internalisedp)
 {
     internalise_sequence(v, internalisedp, (state ? state->exists : 0));
 }
 
 static void search_uid_internalise(struct index_state *state,
-				   const union search_value *v, void **internalisedp)
+                                   const union search_value *v, void **internalisedp)
 {
     internalise_sequence(v, internalisedp, (state ? state->last_uid : 0));
 }
 
 static int search_seq_match(message_t *m,
-			    const union search_value *v __attribute__((unused)),
-			    void *internalised,
-			    void *data1)
+                            const union search_value *v __attribute__((unused)),
+                            void *internalised,
+                            void *data1)
 {
     struct seqset *seq = internalised;
     int r;
@@ -1319,9 +1319,9 @@ static int search_seq_match(message_t *m,
 
     r = getter(m, &u);
     if (!r)
-	r = seqset_ismember(seq, u);
+        r = seqset_ismember(seq, u);
     else
-	r = 0;
+        r = 0;
 
     return r;
 }
@@ -1334,8 +1334,8 @@ static void search_seq_serialise(struct buf *b, const union search_value *v)
 /* ====================================================================== */
 
 static int search_flags_match(message_t *m, const union search_value *v,
-			      void *internalised __attribute__((unused)),
-			      void *data1)
+                              void *internalised __attribute__((unused)),
+                              void *data1)
 {
     int r;
     uint32_t u;
@@ -1343,9 +1343,9 @@ static int search_flags_match(message_t *m, const union search_value *v,
 
     r = getter(m, &u);
     if (!r)
-	r = !!(v->u & u);
+        r = !!(v->u & u);
     else
-	r = 0;
+        r = 0;
 
     return r;
 }
@@ -1353,15 +1353,15 @@ static int search_flags_match(message_t *m, const union search_value *v,
 static void search_systemflags_serialise(struct buf *b, const union search_value *v)
 {
     if ((v->u & FLAG_ANSWERED))
-	buf_appendcstr(b, "\\Answered");
+        buf_appendcstr(b, "\\Answered");
     if ((v->u & FLAG_FLAGGED))
-	buf_appendcstr(b, "\\Flagged");
+        buf_appendcstr(b, "\\Flagged");
     if ((v->u & FLAG_DELETED))
-	buf_appendcstr(b, "\\Deleted");
+        buf_appendcstr(b, "\\Deleted");
     if ((v->u & FLAG_DRAFT))
-	buf_appendcstr(b, "\\Draft");
+        buf_appendcstr(b, "\\Draft");
     if ((v->u & FLAG_SEEN))
-	buf_appendcstr(b, "\\Seen");
+        buf_appendcstr(b, "\\Seen");
 }
 
 static int search_systemflags_unserialise(struct protstream *prot, union search_value *v)
@@ -1372,26 +1372,26 @@ static int search_systemflags_unserialise(struct protstream *prot, union search_
     c = getseword(prot, tmp, sizeof(tmp));
 
     if (!strcasecmp(tmp, "\\Answered"))
-	v->u = FLAG_ANSWERED;
+        v->u = FLAG_ANSWERED;
     else if (!strcasecmp(tmp, "\\Flagged"))
-	v->u = FLAG_FLAGGED;
+        v->u = FLAG_FLAGGED;
     else if (!strcasecmp(tmp, "\\Deleted"))
-	v->u = FLAG_DELETED;
+        v->u = FLAG_DELETED;
     else if (!strcasecmp(tmp, "\\Draft"))
-	v->u = FLAG_DRAFT;
+        v->u = FLAG_DRAFT;
     else if (!strcasecmp(tmp, "\\Seen"))
-	v->u = FLAG_SEEN;
+        v->u = FLAG_SEEN;
     else
-	return EOF;
+        return EOF;
     return c;
 }
 
 static void search_indexflags_serialise(struct buf *b, const union search_value *v)
 {
     if ((v->u & MESSAGE_SEEN))
-	buf_appendcstr(b, "\\Seen");
+        buf_appendcstr(b, "\\Seen");
     if ((v->u & MESSAGE_RECENT))
-	buf_appendcstr(b, "\\Recent");
+        buf_appendcstr(b, "\\Recent");
 }
 
 static int search_indexflags_unserialise(struct protstream *prot, union search_value *v)
@@ -1402,11 +1402,11 @@ static int search_indexflags_unserialise(struct protstream *prot, union search_v
     c = getseword(prot, tmp, sizeof(tmp));
 
     if (!strcasecmp(tmp, "\\Seen"))
-	v->u = MESSAGE_SEEN;
+        v->u = MESSAGE_SEEN;
     else if (!strcasecmp(tmp, "\\Recent"))
-	v->u = MESSAGE_RECENT;
+        v->u = MESSAGE_RECENT;
     else
-	return EOF;
+        return EOF;
     return c;
 }
 
@@ -1422,40 +1422,40 @@ unsigned int search_indexflags_get_countability(const union search_value *v)
 /* ====================================================================== */
 
 static void search_keyword_internalise(struct index_state *state,
-				       const union search_value *v,
-				       void **internalisedp)
+                                       const union search_value *v,
+                                       void **internalisedp)
 {
     int r;
     int num = 0;
 
     if (state) {
-	r = mailbox_user_flag(state->mailbox, v->s, &num, /*create*/0);
-	if (!r)
-	    num++;
-	else
-	    num = 0;
+        r = mailbox_user_flag(state->mailbox, v->s, &num, /*create*/0);
+        if (!r)
+            num++;
+        else
+            num = 0;
     }
     *internalisedp = (void*)(unsigned long)num;
 }
 
 static int search_keyword_match(message_t *m,
-				const union search_value *v __attribute__((unused)),
-				void *internalised,
-				void *data1 __attribute__((unused)))
+                                const union search_value *v __attribute__((unused)),
+                                void *internalised,
+                                void *data1 __attribute__((unused)))
 {
     int r;
     int num = (int)(unsigned long)internalised;
     uint32_t flags[MAX_USER_FLAGS/32];
 
     if (!num)
-	return 0;   /* not a valid flag for this mailbox */
+        return 0;   /* not a valid flag for this mailbox */
     num--;
 
     r = message_get_userflags(m, flags);
     if (!r)
-	r = !!(flags[num/32] & (1<<(num % 32)));
+        r = !!(flags[num/32] & (1<<(num % 32)));
     else
-	r = 0;
+        r = 0;
 
     return r;
 }
@@ -1463,8 +1463,8 @@ static int search_keyword_match(message_t *m,
 /* ====================================================================== */
 
 static int search_uint64_cmp(message_t *m, const union search_value *v,
-			     void *internalised __attribute__((unused)),
-			     void *data1)
+                             void *internalised __attribute__((unused)),
+                             void *data1)
 {
     int r;
     uint64_t u;
@@ -1472,21 +1472,21 @@ static int search_uint64_cmp(message_t *m, const union search_value *v,
 
     r = getter(m, &u);
     if (!r) {
-	if (u < v->u)
-	    r = -1;
-	else if (u == v->u)
-	    r = 0;
-	else
-	    r = 1;
+        if (u < v->u)
+            r = -1;
+        else if (u == v->u)
+            r = 0;
+        else
+            r = 1;
     }
     else
-	r = 0;
+        r = 0;
     return r;
 }
 
 static int search_uint64_match(message_t *m, const union search_value *v,
-			       void *internalised __attribute__((unused)),
-			       void *data1)
+                               void *internalised __attribute__((unused)),
+                               void *data1)
 {
     int r;
     uint64_t u;
@@ -1494,9 +1494,9 @@ static int search_uint64_match(message_t *m, const union search_value *v,
 
     r = getter(m, &u);
     if (!r)
-	r = (v->u == u);
+        r = (v->u == u);
     else
-	r = 0;
+        r = 0;
 
     return r;
 }
@@ -1531,7 +1531,7 @@ static int search_cid_unserialise(struct protstream *prot, union search_value *v
 
     c = getseword(prot, tmp, sizeof(tmp));
     if (!conversation_id_decode(&cid, tmp))
-	return EOF;
+        return EOF;
     v->u = cid;
     return c;
 }
@@ -1539,22 +1539,22 @@ static int search_cid_unserialise(struct protstream *prot, union search_value *v
 /* ====================================================================== */
 
 static void search_folder_internalise(struct index_state *state,
-				      const union search_value *v,
-				      void **internalisedp)
+                                      const union search_value *v,
+                                      void **internalisedp)
 {
     if (state)
-	*internalisedp = (void *)(unsigned long)(!strcmp(state->mailbox->name, v->s));
+        *internalisedp = (void *)(unsigned long)(!strcmp(state->mailbox->name, v->s));
 }
 
 static int search_folder_match(message_t *m __attribute__((unused)),
-			       const union search_value *v __attribute__((unused)),
-			       void *internalised, void *data1 __attribute__((unused)))
+                               const union search_value *v __attribute__((unused)),
+                               void *internalised, void *data1 __attribute__((unused)))
 {
     return (int)(unsigned long)internalised;
 }
 
 unsigned int search_folder_get_countability(const union search_value *v
-					    __attribute__((unused)))
+                                            __attribute__((unused)))
 {
     return 0;
 }
@@ -1562,11 +1562,11 @@ unsigned int search_folder_get_countability(const union search_value *v
 /* ====================================================================== */
 
 static void search_annotation_internalise(struct index_state *state,
-					  const union search_value *v __attribute__((unused)),
-					  void **internalisedp)
+                                          const union search_value *v __attribute__((unused)),
+                                          void **internalisedp)
 {
     if (state)
-	*internalisedp = state->mailbox;
+        *internalisedp = state->mailbox;
 }
 
 struct search_annot_rock {
@@ -1575,43 +1575,43 @@ struct search_annot_rock {
 };
 
 static int _search_annot_match(const struct buf *match,
-			       const struct buf *value)
+                               const struct buf *value)
 {
     /* These cases are not explicitly defined in RFC5257 */
 
     /* NIL matches NIL and nothing else */
     if (match->s == NULL)
-	return (value->s == NULL);
+        return (value->s == NULL);
     if (value->s == NULL)
-	return 0;
+        return 0;
 
     /* empty matches empty and nothing else */
     if (match->len == 0)
-	return (value->len == 0);
+        return (value->len == 0);
     if (value->len == 0)
-	return 0;
+        return 0;
 
     /* RFC5257 seems to define a simple CONTAINS style search */
     return !!memmem(value->s, value->len,
-		    match->s, match->len);
+                    match->s, match->len);
 }
 
 static void _search_annot_callback(const char *mboxname __attribute__((unused)),
-				   uint32_t uid __attribute__((unused)),
-				   const char *entry __attribute__((unused)),
-				   struct attvaluelist *attvalues, void *rock)
+                                   uint32_t uid __attribute__((unused)),
+                                   const char *entry __attribute__((unused)),
+                                   struct attvaluelist *attvalues, void *rock)
 {
     struct search_annot_rock *sarock = rock;
     struct attvaluelist *l;
 
     for (l = attvalues ; l ; l = l->next) {
-	if (_search_annot_match(sarock->match, &l->value))
-	    sarock->result = 1;
+        if (_search_annot_match(sarock->match, &l->value))
+            sarock->result = 1;
     }
 }
 
 static int search_annotation_match(message_t *m, const union search_value *v,
-				   void *internalised, void *data1 __attribute__((unused)))
+                                   void *internalised, void *data1 __attribute__((unused)))
 {
     struct mailbox *mailbox = (struct mailbox *)internalised;
     struct searchannot *sa = v->annot;
@@ -1630,17 +1630,17 @@ static int search_annotation_match(message_t *m, const union search_value *v,
     r = mailbox_get_annotate_state(mailbox, uid, &astate);
     if (r) goto out;
     annotate_state_set_auth(astate, sa->isadmin,
-			    sa->userid, sa->auth_state);
+                            sa->userid, sa->auth_state);
 
     memset(&rock, 0, sizeof(rock));
     rock.match = &sa->value;
 
     r = annotate_state_fetch(astate,
-			     &entries, &attribs,
-			     _search_annot_callback, &rock,
-			     0);
+                             &entries, &attribs,
+                             _search_annot_callback, &rock,
+                             0);
     if (r >= 0)
-	r = rock.result;
+        r = rock.result;
 
 out:
     strarray_fini(&entries);
@@ -1651,7 +1651,7 @@ out:
 static void search_annotation_serialise(struct buf *b, const union search_value *v)
 {
     buf_printf(b, "(entry \"%s\" attrib \"%s\" value \"%s\")",
-		v->annot->entry, v->annot->attrib, buf_cstring(&v->annot->value));
+                v->annot->entry, v->annot->attrib, buf_cstring(&v->annot->value));
 }
 
 /* Note: this won't be usable for execution as it lacks
@@ -1696,7 +1696,7 @@ static int search_annotation_unserialise(struct protstream *prot, union search_v
 }
 
 static void search_annotation_duplicate(union search_value *new,
-					const union search_value *old)
+                                        const union search_value *old)
 {
     new->annot = (struct searchannot *)xmemdup(old->annot, sizeof(*old->annot));
     new->annot->entry = xstrdup(new->annot->entry);
@@ -1708,11 +1708,11 @@ static void search_annotation_duplicate(union search_value *new,
 static void search_annotation_free(union search_value *v)
 {
     if (v->annot) {
-	free(v->annot->entry);
-	free(v->annot->attrib);
-	buf_free(&v->annot->value);
-	free(v->annot);
-	v->annot = NULL;
+        free(v->annot->entry);
+        free(v->annot->attrib);
+        buf_free(&v->annot->value);
+        free(v->annot);
+        v->annot = NULL;
     }
 }
 
@@ -1721,16 +1721,16 @@ static void search_annotation_free(union search_value *v)
 struct conv_rock {
     struct conversations_state *cstate;
     int cstate_is_ours;
-    int num;	    /* -1=invalid, 0=\Seen, 1+=index into cstate->counted_flags+1 */
+    int num;        /* -1=invalid, 0=\Seen, 1+=index into cstate->counted_flags+1 */
 };
 
 static void conv_rock_new(struct mailbox *mailbox,
-			  struct conv_rock **rockp);
+                          struct conv_rock **rockp);
 static void conv_rock_free(struct conv_rock **rockp);
 
 static void search_convflags_internalise(struct index_state *state,
-					 const union search_value *v,
-					 void **internalisedp)
+                                         const union search_value *v,
+                                         void **internalisedp)
 {
     struct conv_rock **rockp = (struct conv_rock **)internalisedp;
     struct conv_rock *rock;
@@ -1738,25 +1738,25 @@ static void search_convflags_internalise(struct index_state *state,
     conv_rock_free(rockp);
 
     if (state) {
-	conv_rock_new(state->mailbox, rockp);
-	rock = *rockp;
-	if (rock->cstate) {
-	    if (!strcasecmp(v->s, "\\Seen"))
-		rock->num = 0;
-	    else {
-		rock->num = strarray_find_case(rock->cstate->counted_flags, v->s, 0);
-		/* rock->num might be -1 invalid */
-		if (rock->num >= 0)
-		    rock->num++;
-	    }
-	}
+        conv_rock_new(state->mailbox, rockp);
+        rock = *rockp;
+        if (rock->cstate) {
+            if (!strcasecmp(v->s, "\\Seen"))
+                rock->num = 0;
+            else {
+                rock->num = strarray_find_case(rock->cstate->counted_flags, v->s, 0);
+                /* rock->num might be -1 invalid */
+                if (rock->num >= 0)
+                    rock->num++;
+            }
+        }
     }
 }
 
 static int search_convflags_match(message_t *m,
-				  const union search_value *v __attribute__((unused)),
-				  void *internalised,
-				  void *data1 __attribute__((unused)))
+                                  const union search_value *v __attribute__((unused)),
+                                  void *internalised,
+                                  void *data1 __attribute__((unused)))
 {
     struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
@@ -1770,9 +1770,9 @@ static int search_convflags_match(message_t *m,
     if (!conv) return 0;
 
     if (rock->num == 0)
-	r = !conv->unseen;
+        r = !conv->unseen;
     else if (rock->num > 0)
-	r = !!conv->counts[rock->num-1];
+        r = !!conv->counts[rock->num-1];
 
     conversation_free(conv);
     return r;
@@ -1781,25 +1781,25 @@ static int search_convflags_match(message_t *m,
 unsigned int search_convflags_get_countability(const union search_value *v)
 {
     if (!strcasecmp(v->s, "\\Seen"))
-	return SEC_CONVSEEN;
+        return SEC_CONVSEEN;
     return SEC_UNCOUNTED;
 }
 
 static void search_convmodseq_internalise(struct index_state *state,
-					  const union search_value *v __attribute__((unused)),
-					  void **internalisedp)
+                                          const union search_value *v __attribute__((unused)),
+                                          void **internalisedp)
 {
     struct conv_rock **rockp = (struct conv_rock **)internalisedp;
 
     conv_rock_free(rockp);
 
     if (state) {
-	conv_rock_new(state->mailbox, rockp);
+        conv_rock_new(state->mailbox, rockp);
     }
 }
 
 static int search_convmodseq_match(message_t *m, const union search_value *v,
-				   void *internalised, void *data1 __attribute__((unused)))
+                                   void *internalised, void *data1 __attribute__((unused)))
 {
     struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
@@ -1819,16 +1819,16 @@ static int search_convmodseq_match(message_t *m, const union search_value *v,
 }
 
 static void conv_rock_new(struct mailbox *mailbox,
-			  struct conv_rock **rockp)
+                          struct conv_rock **rockp)
 {
     struct conv_rock *rock = xzmalloc(sizeof(*rock));
 
     rock->cstate = conversations_get_mbox(mailbox->name);
     if (!rock->cstate) {
-	if (conversations_open_mbox(mailbox->name, &rock->cstate))
-	    rock->num = -1;	    /* invalid */
-	else
-	    rock->cstate_is_ours = 1;
+        if (conversations_open_mbox(mailbox->name, &rock->cstate))
+            rock->num = -1;         /* invalid */
+        else
+            rock->cstate_is_ours = 1;
     }
 
     *rockp = rock;
@@ -1838,10 +1838,10 @@ static void conv_rock_free(struct conv_rock **rockp)
 {
     struct conv_rock *rock = *rockp;
     if (rock) {
-	if (rock->cstate_is_ours)
-	    conversations_abort(&rock->cstate);
-	free(rock);
-	*rockp = NULL;
+        if (rock->cstate_is_ours)
+            conversations_abort(&rock->cstate);
+        free(rock);
+        *rockp = NULL;
     }
 }
 
@@ -1849,8 +1849,8 @@ static void conv_rock_free(struct conv_rock **rockp)
 /* ====================================================================== */
 
 static int search_uint32_cmp(message_t *m, const union search_value *v,
-			     void *internalised __attribute__((unused)),
-			     void *data1)
+                             void *internalised __attribute__((unused)),
+                             void *data1)
 {
     int r;
     uint32_t u;
@@ -1858,21 +1858,21 @@ static int search_uint32_cmp(message_t *m, const union search_value *v,
 
     r = getter(m, &u);
     if (!r) {
-	if (u < v->u)
-	    r = -1;
-	else if (u == v->u)
-	    r = 0;
-	else
-	    r = 1;
+        if (u < v->u)
+            r = -1;
+        else if (u == v->u)
+            r = 0;
+        else
+            r = 1;
     }
     else
-	r = 0;
+        r = 0;
     return r;
 }
 
 static int search_uint32_match(message_t *m, const union search_value *v,
-			       void *internalised __attribute__((unused)),
-			       void *data1)
+                               void *internalised __attribute__((unused)),
+                               void *data1)
 {
     int r;
     uint32_t u;
@@ -1880,9 +1880,9 @@ static int search_uint32_match(message_t *m, const union search_value *v,
 
     r = getter(m, &u);
     if (!r)
-	r = (v->u == u);
+        r = (v->u == u);
     else
-	r = 0;
+        r = 0;
     return r;
 }
 
@@ -1916,34 +1916,34 @@ struct searchmsg_rock
 };
 
 static int searchmsg_cb(int partno, int charset, int encoding,
-			const char *subtype __attribute((unused)),
-			struct buf *data, void *rock)
+                        const char *subtype __attribute((unused)),
+                        struct buf *data, void *rock)
 {
     struct searchmsg_rock *sr = (struct searchmsg_rock *)rock;
 
     if (!partno) {
-	/* header-like */
-	if (sr->skipheader) {
-	    sr->skipheader = 0; /* Only skip top-level message header */
-	    return 0;
-	}
-	sr->result = charset_search_mimeheader(sr->substr, sr->pat,
-					       buf_cstring(data), charset_flags);
+        /* header-like */
+        if (sr->skipheader) {
+            sr->skipheader = 0; /* Only skip top-level message header */
+            return 0;
+        }
+        sr->result = charset_search_mimeheader(sr->substr, sr->pat,
+                                               buf_cstring(data), charset_flags);
     }
     else {
-	/* body-like */
-	if (charset < 0 || charset == 0xffff)
-	     return 0;
-	sr->result = charset_searchfile(sr->substr, sr->pat,
-					data->s, data->len,
-					charset, encoding, charset_flags);
+        /* body-like */
+        if (charset < 0 || charset == 0xffff)
+             return 0;
+        sr->result = charset_searchfile(sr->substr, sr->pat,
+                                        data->s, data->len,
+                                        charset, encoding, charset_flags);
     }
     if (sr->result) return 1; /* found it, exit early */
     return 0;
 }
 
 static int search_text_match(message_t *m, const union search_value *v,
-			     void *internalised, void *data1)
+                             void *internalised, void *data1)
 {
     struct searchmsg_rock sr;
 
@@ -1977,348 +1977,348 @@ EXPORTED void search_attr_init(void)
     unsigned int i;
 
     static const search_attr_t attrs[] = {
-	{
-	    "bcc",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_BCC,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_string_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_bcc
-	},{
-	    "cc",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_CC,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_string_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_cc
-	},{
-	    "from",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_FROM,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_string_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_from
-	},{
-	    "message-id",
-	    /*flags*/0,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_string_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_messageid
-	},{
-	    "listid",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_LISTID,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_listid_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    NULL
-	},{
-	    "contenttype",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_TYPE,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_contenttype_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    NULL
-	},{
-	    "subject",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_SUBJECT,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_string_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_subject
-	},{
-	    "to",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_TO,
-	    SEARCH_COST_CACHE,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_string_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_to
-	},{
-	    "msgno",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    search_msgno_internalise,
-	    /*cmp*/NULL,
-	    search_seq_match,
-	    search_seq_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_msgno
-	},{
-	    "uid",
-	    /*flags*/0,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    search_uid_internalise,
-	    /*cmp*/NULL,
-	    search_seq_match,
-	    search_seq_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)message_get_uid
-	},{
-	    "systemflags",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    /*internalise*/NULL,
-	    /*cmp*/NULL,
-	    search_flags_match,
-	    search_systemflags_serialise,
-	    search_systemflags_unserialise,
-	    /*get_countability*/NULL,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    (void *)message_get_systemflags
-	},{
-	    "indexflags",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    /*internalise*/NULL,
-	    /*cmp*/NULL,
-	    search_flags_match,
-	    search_indexflags_serialise,
-	    search_indexflags_unserialise,
-	    search_indexflags_get_countability,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    (void *)message_get_indexflags
-	},{
-	    "keyword",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    search_keyword_internalise,
-	    /*cmp*/NULL,
-	    search_keyword_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    NULL
-	},{
-	    "convflags",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_CONV,
-	    search_convflags_internalise,
-	    /*cmp*/NULL,
-	    search_convflags_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    search_convflags_get_countability,
-	    search_string_duplicate,
-	    search_string_free,
-	    NULL
-	},{
-	    "convmodseq",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_CONV,
-	    search_convmodseq_internalise,
-	    /*cmp*/NULL,
-	    search_convmodseq_match,
-	    search_uint64_serialise,
-	    search_uint64_unserialise,
-	    /*get_countability*/NULL,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    NULL
-	},{
-	    "modseq",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    /*internalise*/NULL,
-	    search_uint64_cmp,
-	    search_uint64_match,
-	    search_uint64_serialise,
-	    search_uint64_unserialise,
-	    /*get_countability*/NULL,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    (void *)message_get_modseq
-	},{
-	    "cid",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    /*internalise*/NULL,
-	    search_uint64_cmp,
-	    search_uint64_match,
-	    search_cid_serialise,
-	    search_cid_unserialise,
-	    /*get_countability*/NULL,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    (void *)message_get_cid
-	},{
-	    "folder",
-	    /*flags*/0,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_NONE,
-	    search_folder_internalise,
-	    /*cmp*/NULL,
-	    search_folder_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    search_folder_get_countability,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)NULL
-	},{
-	    "annotation",
-	    SEA_MUTABLE,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_ANNOT,
-	    search_annotation_internalise,
-	    /*cmp*/NULL,
-	    search_annotation_match,
-	    search_annotation_serialise,
-	    search_annotation_unserialise,
-	    /*get_countability*/NULL,
-	    search_annotation_duplicate,
-	    search_annotation_free,
-	    (void *)NULL
-	},{
-	    "size",
-	    /*flags*/0,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    /*internalise*/NULL,
-	    search_uint32_cmp,
-	    search_uint32_match,
-	    search_uint32_serialise,
-	    search_uint32_unserialise,
-	    /*get_countability*/NULL,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    (void *)message_get_size
-	},{
-	    "internaldate",
-	    /*flags*/0,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    /*internalise*/NULL,
-	    search_uint32_cmp,
-	    search_uint32_match,
-	    search_uint32_serialise,
-	    search_uint32_unserialise,
-	    /*get_countability*/NULL,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    (void *)message_get_internaldate
-	},{
-	    "sentdate",
-	    /*flags*/0,
-	    SEARCH_PART_NONE,
-	    SEARCH_COST_INDEX,
-	    /*internalise*/NULL,
-	    search_uint32_cmp,
-	    search_uint32_match,
-	    search_uint32_serialise,
-	    search_uint32_unserialise,
-	    /*get_countability*/NULL,
-	    /*duplicate*/NULL,
-	    /*free*/NULL,
-	    (void *)message_get_sentdate
-	},{
-	    "body",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_BODY,
-	    SEARCH_COST_BODY,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_text_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)1	    /* skipheader flag */
-	},{
-	    "text",
-	    SEA_FUZZABLE,
-	    SEARCH_PART_ANY,
-	    SEARCH_COST_BODY,
-	    search_string_internalise,
-	    /*cmp*/NULL,
-	    search_text_match,
-	    search_string_serialise,
-	    search_string_unserialise,
-	    /*get_countability*/NULL,
-	    search_string_duplicate,
-	    search_string_free,
-	    (void *)0	    /* skipheader flag */
-	}
+        {
+            "bcc",
+            SEA_FUZZABLE,
+            SEARCH_PART_BCC,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_bcc
+        },{
+            "cc",
+            SEA_FUZZABLE,
+            SEARCH_PART_CC,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_cc
+        },{
+            "from",
+            SEA_FUZZABLE,
+            SEARCH_PART_FROM,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_from
+        },{
+            "message-id",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_messageid
+        },{
+            "listid",
+            SEA_FUZZABLE,
+            SEARCH_PART_LISTID,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_listid_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            NULL
+        },{
+            "contenttype",
+            SEA_FUZZABLE,
+            SEARCH_PART_TYPE,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_contenttype_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            NULL
+        },{
+            "subject",
+            SEA_FUZZABLE,
+            SEARCH_PART_SUBJECT,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_subject
+        },{
+            "to",
+            SEA_FUZZABLE,
+            SEARCH_PART_TO,
+            SEARCH_COST_CACHE,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_to
+        },{
+            "msgno",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            search_msgno_internalise,
+            /*cmp*/NULL,
+            search_seq_match,
+            search_seq_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_msgno
+        },{
+            "uid",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            search_uid_internalise,
+            /*cmp*/NULL,
+            search_seq_match,
+            search_seq_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)message_get_uid
+        },{
+            "systemflags",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            /*cmp*/NULL,
+            search_flags_match,
+            search_systemflags_serialise,
+            search_systemflags_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_systemflags
+        },{
+            "indexflags",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            /*cmp*/NULL,
+            search_flags_match,
+            search_indexflags_serialise,
+            search_indexflags_unserialise,
+            search_indexflags_get_countability,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_indexflags
+        },{
+            "keyword",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            search_keyword_internalise,
+            /*cmp*/NULL,
+            search_keyword_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            NULL
+        },{
+            "convflags",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_CONV,
+            search_convflags_internalise,
+            /*cmp*/NULL,
+            search_convflags_match,
+            search_string_serialise,
+            search_string_unserialise,
+            search_convflags_get_countability,
+            search_string_duplicate,
+            search_string_free,
+            NULL
+        },{
+            "convmodseq",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_CONV,
+            search_convmodseq_internalise,
+            /*cmp*/NULL,
+            search_convmodseq_match,
+            search_uint64_serialise,
+            search_uint64_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            NULL
+        },{
+            "modseq",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_uint64_cmp,
+            search_uint64_match,
+            search_uint64_serialise,
+            search_uint64_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_modseq
+        },{
+            "cid",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_uint64_cmp,
+            search_uint64_match,
+            search_cid_serialise,
+            search_cid_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_cid
+        },{
+            "folder",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_NONE,
+            search_folder_internalise,
+            /*cmp*/NULL,
+            search_folder_match,
+            search_string_serialise,
+            search_string_unserialise,
+            search_folder_get_countability,
+            search_string_duplicate,
+            search_string_free,
+            (void *)NULL
+        },{
+            "annotation",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_ANNOT,
+            search_annotation_internalise,
+            /*cmp*/NULL,
+            search_annotation_match,
+            search_annotation_serialise,
+            search_annotation_unserialise,
+            /*get_countability*/NULL,
+            search_annotation_duplicate,
+            search_annotation_free,
+            (void *)NULL
+        },{
+            "size",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_uint32_cmp,
+            search_uint32_match,
+            search_uint32_serialise,
+            search_uint32_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_size
+        },{
+            "internaldate",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_uint32_cmp,
+            search_uint32_match,
+            search_uint32_serialise,
+            search_uint32_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_internaldate
+        },{
+            "sentdate",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_uint32_cmp,
+            search_uint32_match,
+            search_uint32_serialise,
+            search_uint32_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_sentdate
+        },{
+            "body",
+            SEA_FUZZABLE,
+            SEARCH_PART_BODY,
+            SEARCH_COST_BODY,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_text_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)1       /* skipheader flag */
+        },{
+            "text",
+            SEA_FUZZABLE,
+            SEARCH_PART_ANY,
+            SEARCH_COST_BODY,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_text_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)0       /* skipheader flag */
+        }
     };
 
     construct_hash_table(&attrs_by_name, VECTOR_SIZE(attrs), 0);
     for (i = 0 ; i < VECTOR_SIZE(attrs) ; i++)
-	hash_insert(attrs[i].name, (void *)&attrs[i], &attrs_by_name);
+        hash_insert(attrs[i].name, (void *)&attrs[i], &attrs_by_name);
 }
 
 /*
@@ -2348,42 +2348,42 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
     search_attr_t *attr;
     char *key = NULL;
     static const search_attr_t proto = {
-	"name",
-	SEA_FUZZABLE,
-	SEARCH_PART_NONE,
-	SEARCH_COST_NONE,
-	search_string_internalise,
-	/*cmp*/NULL,
-	search_header_match,
-	search_string_serialise,
-	search_string_unserialise,
-	/*get_countability*/NULL,
-	search_string_duplicate,
-	search_string_free,
-	NULL
+        "name",
+        SEA_FUZZABLE,
+        SEARCH_PART_NONE,
+        SEARCH_COST_NONE,
+        search_string_internalise,
+        /*cmp*/NULL,
+        search_header_match,
+        search_string_serialise,
+        search_string_unserialise,
+        /*get_countability*/NULL,
+        search_string_duplicate,
+        search_string_free,
+        NULL
     };
 
     /* some header fields can be reduced to search terms */
     if (!strcasecmp(field, "bcc") ||
-	!strcasecmp(field, "cc") ||
-	!strcasecmp(field, "to") ||
-	!strcasecmp(field, "from") ||
-	!strcasecmp(field, "subject") ||
-	!strcasecmp(field, "message-id"))
-	return search_attr_find(field);
+        !strcasecmp(field, "cc") ||
+        !strcasecmp(field, "to") ||
+        !strcasecmp(field, "from") ||
+        !strcasecmp(field, "subject") ||
+        !strcasecmp(field, "message-id"))
+        return search_attr_find(field);
 
     key = lcase(strconcat("header:", field, (char *)NULL));
     attr = (search_attr_t *)hash_lookup(key, &attrs_by_name);
 
     if (!attr) {
-	attr = (search_attr_t *)xzmalloc(sizeof(search_attr_t));
-	*attr = proto;
-	attr->name = key;
-	attr->part = (config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS)
-			? SEARCH_PART_HEADERS : -1);
-	attr->data1 = strchr(key, ':')+1;
-	hash_insert(attr->name, (void *)attr, &attrs_by_name);
-	key = NULL;	/* attr takes this over */
+        attr = (search_attr_t *)xzmalloc(sizeof(search_attr_t));
+        *attr = proto;
+        attr->name = key;
+        attr->part = (config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS)
+                        ? SEARCH_PART_HEADERS : -1);
+        attr->data1 = strchr(key, ':')+1;
+        hash_insert(attr->name, (void *)attr, &attrs_by_name);
+        key = NULL;     /* attr takes this over */
     }
 
     free(key);
@@ -2397,6 +2397,6 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
 EXPORTED int search_attr_is_fuzzable(const search_attr_t *attr)
 {
     return (attr->part != SEARCH_PART_NONE &&
-	    (attr->flags & SEA_FUZZABLE));
+            (attr->flags & SEA_FUZZABLE));
 }
 

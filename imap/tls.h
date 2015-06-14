@@ -59,20 +59,20 @@ int tls_enabled(void);
 
 /* init tls */
 int tls_init_serverengine(const char *ident,
-			  int verifydepth, /* depth to verify */
-			  int askcert);    /* 1 = client auth */
+                          int verifydepth, /* depth to verify */
+                          int askcert);    /* 1 = client auth */
 
 int tls_init_clientengine(int verifydepth,
-			  const char *var_server_cert,
-			  const char *var_server_key);
+                          const char *var_server_cert,
+                          const char *var_server_key);
 
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, int timeout,
-			int *layerbits, char **authid, SSL **ret);
+                        int *layerbits, char **authid, SSL **ret);
 
 int tls_start_clienttls(int readfd, int writefd,
-			int *layerbits, char **authid, SSL **ret,
-			SSL_SESSION **sess);
+                        int *layerbits, char **authid, SSL **ret,
+                        SSL_SESSION **sess);
 
 /* reset tls */
 int tls_reset_servertls(SSL **conn);

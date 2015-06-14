@@ -55,7 +55,7 @@
 #include "xmalloc.h"
 #include "exitcodes.h"
 
-struct mpool 
+struct mpool
 {
     struct mpool_blob *blob;
 };
@@ -68,7 +68,7 @@ struct mpool_blob
     struct mpool_blob *next; /* Next Pool */
 };
 
-static struct mpool_blob *new_mpool_blob(size_t size) 
+static struct mpool_blob *new_mpool_blob(size_t size)
 {
     struct mpool_blob *blob = xmalloc(sizeof(struct mpool_blob));
 
@@ -87,7 +87,7 @@ EXPORTED struct mpool *new_mpool(size_t size)
     struct mpool *ret = xmalloc(sizeof(struct mpool));
 
     ret->blob = new_mpool_blob(size);
-    
+
     return ret;
 }
 
@@ -98,17 +98,17 @@ EXPORTED void free_mpool(struct mpool *pool)
 
     if (!pool) return;
     if (!pool->blob) {
-	fatal("memory pool without a blob", EC_TEMPFAIL);
-	return;
+        fatal("memory pool without a blob", EC_TEMPFAIL);
+        return;
     }
-    
+
     p = pool->blob;
 
     while(p) {
-	p_next = p->next;
-	free(p->base);
-	free(p);
-	p = p_next;
+        p_next = p->next;
+        free(p->base);
+        free(p);
+        p = p_next;
     }
 
     free(pool);
@@ -128,13 +128,13 @@ EXPORTED void *mpool_malloc(struct mpool *pool, size_t size)
     void *ret = NULL;
     struct mpool_blob *p;
     size_t remain;
-    
+
     if(!pool || !pool->blob) {
-	fatal("mpool_malloc called without a valid pool", EC_TEMPFAIL);
+        fatal("mpool_malloc called without a valid pool", EC_TEMPFAIL);
     }
     if(!size) {
-	/* This is legal under ANSI C, so we should allow it too */
-	size = 1;
+        /* This is legal under ANSI C, so we should allow it too */
+        size = 1;
     }
 
     p = pool->blob;
@@ -142,18 +142,18 @@ EXPORTED void *mpool_malloc(struct mpool *pool, size_t size)
     /* This is a bit tricky, not only do we have to make sure that the current
      * pool has enough room, we need to be sure that we haven't rounded p->ptr
      * outside of the current pool anyway */
-    
+
     remain = p->size - ((char *)p->ptr - (char *)p->base);
 
     if (remain < size ||
         (char *) p->ptr > (p->size + (char *) p->base)) {
-      	/* Need a new pool */
-	struct mpool_blob *new_pool;
-       	size_t new_pool_size = 2 * ((size > p->size) ? size : p->size);
-	
-	new_pool = new_mpool_blob(new_pool_size);
-	new_pool->next = p;
-	p = pool->blob = new_pool;
+        /* Need a new pool */
+        struct mpool_blob *new_pool;
+        size_t new_pool_size = 2 * ((size > p->size) ? size : p->size);
+
+        new_pool = new_mpool_blob(new_pool_size);
+        new_pool->next = p;
+        p = pool->blob = new_pool;
     }
 
     ret = p->ptr;
@@ -168,9 +168,9 @@ EXPORTED void *mpool_malloc(struct mpool *pool, size_t size)
 EXPORTED char *mpool_strndup(struct mpool *pool, const char *str, size_t n)
 {
     char *ret;
-    
+
     if(!str) return NULL;
-    
+
     ret = mpool_malloc(pool, n+1);
     strncpy(ret, str, n);
     ret[n] = '\0';
@@ -182,10 +182,10 @@ EXPORTED char *mpool_strndup(struct mpool *pool, const char *str, size_t n)
 EXPORTED char *mpool_strdup(struct mpool *pool, const char *str)
 {
     size_t len;
-    
+
     if(!str) return NULL;
-    
+
     len = strlen(str);
-    
+
     return mpool_strndup(pool, str, len);
 }

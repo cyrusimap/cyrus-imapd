@@ -143,22 +143,22 @@ static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
 static void cmd_starttls(void);
 static void cmd_restart(struct sync_reserve_list **reserve_listp,
-		       int realloc);
+                       int realloc);
 static void cmd_compress(char *alg);
 
 /* generic commands - in dlist format */
 static void cmd_get(struct dlist *kl);
 static void cmd_apply(struct dlist *kl,
-		      struct sync_reserve_list *reserve_list);
+                      struct sync_reserve_list *reserve_list);
 
 static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
-		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation, const char *empty_resp,
-		      struct protstream *pin, struct protstream *pout,
-		      int *sasl_result, char **success_data);
+                      const char *init_resp, const char *resp_prefix,
+                      const char *continuation, const char *empty_resp,
+                      struct protstream *pin, struct protstream *pout,
+                      int *sasl_result, char **success_data);
 
 static struct {
     char *ipremoteport;
@@ -184,23 +184,23 @@ static void sync_reset(void)
     proc_cleanup();
 
     if (sync_in) {
-	prot_NONBLOCK(sync_in);
-	prot_fill(sync_in);
+        prot_NONBLOCK(sync_in);
+        prot_fill(sync_in);
 
-	prot_free(sync_in);
+        prot_free(sync_in);
     }
 
     if (sync_out) {
-	prot_flush(sync_out);
-	prot_free(sync_out);
+        prot_flush(sync_out);
+        prot_free(sync_out);
     }
 
     sync_in = sync_out = NULL;
 
 #ifdef HAVE_SSL
     if (tls_conn) {
-	tls_reset_servertls(&tls_conn);
-	tls_conn = NULL;
+        tls_reset_servertls(&tls_conn);
+        tls_conn = NULL;
     }
 #endif
 
@@ -208,20 +208,20 @@ static void sync_reset(void)
 
     sync_clienthost = "[local]";
     if (sync_logfd != -1) {
-	close(sync_logfd);
-	sync_logfd = -1;
+        close(sync_logfd);
+        sync_logfd = -1;
     }
     if (sync_userid != NULL) {
-	free(sync_userid);
-	sync_userid = NULL;
+        free(sync_userid);
+        sync_userid = NULL;
     }
     if (sync_authstate) {
-	auth_freestate(sync_authstate);
-	sync_authstate = NULL;
+        auth_freestate(sync_authstate);
+        sync_authstate = NULL;
     }
     if (sync_saslconn) {
-	sasl_dispose(&sync_saslconn);
-	sync_saslconn = NULL;
+        sasl_dispose(&sync_saslconn);
+        sync_saslconn = NULL;
     }
     sync_starttls_done = 0;
     sync_compress_done = 0;
@@ -246,8 +246,8 @@ static void sync_reset(void)
  * MUST NOT exit directly; must return with non-zero error code
  */
 int service_init(int argc __attribute__((unused)),
-		 char **argv __attribute__((unused)),
-		 char **envp __attribute__((unused)))
+                 char **argv __attribute__((unused)),
+                 char **envp __attribute__((unused)))
 {
     int opt, r;
 
@@ -262,21 +262,21 @@ int service_init(int argc __attribute__((unused)),
     global_sasl_init(1, 1, mysasl_cb);
 
     while ((opt = getopt(argc, argv, "p:f")) != EOF) {
-	switch(opt) {
-	case 'p': /* external protection */
-	    extprops_ssf = atoi(optarg);
-	    break;
-	case 'f':
-	    opt_force = 1;
-	    break;
-	default:
-	    usage();
-	}
+        switch(opt) {
+        case 'p': /* external protection */
+            extprops_ssf = atoi(optarg);
+            break;
+        case 'f':
+            opt_force = 1;
+            break;
+        default:
+            usage();
+        }
     }
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
-	fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EC_CONFIG);
     }
 
     /* open the mboxlist, we'll need it for real work */
@@ -293,7 +293,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Open the statuscache so we can invalidate seen states */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-	statuscache_open();
+        statuscache_open();
     }
 
 #ifdef WITH_DAV
@@ -313,27 +313,27 @@ static void dobanner(void)
     int mechcount;
 
     if (!sync_userid) {
-	if (sasl_listmech(sync_saslconn, NULL,
-			  "* SASL ", " ", "\r\n",
-			  &mechlist, NULL, &mechcount) == SASL_OK
-	    && mechcount > 0) {
-	    prot_printf(sync_out, "%s", mechlist);
-	}
+        if (sasl_listmech(sync_saslconn, NULL,
+                          "* SASL ", " ", "\r\n",
+                          &mechlist, NULL, &mechcount) == SASL_OK
+            && mechcount > 0) {
+            prot_printf(sync_out, "%s", mechlist);
+        }
 
-	if (tls_enabled() && !sync_starttls_done) {
-	    prot_printf(sync_out, "* STARTTLS\r\n");
-	}
+        if (tls_enabled() && !sync_starttls_done) {
+            prot_printf(sync_out, "* STARTTLS\r\n");
+        }
 
 #ifdef HAVE_ZLIB
-	if (!sync_compress_done && !sync_starttls_done) {
-	    prot_printf(sync_out, "* COMPRESS DEFLATE\r\n");
-	}
+        if (!sync_compress_done && !sync_starttls_done) {
+            prot_printf(sync_out, "* COMPRESS DEFLATE\r\n");
+        }
 #endif
     }
 
     prot_printf(sync_out,
-		"* OK %s Cyrus sync server %s\r\n",
-		config_servername, cyrus_version());
+                "* OK %s Cyrus sync server %s\r\n",
+                config_servername, cyrus_version());
 
     prot_flush(sync_out);
 }
@@ -342,8 +342,8 @@ static void dobanner(void)
  * run for each accepted connection
  */
 int service_main(int argc __attribute__((unused)),
-		 char **argv __attribute__((unused)),
-		 char **envp __attribute__((unused)))
+                 char **argv __attribute__((unused)),
+                 char **envp __attribute__((unused)))
 {
     struct protoent *proto;
     const char *localip, *remoteip;
@@ -362,49 +362,49 @@ int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     sync_clienthost = get_clienthost(0, &localip, &remoteip);
     if (!strcmp(sync_clienthost, UNIX_SOCKET)) {
-	/* we're not connected to an internet socket! */
-	sync_userid = xstrdup("cyrus");
-	sync_userisadmin = 1;
+        /* we're not connected to an internet socket! */
+        sync_userid = xstrdup("cyrus");
+        sync_userisadmin = 1;
     }
     else {
-	/* other params should be filled in */
-	if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
-			    NULL, 0, &sync_saslconn) != SASL_OK)
-	    fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
+        /* other params should be filled in */
+        if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
+                            NULL, 0, &sync_saslconn) != SASL_OK)
+            fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
 
-	/* will always return something valid */
-	secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
-	if (sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
-	    fatal("Failed to set SASL property", EC_TEMPFAIL);
+        /* will always return something valid */
+        secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
+        if (sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
+            fatal("Failed to set SASL property", EC_TEMPFAIL);
 
-	if (sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
-	    fatal("Failed to set SASL property", EC_TEMPFAIL);
+        if (sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
+            fatal("Failed to set SASL property", EC_TEMPFAIL);
 
-	if (localip) {
-	    sasl_setprop(sync_saslconn, SASL_IPLOCALPORT, localip);
-	    saslprops.iplocalport = xstrdup(localip);
-	}
+        if (localip) {
+            sasl_setprop(sync_saslconn, SASL_IPLOCALPORT, localip);
+            saslprops.iplocalport = xstrdup(localip);
+        }
 
-	if (remoteip) {
-	    if (sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip) != SASL_OK)
-		fatal("failed to set sasl property", EC_TEMPFAIL);
-	    saslprops.ipremoteport = xstrdup(remoteip);
-	}
+        if (remoteip) {
+            if (sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip) != SASL_OK)
+                fatal("failed to set sasl property", EC_TEMPFAIL);
+            saslprops.ipremoteport = xstrdup(remoteip);
+        }
 
-	/* Disable Nagle's Algorithm => increase throughput
-	 *
-	 * http://en.wikipedia.org/wiki/Nagle's_algorithm
-	 */
-	if ((proto = getprotobyname("tcp")) != NULL) {
-	    int on = 1;
+        /* Disable Nagle's Algorithm => increase throughput
+         *
+         * http://en.wikipedia.org/wiki/Nagle's_algorithm
+         */
+        if ((proto = getprotobyname("tcp")) != NULL) {
+            int on = 1;
 
-	    if (setsockopt(1, proto->p_proto, TCP_NODELAY,
-			   (void *) &on, sizeof(on)) != 0) {
-		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
-	    }
-	} else {
-	    syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
-	}
+            if (setsockopt(1, proto->p_proto, TCP_NODELAY,
+                           (void *) &on, sizeof(on)) != 0) {
+                syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+            }
+        } else {
+            syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
+        }
     }
 
     proc_register(config_ident, sync_clienthost, NULL, NULL, NULL);
@@ -418,7 +418,7 @@ int service_main(int argc __attribute__((unused)),
 
     sync_log_init();
     if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
-	sync_log_suppress();
+        sync_log_suppress();
 
     dobanner();
 
@@ -460,8 +460,8 @@ void shut_down(int code)
 #endif
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-	statuscache_close();
-	statuscache_done();
+        statuscache_close();
+        statuscache_done();
     }
 
     seen_done();
@@ -477,14 +477,14 @@ void shut_down(int code)
     partlist_local_done();
 
     if (sync_in) {
-	prot_NONBLOCK(sync_in);
-	prot_fill(sync_in);
-	prot_free(sync_in);
+        prot_NONBLOCK(sync_in);
+        prot_fill(sync_in);
+        prot_free(sync_in);
     }
 
     if (sync_out) {
-	prot_flush(sync_out);
-	prot_free(sync_out);
+        prot_flush(sync_out);
+        prot_free(sync_out);
     }
 
 #ifdef HAVE_SSL
@@ -501,14 +501,14 @@ EXPORTED void fatal(const char* s, int code)
     static int recurse_code = 0;
 
     if (recurse_code) {
-	/* We were called recursively. Just give up */
-	proc_cleanup();
-	exit(recurse_code);
+        /* We were called recursively. Just give up */
+        proc_cleanup();
+        exit(recurse_code);
     }
     recurse_code = code;
     if (sync_out) {
-	prot_printf(sync_out, "* Fatal error: %s\r\n", s);
-	prot_flush(sync_out);
+        prot_printf(sync_out, "* Fatal error: %s\r\n", s);
+        prot_flush(sync_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
     shut_down(code);
@@ -523,18 +523,18 @@ static int reset_saslconn(sasl_conn_t **conn)
     sasl_dispose(conn);
     /* do initialization typical of service_main */
     ret = sasl_server_new("csync", config_servername,
-			 NULL, NULL, NULL,
-			 NULL, 0, conn);
+                         NULL, NULL, NULL,
+                         NULL, 0, conn);
     if (ret != SASL_OK) return ret;
 
     if (saslprops.ipremoteport)
        ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-			  saslprops.ipremoteport);
+                          saslprops.ipremoteport);
     if (ret != SASL_OK) return ret;
 
     if (saslprops.iplocalport)
        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-			  saslprops.iplocalport);
+                          saslprops.iplocalport);
     if (ret != SASL_OK) return ret;
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
@@ -543,9 +543,9 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if (saslprops.ssf) {
-	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
     } else {
-	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
+        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if (ret != SASL_OK) return ret;
@@ -573,178 +573,178 @@ static void cmdloop(void)
     reserve_list = sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
 
     for (;;) {
-	prot_flush(sync_out);
+        prot_flush(sync_out);
 
-	/* Parse command name */
-	if ((c = getword(sync_in, &cmd)) == EOF)
-	    break;
+        /* Parse command name */
+        if ((c = getword(sync_in, &cmd)) == EOF)
+            break;
 
-	if (!cmd.s[0]) {
-	    prot_printf(sync_out, "BAD Null command\r\n");
-	    eatline(sync_in, c);
-	    continue;
-	}
+        if (!cmd.s[0]) {
+            prot_printf(sync_out, "BAD Null command\r\n");
+            eatline(sync_in, c);
+            continue;
+        }
 
-	if (Uislower(cmd.s[0])) 
-	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
-	for (p = &cmd.s[1]; *p; p++) {
-	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
-	}
+        if (Uislower(cmd.s[0]))
+            cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+        for (p = &cmd.s[1]; *p; p++) {
+            if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+        }
 
-	/* Must be an admin */
-	if (sync_userid && !sync_userisadmin) goto noperm;
+        /* Must be an admin */
+        if (sync_userid && !sync_userisadmin) goto noperm;
 
-	switch (cmd.s[0]) {
-	case 'A':
-	    if (!strcmp(cmd.s, "Authenticate")) {
-		int haveinitresp = 0;
-		if (c != ' ') goto missingargs;
-		c = getword(sync_in, &arg1);
-		if (!imparse_isatom(arg1.s)) {
-		    prot_printf(sync_out, "BAD Invalid mechanism\r\n");
-		    eatline(sync_in, c);
-		    continue;
-		}
-		if (c == ' ') {
-		    haveinitresp = 1;
-		    c = getword(sync_in, &arg2);
-		    if (c == EOF) goto missingargs;
-		}
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
+        switch (cmd.s[0]) {
+        case 'A':
+            if (!strcmp(cmd.s, "Authenticate")) {
+                int haveinitresp = 0;
+                if (c != ' ') goto missingargs;
+                c = getword(sync_in, &arg1);
+                if (!imparse_isatom(arg1.s)) {
+                    prot_printf(sync_out, "BAD Invalid mechanism\r\n");
+                    eatline(sync_in, c);
+                    continue;
+                }
+                if (c == ' ') {
+                    haveinitresp = 1;
+                    c = getword(sync_in, &arg2);
+                    if (c == EOF) goto missingargs;
+                }
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
 
-		if (sync_userid) {
-		    prot_printf(sync_out, "BAD Already authenticated\r\n");
-		    continue;
-		}
-		cmd_authenticate(arg1.s, haveinitresp ? arg2.s : NULL);
-		continue;
-	    }
-	    if (!sync_userid) goto nologin;
-	    if (!strcmp(cmd.s, "Apply")) {
-		kl = sync_parseline(sync_in);
-		if (kl) {
-		    cmd_apply(kl, reserve_list);
-		    dlist_free(&kl);
-		}
-		else {
-		    syslog(LOG_ERR, "IOERROR: received bad APPLY command");
-		    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse APPLY line\r\n");
-		}
-		continue;
-	    }
-	    break;
+                if (sync_userid) {
+                    prot_printf(sync_out, "BAD Already authenticated\r\n");
+                    continue;
+                }
+                cmd_authenticate(arg1.s, haveinitresp ? arg2.s : NULL);
+                continue;
+            }
+            if (!sync_userid) goto nologin;
+            if (!strcmp(cmd.s, "Apply")) {
+                kl = sync_parseline(sync_in);
+                if (kl) {
+                    cmd_apply(kl, reserve_list);
+                    dlist_free(&kl);
+                }
+                else {
+                    syslog(LOG_ERR, "IOERROR: received bad APPLY command");
+                    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse APPLY line\r\n");
+                }
+                continue;
+            }
+            break;
 
-	case 'C':
-	    if (!strcmp(cmd.s, "Compress")) {
-		if (c != ' ') goto missingargs;
-		c = getword(sync_in, &arg1);
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-		cmd_compress(arg1.s);
-		continue;
-	    }
-	    break;
+        case 'C':
+            if (!strcmp(cmd.s, "Compress")) {
+                if (c != ' ') goto missingargs;
+                c = getword(sync_in, &arg1);
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
+                cmd_compress(arg1.s);
+                continue;
+            }
+            break;
 
-	case 'G':
-	    if (!sync_userid) goto nologin;
-	    if (!strcmp(cmd.s, "Get")) {
-		kl = sync_parseline(sync_in);
-		if (kl) {
-		    cmd_get(kl);
-		    dlist_free(&kl);
-		}
-		else {
-		    syslog(LOG_ERR, "IOERROR: received bad GET command");
-		    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse GET line\r\n");
-		}
-		continue;
-	    }
-	    break;
+        case 'G':
+            if (!sync_userid) goto nologin;
+            if (!strcmp(cmd.s, "Get")) {
+                kl = sync_parseline(sync_in);
+                if (kl) {
+                    cmd_get(kl);
+                    dlist_free(&kl);
+                }
+                else {
+                    syslog(LOG_ERR, "IOERROR: received bad GET command");
+                    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse GET line\r\n");
+                }
+                continue;
+            }
+            break;
 
-	case 'E':
-	    if (!strcmp(cmd.s, "Exit")) {
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-		prot_printf(sync_out, "OK Finished\r\n");
-		prot_flush(sync_out);
-		goto exit;
-	    }
-	    break;
+        case 'E':
+            if (!strcmp(cmd.s, "Exit")) {
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
+                prot_printf(sync_out, "OK Finished\r\n");
+                prot_flush(sync_out);
+                goto exit;
+            }
+            break;
 
-	case 'N':
-	    if (!strcmp(cmd.s, "Noop")) {
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-		prot_printf(sync_out, "OK Noop completed\r\n");
-		continue;
-	    }
-	    break;
+        case 'N':
+            if (!strcmp(cmd.s, "Noop")) {
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
+                prot_printf(sync_out, "OK Noop completed\r\n");
+                continue;
+            }
+            break;
 
-	case 'R':
-	    if (!strcmp(cmd.s, "Restart")) {
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-		/* just clear the GUID cache */
-		cmd_restart(&reserve_list, 1);
-		prot_printf(sync_out, "OK Restarting\r\n");
-		continue;
-	    }
-	    else if (!sync_userid) goto nologin;
-	    break;
+        case 'R':
+            if (!strcmp(cmd.s, "Restart")) {
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
+                /* just clear the GUID cache */
+                cmd_restart(&reserve_list, 1);
+                prot_printf(sync_out, "OK Restarting\r\n");
+                continue;
+            }
+            else if (!sync_userid) goto nologin;
+            break;
 
-	case 'S':
-	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
+        case 'S':
+            if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+                if (c == '\r') c = prot_getc(sync_in);
+                if (c != '\n') goto extraargs;
 
-		/* XXX  discard any input pipelined after STARTTLS */
-		prot_flush(sync_in);
+                /* XXX  discard any input pipelined after STARTTLS */
+                prot_flush(sync_in);
 
-		/* if we've already done SASL fail */
-		if (sync_userid != NULL) {
-		    prot_printf(sync_out,
-				"BAD Can't Starttls after authentication\r\n");
-		    continue;
-		}
-		/* check if already did a successful tls */
-		if (sync_starttls_done == 1) {
-		    prot_printf(sync_out,
-				"BAD Already did a successful Starttls\r\n");
-		    continue;
-		}
-		cmd_starttls();
-		continue;
-	    }
-	    break;
+                /* if we've already done SASL fail */
+                if (sync_userid != NULL) {
+                    prot_printf(sync_out,
+                                "BAD Can't Starttls after authentication\r\n");
+                    continue;
+                }
+                /* check if already did a successful tls */
+                if (sync_starttls_done == 1) {
+                    prot_printf(sync_out,
+                                "BAD Already did a successful Starttls\r\n");
+                    continue;
+                }
+                cmd_starttls();
+                continue;
+            }
+            break;
 
-	}
+        }
 
-	syslog(LOG_ERR, "IOERROR: received bad command: %s", cmd.s);
-	prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
-	eatline(sync_in, c);
-	continue;
+        syslog(LOG_ERR, "IOERROR: received bad command: %s", cmd.s);
+        prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
+        eatline(sync_in, c);
+        continue;
 
     nologin:
-	prot_printf(sync_out, "NO Please authenticate first\r\n");
-	eatline(sync_in, c);
-	continue;
+        prot_printf(sync_out, "NO Please authenticate first\r\n");
+        eatline(sync_in, c);
+        continue;
 
     noperm:
-	prot_printf(sync_out, "NO %s\r\n",
-		    error_message(IMAP_PERMISSION_DENIED));
-	eatline(sync_in, c);
-	continue;
+        prot_printf(sync_out, "NO %s\r\n",
+                    error_message(IMAP_PERMISSION_DENIED));
+        eatline(sync_in, c);
+        continue;
 
     missingargs:
-	prot_printf(sync_out, "BAD Missing required argument to %s\r\n", cmd.s);
-	eatline(sync_in, c);
-	continue;
+        prot_printf(sync_out, "BAD Missing required argument to %s\r\n", cmd.s);
+        eatline(sync_in, c);
+        continue;
 
     extraargs:
-	prot_printf(sync_out, "BAD Unexpected extra arguments to %s\r\n", cmd.s);
-	eatline(sync_in, c);
-	continue;
+        prot_printf(sync_out, "BAD Unexpected extra arguments to %s\r\n", cmd.s);
+        eatline(sync_in, c);
+        continue;
     }
 
  exit:
@@ -760,49 +760,49 @@ static void cmd_authenticate(char *mech, char *resp)
     int failedloginpause;
 
     if (sync_userid) {
-	prot_printf(sync_out, "BAD Already authenticated\r\n");
-	return;
+        prot_printf(sync_out, "BAD Already authenticated\r\n");
+        return;
     }
 
     r = saslserver(sync_saslconn, mech, resp, "", "+ ", "",
-		   sync_in, sync_out, &sasl_result, NULL);
+                   sync_in, sync_out, &sasl_result, NULL);
 
     if (r) {
-	const char *errorstring = NULL;
+        const char *errorstring = NULL;
 
-	switch (r) {
-	case IMAP_SASL_CANCEL:
-	    prot_printf(sync_out,
-			"BAD Client canceled authentication\r\n");
-	    break;
-	case IMAP_SASL_PROTERR:
-	    errorstring = prot_error(sync_in);
+        switch (r) {
+        case IMAP_SASL_CANCEL:
+            prot_printf(sync_out,
+                        "BAD Client canceled authentication\r\n");
+            break;
+        case IMAP_SASL_PROTERR:
+            errorstring = prot_error(sync_in);
 
-	    prot_printf(sync_out,
-			"NO Error reading client response: %s\r\n",
-			errorstring ? errorstring : "");
-	    break;
-	default:
-	    /* failed authentication */
-	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
+            prot_printf(sync_out,
+                        "NO Error reading client response: %s\r\n",
+                        errorstring ? errorstring : "");
+            break;
+        default:
+            /* failed authentication */
+            errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
-	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
-		   sync_clienthost, mech, sasl_errdetail(sync_saslconn));
+            syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
+                   sync_clienthost, mech, sasl_errdetail(sync_saslconn));
 
-	    failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
-	    if (failedloginpause != 0) {
-		sleep(failedloginpause);
-	    }
+            failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+            if (failedloginpause != 0) {
+                sleep(failedloginpause);
+            }
 
-	    if (errorstring) {
-		prot_printf(sync_out, "NO %s\r\n", errorstring);
-	    } else {
-		prot_printf(sync_out, "NO Error authenticating\r\n");
-	    }
-	}
+            if (errorstring) {
+                prot_printf(sync_out, "NO %s\r\n", errorstring);
+            } else {
+                prot_printf(sync_out, "NO Error authenticating\r\n");
+            }
+        }
 
-	reset_saslconn(&sync_saslconn);
-	return;
+        reset_saslconn(&sync_saslconn);
+        return;
     }
 
     /* successful authentication */
@@ -812,19 +812,19 @@ static void cmd_authenticate(char *mech, char *resp)
      */
     sasl_result = sasl_getprop(sync_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
-	prot_printf(sync_out, "NO weird SASL error %d SASL_USERNAME\r\n",
-		    sasl_result);
-	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
-	       sasl_result);
-	reset_saslconn(&sync_saslconn);
-	return;
+        prot_printf(sync_out, "NO weird SASL error %d SASL_USERNAME\r\n",
+                    sasl_result);
+        syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
+               sasl_result);
+        reset_saslconn(&sync_saslconn);
+        return;
     }
 
     sync_userid = xstrdup((const char *) val);
     proc_register(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,
-	   mech, sync_starttls_done ? "+TLS" : "", "User logged in");
+           mech, sync_starttls_done ? "+TLS" : "", "User logged in");
 
     sasl_getprop(sync_saslconn, SASL_SSF, &val);
     ssf = *((sasl_ssf_t *) val);
@@ -832,17 +832,17 @@ static void cmd_authenticate(char *mech, char *resp)
     /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
        but the current libsasl doesn't allow that. */
     if (sync_starttls_done) {
-	switch(ssf) {
-	case 0: ssfmsg = "tls protection"; break;
-	case 1: ssfmsg = "tls plus integrity protection"; break;
-	default: ssfmsg = "tls plus privacy protection"; break;
-	}
+        switch(ssf) {
+        case 0: ssfmsg = "tls protection"; break;
+        case 1: ssfmsg = "tls plus integrity protection"; break;
+        default: ssfmsg = "tls plus privacy protection"; break;
+        }
     } else {
-	switch(ssf) {
-	case 0: ssfmsg = "no protection"; break;
-	case 1: ssfmsg = "integrity protection"; break;
-	default: ssfmsg = "privacy protection"; break;
-	}
+        switch(ssf) {
+        case 0: ssfmsg = "no protection"; break;
+        case 1: ssfmsg = "integrity protection"; break;
+        default: ssfmsg = "privacy protection"; break;
+        }
     }
 
     prot_printf(sync_out, "OK Success (%s)\r\n", ssfmsg);
@@ -863,22 +863,22 @@ static void cmd_starttls(void)
     char *auth_id;
 
     if (sync_starttls_done == 1) {
-	prot_printf(sync_out, "NO %s\r\n",
-		    "Already successfully executed STARTTLS");
-	return;
+        prot_printf(sync_out, "NO %s\r\n",
+                    "Already successfully executed STARTTLS");
+        return;
     }
 
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &ssf;
 
     result=tls_init_serverengine("csync",
-				 5,        /* depth to verify */
-				 1);       /* can client auth? */
+                                 5,        /* depth to verify */
+                                 1);       /* can client auth? */
 
     if (result == -1) {
-	syslog(LOG_ERR, "error initializing TLS");
-	prot_printf(sync_out, "NO %s\r\n", "Error initializing TLS");
-	return;
+        syslog(LOG_ERR, "error initializing TLS");
+        prot_printf(sync_out, "NO %s\r\n", "Error initializing TLS");
+        return;
     }
 
     prot_printf(sync_out, "OK %s\r\n", "Begin TLS negotiation now");
@@ -886,36 +886,36 @@ static void cmd_starttls(void)
     prot_flush(sync_out);
 
     result=tls_start_servertls(0, /* read */
-			       1, /* write */
-			       180, /* 3 minutes */
-			       layerp,
-			       &auth_id,
-			       &tls_conn);
+                               1, /* write */
+                               180, /* 3 minutes */
+                               layerp,
+                               &auth_id,
+                               &tls_conn);
 
     /* if error */
     if (result==-1) {
-	prot_printf(sync_out, "NO Starttls failed\r\n");
-	syslog(LOG_NOTICE, "STARTTLS failed: %s", sync_clienthost);
-	return;
+        prot_printf(sync_out, "NO Starttls failed\r\n");
+        syslog(LOG_NOTICE, "STARTTLS failed: %s", sync_clienthost);
+        return;
     }
 
     /* tell SASL about the negotiated layer */
     result = sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &ssf);
     if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
     saslprops.ssf = ssf;
 
     result = sasl_setprop(sync_saslconn, SASL_AUTH_EXTERNAL, auth_id);
     if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
     if (saslprops.authid) {
-	free(saslprops.authid);
-	saslprops.authid = NULL;
+        free(saslprops.authid);
+        saslprops.authid = NULL;
     }
     if (auth_id)
-	saslprops.authid = xstrdup(auth_id);
+        saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(sync_in, tls_conn);
@@ -936,17 +936,17 @@ static void cmd_starttls(void)
 static void cmd_compress(char *alg)
 {
     if (sync_compress_done) {
-	prot_printf(sync_out, "NO Compression already active: %s\r\n", alg);
-	return;
+        prot_printf(sync_out, "NO Compression already active: %s\r\n", alg);
+        return;
     }
     if (strcasecmp(alg, "DEFLATE")) {
-	prot_printf(sync_out, "NO Unknown compression algorithm: %s\r\n", alg);
-	return;
+        prot_printf(sync_out, "NO Unknown compression algorithm: %s\r\n", alg);
+        return;
     }
     if (ZLIB_VERSION[0] != zlibVersion()[0]) {
-	prot_printf(sync_out, "NO Error initializing %s "
-		    "(incompatible zlib version)\r\n", alg);
-	return;
+        prot_printf(sync_out, "NO Error initializing %s "
+                    "(incompatible zlib version)\r\n", alg);
+        return;
     }
     prot_printf(sync_out, "OK %s active\r\n", alg);
     prot_flush(sync_out);
@@ -977,8 +977,8 @@ partition_list_add(char *name, struct partition_list *pl)
 
     /* Is name already on list? */
     for (p=pl; p; p = p->next) {
-	if (!strcmp(p->name, name))
-	    return(pl);
+        if (!strcmp(p->name, name))
+            return(pl);
     }
 
     /* Add entry to start of list and return new list */
@@ -993,12 +993,12 @@ static void
 partition_list_free(struct partition_list *current)
 {
     while (current) {
-	struct partition_list *next = current->next;
+        struct partition_list *next = current->next;
 
-	free(current->name);
-	free(current);
+        free(current->name);
+        free(current);
 
-	current = next;
+        current = next;
     }
 }
 
@@ -1011,28 +1011,28 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
     struct partition_list *p, *pl = NULL;
 
     for (res = l->head; res; res = res->next) {
-	for (msg = res->list->head; msg; msg = msg->next) {
-	    if (!msg->fname) continue;
-	    pl = partition_list_add(res->part, pl);
-	    unlink(msg->fname);
-	}
+        for (msg = res->list->head; msg; msg = msg->next) {
+            if (!msg->fname) continue;
+            pl = partition_list_add(res->part, pl);
+            unlink(msg->fname);
+        }
     }
     sync_reserve_list_free(reserve_listp);
 
     /* Remove all <partition>/sync./<pid> directories referred to above */
     for (p=pl; p ; p = p->next) {
-	static char buf[MAX_MAILBOX_PATH];
+        static char buf[MAX_MAILBOX_PATH];
 
-	snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
-		 config_partitiondir(p->name), (unsigned long)getpid());
-	rmdir(buf);
+        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                 config_partitiondir(p->name), (unsigned long)getpid());
+        rmdir(buf);
     }
     partition_list_free(pl);
 
     if (re_alloc)
-	*reserve_listp = sync_reserve_list_create(hash_size);
+        *reserve_listp = sync_reserve_list_create(hash_size);
     else
-	*reserve_listp = NULL;
+        *reserve_listp = NULL;
 }
 
 /******************************************************************************/
@@ -1040,12 +1040,12 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
 static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
 {
     struct sync_state sync_state = {
-	sync_userid,
-	sync_userisadmin,
-	sync_authstate,
-	&sync_namespace,
-	sync_out,
-	0 /* local_only */
+        sync_userid,
+        sync_userisadmin,
+        sync_authstate,
+        &sync_namespace,
+        sync_out,
+        0 /* local_only */
     };
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
@@ -1055,12 +1055,12 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
 static void cmd_get(struct dlist *kin)
 {
     struct sync_state sync_state = {
-	sync_userid,
-	sync_userisadmin,
-	sync_authstate,
-	&sync_namespace,
-	sync_out,
-	0 /* local_only */
+        sync_userid,
+        sync_userisadmin,
+        sync_authstate,
+        &sync_namespace,
+        sync_out,
+        0 /* local_only */
     };
 
     const char *resp = sync_get(kin, &sync_state);

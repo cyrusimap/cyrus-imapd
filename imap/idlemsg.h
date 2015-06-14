@@ -61,7 +61,7 @@ struct idle_message_s
     char mboxname[MAX_MAILBOX_BUFFER];
 };
 
-#define IDLE_MESSAGE_BASE_SIZE	(1 * (int) sizeof(unsigned long))
+#define IDLE_MESSAGE_BASE_SIZE  (1 * (int) sizeof(unsigned long))
 
 enum {
     IDLE_MSG_INIT,
@@ -78,7 +78,7 @@ int idle_init_sock(const struct sockaddr_un *);
 void idle_done_sock(void);
 int idle_get_sock(void);
 int idle_send(const struct sockaddr_un *remote,
-	      const idle_message_t *msg);
+              const idle_message_t *msg);
 int idle_recv(struct sockaddr_un *remote, idle_message_t *msg);
 
 

@@ -37,19 +37,19 @@
 #include "vzic-dump.h"
 
 
-static void	dump_add_rule			(char		*name,
-						 GArray		*rule_array,
-						 GPtrArray	*name_array);
-static int	dump_compare_strings		(const void	*arg1,
-						 const void	*arg2);
+static void     dump_add_rule                   (char           *name,
+                                                 GArray         *rule_array,
+                                                 GPtrArray      *name_array);
+static int      dump_compare_strings            (const void     *arg1,
+                                                 const void     *arg2);
 
 
 void
-dump_zone_data			(GArray		*zone_data,
-				 char		*filename)
+dump_zone_data                  (GArray         *zone_data,
+                                 char           *filename)
 {
   static char *months[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-			    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
   FILE *fp;
   ZoneData *zone;
   ZoneLineData *zone_line;
@@ -71,53 +71,53 @@ dump_zone_data			(GArray		*zone_data,
       zone_line = &g_array_index (zone->zone_line_data, ZoneLineData, j);
 
       if (j != 0)
-	fprintf (fp, "\t\t\t");
+        fprintf (fp, "\t\t\t");
 
       fprintf (fp, "%s\t", dump_time (zone_line->stdoff_seconds, TIME_WALL,
-				      FALSE));
+                                      FALSE));
 
       if (zone_line->rules)
-	fprintf (fp, "%s\t", zone_line->rules);
+        fprintf (fp, "%s\t", zone_line->rules);
       else if (zone_line->save_seconds != 0)
-	fprintf (fp, "%s\t", dump_time (zone_line->save_seconds, TIME_WALL,
-					FALSE));
+        fprintf (fp, "%s\t", dump_time (zone_line->save_seconds, TIME_WALL,
+                                        FALSE));
       else
-	fprintf (fp, "-\t");
+        fprintf (fp, "-\t");
 
       fprintf (fp, "%s\t", zone_line->format ? zone_line->format : "-");
 
       if (zone_line->until_set) {
-	fprintf (fp, "%s\t", dump_year (zone_line->until_year));
+        fprintf (fp, "%s\t", dump_year (zone_line->until_year));
 
-	output_month = output_day = output_time = FALSE;
+        output_month = output_day = output_time = FALSE;
 
-	if (zone_line->until_time_code != TIME_WALL
-	    || zone_line->until_time_seconds != 0)
-	  output_month = output_day = output_time = TRUE;
-	else if (zone_line->until_day_code != DAY_SIMPLE
-		 || zone_line->until_day_number != 1)
-	  output_month = output_day = TRUE;
-	else if (zone_line->until_month != 0)
-	  output_month = TRUE;
+        if (zone_line->until_time_code != TIME_WALL
+            || zone_line->until_time_seconds != 0)
+          output_month = output_day = output_time = TRUE;
+        else if (zone_line->until_day_code != DAY_SIMPLE
+                 || zone_line->until_day_number != 1)
+          output_month = output_day = TRUE;
+        else if (zone_line->until_month != 0)
+          output_month = TRUE;
 
-	if (output_month)
-	  fprintf (fp, "%s", months[zone_line->until_month]);
+        if (output_month)
+          fprintf (fp, "%s", months[zone_line->until_month]);
 
-	fprintf (fp, "\t");
+        fprintf (fp, "\t");
 
-	if (output_day)
-	  fprintf (fp, "%s", dump_day_coded (zone_line->until_day_code,
-					     zone_line->until_day_number,
-					     zone_line->until_day_weekday));
+        if (output_day)
+          fprintf (fp, "%s", dump_day_coded (zone_line->until_day_code,
+                                             zone_line->until_day_number,
+                                             zone_line->until_day_weekday));
 
-	fprintf (fp, "\t");
+        fprintf (fp, "\t");
 
-	if (output_time)
-	  fprintf (fp, "%s", dump_time (zone_line->until_time_seconds,
-					zone_line->until_time_code, FALSE));
+        if (output_time)
+          fprintf (fp, "%s", dump_time (zone_line->until_time_seconds,
+                                        zone_line->until_time_code, FALSE));
 
       } else {
-	fprintf (fp, "\t\t\t");
+        fprintf (fp, "\t\t\t");
       }
 
       fprintf (fp, "\n");
@@ -129,8 +129,8 @@ dump_zone_data			(GArray		*zone_data,
 
 
 void
-dump_rule_data			(GHashTable	*rule_data,
-				 char		*filename)
+dump_rule_data                  (GHashTable     *rule_data,
+                                 char           *filename)
 {
   FILE *fp;
   GPtrArray *name_array;
@@ -150,7 +150,7 @@ dump_rule_data			(GHashTable	*rule_data,
   name_array = g_ptr_array_new ();
   g_hash_table_foreach (rule_data, (GHFunc) dump_add_rule, name_array);
   qsort (name_array->pdata, name_array->len, sizeof (char*),
-	 dump_compare_strings);
+         dump_compare_strings);
 
   for (i = 0; i < name_array->len; i++) {
     name = g_ptr_array_index (name_array, i);
@@ -169,17 +169,17 @@ dump_rule_data			(GHashTable	*rule_data,
 
 
 static void
-dump_add_rule			(char		*name,
-				 GArray		*rule_array,
-				 GPtrArray	*name_array)
+dump_add_rule                   (char           *name,
+                                 GArray         *rule_array,
+                                 GPtrArray      *name_array)
 {
   g_ptr_array_add (name_array, name);
 }
 
 
 static int
-dump_compare_strings		(const void	*arg1,
-				 const void	*arg2)
+dump_compare_strings            (const void     *arg1,
+                                 const void     *arg2)
 {
   char **a, **b;
 
@@ -191,18 +191,18 @@ dump_compare_strings		(const void	*arg1,
 
 
 void
-dump_rule_array			(char		*name,
-				 GArray		*rule_array,
-				 FILE		*fp)
+dump_rule_array                 (char           *name,
+                                 GArray         *rule_array,
+                                 FILE           *fp)
 {
   static char *months[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-			    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
   RuleData *rule;
   int i;
 
 #if 0
-  fprintf (fp, "\n# Rule	NAME	FROM	TO	TYPE	IN	ON	AT	SAVE	LETTER/S");
+  fprintf (fp, "\n# Rule        NAME    FROM    TO      TYPE    IN      ON      AT      SAVE    LETTER/S");
 #endif
 
   for (i = 0; i < rule_array->len; i++) {
@@ -220,11 +220,11 @@ dump_rule_array			(char		*name,
     fprintf (fp, "%s\t", months[rule->in_month]);
 
     fprintf (fp, "%s\t",
-	     dump_day_coded (rule->on_day_code, rule->on_day_number,
-			     rule->on_day_weekday));
+             dump_day_coded (rule->on_day_code, rule->on_day_number,
+                             rule->on_day_weekday));
 
     fprintf (fp, "%s\t", dump_time (rule->at_time_seconds, rule->at_time_code,
-				    FALSE));
+                                    FALSE));
 
     fprintf (fp, "%s\t", dump_time (rule->save_seconds, TIME_WALL, TRUE));
 
@@ -236,9 +236,9 @@ dump_rule_array			(char		*name,
 
 
 char*
-dump_time			(int		 seconds,
-				 TimeCode	 time_code,
-				 gboolean	 use_zero)
+dump_time                       (int             seconds,
+                                 TimeCode        time_code,
+                                 gboolean        use_zero)
 {
   static char buffer[256], *sign;
   int hours, minutes;
@@ -274,13 +274,13 @@ dump_time			(int		 seconds,
 
 
 char*
-dump_day_coded			(DayCode	day_code,
-				 int		day_number,
-				 int		day_weekday)
+dump_day_coded                  (DayCode        day_code,
+                                 int            day_number,
+                                 int            day_weekday)
 {
   static char buffer[256];
   static char *weekdays[] = { "Sun", "Mon", "Tue", "Wed",
-			      "Thu", "Fri", "Sat" };
+                              "Thu", "Fri", "Sat" };
 
   switch (day_code) {
   case DAY_SIMPLE:
@@ -305,7 +305,7 @@ dump_day_coded			(DayCode	day_code,
 
 
 char*
-dump_year			(int		year)
+dump_year                       (int            year)
 {
   static char buffer[256];
 
@@ -320,9 +320,9 @@ dump_year			(int		year)
 
 
 void
-dump_time_zone_names		(GList		*names,
-				 char		*output_dir,
-				 GHashTable	*zones_hash)
+dump_time_zone_names            (GList          *names,
+                                 char           *output_dir,
+                                 GHashTable     *zones_hash)
 {
   char filename[PATHNAME_BUFFER_SIZE], *zone_name, *zone_name_in_hash = NULL;
   char strings_filename[PATHNAME_BUFFER_SIZE];
@@ -361,25 +361,25 @@ dump_time_zone_names		(GList		*names,
        so we use the entry from the timezone linked from. */
     if (!zone_desc) {
       if (!strcmp (zone_name, "America/Indiana/Indianapolis"))
-	zone_name_in_hash = "America/Indianapolis";
+        zone_name_in_hash = "America/Indianapolis";
       else if (!strcmp (zone_name, "America/Kentucky/Louisville"))
-	zone_name_in_hash = "America/Louisville";
+        zone_name_in_hash = "America/Louisville";
       else if (!strcmp (zone_name, "Asia/Istanbul"))
-	zone_name_in_hash = "Europe/Istanbul";
+        zone_name_in_hash = "Europe/Istanbul";
       else if (!strcmp (zone_name, "Europe/Nicosia"))
-	zone_name_in_hash = "Asia/Nicosia";
+        zone_name_in_hash = "Asia/Nicosia";
 
       if (zone_name_in_hash)
-	zone_desc = g_hash_table_lookup (zones_hash, zone_name_in_hash);
+        zone_desc = g_hash_table_lookup (zones_hash, zone_name_in_hash);
     }
 
     if (zone_desc) {
       fprintf (fp, "%+04i%02i%02i %+04i%02i%02i %s\n",
-	       zone_desc->latitude[0], zone_desc->latitude[1],
-	       zone_desc->latitude[2],
-	       zone_desc->longitude[0], zone_desc->longitude[1],
-	       zone_desc->longitude[2],
-	       zone_name);
+               zone_desc->latitude[0], zone_desc->latitude[1],
+               zone_desc->latitude[2],
+               zone_desc->longitude[0], zone_desc->longitude[1],
+               zone_desc->longitude[2],
+               zone_name);
     } else {
       g_print ("Zone description not found for: %s\n", zone_name);
       fprintf (fp, "%s\n", zone_name);
@@ -391,7 +391,7 @@ dump_time_zone_names		(GList		*names,
       char zone_name_buffer[1024], *src, *dest;
 
       for (src = zone_name, dest = zone_name_buffer; *src; src++, dest++)
-	*dest = (*src == '_') ? ' ' : *src;
+        *dest = (*src == '_') ? ' ' : *src;
       *dest = '\0';
 #endif
 

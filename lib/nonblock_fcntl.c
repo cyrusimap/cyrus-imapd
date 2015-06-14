@@ -49,8 +49,8 @@
 #include "exitcodes.h"
 #include "nonblock.h"
 
-#ifndef	FNDELAY
-#define FNDELAY		O_NDELAY
+#ifndef FNDELAY
+#define FNDELAY         O_NDELAY
 #endif
 
 #ifdef O_NONBLOCK
@@ -73,10 +73,10 @@ EXPORTED void nonblock(int fd, int mode)
     flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) fatal("Internal error: fcntl F_GETFL failed", EC_IOERR);
     if (mode) {
-	flags |= NON_BLOCKING_MODE;
+        flags |= NON_BLOCKING_MODE;
     }
     else {
-	flags &= ~NON_BLOCKING_MODE;
+        flags &= ~NON_BLOCKING_MODE;
     }
     (void)fcntl(fd, F_SETFL, flags);
 }

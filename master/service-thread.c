@@ -83,7 +83,7 @@ void notify_master(int fd, int msg)
     notifymsg.message = msg;
     notifymsg.service_pid = getpid();
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
-	syslog(LOG_ERR, "unable to tell master %x: %m", msg);
+        syslog(LOG_ERR, "unable to tell master %x: %m", msg);
     }
 }
 
@@ -104,18 +104,18 @@ static int libwrap_ask(struct request_info *req, int fd)
     struct sockaddr *sin = (struct sockaddr *)&sin_storage;
     socklen_t sinlen;
     int a;
-    
+
     /* XXX: old FreeBSD didn't fill sockaddr correctly against AF_UNIX */
     sin->sa_family = AF_UNIX;
 
     /* is this a connection from the local host? */
     sinlen = sizeof(struct sockaddr_storage);
     if (getpeername(fd, sin, &sinlen) == 0) {
-	if (sin->sa_family == AF_UNIX) {
-	    return 1;
-	}
+        if (sin->sa_family == AF_UNIX) {
+            return 1;
+        }
     }
-    
+
     /* i hope using the sock_* functions are legal; it certainly makes
        this code very easy! */
     request_set(req, RQ_FILE, fd, 0);
@@ -123,7 +123,7 @@ static int libwrap_ask(struct request_info *req, int fd)
 
     a = hosts_access(req);
     if (!a) {
-	syslog(deny_severity, "refused connection from %s", eval_client(req));
+        syslog(deny_severity, "refused connection from %s", eval_client(req));
     }
 
     return a;
@@ -133,13 +133,13 @@ static int libwrap_ask(struct request_info *req, int fd)
 struct request_info { int x; };
 
 static void libwrap_init(struct request_info *r __attribute__((unused)),
-			 char *service __attribute__((unused)))
+                         char *service __attribute__((unused)))
 {
 
 }
 
 static int libwrap_ask(struct request_info *r __attribute__((unused)),
-		       int fd __attribute__((unused)))
+                       int fd __attribute__((unused)))
 {
     return 1;
 }
@@ -160,31 +160,31 @@ int main(int argc, char **argv, char **envp)
     strarray_t newargv = STRARRAY_INITIALIZER;
 
     opterr = 0; /* disable error reporting,
-		   since we don't know about service-specific options */
+                   since we don't know about service-specific options */
 
     strarray_append(&newargv, argv[0]);
 
     while ((opt = getopt(argc, argv, "C:D")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	case 'D':
-	    call_debugger = 1;
-	    break;
-	default:
-	    strarray_append(&newargv, argv[optind-1]);
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+        case 'D':
+            call_debugger = 1;
+            break;
+        default:
+            strarray_append(&newargv, argv[optind-1]);
 
-	    /* option has an argument */
-	    if (optind < argc && argv[optind][0] != '-')
-		strarray_append(&newargv, argv[optind++]);
+            /* option has an argument */
+            if (optind < argc && argv[optind][0] != '-')
+                strarray_append(&newargv, argv[optind++]);
 
-	    break;
-	}
+            break;
+        }
     }
     /* grab the remaining arguments */
     for (; optind < argc; optind++)
-	strarray_append(&newargv, argv[optind]);
+        strarray_append(&newargv, argv[optind]);
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
@@ -193,14 +193,14 @@ int main(int argc, char **argv, char **envp)
     if (p) verbose = atoi(p) + 1;
 
     if (verbose > 30) {
-	syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
-	sleep(15);
+        syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
+        sleep(15);
     }
 
     p = getenv("CYRUS_SERVICE");
     if (p == NULL) {
-	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
-	exit(EX_SOFTWARE);
+        syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
+        exit(EX_SOFTWARE);
     }
     service = xstrdup(p);
 
@@ -208,98 +208,98 @@ int main(int argc, char **argv, char **envp)
     cyrus_init(alt_config, service, 0, config_need_data);
 
     if (call_debugger) {
-	char debugbuf[1024];
-	int ret;
-	const char *debugger = config_getstring(IMAPOPT_DEBUG_COMMAND);
-	if (debugger) {
-	    snprintf(debugbuf, sizeof(debugbuf), debugger, 
-		     argv[0], getpid(), service);
-	    syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
-	    ret = system(debugbuf); /* run debugger */
-	    syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
-	}
+        char debugbuf[1024];
+        int ret;
+        const char *debugger = config_getstring(IMAPOPT_DEBUG_COMMAND);
+        if (debugger) {
+            snprintf(debugbuf, sizeof(debugbuf), debugger,
+                     argv[0], getpid(), service);
+            syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
+            ret = system(debugbuf); /* run debugger */
+            syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
+        }
     }
     syslog(LOG_DEBUG, "executed");
 
     /* set close on exec */
     fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD, 
-				       fdflags | FD_CLOEXEC);
+    if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
+                                       fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
-	syslog(LOG_ERR, "unable to set close on exec: %m");
-	if (MESSAGE_MASTER_ON_EXIT) 
-	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-	return 1;
+        syslog(LOG_ERR, "unable to set close on exec: %m");
+        if (MESSAGE_MASTER_ON_EXIT)
+            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        return 1;
     }
     fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD, 
-				       fdflags | FD_CLOEXEC);
+    if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
+                                       fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
-	syslog(LOG_ERR, "unable to set close on exec: %m");
-	if (MESSAGE_MASTER_ON_EXIT) 
-	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-	return 1;
+        syslog(LOG_ERR, "unable to set close on exec: %m");
+        if (MESSAGE_MASTER_ON_EXIT)
+            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        return 1;
     }
 
     if (service_init(newargv.count, newargv.data, envp) != 0) {
-	if (MESSAGE_MASTER_ON_EXIT) 
-	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-	return 1;
+        if (MESSAGE_MASTER_ON_EXIT)
+            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        return 1;
     }
 
     for (;;) {
-	/* ok, listen to this socket until someone talks to us */
-	fd = -1;
-	while (fd < 0) { /* loop until we succeed */
-	    fd = accept(LISTEN_FD, NULL, NULL);
-	    if (fd < 0) {
-		switch (errno) {
-		case EINTR:
+        /* ok, listen to this socket until someone talks to us */
+        fd = -1;
+        while (fd < 0) { /* loop until we succeed */
+            fd = accept(LISTEN_FD, NULL, NULL);
+            if (fd < 0) {
+                switch (errno) {
+                case EINTR:
         signals_poll();
-		case ENETDOWN:
+                case ENETDOWN:
 #ifdef EPROTO
-		case EPROTO:
+                case EPROTO:
 #endif
-		case ENOPROTOOPT:
-		case EHOSTDOWN:
+                case ENOPROTOOPT:
+                case EHOSTDOWN:
 #ifdef ENONET
-		case ENONET:
+                case ENONET:
 #endif
-		case EHOSTUNREACH:
-		case EOPNOTSUPP:
-		case ENETUNREACH:
-		case EAGAIN:
-		case ECONNABORTED:
-		    break;
-		default:
-		    syslog(LOG_ERR, "accept failed: %m");
-		    if (MESSAGE_MASTER_ON_EXIT) 
-			notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		    service_abort(EX_OSERR);
-		}
-	    }
-	}
-	
-	libwrap_init(&request, getenv("CYRUS_SERVICE"));
+                case EHOSTUNREACH:
+                case EOPNOTSUPP:
+                case ENETUNREACH:
+                case EAGAIN:
+                case ECONNABORTED:
+                    break;
+                default:
+                    syslog(LOG_ERR, "accept failed: %m");
+                    if (MESSAGE_MASTER_ON_EXIT)
+                        notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                    service_abort(EX_OSERR);
+                }
+            }
+        }
 
-	if (!libwrap_ask(&request, fd)) {
-	    /* connection denied! */
-	    shutdown(fd, SHUT_RDWR);
-	    close(fd);
-	    continue;
-	}
-	
-	syslog(LOG_DEBUG, "accepted connection");
+        libwrap_init(&request, getenv("CYRUS_SERVICE"));
 
-	use_count++;
-	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION_MULTI);
-	if (service_main_fd(fd, newargv.count, newargv.data, envp) < 0) {
-	    break;
-	}
+        if (!libwrap_ask(&request, fd)) {
+            /* connection denied! */
+            shutdown(fd, SHUT_RDWR);
+            close(fd);
+            continue;
+        }
+
+        syslog(LOG_DEBUG, "accepted connection");
+
+        use_count++;
+        notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION_MULTI);
+        if (service_main_fd(fd, newargv.count, newargv.data, envp) < 0) {
+            break;
+        }
     }
 
-    if (MESSAGE_MASTER_ON_EXIT) 
-	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+    if (MESSAGE_MASTER_ON_EXIT)
+        notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
     service_abort(0);
     return 0;
 }

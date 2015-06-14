@@ -97,31 +97,31 @@ static int mbox_count_cb(const mbentry_t *mbentry __attribute__((unused)), void 
 
 /* remove an ientry from list of those idling on mboxname */
 static void remove_ientry(const char *mboxname,
-			  const struct sockaddr_un *remote)
+                          const struct sockaddr_un *remote)
 {
     struct ientry *t, *p = NULL;
 
     t = (struct ientry *) hash_lookup(mboxname, &itable);
     while (t && memcmp(&t->remote, remote, sizeof(*remote))) {
-	p = t;
-	t = t->next;
+        p = t;
+        t = t->next;
     }
     if (t) {
-	if (!p) {
-	    /* first ientry in the linked list */
+        if (!p) {
+            /* first ientry in the linked list */
 
-	    p = t->next; /* remove node */
+            p = t->next; /* remove node */
 
-	    /* we just removed the data that the hash entry
-	       was pointing to, so insert the new data */
-	    hash_insert(mboxname, p, &itable);
-	}
-	else {
-	    /* not the first ientry in the linked list */
+            /* we just removed the data that the hash entry
+               was pointing to, so insert the new data */
+            hash_insert(mboxname, p, &itable);
+        }
+        else {
+            /* not the first ientry in the linked list */
 
-	    p->next = t->next; /* remove node */
-	}
-	free(t);
+            p->next = t->next; /* remove node */
+        }
+        free(t);
     }
 }
 
@@ -134,83 +134,83 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 
     switch (msg->which) {
     case IDLE_MSG_INIT:
-	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_INIT '%s'\n",
-		   idle_id_from_addr(remote), msg->mboxname);
+        if (verbose || debugmode)
+            syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_INIT '%s'\n",
+                   idle_id_from_addr(remote), msg->mboxname);
 
-	/* add an ientry to list of those idling on mboxname */
-	t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
-	n = (struct ientry *) xzmalloc(sizeof(struct ientry));
-	n->remote = *remote;
-	n->itime = time(NULL);
-	n->next = t;
-	hash_insert(msg->mboxname, n, &itable);
-	break;
+        /* add an ientry to list of those idling on mboxname */
+        t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
+        n = (struct ientry *) xzmalloc(sizeof(struct ientry));
+        n->remote = *remote;
+        n->itime = time(NULL);
+        n->next = t;
+        hash_insert(msg->mboxname, n, &itable);
+        break;
 
     case IDLE_MSG_NOTIFY:
-	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'\n", msg->mboxname);
+        if (verbose || debugmode)
+            syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'\n", msg->mboxname);
 
-	/* send a message to all clients idling on mboxname */
-	t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
-	for ( ; t ; t = n) {
-	    n = t->next;
-	    if ((t->itime + idle_timeout) < time(NULL)) {
-		/* This process has been idling for longer than the timeout
-		 * period, so it probably died.  Remove it from the list.
-		 */
-		if (verbose || debugmode)
-		    syslog(LOG_DEBUG, "    TIMEOUT %s\n", idle_id_from_addr(&t->remote));
+        /* send a message to all clients idling on mboxname */
+        t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
+        for ( ; t ; t = n) {
+            n = t->next;
+            if ((t->itime + idle_timeout) < time(NULL)) {
+                /* This process has been idling for longer than the timeout
+                 * period, so it probably died.  Remove it from the list.
+                 */
+                if (verbose || debugmode)
+                    syslog(LOG_DEBUG, "    TIMEOUT %s\n", idle_id_from_addr(&t->remote));
 
-		remove_ientry(msg->mboxname, &t->remote);
-	    }
-	    else { /* signal process to update */
-		if (verbose || debugmode)
-		    syslog(LOG_DEBUG, "    fwd NOTIFY %s\n", idle_id_from_addr(&t->remote));
+                remove_ientry(msg->mboxname, &t->remote);
+            }
+            else { /* signal process to update */
+                if (verbose || debugmode)
+                    syslog(LOG_DEBUG, "    fwd NOTIFY %s\n", idle_id_from_addr(&t->remote));
 
-		/* forward the received msg onto our clients */
-		r = idle_send(&t->remote, msg);
-		if (r) {
-		    /* ENOENT can happen as result of a race between delivering
-		     * messages and shutting down imapd.  It indicates that the
-		     * imapd's socket was unlinked, which means that imapd went
-		     * through it's graceful shutdown path, so don't syslog. */
-		    if (r != ENOENT)
-			syslog(LOG_ERR, "IDLE: error sending message "
-					"NOTIFY to imapd %s for mailbox %s: %s, "
-					"forgetting.",
-					idle_id_from_addr(&t->remote),
-					msg->mboxname, error_message(r));
-		    if (verbose || debugmode)
-			syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
-		    remove_ientry(msg->mboxname, &t->remote);
-		}
-	    }
-	}
-	break;
+                /* forward the received msg onto our clients */
+                r = idle_send(&t->remote, msg);
+                if (r) {
+                    /* ENOENT can happen as result of a race between delivering
+                     * messages and shutting down imapd.  It indicates that the
+                     * imapd's socket was unlinked, which means that imapd went
+                     * through it's graceful shutdown path, so don't syslog. */
+                    if (r != ENOENT)
+                        syslog(LOG_ERR, "IDLE: error sending message "
+                                        "NOTIFY to imapd %s for mailbox %s: %s, "
+                                        "forgetting.",
+                                        idle_id_from_addr(&t->remote),
+                                        msg->mboxname, error_message(r));
+                    if (verbose || debugmode)
+                        syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
+                    remove_ientry(msg->mboxname, &t->remote);
+                }
+            }
+        }
+        break;
 
     case IDLE_MSG_DONE:
-	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_DONE '%s'\n",
-		   idle_id_from_addr(remote), msg->mboxname);
+        if (verbose || debugmode)
+            syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_DONE '%s'\n",
+                   idle_id_from_addr(remote), msg->mboxname);
 
-	/* remove client from list of those idling on mboxname */
-	remove_ientry(msg->mboxname, remote);
-	break;
+        /* remove client from list of those idling on mboxname */
+        remove_ientry(msg->mboxname, remote);
+        break;
 
     case IDLE_MSG_NOOP:
-	break;
+        break;
 
     default:
-	syslog(LOG_ERR, "unrecognized message: %lx", msg->which);
-	break;
+        syslog(LOG_ERR, "unrecognized message: %lx", msg->which);
+        break;
     }
 }
 
 
 static void send_alert(const char *key,
-		       void *data,
-		       void *rock __attribute__((unused)))
+                       void *data,
+                       void *rock __attribute__((unused)))
 {
     struct ientry *t = (struct ientry *) data;
     struct ientry *n;
@@ -222,28 +222,28 @@ static void send_alert(const char *key,
 
 
     for ( ; t ; t = n) {
-	n = t->next;
+        n = t->next;
 
-	/* signal process to check ALERTs */
-	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "    ALERT %s\n", idle_id_from_addr(&t->remote));
+        /* signal process to check ALERTs */
+        if (verbose || debugmode)
+            syslog(LOG_DEBUG, "    ALERT %s\n", idle_id_from_addr(&t->remote));
 
-	r = idle_send(&t->remote, &msg);
-	if (r) {
-	    /* ENOENT can happen as result of a race between shutting
-	     * down idled and shutting down imapd.  It indicates that the
-	     * imapd's socket was unlinked, which means that imapd went
-	     * through it's graceful shutdown path, so don't syslog. */
-	    if (r != ENOENT)
-		syslog(LOG_ERR, "IDLE: error sending message "
-				"ALERT to imapd %s for mailbox %s: %s, "
-				"forgetting.",
-				idle_id_from_addr(&t->remote),
-				msg.mboxname, error_message(r));
-	    if (verbose || debugmode)
-		syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
-	    remove_ientry(key, &t->remote);
-	}
+        r = idle_send(&t->remote, &msg);
+        if (r) {
+            /* ENOENT can happen as result of a race between shutting
+             * down idled and shutting down imapd.  It indicates that the
+             * imapd's socket was unlinked, which means that imapd went
+             * through it's graceful shutdown path, so don't syslog. */
+            if (r != ENOENT)
+                syslog(LOG_ERR, "IDLE: error sending message "
+                                "ALERT to imapd %s for mailbox %s: %s, "
+                                "forgetting.",
+                                idle_id_from_addr(&t->remote),
+                                msg.mboxname, error_message(r));
+            if (verbose || debugmode)
+                syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
+            remove_ientry(key, &t->remote);
+        }
     }
 }
 
@@ -273,18 +273,18 @@ int main(int argc, char **argv)
     if (p) verbose = atoi(p) + 1;
 
     while ((opt = getopt(argc, argv, "C:d")) != EOF) {
-	switch (opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
-	case 'd': /* don't fork. debugging mode */
-	    debugmode = 1;
-	    break;
-	default:
-	    fprintf(stderr, "invalid argument\n");
-	    exit(EC_USAGE);
-	    break;
-	}
+        case 'd': /* don't fork. debugging mode */
+            debugmode = 1;
+            break;
+        default:
+            fprintf(stderr, "invalid argument\n");
+            exit(EC_USAGE);
+            break;
+        }
     }
 
     cyrus_init(alt_config, "idled", 0, 0);
@@ -308,25 +308,25 @@ int main(int argc, char **argv)
     construct_hash_table(&itable, nmbox + 1, 1);
 
     if (!idle_make_server_address(&local) ||
-	!idle_init_sock(&local)) {
-	cyrus_done();
-	exit(1);
+        !idle_init_sock(&local)) {
+        cyrus_done();
+        exit(1);
     }
     s = idle_get_sock();
 
     /* fork unless we were given the -d option or we're running as a daemon */
     if (debugmode == 0 && !getenv("CYRUS_ISDAEMON")) {
 
-	pid = fork();
+        pid = fork();
 
-	if (pid == -1) {
-	    perror("fork");
-	    exit(1);
-	}
+        if (pid == -1) {
+            perror("fork");
+            exit(1);
+        }
 
-	if (pid != 0) { /* parent */
-	    exit(0);
-	}
+        if (pid != 0) { /* parent */
+            exit(0);
+        }
     }
     /* child */
 
@@ -337,40 +337,40 @@ int main(int argc, char **argv)
     nfds = s + 1;
 
     for (;;) {
-	int n;
+        int n;
 
-	/* check for shutdown file */
-	if (shutdown_file(NULL, 0)) {
-	    /* signal all processes to shutdown */
-	    if (verbose || debugmode)
-		syslog(LOG_DEBUG, "Detected shutdown file\n");
-	    shut_down(1);
-	}
+        /* check for shutdown file */
+        if (shutdown_file(NULL, 0)) {
+            /* signal all processes to shutdown */
+            if (verbose || debugmode)
+                syslog(LOG_DEBUG, "Detected shutdown file\n");
+            shut_down(1);
+        }
 
-	/* timeout for select is 1 second */
-	timeout.tv_sec = 1;
-	timeout.tv_usec = 0;
+        /* timeout for select is 1 second */
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
 
-	/* check for the next input */
-	rset = read_set;
-	n = signals_select(nfds, &rset, NULL, NULL, &timeout);
-	if (n < 0 && errno == EAGAIN) continue;
-	if (n < 0 && errno == EINTR) continue;
-	if (n == -1) {
-	    /* uh oh */
-	    syslog(LOG_ERR, "select(): %m");
-	    close(s);
-	    fatal("select error",-1);
-	}
+        /* check for the next input */
+        rset = read_set;
+        n = signals_select(nfds, &rset, NULL, NULL, &timeout);
+        if (n < 0 && errno == EAGAIN) continue;
+        if (n < 0 && errno == EINTR) continue;
+        if (n == -1) {
+            /* uh oh */
+            syslog(LOG_ERR, "select(): %m");
+            close(s);
+            fatal("select error",-1);
+        }
 
-	/* read and process a message */
-	if (FD_ISSET(s, &rset)) {
-	    struct sockaddr_un from;
-	    idle_message_t msg;
+        /* read and process a message */
+        if (FD_ISSET(s, &rset)) {
+            struct sockaddr_un from;
+            idle_message_t msg;
 
-	    if (idle_recv(&from, &msg))
-		process_message(&from, &msg);
-	}
+            if (idle_recv(&from, &msg))
+                process_message(&from, &msg);
+        }
 
     }
 

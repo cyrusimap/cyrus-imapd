@@ -32,9 +32,9 @@ Section: mail
 Priority: extra
 Maintainer: Bron Gondwana <brong\@fastmail.fm>
 Build-Depends: libssl-dev, zlib1g-dev, comerr-dev, libsasl2-dev,
-	libzephyr-dev, libpcre3-dev, autoconf, libxapian-dev,
-	libxml2-dev, libical-dev, libsqlite3-dev,
-	flex, bison, debhelper, libsnmp-dev, libglib2.0-dev
+        libzephyr-dev, libpcre3-dev, autoconf, libxapian-dev,
+        libxml2-dev, libical-dev, libsqlite3-dev,
+        flex, bison, debhelper, libsnmp-dev, libglib2.0-dev
 
 Package: $basename
 Architecture: all
@@ -66,52 +66,52 @@ export DH_COMPAT=4
 PACKAGE=\$(shell dh_listpackages)
 
 build:
-	dh_testdir
-	autoreconf -v -i
-	./configure --without-krb --with-perl=/usr/bin/perl --enable-http --enable-calalarmd --enable-idled --with-extraident=git-$branch-$num --prefix=/$basedir -with-cyrus-prefix=/$basedir --with-zlib --without-snmp --enable-replication --without-bdb --enable-xapian
-	make -j 8 all CFLAGS="-g -fPIC -W -Wall -Werror -fstack-protector-all"
-	make sieve/test
-	touch build
+        dh_testdir
+        autoreconf -v -i
+        ./configure --without-krb --with-perl=/usr/bin/perl --enable-http --enable-calalarmd --enable-idled --with-extraident=git-$branch-$num --prefix=/$basedir -with-cyrus-prefix=/$basedir --with-zlib --without-snmp --enable-replication --without-bdb --enable-xapian
+        make -j 8 all CFLAGS="-g -fPIC -W -Wall -Werror -fstack-protector-all"
+        make sieve/test
+        touch build
 
 clean:
-	dh_testdir
-	dh_testroot
-	dh_clean -d
-	rm -f build
+        dh_testdir
+        dh_testroot
+        dh_clean -d
+        rm -f build
 
 binary-indep: build
 
 binary-arch: build
-	dh_testdir
-	dh_testroot
-	dh_clean -k -d
-	dh_installdirs
+        dh_testdir
+        dh_testroot
+        dh_clean -k -d
+        dh_installdirs
 
-	dh_installdocs
-	dh_installchangelogs
+        dh_installdocs
+        dh_installchangelogs
 
-	make install DESTDIR=\$(CURDIR)/debian/$basename
-	make install-binsymlinks DESTDIR=\$(CURDIR)/debian/$basename
-	/bin/bash ./libtool --mode=install install -o root -m 755 sieve/test \$(PWD)/debian/$basename/$basedir/bin/sieve-test
-	install -o root -m 755 tools/rehash debian/$basename/$basedir/bin/rehash
-	install -o root -m 755 tools/mkimap debian/$basename/$basedir/bin/mkimap
-	install -o root -m 755 tools/translatesieve debian/$basename/$basedir/bin/translatesieve
-	install -o root -m 755 tools/upgradesieve debian/$basename/$basedir/bin/upgradesieve
+        make install DESTDIR=\$(CURDIR)/debian/$basename
+        make install-binsymlinks DESTDIR=\$(CURDIR)/debian/$basename
+        /bin/bash ./libtool --mode=install install -o root -m 755 sieve/test \$(PWD)/debian/$basename/$basedir/bin/sieve-test
+        install -o root -m 755 tools/rehash debian/$basename/$basedir/bin/rehash
+        install -o root -m 755 tools/mkimap debian/$basename/$basedir/bin/mkimap
+        install -o root -m 755 tools/translatesieve debian/$basename/$basedir/bin/translatesieve
+        install -o root -m 755 tools/upgradesieve debian/$basename/$basedir/bin/upgradesieve
 
-	# set up source package
-	# no need to actually install the built object files!  It's just the source we want
-	mkdir -p debian/$basename-build/usr/src/$basename-build/cyrus
-	# but keep the git data so we can build again!
-	find . -maxdepth 1 -mindepth 1 -not -name debian -print0 | \\
-		xargs -0 -r -i cp -a {} debian/$basename-build/usr/src/$basename-build/cyrus/
+        # set up source package
+        # no need to actually install the built object files!  It's just the source we want
+        mkdir -p debian/$basename-build/usr/src/$basename-build/cyrus
+        # but keep the git data so we can build again!
+        find . -maxdepth 1 -mindepth 1 -not -name debian -print0 | \\
+                xargs -0 -r -i cp -a {} debian/$basename-build/usr/src/$basename-build/cyrus/
 
-	dh_compress
-	dh_makeshlibs
-	dh_installdeb
-	#-dh_shlibdeps
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb -- -z3
+        dh_compress
+        dh_makeshlibs
+        dh_installdeb
+        #-dh_shlibdeps
+        dh_gencontrol
+        dh_md5sums
+        dh_builddeb -- -z3
 
 binary: binary-arch
 EOF
@@ -119,6 +119,6 @@ close(FH);
 
 chmod(0755, "debian/rules");
 
-print "Debian build environment for branch \"$branch\" set up 
+print "Debian build environment for branch \"$branch\" set up
 
   - run dpkg-buildpackage to build\n";

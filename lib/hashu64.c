@@ -51,17 +51,17 @@ EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t siz
 
       /* Allocate the table -- different for using memory pools and not */
       if(use_mpool) {
-	  /* Allocate an initial memory pool for 32 byte keys + the hash table
-	   * + the buckets themselves */
-	  table->pool =
-	      new_mpool(size * (32 + sizeof(bucketu64*) + sizeof(bucketu64)));
-	  table->table =
-	      (bucketu64 **)mpool_malloc(table->pool,sizeof(bucketu64 *) * size);
+          /* Allocate an initial memory pool for 32 byte keys + the hash table
+           * + the buckets themselves */
+          table->pool =
+              new_mpool(size * (32 + sizeof(bucketu64*) + sizeof(bucketu64)));
+          table->table =
+              (bucketu64 **)mpool_malloc(table->pool,sizeof(bucketu64 *) * size);
       } else {
-	  table->pool = NULL;
-	  table->table = xmalloc(sizeof(bucketu64 *) * size);
+          table->pool = NULL;
+          table->table = xmalloc(sizeof(bucketu64 *) * size);
       }
-       
+
       /* Allocate the table and initilize it */
       memset(table->table, 0, sizeof(bucketu64 *) * size);
 
@@ -87,17 +87,17 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
       */
       if (!((table->table)[val]))
       {
-	  if(table->pool) {
-	      (table->table)[val] =
-		  (bucketu64 *)mpool_malloc(table->pool, sizeof(bucketu64));
-	      (table->table)[val] -> key = key;
-	  } else {
-	      (table->table)[val] = (bucketu64 *)xmalloc(sizeof(bucketu64));
-	      (table->table)[val] -> key = key;
-	  }
-	  (table->table)[val] -> next = NULL;
-	  (table->table)[val] -> data = data;
-	  return (table->table)[val] -> data;
+          if(table->pool) {
+              (table->table)[val] =
+                  (bucketu64 *)mpool_malloc(table->pool, sizeof(bucketu64));
+              (table->table)[val] -> key = key;
+          } else {
+              (table->table)[val] = (bucketu64 *)xmalloc(sizeof(bucketu64));
+              (table->table)[val] -> key = key;
+          }
+          (table->table)[val] -> next = NULL;
+          (table->table)[val] -> data = data;
+          return (table->table)[val] -> data;
       }
 
       /*
@@ -105,31 +105,31 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
       ** has already been inserted, and if so, increment its count.
       */
       for (prev = &((table->table)[val]), ptr=(table->table)[val];
-	   ptr;
-	   prev=&(ptr->next),ptr=ptr->next) {
-	  int cmpresult = u64cmp(key, ptr->key);
-	  if (!cmpresult) {
-	      /* Match! Replace this value and return the old */
-	      void *old_data;
-	      
-	      old_data = ptr->data;
-	      ptr -> data = data;
-	      return old_data;
-	  } else if (cmpresult < 0) {
-	      /* The new key is smaller than the current key--
-	       * insert a node and return this data */
-	      if(table->pool) {
-		  newptr = (bucketu64 *)mpool_malloc(table->pool, sizeof(bucketu64));
-		  newptr->key = key;
-	      } else {
-		  newptr = (bucketu64 *)xmalloc(sizeof(bucketu64));
-		  newptr->key = key;
-	      }
-	      newptr->data = data;
-	      newptr->next = ptr;
-	      *prev = newptr;
-	      return data;
-	  }
+           ptr;
+           prev=&(ptr->next),ptr=ptr->next) {
+          int cmpresult = u64cmp(key, ptr->key);
+          if (!cmpresult) {
+              /* Match! Replace this value and return the old */
+              void *old_data;
+
+              old_data = ptr->data;
+              ptr -> data = data;
+              return old_data;
+          } else if (cmpresult < 0) {
+              /* The new key is smaller than the current key--
+               * insert a node and return this data */
+              if(table->pool) {
+                  newptr = (bucketu64 *)mpool_malloc(table->pool, sizeof(bucketu64));
+                  newptr->key = key;
+              } else {
+                  newptr = (bucketu64 *)xmalloc(sizeof(bucketu64));
+                  newptr->key = key;
+              }
+              newptr->data = data;
+              newptr->next = ptr;
+              *prev = newptr;
+              return data;
+          }
       }
 
       /*
@@ -137,11 +137,11 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
       ** of the list (*prev should be correct)
       */
       if(table->pool) {
-	  newptr=(bucketu64 *)mpool_malloc(table->pool,sizeof(bucketu64));
-	  newptr->key = key;
+          newptr=(bucketu64 *)mpool_malloc(table->pool,sizeof(bucketu64));
+          newptr->key = key;
       } else {
-	  newptr=(bucketu64 *)xmalloc(sizeof(bucketu64));
-	  newptr->key = key;
+          newptr=(bucketu64 *)xmalloc(sizeof(bucketu64));
+          newptr->key = key;
       }
       newptr->data = data;
       newptr->next = NULL;
@@ -165,11 +165,11 @@ EXPORTED void *hashu64_lookup(uint64_t key, hashu64_table *table)
 
       for ( ptr = (table->table)[val];NULL != ptr; ptr = ptr->next )
       {
-	  int cmpresult = u64cmp(key, ptr->key);
-	  if (!cmpresult)
-	      return ptr->data;
-	  else if(cmpresult < 0) /* key < ptr->key -- we passed it */
-	      return NULL;
+          int cmpresult = u64cmp(key, ptr->key);
+          if (!cmpresult)
+              return ptr->data;
+          else if(cmpresult < 0) /* key < ptr->key -- we passed it */
+              return NULL;
       }
       return NULL;
 }
@@ -201,40 +201,40 @@ EXPORTED void *hashu64_del(uint64_t key, hashu64_table *table)
             NULL != ptr;
             last = ptr, ptr = ptr->next)
       {
-	  int cmpresult = u64cmp(key, ptr->key);
-	  if (!cmpresult)
-	  {
-	      if (last != NULL )
-	      {
-		  data = ptr -> data;
-		  last -> next = ptr -> next;
-		  if(!table->pool) {
-		      free(ptr);
-		  }
-		  return data;
-	      }
-	      
-	      /*
-	      ** If 'last' still equals NULL, it means that we need to
-	      ** delete the first node in the list. This simply consists
-	      ** of putting our own 'next' pointer in the array holding
-	      ** the head of the list.  We then dispose of the current
-	      ** node as above.
-	      */
-	      
-	      else
-	      {
-		  data = ptr->data;
-		  (table->table)[val] = ptr->next;
-		  if(!table->pool) {
-		      free(ptr);
-		  }
-		  return data;
-	      }
-	  } else if (cmpresult < 0) {
-	      /* its not here! */
-	      return NULL;
-	  }
+          int cmpresult = u64cmp(key, ptr->key);
+          if (!cmpresult)
+          {
+              if (last != NULL )
+              {
+                  data = ptr -> data;
+                  last -> next = ptr -> next;
+                  if(!table->pool) {
+                      free(ptr);
+                  }
+                  return data;
+              }
+
+              /*
+              ** If 'last' still equals NULL, it means that we need to
+              ** delete the first node in the list. This simply consists
+              ** of putting our own 'next' pointer in the array holding
+              ** the head of the list.  We then dispose of the current
+              ** node as above.
+              */
+
+              else
+              {
+                  data = ptr->data;
+                  (table->table)[val] = ptr->next;
+                  if(!table->pool) {
+                      free(ptr);
+                  }
+                  return data;
+              }
+          } else if (cmpresult < 0) {
+              /* its not here! */
+              return NULL;
+          }
       }
 
       /*
@@ -261,28 +261,28 @@ EXPORTED void free_hashu64_table(hashu64_table *table, void (*func)(void *))
       /* We also need to traverse this anyway if we aren't using a memory
        * pool */
       if(func || !table->pool) {
-	  for (i=0;i<table->size; i++)
-	  {
-	      ptr = (table->table)[i];
-	      while (ptr)
-	      {
-		  temp = ptr;
-		  ptr = ptr->next;
-		  if (func)
-		      func(temp->data);
-		  if(!table->pool) {
-		      free(temp);
-		  }
-	      }
-	  }
+          for (i=0;i<table->size; i++)
+          {
+              ptr = (table->table)[i];
+              while (ptr)
+              {
+                  temp = ptr;
+                  ptr = ptr->next;
+                  if (func)
+                      func(temp->data);
+                  if(!table->pool) {
+                      free(temp);
+                  }
+              }
+          }
       }
-      
+
       /* Free the main structures */
       if(table->pool) {
-	  free_mpool(table->pool);
-	  table->pool = NULL;
+          free_mpool(table->pool);
+          table->pool = NULL;
       } else {
-	  free(table->table);
+          free(table->table);
       }
       table->table = NULL;
       table->size = 0;
@@ -293,9 +293,9 @@ EXPORTED void free_hashu64_table(hashu64_table *table, void (*func)(void *))
 ** node in the table, passing it the key, the associated data and 'rock'.
 */
 
-EXPORTED void hashu64_enumerate(hashu64_table *table, 
-				void (*func)(uint64_t, void *, void *),
-				void *rock)
+EXPORTED void hashu64_enumerate(hashu64_table *table,
+                                void (*func)(uint64_t, void *, void *),
+                                void *rock)
 {
       unsigned i;
       bucketu64 *temp, *temp_next;
@@ -308,7 +308,7 @@ EXPORTED void hashu64_enumerate(hashu64_table *table,
                         NULL != temp;
                         temp = temp_next)
                   {
-			temp_next = temp->next;
+                        temp_next = temp->next;
                         func(temp -> key, temp->data, rock);
                   }
             }

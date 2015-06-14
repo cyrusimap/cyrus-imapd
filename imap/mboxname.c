@@ -143,8 +143,8 @@ static struct mboxlocklist *find_lockitem(const char *name)
     struct mboxlocklist *item;
 
     for (item = open_mboxlocks; item; item = item->next) {
-	if (!strcmp(name, item->l.name))
-	    return item;
+        if (!strcmp(name, item->l.name))
+            return item;
     }
 
     return NULL;
@@ -156,21 +156,21 @@ static void remove_lockitem(struct mboxlocklist *remitem)
     struct mboxlocklist *previtem = NULL;
 
     for (item = open_mboxlocks; item; item = item->next) {
-	if (item == remitem) {
-	    if (previtem)
-		previtem->next = item->next;
-	    else
-		open_mboxlocks = item->next;
-	    if (item->l.lock_fd != -1) {
-		if (item->l.locktype)
-		    lock_unlock(item->l.lock_fd, item->l.name);
-		close(item->l.lock_fd);
-	    }
-	    free(item->l.name);
-	    free(item);
-	    return;
-	}
-	previtem = item;
+        if (item == remitem) {
+            if (previtem)
+                previtem->next = item->next;
+            else
+                open_mboxlocks = item->next;
+            if (item->l.lock_fd != -1) {
+                if (item->l.locktype)
+                    lock_unlock(item->l.lock_fd, item->l.name);
+                close(item->l.lock_fd);
+            }
+            free(item->l.name);
+            free(item);
+            return;
+        }
+        previtem = item;
     }
 
     fatal("didn't find item in list", EC_SOFTWARE);
@@ -179,7 +179,7 @@ static void remove_lockitem(struct mboxlocklist *remitem)
 /* name locking support */
 
 EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
-		  int locktype_and_flags)
+                  int locktype_and_flags)
 {
     const char *fname;
     int r = 0;
@@ -192,18 +192,18 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 
     fname = mboxname_lockpath(mboxname);
     if (!fname)
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
 
     lockitem = find_lockitem(mboxname);
 
     /* already open?  just use this one */
     if (lockitem) {
-	/* can't change locktype! */
-	if (lockitem->l.locktype != locktype)
-	    return IMAP_MAILBOX_LOCKED;
+        /* can't change locktype! */
+        if (lockitem->l.locktype != locktype)
+            return IMAP_MAILBOX_LOCKED;
 
-	lockitem->nopen++;
-	goto done;
+        lockitem->nopen++;
+        goto done;
     }
 
     lockitem = create_lockitem(mboxname);
@@ -212,21 +212,21 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
      * More efficient on a common codepath */
     lockitem->l.lock_fd = open(fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (lockitem->l.lock_fd == -1) {
-	if (cyrus_mkdir(fname, 0755) == -1) {
-	    r = IMAP_IOERROR;
-	    goto done;
-	}
-	lockitem->l.lock_fd = open(fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
+        if (cyrus_mkdir(fname, 0755) == -1) {
+            r = IMAP_IOERROR;
+            goto done;
+        }
+        lockitem->l.lock_fd = open(fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
     }
     /* but if it still didn't succeed, we have problems */
     if (lockitem->l.lock_fd == -1) {
-	r = IMAP_IOERROR;
-	goto done;
+        r = IMAP_IOERROR;
+        goto done;
     }
 
     r = lock_setlock(lockitem->l.lock_fd,
-		     locktype == LOCK_EXCLUSIVE,
-		     nonblock, fname);
+                     locktype == LOCK_EXCLUSIVE,
+                     nonblock, fname);
     if (!r) lockitem->l.locktype = locktype;
     else if (errno == EWOULDBLOCK) r = IMAP_MAILBOX_LOCKED;
     else r = errno;
@@ -249,8 +249,8 @@ EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
     *mboxlockptr = NULL;
 
     if (lockitem->nopen > 1) {
-	lockitem->nopen--;
-	return;
+        lockitem->nopen--;
+        return;
     }
 
     remove_lockitem(lockitem);
@@ -267,7 +267,7 @@ EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
  */
 
 EXPORTED int mboxname_parts_to_internal(struct mboxname_parts *parts,
-					char *result)
+                                        char *result)
 {
     char *p = result;
     size_t sz = MAX_MAILBOX_NAME;
@@ -276,33 +276,33 @@ EXPORTED int mboxname_parts_to_internal(struct mboxname_parts *parts,
     const char *pf = "";
 
     if (parts->domain) {
-	len = snprintf(p, sz, "%s!", parts->domain);
-	p += len;
-	sz -= len;
-	if (!sz) return IMAP_MAILBOX_BADNAME;
+        len = snprintf(p, sz, "%s!", parts->domain);
+        p += len;
+        sz -= len;
+        if (!sz) return IMAP_MAILBOX_BADNAME;
     }
 
     if (parts->is_deleted) {
-	len = snprintf(p, sz, "%s%s", pf, dp);
-	p += len;
-	sz -= len;
-	if (!sz) return IMAP_MAILBOX_BADNAME;
-	pf = ".";
+        len = snprintf(p, sz, "%s%s", pf, dp);
+        p += len;
+        sz -= len;
+        if (!sz) return IMAP_MAILBOX_BADNAME;
+        pf = ".";
     }
 
     if (parts->userid) {
-	len = snprintf(p, sz, "%suser.%s", pf, parts->userid);
-	p += len;
-	sz -= len;
-	if (!sz) return IMAP_MAILBOX_BADNAME;
-	pf = ".";
+        len = snprintf(p, sz, "%suser.%s", pf, parts->userid);
+        p += len;
+        sz -= len;
+        if (!sz) return IMAP_MAILBOX_BADNAME;
+        pf = ".";
     }
 
     if (parts->box) {
-	len = snprintf(p, sz, "%s%s", pf, parts->box);
-	p += len;
-	sz -= len;
-	if (!sz) return IMAP_MAILBOX_BADNAME;
+        len = snprintf(p, sz, "%s%s", pf, parts->box);
+        p += len;
+        sz -= len;
+        if (!sz) return IMAP_MAILBOX_BADNAME;
     }
 
     return 0;
@@ -310,7 +310,7 @@ EXPORTED int mboxname_parts_to_internal(struct mboxname_parts *parts,
 
 /* Handle conversion from the standard namespace to the internal namespace */
 static int mboxname_tointernal(struct namespace *namespace, const char *name,
-			       const char *userid, char *result)
+                               const char *userid, char *result)
 {
     char *cp;
     char *atp;
@@ -325,86 +325,86 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
     namelen = strlen(name);
 
     if (config_virtdomains) {
-	if (userid && (cp = strrchr(userid, '@'))) {
-	    /* user logged in as user@domain */
-	    userlen = cp - userid;
-	    /* don't prepend default domain */
-	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp+1))) {
-		domainlen = strlen(cp+1)+1;
-		snprintf(result, MAX_MAILBOX_BUFFER, "%s!", cp+1);
-	    }
-	}
-	if ((cp = strrchr(name, '@'))) {
-	    /* mailbox specified as mbox@domain */
-	    namelen = cp - name;
+        if (userid && (cp = strrchr(userid, '@'))) {
+            /* user logged in as user@domain */
+            userlen = cp - userid;
+            /* don't prepend default domain */
+            if (!(config_defdomain && !strcasecmp(config_defdomain, cp+1))) {
+                domainlen = strlen(cp+1)+1;
+                snprintf(result, MAX_MAILBOX_BUFFER, "%s!", cp+1);
+            }
+        }
+        if ((cp = strrchr(name, '@'))) {
+            /* mailbox specified as mbox@domain */
+            namelen = cp - name;
 
-	    if (config_defdomain && !strcasecmp(config_defdomain, cp+1)) {
-		if (domainlen) {
-		    /* don't allow cross-domain access */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		/* don't prepend default domain */
-	    }
-	    else {
-		if ((!domainlen && !namespace->isadmin) ||
-		    (domainlen && strcasecmp(userid+userlen, cp))) {
-		    /* don't allow cross-domain access
-		       (except for global admin) */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		domainlen = strlen(cp+1)+1;
-		snprintf(result, MAX_MAILBOX_BUFFER, "%s!", cp+1);
-	    }
+            if (config_defdomain && !strcasecmp(config_defdomain, cp+1)) {
+                if (domainlen) {
+                    /* don't allow cross-domain access */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                /* don't prepend default domain */
+            }
+            else {
+                if ((!domainlen && !namespace->isadmin) ||
+                    (domainlen && strcasecmp(userid+userlen, cp))) {
+                    /* don't allow cross-domain access
+                       (except for global admin) */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                domainlen = strlen(cp+1)+1;
+                snprintf(result, MAX_MAILBOX_BUFFER, "%s!", cp+1);
+            }
 
-	    atp = strchr(name, '@');
-	    if (atp && atp != cp) {
-		/* don't allow multiple '@' in name */
-		return IMAP_MAILBOX_BADNAME;
-	    }
-	}
+            atp = strchr(name, '@');
+            if (atp && atp != cp) {
+                /* don't allow multiple '@' in name */
+                return IMAP_MAILBOX_BADNAME;
+            }
+        }
 
-	/* if no domain specified, we're in the default domain */
+        /* if no domain specified, we're in the default domain */
     }
 
     mbresult = result + domainlen;
 
     /* Personal (INBOX) namespace */
     if ((name[0] == 'i' || name[0] == 'I') &&
-	!strncasecmp(name, "inbox", 5) &&
-	(namelen == 5 || name[5] == namespace->hier_sep)) {
+        !strncasecmp(name, "inbox", 5) &&
+        (namelen == 5 || name[5] == namespace->hier_sep)) {
 
-	if (!userid || ((cp = strchr(userid, namespace->hier_sep)) &&
-			(cp - userid < userlen))) {
-	    return IMAP_MAILBOX_BADNAME;
-	}
+        if (!userid || ((cp = strchr(userid, namespace->hier_sep)) &&
+                        (cp - userid < userlen))) {
+            return IMAP_MAILBOX_BADNAME;
+        }
 
-	snprintf(mbresult, MAX_MAILBOX_BUFFER - domainlen,
-		 "user.%.*s%.*s", userlen, userid, namelen-5, name+5);
+        snprintf(mbresult, MAX_MAILBOX_BUFFER - domainlen,
+                 "user.%.*s%.*s", userlen, userid, namelen-5, name+5);
 
-	/* Translate any separators in userid+mailbox */
-	mboxname_hiersep_tointernal(namespace, mbresult+5+userlen, 0);
+        /* Translate any separators in userid+mailbox */
+        mboxname_hiersep_tointernal(namespace, mbresult+5+userlen, 0);
     }
 
     else {
-	/* Other Users & Shared namespace */
-	snprintf(mbresult, MAX_MAILBOX_BUFFER - domainlen,
-		 "%.*s", namelen, name);
+        /* Other Users & Shared namespace */
+        snprintf(mbresult, MAX_MAILBOX_BUFFER - domainlen,
+                 "%.*s", namelen, name);
 
-	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(namespace, mbresult, 0);
+        /* Translate any separators in mailboxname */
+        mboxname_hiersep_tointernal(namespace, mbresult, 0);
     }
 
     if (result[MAX_MAILBOX_BUFFER-1] != '\0') {
-	syslog(LOG_ERR, "IOERROR: long mailbox name attempt: %s", name);
-	return IMAP_MAILBOX_BADNAME;
+        syslog(LOG_ERR, "IOERROR: long mailbox name attempt: %s", name);
+        return IMAP_MAILBOX_BADNAME;
     }
     return 0;
 }
 
 /* Handle conversion from the alternate namespace to the internal namespace */
 static int mboxname_tointernal_alt(struct namespace *namespace,
-				   const char *name,
-				   const char *userid, char *result)
+                                   const char *name,
+                                   const char *userid, char *result)
 {
     char *cp;
     int userlen, domainlen = 0, namelen;
@@ -418,43 +418,43 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
     namelen = strlen(name);
 
     if (config_virtdomains) {
-	if (userid && (cp = strchr(userid, '@'))) {
-	    /* user logged in as user@domain */
-	    userlen = cp++ - userid;
-	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
-		/* don't prepend default domain */
-		domainlen = strlen(cp)+1;
-		if (domainlen > MAX_MAILBOX_NAME) 
-		    return IMAP_MAILBOX_BADNAME; 
-		sprintf(result, "%s!", cp);
-	    }
-	}
-	if ((cp = strrchr(name, '@'))) {
-	    /* mailbox specified as mbox@domain */
-	    namelen = cp - name;
+        if (userid && (cp = strchr(userid, '@'))) {
+            /* user logged in as user@domain */
+            userlen = cp++ - userid;
+            if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
+                /* don't prepend default domain */
+                domainlen = strlen(cp)+1;
+                if (domainlen > MAX_MAILBOX_NAME)
+                    return IMAP_MAILBOX_BADNAME;
+                sprintf(result, "%s!", cp);
+            }
+        }
+        if ((cp = strrchr(name, '@'))) {
+            /* mailbox specified as mbox@domain */
+            namelen = cp - name;
 
-	    if (config_defdomain && !strcasecmp(config_defdomain, cp+1)) {
-		if (domainlen) {
-		    /* don't allow cross-domain access */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		/* don't prepend default domain */
-	    }
-	    else {
-		if ((!domainlen && !namespace->isadmin) ||
-		    (domainlen && strcasecmp(userid+userlen, cp))) {
-		    /* don't allow cross-domain access 
-		       (except for global admin) */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		domainlen = strlen(cp+1)+1;
-		if (domainlen > MAX_MAILBOX_NAME) 
-		    return IMAP_MAILBOX_BADNAME; 
-		sprintf(result, "%s!", cp+1);
-	    }
-	}
+            if (config_defdomain && !strcasecmp(config_defdomain, cp+1)) {
+                if (domainlen) {
+                    /* don't allow cross-domain access */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                /* don't prepend default domain */
+            }
+            else {
+                if ((!domainlen && !namespace->isadmin) ||
+                    (domainlen && strcasecmp(userid+userlen, cp))) {
+                    /* don't allow cross-domain access
+                       (except for global admin) */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                domainlen = strlen(cp+1)+1;
+                if (domainlen > MAX_MAILBOX_NAME)
+                    return IMAP_MAILBOX_BADNAME;
+                sprintf(result, "%s!", cp+1);
+            }
+        }
 
-	/* if no domain specified, we're in the default domain */
+        /* if no domain specified, we're in the default domain */
     }
 
     result += domainlen;
@@ -464,22 +464,22 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
     if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
 
     if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED], prefixlen-1) &&
-	(namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
+        (namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
 
-	if (namelen ==  prefixlen-1) {
-	    /* can't create folders using undelimited prefix */
-	    return IMAP_MAILBOX_BADNAME;
-	}
+        if (namelen ==  prefixlen-1) {
+            /* can't create folders using undelimited prefix */
+            return IMAP_MAILBOX_BADNAME;
+        }
 
-	if (domainlen+namelen-prefixlen > MAX_MAILBOX_NAME) {
-	    return IMAP_MAILBOX_BADNAME;
-	}
+        if (domainlen+namelen-prefixlen > MAX_MAILBOX_NAME) {
+            return IMAP_MAILBOX_BADNAME;
+        }
 
-	sprintf(result, "%.*s", namelen-prefixlen, name+prefixlen);
+        sprintf(result, "%.*s", namelen-prefixlen, name+prefixlen);
 
-	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(namespace, result, 0);
-	return 0;
+        /* Translate any separators in mailboxname */
+        mboxname_hiersep_tointernal(namespace, result, 0);
+        return 0;
     }
 
     /* Other Users namespace */
@@ -487,57 +487,57 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
     if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
 
     if (!strncmp(name, namespace->prefix[NAMESPACE_USER], prefixlen-1) &&
-	(namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
+        (namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
 
-	if (namelen == prefixlen-1) {
-	    /* can't create folders using undelimited prefix */
-	    return IMAP_MAILBOX_BADNAME;
-	}
+        if (namelen == prefixlen-1) {
+            /* can't create folders using undelimited prefix */
+            return IMAP_MAILBOX_BADNAME;
+        }
 
-	if (domainlen+namelen-prefixlen+5 > MAX_MAILBOX_NAME) {
-	    return IMAP_MAILBOX_BADNAME;
-	}
+        if (domainlen+namelen-prefixlen+5 > MAX_MAILBOX_NAME) {
+            return IMAP_MAILBOX_BADNAME;
+        }
 
-	sprintf(result, "user.%.*s", namelen-prefixlen, name+prefixlen);
+        sprintf(result, "user.%.*s", namelen-prefixlen, name+prefixlen);
 
-	/* Translate any separators in userid+mailbox */
-	mboxname_hiersep_tointernal(namespace, result+5, 0);
-	return 0;
+        /* Translate any separators in userid+mailbox */
+        mboxname_hiersep_tointernal(namespace, result+5, 0);
+        return 0;
     }
 
     /* Personal (INBOX) namespace */
     if (!userid || ((cp = strchr(userid, namespace->hier_sep)) &&
-		    (cp - userid < userlen))) {
-	return IMAP_MAILBOX_BADNAME;
+                    (cp - userid < userlen))) {
+        return IMAP_MAILBOX_BADNAME;
     }
 
     if (domainlen+userlen+5 > MAX_MAILBOX_NAME) {
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
     }
 
     sprintf(result, "user.%.*s", userlen, userid);
 
     /* INBOX */
     if ((name[0] == 'i' || name[0] == 'I') &&
-	!strncasecmp(name, "inbox", 5) && 
-	(namelen == 5 || name[5] == namespace->hier_sep)) {
+        !strncasecmp(name, "inbox", 5) &&
+        (namelen == 5 || name[5] == namespace->hier_sep)) {
 
-	if (name[5] == namespace->hier_sep) {
-	    /* can't create folders under INBOX */
-	    return IMAP_MAILBOX_BADNAME;
-	}
+        if (name[5] == namespace->hier_sep) {
+            /* can't create folders under INBOX */
+            return IMAP_MAILBOX_BADNAME;
+        }
 
-	return 0;
+        return 0;
     }
 
     resultlen = strlen(result);
 
     /* other personal folder */
     if (domainlen+resultlen+6+namelen > MAX_MAILBOX_NAME) {
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
     }
-    snprintf(result+resultlen, MAX_MAILBOX_BUFFER-resultlen, ".%.*s", 
-	     namelen, name);
+    snprintf(result+resultlen, MAX_MAILBOX_BUFFER-resultlen, ".%.*s",
+             namelen, name);
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_tointernal(namespace, result+6+userlen, 0);
@@ -553,7 +553,7 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 
 /* Handle conversion from the internal namespace to the standard namespace */
 static int mboxname_toexternal(struct namespace *namespace, const char *mboxname,
-			       const char *userid, char *result)
+                               const char *userid, char *result)
 {
     struct mboxname_parts mbparts;
     struct mboxname_parts userparts;
@@ -562,52 +562,52 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
     result[0] = '\0';
 
     if (strlen(mboxname) > MAX_MAILBOX_NAME)
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
 
     mboxname_to_parts(mboxname, &mbparts);
     mboxname_userid_to_parts(userid, &userparts);
 
     if (mbparts.userid) {
-	if (!namespace->isadmin && !mbparts.is_deleted &&
-	    mboxname_parts_same_userid(&mbparts, &userparts)) {
-	    strcpy(result, "INBOX");
-	}
-	else if (mbparts.is_deleted) {
-	    const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
-	    sprintf(result, "%s.user.%s", dp, mbparts.userid);
-	}
-	else {
-	    sprintf(result, "user.%s", mbparts.userid);
-	}
+        if (!namespace->isadmin && !mbparts.is_deleted &&
+            mboxname_parts_same_userid(&mbparts, &userparts)) {
+            strcpy(result, "INBOX");
+        }
+        else if (mbparts.is_deleted) {
+            const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
+            sprintf(result, "%s.user.%s", dp, mbparts.userid);
+        }
+        else {
+            sprintf(result, "user.%s", mbparts.userid);
+        }
 
-	if (mbparts.box)
-	    strcat(result, ".");
+        if (mbparts.box)
+            strcat(result, ".");
     } else {
-	/* shared mailbox */
-	if (mbparts.is_deleted) {
-	    const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
-	    sprintf(result, "%s.", dp);
-	}
+        /* shared mailbox */
+        if (mbparts.is_deleted) {
+            const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
+            sprintf(result, "%s.", dp);
+        }
     }
 
 
     if (mbparts.box)
-	strcat(result, mbparts.box);
+        strcat(result, mbparts.box);
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_toexternal(namespace, result, 0);
 
     /* Append domain - only if not the same as the user */
     if (mbparts.domain) {
-	if (strcmpsafe(userparts.domain, mbparts.domain)) {
-	    strcat(result, "@");
-	    strcat(result, mbparts.domain);
-	} else {
-	    if (namespace->isadmin && !userparts.domain) {
-		strcat(result, "@");
-		strcat(result, mbparts.domain);
-	    }
-	}
+        if (strcmpsafe(userparts.domain, mbparts.domain)) {
+            strcat(result, "@");
+            strcat(result, mbparts.domain);
+        } else {
+            if (namespace->isadmin && !userparts.domain) {
+                strcat(result, "@");
+                strcat(result, mbparts.domain);
+            }
+        }
     }
 
     mboxname_free_parts(&mbparts);
@@ -617,7 +617,7 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
 
 /* Handle conversion from the internal namespace to the alternate namespace */
 static int mboxname_toexternal_alt(struct namespace *namespace, const char *mboxname,
-				  const char *userid, char *result)
+                                  const char *userid, char *result)
 {
     char iresult[MAX_MAILBOX_NAME];
     int r = 0;
@@ -629,7 +629,7 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *mbox
     mboxname_toexternal(namespace, mboxname, userid, iresult);
 
     if (namespace->isadmin) {
-	sprintf(result, "%s", iresult);
+        sprintf(result, "%s", iresult);
     }
 
     // If an administrator view, such as intended with event
@@ -637,36 +637,36 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *mbox
     // sufficient (omit the "Other Users/" and "Shared Folders/"
     // prefixes for regular users).
     if (namespace->isadmin) {
-	sprintf(result, "%s", iresult);
-	return 0;
+        sprintf(result, "%s", iresult);
+        return 0;
     }
 
     r = strncasecmp(iresult, "inbox", 5);
 
     if (!r) {
-	if (iresult[5] == '\0') {
-	    // Just "INBOX"
-	    sprintf(result, "%s", iresult);
-	} else if (iresult[5] == namespace->hier_sep) {
-	    // INBOX/something
-	    sprintf(result, "%s", iresult+6);
-	}
+        if (iresult[5] == '\0') {
+            // Just "INBOX"
+            sprintf(result, "%s", iresult);
+        } else if (iresult[5] == namespace->hier_sep) {
+            // INBOX/something
+            sprintf(result, "%s", iresult+6);
+        }
 
-	return 0;
+        return 0;
     }
 
     r = strncasecmp(iresult, "user", 4);
 
     if (!r) {
-	if (iresult[4] == namespace->hier_sep) {
-	    // The namespace already has a hierarchy separator
-	    sprintf(result, "%s%s", namespace->prefix[NAMESPACE_USER], iresult+5);
-	/* special case:  LIST/LSUB "" % */
-	} else {
-	    sprintf(result, "%.*s", (int)strlen(namespace->prefix[NAMESPACE_USER])-1, namespace->prefix[NAMESPACE_USER]);
-	}
+        if (iresult[4] == namespace->hier_sep) {
+            // The namespace already has a hierarchy separator
+            sprintf(result, "%s%s", namespace->prefix[NAMESPACE_USER], iresult+5);
+        /* special case:  LIST/LSUB "" % */
+        } else {
+            sprintf(result, "%.*s", (int)strlen(namespace->prefix[NAMESPACE_USER])-1, namespace->prefix[NAMESPACE_USER]);
+        }
 
-	return 0;
+        return 0;
     }
 
     /* If not the personal namespace and not the other user namespace, then
@@ -674,11 +674,11 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *mbox
 
     /* special case:  LIST/LSUB "" % */
     if (!strncmp(mboxname, namespace->prefix[NAMESPACE_SHARED],
-	strlen(namespace->prefix[NAMESPACE_SHARED])-1)) {
-	strcpy(result, mboxname);
+        strlen(namespace->prefix[NAMESPACE_SHARED])-1)) {
+        strcpy(result, mboxname);
     } else {
-	strcpy(result, namespace->prefix[NAMESPACE_SHARED]);
-	strcat(result, mboxname);
+        strcpy(result, namespace->prefix[NAMESPACE_SHARED]);
+        strcat(result, mboxname);
     }
 
     sprintf(result, "%s%s", namespace->prefix[NAMESPACE_SHARED], iresult);
@@ -698,7 +698,7 @@ EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
     namespace->isadmin = isadmin;
 
     namespace->hier_sep =
-	config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
+        config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
     namespace->isalt = !isadmin && config_getswitch(IMAPOPT_ALTNAMESPACE);
 
     namespace->accessible[NAMESPACE_INBOX] = 1;
@@ -706,47 +706,47 @@ EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
     namespace->accessible[NAMESPACE_SHARED] = !config_getswitch(IMAPOPT_DISABLE_SHARED_NAMESPACE);
 
     if (namespace->isalt) {
-	/* alternate namespace */
-	strcpy(namespace->prefix[NAMESPACE_INBOX], "");
+        /* alternate namespace */
+        strcpy(namespace->prefix[NAMESPACE_INBOX], "");
 
-	prefix = config_getstring(IMAPOPT_USERPREFIX);
-	if (!prefix || strlen(prefix) == 0 ||
-	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
-	    strchr(prefix,namespace->hier_sep) != NULL)
-	    return IMAP_NAMESPACE_BADPREFIX;
-	sprintf(namespace->prefix[NAMESPACE_USER], "%.*s%c",
-		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
+        prefix = config_getstring(IMAPOPT_USERPREFIX);
+        if (!prefix || strlen(prefix) == 0 ||
+            strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
+            strchr(prefix,namespace->hier_sep) != NULL)
+            return IMAP_NAMESPACE_BADPREFIX;
+        sprintf(namespace->prefix[NAMESPACE_USER], "%.*s%c",
+                MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
 
-	prefix = config_getstring(IMAPOPT_SHAREDPREFIX);
-	if (!prefix || strlen(prefix) == 0 ||
-	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
-	    strchr(prefix, namespace->hier_sep) != NULL ||
-	    !strncmp(namespace->prefix[NAMESPACE_USER], prefix, strlen(prefix)))
-	    return IMAP_NAMESPACE_BADPREFIX;
+        prefix = config_getstring(IMAPOPT_SHAREDPREFIX);
+        if (!prefix || strlen(prefix) == 0 ||
+            strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
+            strchr(prefix, namespace->hier_sep) != NULL ||
+            !strncmp(namespace->prefix[NAMESPACE_USER], prefix, strlen(prefix)))
+            return IMAP_NAMESPACE_BADPREFIX;
 
-	if (!isadmin) {
-	    sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
-		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep); 
-	}
+        if (!isadmin) {
+            sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
+                MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
+        }
 
-	namespace->mboxname_tointernal = mboxname_tointernal_alt;
-	namespace->mboxname_toexternal = mboxname_toexternal_alt;
-	namespace->mboxlist_findall = mboxlist_findall_alt;
-	namespace->mboxlist_findsub = mboxlist_findsub_alt;
+        namespace->mboxname_tointernal = mboxname_tointernal_alt;
+        namespace->mboxname_toexternal = mboxname_toexternal_alt;
+        namespace->mboxlist_findall = mboxlist_findall_alt;
+        namespace->mboxlist_findsub = mboxlist_findsub_alt;
     }
 
     else {
-	/* standard namespace */
-	sprintf(namespace->prefix[NAMESPACE_INBOX], "%s%c",
-		"INBOX", namespace->hier_sep);
-	sprintf(namespace->prefix[NAMESPACE_USER], "%s%c",
-		"user", namespace->hier_sep);
-	strcpy(namespace->prefix[NAMESPACE_SHARED], "");
+        /* standard namespace */
+        sprintf(namespace->prefix[NAMESPACE_INBOX], "%s%c",
+                "INBOX", namespace->hier_sep);
+        sprintf(namespace->prefix[NAMESPACE_USER], "%s%c",
+                "user", namespace->hier_sep);
+        strcpy(namespace->prefix[NAMESPACE_SHARED], "");
 
-	namespace->mboxname_tointernal = mboxname_tointernal;
-	namespace->mboxname_toexternal = mboxname_toexternal;
-	namespace->mboxlist_findall = mboxlist_findall;
-	namespace->mboxlist_findsub = mboxlist_findsub;
+        namespace->mboxname_tointernal = mboxname_tointernal;
+        namespace->mboxname_toexternal = mboxname_toexternal;
+        namespace->mboxlist_findall = mboxlist_findall;
+        namespace->mboxlist_findsub = mboxlist_findsub;
     }
 
     return 0;
@@ -756,8 +756,8 @@ EXPORTED struct namespace *mboxname_get_adminnamespace()
 {
     static struct namespace ns;
     if (!admin_namespace) {
-	mboxname_init_namespace(&ns, /*isadmin*/1);
-	admin_namespace = &ns;
+        mboxname_init_namespace(&ns, /*isadmin*/1);
+        admin_namespace = &ns;
     }
     return admin_namespace;
 }
@@ -768,7 +768,7 @@ EXPORTED struct namespace *mboxname_get_adminnamespace()
  * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
  */
 EXPORTED char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
-				  int length)
+                                  int length)
 {
     char *p;
 
@@ -778,11 +778,11 @@ EXPORTED char *mboxname_hiersep_tointernal(struct namespace *namespace, char *na
     if (!length) length = strlen(name);
 
     if (namespace->hier_sep == '/') {
-	/* change all '/'s to '.' and all '.'s to DOTCHAR */
-	for (p = name; *p && length; p++, length--) {
-	    if (*p == '/') *p = '.';
-	    else if (*p == '.') *p = DOTCHAR;
-	}
+        /* change all '/'s to '.' and all '.'s to DOTCHAR */
+        for (p = name; *p && length; p++, length--) {
+            if (*p == '/') *p = '.';
+            else if (*p == '.') *p = DOTCHAR;
+        }
     }
 
     return name;
@@ -799,7 +799,7 @@ EXPORTED char *mboxname_hiersep_toexternal(struct namespace *namespace, char *na
     char *p;
 
     if (name == NULL)
-    	return NULL;
+        return NULL;
 
     assert(namespace != NULL);
     assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
@@ -807,11 +807,11 @@ EXPORTED char *mboxname_hiersep_toexternal(struct namespace *namespace, char *na
     if (!length) length=strlen(name);
 
     if (namespace->hier_sep == '/') {
-	/* change all '.'s to '/' and all DOTCHARs to '.' */
-	for (p = name; *p && length; p++, length--) {
-	    if (*p == '.') *p = '/';
-	    else if (*p == DOTCHAR) *p = '.';
-	}
+        /* change all '.'s to '/' and all DOTCHARs to '.' */
+        for (p = name; *p && length; p++, length--) {
+            if (*p == '.') *p = '/';
+            else if (*p == DOTCHAR) *p = '.';
+        }
     }
 
     return name;
@@ -826,9 +826,9 @@ EXPORTED int mboxname_userownsmailbox(const char *userid, const char *name)
     char inboxname[MAX_MAILBOX_BUFFER];
 
     if (!mboxname_tointernal(&internal, "INBOX", userid, inboxname) &&
-	!strncmp(name, inboxname, strlen(inboxname)) &&
-	(name[strlen(inboxname)] == '\0' || name[strlen(inboxname)] == '.')) {
-	return 1;
+        !strncmp(name, inboxname, strlen(inboxname)) &&
+        (name[strlen(inboxname)] == '\0' || name[strlen(inboxname)] == '.')) {
+        return 1;
     }
     return 0;
 }
@@ -844,16 +844,16 @@ EXPORTED char *mboxname_isusermailbox(const char *name, int isinbox)
 
     /* step past the domain part */
     if (config_virtdomains && (p = strchr(start, '!')))
-	start = p + 1;
+        start = p + 1;
 
     /* starts with "user." AND
      * we don't care if it's an inbox OR
-     * there's no dots after the username 
+     * there's no dots after the username
      */
     if (!strncmp(start, "user.", 5) && (!isinbox || !strchr(start+5, '.')))
-	return (char*) start+5;
+        return (char*) start+5;
     else
-	return NULL;
+        return NULL;
 }
 
 /* NOTE - name must have had domain removed already */
@@ -862,21 +862,21 @@ static int mboxname_strip_deletedprefix(char *name, char **ptr)
     static const char *deletedprefix = NULL;
     static int deletedprefix_len = 0;
 
-    /* cache for efficiency, this code can get called 
+    /* cache for efficiency, this code can get called
      * in an inner loop */
     if (!deletedprefix) {
-	deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-	deletedprefix_len = strlen(deletedprefix);
+        deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
+        deletedprefix_len = strlen(deletedprefix);
     }
 
     /* if the prefix is blank, then nothing is deleted */
     if (!deletedprefix_len) return 0;
 
     if (strncmp(name, deletedprefix, deletedprefix_len))
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
 
     if (name[deletedprefix_len] != '.')
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
 
     *ptr = name + deletedprefix_len + 1;
 
@@ -895,26 +895,26 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
     int i;
 
     if (config_virtdomains && (p = strchr(name, '!')))
-	domainlen = p - name + 1;
+        domainlen = p - name + 1;
 
     if (mboxname_strip_deletedprefix((char *)(name + domainlen), &rest))
-	return 0;
+        return 0;
 
     /* Sanity check for 8 hex digits only at the end */
     p = strrchr(rest, '.');
     if (!p)
-	return 0;
+        return 0;
     p++;
 
     for (i = 0 ; i < 7; i++) {
         if (!Uisxdigit(p[i]))
-	    return 0;
+            return 0;
     }
     if (p[8] != '\0')
-	return 0;
+        return 0;
 
     if (timestampp)
-	*timestampp = (time_t)strtoul(p, NULL, 16);
+        *timestampp = (time_t)strtoul(p, NULL, 16);
 
     return 1;
 }
@@ -933,8 +933,8 @@ int mboxname_iscalendarmailbox(const char *name, int mbtype)
     if (mbtype & MBTYPE_CALENDAR) return 1;  /* Only works on backends */
 
     if (!calendarprefix) {
-	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-	if (calendarprefix) calendarprefix_len = strlen(calendarprefix);
+        calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+        if (calendarprefix) calendarprefix_len = strlen(calendarprefix);
     }
 
     /* if the prefix is blank, then no calendars */
@@ -942,15 +942,15 @@ int mboxname_iscalendarmailbox(const char *name, int mbtype)
 
     /* step past the domain part */
     if (config_virtdomains && (p = strchr(start, '!')))
-	start = p + 1;
+        start = p + 1;
 
     /* step past the user part */
     if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
-	start = p + 1;
+        start = p + 1;
 
     return ((!strncmp(start, calendarprefix, calendarprefix_len) &&
-	     (start[calendarprefix_len] == '\0' ||
-	      start[calendarprefix_len] == '.')) ? 1 : 0);
+             (start[calendarprefix_len] == '\0' ||
+              start[calendarprefix_len] == '.')) ? 1 : 0);
 }
 
 /*
@@ -967,8 +967,8 @@ int mboxname_isaddressbookmailbox(const char *name, int mbtype)
     if (mbtype & MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
 
     if (!addressbookprefix) {
-	addressbookprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
-	if (addressbookprefix) addressbookprefix_len = strlen(addressbookprefix);
+        addressbookprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+        if (addressbookprefix) addressbookprefix_len = strlen(addressbookprefix);
     }
 
     /* if the prefix is blank, then no addressbooks */
@@ -976,15 +976,15 @@ int mboxname_isaddressbookmailbox(const char *name, int mbtype)
 
     /* step past the domain part */
     if (config_virtdomains && (p = strchr(start, '!')))
-	start = p + 1;
+        start = p + 1;
 
     /* step past the user part */
     if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
-	start = p + 1;
+        start = p + 1;
 
     return ((!strncmp(start, addressbookprefix, addressbookprefix_len) &&
-	     (start[addressbookprefix_len] == '\0' ||
-	      start[addressbookprefix_len] == '.')) ? 1 : 0);
+             (start[addressbookprefix_len] == '\0' ||
+              start[addressbookprefix_len] == '.')) ? 1 : 0);
 }
 
 /*
@@ -997,16 +997,16 @@ EXPORTED const char *mboxname_to_userid(const char *mboxname)
     struct mboxname_parts parts;
 
     if (mboxname_to_parts(mboxname, &parts))
-	return NULL;
+        return NULL;
 
     if (parts.userid == NULL) {
-	ret = NULL;
+        ret = NULL;
     } else {
-	if (parts.domain)
-	    snprintf(userid, sizeof(userid), "%s@%s", parts.userid, parts.domain);
-	else
-	    xstrncpy(userid, parts.userid, sizeof(userid));
-	ret = userid;
+        if (parts.domain)
+            snprintf(userid, sizeof(userid), "%s@%s", parts.userid, parts.domain);
+        else
+            xstrncpy(userid, parts.userid, sizeof(userid));
+        ret = userid;
     }
 
     mboxname_free_parts(&parts);
@@ -1020,12 +1020,12 @@ EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
     if (!userid) return NULL;
 
     if (config_virtdomains) {
-	const char *atp;
-	atp = strchr(userid, '@');
-	if (atp) {
-	    buf_printf(&mbox, "%s!user.%.*s", atp+1, (int)(atp-userid), userid);
-	    goto userdone;
-	}
+        const char *atp;
+        atp = strchr(userid, '@');
+        if (atp) {
+            buf_printf(&mbox, "%s!user.%.*s", atp+1, (int)(atp-userid), userid);
+            goto userdone;
+        }
     }
 
     /* otherwise it's simple */
@@ -1033,7 +1033,7 @@ EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 
  userdone:
     if (subfolder)
-	buf_printf(&mbox, ".%s", subfolder);
+        buf_printf(&mbox, ".%s", subfolder);
 
     return buf_release(&mbox);
 }
@@ -1043,8 +1043,8 @@ EXPORTED char *mboxname_abook(const char *userid, const char *collection)
     struct buf name = BUF_INITIALIZER;
     buf_setcstr(&name, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     if (collection) {
-	buf_putc(&name, '.');
-	buf_appendcstr(&name, collection);
+        buf_putc(&name, '.');
+        buf_appendcstr(&name, collection);
     }
     char *res = mboxname_user_mbox(userid, buf_cstring(&name));
     buf_free(&name);
@@ -1056,8 +1056,8 @@ EXPORTED char *mboxname_cal(const char *userid, const char *collection)
     struct buf name = BUF_INITIALIZER;
     buf_setcstr(&name, config_getstring(IMAPOPT_CALENDARPREFIX));
     if (collection) {
-	buf_putc(&name, '.');
-	buf_appendcstr(&name, collection);
+        buf_putc(&name, '.');
+        buf_appendcstr(&name, collection);
     }
     char *res = mboxname_user_mbox(userid, buf_cstring(&name));
     buf_free(&name);
@@ -1069,13 +1069,13 @@ EXPORTED char *mboxname_cal(const char *userid, const char *collection)
  * Returns: 1 if the userids are the same, 0 if not.
  */
 EXPORTED int mboxname_parts_same_userid(struct mboxname_parts *a,
-			       struct mboxname_parts *b)
+                               struct mboxname_parts *b)
 {
     int r;
 
     r = strcmpsafe(a->domain, b->domain);
     if (!r)
-	r = strcmpsafe(a->userid, b->userid);
+        r = strcmpsafe(a->userid, b->userid);
     return !r;
 }
 
@@ -1083,7 +1083,7 @@ EXPORTED int mboxname_parts_same_userid(struct mboxname_parts *a,
  * Check whether two mboxnames have the same userid.
  * Needed for some corner cases in the COPY command.
  * Returns: 1 if the userids are the same, 0 if not,
- *	    or negative error.
+ *          or negative error.
  */
 EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
 {
@@ -1091,10 +1091,10 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
     int r;
 
     if (mboxname_to_parts(name1, &parts1))
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
     if (mboxname_to_parts(name2, &parts2)) {
-	mboxname_free_parts(&parts1);
-	return IMAP_MAILBOX_BADNAME;
+        mboxname_free_parts(&parts1);
+        return IMAP_MAILBOX_BADNAME;
     }
 
     r = mboxname_parts_same_userid(&parts1, &parts2);
@@ -1119,34 +1119,34 @@ EXPORTED int mboxname_to_parts(const char *mboxname, struct mboxname_parts *part
     mboxname_init_parts(parts);
 
     if (!mboxname)
-	return 0;
+        return 0;
 
     b = parts->freeme = xstrdup(mboxname);
 
     if (config_virtdomains && (e = strchr(b, '!'))) {
-	parts->domain = b;
-	*e++ = '\0';
-	b = e;
+        parts->domain = b;
+        *e++ = '\0';
+        b = e;
     }
 
     if (!mboxname_strip_deletedprefix(b, &b)) {
-	parts->is_deleted = 1;
+        parts->is_deleted = 1;
     }
 
     if (!strncmp(b, "user.", 5)) {
-	/* user mailbox */
-	b += 5;
-	parts->userid = b;
-	/* find end of userid */
-	e = strchr(b, '.');
-	if (e) {
-	    *e++ = '\0';
-	    b = e;
-	} else {
-	    b += strlen(b);
-	}
+        /* user mailbox */
+        b += 5;
+        parts->userid = b;
+        /* find end of userid */
+        e = strchr(b, '.');
+        if (e) {
+            *e++ = '\0';
+            b = e;
+        } else {
+            b += strlen(b);
+        }
     } else {
-	/* shared mailbox - nothing to strip */
+        /* shared mailbox - nothing to strip */
     }
 
     if (*b) parts->box = b;
@@ -1161,15 +1161,15 @@ EXPORTED int mboxname_userid_to_parts(const char *userid, struct mboxname_parts 
     mboxname_init_parts(parts);
 
     if (!userid)
-	return 0;
+        return 0;
 
     b = parts->freeme = xstrdup(userid);
 
     parts->userid = b;
 
     if (config_virtdomains && (e = strchr(b, '@'))) {
-	*e++ = '\0';
-	parts->domain = e;
+        *e++ = '\0';
+        parts->domain = e;
     }
 
     return 0;
@@ -1183,8 +1183,8 @@ EXPORTED void mboxname_init_parts(struct mboxname_parts *parts)
 EXPORTED void mboxname_free_parts(struct mboxname_parts *parts)
 {
     if (parts->freeme) {
-	free(parts->freeme);
-	memset(parts, 0, sizeof(*parts));
+        free(parts->freeme);
+        memset(parts, 0, sizeof(*parts));
     }
 }
 
@@ -1213,107 +1213,107 @@ HIDDEN int mboxname_policycheck(const char *name)
      * then continue with the check
      */
     if (mboxname_isdeletedmailbox(name, NULL))
-	return 0;
+        return 0;
 
     if (strlen(name) > MAX_MAILBOX_NAME)
-	return IMAP_MAILBOX_BADNAME;
+        return IMAP_MAILBOX_BADNAME;
 
     /* find the virtual domain, if any.  We don't sanity check domain
        names yet - maybe we should */
     p = strchr(name, '!');
     if (p) {
-	if (config_virtdomains)
-	    name = p + 1;
-	else
-	    return IMAP_MAILBOX_BADNAME;
+        if (config_virtdomains)
+            name = p + 1;
+        else
+            return IMAP_MAILBOX_BADNAME;
     }
 
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
-	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
-	if (GLOB_TEST(g, name) != -1) {
-	    glob_free(&g);
-	    return IMAP_MAILBOX_BADNAME;
-	}
-	glob_free(&g);
+        g = glob_init(badmboxpatterns[i], GLOB_ICASE);
+        if (GLOB_TEST(g, name) != -1) {
+            glob_free(&g);
+            return IMAP_MAILBOX_BADNAME;
+        }
+        glob_free(&g);
     }
 
     if (*name == '~') return IMAP_MAILBOX_BADNAME;
     while (*name) {
-	if (*name == '&') {
-	    /* Modified UTF-7 */
-	    name++;
-	    while (*name != '-') {
-		if (sawutf7) {
-		    /* Two adjacent utf7 sequences */
-		    return IMAP_MAILBOX_BADNAME;
-		}
+        if (*name == '&') {
+            /* Modified UTF-7 */
+            name++;
+            while (*name != '-') {
+                if (sawutf7) {
+                    /* Two adjacent utf7 sequences */
+                    return IMAP_MAILBOX_BADNAME;
+                }
 
-		if ((c1 = CHARMOD64(*name++)) == XX ||
-		    (c2 = CHARMOD64(*name++)) == XX ||
-		    (c3 = CHARMOD64(*name++)) == XX) {
-		    /* Non-base64 character */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		ucs4 = (c1 << 10) | (c2 << 4) | (c3 >> 2);
-		if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
-		    /* US-ASCII or multi-word character */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		if (*name == '-') {
-		    /* Trailing bits not zero */
-		    if (c3 & 0x03) return IMAP_MAILBOX_BADNAME;
+                if ((c1 = CHARMOD64(*name++)) == XX ||
+                    (c2 = CHARMOD64(*name++)) == XX ||
+                    (c3 = CHARMOD64(*name++)) == XX) {
+                    /* Non-base64 character */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                ucs4 = (c1 << 10) | (c2 << 4) | (c3 >> 2);
+                if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
+                    /* US-ASCII or multi-word character */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                if (*name == '-') {
+                    /* Trailing bits not zero */
+                    if (c3 & 0x03) return IMAP_MAILBOX_BADNAME;
 
-		    /* End of UTF-7 sequence */
-		    break;
-		}
+                    /* End of UTF-7 sequence */
+                    break;
+                }
 
-		if ((c4 = CHARMOD64(*name++)) == XX ||
-		    (c5 = CHARMOD64(*name++)) == XX ||
-		    (c6 = CHARMOD64(*name++)) == XX) {
-		    /* Non-base64 character */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		ucs4 = ((c3 & 0x03) << 14) | (c4 << 8) | (c5 << 2) | (c6 >> 4);
-		if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
-		    /* US-ASCII or multi-word character */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		if (*name == '-') {
-		    /* Trailing bits not zero */
-		    if (c6 & 0x0f) return IMAP_MAILBOX_BADNAME;
+                if ((c4 = CHARMOD64(*name++)) == XX ||
+                    (c5 = CHARMOD64(*name++)) == XX ||
+                    (c6 = CHARMOD64(*name++)) == XX) {
+                    /* Non-base64 character */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                ucs4 = ((c3 & 0x03) << 14) | (c4 << 8) | (c5 << 2) | (c6 >> 4);
+                if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
+                    /* US-ASCII or multi-word character */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                if (*name == '-') {
+                    /* Trailing bits not zero */
+                    if (c6 & 0x0f) return IMAP_MAILBOX_BADNAME;
 
-		    /* End of UTF-7 sequence */
-		    break;
-		}
+                    /* End of UTF-7 sequence */
+                    break;
+                }
 
-		if ((c7 = CHARMOD64(*name++)) == XX ||
-		    (c8 = CHARMOD64(*name++)) == XX) {
-		    /* Non-base64 character */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-		ucs4 = ((c6 & 0x0f) << 12) | (c7 << 6) | c8;
-		if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
-		    /* US-ASCII or multi-word character */
-		    return IMAP_MAILBOX_BADNAME;
-		}
-	    }
+                if ((c7 = CHARMOD64(*name++)) == XX ||
+                    (c8 = CHARMOD64(*name++)) == XX) {
+                    /* Non-base64 character */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+                ucs4 = ((c6 & 0x0f) << 12) | (c7 << 6) | c8;
+                if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
+                    /* US-ASCII or multi-word character */
+                    return IMAP_MAILBOX_BADNAME;
+                }
+            }
 
-	    if (name[-1] == '&') sawutf7 = 0; /* '&-' is sequence for '&' */
-	    else sawutf7 = 1;
+            if (name[-1] == '&') sawutf7 = 0; /* '&-' is sequence for '&' */
+            else sawutf7 = 1;
 
-	    name++;		/* Skip over terminating '-' */
-	}
-	else {
-	    /* If we're using unixhierarchysep, DOTCHAR is allowed */
-	    if (!strchr(GOODCHARS, *name) &&
-		!(unixsep && *name == DOTCHAR))
-		return IMAP_MAILBOX_BADNAME;
-	    /* If we're not using virtdomains, '@' is not permitted in the mboxname */
-	    if (!config_virtdomains && *name == '@')
-		return IMAP_MAILBOX_BADNAME;
-	    name++;
-	    sawutf7 = 0;
-	}
+            name++;             /* Skip over terminating '-' */
+        }
+        else {
+            /* If we're using unixhierarchysep, DOTCHAR is allowed */
+            if (!strchr(GOODCHARS, *name) &&
+                !(unixsep && *name == DOTCHAR))
+                return IMAP_MAILBOX_BADNAME;
+            /* If we're not using virtdomains, '@' is not permitted in the mboxname */
+            if (!config_virtdomains && *name == '@')
+                return IMAP_MAILBOX_BADNAME;
+            name++;
+            sawutf7 = 0;
+        }
     }
     return 0;
 }
@@ -1325,15 +1325,15 @@ EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 
     /* can't be a child */
     if (longlen < shortlen)
-	return 0;
+        return 0;
 
     /* don't match along same length */
     if (strncmp(longstr, shortstr, shortlen))
-	return 0;
+        return 0;
 
     /* longer, and not a separator */
     if (longlen > shortlen && longstr[shortlen] != '.')
-	return 0;
+        return 0;
 
     /* it's a match! */
     return 1;
@@ -1341,8 +1341,8 @@ EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 
 
 static void mboxname_hash(char *buf, size_t buf_len,
-			  const char *root,
-			  const char *name)
+                          const char *root,
+                          const char *name)
 {
     const char *idx;
     char c, *p;
@@ -1352,46 +1352,46 @@ static void mboxname_hash(char *buf, size_t buf_len,
     buf += strlen(buf);
 
     if (config_virtdomains && (p = strchr(name, '!'))) {
-	*p = '\0';  /* split domain!user */
-	if (config_hashimapspool) {
-	    c = (char) dir_hash_c(name, config_fulldirhash);
-	    snprintf(buf, buf_len, "%s%c/%s", FNAME_DOMAINDIR, c, name);
-	}
-	else {
-	    snprintf(buf, buf_len, "%s%s", FNAME_DOMAINDIR, name);
-	}
-	*p++ = '!';  /* reassemble domain!user */
-	name = p;
-	buf_len -= strlen(buf);
-	buf += strlen(buf);
+        *p = '\0';  /* split domain!user */
+        if (config_hashimapspool) {
+            c = (char) dir_hash_c(name, config_fulldirhash);
+            snprintf(buf, buf_len, "%s%c/%s", FNAME_DOMAINDIR, c, name);
+        }
+        else {
+            snprintf(buf, buf_len, "%s%s", FNAME_DOMAINDIR, name);
+        }
+        *p++ = '!';  /* reassemble domain!user */
+        name = p;
+        buf_len -= strlen(buf);
+        buf += strlen(buf);
     }
 
     if (config_hashimapspool) {
-	idx = strchr(name, '.');
-	if (idx == NULL) {
-	    idx = name;
-	} else {
-	    idx++;
-	}
-	c = (char) dir_hash_c(idx, config_fulldirhash);
-	
-	snprintf(buf, buf_len, "/%c/%s", c, name);
+        idx = strchr(name, '.');
+        if (idx == NULL) {
+            idx = name;
+        } else {
+            idx++;
+        }
+        c = (char) dir_hash_c(idx, config_fulldirhash);
+
+        snprintf(buf, buf_len, "/%c/%s", c, name);
     } else {
-	/* standard mailbox placement */
-	snprintf(buf, buf_len, "/%s", name);
+        /* standard mailbox placement */
+        snprintf(buf, buf_len, "/%s", name);
     }
 
     /* change all '.'s to '/' */
     for (p = buf; *p; p++) {
-	if (*p == '.') *p = '/';
+        if (*p == '.') *p = '/';
     }
 }
 
 /* note: mboxname must be internal */
 EXPORTED char *mboxname_datapath(const char *partition,
-				 const char *mboxname,
-				 const char *uniqueid __attribute__((unused)),
-				 unsigned long uid)
+                                 const char *mboxname,
+                                 const char *uniqueid __attribute__((unused)),
+                                 unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
     const char *root;
@@ -1402,29 +1402,29 @@ EXPORTED char *mboxname_datapath(const char *partition,
     if (!root) return NULL;
 
     if (!mboxname) {
-	xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
-	return pathresult;
+        xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
+        return pathresult;
     }
 
     mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
 
     if (uid) {
-	int len = strlen(pathresult);
-	snprintf(pathresult + len, MAX_MAILBOX_PATH - len, "/%lu.", uid);
+        int len = strlen(pathresult);
+        snprintf(pathresult + len, MAX_MAILBOX_PATH - len, "/%lu.", uid);
     }
     pathresult[MAX_MAILBOX_PATH] = '\0';
 
     if (strlen(pathresult) == MAX_MAILBOX_PATH)
-	return NULL;
+        return NULL;
 
     return pathresult;
 }
 
 /* note: mboxname must be internal */
 EXPORTED char *mboxname_archivepath(const char *partition,
-				    const char *mboxname,
-				    const char *uniqueid __attribute__((unused)),
-				    unsigned long uid)
+                                    const char *mboxname,
+                                    const char *uniqueid __attribute__((unused)),
+                                    unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
     const char *root;
@@ -1438,20 +1438,20 @@ EXPORTED char *mboxname_archivepath(const char *partition,
     /* XXX - dedup with datapath above - but make sure to keep the results
      * in separate buffers and/or audit the callers */
     if (!mboxname) {
-	xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
-	return pathresult;
+        xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
+        return pathresult;
     }
 
     mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
 
     if (uid) {
-	int len = strlen(pathresult);
-	snprintf(pathresult + len, MAX_MAILBOX_PATH - len, "/%lu.", uid);
+        int len = strlen(pathresult);
+        snprintf(pathresult + len, MAX_MAILBOX_PATH - len, "/%lu.", uid);
     }
     pathresult[MAX_MAILBOX_PATH] = '\0';
 
     if (strlen(pathresult) == MAX_MAILBOX_PATH)
-	return NULL;
+        return NULL;
 
     return pathresult;
 }
@@ -1462,7 +1462,7 @@ char *mboxname_lockpath(const char *mboxname)
 }
 
 char *mboxname_lockpath_suffix(const char *mboxname,
-			       const char *suffix)
+                               const char *suffix)
 {
     static char lockresult[MAX_MAILBOX_PATH+1];
     char basepath[MAX_MAILBOX_PATH+1];
@@ -1470,8 +1470,8 @@ char *mboxname_lockpath_suffix(const char *mboxname,
     int len;
 
     if (!root) {
-	snprintf(basepath, MAX_MAILBOX_PATH, "%s/lock", config_dir);
-	root = basepath;
+        snprintf(basepath, MAX_MAILBOX_PATH, "%s/lock", config_dir);
+        root = basepath;
     }
 
     mboxname_hash(lockresult, MAX_MAILBOX_PATH, root, mboxname);
@@ -1481,16 +1481,16 @@ char *mboxname_lockpath_suffix(const char *mboxname,
     lockresult[MAX_MAILBOX_PATH] = '\0';
 
     if (strlen(lockresult) == MAX_MAILBOX_PATH)
-	return NULL;
+        return NULL;
 
     return lockresult;
 }
 
 EXPORTED char *mboxname_metapath(const char *partition,
-				 const char *mboxname,
-				 const char *uniqueid __attribute__((unused)),
-				 int metafile,
-				 int isnew)
+                                 const char *mboxname,
+                                 const char *uniqueid __attribute__((unused)),
+                                 int metafile,
+                                 int isnew)
 {
     static char metaresult[MAX_MAILBOX_PATH];
     int metaflag = 0;
@@ -1505,86 +1505,86 @@ EXPORTED char *mboxname_metapath(const char *partition,
 
     switch (metafile) {
     case META_HEADER:
-	snprintf(confkey, 256, "metadir-header-%s", partition);
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_HEADER;
-	filename = FNAME_HEADER;
-	break;
+        snprintf(confkey, 256, "metadir-header-%s", partition);
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_HEADER;
+        filename = FNAME_HEADER;
+        break;
     case META_INDEX:
-	snprintf(confkey, 256, "metadir-index-%s", partition);
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_INDEX;
-	filename = FNAME_INDEX;
-	break;
+        snprintf(confkey, 256, "metadir-index-%s", partition);
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_INDEX;
+        filename = FNAME_INDEX;
+        break;
     case META_CACHE:
-	snprintf(confkey, 256, "metadir-cache-%s", partition);
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_CACHE;
-	filename = FNAME_CACHE;
-	break;
+        snprintf(confkey, 256, "metadir-cache-%s", partition);
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_CACHE;
+        filename = FNAME_CACHE;
+        break;
     case META_EXPUNGE:
-	/* not movable, it's only old */
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_EXPUNGE;
-	filename = FNAME_EXPUNGE;
-	break;
+        /* not movable, it's only old */
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_EXPUNGE;
+        filename = FNAME_EXPUNGE;
+        break;
     case META_SQUAT:
-	snprintf(confkey, 256, "metadir-squat-%s", partition);
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_SQUAT;
-	filename = FNAME_SQUAT;
-	break;
+        snprintf(confkey, 256, "metadir-squat-%s", partition);
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_SQUAT;
+        filename = FNAME_SQUAT;
+        break;
     case META_ANNOTATIONS:
-	snprintf(confkey, 256, "metadir-index-%s", partition);
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_ANNOTATIONS;
-	filename = FNAME_ANNOTATIONS;
-	break;
+        snprintf(confkey, 256, "metadir-index-%s", partition);
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_ANNOTATIONS;
+        filename = FNAME_ANNOTATIONS;
+        break;
 #ifdef WITH_DAV
     case META_DAV:
-	snprintf(confkey, 256, "metadir-dav-%s", partition);
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_DAV;
-	filename = FNAME_DAV;
-	break;
+        snprintf(confkey, 256, "metadir-dav-%s", partition);
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_DAV;
+        filename = FNAME_DAV;
+        break;
 #endif
     case META_ARCHIVECACHE:
-	snprintf(confkey, 256, "metadir-archivecache-%s", partition);
-	metaflag = IMAP_ENUM_METAPARTITION_FILES_ARCHIVECACHE;
-	filename = FNAME_CACHE;
-	archiveflag = 1;
-	break;
+        snprintf(confkey, 256, "metadir-archivecache-%s", partition);
+        metaflag = IMAP_ENUM_METAPARTITION_FILES_ARCHIVECACHE;
+        filename = FNAME_CACHE;
+        archiveflag = 1;
+        break;
     case 0:
-	break;
+        break;
     default:
-	fatal("Unknown meta file requested", EC_SOFTWARE);
+        fatal("Unknown meta file requested", EC_SOFTWARE);
     }
 
     if (*confkey)
-	root = config_getoverflowstring(confkey, NULL);
+        root = config_getoverflowstring(confkey, NULL);
 
     if (!root && (!metaflag || (config_metapartition_files & metaflag)))
-	root = config_metapartitiondir(partition);
+        root = config_metapartitiondir(partition);
 
     if (!root && archiveflag)
-	root = config_archivepartitiondir(partition);
+        root = config_archivepartitiondir(partition);
 
     if (!root)
-	root = config_partitiondir(partition);
+        root = config_partitiondir(partition);
 
     if (!root)
-	return NULL;
+        return NULL;
 
     if (!mboxname) {
-	xstrncpy(metaresult, root, MAX_MAILBOX_PATH);
-	return metaresult;
+        xstrncpy(metaresult, root, MAX_MAILBOX_PATH);
+        return metaresult;
     }
 
     mboxname_hash(metaresult, MAX_MAILBOX_PATH, root, mboxname);
 
     if (filename) {
-	int len = strlen(metaresult);
-	if (isnew)
-	    snprintf(metaresult + len, MAX_MAILBOX_PATH - len, "%s.NEW", filename);
-	else
-	    snprintf(metaresult + len, MAX_MAILBOX_PATH - len, "%s", filename);
+        int len = strlen(metaresult);
+        if (isnew)
+            snprintf(metaresult + len, MAX_MAILBOX_PATH - len, "%s.NEW", filename);
+        else
+            snprintf(metaresult + len, MAX_MAILBOX_PATH - len, "%s", filename);
     }
 
     if (strlen(metaresult) >= MAX_MAILBOX_PATH)
-	return NULL;
+        return NULL;
 
     return metaresult;
 }
@@ -1598,16 +1598,16 @@ EXPORTED void mboxname_todeleted(const char *name, char *result, int withtime)
     xstrncpy(result, name, MAX_MAILBOX_BUFFER);
 
     if (config_virtdomains && (p = strchr(name, '!')))
-        domainlen = p - name + 1;    
+        domainlen = p - name + 1;
 
     if (withtime) {
-	struct timeval tv;
-	gettimeofday( &tv, NULL );
-	snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s.%X",
-		 deletedprefix, name+domainlen, (unsigned) tv.tv_sec);
+        struct timeval tv;
+        gettimeofday( &tv, NULL );
+        snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s.%X",
+                 deletedprefix, name+domainlen, (unsigned) tv.tv_sec);
     } else {
-	snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s",
-		 deletedprefix, name+domainlen);
+        snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s",
+                 deletedprefix, name+domainlen);
     }
 }
 
@@ -1617,19 +1617,19 @@ EXPORTED int mboxname_make_parent(char *name)
     char *p;
 
     if (config_virtdomains && (p = strchr(name, '!')))
-	domainlen = p - name + 1;
+        domainlen = p - name + 1;
 
     if (!name[0] || !strcmp(name+domainlen, "user"))
-	return 0;				/* stop now */
+        return 0;                               /* stop now */
 
     p = strrchr(name, '.');
 
-    if (p && (p - name > domainlen))		/* don't split subdomain */
-	*p = '\0';
-    else if (!name[domainlen])			/* server entry */
-	name[0] = '\0';
-    else					/* domain entry */
-	name[domainlen] = '\0';
+    if (p && (p - name > domainlen))            /* don't split subdomain */
+        *p = '\0';
+    else if (!name[domainlen])                  /* server entry */
+        name[0] = '\0';
+    else                                        /* domain entry */
+        name[domainlen] = '\0';
 
     return 1;
 }
@@ -1642,38 +1642,38 @@ EXPORTED char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *s
     char c[2], d[2];
 
     if (parts->domain) {
-	if (parts->userid) {
-	    fname = strconcat(config_dir,
-			      FNAME_DOMAINDIR,
-			      dir_hash_b(parts->domain, config_fulldirhash, d),
-			      "/", parts->domain,
-			      FNAME_USERDIR,
-			      dir_hash_b(parts->userid, config_fulldirhash, c),
-			      "/", parts->userid, ".", suffix,
-			      (char *)NULL);
-	}
-	else {
-	    fname = strconcat(config_dir,
-			      FNAME_DOMAINDIR,
-			      dir_hash_b(parts->domain, config_fulldirhash, d),
-			      "/", parts->domain,
-			      "/", FNAME_SHAREDPREFIX, ".", suffix,
-			      (char *)NULL);
-	}
+        if (parts->userid) {
+            fname = strconcat(config_dir,
+                              FNAME_DOMAINDIR,
+                              dir_hash_b(parts->domain, config_fulldirhash, d),
+                              "/", parts->domain,
+                              FNAME_USERDIR,
+                              dir_hash_b(parts->userid, config_fulldirhash, c),
+                              "/", parts->userid, ".", suffix,
+                              (char *)NULL);
+        }
+        else {
+            fname = strconcat(config_dir,
+                              FNAME_DOMAINDIR,
+                              dir_hash_b(parts->domain, config_fulldirhash, d),
+                              "/", parts->domain,
+                              "/", FNAME_SHAREDPREFIX, ".", suffix,
+                              (char *)NULL);
+        }
     }
     else {
-	if (parts->userid) {
-	    fname = strconcat(config_dir,
-			      FNAME_USERDIR,
-			      dir_hash_b(parts->userid, config_fulldirhash, c),
-			      "/", parts->userid, ".", suffix,
-			      (char *)NULL);
-	}
-	else {
-	    fname = strconcat(config_dir,
-			      "/", FNAME_SHAREDPREFIX, ".", suffix,
-			      (char *)NULL);
-	}
+        if (parts->userid) {
+            fname = strconcat(config_dir,
+                              FNAME_USERDIR,
+                              dir_hash_b(parts->userid, config_fulldirhash, c),
+                              "/", parts->userid, ".", suffix,
+                              (char *)NULL);
+        }
+        else {
+            fname = strconcat(config_dir,
+                              "/", FNAME_SHAREDPREFIX, ".", suffix,
+                              (char *)NULL);
+        }
     }
 
     return fname;
@@ -1701,16 +1701,16 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
      * we'll still get a consistent read on either the old or new
      * value */
     if (fd != -1) {
-	struct stat sbuf;
-	if (fstat(fd, &sbuf)) {
-	    syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
-	    goto done;
-	}
-	if (sbuf.st_size) {
-	    map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
-	    parsenum(base, NULL, sbuf.st_size, &fileval);
-	    map_free(&base, &len);
-	}
+        struct stat sbuf;
+        if (fstat(fd, &sbuf)) {
+            syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+            goto done;
+        }
+        if (sbuf.st_size) {
+            map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
+            parsenum(base, NULL, sbuf.st_size, &fileval);
+            map_free(&base, &len);
+        }
     }
 
  done:
@@ -1743,7 +1743,7 @@ static int mboxname_buf_to_counters(const char *base, struct mboxname_counters *
     vals->crc = ntohl(*((uint32_t *)(base+MV_OFF_CRC)));
 
     if (crc32_map(base, MV_OFF_CRC) != vals->crc)
-	return IMAP_MAILBOX_CHECKSUM;
+        return IMAP_MAILBOX_CHECKSUM;
 
     return 0;
 }
@@ -1778,70 +1778,70 @@ static int mboxname_load_counters(const char *mboxname, struct mboxname_counters
 
     fname = mboxname_conf_getpath(&parts, "counters");
     if (!fname) {
-	r = IMAP_MAILBOX_BADNAME;
-	goto done;
+        r = IMAP_MAILBOX_BADNAME;
+        goto done;
     }
 
     /* get a blocking lock on fd */
     for (;;) {
-	fd = open(fname, O_RDWR | O_CREAT, 0644);
-	if (fd == -1) {
-	    /* OK to not exist - try creating the directory first */
-	    if (cyrus_mkdir(fname, 0755)) goto done;
-	    fd = open(fname, O_RDWR | O_CREAT, 0644);
-	}
-	if (fd == -1) {
-	    syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
-	    goto done;
-	}
-	if (lock_blocking(fd, fname)) {
-	    syslog(LOG_ERR, "IOERROR: failed to lock %s: %m", fname);
-	    goto done;
-	}
-	if (fstat(fd, &sbuf)) {
-	    syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
-	    goto done;
-	}
-	if (stat(fname, &fbuf)) {
-	    syslog(LOG_ERR, "IOERROR: failed to stat file %s: %m", fname);
-	    goto done;
-	}
-	if (sbuf.st_ino == fbuf.st_ino) break;
-	lock_unlock(fd, fname);
-	close(fd);
-	fd = -1;
+        fd = open(fname, O_RDWR | O_CREAT, 0644);
+        if (fd == -1) {
+            /* OK to not exist - try creating the directory first */
+            if (cyrus_mkdir(fname, 0755)) goto done;
+            fd = open(fname, O_RDWR | O_CREAT, 0644);
+        }
+        if (fd == -1) {
+            syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
+            goto done;
+        }
+        if (lock_blocking(fd, fname)) {
+            syslog(LOG_ERR, "IOERROR: failed to lock %s: %m", fname);
+            goto done;
+        }
+        if (fstat(fd, &sbuf)) {
+            syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+            goto done;
+        }
+        if (stat(fname, &fbuf)) {
+            syslog(LOG_ERR, "IOERROR: failed to stat file %s: %m", fname);
+            goto done;
+        }
+        if (sbuf.st_ino == fbuf.st_ino) break;
+        lock_unlock(fd, fname);
+        close(fd);
+        fd = -1;
     }
 
     if (fd < 0) {
-	r = IMAP_IOERROR;
-	goto done;
+        r = IMAP_IOERROR;
+        goto done;
     }
 
     if (sbuf.st_size >= MV_LENGTH) {
-	/* read the old value */
-	map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
-	if (len >= MV_LENGTH) {
-	    r = mboxname_buf_to_counters(base, vals);
-	}
-	map_free(&base, &len);
+        /* read the old value */
+        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+        if (len >= MV_LENGTH) {
+            r = mboxname_buf_to_counters(base, vals);
+        }
+        map_free(&base, &len);
     }
     else {
-	/* going to have to read the old files */
-	vals->mailmodseq = vals->caldavmodseq = vals->carddavmodseq =
-	    vals->highestmodseq = mboxname_readval_old(mboxname, "modseq");
-	vals->uidvalidity = mboxname_readval_old(mboxname, "uidvalidity");
+        /* going to have to read the old files */
+        vals->mailmodseq = vals->caldavmodseq = vals->carddavmodseq =
+            vals->highestmodseq = mboxname_readval_old(mboxname, "modseq");
+        vals->uidvalidity = mboxname_readval_old(mboxname, "uidvalidity");
     }
 
 done:
     if (r) {
-	if (fd != -1) {
-	    lock_unlock(fd, fname);
-	    close(fd);
-	}
+        if (fd != -1) {
+            lock_unlock(fd, fname);
+            close(fd);
+        }
     }
     else {
-	/* maintain the lock until we're done */
-	*fdp = fd;
+        /* maintain the lock until we're done */
+        *fdp = fd;
     }
     mboxname_free_parts(&parts);
     free(fname);
@@ -1862,16 +1862,16 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
 
     fname = mboxname_conf_getpath(&parts, "counters");
     if (!fname) {
-	r = IMAP_MAILBOX_BADNAME;
-	goto done;
+        r = IMAP_MAILBOX_BADNAME;
+        goto done;
     }
 
     snprintf(newfname, MAX_MAILBOX_PATH, "%s.NEW", fname);
     newfd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if (newfd == -1) {
-	r = IMAP_IOERROR;
-	syslog(LOG_ERR, "IOERROR: failed to open for write %s: %m", newfname);
-	goto done;
+        r = IMAP_IOERROR;
+        syslog(LOG_ERR, "IOERROR: failed to open for write %s: %m", newfname);
+        goto done;
     }
 
     /* it's a new generation! */
@@ -1880,31 +1880,31 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
     mboxname_counters_to_buf(vals, buf);
     n = retry_write(newfd, buf, MV_LENGTH);
     if (n < 0) {
-	r = IMAP_IOERROR;
-	syslog(LOG_ERR, "IOERROR: failed to write %s: %m", newfname);
-	goto done;
+        r = IMAP_IOERROR;
+        syslog(LOG_ERR, "IOERROR: failed to write %s: %m", newfname);
+        goto done;
     }
 
     if (fdatasync(newfd)) {
-	r = IMAP_IOERROR;
-	syslog(LOG_ERR, "IOERROR: failed to fdatasync %s: %m", newfname);
-	goto done;
+        r = IMAP_IOERROR;
+        syslog(LOG_ERR, "IOERROR: failed to fdatasync %s: %m", newfname);
+        goto done;
     }
 
     close(newfd);
     newfd = -1;
 
     if (rename(newfname, fname)) {
-	r = IMAP_IOERROR;
-	syslog(LOG_ERR, "IOERROR: failed to rename %s: %m", newfname);
-	goto done;
+        r = IMAP_IOERROR;
+        syslog(LOG_ERR, "IOERROR: failed to rename %s: %m", newfname);
+        goto done;
     }
 
  done:
     if (newfd != -1) close(newfd);
     if (fd != -1) {
-	lock_unlock(fd, fname);
-	close(fd);
+        lock_unlock(fd, fname);
+        close(fd);
     }
     mboxname_free_parts(&parts);
     free(fname);
@@ -1935,40 +1935,40 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
 
     fname = mboxname_conf_getpath(&parts, "counters");
     if (!fname) {
-	r = IMAP_MAILBOX_BADNAME;
-	goto done;
+        r = IMAP_MAILBOX_BADNAME;
+        goto done;
     }
 
     fd = open(fname, O_RDONLY);
 
     /* if no file, import from the old files potentially, and write a file regardless */
     if (fd < 0) {
-	/* race => multiple rewrites, won't hurt too much */
-	r = mboxname_load_counters(mboxname, vals, &fd);
-	if (r) goto done;
-	r = mboxname_set_counters(mboxname, vals, fd);
-	fd = -1;
-	if (r) goto done;
-	free(fname);
-	fname = mboxname_conf_getpath(&parts, "modseq");
-	if (fname) unlink(fname);
-	free(fname);
-	fname = mboxname_conf_getpath(&parts, "uidvalidity");
-	if (fname) unlink(fname);
-	goto done;
+        /* race => multiple rewrites, won't hurt too much */
+        r = mboxname_load_counters(mboxname, vals, &fd);
+        if (r) goto done;
+        r = mboxname_set_counters(mboxname, vals, fd);
+        fd = -1;
+        if (r) goto done;
+        free(fname);
+        fname = mboxname_conf_getpath(&parts, "modseq");
+        if (fname) unlink(fname);
+        free(fname);
+        fname = mboxname_conf_getpath(&parts, "uidvalidity");
+        if (fname) unlink(fname);
+        goto done;
     }
 
     if (fstat(fd, &sbuf)) {
-	syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
-	r = IMAP_IOERROR;
-	goto done;
+        syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+        r = IMAP_IOERROR;
+        goto done;
     }
 
     if (sbuf.st_size >= MV_LENGTH) {
-	map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
-	if (len >= MV_LENGTH)
-	    r = mboxname_buf_to_counters(base, vals);
-	map_free(&base, &len);
+        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+        if (len >= MV_LENGTH)
+            r = mboxname_buf_to_counters(base, vals);
+        map_free(&base, &len);
     }
 
  done:
@@ -1983,10 +1983,10 @@ EXPORTED modseq_t mboxname_readmodseq(const char *mboxname)
     struct mboxname_counters counters;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-	return 0;
+        return 0;
 
     if (mboxname_read_counters(mboxname, &counters))
-	return 0;
+        return 0;
 
     return counters.highestmodseq;
 }
@@ -1998,21 +1998,21 @@ EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int m
     int fd = -1;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-	return last + 1;
+        return last + 1;
 
     /* XXX error handling */
     if (mboxname_load_counters(mboxname, &counters, &fd))
-	return last + 1;
+        return last + 1;
 
     if (mbtype & MBTYPE_ADDRESSBOOK)
-	typemodseqp = &counters.carddavmodseq;
+        typemodseqp = &counters.carddavmodseq;
     else if (mbtype & MBTYPE_CALENDAR)
-	typemodseqp = &counters.caldavmodseq;
+        typemodseqp = &counters.caldavmodseq;
     else
-	typemodseqp = &counters.mailmodseq;
+        typemodseqp = &counters.mailmodseq;
 
     if (counters.highestmodseq < last)
-	counters.highestmodseq = last;
+        counters.highestmodseq = last;
 
     counters.highestmodseq++;
 
@@ -2032,33 +2032,33 @@ EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbt
     int dirty = 0;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-	return val;
+        return val;
 
     /* XXX error handling */
     if (mboxname_load_counters(mboxname, &counters, &fd))
-	return val;
+        return val;
 
     if (mbtype & MBTYPE_ADDRESSBOOK)
-	typemodseqp = &counters.carddavmodseq;
+        typemodseqp = &counters.carddavmodseq;
     else if (mbtype & MBTYPE_CALENDAR)
-	typemodseqp = &counters.caldavmodseq;
+        typemodseqp = &counters.caldavmodseq;
     else
-	typemodseqp = &counters.mailmodseq;
+        typemodseqp = &counters.mailmodseq;
 
     if (counters.highestmodseq < val) {
-	counters.highestmodseq = val;
-	dirty = 1;
+        counters.highestmodseq = val;
+        dirty = 1;
     }
 
     if (*typemodseqp < val) {
-	*typemodseqp = val;
-	dirty = 1;
+        *typemodseqp = val;
+        dirty = 1;
     }
 
     if (dirty)
-	mboxname_set_counters(mboxname, &counters, fd);
+        mboxname_set_counters(mboxname, &counters, fd);
     else
-	mboxname_unload_counters(fd);
+        mboxname_unload_counters(fd);
 
     return val;
 }
@@ -2068,10 +2068,10 @@ EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
     struct mboxname_counters counters;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-	return 0;
+        return 0;
 
     if (mboxname_read_counters(mboxname, &counters))
-	return 0;
+        return 0;
 
     return counters.uidvalidity;
 }
@@ -2082,14 +2082,14 @@ EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, 
     int fd = -1;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-	return last + 1;
+        return last + 1;
 
     /* XXX error handling */
     if (mboxname_load_counters(mboxname, &counters, &fd))
-	return last + 1;
+        return last + 1;
 
     if (counters.uidvalidity < last)
-	counters.uidvalidity = last;
+        counters.uidvalidity = last;
 
     counters.uidvalidity++;
 
@@ -2106,21 +2106,21 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val, in
     int dirty = 0;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-	return val;
+        return val;
 
     /* XXX error handling */
     if (mboxname_load_counters(mboxname, &counters, &fd))
-	return val;
+        return val;
 
     if (counters.uidvalidity < val) {
-	counters.uidvalidity = val;
-	dirty = 1;
+        counters.uidvalidity = val;
+        dirty = 1;
     }
 
     if (dirty)
-	mboxname_set_counters(mboxname, &counters, fd);
+        mboxname_set_counters(mboxname, &counters, fd);
     else
-	mboxname_unload_counters(fd);
+        mboxname_unload_counters(fd);
 
     return val;
 }

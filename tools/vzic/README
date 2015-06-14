@@ -188,7 +188,7 @@ list in this format:
 
   Timezone Name        Date and Time of Change in UTC   New Offset from UTC
 
-  America/Dawson	26 Oct 1986	 2:00:00	-0800
+  America/Dawson        26 Oct 1986      2:00:00        -0800
 
 Unfortunately there are some differences here, but they all happen before
 1970 so it doesn't matter too much. It looks like the libical code has

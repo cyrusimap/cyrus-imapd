@@ -198,7 +198,7 @@ static void test_parse_rxdate(void)
 #define FIRST_RX    "Fri, 29 Oct 2010 13:05:01 +1100"
 #define SECOND_RX   "Fri, 29 Oct 2010 13:03:03 +1100"
 #define THIRD_RX    "Fri, 29 Oct 2010 13:01:01 +1100"
-#define SENT	    "Thu, 28 Oct 2010 18:37:26 +1100"
+#define SENT        "Thu, 28 Oct 2010 18:37:26 +1100"
 
     /* Message has neither Received: nor X-DeliveredInternalDate headers. */
     static const char msg_neither[] =
@@ -284,7 +284,7 @@ static void test_parse_rxdate(void)
     /* Received only: first seen Received */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_only_received,
-			     sizeof(msg_only_received)-1, &body);
+                             sizeof(msg_only_received)-1, &body);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
     message_free_body(&body);
@@ -292,7 +292,7 @@ static void test_parse_rxdate(void)
     /* X-DeliveredInternalDate only: use that */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_only_xdid,
-			     sizeof(msg_only_xdid)-1, &body);
+                             sizeof(msg_only_xdid)-1, &body);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
     message_free_body(&body);
@@ -300,7 +300,7 @@ static void test_parse_rxdate(void)
     /* both, Received first: use X-DeliveredInternalDate */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_received_then_xdid,
-			     sizeof(msg_received_then_xdid)-1, &body);
+                             sizeof(msg_received_then_xdid)-1, &body);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
     message_free_body(&body);
@@ -308,7 +308,7 @@ static void test_parse_rxdate(void)
     /* both, X-DeliveredInternalDate first: use X-DeliveredInternalDate */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_xdid_then_received,
-			     sizeof(msg_xdid_then_received)-1, &body);
+                             sizeof(msg_xdid_then_received)-1, &body);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
     message_free_body(&body);
@@ -483,12 +483,12 @@ HTML_PART "\r\n"
     message_fetch_part(&mcontent, types, &parts);
     CU_ASSERT_PTR_NOT_NULL(parts);
     if (parts) {
-	CU_ASSERT_PTR_NOT_NULL(parts[0]);
-	CU_ASSERT_PTR_NULL(parts[1]);
-	CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, TEXT_PART);
-	free(parts[0]);
-	free(parts);
-	parts = NULL;
+        CU_ASSERT_PTR_NOT_NULL(parts[0]);
+        CU_ASSERT_PTR_NULL(parts[1]);
+        CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, TEXT_PART);
+        free(parts[0]);
+        free(parts);
+        parts = NULL;
     }
 
     types[0] = "TEXT/HTML";
@@ -496,12 +496,12 @@ HTML_PART "\r\n"
     message_fetch_part(&mcontent, types, &parts);
     CU_ASSERT_PTR_NOT_NULL(parts);
     if (parts) {
-	CU_ASSERT_PTR_NOT_NULL(parts[0]);
-	CU_ASSERT_PTR_NULL(parts[1]);
-	CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, HTML_PART);
-	free(parts[0]);
-	free(parts);
-	parts = NULL;
+        CU_ASSERT_PTR_NOT_NULL(parts[0]);
+        CU_ASSERT_PTR_NULL(parts[1]);
+        CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, HTML_PART);
+        free(parts[0]);
+        free(parts);
+        parts = NULL;
     }
 
     /* check cacheheaders */
@@ -586,7 +586,7 @@ static void test_rfc2231_extended_continuations(void)
 "Hello, World\n";
     int r;
     static const char TITLE[] =
-		"us-ascii'en'This%20is%20even%20more%20%2A%2A%2Afun%2A%2A%2A%20isn%27t%20it!";
+                "us-ascii'en'This%20is%20even%20more%20%2A%2A%2Afun%2A%2A%2A%20isn%27t%20it!";
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
@@ -790,12 +790,12 @@ HTML_PART "\r\n"
     message_fetch_part(&mcontent, types, &parts);
     CU_ASSERT_PTR_NOT_NULL(parts);
     if (parts) {
-	CU_ASSERT_PTR_NOT_NULL(parts[0]);
-	CU_ASSERT_PTR_NULL(parts[1]);
-	CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, TEXT_PART);
-	free(parts[0]);
-	free(parts);
-	parts = NULL;
+        CU_ASSERT_PTR_NOT_NULL(parts[0]);
+        CU_ASSERT_PTR_NULL(parts[1]);
+        CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, TEXT_PART);
+        free(parts[0]);
+        free(parts);
+        parts = NULL;
     }
 
     types[0] = "TEXT/HTML";
@@ -803,12 +803,12 @@ HTML_PART "\r\n"
     message_fetch_part(&mcontent, types, &parts);
     CU_ASSERT_PTR_NOT_NULL(parts);
     if (parts) {
-	CU_ASSERT_PTR_NOT_NULL(parts[0]);
-	CU_ASSERT_PTR_NULL(parts[1]);
-	CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, HTML_PART);
-	free(parts[0]);
-	free(parts);
-	parts = NULL;
+        CU_ASSERT_PTR_NOT_NULL(parts[0]);
+        CU_ASSERT_PTR_NULL(parts[1]);
+        CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, HTML_PART);
+        free(parts[0]);
+        free(parts);
+        parts = NULL;
     }
 
     /* check cacheheaders */
@@ -953,21 +953,21 @@ static void test_write_nstring(void)
 
     /* Boring but overly long string */
     {
-	struct buf llb = BUF_INITIALIZER;
-	int i;
+        struct buf llb = BUF_INITIALIZER;
+        int i;
 
-	for (i = 0 ; i<500 ; i++)
-	    buf_appendcstr(&llb, "blah ");
-	buf_cstring(&llb);
+        for (i = 0 ; i<500 ; i++)
+            buf_appendcstr(&llb, "blah ");
+        buf_cstring(&llb);
 
-	buf_reset(&b);
-	message_write_nstring(&b, llb.s);
-	buf_cstring(&b);
-	CU_ASSERT_EQUAL(b.len, llb.len+8); \
-	CU_ASSERT_STRING_EQUAL(b.s+8, llb.s);
-	b.s[8] = '\0';
-	CU_ASSERT_STRING_EQUAL(b.s, "{2500}\r\n");
-	buf_free(&llb);
+        buf_reset(&b);
+        message_write_nstring(&b, llb.s);
+        buf_cstring(&b);
+        CU_ASSERT_EQUAL(b.len, llb.len+8); \
+        CU_ASSERT_STRING_EQUAL(b.s+8, llb.s);
+        b.s[8] = '\0';
+        CU_ASSERT_STRING_EQUAL(b.s, "{2500}\r\n");
+        buf_free(&llb);
     }
 
     /* embedded NULs not handled in message_write_nstring */

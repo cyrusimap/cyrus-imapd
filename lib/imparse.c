@@ -58,11 +58,11 @@ EXPORTED int imparse_word(char **s, char **retval)
 
     *retval = *s;
     for (;;) {
-	c = *(*s)++;
-	if (!c || Uisspace(c) || c == '(' || c == ')' || c == '\"') {
-	    (*s)[-1] = '\0';
-	    return c;
-	}
+        c = *(*s)++;
+        if (!c || Uisspace(c) || c == '(' || c == ')' || c == '\"') {
+            (*s)[-1] = '\0';
+            return c;
+        }
     }
 }
 
@@ -89,41 +89,41 @@ EXPORTED int imparse_astring(char **s, char **retval)
     case ')':
     case '\r':
     case '\n':
-	/* Invalid starting character */
-	*retval = "";
-	return EOF;
+        /* Invalid starting character */
+        *retval = "";
+        return EOF;
 
     default:
-	/*
-	 * Atom -- parser is liberal in accepting specials other
-	 * than whitespace, parens, or double quotes
-	 */
-	return imparse_word(s, retval);
-	
+        /*
+         * Atom -- parser is liberal in accepting specials other
+         * than whitespace, parens, or double quotes
+         */
+        return imparse_word(s, retval);
+
     case '\"':
-	/*
-	 * Quoted-string.  Parser is liberal in accepting qspecials
-	 * other than double-quote, CR, and LF.
-	 */
-	*retval = d = ++(*s);
-	for (;;) {
-	    c = *(*s)++;
-	    if (c == '\\') {
-		c = *(*s)++;
-	    }
-	    else if (c == '\"') {
-		*d = '\0';
-		return *(*s)++;
-	    }
-	    else if (c == '\0' || c == '\r' || c == '\n') {
-		*retval = "";
-		return EOF;
-	    }
-	    *d++ = c;
-	}
+        /*
+         * Quoted-string.  Parser is liberal in accepting qspecials
+         * other than double-quote, CR, and LF.
+         */
+        *retval = d = ++(*s);
+        for (;;) {
+            c = *(*s)++;
+            if (c == '\\') {
+                c = *(*s)++;
+            }
+            else if (c == '\"') {
+                *d = '\0';
+                return *(*s)++;
+            }
+            else if (c == '\0' || c == '\r' || c == '\n') {
+                *retval = "";
+                return EOF;
+            }
+            *d++ = c;
+        }
 
     case '{':
-	/* Literal */
+        /* Literal */
         (*s)++;
         while (Uisdigit(c = *(*s)++)) {
             sawdigit = 1;
@@ -153,11 +153,11 @@ EXPORTED int imparse_isnatom(const char *s, int len)
 
     if (!*s) return 0;
     for (; len || *s; s++) {
-	count++;
-	if (len && count > len) break;
-	if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
-	    *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
-	    *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
+        count++;
+        if (len && count > len) break;
+        if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
+            *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
+            *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
     }
     if (count >= 1024) return 0;
     return count;
@@ -178,25 +178,25 @@ EXPORTED int imparse_issequence(const char* s)
     int sawcolon = 0;
 
     while ((c = *s)) {
-	if (c == ',') {
-	    if (!len) return 0;
-	    if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
-	    sawcolon = 0;
-	}
-	else if (c == ':') {
-	    if (sawcolon || !len) return 0;
-	    if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
-	    sawcolon = 1;
-	}
-	else if (c == '*') {
-	    if (len && s[-1] != ',' && s[-1] != ':') return 0;
-	    if (Uisdigit(s[1])) return 0;
-	}
-	else if (!Uisdigit(c)) {
-	    return 0;
-	}
-	s++;
-	len++;
+        if (c == ',') {
+            if (!len) return 0;
+            if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
+            sawcolon = 0;
+        }
+        else if (c == ':') {
+            if (sawcolon || !len) return 0;
+            if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
+            sawcolon = 1;
+        }
+        else if (c == '*') {
+            if (len && s[-1] != ',' && s[-1] != ':') return 0;
+            if (Uisdigit(s[1])) return 0;
+        }
+        else if (!Uisdigit(c)) {
+            return 0;
+        }
+        s++;
+        len++;
     }
     if (len == 0) return 0;
     if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
@@ -210,7 +210,7 @@ EXPORTED int imparse_isnumber(const char *s)
 {
     if (!*s) return 0;
     for (; *s; s++) {
-	if (!Uisdigit(*s)) return 0;
+        if (!Uisdigit(*s)) return 0;
     }
     return 1;
 }

@@ -96,7 +96,7 @@ struct mbent {
     char acl[1];
 };
 
-struct mbent_queue 
+struct mbent_queue
 {
     struct mbent *head;
     struct mbent **tail;
@@ -107,11 +107,11 @@ void free_mbent(struct mbent *p);
 
 /* Used by the slave listener thread to update the local database */
 int cmd_change(struct mupdate_mailboxdata *mdata,
-	       const char *cmd, void *context);
+               const char *cmd, void *context);
 
 int mupdate_synchronize_remote(mupdate_handle *handle,
-			       struct mbent_queue *remote_boxes,
-			       struct mpool *pool);
+                               struct mbent_queue *remote_boxes,
+                               struct mpool *pool);
 /* Given an mbent_queue, will synchronize the local database to it */
 int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool);
 
@@ -136,9 +136,9 @@ enum mupdate_cmd_response {
    otherwise MUPDATE_error. */
 /* if 'wait_for_ok' is set and 'response' != NULL, *response is filled in */
 int mupdate_scarf(mupdate_handle *handle,
-		  mupdate_callback callback,
-		  void *context,
-		  int wait_for_ok,
-		  enum mupdate_cmd_response *response);
+                  mupdate_callback callback,
+                  void *context,
+                  int wait_for_ok,
+                  enum mupdate_cmd_response *response);
 
 #endif /* INCLUDED_MUPDATE_H */

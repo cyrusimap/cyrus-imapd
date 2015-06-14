@@ -75,13 +75,13 @@ sub AUTOLOAD {
     ($constname = $AUTOLOAD) =~ s/.*:://;
     my $val = constant($constname, @_ ? $_[0] : 0);
     if ($! != 0) {
-	if ($! =~ /Invalid/) {
-	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
-	    goto &AutoLoader::AUTOLOAD;
-	}
-	else {
-		croak "Your vendor has not defined Cyrus::SIEVE::managesieve macro $constname";
-	}
+        if ($! =~ /Invalid/) {
+            $AutoLoader::AUTOLOAD = $AUTOLOAD;
+            goto &AutoLoader::AUTOLOAD;
+        }
+        else {
+                croak "Your vendor has not defined Cyrus::SIEVE::managesieve macro $constname";
+        }
     }
     eval "sub $AUTOLOAD { $val }";
     goto &$AUTOLOAD;

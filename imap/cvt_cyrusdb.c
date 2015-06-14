@@ -75,52 +75,52 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	}
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+        }
     }
 
     if ((argc - optind) != 4) {
-	strarray_t *backends = cyrusdb_backends();
-	char sep;
+        strarray_t *backends = cyrusdb_backends();
+        char sep;
 
-	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <new db> <new db backend>\n", argv[0]);
-	fprintf(stderr, "Usable Backends:  ");
+        fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <new db> <new db backend>\n", argv[0]);
+        fprintf(stderr, "Usable Backends:  ");
 
-	for(i=0, sep = ':'; i < backends->count; i++) {
-	    fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
-	    sep = ',';
-	}
-	strarray_free(backends);
+        for(i=0, sep = ':'; i < backends->count; i++) {
+            fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
+            sep = ',';
+        }
+        strarray_free(backends);
 
-	fprintf(stderr, "\n");
-	exit(-1);
+        fprintf(stderr, "\n");
+        exit(-1);
     }
 
     old_db = argv[optind];
     new_db = argv[optind+2];
 
     if (old_db[0] != '/' || new_db[0] != '/') {
-	printf("\nSorry, you cannot use this tool with relative path names.\n"
-	       "This is because some database backends (mainly berkeley) do not\n"
-	       "always do what you would expect with them.\n"
-	       "\nPlease use absolute pathnames instead.\n\n");
-	exit(EC_OSERR);
+        printf("\nSorry, you cannot use this tool with relative path names.\n"
+               "This is because some database backends (mainly berkeley) do not\n"
+               "always do what you would expect with them.\n"
+               "\nPlease use absolute pathnames instead.\n\n");
+        exit(EC_OSERR);
     }
 
     OLDDB = argv[optind+1];
     NEWDB = argv[optind+3];
 
     if (NEWDB == OLDDB) {
-	fatal("no conversion required", EC_TEMPFAIL);
+        fatal("no conversion required", EC_TEMPFAIL);
     }
 
     cyrus_init(alt_config, "cvt_cyrusdb", 0, 0);
 
     printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB,
-	   new_db, NEWDB);
+           new_db, NEWDB);
 
     cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
 

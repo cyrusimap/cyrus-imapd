@@ -32,8 +32,8 @@ static void test_multiple(void)
     char *s;
 
     s = strconcat(word1, " ", word2, " ", word3, " ",
-		  word4, " ", word5, ", ", word6,
-		  (char *)NULL);
+                  word4, " ", word5, ", ", word6,
+                  (char *)NULL);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "lorem ipsum dolor sit amet, consectetur adipisicing elit");
     free(s);

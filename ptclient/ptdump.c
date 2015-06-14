@@ -50,21 +50,21 @@
 #include "libconfig.h"
 
 static int dump_cb(void *rockp __attribute__((unused)),
-		     const char *key, size_t keylen,
-		     const char *data,
-		     size_t datalen __attribute__((unused)))
+                     const char *key, size_t keylen,
+                     const char *data,
+                     size_t datalen __attribute__((unused)))
 {
     struct auth_state *authstate = (struct auth_state *)data;
     int i;
-    
+
     printf("user: ");
     fwrite(key, keylen, 1, stdout);
     printf(" time: %d groups: %d\n",
-	   (unsigned)authstate->mark, (unsigned)authstate->ngroups);
+           (unsigned)authstate->mark, (unsigned)authstate->ngroups);
 
     for (i=0; i < authstate->ngroups; i++)
-	printf("  %s\n",authstate->groups[i].id);
-    
+        printf("  %s\n",authstate->groups[i].id);
+
     return 0;
 }
 
@@ -78,18 +78,18 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	default:
-	    fprintf(stderr,"usage: [-C filename]"
-		    "\n\t-C <filename>\tAlternate Config File"
-		    "\n");
-	    exit(-1);
-	    break;
-	    /* just pass through */
-	}
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+        default:
+            fprintf(stderr,"usage: [-C filename]"
+                    "\n\t-C <filename>\tAlternate Config File"
+                    "\n");
+            exit(-1);
+            break;
+            /* just pass through */
+        }
     }
 
     cyrus_init(alt_config, "ptdump", 0, 0);
@@ -99,9 +99,9 @@ int main(int argc, char *argv[])
     strcat(fnamebuf, PTS_DBFIL);
     r = cyrusdb_open(config_ptscache_db, fnamebuf, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
-	fprintf(stderr,"error opening %s (%s)", fnamebuf,
-	       cyrusdb_strerror(r));
-	exit(1);
+        fprintf(stderr,"error opening %s (%s)", fnamebuf,
+               cyrusdb_strerror(r));
+        exit(1);
     }
 
     /* iterate through db, wiping expired entries */

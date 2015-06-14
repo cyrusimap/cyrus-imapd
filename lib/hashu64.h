@@ -40,7 +40,7 @@ typedef struct hashu64_table {
 */
 
 hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size,
-				 int use_mpool);
+                                 int use_mpool);
 
 /*
 ** Inserts a pointer to 'data' in the table, with a copy of 'key' as its
@@ -74,7 +74,7 @@ void *hashu64_del(uint64_t key,hashu64_table *table);
 */
 
 void hashu64_enumerate(hashu64_table *table,void (*func)(uint64_t ,void *,void *),
-		    void *rock);
+                    void *rock);
 
 /*
 ** Frees a hash table.  For each node that was inserted in the table,

@@ -56,12 +56,12 @@ typedef struct
     char *state;
     const char *sep;
     char *curr;
-#define _TOK_FIRST	(1<<0)
-#define TOK_TRIMLEFT	(1<<1)	/* trim whitespace from start of tokens */
-#define TOK_TRIMRIGHT	(1<<2)	/* trim whitespace from end of tokens */
-#define TOK_EMPTY	(1<<3)	/* return empty "" tokens if adjacent
-				 * delimiter characters are present */
-#define TOK_FREEBUFFER	(1<<4)	/* tok_t should free() the buffer when done */
+#define _TOK_FIRST      (1<<0)
+#define TOK_TRIMLEFT    (1<<1)  /* trim whitespace from start of tokens */
+#define TOK_TRIMRIGHT   (1<<2)  /* trim whitespace from end of tokens */
+#define TOK_EMPTY       (1<<3)  /* return empty "" tokens if adjacent
+                                 * delimiter characters are present */
+#define TOK_FREEBUFFER  (1<<4)  /* tok_t should free() the buffer when done */
     unsigned int flags;
 } tok_t;
 

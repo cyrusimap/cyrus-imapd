@@ -54,8 +54,8 @@ void sieve_free_net(isieve_t *obj);
  * after sieve_free_net is called on the object, so that referrals can
  * continue to work */
 int init_sasl(isieve_t *obj,
-	      int ssf,
-	      sasl_callback_t *callbacks);
+              int ssf,
+              sasl_callback_t *callbacks);
 
 char * read_capability(isieve_t *obj);
 int detect_mitm(isieve_t *obj, char *mechlist);
@@ -70,12 +70,12 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing, sasl_ssf_t 
 
 int isieve_logout(isieve_t **obj);
 int isieve_put_file(isieve_t *obj, char *filename, char *destname,
-		    char **errstr);
+                    char **errstr);
 int isieve_put(isieve_t *obj, char *name, char *data, int len, char **errstr);
 int isieve_delete(isieve_t *obj, char *name, char **errstr);
 typedef void *isieve_listcb_t(char *name, int isactive, void *rock);
 int isieve_list(isieve_t *obj, isieve_listcb_t *cb,void *rock, char **errstr);
 int isieve_activate(isieve_t *obj, char *name, char **errstr);
-int isieve_get(isieve_t *obj,char *name, char **output, char **errstr);  
+int isieve_get(isieve_t *obj,char *name, char **output, char **errstr);
 
 #endif /* ISIEVE_H_ */

@@ -79,8 +79,8 @@ union search_value {
 
 /* search_attr.flags */
 enum {
-    SEA_MUTABLE =	(1<<0),
-    SEA_FUZZABLE =	(1<<1),
+    SEA_MUTABLE =       (1<<0),
+    SEA_FUZZABLE =      (1<<1),
 };
 
 typedef struct search_attr search_attr_t;
@@ -90,7 +90,7 @@ struct search_attr {
     int part;
     int cost;
     void (*internalise)(struct index_state *, const union search_value *,
-		       void **internalisedp);
+                       void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
     int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
     void (*serialise)(struct buf *, const union search_value *);
@@ -98,7 +98,7 @@ struct search_attr {
     unsigned int (*get_countability)(const union search_value *);
     void (*duplicate)(union search_value *, const union search_value *);
     void (*free)(union search_value *);
-    void *data1;	/* extra data for the functions above */
+    void *data1;        /* extra data for the functions above */
 };
 
 typedef struct search_expr search_expr_t;
@@ -114,22 +114,22 @@ struct search_expr {
 
 /* flags for search_expr_get_countability */
 enum {
-    SEC_EXISTS =	    (1<<0),
-    SEC_RECENT =	    (1<<1),
-    SEC_SEEN =		    (1<<2),
-    SEC_CONVSEEN =	    (1<<3),
-    SEC_NOT =		    (1<<29),
-    SEC_UNCOUNTED =	    (1<<30),
+    SEC_EXISTS =            (1<<0),
+    SEC_RECENT =            (1<<1),
+    SEC_SEEN =              (1<<2),
+    SEC_CONVSEEN =          (1<<3),
+    SEC_NOT =               (1<<29),
+    SEC_UNCOUNTED =         (1<<30),
 };
 
 extern search_expr_t *search_expr_new(search_expr_t *parent,
-				      enum search_op);
+                                      enum search_op);
 extern void search_expr_append(search_expr_t *parent, search_expr_t *child);
 extern void search_expr_free(search_expr_t *);
 extern search_expr_t *search_expr_duplicate(const search_expr_t *e);
 extern int search_expr_apply(search_expr_t *e,
-			     int (*cb)(search_expr_t *e, void *rock),
-			     void *rock);
+                             int (*cb)(search_expr_t *e, void *rock),
+                             void *rock);
 extern char *search_expr_serialise(const search_expr_t *);
 extern search_expr_t *search_expr_unserialise(const char *s);
 extern int search_expr_normalise(search_expr_t **);
@@ -140,11 +140,11 @@ extern int search_expr_is_mutable(const search_expr_t *);
 extern unsigned int search_expr_get_countability(const search_expr_t *);
 extern void search_expr_neutralise(search_expr_t *);
 extern void search_expr_split_by_folder_and_index(search_expr_t *e,
-					void (*cb)(const char *mboxname,
-						   search_expr_t *indexed,
-						   search_expr_t *scan,
-						   void *rock),
-					void *rock);
+                                        void (*cb)(const char *mboxname,
+                                                   search_expr_t *indexed,
+                                                   search_expr_t *scan,
+                                                   void *rock),
+                                        void *rock);
 
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);

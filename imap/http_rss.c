@@ -76,10 +76,10 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-#define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
-#define GUID_URL_SCHEME	"data:,"
-#define MAX_SECTION_LEN	128
-#define FEEDLIST_VAR	"%RSS_FEEDLIST%"
+#define XML_NS_ATOM     "http://www.w3.org/2005/Atom"
+#define GUID_URL_SCHEME "data:,"
+#define MAX_SECTION_LEN 128
+#define FEEDLIST_VAR    "%RSS_FEEDLIST%"
 
 static const char def_template[] =
     HTML_DOCTYPE
@@ -92,17 +92,17 @@ static time_t compile_time;
 static void rss_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
 static int rss_parse_path(const char *path,
-			  struct request_target_t *tgt, const char **errstr);
+                          struct request_target_t *tgt, const char **errstr);
 static int is_feed(const char *mbox);
 static int list_feeds(struct transaction_t *txn);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
-			 unsigned recno, uint32_t uid,
-			 struct index_record *record, struct body **body,
-			 struct buf *msg_buf);
+                         unsigned recno, uint32_t uid,
+                         struct index_record *record, struct body **body,
+                         struct buf *msg_buf);
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox);
 static void display_message(struct transaction_t *txn,
-			    const char *mboxname, const struct index_record *record,
-			    struct body *body, const struct buf *msg_buf);
+                            const char *mboxname, const struct index_record *record,
+                            struct body *body, const struct buf *msg_buf);
 static struct body *body_fetch_section(struct body *body, const char *section);
 
 
@@ -112,23 +112,23 @@ struct namespace_t namespace_rss = {
     /*mbtype*/0,
     rss_init, NULL, NULL, NULL,
     {
-	{ NULL,			NULL },			/* ACL		*/
-	{ NULL,			NULL },			/* COPY		*/
-	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get,		NULL },			/* GET		*/
-	{ &meth_get,		NULL },			/* HEAD		*/
-	{ NULL,			NULL },			/* LOCK		*/
-	{ NULL,			NULL },			/* MKCALENDAR	*/
-	{ NULL,			NULL },			/* MKCOL	*/
-	{ NULL,			NULL },			/* MOVE		*/
-	{ &meth_options,	&rss_parse_path },	/* OPTIONS	*/
-	{ NULL,			NULL },			/* POST		*/
-	{ NULL,			NULL },			/* PROPFIND	*/
-	{ NULL,			NULL },			/* PROPPATCH	*/
-	{ NULL,			NULL },			/* PUT		*/
-	{ NULL,			NULL },			/* REPORT	*/
-	{ &meth_trace,		&rss_parse_path },	/* TRACE	*/
-	{ NULL,			NULL }			/* UNLOCK	*/
+        { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* COPY         */
+        { NULL,                 NULL },                 /* DELETE       */
+        { &meth_get,            NULL },                 /* GET          */
+        { &meth_get,            NULL },                 /* HEAD         */
+        { NULL,                 NULL },                 /* LOCK         */
+        { NULL,                 NULL },                 /* MKCALENDAR   */
+        { NULL,                 NULL },                 /* MKCOL        */
+        { NULL,                 NULL },                 /* MOVE         */
+        { &meth_options,        &rss_parse_path },      /* OPTIONS      */
+        { NULL,                 NULL },                 /* POST         */
+        { NULL,                 NULL },                 /* PROPFIND     */
+        { NULL,                 NULL },                 /* PROPPATCH    */
+        { NULL,                 NULL },                 /* PUT          */
+        { NULL,                 NULL },                 /* REPORT       */
+        { &meth_trace,          &rss_parse_path },      /* TRACE        */
+        { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
 
@@ -144,7 +144,7 @@ static void rss_init(struct buf *serverinfo __attribute__((unused)))
 
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
-		    void *params __attribute__((unused)))
+                    void *params __attribute__((unused)))
 {
     int ret = 0, r, rights;
     struct strlist *param;
@@ -154,9 +154,9 @@ static int meth_get(struct transaction_t *txn,
 
     /* Construct mailbox name corresponding to request target URI */
     if ((r = rss_parse_path(txn->req_uri->path,
-			    &txn->req_tgt, &txn->error.desc))) {
-	txn->error.desc = error_message(r);
-	return HTTP_NOT_FOUND;
+                            &txn->req_tgt, &txn->error.desc))) {
+        txn->error.desc = error_message(r);
+        return HTTP_NOT_FOUND;
     }
 
     /* If no mailboxname, list all available feeds */
@@ -167,19 +167,19 @@ static int meth_get(struct transaction_t *txn,
 
     /* Check ACL for current user */
     rights = txn->req_tgt.mbentry->acl ?
-	cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
+        cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
     if (!(rights & ACL_READ)) return HTTP_NO_PRIVS;
 
     if (txn->req_tgt.mbentry->server) {
-	/* Remote mailbox */
-	struct backend *be;
+        /* Remote mailbox */
+        struct backend *be;
 
-	be = proxy_findserver(txn->req_tgt.mbentry->server,
-			      &http_protocol, proxy_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, proxy_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
 
-	return http_pipe_req_resp(be, txn);
+        return http_pipe_req_resp(be, txn);
     }
 
     /* Local Mailbox */
@@ -187,122 +187,122 @@ static int meth_get(struct transaction_t *txn,
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mbentry->name, error_message(r));
-	txn->error.desc = error_message(r);
+        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        txn->error.desc = error_message(r);
 
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
+        switch (r) {
+        case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+        case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+        default: return HTTP_SERVER_ERROR;
+        }
     }
 
-    /* Check for UID, if any */    
+    /* Check for UID, if any */
     if (txn->req_tgt.resource) {
-	uid = strtoul(txn->req_tgt.resource, NULL, 10);
-	if (!uid) uid = -1;
+        uid = strtoul(txn->req_tgt.resource, NULL, 10);
+        if (!uid) uid = -1;
 
-	/* Check for section query param, if any */
-	param = hash_lookup("section", &txn->req_qparams);
-	if (param) section = param->s;
+        /* Check for section query param, if any */
+        param = hash_lookup("section", &txn->req_qparams);
+        if (param) section = param->s;
     }
 
     /* If no UID specified, list messages as an RSS feed */
     if (!uid) ret = list_messages(txn, mailbox);
     else if (uid > mailbox->i.last_uid) {
-	txn->error.desc = "Message does not exist\r\n";
-	ret = HTTP_NOT_FOUND;
+        txn->error.desc = "Message does not exist\r\n";
+        ret = HTTP_NOT_FOUND;
     }
     else {
-	struct index_record record;
-	struct buf msg_buf = BUF_INITIALIZER;
-	struct body *body = NULL;
+        struct index_record record;
+        struct buf msg_buf = BUF_INITIALIZER;
+        struct body *body = NULL;
 
-	/* Fetch the message */
-	if (!(ret = fetch_message(txn, mailbox, 0, uid,
-				  &record, &body, &msg_buf))) {
-	    int precond;
-	    const char *etag = NULL;
-	    time_t lastmod = 0;
-	    struct resp_body_t *resp_body = &txn->resp_body;
+        /* Fetch the message */
+        if (!(ret = fetch_message(txn, mailbox, 0, uid,
+                                  &record, &body, &msg_buf))) {
+            int precond;
+            const char *etag = NULL;
+            time_t lastmod = 0;
+            struct resp_body_t *resp_body = &txn->resp_body;
 
-	    /* Check any preconditions */
-	    if (section && !strcmp(section, "0")) {
-		/* Entire raw message */
-		txn->flags.ranges = 1;
-	    }
+            /* Check any preconditions */
+            if (section && !strcmp(section, "0")) {
+                /* Entire raw message */
+                txn->flags.ranges = 1;
+            }
 
-	    etag = message_guid_encode(&record.guid);
-	    lastmod = record.internaldate;
-	    precond = check_precond(txn, etag, lastmod);
+            etag = message_guid_encode(&record.guid);
+            lastmod = record.internaldate;
+            precond = check_precond(txn, etag, lastmod);
 
-	    switch (precond) {
-	    case HTTP_OK:
-	    case HTTP_PARTIAL:
-	    case HTTP_NOT_MODIFIED:
-		/* Fill in ETag, Last-Modified, and Expires */
-		resp_body->etag = etag;
-		resp_body->lastmod = lastmod;
-		resp_body->maxage = 31536000;  /* 1 year */
-		txn->flags.cc |= CC_MAXAGE;
+            switch (precond) {
+            case HTTP_OK:
+            case HTTP_PARTIAL:
+            case HTTP_NOT_MODIFIED:
+                /* Fill in ETag, Last-Modified, and Expires */
+                resp_body->etag = etag;
+                resp_body->lastmod = lastmod;
+                resp_body->maxage = 31536000;  /* 1 year */
+                txn->flags.cc |= CC_MAXAGE;
 
-		if (precond != HTTP_NOT_MODIFIED) break;
+                if (precond != HTTP_NOT_MODIFIED) break;
 
-	    default:
-		/* We failed a precondition - don't perform the request */
-		ret = precond;
-		goto done;
-	    }
+            default:
+                /* We failed a precondition - don't perform the request */
+                ret = precond;
+                goto done;
+            }
 
-	    if (!section) {
-		/* Return entire message formatted as text/html */
-		display_message(txn, mailbox->name, &record, body, &msg_buf);
-	    }
-	    else if (!strcmp(section, "0")) {
-		/* Return entire message as text/plain */
-		resp_body->type = "text/plain";
-		write_body(precond, txn, buf_base(&msg_buf), buf_len(&msg_buf));
-	    }
-	    else {
-		/* Fetch, decode, and return the specified MIME message part */
-		struct body *part;
-		const char *outbuf;
-		size_t outsize;
+            if (!section) {
+                /* Return entire message formatted as text/html */
+                display_message(txn, mailbox->name, &record, body, &msg_buf);
+            }
+            else if (!strcmp(section, "0")) {
+                /* Return entire message as text/plain */
+                resp_body->type = "text/plain";
+                write_body(precond, txn, buf_base(&msg_buf), buf_len(&msg_buf));
+            }
+            else {
+                /* Fetch, decode, and return the specified MIME message part */
+                struct body *part;
+                const char *outbuf;
+                size_t outsize;
 
-		part = body_fetch_section(body, section);
-		if (!part) {
-		    ret = HTTP_NOT_FOUND;
-		    goto done;
-		}
+                part = body_fetch_section(body, section);
+                if (!part) {
+                    ret = HTTP_NOT_FOUND;
+                    goto done;
+                }
 
-		outbuf = charset_decode_mimebody(buf_base(&msg_buf) +
-						 part->content_offset,
-						 part->content_size,
-						 part->charset_cte & 0xff,
-						 &part->decoded_body, &outsize);
+                outbuf = charset_decode_mimebody(buf_base(&msg_buf) +
+                                                 part->content_offset,
+                                                 part->content_size,
+                                                 part->charset_cte & 0xff,
+                                                 &part->decoded_body, &outsize);
 
-		if (!outbuf) {
-		    txn->error.desc = "Unknown MIME encoding";
-		    ret = HTTP_SERVER_ERROR;
-		    goto done;
-		}
+                if (!outbuf) {
+                    txn->error.desc = "Unknown MIME encoding";
+                    ret = HTTP_SERVER_ERROR;
+                    goto done;
+                }
 
-		assert(!buf_len(&txn->buf));
-		buf_printf(&txn->buf, "%s/%s", part->type, part->subtype);
-		txn->resp_body.type = buf_cstring(&txn->buf);
+                assert(!buf_len(&txn->buf));
+                buf_printf(&txn->buf, "%s/%s", part->type, part->subtype);
+                txn->resp_body.type = buf_cstring(&txn->buf);
 
-		write_body(precond, txn, outbuf, outsize);
-	    }
+                write_body(precond, txn, outbuf, outsize);
+            }
 
-	  done:
-	    buf_free(&msg_buf);
+          done:
+            buf_free(&msg_buf);
 
-	    if (body) {
-		message_free_body(body);
-		free(body);
-	    }
-	}
+            if (body) {
+                message_free_body(body);
+                free(body);
+            }
+        }
     }
 
     mailbox_close(&mailbox);
@@ -312,9 +312,9 @@ static int meth_get(struct transaction_t *txn,
 }
 
 
-/* Create a mailbox name from the request URL */ 
+/* Create a mailbox name from the request URL */
 static int rss_parse_path(const char *path, struct request_target_t *tgt,
-			  const char **errstr)
+                          const char **errstr)
 {
     const char *start, *end;
     char mboxname[MAX_MAILBOX_BUFFER+1];
@@ -329,13 +329,13 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
 
     /* Check for UID */
     if (end > start && end[-1] == '.') {
-	const char *p;
+        const char *p;
 
-	for (p = end-2; p > start && isdigit((int) *p); p--);
-	if (*p == '/') {
-	    end = p;
-	    tgt->resource = (char *) ++p;
-	}
+        for (p = end-2; p > start && isdigit((int) *p); p--);
+        if (*p == '/') {
+            end = p;
+            tgt->resource = (char *) ++p;
+        }
     }
 
     len = end - start;
@@ -348,18 +348,18 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
 
     /* Locate the mailbox */
     if (*mboxname) {
-	int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
-	if (r) {
-	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
-		   mboxname, error_message(r));
-	    *errstr = error_message(r);
+        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        if (r) {
+            syslog(LOG_ERR, "mlookup(%s) failed: %s",
+                   mboxname, error_message(r));
+            *errstr = error_message(r);
 
-	    switch (r) {
-	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	    default: return HTTP_SERVER_ERROR;
-	    }
-	}
+            switch (r) {
+            case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+            case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+            default: return HTTP_SERVER_ERROR;
+            }
+        }
     }
 
     return 0;
@@ -376,8 +376,8 @@ static int is_feed(const char *mbox)
     struct wildmat *wild;
 
     if (!feeds) {
-	feeds = split_wildmats((char *) config_getstring(IMAPOPT_RSS_FEEDS),
-			       NULL);
+        feeds = split_wildmats((char *) config_getstring(IMAPOPT_RSS_FEEDS),
+                               NULL);
     }
 
     /* check mailbox against the 'rss_feeds' wildmat */
@@ -390,7 +390,7 @@ static int is_feed(const char *mbox)
     /* otherwise, its usable */
     return 1;
 }
-    
+
 
 /*
  * mboxlist_findall() callback function to list RSS feeds as a tree
@@ -414,101 +414,101 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
     struct buf *buf = &lrock->txn->resp_body.payload;
 
     if (name) {
-	int rights;
-	mbentry_t *mbentry = NULL;
-	int r;
+        int rights;
+        mbentry_t *mbentry = NULL;
+        int r;
 
-	/* Don't list mailboxes that we don't treat as RSS feeds */
-	if (!is_feed(name)) return 0;
+        /* Don't list mailboxes that we don't treat as RSS feeds */
+        if (!is_feed(name)) return 0;
 
-	/* Don't list deleted mailboxes */
-	if (mboxname_isdeletedmailbox(name, NULL)) return 0;
+        /* Don't list deleted mailboxes */
+        if (mboxname_isdeletedmailbox(name, NULL)) return 0;
 
-	/* Lookup the mailbox and make sure its readable */
-	r = http_mlookup(name, &mbentry, NULL);
-	if (r) return 0;
+        /* Lookup the mailbox and make sure its readable */
+        r = http_mlookup(name, &mbentry, NULL);
+        if (r) return 0;
 
-	rights = httpd_myrights(httpd_authstate, mbentry->acl);
-	mboxlist_entry_free(&mbentry);
+        rights = httpd_myrights(httpd_authstate, mbentry->acl);
+        mboxlist_entry_free(&mbentry);
 
-	if ((rights & ACL_READ) != ACL_READ)
-	    return 0;
+        if ((rights & ACL_READ) != ACL_READ)
+            return 0;
     }
 
     if (name &&
-	!strncmp(name, last->name, last->len) &&
-	(!last->len || (name[last->len] == '.'))) {
-	/* Found closest ancestor of 'name' */
-	struct node *node;
-	size_t len = matchlen;
-	char shortname[MAX_MAILBOX_NAME+1], path[MAX_MAILBOX_PATH+1];
-	char *cp, *href = NULL;
+        !strncmp(name, last->name, last->len) &&
+        (!last->len || (name[last->len] == '.'))) {
+        /* Found closest ancestor of 'name' */
+        struct node *node;
+        size_t len = matchlen;
+        char shortname[MAX_MAILBOX_NAME+1], path[MAX_MAILBOX_PATH+1];
+        char *cp, *href = NULL;
 
-	/* Send a body chunk once in a while */
-	if (buf_len(buf) > PROT_BUFSIZE) {
-	    write_body(0, lrock->txn, buf_cstring(buf), buf_len(buf));
-	    buf_reset(buf);
-	}
+        /* Send a body chunk once in a while */
+        if (buf_len(buf) > PROT_BUFSIZE) {
+            write_body(0, lrock->txn, buf_cstring(buf), buf_len(buf));
+            buf_reset(buf);
+        }
 
-	if (last->child) {
-	    /* Reuse our sibling */
-	    buf_printf(buf, "</li>\n");
-	    node = last->child;
-	}
-	else {
-	    /* Create first child */
-	    buf_printf(buf, "\n<ul%s>\n",
-		       last->parent ? "" : " id='feed'"); /* needed by CSS */
-	    node = xmalloc(sizeof(struct node));
-	}
+        if (last->child) {
+            /* Reuse our sibling */
+            buf_printf(buf, "</li>\n");
+            node = last->child;
+        }
+        else {
+            /* Create first child */
+            buf_printf(buf, "\n<ul%s>\n",
+                       last->parent ? "" : " id='feed'"); /* needed by CSS */
+            node = xmalloc(sizeof(struct node));
+        }
 
-	/* See if we have a missing ancestor in the tree */
-	if ((cp = strchr(&name[last->len+1], '.'))) len = cp - name;
-	else href = path;
+        /* See if we have a missing ancestor in the tree */
+        if ((cp = strchr(&name[last->len+1], '.'))) len = cp - name;
+        else href = path;
 
-	/* Populate new/updated node */
-	strncpy(node->name, name, len);
-	node->name[len] = '\0';
-	node->len = len;
-	node->parent = last;
-	node->child = NULL;
-	lrock->last = last->child = node;
+        /* Populate new/updated node */
+        strncpy(node->name, name, len);
+        node->name[len] = '\0';
+        node->len = len;
+        node->parent = last;
+        node->child = NULL;
+        lrock->last = last->child = node;
 
-	/* Get last segment of mailbox name */
-	if ((cp = strrchr(node->name, '.'))) cp++;
-	else cp = node->name;
+        /* Get last segment of mailbox name */
+        if ((cp = strrchr(node->name, '.'))) cp++;
+        else cp = node->name;
 
-	/* Translate short mailbox name to external form */
-	strlcpy(shortname, cp, sizeof(shortname));
-	mboxname_hiersep_toexternal(&httpd_namespace, shortname, 0);
+        /* Translate short mailbox name to external form */
+        strlcpy(shortname, cp, sizeof(shortname));
+        mboxname_hiersep_toexternal(&httpd_namespace, shortname, 0);
 
-	if (href) {
-	    /* Add selectable feed with link */
-	    snprintf(path, sizeof(path), ".rss.%s", node->name);
-	    mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
-	    buf_printf(buf, "<li><a href=\"%s\">%s</a>",
-		       href, shortname);
-	}
-	else {
-	    /* Add missing ancestor and recurse down the tree */
-	    buf_printf(buf, "<li>%s", shortname);
+        if (href) {
+            /* Add selectable feed with link */
+            snprintf(path, sizeof(path), ".rss.%s", node->name);
+            mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
+            buf_printf(buf, "<li><a href=\"%s\">%s</a>",
+                       href, shortname);
+        }
+        else {
+            /* Add missing ancestor and recurse down the tree */
+            buf_printf(buf, "<li>%s", shortname);
 
-	    list_cb(name, matchlen, maycreate, rock);
-	}
+            list_cb(name, matchlen, maycreate, rock);
+        }
     }
     else {
-	/* Remove child */
-	if (last->child) {
-	    buf_printf(buf, "</li>\n</ul>\n");
-	    free(last->child);
-	    last->child = NULL;
-	}
+        /* Remove child */
+        if (last->child) {
+            buf_printf(buf, "</li>\n</ul>\n");
+            free(last->child);
+            last->child = NULL;
+        }
 
-	if (last->parent) {
-	    /* Recurse back up the tree */
-	    lrock->last = last->parent;
-	    list_cb(name, matchlen, maycreate, rock);
-	}
+        if (last->parent) {
+            /* Recurse back up the tree */
+            lrock->last = last->parent;
+            list_cb(name, matchlen, maycreate, rock);
+        }
     }
 
     return 0;
@@ -533,36 +533,36 @@ static int list_feeds(struct transaction_t *txn)
     struct node root = { "", 0, NULL, NULL };
 
     if (template_file) {
-	/* See if template exists and contains feedlist variable */
-	if (!stat(template_file, &sbuf) && S_ISREG(sbuf.st_mode) &&
-	    (size_t) sbuf.st_size >= varlen &&
-	    (fd = open(template_file, O_RDONLY)) != -1) {
-	    const char *p;
-	    unsigned long len;
+        /* See if template exists and contains feedlist variable */
+        if (!stat(template_file, &sbuf) && S_ISREG(sbuf.st_mode) &&
+            (size_t) sbuf.st_size >= varlen &&
+            (fd = open(template_file, O_RDONLY)) != -1) {
+            const char *p;
+            unsigned long len;
 
-	    map_refresh(fd, 1, &template, &template_len, sbuf.st_size,
-			template_file, NULL);
+            map_refresh(fd, 1, &template, &template_len, sbuf.st_size,
+                        template_file, NULL);
 
-	    for (p = template, len = template_len;
-		 len >= varlen && strncmp(p, FEEDLIST_VAR, varlen); p++, len--);
-	    if (len >= varlen) {
-		var = p;
-		lastmod = sbuf.st_mtime;
-	    }
-	    else {
-		map_free(&template, &template_len);
-		close(fd);
-		fd = -1;
-	    }
-	}
+            for (p = template, len = template_len;
+                 len >= varlen && strncmp(p, FEEDLIST_VAR, varlen); p++, len--);
+            if (len >= varlen) {
+                var = p;
+                lastmod = sbuf.st_mtime;
+            }
+            else {
+                map_free(&template, &template_len);
+                close(fd);
+                fd = -1;
+            }
+        }
     }
 
     if (!var) {
-	/* No usable template specified, use our default */
-	template = def_template;
-	template_len = strlen(def_template);
-	var = strstr(template, FEEDLIST_VAR);
-	lastmod = compile_time;
+        /* No usable template specified, use our default */
+        template = def_template;
+        template_len = strlen(def_template);
+        var = strstr(template, FEEDLIST_VAR);
+        lastmod = compile_time;
     }
 
     prefix = template;
@@ -591,18 +591,18 @@ static int list_feeds(struct transaction_t *txn)
     switch (precond) {
     case HTTP_OK:
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag, Last-Modified, and Expires */
-	txn->resp_body.etag = buf_cstring(&txn->buf);
-	txn->resp_body.lastmod = lastmod;
-	txn->resp_body.maxage = 86400;  /* 24 hrs */
-	txn->flags.cc |= CC_MAXAGE;
+        /* Fill in ETag, Last-Modified, and Expires */
+        txn->resp_body.etag = buf_cstring(&txn->buf);
+        txn->resp_body.lastmod = lastmod;
+        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->flags.cc |= CC_MAXAGE;
 
-	if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
+        /* We failed a precondition - don't perform the request */
+        ret = precond;
+        goto done;
     }
 
     /* Setup for chunked response */
@@ -611,8 +611,8 @@ static int list_feeds(struct transaction_t *txn)
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
-	response_header(HTTP_OK, txn);
-	goto done;
+        response_header(HTTP_OK, txn);
+        goto done;
     }
 
     /* Send beginning of template */
@@ -623,7 +623,7 @@ static int list_feeds(struct transaction_t *txn)
     lrock.txn = txn;
     lrock.last = &root;
     mboxlist_findall(&httpd_namespace, "user.*", 1, httpd_userid,
-		     httpd_authstate, list_cb, &lrock);
+                     httpd_authstate, list_cb, &lrock);
 
     /* Close out the tree */
     list_cb(NULL, 0, 0, &lrock);
@@ -637,8 +637,8 @@ static int list_feeds(struct transaction_t *txn)
 
   done:
     if (fd != -1) {
-	map_free(&template, &template_len);
-	close(fd);
+        map_free(&template, &template_len);
+        close(fd);
     }
 
     return ret;
@@ -647,9 +647,9 @@ static int list_feeds(struct transaction_t *txn)
 
 /* Fetch the index record & bodystructure, and mmap the message */
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
-			 unsigned recno, uint32_t uid,
-			 struct index_record *record, struct body **body,
-			 struct buf *msg_buf)
+                         unsigned recno, uint32_t uid,
+                         struct index_record *record, struct body **body,
+                         struct buf *msg_buf)
 {
     int r;
 
@@ -661,25 +661,25 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     record->uid = uid;
     r = mailbox_reload_index_record(mailbox, record);
     if ((r == CYRUSDB_NOTFOUND) ||
-	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
-	txn->error.desc = "Message has been removed\r\n";
+        (record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
+        txn->error.desc = "Message has been removed\r\n";
 
-	/* Fill in Expires */
-	txn->resp_body.maxage = 31536000;  /* 1 year */
-	txn->flags.cc |= CC_MAXAGE;
-	return HTTP_GONE;
+        /* Fill in Expires */
+        txn->resp_body.maxage = 31536000;  /* 1 year */
+        txn->flags.cc |= CC_MAXAGE;
+        return HTTP_GONE;
     }
     else if (r) {
-	syslog(LOG_ERR, "find index record failed");
-	txn->error.desc = error_message(r);
-	return HTTP_SERVER_ERROR;
+        syslog(LOG_ERR, "find index record failed");
+        txn->error.desc = error_message(r);
+        return HTTP_SERVER_ERROR;
     }
 
     /* Fetch cache record for the message */
     if ((r = mailbox_cacherecord(mailbox, record))) {
-	syslog(LOG_ERR, "read cache failed");
-	txn->error.desc = error_message(r);
-	return HTTP_SERVER_ERROR;
+        syslog(LOG_ERR, "read cache failed");
+        txn->error.desc = error_message(r);
+        return HTTP_SERVER_ERROR;
     }
 
     /* Read message bodystructure */
@@ -693,62 +693,62 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 
 
 static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
-			  unsigned replace, unsigned level)
+                          unsigned replace, unsigned level)
 {
     const char *c;
     unsigned buflen = buf_len(buf), len = 0;
 
     if (!replace && config_httpprettytelemetry)
-	buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+        buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
 
     for (c = str; c && *c && (!max || len < max); c++, len++) {
-	/* Translate CR to HTML <br> tag */
-	if (*c == '\r') buf_appendcstr(buf, "<br>");
-	else if (*c == '\n' && !config_httpprettytelemetry) continue;
+        /* Translate CR to HTML <br> tag */
+        if (*c == '\r') buf_appendcstr(buf, "<br>");
+        else if (*c == '\n' && !config_httpprettytelemetry) continue;
 
-	/* Translate XML/HTML specials */
-	else if (*c == '"') buf_appendcstr(buf, "&quot;");
-//	else if (*c == '\'') buf_appendcstr(buf, "&apos;");
-	else if (*c == '&') buf_appendcstr(buf, "&amp;");
-	else if (*c == '<') buf_appendcstr(buf, "&lt;");
-	else if (*c == '>') buf_appendcstr(buf, "&gt;");
+        /* Translate XML/HTML specials */
+        else if (*c == '"') buf_appendcstr(buf, "&quot;");
+//      else if (*c == '\'') buf_appendcstr(buf, "&apos;");
+        else if (*c == '&') buf_appendcstr(buf, "&amp;");
+        else if (*c == '<') buf_appendcstr(buf, "&lt;");
+        else if (*c == '>') buf_appendcstr(buf, "&gt;");
 
-	/* Handle multi-byte UTF-8 sequences */
-	else if ((*c & 0xc0) == 0xc0) {
-	    /* Code points larger than 127 are represented by
-	     * multi-byte sequences, composed of a leading byte and
-	     * one or more continuation bytes.  The leading byte has
-	     * two or more high-order 1s followed by a 0, while
-	     * continuation bytes all have '10' in the high-order
-	     * position.  The number of high-order 1s in the leading
-	     * byte of a multi-byte sequence indicates the number of
-	     * bytes in the sequence.
-	     */
-	    unsigned char lead = *c;
+        /* Handle multi-byte UTF-8 sequences */
+        else if ((*c & 0xc0) == 0xc0) {
+            /* Code points larger than 127 are represented by
+             * multi-byte sequences, composed of a leading byte and
+             * one or more continuation bytes.  The leading byte has
+             * two or more high-order 1s followed by a 0, while
+             * continuation bytes all have '10' in the high-order
+             * position.  The number of high-order 1s in the leading
+             * byte of a multi-byte sequence indicates the number of
+             * bytes in the sequence.
+             */
+            unsigned char lead = *c;
 
-	    do buf_putc(buf, *c);
-	    while (((lead <<= 1) & 0x80) && c++);
-	}
+            do buf_putc(buf, *c);
+            while (((lead <<= 1) & 0x80) && c++);
+        }
 
-	/* Check for non-printable chars */
-	else if (!(isspace(*c) || isprint(*c))) {
-	    if (replace) {
-		/* Replace entire string with a warning */
-		buf_truncate(buf, buflen);
-		buf_printf_markup(buf, level++, "<blockquote>");
-		buf_printf_markup(buf, level, "<i><b>NOTE:</b> "
-				  "This message contains characters "
-				  "that can not be displayed in RSS</i>");
-		buf_printf_markup(buf, --level, "</blockquote>");
-		return;
-	    }
-	    else {
-		/* Translate non-printable chars to X */
-		buf_putc(buf, 'X');
-	    }
-	}
+        /* Check for non-printable chars */
+        else if (!(isspace(*c) || isprint(*c))) {
+            if (replace) {
+                /* Replace entire string with a warning */
+                buf_truncate(buf, buflen);
+                buf_printf_markup(buf, level++, "<blockquote>");
+                buf_printf_markup(buf, level, "<i><b>NOTE:</b> "
+                                  "This message contains characters "
+                                  "that can not be displayed in RSS</i>");
+                buf_printf_markup(buf, --level, "</blockquote>");
+                return;
+            }
+            else {
+                /* Translate non-printable chars to X */
+                buf_putc(buf, 'X');
+            }
+        }
 
-	else buf_putc(buf, *c);
+        else buf_putc(buf, *c);
     }
 
     if (!replace && config_httpprettytelemetry) buf_appendcstr(buf, "\n");
@@ -773,23 +773,23 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* Check any preconditions */
     lastmod = mailbox->i.last_appenddate;
     sprintf(etag, "%u-%u-%u",
-	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
+            mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
     precond = check_precond(txn, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag, Last-Modified, and Expires */
-	txn->resp_body.etag = etag;
-	txn->resp_body.lastmod = lastmod;
-	txn->resp_body.maxage = 3600;  /* 1 hr */
-	txn->flags.cc |= CC_MAXAGE;
+        /* Fill in ETag, Last-Modified, and Expires */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = lastmod;
+        txn->resp_body.maxage = 3600;  /* 1 hr */
+        txn->flags.cc |= CC_MAXAGE;
 
-	if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
-	/* We failed a precondition - don't perform the request */
-	return precond;
+        /* We failed a precondition - don't perform the request */
+        return precond;
     }
 
     /* Setup for chunked response */
@@ -798,8 +798,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
-	response_header(HTTP_OK, txn);
-	return 0;
+        response_header(HTTP_OK, txn);
+        return 0;
     }
 
     /* Get maximum age of items to display */
@@ -817,29 +817,29 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 #if 0
     /* Obtain recentuid */
     if (mailbox_internal_seen(mailbox, httpd_userid)) {
-	recentuid = mailbox->i.recentuid;
+        recentuid = mailbox->i.recentuid;
     }
     else if (httpd_userid) {
-	struct seen *seendb = NULL;
-	struct seendata sd;
+        struct seen *seendb = NULL;
+        struct seendata sd;
 
-	r = seen_open(httpd_userid, SEEN_CREATE, &seendb);
-	if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
-	seen_close(&seendb);
+        r = seen_open(httpd_userid, SEEN_CREATE, &seendb);
+        if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+        seen_close(&seendb);
 
-	/* handle no seen DB gracefully */
-	if (r) {
-	    recentuid = mailbox->i.last_uid;
-	    syslog(LOG_ERR, "Could not open seen state for %s (%s)",
-		   httpd_userid, error_message(r));
-	}
-	else {
-	    recentuid = sd.lastuid;
-	    free(sd.seenuids);
-	}
+        /* handle no seen DB gracefully */
+        if (r) {
+            recentuid = mailbox->i.last_uid;
+            syslog(LOG_ERR, "Could not open seen state for %s (%s)",
+                   httpd_userid, error_message(r));
+        }
+        else {
+            recentuid = sd.lastuid;
+            free(sd.seenuids);
+        }
     }
     else {
-	recentuid = mailbox->i.last_uid; /* nothing is recent! */
+        recentuid = mailbox->i.last_uid; /* nothing is recent! */
     }
 #endif
 
@@ -859,14 +859,14 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Set up the Atom <feed> response for the mailbox */
     buf_printf_markup(buf, level++,
-		      "<feed xmlns=\"" XML_NS_ATOM "\">");
+                      "<feed xmlns=\"" XML_NS_ATOM "\">");
 
     /* <title> - required */
     buf_printf_markup(buf, level, "<title>%s</title>", mboxname);
 
     /* <id> - required */
     buf_printf_markup(buf, level, "<id>%s%s</id>",
-		      GUID_URL_SCHEME, mailbox->uniqueid);
+                      GUID_URL_SCHEME, mailbox->uniqueid);
 
     /* <updated> - required */
     time_to_rfc3339(lastmod, datestr, sizeof(datestr));
@@ -880,28 +880,28 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* <subtitle> - optional */
     annotatemore_lookup(mailbox->name, "/comment", NULL, &attrib);
     if (age_mark) {
-	time_to_rfc822(age_mark, datestr, sizeof(datestr));
-	buf_printf_markup(buf, level,
-			"<subtitle>%s [posts since %s]</subtitle>",
-			  buf_cstring(&attrib), datestr);
+        time_to_rfc822(age_mark, datestr, sizeof(datestr));
+        buf_printf_markup(buf, level,
+                        "<subtitle>%s [posts since %s]</subtitle>",
+                          buf_cstring(&attrib), datestr);
     }
     else {
-	buf_printf_markup(buf, level,
-			  "<subtitle>%s [%u most recent posts]</subtitle>",
-			  buf_cstring(&attrib),
-			  max_items ? (unsigned) max_items : mailbox->i.exists);
+        buf_printf_markup(buf, level,
+                          "<subtitle>%s [%u most recent posts]</subtitle>",
+                          buf_cstring(&attrib),
+                          max_items ? (unsigned) max_items : mailbox->i.exists);
     }
     buf_free(&attrib);
 
     /* <link> - optional */
     buf_printf_markup(buf, level,
-		      "<link rel=\"self\" type=\"application/atom+xml\""
-		      " href=\"%s\"/>", buf_cstring(url));
+                      "<link rel=\"self\" type=\"application/atom+xml\""
+                      " href=\"%s\"/>", buf_cstring(url));
 
     /* <generator> - optional */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf_markup(buf, level, "<generator>Cyrus HTTP %s</generator>",
-			  cyrus_version());
+        buf_printf_markup(buf, level, "<generator>Cyrus HTTP %s</generator>",
+                          cyrus_version());
     }
 
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
@@ -909,124 +909,124 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Add an <entry> for each message */
     for (recno = mailbox->i.num_records, nitems = 0;
-	 recno >= 1 && (!max_items || nitems < max_items); recno--) {
-	struct index_record record;
-	struct buf msg_buf = BUF_INITIALIZER;
-	struct body *body = NULL;
-	char *subj;
-	struct address *addr = NULL;
-	const char *content_types[] = { "text", NULL };
-	struct message_content content;
-	struct bodypart **parts;
+         recno >= 1 && (!max_items || nitems < max_items); recno--) {
+        struct index_record record;
+        struct buf msg_buf = BUF_INITIALIZER;
+        struct body *body = NULL;
+        char *subj;
+        struct address *addr = NULL;
+        const char *content_types[] = { "text", NULL };
+        struct message_content content;
+        struct bodypart **parts;
 
-	/* Send a body chunk once in a while */
-	if (buf_len(buf) > PROT_BUFSIZE) {
-	    write_body(0, txn, buf_cstring(buf), buf_len(buf));
-	    buf_reset(buf);
-	}
+        /* Send a body chunk once in a while */
+        if (buf_len(buf) > PROT_BUFSIZE) {
+            write_body(0, txn, buf_cstring(buf), buf_len(buf));
+            buf_reset(buf);
+        }
 
-	/* Fetch the message */
-	if (fetch_message(txn, mailbox, recno, 0,
-			  &record, &body, &msg_buf)) {
-	    continue;
-	}
+        /* Fetch the message */
+        if (fetch_message(txn, mailbox, recno, 0,
+                          &record, &body, &msg_buf)) {
+            continue;
+        }
 
-	/* XXX  Are we going to do anything with \Recent? */
-	if (record.uid <= recentuid) {
-	    syslog(LOG_DEBUG, "recno %u not recent (%u/%u)",
-		   recno, record.uid, recentuid);
-	    continue;
-	}
+        /* XXX  Are we going to do anything with \Recent? */
+        if (record.uid <= recentuid) {
+            syslog(LOG_DEBUG, "recno %u not recent (%u/%u)",
+                   recno, record.uid, recentuid);
+            continue;
+        }
 
-	/* Make sure the message is new enough */
-	if (record.gmtime < age_mark) continue;
+        /* Make sure the message is new enough */
+        if (record.gmtime < age_mark) continue;
 
-	/* Feeding this message, increment counter */
-	nitems++;
+        /* Feeding this message, increment counter */
+        nitems++;
 
-	buf_printf_markup(buf, level++, "<entry>");
+        buf_printf_markup(buf, level++, "<entry>");
 
-	/* <title> - required */
-	subj = charset_parse_mimeheader(body->subject);
-	buf_printf_markup(buf, level++, "<title type=\"html\">");
-	buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0, level);
-	buf_printf_markup(buf, --level, "</title>");
-	free(subj);
+        /* <title> - required */
+        subj = charset_parse_mimeheader(body->subject);
+        buf_printf_markup(buf, level++, "<title type=\"html\">");
+        buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0, level);
+        buf_printf_markup(buf, --level, "</title>");
+        free(subj);
 
-	/* <id> - required */
-	buf_printf_markup(buf, level, "<id>%s%s</id>",
-			  GUID_URL_SCHEME, message_guid_encode(&record.guid));
+        /* <id> - required */
+        buf_printf_markup(buf, level, "<id>%s%s</id>",
+                          GUID_URL_SCHEME, message_guid_encode(&record.guid));
 
-	/* <updated> - required */
-	time_to_rfc3339(record.gmtime, datestr, sizeof(datestr));
-	buf_printf_markup(buf, level, "<updated>%s</updated>", datestr);
+        /* <updated> - required */
+        time_to_rfc3339(record.gmtime, datestr, sizeof(datestr));
+        buf_printf_markup(buf, level, "<updated>%s</updated>", datestr);
 
-	/* <published> - optional */
-	buf_printf_markup(buf, level, "<published>%s</published>", datestr);
+        /* <published> - optional */
+        buf_printf_markup(buf, level, "<published>%s</published>", datestr);
 
-	/* <link> - optional */
-	buf_truncate(url, url_len);
-	buf_printf(url, "/%u.", record.uid);
-	buf_printf_markup(buf, level, "<link rel=\"alternate\""
-			  " type=\"text/html\" href=\"%s\"/>",
-			  buf_cstring(url));
+        /* <link> - optional */
+        buf_truncate(url, url_len);
+        buf_printf(url, "/%u.", record.uid);
+        buf_printf_markup(buf, level, "<link rel=\"alternate\""
+                          " type=\"text/html\" href=\"%s\"/>",
+                          buf_cstring(url));
 
-	/* <author> - optional */
-	addr = body->from;
-	if (!addr) addr = body->sender;
-	if (addr && *addr->mailbox) {
-	    buf_printf_markup(buf, level++, "<author>");
+        /* <author> - optional */
+        addr = body->from;
+        if (!addr) addr = body->sender;
+        if (addr && *addr->mailbox) {
+            buf_printf_markup(buf, level++, "<author>");
 
-	    /* <name> - required */
-	    if (addr->name) {
-		char *name = charset_parse_mimeheader(addr->name);
-		buf_printf_markup(buf, level++, "<name>");
-		buf_escapestr(buf, name, 0, 0, level);
-		buf_printf_markup(buf, --level, "</name>");
-		free(name);
-	    }
-	    else {
-		buf_printf_markup(buf, level, "<name>%s@%s</name>",
-				  addr->mailbox, addr->domain);
-	    }
+            /* <name> - required */
+            if (addr->name) {
+                char *name = charset_parse_mimeheader(addr->name);
+                buf_printf_markup(buf, level++, "<name>");
+                buf_escapestr(buf, name, 0, 0, level);
+                buf_printf_markup(buf, --level, "</name>");
+                free(name);
+            }
+            else {
+                buf_printf_markup(buf, level, "<name>%s@%s</name>",
+                                  addr->mailbox, addr->domain);
+            }
 
-	    /* <email> - optional */
-	    buf_printf_markup(buf, level, "<email>%s@%s</email>",
-			      addr->mailbox, addr->domain);
+            /* <email> - optional */
+            buf_printf_markup(buf, level, "<email>%s@%s</email>",
+                              addr->mailbox, addr->domain);
 
-	    buf_printf_markup(buf, --level, "</author>");
-	}
+            buf_printf_markup(buf, --level, "</author>");
+        }
 
-	/* <summary> - optional (find and use the first text/ part) */
-	content.base = buf_base(&msg_buf);
-	content.len = buf_len(&msg_buf);
-	content.body = body;
-	message_fetch_part(&content, content_types, &parts);
+        /* <summary> - optional (find and use the first text/ part) */
+        content.base = buf_base(&msg_buf);
+        content.len = buf_len(&msg_buf);
+        content.body = body;
+        message_fetch_part(&content, content_types, &parts);
 
-	if (parts && *parts) {
-	    buf_printf_markup(buf, level++, "<summary type=\"html\">");
-	    buf_printf_markup(buf, level++, "<![CDATA[");
-	    buf_escapestr(buf, parts[0]->decoded_body, max_len, 1, level);
-	    buf_printf_markup(buf, --level, "]]>");
-	    buf_printf_markup(buf, --level, "</summary>");
-	}
+        if (parts && *parts) {
+            buf_printf_markup(buf, level++, "<summary type=\"html\">");
+            buf_printf_markup(buf, level++, "<![CDATA[");
+            buf_escapestr(buf, parts[0]->decoded_body, max_len, 1, level);
+            buf_printf_markup(buf, --level, "]]>");
+            buf_printf_markup(buf, --level, "</summary>");
+        }
 
-	buf_printf_markup(buf, --level, "</entry>");
+        buf_printf_markup(buf, --level, "</entry>");
 
-	/* free the results */
-	if (parts) {
-	    struct bodypart **p;
+        /* free the results */
+        if (parts) {
+            struct bodypart **p;
 
-	    for (p = parts; *p; p++) free(*p);
-	    free(parts);
-	}
+            for (p = parts; *p; p++) free(*p);
+            free(parts);
+        }
 
-	if (body) {
-	    message_free_body(body);
-	    free(body);
-	}
+        if (body) {
+            message_free_body(body);
+            free(body);
+        }
 
-	buf_free(&msg_buf);
+        buf_free(&msg_buf);
     }
 
     /* End of Atom <feed> */
@@ -1041,227 +1041,227 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 
 static void display_address(struct buf *buf, struct address *addr,
-			    const char *sep, unsigned level)
+                            const char *sep, unsigned level)
 {
     if (config_httpprettytelemetry)
-	buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+        buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
 
     buf_printf(buf, "%s", sep);
     if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
     buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
-	       addr->mailbox, addr->domain, addr->mailbox, addr->domain);
+               addr->mailbox, addr->domain, addr->mailbox, addr->domain);
 
     if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
 }
 
 
 static void display_part(struct transaction_t *txn,
-			 struct body *body, const struct index_record *record,
-			 const char *cursection, const struct buf *msg_buf,
-			 unsigned level)
+                         struct body *body, const struct index_record *record,
+                         const char *cursection, const struct buf *msg_buf,
+                         unsigned level)
 {
     struct buf *buf = &txn->resp_body.payload;
     char nextsection[MAX_SECTION_LEN+1];
 
     if (body->numparts) {
-	/* multipart */
-	int i = 0;
+        /* multipart */
+        int i = 0;
 
-	if (!strcmp(body->subtype, "ALTERNATIVE") &&
-	    !strcmp(body->subpart[0].type, "TEXT")) {
-	    /* Look for a multipart/ or text/html subpart to display first,
-	       otherwise start with first subpart */
-	    for (i = body->numparts; --i;) {
-		if (!strcmp(body->subpart[i].type, "MULTIPART") ||
-		    !strcmp(body->subpart[i].subtype, "HTML")) break;
-	    }
-	}
+        if (!strcmp(body->subtype, "ALTERNATIVE") &&
+            !strcmp(body->subpart[0].type, "TEXT")) {
+            /* Look for a multipart/ or text/html subpart to display first,
+               otherwise start with first subpart */
+            for (i = body->numparts; --i;) {
+                if (!strcmp(body->subpart[i].type, "MULTIPART") ||
+                    !strcmp(body->subpart[i].subtype, "HTML")) break;
+            }
+        }
 
-	/* Display all/remaining subparts */
-	for (; i < body->numparts; i++) {
-	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		     cursection, *cursection ? "." : "", i+1);
-	    display_part(txn, &body->subpart[i],
-			 record, nextsection, msg_buf, level);
-	}
+        /* Display all/remaining subparts */
+        for (; i < body->numparts; i++) {
+            snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+                     cursection, *cursection ? "." : "", i+1);
+            display_part(txn, &body->subpart[i],
+                         record, nextsection, msg_buf, level);
+        }
     }
     else if (body->subpart) {
-	/* message/rfc822 */
-	struct body *subpart = body->subpart;
-	struct address *addr;
-	char *sep;
+        /* message/rfc822 */
+        struct body *subpart = body->subpart;
+        struct address *addr;
+        char *sep;
 
-	/* Display enclosed message header as a shaded table */
-	buf_printf_markup(buf, level++,
-			  "<table width=\"100%%\" bgcolor=\"#CCCCCC\">");
-	/* Subject header field */
-	if (subpart->subject) {
-	    char *subj;
+        /* Display enclosed message header as a shaded table */
+        buf_printf_markup(buf, level++,
+                          "<table width=\"100%%\" bgcolor=\"#CCCCCC\">");
+        /* Subject header field */
+        if (subpart->subject) {
+            char *subj;
 
-	    subj = charset_parse_mimeheader(subpart->subject);
-	    buf_printf_markup(buf, level++, "<tr>");
-	    buf_printf_markup(buf, level,
-			      "<td align=right valign=top><b>Subject: </b></td>");
-	    buf_printf_markup(buf, level, "<td>%s</td>", subj);
-	    buf_printf_markup(buf, --level, "</tr>");
-	    free(subj);
-	}
-	/* From header field */
-	if (subpart->from && *subpart->from->mailbox) {
-	    buf_printf_markup(buf, level++, "<tr>");
-	    buf_printf_markup(buf, level,
-			      "<td align=right><b>From: </b></td>");
-	    buf_printf_markup(buf, level++, "<td>");
-	    display_address(buf, subpart->from, "", level);
-	    buf_printf_markup(buf, --level, "</td>");
-	    buf_printf_markup(buf, --level, "</tr>");
-	}
-	/* Sender header field (if different than From */
-	if (subpart->sender && *subpart->sender->mailbox &&
-	    (!subpart->from ||
-	     strcmp(subpart->sender->mailbox, subpart->from->mailbox) ||
-	     strcmp(subpart->sender->domain, subpart->from->domain))) {
-	    buf_printf_markup(buf, level++, "<tr>");
-	    buf_printf_markup(buf, level,
-			      "<td align=right><b>Sender: </b></td>");
-	    buf_printf_markup(buf, level++, "<td>");
-	    display_address(buf, subpart->sender, "", level);
-	    buf_printf_markup(buf, --level, "</td>");
-	    buf_printf_markup(buf, --level, "</tr>");
-	}
-	/* Reply-To header field (if different than From */
-	if (subpart->reply_to && *subpart->reply_to->mailbox &&
-	    (!subpart->from ||
-	     strcmp(subpart->reply_to->mailbox, subpart->from->mailbox) ||
-	     strcmp(subpart->reply_to->domain, subpart->from->domain))) {
-	    buf_printf_markup(buf, level++, "<tr>");
-	    buf_printf_markup(buf, level,
-			      "<td align=right><b>Reply-To: </b></td>");
-	    buf_printf_markup(buf, level++, "<td>");
-	    display_address(buf, subpart->reply_to, "", level);
-	    buf_printf_markup(buf, --level, "</td>");
-	    buf_printf_markup(buf, --level, "</tr>");
-	}
-	/* Date header field */
-	buf_printf_markup(buf, level++, "<tr>");
-	buf_printf_markup(buf, level,
-			  "<td align=right><b>Date: </b></td>");
-	buf_printf_markup(buf, level,
-			  "<td width=\"100%%\">%s</td>", subpart->date);
-	buf_printf_markup(buf, --level, "</tr>");
-	/* To header field (possibly multiple addresses) */
-	if (subpart->to) {
-	    buf_printf_markup(buf, level++, "<tr>");
-	    buf_printf_markup(buf, level,
-			      "<td align=right valign=top><b>To: </b></td>");
-	    buf_printf_markup(buf, level++, "<td>");
-	    for (sep = "", addr = subpart->to; addr; addr = addr->next) {
-		display_address(buf, addr, sep, level);
-		sep = ", ";
-	    }
-	    buf_printf_markup(buf, --level, "</td>");
-	    buf_printf_markup(buf, --level, "</tr>");
-	}
-	/* Cc header field (possibly multiple addresses) */
-	if (subpart->cc) {
-	    buf_printf_markup(buf, level++, "<tr>");
-	    buf_printf_markup(buf, level,
-			      "<td align=right valign=top><b>Cc: </b></td>");
-	    buf_printf_markup(buf, level++, "<td>");
-	    for (sep = "", addr = subpart->cc; addr; addr = addr->next) {
-		display_address(buf, addr, sep, level);
-		sep = ", ";
-	    }
-	    buf_printf_markup(buf, --level, "</td>");
-	    buf_printf_markup(buf, --level, "</tr>");
-	}
-	buf_printf_markup(buf, --level, "</table>");
-//	buf_printf_markup(buf, level, "<br>");
+            subj = charset_parse_mimeheader(subpart->subject);
+            buf_printf_markup(buf, level++, "<tr>");
+            buf_printf_markup(buf, level,
+                              "<td align=right valign=top><b>Subject: </b></td>");
+            buf_printf_markup(buf, level, "<td>%s</td>", subj);
+            buf_printf_markup(buf, --level, "</tr>");
+            free(subj);
+        }
+        /* From header field */
+        if (subpart->from && *subpart->from->mailbox) {
+            buf_printf_markup(buf, level++, "<tr>");
+            buf_printf_markup(buf, level,
+                              "<td align=right><b>From: </b></td>");
+            buf_printf_markup(buf, level++, "<td>");
+            display_address(buf, subpart->from, "", level);
+            buf_printf_markup(buf, --level, "</td>");
+            buf_printf_markup(buf, --level, "</tr>");
+        }
+        /* Sender header field (if different than From */
+        if (subpart->sender && *subpart->sender->mailbox &&
+            (!subpart->from ||
+             strcmp(subpart->sender->mailbox, subpart->from->mailbox) ||
+             strcmp(subpart->sender->domain, subpart->from->domain))) {
+            buf_printf_markup(buf, level++, "<tr>");
+            buf_printf_markup(buf, level,
+                              "<td align=right><b>Sender: </b></td>");
+            buf_printf_markup(buf, level++, "<td>");
+            display_address(buf, subpart->sender, "", level);
+            buf_printf_markup(buf, --level, "</td>");
+            buf_printf_markup(buf, --level, "</tr>");
+        }
+        /* Reply-To header field (if different than From */
+        if (subpart->reply_to && *subpart->reply_to->mailbox &&
+            (!subpart->from ||
+             strcmp(subpart->reply_to->mailbox, subpart->from->mailbox) ||
+             strcmp(subpart->reply_to->domain, subpart->from->domain))) {
+            buf_printf_markup(buf, level++, "<tr>");
+            buf_printf_markup(buf, level,
+                              "<td align=right><b>Reply-To: </b></td>");
+            buf_printf_markup(buf, level++, "<td>");
+            display_address(buf, subpart->reply_to, "", level);
+            buf_printf_markup(buf, --level, "</td>");
+            buf_printf_markup(buf, --level, "</tr>");
+        }
+        /* Date header field */
+        buf_printf_markup(buf, level++, "<tr>");
+        buf_printf_markup(buf, level,
+                          "<td align=right><b>Date: </b></td>");
+        buf_printf_markup(buf, level,
+                          "<td width=\"100%%\">%s</td>", subpart->date);
+        buf_printf_markup(buf, --level, "</tr>");
+        /* To header field (possibly multiple addresses) */
+        if (subpart->to) {
+            buf_printf_markup(buf, level++, "<tr>");
+            buf_printf_markup(buf, level,
+                              "<td align=right valign=top><b>To: </b></td>");
+            buf_printf_markup(buf, level++, "<td>");
+            for (sep = "", addr = subpart->to; addr; addr = addr->next) {
+                display_address(buf, addr, sep, level);
+                sep = ", ";
+            }
+            buf_printf_markup(buf, --level, "</td>");
+            buf_printf_markup(buf, --level, "</tr>");
+        }
+        /* Cc header field (possibly multiple addresses) */
+        if (subpart->cc) {
+            buf_printf_markup(buf, level++, "<tr>");
+            buf_printf_markup(buf, level,
+                              "<td align=right valign=top><b>Cc: </b></td>");
+            buf_printf_markup(buf, level++, "<td>");
+            for (sep = "", addr = subpart->cc; addr; addr = addr->next) {
+                display_address(buf, addr, sep, level);
+                sep = ", ";
+            }
+            buf_printf_markup(buf, --level, "</td>");
+            buf_printf_markup(buf, --level, "</tr>");
+        }
+        buf_printf_markup(buf, --level, "</table>");
+//      buf_printf_markup(buf, level, "<br>");
 
-	/* Display subpart */
-	snprintf(nextsection, sizeof(nextsection), "%s%s", cursection,
-		 subpart->numparts ? "" : (*cursection ? ".1" : "1"));
-	display_part(txn, subpart, record, nextsection, msg_buf, level);
+        /* Display subpart */
+        snprintf(nextsection, sizeof(nextsection), "%s%s", cursection,
+                 subpart->numparts ? "" : (*cursection ? ".1" : "1"));
+        display_part(txn, subpart, record, nextsection, msg_buf, level);
     }
     else {
-	/* Leaf part - display something */
+        /* Leaf part - display something */
 
-	if (!strcmp(body->type, "TEXT") &&
-	    (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
-	    /* Display non-attachment text part */
-	    int ishtml = !strcmp(body->subtype, "HTML");
-	    int charset = body->charset_cte >> 16;
-	    int encoding = body->charset_cte & 0xff;
+        if (!strcmp(body->type, "TEXT") &&
+            (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
+            /* Display non-attachment text part */
+            int ishtml = !strcmp(body->subtype, "HTML");
+            int charset = body->charset_cte >> 16;
+            int encoding = body->charset_cte & 0xff;
 
-	    if (charset < 0) charset = 0; /* unknown, try ASCII */
-	    body->decoded_body =
-		charset_to_utf8(buf_base(msg_buf) + body->content_offset,
-				body->content_size, charset, encoding);
-	    if (!ishtml) buf_printf_markup(buf, level, "<pre>");
-	    write_body(0, txn, buf_cstring(buf), buf_len(buf));
-	    buf_reset(buf);
+            if (charset < 0) charset = 0; /* unknown, try ASCII */
+            body->decoded_body =
+                charset_to_utf8(buf_base(msg_buf) + body->content_offset,
+                                body->content_size, charset, encoding);
+            if (!ishtml) buf_printf_markup(buf, level, "<pre>");
+            write_body(0, txn, buf_cstring(buf), buf_len(buf));
+            buf_reset(buf);
 
-	    write_body(0, txn, body->decoded_body, strlen(body->decoded_body));
-	    if (!ishtml) buf_printf_markup(buf, level, "</pre>");
-	}
-	else {
-	    int is_image = !strcmp(body->type, "IMAGE");
-	    struct param *param = body->params;
-	    const char *file_attr = "NAME";
+            write_body(0, txn, body->decoded_body, strlen(body->decoded_body));
+            if (!ishtml) buf_printf_markup(buf, level, "</pre>");
+        }
+        else {
+            int is_image = !strcmp(body->type, "IMAGE");
+            struct param *param = body->params;
+            const char *file_attr = "NAME";
 
-	    /* Anything else is shown as an attachment.
-	     * Show images inline, using name/description as alternative text.
-	     */
-	    /* Look for a filename in parameters */
-	    if (body->disposition) {
-		if (!strcmp(body->disposition, "ATTACHMENT")) is_image = 0;
-		param = body->disposition_params;
-		file_attr = "FILENAME";
-	    }
-	    for (; param && strcmp(param->attribute, file_attr);
-		 param = param->next);
+            /* Anything else is shown as an attachment.
+             * Show images inline, using name/description as alternative text.
+             */
+            /* Look for a filename in parameters */
+            if (body->disposition) {
+                if (!strcmp(body->disposition, "ATTACHMENT")) is_image = 0;
+                param = body->disposition_params;
+                file_attr = "FILENAME";
+            }
+            for (; param && strcmp(param->attribute, file_attr);
+                 param = param->next);
 
-	    buf_printf_markup(buf, level++, "<div align=center>");
+            buf_printf_markup(buf, level++, "<div align=center>");
 
-	    /* Create link */
-	    buf_printf_markup(buf, level++,
-			      "<a href=\"%s?section=%s\" type=\"%s/%s\">",
-			      txn->req_tgt.path, cursection,
-			      body->type, body->subtype);
+            /* Create link */
+            buf_printf_markup(buf, level++,
+                              "<a href=\"%s?section=%s\" type=\"%s/%s\">",
+                              txn->req_tgt.path, cursection,
+                              body->type, body->subtype);
 
-	    if (config_httpprettytelemetry)
-		buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+            if (config_httpprettytelemetry)
+                buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
 
-	    /* Add image */
-	    if (is_image) {
-		buf_printf(buf, "<img src=\"%s?section=%s\" alt=\"",
-			   txn->req_tgt.path, cursection);
-	    }
+            /* Add image */
+            if (is_image) {
+                buf_printf(buf, "<img src=\"%s?section=%s\" alt=\"",
+                           txn->req_tgt.path, cursection);
+            }
 
-	    /* Create text for link or alternative text for image */
-	    if (param) buf_printf(buf, "%s", param->value);
-	    else {
-		buf_printf(buf, "[%s/%s %lu bytes]",
-			   body->type, body->subtype, body->content_size);
-	    }
+            /* Create text for link or alternative text for image */
+            if (param) buf_printf(buf, "%s", param->value);
+            else {
+                buf_printf(buf, "[%s/%s %lu bytes]",
+                           body->type, body->subtype, body->content_size);
+            }
 
-	    if (is_image) buf_printf(buf, "\">");
+            if (is_image) buf_printf(buf, "\">");
 
-	    if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+            if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
 
-	    buf_printf_markup(buf, --level, "</a>");
-	    buf_printf_markup(buf, --level, "</div>");
-	}
+            buf_printf_markup(buf, --level, "</a>");
+            buf_printf_markup(buf, --level, "</div>");
+        }
 
-	buf_printf_markup(buf, level, "<hr>");
+        buf_printf_markup(buf, level, "<hr>");
     }
 }
 
 
 /* Return entire message formatted as text/html */
 static void display_message(struct transaction_t *txn,
-			    const char *mboxname, const struct index_record *record,
-			    struct body *body, const struct buf *msg_buf)
+                            const char *mboxname, const struct index_record *record,
+                            struct body *body, const struct buf *msg_buf)
 {
     struct body toplevel;
     struct buf *buf = &txn->resp_body.payload;
@@ -1273,8 +1273,8 @@ static void display_message(struct transaction_t *txn,
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
-	response_header(HTTP_OK, txn);
-	return;
+        response_header(HTTP_OK, txn);
+        return;
     }
 
     /* Start HTML */
@@ -1283,16 +1283,16 @@ static void display_message(struct transaction_t *txn,
     buf_printf_markup(buf, level++, "<html>");
     buf_printf_markup(buf, level++, "<head>");
     buf_printf_markup(buf, level, "<title>%s:%u</title>",
-		      mboxname, record->uid);
+                      mboxname, record->uid);
     buf_printf_markup(buf, --level, "</head>");
     buf_printf_markup(buf, level++, "<body>");
 
     /* Create link to message source */
     buf_printf_markup(buf, level++, "<div align=center>");
     buf_printf_markup(buf, level,
-		      "<a href=\"%s?section=0\" type=\"plain/text\">"
-		      "[View message source]</a>",
-		      txn->req_tgt.path);
+                      "<a href=\"%s?section=0\" type=\"plain/text\">"
+                      "[View message source]</a>",
+                      txn->req_tgt.path);
     buf_printf_markup(buf, --level, "</div>");
     buf_printf_markup(buf, level, "<hr>");
 
@@ -1324,27 +1324,27 @@ static struct body *body_fetch_section(struct body *body, const char *section)
     const char *p = section;
 
     while (*p) {
-	int32_t skip = 0;
-	int r = parseint32(p, &p, &skip);
+        int32_t skip = 0;
+        int r = parseint32(p, &p, &skip);
 
-	if (r || !skip) return NULL;
+        if (r || !skip) return NULL;
 
-	if (body->subpart && !body->numparts) {
-	    /* step inside message/rfc822 */
-	    body = body->subpart;
-	}
+        if (body->subpart && !body->numparts) {
+            /* step inside message/rfc822 */
+            body = body->subpart;
+        }
 
-	if ((skip > 1) && (skip > body->numparts)) return NULL;
+        if ((skip > 1) && (skip > body->numparts)) return NULL;
 
-	if (body->numparts) {
-	    /* step inside multipart */
-	    body = &body->subpart[--skip];
-	}
+        if (body->numparts) {
+            /* step inside multipart */
+            body = &body->subpart[--skip];
+        }
 
-	if (*p == '.') {
-	    if (!body->subpart) return NULL;
-	    p++;
-	}
+        if (*p == '.') {
+            if (!body->subpart) return NULL;
+            p++;
+        }
     }
 
     return (*p ? NULL : body);

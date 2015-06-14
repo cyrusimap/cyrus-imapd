@@ -22,8 +22,8 @@ EXPORTED uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
     int n;
     uint32_t crc = crc32(0L, Z_NULL, 0);
     for (n = 0; n < iovcnt; n++) {
-	if (iov[n].iov_len)
-	    crc = crc32(crc, (const unsigned char *)iov[n].iov_base, iov[n].iov_len);
+        if (iov[n].iov_len)
+            crc = crc32(crc, (const unsigned char *)iov[n].iov_base, iov[n].iov_len);
     }
     return crc;
 }
@@ -148,9 +148,9 @@ EXPORTED uint32_t crc32_map(const char *base, unsigned len)
 {
     uint32_t crc = ~0U;
     const uint8_t *p = (const uint8_t *)base;
-    
+
     while (len--)
-	crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+        crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
 
     return crc ^ ~0U;
 }
@@ -161,11 +161,11 @@ EXPORTED uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
     int n;
 
     for (n = 0; n < iovcnt; n++) {
-	size_t len = iov[n].iov_len;
-	const uint8_t *p = (const uint8_t *)iov[n].iov_base;
+        size_t len = iov[n].iov_len;
+        const uint8_t *p = (const uint8_t *)iov[n].iov_base;
 
-	while (len--)
-	    crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+        while (len--)
+            crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
     }
 
     return crc ^ ~0U;

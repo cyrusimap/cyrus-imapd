@@ -57,19 +57,19 @@
 /* "compiled" glob structure: may change
  */
 typedef struct glob {
-    int flags;			/* glob flags, see below */
-    int slen;			/* suppress string length */
-    char *suppress;		/* suppress string pointer */
-    const char *gstar, *ghier, *gptr;	/* INBOX prefix comparison state */
-    char sep_char;		/* separator character */
-    char inbox[6];		/* INBOX in the correct case */
-    char str[3];		/* glob string & suppress string */
+    int flags;                  /* glob flags, see below */
+    int slen;                   /* suppress string length */
+    char *suppress;             /* suppress string pointer */
+    const char *gstar, *ghier, *gptr;   /* INBOX prefix comparison state */
+    char sep_char;              /* separator character */
+    char inbox[6];              /* INBOX in the correct case */
+    char str[3];                /* glob string & suppress string */
 } glob;
 
 /* glob_init flags: */
-#define GLOB_ICASE        0x01	/* case insensitive */
-#define GLOB_SUBSTRING    0x02	/* match a substring */
-#define GLOB_HIERARCHY    0x04	/* use '%' as hierarchy matching and no '?' */
+#define GLOB_ICASE        0x01  /* case insensitive */
+#define GLOB_SUBSTRING    0x02  /* match a substring */
+#define GLOB_HIERARCHY    0x04  /* use '%' as hierarchy matching and no '?' */
 #define GLOB_INBOXCASE    0x08  /* match "inbox" prefix case insensitive */
 
 /* initialize globbing structure
@@ -78,7 +78,7 @@ typedef struct glob {
  *  suppress -- prefix to suppress
  */
 extern glob *glob_init_suppress P((const char *str, int flags,
-				   const char *suppress));
+                                   const char *suppress));
 
 /* free a glob structure
  */
@@ -90,7 +90,7 @@ extern void glob_free P((glob **g));
  *  len       length of ptr string (if 0, strlen() is used)
  *  min       pointer to minimum length of a valid partial-match.
  *            Set to -1 if no more matches.  Set to return value + 1
- *     	      if another match is possible.  If NULL, no partial-matches
+ *            if another match is possible.  If NULL, no partial-matches
  *            are returned.
  */
 extern int glob_test P((glob *g, const char *str, long len, long *min));

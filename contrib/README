@@ -1,7 +1,7 @@
 This directory contains various patches to the distribution that were
 either couldn't be wedged into the configure script due to system
 dependancies or weren't worth getting into the configure script (laziness
-plays a large part here).  They are "not supported" by us, meaning that we 
+plays a large part here).  They are "not supported" by us, meaning that we
 didn't try them, don't use them for whatever reasons, or were too lazy to
 do a real integration at this point in time.
 

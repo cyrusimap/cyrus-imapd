@@ -62,8 +62,8 @@ EXPORTED const char *map_method_desc = "stupidshared";
  */
 void
 EXPORTED map_refresh(int fd, int onceonly, const char **base,
-		     size_t *len, size_t newlen, const char *name,
-		     const char *mboxname)
+                     size_t *len, size_t newlen, const char *name,
+                     const char *mboxname)
 {
     (void)onceonly;
     struct stat sbuf;
@@ -71,13 +71,13 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     char buf[256];
 
     if (newlen == MAP_UNKNOWN_LEN) {
-	if (fstat(fd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-		   mboxname ? " for " : "", mboxname ? mboxname : "");
-	    snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
-	    fatal(buf, EC_IOERR);
-	}
-	newlen = sbuf.st_size;
+        if (fstat(fd, &sbuf) == -1) {
+            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
+                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
+            fatal(buf, EC_IOERR);
+        }
+        newlen = sbuf.st_size;
     }
 
     /* Already mapped in */
@@ -95,10 +95,10 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 
     *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, flags, fd, 0L);
     if (*base == (char *)MAP_FAILED) {
-	syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
-	       mboxname ? " for " : "", mboxname ? mboxname : "");
-	snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
-	fatal(buf, EC_IOERR);
+        syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
+               mboxname ? " for " : "", mboxname ? mboxname : "");
+        snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
+        fatal(buf, EC_IOERR);
     }
     *len = newlen;
 }

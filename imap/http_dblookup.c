@@ -61,28 +61,28 @@ struct namespace_t namespace_dblookup = {
     ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
-	{ NULL,			NULL },			/* ACL		*/
-	{ NULL,			NULL },			/* COPY		*/
-	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get_db,		NULL },			/* GET		*/
-	{ NULL,			NULL },			/* HEAD		*/
-	{ NULL,			NULL },			/* LOCK		*/
-	{ NULL,			NULL },			/* MKCALENDAR	*/
-	{ NULL,			NULL },			/* MKCOL	*/
-	{ NULL,			NULL },			/* MOVE		*/
-	{ NULL,			NULL },			/* OPTIONS	*/
-	{ NULL,			NULL },			/* POST		*/
-	{ NULL,			NULL },			/* PROPFIND	*/
-	{ NULL,			NULL },			/* PROPPATCH	*/
-	{ NULL,			NULL },			/* PUT		*/
-	{ NULL,			NULL },			/* REPORT	*/
-	{ NULL,			NULL },			/* TRACE	*/
-	{ NULL,			NULL }			/* UNLOCK	*/
+        { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* COPY         */
+        { NULL,                 NULL },                 /* DELETE       */
+        { &meth_get_db,         NULL },                 /* GET          */
+        { NULL,                 NULL },                 /* HEAD         */
+        { NULL,                 NULL },                 /* LOCK         */
+        { NULL,                 NULL },                 /* MKCALENDAR   */
+        { NULL,                 NULL },                 /* MKCOL        */
+        { NULL,                 NULL },                 /* MOVE         */
+        { NULL,                 NULL },                 /* OPTIONS      */
+        { NULL,                 NULL },                 /* POST         */
+        { NULL,                 NULL },                 /* PROPFIND     */
+        { NULL,                 NULL },                 /* PROPPATCH    */
+        { NULL,                 NULL },                 /* PUT          */
+        { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* TRACE        */
+        { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
 
 static int get_email(struct transaction_t *txn __attribute__((unused)),
-		     const char *userid, const char *key)
+                     const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
@@ -100,7 +100,7 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
 
     json = json_array();
     for (i = 0; i < strarray_size(array); i++) {
-	json_array_append_new(json, json_string(strarray_nth(array, i)));
+        json_array_append_new(json, json_string(strarray_nth(array, i)));
     }
 
     result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
@@ -120,7 +120,7 @@ done:
 }
 
 static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
-			  const char *userid, const char *key)
+                          const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
@@ -134,7 +134,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
 
     mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
     if (mailboxhdrs) {
-	mailbox = mailboxhdrs[0];
+        mailbox = mailboxhdrs[0];
     }
 
     mboxname = mboxname_abook(userid, mailbox);
@@ -148,7 +148,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
 
     json = json_array();
     for (i = 0; i < strarray_size(array); i++) {
-	json_array_append_new(json, json_string(strarray_nth(array, i)));
+        json_array_append_new(json, json_string(strarray_nth(array, i)));
     }
 
     result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
@@ -168,7 +168,7 @@ done:
 }
 
 static int get_uid2groups(struct transaction_t *txn,
-			  const char *userid, const char *key)
+                          const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
@@ -184,12 +184,12 @@ static int get_uid2groups(struct transaction_t *txn,
 
     otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
     if (otheruserhdrs) {
-	otheruser = otheruserhdrs[0];
+        otheruser = otheruserhdrs[0];
     }
 
     mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
     if (mailboxhdrs) {
-	mailbox = mailboxhdrs[0];
+        mailbox = mailboxhdrs[0];
     }
 
     mboxname = mboxname_abook(userid, mailbox);
@@ -203,7 +203,7 @@ static int get_uid2groups(struct transaction_t *txn,
 
     json = json_array();
     for (i = 0; i < strarray_size(array); i++) {
-	json_array_append_new(json, json_string(strarray_nth(array, i)));
+        json_array_append_new(json, json_string(strarray_nth(array, i)));
     }
 
     result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
@@ -240,7 +240,7 @@ static int get_group(struct transaction_t *txn, const char *userid, const char *
 
     json = json_array();
     for (i = 0; i < strarray_size(array); i++) {
-	json_array_append_new(json, json_string(strarray_nth(array, i)));
+        json_array_append_new(json, json_string(strarray_nth(array, i)));
     }
 
     result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
@@ -260,7 +260,7 @@ done:
 }
 
 static int meth_get_db(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
+                       void *params __attribute__((unused)))
 {
     const char **userhdrs;
     const char **keyhdrs;
@@ -280,19 +280,19 @@ static int meth_get_db(struct transaction_t *txn,
     if (keyhdrs[1]) return HTTP_NOT_ALLOWED;
 
     if (!strcmp(txn->req_uri->path, "/dblookup/email"))
-	return get_email(txn, userhdrs[0], keyhdrs[0]);
+        return get_email(txn, userhdrs[0], keyhdrs[0]);
 
     if (!strcmp(txn->req_uri->path, "/dblookup/email2uids"))
-	return get_email2uids(txn, userhdrs[0], keyhdrs[0]);
+        return get_email2uids(txn, userhdrs[0], keyhdrs[0]);
 
     if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
-	return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
+        return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
 
     strlcpy(path, keyhdrs[0], sizeof(path));
     p = path + strlen(path);
     while (p >= path && *p != '/') { p--; }
     if (p < path)
-	return HTTP_BAD_REQUEST;
+        return HTTP_BAD_REQUEST;
     *p++ = '\0';
 
     mboxname_init_parts(&parts);
@@ -304,18 +304,18 @@ static int meth_get_db(struct transaction_t *txn,
 
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
-	/* not allowed to be cross domain */
-	if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
-	    return HTTP_NOT_FOUND;
-	//free(parts.domain); - XXX fix when converting to real parts
-	parts.domain = NULL;
+        /* not allowed to be cross domain */
+        if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
+            return HTTP_NOT_FOUND;
+        //free(parts.domain); - XXX fix when converting to real parts
+        parts.domain = NULL;
     }
 
     mboxname_parts_to_internal(&parts, mboxname);
     mboxname_free_parts(&parts);
 
     if (!strcmp(txn->req_uri->path, "/dblookup/group"))
-	return get_group(txn, userhdrs[0], mboxname, p);
+        return get_group(txn, userhdrs[0], mboxname, p);
 
     return HTTP_NOT_FOUND;
 }

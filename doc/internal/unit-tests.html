@@ -145,7 +145,7 @@ rm -f cunit/mboxname.testc-cunit.c
 /bin/bash ./libtool --tag=CC --mode=link gcc -fPIC  -g -O2 -o cunit/unit
 cunit/unit.o ... lib/libcyrus_min.la ...  <span class="note">(c)</span>
 ...
-Running unit tests		<span class="note">(d)</span>
+Running unit tests              <span class="note">(d)</span>
 
 
      CUnit - A Unit testing framework for C - Version 2.1-0
@@ -308,9 +308,9 @@ a failing test somewhat challenging.  The solution is:</p>
 ...
 Reading symbols from /home/me/cyrus-imapd/cunit/.libs/lt-unit...done.
 (gdb) <b>list crc32.testc:1</b>
-1	/* Unit test for lib/crc32.c */
-2	#include "cunit/cunit.h"
-3	#include "crc32.h"
+1       /* Unit test for lib/crc32.c */
+2       #include "cunit/cunit.h"
+3       #include "crc32.h"
 ...
 (gdb) <b>break test_map</b>
 Breakpoint 1 at 0x44a2f8: file ./cunit/crc32.testc, line 11.
@@ -324,10 +324,10 @@ Starting program: /home/me/cyrus-imapd/cunit/.libs/lt-unit -t -v crc32
 
 
 Suite: crc32
-  Test: map ... 
+  Test: map ...
 Breakpoint 1, test_map () at ./cunit/crc32.testc:11
-11	    c = crc32_map(TEXT, sizeof(TEXT)-1);
-(gdb) 
+11          c = crc32_map(TEXT, sizeof(TEXT)-1);
+(gdb)
 </blockquote>
 
 <p>Note the <b>-t</b> option.  This turns off test timeouts, which is very useful

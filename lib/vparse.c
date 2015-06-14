@@ -687,9 +687,9 @@ EXPORTED const char *vparse_stringval(const struct vparse_card *card, const char
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
-	if (entry->multivalue == 1) continue;
-	if (!strcasecmp(name, entry->name))
-	    return entry->v.value;
+        if (entry->multivalue == 1) continue;
+        if (!strcasecmp(name, entry->name))
+            return entry->v.value;
     }
     return NULL;
 }
@@ -698,9 +698,9 @@ EXPORTED const strarray_t *vparse_multival(const struct vparse_card *card, const
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
-	if (entry->multivalue == 0) continue;
-	if (!strcasecmp(name, entry->name))
-	    return entry->v.values;
+        if (entry->multivalue == 0) continue;
+        if (!strcasecmp(name, entry->name))
+            return entry->v.values;
     }
     return NULL;
 }
@@ -731,10 +731,10 @@ static void _endline(struct vparse_target *tgt)
 static void _checkwrap(unsigned char c, struct vparse_target *tgt)
 {
     if (buf_len(tgt->buf) - tgt->last < 75)
-	return; /* still short line */
+        return; /* still short line */
 
     if (c >= 0x80 && c < 0xC0)
-	return; /* never wrap continuation chars */
+        return; /* never wrap continuation chars */
 
     /* wrap */
     _endline(tgt);
@@ -745,48 +745,48 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
-	_checkwrap(*value, tgt);
-	switch (*value) {
-	case '\r':
-	    break;
-	case '\n':
-	    buf_putc(tgt->buf, '\\');
-	    buf_putc(tgt->buf, 'n');
-	    break;
-	case ';':
-	case ',':
-	case '\\':
-	    buf_putc(tgt->buf, '\\');
-	    buf_putc(tgt->buf, *value);
-	    break;
-	default:
-	    buf_putc(tgt->buf, *value);
-	}
+        _checkwrap(*value, tgt);
+        switch (*value) {
+        case '\r':
+            break;
+        case '\n':
+            buf_putc(tgt->buf, '\\');
+            buf_putc(tgt->buf, 'n');
+            break;
+        case ';':
+        case ',':
+        case '\\':
+            buf_putc(tgt->buf, '\\');
+            buf_putc(tgt->buf, *value);
+            break;
+        default:
+            buf_putc(tgt->buf, *value);
+        }
     }
 }
 
 static void _paramval_to_tgt(const char *value, struct vparse_target *tgt)
 {
     for (; *value; value++) {
-	_checkwrap(*value, tgt);
-	switch (*value) {
-	case '\r':
-	    break;
-	case '\n':
-	    buf_putc(tgt->buf, '^');
-	    buf_putc(tgt->buf, 'n');
-	    break;
-	case '^':
-	    buf_putc(tgt->buf, '^');
-	    buf_putc(tgt->buf, '^');
-	    break;
-	case '"':
-	    buf_putc(tgt->buf, '^');
-	    buf_putc(tgt->buf, '\'');
-	    break;
-	default:
-	    buf_putc(tgt->buf, *value);
-	}
+        _checkwrap(*value, tgt);
+        switch (*value) {
+        case '\r':
+            break;
+        case '\n':
+            buf_putc(tgt->buf, '^');
+            buf_putc(tgt->buf, 'n');
+            break;
+        case '^':
+            buf_putc(tgt->buf, '^');
+            buf_putc(tgt->buf, '^');
+            break;
+        case '"':
+            buf_putc(tgt->buf, '^');
+            buf_putc(tgt->buf, '\'');
+            break;
+        default:
+            buf_putc(tgt->buf, *value);
+        }
     }
 }
 
@@ -794,23 +794,23 @@ static void _key_to_tgt(const char *key, struct vparse_target *tgt)
 {
     /* uppercase keys */
     for (; *key; key++) {
-	_checkwrap(*key, tgt);
-	buf_putc(tgt->buf, toupper(*key));
+        _checkwrap(*key, tgt);
+        buf_putc(tgt->buf, toupper(*key));
     }
 }
 
 static int _needsquote(const char *p)
 {
     while (*p++) {
-	switch (*p) {
-	case '"':
-	case ',':
-	case ':':
-	case ';':
-	case ' ':  // in theory, whitespace is legal
-	case '\t': // in theory, whitespace is legal
-	    return 1;
-	}
+        switch (*p) {
+        case '"':
+        case ',':
+        case ':':
+        case ';':
+        case ' ':  // in theory, whitespace is legal
+        case '\t': // in theory, whitespace is legal
+            return 1;
+        }
     }
     return 0;
 }
@@ -821,37 +821,37 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
 
     // rfc6350 3.3 - it is RECOMMENDED that property and parameter names be upper-case on output.
     if (entry->group) {
-	_key_to_tgt(entry->group, tgt);
-	buf_putc(tgt->buf, '.');
+        _key_to_tgt(entry->group, tgt);
+        buf_putc(tgt->buf, '.');
     }
     _key_to_tgt(entry->name, tgt);
 
     for (param = entry->params; param; param = param->next) {
-	buf_putc(tgt->buf, ';');
-	_key_to_tgt(param->name, tgt);
-	buf_putc(tgt->buf, '=');
-	if (_needsquote(param->value)) {
-	    /* XXX - smart quoting? */
-	    buf_putc(tgt->buf, '"');
-	    _paramval_to_tgt(param->value, tgt);
-	    buf_putc(tgt->buf, '"');
-	}
-	else {
-	    _paramval_to_tgt(param->value, tgt);
-	}
+        buf_putc(tgt->buf, ';');
+        _key_to_tgt(param->name, tgt);
+        buf_putc(tgt->buf, '=');
+        if (_needsquote(param->value)) {
+            /* XXX - smart quoting? */
+            buf_putc(tgt->buf, '"');
+            _paramval_to_tgt(param->value, tgt);
+            buf_putc(tgt->buf, '"');
+        }
+        else {
+            _paramval_to_tgt(param->value, tgt);
+        }
     }
 
     buf_putc(tgt->buf, ':');
 
     if (entry->multivalue) {
-	int i;
-	for (i = 0; i < entry->v.values->count; i++) {
-	    if (i) buf_putc(tgt->buf, ';');
-	    _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
-	}
+        int i;
+        for (i = 0; i < entry->v.values->count; i++) {
+            if (i) buf_putc(tgt->buf, ';');
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
+        }
     }
     else {
-	_value_to_tgt(entry->v.value, tgt);
+        _value_to_tgt(entry->v.value, tgt);
     }
 
     _endline(tgt);
@@ -863,23 +863,23 @@ static void _card_to_tgt(const struct vparse_card *card, struct vparse_target *t
     const struct vparse_card *sub;
 
     if (card->type) {
-	_key_to_tgt("BEGIN", tgt);
-	buf_putc(tgt->buf, ':');
-	_key_to_tgt(card->type, tgt);
-	_endline(tgt);
+        _key_to_tgt("BEGIN", tgt);
+        buf_putc(tgt->buf, ':');
+        _key_to_tgt(card->type, tgt);
+        _endline(tgt);
     }
 
     for (entry = card->properties; entry; entry = entry->next)
-	_entry_to_tgt(entry, tgt);
+        _entry_to_tgt(entry, tgt);
 
     for (sub = card->objects; sub; sub = sub->next)
-	_card_to_tgt(sub, tgt);
+        _card_to_tgt(sub, tgt);
 
     if (card->type) {
-	_key_to_tgt("END", tgt);
-	buf_putc(tgt->buf, ':');
-	_key_to_tgt(card->type, tgt);
-	_endline(tgt);
+        _key_to_tgt("END", tgt);
+        buf_putc(tgt->buf, ':');
+        _key_to_tgt(card->type, tgt);
+        _endline(tgt);
     }
 }
 
@@ -889,7 +889,7 @@ EXPORTED void vparse_tobuf(const struct vparse_card *card, struct buf *buf)
     tgt.buf = buf;
     tgt.last = 0;
     for (; card; card = card->next)
-	_card_to_tgt(card, &tgt);
+        _card_to_tgt(card, &tgt);
 }
 
 EXPORTED struct vparse_card *vparse_new_card(const char *type)
@@ -916,8 +916,8 @@ EXPORTED struct vparse_entry *vparse_get_entry(struct vparse_card *card, const c
     struct vparse_entry *entry = NULL;
 
     for (entry = card->properties; entry; entry = entry->next) {
-	if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name))
-	    break;
+        if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name))
+            break;
     }
 
     return entry;
@@ -927,15 +927,15 @@ EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group,
 {
     struct vparse_entry **entryp = &card->properties;
     while (*entryp) {
-	struct vparse_entry *entry = *entryp;
-	if ((!group || !strcasecmpsafe(entry->group, group)) && !strcasecmpsafe(entry->name, name)) {
-	    *entryp = entry->next;
-	    entry->next = NULL; /* so free doesn't walk the chain */
-	    _free_entry(entry);
-	}
-	else {
-	    entryp = &((*entryp)->next);
-	}
+        struct vparse_entry *entry = *entryp;
+        if ((!group || !strcasecmpsafe(entry->group, group)) && !strcasecmpsafe(entry->name, name)) {
+            *entryp = entry->next;
+            entry->next = NULL; /* so free doesn't walk the chain */
+            _free_entry(entry);
+        }
+        else {
+            entryp = &((*entryp)->next);
+        }
     }
 }
 
@@ -943,8 +943,8 @@ EXPORTED struct vparse_param *vparse_get_param(struct vparse_entry *entry, const
 {
     struct vparse_param *param;
     for (param = entry->params; param; param = param->next) {
-	if (!strcasecmp(param->name, name))
-	    return param;
+        if (!strcasecmp(param->name, name))
+            return param;
     }
     return NULL;
 }
@@ -964,15 +964,15 @@ EXPORTED void vparse_delete_params(struct vparse_entry *entry, const char *name)
 {
     struct vparse_param **paramp = &entry->params;
     while (*paramp) {
-	struct vparse_param *param = *paramp;
-	if (!strcasecmpsafe(param->name, name)) {
-	    *paramp = param->next;
-	    param->next = NULL;
-	    _free_param(param);
-	}
-	else {
-	    paramp = &((*paramp)->next);
-	}
+        struct vparse_param *param = *paramp;
+        if (!strcasecmpsafe(param->name, name)) {
+            *paramp = param->next;
+            param->next = NULL;
+            _free_param(param);
+        }
+        else {
+            paramp = &((*paramp)->next);
+        }
     }
 }
 

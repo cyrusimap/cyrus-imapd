@@ -1,9 +1,9 @@
-/*using redirect to test if, elsif, and else, along with all of the tests 
+/*using redirect to test if, elsif, and else, along with all of the tests
   that can be inside
 
-  this is still being added to, there are almost certaintly conditions not 
-  being tested 
- 
+  this is still being added to, there are almost certaintly conditions not
+  being tested
+
 
  */
 
@@ -50,7 +50,7 @@ if address :localpart :matches "from" "z*"
 
 
 #add tests/messages that differentiate between header/address.
-#need to write messages and to tweak tests to make sure everyhting works 
+#need to write messages and to tweak tests to make sure everyhting works
 #as expected
 
 if header :contains "Date" "Feb"
@@ -65,15 +65,15 @@ if header :matches "Date"  "Mon, 25 Feb *"
 ##########################################################################
 #this stuff will be true for a lot of messages                           #
 ##########################################################################
-#stop 	
+#stop
 
 if exists "To"
 {redirect "me+toexists@blah.com";}
-	
+
 if exists "flooglewart"
 {redirect "me+badexists@blah.com";}
 
-	if size :over 10K
+        if size :over 10K
 {redirect "me+over10k@blah.com";}
 
 if size :over 1M
@@ -144,7 +144,7 @@ if allof(true, false)
 else
 {redirect "me+goodallof@blah.com";}
 
-if allof(true, true) 
+if allof(true, true)
 {redirect "me+goodallof@blah.com";}
 else
 {redirect "me+badallof(tt)@blah.com";}
@@ -152,20 +152,20 @@ else
 #ANYOF(or)
 if anyof(false, false)
 {redirect "me+badanyof(ff)@blah.com";}
-else 
+else
 {redirect "me+goodanyof@blah.com";}
 
 if anyof(false,true)
 {redirect "me+goodanyof@blah.com";}
-else 
+else
 {redirect "me+badanyof(ft)@blah.com";}
 
 if anyof(true, false)
 {redirect "me+goodanyof@blah.com";}
-else 
+else
 {redirect "me+badanyof(tf)@blah.com";}
 
 if anyof(true, true)
 {redirect "me+goodanyof@blah.com";}
-else 
+else
 {redirect "me+badanyof(tt)@blah.com";}

@@ -96,22 +96,22 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((opt = getopt(argc, argv, "C:di:")) != EOF) {
-	switch (opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
-	case 'd': /* don't fork. debugging mode */
-	    debugmode = 1;
-	    break;
-	default:
-	    fprintf(stderr, "invalid argument\n");
-	    exit(EC_USAGE);
-	    break;
-	}
+        case 'd': /* don't fork. debugging mode */
+            debugmode = 1;
+            break;
+        default:
+            fprintf(stderr, "invalid argument\n");
+            exit(EC_USAGE);
+            break;
+        }
     }
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
@@ -131,36 +131,36 @@ int main(int argc, char **argv)
     /* fork unless we were given the -d option or we're running as a daemon */
     if (debugmode == 0 && !getenv("CYRUS_ISDAEMON")) {
 
-	pid = fork();
+        pid = fork();
 
-	if (pid == -1) {
-	    perror("fork");
-	    exit(1);
-	}
+        if (pid == -1) {
+            perror("fork");
+            exit(1);
+        }
 
-	if (pid != 0) { /* parent */
-	    exit(0);
-	}
+        if (pid != 0) { /* parent */
+            exit(0);
+        }
     }
     /* child */
 
     for (;;) {
-	struct timeval start, end;
-	double totaltime;
-	int tosleep;
+        struct timeval start, end;
+        double totaltime;
+        int tosleep;
 
-	signals_poll();
+        signals_poll();
 
-	gettimeofday(&start, 0);
-	caldav_alarm_process();
-	gettimeofday(&end, 0);
+        gettimeofday(&start, 0);
+        caldav_alarm_process();
+        gettimeofday(&end, 0);
 
-	signals_poll();
+        signals_poll();
 
-	totaltime = timesub(&start, &end);
-	tosleep = 10 - round(totaltime);
-	if (tosleep > 0)
-	    sleep(tosleep);
+        totaltime = timesub(&start, &end);
+        tosleep = 10 - round(totaltime);
+        if (tosleep > 0)
+            sleep(tosleep);
     }
 
     /* NOTREACHED */

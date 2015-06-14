@@ -28,7 +28,7 @@ static void test_run(void)
 
 static void test_popen_r(void)
 {
-#define WORD0	"dreamcatcher"
+#define WORD0   "dreamcatcher"
     int r;
     struct command *cmd = NULL;
     char buf[32];
@@ -52,7 +52,7 @@ static void test_popen_r(void)
 
 static void test_popen_w(void)
 {
-#define WORD0	"semiotics"
+#define WORD0   "semiotics"
     int r;
     struct command *cmd = NULL;
     FILE *fp;
@@ -92,8 +92,8 @@ static void test_popen_w(void)
 
 static void test_popen_rw(void)
 {
-#define WORD0		"cosby sweater"
-#define WORD0_CAP	"COSBY SWEATER"
+#define WORD0           "cosby sweater"
+#define WORD0_CAP       "COSBY SWEATER"
     int r;
     struct command *cmd = NULL;
     char buf[32];

@@ -50,14 +50,14 @@ void *memmove(void *s, const void *ct, size_t n)
     const char *c_ct = ct;
 
     if (c_s <= c_ct) {
-	while (n--) {
-	    *c_s++ = *c_ct++;
-	}
+        while (n--) {
+            *c_s++ = *c_ct++;
+        }
     }
     else {
-	while (n--) {
-	    c_s[n] = c_ct[n];
-	}
+        while (n--) {
+            c_s[n] = c_ct[n];
+        }
     }
 
     return s;

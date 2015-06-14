@@ -56,7 +56,7 @@ typedef struct
     uint64_t *data;
 } arrayu64_t;
 
-#define ARRAYU64_INITIALIZER	{ 0, 0, NULL }
+#define ARRAYU64_INITIALIZER    { 0, 0, NULL }
 #define arrayu64_init(sa)   (memset((sa), 0, sizeof(arrayu64_t)))
 void arrayu64_fini(arrayu64_t *);
 
@@ -77,11 +77,11 @@ arrayu64_t *arrayu64_dup(const arrayu64_t *);
 
 uint64_t arrayu64_max(const arrayu64_t *);
 
-#define arrayu64_shift(sa)	    arrayu64_remove((sa), 0)
-#define arrayu64_unshift(sa, s)	    arrayu64_insert((sa), 0, (s))
+#define arrayu64_shift(sa)          arrayu64_remove((sa), 0)
+#define arrayu64_unshift(sa, s)     arrayu64_insert((sa), 0, (s))
 
-#define arrayu64_pop(sa)	    arrayu64_remove((sa), -1)
-#define arrayu64_push(sa, s)	    arrayu64_append((sa), (s))
+#define arrayu64_pop(sa)            arrayu64_remove((sa), -1)
+#define arrayu64_push(sa, s)        arrayu64_append((sa), (s))
 
 void arrayu64_sort(arrayu64_t *, compar_t *);
 void arrayu64_uniq(arrayu64_t *);

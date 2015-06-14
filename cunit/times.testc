@@ -345,7 +345,7 @@ test_gen_iso8601_secfrac(void)
     static const struct timeval TIMEVAL = { 1290741722, 123456 };
     char buf[33];
     int r;
-    
+
     r = timeval_to_iso8601(&TIMEVAL, timeval_ms, buf, sizeof(buf));
     CU_ASSERT_EQUAL(r, strlen(DATETIME_STR));
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_STR);

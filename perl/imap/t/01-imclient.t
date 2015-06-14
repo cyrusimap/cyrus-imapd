@@ -136,11 +136,11 @@ print "ok 9\n";
 # authentication with extra parameters
 $client = Cyrus::IMAP->new($server);
 print "not " if !$client->authenticate(-mechanism => 'PLAIN',
-				       -service => 'imap',
-				       -user => $auser,
-				       -password => $pass,
-				       -minssf => 0,
-				       -maxssf => 10000);
+                                       -service => 'imap',
+                                       -user => $auser,
+                                       -password => $pass,
+                                       -minssf => 0,
+                                       -maxssf => 10000);
 $pass = "\0" x length($pass);
 print "ok 10\n";
 

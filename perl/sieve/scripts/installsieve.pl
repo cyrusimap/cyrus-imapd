@@ -50,17 +50,17 @@ print "NOTE: This program is deprecated. Please use sieveshell\n";
 print "\n";
 
 $ret = GetOptions("v|views:s" => \$views,
-		  "l|list" => \$list,
-#		  "p|port:i" => \$port,
-		  "i|installs:s" => \$installs,
-		  "a|activates:s" => \$activates,
-		  "d|deletes:s" => \$deletes,
-#		  "m|mechanism:s" => \$mech,
-		  "g|gets:s" => \$gets,
+                  "l|list" => \$list,
+#                 "p|port:i" => \$port,
+                  "i|installs:s" => \$installs,
+                  "a|activates:s" => \$activates,
+                  "d|deletes:s" => \$deletes,
+#                 "m|mechanism:s" => \$mech,
+                  "g|gets:s" => \$gets,
                   "u|username:s" => \$username,
-#		  "w|password:s" => \$pass
+#                 "w|password:s" => \$pass
                   );
-if (!$ret || $#ARGV != 0) { 
+if (!$ret || $#ARGV != 0) {
     show_help();
     exit;
 }
@@ -70,7 +70,7 @@ $acapserver = $ARGV[0];
 sub list_cb {
 
   my($name, $isactive) = @_ ;
-  
+
   print "$name ";
   if ($isactive == 1) {
     print " <- active script\n";
@@ -96,7 +96,7 @@ sub prompt {
 
   $b = <STDIN>;
   chop($b);
-  
+
   $b;
 }
 
@@ -149,26 +149,26 @@ if (defined $activates) {
 if (defined $gets) {
     $str = "";
     $ret = sieve_get($obj, $gets, $str);
-    if ($ret != 0) { 
-	error($obj, "get failed");
+    if ($ret != 0) {
+        error($obj, "get failed");
     } else {
-	open (OUTPUT,">$gets") || die "Unable to open $gets";
-	print OUTPUT $str;
-	close(OUTPUT);    
+        open (OUTPUT,">$gets") || die "Unable to open $gets";
+        print OUTPUT $str;
+        close(OUTPUT);
     }
 }
 if (defined $views) {
     $str = "";
     $ret = sieve_get($obj, $views, $str);
-    if ($ret != 0) { 
-	error($obj, "get failed");
+    if ($ret != 0) {
+        error($obj, "get failed");
     } else {
-	# view
-	print $str;
+        # view
+        print $str;
     }
 }
 
 if (defined $list) {
-  $ret = sieve_list($obj, "list_cb");  
+  $ret = sieve_list($obj, "list_cb");
   if ($ret != 0) { error("List command failed"); }
 }

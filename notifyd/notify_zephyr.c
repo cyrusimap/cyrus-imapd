@@ -71,10 +71,10 @@
 #include "notify_zephyr.h"
 
 char* notify_zephyr(const char *class, const char *priority,
-		    const char *user, const char *mailbox,
-		    int nopt, char **options,
-		    const char *message,
-		    const char *fname __attribute__((unused)))
+                    const char *user, const char *mailbox,
+                    int nopt, char **options,
+                    const char *message,
+                    const char *fname __attribute__((unused)))
 {
     ZNotice_t notice;
     int retval;
@@ -86,67 +86,67 @@ char* notify_zephyr(const char *class, const char *priority,
     if (!*user) return xstrdup("NO zephyr recipient not specified");
 
     if ((retval = ZInitialize()) != ZERR_NONE) {
-	syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");
-	return xstrdup("NO cannot initialize zephyr");
+        syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");
+        return xstrdup("NO cannot initialize zephyr");
     }
-  
+
     if (gethostname(myhost,sizeof(myhost)) == -1) {
-	syslog(LOG_ERR, "IOERROR: cannot get hostname: %m");
-	return xstrdup("NO zephyr cannot get hostname");
+        syslog(LOG_ERR, "IOERROR: cannot get hostname: %m");
+        return xstrdup("NO zephyr cannot get hostname");
     }
     myhost[sizeof(myhost)-1] = '\0';
-  
+
 #ifdef HAVE_KRB
     mykrbhost = krb_get_phost(myhost);
 #endif
-  
+
     if (*mailbox) {
-	buf_printf(&msgbody, "You have new mail in %s.\n\n", mailbox);
+        buf_printf(&msgbody, "You have new mail in %s.\n\n", mailbox);
     }
 
     if (*message) {
-	buf_appendcstr(&msgbody, message);
-	buf_putc(&msgbody, '\n');
+        buf_appendcstr(&msgbody, message);
+        buf_putc(&msgbody, '\n');
     }
 
     lines[0] = myhost;
     lines[1] = (char *)buf_cstring(&msgbody);
 
     mysender = strconcat("imap",
-			 mykrbhost ? "." : "",
-			 mykrbhost ? mykrbhost : "",
-			 "@",
-			 ZGetRealm(),
-			 (char *)NULL);
+                         mykrbhost ? "." : "",
+                         mykrbhost ? mykrbhost : "",
+                         "@",
+                         ZGetRealm(),
+                         (char *)NULL);
 
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
     notice.z_class = *class ? (char *) class : MAIL_CLASS;
     notice.z_class_inst = *priority ? (char *) priority :
-	*mailbox ? (char *) mailbox : "INBOX";
+        *mailbox ? (char *) mailbox : "INBOX";
 
     notice.z_opcode = "";
     notice.z_sender = mysender;
     notice.z_default_format = "From Post Office $1:\n$2";
-  
+
     notice.z_recipient = (char *) user;
 
     retval = ZSendList(&notice,lines,2,ZNOAUTH);
 
     /* do any additional users */
     while (retval == ZERR_NONE && nopt) {
-	notice.z_recipient = (char *) options[--nopt];
+        notice.z_recipient = (char *) options[--nopt];
 
-	retval = ZSendList(&notice,lines,2,ZNOAUTH);
+        retval = ZSendList(&notice,lines,2,ZNOAUTH);
     }
 
     buf_free(&msgbody);
     free(mysender);
 
     if (retval != ZERR_NONE) {
-	syslog(LOG_ERR, "IOERROR: cannot send zephyr notice: %m");
-	return xstrdup("NO cannot send zephyr notice");
-    } 
+        syslog(LOG_ERR, "IOERROR: cannot send zephyr notice: %m");
+        return xstrdup("NO cannot send zephyr notice");
+    }
 
     return xstrdup("OK zephyr notification successful");
 }

@@ -48,7 +48,7 @@
 
 void addrerror(void*, const char *);
 
-static int ncom;	/* number of open comments */
+static int ncom;        /* number of open comments */
 #define YY_DECL int addrlex(YYSTYPE* addrlval __attribute__((unused)), void* parse_script)
 %}
 
@@ -61,40 +61,40 @@ static int ncom;	/* number of open comments */
 
 %%
 
-\"				{ BEGIN QSTRING; return yytext[0]; }
-\[				{ BEGIN DOMAINLIT; return yytext[0]; }
-\(				{ ncom = 1; BEGIN COMMENT; }
-\)				{ addrerror(parse_script, "address parse error, "
-					  "unexpected `')'' "
-					  "(unbalanced comment)");
-				  yyterminate(); }
+\"                              { BEGIN QSTRING; return yytext[0]; }
+\[                              { BEGIN DOMAINLIT; return yytext[0]; }
+\(                              { ncom = 1; BEGIN COMMENT; }
+\)                              { addrerror(parse_script, "address parse error, "
+                                          "unexpected `')'' "
+                                          "(unbalanced comment)");
+                                  yyterminate(); }
 
-[^\(\)<>@,;:\\".\[\] \n\r]+	return ATOM;
+[^\(\)<>@,;:\\".\[\] \n\r]+     return ATOM;
 
-[\t \n\r]+			/* ignore whitespace */
-.				return yytext[0];
+[\t \n\r]+                      /* ignore whitespace */
+.                               return yytext[0];
 
-<QSTRING>([^\n\r"\\]|\\.)*	return QTEXT;
-<QSTRING>\"			{ BEGIN INITIAL; return yytext[0]; }
-<QSTRING><<EOF>>		{ BEGIN INITIAL;
-				  addrerror(parse_script, "address parse error, expecting `'\"'' (unterminated string)");
-				  yyterminate(); }
+<QSTRING>([^\n\r"\\]|\\.)*      return QTEXT;
+<QSTRING>\"                     { BEGIN INITIAL; return yytext[0]; }
+<QSTRING><<EOF>>                { BEGIN INITIAL;
+                                  addrerror(parse_script, "address parse error, expecting `'\"'' (unterminated string)");
+                                  yyterminate(); }
 
-<DOMAINLIT>([^\[\]\n\r\\]|\\.)*	return DTEXT;
-<DOMAINLIT>\]			{ BEGIN INITIAL; return yytext[0]; }
-<DOMAINLIT><<EOF>>		{ BEGIN INITIAL;
-				  addrerror(parse_script, "address parse error, expecting `']'' (unterminated domain literal)");
-				  yyterminate(); }
+<DOMAINLIT>([^\[\]\n\r\\]|\\.)* return DTEXT;
+<DOMAINLIT>\]                   { BEGIN INITIAL; return yytext[0]; }
+<DOMAINLIT><<EOF>>              { BEGIN INITIAL;
+                                  addrerror(parse_script, "address parse error, expecting `']'' (unterminated domain literal)");
+                                  yyterminate(); }
 
 
 
-<COMMENT>([^\(\)\n\0\\]|\\.)*	/* ignore comments */
-<COMMENT>\(			ncom++;
-<COMMENT>\)			{ ncom--; if (ncom == 0) BEGIN INITIAL; }
-<COMMENT><<EOF>>		{ BEGIN INITIAL;
-				  addrerror(parse_script, "address parse error, "
-					  "expecting `')'' "
-					  "(unterminated comment)");
-				  yyterminate(); }
+<COMMENT>([^\(\)\n\0\\]|\\.)*   /* ignore comments */
+<COMMENT>\(                     ncom++;
+<COMMENT>\)                     { ncom--; if (ncom == 0) BEGIN INITIAL; }
+<COMMENT><<EOF>>                { BEGIN INITIAL;
+                                  addrerror(parse_script, "address parse error, "
+                                          "expecting `')'' "
+                                          "(unterminated comment)");
+                                  yyterminate(); }
 
 %%

@@ -61,38 +61,38 @@ extern time_t caldav_eternity;
 
 #ifndef HAVE_VPOLL
 /* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
-#define ICAL_VPOLL_COMPONENT   	      ICAL_NO_COMPONENT
+#define ICAL_VPOLL_COMPONENT          ICAL_NO_COMPONENT
 #define ICAL_VVOTER_COMPONENT         ICAL_X_COMPONENT
-#define ICAL_METHOD_POLLSTATUS	      ICAL_METHOD_NONE
-#define ICAL_VOTER_PROPERTY	      ICAL_NO_PROPERTY
-#define icalproperty_get_voter	      icalproperty_get_attendee
+#define ICAL_METHOD_POLLSTATUS        ICAL_METHOD_NONE
+#define ICAL_VOTER_PROPERTY           ICAL_NO_PROPERTY
+#define icalproperty_get_voter        icalproperty_get_attendee
 #endif
 
 /* Bitmask of calendar components */
 enum {
     /* "Real" components - MUST remain in this order (values used in DAV DB) */
-    CAL_COMP_VEVENT =		(1<<0),
-    CAL_COMP_VTODO =		(1<<1),
-    CAL_COMP_VJOURNAL =		(1<<2),
-    CAL_COMP_VFREEBUSY =	(1<<3),
-    CAL_COMP_VAVAILABILITY =	(1<<4),
-    CAL_COMP_VPOLL =	   	(1<<5),
+    CAL_COMP_VEVENT =           (1<<0),
+    CAL_COMP_VTODO =            (1<<1),
+    CAL_COMP_VJOURNAL =         (1<<2),
+    CAL_COMP_VFREEBUSY =        (1<<3),
+    CAL_COMP_VAVAILABILITY =    (1<<4),
+    CAL_COMP_VPOLL =            (1<<5),
     /* Append additional "real" components here */
 
     /* Other components - values don't matter - prepend here */
-    CAL_COMP_VALARM =		(1<<13),
-    CAL_COMP_VTIMEZONE =	(1<<14),
-    CAL_COMP_VCALENDAR =	(1<<15)
+    CAL_COMP_VALARM =           (1<<13),
+    CAL_COMP_VTIMEZONE =        (1<<14),
+    CAL_COMP_VCALENDAR =        (1<<15)
 };
 
 struct caldav_db;
 
 struct comp_flags {
-    unsigned recurring	  : 1;		/* Has RRULE property */
-    unsigned transp	  : 1;		/* Is TRANSParent */
-    unsigned status	  : 2;		/* STATUS property value (see below) */
-    unsigned tzbyref	  : 1;		/* VTIMEZONEs by reference */
-    unsigned mattach	  : 1;		/* Has managed ATTACHment(s) */
+    unsigned recurring    : 1;          /* Has RRULE property */
+    unsigned transp       : 1;          /* Is TRANSParent */
+    unsigned status       : 2;          /* STATUS property value (see below) */
+    unsigned tzbyref      : 1;          /* VTIMEZONEs by reference */
+    unsigned mattach      : 1;          /* Has managed ATTACHment(s) */
 };
 
 /* Status values */
@@ -130,19 +130,19 @@ int caldav_close(struct caldav_db *caldavdb);
 /* lookup an entry from 'caldavdb' by resource
    (optionally inside a transaction for updates) */
 int caldav_lookup_resource(struct caldav_db *caldavdb,
-			   const char *mailbox, const char *resource,
-			   struct caldav_data **result,
-			   int tombstones);
+                           const char *mailbox, const char *resource,
+                           struct caldav_data **result,
+                           int tombstones);
 
 /* lookup an entry from 'caldavdb' by iCal UID
    (optionally inside a transaction for updates) */
 int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
-		      struct caldav_data **result);
+                      struct caldav_data **result);
 
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-		   int (*cb)(void *rock, void *data),
-		   void *rock);
+                   int (*cb)(void *rock, void *data),
+                   void *rock);
 
 /* write an entry to 'caldavdb' */
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);

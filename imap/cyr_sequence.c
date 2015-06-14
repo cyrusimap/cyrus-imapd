@@ -88,21 +88,21 @@ int main(int argc, char *argv[])
     const char *origlist = NULL;
 
     while ((opt = getopt(argc, argv, "C:m:o:s")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	case 'm': /* maxval */
-	    parseuint32(optarg, NULL, &maxval);
-	    break;
-	case 'o':
-	    origlist = optarg;
-	    break;
-	case 's':
-	    flags = SEQ_SPARSE;
-	}
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+        case 'm': /* maxval */
+            parseuint32(optarg, NULL, &maxval);
+            break;
+        case 'o':
+            origlist = optarg;
+            break;
+        case 's':
+            flags = SEQ_SPARSE;
+        }
     }
-	
+
     if ((argc - optind) < 1) usage(argv[0]);
 
 
@@ -110,78 +110,78 @@ int main(int argc, char *argv[])
 
     /* special case */
     if (!strcmp(argv[optind], "create")) {
-	int i;
-	seq = seqset_init(maxval, flags);
-	for (i = optind + 1; i < argc; i++) {
-	    char *ptr = argv[i];
-	    int isadd = 1;
-	    if (*ptr == '~') {
-		isadd = 0;
-		ptr++;
-	    }
-	    if (parseuint32(ptr, NULL, &num))
-		printf("%s NAN\n", argv[i]);
-	    else
-		seqset_add(seq, num, isadd);
-	}
-	if (origlist) {
-	    unsigned oldmax = seq_lastnum(origlist, NULL);
-	    if (oldmax > maxval) {
-		struct seqset *origseq = seqset_parse(origlist, NULL, oldmax);
-		unsigned val;
-		for (val = maxval + 1; val <= oldmax; val++)
-		    seqset_add(seq, val, seqset_ismember(origseq, val));
-		seqset_free(origseq);
-	    }
-	}
-	res = seqset_cstring(seq);
-	printf("%s\n", res);
-	free(res);
+        int i;
+        seq = seqset_init(maxval, flags);
+        for (i = optind + 1; i < argc; i++) {
+            char *ptr = argv[i];
+            int isadd = 1;
+            if (*ptr == '~') {
+                isadd = 0;
+                ptr++;
+            }
+            if (parseuint32(ptr, NULL, &num))
+                printf("%s NAN\n", argv[i]);
+            else
+                seqset_add(seq, num, isadd);
+        }
+        if (origlist) {
+            unsigned oldmax = seq_lastnum(origlist, NULL);
+            if (oldmax > maxval) {
+                struct seqset *origseq = seqset_parse(origlist, NULL, oldmax);
+                unsigned val;
+                for (val = maxval + 1; val <= oldmax; val++)
+                    seqset_add(seq, val, seqset_ismember(origseq, val));
+                seqset_free(origseq);
+            }
+        }
+        res = seqset_cstring(seq);
+        printf("%s\n", res);
+        free(res);
     }
     else if (!strcmp(argv[optind], "parsed")) {
-	unsigned i;
-	seq = seqset_parse(argv[optind+1], NULL, maxval);
-	printf("Sections: " SIZE_T_FMT "\n", seq->len);
-	for (i = 0; i < seq->len; i++) {
-	    if (seq->set[i].high == UINT_MAX)
-		printf(" [%u, *]\n", seq->set[i].low);
-	    else
-		printf(" [%u, %u]\n", seq->set[i].low, seq->set[i].high);
-	}
+        unsigned i;
+        seq = seqset_parse(argv[optind+1], NULL, maxval);
+        printf("Sections: " SIZE_T_FMT "\n", seq->len);
+        for (i = 0; i < seq->len; i++) {
+            if (seq->set[i].high == UINT_MAX)
+                printf(" [%u, *]\n", seq->set[i].low);
+            else
+                printf(" [%u, %u]\n", seq->set[i].low, seq->set[i].high);
+        }
     }
     else if (!strcmp(argv[optind], "compress")) {
-	seq = seqset_parse(argv[optind+1], NULL, maxval);
-	res = seqset_cstring(seq);
-	printf("%s\n", res);
-	free(res);
+        seq = seqset_parse(argv[optind+1], NULL, maxval);
+        res = seqset_cstring(seq);
+        printf("%s\n", res);
+        free(res);
     }
     else if (!strcmp(argv[optind], "members")) {
-	seq = seqset_parse(argv[optind+1], NULL, maxval);
-	while ((num = seqset_getnext(seq))) {
-	    printf("%u\n", num);
-	}
+        seq = seqset_parse(argv[optind+1], NULL, maxval);
+        while ((num = seqset_getnext(seq))) {
+            printf("%u\n", num);
+        }
     }
     else if (!strcmp(argv[optind], "join")) {
-	struct seqset *seq2;
-	seq = seqset_parse(argv[optind+1], NULL, maxval);
-	seq2 = seqset_parse(argv[optind+2], NULL, maxval);
-	seqset_join(seq, seq2);
-	res = seqset_cstring(seq);
-	printf("%s\n", res);
-	free(res);
+        struct seqset *seq2;
+        seq = seqset_parse(argv[optind+1], NULL, maxval);
+        seq2 = seqset_parse(argv[optind+2], NULL, maxval);
+        seqset_join(seq, seq2);
+        res = seqset_cstring(seq);
+        printf("%s\n", res);
+        free(res);
     }
     else if (!strcmp(argv[optind], "ismember")) {
-	int i;
-	seq = seqset_parse(argv[optind+1], NULL, maxval);
-	for (i = optind + 2; i < argc; i++) {
-	    if (parseuint32(argv[i], NULL, &num))
-		printf("%s NAN\n", argv[i]);
-	    else
-		printf("%d %s\n", num, seqset_ismember(seq, num) ? "Yes" : "No");
-	}
+        int i;
+        seq = seqset_parse(argv[optind+1], NULL, maxval);
+        for (i = optind + 2; i < argc; i++) {
+            if (parseuint32(argv[i], NULL, &num))
+                printf("%s NAN\n", argv[i]);
+            else
+                printf("%d %s\n", num, seqset_ismember(seq, num) ? "Yes" : "No");
+        }
     }
     else {
-	printf("Unknown command %s", argv[optind]);
+        printf("Unknown command %s", argv[optind]);
     }
 
     seqset_free(seq);

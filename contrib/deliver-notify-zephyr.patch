@@ -8,26 +8,26 @@ out.
 I have lost the name of the author for this patch; my apologies to this
 person.
 
-*** deliver.c.orig	Wed Jun 11 12:43:44 1997
---- deliver.c	Wed Jun 11 15:08:41 1997
+*** deliver.c.orig      Wed Jun 11 12:43:44 1997
+--- deliver.c   Wed Jun 11 15:08:41 1997
 ***************
 *** 597,603 ****
-  	    else if (notifyptr &&
-  		     (!strncasecmp(buf, "from:", 5) ||
-  		      !strncasecmp(buf, "subject:", 8) ||
-! 		      !strncasecmp(buf, "to:", 3))) {
-  		if (!*notifyptr) *notifyptr = xstrdup(buf);
-  		else {
-  		    *notifyptr =
+            else if (notifyptr &&
+                     (!strncasecmp(buf, "from:", 5) ||
+                      !strncasecmp(buf, "subject:", 8) ||
+!                     !strncasecmp(buf, "to:", 3))) {
+                if (!*notifyptr) *notifyptr = xstrdup(buf);
+                else {
+                    *notifyptr =
 --- 597,604 ----
-  	    else if (notifyptr &&
-  		     (!strncasecmp(buf, "from:", 5) ||
-  		      !strncasecmp(buf, "subject:", 8) ||
-! 		      !strncasecmp(buf, "to:", 3) ||
-! 		      !strncasecmp(buf, "cc:", 3))) {
-  		if (!*notifyptr) *notifyptr = xstrdup(buf);
-  		else {
-  		    *notifyptr =
+            else if (notifyptr &&
+                     (!strncasecmp(buf, "from:", 5) ||
+                      !strncasecmp(buf, "subject:", 8) ||
+!                     !strncasecmp(buf, "to:", 3) ||
+!                     !strncasecmp(buf, "cc:", 3))) {
+                if (!*notifyptr) *notifyptr = xstrdup(buf);
+                else {
+                    *notifyptr =
 ***************
 *** 682,687 ****
 --- 683,689 ----
@@ -40,55 +40,55 @@ person.
       char *submailbox = 0;
 ***************
 *** 740,755 ****
-  	prot_rewind(msg);
-  	r = append_fromstream(&mailbox, msg, size, time(0), flag, nflags,
-  			      user);
-  	mailbox_close(&mailbox);
+        prot_rewind(msg);
+        r = append_fromstream(&mailbox, msg, size, time(0), flag, nflags,
+                              user);
+        mailbox_close(&mailbox);
       }
-  
+
       if (!r && user) {
-! 	strcpy(notifybuf, "INBOX");
-! 	if (submailbox) {
-! 	    strcat(notifybuf, ".");
-! 	    strcat(notifybuf, submailbox);
-  	}
-! 	notify(user, notifybuf, notifyheader ? notifyheader : "");
+!       strcpy(notifybuf, "INBOX");
+!       if (submailbox) {
+!           strcat(notifybuf, ".");
+!           strcat(notifybuf, submailbox);
+        }
+!       notify(user, notifybuf, notifyheader ? notifyheader : "");
       }
-  
+
       if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
 --- 742,776 ----
-  	prot_rewind(msg);
-  	r = append_fromstream(&mailbox, msg, size, time(0), flag, nflags,
-  			      user);
-+ 	mbxacl=strdup(mailbox.acl);
-  	mailbox_close(&mailbox);
+        prot_rewind(msg);
+        r = append_fromstream(&mailbox, msg, size, time(0), flag, nflags,
+                              user);
++       mbxacl=strdup(mailbox.acl);
+        mailbox_close(&mailbox);
       }
-  
+
       if (!r && user) {
-! 	struct auth_state *auth_anyone;
-! 	char *anyone="anyone";
-! 	char *pseudouser;
-! 	int amr;
-! 
-! 	anyone=auth_canonifyid(anyone);
-! 	auth_anyone=auth_newstate(anyone,(char*)0);
-! 
-! 	amr=acl_myrights(auth_anyone,mbxacl);
-! 	if (amr & ACL_READ) {
-! 	    strcpy(notifybuf, user);
-! 	    pseudouser=strdup("");
-! 	} else {
-! 	    strcpy(notifybuf, "INBOX");
-! 	    if (submailbox) {
-! 	        strcat(notifybuf, ".");
-! 	        strcat(notifybuf, submailbox);
-! 	    }
-! 	    pseudouser=strdup(user);
-  	}
-! 	notify(pseudouser, notifybuf, notifyheader ? notifyheader : "");
-! 	auth_freestate(auth_anyone);
-! 	free(pseudouser);
-! 	free(mbxacl);
+!       struct auth_state *auth_anyone;
+!       char *anyone="anyone";
+!       char *pseudouser;
+!       int amr;
+!
+!       anyone=auth_canonifyid(anyone);
+!       auth_anyone=auth_newstate(anyone,(char*)0);
+!
+!       amr=acl_myrights(auth_anyone,mbxacl);
+!       if (amr & ACL_READ) {
+!           strcpy(notifybuf, user);
+!           pseudouser=strdup("");
+!       } else {
+!           strcpy(notifybuf, "INBOX");
+!           if (submailbox) {
+!               strcat(notifybuf, ".");
+!               strcat(notifybuf, submailbox);
+!           }
+!           pseudouser=strdup(user);
+        }
+!       notify(pseudouser, notifybuf, notifyheader ? notifyheader : "");
+!       auth_freestate(auth_anyone);
+!       free(pseudouser);
+!       free(mbxacl);
       }
-  
+
       if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);

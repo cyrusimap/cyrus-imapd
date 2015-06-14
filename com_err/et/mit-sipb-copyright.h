@@ -1,7 +1,7 @@
 /*
 
 Copyright 1987, 1988 by the Student Information Processing Board
-	of the Massachusetts Institute of Technology
+        of the Massachusetts Institute of Technology
 
 Permission to use, copy, modify, and distribute this software
 and its documentation for any purpose and without fee is

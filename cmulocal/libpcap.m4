@@ -51,91 +51,91 @@ AC_DEFUN([CMU_PCAP_LIB_WHERE], [
 AC_DEFUN([CMU_PCAP], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(pcap,
-	[AS_HELP_STRING([--with-pcap=PREFIX], [Compile with PCAP support])],
-	[if test "X$with_pcap" = "X"; then
-		with_pcap=yes
-	fi])
+        [AS_HELP_STRING([--with-pcap=PREFIX], [Compile with PCAP support])],
+        [if test "X$with_pcap" = "X"; then
+                with_pcap=yes
+        fi])
 AC_ARG_WITH(pcap-lib,
-	[AS_HELP_STRING([--with-pcap-lib=DIR], [use pcap libraries in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-pcap-lib])
-	fi])
+        [AS_HELP_STRING([--with-pcap-lib=DIR], [use pcap libraries in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-pcap-lib])
+        fi])
 AC_ARG_WITH(pcap-include,
-	[AS_HELP_STRING([--with-pcap-include=DIR], [use pcap headers in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-pcap-include])
-	fi])
+        [AS_HELP_STRING([--with-pcap-include=DIR], [use pcap headers in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-pcap-include])
+        fi])
 
-	if test "X$with_pcap" != "X"; then
-	  if test "$with_pcap" != "yes"; then
-	    ac_cv_pcap_where_lib=$with_pcap/$CMU_LIB_SUBDIR
-	    ac_cv_pcap_where_inc=$with_pcap/include
-	  fi
-	fi
+        if test "X$with_pcap" != "X"; then
+          if test "$with_pcap" != "yes"; then
+            ac_cv_pcap_where_lib=$with_pcap/$CMU_LIB_SUBDIR
+            ac_cv_pcap_where_inc=$with_pcap/include
+          fi
+        fi
 
-	if test "X$with_pcap_lib" != "X"; then
-	  ac_cv_pcap_where_lib=$with_pcap_lib
-	fi
-	if test "X$ac_cv_pcap_where_lib" = "X"; then
-	  CMU_PCAP_LIB_WHERE(/usr/ng/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
-	fi
+        if test "X$with_pcap_lib" != "X"; then
+          ac_cv_pcap_where_lib=$with_pcap_lib
+        fi
+        if test "X$ac_cv_pcap_where_lib" = "X"; then
+          CMU_PCAP_LIB_WHERE(/usr/ng/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
+        fi
 
-	if test "X$with_pcap_include" != "X"; then
-	  ac_cv_pcap_where_inc=$with_pcap_include
-	fi
-	if test "X$ac_cv_pcap_where_inc" = "X"; then
-	  CMU_PCAP_INC_WHERE(/usr/ng/include /usr/include /usr/local/include)
-	fi
+        if test "X$with_pcap_include" != "X"; then
+          ac_cv_pcap_where_inc=$with_pcap_include
+        fi
+        if test "X$ac_cv_pcap_where_inc" = "X"; then
+          CMU_PCAP_INC_WHERE(/usr/ng/include /usr/include /usr/local/include)
+        fi
 
-	AC_MSG_CHECKING(whether to include pcap)
-	if test "X$ac_cv_pcap_where_lib" = "X" -a "X$ac_cv_pcap_where_inc" = "X"; then
-	  ac_cv_found_pcap=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_pcap=yes
-	  AC_MSG_RESULT(yes)
-	  PCAP_INC_DIR=$ac_cv_pcap_where_inc
-	  PCAP_LIB_DIR=$ac_cv_pcap_where_lib
-	  PCAP_INC_FLAGS="-I${PCAP_INC_DIR}"
-	  PCAP_LIB_FLAGS="-L${PCAP_LIB_DIR} -lpcap"
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${PCAP_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${PCAP_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${PCAP_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${PCAP_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${PCAP_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${PCAP_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${PCAP_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${PCAP_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${PCAP_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+        AC_MSG_CHECKING(whether to include pcap)
+        if test "X$ac_cv_pcap_where_lib" = "X" -a "X$ac_cv_pcap_where_inc" = "X"; then
+          ac_cv_found_pcap=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_pcap=yes
+          AC_MSG_RESULT(yes)
+          PCAP_INC_DIR=$ac_cv_pcap_where_inc
+          PCAP_LIB_DIR=$ac_cv_pcap_where_lib
+          PCAP_INC_FLAGS="-I${PCAP_INC_DIR}"
+          PCAP_LIB_FLAGS="-L${PCAP_LIB_DIR} -lpcap"
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${PCAP_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${PCAP_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${PCAP_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${PCAP_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${PCAP_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${PCAP_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${PCAP_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${PCAP_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${PCAP_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

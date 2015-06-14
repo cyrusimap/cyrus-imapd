@@ -100,14 +100,14 @@ static void test_qp(void)
     /* corner cases in Quoted-Printable */
 #define TESTCASE(in, cs, enc, exp) \
     { \
-	static const char _in[] = (in); \
-	static const char _exp[] = (exp); \
-	int _cs = (cs); \
-	int _enc = (enc); \
-	char *s = charset_to_utf8(_in, sizeof(_in)-1, _cs, _enc); \
-	CU_ASSERT_PTR_NOT_NULL(s); \
-	CU_ASSERT_STRING_EQUAL(s, _exp); \
-	free(s); \
+        static const char _in[] = (in); \
+        static const char _exp[] = (exp); \
+        int _cs = (cs); \
+        int _enc = (enc); \
+        char *s = charset_to_utf8(_in, sizeof(_in)-1, _cs, _enc); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _exp); \
+        free(s); \
     }
 
     /* encoding of SP */
@@ -143,9 +143,9 @@ static void test_decode_mimeheader(void)
     static const char ASCII_1[] = "Lorem IPSUM dolor \t \t  sit amet";
     static const char SEARCH_1[] = "LOREM IPSUM DOLOR SIT AMET";
     static const char ASCII_B64_2[] = "Lorem =?us-ascii?q?ipsum?= dolor "
-				      "=?US-ASCII?Q?sit amet?=";
+                                      "=?US-ASCII?Q?sit amet?=";
     static const char ASCII_B64_3[] = "Lorem =?iso-8859-1?q?ips=fcm?= \t"
-				      "DOLOR =?iso-8859-1?Q?s=eft am=ebt?=";
+                                      "DOLOR =?iso-8859-1?Q?s=eft am=ebt?=";
     static const char SEARCH_3[] = "LOREM IPSUM DOLOR SIT AMET";
     static const char SEARCH_3b[] = "LOREM IPSÜM DOLOR SÏT AMËT";
     static const char SEARCH_3c[] = "LOREMIPSUMDOLORSITAMET";
@@ -291,7 +291,7 @@ static void test_search_mimeheader(void)
     char *s;
     comp_pat *pat;
     static const char SUBJECT_CP1252[] = "=?Cp1252?Q?Herzlichen_Gl=FCckwunsch,_der_Artikel_Canon_Ob?= "
-				         "=?Cp1252?Q?jektiv_EF-S_18-55_mm_1:3,5-5,6_geh=F6rt_Ihnen!?=";
+                                         "=?Cp1252?Q?jektiv_EF-S_18-55_mm_1:3,5-5,6_geh=F6rt_Ihnen!?=";
     static const char SEARCH_CP1252[] = "Herzlichen";
     int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
 
@@ -337,25 +337,25 @@ static void append_text(const struct buf *text, void *rock)
 
 #define TESTCASE(in, cs, enc, st, exp) \
     { \
-	static const char _in[] = (in); \
-	static int _cs = (cs); \
-	int _enc = (enc); \
-	static const char _st[] = (st); \
-	static const char _exp[] = (exp); \
-	struct buf bin = BUF_INITIALIZER; \
-	struct text_rock tr; \
-	int r; \
+        static const char _in[] = (in); \
+        static int _cs = (cs); \
+        int _enc = (enc); \
+        static const char _st[] = (st); \
+        static const char _exp[] = (exp); \
+        struct buf bin = BUF_INITIALIZER; \
+        struct text_rock tr; \
+        int r; \
  \
-	memset(&tr, 0, sizeof(tr)); \
-	buf_init_ro(&bin, _in, sizeof(_in)-1); \
+        memset(&tr, 0, sizeof(tr)); \
+        buf_init_ro(&bin, _in, sizeof(_in)-1); \
  \
-	r = charset_extract(append_text, &tr, &bin, _cs, _enc, _st, flags); \
-	CU_ASSERT_EQUAL(r, 1); \
-	CU_ASSERT_EQUAL(tr.ncalls, 1); \
-	CU_ASSERT_STRING_EQUAL(buf_cstring(&tr.out), _exp); \
+        r = charset_extract(append_text, &tr, &bin, _cs, _enc, _st, flags); \
+        CU_ASSERT_EQUAL(r, 1); \
+        CU_ASSERT_EQUAL(tr.ncalls, 1); \
+        CU_ASSERT_STRING_EQUAL(buf_cstring(&tr.out), _exp); \
  \
-	buf_free(&bin); \
-	buf_free(&tr.out); \
+        buf_free(&bin); \
+        buf_free(&tr.out); \
     }
 
 static void test_extract(void)
@@ -371,198 +371,198 @@ static void test_extract(void)
 
     /* single spaces become single spaces */
     TESTCASE("before they sold out",
-	     0, ENCODING_NONE, "PLAIN",
-	     "BEFORE THEY SOLD OUT");
+             0, ENCODING_NONE, "PLAIN",
+             "BEFORE THEY SOLD OUT");
 
     /* multiple spaces are squashed to a single spaces */
     TESTCASE("you    probably \t haven't\r\nheard\t\r\tof them",
-	     0, ENCODING_NONE, "PLAIN",
-	     "YOU PROBABLY HAVEN'T HEARD OF THEM");
+             0, ENCODING_NONE, "PLAIN",
+             "YOU PROBABLY HAVEN'T HEARD OF THEM");
 
     /* invalid UTF-8 bytes become the Replacement character */
     TESTCASE("a\300b", 0, ENCODING_NONE, "PLAIN", /* 0xC0 */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\301b", 0, ENCODING_NONE, "PLAIN", /* 0xC1 */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\365b", 0, ENCODING_NONE, "PLAIN", /* 0xF5 */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\366b", 0, ENCODING_NONE, "PLAIN", /* 0xF6 */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\367b", 0, ENCODING_NONE, "PLAIN", /* 0xF7 */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\370b", 0, ENCODING_NONE, "PLAIN", /* 0xF8 */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\371b", 0, ENCODING_NONE, "PLAIN", /* 0xF9 */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\372b", 0, ENCODING_NONE, "PLAIN", /* 0xFA */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\373b", 0, ENCODING_NONE, "PLAIN", /* 0xFB */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\374b", 0, ENCODING_NONE, "PLAIN", /* 0xFC */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\375b", 0, ENCODING_NONE, "PLAIN", /* 0xFD */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\376b", 0, ENCODING_NONE, "PLAIN", /* 0xFE */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
     TESTCASE("a\377b", 0, ENCODING_NONE, "PLAIN", /* 0xFF */
-	     "A"UTF8_REPLACEMENT"B");
+             "A"UTF8_REPLACEMENT"B");
 
     /* ill-formed UTF-8 sequences become the Replacement character */
 
     /* 2-byte sequence lead byte then a non-continuation byte */
     TESTCASE("a\302bcd", 0, ENCODING_NONE, "PLAIN",
-	     "A"UTF8_REPLACEMENT"BCD");
+             "A"UTF8_REPLACEMENT"BCD");
     /* 3-byte sequence lead byte then a non-continuation byte */
     TESTCASE("a\340bcde", 0, ENCODING_NONE, "PLAIN",
-	     "A"UTF8_REPLACEMENT"BCDE");
+             "A"UTF8_REPLACEMENT"BCDE");
     /* 4-byte sequence lead byte then a non-continuation byte */
     TESTCASE("a\360bcdef", 0, ENCODING_NONE, "PLAIN",
-	     "A"UTF8_REPLACEMENT"BCDEF");
+             "A"UTF8_REPLACEMENT"BCDEF");
     /* unexpected continuation byte */
     TESTCASE("a\240bc", 0, ENCODING_NONE, "PLAIN",
-	     "A"UTF8_REPLACEMENT"BC");
+             "A"UTF8_REPLACEMENT"BC");
 
     /* HTML: correctly formed balanced tag pairs */
     TESTCASE("<b>Photo</b> <em>booth</em>",
-	0, ENCODING_NONE, "HTML",
-	"PHOTO BOOTH");
+        0, ENCODING_NONE, "HTML",
+        "PHOTO BOOTH");
 
     /* HTML: unbalanced tags */
     TESTCASE("<b>American<b> <b>Apparel</b>",
-	0, ENCODING_NONE, "HTML",
-	"AMERICAN APPAREL");
+        0, ENCODING_NONE, "HTML",
+        "AMERICAN APPAREL");
 
     /* HTML: OMITTAG tags with and without end tags */
     TESTCASE("<hr>Terry<hr> <hr>Richardson</hr>",
-	0, ENCODING_NONE, "HTML",
-	" TERRY RICHARDSON ");
+        0, ENCODING_NONE, "HTML",
+        " TERRY RICHARDSON ");
 
     /* HTML: non-phrasing tags are replaced with whitespace */
     TESTCASE("hella<br>mlkshk",
-	0, ENCODING_NONE, "HTML",
-	"HELLA MLKSHK");
+        0, ENCODING_NONE, "HTML",
+        "HELLA MLKSHK");
     TESTCASE("godard<br/>synth",
-	0, ENCODING_NONE, "HTML",
-	"GODARD SYNTH");
+        0, ENCODING_NONE, "HTML",
+        "GODARD SYNTH");
     TESTCASE("<div>vinyl</div><div>narwhal</div>",
-	0, ENCODING_NONE, "HTML",
-	" VINYL NARWHAL ");
+        0, ENCODING_NONE, "HTML",
+        " VINYL NARWHAL ");
 
     /* HTML: quoted tag parameters */
     TESTCASE("<a href=\"foo.html\">leggings</a> <img src\"beer.jpg\">gastropub",
-	0, ENCODING_NONE, "HTML",
-	"LEGGINGS GASTROPUB");
+        0, ENCODING_NONE, "HTML",
+        "LEGGINGS GASTROPUB");
 
     /* HTML: unquoted tag parameters */
     TESTCASE("<a href=foo.html>biodiesel</a> <img srcbeer.jpg>seitan",
-	0, ENCODING_NONE, "HTML",
-	"BIODIESEL SEITAN");
+        0, ENCODING_NONE, "HTML",
+        "BIODIESEL SEITAN");
 
     /* HTML: contents of SCRIPT tag */
     TESTCASE("viral <script>bicycle rights</script>readymade",
-	0, ENCODING_NONE, "HTML",
-	"VIRAL READYMADE");
+        0, ENCODING_NONE, "HTML",
+        "VIRAL READYMADE");
 
     /* HTML: HTML4 SCRIPT tag with no contents */
     TESTCASE("cardigan <script type=\"text/javascript\" "
-	     "src=\"truffaut.js\"></script>williamsburg",
-	0, ENCODING_NONE, "HTML",
-	"CARDIGAN WILLIAMSBURG");
+             "src=\"truffaut.js\"></script>williamsburg",
+        0, ENCODING_NONE, "HTML",
+        "CARDIGAN WILLIAMSBURG");
 
     /* HTML: XHTML SCRIPT empty-element-tag aka self-closing tag */
     TESTCASE("brunch <script type=\"text/javascript\" "
-	     "src=\"cred.js\"/>shoreditch",
-	0, ENCODING_NONE, "HTML",
-	"BRUNCH SHOREDITCH");
+             "src=\"cred.js\"/>shoreditch",
+        0, ENCODING_NONE, "HTML",
+        "BRUNCH SHOREDITCH");
 
     /* HTML: contents of STYLE tag */
     TESTCASE("pickled <style>whatever tumblr</style>stumptown",
-	0, ENCODING_NONE, "HTML",
-	"PICKLED STUMPTOWN");
+        0, ENCODING_NONE, "HTML",
+        "PICKLED STUMPTOWN");
 
     /* HTML: comments, correctly formed */
     TESTCASE("pinterest <!-- master cleanse -->forage",
-	0, ENCODING_NONE, "HTML",
-	"PINTEREST FORAGE");
+        0, ENCODING_NONE, "HTML",
+        "PINTEREST FORAGE");
 
     /* HTML: comments correctly formed with embedded -- */
     TESTCASE("polaroid <!-- food -- truck -->letterpress",
-	0, ENCODING_NONE, "HTML",
-	"POLAROID LETTERPRESS");
+        0, ENCODING_NONE, "HTML",
+        "POLAROID LETTERPRESS");
 
     /* HTML: comments correctly formed with embedded tags */
     TESTCASE("semiotics <!-- messenger <hr> bag -->scenester",
-	0, ENCODING_NONE, "HTML",
-	"SEMIOTICS SCENESTER");
+        0, ENCODING_NONE, "HTML",
+        "SEMIOTICS SCENESTER");
 
     /* HTML: comments correctly formed with embedded -> */
     TESTCASE("butcher <!-- cosby -> sweater -->whatever",
-	0, ENCODING_NONE, "HTML",
-	"BUTCHER WHATEVER");
+        0, ENCODING_NONE, "HTML",
+        "BUTCHER WHATEVER");
 
     /* HTML: comments correctly formed with ---> ending */
     TESTCASE("ennui <!-- art party --->keffiyeh",
-	0, ENCODING_NONE, "HTML",
-	"ENNUI KEFFIYEH");
+        0, ENCODING_NONE, "HTML",
+        "ENNUI KEFFIYEH");
 
     /* HTML: trivial comment */
     TESTCASE("street <!-->art",
-	0, ENCODING_NONE, "HTML",
-	"STREET ART");
+        0, ENCODING_NONE, "HTML",
+        "STREET ART");
 
     /* HTML: initial DOCTYPE is ignored */
     TESTCASE("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" "
-	     "\"http://www.w3.org/TR/html4/strict.dtd\">ethnic sustainable",
-	0, ENCODING_NONE, "HTML",
-	"ETHNIC SUSTAINABLE");
+             "\"http://www.w3.org/TR/html4/strict.dtd\">ethnic sustainable",
+        0, ENCODING_NONE, "HTML",
+        "ETHNIC SUSTAINABLE");
 
     /* HTML: simple character references */
     TESTCASE("&quot;Twee &amp; Keytar&quot; &lt;dreamcatcher@umami.org&gt;",
-	0, ENCODING_NONE, "HTML",
-	"\"TWEE & KEYTAR\" <DREAMCATCHER@UMAMI.ORG>");
+        0, ENCODING_NONE, "HTML",
+        "\"TWEE & KEYTAR\" <DREAMCATCHER@UMAMI.ORG>");
 
     /* HTML: naked & is emitted */
     TESTCASE("gentrify&<b>sartorial</b>",
-	0, ENCODING_NONE, "HTML",
-	"GENTRIFY&SARTORIAL");
+        0, ENCODING_NONE, "HTML",
+        "GENTRIFY&SARTORIAL");
 
     /* HTML: non-zero length unterminated entities are emitted */
     TESTCASE("tattooed&amp locavore",
-	0, ENCODING_NONE, "HTML",
-	"TATTOOED& LOCAVORE");
+        0, ENCODING_NONE, "HTML",
+        "TATTOOED& LOCAVORE");
 
     /* HTML: decimal Unicode entities: U+267B RECYCLE SYMBOL */
     TESTCASE("odd&#9851;future",
-	0, ENCODING_NONE, "HTML",
-	"ODD♻FUTURE");
+        0, ENCODING_NONE, "HTML",
+        "ODD♻FUTURE");
 
     /* HTML: hexadecimal Unicode entities: U+2704 SCISSORS */
     TESTCASE("odd&#x2704;future",
-	0, ENCODING_NONE, "HTML",
-	"ODD✄FUTURE");
+        0, ENCODING_NONE, "HTML",
+        "ODD✄FUTURE");
 
     /* HTML: compatibility numerical character references */
     TESTCASE(
-	"A&#128;B&#129;C&#130;D&#131;"
-	"E&#132;F&#133;G&#134;H&#135;"
-	"I&#136;J&#137;K&#138;L&#139;"
-	"M&#140;N&#141;O&#142;P&#143;"
-	"Q&#144;R&#145;S&#146;T&#147;"
-	"U&#148;V&#149;W&#150;X&#151;"
-	"Y&#152;Z&#153;A&#154;B&#155;"
-	"C&#156;D&#157;E&#158;F&#159;g",
-	0, ENCODING_NONE, "HTML",
-	"A€BC‚DƑ"	/* ƒ capitalised */
-	"E„F...G†H‡"	/* … normalised to ... */
-	"IˆJ‰KSL‹"	/* Š normalised to S */
-	"MŒNOZP"	/* Ž normalised to Z */
-	"QR‘S’T“"
-	"U”V•W–X—"
-	"Y˜ZTMASB›"	/* š capitalised then normalised to S,
-			 * ™ normalised to TM */
-	"CŒDEZFYG")	/* œ capitalised to Œ,
-			   ž capitalised then normalised to Z,
-			 * Ÿ normalised to Y */
+        "A&#128;B&#129;C&#130;D&#131;"
+        "E&#132;F&#133;G&#134;H&#135;"
+        "I&#136;J&#137;K&#138;L&#139;"
+        "M&#140;N&#141;O&#142;P&#143;"
+        "Q&#144;R&#145;S&#146;T&#147;"
+        "U&#148;V&#149;W&#150;X&#151;"
+        "Y&#152;Z&#153;A&#154;B&#155;"
+        "C&#156;D&#157;E&#158;F&#159;g",
+        0, ENCODING_NONE, "HTML",
+        "A€BC‚DƑ"  /* ƒ capitalised */
+        "E„F...G†H‡"      /* … normalised to ... */
+        "IˆJ‰KSL‹" /* Š normalised to S */
+        "MŒNOZP"       /* Ž normalised to Z */
+        "QR‘S’T“"
+        "U”V•W–X—"
+        "Y˜ZTMASB›"  /* š capitalised then normalised to S,
+                         * ™ normalised to TM */
+        "CŒDEZFYG")    /* œ capitalised to Œ,
+                           ž capitalised then normalised to Z,
+                         * Ÿ normalised to Y */
 
     /* HTML: numerical character references to invalid Unicode
      * codepoints and valid codepoints just adjacent to invalid

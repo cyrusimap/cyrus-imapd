@@ -55,7 +55,7 @@ EXPORTED ptrarray_t *ptrarray_new(void)
 EXPORTED void ptrarray_fini(ptrarray_t *pa)
 {
     if (!pa)
-	return;
+        return;
     memset(pa->data, 0, sizeof(void *) * pa->count);
     free(pa->data);
     pa->data = NULL;
@@ -66,7 +66,7 @@ EXPORTED void ptrarray_fini(ptrarray_t *pa)
 EXPORTED void ptrarray_free(ptrarray_t *pa)
 {
     if (!pa)
-	return;
+        return;
     ptrarray_fini(pa);
     free(pa);
 }
@@ -78,13 +78,13 @@ EXPORTED void ptrarray_free(ptrarray_t *pa)
  * index, so that we can pass data[] to execve() or other routines that
  * assume a NULL terminator.
  */
-#define QUANTUM	    16
+#define QUANTUM     16
 static void ensure_alloc(ptrarray_t *pa, int newalloc)
 {
     if (newalloc)
-	newalloc++;
+        newalloc++;
     if (newalloc <= pa->alloc)
-	return;
+        return;
     newalloc = ((newalloc + QUANTUM-1) / QUANTUM) * QUANTUM;
     pa->data = xrealloc(pa->data, sizeof(void *) * newalloc);
     memset(pa->data+pa->alloc, 0, sizeof(void *) * (newalloc-pa->alloc));
@@ -94,22 +94,22 @@ static void ensure_alloc(ptrarray_t *pa, int newalloc)
 static inline int adjust_index_ro(const ptrarray_t *pa, int idx)
 {
     if (idx >= pa->count)
-	return -1;
+        return -1;
     else if (idx < 0)
-	idx += pa->count;
+        idx += pa->count;
     return idx;
 }
 
 static inline int adjust_index_rw(ptrarray_t *pa, int idx, int len)
 {
     if (idx >= pa->count) {
-	ensure_alloc(pa, idx+len);
+        ensure_alloc(pa, idx+len);
     } else if (idx < 0) {
-	idx += pa->count;
-	if (idx >= 0 && len)
-	    ensure_alloc(pa, pa->count+len);
+        idx += pa->count;
+        if (idx >= 0 && len)
+            ensure_alloc(pa, pa->count+len);
     } else if (len) {
-	ensure_alloc(pa, pa->count+len);
+        ensure_alloc(pa, pa->count+len);
     }
     return idx;
 }
@@ -117,7 +117,7 @@ static inline int adjust_index_rw(ptrarray_t *pa, int idx, int len)
 EXPORTED void ptrarray_add(ptrarray_t *pa, void *p)
 {
     if (ptrarray_find(pa, p, 0) < 0)
-	ptrarray_append(pa, p);
+        ptrarray_append(pa, p);
 }
 
 EXPORTED void ptrarray_append(ptrarray_t *pa, void *p)
@@ -129,15 +129,15 @@ EXPORTED void ptrarray_append(ptrarray_t *pa, void *p)
 EXPORTED void ptrarray_set(ptrarray_t *pa, int idx, void *p)
 {
     if ((idx = adjust_index_rw(pa, idx, 0)) < 0)
-	return;
+        return;
     pa->data[idx] = p;
 }
 
 static inline void _ptrarray_insert(ptrarray_t *pa, int idx, void *p)
 {
     if (idx < pa->count)
-	memmove(pa->data+idx+1, pa->data+idx,
-		sizeof(void *) * (pa->count-idx));
+        memmove(pa->data+idx+1, pa->data+idx,
+                sizeof(void *) * (pa->count-idx));
     pa->data[idx] = p;
     pa->count++;
 }
@@ -145,7 +145,7 @@ static inline void _ptrarray_insert(ptrarray_t *pa, int idx, void *p)
 EXPORTED void ptrarray_insert(ptrarray_t *pa, int idx, void *p)
 {
     if ((idx = adjust_index_rw(pa, idx, 1)) < 0)
-	return;
+        return;
     _ptrarray_insert(pa, idx, p);
 }
 
@@ -153,12 +153,12 @@ EXPORTED void *ptrarray_remove(ptrarray_t *pa, int idx)
 {
     void *p;
     if ((idx = adjust_index_ro(pa, idx)) < 0)
-	return NULL;
+        return NULL;
     p = pa->data[idx];
     pa->count--;
     if (idx < pa->count)
-	memmove(pa->data+idx, pa->data+idx+1,
-		sizeof(void *) * (pa->count-idx));
+        memmove(pa->data+idx, pa->data+idx+1,
+                sizeof(void *) * (pa->count-idx));
     return p;
 }
 
@@ -167,14 +167,14 @@ EXPORTED void ptrarray_truncate(ptrarray_t *pa, int newlen)
     int i;
 
     if (newlen == pa->count)
-	return;
+        return;
 
     if (newlen > pa->count) {
-	ensure_alloc(pa, newlen);
+        ensure_alloc(pa, newlen);
     } else {
-	for (i = newlen ; i < pa->count ; i++) {
-	    pa->data[i] = NULL;
-	}
+        for (i = newlen ; i < pa->count ; i++) {
+            pa->data[i] = NULL;
+        }
     }
     pa->count = newlen;
 }
@@ -182,7 +182,7 @@ EXPORTED void ptrarray_truncate(ptrarray_t *pa, int newlen)
 EXPORTED void *ptrarray_nth(const ptrarray_t *pa, int idx)
 {
     if ((idx = adjust_index_ro(pa, idx)) < 0)
-	return NULL;
+        return NULL;
     return pa->data[idx];
 }
 
@@ -200,14 +200,14 @@ EXPORTED int ptrarray_find(const ptrarray_t *pa, void *match, int starting)
     int i;
 
     for (i = starting ; i < pa->count ; i++)
-	if (match == pa->data[i])
-	    return i;
+        if (match == pa->data[i])
+            return i;
     return -1;
 }
 
 EXPORTED void ptrarray_sort(ptrarray_t *pa,
-			    int (*compare)(const void **, const void **))
+                            int (*compare)(const void **, const void **))
 {
     qsort(pa->data, pa->count, sizeof(void*),
-	    (int (*)(const void *, const void *))compare);
+            (int (*)(const void *, const void *))compare);
 }

@@ -5,8 +5,8 @@
 #include "imap/global.h"
 #include "util.h"
 
-#define CANARY		0xdeadbeef
-#define CANARY64	0xdeadbeefcafebabe
+#define CANARY          0xdeadbeef
+#define CANARY64        0xdeadbeefcafebabe
 
 static void test_parsenum(void)
 {
@@ -25,7 +25,7 @@ int wrap_getint32(const char *s, int32_t *valp)
     char *b;
     int c;
 
-    b = xstrdup(s);	/* work around bug in prot_ungetc */
+    b = xstrdup(s);     /* work around bug in prot_ungetc */
     prot = prot_readmap(b, strlen(b));
     *valp = CANARY;
     c = getint32(prot, valp);
@@ -103,7 +103,7 @@ int wrap_getsint32(const char *s, int32_t *valp)
     char *b;
     int c;
 
-    b = xstrdup(s);	/* work around bug in prot_ungetc */
+    b = xstrdup(s);     /* work around bug in prot_ungetc */
     prot = prot_readmap(b, strlen(b));
     *valp = CANARY;
     c = getsint32(prot, valp);
@@ -181,7 +181,7 @@ int wrap_getmodseq(const char *s, modseq_t *valp)
     char *b;
     int c;
 
-    b = xstrdup(s);	/* work around bug in prot_ungetc */
+    b = xstrdup(s);     /* work around bug in prot_ungetc */
     prot = prot_readmap(b, strlen(b));
     *valp = CANARY64;
     c = getmodseq(prot, valp);

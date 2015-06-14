@@ -74,18 +74,18 @@ extern charset_index charset_lookupname(const char *name);
 extern comp_pat *charset_compilepat(const char *s);
 extern void charset_freepat(comp_pat *pat);
 extern int charset_searchstring(const char *substr, comp_pat *pat,
-			        const char *s, size_t len, int flags);
+                                const char *s, size_t len, int flags);
 extern int charset_searchfile(const char *substr, comp_pat *pat,
-                              const char *msg_base, size_t len, 
+                              const char *msg_base, size_t len,
                               charset_index charset, int encoding, int flags);
 extern const char *charset_decode_mimebody(const char *msg_base, size_t len,
-					   int encoding, char **retval,
-					   size_t *outlen);
+                                           int encoding, char **retval,
+                                           size_t *outlen);
 extern char *charset_encode_mimebody(const char *msg_base, size_t len,
-				     char *retval, size_t *outlen, 
-				     int *outlines);
+                                     char *retval, size_t *outlen,
+                                     int *outlines);
 extern char *charset_qpencode_mimebody(const char *msg_base, size_t len,
-				       size_t *outlen);
+                                       size_t *outlen);
 extern char *charset_to_utf8(const char *msg_base, size_t len, charset_index charset, int encoding);
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
@@ -96,9 +96,9 @@ extern char *charset_encode_mimeheader(const char *header, size_t len);
    down in a series of invocations of the callback 'cb'.  This is
    called by index_getsearchtext to extract the MIME body parts. */
 extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
-			   void *rock,
-			   const struct buf *data,
-			   charset_index charset, int encoding,
-			   const char *subtype, int flags);
+                           void *rock,
+                           const struct buf *data,
+                           charset_index charset, int encoding,
+                           const char *subtype, int flags);
 
 #endif /* INCLUDED_CHARSET_H */

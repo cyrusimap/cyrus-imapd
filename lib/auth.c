@@ -69,15 +69,15 @@ static struct auth_mech *auth_fromname(void)
         return auth;
 
     for (i = 0; auth_mechs[i]; i++) {
-	if (!strcmp(auth_mechs[i]->name, name)) {
-	    auth = auth_mechs[i]; break;
-	}
+        if (!strcmp(auth_mechs[i]->name, name)) {
+            auth = auth_mechs[i]; break;
+        }
     }
     if (!auth) {
-	char errbuf[1024];
-	snprintf(errbuf, sizeof(errbuf),
-		 "Authorization mechanism %s not supported", name);
-	fatal(errbuf, EC_CONFIG);
+        char errbuf[1024];
+        snprintf(errbuf, sizeof(errbuf),
+                 "Authorization mechanism %s not supported", name);
+        fatal(errbuf, EC_CONFIG);
     }
 
     return auth;

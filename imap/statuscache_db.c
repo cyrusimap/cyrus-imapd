@@ -80,7 +80,7 @@ char *statuscache_filename(void)
     const char *fname = config_getstring(IMAPOPT_STATUSCACHE_DB_PATH);
 
     if (fname)
-	return xstrdup(fname);
+        return xstrdup(fname);
 
     /* create db file name */
     return strconcat(config_dir, FNAME_STATUSCACHEDB, (char *)NULL);
@@ -93,10 +93,10 @@ EXPORTED void statuscache_open(void)
 
     ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (ret != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-	       cyrusdb_strerror(ret));
-	syslog(LOG_ERR, "statuscache in degraded mode");
-	goto out;
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+               cyrusdb_strerror(ret));
+        syslog(LOG_ERR, "statuscache in degraded mode");
+        goto out;
     }
 
     statuscache_dbopen = 1;
@@ -109,18 +109,18 @@ EXPORTED void statuscache_close(void)
     int r;
 
     if (statuscache_dbopen) {
-	r = cyrusdb_close(statuscachedb);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
-		   cyrusdb_strerror(r));
-	}
-	statuscache_dbopen = 0;
+        r = cyrusdb_close(statuscachedb);
+        if (r) {
+            syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
+                   cyrusdb_strerror(r));
+        }
+        statuscache_dbopen = 0;
     }
 }
 
 HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
-		      struct mailbox *mailbox, unsigned statusitems,
-		      unsigned numrecent, unsigned numunseen)
+                      struct mailbox *mailbox, unsigned statusitems,
+                      unsigned numrecent, unsigned numunseen)
 {
     assert(sdata);
     assert(mailbox);
@@ -142,7 +142,7 @@ EXPORTED void statuscache_done(void)
 }
 
 static char *statuscache_buildkey(const char *mailboxname, const char *userid,
-				  size_t *keylen)
+                                  size_t *keylen)
 {
     static char key[MAX_MAILBOX_BUFFER];
     size_t len;
@@ -153,7 +153,7 @@ static char *statuscache_buildkey(const char *mailboxname, const char *userid,
     key[len++] = '%';
     key[len++] = '%';
     if (userid)
-	len += strlcpy(key + len, userid, sizeof(key) - len);
+        len += strlcpy(key + len, userid, sizeof(key) - len);
 
     *keylen = len;
 
@@ -164,7 +164,7 @@ static char *statuscache_buildkey(const char *mailboxname, const char *userid,
  * Performs a STATUS command - note: state MAY be NULL here.
  */
 EXPORTED int status_lookup(const char *mboxname, const char *userid,
-		  unsigned statusitems, struct statusdata *sdata)
+                  unsigned statusitems, struct statusdata *sdata)
 {
     struct mailbox *mailbox = NULL;
     unsigned numrecent = 0;
@@ -174,23 +174,23 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
 
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-	/* Do actual lookup of cache item. */
-	r = statuscache_lookup(mboxname, userid, statusitems, sdata);
+        /* Do actual lookup of cache item. */
+        r = statuscache_lookup(mboxname, userid, statusitems, sdata);
 
-	/* Seen/recent status uses "push" invalidation events from
-	 * seen_db.c.   This avoids needing to open cyrus.header to get
-	 * the mailbox uniqueid to open the seen db and get the
-	 * unseen_mtime and recentuid.
-	 */
+        /* Seen/recent status uses "push" invalidation events from
+         * seen_db.c.   This avoids needing to open cyrus.header to get
+         * the mailbox uniqueid to open the seen db and get the
+         * unseen_mtime and recentuid.
+         */
 
-	if (!r) {
-	    syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-		   mboxname, userid, statusitems);
-	    return 0;
-	}
+        if (!r) {
+            syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
+                   mboxname, userid, statusitems);
+            return 0;
+        }
 
-	syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-	       mboxname, userid, statusitems);
+        syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
+               mboxname, userid, statusitems);
     }
 
     /* Missing or invalid cache entry */
@@ -200,56 +200,56 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
     /* We always have message count, uidnext,
        uidvalidity, and highestmodseq for cache */
     c_statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |
-		    STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
+                    STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
 
     if (!mailbox->i.exists) {
-	/* no messages, so these two must also be zero */
-	c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
+        /* no messages, so these two must also be zero */
+        c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
     }
     else if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
-	/* Read \Seen state */
-	struct seqset *seq = NULL;
-	const struct index_record *record;
-	int internalseen = mailbox_internal_seen(mailbox, userid);
-	unsigned recentuid;
+        /* Read \Seen state */
+        struct seqset *seq = NULL;
+        const struct index_record *record;
+        int internalseen = mailbox_internal_seen(mailbox, userid);
+        unsigned recentuid;
 
-	if (internalseen) {
-	    recentuid = mailbox->i.recentuid;
-	} else {
-	    struct seen *seendb = NULL;
-	    struct seendata sd = SEENDATA_INITIALIZER;
+        if (internalseen) {
+            recentuid = mailbox->i.recentuid;
+        } else {
+            struct seen *seendb = NULL;
+            struct seendata sd = SEENDATA_INITIALIZER;
 
-	    r = seen_open(userid, SEEN_CREATE, &seendb);
-	    if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
-	    seen_close(&seendb);
-	    if (r) goto done;
+            r = seen_open(userid, SEEN_CREATE, &seendb);
+            if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+            seen_close(&seendb);
+            if (r) goto done;
 
-	    recentuid = sd.lastuid;
-	    seq = seqset_parse(sd.seenuids, NULL, recentuid);
-	    seen_freedata(&sd);
-	}
+            recentuid = sd.lastuid;
+            seq = seqset_parse(sd.seenuids, NULL, recentuid);
+            seen_freedata(&sd);
+        }
 
-	struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-	while ((record = mailbox_iter_step(iter))) {
-	    if (record->uid > recentuid)
-		numrecent++;
-	    if (internalseen) {
-		if (!(record->system_flags & FLAG_SEEN))
-		    numunseen++;
-	    }
-	    else {
-		if (!seqset_ismember(seq, record->uid))
-		    numunseen++;
-	    }
-	}
-	mailbox_iter_done(&iter);
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+        while ((record = mailbox_iter_step(iter))) {
+            if (record->uid > recentuid)
+                numrecent++;
+            if (internalseen) {
+                if (!(record->system_flags & FLAG_SEEN))
+                    numunseen++;
+            }
+            else {
+                if (!seqset_ismember(seq, record->uid))
+                    numunseen++;
+            }
+        }
+        mailbox_iter_done(&iter);
 
-	/* we've calculated the correct values for both */
-	c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
+        /* we've calculated the correct values for both */
+        c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
     }
 
     statuscache_fill(sdata, userid, mailbox, c_statusitems,
-		     numrecent, numunseen);
+                     numrecent, numunseen);
 
     /* cache the new value while unlocking */
     mailbox_unlock_index(mailbox, sdata);
@@ -260,7 +260,7 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
 }
 
 EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
-		       unsigned statusitems, struct statusdata *sdata)
+                       unsigned statusitems, struct statusdata *sdata)
 {
     size_t keylen, datalen;
     int r = 0;
@@ -270,23 +270,23 @@ EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
 
     /* Don't access DB if it hasn't been opened */
     if (!statuscache_dbopen)
-	return IMAP_NO_NOSUCHMSG;
+        return IMAP_NO_NOSUCHMSG;
 
     /* Check if there is an entry in the database */
     do {
-	r = cyrusdb_fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
+        r = cyrusdb_fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
     } while (r == CYRUSDB_AGAIN);
 
     if (r || !data || ((size_t) datalen < sizeof(unsigned))) {
-	return IMAP_NO_NOSUCHMSG;
+        return IMAP_NO_NOSUCHMSG;
     }
 
     dend = data + datalen;
 
     version = (unsigned) strtoul(data, &p, 10);
     if (version != (unsigned) STATUSCACHE_VERSION) {
-	/* Wrong version */
-	return IMAP_NO_NOSUCHMSG;
+        /* Wrong version */
+        return IMAP_NO_NOSUCHMSG;
     }
 
     if (p < dend) sdata->statusitems = strtoul(p, &p, 10);
@@ -299,20 +299,20 @@ EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
 
     /* Sanity check the data */
     if (!sdata->statusitems || !sdata->uidnext || !sdata->uidvalidity) {
-	return IMAP_NO_NOSUCHMSG;
+        return IMAP_NO_NOSUCHMSG;
     }
 
     if ((sdata->statusitems & statusitems) != statusitems) {
-	/* Don't have all of the requested information */
-	return IMAP_NO_NOSUCHMSG;
+        /* Don't have all of the requested information */
+        return IMAP_NO_NOSUCHMSG;
     }
 
     return 0;
 }
 
 static int statuscache_store(const char *mboxname,
-			     struct statusdata *sdata,
-			     struct txn **tidptr)
+                             struct statusdata *sdata,
+                             struct txn **tidptr)
 {
     char data[250];  /* enough room for 11*(UULONG + SP) */
     size_t keylen, datalen;
@@ -321,25 +321,25 @@ static int statuscache_store(const char *mboxname,
 
     /* Don't access DB if it hasn't been opened */
     if (!statuscache_dbopen)
-	return 0;
+        return 0;
 
     /* The trailing whitespace is necessary because we
      * use non-length-based functions to parse the values.
-     * Any non-digit char would be fine, but whitespace 
+     * Any non-digit char would be fine, but whitespace
      * looks less ugly in dbtool output */
     datalen = snprintf(data, sizeof(data),
-		       "%u %u %u %u %u %u %u " MODSEQ_FMT " ",
-		       STATUSCACHE_VERSION,
-		       sdata->statusitems, sdata->messages,
-		       sdata->recent, sdata->uidnext,
-		       sdata->uidvalidity, sdata->unseen,
-		       sdata->highestmodseq);
+                       "%u %u %u %u %u %u %u " MODSEQ_FMT " ",
+                       STATUSCACHE_VERSION,
+                       sdata->statusitems, sdata->messages,
+                       sdata->recent, sdata->uidnext,
+                       sdata->uidvalidity, sdata->unseen,
+                       sdata->highestmodseq);
 
     r = cyrusdb_store(statuscachedb, key, keylen, data, datalen, tidptr);
 
     if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
-	       mboxname, cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
+               mboxname, cyrusdb_strerror(r));
     }
 
     return r;
@@ -353,7 +353,7 @@ struct statuscache_deleterock {
 static int delete_cb(void *rockp,
                      const char *key, size_t keylen,
                      const char *data __attribute__((unused)),
-                     size_t datalen __attribute__((unused))) 
+                     size_t datalen __attribute__((unused)))
 {
     int r;
     char buf[4096];
@@ -361,7 +361,7 @@ static int delete_cb(void *rockp,
 
     /* error if it's too big */
     if (keylen > 4096)
-	return 1;
+        return 1;
 
     /* we need to cache a copy, because the delete might re-map
      * the mmap space */
@@ -370,8 +370,8 @@ static int delete_cb(void *rockp,
     /* Delete db entry */
     r = cyrusdb_delete(rp->db, buf, keylen, &rp->tid, 1);
     if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: error deleting from database: %s", 
-	       cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: error deleting from database: %s",
+               cyrusdb_strerror(r));
     }
 
     return 0;
@@ -387,12 +387,12 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
 
     /* if it's disabled then skip */
     if (!config_getswitch(IMAPOPT_STATUSCACHE))
-	return 0;
+        return 0;
 
     /* Open DB if it hasn't been opened */
     if (!statuscache_dbopen) {
-	statuscache_open();
-	doclose = 1;
+        statuscache_open();
+        doclose = 1;
     }
 
     drock.db = statuscachedb;
@@ -401,28 +401,28 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
     key = statuscache_buildkey(mboxname, /*userid*/NULL, &keylen);
 
     r = cyrusdb_foreach(drock.db, key, keylen, NULL, delete_cb,
-		    &drock, &drock.tid);
+                    &drock, &drock.tid);
 
     if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: error invalidating: %s (%s)",
-	       mboxname, cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: error invalidating: %s (%s)",
+               mboxname, cyrusdb_strerror(r));
     }
 
     if (!r && sdata) {
-	r = statuscache_store(mboxname, sdata, &drock.tid);
+        r = statuscache_store(mboxname, sdata, &drock.tid);
     }
 
     if (r == CYRUSDB_OK) {
-	cyrusdb_commit(drock.db, drock.tid);
+        cyrusdb_commit(drock.db, drock.tid);
     }
     else {
-	syslog(LOG_NOTICE, "DBERROR: failed to store statuscace data for %s", mboxname);
-	if (drock.tid) cyrusdb_abort(drock.db, drock.tid);
+        syslog(LOG_NOTICE, "DBERROR: failed to store statuscace data for %s", mboxname);
+        if (drock.tid) cyrusdb_abort(drock.db, drock.tid);
     }
 
     if (doclose)
-	statuscache_close();
+        statuscache_close();
 
-    return 0; 
+    return 0;
 }
 

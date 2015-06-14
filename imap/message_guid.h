@@ -49,7 +49,7 @@
 
 enum guid_status {
     GUID_UNKNOWN = -1, /* Unknown if GUID is [non-]NULL (not yet tested) */
-    GUID_NULL =	    0, /* GUID is NULL */
+    GUID_NULL =     0, /* GUID is NULL */
     GUID_NONNULL =  1, /* GUID is non-NULL */
 };
 
@@ -60,16 +60,16 @@ struct message_guid {
 
 /* Generate GUID from message */
 void message_guid_generate(struct message_guid *guid,
-			   const char *msg_base, unsigned long msg_len);
+                           const char *msg_base, unsigned long msg_len);
 
 /* Copy a GUID */
 void message_guid_copy(struct message_guid *dst, const struct message_guid *src);
 
 /* Compare a pair of GUIDs: Returns 1 => match. */
 int message_guid_equal(const struct message_guid *guid1,
-		       const struct message_guid *guid2);
+                       const struct message_guid *guid2);
 int message_guid_cmp(const struct message_guid *guid1,
-		     const struct message_guid *guid2);
+                     const struct message_guid *guid2);
 
 /* Convert GUID into hash value for hash table lookup
  * Returns: positive int in range [0, hash_size-1]
@@ -91,7 +91,7 @@ void message_guid_export(const struct message_guid *guid, unsigned char *buf);
  * (Wrapper for memcpy() with current implementation)
  */
 void message_guid_import(struct message_guid *guid,
-			 const unsigned char *buf);
+                         const unsigned char *buf);
 
 
 /* Routines for manipulating text value */

@@ -58,7 +58,7 @@ struct bitvector
     unsigned char *bits;
 };
 
-#define BV_INITIALIZER	{ 0, 0, NULL }
+#define BV_INITIALIZER  { 0, 0, NULL }
 
 extern void bv_init(bitvector_t *);
 extern void bv_setsize(bitvector_t *, unsigned int i);

@@ -54,7 +54,7 @@
 #include "script.h"
 #include "util.h"
 #include "assert.h"
-#include <string.h> 
+#include <string.h>
 #include <stdlib.h>
 #include <sys/file.h>
 #include <unistd.h>
@@ -68,7 +68,7 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 #define TIMSIEVE_FAIL -1
 #define TIMSIEVE_OK 0
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
     FILE *instream;
     char *err = NULL;
@@ -78,91 +78,91 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     while ((c = getopt(argc, argv, "C:")) != EOF)
-	switch (c) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	default:
-	    usage_error = 1;
-	    break;
-	}
+        switch (c) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+        default:
+            usage_error = 1;
+            break;
+        }
 
     if (usage_error || (argc - optind) < 2) {
-	fprintf(stderr, "Syntax: %s [-C <altconfig>] <filename> <outputfile>\n",
-	       argv[0]);
-	exit(1);
+        fprintf(stderr, "Syntax: %s [-C <altconfig>] <filename> <outputfile>\n",
+               argv[0]);
+        exit(1);
     }
 
     instream = fopen(argv[optind++],"r");
     if(instream == NULL) {
-	fprintf(stderr, "Unable to open %s for reading\n", argv[1]);
-	exit(1);
+        fprintf(stderr, "Unable to open %s for reading\n", argv[1]);
+        exit(1);
     }
-    
+
     /* Load configuration file. */
     config_read(alt_config, 0);
 
     if(is_script_parsable(instream, &err, &s) == TIMSIEVE_FAIL) {
-	if(err) {
-	    fprintf(stderr, "Unable to parse script: %s\n", err);
-	} else {
-	    fprintf(stderr, "Unable to parse script.\n");
-	}
-	 
-	exit(1);
+        if(err) {
+            fprintf(stderr, "Unable to parse script: %s\n", err);
+        } else {
+            fprintf(stderr, "Unable to parse script.\n");
+        }
+
+        exit(1);
     }
-    
+
     /* Now, generate the bytecode */
     if(sieve_generate_bytecode(&bc, s) == -1) {
-	fprintf(stderr, "bytecode generate failed\n");
-	exit(1);
+        fprintf(stderr, "bytecode generate failed\n");
+        exit(1);
     }
 
     /* Now, open the new file */
     fd = open(argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if(fd < 0) {
-	fprintf(stderr, "couldn't open bytecode output file\n");
-	exit(1);
-    }  
+        fprintf(stderr, "couldn't open bytecode output file\n");
+        exit(1);
+    }
 
     /* Now, emit the bytecode */
     if(sieve_emit_bytecode(fd, bc) == -1) {
-	fprintf(stderr, "bytecode emit failed\n");
-	exit(1);
+        fprintf(stderr, "bytecode emit failed\n");
+        exit(1);
     }
 
     close(fd);
-    
+
     sieve_free_bytecode(&bc);
     sieve_script_free(&s);
 
     return 0;
 }
 
-/* to make larry's stupid functions happy :) */ 
+/* to make larry's stupid functions happy :) */
 static void foo(void)
 {
     fatal("stub function called", 0);
 }
 static sieve_vacation_t vacation = {
-    0,				/* min response */
-    0,				/* max response */
-    (sieve_callback *) &foo,	/* autorespond() */
-    (sieve_callback *) &foo	/* send_response() */
+    0,                          /* min response */
+    0,                          /* max response */
+    (sieve_callback *) &foo,    /* autorespond() */
+    (sieve_callback *) &foo     /* send_response() */
 };
 
-static int sieve_notify(void *ac __attribute__((unused)), 
-			void *interp_context __attribute__((unused)), 
-			void *script_context __attribute__((unused)),
-			void *message_context __attribute__((unused)),
-			const char **errmsg __attribute__((unused)))
+static int sieve_notify(void *ac __attribute__((unused)),
+                        void *interp_context __attribute__((unused)),
+                        void *script_context __attribute__((unused)),
+                        void *message_context __attribute__((unused)),
+                        const char **errmsg __attribute__((unused)))
 {
     fatal("stub function called", 0);
     return SIEVE_FAIL;
 }
 
 static int mysieve_error(int lineno, const char *msg,
-			 void *i __attribute__((unused)), void *s)
+                         void *i __attribute__((unused)), void *s)
 {
     struct buf *errors = (struct buf *)s;
     buf_printf(errors, "line %d: %s\r\n", lineno, msg);
@@ -170,9 +170,9 @@ static int mysieve_error(int lineno, const char *msg,
 }
 
 EXPORTED void fatal(const char *s, int code)
-{  
+{
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
-                           
+
     exit(1);
 }
 /* end the boilerplate */
@@ -202,8 +202,8 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
-	goto done;
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        goto done;
     }
 
     sieve_register_notify(i, &sieve_notify);
@@ -217,15 +217,15 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
     res = sieve_script_parse(i, stream, &errors, &s);
 
     if (res == SIEVE_OK) {
-	if(ret) {
-	    *ret = s;
-	} else {
-	    sieve_script_free(&s);
-	}
+        if(ret) {
+            *ret = s;
+        } else {
+            sieve_script_free(&s);
+        }
     }
     else {
-	sieve_script_free(&s);
-	*errstr = buf_release(&errors);
+        sieve_script_free(&s);
+        *errstr = buf_release(&errors);
     }
     buf_free(&errors);
 

@@ -7,7 +7,7 @@ static const char *asciify(unsigned char mac[16])
     int i;
 
     for (i = 0 ; i < 16 ; i++)
-	sprintf(buf+2*i, "%02x", mac[i]);
+        sprintf(buf+2*i, "%02x", mac[i]);
     return buf;
 }
 

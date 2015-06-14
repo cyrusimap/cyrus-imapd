@@ -109,10 +109,10 @@ typedef struct {
   char doc_ID_list_offset[8];/* offset to a doc-ID-list structure (see below) */
   char word_list_offset[8];  /* offset to a word-list structure (see below) */
   char valid_char_bits[32];  /* a bitmap recording which characters
-				appear in the index. The client
-				promises that query strings will not
-				contain characters which don't have
-				their bits set in the bitmap. */
+                                appear in the index. The client
+                                promises that query strings will not
+                                contain characters which don't have
+                                their bits set in the bitmap. */
 } SquatDiskHeader;
 
 /* Index file format

@@ -286,151 +286,151 @@ static char *ptsmodule_canonifyid(const char *identifier, size_t len)
 }
 
 
-static int ptsmodule_connect(void) 
+static int ptsmodule_connect(void)
 {
-	int rc = 0;
+        int rc = 0;
 
-	if (ptsm == NULL)  // Sanity Check
-		return PTSM_FAIL;
+        if (ptsm == NULL)  // Sanity Check
+                return PTSM_FAIL;
 
-	if (ptsm->ld != NULL)
-		return PTSM_OK;
+        if (ptsm->ld != NULL)
+                return PTSM_OK;
 
-	if (ISSET(ptsm->tls_cacert_file)) {
-		rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTFILE, ptsm->tls_cacert_file);
-		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTFILE (%s).", ldap_err2string (rc));
-		}
-	}
+        if (ISSET(ptsm->tls_cacert_file)) {
+                rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTFILE, ptsm->tls_cacert_file);
+                if (rc != LDAP_SUCCESS) {
+                        syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTFILE (%s).", ldap_err2string (rc));
+                }
+        }
 
-	if (ISSET(ptsm->tls_cacert_dir)) {
-		rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTDIR, ptsm->tls_cacert_dir);
-		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTDIR (%s).", ldap_err2string (rc));
-		}
-	}
+        if (ISSET(ptsm->tls_cacert_dir)) {
+                rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTDIR, ptsm->tls_cacert_dir);
+                if (rc != LDAP_SUCCESS) {
+                        syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTDIR (%s).", ldap_err2string (rc));
+                }
+        }
 
-	if (ptsm->tls_check_peer != 0) {
-		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_REQUIRE_CERT, &ptsm->tls_check_peer);
-		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_REQUIRE_CERT (%s).", ldap_err2string (rc));
-		}
-	}
+        if (ptsm->tls_check_peer != 0) {
+                rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_REQUIRE_CERT, &ptsm->tls_check_peer);
+                if (rc != LDAP_SUCCESS) {
+                        syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_REQUIRE_CERT (%s).", ldap_err2string (rc));
+                }
+        }
 
-	if (ISSET(ptsm->tls_ciphers)) {
-		/* set cipher suite, certificate and private key: */
-		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CIPHER_SUITE, ptsm->tls_ciphers);
-		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CIPHER_SUITE (%s).", ldap_err2string (rc));
-		}
-	}
+        if (ISSET(ptsm->tls_ciphers)) {
+                /* set cipher suite, certificate and private key: */
+                rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CIPHER_SUITE, ptsm->tls_ciphers);
+                if (rc != LDAP_SUCCESS) {
+                        syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CIPHER_SUITE (%s).", ldap_err2string (rc));
+                }
+        }
 
-	if (ISSET(ptsm->tls_cert)) {
-		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CERTFILE, ptsm->tls_cert);
-		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CERTFILE (%s).", ldap_err2string (rc));
-		}
-	}
+        if (ISSET(ptsm->tls_cert)) {
+                rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CERTFILE, ptsm->tls_cert);
+                if (rc != LDAP_SUCCESS) {
+                        syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CERTFILE (%s).", ldap_err2string (rc));
+                }
+        }
 
-	if (ISSET(ptsm->tls_key)) {
-		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_KEYFILE, ptsm->tls_key);
-		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_KEYFILE (%s).", ldap_err2string (rc));
-		}
-	}
+        if (ISSET(ptsm->tls_key)) {
+                rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_KEYFILE, ptsm->tls_key);
+                if (rc != LDAP_SUCCESS) {
+                        syslog(LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_KEYFILE (%s).", ldap_err2string (rc));
+                }
+        }
 
-	rc = ldap_initialize(&ptsm->ld, ptsm->uri);
-	if (rc != LDAP_SUCCESS) {
-		syslog(LOG_ERR, "ldap_initialize failed (%s)", ptsm->uri);
-		return PTSM_FAIL;
-	}
+        rc = ldap_initialize(&ptsm->ld, ptsm->uri);
+        if (rc != LDAP_SUCCESS) {
+                syslog(LOG_ERR, "ldap_initialize failed (%s)", ptsm->uri);
+                return PTSM_FAIL;
+        }
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_PROTOCOL_VERSION, &(ptsm->version));
-	if (rc != LDAP_OPT_SUCCESS) {
+        rc = ldap_set_option(ptsm->ld, LDAP_OPT_PROTOCOL_VERSION, &(ptsm->version));
+        if (rc != LDAP_OPT_SUCCESS) {
 
-		if (ptsm->sasl ||
-		    ptsm->start_tls) {
-			syslog(LOG_ERR, "Failed to set LDAP_OPT_PROTOCOL_VERSION %d, required for ldap_start_tls and ldap_sasl.", ptsm->version);
-			ldap_unbind(ptsm->ld);
+                if (ptsm->sasl ||
+                    ptsm->start_tls) {
+                        syslog(LOG_ERR, "Failed to set LDAP_OPT_PROTOCOL_VERSION %d, required for ldap_start_tls and ldap_sasl.", ptsm->version);
+                        ldap_unbind(ptsm->ld);
             ptsm->ld = NULL;
-			return PTSM_FAIL;
-		} else
-			syslog(LOG_WARNING, "Unable to set LDAP_OPT_PROTOCOL_VERSION %d.", ptsm->version);
+                        return PTSM_FAIL;
+                } else
+                        syslog(LOG_WARNING, "Unable to set LDAP_OPT_PROTOCOL_VERSION %d.", ptsm->version);
 
-		ptsm->version = LDAP_VERSION2;
-	}
+                ptsm->version = LDAP_VERSION2;
+        }
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_NETWORK_TIMEOUT, &(ptsm->timeout));
-	if (rc != LDAP_OPT_SUCCESS) {
-		syslog(LOG_WARNING, "Unable to set LDAP_OPT_NETWORK_TIMEOUT %ld.%06d.",
-		       (long)ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
-	}
+        rc = ldap_set_option(ptsm->ld, LDAP_OPT_NETWORK_TIMEOUT, &(ptsm->timeout));
+        if (rc != LDAP_OPT_SUCCESS) {
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_NETWORK_TIMEOUT %ld.%06d.",
+                       (long)ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
+        }
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_SIZELIMIT, &(ptsm->size_limit));
-	if (rc != LDAP_OPT_SUCCESS) {
-		syslog(LOG_WARNING, "Unable to set LDAP_OPT_SIZELIMIT %d.", ptsm->size_limit);
-	}
+        rc = ldap_set_option(ptsm->ld, LDAP_OPT_SIZELIMIT, &(ptsm->size_limit));
+        if (rc != LDAP_OPT_SUCCESS) {
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_SIZELIMIT %d.", ptsm->size_limit);
+        }
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_TIMELIMIT, &(ptsm->time_limit));
-	if (rc != LDAP_OPT_SUCCESS) {
-		syslog(LOG_WARNING, "Unable to set LDAP_OPT_TIMELIMIT %d.", ptsm->time_limit);
-	}
+        rc = ldap_set_option(ptsm->ld, LDAP_OPT_TIMELIMIT, &(ptsm->time_limit));
+        if (rc != LDAP_OPT_SUCCESS) {
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_TIMELIMIT %d.", ptsm->time_limit);
+        }
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_DEREF, &(ptsm->deref));
-	if (rc != LDAP_OPT_SUCCESS) {
-		syslog(LOG_WARNING, "Unable to set LDAP_OPT_DEREF %d.", ptsm->deref);
-	}
+        rc = ldap_set_option(ptsm->ld, LDAP_OPT_DEREF, &(ptsm->deref));
+        if (rc != LDAP_OPT_SUCCESS) {
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_DEREF %d.", ptsm->deref);
+        }
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_REFERRALS, ptsm->referrals ? LDAP_OPT_ON : LDAP_OPT_OFF);
-	if (rc != LDAP_OPT_SUCCESS) {
-		syslog(LOG_WARNING, "Unable to set LDAP_OPT_REFERRALS.");
-	}
+        rc = ldap_set_option(ptsm->ld, LDAP_OPT_REFERRALS, ptsm->referrals ? LDAP_OPT_ON : LDAP_OPT_OFF);
+        if (rc != LDAP_OPT_SUCCESS) {
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_REFERRALS.");
+        }
 
-	rc = ldap_set_option(ptsm->ld, LDAP_OPT_RESTART, ptsm->restart ? LDAP_OPT_ON : LDAP_OPT_OFF);
-	if (rc != LDAP_OPT_SUCCESS) {
-		syslog(LOG_WARNING, "Unable to set LDAP_OPT_RESTART.");
-	}
+        rc = ldap_set_option(ptsm->ld, LDAP_OPT_RESTART, ptsm->restart ? LDAP_OPT_ON : LDAP_OPT_OFF);
+        if (rc != LDAP_OPT_SUCCESS) {
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_RESTART.");
+        }
 
-	if (ptsm->start_tls) {
+        if (ptsm->start_tls) {
 
-		rc = ldap_start_tls_s(ptsm->ld, NULL, NULL);
-		if (rc != LDAP_SUCCESS) {
-			syslog(LOG_ERR, "start tls failed (%s).", ldap_err2string(rc));
-			ldap_unbind(ptsm->ld);
+                rc = ldap_start_tls_s(ptsm->ld, NULL, NULL);
+                if (rc != LDAP_SUCCESS) {
+                        syslog(LOG_ERR, "start tls failed (%s).", ldap_err2string(rc));
+                        ldap_unbind(ptsm->ld);
             ptsm->ld = NULL;
-			return PTSM_FAIL;
-		}
-	}
-	
-	if (ptsm->sasl) {
+                        return PTSM_FAIL;
+                }
+        }
 
-		if (EMPTY(ptsm->mech))
-			ldap_get_option(ptsm->ld, LDAP_OPT_X_SASL_MECH, &(ptsm->mech));
+        if (ptsm->sasl) {
 
-		if (EMPTY(ptsm->realm))
-			ldap_get_option(ptsm->ld, LDAP_OPT_X_SASL_REALM, &(ptsm->realm));
+                if (EMPTY(ptsm->mech))
+                        ldap_get_option(ptsm->ld, LDAP_OPT_X_SASL_MECH, &(ptsm->mech));
 
-		if (ISSET(ptsm->sasl_secprops)) {
-			rc = ldap_set_option(ptsm->ld, LDAP_OPT_X_SASL_SECPROPS, (void *) ptsm->sasl_secprops);
-			if( rc != LDAP_OPT_SUCCESS ) {
-				syslog(LOG_ERR, "Unable to set LDAP_OPT_X_SASL_SECPROPS.");
-				ldap_unbind(ptsm->ld);
+                if (EMPTY(ptsm->realm))
+                        ldap_get_option(ptsm->ld, LDAP_OPT_X_SASL_REALM, &(ptsm->realm));
+
+                if (ISSET(ptsm->sasl_secprops)) {
+                        rc = ldap_set_option(ptsm->ld, LDAP_OPT_X_SASL_SECPROPS, (void *) ptsm->sasl_secprops);
+                        if( rc != LDAP_OPT_SUCCESS ) {
+                                syslog(LOG_ERR, "Unable to set LDAP_OPT_X_SASL_SECPROPS.");
+                                ldap_unbind(ptsm->ld);
                 ptsm->ld = NULL;
-				return PTSM_FAIL;
-			}
-		}
+                                return PTSM_FAIL;
+                        }
+                }
 
-		rc = ldap_sasl_interactive_bind_s(
-			ptsm->ld, 
-			ptsm->bind_dn,
-			ptsm->mech, 
-			NULL, 
-			NULL, 
-			LDAP_SASL_QUIET, 
-			ptsmodule_interact, 
-			ptsm);
-	} else
-		rc = ldap_simple_bind_s(ptsm->ld, ptsm->bind_dn, ptsm->password);
+                rc = ldap_sasl_interactive_bind_s(
+                        ptsm->ld,
+                        ptsm->bind_dn,
+                        ptsm->mech,
+                        NULL,
+                        NULL,
+                        LDAP_SASL_QUIET,
+                        ptsmodule_interact,
+                        ptsm);
+        } else
+                rc = ldap_simple_bind_s(ptsm->ld, ptsm->bind_dn, ptsm->password);
 
     if (rc != LDAP_SUCCESS) {
         syslog(LOG_ERR,
@@ -650,15 +650,15 @@ static int ptsmodule_standard_root_dn(const char *domain, const char **result)
     buf_setcstr(&buf, "dc=");
 
     while (part != NULL) {
-	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
+        syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
 
-	buf_appendcstr(&buf, part);
-	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
+        buf_appendcstr(&buf, part);
+        syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
 
-	part = strtok_r(NULL, ".", &tok_state);
-	
-	if (part != NULL)
-	    buf_appendcstr(&buf, dc_sep);
+        part = strtok_r(NULL, ".", &tok_state);
+
+        if (part != NULL)
+            buf_appendcstr(&buf, dc_sep);
     }
 
     free(domain_copy);
@@ -934,67 +934,67 @@ static int ptsmodule_get_dn(
         if (rc != PTSM_OK)
             return rc;
 
-	if (ptsm->domain_base_dn && ptsm->domain_base_dn[0] != '\0' && (strrchr(canon_id, '@') != NULL)) {
-	    syslog(LOG_DEBUG, "Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
+        if (ptsm->domain_base_dn && ptsm->domain_base_dn[0] != '\0' && (strrchr(canon_id, '@') != NULL)) {
+            syslog(LOG_DEBUG, "Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
 
-	    /* Get the base dn to search from domain_base_dn searched on domain_scope with
-		domain_filter */
-	    domain = strrchr(canon_id, '@');
+            /* Get the base dn to search from domain_base_dn searched on domain_scope with
+                domain_filter */
+            domain = strrchr(canon_id, '@');
 
-	    /* Strip the first character which is a '@' */
-	    domain = domain+1;
+            /* Strip the first character which is a '@' */
+            domain = domain+1;
 
-	    snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
+            snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
 
-	    syslog(LOG_DEBUG, "Domain filter: %s", domain_filter);
+            syslog(LOG_DEBUG, "Domain filter: %s", domain_filter);
 
-	    rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
+            rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
 
-	    if (rc != LDAP_SUCCESS) {
-		syslog(LOG_ERR, "LDAP search for domain failed.");
-		return rc;
-	    }
+            if (rc != LDAP_SUCCESS) {
+                syslog(LOG_ERR, "LDAP search for domain failed.");
+                return rc;
+            }
 
-	    if (ldap_count_entries(ptsm->ld, res) < 1) {
-		syslog(LOG_ERR, "No domain %s found", domain);
-		return PTSM_FAIL;
-	    } else if (ldap_count_entries(ptsm->ld, res) > 1) {
-		syslog(LOG_ERR, "Multiple domains %s found", domain);
-		return PTSM_FAIL;
-	    } else {
-		if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
-		    if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_result_attribute)) != NULL) {
-			syslog(LOG_DEBUG, "Root DN for domain %s is %s", domain, vals[0]);
-			ptsm->base = vals[0];
-			rc = PTSM_OK;
-		    } else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
-			syslog(LOG_DEBUG, "Domain %s is an alias domain for parent domain %s", domain, vals[0]);
-			rc = ptsmodule_standard_root_dn(vals[0], &ptsm->base);
-		    } else {
-			rc = ptsmodule_standard_root_dn(domain, &ptsm->base);
-		    }
+            if (ldap_count_entries(ptsm->ld, res) < 1) {
+                syslog(LOG_ERR, "No domain %s found", domain);
+                return PTSM_FAIL;
+            } else if (ldap_count_entries(ptsm->ld, res) > 1) {
+                syslog(LOG_ERR, "Multiple domains %s found", domain);
+                return PTSM_FAIL;
+            } else {
+                if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
+                    if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_result_attribute)) != NULL) {
+                        syslog(LOG_DEBUG, "Root DN for domain %s is %s", domain, vals[0]);
+                        ptsm->base = vals[0];
+                        rc = PTSM_OK;
+                    } else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
+                        syslog(LOG_DEBUG, "Domain %s is an alias domain for parent domain %s", domain, vals[0]);
+                        rc = ptsmodule_standard_root_dn(vals[0], &ptsm->base);
+                    } else {
+                        rc = ptsmodule_standard_root_dn(domain, &ptsm->base);
+                    }
 
-		    if (rc != PTSM_OK) {
-			return rc;
-		    } else {
-			base = xstrdup(ptsm->base);
-			syslog(LOG_DEBUG, "Continuing with ptsm->base: %s", ptsm->base);
-		    }
-		}
-	    }
+                    if (rc != PTSM_OK) {
+                        return rc;
+                    } else {
+                        base = xstrdup(ptsm->base);
+                        syslog(LOG_DEBUG, "Continuing with ptsm->base: %s", ptsm->base);
+                    }
+                }
+            }
 
-	} else {
+        } else {
             rc = ptsmodule_expand_tokens(ptsm->base, canon_id, NULL, &base);
-	    if (rc != PTSM_OK)
-	        return rc;
-	}
+            if (rc != PTSM_OK)
+                return rc;
+        }
 
         rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
 
         if (rc != LDAP_SUCCESS) {
-	    syslog(LOG_DEBUG, "Searching %s with %s failed", base, base);
-	    free(filter);
-	    free(base);
+            syslog(LOG_DEBUG, "Searching %s with %s failed", base, base);
+            free(filter);
+            free(base);
 
             if (rc == LDAP_SERVER_DOWN) {
                 ldap_unbind(ptsm->ld);
@@ -1008,20 +1008,20 @@ static int ptsmodule_get_dn(
         free(filter);
         free(base);
 
-	/*
-	 * We don't want to return the *first* entry found, we want to return
-	 * the *only* entry found.
-	 */
-	if (ldap_count_entries(ptsm->ld, res) < 1) {
-	    syslog(LOG_ERR, "No entries found");
-	} else if (ldap_count_entries(ptsm->ld, res) > 1) {
-	    syslog(LOG_ERR, "Multiple entries found: %d", ldap_count_entries(ptsm->ld, res));
-	} else {
+        /*
+         * We don't want to return the *first* entry found, we want to return
+         * the *only* entry found.
+         */
+        if (ldap_count_entries(ptsm->ld, res) < 1) {
+            syslog(LOG_ERR, "No entries found");
+        } else if (ldap_count_entries(ptsm->ld, res) > 1) {
+            syslog(LOG_ERR, "Multiple entries found: %d", ldap_count_entries(ptsm->ld, res));
+        } else {
 /*      if ( ldap_count_entries(ptsm->ld, res) == 1 ) { */
-	    if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
-		*ret = ldap_get_dn(ptsm->ld, entry);
-	    }
-	}
+            if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
+                *ret = ldap_get_dn(ptsm->ld, entry);
+            }
+        }
 
         ldap_msgfree(res);
         res = NULL;
@@ -1246,37 +1246,37 @@ static int ptsmodule_make_authstate_filter(
     for (i = 0, entry = ldap_first_entry(ptsm->ld, res); entry != NULL;
          i++, entry = ldap_next_entry(ptsm->ld, entry)) {
 
-	vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
-	if (vals == NULL) {
-	    syslog(LOG_ERR, "Multiple values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
-	    continue;
-	}
+        vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
+        if (vals == NULL) {
+            syslog(LOG_ERR, "Multiple values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
+            continue;
+        }
 
-	if (ldap_count_values(vals) < 1 ) {
-	    syslog(LOG_ERR, "No values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
-	} else if (ldap_count_values(vals) > 1) {
-	    syslog(LOG_ERR, "Too many values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
-	} else {
-	    *reply = "too many values";
-	    rc = PTSM_FAIL;
-	    ldap_value_free(vals);
-	    vals = NULL;
-	    goto done;
-	}
+        if (ldap_count_values(vals) < 1 ) {
+            syslog(LOG_ERR, "No values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
+        } else if (ldap_count_values(vals) > 1) {
+            syslog(LOG_ERR, "Too many values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
+        } else {
+            *reply = "too many values";
+            rc = PTSM_FAIL;
+            ldap_value_free(vals);
+            vals = NULL;
+            goto done;
+        }
 
-	strcpy((*newstate)->groups[i].id, "group:");
+        strcpy((*newstate)->groups[i].id, "group:");
 
-	unsigned int j;
-	for (j =0; j < strlen(vals[0]); j++) {
-	    if(Uisupper(vals[0][j]))
-		vals[0][j]=tolower(vals[0][j]);
-	}
+        unsigned int j;
+        for (j =0; j < strlen(vals[0]); j++) {
+            if(Uisupper(vals[0][j]))
+                vals[0][j]=tolower(vals[0][j]);
+        }
 
-	strlcat((*newstate)->groups[i].id, vals[0], sizeof((*newstate)->groups[i].id));
-	(*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+        strlcat((*newstate)->groups[i].id, vals[0], sizeof((*newstate)->groups[i].id));
+        (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
 
-	ldap_value_free(vals);
-	vals = NULL;
+        ldap_value_free(vals);
+        vals = NULL;
     }
 
     rc = PTSM_OK;
@@ -1331,65 +1331,65 @@ static int ptsmodule_make_authstate_group(
     }
 
     if (ptsm->domain_base_dn && (strrchr(canon_id, '@') != NULL)) {
-	syslog(LOG_DEBUG, "(groups) Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
+        syslog(LOG_DEBUG, "(groups) Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
 
-	/* Get the base dn to search from domain_base_dn searched on domain_scope with
-	    domain_filter */
-	domain = strrchr(canon_id, '@');
+        /* Get the base dn to search from domain_base_dn searched on domain_scope with
+            domain_filter */
+        domain = strrchr(canon_id, '@');
 
-	syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
+        syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
 
-	/* Strip the first character which is a '@' AM: assuming ASCII */
-	domain = domain+1;
+        /* Strip the first character which is a '@' AM: assuming ASCII */
+        domain = domain+1;
 
-	syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
+        syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
 
-	snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
+        snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
 
-	syslog(LOG_DEBUG, "(groups) Domain filter: %s", domain_filter);
+        syslog(LOG_DEBUG, "(groups) Domain filter: %s", domain_filter);
 
-	rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
+        rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
 
-	if (rc != LDAP_SUCCESS) {
-	    syslog(LOG_DEBUG, "(groups) Result from domain query not OK");
-	    return rc;
-	} else {
-	    syslog(LOG_DEBUG, "(groups) Result from domain query OK");
-	}
+        if (rc != LDAP_SUCCESS) {
+            syslog(LOG_DEBUG, "(groups) Result from domain query not OK");
+            return rc;
+        } else {
+            syslog(LOG_DEBUG, "(groups) Result from domain query OK");
+        }
 
-	if (ldap_count_entries(ptsm->ld, res) < 1) {
-	    syslog(LOG_ERR, "(groups) No domain %s found", domain);
-	    return PTSM_FAIL;
-	} else if (ldap_count_entries(ptsm->ld, res) > 1) {
-	    syslog(LOG_ERR, "(groups) Multiple domains %s found", domain);
-	    return PTSM_FAIL;
-	} else {
-	    syslog(LOG_DEBUG, "(groups) Domain %s found", domain);
-	    if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
-		if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_result_attribute)) != NULL) {
-		    ptsm->group_base = vals[0];
-		    rc = PTSM_OK;
-		} else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
-		    char *new_domain = xstrdup(vals[0]);
-		    syslog(LOG_DEBUG, "(groups) Domain %s is now domain %s", domain, new_domain);
-		    rc = ptsmodule_standard_root_dn(new_domain, &ptsm->group_base);
-		    free(new_domain);
-		} else {
-		    rc = ptsmodule_standard_root_dn(domain, &ptsm->group_base);
-		}
+        if (ldap_count_entries(ptsm->ld, res) < 1) {
+            syslog(LOG_ERR, "(groups) No domain %s found", domain);
+            return PTSM_FAIL;
+        } else if (ldap_count_entries(ptsm->ld, res) > 1) {
+            syslog(LOG_ERR, "(groups) Multiple domains %s found", domain);
+            return PTSM_FAIL;
+        } else {
+            syslog(LOG_DEBUG, "(groups) Domain %s found", domain);
+            if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
+                if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_result_attribute)) != NULL) {
+                    ptsm->group_base = vals[0];
+                    rc = PTSM_OK;
+                } else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
+                    char *new_domain = xstrdup(vals[0]);
+                    syslog(LOG_DEBUG, "(groups) Domain %s is now domain %s", domain, new_domain);
+                    rc = ptsmodule_standard_root_dn(new_domain, &ptsm->group_base);
+                    free(new_domain);
+                } else {
+                    rc = ptsmodule_standard_root_dn(domain, &ptsm->group_base);
+                }
 
-		if (rc != PTSM_OK) {
-		    return rc;
-		} else {
-		    base = xstrdup(ptsm->group_base);
-		    syslog(LOG_DEBUG, "Continuing with ptsm->group_base: %s", ptsm->group_base);
-		}
-	    }
-	}
+                if (rc != PTSM_OK) {
+                    return rc;
+                } else {
+                    base = xstrdup(ptsm->group_base);
+                    syslog(LOG_DEBUG, "Continuing with ptsm->group_base: %s", ptsm->group_base);
+                }
+            }
+        }
     } else {
-	rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id, NULL, &base);
-	if (rc != PTSM_OK)
-	    return rc;
+        rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id, NULL, &base);
+        if (rc != PTSM_OK)
+            return rc;
     }
 
     syslog(LOG_DEBUG, "(groups) about to search %s for %s", base, filter);

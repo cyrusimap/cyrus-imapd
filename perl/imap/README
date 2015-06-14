@@ -5,11 +5,11 @@ appears to be required for administrative connections to Cyrus 1.6.x.
 
 To build:
 
-	[export CYRUS_SRC=/path/to/cyrus-imapd-source-dir]
-	perl Makefile.PL
-	make
-	make test	# or see below
-	make install
+        [export CYRUS_SRC=/path/to/cyrus-imapd-source-dir]
+        perl Makefile.PL
+        make
+        make test       # or see below
+        make install
 
 "make test" is supposed to test the imclient (IMAP::Cyrus) and perform very
 limited testing of Cyrus::IMAP::Admin.  Full testing cannot be done because
@@ -19,15 +19,15 @@ harness eats stdout, so you can only run the tests by hand.  Sigh.)
 
 For more complete testing, you may run it in interactive mode:
 
-	perl -Iblib/arch -Iblib/lib -MIMAP::Cyrus::Shell \
-		-e shell [-- --user adminname] [server]
+        perl -Iblib/arch -Iblib/lib -MIMAP::Cyrus::Shell \
+                -e shell [-- --user adminname] [server]
 
 cyradm.sh does this (and will be installed as "cyradm"), but it expects
 IMAP::Cyrus to already be installed.
 
 For more information, perldoc is your friend:
 
-	perldoc Cyrus::IMAP		# imclient library
-	perldoc Cyrus::IMAP::Admin	# administrative library
-	perldoc Cyrus::IMAP::Shell	# cyradm shell
-	man cyradm			# the same
+        perldoc Cyrus::IMAP             # imclient library
+        perldoc Cyrus::IMAP::Admin      # administrative library
+        perldoc Cyrus::IMAP::Shell      # cyradm shell
+        man cyradm                      # the same

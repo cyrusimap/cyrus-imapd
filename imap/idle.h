@@ -49,13 +49,13 @@ extern const char *idle_method_desc;
 typedef enum {
     /* something noteworthy may have happened to the mailbox,
      * e.g. a delivery, so it needs to be checked */
-    IDLE_MAILBOX =	0x1,
+    IDLE_MAILBOX =      0x1,
     /* the shutdownfile may have been written, needing an ALERT reponse
      * to be sent to any IMAP clients */
-    IDLE_ALERT =	0x2,
+    IDLE_ALERT =        0x2,
     /* input was detected on the @otherfd, probably because the IMAP
      * client cancelled the IDLE */
-    IDLE_INPUT =	0x4
+    IDLE_INPUT =        0x4
 } idle_flags_t;
 
 typedef void idle_updateproc_t(idle_flags_t flags);

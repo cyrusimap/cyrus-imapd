@@ -108,71 +108,71 @@ struct index_modified_flags {
 
 static int index_writeseen(struct index_state *state);
 static void index_fetchmsg(struct index_state *state,
-		    const struct buf *msg,
-		    unsigned offset, unsigned size,
-		    unsigned start_octet, unsigned octet_count);
+                    const struct buf *msg,
+                    unsigned offset, unsigned size,
+                    unsigned start_octet, unsigned octet_count);
 static int index_fetchsection(struct index_state *state, const char *resp,
-			      const struct buf *msg,
-			      char *section,
-			      const char *cachestr, unsigned size,
-			      unsigned start_octet, unsigned octet_count);
+                              const struct buf *msg,
+                              char *section,
+                              const char *cachestr, unsigned size,
+                              unsigned start_octet, unsigned octet_count);
 static void index_fetchfsection(struct index_state *state,
-				const char *msg_base, unsigned long msg_size,
-				struct fieldlist *fsection,
-				const char *cachestr,
-				unsigned start_octet, unsigned octet_count);
+                                const char *msg_base, unsigned long msg_size,
+                                struct fieldlist *fsection,
+                                const char *cachestr,
+                                unsigned start_octet, unsigned octet_count);
 static char *index_readheader(const char *msg_base, unsigned long msg_size,
-			      unsigned offset, unsigned size);
+                              unsigned offset, unsigned size);
 static void index_fetchheader(struct index_state *state,
-			      const char *msg_base, unsigned long msg_size,
-			      unsigned size,
-			      const strarray_t *headers,
-			      const strarray_t *headers_not);
+                              const char *msg_base, unsigned long msg_size,
+                              unsigned size,
+                              const strarray_t *headers,
+                              const strarray_t *headers_not);
 static void index_fetchcacheheader(struct index_state *state, struct index_record *record,
-				   const strarray_t *headers, unsigned start_octet,
-				   unsigned octet_count);
+                                   const strarray_t *headers, unsigned start_octet,
+                                   unsigned octet_count);
 static void index_listflags(struct index_state *state);
 static void index_fetchflags(struct index_state *state, uint32_t msgno);
 
 static int index_copysetup(struct index_state *state, uint32_t msgno,
-			   struct copyargs *copyargs);
+                           struct copyargs *copyargs);
 static int index_storeflag(struct index_state *state,
-			   struct index_modified_flags *modified_flags,
-			   uint32_t msgno, struct index_record *record,
-			   struct storeargs *storeargs);
+                           struct index_modified_flags *modified_flags,
+                           uint32_t msgno, struct index_record *record,
+                           struct storeargs *storeargs);
 static int index_store_annotation(struct index_state *state, uint32_t msgno,
-			   struct storeargs *storeargs);
+                           struct storeargs *storeargs);
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
-			    const struct fetchargs *fetchargs);
+                            const struct fetchargs *fetchargs);
 static void index_printflags(struct index_state *state, uint32_t msgno,
-			     int usinguid, int printmodseq);
+                             int usinguid, int printmodseq);
 static char *get_localpart_addr(const char *header);
 static char *get_displayname(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
 static void index_get_ids(MsgData *msgdata,
-			  char *envtokens[], const char *headers, unsigned size);
+                          char *envtokens[], const char *headers, unsigned size);
 
 static int index_sort_compare(MsgData *md1, MsgData *md2,
-			      const struct sortcrit *call_data);
+                              const struct sortcrit *call_data);
 static int index_sort_compare_qsort(const void *v1, const void *v2);
 
 static void *index_thread_getnext(Thread *thread);
 static void index_thread_setnext(Thread *thread, Thread *next);
 static int index_thread_compare(Thread *t1, Thread *t2,
-				const struct sortcrit *call_data);
+                                const struct sortcrit *call_data);
 static void index_thread_orderedsubj(struct index_state *state,
-				     unsigned *msgno_list, unsigned int nmsg,
-				     int usinguid);
+                                     unsigned *msgno_list, unsigned int nmsg,
+                                     int usinguid);
 static void index_thread_sort(Thread *root, const struct sortcrit *sortcrit);
 static void index_thread_print(struct index_state *state,
-			       Thread *threads, int usinguid);
+                               Thread *threads, int usinguid);
 static void index_thread_ref(struct index_state *state,
-			     unsigned *msgno_list, unsigned int nmsg,
-			     int usinguid);
+                             unsigned *msgno_list, unsigned int nmsg,
+                             int usinguid);
 
 static struct seqset *_parse_sequence(struct index_state *state,
-				      const char *sequence, int usinguid);
+                                      const char *sequence, int usinguid);
 static void massage_header(char *hdr);
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
@@ -183,8 +183,8 @@ static const struct thread_algorithm thread_algs[] = {
 };
 
 EXPORTED int index_reload_record(struct index_state *state,
-				 uint32_t msgno,
-				 struct index_record *record)
+                                 uint32_t msgno,
+                                 struct index_record *record)
 {
     struct index_map *im = &state->map[msgno-1];
     int r = 0;
@@ -192,13 +192,13 @@ EXPORTED int index_reload_record(struct index_state *state,
 
     memset(record, 0, sizeof(struct index_record));
     if (!im->recno) {
-	/* doh, gotta just fill in what we know */
-	record->uid = im->uid;
+        /* doh, gotta just fill in what we know */
+        record->uid = im->uid;
     }
     else {
-	record->recno = im->recno;
-	record->uid = im->uid;
-	r = mailbox_reload_index_record(state->mailbox, record);
+        record->recno = im->recno;
+        record->uid = im->uid;
+        r = mailbox_reload_index_record(state->mailbox, record);
     }
     /* NOTE: we have released the cyrus.index lock at this point, but are
      * still holding the mailbox name relock.  This means nobody can rewrite
@@ -223,14 +223,14 @@ EXPORTED int index_reload_record(struct index_state *state,
     record->system_flags = im->system_flags;
     record->cache_offset = im->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	record->user_flags[i] = im->user_flags[i];
+        record->user_flags[i] = im->user_flags[i];
 
     return 0;
 }
 
 static int index_rewrite_record(struct index_state *state,
-				uint32_t msgno,
-				struct index_record *record)
+                                uint32_t msgno,
+                                struct index_record *record)
 {
     struct index_map *im = &state->map[msgno-1];
     int i;
@@ -246,7 +246,7 @@ static int index_rewrite_record(struct index_state *state,
     im->system_flags = record->system_flags;
     im->cache_offset = record->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	im->user_flags[i] = record->user_flags[i];
+        im->user_flags[i] = record->user_flags[i];
 
     return 0;
 }
@@ -256,8 +256,8 @@ EXPORTED void index_release(struct index_state *state)
     if (!state) return;
 
     if (state->mailbox) {
-	mailbox_close(&state->mailbox);
-	state->mailbox = NULL; /* should be done by close anyway */
+        mailbox_close(&state->mailbox);
+        state->mailbox = NULL; /* should be done by close anyway */
     }
 }
 static struct sortcrit *the_sortcrit;
@@ -278,7 +278,7 @@ EXPORTED void index_close(struct index_state **stateptr)
     free(state->mboxname);
     free(state->userid);
     for (i = 0; i < MAX_USER_FLAGS; i++)
-	free(state->flagname[i]);
+        free(state->flagname[i]);
     free(state);
 
     *stateptr = NULL;
@@ -289,49 +289,49 @@ EXPORTED void index_close(struct index_state **stateptr)
  * initial CHECK.
  */
 EXPORTED int index_open(const char *name, struct index_init *init,
-	       struct index_state **stateptr)
+               struct index_state **stateptr)
 {
     int r;
     struct index_state *state = xzmalloc(sizeof(struct index_state));
 
     if (init) {
-	state->authstate = init->authstate;
-	state->examining = init->examine_mode;
-	state->mboxname = xstrdup(name);
-	state->out = init->out;
-	state->userid = xstrdupnull(init->userid);
-	state->want_dav = init->want_dav;
-	state->want_expunged = init->want_expunged;
+        state->authstate = init->authstate;
+        state->examining = init->examine_mode;
+        state->mboxname = xstrdup(name);
+        state->out = init->out;
+        state->userid = xstrdupnull(init->userid);
+        state->want_dav = init->want_dav;
+        state->want_expunged = init->want_expunged;
 
-	if (state->examining) {
-	    r = mailbox_open_irl(state->mboxname, &state->mailbox);
-	    if (r) goto fail;
-	}
-	else {
-	    r = mailbox_open_iwl(state->mboxname, &state->mailbox);
-	    if (r) goto fail;
-	}
-	state->myrights = cyrus_acl_myrights(init->authstate,
-					     state->mailbox->acl);
-	if (state->examining)
-	    state->myrights &= ~ACL_READ_WRITE;
+        if (state->examining) {
+            r = mailbox_open_irl(state->mboxname, &state->mailbox);
+            if (r) goto fail;
+        }
+        else {
+            r = mailbox_open_iwl(state->mboxname, &state->mailbox);
+            if (r) goto fail;
+        }
+        state->myrights = cyrus_acl_myrights(init->authstate,
+                                             state->mailbox->acl);
+        if (state->examining)
+            state->myrights &= ~ACL_READ_WRITE;
 
-	state->internalseen = mailbox_internal_seen(state->mailbox,
-						    state->userid);
+        state->internalseen = mailbox_internal_seen(state->mailbox,
+                                                    state->userid);
     }
     else {
-	r = mailbox_open_iwl(name, &state->mailbox);
-	if (r) goto fail;
+        r = mailbox_open_iwl(name, &state->mailbox);
+        if (r) goto fail;
     }
 
     if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
-	if (state->want_dav && (state->mailbox->mbtype & MBTYPES_DAV)) {
-	    /* User logged in using imapmagicplus token "dav" */
-	}
-	else {
-	    r = IMAP_MAILBOX_BADTYPE;
-	    goto fail;
-	}
+        if (state->want_dav && (state->mailbox->mbtype & MBTYPES_DAV)) {
+            /* User logged in using imapmagicplus token "dav" */
+        }
+        else {
+            r = IMAP_MAILBOX_BADTYPE;
+            goto fail;
+        }
     }
 
     /* initialise the index_state */
@@ -339,7 +339,7 @@ EXPORTED int index_open(const char *name, struct index_init *init,
 
     /* have to get the vanished list while we're still locked */
     if (init)
-	init->vanishedlist = index_vanished(state, &init->vanished);
+        init->vanishedlist = index_vanished(state, &init->vanished);
 
     index_unlock(state);
 
@@ -356,7 +356,7 @@ fail:
 }
 
 EXPORTED int index_expunge(struct index_state *state, char *sequence,
-		  int need_deleted)
+                  int need_deleted)
 {
     int r;
     uint32_t msgno;
@@ -376,50 +376,50 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     /* don't notify for messages that don't need \Deleted flag because
      * a notification should be already send (eg. MessageMove) */
     if (need_deleted)
-	mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+        mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
+        im = &state->map[msgno-1];
 
-	if (im->system_flags & FLAG_EXPUNGED)
-	    continue; /* already expunged */
+        if (im->system_flags & FLAG_EXPUNGED)
+            continue; /* already expunged */
 
-	if (need_deleted && !(im->system_flags & FLAG_DELETED))
-	    continue; /* no \Deleted flag */
+        if (need_deleted && !(im->system_flags & FLAG_DELETED))
+            continue; /* no \Deleted flag */
 
-	/* if there is a sequence list, check it */
-	if (sequence && !seqset_ismember(seq, im->uid))
-	    continue; /* not in the list */
+        /* if there is a sequence list, check it */
+        if (sequence && !seqset_ismember(seq, im->uid))
+            continue; /* not in the list */
 
-	/* load first once we know we have to process this one */
-	if (index_reload_record(state, msgno, &record))
-	    continue;
+        /* load first once we know we have to process this one */
+        if (index_reload_record(state, msgno, &record))
+            continue;
 
-	oldmodseq = im->modseq;
+        oldmodseq = im->modseq;
 
-	if (!im->isseen) {
-	    state->numunseen--;
-	    im->isseen = 1;
-	}
+        if (!im->isseen) {
+            state->numunseen--;
+            im->isseen = 1;
+        }
 
-	if (im->isrecent) {
-	    state->numrecent--;
-	    im->isrecent = 0;
-	}
+        if (im->isrecent) {
+            state->numrecent--;
+            im->isrecent = 0;
+        }
 
-	/* set the flags */
-	record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
-	numexpunged++;
-	state->num_expunged++;
+        /* set the flags */
+        record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
+        numexpunged++;
+        state->num_expunged++;
 
-	r = index_rewrite_record(state, msgno, &record);
-	if (r) break;
+        r = index_rewrite_record(state, msgno, &record);
+        if (r) break;
 
-	/* avoid telling again (equivalent to STORE FLAGS.SILENT) */
-	if (im->told_modseq == oldmodseq)
-	    im->told_modseq = im->modseq;
+        /* avoid telling again (equivalent to STORE FLAGS.SILENT) */
+        if (im->told_modseq == oldmodseq)
+            im->told_modseq = im->modseq;
 
-	mboxevent_extract_record(mboxevent, state->mailbox, &record);
+        mboxevent_extract_record(mboxevent, state->mailbox, &record);
     }
 
     seqset_free(seq);
@@ -432,11 +432,11 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     index_unlock(state);
 
     if (!r && (numexpunged > 0)) {
-	syslog(LOG_NOTICE, "Expunged %d messages from %s",
-	       numexpunged, state->mboxname);
-	/* send the MessageExpunge event notification for "immediate", "default"
-	 * and "delayed" expunge */
-	mboxevent_notify(mboxevent);
+        syslog(LOG_NOTICE, "Expunged %d messages from %s",
+               numexpunged, state->mboxname);
+        /* send the MessageExpunge event notification for "immediate", "default"
+         * and "delayed" expunge */
+        mboxevent_notify(mboxevent);
     }
 
     mboxevent_free(&mboxevent);
@@ -452,10 +452,10 @@ static char *index_buildseen(struct index_state *state, const char *oldseenuids)
     struct index_map *im;
     char *out;
 
-    outlist = seqset_init(0, SEQ_MERGE); 
+    outlist = seqset_init(0, SEQ_MERGE);
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
-	seqset_add(outlist, im->uid, im->isseen);
+        im = &state->map[msgno-1];
+        seqset_add(outlist, im->uid, im->isseen);
     }
 
     /* there may be future already seen UIDs that this process isn't
@@ -463,14 +463,14 @@ static char *index_buildseen(struct index_state *state, const char *oldseenuids)
      * a massive pain... */
     oldmax = seq_lastnum(oldseenuids, NULL);
     if (oldmax > state->last_uid) {
-	struct seqset *seq = seqset_parse(oldseenuids, NULL, oldmax);
-	uint32_t uid;
+        struct seqset *seq = seqset_parse(oldseenuids, NULL, oldmax);
+        uint32_t uid;
 
-	/* for each future UID, copy the state in the old seenuids */
-	for (uid = state->last_uid + 1; uid <= oldmax; uid++)
-	    seqset_add(outlist, uid, seqset_ismember(seq, uid));
+        /* for each future UID, copy the state in the old seenuids */
+        for (uid = state->last_uid + 1; uid <= oldmax; uid++)
+            seqset_add(outlist, uid, seqset_ismember(seq, uid));
 
-	seqset_free(seq);
+        seqset_free(seq);
     }
 
     out = seqset_cstring(outlist);
@@ -489,21 +489,21 @@ static int index_writeseen(struct index_state *state)
     const char *userid = (mailbox->i.options & OPT_IMAP_SHAREDSEEN) ? "anyone" : state->userid;
 
     if (!state->seen_dirty)
-	return 0;
+        return 0;
 
     state->seen_dirty = 0;
 
     /* only examining, can't write any changes */
     if (state->examining)
-	return 0;
+        return 0;
 
     /* already handled! Just update the header fields */
     if (state->internalseen) {
-	mailbox_index_dirty(mailbox);
-	mailbox->i.recenttime = time(0);
-	if (mailbox->i.recentuid < state->last_uid)
-	    mailbox->i.recentuid = state->last_uid;
-	return 0;
+        mailbox_index_dirty(mailbox);
+        mailbox->i.recenttime = time(0);
+        if (mailbox->i.recentuid < state->last_uid)
+            mailbox->i.recentuid = state->last_uid;
+        return 0;
     }
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
@@ -511,10 +511,10 @@ static int index_writeseen(struct index_state *state)
 
     r = seen_lockread(seendb, mailbox->uniqueid, &oldsd);
     if (r) {
-	oldsd.lastread = 0;
-	oldsd.lastuid = 0;
-	oldsd.lastchange = 0;
-	oldsd.seenuids = xstrdup("");
+        oldsd.lastread = 0;
+        oldsd.lastuid = 0;
+        oldsd.lastchange = 0;
+        oldsd.seenuids = xstrdup("");
     }
 
     /* fields of interest... */
@@ -528,13 +528,13 @@ static int index_writeseen(struct index_state *state)
 
     /* update \Recent lowmark */
     if (sd.lastuid < state->last_uid)
-	sd.lastuid = state->last_uid;
+        sd.lastuid = state->last_uid;
 
     /* only commit if interesting fields have changed */
     if (!seen_compare(&sd, &oldsd)) {
-	sd.lastread = time(NULL);
-	sd.lastchange = mailbox->i.last_appenddate;
-	r = seen_write(seendb, mailbox->uniqueid, &sd);
+        sd.lastread = time(NULL);
+        sd.lastchange = mailbox->i.last_appenddate;
+        r = seen_write(seendb, mailbox->uniqueid, &sd);
     }
 
     seen_close(&seendb);
@@ -553,34 +553,34 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
 
     /* Obtain seen information */
     if (state->internalseen) {
-	*recentuid = mailbox->i.recentuid;
+        *recentuid = mailbox->i.recentuid;
     }
     else if (state->userid) {
-	struct seen *seendb = NULL;
-	struct seendata sd = SEENDATA_INITIALIZER;
-	const char *userid = (mailbox->i.options & OPT_IMAP_SHAREDSEEN) ? "anyone" : state->userid;
-	int r;
+        struct seen *seendb = NULL;
+        struct seendata sd = SEENDATA_INITIALIZER;
+        const char *userid = (mailbox->i.options & OPT_IMAP_SHAREDSEEN) ? "anyone" : state->userid;
+        int r;
 
-	r = seen_open(userid, SEEN_CREATE, &seendb);
-	if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
-	seen_close(&seendb);
+        r = seen_open(userid, SEEN_CREATE, &seendb);
+        if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+        seen_close(&seendb);
 
-	/* handle no seen DB gracefully */
-	if (r) {
-	    *recentuid = mailbox->i.last_uid;
-	    prot_printf(state->out, "* OK (seen state failure) %s: %s\r\n",
-		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
-	    syslog(LOG_ERR, "Could not open seen state for %s (%s)",
-		   userid, error_message(r));
-	}
-	else {
-	    *recentuid = sd.lastuid;
-	    seenlist = seqset_parse(sd.seenuids, NULL, *recentuid);
-	    seen_freedata(&sd);
-	}
+        /* handle no seen DB gracefully */
+        if (r) {
+            *recentuid = mailbox->i.last_uid;
+            prot_printf(state->out, "* OK (seen state failure) %s: %s\r\n",
+                   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
+            syslog(LOG_ERR, "Could not open seen state for %s (%s)",
+                   userid, error_message(r));
+        }
+        else {
+            *recentuid = sd.lastuid;
+            seenlist = seqset_parse(sd.seenuids, NULL, *recentuid);
+            seen_freedata(&sd);
+        }
     }
     else {
-	*recentuid = mailbox->i.last_uid; /* nothing is recent! */
+        *recentuid = mailbox->i.last_uid; /* nothing is recent! */
     }
 
     return seenlist;
@@ -610,22 +610,22 @@ static void index_refresh_locked(struct index_state *state)
      * end */
 
     if (state->last_uid) {
-	need_records = state->exists + (mailbox->i.last_uid - state->last_uid);
+        need_records = state->exists + (mailbox->i.last_uid - state->last_uid);
     }
     else if (state->want_expunged) {
-	/* could need the lot! */
-	need_records = mailbox->i.num_records;
+        /* could need the lot! */
+        need_records = mailbox->i.num_records;
     }
     else {
-	/* init case */
-	need_records = mailbox->i.exists;
+        /* init case */
+        need_records = mailbox->i.exists;
     }
 
     /* make sure we have space */
     if (need_records >= state->mapsize) {
-	state->mapsize = (need_records | 0xff) + 1; /* round up 1-256 */
-	state->map = xrealloc(state->map,
-			      state->mapsize * sizeof(struct index_map));
+        state->mapsize = (need_records | 0xff) + 1; /* round up 1-256 */
+        state->map = xrealloc(state->map,
+                              state->mapsize * sizeof(struct index_map));
     }
 
     seenlist = _readseen(state, &recentuid);
@@ -633,108 +633,108 @@ static void index_refresh_locked(struct index_state *state)
     /* walk through all records */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((record = mailbox_iter_step(iter))) {
-	im = &state->map[msgno-1];
-	while (msgno <= state->exists && im->uid < record->uid) {
-	    /* NOTE: this same logic is repeated below for messages
-	     * past the end of recno (repack removing the trailing
-	     * records).  Make sure to keep them in sync */
-	    if (!(im->system_flags & FLAG_EXPUNGED)) {
-		/* we don't even know the modseq of when it was wiped,
-		 * but we can be sure it's since the last given highestmodseq,
-		 * so simulate the lowest possible value.  This is fine for
-		 * our told_modseq logic, and doesn't have to be exact because
-		 * QRESYNC/CONDSTORE clients will see deletedmodseq and fall
-		 * back to the inefficient codepath anyway */
-		im->modseq = state->highestmodseq + 1;
-	    }
-	    if (!delayed_modseq || im->modseq < delayed_modseq)
-		delayed_modseq = im->modseq - 1;
-	    im->recno = 0;
-	    /* simulate expunged flag so we get an EXPUNGE response and
-	     * tell about unlinked so we don't get IO errors trying to
-	     * find the file */
-	    im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-	    im = &state->map[msgno++];
+        im = &state->map[msgno-1];
+        while (msgno <= state->exists && im->uid < record->uid) {
+            /* NOTE: this same logic is repeated below for messages
+             * past the end of recno (repack removing the trailing
+             * records).  Make sure to keep them in sync */
+            if (!(im->system_flags & FLAG_EXPUNGED)) {
+                /* we don't even know the modseq of when it was wiped,
+                 * but we can be sure it's since the last given highestmodseq,
+                 * so simulate the lowest possible value.  This is fine for
+                 * our told_modseq logic, and doesn't have to be exact because
+                 * QRESYNC/CONDSTORE clients will see deletedmodseq and fall
+                 * back to the inefficient codepath anyway */
+                im->modseq = state->highestmodseq + 1;
+            }
+            if (!delayed_modseq || im->modseq < delayed_modseq)
+                delayed_modseq = im->modseq - 1;
+            im->recno = 0;
+            /* simulate expunged flag so we get an EXPUNGE response and
+             * tell about unlinked so we don't get IO errors trying to
+             * find the file */
+            im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+            im = &state->map[msgno++];
 
-	    /* this one is expunged */
-	    num_expunged++;
-	}
+            /* this one is expunged */
+            num_expunged++;
+        }
 
-	/* expunged record not in map, can skip immediately.  It's
-	 * never been told to this connection, so it doesn't need to
-	 * get its own msgno */
-	if (!state->want_expunged
-	    && (msgno > state->exists || record->uid < im->uid)
-	    && (record->system_flags & FLAG_EXPUNGED))
-	    continue;
+        /* expunged record not in map, can skip immediately.  It's
+         * never been told to this connection, so it doesn't need to
+         * get its own msgno */
+        if (!state->want_expunged
+            && (msgno > state->exists || record->uid < im->uid)
+            && (record->system_flags & FLAG_EXPUNGED))
+            continue;
 
-	/* make sure our UID map is consistent */
-	if (msgno <= state->exists) {
-	    assert(im->uid == record->uid);
-	}
-	else {
-	    im->uid = record->uid;
-	}
+        /* make sure our UID map is consistent */
+        if (msgno <= state->exists) {
+            assert(im->uid == record->uid);
+        }
+        else {
+            im->uid = record->uid;
+        }
 
-	/* copy all mutable fields */
-	im->recno = record->recno;
-	im->modseq = record->modseq;
-	im->system_flags = record->system_flags;
-	im->cache_offset = record->cache_offset;
-	for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	    im->user_flags[i] = record->user_flags[i];
+        /* copy all mutable fields */
+        im->recno = record->recno;
+        im->modseq = record->modseq;
+        im->system_flags = record->system_flags;
+        im->cache_offset = record->cache_offset;
+        for (i = 0; i < MAX_USER_FLAGS/32; i++)
+            im->user_flags[i] = record->user_flags[i];
 
-	/* for expunged records, just track the modseq */
-	if (im->system_flags & FLAG_EXPUNGED) {
-	    num_expunged++;
-	    /* http://www.rfc-editor.org/errata_search.php?rfc=5162
-	     * Errata ID: 1809 - if there are expunged records we
-	     * aren't telling about, need to make the highestmodseq
-	     * be one lower so the client can safely resync */
-	    if (!delayed_modseq || im->modseq < delayed_modseq)
-		delayed_modseq = im->modseq - 1;
-	}
-	else {
-	    /* re-calculate seen flags */
-	    if (state->internalseen)
-		im->isseen = (im->system_flags & FLAG_SEEN) ? 1 : 0;
-	    else
-		im->isseen = seqset_ismember(seenlist, im->uid) ? 1 : 0;
+        /* for expunged records, just track the modseq */
+        if (im->system_flags & FLAG_EXPUNGED) {
+            num_expunged++;
+            /* http://www.rfc-editor.org/errata_search.php?rfc=5162
+             * Errata ID: 1809 - if there are expunged records we
+             * aren't telling about, need to make the highestmodseq
+             * be one lower so the client can safely resync */
+            if (!delayed_modseq || im->modseq < delayed_modseq)
+                delayed_modseq = im->modseq - 1;
+        }
+        else {
+            /* re-calculate seen flags */
+            if (state->internalseen)
+                im->isseen = (im->system_flags & FLAG_SEEN) ? 1 : 0;
+            else
+                im->isseen = seqset_ismember(seenlist, im->uid) ? 1 : 0;
 
-	    if (msgno > state->exists) {
-		/* don't auto-tell new records */
-		im->told_modseq = im->modseq;
-		if (im->uid > recentuid) {
-		    /* mark recent if it's newly being added to the index and also
-		     * greater than the recentuid - ensures only one session gets
-		     * the \Recent flag for any one message */
-		    im->isrecent = 1;
-		    state->seen_dirty = 1;
-		}
-		else
-		    im->isrecent = 0;
-	    }
+            if (msgno > state->exists) {
+                /* don't auto-tell new records */
+                im->told_modseq = im->modseq;
+                if (im->uid > recentuid) {
+                    /* mark recent if it's newly being added to the index and also
+                     * greater than the recentuid - ensures only one session gets
+                     * the \Recent flag for any one message */
+                    im->isrecent = 1;
+                    state->seen_dirty = 1;
+                }
+                else
+                    im->isrecent = 0;
+            }
 
-	    /* track select values */
-	    if (!im->isseen) {
-		numunseen++;
-		if (!firstnotseen)
-		    firstnotseen = msgno;
-	    }
-	    if (im->isrecent) {
-		numrecent++;
-	    }
-	}
+            /* track select values */
+            if (!im->isseen) {
+                numunseen++;
+                if (!firstnotseen)
+                    firstnotseen = msgno;
+            }
+            if (im->isrecent) {
+                numrecent++;
+            }
+        }
 
-	msgno++;
+        msgno++;
 
-	/* make sure we don't overflow the memory we mapped */
-	if (msgno > state->mapsize) {
-	    char buf[2048];
-	    sprintf(buf, "Exists wrong %u %u %u %u", msgno,
-		    state->mapsize, mailbox->i.exists, mailbox->i.num_records);
-	    fatal(buf, EC_IOERR);
-	}
+        /* make sure we don't overflow the memory we mapped */
+        if (msgno > state->mapsize) {
+            char buf[2048];
+            sprintf(buf, "Exists wrong %u %u %u %u", msgno,
+                    state->mapsize, mailbox->i.exists, mailbox->i.num_records);
+            fatal(buf, EC_IOERR);
+        }
     }
     mailbox_iter_done(&iter);
 
@@ -743,17 +743,17 @@ static void index_refresh_locked(struct index_state *state)
      * later expunge processing */
     im = &state->map[msgno-1];
     while (msgno <= state->exists) {
-	/* this is the same logic as the block above in the main loop,
-	 * see comments up there, and make sure the blocks are kept
-	 * in sync! */
-	if (!(im->system_flags & FLAG_EXPUNGED))
-	    im->modseq = state->highestmodseq + 1;
-	if (!delayed_modseq || im->modseq < delayed_modseq)
-	    delayed_modseq = im->modseq - 1;
-	im->recno = 0;
-	im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-	im = &state->map[msgno++];
-	num_expunged++;
+        /* this is the same logic as the block above in the main loop,
+         * see comments up there, and make sure the blocks are kept
+         * in sync! */
+        if (!(im->system_flags & FLAG_EXPUNGED))
+            im->modseq = state->highestmodseq + 1;
+        if (!delayed_modseq || im->modseq < delayed_modseq)
+            delayed_modseq = im->modseq - 1;
+        im->recno = 0;
+        im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+        im = &state->map[msgno++];
+        num_expunged++;
     }
 
     seqset_free(seenlist);
@@ -776,7 +776,7 @@ static void index_refresh_locked(struct index_state *state)
 EXPORTED modseq_t index_highestmodseq(struct index_state *state)
 {
     if (state->delayed_modseq)
-	return state->delayed_modseq;
+        return state->delayed_modseq;
     return state->highestmodseq;
 }
 
@@ -788,14 +788,14 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     index_checkflags(state, 1, 1);
 
     if (state->firstnotseen)
-	prot_printf(state->out, "* OK [UNSEEN %u] Ok\r\n", 
-		    state->firstnotseen);
+        prot_printf(state->out, "* OK [UNSEEN %u] Ok\r\n",
+                    state->firstnotseen);
     prot_printf(state->out, "* OK [UIDVALIDITY %u] Ok\r\n",
-		state->mailbox->i.uidvalidity);
+                state->mailbox->i.uidvalidity);
     prot_printf(state->out, "* OK [UIDNEXT %lu] Ok\r\n",
-		state->last_uid + 1);
+                state->last_uid + 1);
     prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
-		state->highestmodseq);
+                state->highestmodseq);
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
 
     /*
@@ -805,33 +805,33 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     prot_printf(state->out, "* OK [ANNOTATIONS %u] Ok\r\n", 64*1024);
 
     if (init->vanishedlist) {
-	char *vanished;
-	const char *sequence = NULL;
-	struct seqset *seq = NULL;
-	struct index_map *im;
-	uint32_t msgno;
+        char *vanished;
+        const char *sequence = NULL;
+        struct seqset *seq = NULL;
+        struct index_map *im;
+        uint32_t msgno;
 
-	/* QRESYNC response:
-	 * UID FETCH seq FLAGS (CHANGEDSINCE modseq VANISHED)
-	  */
+        /* QRESYNC response:
+         * UID FETCH seq FLAGS (CHANGEDSINCE modseq VANISHED)
+          */
 
-	vanished = seqset_cstring(init->vanishedlist);
-	if (vanished) {
-	    prot_printf(state->out, "* VANISHED (EARLIER) %s\r\n", vanished);
-	    free(vanished);
-	}
+        vanished = seqset_cstring(init->vanishedlist);
+        if (vanished) {
+            prot_printf(state->out, "* VANISHED (EARLIER) %s\r\n", vanished);
+            free(vanished);
+        }
 
-	sequence = init->vanished.sequence;
-	if (sequence) seq = _parse_sequence(state, sequence, 1);
-	for (msgno = 1; msgno <= state->exists; msgno++) {
-	    im = &state->map[msgno-1];
-	    if (sequence && !seqset_ismember(seq, im->uid))
-		continue;
-	    if (im->modseq <= init->vanished.modseq)
-		continue;
-	    index_printflags(state, msgno, 1, 0);
-	}
-	seqset_free(seq);
+        sequence = init->vanished.sequence;
+        if (sequence) seq = _parse_sequence(state, sequence, 1);
+        for (msgno = 1; msgno <= state->exists; msgno++) {
+            im = &state->map[msgno-1];
+            if (sequence && !seqset_ismember(seq, im->uid))
+                continue;
+            if (im->modseq <= init->vanished.modseq)
+                continue;
+            index_printflags(state, msgno, 1, 0);
+        }
+        seqset_free(seq);
     }
 }
 
@@ -848,28 +848,28 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 
     /* Check for deleted mailbox  */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	/* Mailbox has been (re)moved */
-	if (config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
-	    syslog(LOG_WARNING,
-		   "Mailbox %s has been (re)moved out from under client",
-		   state->mboxname);
-	    mailbox_close(&state->mailbox);
-	    fatal("Mailbox has been (re)moved", EC_IOERR);
-	}
+        /* Mailbox has been (re)moved */
+        if (config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
+            syslog(LOG_WARNING,
+                   "Mailbox %s has been (re)moved out from under client",
+                   state->mboxname);
+            mailbox_close(&state->mailbox);
+            fatal("Mailbox has been (re)moved", EC_IOERR);
+        }
 
-	if (state->exists && (client_capa & CAPA_QRESYNC)) {
-	    /* XXX - is it OK to just expand to entire possible range? */
-	    prot_printf(state->out, "* VANISHED 1:%lu\r\n", state->last_uid);
-	}
-	else {
-	    int exists;
-	    for (exists = state->exists; exists > 0; exists--) {
-		prot_printf(state->out, "* 1 EXPUNGE\r\n");
-	    }
-	}
+        if (state->exists && (client_capa & CAPA_QRESYNC)) {
+            /* XXX - is it OK to just expand to entire possible range? */
+            prot_printf(state->out, "* VANISHED 1:%lu\r\n", state->last_uid);
+        }
+        else {
+            int exists;
+            for (exists = state->exists; exists > 0; exists--) {
+                prot_printf(state->out, "* 1 EXPUNGE\r\n");
+            }
+        }
 
-	state->exists = 0;
-	return IMAP_MAILBOX_NONEXISTENT;
+        state->exists = 0;
+        return IMAP_MAILBOX_NONEXISTENT;
     }
 
     if (r) return r;
@@ -878,12 +878,12 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 
 #if TOIMSP
     if (state->firstnotseen) {
-	toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
-	       0, state->mailbox->i.recenttime, 0);
+        toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
+               0, state->mailbox->i.recenttime, 0);
     }
     else {
-	toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
-	       state->mailbox->last_uid, state->mailbox->i.recenttime, 0);
+        toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
+               state->mailbox->last_uid, state->mailbox->i.recenttime, 0);
     }
 #endif
 
@@ -896,7 +896,7 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
  * Perform UID FETCH (VANISHED) on a sequence.
  */
 struct seqset *index_vanished(struct index_state *state,
-			      struct vanished_params *params)
+                              struct vanished_params *params)
 {
     struct mailbox *mailbox = state->mailbox;
     struct seqset *outlist;
@@ -904,10 +904,10 @@ struct seqset *index_vanished(struct index_state *state,
 
     /* check uidvalidity match */
     if (params->uidvalidity_is_max) {
-	if (params->uidvalidity < mailbox->i.uidvalidity) return NULL;
+        if (params->uidvalidity < mailbox->i.uidvalidity) return NULL;
     }
     else {
-	if (params->uidvalidity != mailbox->i.uidvalidity) return NULL;
+        if (params->uidvalidity != mailbox->i.uidvalidity) return NULL;
     }
 
     /* No recently expunged messages */
@@ -919,74 +919,74 @@ struct seqset *index_vanished(struct index_state *state,
     /* XXX - use match_seq and match_uid */
 
     if (params->modseq >= mailbox->i.deletedmodseq) {
-	/* all records are significant */
-	/* List only expunged UIDs with MODSEQ > requested */
-	const struct index_record *record;
-	struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, 0);
-	while ((record = mailbox_iter_step(iter))) {
-	    if (!(record->system_flags & FLAG_EXPUNGED))
-		continue;
-	    if (!params->sequence || seqset_ismember(seq, record->uid))
-		seqset_add(outlist, record->uid, 1);
-	}
-	mailbox_iter_done(&iter);
+        /* all records are significant */
+        /* List only expunged UIDs with MODSEQ > requested */
+        const struct index_record *record;
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, 0);
+        while ((record = mailbox_iter_step(iter))) {
+            if (!(record->system_flags & FLAG_EXPUNGED))
+                continue;
+            if (!params->sequence || seqset_ismember(seq, record->uid))
+                seqset_add(outlist, record->uid, 1);
+        }
+        mailbox_iter_done(&iter);
     }
     else {
-	unsigned prevuid = 0;
-	struct seqset *msgnolist;
-	struct seqset *uidlist;
-	uint32_t msgno;
-	unsigned uid;
+        unsigned prevuid = 0;
+        struct seqset *msgnolist;
+        struct seqset *uidlist;
+        uint32_t msgno;
+        unsigned uid;
 
-	syslog(LOG_NOTICE, "inefficient qresync ("
-	       MODSEQ_FMT " > " MODSEQ_FMT ") %s",
-	       mailbox->i.deletedmodseq, params->modseq,
-	       mailbox->name);
+        syslog(LOG_NOTICE, "inefficient qresync ("
+               MODSEQ_FMT " > " MODSEQ_FMT ") %s",
+               mailbox->i.deletedmodseq, params->modseq,
+               mailbox->name);
 
-	/* use the sequence to uid mapping provided by the client to
-	 * skip over any initial matches - see RFC 5162 section 3.1 */
-	if (params->match_seq && params->match_uid) {
-	    msgnolist = _parse_sequence(state, params->match_seq, 0);
-	    uidlist = _parse_sequence(state, params->match_uid, 1);
-	    while ((msgno = seqset_getnext(msgnolist)) != 0) {
-		uid = seqset_getnext(uidlist);
-		/* first non-match, we'll start here */
-		if (state->map[msgno-1].uid != uid)
-		    break;
-		/* ok, they matched - so we can start after here */
-		prevuid = uid;
-	    }
-	    seqset_free(msgnolist);
-	    seqset_free(uidlist);
-	}
+        /* use the sequence to uid mapping provided by the client to
+         * skip over any initial matches - see RFC 5162 section 3.1 */
+        if (params->match_seq && params->match_uid) {
+            msgnolist = _parse_sequence(state, params->match_seq, 0);
+            uidlist = _parse_sequence(state, params->match_uid, 1);
+            while ((msgno = seqset_getnext(msgnolist)) != 0) {
+                uid = seqset_getnext(uidlist);
+                /* first non-match, we'll start here */
+                if (state->map[msgno-1].uid != uid)
+                    break;
+                /* ok, they matched - so we can start after here */
+                prevuid = uid;
+            }
+            seqset_free(msgnolist);
+            seqset_free(uidlist);
+        }
 
-	const struct index_record *record;
-	struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, ITER_SKIP_EXPUNGED);
-	mailbox_iter_startuid(iter, prevuid);
+        const struct index_record *record;
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, ITER_SKIP_EXPUNGED);
+        mailbox_iter_startuid(iter, prevuid);
 
-	/* possible efficiency improvement - use "seq_getnext" on seq
-	 * to avoid incrementing through every single number for prevuid.
-	 * Only really an issue if there's a giant block of thousands of
-	 * expunged messages.  Only likely to be seen in the wild if
-	 * last_uid winds up being bumped up a few million by a bug... */
+        /* possible efficiency improvement - use "seq_getnext" on seq
+         * to avoid incrementing through every single number for prevuid.
+         * Only really an issue if there's a giant block of thousands of
+         * expunged messages.  Only likely to be seen in the wild if
+         * last_uid winds up being bumped up a few million by a bug... */
 
-	/* for the rest of the mailbox, we're just going to have to assume
-	 * every record in the requested range which DOESN'T exist has been
-	 * expunged, so build a complete sequence */
-	while ((record = mailbox_iter_step(iter))) {
-	    while (++prevuid < record->uid) {
-		if (!params->sequence || seqset_ismember(seq, prevuid))
-		    seqset_add(outlist, prevuid, 1);
-	    }
-	    prevuid = record->uid;
-	}
-	mailbox_iter_done(&iter);
+        /* for the rest of the mailbox, we're just going to have to assume
+         * every record in the requested range which DOESN'T exist has been
+         * expunged, so build a complete sequence */
+        while ((record = mailbox_iter_step(iter))) {
+            while (++prevuid < record->uid) {
+                if (!params->sequence || seqset_ismember(seq, prevuid))
+                    seqset_add(outlist, prevuid, 1);
+            }
+            prevuid = record->uid;
+        }
+        mailbox_iter_done(&iter);
 
-	/* include the space past the final record up to last_uid as well */
-	while (++prevuid <= mailbox->i.last_uid) {
-	    if (!params->sequence || seqset_ismember(seq, prevuid))
-		seqset_add(outlist, prevuid, 1);
-	}
+        /* include the space past the final record up to last_uid as well */
+        while (++prevuid <= mailbox->i.last_uid) {
+            if (!params->sequence || seqset_ismember(seq, prevuid))
+                seqset_add(outlist, prevuid, 1);
+        }
     }
 
     seqset_free(seq);
@@ -995,8 +995,8 @@ struct seqset *index_vanished(struct index_state *state,
 }
 
 static int _fetch_setseen(struct index_state *state,
-			  struct mboxevent *mboxevent,
-			  uint32_t msgno)
+                          struct mboxevent *mboxevent,
+                          uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
@@ -1004,11 +1004,11 @@ static int _fetch_setseen(struct index_state *state,
 
     /* already seen */
     if (im->isseen)
-	return 0;
+        return 0;
 
     /* no rights to change it */
     if (!(state->myrights & ACL_SETSEEN))
-	return 0;
+        return 0;
 
     r = index_reload_record(state, msgno, &record);
     if (r) return r;
@@ -1020,7 +1020,7 @@ static int _fetch_setseen(struct index_state *state,
 
     /* also store in the record if it's internal seen */
     if (state->internalseen)
-	record.system_flags |= FLAG_SEEN;
+        record.system_flags |= FLAG_SEEN;
 
     /* need to bump modseq anyway, so always rewrite it */
     r = index_rewrite_record(state, msgno, &record);
@@ -1040,10 +1040,10 @@ static int _fetch_setseen(struct index_state *state,
 
 /* seq can be NULL - means "ALL" */
 EXPORTED void index_fetchresponses(struct index_state *state,
-			  struct seqset *seq,
-			  int usinguid,
-			  const struct fetchargs *fetchargs,
-			  int *fetchedsomething)
+                          struct seqset *seq,
+                          int usinguid,
+                          const struct fetchargs *fetchargs,
+                          int *fetchedsomething)
 {
     uint32_t msgno, start, end;
     struct index_map *im;
@@ -1053,28 +1053,28 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
-	annotate_getdb(state->mboxname, &annot_db);
+        annotate_getdb(state->mboxname, &annot_db);
 
     start = 1;
     end = state->exists;
 
     /* compress the search range down if a sequence was given */
     if (seq) {
-	unsigned first = seqset_first(seq);
-	unsigned last = seqset_last(seq);
+        unsigned first = seqset_first(seq);
+        unsigned last = seqset_last(seq);
 
-	if (usinguid) {
-	    if (first > 1)
-		start = index_finduid(state, first);
-	    if (first == last)
-		end = start;
-	    else if (last < state->last_uid)
-		end = index_finduid(state, last);
-	}
-	else {
-	    start = first;
-	    end = last;
-	}
+        if (usinguid) {
+            if (first > 1)
+                start = index_finduid(state, first);
+            if (first == last)
+                end = start;
+            else if (last < state->last_uid)
+                end = index_finduid(state, last);
+        }
+        else {
+            start = first;
+            end = last;
+        }
     }
 
     /* make sure we didn't go outside the range! */
@@ -1082,12 +1082,12 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     if (end > state->exists) end = state->exists;
 
     for (msgno = start; msgno <= end; msgno++) {
-	im = &state->map[msgno-1];
-	if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno))
-	    continue;
-	if (index_fetchreply(state, msgno, fetchargs))
-	    break;
-	fetched = 1;
+        im = &state->map[msgno-1];
+        if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno))
+            continue;
+        if (index_fetchreply(state, msgno, fetchargs))
+            break;
+        fetched = 1;
     }
 
     if (fetchedsomething) *fetchedsomething = fetched;
@@ -1101,10 +1101,10 @@ EXPORTED void index_fetchresponses(struct index_state *state,
  * command.)
  */
 EXPORTED int index_fetch(struct index_state *state,
-		const char *sequence,
-		int usinguid,
-		const struct fetchargs *fetchargs,
-		int *fetchedsomething)
+                const char *sequence,
+                int usinguid,
+                const struct fetchargs *fetchargs,
+                int *fetchedsomething)
 {
     struct seqset *seq;
     struct seqset *vanishedlist = NULL;
@@ -1120,31 +1120,31 @@ EXPORTED int index_fetch(struct index_state *state,
 
     /* set the \Seen flag if necessary - while we still have the lock */
     if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining && state->myrights & ACL_SETSEEN) {
-	mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
+        mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
 
-	for (msgno = 1; msgno <= state->exists; msgno++) {
-	    im = &state->map[msgno-1];
-	    if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
-		continue;
-	    r = _fetch_setseen(state, mboxevent, msgno);
-	    if (r) break;
-	}
+        for (msgno = 1; msgno <= state->exists; msgno++) {
+            im = &state->map[msgno-1];
+            if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
+                continue;
+            r = _fetch_setseen(state, mboxevent, msgno);
+            if (r) break;
+        }
 
-	mboxevent_extract_mailbox(mboxevent, state->mailbox);
-	mboxevent_set_access(mboxevent, NULL, NULL, state->userid, state->mailbox->name, 1);
-	mboxevent_set_numunseen(mboxevent, state->mailbox,
-				state->numunseen);
+        mboxevent_extract_mailbox(mboxevent, state->mailbox);
+        mboxevent_set_access(mboxevent, NULL, NULL, state->userid, state->mailbox->name, 1);
+        mboxevent_set_numunseen(mboxevent, state->mailbox,
+                                state->numunseen);
     }
 
     if (fetchargs->vanished) {
-	struct vanished_params v;
-	v.sequence = sequence;;
-	v.uidvalidity = state->mailbox->i.uidvalidity;
-	v.modseq = fetchargs->changedsince;
-	v.match_seq = fetchargs->match_seq;
-	v.match_uid = fetchargs->match_uid;
-	/* XXX - return error unless usinguid? */
-	vanishedlist = index_vanished(state, &v);
+        struct vanished_params v;
+        v.sequence = sequence;;
+        v.uidvalidity = state->mailbox->i.uidvalidity;
+        v.modseq = fetchargs->changedsince;
+        v.match_seq = fetchargs->match_seq;
+        v.match_uid = fetchargs->match_uid;
+        /* XXX - return error unless usinguid? */
+        vanishedlist = index_vanished(state, &v);
     }
 
     index_unlock(state);
@@ -1156,9 +1156,9 @@ EXPORTED int index_fetch(struct index_state *state,
     index_checkflags(state, 1, 0);
 
     if (vanishedlist && vanishedlist->len) {
-	char *vanished = seqset_cstring(vanishedlist);
-	prot_printf(state->out, "* VANISHED (EARLIER) %s\r\n", vanished);
-	free(vanished);
+        char *vanished = seqset_cstring(vanishedlist);
+        prot_printf(state->out, "* VANISHED (EARLIER) %s\r\n", vanished);
+        free(vanished);
     }
 
     seqset_free(vanishedlist);
@@ -1176,7 +1176,7 @@ EXPORTED int index_fetch(struct index_state *state,
  * Perform a STORE command on a sequence
  */
 EXPORTED int index_store(struct index_state *state, char *sequence,
-			 struct storeargs *storeargs)
+                         struct storeargs *storeargs)
 {
     struct mailbox *mailbox;
     int i, r = 0;
@@ -1192,11 +1192,11 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 
     /* First pass at checking permission */
     if ((storeargs->seen && !(state->myrights & ACL_SETSEEN)) ||
-	((storeargs->system_flags & FLAG_DELETED) &&
-	 !(state->myrights & ACL_DELETEMSG)) ||
-	(((storeargs->system_flags & ~FLAG_DELETED) || flags->count) &&
-	 !(state->myrights & ACL_WRITE))) {
-	return IMAP_PERMISSION_DENIED;
+        ((storeargs->system_flags & FLAG_DELETED) &&
+         !(state->myrights & ACL_DELETEMSG)) ||
+        (((storeargs->system_flags & ~FLAG_DELETED) || flags->count) &&
+         !(state->myrights & ACL_WRITE))) {
+        return IMAP_PERMISSION_DENIED;
     }
 
     r = index_lock(state);
@@ -1207,76 +1207,76 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     seq = _parse_sequence(state, sequence, storeargs->usinguid);
 
     for (i = 0; i < flags->count ; i++) {
-	r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
-	if (r) goto out;
-	storeargs->user_flags[userflag/32] |= 1<<(userflag&31);
+        r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
+        if (r) goto out;
+        storeargs->user_flags[userflag/32] |= 1<<(userflag&31);
     }
 
     storeargs->update_time = time((time_t *)0);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
-	if (!seqset_ismember(seq, storeargs->usinguid ? im->uid : msgno))
-	    continue;
+        im = &state->map[msgno-1];
+        if (!seqset_ismember(seq, storeargs->usinguid ? im->uid : msgno))
+            continue;
 
-	/* if it's expunged already, skip it now */
-	if ((im->system_flags & FLAG_EXPUNGED))
-	    continue;
+        /* if it's expunged already, skip it now */
+        if ((im->system_flags & FLAG_EXPUNGED))
+            continue;
 
-	/* if it's changed already, skip it now */
-	if (im->modseq > storeargs->unchangedsince) {
-	    if (!storeargs->modified) {
-		uint32_t maxval = (storeargs->usinguid ?
-				   state->last_uid : state->exists);
-		storeargs->modified = seqset_init(maxval, SEQ_SPARSE);
-	    }
-	    seqset_add(storeargs->modified,
-		       (storeargs->usinguid ? im->uid : msgno),
-		       /*ismember*/1);
-	    continue;
-	}
+        /* if it's changed already, skip it now */
+        if (im->modseq > storeargs->unchangedsince) {
+            if (!storeargs->modified) {
+                uint32_t maxval = (storeargs->usinguid ?
+                                   state->last_uid : state->exists);
+                storeargs->modified = seqset_init(maxval, SEQ_SPARSE);
+            }
+            seqset_add(storeargs->modified,
+                       (storeargs->usinguid ? im->uid : msgno),
+                       /*ismember*/1);
+            continue;
+        }
 
-	r = index_reload_record(state, msgno, &record);
-	if (r) goto out;
+        r = index_reload_record(state, msgno, &record);
+        if (r) goto out;
 
-	switch (storeargs->operation) {
-	case STORE_ADD_FLAGS:
-	case STORE_REMOVE_FLAGS:
-	case STORE_REPLACE_FLAGS:
-	    r = index_storeflag(state, &modified_flags, msgno, &record, storeargs);
-	    if (r)
-		break;
+        switch (storeargs->operation) {
+        case STORE_ADD_FLAGS:
+        case STORE_REMOVE_FLAGS:
+        case STORE_REPLACE_FLAGS:
+            r = index_storeflag(state, &modified_flags, msgno, &record, storeargs);
+            if (r)
+                break;
 
-	    if (modified_flags.added_flags) {
-		if (flagsset == NULL)
-		    flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, &mboxevents);
+            if (modified_flags.added_flags) {
+                if (flagsset == NULL)
+                    flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, &mboxevents);
 
-		mboxevent_add_flags(flagsset, mailbox->flagname,
-		                    modified_flags.added_system_flags,
-		                    modified_flags.added_user_flags);
-		mboxevent_extract_record(flagsset, mailbox, &record);
-	    }
-	    if (modified_flags.removed_flags) {
-		if (flagsclear == NULL)
-		    flagsclear = mboxevent_enqueue(EVENT_FLAGS_CLEAR, &mboxevents);
+                mboxevent_add_flags(flagsset, mailbox->flagname,
+                                    modified_flags.added_system_flags,
+                                    modified_flags.added_user_flags);
+                mboxevent_extract_record(flagsset, mailbox, &record);
+            }
+            if (modified_flags.removed_flags) {
+                if (flagsclear == NULL)
+                    flagsclear = mboxevent_enqueue(EVENT_FLAGS_CLEAR, &mboxevents);
 
-		mboxevent_add_flags(flagsclear, mailbox->flagname,
-		                    modified_flags.removed_system_flags,
-		                    modified_flags.removed_user_flags);
-		mboxevent_extract_record(flagsclear, mailbox, &record);
-	    }
+                mboxevent_add_flags(flagsclear, mailbox->flagname,
+                                    modified_flags.removed_system_flags,
+                                    modified_flags.removed_user_flags);
+                mboxevent_extract_record(flagsclear, mailbox, &record);
+            }
 
-	    break;
+            break;
 
-	case STORE_ANNOTATION:
-	    r = index_store_annotation(state, msgno, storeargs);
-	    break;
+        case STORE_ANNOTATION:
+            r = index_store_annotation(state, msgno, storeargs);
+            break;
 
-	default:
-	    r = IMAP_INTERNAL;
-	    break;
-	}
-	if (r) goto out;
+        default:
+            r = IMAP_INTERNAL;
+            break;
+        }
+        if (r) goto out;
     }
 
     /* let mboxevent_notify split FlagsSet into MessageRead, MessageTrash
@@ -1293,18 +1293,18 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     mboxevent_freequeue(&mboxevents);
 out:
     if (storeargs->operation == STORE_ANNOTATION && r)
-	annotate_state_abort(&mailbox->annot_state);
+        annotate_state_abort(&mailbox->annot_state);
     seqset_free(seq);
     index_unlock(state);
     index_tellchanges(state, storeargs->usinguid, storeargs->usinguid,
-		      (storeargs->unchangedsince != ~0ULL));
+                      (storeargs->unchangedsince != ~0ULL));
 
     return r;
 }
 
 static void prefetch_messages(struct index_state *state,
-			      struct seqset *seq,
-			      int usinguid)
+                              struct seqset *seq,
+                              int usinguid)
 {
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im;
@@ -1315,18 +1315,18 @@ static void prefetch_messages(struct index_state *state,
     syslog(LOG_ERR, "Prefetching initial parts of messages\n");
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
-	if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
-	    continue;
+        im = &state->map[msgno-1];
+        if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
+            continue;
 
-	if (index_reload_record(state, msgno, &record))
-	    continue;
+        if (index_reload_record(state, msgno, &record))
+            continue;
 
-	fname = mailbox_record_fname(mailbox, &record);
-	if (!fname)
-	    continue;
+        fname = mailbox_record_fname(mailbox, &record);
+        if (!fname)
+            continue;
 
-	warmup_file(fname, 0, 16384);
+        warmup_file(fname, 0, 16384);
     }
 }
 
@@ -1336,8 +1336,8 @@ static void prefetch_messages(struct index_state *state,
  * annotator callout for each message in the given sequence.
  */
 EXPORTED int index_run_annotator(struct index_state *state,
-			const char *sequence, int usinguid,
-			struct namespace *namespace, int isadmin)
+                        const char *sequence, int usinguid,
+                        struct namespace *namespace, int isadmin)
 {
     struct index_record record;
     struct seqset *seq = NULL;
@@ -1350,17 +1350,17 @@ EXPORTED int index_run_annotator(struct index_state *state,
      * to account for the EXAMINE command where state->myrights has
      * fewer rights than the ACL actually grants */
     if (!(state->myrights & (ACL_WRITE|ACL_ANNOTATEMSG)))
-	return IMAP_PERMISSION_DENIED;
+        return IMAP_PERMISSION_DENIED;
 
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
-	return 0;
+        return 0;
 
     r = index_lock(state);
     if (r) return r;
 
     r = append_setup_mbox(&as, state->mailbox,
-			  state->userid, state->authstate,
-			  0, NULL, namespace, isadmin, 0);
+                          state->userid, state->authstate,
+                          0, NULL, namespace, isadmin, 0);
     if (r) goto out;
 
     seq = _parse_sequence(state, sequence, usinguid);
@@ -1369,32 +1369,32 @@ EXPORTED int index_run_annotator(struct index_state *state,
     prefetch_messages(state, seq, usinguid);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
-	if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
-	    continue;
+        im = &state->map[msgno-1];
+        if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
+            continue;
 
-	/* if it's expunged already, skip it now */
-	if ((im->system_flags & FLAG_EXPUNGED))
-	    continue;
+        /* if it's expunged already, skip it now */
+        if ((im->system_flags & FLAG_EXPUNGED))
+            continue;
 
-	r = index_reload_record(state, msgno, &record);
-	if (r) goto out;
+        r = index_reload_record(state, msgno, &record);
+        if (r) goto out;
 
-	r = append_run_annotator(&as, &record);
-	if (r) goto out;
+        r = append_run_annotator(&as, &record);
+        if (r) goto out;
 
-	r = index_rewrite_record(state, msgno, &record);
-	if (r) goto out;
+        r = index_rewrite_record(state, msgno, &record);
+        if (r) goto out;
     }
 
 out:
     seqset_free(seq);
 
     if (!r) {
-	r = append_commit(&as);
+        r = append_commit(&as);
     }
     else {
-	append_abort(&as);
+        append_abort(&as);
     }
     index_unlock(state);
 
@@ -1404,8 +1404,8 @@ out:
 }
 
 EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
-			  unsigned int warmup_flags,
-			  struct seqset *uids)
+                          unsigned int warmup_flags,
+                          struct seqset *uids)
 {
     const char *fname = NULL;
     char *tofree1 = NULL;
@@ -1416,51 +1416,51 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
     int r = 0;
 
     if (warmup_flags & WARMUP_INDEX) {
-	fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_INDEX, 0);
-	r = warmup_file(fname, 0, 0);
-	if (r) goto out;
+        fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_INDEX, 0);
+        r = warmup_file(fname, 0, 0);
+        if (r) goto out;
     }
     if (warmup_flags & WARMUP_CONVERSATIONS) {
-	if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
-	    fname = tofree1 = conversations_getmboxpath(mbentry->name);
-	    r = warmup_file(fname, 0, 0);
-	    if (r) goto out;
-	}
+        if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
+            fname = tofree1 = conversations_getmboxpath(mbentry->name);
+            r = warmup_file(fname, 0, 0);
+            if (r) goto out;
+        }
     }
     if (warmup_flags & WARMUP_ANNOTATIONS) {
-	fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_ANNOTATIONS, 0);
-	r = warmup_file(fname, 0, 0);
-	if (r) goto out;
+        fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_ANNOTATIONS, 0);
+        r = warmup_file(fname, 0, 0);
+        if (r) goto out;
     }
     if (warmup_flags & WARMUP_FOLDERSTATUS) {
-	if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-	    fname = tofree2 = statuscache_filename();
-	    r = warmup_file(fname, 0, 0);
-	    if (r) goto out;
-	}
+        if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+            fname = tofree2 = statuscache_filename();
+            r = warmup_file(fname, 0, 0);
+            if (r) goto out;
+        }
     }
     if (warmup_flags & WARMUP_SEARCH) {
-	const char *userid = mboxname_to_userid(mbentry->name);
-	r = search_list_files(userid, &files);
-	if (r) goto out;
-	for (i = 0 ; i < files.count ; i++) {
-	    fname = strarray_nth(&files, i);
-	    r = warmup_file(fname, 0, 0);
-	    if (r) goto out;
-	}
+        const char *userid = mboxname_to_userid(mbentry->name);
+        r = search_list_files(userid, &files);
+        if (r) goto out;
+        for (i = 0 ; i < files.count ; i++) {
+            fname = strarray_nth(&files, i);
+            r = warmup_file(fname, 0, 0);
+            if (r) goto out;
+        }
     }
     while ((uid = seqset_getnext(uids))) {
-	fname = mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, uid);
-	r = warmup_file(fname, 0, 0);
-	if (r) goto out;
+        fname = mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, uid);
+        r = warmup_file(fname, 0, 0);
+        if (r) goto out;
     }
 
 out:
     if (r == ENOENT || r == ENOSYS)
-	r = 0;
+        r = 0;
     if (r)
-	syslog(LOG_ERR, "IOERROR: unable to warmup file %s: %s",
-		fname, error_message(r));
+        syslog(LOG_ERR, "IOERROR: unable to warmup file %s: %s",
+                fname, error_message(r));
     free(tofree1);
     free(tofree2);
     strarray_fini(&files);
@@ -1468,9 +1468,9 @@ out:
 }
 
 static void build_query(search_builder_t *bx,
-			search_expr_t *e,
-			int remove,
-			int *nmatchesp)
+                        search_expr_t *e,
+                        int remove,
+                        int *nmatchesp)
 {
     search_expr_t *child;
     int bop = -1;
@@ -1478,49 +1478,49 @@ static void build_query(search_builder_t *bx,
     switch (e->op) {
 
     case SEOP_NOT:
-	bop = SEARCH_OP_NOT;
-	break;
+        bop = SEARCH_OP_NOT;
+        break;
 
     case SEOP_AND:
-	bop = SEARCH_OP_AND;
-	break;
+        bop = SEARCH_OP_AND;
+        break;
 
     case SEOP_OR:
-	bop = SEARCH_OP_OR;
-	break;
+        bop = SEARCH_OP_OR;
+        break;
 
     case SEOP_FUZZYMATCH:
-	if (e->attr && e->attr->part >= 0) {
-	    bx->match(bx, e->attr->part, e->value.s);
-	    (*nmatchesp)++;
-	    if (remove && e->attr->part != SEARCH_PART_HEADERS) {
-		/*
-		 * We're relying on the search engine to correctly
-		 * find matching messages, so we don't need to
-		 * keep this node in the expression tree anymore.
-		 * Rather than remove it we neuter it.
-		 */
-		search_expr_neutralise(e);
-	    }
-	}
-	return;
+        if (e->attr && e->attr->part >= 0) {
+            bx->match(bx, e->attr->part, e->value.s);
+            (*nmatchesp)++;
+            if (remove && e->attr->part != SEARCH_PART_HEADERS) {
+                /*
+                 * We're relying on the search engine to correctly
+                 * find matching messages, so we don't need to
+                 * keep this node in the expression tree anymore.
+                 * Rather than remove it we neuter it.
+                 */
+                search_expr_neutralise(e);
+            }
+        }
+        return;
 
     default:
-	return;
+        return;
     }
 
     if (e->children) {
-	assert(bop != -1);
-	bx->begin_boolean(bx, bop);
-	for (child = e->children ; child ; child = child->next)
-	    build_query(bx, child, remove, nmatchesp);
-	bx->end_boolean(bx, bop);
+        assert(bop != -1);
+        bx->begin_boolean(bx, bop);
+        for (child = e->children ; child ; child = child->next)
+            build_query(bx, child, remove, nmatchesp);
+        bx->end_boolean(bx, bop);
     }
 }
 
 static int index_prefilter_messages(unsigned* msg_list,
-				    struct index_state *state,
-				    struct searchargs *searchargs __attribute((unused)))
+                                    struct index_state *state,
+                                    struct searchargs *searchargs __attribute((unused)))
 {
     unsigned int msgno;
 
@@ -1530,13 +1530,13 @@ static int index_prefilter_messages(unsigned* msg_list,
      * search. */
 
     for (msgno = 1; msgno <= state->exists; msgno++)
-	msg_list[msgno-1] = msgno;
+        msg_list[msgno-1] = msgno;
 
     return state->exists;
 }
 
 static int index_scan_work(const char *s, unsigned long len,
-			   const char *match, unsigned long min)
+                           const char *match, unsigned long min)
 {
     while (len > min) {
         if (!strncasecmp(s, match, min)) return(1);
@@ -1565,7 +1565,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     if (!(contents && contents[0])) return(0);
 
     if (index_check(state, 0, 0))
-	return 0;
+        return 0;
 
     if (state->exists <= 0) return 0;
 
@@ -1577,7 +1577,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
 
     /* Use US-ASCII to emulate fgrep */
     searchargs.root->value.s = charset_convert(contents, charset_lookupname("US-ASCII"),
-				charset_flags);
+                                charset_flags);
 
     search_expr_internalise(state, searchargs.root);
 
@@ -1586,19 +1586,19 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     listcount = index_prefilter_messages(msgno_list, state, &searchargs);
 
     for (listindex = 0; !n && listindex < listcount; listindex++) {
-	struct buf buf = BUF_INITIALIZER;
-	struct index_record record;
-	msgno = msgno_list[listindex];
+        struct buf buf = BUF_INITIALIZER;
+        struct index_record record;
+        msgno = msgno_list[listindex];
 
-	if (index_reload_record(state, msgno, &record))
-	    continue;
+        if (index_reload_record(state, msgno, &record))
+            continue;
 
-	if (mailbox_map_record(mailbox, &record, &buf))
-	    continue;
+        if (mailbox_map_record(mailbox, &record, &buf))
+            continue;
 
-	n += index_scan_work(buf.s, buf.len, contents, length);
+        n += index_scan_work(buf.s, buf.len, contents, length);
 
-	buf_free(&buf);
+        buf_free(&buf);
     }
 
     search_expr_free(searchargs.root);
@@ -1615,9 +1615,9 @@ EXPORTED message_t *index_get_message(struct index_state *state, uint32_t msgno)
     if (im->isseen) indexflags |= MESSAGE_SEEN;
     if (im->isrecent) indexflags |= MESSAGE_RECENT;
     if (index_reload_record(state, msgno, &record))
-	return NULL;
+        return NULL;
     return message_new_from_index(state->mailbox, &record,
-				  msgno, indexflags);
+                                  msgno, indexflags);
 }
 
 EXPORTED uint32_t index_getuid(struct index_state *state, uint32_t msgno)
@@ -1629,8 +1629,8 @@ EXPORTED uint32_t index_getuid(struct index_state *state, uint32_t msgno)
 /* 'uid_list' is malloc'd string representing the hits from searchargs;
    returns number of hits */
 EXPORTED int index_getuidsequence(struct index_state *state,
-			 struct searchargs *searchargs,
-			 unsigned **uid_list)
+                         struct searchargs *searchargs,
+                         unsigned **uid_list)
 {
     search_query_t *query = NULL;
     search_folder_t *folder = NULL;
@@ -1655,36 +1655,36 @@ static int index_lock(struct index_state *state)
     int r;
 
     if (state->mailbox) {
-	if (state->examining) {
-	    r = mailbox_lock_index(state->mailbox, LOCK_SHARED);
-	    if (r) return r;
-	}
-	else {
-	    r = mailbox_lock_index(state->mailbox, LOCK_EXCLUSIVE);
-	    if (r) return r;
-	}
+        if (state->examining) {
+            r = mailbox_lock_index(state->mailbox, LOCK_SHARED);
+            if (r) return r;
+        }
+        else {
+            r = mailbox_lock_index(state->mailbox, LOCK_EXCLUSIVE);
+            if (r) return r;
+        }
     }
     else {
-	if (state->examining) {
-	    r = mailbox_open_irl(state->mboxname, &state->mailbox);
-	    if (r) return r;
-	}
-	else {
-	    r = mailbox_open_iwl(state->mboxname, &state->mailbox);
-	    if (r) return r;
-	}
+        if (state->examining) {
+            r = mailbox_open_irl(state->mboxname, &state->mailbox);
+            if (r) return r;
+        }
+        else {
+            r = mailbox_open_iwl(state->mboxname, &state->mailbox);
+            if (r) return r;
+        }
     }
 
     /* if the UIDVALIDITY has changed, treat as a delete */
     if (state->mailbox->i.uidvalidity != state->uidvalidity) {
-	mailbox_close(&state->mailbox);
-	return IMAP_MAILBOX_NONEXISTENT;
+        mailbox_close(&state->mailbox);
+        return IMAP_MAILBOX_NONEXISTENT;
     }
 
     /* if highestmodseq has changed or file is repacked, read updates */
     if (state->highestmodseq != state->mailbox->i.highestmodseq
-	|| state->generation != state->mailbox->i.generation_no)
-	index_refresh_locked(state);
+        || state->generation != state->mailbox->i.generation_no)
+        index_refresh_locked(state);
 
     return 0;
 }
@@ -1692,14 +1692,14 @@ static int index_lock(struct index_state *state)
 EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
     int items = STATUS_MESSAGES | STATUS_UIDNEXT | STATUS_UIDVALIDITY |
-		STATUS_HIGHESTMODSEQ | STATUS_RECENT | STATUS_UNSEEN;
+                STATUS_HIGHESTMODSEQ | STATUS_RECENT | STATUS_UNSEEN;
     int r;
 
     r = index_lock(state);
     if (r) return r;
 
     statuscache_fill(sdata, state->userid, state->mailbox, items,
-		     state->numrecent, state->numunseen);
+                     state->numrecent, state->numunseen);
 
     index_unlock(state);
     return 0;
@@ -1735,17 +1735,17 @@ static void index_unlock(struct index_state *state)
  * the highest mod-sequence for all messages being returned.
  */
 static int needs_modseq(const struct searchargs *searchargs,
-			const struct sortcrit *sortcrit)
+                        const struct sortcrit *sortcrit)
 {
     int i;
 
     if (search_expr_uses_attr(searchargs->root, "modseq"))
-	return 1;
+        return 1;
 
     if (sortcrit) {
-	for (i = 0 ; sortcrit[i].key != SORT_SEQUENCE ; i++)
-	    if (sortcrit[i].key == SORT_MODSEQ)
-		return 1;
+        for (i = 0 ; sortcrit[i].key != SORT_SEQUENCE ; i++)
+            if (sortcrit[i].key == SORT_MODSEQ)
+                return 1;
     }
 
     return 0;
@@ -1756,8 +1756,8 @@ static int needs_modseq(const struct searchargs *searchargs,
  * This is a wrapper around the search_query API which simply prints the results.
  */
 EXPORTED int index_search(struct index_state *state,
-			  struct searchargs *searchargs,
-			  int usinguid)
+                          struct searchargs *searchargs,
+                          int usinguid)
 {
     search_query_t *query = NULL;
     search_folder_t *folder;
@@ -1768,89 +1768,89 @@ EXPORTED int index_search(struct index_state *state,
 
     /* update the index */
     if (index_check(state, 0, 0))
-	return 0;
+        return 0;
 
     highestmodseq = needs_modseq(searchargs, NULL);
 
     query = search_query_new(state, searchargs);
     r = search_query_run(query);
-    if (r) goto out;	    /* search failed */
+    if (r) goto out;        /* search failed */
     folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
-	if (!usinguid)
-	    search_folder_use_msn(folder, state);
-	if (highestmodseq)
-	    highestmodseq = search_folder_get_highest_modseq(folder);
-	nmsg = search_folder_get_count(folder);
+        if (!usinguid)
+            search_folder_use_msn(folder, state);
+        if (highestmodseq)
+            highestmodseq = search_folder_get_highest_modseq(folder);
+        nmsg = search_folder_get_count(folder);
     }
     else
-	nmsg = 0;
+        nmsg = 0;
 
     if (searchargs->returnopts) {
-	/*
-	 * Implement RFC 4731 return options.
-	 */
-	prot_printf(state->out, "* ESEARCH");
-	if (searchargs->tag) {
-	    prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
-	}
-	if (nmsg) {
-	    if (usinguid) prot_printf(state->out, " UID");
-	    if (searchargs->returnopts & SEARCH_RETURN_MIN) {
-		prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
-		if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MIN)
-		     highestmodseq = search_folder_get_first_modseq(folder);
-	    }
-	    if (searchargs->returnopts & SEARCH_RETURN_MAX) {
-		prot_printf(state->out, " MAX %u", search_folder_get_max(folder));
-		if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MAX)
-		     highestmodseq = search_folder_get_last_modseq(folder);
-	    }
-	    if (highestmodseq && searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
-		/* special case min and max should be greatest of the two */
-		uint64_t last = search_folder_get_last_modseq(folder);
-		highestmodseq = search_folder_get_first_modseq(folder);
-		if (last > highestmodseq) highestmodseq = last;
-	    }
-	    if (searchargs->returnopts & SEARCH_RETURN_ALL) {
-		struct seqset *seq = search_folder_get_seqset(folder);
+        /*
+         * Implement RFC 4731 return options.
+         */
+        prot_printf(state->out, "* ESEARCH");
+        if (searchargs->tag) {
+            prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
+        }
+        if (nmsg) {
+            if (usinguid) prot_printf(state->out, " UID");
+            if (searchargs->returnopts & SEARCH_RETURN_MIN) {
+                prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
+                if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MIN)
+                     highestmodseq = search_folder_get_first_modseq(folder);
+            }
+            if (searchargs->returnopts & SEARCH_RETURN_MAX) {
+                prot_printf(state->out, " MAX %u", search_folder_get_max(folder));
+                if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MAX)
+                     highestmodseq = search_folder_get_last_modseq(folder);
+            }
+            if (highestmodseq && searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
+                /* special case min and max should be greatest of the two */
+                uint64_t last = search_folder_get_last_modseq(folder);
+                highestmodseq = search_folder_get_first_modseq(folder);
+                if (last > highestmodseq) highestmodseq = last;
+            }
+            if (searchargs->returnopts & SEARCH_RETURN_ALL) {
+                struct seqset *seq = search_folder_get_seqset(folder);
 
-		if (seq->len) {
-		    char *str = seqset_cstring(seq);
-		    prot_printf(state->out, " ALL %s", str);
-		    free(str);
-		}
+                if (seq->len) {
+                    char *str = seqset_cstring(seq);
+                    prot_printf(state->out, " ALL %s", str);
+                    free(str);
+                }
 
-		seqset_free(seq);
-	    }
-	    if (searchargs->returnopts & SEARCH_RETURN_RELEVANCY) {
-		prot_printf(state->out, " RELEVANCY (");
-		for (i = 0; i < nmsg; i++) {
-		    if (i) prot_putc(' ', state->out);
-		    /* for now all messages have relevancy=100 */
-		    prot_printf(state->out, "%u", 100);
-		}
-		prot_printf(state->out, ")");
-	    }
-	    if (highestmodseq)
-		prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
-	}
-	if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
-	    prot_printf(state->out, " COUNT %u", nmsg);
-	}
+                seqset_free(seq);
+            }
+            if (searchargs->returnopts & SEARCH_RETURN_RELEVANCY) {
+                prot_printf(state->out, " RELEVANCY (");
+                for (i = 0; i < nmsg; i++) {
+                    if (i) prot_putc(' ', state->out);
+                    /* for now all messages have relevancy=100 */
+                    prot_printf(state->out, "%u", 100);
+                }
+                prot_printf(state->out, ")");
+            }
+            if (highestmodseq)
+                prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
+        }
+        if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
+            prot_printf(state->out, " COUNT %u", nmsg);
+        }
     }
     else {
-	prot_printf(state->out, "* SEARCH");
+        prot_printf(state->out, "* SEARCH");
 
-	if (nmsg) {
-	    search_folder_foreach(folder, i) {
-		prot_printf(state->out, " %u", i);
-	    }
-	}
+        if (nmsg) {
+            search_folder_foreach(folder, i) {
+                prot_printf(state->out, " %u", i);
+            }
+        }
 
-	if (highestmodseq)
-	    prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+        if (highestmodseq)
+            prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
     }
 
     prot_printf(state->out, "\r\n");
@@ -1864,8 +1864,8 @@ out:
  * Performs a SORT command
  */
 EXPORTED int index_sort(struct index_state *state,
-	       const struct sortcrit *sortcrit,
-	       struct searchargs *searchargs, int usinguid)
+               const struct sortcrit *sortcrit,
+               struct searchargs *searchargs, int usinguid)
 {
     int i;
     int nmsg = 0;
@@ -1876,7 +1876,7 @@ EXPORTED int index_sort(struct index_state *state,
 
     /* update the index */
     if (index_check(state, 0, 0))
-	return 0;
+        return 0;
 
     highestmodseq = needs_modseq(searchargs, NULL);
 
@@ -1884,28 +1884,28 @@ EXPORTED int index_sort(struct index_state *state,
     query = search_query_new(state, searchargs);
     query->sortcrit = sortcrit;
     r = search_query_run(query);
-    if (r) goto out;	    /* search failed */
+    if (r) goto out;        /* search failed */
     folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
-	if (highestmodseq)
-	    highestmodseq = search_folder_get_highest_modseq(folder);
-	nmsg = search_folder_get_count(folder);
+        if (highestmodseq)
+            highestmodseq = search_folder_get_highest_modseq(folder);
+        nmsg = search_folder_get_count(folder);
     }
 
     prot_printf(state->out, "* SORT");
 
     if (nmsg) {
-	/* Output the sorted messages */
-	for (i = 0 ; i < query->merged_msgdata.count ; i++) {
-	    MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
-	    prot_printf(state->out, " %u",
-			(usinguid ? md->uid : md->msgno));
-	}
+        /* Output the sorted messages */
+        for (i = 0 ; i < query->merged_msgdata.count ; i++) {
+            MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
+            prot_printf(state->out, " %u",
+                        (usinguid ? md->uid : md->msgno));
+        }
     }
 
     if (highestmodseq)
-	prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+        prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
 
     prot_printf(state->out, "\r\n");
 
@@ -1921,19 +1921,19 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
     if (!sortcrit) return 0;
 
     for (i = 0; sortcrit[i].key; i++) {
-	switch (sortcrit[i].key) {
-	    /* these are the mutable fields */
-	    case SORT_ANNOTATION:
-	    case SORT_MODSEQ:
-	    case SORT_HASFLAG:
-	    case SORT_CONVMODSEQ:
-	    case SORT_CONVEXISTS:
-	    case SORT_CONVSIZE:
-	    case SORT_HASCONVFLAG:
-		return 1;
-	    default:
-		break;
-	}
+        switch (sortcrit[i].key) {
+            /* these are the mutable fields */
+            case SORT_ANNOTATION:
+            case SORT_MODSEQ:
+            case SORT_HASFLAG:
+            case SORT_CONVMODSEQ:
+            case SORT_CONVEXISTS:
+            case SORT_CONVSIZE:
+            case SORT_HASCONVFLAG:
+                return 1;
+            default:
+                break;
+        }
     }
 
     return 0;
@@ -1945,64 +1945,64 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
  * which the results are returned.  For example, the base
  * case of UID sort and all messages is NOT mutable */
 static int is_mutable_ordering(struct sortcrit *sortcrit,
-			       struct searchargs *searchargs)
+                               struct searchargs *searchargs)
 {
     if (is_mutable_sort(sortcrit))
-	return 1;
+        return 1;
     if (search_expr_is_mutable(searchargs->root))
-	return 1;
+        return 1;
     return 0;
 }
 
-#define UNPREDICTABLE	    (-1)
+#define UNPREDICTABLE       (-1)
 static int search_predict_total(struct index_state *state,
-				struct conversations_state *cstate,
-			        const struct searchargs *searchargs,
-				int conversations,
-				modseq_t *xconvmodseqp)
+                                struct conversations_state *cstate,
+                                const struct searchargs *searchargs,
+                                int conversations,
+                                modseq_t *xconvmodseqp)
 {
     conv_status_t convstatus = CONV_STATUS_INIT;
     uint32_t exists;
 
     if (conversations) {
-	conversation_getstatus(cstate, index_mboxname(state), &convstatus);
-	/* always grab xconvmodseq, so we report a growing
-	 * highestmodseq to all callers */
-	if (xconvmodseqp) *xconvmodseqp = convstatus.modseq;
-	exists = convstatus.exists;
+        conversation_getstatus(cstate, index_mboxname(state), &convstatus);
+        /* always grab xconvmodseq, so we report a growing
+         * highestmodseq to all callers */
+        if (xconvmodseqp) *xconvmodseqp = convstatus.modseq;
+        exists = convstatus.exists;
     }
     else {
-	if (xconvmodseqp) *xconvmodseqp = state->highestmodseq;
-	/* we may be in xconvupdates, where expunged are present */
-	exists = state->exists - state->num_expunged;
+        if (xconvmodseqp) *xconvmodseqp = state->highestmodseq;
+        /* we may be in xconvupdates, where expunged are present */
+        exists = state->exists - state->num_expunged;
     }
 
     switch (search_expr_get_countability(searchargs->root)) {
     case SEC_EXISTS:
-	return exists;
+        return exists;
 
     case SEC_EXISTS|SEC_NOT:
-	return 0;
+        return 0;
 
     /* we don't try to optimise searches on \Recent */
     case SEC_SEEN:
-	assert(state->exists >= state->numunseen);
-	return state->exists - state->numunseen;
+        assert(state->exists >= state->numunseen);
+        return state->exists - state->numunseen;
 
     case SEC_SEEN|SEC_NOT:
-	return state->numunseen;
+        return state->numunseen;
 
     case SEC_CONVSEEN:
-	assert(conversations);
-	assert(convstatus.exists >= convstatus.unseen);
-	return convstatus.exists - convstatus.unseen;
+        assert(conversations);
+        assert(convstatus.exists >= convstatus.unseen);
+        return convstatus.exists - convstatus.unseen;
 
     case SEC_CONVSEEN|SEC_NOT:
-	assert(conversations);
-	return convstatus.unseen;
+        assert(conversations);
+        return convstatus.unseen;
 
     default:
-	return UNPREDICTABLE;
+        return UNPREDICTABLE;
     }
 }
 
@@ -2010,9 +2010,9 @@ static int search_predict_total(struct index_state *state,
  * Performs a XCONVSORT command
  */
 EXPORTED int index_convsort(struct index_state *state,
-			    struct sortcrit *sortcrit,
-			    struct searchargs *searchargs,
-			    const struct windowargs *windowargs)
+                            struct sortcrit *sortcrit,
+                            struct searchargs *searchargs,
+                            const struct windowargs *windowargs)
 {
     MsgData **msgdata = NULL;
     unsigned int mi;
@@ -2035,7 +2035,7 @@ EXPORTED int index_convsort(struct index_state *state,
 
     /* Check the client didn't specify MULTIANCHOR. */
     if (windowargs->anchor && windowargs->anchorfolder)
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* make sure \Deleted messages are expunged.  Will also lock the
      * mailbox state and read any new information */
@@ -2043,20 +2043,20 @@ EXPORTED int index_convsort(struct index_state *state,
     if (r) return r;
 
     if (windowargs->conversations) {
-	cstate = conversations_get_mbox(index_mboxname(state));
-	if (!cstate)
-	    return IMAP_INTERNAL;
+        cstate = conversations_get_mbox(index_mboxname(state));
+        if (!cstate)
+            return IMAP_INTERNAL;
     }
 
     search_expr_internalise(state, searchargs->root);
 
     /* this works both with and without conversations */
     total = search_predict_total(state, cstate, searchargs,
-				windowargs->conversations,
-				&xconvmodseq);
+                                windowargs->conversations,
+                                &xconvmodseq);
     /* not going to match anything? bonus */
     if (!total)
-	goto out;
+        goto out;
 
     construct_hashu64_table(&seen_cids, state->exists/4+4, 0);
 
@@ -2065,10 +2065,10 @@ EXPORTED int index_convsort(struct index_state *state,
      * we can take advantage of the window arguments to stop searching
      * early */
     msgdata = index_msgdata_load(state, NULL, state->exists, sortcrit,
-			         windowargs->anchor, &found_anchor);
+                                 windowargs->anchor, &found_anchor);
     if (windowargs->anchor && !found_anchor) {
-	r = IMAP_ANCHOR_NOT_FOUND;
-	goto out;
+        r = IMAP_ANCHOR_NOT_FOUND;
+        goto out;
     }
 
     /* Sort the messages based on the given criteria */
@@ -2076,70 +2076,70 @@ EXPORTED int index_convsort(struct index_state *state,
 
     /* One pass through the message list */
     for (mi = 0 ; mi < state->exists ; mi++) {
-	MsgData *msg = msgdata[mi];
-	struct index_map *im = &state->map[msg->msgno-1];
+        MsgData *msg = msgdata[mi];
+        struct index_map *im = &state->map[msg->msgno-1];
 
-	/* can happen if we didn't "tellchanges" yet */
-	if (im->system_flags & FLAG_EXPUNGED)
-	    continue;
+        /* can happen if we didn't "tellchanges" yet */
+        if (im->system_flags & FLAG_EXPUNGED)
+            continue;
 
-	/* run the search program against all messages */
-	if (!index_search_evaluate(state, searchargs->root, msg->msgno))
-	    continue;
+        /* run the search program against all messages */
+        if (!index_search_evaluate(state, searchargs->root, msg->msgno))
+            continue;
 
-	/* figure out whether this message is an exemplar */
-	if (windowargs->conversations) {
-	    /* in conversations mode => only the first message seen
-	     * with each unique CID is an exemplar */
-	    if (hashu64_lookup(msg->cid, &seen_cids))
-		continue;
-	    hashu64_insert(msg->cid, (void *)1, &seen_cids);
-	}
-	/* else not in conversations mode => all messages are exemplars */
+        /* figure out whether this message is an exemplar */
+        if (windowargs->conversations) {
+            /* in conversations mode => only the first message seen
+             * with each unique CID is an exemplar */
+            if (hashu64_lookup(msg->cid, &seen_cids))
+                continue;
+            hashu64_insert(msg->cid, (void *)1, &seen_cids);
+        }
+        /* else not in conversations mode => all messages are exemplars */
 
-	pos++;
+        pos++;
 
-	if (!anchor_pos &&
-	    windowargs->anchor == msg->uid) {
-	    /* we've found the anchor's position, rejoice! */
-	    anchor_pos = pos;
-	}
+        if (!anchor_pos &&
+            windowargs->anchor == msg->uid) {
+            /* we've found the anchor's position, rejoice! */
+            anchor_pos = pos;
+        }
 
-	if (windowargs->anchor) {
-	    if (!anchor_pos)
-		continue;
-	    if (pos < anchor_pos + windowargs->offset)
-		continue;
-	}
-	else if (windowargs->position) {
-	    if (pos < windowargs->position)
-		continue;
-	}
-	if (windowargs->limit &&
-	    ++ninwindow > windowargs->limit) {
-	    if (total == UNPREDICTABLE) {
-		/* the total was not predictable, so we need to keep
-		 * going over the whole list to count it */
-		continue;
-	    }
-	    break;
-	}
+        if (windowargs->anchor) {
+            if (!anchor_pos)
+                continue;
+            if (pos < anchor_pos + windowargs->offset)
+                continue;
+        }
+        else if (windowargs->position) {
+            if (pos < windowargs->position)
+                continue;
+        }
+        if (windowargs->limit &&
+            ++ninwindow > windowargs->limit) {
+            if (total == UNPREDICTABLE) {
+                /* the total was not predictable, so we need to keep
+                 * going over the whole list to count it */
+                continue;
+            }
+            break;
+        }
 
-	if (!first_pos)
-	    first_pos = pos;
-	ptrarray_append(&results, msg);
+        if (!first_pos)
+            first_pos = pos;
+        ptrarray_append(&results, msg);
     }
 
     if (total == UNPREDICTABLE) {
-	/* the total was not predictable prima facie */
-	total = pos;
+        /* the total was not predictable prima facie */
+        total = pos;
     }
 
     if (windowargs->anchor && !anchor_pos) {
-	/* the anchor was present but not an exemplar */
-	assert(results.count == 0);
-	r = IMAP_ANCHOR_NOT_FOUND;
-	goto out;
+        /* the anchor was present but not an exemplar */
+        assert(results.count == 0);
+        r = IMAP_ANCHOR_NOT_FOUND;
+        goto out;
     }
 
     /* Print the resulting list */
@@ -2148,27 +2148,27 @@ EXPORTED int index_convsort(struct index_state *state,
      * sort order seen in the field is reverse date, which is basically
      * the worst case for seqset.  So we don't bother */
     if (results.count) {
-	prot_printf(state->out, "* SORT");  /* uids */
-	for (i = 0 ; i < results.count ; i++) {
-	    MsgData *msg = results.data[i];
-	    prot_printf(state->out, " %u", msg->uid);
-	}
-	prot_printf(state->out, "\r\n");
+        prot_printf(state->out, "* SORT");  /* uids */
+        for (i = 0 ; i < results.count ; i++) {
+            MsgData *msg = results.data[i];
+            prot_printf(state->out, " %u", msg->uid);
+        }
+        prot_printf(state->out, "\r\n");
     }
 
 out:
     if (!r) {
-	if (first_pos)
-	    prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
+        if (first_pos)
+            prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
 
-	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
-		    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
-	prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
-		    state->mailbox->i.uidvalidity);
-	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
-		    state->mailbox->i.last_uid + 1);
-	prot_printf(state->out, "* OK [TOTAL %u]\r\n",
-		    total);
+        prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
+                    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
+        prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
+                    state->mailbox->i.uidvalidity);
+        prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
+                    state->mailbox->i.last_uid + 1);
+        prot_printf(state->out, "* OK [TOTAL %u]\r\n",
+                    total);
     }
 
     /* free all our temporary data */
@@ -2183,9 +2183,9 @@ out:
  * Performs a XCONVMULTISORT command
  */
 EXPORTED int index_convmultisort(struct index_state *state,
-				 struct sortcrit *sortcrit,
-				 struct searchargs *searchargs,
-				 const struct windowargs *windowargs)
+                                 struct sortcrit *sortcrit,
+                                 struct searchargs *searchargs,
+                                 const struct windowargs *windowargs)
 {
     int mi;
     int fi;
@@ -2217,7 +2217,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
      * the folder name instead of just ANCHOR.  Check that here
      * 'cos it's easier than doing so during parsing */
     if (windowargs->anchor && !windowargs->anchorfolder)
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* make sure folder still exists and map in data */
     r = index_refresh(state);
@@ -2233,154 +2233,154 @@ EXPORTED int index_convmultisort(struct index_state *state,
     if (r) return r;
 
     if (windowargs->anchorfolder) {
-	anchor_folder = search_query_find_folder(query, windowargs->anchorfolder);
-	if (!anchor_folder) {
-	    r = IMAP_ANCHOR_NOT_FOUND;
-	    goto out;
-	}
+        anchor_folder = search_query_find_folder(query, windowargs->anchorfolder);
+        if (!anchor_folder) {
+            r = IMAP_ANCHOR_NOT_FOUND;
+            goto out;
+        }
     }
 
     /* going to need to do conversation-level breakdown */
     if (windowargs->conversations)
-	construct_hashu64_table(&seen_cids, query->merged_msgdata.count/4+4, 0);
+        construct_hashu64_table(&seen_cids, query->merged_msgdata.count/4+4, 0);
     /* no need */
     else
-	total = query->merged_msgdata.count;
+        total = query->merged_msgdata.count;
 
     /* Another pass through the merged message list */
     for (mi = 0 ; mi < query->merged_msgdata.count ; mi++) {
-	MsgData *md = ptrarray_nth(&query->merged_msgdata, mi);
-	ptrarray_t *response = NULL;
+        MsgData *md = ptrarray_nth(&query->merged_msgdata, mi);
+        ptrarray_t *response = NULL;
 
-	/* figure out whether this message is an exemplar */
-	if (windowargs->conversations) {
-	    response = hashu64_lookup(md->cid, &seen_cids);
-	    /* in conversations mode => only the first message seen
-	     * with each unique CID is an exemplar */
-	    if (response) {
-		if (response != &dummy_response)
-		    ptrarray_append(response, md);
-		continue;
-	    }
-	    hashu64_insert(md->cid, &dummy_response, &seen_cids);
-	}
-	/* else not in conversations mode => all messages are exemplars */
+        /* figure out whether this message is an exemplar */
+        if (windowargs->conversations) {
+            response = hashu64_lookup(md->cid, &seen_cids);
+            /* in conversations mode => only the first message seen
+             * with each unique CID is an exemplar */
+            if (response) {
+                if (response != &dummy_response)
+                    ptrarray_append(response, md);
+                continue;
+            }
+            hashu64_insert(md->cid, &dummy_response, &seen_cids);
+        }
+        /* else not in conversations mode => all messages are exemplars */
 
-	pos++;
+        pos++;
 
-	if (!anchor_pos &&
-	    windowargs->anchor == md->uid &&
-	    anchor_folder == md->folder) {
-	    /* we've found the anchor's position, rejoice! */
-	    anchor_pos = pos;
-	}
+        if (!anchor_pos &&
+            windowargs->anchor == md->uid &&
+            anchor_folder == md->folder) {
+            /* we've found the anchor's position, rejoice! */
+            anchor_pos = pos;
+        }
 
-	if (windowargs->anchor) {
-	    if (!anchor_pos)
-		continue;
-	    if (pos < anchor_pos + windowargs->offset)
-		continue;
-	}
-	else if (windowargs->position) {
-	    if (pos < windowargs->position)
-		continue;
-	}
-	if (windowargs->limit &&
-	    ++ninwindow > windowargs->limit) {
-	    if (total == UNPREDICTABLE) {
-		/* the total was not predictable, so we need to keep
-		 * going over the whole list to count it */
-		continue;
-	    }
-	    break;
-	}
+        if (windowargs->anchor) {
+            if (!anchor_pos)
+                continue;
+            if (pos < anchor_pos + windowargs->offset)
+                continue;
+        }
+        else if (windowargs->position) {
+            if (pos < windowargs->position)
+                continue;
+        }
+        if (windowargs->limit &&
+            ++ninwindow > windowargs->limit) {
+            if (total == UNPREDICTABLE) {
+                /* the total was not predictable, so we need to keep
+                 * going over the whole list to count it */
+                continue;
+            }
+            break;
+        }
 
-	if (!first_pos)
-	    first_pos = pos;
+        if (!first_pos)
+            first_pos = pos;
 
-	/* the message is the exemplar of a conversation which is inside
-	 * the specified window, so record a non-dummy seen_cids entry
-	 * and a results entry */
-	response = ptrarray_new();
-	ptrarray_push(response, md);
-	ptrarray_push(&results, response);
+        /* the message is the exemplar of a conversation which is inside
+         * the specified window, so record a non-dummy seen_cids entry
+         * and a results entry */
+        response = ptrarray_new();
+        ptrarray_push(response, md);
+        ptrarray_push(&results, response);
 
-	if (windowargs->conversations) {
-	    hashu64_insert(md->cid, response, &seen_cids);
-	}
+        if (windowargs->conversations) {
+            hashu64_insert(md->cid, response, &seen_cids);
+        }
     }
 
     if (total == UNPREDICTABLE) {
-	/* the total was not predictable prima facie */
-	total = pos;
+        /* the total was not predictable prima facie */
+        total = pos;
     }
 
     if (windowargs->anchor && !anchor_pos) {
-	/* the anchor was not found */
-	assert(results.count == 0);
-	r = IMAP_ANCHOR_NOT_FOUND;
-	goto out;
+        /* the anchor was not found */
+        assert(results.count == 0);
+        r = IMAP_ANCHOR_NOT_FOUND;
+        goto out;
     }
 
     /* Print the resulting list */
 
     xstats_add(SEARCH_RESULT, results.count);
     if (results.count) {
-	/* The untagged reponse would be XCONVMULTISORT but
-	 * Mail::IMAPTalk has an undocumented hack whereby any untagged
-	 * response matching /sort/i is assumed to be a sequence of
-	 * numeric uids.  Meh. */
-	prot_printf(state->out, "* XCONVMULTI (");
-	for (fi = 0 ; fi < query->folders_by_id.count ; fi++) {
-	    folder = ptrarray_nth(&query->folders_by_id, fi);
+        /* The untagged reponse would be XCONVMULTISORT but
+         * Mail::IMAPTalk has an undocumented hack whereby any untagged
+         * response matching /sort/i is assumed to be a sequence of
+         * numeric uids.  Meh. */
+        prot_printf(state->out, "* XCONVMULTI (");
+        for (fi = 0 ; fi < query->folders_by_id.count ; fi++) {
+            folder = ptrarray_nth(&query->folders_by_id, fi);
 
-	    searchargs->namespace->mboxname_toexternal(searchargs->namespace,
-						       folder->mboxname,
-						       searchargs->userid,
-						       extname);
-	    if (fi)
-		prot_printf(state->out, " ");
-	    prot_printf(state->out, "(");
-	    prot_printstring(state->out, extname);
-	    prot_printf(state->out, " %u)", folder->uidvalidity);
-	}
-	prot_printf(state->out, ") (");
-	for (i = 0 ; i < results.count ; i++) {
-	    ptrarray_t *response = ptrarray_nth(&results, i);
-	    int j;
-	    if (i)
-		prot_printf(state->out, " ");
-	    for (j = 0; j < response->count; j++) {
-		MsgData *md = ptrarray_nth(response, j);
-		if (!j)
-		    prot_printf(state->out, "(%s" , conversation_id_encode(md->cid));
-		prot_printf(state->out, " (%u %u)", md->folder->id, md->uid);
-	    }
-	    prot_printf(state->out, ")");
-	}
-	prot_printf(state->out, ")\r\n");
+            searchargs->namespace->mboxname_toexternal(searchargs->namespace,
+                                                       folder->mboxname,
+                                                       searchargs->userid,
+                                                       extname);
+            if (fi)
+                prot_printf(state->out, " ");
+            prot_printf(state->out, "(");
+            prot_printstring(state->out, extname);
+            prot_printf(state->out, " %u)", folder->uidvalidity);
+        }
+        prot_printf(state->out, ") (");
+        for (i = 0 ; i < results.count ; i++) {
+            ptrarray_t *response = ptrarray_nth(&results, i);
+            int j;
+            if (i)
+                prot_printf(state->out, " ");
+            for (j = 0; j < response->count; j++) {
+                MsgData *md = ptrarray_nth(response, j);
+                if (!j)
+                    prot_printf(state->out, "(%s" , conversation_id_encode(md->cid));
+                prot_printf(state->out, " (%u %u)", md->folder->id, md->uid);
+            }
+            prot_printf(state->out, ")");
+        }
+        prot_printf(state->out, ")\r\n");
     }
 
 out:
     if (!r) {
-	if (first_pos)
-	    prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
+        if (first_pos)
+            prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
 
-	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
-		    hms);
+        prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
+                    hms);
 #if 0
-	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
-		    state->mailbox->i.last_uid + 1);
+        prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
+                    state->mailbox->i.last_uid + 1);
 #endif
-	prot_printf(state->out, "* OK [TOTAL %u]\r\n",
-		    total);
+        prot_printf(state->out, "* OK [TOTAL %u]\r\n",
+                    total);
     }
 
     /* free all our temporary data */
     free_hashu64_table(&seen_cids, NULL);
     for (i = 0 ; i < results.count ; i++) {
-	ptrarray_t *response = ptrarray_nth(&results, i);
-	ptrarray_free(response);
+        ptrarray_t *response = ptrarray_nth(&results, i);
+        ptrarray_free(response);
     }
     ptrarray_fini(&results);
     search_query_free(query);
@@ -2395,7 +2395,7 @@ struct snippet_rock {
 };
 
 static int emit_snippet(struct mailbox *mailbox, uint32_t uid,
-			int part, const char *snippet, void *rock)
+                        int part, const char *snippet, void *rock)
 {
     struct snippet_rock *sr = (struct snippet_rock *)rock;
     const char *partname = search_part_as_string(part);
@@ -2405,7 +2405,7 @@ static int emit_snippet(struct mailbox *mailbox, uint32_t uid,
     if (!partname) return 0;
 
     r = sr->namespace->mboxname_toexternal(sr->namespace, mailbox->name,
-					   sr->userid, extname);
+                                           sr->userid, extname);
     if (r) return r;
 
     prot_printf(sr->out, "* SNIPPET ");
@@ -2417,8 +2417,8 @@ static int emit_snippet(struct mailbox *mailbox, uint32_t uid,
 }
 
 EXPORTED int index_snippets(struct index_state *state,
-			    const struct snippetargs *snippetargs,
-			    struct searchargs *searchargs)
+                            const struct snippetargs *snippetargs,
+                            struct searchargs *searchargs)
 {
     void *intquery = NULL;
     search_builder_t *bx = NULL;
@@ -2435,8 +2435,8 @@ EXPORTED int index_snippets(struct index_state *state,
 
     bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
     if (!bx) {
-	r = IMAP_INTERNAL;
-	goto out;
+        r = IMAP_INTERNAL;
+        goto out;
     }
 
     build_query(bx, searchargs->root, 0, &nmatches);
@@ -2449,66 +2449,66 @@ EXPORTED int index_snippets(struct index_state *state,
     srock.namespace = searchargs->namespace;
     srock.userid = searchargs->userid;
     rx = search_begin_snippets(intquery, 0/*verbose*/,
-			       emit_snippet, &srock);
+                               emit_snippet, &srock);
     if (!rx) goto out;
 
     for ( ; snippetargs ; snippetargs = snippetargs->next) {
 
-	mailbox = NULL;
-	if (!strcmp(snippetargs->mboxname, index_mboxname(state))) {
-	    mailbox = state->mailbox;
-	}
-	else {
-	    r = mailbox_open_iwl(snippetargs->mboxname, &mailbox);
-	    if (r) goto out;
-	}
+        mailbox = NULL;
+        if (!strcmp(snippetargs->mboxname, index_mboxname(state))) {
+            mailbox = state->mailbox;
+        }
+        else {
+            r = mailbox_open_iwl(snippetargs->mboxname, &mailbox);
+            if (r) goto out;
+        }
 
-	if (snippetargs->uidvalidity &&
-	    snippetargs->uidvalidity != mailbox->i.uidvalidity) {
-	    r = IMAP_NOTFOUND;
-	    goto out;
-	}
+        if (snippetargs->uidvalidity &&
+            snippetargs->uidvalidity != mailbox->i.uidvalidity) {
+            r = IMAP_NOTFOUND;
+            goto out;
+        }
 
-	r = rx->begin_mailbox(rx, mailbox, /*incremental*/0);
+        r = rx->begin_mailbox(rx, mailbox, /*incremental*/0);
 
-	for (i = 0 ; i < snippetargs->uids.count ; i++) {
-	    uint32_t uid = snippetargs->uids.data[i];
-	    struct index_record record;
-	    message_t *msg;
+        for (i = 0 ; i < snippetargs->uids.count ; i++) {
+            uint32_t uid = snippetargs->uids.data[i];
+            struct index_record record;
+            message_t *msg;
 
-	    /* This UID didn't appear in the old index file */
-	    r = mailbox_find_index_record(mailbox, uid, &record);
-	    if (r) continue;
+            /* This UID didn't appear in the old index file */
+            r = mailbox_find_index_record(mailbox, uid, &record);
+            if (r) continue;
 
-	    msg = message_new_from_record(mailbox, &record);
-	    index_getsearchtext(msg, rx, /*snippet*/1);
-	    message_unref(&msg);
-	}
+            msg = message_new_from_record(mailbox, &record);
+            index_getsearchtext(msg, rx, /*snippet*/1);
+            message_unref(&msg);
+        }
 
-	r = rx->end_mailbox(rx, mailbox);
-	if (r) goto out;
-	if (mailbox != state->mailbox)
-	    mailbox_close(&mailbox);
+        r = rx->end_mailbox(rx, mailbox);
+        if (r) goto out;
+        if (mailbox != state->mailbox)
+            mailbox_close(&mailbox);
     }
 
 out:
     if (rx) search_end_snippets(rx);
     if (intquery) search_free_internalised(intquery);
     if (mailbox != state->mailbox)
-	mailbox_close(&mailbox);
+        mailbox_close(&mailbox);
     return r;
 }
 
 static modseq_t get_modseq_of(MsgData *msg,
-			      struct conversations_state *cstate)
+                              struct conversations_state *cstate)
 {
     modseq_t modseq = 0;
 
     if (cstate) {
-	conversation_get_modseq(cstate, msg->cid, &modseq);
-	/* TODO: error handling dammit */
+        conversation_get_modseq(cstate, msg->cid, &modseq);
+        /* TODO: error handling dammit */
     } else {
-	modseq = msg->modseq;
+        modseq = msg->modseq;
     }
     return modseq;
 }
@@ -2517,9 +2517,9 @@ static modseq_t get_modseq_of(MsgData *msg,
  * Performs a XCONVUPDATES command
  */
 EXPORTED int index_convupdates(struct index_state *state,
-		      struct sortcrit *sortcrit,
-		      struct searchargs *searchargs,
-		      const struct windowargs *windowargs)
+                      struct sortcrit *sortcrit,
+                      struct searchargs *searchargs,
+                      const struct windowargs *windowargs)
 {
     MsgData **msgdata = NULL;
     modseq_t xconvmodseq = 0;
@@ -2548,21 +2548,21 @@ EXPORTED int index_convupdates(struct index_state *state,
     if (r) return r;
 
     if (windowargs->conversations) {
-	cstate = conversations_get_mbox(index_mboxname(state));
-	if (!cstate)
-	    return IMAP_INTERNAL;
+        cstate = conversations_get_mbox(index_mboxname(state));
+        if (!cstate)
+            return IMAP_INTERNAL;
     }
 
     search_expr_internalise(state, searchargs->root);
 
     total = search_predict_total(state, cstate, searchargs,
-				windowargs->conversations,
-				&xconvmodseq);
+                                windowargs->conversations,
+                                &xconvmodseq);
     /* If there are no current and no expunged messages, we won't
      * have any results at all and can short circuit the main loop;
      * note that is a righter criterion than for XCONVSORT. */
     if (!total && !state->exists)
-	goto out;
+        goto out;
 
     construct_hashu64_table(&seen_cids, state->exists/4+4, 0);
     construct_hashu64_table(&old_seen_cids, state->exists/4+4, 0);
@@ -2576,133 +2576,133 @@ EXPORTED int index_convupdates(struct index_state *state,
 
     /* Discover exemplars */
     for (mi = 0 ; mi < state->exists ; mi++) {
-	MsgData *msg = msgdata[mi];
-	struct index_map *im = &state->map[msg->msgno-1];
-	int was_old_exemplar = 0;
-	int is_new_exemplar = 0;
-	int is_deleted = 0;
-	int is_new = 0;
-	int was_deleted = 0;
-	int is_changed = 0;
-	int in_search = 0;
+        MsgData *msg = msgdata[mi];
+        struct index_map *im = &state->map[msg->msgno-1];
+        int was_old_exemplar = 0;
+        int is_new_exemplar = 0;
+        int is_deleted = 0;
+        int is_new = 0;
+        int was_deleted = 0;
+        int is_changed = 0;
+        int in_search = 0;
 
-	in_search = index_search_evaluate(state, searchargs->root, msg->msgno);
-	is_deleted = !!(im->system_flags & FLAG_EXPUNGED);
-	is_new = (im->uid >= windowargs->uidnext);
-	was_deleted = is_deleted && (im->modseq <= windowargs->modseq);
+        in_search = index_search_evaluate(state, searchargs->root, msg->msgno);
+        is_deleted = !!(im->system_flags & FLAG_EXPUNGED);
+        is_new = (im->uid >= windowargs->uidnext);
+        was_deleted = is_deleted && (im->modseq <= windowargs->modseq);
 
-	/* is this message a current exemplar? */
-	if (!is_deleted &&
-	    in_search &&
-	    (!windowargs->conversations || !hashu64_lookup(msg->cid, &seen_cids))) {
-	    is_new_exemplar = 1;
-	    pos++;
-	    if (windowargs->conversations)
-		hashu64_insert(msg->cid, (void *)1, &seen_cids);
-	}
+        /* is this message a current exemplar? */
+        if (!is_deleted &&
+            in_search &&
+            (!windowargs->conversations || !hashu64_lookup(msg->cid, &seen_cids))) {
+            is_new_exemplar = 1;
+            pos++;
+            if (windowargs->conversations)
+                hashu64_insert(msg->cid, (void *)1, &seen_cids);
+        }
 
-	/* optimisation for when the total is
-	 * not known but we've hit 'upto' */
-	if (upto_pos)
-	    continue;
+        /* optimisation for when the total is
+         * not known but we've hit 'upto' */
+        if (upto_pos)
+            continue;
 
-	modseq_t modseq = get_modseq_of(msg, cstate);
-	is_changed = (modseq > windowargs->modseq);
+        modseq_t modseq = get_modseq_of(msg, cstate);
+        is_changed = (modseq > windowargs->modseq);
 
-	/* was this message an old exemplar, or in the case of mutable
-	 * searches, possible an old exemplar? */
-	if (!is_new &&
-	    !was_deleted &&
-	    (in_search || (search_is_mutable && is_changed)) &&
-	    (!windowargs->conversations || !hashu64_lookup(msg->cid, &old_seen_cids))) {
-	    was_old_exemplar = 1;
-	    if (windowargs->conversations)
-		hashu64_insert(msg->cid, (void *)1, &old_seen_cids);
-	}
+        /* was this message an old exemplar, or in the case of mutable
+         * searches, possible an old exemplar? */
+        if (!is_new &&
+            !was_deleted &&
+            (in_search || (search_is_mutable && is_changed)) &&
+            (!windowargs->conversations || !hashu64_lookup(msg->cid, &old_seen_cids))) {
+            was_old_exemplar = 1;
+            if (windowargs->conversations)
+                hashu64_insert(msg->cid, (void *)1, &old_seen_cids);
+        }
 
-	if (was_old_exemplar && !is_new_exemplar) {
-	    ptrarray_push(&removed, msg);
-	} else if (!was_old_exemplar && is_new_exemplar) {
-	    msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
-	    ptrarray_push(&added, msg);
-	} else if (was_old_exemplar && is_new_exemplar) {
-	    if (is_changed) {
-		ptrarray_push(&changed, msg);
-		if (search_is_mutable) {
-		    /* is the search is mutable, we're in a whole world of
-		     * uncertainty about the client's state, so we just
-		     * report the exemplar in all three lists and let the
-		     * client sort it out. */
-		    ptrarray_push(&removed, msg);
-		    msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
-		    ptrarray_push(&added, msg);
-		}
-	    }
-	}
+        if (was_old_exemplar && !is_new_exemplar) {
+            ptrarray_push(&removed, msg);
+        } else if (!was_old_exemplar && is_new_exemplar) {
+            msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
+            ptrarray_push(&added, msg);
+        } else if (was_old_exemplar && is_new_exemplar) {
+            if (is_changed) {
+                ptrarray_push(&changed, msg);
+                if (search_is_mutable) {
+                    /* is the search is mutable, we're in a whole world of
+                     * uncertainty about the client's state, so we just
+                     * report the exemplar in all three lists and let the
+                     * client sort it out. */
+                    ptrarray_push(&removed, msg);
+                    msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
+                    ptrarray_push(&added, msg);
+                }
+            }
+        }
 
-	/* if this is the last message the client cares about ('upto')
-	 * then we can break early...unless its a mutable search or
-	 * we need to keep going to calculate an accurate total */
-	if (!search_is_mutable &&
-	    !upto_pos &&
-	    msg->uid == windowargs->upto) {
-	    if (total != UNPREDICTABLE)
-		break;
-	    upto_pos = pos;
-	}
+        /* if this is the last message the client cares about ('upto')
+         * then we can break early...unless its a mutable search or
+         * we need to keep going to calculate an accurate total */
+        if (!search_is_mutable &&
+            !upto_pos &&
+            msg->uid == windowargs->upto) {
+            if (total != UNPREDICTABLE)
+                break;
+            upto_pos = pos;
+        }
     }
 
     /* unlike 'anchor', the case of not finding 'upto' is not an error */
 
     if (total == UNPREDICTABLE) {
-	/* the total was not predictable prima facie */
-	total = pos;
+        /* the total was not predictable prima facie */
+        total = pos;
     }
 
     /* Print the resulting lists */
 
     if (added.count) {
-	prot_printf(state->out, "* ADDED"); /* (uid pos) tuples */
-	for (i = 0 ; i < added.count ; i++) {
-	    MsgData *msg = added.data[i];
-	    prot_printf(state->out, " (%u %u)",
-			msg->uid, msg->msgno);
-	}
-	prot_printf(state->out, "\r\n");
+        prot_printf(state->out, "* ADDED"); /* (uid pos) tuples */
+        for (i = 0 ; i < added.count ; i++) {
+            MsgData *msg = added.data[i];
+            prot_printf(state->out, " (%u %u)",
+                        msg->uid, msg->msgno);
+        }
+        prot_printf(state->out, "\r\n");
     }
 
     if (removed.count) {
-	prot_printf(state->out, "* REMOVED");	/* uids */
-	for (i = 0 ; i < removed.count ; i++) {
-	    MsgData *msg = removed.data[i];
-	    prot_printf(state->out, " %u", msg->uid);
-	}
-	prot_printf(state->out, "\r\n");
+        prot_printf(state->out, "* REMOVED");   /* uids */
+        for (i = 0 ; i < removed.count ; i++) {
+            MsgData *msg = removed.data[i];
+            prot_printf(state->out, " %u", msg->uid);
+        }
+        prot_printf(state->out, "\r\n");
     }
 
     if (changed.count) {
-	prot_printf(state->out, "* CHANGED");	/* cids or uids */
-	for (i = 0 ; i < changed.count ; i++) {
-	    MsgData *msg = changed.data[i];
-	    if (windowargs->conversations)
-		prot_printf(state->out, " %s",
-			conversation_id_encode(msg->cid));
-	    else
-		prot_printf(state->out, " %u", msg->uid);
-	}
-	prot_printf(state->out, "\r\n");
+        prot_printf(state->out, "* CHANGED");   /* cids or uids */
+        for (i = 0 ; i < changed.count ; i++) {
+            MsgData *msg = changed.data[i];
+            if (windowargs->conversations)
+                prot_printf(state->out, " %s",
+                        conversation_id_encode(msg->cid));
+            else
+                prot_printf(state->out, " %u", msg->uid);
+        }
+        prot_printf(state->out, "\r\n");
     }
 
 out:
     if (!r) {
-	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
-		    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
-	prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
-		    state->mailbox->i.uidvalidity);
-	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
-		    state->mailbox->i.last_uid + 1);
-	prot_printf(state->out, "* OK [TOTAL %u]\r\n",
-		    total);
+        prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
+                    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
+        prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
+                    state->mailbox->i.uidvalidity);
+        prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
+                    state->mailbox->i.last_uid + 1);
+        prot_printf(state->out, "* OK [TOTAL %u]\r\n",
+                    total);
     }
 
     /* free all our temporary data */
@@ -2720,7 +2720,7 @@ out:
  * Performs a THREAD command
  */
 EXPORTED int index_thread(struct index_state *state, int algorithm,
-		 struct searchargs *searchargs, int usinguid)
+                 struct searchargs *searchargs, int usinguid)
 {
     search_query_t *query = NULL;
     search_folder_t *folder;
@@ -2732,47 +2732,47 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 
     /* update the index */
     if (index_check(state, 0, 0))
-	return 0;
+        return 0;
 
     highestmodseq = needs_modseq(searchargs, NULL);
 
     if(CONFIG_TIMING_VERBOSE)
-	start = clock();
+        start = clock();
 
     /* Search for messages based on the given criteria */
     query = search_query_new(state, searchargs);
     r = search_query_run(query);
-    if (r) goto out;	    /* search failed */
+    if (r) goto out;        /* search failed */
     folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
-	search_folder_use_msn(folder, state);
-	if (highestmodseq)
-	    highestmodseq = search_folder_get_highest_modseq(folder);
-	nmsg = search_folder_get_array(folder, &msgno_list);
+        search_folder_use_msn(folder, state);
+        if (highestmodseq)
+            highestmodseq = search_folder_get_highest_modseq(folder);
+        nmsg = search_folder_get_array(folder, &msgno_list);
     }
 
     if (nmsg) {
-	/* Thread messages using given algorithm */
-	(*thread_algs[algorithm].threader)(state, msgno_list, nmsg, usinguid);
+        /* Thread messages using given algorithm */
+        (*thread_algs[algorithm].threader)(state, msgno_list, nmsg, usinguid);
 
-	free(msgno_list);
+        free(msgno_list);
 
-	if (highestmodseq)
-	    prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+        if (highestmodseq)
+            prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
     }
 
     /* print an empty untagged response */
     else
-	index_thread_print(state, NULL, usinguid);
+        index_thread_print(state, NULL, usinguid);
 
     prot_printf(state->out, "\r\n");
 
     if (CONFIG_TIMING_VERBOSE) {
-	/* debug */
-	syslog(LOG_DEBUG, "THREAD %s processing time: %d msg in %f sec",
-	       thread_algs[algorithm].alg_name, nmsg,
-	       (clock() - start) / (double) CLOCKS_PER_SEC);
+        /* debug */
+        syslog(LOG_DEBUG, "THREAD %s processing time: %d msg in %f sec",
+               thread_algs[algorithm].alg_name, nmsg,
+               (clock() - start) / (double) CLOCKS_PER_SEC);
     }
 
 out:
@@ -2785,15 +2785,15 @@ out:
  */
 EXPORTED int
 index_copy(struct index_state *state,
-	   char *sequence, 
-	   int usinguid,
-	   char *name, 
-	   char **copyuidp,
-	   int nolink,
-	   struct namespace *namespace,
-	   int isadmin,
-	   int ismove,
-	   int ignorequota)
+           char *sequence,
+           int usinguid,
+           char *name,
+           char **copyuidp,
+           int nolink,
+           struct namespace *namespace,
+           int isadmin,
+           int ismove,
+           int ignorequota)
 {
     struct copyargs copyargs;
     int i;
@@ -2815,11 +2815,11 @@ index_copy(struct index_state *state,
 
     /* let's just see how common this is... */
     if (!strcmp(index_mboxname(state), name))
-	syslog(LOG_NOTICE, "same mailbox copy %s (%s)", name, sequence);
+        syslog(LOG_NOTICE, "same mailbox copy %s (%s)", name, sequence);
 
     is_same_user = mboxname_same_userid(index_mboxname(state), name);
     if (is_same_user < 0)
-	return is_same_user;
+        return is_same_user;
 
     r = index_check(state, usinguid, usinguid);
     if (r) return r;
@@ -2829,18 +2829,18 @@ index_copy(struct index_state *state,
     seq = _parse_sequence(state, sequence, usinguid);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
-	checkval = usinguid ? im->uid : msgno;
-	if (!seqset_ismember(seq, checkval))
-	    continue;
-	index_copysetup(state, msgno, &copyargs);
+        im = &state->map[msgno-1];
+        checkval = usinguid ? im->uid : msgno;
+        if (!seqset_ismember(seq, checkval))
+            continue;
+        index_copysetup(state, msgno, &copyargs);
     }
 
     seqset_free(seq);
 
     if (copyargs.nummsg == 0) {
-	r =  IMAP_NO_NOSUCHMSG;
-	goto done;
+        r =  IMAP_NO_NOSUCHMSG;
+        goto done;
     }
 
     r = mailbox_open_iwl(name, &destmailbox);
@@ -2848,25 +2848,25 @@ index_copy(struct index_state *state,
 
     /* not moving or different quota root - need to check quota */
     if (!ismove || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
-	for (i = 0; i < copyargs.nummsg; i++)
-	    qdiffs[QUOTA_STORAGE] += copyargs.records[i].size;
-	qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
-	qptr = qdiffs;
+        for (i = 0; i < copyargs.nummsg; i++)
+            qdiffs[QUOTA_STORAGE] += copyargs.records[i].size;
+        qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
+        qptr = qdiffs;
     }
 
     r = append_setup_mbox(&appendstate, destmailbox, state->userid,
-			  state->authstate, ACL_INSERT,
-			  ignorequota ? NULL : qptr, namespace, isadmin,
-			  ismove ? EVENT_MESSAGE_MOVE : EVENT_MESSAGE_COPY);
+                          state->authstate, ACL_INSERT,
+                          ignorequota ? NULL : qptr, namespace, isadmin,
+                          ismove ? EVENT_MESSAGE_MOVE : EVENT_MESSAGE_COPY);
     if (r) goto done;
 
     docopyuid = (appendstate.myrights & ACL_READ);
 
     r = append_copy(srcmailbox, &appendstate, copyargs.nummsg,
-		    copyargs.records, nolink, is_same_user);
+                    copyargs.records, nolink, is_same_user);
     if (r) {
-	append_abort(&appendstate);
-	goto done;
+        append_abort(&appendstate);
+        goto done;
     }
 
     r = append_commit(&appendstate);
@@ -2877,40 +2877,40 @@ index_copy(struct index_state *state,
     mailbox_unlock_index(destmailbox, NULL);
 
     if (docopyuid || ismove) {
-	char *source;
-	struct seqset *seq;
-	unsigned uidvalidity = destmailbox->i.uidvalidity;
+        char *source;
+        struct seqset *seq;
+        unsigned uidvalidity = destmailbox->i.uidvalidity;
 
-	seq = seqset_init(0, SEQ_SPARSE);
+        seq = seqset_init(0, SEQ_SPARSE);
 
-	for (i = 0; i < copyargs.nummsg; i++)
-	    seqset_add(seq, copyargs.records[i].uid, 1);
+        for (i = 0; i < copyargs.nummsg; i++)
+            seqset_add(seq, copyargs.records[i].uid, 1);
 
-	source = seqset_cstring(seq);
+        source = seqset_cstring(seq);
 
-	/* remove the source messages */
-	if (ismove)
-	    r = index_expunge(state, source, 0);
+        /* remove the source messages */
+        if (ismove)
+            r = index_expunge(state, source, 0);
 
-	if (docopyuid) {
-	    *copyuidp = xmalloc(strlen(source) + 50);
+        if (docopyuid) {
+            *copyuidp = xmalloc(strlen(source) + 50);
 
-	    if (appendstate.nummsg == 1)
-		sprintf(*copyuidp, "%u %s %u", uidvalidity, source,
-			appendstate.baseuid);
-	    else
-		sprintf(*copyuidp, "%u %s %u:%u", uidvalidity, source,
-			appendstate.baseuid,
-			appendstate.baseuid + appendstate.nummsg - 1);
-	}
+            if (appendstate.nummsg == 1)
+                sprintf(*copyuidp, "%u %s %u", uidvalidity, source,
+                        appendstate.baseuid);
+            else
+                sprintf(*copyuidp, "%u %s %u:%u", uidvalidity, source,
+                        appendstate.baseuid,
+                        appendstate.baseuid + appendstate.nummsg - 1);
+        }
 
-	free(source);
-	seqset_free(seq);
+        free(source);
+        seqset_free(seq);
     }
 
     /* we log the first name to get GUID-copy magic */
     if (!r)
-	sync_log_mailbox_double(index_mboxname(state), name);
+        sync_log_mailbox_double(index_mboxname(state), name);
 
 done:
     free(copyargs.records);
@@ -2922,8 +2922,8 @@ done:
 /*
  * Helper function to multiappend a message to remote mailbox
  */
-static int index_appendremote(struct index_state *state, uint32_t msgno, 
-			      struct protstream *pout)
+static int index_appendremote(struct index_state *state, uint32_t msgno,
+                              struct protstream *pout)
 {
     struct mailbox *mailbox = state->mailbox;
     struct buf buf = BUF_INITIALIZER;
@@ -2938,42 +2938,42 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
 
     /* Open the message file */
     if (mailbox_map_record(mailbox, &record, &buf))
-	return IMAP_NO_MSGGONE;
+        return IMAP_NO_MSGGONE;
 
     /* start the individual append */
     prot_printf(pout, " ");
 
     /* add system flags */
     if (record.system_flags & FLAG_ANSWERED) {
-	prot_printf(pout, "%c\\Answered", sepchar);
-	sepchar = ' ';
+        prot_printf(pout, "%c\\Answered", sepchar);
+        sepchar = ' ';
     }
     if (record.system_flags & FLAG_FLAGGED) {
-	prot_printf(pout, "%c\\Flagged", sepchar);
-	sepchar = ' ';
+        prot_printf(pout, "%c\\Flagged", sepchar);
+        sepchar = ' ';
     }
     if (record.system_flags & FLAG_DRAFT) {
-	prot_printf(pout, "%c\\Draft", sepchar);
-	sepchar = ' ';
+        prot_printf(pout, "%c\\Draft", sepchar);
+        sepchar = ' ';
     }
     if (record.system_flags & FLAG_DELETED) {
-	prot_printf(pout, "%c\\Deleted", sepchar);
-	sepchar = ' ';
+        prot_printf(pout, "%c\\Deleted", sepchar);
+        sepchar = ' ';
     }
     if (record.system_flags & FLAG_SEEN) {
-	prot_printf(pout, "%c\\Seen", sepchar);
-	sepchar = ' ';
+        prot_printf(pout, "%c\\Seen", sepchar);
+        sepchar = ' ';
     }
 
     /* add user flags */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if ((flag & 31) == 0) {
-	    flagmask = record.user_flags[flag/32];
-	}
-	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    prot_printf(pout, "%c%s", sepchar, state->flagname[flag]);
-	    sepchar = ' ';
-	}
+        if ((flag & 31) == 0) {
+            flagmask = record.user_flags[flag/32];
+        }
+        if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+            prot_printf(pout, "%c%s", sepchar, state->flagname[flag]);
+            sepchar = ' ';
+        }
     }
 
     /* add internal date */
@@ -2993,7 +2993,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
  * Performs a COPY command from a local mailbox to a remote mailbox
  */
 EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
-		      int usinguid, struct protstream *pout)
+                      int usinguid, struct protstream *pout)
 {
     uint32_t msgno;
     struct seqset *seq;
@@ -3006,10 +3006,10 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
     seq = _parse_sequence(state, sequence, usinguid);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
-	if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
-	    continue;
-	index_appendremote(state, msgno, pout);
+        im = &state->map[msgno-1];
+        if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
+            continue;
+        index_appendremote(state, msgno, pout);
     }
 
     seqset_free(seq);
@@ -3030,14 +3030,14 @@ EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid)
     unsigned miduid;
 
     while (low <= high) {
-	mid = (high - low)/2 + low;
-	miduid = index_getuid(state, mid);
-	if (miduid == uid)
-	    return mid;
-	else if (miduid > uid)
-	    high = mid - 1;
-	else
-	    low = mid + 1;
+        mid = (high - low)/2 + low;
+        miduid = index_getuid(state, mid);
+        if (miduid == uid)
+            return mid;
+        else if (miduid > uid)
+            high = mid - 1;
+        else
+            low = mid + 1;
     }
     return high;
 }
@@ -3052,11 +3052,11 @@ enum {
 static int data_domain(const char *p, size_t n)
 {
     while (n--) {
-	if (!*p) return DOMAIN_BINARY;
-	if (*p & 0x80) return DOMAIN_8BIT;
-	p++;
+        if (!*p) return DOMAIN_BINARY;
+        if (*p & 0x80) return DOMAIN_8BIT;
+        p++;
     }
- 
+
     return DOMAIN_7BIT;
 }
 
@@ -3069,58 +3069,58 @@ static int data_domain(const char *p, size_t n)
  * IMAP command PARTIAL.
  */
 void index_fetchmsg(struct index_state *state, const struct buf *msg,
-		    unsigned offset,
-		    unsigned size,     /* this is the correct size for a news message after
-					  having LF translated to CRLF */
-		    unsigned start_octet, unsigned octet_count)
+                    unsigned offset,
+                    unsigned size,     /* this is the correct size for a news message after
+                                          having LF translated to CRLF */
+                    unsigned start_octet, unsigned octet_count)
 {
     unsigned n, domain;
 
     /* If no data, output NIL */
     if (!msg || !msg->s) {
-	prot_printf(state->out, "NIL");
-	return;
+        prot_printf(state->out, "NIL");
+        return;
     }
 
     /* partial fetch: adjust 'size' */
     if (octet_count) {
-	if (size <= start_octet) {
-	    size = 0;
-	}
-	else {
-	    size -= start_octet;
-	}
-	if (size > octet_count) size = octet_count;
+        if (size <= start_octet) {
+            size = 0;
+        }
+        else {
+            size -= start_octet;
+        }
+        if (size > octet_count) size = octet_count;
     }
 
     /* If zero-length data, output empty quoted string */
     if (size == 0) {
-	prot_printf(state->out, "\"\"");
-	return;
+        prot_printf(state->out, "\"\"");
+        return;
     }
 
     /* Seek over PARTIAL constraint */
     offset += start_octet;
     n = size;
     if (offset + size > msg->len) {
-	if (msg->len > offset) {
-	    n = msg->len - offset;
-	}
-	else {
-	    prot_printf(state->out, "\"\"");
-	    return;
-	}
+        if (msg->len > offset) {
+            n = msg->len - offset;
+        }
+        else {
+            prot_printf(state->out, "\"\"");
+            return;
+        }
     }
 
     /* Get domain of the data */
     domain = data_domain(msg->s + offset, n);
 
     if (domain == DOMAIN_BINARY) {
-	/* Write size of literal8 */
-	prot_printf(state->out, "~{%u}\r\n", size);
+        /* Write size of literal8 */
+        prot_printf(state->out, "~{%u}\r\n", size);
     } else {
-	/* Write size of literal */
-	prot_printf(state->out, "{%u}\r\n", size);
+        /* Write size of literal */
+        prot_printf(state->out, "{%u}\r\n", size);
     }
 
     /* Non-text literal -- tell the protstream about it */
@@ -3128,12 +3128,12 @@ void index_fetchmsg(struct index_state *state, const struct buf *msg,
 
     prot_write(state->out, msg->s + offset, n);
     while (n++ < size) {
-	/* File too short, resynch client.
-	 *
-	 * This can only happen if the reported size of the part
-	 * is incorrect and would push us past EOF.
-	 */
-	(void)prot_putc(' ', state->out);
+        /* File too short, resynch client.
+         *
+         * This can only happen if the reported size of the part
+         * is incorrect and would push us past EOF.
+         */
+        (void)prot_putc(' ', state->out);
     }
 
     /* End of non-text literal -- tell the protstream about it */
@@ -3144,9 +3144,9 @@ void index_fetchmsg(struct index_state *state, const struct buf *msg,
  * Helper function to fetch a body section
  */
 static int index_fetchsection(struct index_state *state, const char *resp,
-			      const struct buf *inmsg,
-			      char *section, const char *cachestr, unsigned size,
-			      unsigned start_octet, unsigned octet_count)
+                              const struct buf *inmsg,
+                              char *section, const char *cachestr, unsigned size,
+                              unsigned start_octet, unsigned octet_count)
 {
     const char *p;
     int32_t skip = 0;
@@ -3161,123 +3161,123 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 
     /* Special-case BODY[] */
     if (*p == ']') {
-	if (strstr(resp, "BINARY.SIZE")) {
-	    prot_printf(state->out, "%s%u", resp, size);
-	} else {
-	    prot_printf(state->out, "%s", resp);
-	    index_fetchmsg(state, &msg, 0, size,
-			   start_octet, octet_count);
-	}
-	return 0;
+        if (strstr(resp, "BINARY.SIZE")) {
+            prot_printf(state->out, "%s%u", resp, size);
+        } else {
+            prot_printf(state->out, "%s", resp);
+            index_fetchmsg(state, &msg, 0, size,
+                           start_octet, octet_count);
+        }
+        return 0;
     }
 
     while (*p != ']' && *p != 'M') {
-	int num_parts = CACHE_ITEM_BIT32(cachestr);
-	int r;
+        int num_parts = CACHE_ITEM_BIT32(cachestr);
+        int r;
 
-	/* Generate the actual part number */
-	r = parseint32(p, &p, &skip);
-	if (*p == '.') p++;
+        /* Generate the actual part number */
+        r = parseint32(p, &p, &skip);
+        if (*p == '.') p++;
 
-	/* Handle .0, .HEADER, and .TEXT */
-	if (r || skip == 0) {
-	    skip = 0;
-	    /* We don't have any digits, so its a string */
-	    switch (*p) {
-	    case 'H':
-		p += 6;
-		fetchmime++;	/* .HEADER maps internally to .0.MIME */
-		break;
+        /* Handle .0, .HEADER, and .TEXT */
+        if (r || skip == 0) {
+            skip = 0;
+            /* We don't have any digits, so its a string */
+            switch (*p) {
+            case 'H':
+                p += 6;
+                fetchmime++;    /* .HEADER maps internally to .0.MIME */
+                break;
 
-	    case 'T':
-		p += 4;
-		break;		/* .TEXT maps internally to .0 */
+            case 'T':
+                p += 4;
+                break;          /* .TEXT maps internally to .0 */
 
-	    default:
-		fetchmime++;	/* .0 maps internally to .0.MIME */
-		break;
-	    }
-	} 
+            default:
+                fetchmime++;    /* .0 maps internally to .0.MIME */
+                break;
+            }
+        }
 
-	/* section number too large */
-	if (skip >= num_parts) goto badpart;
+        /* section number too large */
+        if (skip >= num_parts) goto badpart;
 
-	if (*p != ']' && *p != 'M') {
-	    /* We are NOT at the end of a part specification, so there's
-	     * a subpart being requested.  Find the subpart in the tree. */
+        if (*p != ']' && *p != 'M') {
+            /* We are NOT at the end of a part specification, so there's
+             * a subpart being requested.  Find the subpart in the tree. */
 
-	    /* Skip the headers for this part, along with the number of
-	     * sub parts */
-	    cachestr += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
+            /* Skip the headers for this part, along with the number of
+             * sub parts */
+            cachestr += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
 
-	    /* Skip to the correct part */
-	    while (--skip) {
-		if (CACHE_ITEM_BIT32(cachestr) > 0) {
-		    /* Skip each part at this level */
-		    skip += CACHE_ITEM_BIT32(cachestr)-1;
-		    cachestr += CACHE_ITEM_BIT32(cachestr) * 5 * 4;
-		}
-		cachestr += CACHE_ITEM_SIZE_SKIP;
-	    }
-	}
+            /* Skip to the correct part */
+            while (--skip) {
+                if (CACHE_ITEM_BIT32(cachestr) > 0) {
+                    /* Skip each part at this level */
+                    skip += CACHE_ITEM_BIT32(cachestr)-1;
+                    cachestr += CACHE_ITEM_BIT32(cachestr) * 5 * 4;
+                }
+                cachestr += CACHE_ITEM_SIZE_SKIP;
+            }
+        }
     }
 
     if (*p == 'M') fetchmime++;
 
     cachestr += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP + (fetchmime ? 0 : 2 * 4);
-    
+
     if (CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
-	goto badpart;
+        goto badpart;
 
     offset = CACHE_ITEM_BIT32(cachestr);
     size = CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP);
 
     if (msg.s && (p = strstr(resp, "BINARY"))) {
-	/* BINARY or BINARY.SIZE */
-	int encoding = CACHE_ITEM_BIT32(cachestr + 2 * 4) & 0xff;
-	size_t newsize;
+        /* BINARY or BINARY.SIZE */
+        int encoding = CACHE_ITEM_BIT32(cachestr + 2 * 4) & 0xff;
+        size_t newsize;
 
-	/* check that the offset isn't corrupt */
-	if (offset + size > msg.len) {
-	    syslog(LOG_ERR, "invalid part offset in %s", index_mboxname(state));
-	    return IMAP_IOERROR;
-	}
+        /* check that the offset isn't corrupt */
+        if (offset + size > msg.len) {
+            syslog(LOG_ERR, "invalid part offset in %s", index_mboxname(state));
+            return IMAP_IOERROR;
+        }
 
-	msg.s = (char *)charset_decode_mimebody(msg.s + offset, size, encoding,
-						&decbuf, &newsize);
+        msg.s = (char *)charset_decode_mimebody(msg.s + offset, size, encoding,
+                                                &decbuf, &newsize);
 
-	if (!msg.s) {
-	    /* failed to decode */
-	    if (decbuf) free(decbuf);
-	    return IMAP_NO_UNKNOWN_CTE;
-	}
-	else if (p[6] == '.') {
-	    /* BINARY.SIZE */
-	    prot_printf(state->out, "%s%zd", resp, newsize);
-	    if (decbuf) free(decbuf);
-	    return 0;
-	}
-	else {
-	    /* BINARY */
-	    offset = 0;
-	    size = newsize;
-	    msg.len = newsize;
-	}
+        if (!msg.s) {
+            /* failed to decode */
+            if (decbuf) free(decbuf);
+            return IMAP_NO_UNKNOWN_CTE;
+        }
+        else if (p[6] == '.') {
+            /* BINARY.SIZE */
+            prot_printf(state->out, "%s%zd", resp, newsize);
+            if (decbuf) free(decbuf);
+            return 0;
+        }
+        else {
+            /* BINARY */
+            offset = 0;
+            size = newsize;
+            msg.len = newsize;
+        }
     }
 
     /* Output body part */
     prot_printf(state->out, "%s", resp);
     index_fetchmsg(state, &msg, offset, size,
-		   start_octet, octet_count);
+                   start_octet, octet_count);
 
     if (decbuf) free(decbuf);
     return 0;
 
  badpart:
     if (strstr(resp, "BINARY.SIZE"))
-	prot_printf(state->out, "%s0", resp);
+        prot_printf(state->out, "%s0", resp);
     else
-	prot_printf(state->out, "%sNIL", resp);
+        prot_printf(state->out, "%sNIL", resp);
     return 0;
 }
 
@@ -3285,11 +3285,11 @@ static int index_fetchsection(struct index_state *state, const char *resp,
  * Helper function to fetch a HEADER.FIELDS[.NOT] body section
  */
 static void index_fetchfsection(struct index_state *state,
-				const char *msg_base,
-				unsigned long msg_size,
-				struct fieldlist *fsection,
-				const char *cachestr,
-				unsigned start_octet, unsigned octet_count)
+                                const char *msg_base,
+                                unsigned long msg_size,
+                                struct fieldlist *fsection,
+                                const char *cachestr,
+                                unsigned start_octet, unsigned octet_count)
 {
     const char *p;
     int32_t skip = 0;
@@ -3303,29 +3303,29 @@ static void index_fetchfsection(struct index_state *state,
 
     /* If no data, output null quoted string */
     if (!msg_base) {
-	prot_printf(state->out, "\"\"");
-	return;
+        prot_printf(state->out, "\"\"");
+        return;
     }
 
     p = fsection->section;
 
     while (*p != 'H') {
-	int num_parts = CACHE_ITEM_BIT32(cachestr);
+        int num_parts = CACHE_ITEM_BIT32(cachestr);
 
-	r = parseint32(p, &p, &skip);
-	if (*p == '.') p++;
+        r = parseint32(p, &p, &skip);
+        if (*p == '.') p++;
 
-	/* section number too large */
-	if (r || skip == 0 || skip >= num_parts) goto badpart;
+        /* section number too large */
+        if (r || skip == 0 || skip >= num_parts) goto badpart;
 
-	cachestr += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
-	while (--skip) {
-	    if (CACHE_ITEM_BIT32(cachestr) > 0) {
-		skip += CACHE_ITEM_BIT32(cachestr)-1;
-		cachestr += CACHE_ITEM_BIT32(cachestr) * 5 * 4;
-	    }
-	    cachestr += CACHE_ITEM_SIZE_SKIP;
-	}
+        cachestr += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
+        while (--skip) {
+            if (CACHE_ITEM_BIT32(cachestr) > 0) {
+                skip += CACHE_ITEM_BIT32(cachestr)-1;
+                cachestr += CACHE_ITEM_BIT32(cachestr) * 5 * 4;
+            }
+            cachestr += CACHE_ITEM_SIZE_SKIP;
+        }
     }
 
     /* leaf object */
@@ -3334,51 +3334,51 @@ static void index_fetchfsection(struct index_state *state,
     cachestr += 4;
 
     if (CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
-	goto badpart;
-	
-    if (p[13]) fields_not++;	/* Check for "." after "HEADER.FIELDS" */
+        goto badpart;
 
-    buf = index_readheader(msg_base, msg_size, 
-			   CACHE_ITEM_BIT32(cachestr),
-			   CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP));
+    if (p[13]) fields_not++;    /* Check for "." after "HEADER.FIELDS" */
+
+    buf = index_readheader(msg_base, msg_size,
+                           CACHE_ITEM_BIT32(cachestr),
+                           CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP));
 
     if (fields_not) {
-	message_pruneheader(buf, 0, fsection->fields);
+        message_pruneheader(buf, 0, fsection->fields);
     }
     else {
-	message_pruneheader(buf, fsection->fields, 0);
+        message_pruneheader(buf, fsection->fields, 0);
     }
     size = strlen(buf);
 
     /* partial fetch: adjust 'size' */
     if (octet_count) {
-	if (size <= start_octet) {
-	    crlf_start = start_octet - size;
-	    size = 0;
-	    start_octet = 0;
-	    if (crlf_size <= crlf_start) {
-		crlf_size = 0;
-	    }
-	    else {
-		crlf_size -= crlf_start;
-	    }
-	}
-	else {
-	    size -= start_octet;
-	}
-	if (size > octet_count) {
-	    size = octet_count;
-	    crlf_size = 0;
-	}
-	else if (size + crlf_size > octet_count) {
-	    crlf_size = octet_count - size;
-	}
+        if (size <= start_octet) {
+            crlf_start = start_octet - size;
+            size = 0;
+            start_octet = 0;
+            if (crlf_size <= crlf_start) {
+                crlf_size = 0;
+            }
+            else {
+                crlf_size -= crlf_start;
+            }
+        }
+        else {
+            size -= start_octet;
+        }
+        if (size > octet_count) {
+            size = octet_count;
+            crlf_size = 0;
+        }
+        else if (size + crlf_size > octet_count) {
+            crlf_size = octet_count - size;
+        }
     }
 
     /* If no data, output null quoted string */
     if (size + crlf_size == 0) {
-	prot_printf(state->out, "\"\"");
-	return;
+        prot_printf(state->out, "\"\"");
+        return;
     }
 
     /* Write literal */
@@ -3396,18 +3396,18 @@ static void index_fetchfsection(struct index_state *state,
  * Helper function to read a header section into a static buffer
  */
 static char *index_readheader(const char *msg_base, unsigned long msg_size,
-			      unsigned offset, unsigned size)
+                              unsigned offset, unsigned size)
 {
     static struct buf buf = BUF_INITIALIZER;
 
     if (offset + size > msg_size) {
-	/* Message file is too short, truncate request */
-	if (offset < msg_size) {
-	    size = msg_size - offset;
-	}
-	else {
-	    size = 0;
-	}
+        /* Message file is too short, truncate request */
+        if (offset < msg_size) {
+            size = msg_size - offset;
+        }
+        else {
+            size = 0;
+        }
     }
 
     buf_reset(&buf);
@@ -3420,18 +3420,18 @@ static char *index_readheader(const char *msg_base, unsigned long msg_size,
  * that can't use the cacheheaders in cyrus.cache
  */
 static void index_fetchheader(struct index_state *state,
-			      const char *msg_base,
-			      unsigned long msg_size,
-			      unsigned size,
-			      const strarray_t *headers,
-			      const strarray_t *headers_not)
+                              const char *msg_base,
+                              unsigned long msg_size,
+                              unsigned size,
+                              const strarray_t *headers,
+                              const strarray_t *headers_not)
 {
     char *buf;
 
     /* If no data, output null quoted string */
     if (!msg_base) {
-	prot_printf(state->out, "\"\"");
-	return;
+        prot_printf(state->out, "\"\"");
+        return;
     }
 
     buf = index_readheader(msg_base, msg_size, 0, size);
@@ -3448,8 +3448,8 @@ static void index_fetchheader(struct index_state *state,
  */
 static void
 index_fetchcacheheader(struct index_state *state, struct index_record *record,
-		       const strarray_t *headers, unsigned start_octet,
-		       unsigned octet_count)
+                       const strarray_t *headers, unsigned start_octet,
+                       unsigned octet_count)
 {
     static struct buf buf = BUF_INITIALIZER;
     unsigned size;
@@ -3459,13 +3459,13 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
     struct mailbox *mailbox = state->mailbox;
 
     if (mailbox_cacherecord(mailbox, record)) {
-	/* bogus cache record */
-	prot_printf(state->out, "\"\"");
-	return;
+        /* bogus cache record */
+        prot_printf(state->out, "\"\"");
+        return;
     }
 
     buf_setmap(&buf, cacheitem_base(record, CACHE_HEADERS),
-		     cacheitem_size(record, CACHE_HEADERS));
+                     cacheitem_size(record, CACHE_HEADERS));
     buf_cstring(&buf);
 
     message_pruneheader(buf.s, headers, 0);
@@ -3473,36 +3473,36 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
 
     /* partial fetch: adjust 'size' */
     if (octet_count) {
-	if (size <= start_octet) {
-	    crlf_start = start_octet - size;
-	    size = 0;
-	    start_octet = 0;
-	    if (crlf_size <= crlf_start) {
-		crlf_size = 0;
-	    }
-	    else {
-		crlf_size -= crlf_start;
-	    }
-	}
-	else {
-	    size -= start_octet;
-	}
-	if (size > octet_count) {
-	    size = octet_count;
-	    crlf_size = 0;
-	}
-	else if (size + crlf_size > octet_count) {
-	    crlf_size = octet_count - size;
-	}
+        if (size <= start_octet) {
+            crlf_start = start_octet - size;
+            size = 0;
+            start_octet = 0;
+            if (crlf_size <= crlf_start) {
+                crlf_size = 0;
+            }
+            else {
+                crlf_size -= crlf_start;
+            }
+        }
+        else {
+            size -= start_octet;
+        }
+        if (size > octet_count) {
+            size = octet_count;
+            crlf_size = 0;
+        }
+        else if (size + crlf_size > octet_count) {
+            crlf_size = octet_count - size;
+        }
     }
-	
+
     if (size + crlf_size == 0) {
-	prot_printf(state->out, "\"\"");
+        prot_printf(state->out, "\"\"");
     }
     else {
-	prot_printf(state->out, "{%u}\r\n", size + crlf_size);
-	prot_write(state->out, buf.s + start_octet, size);
-	prot_write(state->out, crlf + crlf_start, crlf_size);
+        prot_printf(state->out, "{%u}\r\n", size + crlf_size);
+        prot_write(state->out, buf.s + start_octet, size);
+        prot_write(state->out, crlf + crlf_start, crlf_size);
     }
 }
 
@@ -3517,35 +3517,35 @@ static void index_listflags(struct index_state *state)
 
     prot_printf(state->out, "* FLAGS (\\Answered \\Flagged \\Draft \\Deleted \\Seen");
     for (i = 0; i < MAX_USER_FLAGS; i++) {
-	if (state->flagname[i]) {
-	    prot_printf(state->out, " %s", state->flagname[i]);
-	}
-	else cancreate++;
+        if (state->flagname[i]) {
+            prot_printf(state->out, " %s", state->flagname[i]);
+        }
+        else cancreate++;
     }
     prot_printf(state->out, ")\r\n* OK [PERMANENTFLAGS ");
     if (!state->examining) {
-	if (state->myrights & ACL_WRITE) {
-	    prot_printf(state->out, "%c\\Answered \\Flagged \\Draft", sepchar);
-	    sepchar = ' ';
-	}
-	if (state->myrights & ACL_DELETEMSG) {
-	    prot_printf(state->out, "%c\\Deleted", sepchar);
-	    sepchar = ' ';
-	}
-	if (state->myrights & ACL_SETSEEN) {
-	    prot_printf(state->out, "%c\\Seen", sepchar);
-	    sepchar = ' ';
-	}
-	if (state->myrights & ACL_WRITE) {
-	    for (i = 0; i < MAX_USER_FLAGS; i++) {
-		if (state->flagname[i]) {
-		    prot_printf(state->out, " %s", state->flagname[i]);
-		}
-	    }
-	    if (cancreate) {
-		prot_printf(state->out, " \\*");
-	    }
-	}
+        if (state->myrights & ACL_WRITE) {
+            prot_printf(state->out, "%c\\Answered \\Flagged \\Draft", sepchar);
+            sepchar = ' ';
+        }
+        if (state->myrights & ACL_DELETEMSG) {
+            prot_printf(state->out, "%c\\Deleted", sepchar);
+            sepchar = ' ';
+        }
+        if (state->myrights & ACL_SETSEEN) {
+            prot_printf(state->out, "%c\\Seen", sepchar);
+            sepchar = ' ';
+        }
+        if (state->myrights & ACL_WRITE) {
+            for (i = 0; i < MAX_USER_FLAGS; i++) {
+                if (state->flagname[i]) {
+                    prot_printf(state->out, " %s", state->flagname[i]);
+                }
+            }
+            if (cancreate) {
+                prot_printf(state->out, " \\*");
+            }
+        }
     }
     if (sepchar == '(') prot_printf(state->out, "(");
     prot_printf(state->out, ")] Ok\r\n");
@@ -3557,28 +3557,28 @@ EXPORTED void index_checkflags(struct index_state *state, int print, int dirty)
     unsigned i;
 
     for (i = 0; i < MAX_USER_FLAGS; i++) {
-	/* both empty */
-	if (!mailbox->flagname[i] && !state->flagname[i])
-	    continue;
+        /* both empty */
+        if (!mailbox->flagname[i] && !state->flagname[i])
+            continue;
 
-	/* both same */
-	if (mailbox->flagname[i] && state->flagname[i] &&
-	    !strcmp(mailbox->flagname[i], state->flagname[i]))
-	    continue;
+        /* both same */
+        if (mailbox->flagname[i] && state->flagname[i] &&
+            !strcmp(mailbox->flagname[i], state->flagname[i]))
+            continue;
 
-	/* ok, got something to change! */
-	if (state->flagname[i])
-	    free(state->flagname[i]);
-	if (mailbox->flagname[i])
-	    state->flagname[i] = xstrdup(mailbox->flagname[i]);
-	else
-	    state->flagname[i] = NULL;
+        /* ok, got something to change! */
+        if (state->flagname[i])
+            free(state->flagname[i]);
+        if (mailbox->flagname[i])
+            state->flagname[i] = xstrdup(mailbox->flagname[i]);
+        else
+            state->flagname[i] = NULL;
 
-	dirty = 1;
+        dirty = 1;
     }
 
     if (dirty && print)
-	index_listflags(state);
+        index_listflags(state);
 }
 
 static void index_tellexpunge(struct index_state *state)
@@ -3592,35 +3592,35 @@ static void index_tellexpunge(struct index_state *state)
     vanishedlist = seqset_init(0, SEQ_SPARSE);
 
     for (oldmsgno = 1; oldmsgno <= exists; oldmsgno++) {
-	im = &state->map[oldmsgno-1];
+        im = &state->map[oldmsgno-1];
 
-	/* inform about expunges */
-	if (im->system_flags & FLAG_EXPUNGED) {
-	    state->exists--;
-	    state->num_expunged--;
-	    /* they never knew about this one, skip */
-	    if (msgno > state->oldexists)
-		continue;
-	    state->oldexists--;
-	    if ((client_capa & CAPA_QRESYNC))
-		seqset_add(vanishedlist, im->uid, 1);
-	    else
-		prot_printf(state->out, "* %u EXPUNGE\r\n", msgno);
-	    continue;
-	}
+        /* inform about expunges */
+        if (im->system_flags & FLAG_EXPUNGED) {
+            state->exists--;
+            state->num_expunged--;
+            /* they never knew about this one, skip */
+            if (msgno > state->oldexists)
+                continue;
+            state->oldexists--;
+            if ((client_capa & CAPA_QRESYNC))
+                seqset_add(vanishedlist, im->uid, 1);
+            else
+                prot_printf(state->out, "* %u EXPUNGE\r\n", msgno);
+            continue;
+        }
 
-	/* copy back if necessary (after first expunge) */
-	if (msgno < oldmsgno)
-	    state->map[msgno-1] = *im;
+        /* copy back if necessary (after first expunge) */
+        if (msgno < oldmsgno)
+            state->map[msgno-1] = *im;
 
-	msgno++;
+        msgno++;
     }
 
     /* report all vanished if we're doing it this way */
     if (vanishedlist->len) {
-	char *vanished = seqset_cstring(vanishedlist);
-	prot_printf(state->out, "* VANISHED %s\r\n", vanished);
-	free(vanished);
+        char *vanished = seqset_cstring(vanishedlist);
+        prot_printf(state->out, "* VANISHED %s\r\n", vanished);
+        free(vanished);
     }
     seqset_free(vanishedlist);
 
@@ -3636,7 +3636,7 @@ static void index_tellexists(struct index_state *state)
 }
 
 EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
-		       int printuid, int printmodseq)
+                       int printuid, int printmodseq)
 {
     uint32_t msgno;
     struct index_map *im;
@@ -3649,11 +3649,11 @@ EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
 
     /* print any changed message flags */
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
+        im = &state->map[msgno-1];
 
-	/* report if it's changed since last told */
-	if (im->modseq > im->told_modseq)
-	    index_printflags(state, msgno, printuid, printmodseq);
+        /* report if it's changed since last told */
+        if (im->modseq > im->told_modseq)
+            index_printflags(state, msgno, printuid, printmodseq);
     }
 }
 
@@ -3663,12 +3663,12 @@ struct fetch_annotation_rock {
 };
 
 static void fetch_annotation_response(const char *mboxname
-					__attribute__((unused)),
-				      uint32_t uid
-					__attribute__((unused)),
-				      const char *entry,
-				      struct attvaluelist *attvalues,
-				      void *rock)
+                                        __attribute__((unused)),
+                                      uint32_t uid
+                                        __attribute__((unused)),
+                                      const char *entry,
+                                      struct attvaluelist *attvalues,
+                                      void *rock)
 {
     char sep2 = '(';
     struct attvaluelist *l;
@@ -3679,11 +3679,11 @@ static void fetch_annotation_response(const char *mboxname
     prot_putc(' ', frock->pout);
 
     for (l = attvalues ; l ; l = l->next) {
-	prot_putc(sep2, frock->pout);
-	sep2 = ' ';
-	prot_printastring(frock->pout, l->attrib);
-	prot_putc(' ', frock->pout);
-	prot_printmap(frock->pout, l->value.s, l->value.len);
+        prot_putc(sep2, frock->pout);
+        sep2 = ' ';
+        prot_printastring(frock->pout, l->attrib);
+        prot_putc(' ', frock->pout);
+        prot_printmap(frock->pout, l->value.s, l->value.len);
     }
     prot_putc(')', frock->pout);
 
@@ -3695,28 +3695,28 @@ static void fetch_annotation_response(const char *mboxname
  * fetch item.
  */
 static int index_fetchannotations(struct index_state *state,
-				  uint32_t msgno,
-				  const struct fetchargs *fetchargs)
+                                  uint32_t msgno,
+                                  const struct fetchargs *fetchargs)
 {
     annotate_state_t *astate = NULL;
     struct fetch_annotation_rock rock;
     int r = 0;
 
     r = mailbox_get_annotate_state(state->mailbox,
-			           state->map[msgno-1].uid,
-				   &astate);
+                                   state->map[msgno-1].uid,
+                                   &astate);
     if (r) return r;
     annotate_state_set_auth(astate, fetchargs->isadmin,
-			    fetchargs->userid, fetchargs->authstate);
+                            fetchargs->userid, fetchargs->authstate);
 
     memset(&rock, 0, sizeof(rock));
     rock.pout = state->out;
     rock.sep = "";
 
     r = annotate_state_fetch(astate,
-			     &fetchargs->entries, &fetchargs->attribs,
-			     fetch_annotation_response, &rock,
-			     0);
+                             &fetchargs->entries, &fetchargs->attribs,
+                             fetch_annotation_response, &rock,
+                             0);
 
     return r;
 }
@@ -3727,7 +3727,7 @@ static int index_fetchannotations(struct index_state *state,
  * Also sends preceeding * FLAGS if necessary.
  */
 static void index_fetchflags(struct index_state *state,
-			     uint32_t msgno)
+                             uint32_t msgno)
 {
     int sepchar = '(';
     unsigned flag;
@@ -3737,37 +3737,37 @@ static void index_fetchflags(struct index_state *state,
     prot_printf(state->out, "* %u FETCH (FLAGS ", msgno);
 
     if (im->isrecent) {
-	prot_printf(state->out, "%c\\Recent", sepchar);
-	sepchar = ' ';
+        prot_printf(state->out, "%c\\Recent", sepchar);
+        sepchar = ' ';
     }
     if (im->system_flags & FLAG_ANSWERED) {
-	prot_printf(state->out, "%c\\Answered", sepchar);
-	sepchar = ' ';
+        prot_printf(state->out, "%c\\Answered", sepchar);
+        sepchar = ' ';
     }
     if (im->system_flags & FLAG_FLAGGED) {
-	prot_printf(state->out, "%c\\Flagged", sepchar);
-	sepchar = ' ';
+        prot_printf(state->out, "%c\\Flagged", sepchar);
+        sepchar = ' ';
     }
     if (im->system_flags & FLAG_DRAFT) {
-	prot_printf(state->out, "%c\\Draft", sepchar);
-	sepchar = ' ';
+        prot_printf(state->out, "%c\\Draft", sepchar);
+        sepchar = ' ';
     }
     if (im->system_flags & FLAG_DELETED) {
-	prot_printf(state->out, "%c\\Deleted", sepchar);
-	sepchar = ' ';
+        prot_printf(state->out, "%c\\Deleted", sepchar);
+        sepchar = ' ';
     }
     if (im->isseen) {
-	prot_printf(state->out, "%c\\Seen", sepchar);
-	sepchar = ' ';
+        prot_printf(state->out, "%c\\Seen", sepchar);
+        sepchar = ' ';
     }
     for (flag = 0; flag < VECTOR_SIZE(state->flagname); flag++) {
-	if ((flag & 31) == 0) {
-	    flagmask = im->user_flags[flag/32];
-	}
-	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    prot_printf(state->out, "%c%s", sepchar, state->flagname[flag]);
-	    sepchar = ' ';
-	}
+        if ((flag & 31) == 0) {
+            flagmask = im->user_flags[flag/32];
+        }
+        if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+            prot_printf(state->out, "%c%s", sepchar, state->flagname[flag]);
+            sepchar = ' ';
+        }
     }
     if (sepchar == '(') (void)prot_putc('(', state->out);
     (void)prot_putc(')', state->out);
@@ -3775,8 +3775,8 @@ static void index_fetchflags(struct index_state *state,
 }
 
 static void index_printflags(struct index_state *state,
-			     uint32_t msgno, int usinguid,
-			     int printmodseq)
+                             uint32_t msgno, int usinguid,
+                             int printmodseq)
 {
     struct index_map *im = &state->map[msgno-1];
 
@@ -3785,9 +3785,9 @@ static void index_printflags(struct index_state *state,
      * Errata ID: 1807 - MUST send UID and MODSEQ to all
      * untagged FETCH unsolicited responses */
     if (usinguid || (client_capa & CAPA_QRESYNC))
-	prot_printf(state->out, " UID %u", im->uid);
+        prot_printf(state->out, " UID %u", im->uid);
     if (printmodseq || (client_capa & CAPA_CONDSTORE))
-	prot_printf(state->out, " MODSEQ (" MODSEQ_FMT ")", im->modseq);
+        prot_printf(state->out, " MODSEQ (" MODSEQ_FMT ")", im->modseq);
     prot_printf(state->out, ")\r\n");
 }
 
@@ -3795,7 +3795,7 @@ static void index_printflags(struct index_state *state,
  * Helper function to send requested * FETCH data for a message
  */
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
-			    const struct fetchargs *fetchargs)
+                            const struct fetchargs *fetchargs)
 {
     struct mailbox *mailbox = state->mailbox;
     int fetchitems = fetchargs->fetchitems;
@@ -3812,300 +3812,300 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
     /* Check the modseq against changedsince */
     if (fetchargs->changedsince && im->modseq <= fetchargs->changedsince)
-	return 0;
+        return 0;
 
     /* skip missing records entirely */
     if (!im->recno)
-	return 0;
+        return 0;
 
     r = index_reload_record(state, msgno, &record);
     if (r) {
-	prot_printf(state->out, "* OK ");
-	prot_printf(state->out, error_message(IMAP_NO_MSGGONE), msgno);
-	prot_printf(state->out, "\r\n");
-	return 0;
+        prot_printf(state->out, "* OK ");
+        prot_printf(state->out, error_message(IMAP_NO_MSGGONE), msgno);
+        prot_printf(state->out, "\r\n");
+        return 0;
     }
 
     /* Check against the CID list filter */
     if (fetchargs->cidhash) {
-	const char *key = conversation_id_encode(record.cid);
-	if (!hash_lookup(key, fetchargs->cidhash))
-	    return 0;
+        const char *key = conversation_id_encode(record.cid);
+        if (!hash_lookup(key, fetchargs->cidhash))
+            return 0;
     }
 
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_SHA1|FETCH_RFC822)) ||
-	fetchargs->cache_atleast > record.cache_version ||
-	fetchargs->binsections || fetchargs->sizesections ||
-	fetchargs->bodysections) {
-	if (mailbox_map_record(mailbox, &record, &buf)) {
-	    prot_printf(state->out, "* OK ");
-	    prot_printf(state->out, error_message(IMAP_NO_MSGGONE), msgno);
-	    prot_printf(state->out, "\r\n");
-	    return 0;
-	}
+        fetchargs->cache_atleast > record.cache_version ||
+        fetchargs->binsections || fetchargs->sizesections ||
+        fetchargs->bodysections) {
+        if (mailbox_map_record(mailbox, &record, &buf)) {
+            prot_printf(state->out, "* OK ");
+            prot_printf(state->out, error_message(IMAP_NO_MSGGONE), msgno);
+            prot_printf(state->out, "\r\n");
+            return 0;
+        }
     }
 
     /* display flags if asked _OR_ if they've changed */
     if (fetchitems & FETCH_FLAGS || im->told_modseq < record.modseq) {
-	index_fetchflags(state, msgno);
-	sepchar = ' ';
+        index_fetchflags(state, msgno);
+        sepchar = ' ';
     }
     else if ((fetchitems & ~FETCH_SETSEEN) || fetchargs->fsections ||
-	     fetchargs->headers.count || fetchargs->headers_not.count) {
-	/* these fetch items will always succeed, so start the response */
-	prot_printf(state->out, "* %u FETCH ", msgno);
-	started = 1;
+             fetchargs->headers.count || fetchargs->headers_not.count) {
+        /* these fetch items will always succeed, so start the response */
+        prot_printf(state->out, "* %u FETCH ", msgno);
+        started = 1;
     }
     if (fetchitems & FETCH_UID) {
-	prot_printf(state->out, "%cUID %u", sepchar, record.uid);
-	sepchar = ' ';
+        prot_printf(state->out, "%cUID %u", sepchar, record.uid);
+        sepchar = ' ';
     }
     if (fetchitems & FETCH_GUID) {
-	prot_printf(state->out, "%cDIGEST.SHA1 %s", sepchar,
-		    message_guid_encode(&record.guid));
-	sepchar = ' ';
+        prot_printf(state->out, "%cDIGEST.SHA1 %s", sepchar,
+                    message_guid_encode(&record.guid));
+        sepchar = ' ';
     }
 
     if (fetchitems & FETCH_INTERNALDATE) {
-	time_t msgdate = record.internaldate;
-	char datebuf[RFC3501_DATETIME_MAX+1];
+        time_t msgdate = record.internaldate;
+        char datebuf[RFC3501_DATETIME_MAX+1];
 
-	time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
+        time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
 
-	prot_printf(state->out, "%cINTERNALDATE \"%s\"",
-		    sepchar, datebuf);
-	sepchar = ' ';
+        prot_printf(state->out, "%cINTERNALDATE \"%s\"",
+                    sepchar, datebuf);
+        sepchar = ' ';
     }
     if (fetchitems & FETCH_MODSEQ) {
-	prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
-		    sepchar, record.modseq);
-	sepchar = ' ';
+        prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
+                    sepchar, record.modseq);
+        sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-	prot_printf(state->out, "%cRFC822.SIZE %u", 
-		    sepchar, record.size);
-	sepchar = ' ';
+        prot_printf(state->out, "%cRFC822.SIZE %u",
+                    sepchar, record.size);
+        sepchar = ' ';
     }
     if ((fetchitems & FETCH_ANNOTATION)) {
-	prot_printf(state->out, "%cANNOTATION (", sepchar);
-	r = index_fetchannotations(state, msgno, fetchargs);
-	r = 0;
-	prot_printf(state->out, ")");
-	sepchar = ' ';
+        prot_printf(state->out, "%cANNOTATION (", sepchar);
+        r = index_fetchannotations(state, msgno, fetchargs);
+        r = 0;
+        prot_printf(state->out, ")");
+        sepchar = ' ';
     }
     if (fetchitems & FETCH_FILESIZE) {
-	unsigned int msg_size = buf.len;
-	if (!buf.s) {
-	    const char *fname = mailbox_record_fname(mailbox, &record);
-	    struct stat sbuf;
-	    /* Find the size of the message file */
-	    if (stat(fname, &sbuf) == -1)
-		syslog(LOG_ERR, "IOERROR: stat on %s: %m", fname);
-	    else
-		msg_size = sbuf.st_size;
-	}
-	prot_printf(state->out, "%cRFC822.FILESIZE %lu", sepchar,
-		    (long unsigned)msg_size);
-	sepchar = ' ';
+        unsigned int msg_size = buf.len;
+        if (!buf.s) {
+            const char *fname = mailbox_record_fname(mailbox, &record);
+            struct stat sbuf;
+            /* Find the size of the message file */
+            if (stat(fname, &sbuf) == -1)
+                syslog(LOG_ERR, "IOERROR: stat on %s: %m", fname);
+            else
+                msg_size = sbuf.st_size;
+        }
+        prot_printf(state->out, "%cRFC822.FILESIZE %lu", sepchar,
+                    (long unsigned)msg_size);
+        sepchar = ' ';
     }
     if (fetchitems & FETCH_SHA1) {
-	struct message_guid tmpguid;
-	message_guid_generate(&tmpguid, buf.s, buf.len);
-	prot_printf(state->out, "%cRFC822.SHA1 %s", sepchar, message_guid_encode(&tmpguid));
-	sepchar = ' ';
+        struct message_guid tmpguid;
+        message_guid_generate(&tmpguid, buf.s, buf.len);
+        prot_printf(state->out, "%cRFC822.SHA1 %s", sepchar, message_guid_encode(&tmpguid));
+        sepchar = ' ';
     }
     if ((fetchitems & FETCH_CID) &&
-	config_getswitch(IMAPOPT_CONVERSATIONS)) {
-	struct buf buf = BUF_INITIALIZER;
-	if (!record.cid)
-	    buf_appendcstr(&buf, "NIL");
-	else
-	    buf_printf(&buf, CONV_FMT, record.cid);
-	prot_printf(state->out, "%cCID %s", sepchar, buf_cstring(&buf));
-	buf_free(&buf);
-	sepchar = ' ';
+        config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        struct buf buf = BUF_INITIALIZER;
+        if (!record.cid)
+            buf_appendcstr(&buf, "NIL");
+        else
+            buf_printf(&buf, CONV_FMT, record.cid);
+        prot_printf(state->out, "%cCID %s", sepchar, buf_cstring(&buf));
+        buf_free(&buf);
+        sepchar = ' ';
     }
     if ((fetchitems & FETCH_FOLDER)) {
-	struct namespace *ns = fetchargs->namespace;
-	char mboxname[MAX_MAILBOX_PATH+1];
-	r = ns->mboxname_toexternal(ns, index_mboxname(state),
-				    fetchargs->userid, mboxname);
-	if (!r) {
-	    prot_printf(state->out, "%cFOLDER ", sepchar);
-	    prot_printastring(state->out, mboxname);
-	    sepchar = ' ';
-	}
-	r = 0;
+        struct namespace *ns = fetchargs->namespace;
+        char mboxname[MAX_MAILBOX_PATH+1];
+        r = ns->mboxname_toexternal(ns, index_mboxname(state),
+                                    fetchargs->userid, mboxname);
+        if (!r) {
+            prot_printf(state->out, "%cFOLDER ", sepchar);
+            prot_printastring(state->out, mboxname);
+            sepchar = ' ';
+        }
+        r = 0;
     }
     if ((fetchitems & FETCH_UIDVALIDITY)) {
-	prot_printf(state->out, "%cUIDVALIDITY %u", sepchar,
-		    state->mailbox->i.uidvalidity);
-	sepchar = ' ';
+        prot_printf(state->out, "%cUIDVALIDITY %u", sepchar,
+                    state->mailbox->i.uidvalidity);
+        sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {
         if (!mailbox_cacherecord(mailbox, &record)) {
-	    prot_printf(state->out, "%cENVELOPE ", sepchar);
-	    sepchar = ' ';
-	    prot_putbuf(state->out, cacheitem_buf(&record, CACHE_ENVELOPE));
-	}
+            prot_printf(state->out, "%cENVELOPE ", sepchar);
+            sepchar = ' ';
+            prot_putbuf(state->out, cacheitem_buf(&record, CACHE_ENVELOPE));
+        }
     }
     if (fetchitems & FETCH_BODYSTRUCTURE) {
         if (!mailbox_cacherecord(mailbox, &record)) {
-	    prot_printf(state->out, "%cBODYSTRUCTURE ", sepchar);
-	    sepchar = ' ';
-	    prot_putbuf(state->out, cacheitem_buf(&record, CACHE_BODYSTRUCTURE));
-	}
+            prot_printf(state->out, "%cBODYSTRUCTURE ", sepchar);
+            sepchar = ' ';
+            prot_putbuf(state->out, cacheitem_buf(&record, CACHE_BODYSTRUCTURE));
+        }
     }
     if (fetchitems & FETCH_BODY) {
         if (!mailbox_cacherecord(mailbox, &record)) {
-	    prot_printf(state->out, "%cBODY ", sepchar);
-	    sepchar = ' ';
-	    prot_putbuf(state->out, cacheitem_buf(&record, CACHE_BODY));
-	}
+            prot_printf(state->out, "%cBODY ", sepchar);
+            sepchar = ' ';
+            prot_putbuf(state->out, cacheitem_buf(&record, CACHE_BODY));
+        }
     }
 
     if (fetchitems & FETCH_HEADER) {
-	prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
-	sepchar = ' ';
-	index_fetchmsg(state, &buf, 0,
-		       record.header_size,
-		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->start_octet : 0,
-		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->octet_count : 0);
+        prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
+        sepchar = ' ';
+        index_fetchmsg(state, &buf, 0,
+                       record.header_size,
+                       (fetchitems & FETCH_IS_PARTIAL) ?
+                         fetchargs->start_octet : 0,
+                       (fetchitems & FETCH_IS_PARTIAL) ?
+                         fetchargs->octet_count : 0);
     }
     else if (fetchargs->headers.count || fetchargs->headers_not.count) {
-	prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
-	sepchar = ' ';
-	if (fetchargs->cache_atleast > record.cache_version) {
-	    index_fetchheader(state, buf.s, buf.len,
-			      record.header_size,
-			      &fetchargs->headers, &fetchargs->headers_not);
-	} else {
-	    index_fetchcacheheader(state, &record, &fetchargs->headers, 0, 0);
-	}
+        prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
+        sepchar = ' ';
+        if (fetchargs->cache_atleast > record.cache_version) {
+            index_fetchheader(state, buf.s, buf.len,
+                              record.header_size,
+                              &fetchargs->headers, &fetchargs->headers_not);
+        } else {
+            index_fetchcacheheader(state, &record, &fetchargs->headers, 0, 0);
+        }
     }
 
     if (fetchitems & FETCH_TEXT) {
-	prot_printf(state->out, "%cRFC822.TEXT ", sepchar);
-	sepchar = ' ';
-	index_fetchmsg(state, &buf,
-		       record.header_size, record.size - record.header_size,
-		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->start_octet : 0,
-		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->octet_count : 0);
+        prot_printf(state->out, "%cRFC822.TEXT ", sepchar);
+        sepchar = ' ';
+        index_fetchmsg(state, &buf,
+                       record.header_size, record.size - record.header_size,
+                       (fetchitems & FETCH_IS_PARTIAL) ?
+                         fetchargs->start_octet : 0,
+                       (fetchitems & FETCH_IS_PARTIAL) ?
+                         fetchargs->octet_count : 0);
     }
     if (fetchitems & FETCH_RFC822) {
-	prot_printf(state->out, "%cRFC822 ", sepchar);
-	sepchar = ' ';
-	index_fetchmsg(state, &buf, 0, record.size,
-		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->start_octet : 0,
-		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->octet_count : 0);
+        prot_printf(state->out, "%cRFC822 ", sepchar);
+        sepchar = ' ';
+        index_fetchmsg(state, &buf, 0, record.size,
+                       (fetchitems & FETCH_IS_PARTIAL) ?
+                         fetchargs->start_octet : 0,
+                       (fetchitems & FETCH_IS_PARTIAL) ?
+                         fetchargs->octet_count : 0);
     }
     for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {
-	int i;
-	prot_printf(state->out, "%cBODY[%s ", sepchar, fsection->section);
-	sepchar = '(';
-	for (i = 0 ; i < fsection->fields->count ; i++) {
-	    (void)prot_putc(sepchar, state->out);
-	    sepchar = ' ';
-	    prot_printastring(state->out, fsection->fields->data[i]);
-	}
-	(void)prot_putc(')', state->out);
-	sepchar = ' ';
+        int i;
+        prot_printf(state->out, "%cBODY[%s ", sepchar, fsection->section);
+        sepchar = '(';
+        for (i = 0 ; i < fsection->fields->count ; i++) {
+            (void)prot_putc(sepchar, state->out);
+            sepchar = ' ';
+            prot_printastring(state->out, fsection->fields->data[i]);
+        }
+        (void)prot_putc(')', state->out);
+        sepchar = ' ';
 
-	oi = (struct octetinfo *)fsection->rock;
+        oi = (struct octetinfo *)fsection->rock;
 
-	prot_printf(state->out, "%s ", fsection->trail);
+        prot_printf(state->out, "%s ", fsection->trail);
 
-	if (fetchargs->cache_atleast > record.cache_version) {
-	    if (!mailbox_cacherecord(mailbox, &record))
-		index_fetchfsection(state, buf.s, buf.len,
-				    fsection,
-				    cacheitem_base(&record, CACHE_SECTION),
-				    (fetchitems & FETCH_IS_PARTIAL) ?
-				      fetchargs->start_octet : oi->start_octet,
-				    (fetchitems & FETCH_IS_PARTIAL) ?
-				      fetchargs->octet_count : oi->octet_count);
-	    else
-		prot_printf(state->out, "NIL");
-	    
-	}
-	else {
-	    index_fetchcacheheader(state, &record, fsection->fields,
-				   (fetchitems & FETCH_IS_PARTIAL) ?
-				     fetchargs->start_octet : oi->start_octet,
-				   (fetchitems & FETCH_IS_PARTIAL) ?
-				     fetchargs->octet_count : oi->octet_count);
-	}
+        if (fetchargs->cache_atleast > record.cache_version) {
+            if (!mailbox_cacherecord(mailbox, &record))
+                index_fetchfsection(state, buf.s, buf.len,
+                                    fsection,
+                                    cacheitem_base(&record, CACHE_SECTION),
+                                    (fetchitems & FETCH_IS_PARTIAL) ?
+                                      fetchargs->start_octet : oi->start_octet,
+                                    (fetchitems & FETCH_IS_PARTIAL) ?
+                                      fetchargs->octet_count : oi->octet_count);
+            else
+                prot_printf(state->out, "NIL");
+
+        }
+        else {
+            index_fetchcacheheader(state, &record, fsection->fields,
+                                   (fetchitems & FETCH_IS_PARTIAL) ?
+                                     fetchargs->start_octet : oi->start_octet,
+                                   (fetchitems & FETCH_IS_PARTIAL) ?
+                                     fetchargs->octet_count : oi->octet_count);
+        }
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
-	respbuf[0] = 0;
-	if (sepchar == '(' && !started) {
-	    /* we haven't output a fetch item yet, so start the response */
-	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
-	}
-	snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
-		 "%cBODY[%s ", sepchar, section->name);
+        respbuf[0] = 0;
+        if (sepchar == '(' && !started) {
+            /* we haven't output a fetch item yet, so start the response */
+            snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
+        }
+        snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
+                 "%cBODY[%s ", sepchar, section->name);
 
-	oi = &section->octetinfo;
-
-	if (!mailbox_cacherecord(mailbox, &record)) {
-	    r = index_fetchsection(state, respbuf, &buf,
-				   section->name, cacheitem_base(&record, CACHE_SECTION),
-				   record.size,
-				   (fetchitems & FETCH_IS_PARTIAL) ?
-				    fetchargs->start_octet : oi->start_octet,
-				   (fetchitems & FETCH_IS_PARTIAL) ?
-				    fetchargs->octet_count : oi->octet_count);
-	    if (!r) sepchar = ' ';
-	}
-    }
-    for (section = fetchargs->binsections; section; section = section->next) {
-	respbuf[0] = 0;
-	if (sepchar == '(' && !started) {
-	    /* we haven't output a fetch item yet, so start the response */
-	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
-	}
-	snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
-		 "%cBINARY[%s ", sepchar, section->name);
-
-	if (!mailbox_cacherecord(mailbox, &record)) {
-	    oi = &section->octetinfo;
-	    r = index_fetchsection(state, respbuf, &buf,
-				   section->name, cacheitem_base(&record, CACHE_SECTION),
-				   record.size,
-				   (fetchitems & FETCH_IS_PARTIAL) ?
-				    fetchargs->start_octet : oi->start_octet,
-				   (fetchitems & FETCH_IS_PARTIAL) ?
-				    fetchargs->octet_count : oi->octet_count);
-	    if (!r) sepchar = ' ';
-	}
-    }
-    for (section = fetchargs->sizesections; section; section = section->next) {
-	respbuf[0] = 0;
-	if (sepchar == '(' && !started) {
-	    /* we haven't output a fetch item yet, so start the response */
-	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
-	}
-	snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
-		 "%cBINARY.SIZE[%s ", sepchar, section->name);
+        oi = &section->octetinfo;
 
         if (!mailbox_cacherecord(mailbox, &record)) {
-	    r = index_fetchsection(state, respbuf, &buf,
-				   section->name, cacheitem_base(&record, CACHE_SECTION),
-				   record.size,
-				   fetchargs->start_octet, fetchargs->octet_count);
-	    if (!r) sepchar = ' ';
-	}
+            r = index_fetchsection(state, respbuf, &buf,
+                                   section->name, cacheitem_base(&record, CACHE_SECTION),
+                                   record.size,
+                                   (fetchitems & FETCH_IS_PARTIAL) ?
+                                    fetchargs->start_octet : oi->start_octet,
+                                   (fetchitems & FETCH_IS_PARTIAL) ?
+                                    fetchargs->octet_count : oi->octet_count);
+            if (!r) sepchar = ' ';
+        }
+    }
+    for (section = fetchargs->binsections; section; section = section->next) {
+        respbuf[0] = 0;
+        if (sepchar == '(' && !started) {
+            /* we haven't output a fetch item yet, so start the response */
+            snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
+        }
+        snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
+                 "%cBINARY[%s ", sepchar, section->name);
+
+        if (!mailbox_cacherecord(mailbox, &record)) {
+            oi = &section->octetinfo;
+            r = index_fetchsection(state, respbuf, &buf,
+                                   section->name, cacheitem_base(&record, CACHE_SECTION),
+                                   record.size,
+                                   (fetchitems & FETCH_IS_PARTIAL) ?
+                                    fetchargs->start_octet : oi->start_octet,
+                                   (fetchitems & FETCH_IS_PARTIAL) ?
+                                    fetchargs->octet_count : oi->octet_count);
+            if (!r) sepchar = ' ';
+        }
+    }
+    for (section = fetchargs->sizesections; section; section = section->next) {
+        respbuf[0] = 0;
+        if (sepchar == '(' && !started) {
+            /* we haven't output a fetch item yet, so start the response */
+            snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
+        }
+        snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
+                 "%cBINARY.SIZE[%s ", sepchar, section->name);
+
+        if (!mailbox_cacherecord(mailbox, &record)) {
+            r = index_fetchsection(state, respbuf, &buf,
+                                   section->name, cacheitem_base(&record, CACHE_SECTION),
+                                   record.size,
+                                   fetchargs->start_octet, fetchargs->octet_count);
+            if (!r) sepchar = ' ';
+        }
     }
     if (sepchar != '(') {
-	/* finsh the response if we have one */
-	prot_printf(state->out, ")\r\n");
+        /* finsh the response if we have one */
+        prot_printf(state->out, ")\r\n");
     }
     buf_free(&buf);
 
@@ -4123,9 +4123,9 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
  * and index_fetchmsg().
  */
 EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
-		   unsigned params, const char *section,
-		   unsigned long start_octet, unsigned long octet_count,
-		   struct protstream *pout, unsigned long *outsize)
+                   unsigned params, const char *section,
+                   unsigned long start_octet, unsigned long octet_count,
+                   struct protstream *pout, unsigned long *outsize)
 {
     /* dumbass eM_Client sends this:
      * A4 APPEND "INBOX.Junk Mail" () "14-Jul-2013 17:01:02 +0000"
@@ -4147,7 +4147,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     struct index_record record;
 
     if (!strcasecmpsafe(section, "TEXT.MIME"))
-	section = text_mime;
+        section = text_mime;
 
     if (outsize) *outsize = 0;
 
@@ -4159,7 +4159,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
     /* Open the message file */
     if (mailbox_map_record(mailbox, &record, &buf))
-	return IMAP_NO_MSGGONE;
+        return IMAP_NO_MSGGONE;
 
     data = buf.s;
     size = buf.len;
@@ -4168,102 +4168,102 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
     /* Special-case BODY[] */
     if (!section || !*section) {
-	/* whole message, no further parsing */
+        /* whole message, no further parsing */
     }
     else {
-	const char *p = ucase((char *) section);
+        const char *p = ucase((char *) section);
 
-	while (*p && *p != 'M') {
-	    int num_parts = CACHE_ITEM_BIT32(cacheitem);
+        while (*p && *p != 'M') {
+            int num_parts = CACHE_ITEM_BIT32(cacheitem);
 
-	    /* Generate the actual part number */
-	    r = parseint32(p, &p, &skip);
-	    if (*p == '.') p++;
+            /* Generate the actual part number */
+            r = parseint32(p, &p, &skip);
+            if (*p == '.') p++;
 
-	    /* Handle .0, .HEADER, and .TEXT */
-	    if (r || skip == 0) {
-		skip = 0;
-		/* We don't have any digits, so its a string */
-		switch (*p) {
-		case 'H':
-		    p += 6;
-		    fetchmime++;  /* .HEADER maps internally to .0.MIME */
-		    break;
+            /* Handle .0, .HEADER, and .TEXT */
+            if (r || skip == 0) {
+                skip = 0;
+                /* We don't have any digits, so its a string */
+                switch (*p) {
+                case 'H':
+                    p += 6;
+                    fetchmime++;  /* .HEADER maps internally to .0.MIME */
+                    break;
 
-		case 'T':
-		    p += 4;
-		    break;	  /* .TEXT maps internally to .0 */
+                case 'T':
+                    p += 4;
+                    break;        /* .TEXT maps internally to .0 */
 
-		default:
-		    fetchmime++;  /* .0 maps internally to .0.MIME */
-		    break;
-		}
-	    }
+                default:
+                    fetchmime++;  /* .0 maps internally to .0.MIME */
+                    break;
+                }
+            }
 
-	    /* section number too large */
-	    if (skip >= num_parts) {
-		r = IMAP_BADURL;
-		goto done;
-	    }
+            /* section number too large */
+            if (skip >= num_parts) {
+                r = IMAP_BADURL;
+                goto done;
+            }
 
-	    if (*p && *p != 'M') {
-		/* We are NOT at the end of a part specification, so there's
-		 * a subpart being requested.  Find the subpart in the tree. */
+            if (*p && *p != 'M') {
+                /* We are NOT at the end of a part specification, so there's
+                 * a subpart being requested.  Find the subpart in the tree. */
 
-		/* Skip the headers for this part, along with the number of
-		 * sub parts */
-		cacheitem += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
+                /* Skip the headers for this part, along with the number of
+                 * sub parts */
+                cacheitem += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
 
-		/* Skip to the correct part */
-		while (--skip) {
-		    if (CACHE_ITEM_BIT32(cacheitem) > 0) {
-			/* Skip each part at this level */
-			skip += CACHE_ITEM_BIT32(cacheitem)-1;
-			cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
-		    }
-		    cacheitem += CACHE_ITEM_SIZE_SKIP;
-		}
-	    }
-	}
+                /* Skip to the correct part */
+                while (--skip) {
+                    if (CACHE_ITEM_BIT32(cacheitem) > 0) {
+                        /* Skip each part at this level */
+                        skip += CACHE_ITEM_BIT32(cacheitem)-1;
+                        cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
+                    }
+                    cacheitem += CACHE_ITEM_SIZE_SKIP;
+                }
+            }
+        }
 
-	if (*p == 'M') fetchmime++;
+        if (*p == 'M') fetchmime++;
 
-	cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
-	    (fetchmime ? 0 : 2 * 4);
-    
-	if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == (bit32) -1) {
-	    r = IMAP_BADURL;
-	    goto done;
-	}
+        cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
+            (fetchmime ? 0 : 2 * 4);
 
-	data += CACHE_ITEM_BIT32(cacheitem);
-	size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
+        if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == (bit32) -1) {
+            r = IMAP_BADURL;
+            goto done;
+        }
+
+        data += CACHE_ITEM_BIT32(cacheitem);
+        size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
     }
 
     /* Handle extended URLFETCH parameters */
     if (params & URLFETCH_BODYPARTSTRUCTURE) {
-	prot_printf(pout, " (BODYPARTSTRUCTURE");
-	/* XXX Calculate body part structure */
-	prot_printf(pout, " NIL");
-	prot_printf(pout, ")");
+        prot_printf(pout, " (BODYPARTSTRUCTURE");
+        /* XXX Calculate body part structure */
+        prot_printf(pout, " NIL");
+        prot_printf(pout, ")");
     }
 
     if (params & URLFETCH_BODY) {
-	prot_printf(pout, " (BODY");
+        prot_printf(pout, " (BODY");
     }
     else if (params & URLFETCH_BINARY) {
-	int encoding = CACHE_ITEM_BIT32(cacheitem + 2 * 4) & 0xff;
+        int encoding = CACHE_ITEM_BIT32(cacheitem + 2 * 4) & 0xff;
 
-	prot_printf(pout, " (BINARY");
+        prot_printf(pout, " (BINARY");
 
-	data = charset_decode_mimebody(data, size, encoding,
-				       &decbuf, &size);
-	if (!data) {
-	    /* failed to decode */
-	    prot_printf(pout, " NIL)");
-	    r = 0;
-	    goto done;
-	}
+        data = charset_decode_mimebody(data, size, encoding,
+                                       &decbuf, &size);
+        if (!data) {
+            /* failed to decode */
+            prot_printf(pout, " NIL)");
+            r = 0;
+            goto done;
+        }
     }
 
     /* Handle PARTIAL request */
@@ -4273,18 +4273,18 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     if (start_octet + n > size) n = size - start_octet;
 
     if (outsize) {
-	/* Return size (CATENATE) */
-	*outsize = n;
+        /* Return size (CATENATE) */
+        *outsize = n;
     } else {
-	domain = data_domain(data + start_octet, n);
+        domain = data_domain(data + start_octet, n);
 
-	if (domain == DOMAIN_BINARY) {
-	    /* Write size of literal8 */
-	    prot_printf(pout, " ~{%u}\r\n", n);
-	} else {
-	    /* Write size of literal */
-	    prot_printf(pout, " {%u}\r\n", n);
-	}
+        if (domain == DOMAIN_BINARY) {
+            /* Write size of literal8 */
+            prot_printf(pout, " ~{%u}\r\n", n);
+        } else {
+            /* Write size of literal */
+            prot_printf(pout, " {%u}\r\n", n);
+        }
     }
 
     /* Non-text literal -- tell the protstream about it */
@@ -4312,9 +4312,9 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
  * Helper function to perform a STORE command for flags.
  */
 static int index_storeflag(struct index_state *state,
-			   struct index_modified_flags *modified_flags,
-			   uint32_t msgno, struct index_record *record,
-			   struct storeargs *storeargs)
+                           struct index_modified_flags *modified_flags,
+                           uint32_t msgno, struct index_record *record,
+                           struct storeargs *storeargs)
 {
     uint32_t old, new, keep;
     unsigned i;
@@ -4330,19 +4330,19 @@ static int index_storeflag(struct index_state *state,
     /* Change \Seen flag.  This gets done on the index first and will only be
        copied into the record later if internalseen is set */
     if (state->myrights & ACL_SETSEEN) {
-	old = im->isseen ? 1 : 0;
-	new = old;
-	if (storeargs->operation == STORE_REPLACE_FLAGS)
-	    new = storeargs->seen ? 1 : 0;
-	else if (storeargs->seen)
-	    new = (storeargs->operation == STORE_ADD_FLAGS) ? 1 : 0;
+        old = im->isseen ? 1 : 0;
+        new = old;
+        if (storeargs->operation == STORE_REPLACE_FLAGS)
+            new = storeargs->seen ? 1 : 0;
+        else if (storeargs->seen)
+            new = (storeargs->operation == STORE_ADD_FLAGS) ? 1 : 0;
 
-	if (new != old) {
-	    state->numunseen += (old - new);
-	    im->isseen = new;
-	    state->seen_dirty = 1;
-	    dirty++;
-	}
+        if (new != old) {
+            state->numunseen += (old - new);
+            im->isseen = new;
+            state->seen_dirty = 1;
+            dirty++;
+        }
     }
 
     keep = record->system_flags & FLAGS_INTERNAL;
@@ -4351,82 +4351,82 @@ static int index_storeflag(struct index_state *state,
 
     /* all other updates happen directly to the record */
     if (storeargs->operation == STORE_REPLACE_FLAGS) {
-	if (!(state->myrights & ACL_WRITE)) {
-	    /* ACL_DELETE handled in index_store() */
-	    if ((old & FLAG_DELETED) != (new & FLAG_DELETED)) {
-		dirty++;
-	        record->system_flags = (old & ~FLAG_DELETED) | (new & FLAG_DELETED);
-	    }
-	}
-	else {
-	    if (!(state->myrights & ACL_DELETEMSG)) {
-		if ((old & ~FLAG_DELETED) != (new & ~FLAG_DELETED)) {
-		    dirty++;
-		    record->system_flags = (old & FLAG_DELETED) | (new & ~FLAG_DELETED);
-		}
-	    }
-	    else {
-		if (old != new) {
-		    dirty++;
-		    record->system_flags = new;
-		}
-	    }
-	    for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-		if (record->user_flags[i] != storeargs->user_flags[i]) {
-		    uint32_t changed;
-		    dirty++;
+        if (!(state->myrights & ACL_WRITE)) {
+            /* ACL_DELETE handled in index_store() */
+            if ((old & FLAG_DELETED) != (new & FLAG_DELETED)) {
+                dirty++;
+                record->system_flags = (old & ~FLAG_DELETED) | (new & FLAG_DELETED);
+            }
+        }
+        else {
+            if (!(state->myrights & ACL_DELETEMSG)) {
+                if ((old & ~FLAG_DELETED) != (new & ~FLAG_DELETED)) {
+                    dirty++;
+                    record->system_flags = (old & FLAG_DELETED) | (new & ~FLAG_DELETED);
+                }
+            }
+            else {
+                if (old != new) {
+                    dirty++;
+                    record->system_flags = new;
+                }
+            }
+            for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
+                if (record->user_flags[i] != storeargs->user_flags[i]) {
+                    uint32_t changed;
+                    dirty++;
 
-		    changed = ~record->user_flags[i] & storeargs->user_flags[i];
-		    if (changed) {
-			modified_flags->added_user_flags[i] = changed;
-			modified_flags->added_flags++;
-		    }
+                    changed = ~record->user_flags[i] & storeargs->user_flags[i];
+                    if (changed) {
+                        modified_flags->added_user_flags[i] = changed;
+                        modified_flags->added_flags++;
+                    }
 
-		    changed = record->user_flags[i] & ~storeargs->user_flags[i];
-		    if (changed) {
-			modified_flags->removed_user_flags[i] = changed;
-			modified_flags->removed_flags++;
-		    }
-		    record->user_flags[i] = storeargs->user_flags[i];
-		}
-	    }
-	}
+                    changed = record->user_flags[i] & ~storeargs->user_flags[i];
+                    if (changed) {
+                        modified_flags->removed_user_flags[i] = changed;
+                        modified_flags->removed_flags++;
+                    }
+                    record->user_flags[i] = storeargs->user_flags[i];
+                }
+            }
+        }
     }
     else if (storeargs->operation == STORE_ADD_FLAGS) {
-	uint32_t added;
+        uint32_t added;
 
-	if (~old & new) {
-	    dirty++;
-	    record->system_flags = old | new;
-	}
-	for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-	    added = ~record->user_flags[i] & storeargs->user_flags[i];
-	    if (added) {
-		dirty++;
-		record->user_flags[i] |= storeargs->user_flags[i];
+        if (~old & new) {
+            dirty++;
+            record->system_flags = old | new;
+        }
+        for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
+            added = ~record->user_flags[i] & storeargs->user_flags[i];
+            if (added) {
+                dirty++;
+                record->user_flags[i] |= storeargs->user_flags[i];
 
-		modified_flags->added_user_flags[i] = added;
-		modified_flags->added_flags++;
-	    }
-	}
+                modified_flags->added_user_flags[i] = added;
+                modified_flags->added_flags++;
+            }
+        }
     }
     else { /* STORE_REMOVE_FLAGS */
-	uint32_t removed;
+        uint32_t removed;
 
-	if (old & new) {
-	    dirty++;
-	    record->system_flags &= ~storeargs->system_flags;
-	}
-	for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-	    removed = record->user_flags[i] & storeargs->user_flags[i];
-	    if (removed) {
-		dirty++;
-		record->user_flags[i] &= ~storeargs->user_flags[i];
+        if (old & new) {
+            dirty++;
+            record->system_flags &= ~storeargs->system_flags;
+        }
+        for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
+            removed = record->user_flags[i] & storeargs->user_flags[i];
+            if (removed) {
+                dirty++;
+                record->user_flags[i] &= ~storeargs->user_flags[i];
 
-		modified_flags->removed_user_flags[i] = removed;
-		modified_flags->removed_flags++;
-	    }
-	}
+                modified_flags->removed_user_flags[i] = removed;
+                modified_flags->removed_flags++;
+            }
+        }
     }
 
     /* rfc4551:
@@ -4445,21 +4445,21 @@ static int index_storeflag(struct index_state *state,
     if (!dirty) return 0;
 
     if (state->internalseen) {
-	/* copy the seen flag from the index */
-	if (im->isseen)
-	    record->system_flags |= FLAG_SEEN;
-	else
-	    record->system_flags &= ~FLAG_SEEN;
+        /* copy the seen flag from the index */
+        if (im->isseen)
+            record->system_flags |= FLAG_SEEN;
+        else
+            record->system_flags &= ~FLAG_SEEN;
     }
     /* add back the internal tracking flags */
     record->system_flags |= keep;
 
     modified_flags->added_system_flags = ~old & record->system_flags & FLAGS_SYSTEM;
     if (modified_flags->added_system_flags)
-	modified_flags->added_flags++;
+        modified_flags->added_flags++;
     modified_flags->removed_system_flags = old & ~record->system_flags & FLAGS_SYSTEM;
     if (modified_flags->removed_system_flags)
-	modified_flags->removed_flags++;
+        modified_flags->removed_flags++;
 
     r = index_rewrite_record(state, msgno, record);
     if (r) return r;
@@ -4470,7 +4470,7 @@ static int index_storeflag(struct index_state *state,
      * as well in this case, it's simpler and not much more
      * bandwidth */
     if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
-	im->told_modseq = im->modseq;
+        im->told_modseq = im->modseq;
 
     return 0;
 }
@@ -4479,8 +4479,8 @@ static int index_storeflag(struct index_state *state,
  * Helper function to perform a STORE command for annotations
  */
 static int index_store_annotation(struct index_state *state,
-				  uint32_t msgno,
-				  struct storeargs *storeargs)
+                                  uint32_t msgno,
+                                  struct storeargs *storeargs)
 {
     modseq_t oldmodseq;
     struct index_record record;
@@ -4496,7 +4496,7 @@ static int index_store_annotation(struct index_state *state,
     r = mailbox_get_annotate_state(state->mailbox, record.uid, &astate);
     if (r) goto out;
     annotate_state_set_auth(astate, storeargs->isadmin,
-			    storeargs->userid, storeargs->authstate);
+                            storeargs->userid, storeargs->authstate);
     r = annotate_state_store(astate, storeargs->entryatts);
     if (r) goto out;
 
@@ -4509,7 +4509,7 @@ static int index_store_annotation(struct index_state *state,
 
     /* if it's silent and unchanged, update the seen value */
     if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
-	im->told_modseq = im->modseq;
+        im->told_modseq = im->modseq;
 
 out:
     return r;
@@ -4520,8 +4520,8 @@ out:
  * Evaluate a searchargs structure on a msgno
  */
 int index_search_evaluate(struct index_state *state,
-			  const search_expr_t *e,
-			  uint32_t msgno)
+                          const search_expr_t *e,
+                          uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     int r;
@@ -4534,8 +4534,8 @@ int index_search_evaluate(struct index_state *state,
     xstats_inc(SEARCH_EVALUATE);
 
     m = message_new_from_index(state->mailbox, &record, msgno,
-			       (im->isrecent ? MESSAGE_RECENT : 0) |
-			       (im->isseen ? MESSAGE_SEEN : 0));
+                               (im->isrecent ? MESSAGE_RECENT : 0) |
+                               (im->isseen ? MESSAGE_SEEN : 0));
     r = search_expr_evaluate(m, e);
     message_unref(&m);
 
@@ -4550,11 +4550,11 @@ struct getsearchtext_rock
 };
 
 static void stuff_part(search_text_receiver_t *receiver,
-		       int part, const struct buf *buf)
+                       int part, const struct buf *buf)
 {
     if (part == SEARCH_PART_HEADERS &&
-	!config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS))
-	return;
+        !config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS))
+        return;
 
     receiver->begin_part(receiver, part);
     receiver->append_text(receiver, buf);
@@ -4568,35 +4568,35 @@ static void extract_cb(const struct buf *text, void *rock)
 }
 
 static int getsearchtext_cb(int partno, int charset, int encoding,
-			    const char *subtype, struct buf *data,
-			    void *rock)
+                            const char *subtype, struct buf *data,
+                            void *rock)
 {
     struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
     char *q;
     struct buf text = BUF_INITIALIZER;
 
     if (!partno) {
-	/* header-like */
-	q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
-	buf_init_ro_cstr(&text, q);
-	if (++str->partcount == 1) {
-	    stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
-	} else {
-	    stuff_part(str->receiver, SEARCH_PART_BODY, &text);
-	}
-	free(q);
-	buf_free(&text);
+        /* header-like */
+        q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
+        buf_init_ro_cstr(&text, q);
+        if (++str->partcount == 1) {
+            stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
+        } else {
+            stuff_part(str->receiver, SEARCH_PART_BODY, &text);
+        }
+        free(q);
+        buf_free(&text);
     }
     else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {
-	/* PGP encrypted body part - we don't want to index this,
-	 * it's a ton of random base64 noise */
+        /* PGP encrypted body part - we don't want to index this,
+         * it's a ton of random base64 noise */
     }
     else {
-	/* body-like */
-	str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
-	charset_extract(extract_cb, str, data, charset, encoding, subtype,
-			str->charset_flags);
-	str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+        /* body-like */
+        str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
+        charset_extract(extract_cb, str, data, charset, encoding, subtype,
+                        str->charset_flags);
+        str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
     }
 
     return 0;
@@ -4607,14 +4607,14 @@ static void append_alnum(struct buf *buf, const char *ss)
     const unsigned char *s = (const unsigned char *)ss;
 
     for ( ; *s ; ++s) {
-	if (Uisalnum(*s))
-	    buf_putc(buf, *s);
+        if (Uisalnum(*s))
+            buf_putc(buf, *s);
     }
 }
 
 EXPORTED int index_getsearchtext(message_t *msg,
-			 search_text_receiver_t *receiver,
-			 int snippet)
+                         search_text_receiver_t *receiver,
+                         int snippet)
 {
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
@@ -4632,59 +4632,59 @@ EXPORTED int index_getsearchtext(message_t *msg,
     str.charset_flags = charset_flags;
 
     if (snippet) {
-	str.charset_flags |= CHARSET_SNIPPET;
-	format = MESSAGE_SNIPPET;
+        str.charset_flags |= CHARSET_SNIPPET;
+        format = MESSAGE_SNIPPET;
     }
 
     message_foreach_text_section(msg, getsearchtext_cb, &str);
 
     if (!message_get_field(msg, "From", format, &buf))
-	stuff_part(receiver, SEARCH_PART_FROM, &buf);
+        stuff_part(receiver, SEARCH_PART_FROM, &buf);
 
     if (!message_get_field(msg, "To", format, &buf))
-	stuff_part(receiver, SEARCH_PART_TO, &buf);
+        stuff_part(receiver, SEARCH_PART_TO, &buf);
 
     if (!message_get_field(msg, "Cc", format, &buf))
-	stuff_part(receiver, SEARCH_PART_CC, &buf);
+        stuff_part(receiver, SEARCH_PART_CC, &buf);
 
     if (!message_get_field(msg, "Bcc", format, &buf))
-	stuff_part(receiver, SEARCH_PART_BCC, &buf);
+        stuff_part(receiver, SEARCH_PART_BCC, &buf);
 
     if (!message_get_field(msg, "Subject", format, &buf))
-	stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
+        stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
 
     if (!message_get_field(msg, "List-Id", format, &buf))
-	stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
     if (!message_get_field(msg, "Mailing-List", format, &buf))
-	stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
 
     if (!message_get_leaf_types(msg, &types) && types.count) {
-	/* We add three search terms: the type, subtype, and a combined
-	 * type+subtype string.  We carefully control punctuation to
-	 * ensure that each word in indexed as a single term.  For
-	 * example if the original message has "application/x-pdf" then
-	 * we index "APPLICATION" "XPDF" "APPLICATION_XPDF".  */
+        /* We add three search terms: the type, subtype, and a combined
+         * type+subtype string.  We carefully control punctuation to
+         * ensure that each word in indexed as a single term.  For
+         * example if the original message has "application/x-pdf" then
+         * we index "APPLICATION" "XPDF" "APPLICATION_XPDF".  */
 
-	receiver->begin_part(receiver, SEARCH_PART_TYPE);
-	for (i = 0 ; i < types.count ; i+= 2) {
-	    buf_reset(&buf);
+        receiver->begin_part(receiver, SEARCH_PART_TYPE);
+        for (i = 0 ; i < types.count ; i+= 2) {
+            buf_reset(&buf);
 
-	    if (i) buf_putc(&buf, ' ');
+            if (i) buf_putc(&buf, ' ');
 
-	    /* type */
-	    append_alnum(&buf, types.data[i]);
-	    buf_putc(&buf, ' ');
-	    /* subtype */
-	    append_alnum(&buf, types.data[i+1]);
-	    buf_putc(&buf, ' ');
-	    /* combined type_subtype */
-	    append_alnum(&buf, types.data[i]);
-	    buf_putc(&buf, '_');
-	    append_alnum(&buf, types.data[i+1]);
+            /* type */
+            append_alnum(&buf, types.data[i]);
+            buf_putc(&buf, ' ');
+            /* subtype */
+            append_alnum(&buf, types.data[i+1]);
+            buf_putc(&buf, ' ');
+            /* combined type_subtype */
+            append_alnum(&buf, types.data[i]);
+            buf_putc(&buf, '_');
+            append_alnum(&buf, types.data[i+1]);
 
-	    receiver->append_text(receiver, &buf);
-	}
-	receiver->end_part(receiver, SEARCH_PART_TYPE);
+            receiver->append_text(receiver, &buf);
+        }
+        receiver->end_part(receiver, SEARCH_PART_TYPE);
     }
 
     r = receiver->end_message(receiver);
@@ -4698,16 +4698,16 @@ EXPORTED int index_getsearchtext(message_t *msg,
  */
 #define COPYARGSGROW 30
 static int index_copysetup(struct index_state *state, uint32_t msgno,
-			   struct copyargs *copyargs)
+                           struct copyargs *copyargs)
 {
     struct index_map *im = &state->map[msgno-1];
     int r;
 
     if (copyargs->nummsg == copyargs->msgalloc) {
-	copyargs->msgalloc += COPYARGSGROW;
-	copyargs->records = (struct index_record *)
-	  xrealloc((char *)copyargs->records,
-		   copyargs->msgalloc * sizeof(struct index_record));
+        copyargs->msgalloc += COPYARGSGROW;
+        copyargs->records = (struct index_record *)
+          xrealloc((char *)copyargs->records,
+                   copyargs->msgalloc * sizeof(struct index_record));
     }
 
     r = index_reload_record(state, msgno, &copyargs->records[copyargs->nummsg]);
@@ -4715,9 +4715,9 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
 
     /* seen is per user - embed it in the record */
     if (im->isseen)
-	copyargs->records[copyargs->nummsg].system_flags |= FLAG_SEEN;
+        copyargs->records[copyargs->nummsg].system_flags |= FLAG_SEEN;
     else
-	copyargs->records[copyargs->nummsg].system_flags &= ~FLAG_SEEN;
+        copyargs->records[copyargs->nummsg].system_flags &= ~FLAG_SEEN;
 
     copyargs->nummsg++;
 
@@ -4731,9 +4731,9 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
  * by the specified sort criteria.
  */
 MsgData **index_msgdata_load(struct index_state *state,
-			     unsigned *msgno_list, int n,
-			     const struct sortcrit *sortcrit,
-			     unsigned int anchor, int *found_anchor)
+                             unsigned *msgno_list, int n,
+                             const struct sortcrit *sortcrit,
+                             unsigned int anchor, int *found_anchor)
 {
     MsgData **ptrs, *md, *cur;
     int i, j;
@@ -4754,159 +4754,159 @@ MsgData **index_msgdata_load(struct index_state *state,
     xstats_add(MSGDATA_LOAD, n);
 
     if (found_anchor)
-	*found_anchor = 0;
+        *found_anchor = 0;
 
     for (i = 0 ; i < n ; i++) {
-	cur = &md[i];
-	ptrs[i] = cur;
+        cur = &md[i];
+        ptrs[i] = cur;
 
-	/* set msgno */
-	cur->msgno = (msgno_list ? msgno_list[i] : (unsigned)(i+1));
+        /* set msgno */
+        cur->msgno = (msgno_list ? msgno_list[i] : (unsigned)(i+1));
 
-	if (index_reload_record(state, cur->msgno, &record))
-	    continue;
+        if (index_reload_record(state, cur->msgno, &record))
+            continue;
 
-	cur->uid = record.uid;
-	cur->cid = record.cid;
-	if (found_anchor && record.uid == anchor)
-	    *found_anchor = 1;
+        cur->uid = record.uid;
+        cur->cid = record.cid;
+        if (found_anchor && record.uid == anchor)
+            *found_anchor = 1;
 
-	/* useful for convupdates */
-	cur->modseq = record.modseq;
+        /* useful for convupdates */
+        cur->modseq = record.modseq;
 
-	did_cache = did_env = did_conv = 0;
-	tmpenv = NULL;
-	conv = NULL; /* XXX: use a hash to avoid re-reading? */
+        did_cache = did_env = did_conv = 0;
+        tmpenv = NULL;
+        conv = NULL; /* XXX: use a hash to avoid re-reading? */
 
-	for (j = 0; sortcrit[j].key; j++) {
-	    label = sortcrit[j].key;
+        for (j = 0; sortcrit[j].key; j++) {
+            label = sortcrit[j].key;
 
-	    if ((label == SORT_CC || label == SORT_DATE ||
-		 label == SORT_FROM || label == SORT_SUBJECT ||
-		 label == SORT_TO || label == LOAD_IDS ||
-		 label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO) &&
-		!did_cache) {
+            if ((label == SORT_CC || label == SORT_DATE ||
+                 label == SORT_FROM || label == SORT_SUBJECT ||
+                 label == SORT_TO || label == LOAD_IDS ||
+                 label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO) &&
+                !did_cache) {
 
-		/* fetch cached info */
-		if (mailbox_cacherecord(mailbox, &record))
-		    continue; /* can't do this with a broken cache */
+                /* fetch cached info */
+                if (mailbox_cacherecord(mailbox, &record))
+                    continue; /* can't do this with a broken cache */
 
-		did_cache++;
-	    }
+                did_cache++;
+            }
 
-	    if ((label == LOAD_IDS) && !did_env) {
-		/* no point if we don't have enough data */
-		if (cacheitem_size(&record, CACHE_ENVELOPE) <= 2)
-		    continue;
+            if ((label == LOAD_IDS) && !did_env) {
+                /* no point if we don't have enough data */
+                if (cacheitem_size(&record, CACHE_ENVELOPE) <= 2)
+                    continue;
 
-		/* make a working copy of envelope -- strip outer ()'s */
-		/* +1 -> skip the leading paren */
-		/* -2 -> don't include the size of the outer parens */
-		tmpenv = xstrndup(cacheitem_base(&record, CACHE_ENVELOPE) + 1, 
-				  cacheitem_size(&record, CACHE_ENVELOPE) - 2);
+                /* make a working copy of envelope -- strip outer ()'s */
+                /* +1 -> skip the leading paren */
+                /* -2 -> don't include the size of the outer parens */
+                tmpenv = xstrndup(cacheitem_base(&record, CACHE_ENVELOPE) + 1,
+                                  cacheitem_size(&record, CACHE_ENVELOPE) - 2);
 
-		/* parse envelope into tokens */
-		parse_cached_envelope(tmpenv, envtokens,
-				      VECTOR_SIZE(envtokens));
+                /* parse envelope into tokens */
+                parse_cached_envelope(tmpenv, envtokens,
+                                      VECTOR_SIZE(envtokens));
 
-		did_env++;
-	    }
+                did_env++;
+            }
 
-	    if ((label == SORT_HASCONVFLAG || label == SORT_CONVMODSEQ ||
-		label == SORT_CONVEXISTS || label == SORT_CONVSIZE) && !did_conv) {
-		if (!cstate) cstate = conversations_get_mbox(index_mboxname(state));
-		assert(cstate);
-		if (conversation_load(cstate, record.cid, &conv))
-		    continue;
-		if (!conv) conv = conversation_new(cstate);
-		did_conv++;
-	    }
+            if ((label == SORT_HASCONVFLAG || label == SORT_CONVMODSEQ ||
+                label == SORT_CONVEXISTS || label == SORT_CONVSIZE) && !did_conv) {
+                if (!cstate) cstate = conversations_get_mbox(index_mboxname(state));
+                assert(cstate);
+                if (conversation_load(cstate, record.cid, &conv))
+                    continue;
+                if (!conv) conv = conversation_new(cstate);
+                did_conv++;
+            }
 
-	    switch (label) {
-	    case SORT_CC:
-		cur->cc = get_localpart_addr(cacheitem_base(&record, CACHE_CC));
-		break;
-	    case SORT_DATE:
-		cur->sentdate = record.gmtime;
-		/* fall through */
-	    case SORT_ARRIVAL:
-		cur->internaldate = record.internaldate;
-		break;
-	    case SORT_FROM:
-		cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
-		break;
-	    case SORT_MODSEQ:
-		/* already copied above */
-		break;
-	    case SORT_SIZE:
-		cur->size = record.size;
-		break;
-	    case SORT_SUBJECT:
-		cur->xsubj = index_extract_subject(cacheitem_base(&record, CACHE_SUBJECT),
-						   cacheitem_size(&record, CACHE_SUBJECT),
-						   &cur->is_refwd);
-		cur->xsubj_hash = strhash(cur->xsubj);
-		break;
-	    case SORT_TO:
-		cur->to = get_localpart_addr(cacheitem_base(&record, CACHE_TO));
-		break;
- 	    case SORT_ANNOTATION: {
-		struct buf value = BUF_INITIALIZER;
+            switch (label) {
+            case SORT_CC:
+                cur->cc = get_localpart_addr(cacheitem_base(&record, CACHE_CC));
+                break;
+            case SORT_DATE:
+                cur->sentdate = record.gmtime;
+                /* fall through */
+            case SORT_ARRIVAL:
+                cur->internaldate = record.internaldate;
+                break;
+            case SORT_FROM:
+                cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
+                break;
+            case SORT_MODSEQ:
+                /* already copied above */
+                break;
+            case SORT_SIZE:
+                cur->size = record.size;
+                break;
+            case SORT_SUBJECT:
+                cur->xsubj = index_extract_subject(cacheitem_base(&record, CACHE_SUBJECT),
+                                                   cacheitem_size(&record, CACHE_SUBJECT),
+                                                   &cur->is_refwd);
+                cur->xsubj_hash = strhash(cur->xsubj);
+                break;
+            case SORT_TO:
+                cur->to = get_localpart_addr(cacheitem_base(&record, CACHE_TO));
+                break;
+            case SORT_ANNOTATION: {
+                struct buf value = BUF_INITIALIZER;
 
-		annotatemore_msg_lookup(state->mboxname,
-					record.uid,
-					sortcrit[j].args.annot.entry,
-					sortcrit[j].args.annot.userid,
-					&value);
+                annotatemore_msg_lookup(state->mboxname,
+                                        record.uid,
+                                        sortcrit[j].args.annot.entry,
+                                        sortcrit[j].args.annot.userid,
+                                        &value);
 
-		/* buf_release() never returns NULL, so if the lookup
-		 * fails for any reason we just get an empty string here */
-		strarray_appendm(&cur->annot, buf_release(&value));
- 		break;
-	    }
-	    case LOAD_IDS:
-		index_get_ids(cur, envtokens, cacheitem_base(&record, CACHE_HEADERS),
-					      cacheitem_size(&record, CACHE_HEADERS));
-		break;
-	    case SORT_DISPLAYFROM:
-		cur->displayfrom = get_displayname(
-				   cacheitem_base(&record, CACHE_FROM));
-		break;
-	    case SORT_DISPLAYTO:
-		cur->displayto = get_displayname(
-				 cacheitem_base(&record, CACHE_TO));
-		break;
-	    case SORT_HASFLAG: {
-		const char *name = sortcrit[j].args.flag.name;
-		if (mailbox_record_hasflag(mailbox, &record, name))
-		    cur->hasflag |= (1<<j);
-		break;
-	    }
-	    case SORT_HASCONVFLAG: {
-		const char *name = sortcrit[j].args.flag.name;
-		int idx = strarray_find_case(cstate->counted_flags, name, 0);
-		/* flag exists in the conversation at all */
-		if (idx >= 0 && conv->counts[idx] > 0 && j < 31)
-		    cur->hasconvflag |= (1<<j);
-		break;
-	    }
-	    case SORT_CONVEXISTS:
-		cur->convexists = conv->exists;
-		break;
-	    case SORT_CONVSIZE:
-		cur->convsize = conv->size;
-		break;
-	    case SORT_CONVMODSEQ:
-		cur->convmodseq = conv->modseq;
-		break;
-	    case SORT_RELEVANCY:
-		/* for now all messages have relevancy=100 */
-		break;
-	    }
-	}
+                /* buf_release() never returns NULL, so if the lookup
+                 * fails for any reason we just get an empty string here */
+                strarray_appendm(&cur->annot, buf_release(&value));
+                break;
+            }
+            case LOAD_IDS:
+                index_get_ids(cur, envtokens, cacheitem_base(&record, CACHE_HEADERS),
+                                              cacheitem_size(&record, CACHE_HEADERS));
+                break;
+            case SORT_DISPLAYFROM:
+                cur->displayfrom = get_displayname(
+                                   cacheitem_base(&record, CACHE_FROM));
+                break;
+            case SORT_DISPLAYTO:
+                cur->displayto = get_displayname(
+                                 cacheitem_base(&record, CACHE_TO));
+                break;
+            case SORT_HASFLAG: {
+                const char *name = sortcrit[j].args.flag.name;
+                if (mailbox_record_hasflag(mailbox, &record, name))
+                    cur->hasflag |= (1<<j);
+                break;
+            }
+            case SORT_HASCONVFLAG: {
+                const char *name = sortcrit[j].args.flag.name;
+                int idx = strarray_find_case(cstate->counted_flags, name, 0);
+                /* flag exists in the conversation at all */
+                if (idx >= 0 && conv->counts[idx] > 0 && j < 31)
+                    cur->hasconvflag |= (1<<j);
+                break;
+            }
+            case SORT_CONVEXISTS:
+                cur->convexists = conv->exists;
+                break;
+            case SORT_CONVSIZE:
+                cur->convsize = conv->size;
+                break;
+            case SORT_CONVMODSEQ:
+                cur->convmodseq = conv->modseq;
+                break;
+            case SORT_RELEVANCY:
+                /* for now all messages have relevancy=100 */
+                break;
+            }
+        }
 
-	free(tmpenv);
-	conversation_free(conv);
+        free(tmpenv);
+        conversation_free(conv);
     }
 
     return ptrs;
@@ -4921,7 +4921,7 @@ static char *get_localpart_addr(const char *header)
     if (!addr) return NULL;
 
     if (addr->mailbox)
-	ret = xstrdup(addr->mailbox);
+        ret = xstrdup(addr->mailbox);
 
     parseaddr_free(addr);
 
@@ -4941,20 +4941,20 @@ static char *get_displayname(const char *header)
     if (!addr) return NULL;
 
     if (addr->name && addr->name[0]) {
-	/* pure RFC5255 compatible "searchform" conversion */
-	ret = charset_utf8_to_searchform(addr->name, /*flags*/0);
+        /* pure RFC5255 compatible "searchform" conversion */
+        ret = charset_utf8_to_searchform(addr->name, /*flags*/0);
     }
     else if (addr->domain && addr->mailbox) {
-	ret = strconcat(addr->mailbox, "@", addr->domain, (char *)NULL);
-	/* gotta uppercase mailbox/domain */
-	for (p = ret; *p; p++)
-	    *p = toupper(*p);
+        ret = strconcat(addr->mailbox, "@", addr->domain, (char *)NULL);
+        /* gotta uppercase mailbox/domain */
+        for (p = ret; *p; p++)
+            *p = toupper(*p);
     }
     else if (addr->mailbox) {
-	ret = xstrdup(addr->mailbox);
-	/* gotta uppercase mailbox/domain */
-	for (p = ret; *p; p++)
-	    *p = toupper(*p);
+        ret = xstrdup(addr->mailbox);
+        /* gotta uppercase mailbox/domain */
+        for (p = ret; *p; p++)
+            *p = toupper(*p);
     }
 
     parseaddr_free(addr);
@@ -4973,36 +4973,36 @@ static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
     char *rawbuf, *buf, *s, *base;
 
     /* parse the subj NSTRING and make a working copy */
-    if (!strcmp(subj, "NIL")) {		       	/* NIL? */
-	return xstrdup("");			/* yes, return empty */
-    } else if (*subj == '"') {			/* quoted? */
-	rawbuf = xstrndup(subj + 1, len - 2);	/* yes, strip quotes */
+    if (!strcmp(subj, "NIL")) {                 /* NIL? */
+        return xstrdup("");                     /* yes, return empty */
+    } else if (*subj == '"') {                  /* quoted? */
+        rawbuf = xstrndup(subj + 1, len - 2);   /* yes, strip quotes */
     } else {
-	s = strchr(subj, '}') + 3;		/* literal, skip { }\r\n */
-	rawbuf = xstrndup(s, len - (s - subj));
+        s = strchr(subj, '}') + 3;              /* literal, skip { }\r\n */
+        rawbuf = xstrndup(s, len - (s - subj));
     }
 
     buf = charset_parse_mimeheader(rawbuf);
     free(rawbuf);
 
     for (s = buf;;) {
-	base = _index_extract_subject(s, is_refwd);
+        base = _index_extract_subject(s, is_refwd);
 
-	/* If we have a Netscape "[Fwd: ...]", extract the contents */
-	if (!strncasecmp(base, "[fwd:", 5) &&
-	    base[strlen(base) - 1]  == ']') {
+        /* If we have a Netscape "[Fwd: ...]", extract the contents */
+        if (!strncasecmp(base, "[fwd:", 5) &&
+            base[strlen(base) - 1]  == ']') {
 
-	    /* inc refwd counter */
-	    *is_refwd += 1;
+            /* inc refwd counter */
+            *is_refwd += 1;
 
-	    /* trim "]" */
-	    base[strlen(base) - 1] = '\0';
+            /* trim "]" */
+            base[strlen(base) - 1] = '\0';
 
-	    /* trim "[fwd:" */
-	    s = base + 5;
-	}
-	else /* otherwise, we're done */
-	    break;
+            /* trim "[fwd:" */
+            s = base + 5;
+        }
+        else /* otherwise, we're done */
+            break;
     }
 
     base = xstrdup(base);
@@ -5010,7 +5010,7 @@ static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
     free(buf);
 
     for (s = base; *s; s++) {
-	*s = toupper(*s);
+        *s = toupper(*s);
     }
 
     return base;
@@ -5031,18 +5031,18 @@ static char *_index_extract_subject(char *s, int *is_refwd)
      * resetting the end of the string as we go.
      */
     for (x = s + strlen(s) - 1; x >= s;) {
-	if (Uisspace(*x)) {                             /* whitespace? */
-	    *x = '\0';					/* yes, trim it */
-	    x--;					/* skip past it */
-	}
-	else if (x - s >= 4 &&
-		 !strncasecmp(x-4, "(fwd)", 5)) {	/* "(fwd)"? */
-	    *(x-4) = '\0';				/* yes, trim it */
-	    x -= 5;					/* skip past it */
-	    *is_refwd += 1;				/* inc refwd counter */
-	}
-	else
-	    break;					/* we're done */
+        if (Uisspace(*x)) {                             /* whitespace? */
+            *x = '\0';                                  /* yes, trim it */
+            x--;                                        /* skip past it */
+        }
+        else if (x - s >= 4 &&
+                 !strncasecmp(x-4, "(fwd)", 5)) {       /* "(fwd)"? */
+            *(x-4) = '\0';                              /* yes, trim it */
+            x -= 5;                                     /* skip past it */
+            *is_refwd += 1;                             /* inc refwd counter */
+        }
+        else
+            break;                                      /* we're done */
     }
 
     /* trim leader
@@ -5051,91 +5051,91 @@ static char *_index_extract_subject(char *s, int *is_refwd)
      * skipping over stuff we don't care about.
      */
     for (base = s; base;) {
-	if (Uisspace(*base)) base++;			/* whitespace? */
+        if (Uisspace(*base)) base++;                    /* whitespace? */
 
-	/* possible refwd */
-	else if ((!strncasecmp(base, "re", 2) &&	/* "re"? */
-		  (x = base + 2)) ||			/* yes, skip past it */
-		 (!strncasecmp(base, "fwd", 3) &&	/* "fwd"? */
-		  (x = base + 3)) ||			/* yes, skip past it */
-		 (!strncasecmp(base, "fw", 2) &&	/* "fw"? */
-		  (x = base + 2))) {			/* yes, skip past it */
-	    int count = 0;				/* init counter */
-	    
-	    while (Uisspace(*x)) x++;			/* skip whitespace */
+        /* possible refwd */
+        else if ((!strncasecmp(base, "re", 2) &&        /* "re"? */
+                  (x = base + 2)) ||                    /* yes, skip past it */
+                 (!strncasecmp(base, "fwd", 3) &&       /* "fwd"? */
+                  (x = base + 3)) ||                    /* yes, skip past it */
+                 (!strncasecmp(base, "fw", 2) &&        /* "fw"? */
+                  (x = base + 2))) {                    /* yes, skip past it */
+            int count = 0;                              /* init counter */
 
-	    if (*x == '[') {				/* start of blob? */
-		for (x++; x;) {				/* yes, get count */
-		    if (!*x) {				/* end of subj, quit */
-			x = NULL;
-			break;
-		    }
-		    else if (*x == ']') {		/* end of blob, done */
-			break;
-					/* if we have a digit, and we're still
-					   counting, keep building the count */
-		    } else if (cyrus_isdigit((int) *x) && count != -1) {
-			count = count * 10 + *x - '0';
-			if (count < 0) {                /* overflow */
-			    count = -1; /* abort counting */
-			}
-		    } else {				/* no digit, */
-			count = -1;			/*  abort counting */
-		    }
-		    x++;
-		}
+            while (Uisspace(*x)) x++;                   /* skip whitespace */
 
-		if (x)					/* end of blob? */
-		    x++;				/* yes, skip past it */
-		else
-		    break;				/* no, we're done */
-	    }
+            if (*x == '[') {                            /* start of blob? */
+                for (x++; x;) {                         /* yes, get count */
+                    if (!*x) {                          /* end of subj, quit */
+                        x = NULL;
+                        break;
+                    }
+                    else if (*x == ']') {               /* end of blob, done */
+                        break;
+                                        /* if we have a digit, and we're still
+                                           counting, keep building the count */
+                    } else if (cyrus_isdigit((int) *x) && count != -1) {
+                        count = count * 10 + *x - '0';
+                        if (count < 0) {                /* overflow */
+                            count = -1; /* abort counting */
+                        }
+                    } else {                            /* no digit, */
+                        count = -1;                     /*  abort counting */
+                    }
+                    x++;
+                }
 
-	    while (Uisspace(*x)) x++;                   /* skip whitespace */
+                if (x)                                  /* end of blob? */
+                    x++;                                /* yes, skip past it */
+                else
+                    break;                              /* no, we're done */
+            }
 
-	    if (*x == ':') {				/* ending colon? */
-		base = x + 1;				/* yes, skip past it */
-		*is_refwd += (count > 0 ? count : 1);	/* inc refwd counter
-							   by count or 1 */
-	    }
-	    else
-		break;					/* no, we're done */
-	}
+            while (Uisspace(*x)) x++;                   /* skip whitespace */
+
+            if (*x == ':') {                            /* ending colon? */
+                base = x + 1;                           /* yes, skip past it */
+                *is_refwd += (count > 0 ? count : 1);   /* inc refwd counter
+                                                           by count or 1 */
+            }
+            else
+                break;                                  /* no, we're done */
+        }
 
 #if 0 /* do nested blobs - wait for decision on this */
-	else if (*base == '[') {			/* start of blob? */
-	    int count = 1;				/* yes, */
-	    x = base + 1;				/*  find end of blob */
-	    while (count) {				/* find matching ']' */
-		if (!*x) {				/* end of subj, quit */
-		    x = NULL;
-		    break;
-		}
-		else if (*x == '[')			/* new open */
-		    count++;				/* inc counter */
-		else if (*x == ']')			/* close */
-		    count--;				/* dec counter */
-		x++;
-	    }
+        else if (*base == '[') {                        /* start of blob? */
+            int count = 1;                              /* yes, */
+            x = base + 1;                               /*  find end of blob */
+            while (count) {                             /* find matching ']' */
+                if (!*x) {                              /* end of subj, quit */
+                    x = NULL;
+                    break;
+                }
+                else if (*x == '[')                     /* new open */
+                    count++;                            /* inc counter */
+                else if (*x == ']')                     /* close */
+                    count--;                            /* dec counter */
+                x++;
+            }
 
-	    if (!x)					/* blob didn't close */
-		break;					/*  so quit */
+            if (!x)                                     /* blob didn't close */
+                break;                                  /*  so quit */
 
-	    else if (*x)				/* end of subj? */
-		base = x;				/* no, skip blob */
+            else if (*x)                                /* end of subj? */
+                base = x;                               /* no, skip blob */
 #else
-	else if (*base == '[' &&			/* start of blob? */
-		 (x = strpbrk(base+1, "[]")) &&		/* yes, end of blob */
-		 *x == ']') {				/*  (w/o nesting)? */
+        else if (*base == '[' &&                        /* start of blob? */
+                 (x = strpbrk(base+1, "[]")) &&         /* yes, end of blob */
+                 *x == ']') {                           /*  (w/o nesting)? */
 
-	    if (*(x+1))					/* yes, end of subj? */
-		base = x + 1;				/* no, skip blob */
+            if (*(x+1))                                 /* yes, end of subj? */
+                base = x + 1;                           /* no, skip blob */
 #endif
-	    else
-		break;					/* yes, return blob */
-	}
-	else
-	    break;					/* we're done */
+            else
+                break;                                  /* yes, return blob */
+        }
+        else
+            break;                                      /* we're done */
     }
 
     return base;
@@ -5144,7 +5144,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 /* Get message-id, and references/in-reply-to */
 
 void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
-		   unsigned size)
+                   unsigned size)
 {
     static struct buf buf;
     strarray_t refhdr = STRARRAY_INITIALIZER;
@@ -5156,9 +5156,9 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
     msgdata->msgid = find_msgid(envtokens[ENV_MSGID], NULL);
      /* if we don't have one, create one */
     if (!msgdata->msgid) {
-	buf_printf(&buf, "<Empty-ID: %u>", msgdata->msgno);
-	msgdata->msgid = xstrdup(buf.s);
-	buf_reset(&buf);
+        buf_printf(&buf, "<Empty-ID: %u>", msgdata->msgno);
+        msgdata->msgid = xstrdup(buf.s);
+        buf_reset(&buf);
     }
 
     /* Copy headers to the buffer */
@@ -5171,21 +5171,21 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
     strarray_fini(&refhdr);
 
     if (buf.s) {
-	/* allocate some space for refs */
-	/* find references */
-	refstr = buf.s;
-	massage_header(refstr);
-	while ((ref = find_msgid(refstr, &refstr)) != NULL)
-	    strarray_appendm(&msgdata->ref, ref);
+        /* allocate some space for refs */
+        /* find references */
+        refstr = buf.s;
+        massage_header(refstr);
+        while ((ref = find_msgid(refstr, &refstr)) != NULL)
+            strarray_appendm(&msgdata->ref, ref);
     }
 
     /* if we have no references, try in-reply-to */
     if (!msgdata->ref.count) {
-	/* get in-reply-to id */
-	in_reply_to = find_msgid(envtokens[ENV_INREPLYTO], NULL);
-	/* if we have an in-reply-to id, make it the ref */
-	if (in_reply_to)
-	    strarray_appendm(&msgdata->ref, in_reply_to);
+        /* get in-reply-to id */
+        in_reply_to = find_msgid(envtokens[ENV_INREPLYTO], NULL);
+        /* if we have an in-reply-to id, make it the ref */
+        if (in_reply_to)
+            strarray_appendm(&msgdata->ref, in_reply_to);
     }
 }
 
@@ -5201,85 +5201,85 @@ static int numcmp(modseq_t n1, modseq_t n2)
  * Comparison function for sorting message lists.
  */
 static int index_sort_compare(MsgData *md1, MsgData *md2,
-			      const struct sortcrit *sortcrit)
+                              const struct sortcrit *sortcrit)
 {
     int reverse, ret = 0, i = 0, ann = 0;
 
     do {
-	/* determine sort order from reverse flag bit */
-	reverse = sortcrit[i].flags & SORT_REVERSE;
+        /* determine sort order from reverse flag bit */
+        reverse = sortcrit[i].flags & SORT_REVERSE;
 
-	switch (sortcrit[i].key) {
-	case SORT_SEQUENCE:
-	    ret = numcmp(md1->msgno, md2->msgno);
-	    break;
-	case SORT_ARRIVAL:
-	    ret = numcmp(md1->internaldate, md2->internaldate);
-	    break;
-	case SORT_CC:
-	    ret = strcmpsafe(md1->cc, md2->cc);
-	    break;
-	case SORT_DATE: {
-	    time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate;
-	    time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate;
-	    ret = numcmp(d1, d2);
-	    break;
-	}
-	case SORT_FROM:
-	    ret = strcmpsafe(md1->from, md2->from);
-	    break;
-	case SORT_SIZE:
-	    ret = numcmp(md1->size, md2->size);
-	    break;
-	case SORT_SUBJECT:
-	    ret = strcmpsafe(md1->xsubj, md2->xsubj);
-	    break;
-	case SORT_TO:
-	    ret = strcmpsafe(md1->to, md2->to);
-	    break;
-	case SORT_ANNOTATION:
-	    ret = strcmpsafe(md1->annot.data[ann], md2->annot.data[ann]);
-	    ann++;
-	    break;
-	case SORT_MODSEQ:
-	    ret = numcmp(md1->modseq, md2->modseq);
-	    break;
-	case SORT_DISPLAYFROM:
-	    ret = strcmpsafe(md1->displayfrom, md2->displayfrom);
-	    break;
-	case SORT_DISPLAYTO:
-	    ret = strcmpsafe(md1->displayto, md2->displayto);
-	    break;
-	case SORT_UID:
-	    ret = numcmp(md1->uid, md2->uid);
-	    break;
-	case SORT_CONVMODSEQ:
-	    ret = numcmp(md1->convmodseq, md2->convmodseq);
-	    break;
-	case SORT_CONVEXISTS:
-	    ret = numcmp(md1->convexists, md2->convexists);
-	    break;
-	case SORT_CONVSIZE:
-	    ret = numcmp(md1->convsize, md2->convsize);
-	    break;
-	case SORT_HASFLAG:
-	    if (i < 31)
-		ret = numcmp(md1->hasflag & (1<<i),
-			     md2->hasflag & (1<<i));
-	    break;
-	case SORT_HASCONVFLAG:
-	    if (i < 31)
-		ret = numcmp(md1->hasconvflag & (1<<i),
-			     md2->hasconvflag & (1<<i));
-	    break;
-	case SORT_FOLDER:
-	    if (md1->folder && md2->folder)
-		ret = strcmpsafe(md1->folder->mboxname, md2->folder->mboxname);
-	    break;
-	case SORT_RELEVANCY:
-	    ret = 0;	    /* for now all messages have relevancy=100 */
-	    break;
-	}
+        switch (sortcrit[i].key) {
+        case SORT_SEQUENCE:
+            ret = numcmp(md1->msgno, md2->msgno);
+            break;
+        case SORT_ARRIVAL:
+            ret = numcmp(md1->internaldate, md2->internaldate);
+            break;
+        case SORT_CC:
+            ret = strcmpsafe(md1->cc, md2->cc);
+            break;
+        case SORT_DATE: {
+            time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate;
+            time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate;
+            ret = numcmp(d1, d2);
+            break;
+        }
+        case SORT_FROM:
+            ret = strcmpsafe(md1->from, md2->from);
+            break;
+        case SORT_SIZE:
+            ret = numcmp(md1->size, md2->size);
+            break;
+        case SORT_SUBJECT:
+            ret = strcmpsafe(md1->xsubj, md2->xsubj);
+            break;
+        case SORT_TO:
+            ret = strcmpsafe(md1->to, md2->to);
+            break;
+        case SORT_ANNOTATION:
+            ret = strcmpsafe(md1->annot.data[ann], md2->annot.data[ann]);
+            ann++;
+            break;
+        case SORT_MODSEQ:
+            ret = numcmp(md1->modseq, md2->modseq);
+            break;
+        case SORT_DISPLAYFROM:
+            ret = strcmpsafe(md1->displayfrom, md2->displayfrom);
+            break;
+        case SORT_DISPLAYTO:
+            ret = strcmpsafe(md1->displayto, md2->displayto);
+            break;
+        case SORT_UID:
+            ret = numcmp(md1->uid, md2->uid);
+            break;
+        case SORT_CONVMODSEQ:
+            ret = numcmp(md1->convmodseq, md2->convmodseq);
+            break;
+        case SORT_CONVEXISTS:
+            ret = numcmp(md1->convexists, md2->convexists);
+            break;
+        case SORT_CONVSIZE:
+            ret = numcmp(md1->convsize, md2->convsize);
+            break;
+        case SORT_HASFLAG:
+            if (i < 31)
+                ret = numcmp(md1->hasflag & (1<<i),
+                             md2->hasflag & (1<<i));
+            break;
+        case SORT_HASCONVFLAG:
+            if (i < 31)
+                ret = numcmp(md1->hasconvflag & (1<<i),
+                             md2->hasconvflag & (1<<i));
+            break;
+        case SORT_FOLDER:
+            if (md1->folder && md2->folder)
+                ret = strcmpsafe(md1->folder->mboxname, md2->folder->mboxname);
+            break;
+        case SORT_RELEVANCY:
+            ret = 0;        /* for now all messages have relevancy=100 */
+            break;
+        }
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
     return (reverse ? -ret : ret);
@@ -5307,21 +5307,21 @@ void index_msgdata_free(MsgData **msgdata, unsigned int n)
     unsigned int i;
 
     if (!msgdata)
-	return;
+        return;
     for (i = 0 ; i < n ; i++) {
-	MsgData *md = msgdata[i];
+        MsgData *md = msgdata[i];
 
-	free(md->cc);
-	free(md->from);
-	free(md->to);
-	free(md->displayfrom);
-	free(md->displayto);
-	free(md->xsubj);
-	free(md->msgid);
-	free(md->listid);
-	free(md->contenttype);
-	strarray_fini(&md->ref);
-	strarray_fini(&md->annot);
+        free(md->cc);
+        free(md->from);
+        free(md->to);
+        free(md->displayfrom);
+        free(md->displayto);
+        free(md->xsubj);
+        free(md->msgid);
+        free(md->listid);
+        free(md->contenttype);
+        strarray_fini(&md->ref);
+        strarray_fini(&md->annot);
     }
     free(msgdata);
 }
@@ -5346,7 +5346,7 @@ static void index_thread_setnext(Thread *thread, Thread *next)
  * Comparison function for sorting threads.
  */
 static int index_thread_compare(Thread *t1, Thread *t2,
-				const struct sortcrit *call_data)
+                                const struct sortcrit *call_data)
 {
     MsgData *md1, *md2;
 
@@ -5360,40 +5360,40 @@ static int index_thread_compare(Thread *t1, Thread *t2,
  * Sort a list of threads.
  */
 static void index_thread_sort(Thread *root,
-			      const struct sortcrit *sortcrit)
+                              const struct sortcrit *sortcrit)
 {
     Thread *child;
 
     /* sort the grandchildren */
     child = root->child;
     while (child) {
-	/* if the child has children, sort them */
-	if (child->child)
-	    index_thread_sort(child, sortcrit);
-	child = child->next;
+        /* if the child has children, sort them */
+        if (child->child)
+            index_thread_sort(child, sortcrit);
+        child = child->next;
     }
 
     /* sort the children */
     root->child = lsort(root->child,
-			(void * (*)(void*)) index_thread_getnext,
-			(void (*)(void*,void*)) index_thread_setnext,
-			(int (*)(void*,void*,void*)) index_thread_compare,
-			(void *)sortcrit);
+                        (void * (*)(void*)) index_thread_getnext,
+                        (void (*)(void*,void*)) index_thread_setnext,
+                        (int (*)(void*,void*,void*)) index_thread_compare,
+                        (void *)sortcrit);
 }
 
 /*
  * Thread a list of messages using the ORDEREDSUBJECT algorithm.
  */
 static void index_thread_orderedsubj(struct index_state *state,
-				     unsigned *msgno_list, unsigned int nmsg,
-				     int usinguid)
+                                     unsigned *msgno_list, unsigned int nmsg,
+                                     int usinguid)
 {
     MsgData **msgdata;
     unsigned int mi;
     static const struct sortcrit sortcrit[] =
-				 {{ SORT_SUBJECT,  0, {{NULL, NULL}} },
-				  { SORT_DATE,     0, {{NULL, NULL}} },
-				  { SORT_SEQUENCE, 0, {{NULL, NULL}} }};
+                                 {{ SORT_SUBJECT,  0, {{NULL, NULL}} },
+                                  { SORT_DATE,     0, {{NULL, NULL}} },
+                                  { SORT_SEQUENCE, 0, {{NULL, NULL}} }};
     unsigned psubj_hash = 0;
     char *psubj;
     Thread *head, *newnode, *cur, *parent, *last;
@@ -5411,50 +5411,50 @@ static void index_thread_orderedsubj(struct index_state *state,
      */
     head = (Thread *) xzmalloc((nmsg + 1) * sizeof(Thread));
 
-    newnode = head + 1;	/* set next newnode to the second
-			   one in the array (skip the head) */
-    parent = head;	/* parent is the head node */
-    psubj = NULL;	/* no previous subject */
-    cur = NULL;		/* no current thread */
-    last = NULL;	/* no last child */
+    newnode = head + 1; /* set next newnode to the second
+                           one in the array (skip the head) */
+    parent = head;      /* parent is the head node */
+    psubj = NULL;       /* no previous subject */
+    cur = NULL;         /* no current thread */
+    last = NULL;        /* no last child */
 
     for (mi = 0 ; mi < nmsg ; mi++) {
-	MsgData *msg = msgdata[mi];
-	newnode->msgdata = msg;
+        MsgData *msg = msgdata[mi];
+        newnode->msgdata = msg;
 
-	/* if no previous subj, or
-	   current subj = prev subj (subjs have same hash, and
-	   the strings are equal), then add message to current thread */
-	if (!psubj ||
-	    (msg->xsubj_hash == psubj_hash &&
-	     !strcmp(msg->xsubj, psubj))) {
-	    /* if no children, create first child */
-	    if (!parent->child) {
-		last = parent->child = newnode;
-		if (!cur)		/* first thread */
-		    parent = cur = parent->child;
-	    }
-	    /* otherwise, add to siblings */
-	    else {
-		last->next = newnode;
-		last = last->next;
-	    }
-	}
-	/* otherwise, create a new thread */
-	else {
-	    cur->next = newnode;	/* create and start a new thread */
-	    parent = cur = cur->next;	/* now work with the new thread */
-	}
+        /* if no previous subj, or
+           current subj = prev subj (subjs have same hash, and
+           the strings are equal), then add message to current thread */
+        if (!psubj ||
+            (msg->xsubj_hash == psubj_hash &&
+             !strcmp(msg->xsubj, psubj))) {
+            /* if no children, create first child */
+            if (!parent->child) {
+                last = parent->child = newnode;
+                if (!cur)               /* first thread */
+                    parent = cur = parent->child;
+            }
+            /* otherwise, add to siblings */
+            else {
+                last->next = newnode;
+                last = last->next;
+            }
+        }
+        /* otherwise, create a new thread */
+        else {
+            cur->next = newnode;        /* create and start a new thread */
+            parent = cur = cur->next;   /* now work with the new thread */
+        }
 
-	psubj_hash = msg->xsubj_hash;
-	psubj = msg->xsubj;
-	newnode++;
+        psubj_hash = msg->xsubj_hash;
+        psubj = msg->xsubj;
+        newnode++;
     }
 
     /* Sort threads by date */
     index_thread_sort(head, sortcrit+1);
 
-    /* Output the threaded messages */ 
+    /* Output the threaded messages */
     index_thread_print(state, head, usinguid);
 
     /* free the thread array */
@@ -5470,52 +5470,52 @@ static void index_thread_orderedsubj(struct index_state *state,
  * Frees contents of msgdata as a side effect.
  */
 static void _index_thread_print(struct index_state *state,
-				Thread *thread, int usinguid)
+                                Thread *thread, int usinguid)
 {
     Thread *child;
 
     /* for each thread... */
     while (thread) {
-	/* start the thread */
-	prot_printf(state->out, "(");
+        /* start the thread */
+        prot_printf(state->out, "(");
 
-	/* if we have a message, print its identifier
-	 * (do nothing for empty containers)
-	 */
-	if (thread->msgdata) {
-	    prot_printf(state->out, "%u",
-			usinguid ? thread->msgdata->uid :
-			thread->msgdata->msgno);
+        /* if we have a message, print its identifier
+         * (do nothing for empty containers)
+         */
+        if (thread->msgdata) {
+            prot_printf(state->out, "%u",
+                        usinguid ? thread->msgdata->uid :
+                        thread->msgdata->msgno);
 
-	    /* if we have a child, print the parent-child separator */
-	    if (thread->child) prot_printf(state->out, " ");
-	}
+            /* if we have a child, print the parent-child separator */
+            if (thread->child) prot_printf(state->out, " ");
+        }
 
-	/* for each child, grandchild, etc... */
-	child = thread->child;
-	while (child) {
-	    /* if the child has siblings, print new branch and break */
-	    if (child->next) {
-		_index_thread_print(state, child, usinguid);
-		break;
-	    }
-	    /* otherwise print the only child */
-	    else {
-		prot_printf(state->out, "%u",
-			    usinguid ? child->msgdata->uid :
-			    child->msgdata->msgno);
+        /* for each child, grandchild, etc... */
+        child = thread->child;
+        while (child) {
+            /* if the child has siblings, print new branch and break */
+            if (child->next) {
+                _index_thread_print(state, child, usinguid);
+                break;
+            }
+            /* otherwise print the only child */
+            else {
+                prot_printf(state->out, "%u",
+                            usinguid ? child->msgdata->uid :
+                            child->msgdata->msgno);
 
-		/* if we have a child, print the parent-child separator */
-		if (child->child) prot_printf(state->out, " ");
+                /* if we have a child, print the parent-child separator */
+                if (child->child) prot_printf(state->out, " ");
 
-		child = child->child;
-	    }
-	}
+                child = child->child;
+            }
+        }
 
-	/* end the thread */
-	prot_printf(state->out, ")");
+        /* end the thread */
+        prot_printf(state->out, ")");
 
-	thread = thread->next;
+        thread = thread->next;
     }
 }
 
@@ -5526,13 +5526,13 @@ static void _index_thread_print(struct index_state *state,
  * start and end of the untagged thread response.
  */
 static void index_thread_print(struct index_state *state,
-			       Thread *thread, int usinguid)
+                               Thread *thread, int usinguid)
 {
     prot_printf(state->out, "* THREAD");
 
     if (thread) {
-	prot_printf(state->out, " ");
-	_index_thread_print(state, thread->child, usinguid);
+        prot_printf(state->out, " ");
+        _index_thread_print(state, thread->child, usinguid);
     }
 }
 
@@ -5546,8 +5546,8 @@ EXPORTED int find_thread_algorithm(char *arg)
 
     ucase(arg);
     for (alg = 0; thread_algs[alg].alg_name; alg++) {
-	if (!strcmp(arg, thread_algs[alg].alg_name))
-	    return alg;
+        if (!strcmp(arg, thread_algs[alg].alg_name))
+            return alg;
     }
     return -1;
 }
@@ -5570,12 +5570,12 @@ static int thread_is_descendent(Thread *parent, Thread *child)
 
     /* self */
     if (parent == child)
-	return 1;
+        return 1;
 
     /* search each child's decendents */
     for (kid = parent->child; kid; kid = kid->next) {
-	if (thread_is_descendent(kid, child))
-	    return 1;
+        if (thread_is_descendent(kid, child))
+            return 1;
     }
     return 0;
 }
@@ -5599,20 +5599,20 @@ static void thread_orphan_child(Thread *child)
 
     /* sanity check -- make sure child is actually a child of parent */
     for (prev = NULL, cur = child->parent->child;
-	 cur != child && cur != NULL; prev = cur, cur = cur->next);
+         cur != child && cur != NULL; prev = cur, cur = cur->next);
 
     if (!cur) {
-	/* uh oh!  couldn't find the child in it's parent's children
-	 * we should probably return NO to thread command
-	 */
-	return;
+        /* uh oh!  couldn't find the child in it's parent's children
+         * we should probably return NO to thread command
+         */
+        return;
     }
 
     /* unlink child */
-    if (!prev)	/* first child */
-	child->parent->child = child->next;
+    if (!prev)  /* first child */
+        child->parent->child = child->next;
     else
-	prev->next = child->next;
+        prev->next = child->next;
     child->parent = child->next = NULL;
 }
 
@@ -5620,7 +5620,7 @@ static void thread_orphan_child(Thread *child)
  * Link messages together using message-id and references.
  */
 static void ref_link_messages(MsgData **msgdata, unsigned int nmsg,
-			      Thread **newnode, struct hash_table *id_table)
+                              Thread **newnode, struct hash_table *id_table)
 {
     Thread *cur, *parent, *ref;
     unsigned int mi;
@@ -5630,74 +5630,74 @@ static void ref_link_messages(MsgData **msgdata, unsigned int nmsg,
 
     /* for each message... */
     for (mi = 0 ; mi < nmsg ; mi++) {
-	MsgData *msg = msgdata[mi];
+        MsgData *msg = msgdata[mi];
 
-	/* fill the containers with msgdata
-	 *
-	 * if we already have a container, use it
-	 */
-	if ((cur = (Thread *) hash_lookup(msg->msgid, id_table))) {
-	    /* If this container is not empty, then we have a duplicate
-	     * Message-ID.  Make this one unique so that we don't stomp
-	     * on the old one.
-	     */
-	    if (cur->msgdata) {
-		snprintf(buf, sizeof(buf), "-dup%d", dup_count++);
-		msg->msgid =
-		    (char *) xrealloc(msg->msgid,
-				      strlen(msg->msgid) + strlen(buf) + 1);
-		strcat(msg->msgid, buf);
-		/* clear cur so that we create a new container */
-		cur = NULL;
-	    }
-	    else
-		cur->msgdata = msg;
-	}
+        /* fill the containers with msgdata
+         *
+         * if we already have a container, use it
+         */
+        if ((cur = (Thread *) hash_lookup(msg->msgid, id_table))) {
+            /* If this container is not empty, then we have a duplicate
+             * Message-ID.  Make this one unique so that we don't stomp
+             * on the old one.
+             */
+            if (cur->msgdata) {
+                snprintf(buf, sizeof(buf), "-dup%d", dup_count++);
+                msg->msgid =
+                    (char *) xrealloc(msg->msgid,
+                                      strlen(msg->msgid) + strlen(buf) + 1);
+                strcat(msg->msgid, buf);
+                /* clear cur so that we create a new container */
+                cur = NULL;
+            }
+            else
+                cur->msgdata = msg;
+        }
 
-	/* otherwise, make and index a new container */
-	if (!cur) {
-	    cur = *newnode;
-	    cur->msgdata = msg;
-	    hash_insert(msg->msgid, cur, id_table);
-	    (*newnode)++;
-	}
+        /* otherwise, make and index a new container */
+        if (!cur) {
+            cur = *newnode;
+            cur->msgdata = msg;
+            hash_insert(msg->msgid, cur, id_table);
+            (*newnode)++;
+        }
 
-	/* Step 1.A */
-	for (i = 0, parent = NULL; i < msg->ref.count; i++) {
-	    /* if we don't already have a container for the reference,
-	     * make and index a new (empty) container
-	     */
-	    if (!(ref = (Thread *) hash_lookup(msg->ref.data[i], id_table))) {
-		ref = *newnode;
-		hash_insert(msg->ref.data[i], ref, id_table);
-		(*newnode)++;
-	    }
+        /* Step 1.A */
+        for (i = 0, parent = NULL; i < msg->ref.count; i++) {
+            /* if we don't already have a container for the reference,
+             * make and index a new (empty) container
+             */
+            if (!(ref = (Thread *) hash_lookup(msg->ref.data[i], id_table))) {
+                ref = *newnode;
+                hash_insert(msg->ref.data[i], ref, id_table);
+                (*newnode)++;
+            }
 
-	    /* link the references together as parent-child iff:
-	     * - we won't change existing links, AND
-	     * - we won't create a loop
-	     */
-	    if (!ref->parent &&
-		parent && !thread_is_descendent(ref, parent)) {
-		thread_adopt_child(parent, ref);
-	    }
+            /* link the references together as parent-child iff:
+             * - we won't change existing links, AND
+             * - we won't create a loop
+             */
+            if (!ref->parent &&
+                parent && !thread_is_descendent(ref, parent)) {
+                thread_adopt_child(parent, ref);
+            }
 
-	    parent = ref;
-	}
+            parent = ref;
+        }
 
-	/* Step 1.B
-	 *
-	 * if we have a parent already, it is probably bogus (the result
-	 * of a truncated references field), so unlink from it because
-	 * we now have the actual parent
-	 */
-	if (cur->parent) thread_orphan_child(cur);
+        /* Step 1.B
+         *
+         * if we have a parent already, it is probably bogus (the result
+         * of a truncated references field), so unlink from it because
+         * we now have the actual parent
+         */
+        if (cur->parent) thread_orphan_child(cur);
 
-	/* make the last reference the parent of our message iff:
-	 * - we won't create a loop
-	 */
-	if (parent && !thread_is_descendent(cur, parent))
-	    thread_adopt_child(parent, cur);
+        /* make the last reference the parent of our message iff:
+         * - we won't create a loop
+         */
+        if (parent && !thread_is_descendent(cur, parent))
+            thread_adopt_child(parent, cur);
     }
 }
 
@@ -5705,24 +5705,24 @@ static void ref_link_messages(MsgData **msgdata, unsigned int nmsg,
  * Gather orphan messages under the root node.
  */
 static void ref_gather_orphans(const char *key __attribute__((unused)),
-			       void *data, void *rock)
+                               void *data, void *rock)
 {
     Thread *node = (Thread *)data;
     struct rootset *rootset = (struct rootset *)rock;
 
     /* we only care about nodes without parents */
     if (!node->parent) {
-	if (node->next) {
-	    /* uh oh!  a node without a parent should not have a sibling
-	     * we should probably return NO to thread command
-	     */
-	    return;
-	}
+        if (node->next) {
+            /* uh oh!  a node without a parent should not have a sibling
+             * we should probably return NO to thread command
+             */
+            return;
+        }
 
-	/* add this node to root's children */
-	node->next = rootset->root->child;
-	rootset->root->child = node;
-	rootset->nroot++;
+        /* add this node to root's children */
+        node->next = rootset->root->child;
+        rootset->root->child = node;
+        rootset->nroot++;
     }
 }
 
@@ -5734,72 +5734,72 @@ static void ref_prune_tree(Thread *parent)
     Thread *cur, *prev, *next, *child;
 
     for (prev = NULL, cur = parent->child, next = cur->next;
-	 cur;
-	 prev = cur, cur = next, next = (cur ? cur->next : NULL)) {
+         cur;
+         prev = cur, cur = next, next = (cur ? cur->next : NULL)) {
 
 retry:
-	/* if we have an empty container with no children, delete it */
-	if (!cur->msgdata && !cur->child) {
-	    if (!prev)	/* first child */
-		parent->child = cur->next;
-	    else
-		prev->next = cur->next;
+        /* if we have an empty container with no children, delete it */
+        if (!cur->msgdata && !cur->child) {
+            if (!prev)  /* first child */
+                parent->child = cur->next;
+            else
+                prev->next = cur->next;
 
-	    /* we just removed cur from our list,
-	     * so we need to keep the same prev for the next pass
-	     */
-	    cur = prev;
-	}
+            /* we just removed cur from our list,
+             * so we need to keep the same prev for the next pass
+             */
+            cur = prev;
+        }
 
-	/* if we have an empty container with children, AND
-	 * we're not at the root OR we only have one child,
-	 * then remove the container but promote its children to this level
-	 * (splice them into the current child list)
-	 */
-	else if (!cur->msgdata && cur->child &&
-		 (cur->parent || !cur->child->next)) {
-	    /* move cur's children into cur's place (start the splice) */
-	    if (!prev)	/* first child */
-		parent->child = cur->child;
-	    else
-		prev->next = cur->child;
+        /* if we have an empty container with children, AND
+         * we're not at the root OR we only have one child,
+         * then remove the container but promote its children to this level
+         * (splice them into the current child list)
+         */
+        else if (!cur->msgdata && cur->child &&
+                 (cur->parent || !cur->child->next)) {
+            /* move cur's children into cur's place (start the splice) */
+            if (!prev)  /* first child */
+                parent->child = cur->child;
+            else
+                prev->next = cur->child;
 
-	    /* make cur's parent the new parent of cur's children
-	     * (they're moving in with grandma!)
-	     */
-	    child = cur->child;
-	    do {
-		child->parent = cur->parent;
-	    } while (child->next && (child = child->next));
+            /* make cur's parent the new parent of cur's children
+             * (they're moving in with grandma!)
+             */
+            child = cur->child;
+            do {
+                child->parent = cur->parent;
+            } while (child->next && (child = child->next));
 
-	    /* make the cur's last child point to cur's next sibling
-	     * (finish the splice)
-	     */
-	    child->next = cur->next;
+            /* make the cur's last child point to cur's next sibling
+             * (finish the splice)
+             */
+            child->next = cur->next;
 
-	    /* we just replaced cur with it's children
-	     * so make it's first child the next node to process
-	     */
-	    next = cur->child;
+            /* we just replaced cur with it's children
+             * so make it's first child the next node to process
+             */
+            next = cur->child;
 
-	    /* make cur childless and siblingless */
-	    cur->child = cur->next = NULL;
+            /* make cur childless and siblingless */
+            cur->child = cur->next = NULL;
 
-	    /* we just removed cur from our list,
-	     * so we need to keep the same prev for the next pass
-	     */
-	    cur = prev;
-	}
+            /* we just removed cur from our list,
+             * so we need to keep the same prev for the next pass
+             */
+            cur = prev;
+        }
 
-	/* if we have a message with children, prune it's children */
-	else if (cur->child) {
-	    ref_prune_tree(cur);
-	    if (!cur->msgdata && !cur->child) {
-		/* Did we end up with a completely empty node here?
-		 * Go back and prune it too.  See Bug 3784.  */
-		goto retry;
-	    }
-	}
+        /* if we have a message with children, prune it's children */
+        else if (cur->child) {
+            ref_prune_tree(cur);
+            if (!cur->msgdata && !cur->child) {
+                /* Did we end up with a completely empty node here?
+                 * Go back and prune it too.  See Bug 3784.  */
+                goto retry;
+            }
+        }
     }
 }
 
@@ -5810,28 +5810,28 @@ static void ref_sort_root(Thread *root)
 {
     Thread *cur;
     static const struct sortcrit sortcrit[] =
-				 {{ SORT_DATE,     0, {{NULL, NULL}} },
-				  { SORT_SEQUENCE, 0, {{NULL, NULL}} }};
+                                 {{ SORT_DATE,     0, {{NULL, NULL}} },
+                                  { SORT_SEQUENCE, 0, {{NULL, NULL}} }};
 
     cur = root->child;
     while (cur) {
-	/* if the message is a dummy, sort its children */
-	if (!cur->msgdata) {
-	    cur->child = lsort(cur->child,
-			       (void * (*)(void*)) index_thread_getnext,
-			       (void (*)(void*,void*)) index_thread_setnext,
-			       (int (*)(void*,void*,void*)) index_thread_compare,
-			       (void *)sortcrit);
-	}
-	cur = cur->next;
+        /* if the message is a dummy, sort its children */
+        if (!cur->msgdata) {
+            cur->child = lsort(cur->child,
+                               (void * (*)(void*)) index_thread_getnext,
+                               (void (*)(void*,void*)) index_thread_setnext,
+                               (int (*)(void*,void*,void*)) index_thread_compare,
+                               (void *)sortcrit);
+        }
+        cur = cur->next;
     }
 
     /* sort the root set */
     root->child = lsort(root->child,
-			(void * (*)(void*)) index_thread_getnext,
-			(void (*)(void*,void*)) index_thread_setnext,
-			(int (*)(void*,void*,void*)) index_thread_compare,
-			(void *)sortcrit);
+                        (void * (*)(void*)) index_thread_getnext,
+                        (void (*)(void*,void*)) index_thread_setnext,
+                        (int (*)(void*,void*,void*)) index_thread_compare,
+                        (void *)sortcrit);
 }
 
 /*
@@ -5852,137 +5852,137 @@ static void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
      * at the root
      */
     for (cur = root->child; cur; cur = cur->next) {
-	/* Step 5.B.i: find subject of the thread
-	 *
-	 * if the container is not empty, use it's subject
-	 */
-	if (cur->msgdata)
-	    subj = cur->msgdata->xsubj;
-	/* otherwise, use the subject of it's first child */
-	else
-	    subj = cur->child->msgdata->xsubj;
+        /* Step 5.B.i: find subject of the thread
+         *
+         * if the container is not empty, use it's subject
+         */
+        if (cur->msgdata)
+            subj = cur->msgdata->xsubj;
+        /* otherwise, use the subject of it's first child */
+        else
+            subj = cur->child->msgdata->xsubj;
 
-	/* Step 5.B.ii: if subject is empty, skip it */
-	if (!strlen(subj)) continue;
+        /* Step 5.B.ii: if subject is empty, skip it */
+        if (!strlen(subj)) continue;
 
-	/* Step 5.B.iii: lookup this subject in the table */
-	old = (Thread *) hash_lookup(subj, &subj_table);
+        /* Step 5.B.iii: lookup this subject in the table */
+        old = (Thread *) hash_lookup(subj, &subj_table);
 
-	/* Step 5.B.iv: insert the current container into the table iff:
-	 * - this subject is not in the table, OR
-	 * - this container is empty AND the one in the table is not
-	 *   (the empty one is more interesting as a root), OR
-	 * - the container in the table is a re/fwd AND this one is not
-	 *   (the non-re/fwd is the more interesting of the two)
-	 */
-	if (!old ||
-	    (!cur->msgdata && old->msgdata) ||
-	    (old->msgdata && old->msgdata->is_refwd &&
-	     cur->msgdata && !cur->msgdata->is_refwd)) {
-	  hash_insert(subj, cur, &subj_table);
-	}
+        /* Step 5.B.iv: insert the current container into the table iff:
+         * - this subject is not in the table, OR
+         * - this container is empty AND the one in the table is not
+         *   (the empty one is more interesting as a root), OR
+         * - the container in the table is a re/fwd AND this one is not
+         *   (the non-re/fwd is the more interesting of the two)
+         */
+        if (!old ||
+            (!cur->msgdata && old->msgdata) ||
+            (old->msgdata && old->msgdata->is_refwd &&
+             cur->msgdata && !cur->msgdata->is_refwd)) {
+          hash_insert(subj, cur, &subj_table);
+        }
     }
 
     /* 5.C - group containers with the same subject together */
     for (prev = NULL, cur = root->child, next = cur->next;
-	 cur;
-	 prev = cur, cur = next, next = (next ? next->next : NULL)) {	
-	/* Step 5.C.i: find subject of the thread
-	 *
-	 * if container is not empty, use it's subject
-	 */
-	if (cur->msgdata)
-	    subj = cur->msgdata->xsubj;
-	/* otherwise, use the subject of it's first child */
-	else
-	    subj = cur->child->msgdata->xsubj;
+         cur;
+         prev = cur, cur = next, next = (next ? next->next : NULL)) {
+        /* Step 5.C.i: find subject of the thread
+         *
+         * if container is not empty, use it's subject
+         */
+        if (cur->msgdata)
+            subj = cur->msgdata->xsubj;
+        /* otherwise, use the subject of it's first child */
+        else
+            subj = cur->child->msgdata->xsubj;
 
-	/* Step 5.C.ii: if subject is empty, skip it */
-	if (!strlen(subj)) continue;
+        /* Step 5.C.ii: if subject is empty, skip it */
+        if (!strlen(subj)) continue;
 
-	/* Step 5.C.iii: lookup this subject in the table */
-	old = (Thread *) hash_lookup(subj, &subj_table);
+        /* Step 5.C.iii: lookup this subject in the table */
+        old = (Thread *) hash_lookup(subj, &subj_table);
 
-	/* Step 5.C.iv: if we found ourselves, skip it */
-	if (!old || old == cur) continue;
+        /* Step 5.C.iv: if we found ourselves, skip it */
+        if (!old || old == cur) continue;
 
-	/* ok, we already have a container which contains our current subject,
-	 * so pull this container out of the root set, because we are going to
-	 * merge this node with another one
-	 */
-	if (!prev)	/* we're at the root */
-	    root->child = cur->next;
-	else
-	    prev->next = cur->next;
-	cur->next = NULL;
+        /* ok, we already have a container which contains our current subject,
+         * so pull this container out of the root set, because we are going to
+         * merge this node with another one
+         */
+        if (!prev)      /* we're at the root */
+            root->child = cur->next;
+        else
+            prev->next = cur->next;
+        cur->next = NULL;
 
-	/* if both containers are dummies, append cur's children to old's */
-	if (!old->msgdata && !cur->msgdata) {
-	    /* find old's last child */
-	    for (child = old->child; child->next; child = child->next);
+        /* if both containers are dummies, append cur's children to old's */
+        if (!old->msgdata && !cur->msgdata) {
+            /* find old's last child */
+            for (child = old->child; child->next; child = child->next);
 
-	    /* append cur's children to old's children list */
-	    child->next = cur->child;
+            /* append cur's children to old's children list */
+            child->next = cur->child;
 
-	    /* make old the parent of cur's children */
-	    for (child = cur->child; child; child = child->next)
-		child->parent = old;
+            /* make old the parent of cur's children */
+            for (child = cur->child; child; child = child->next)
+                child->parent = old;
 
-	    /* make cur childless */
-	    cur->child = NULL;
-	}
+            /* make cur childless */
+            cur->child = NULL;
+        }
 
-	/* if:
-	 * - old container is empty, OR
-	 * - the current message is a re/fwd AND the old one is not,
-	 * make the current container a child of the old one
-	 *
-	 * Note: we don't have to worry about the reverse cases
-	 * because step 5.B guarantees that they won't happen
-	 */
-	else if (!old->msgdata ||
-		 (cur->msgdata && cur->msgdata->is_refwd &&
-		  !old->msgdata->is_refwd)) {
-	    thread_adopt_child(old, cur);
-	}
+        /* if:
+         * - old container is empty, OR
+         * - the current message is a re/fwd AND the old one is not,
+         * make the current container a child of the old one
+         *
+         * Note: we don't have to worry about the reverse cases
+         * because step 5.B guarantees that they won't happen
+         */
+        else if (!old->msgdata ||
+                 (cur->msgdata && cur->msgdata->is_refwd &&
+                  !old->msgdata->is_refwd)) {
+            thread_adopt_child(old, cur);
+        }
 
-	/* if both messages are re/fwds OR neither are re/fwds,
-	 * then make them both children of a new dummy container
-	 * (we don't want to assume any parent-child relationship between them)
-	 *
-	 * perhaps we can create a parent-child relationship
-	 * between re/fwds by counting the number of re/fwds
-	 *
-	 * Note: we need the hash table to still point to old,
-	 * so we must make old the dummy and make the contents of the
-	 * new container a copy of old's original contents
-	 */
-	else {
-	    Thread *new = (*newnode)++;
+        /* if both messages are re/fwds OR neither are re/fwds,
+         * then make them both children of a new dummy container
+         * (we don't want to assume any parent-child relationship between them)
+         *
+         * perhaps we can create a parent-child relationship
+         * between re/fwds by counting the number of re/fwds
+         *
+         * Note: we need the hash table to still point to old,
+         * so we must make old the dummy and make the contents of the
+         * new container a copy of old's original contents
+         */
+        else {
+            Thread *new = (*newnode)++;
 
-	    /* make new a copy of old (except parent and next) */
- 	    new->msgdata = old->msgdata;
-	    new->child = old->child;
-	    new->next = NULL;
+            /* make new a copy of old (except parent and next) */
+            new->msgdata = old->msgdata;
+            new->child = old->child;
+            new->next = NULL;
 
-	    /* make new the parent of it's newly adopted children */
-	    for (child = new->child; child; child = child->next)
-		child->parent = new;
+            /* make new the parent of it's newly adopted children */
+            for (child = new->child; child; child = child->next)
+                child->parent = new;
 
-	    /* make old the parent of cur and new */
-	    cur->parent = old;
-	    new->parent = old;
+            /* make old the parent of cur and new */
+            cur->parent = old;
+            new->parent = old;
 
-	    /* empty old and make it have two children (cur and new) */
-	    old->msgdata = NULL;
-	    old->child = cur;
-	    cur->next = new;
-	}
+            /* empty old and make it have two children (cur and new) */
+            old->msgdata = NULL;
+            old->child = cur;
+            cur->next = new;
+        }
 
-	/* we just removed cur from our list,
-	 * so we need to keep the same prev for the next pass
-	 */
-	cur = prev;
+        /* we just removed cur from our list,
+         * so we need to keep the same prev for the next pass
+         */
+        cur = prev;
     }
 
     free_hash_table(&subj_table, NULL);
@@ -5992,7 +5992,7 @@ static void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
  * Guts of thread searching.  Recurses over children when necessary.
  */
 static int _index_thread_search(struct index_state *state,
-				Thread *thread, int (*searchproc) (MsgData *))
+                                Thread *thread, int (*searchproc) (MsgData *))
 {
     Thread *child;
 
@@ -6002,8 +6002,8 @@ static int _index_thread_search(struct index_state *state,
     /* test the children recursively */
     child = thread->child;
     while (child) {
-	if (_index_thread_search(state, child, searchproc)) return 1;
-	child = child->next;
+        if (_index_thread_search(state, child, searchproc)) return 1;
+        child = child->next;
     }
 
     /* if we get here, we struck out */
@@ -6017,25 +6017,25 @@ static int _index_thread_search(struct index_state *state,
  * each thread and removes any which fail the searchproc().
  */
 static void index_thread_search(struct index_state *state,
-				Thread *root, int (*searchproc) (MsgData *))
+                                Thread *root, int (*searchproc) (MsgData *))
 {
     Thread *cur, *prev, *next;
 
     for (prev = NULL, cur = root->child, next = cur->next;
-	 cur;
-	 prev = cur, cur= next, next = (cur ? cur->next : NULL)) {
-	if (!_index_thread_search(state, cur, searchproc)) {
-	    /* unlink the thread from the list */
-	    if (!prev)	/* first thread */
-		root->child = cur->next;
-	    else
-		prev->next = cur->next;
+         cur;
+         prev = cur, cur= next, next = (cur ? cur->next : NULL)) {
+        if (!_index_thread_search(state, cur, searchproc)) {
+            /* unlink the thread from the list */
+            if (!prev)  /* first thread */
+                root->child = cur->next;
+            else
+                prev->next = cur->next;
 
-	    /* we just removed cur from our list,
-	     * so we need to keep the same prev for the next pass
-	     */
-	    cur = prev;
-	}
+            /* we just removed cur from our list,
+             * so we need to keep the same prev for the next pass
+             */
+            cur = prev;
+        }
     }
 }
 
@@ -6044,10 +6044,10 @@ static void index_thread_search(struct index_state *state,
  * searchproc() and sortcrit[].
  */
 static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
-			      unsigned int nmsg,
-			      const struct sortcrit loadcrit[],
-			      int (*searchproc) (MsgData *),
-			      const struct sortcrit sortcrit[], int usinguid)
+                              unsigned int nmsg,
+                              const struct sortcrit loadcrit[],
+                              int (*searchproc) (MsgData *),
+                              const struct sortcrit sortcrit[], int usinguid)
 {
     MsgData **msgdata;
     unsigned int mi;
@@ -6061,7 +6061,7 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
 
     /* calculate the sum of the number of references for all messages */
     for (mi = 0, tref = 0 ; mi < nmsg ; mi++)
-	tref += msgdata[mi]->ref.count;
+        tref += msgdata[mi]->ref.count;
 
     /* create an array of Thread to use as nodes of thread tree (including
      * empty containers)
@@ -6084,8 +6084,8 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
     rootset.root = (Thread *) xmalloc(nnode * sizeof(Thread));
     memset(rootset.root, 0, nnode * sizeof(Thread));
 
-    newnode = rootset.root + 1;	/* set next newnode to the second
-				   one in the array (skip the root) */
+    newnode = rootset.root + 1; /* set next newnode to the second
+                                   one in the array (skip the root) */
 
     /* Step 0: create an id_table with one bucket for every possible
      * message-id and reference (nmsg + tref)
@@ -6117,7 +6117,7 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
     /* Step 6: sort threads */
     if (sortcrit) index_thread_sort(rootset.root, sortcrit);
 
-    /* Output the threaded messages */ 
+    /* Output the threaded messages */
     index_thread_print(state, rootset.root, usinguid);
 
     /* free the thread array */
@@ -6131,17 +6131,17 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
  * Thread a list of messages using the REFERENCES algorithm.
  */
 static void index_thread_ref(struct index_state *state,
-			     unsigned *msgno_list, unsigned int nmsg,
-			     int usinguid)
+                             unsigned *msgno_list, unsigned int nmsg,
+                             int usinguid)
 {
     static const struct sortcrit loadcrit[] =
-				 {{ LOAD_IDS,      0, {{NULL,NULL}} },
-				  { SORT_SUBJECT,  0, {{NULL,NULL}} },
-				  { SORT_DATE,     0, {{NULL,NULL}} },
-				  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
+                                 {{ LOAD_IDS,      0, {{NULL,NULL}} },
+                                  { SORT_SUBJECT,  0, {{NULL,NULL}} },
+                                  { SORT_DATE,     0, {{NULL,NULL}} },
+                                  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
     static const struct sortcrit sortcrit[] =
-				 {{ SORT_DATE,     0, {{NULL,NULL}} },
-				  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
+                                 {{ SORT_DATE,     0, {{NULL,NULL}} },
+                                  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
 
     _index_thread_ref(state, msgno_list, nmsg, loadcrit, NULL, sortcrit, usinguid);
 }
@@ -6150,13 +6150,13 @@ static void index_thread_ref(struct index_state *state,
  * NNTP specific stuff.
  */
 EXPORTED char *index_get_msgid(struct index_state *state,
-			       uint32_t msgno)
+                               uint32_t msgno)
 {
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;
 
     if (index_reload_record(state, msgno, &record))
-	return NULL;
+        return NULL;
 
     return mailbox_cache_get_msgid(mailbox, &record);
 }
@@ -6167,32 +6167,32 @@ static void massage_header(char *hdr)
     char *p, c;
 
     for (p = hdr; *p; p++) {
-	if (*p == ' ' || *p == '\t' || *p == '\r') {
-	    if (!n || *(p+1) == '\n') {
-		/* no leading or trailing whitespace */
-		continue;
-	    }
-	    /* replace with space */
-	    c = ' ';
-	}
-	else if (*p == '\n') {
-	    if (*(p+1) == ' ' || *(p+1) == '\t') {
-		/* folded header */
-		continue;
-	    }
-	    /* end of header */
-	    break;
-	}
-	else
-	    c = *p;
+        if (*p == ' ' || *p == '\t' || *p == '\r') {
+            if (!n || *(p+1) == '\n') {
+                /* no leading or trailing whitespace */
+                continue;
+            }
+            /* replace with space */
+            c = ' ';
+        }
+        else if (*p == '\n') {
+            if (*(p+1) == ' ' || *(p+1) == '\t') {
+                /* folded header */
+                continue;
+            }
+            /* end of header */
+            break;
+        }
+        else
+            c = *p;
 
-	hdr[n++] = c;
+        hdr[n++] = c;
     }
     hdr[n] = '\0';
 }
 
 EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
-						     uint32_t msgno)
+                                                     uint32_t msgno)
 {
     static struct nntp_overview over;
     static char *env = NULL, *from = NULL, *hdr = NULL;
@@ -6208,18 +6208,18 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
     memset(&over, 0, sizeof(struct nntp_overview));
 
     if (index_reload_record(state, msgno, &record))
-	return NULL;
+        return NULL;
 
     if (mailbox_cacherecord(mailbox, &record))
-	return NULL; /* upper layers can cope! */
+        return NULL; /* upper layers can cope! */
 
     /* make a working copy of envelope; strip outer ()'s */
     /* -2 -> don't include the size of the outer parens */
     /* +1 -> leave space for NUL */
     size = cacheitem_size(&record, CACHE_ENVELOPE) - 2 + 1;
     if (envsize < size) {
-	envsize = size;
-	env = xrealloc(env, envsize);
+        envsize = size;
+        env = xrealloc(env, envsize);
     }
     /* +1 -> skip the leading paren */
     strlcpy(env, cacheitem_base(&record, CACHE_ENVELOPE) + 1, size);
@@ -6227,8 +6227,8 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
     /* make a working copy of headers */
     size = cacheitem_size(&record, CACHE_HEADERS);
     if (hdrsize < size+2) {
-	hdrsize = size+100;
-	hdr = xrealloc(hdr, hdrsize);
+        hdrsize = size+100;
+        hdr = xrealloc(hdr, hdrsize);
     }
     memcpy(hdr, cacheitem_base(&record, CACHE_HEADERS), size);
     hdr[size] = '\0';
@@ -6243,27 +6243,27 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
 
     /* massage subject */
     if ((over.subj = envtokens[ENV_SUBJECT]))
-	massage_header(over.subj);
+        massage_header(over.subj);
 
     /* build original From: header */
     if (envtokens[ENV_FROM]) /* paranoia */
-	message_parse_env_address(envtokens[ENV_FROM], &addr);
+        message_parse_env_address(envtokens[ENV_FROM], &addr);
 
     if (addr.mailbox && addr.domain) { /* paranoia */
-	/* +3 -> add space for quotes and space */
-	/* +4 -> add space for < @ > NUL */
-	size = (addr.name ? strlen(addr.name) + 3 : 0) +
-	    strlen(addr.mailbox) + strlen(addr.domain) + 4;
-	if (fromsize < size) {
-	    fromsize = size;
-	    from = xrealloc(from, fromsize);
-	}
-	from[0] = '\0';
-	if (addr.name) sprintf(from, "\"%s\" ", addr.name);
-	snprintf(from + strlen(from), fromsize - strlen(from),
-		 "<%s@%s>", addr.mailbox, addr.domain);
+        /* +3 -> add space for quotes and space */
+        /* +4 -> add space for < @ > NUL */
+        size = (addr.name ? strlen(addr.name) + 3 : 0) +
+            strlen(addr.mailbox) + strlen(addr.domain) + 4;
+        if (fromsize < size) {
+            fromsize = size;
+            from = xrealloc(from, fromsize);
+        }
+        from[0] = '\0';
+        if (addr.name) sprintf(from, "\"%s\" ", addr.name);
+        snprintf(from + strlen(from), fromsize - strlen(from),
+                 "<%s@%s>", addr.mailbox, addr.domain);
 
-	over.from = from;
+        over.from = from;
     }
 
     /* massage references */
@@ -6272,15 +6272,15 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
     strarray_fini(&refhdr);
 
     if (*hdr) {
-	over.ref = hdr + 11; /* skip over header name */
-	massage_header(over.ref);
+        over.ref = hdr + 11; /* skip over header name */
+        massage_header(over.ref);
     }
 
     return &over;
 }
 
 EXPORTED extern char *index_getheader(struct index_state *state,
-				      uint32_t msgno, char *hdr)
+                                      uint32_t msgno, char *hdr)
 {
     static struct buf staticbuf = BUF_INITIALIZER;
     strarray_t headers = STRARRAY_INITIALIZER;
@@ -6289,20 +6289,20 @@ EXPORTED extern char *index_getheader(struct index_state *state,
     char *buf;
 
     if (index_reload_record(state, msgno, &record))
-	return NULL;
+        return NULL;
 
     /* see if the header is cached */
     if (mailbox_cached_header(hdr) != BIT32_MAX &&
         !mailbox_cacherecord(mailbox, &record)) {
-	buf_copy(&staticbuf, cacheitem_buf(&record, CACHE_HEADERS));
+        buf_copy(&staticbuf, cacheitem_buf(&record, CACHE_HEADERS));
     }
     else {
-	/* uncached header */
-	struct buf msgbuf = BUF_INITIALIZER;
-	if (mailbox_map_record(mailbox, &record, &msgbuf))
-	    return NULL;
-	buf_setcstr(&staticbuf, index_readheader(msgbuf.s, msgbuf.len, 0, record.header_size));
-	buf_free(&msgbuf);
+        /* uncached header */
+        struct buf msgbuf = BUF_INITIALIZER;
+        if (mailbox_map_record(mailbox, &record, &msgbuf))
+            return NULL;
+        buf_setcstr(&staticbuf, index_readheader(msgbuf.s, msgbuf.len, 0, record.header_size));
+        buf_free(&msgbuf);
     }
 
     strarray_append(&headers, hdr);
@@ -6311,31 +6311,31 @@ EXPORTED extern char *index_getheader(struct index_state *state,
 
     buf = staticbuf.s;
     if (*buf) {
-	buf += strlen(hdr) + 1; /* skip header: */
-	massage_header(buf);
+        buf += strlen(hdr) + 1; /* skip header: */
+        massage_header(buf);
     }
 
     return buf;
 }
 
 EXPORTED extern unsigned long index_getsize(struct index_state *state,
-					    uint32_t msgno)
+                                            uint32_t msgno)
 {
     struct index_record record;
 
     if (index_reload_record(state, msgno, &record))
-	return 0;
+        return 0;
 
     return record.size;
 }
 
 EXPORTED extern unsigned long index_getlines(struct index_state *state,
-					     uint32_t msgno)
+                                             uint32_t msgno)
 {
     struct index_record record;
 
     if (index_reload_record(state, msgno, &record))
-	return 0;
+        return 0;
 
     return record.content_lines;
 }
@@ -6355,7 +6355,7 @@ EXPORTED int index_hasrights(const struct index_state *state, int rights)
  * Parse a sequence into an array of sorted & merged ranges.
  */
 static struct seqset *_parse_sequence(struct index_state *state,
-				      const char *sequence, int usinguid)
+                                      const char *sequence, int usinguid)
 {
     unsigned maxval = usinguid ? state->last_uid : state->exists;
     return seqset_parse(sequence, NULL, maxval);
@@ -6370,10 +6370,10 @@ EXPORTED void freesequencelist(struct seqset *l)
  * Create a new search program.
  */
 EXPORTED struct searchargs *new_searchargs(const char *tag, int state,
-					   struct namespace *namespace,
-					   const char *userid,
-					   struct auth_state *authstate,
-					   int isadmin)
+                                           struct namespace *namespace,
+                                           const char *userid,
+                                           struct auth_state *authstate,
+                                           int isadmin)
 {
     struct searchargs *sa;
 
@@ -6405,33 +6405,33 @@ EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
 {
     struct buf b = BUF_INITIALIZER;
     static const char * const key_names[] = {
-	"SEQUENCE", "ARRIVAL", "CC", "DATE",
-	"DISPLAYFROM", "DISPLAYTO", "FROM",
-	"SIZE", "SUBJECT", "TO", "ANNOTATION",
-	"MODSEQ", "UID", "HASFLAG", "CONVMODSEQ",
-	"CONVEXISTS", "CONVSIZE", "HASCONVFLAG",
-	"FOLDER", "RELEVANCY"
+        "SEQUENCE", "ARRIVAL", "CC", "DATE",
+        "DISPLAYFROM", "DISPLAYTO", "FROM",
+        "SIZE", "SUBJECT", "TO", "ANNOTATION",
+        "MODSEQ", "UID", "HASFLAG", "CONVMODSEQ",
+        "CONVEXISTS", "CONVSIZE", "HASCONVFLAG",
+        "FOLDER", "RELEVANCY"
     };
 
     for ( ; sortcrit->key ; sortcrit++) {
-	if (b.len)
-	    buf_putc(&b, ' ');
-	if (sortcrit->flags & SORT_REVERSE)
-	    buf_appendcstr(&b, "REVERSE ");
+        if (b.len)
+            buf_putc(&b, ' ');
+        if (sortcrit->flags & SORT_REVERSE)
+            buf_appendcstr(&b, "REVERSE ");
 
-	if (sortcrit->key < VECTOR_SIZE(key_names))
-	    buf_appendcstr(&b, key_names[sortcrit->key]);
-	else
-	    buf_printf(&b, "UNKNOWN%u", sortcrit->key);
+        if (sortcrit->key < VECTOR_SIZE(key_names))
+            buf_appendcstr(&b, key_names[sortcrit->key]);
+        else
+            buf_printf(&b, "UNKNOWN%u", sortcrit->key);
 
-	switch (sortcrit->key) {
-	case SORT_ANNOTATION:
-	    buf_printf(&b, " \"%s\" \"%s\"",
-		       sortcrit->args.annot.entry,
-		       *sortcrit->args.annot.userid ?
-			    "value.priv" : "value.shared");
-	    break;
-	}
+        switch (sortcrit->key) {
+        case SORT_ANNOTATION:
+            buf_printf(&b, " \"%s\" \"%s\"",
+                       sortcrit->args.annot.entry,
+                       *sortcrit->args.annot.userid ?
+                            "value.priv" : "value.shared");
+            break;
+        }
     }
     return buf_release(&b);
 }
@@ -6445,13 +6445,13 @@ EXPORTED void freesortcrit(struct sortcrit *s)
 
     if (!s) return;
     do {
-	switch (s[i].key) {
-	case SORT_ANNOTATION:
-	    free(s[i].args.annot.entry);
-	    free(s[i].args.annot.userid);
-	    break;
-	}
-	i++;
+        switch (s[i].key) {
+        case SORT_ANNOTATION:
+            free(s[i].args.annot.entry);
+            free(s[i].args.annot.userid);
+            break;
+        }
+        i++;
     } while (s[i].key != SORT_SEQUENCE);
     free(s);
 }

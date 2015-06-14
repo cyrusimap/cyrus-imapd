@@ -56,7 +56,7 @@
 extern const char *lock_method_desc;
 
 extern int lock_reopen (int fd, const char *filename,
-			struct stat *sbuf, const char **failaction);
+                        struct stat *sbuf, const char **failaction);
 
 extern int lock_setlock (int fd, int ex, int nb, const char *filename);
 extern int lock_unlock (int fd, const char *filename);

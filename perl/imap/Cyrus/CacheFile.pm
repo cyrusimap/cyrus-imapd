@@ -78,7 +78,7 @@ sub new_file {
     $fh = IO::File::fcntl->new($file, '+<', @$lockopts)
           || die "Can't open $file for locked read: $!";
   } else {
-    $fh = IO::File->new("< $file") 
+    $fh = IO::File->new("< $file")
           || die "Can't open $file for read: $!";
   }
 
@@ -117,7 +117,7 @@ sub record {
   my $Self = shift;
   my $Field = shift;
 
-  return undef unless ($Self->{record}); 
+  return undef unless ($Self->{record});
 
   if ($Field) {
     return $Self->{record}{$Field};

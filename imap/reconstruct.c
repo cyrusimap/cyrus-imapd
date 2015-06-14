@@ -138,91 +138,91 @@ int main(int argc, char **argv)
     char *start_part = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     construct_hash_table(&unqid_table, 2047, 1);
 
     while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOnV:u")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 'p':
-	    start_part = optarg;
-	    break;
+        case 'p':
+            start_part = optarg;
+            break;
 
-	case 'r':
-	    rflag = 1;
-	    break;
+        case 'r':
+            rflag = 1;
+            break;
 
-	case 'u':
-	    dousers = 1;
-	    break;
+        case 'u':
+            dousers = 1;
+            break;
 
-	case 'm':
-	    mflag = 1;
-	    break;
+        case 'm':
+            mflag = 1;
+            break;
 
-	case 'n':
-	    reconstruct_flags &= ~RECONSTRUCT_MAKE_CHANGES;
-	    break;
+        case 'n':
+            reconstruct_flags &= ~RECONSTRUCT_MAKE_CHANGES;
+            break;
 
-	case 'g':
-	    fprintf(stderr, "reconstruct: deprecated option -g ignored\n");
-	    break;
+        case 'g':
+            fprintf(stderr, "reconstruct: deprecated option -g ignored\n");
+            break;
 
-	case 'G':
-	    reconstruct_flags |= RECONSTRUCT_ALWAYS_PARSE;
-	    break;
+        case 'G':
+            reconstruct_flags |= RECONSTRUCT_ALWAYS_PARSE;
+            break;
 
-	case 'f':
-	    fflag = 1;
-	    break;
+        case 'f':
+            fflag = 1;
+            break;
 
-	case 'x':
-	    xflag = 1;
-	    break;
+        case 'x':
+            xflag = 1;
+            break;
 
-	case 'k':
-	    fprintf(stderr, "reconstruct: deprecated option -k ignored\n");
-	    break;
+        case 'k':
+            fprintf(stderr, "reconstruct: deprecated option -k ignored\n");
+            break;
 
-	case 's':
-	    reconstruct_flags &= ~RECONSTRUCT_DO_STAT;
-	    break;
+        case 's':
+            reconstruct_flags &= ~RECONSTRUCT_DO_STAT;
+            break;
 
-	case 'q':
-	    reconstruct_flags |= RECONSTRUCT_QUIET;
-	    break;
+        case 'q':
+            reconstruct_flags |= RECONSTRUCT_QUIET;
+            break;
 
-	case 'R':
-	    reconstruct_flags |= RECONSTRUCT_GUID_REWRITE;
-	    break;
+        case 'R':
+            reconstruct_flags |= RECONSTRUCT_GUID_REWRITE;
+            break;
 
-	case 'U':
-	    reconstruct_flags |= RECONSTRUCT_GUID_UNLINK;
-	    break;
+        case 'U':
+            reconstruct_flags |= RECONSTRUCT_GUID_UNLINK;
+            break;
 
-	case 'o':
-	    reconstruct_flags |= RECONSTRUCT_IGNORE_ODDFILES;
-	    break;
+        case 'o':
+            reconstruct_flags |= RECONSTRUCT_IGNORE_ODDFILES;
+            break;
 
-	case 'O':
-	    reconstruct_flags |= RECONSTRUCT_REMOVE_ODDFILES;
-	    break;
+        case 'O':
+            reconstruct_flags |= RECONSTRUCT_REMOVE_ODDFILES;
+            break;
 
-	case 'V':
-	    if (!strcasecmp(optarg, "max"))
-		setversion = MAILBOX_MINOR_VERSION;
-	    else
-		setversion = atoi(optarg);
-	    break;
+        case 'V':
+            if (!strcasecmp(optarg, "max"))
+                setversion = MAILBOX_MINOR_VERSION;
+            else
+                setversion = atoi(optarg);
+            break;
 
-	default:
-	    usage();
-	}
+        default:
+            usage();
+        }
     }
 
     cyrus_init(alt_config, "reconstruct", 0, CONFIG_NEED_PARTITION_DATA);
@@ -230,18 +230,18 @@ int main(int argc, char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
-	syslog(LOG_ERR, "%s", error_message(r));
-	fatal(error_message(r), EC_CONFIG);
+        syslog(LOG_ERR, "%s", error_message(r));
+        fatal(error_message(r), EC_CONFIG);
     }
 
     sync_log_init();
 
     if (mflag) {
-	if (rflag || fflag || optind != argc) {
-	    cyrus_done();
-	    usage();
-	}
-	do_mboxlist();
+        if (rflag || fflag || optind != argc) {
+            cyrus_done();
+            usage();
+        }
+        do_mboxlist();
     }
 
     mboxlist_init(0);
@@ -257,121 +257,121 @@ int main(int argc, char **argv)
 
     /* Deal with nonexistent mailboxes */
     if (start_part) {
-	/* We were handed a mailbox that does not exist currently */
-	if(optind == argc) {
-	    fprintf(stderr,
-		    "When using -p, you must specify a mailbox to attempt to reconstruct.");
-	    exit(EC_USAGE);
-	}
+        /* We were handed a mailbox that does not exist currently */
+        if(optind == argc) {
+            fprintf(stderr,
+                    "When using -p, you must specify a mailbox to attempt to reconstruct.");
+            exit(EC_USAGE);
+        }
 
-	/* do any of the mailboxes exist in mboxlist already? */
-	/* Do they look like mailboxes? */
-	for (i = optind; i < argc; i++) {
-	    if (strchr(argv[i],'%') || strchr(argv[i],'*')) {
-		fprintf(stderr, "Using wildcards with -p is not supported.\n");
-		exit(EC_USAGE);
-	    }
+        /* do any of the mailboxes exist in mboxlist already? */
+        /* Do they look like mailboxes? */
+        for (i = optind; i < argc; i++) {
+            if (strchr(argv[i],'%') || strchr(argv[i],'*')) {
+                fprintf(stderr, "Using wildcards with -p is not supported.\n");
+                exit(EC_USAGE);
+            }
 
-	    /* Translate mailboxname */
-	    (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
-						   NULL, buf);
+            /* Translate mailboxname */
+            (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
+                                                   NULL, buf);
 
-	    /* Does it exist */
-	    do {
-		r = mboxlist_lookup(buf, NULL, NULL);
-	    } while (r == IMAP_AGAIN);
+            /* Does it exist */
+            do {
+                r = mboxlist_lookup(buf, NULL, NULL);
+            } while (r == IMAP_AGAIN);
 
-	    if (r != IMAP_MAILBOX_NONEXISTENT) {
-		fprintf(stderr,
-			"Mailbox %s already exists.  Cannot specify -p.\n",
-			argv[i]);
-		exit(EC_USAGE);
-	    }
-	}
+            if (r != IMAP_MAILBOX_NONEXISTENT) {
+                fprintf(stderr,
+                        "Mailbox %s already exists.  Cannot specify -p.\n",
+                        argv[i]);
+                exit(EC_USAGE);
+            }
+        }
 
-	/* None of them exist.  Create them. */
-	for (i = optind; i < argc; i++) {
-	    /* Translate mailboxname */
-	    (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
-						   NULL, buf);
+        /* None of them exist.  Create them. */
+        for (i = optind; i < argc; i++) {
+            /* Translate mailboxname */
+            (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
+                                                   NULL, buf);
 
-	    /* don't notify mailbox creation here */
-	    r = mboxlist_createmailbox(buf, 0, start_part, 1,
-				       "cyrus", NULL, 0, 0, !xflag, 0, NULL);
-	    if (r) {
-		fprintf(stderr, "could not create %s\n", argv[i]);
-	    }
-	}
+            /* don't notify mailbox creation here */
+            r = mboxlist_createmailbox(buf, 0, start_part, 1,
+                                       "cyrus", NULL, 0, 0, !xflag, 0, NULL);
+            if (r) {
+                fprintf(stderr, "could not create %s\n", argv[i]);
+            }
+        }
     }
 
     /* Normal Operation */
     if (optind == argc) {
-	if (rflag || dousers) {
-	    fprintf(stderr, "please specify a mailbox to recurse from\n");
-	    cyrus_done();
-	    exit(EC_USAGE);
-	}
-	assert(!rflag);
-	strlcpy(buf, "*", sizeof(buf));
-	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
-					    do_reconstruct, NULL);
+        if (rflag || dousers) {
+            fprintf(stderr, "please specify a mailbox to recurse from\n");
+            cyrus_done();
+            exit(EC_USAGE);
+        }
+        assert(!rflag);
+        strlcpy(buf, "*", sizeof(buf));
+        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
+                                            do_reconstruct, NULL);
     }
 
     for (i = optind; i < argc; i++) {
-	if (dousers) {
-	    mboxlist_allusermbox(argv[i], do_reconstruct_p, NULL, /*include_deleted*/1);
-	    continue;
-	}
-	char *domain = NULL;
+        if (dousers) {
+            mboxlist_allusermbox(argv[i], do_reconstruct_p, NULL, /*include_deleted*/1);
+            continue;
+        }
+        char *domain = NULL;
 
-	/* save domain */
-	if (config_virtdomains) domain = strchr(argv[i], '@');
+        /* save domain */
+        if (config_virtdomains) domain = strchr(argv[i], '@');
 
-	strlcpy(buf, argv[i], sizeof(buf));
-	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&recon_namespace, buf,
-				    config_virtdomains ?
-				    strcspn(buf, "@") : 0);
+        strlcpy(buf, argv[i], sizeof(buf));
+        /* Translate any separators in mailboxname */
+        mboxname_hiersep_tointernal(&recon_namespace, buf,
+                                    config_virtdomains ?
+                                    strcspn(buf, "@") : 0);
 
-	/* reconstruct the first mailbox/pattern */
-	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
-					    0, do_reconstruct,
-					    fflag ? &discovered : NULL);
-	if (rflag) {
-	    /* build a pattern for submailboxes */
-	    char *p = strchr(buf, '@');
-	    if (p) *p = '\0';
-	    strlcat(buf, ".*", sizeof(buf));
+        /* reconstruct the first mailbox/pattern */
+        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
+                                            0, do_reconstruct,
+                                            fflag ? &discovered : NULL);
+        if (rflag) {
+            /* build a pattern for submailboxes */
+            char *p = strchr(buf, '@');
+            if (p) *p = '\0';
+            strlcat(buf, ".*", sizeof(buf));
 
-	    /* append the domain */
-	    if (domain) strlcat(buf, domain, sizeof(buf));
+            /* append the domain */
+            if (domain) strlcat(buf, domain, sizeof(buf));
 
-	    /* reconstruct the submailboxes */
-	    (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
-						0, do_reconstruct,
-						fflag ? &discovered : NULL);
-	}
+            /* reconstruct the submailboxes */
+            (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
+                                                0, do_reconstruct,
+                                                fflag ? &discovered : NULL);
+        }
     }
 
     /* examine our list to see if we discovered anything */
     while (discovered.count) {
-	char *name = strarray_shift(&discovered);
-	int r = 0;
+        char *name = strarray_shift(&discovered);
+        int r = 0;
 
-	/* create p (database only) and reconstruct it */
-	/* partition is defined by the parent mailbox */
-	/* don't notify mailbox creation here */
-	r = mboxlist_createmailbox(name, 0, NULL, 1,
-				   "cyrus", NULL, 0, 0, !xflag, 0, NULL);
-	if (r) {
-	    fprintf(stderr, "createmailbox %s: %s\n",
-		    name, error_message(r));
-	} else {
-	    do_reconstruct(name, strlen(name), 0, &discovered);
-	}
-	/* may have added more things into our list */
+        /* create p (database only) and reconstruct it */
+        /* partition is defined by the parent mailbox */
+        /* don't notify mailbox creation here */
+        r = mboxlist_createmailbox(name, 0, NULL, 1,
+                                   "cyrus", NULL, 0, 0, !xflag, 0, NULL);
+        if (r) {
+            fprintf(stderr, "createmailbox %s: %s\n",
+                    name, error_message(r));
+        } else {
+            do_reconstruct(name, strlen(name), 0, &discovered);
+        }
+        /* may have added more things into our list */
 
-	free(name);
+        free(name);
     }
 
     free_hash_table(&unqid_table, free);
@@ -400,7 +400,7 @@ int main(int argc, char **argv)
 static void usage(void)
 {
     fprintf(stderr,
-	    "usage: reconstruct [-C <alt_config>] [-p partition] [-ksrfxu] mailbox...\n");
+            "usage: reconstruct [-C <alt_config>] [-p partition] [-ksrfxu] mailbox...\n");
     fprintf(stderr, "       reconstruct [-C <alt_config>] -m\n");
     exit(EC_USAGE);
 }
@@ -411,7 +411,7 @@ static void usage(void)
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
 {
     if (!(mbentry->mbtype & MBTYPE_DELETED))
-	do_reconstruct(mbentry->name, strlen(mbentry->name), 0, rock);
+        do_reconstruct(mbentry->name, strlen(mbentry->name), 0, rock);
 
     return 0;
 }
@@ -420,9 +420,9 @@ static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
 static int do_reconstruct(const char *name,
-			  int matchlen,
-			  int maycreate __attribute__((unused)),
-			  void *rock)
+                          int matchlen,
+                          int maycreate __attribute__((unused)),
+                          void *rock)
 {
     strarray_t *discovered = (strarray_t *)rock;
     int r;
@@ -436,106 +436,106 @@ static int do_reconstruct(const char *name,
 
     /* don't repeat */
     if (matchlen == (int) strlen(lastname) &&
-	!strncmp(name, lastname, matchlen)) return 0;
+        !strncmp(name, lastname, matchlen)) return 0;
 
     if (matchlen >= (int) sizeof(lastname))
-	matchlen = sizeof(lastname) - 1;
+        matchlen = sizeof(lastname) - 1;
 
     strncpy(lastname, name, matchlen);
     lastname[matchlen] = '\0';
 
     r = mailbox_reconstruct(lastname, reconstruct_flags);
     if (r) {
-	com_err(lastname, r, "%s",
-		(r == IMAP_IOERROR) ? error_message(errno) : NULL);
-	return 0;
+        com_err(lastname, r, "%s",
+                (r == IMAP_IOERROR) ? error_message(errno) : NULL);
+        return 0;
     }
 
     r = mailbox_open_iwl(lastname, &mailbox);
     if (r) {
-	com_err(lastname, r, "Failed to open after reconstruct");
-	return 0;
+        com_err(lastname, r, "Failed to open after reconstruct");
+        return 0;
     }
 
     other = hash_lookup(mailbox->uniqueid, &unqid_table);
     if (other) {
-	syslog (LOG_ERR, "uniqueid clash with %s for %s - changing %s",
-		other, mailbox->uniqueid, mailbox->name);
-	/* uniqueid change required! */
-	mailbox_make_uniqueid(mailbox);
+        syslog (LOG_ERR, "uniqueid clash with %s for %s - changing %s",
+                other, mailbox->uniqueid, mailbox->name);
+        /* uniqueid change required! */
+        mailbox_make_uniqueid(mailbox);
     }
 
     hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
 
     /* Convert internal name to external */
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
-					   NULL, buf);
+                                           NULL, buf);
     if (!(reconstruct_flags & RECONSTRUCT_QUIET))
-	printf("%s\n", buf);
+        printf("%s\n", buf);
 
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
 
     if (setversion) {
-	/* need to re-set the version! */
-	int r = mailbox_setversion(mailbox, setversion);
-	if (r) {
-	    printf("FAILED TO REPACK %s with new version %s\n", buf, error_message(r));
-	}
-	else {
-	    printf("Repacked %s to version %d\n", buf, setversion);
-	}
+        /* need to re-set the version! */
+        int r = mailbox_setversion(mailbox, setversion);
+        if (r) {
+            printf("FAILED TO REPACK %s with new version %s\n", buf, error_message(r));
+        }
+        else {
+            printf("Repacked %s to version %d\n", buf, setversion);
+        }
     }
     mailbox_close(&mailbox);
 
     if (discovered) {
-	char fnamebuf[MAX_MAILBOX_PATH];
-	char *ptr;
-	DIR *dirp;
-	struct dirent *dirent;
-	struct stat sbuf;
+        char fnamebuf[MAX_MAILBOX_PATH];
+        char *ptr;
+        DIR *dirp;
+        struct dirent *dirent;
+        struct stat sbuf;
 
-	ptr = strstr(outpath, "cyrus.header");
-	if (!ptr) return 0;
-	*ptr = 0;
+        ptr = strstr(outpath, "cyrus.header");
+        if (!ptr) return 0;
+        *ptr = 0;
 
-	r = chdir(outpath);
-	if (r) return 0;
+        r = chdir(outpath);
+        if (r) return 0;
 
-	/* we recurse down this directory to see if there's any mailboxes
-	   under this not in the mailboxes database */
-	dirp = opendir(".");
-	if (!dirp) return 0;
+        /* we recurse down this directory to see if there's any mailboxes
+           under this not in the mailboxes database */
+        dirp = opendir(".");
+        if (!dirp) return 0;
 
-	while ((dirent = readdir(dirp)) != NULL) {
-	    /* mailbox directories never have a dot in them */
-	    if (strchr(dirent->d_name, '.')) continue;
-	    if (stat(dirent->d_name, &sbuf) < 0) continue;
-	    if (!S_ISDIR(sbuf.st_mode)) continue;
+        while ((dirent = readdir(dirp)) != NULL) {
+            /* mailbox directories never have a dot in them */
+            if (strchr(dirent->d_name, '.')) continue;
+            if (stat(dirent->d_name, &sbuf) < 0) continue;
+            if (!S_ISDIR(sbuf.st_mode)) continue;
 
-	    /* ok, we found a directory that doesn't have a dot in it;
-	       is there a cyrus.header file? */
-	    snprintf(fnamebuf, MAX_MAILBOX_PATH, "%s%s",
-		     dirent->d_name, FNAME_HEADER);
-	    if (stat(fnamebuf, &sbuf) < 0) continue;
+            /* ok, we found a directory that doesn't have a dot in it;
+               is there a cyrus.header file? */
+            snprintf(fnamebuf, MAX_MAILBOX_PATH, "%s%s",
+                     dirent->d_name, FNAME_HEADER);
+            if (stat(fnamebuf, &sbuf) < 0) continue;
 
-	    /* ok, we have a real mailbox directory */
-	    snprintf(buf, MAX_MAILBOX_NAME, "%s.%s",
-		     name, dirent->d_name);
+            /* ok, we have a real mailbox directory */
+            snprintf(buf, MAX_MAILBOX_NAME, "%s.%s",
+                     name, dirent->d_name);
 
-	    /* does fnamebuf exist as a mailbox in mboxlist? */
-	    do {
-		r = mboxlist_lookup(buf, NULL, NULL);
-	    } while (r == IMAP_AGAIN);
-	    if (!r) continue; /* mailbox exists; it'll be reconstructed
-				 with a -r */
+            /* does fnamebuf exist as a mailbox in mboxlist? */
+            do {
+                r = mboxlist_lookup(buf, NULL, NULL);
+            } while (r == IMAP_AGAIN);
+            if (!r) continue; /* mailbox exists; it'll be reconstructed
+                                 with a -r */
 
-	    if (r != IMAP_MAILBOX_NONEXISTENT) break; /* erg? */
-	    else r = 0; /* reset error condition */
+            if (r != IMAP_MAILBOX_NONEXISTENT) break; /* erg? */
+            else r = 0; /* reset error condition */
 
-	    printf("discovered %s\n", buf);
-	    strarray_append(discovered, buf);
-	}
-	closedir(dirp);
+            printf("discovered %s\n", buf);
+            strarray_append(discovered, buf);
+        }
+        closedir(dirp);
     }
 
     return 0;

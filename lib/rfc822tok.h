@@ -46,15 +46,15 @@
 #include "util.h"
 
 /* definitions for tokens returned */
-#define RFC822_ATOM		256
-#define RFC822_QSTRING		257
+#define RFC822_ATOM             256
+#define RFC822_QSTRING          257
 
 typedef struct
 {
     struct buf buf;
     const char *ptr;
-#define RFC822_SPECIAL_DOT	(1<<0)
-#define RFC822_SPECIAL_EQUAL	(1<<1)
+#define RFC822_SPECIAL_DOT      (1<<0)
+#define RFC822_SPECIAL_EQUAL    (1<<1)
     unsigned int flags;
 } rfc822tok_t;
 
@@ -62,9 +62,9 @@ typedef struct
     { BUF_INITIALIZER, NULL, 0 }
 
 void rfc822tok_init(rfc822tok_t *, const char *base,
-		    unsigned int len, unsigned int flags);
+                    unsigned int len, unsigned int flags);
 void rfc822tok_init_buf(rfc822tok_t *, const struct buf *,
-			unsigned int flags);
+                        unsigned int flags);
 void rfc822tok_fini(rfc822tok_t *);
 
 /* Advance to the next token and return it.  Tokens may be several ASCII

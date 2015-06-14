@@ -21,11 +21,11 @@ if test -n "$GCC"; then
 #
 # Don't you just love *all* the different SGI ABIs?
 
-case "${with_mips_abi}" in 
+case "${with_mips_abi}" in
         32|o32) abi='-mabi=32';  abilibdirext=''     ;;
        n32|yes) abi='-mabi=n32'; abilibdirext='32'  ;;
         64) abi='-mabi=64';  abilibdirext='64'   ;;
-	no) abi=''; abilibdirext='';;
+        no) abi=''; abilibdirext='';;
          *) AC_MSG_ERROR("Invalid ABI specified") ;;
 esac
 if test -n "$abi" ; then
@@ -46,29 +46,29 @@ AC_MSG_RESULT($ac_res)
 if test $ac_res = no; then
 # Try to figure out why that failed...
 case $abi in
-	-mabi=32) 
-	save_CFLAGS="$CFLAGS"
-	CFLAGS="$CFLAGS -mabi=n32"
-	AC_TRY_COMPILE(,int x;, ac_res=yes, ac_res=no)
-	CLAGS="$save_CFLAGS"
-	if test $ac_res = yes; then
-		# New GCC
-		AC_MSG_ERROR([$CC does not support the $with_mips_abi ABI])
-	fi
-	# Old GCC
-	abi=''
-	abilibdirext=''
-	;;
-	-mabi=n32|-mabi=64)
-		if test $with_mips_abi = yes; then
-			# Old GCC, default to O32
-			abi=''
-			abilibdirext=''
-		else
-			# Some broken GCC
-			AC_MSG_ERROR([$CC does not support the $with_mips_abi ABI])
-		fi
-	;;
+        -mabi=32)
+        save_CFLAGS="$CFLAGS"
+        CFLAGS="$CFLAGS -mabi=n32"
+        AC_TRY_COMPILE(,int x;, ac_res=yes, ac_res=no)
+        CLAGS="$save_CFLAGS"
+        if test $ac_res = yes; then
+                # New GCC
+                AC_MSG_ERROR([$CC does not support the $with_mips_abi ABI])
+        fi
+        # Old GCC
+        abi=''
+        abilibdirext=''
+        ;;
+        -mabi=n32|-mabi=64)
+                if test $with_mips_abi = yes; then
+                        # Old GCC, default to O32
+                        abi=''
+                        abilibdirext=''
+                else
+                        # Some broken GCC
+                        AC_MSG_ERROR([$CC does not support the $with_mips_abi ABI])
+                fi
+        ;;
 esac
 fi #if test $ac_res = no; then
 fi #if test -n "$abi" ; then
@@ -77,7 +77,7 @@ case "${with_mips_abi}" in
         32|o32) abi='-32'; abilibdirext=''     ;;
        n32|yes) abi='-n32'; abilibdirext='32'  ;;
         64) abi='-64'; abilibdirext='64'   ;;
-	no) abi=''; abilibdirext='';;
+        no) abi=''; abilibdirext='';;
          *) AC_MSG_ERROR("Invalid ABI specified") ;;
 esac
 fi #if test -n "$GCC"; then

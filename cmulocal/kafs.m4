@@ -74,93 +74,93 @@ AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_KRB4])
 AC_REQUIRE([CMU_KRB5])
 AC_ARG_WITH(kafs,
-	[AS_HELP_STRING([--with-kafs=PREFIX], [Compile with Kafs support])],
-	[if test "X$with_kafs" = "X"; then
-		with_kafs=yes
-	fi])
+        [AS_HELP_STRING([--with-kafs=PREFIX], [Compile with Kafs support])],
+        [if test "X$with_kafs" = "X"; then
+                with_kafs=yes
+        fi])
 AC_ARG_WITH(kafs-lib,
-	[AS_HELP_STRING([--with-kafs-lib=DIR], [use kafs libraries in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-kafs-lib])
-	fi])
+        [AS_HELP_STRING([--with-kafs-lib=DIR], [use kafs libraries in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-kafs-lib])
+        fi])
 AC_ARG_WITH(kafs-include,
-	[AS_HELP_STRING([--with-kafs-include=DIR], [use kafs headers in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-kafs-include])
-	fi])
+        [AS_HELP_STRING([--with-kafs-include=DIR], [use kafs headers in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-kafs-include])
+        fi])
 
-	if test "X$with_kafs" != "X"; then
-	  if test "$with_kafs" != "yes" -a "$with_kafs" != no; then
-	    ac_cv_kafs_where_lib=$with_kafs/$CMU_LIB_SUBDIR
-	    ac_cv_kafs_where_inc=$with_kafs/include
-	  fi
-	fi
+        if test "X$with_kafs" != "X"; then
+          if test "$with_kafs" != "yes" -a "$with_kafs" != no; then
+            ac_cv_kafs_where_lib=$with_kafs/$CMU_LIB_SUBDIR
+            ac_cv_kafs_where_inc=$with_kafs/include
+          fi
+        fi
 
-	if test "$with_kafs" != "no"; then 
-	  if test "X$with_kafs_lib" != "X"; then
-	    ac_cv_kafs_where_lib=$with_kafs_lib
-	  fi
-	  if test "X$ac_cv_kafs_where_lib" = "X"; then
-	    CMU_KAFS_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
-	  fi
+        if test "$with_kafs" != "no"; then
+          if test "X$with_kafs_lib" != "X"; then
+            ac_cv_kafs_where_lib=$with_kafs_lib
+          fi
+          if test "X$ac_cv_kafs_where_lib" = "X"; then
+            CMU_KAFS_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
+          fi
 
-	  if test "X$with_kafs_include" != "X"; then
-	    ac_cv_kafs_where_inc=$with_kafs_include
-	  fi
-	  if test "X$ac_cv_kafs_where_inc" = "X"; then
-	    CMU_KAFS_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
-	  fi
-	fi
+          if test "X$with_kafs_include" != "X"; then
+            ac_cv_kafs_where_inc=$with_kafs_include
+          fi
+          if test "X$ac_cv_kafs_where_inc" = "X"; then
+            CMU_KAFS_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
+          fi
+        fi
 
-	AC_MSG_CHECKING(whether to include kafs)
-	if test "X$ac_cv_kafs_where_lib" = "X" -a "X$ac_cv_kafs_where_inc" = "X"; then
-	  ac_cv_found_kafs=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_kafs=yes
-	  AC_MSG_RESULT(yes)
-	  KAFS_INC_DIR=$ac_cv_kafs_where_inc
-	  KAFS_LIB_DIR=$ac_cv_kafs_where_lib
-	  KAFS_INC_FLAGS="-I${KAFS_INC_DIR}"
-	  KAFS_LIB_FLAGS="-L${KAFS_LIB_DIR} -lkafs"
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${KAFS_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${KAFS_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${KAFS_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${KAFS_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${KAFS_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${KAFS_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${KAFS_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${KAFS_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${KAFS_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+        AC_MSG_CHECKING(whether to include kafs)
+        if test "X$ac_cv_kafs_where_lib" = "X" -a "X$ac_cv_kafs_where_inc" = "X"; then
+          ac_cv_found_kafs=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_kafs=yes
+          AC_MSG_RESULT(yes)
+          KAFS_INC_DIR=$ac_cv_kafs_where_inc
+          KAFS_LIB_DIR=$ac_cv_kafs_where_lib
+          KAFS_INC_FLAGS="-I${KAFS_INC_DIR}"
+          KAFS_LIB_FLAGS="-L${KAFS_LIB_DIR} -lkafs"
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${KAFS_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${KAFS_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${KAFS_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${KAFS_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${KAFS_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${KAFS_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${KAFS_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${KAFS_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${KAFS_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

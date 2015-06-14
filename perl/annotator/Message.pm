@@ -112,28 +112,28 @@ sub new {
     my $as = $args{ANNOTATIONS} || [];
 
     for my $name (@$fs) {
-	$flags{$name} = {
-	    value => 1,
-	    orig => 1,
-	};
+        $flags{$name} = {
+            value => 1,
+            orig => 1,
+        };
     }
 
     while (my $entry = shift @$as) {
-	my $rest = shift @$as;
-	my ($type, $value) = @$rest;
-	$annots{$entry}{$type} = {
-	    value => $value,
-	    orig => $value,
-	};
+        my $rest = shift @$as;
+        my ($type, $value) = @$rest;
+        $annots{$entry}{$type} = {
+            value => $value,
+            orig => $value,
+        };
     }
 
     my $self = bless {
-	filename => $args{FILENAME},
-	bodystructure => $args{BODYSTRUCTURE},
-	guid => $args{GUID},
-	header => $args{HEADER},
-	flag => \%flags,
-	annot => \%annots,
+        filename => $args{FILENAME},
+        bodystructure => $args{BODYSTRUCTURE},
+        guid => $args{GUID},
+        header => $args{HEADER},
+        flag => \%flags,
+        annot => \%annots,
     }, ref($class) || $class;
 }
 
@@ -149,9 +149,9 @@ sub fh {
     my $self = shift;
 
     unless ($self->{fh}) {
-	die "Need a filename" unless $self->{filename};
-	require "IO/File.pm";
-	$self->{fh} = IO::File->new($self->{filename}, 'r');
+        die "Need a filename" unless $self->{filename};
+        require "IO/File.pm";
+        $self->{fh} = IO::File->new($self->{filename}, 'r');
     }
 
     # Move back to start of message
@@ -172,19 +172,19 @@ sub decode_part {
     my ($Part, $Content) = @_;
 
     if (lc $Part->{'Content-Transfer-Encoding'} eq 'base64') {
-	# remove trailing partial value
-	$Content =~ tr{[A-Za-z0-9+/=]}{}cd;
-	my $extra = length($Content) % 4;
-	if ($extra) {
-	    # warn "stripping $extra chars " . length($Content);
-	    $Content = substr($Content, 0, -$extra);
-	}
-	$Content = decode_base64($Content);
+        # remove trailing partial value
+        $Content =~ tr{[A-Za-z0-9+/=]}{}cd;
+        my $extra = length($Content) % 4;
+        if ($extra) {
+            # warn "stripping $extra chars " . length($Content);
+            $Content = substr($Content, 0, -$extra);
+        }
+        $Content = decode_base64($Content);
     }
     elsif (lc $Part->{'Content-Transfer-Encoding'} eq 'quoted-printable') {
-	# remove trailing partial value
-	$Content =~ s/=.?$//;
-	$Content = decode_qp($Content);
+        # remove trailing partial value
+        $Content =~ s/=.?$//;
+        $Content = decode_qp($Content);
     }
 
     my $charset = lc($Part->{'Content-Type'}{charset} || 'iso-8859-1');
@@ -192,7 +192,7 @@ sub decode_part {
     # If no charset is present, it defaults to ascii. But some systems
     #  send 8-bit data. For them, assume iso-8859-1, ascii is a subset anyway
     $charset = 'iso-8859-1'
-	if $charset eq 'ascii' || $charset eq 'us-ascii';
+        if $charset eq 'ascii' || $charset eq 'us-ascii';
 
     # Fix up some bogus formatted iso charsets
     $charset =~ s/^(iso)[\-_]?(\d+)[\-_](\d+)[\-_]?\w*/$1-$2-$3/i;
@@ -214,22 +214,22 @@ sub read_part_content {
     my ($Part, $nbytes) = @_;
 
     unless ($Part) {
-	$Part = $self->bodystructure();
+        $Part = $self->bodystructure();
     }
 
     my $fh = $self->fh();
 
     die "No Offset for part"
-	unless defined $Part->{Offset};
+        unless defined $Part->{Offset};
     die "No Size for part"
-	unless defined $Part->{Size};
+        unless defined $Part->{Size};
 
     if (!defined($nbytes) || $Part->{Size} < $nbytes) {
-	$nbytes = $Part->{Size};
+        $nbytes = $Part->{Size};
     }
 
     seek $fh, $Part->{Offset}, 0
-	or die "Cannot seek: $!";
+        or die "Cannot seek: $!";
 
     my $Content = '';
 
@@ -250,8 +250,8 @@ sub header {
     my $self = shift;
 
     unless ($self->{header}) {
-	require "Mail/Header.pm";
-	$self->{header} = Mail::Header->new($self->fh());
+        require "Mail/Header.pm";
+        $self->{header} = Mail::Header->new($self->fh());
     }
 
     return $self->{header};
@@ -259,7 +259,7 @@ sub header {
 
 =item I<bodystructure()>
 
-returns a structure 
+returns a structure
 
 is a structure closely based on the IMAP BODYSTRUCTURE, decoded into a
 hash, including recursively all MIME sections.  In general, the
@@ -357,7 +357,7 @@ sub set_flag_value {
     my $self = shift;
     my ($name, $value) = @_;
     $self->{flag}{$name}{orig} = 0
-	unless exists $self->{flag}{$name}{orig};
+        unless exists $self->{flag}{$name}{orig};
     $self->{flag}{$name}{value} = $value;
 }
 
@@ -407,7 +407,7 @@ sub set_annotation {
     my ($entry, $type, $value) = @_;
     $value = '' unless defined $value;
     $self->{annot}{$entry}{$type}{orig} = ''
-	unless exists $self->{annot}{$entry}{$type}{orig};
+        unless exists $self->{annot}{$entry}{$type}{orig};
     $self->{annot}{$entry}{$type}{value} = $value;
 }
 
@@ -461,17 +461,17 @@ sub get_changed {
     my @annots;
 
     foreach my $name (sort keys %{$self->{flag}}) {
-	my $item = $self->{flag}{$name};
-	push @flags, [$name, $item->{value}]
-	    unless $item->{value} == $item->{orig};
+        my $item = $self->{flag}{$name};
+        push @flags, [$name, $item->{value}]
+            unless $item->{value} == $item->{orig};
     }
 
     foreach my $entry (sort keys %{$self->{annot}}) {
-	foreach my $type (sort keys %{$self->{annot}{$entry}}) {
-	    my $item = $self->{annot}{$entry}{$type};
-	    push @annots, [$entry, $type, $item->{value}]
-		unless is_eq($item->{value}, $item->{orig});
-	}
+        foreach my $type (sort keys %{$self->{annot}{$entry}}) {
+            my $item = $self->{annot}{$entry}{$type};
+            push @annots, [$entry, $type, $item->{value}]
+                unless is_eq($item->{value}, $item->{orig});
+        }
     }
 
     return (\@flags, \@annots);
@@ -480,10 +480,10 @@ sub get_changed {
 sub is_eq {
     my ($l, $r) = @_;
     if (defined $l && defined $r) {
-	return $l eq $r;
+        return $l eq $r;
     }
     else {
-	return !defined $l && !defined $r;
+        return !defined $l && !defined $r;
     }
 }
 

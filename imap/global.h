@@ -55,12 +55,12 @@
 #define MAX_SESSIONID_SIZE 256
 
 /* This is a string because we only ever use it as a string */
-#define SPHINX_MAX_MATCHES	    "1000000"
+#define SPHINX_MAX_MATCHES          "1000000"
 
 /* Flags for cyrus_init() */
 enum {
-    CYRUSINIT_NODB =	(1<<0),
-    CYRUSINIT_PERROR =	(1<<1)
+    CYRUSINIT_NODB =    (1<<0),
+    CYRUSINIT_PERROR =  (1<<1)
 };
 
 /* Startup the configuration subsystem */
@@ -68,48 +68,48 @@ enum {
  * for any libimap/libcyrus process, and should be called fairly early
  * (and needs an associated cyrus_done call) */
 extern int cyrus_init(const char *alt_config, const char *ident,
-		      unsigned flags, int config_need_data);
+                      unsigned flags, int config_need_data);
 extern void global_sasl_init(int client, int server,
-			     const sasl_callback_t *callbacks);
+                             const sasl_callback_t *callbacks);
 
 /* Shutdown a cyrus process */
 extern void cyrus_done(void);
 
 /* sasl configuration */
 extern int mysasl_config(void *context,
-			 const char *plugin_name,
-			 const char *option,
-			 const char **result,
-			 unsigned *len);
+                         const char *plugin_name,
+                         const char *option,
+                         const char **result,
+                         unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
 typedef int (mysasl_cb_ft)(void);
 
 /* user canonification */
 extern const char *canonify_userid(char *user, const char *loginid,
-				   int *domain_from_ip);
+                                   int *domain_from_ip);
 
 extern int is_userid_anonymous(const char *user);
 
 extern int mysasl_canon_user(sasl_conn_t *conn,
-		             void *context,
-		             const char *user, unsigned ulen,
-		             unsigned flags,
-		             const char *user_realm,
-		             char *out_user,
-		             unsigned out_max, unsigned *out_ulen);
+                             void *context,
+                             const char *user, unsigned ulen,
+                             unsigned flags,
+                             const char *user_realm,
+                             char *out_user,
+                             unsigned out_max, unsigned *out_ulen);
 
 extern int mysasl_proxy_policy(sasl_conn_t *conn,
-			       void *context,
-			       const char *requested_user, unsigned rlen,
-			       const char *auth_identity, unsigned alen,
-			       const char *def_realm __attribute__((unused)),
-			       unsigned urlen __attribute__((unused)),
-			       struct propctx *propctx __attribute__((unused)));
+                               void *context,
+                               const char *requested_user, unsigned rlen,
+                               const char *auth_identity, unsigned alen,
+                               const char *def_realm __attribute__((unused)),
+                               unsigned urlen __attribute__((unused)),
+                               struct propctx *propctx __attribute__((unused)));
 
 /* check if `authstate' is a valid member of class */
-extern int global_authisa(struct auth_state *authstate, 
-			  enum imapopt opt);
+extern int global_authisa(struct auth_state *authstate,
+                          enum imapopt opt);
 
 /* useful types */
 struct protstream;
@@ -127,7 +127,7 @@ extern int shutdown_file(char *buf, int size);
 extern char *find_msgid(char *, char **);
 #define UNIX_SOCKET "[unix socket]"
 extern const char *get_clienthost(int s,
-				  const char **localip, const char **remoteip);
+                                  const char **localip, const char **remoteip);
 
 /* Misc globals */
 extern int in_shutdown;

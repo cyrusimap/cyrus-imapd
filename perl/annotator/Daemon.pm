@@ -216,7 +216,7 @@ sub _dlist_parse {
         $$AtomRef = $CurAtom;
       }
     }
-    
+
     # Bracket?
     elsif ($Line =~ m/\G\(/gc) {
       # Begin a new sub-array
@@ -466,7 +466,7 @@ sub _parse_email_address {
 
     # Build 'ename@ecorp.com' part
     my $EmailStr = (defined $Adr->[2] ? $Adr->[2] : '')
-                 . '@' 
+                 . '@'
                  . (defined $Adr->[3] ? $Adr->[3] : '');
     # If the email address has a name, add it at the start and put <> around address
     if (defined $Adr->[0] and $Adr->[0] ne '') {
@@ -504,13 +504,13 @@ sub _read_args
     my $Data = '';
 
     for (;;) {
-	$Nbytes = readline STDIN;
-	last unless defined $Nbytes;
-	chomp $Nbytes;
-	$Nbytes = 0 + $Nbytes;
-# 	printf "nbytes=%d\n", $nbytes;
-	last if (!$Nbytes);
-	read STDIN, $Data, $Nbytes, length($Data);
+        $Nbytes = readline STDIN;
+        last unless defined $Nbytes;
+        chomp $Nbytes;
+        $Nbytes = 0 + $Nbytes;
+#       printf "nbytes=%d\n", $nbytes;
+        last if (!$Nbytes);
+        read STDIN, $Data, $Nbytes, length($Data);
     }
 
     return $Data;
@@ -525,11 +525,11 @@ sub _format_string
     my $len = length($s);
 
     if ($len > 1024 || $s =~ m/[\\"\012\015\200-\377]/) {
-	# don't try to quote this, use a literal
-	return "{$len}\r\n$s";
+        # don't try to quote this, use a literal
+        return "{$len}\r\n$s";
     }
     else {
-	return "\"$s\"";
+        return "\"$s\"";
     }
 }
 
@@ -542,15 +542,15 @@ sub _emit_results
     my ($flags, $annots) = $message->get_changed();
 
     foreach my $a (@$annots) {
-	my ($entry, $type, $value) = @$a;
-	my $format_val = _format_string($value);
-	push @results, "ANNOTATION ($entry ($type $format_val))";
+        my ($entry, $type, $value) = @$a;
+        my $format_val = _format_string($value);
+        push @results, "ANNOTATION ($entry ($type $format_val))";
     }
 
     foreach my $f (@$flags) {
-	my ($name, $set) = @$f;
-	my $op = $set ? "+FLAGS" : "-FLAGS";
-	push @results, "$op $name";
+        my ($name, $set) = @$f;
+        my $op = $set ? "+FLAGS" : "-FLAGS";
+        push @results, "$op $name";
     }
 
     print "(" . join(' ', @results) . ")\n";
@@ -561,27 +561,27 @@ sub process_request
     my ($self) = @_;
 
     eval {
-	$self->log(3, "Reading request");
-	my $ArgsString = _read_args();
-	die "Failed to read args" unless $ArgsString;
+        $self->log(3, "Reading request");
+        my $ArgsString = _read_args();
+        die "Failed to read args" unless $ArgsString;
 
-	my ($ArgsList, $Remainder) = _dlist_parse($ArgsString);
-	die "Failed to parse args $ArgsString" unless $ArgsList;
+        my ($ArgsList, $Remainder) = _dlist_parse($ArgsString);
+        die "Failed to parse args $ArgsString" unless $ArgsList;
 
-	my %ArgsHash = @$ArgsList;
+        my %ArgsHash = @$ArgsList;
 
-	# parse the argshash out here
-	$ArgsHash{BODYSTRUCTURE} = _parse_bodystructure(delete $ArgsHash{BODY});
+        # parse the argshash out here
+        $ArgsHash{BODYSTRUCTURE} = _parse_bodystructure(delete $ArgsHash{BODY});
 
-	my $message = Cyrus::Annotator::Message->new(%ArgsHash);
+        my $message = Cyrus::Annotator::Message->new(%ArgsHash);
 
-	$self->annotate_message($message);
+        $self->annotate_message($message);
 
-	$self->log(3, "Emitting result");
-	$self->_emit_results($message);
+        $self->log(3, "Emitting result");
+        $self->_emit_results($message);
     };
     if ($@) {
-	$self->log(2, "Caught and ignored error: $@");
+        $self->log(2, "Caught and ignored error: $@");
     }
 }
 

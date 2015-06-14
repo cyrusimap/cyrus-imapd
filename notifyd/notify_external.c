@@ -58,10 +58,10 @@
 #include "notify_external.h"
 
 char* notify_external(const char *class, const char *priority,
-		      const char *user, const char *mailbox,
-		      int nopt __attribute__((unused)),
-		      char **options __attribute__((unused)),
-		      const char *message, const char *fname)
+                      const char *user, const char *mailbox,
+                      int nopt __attribute__((unused)),
+                      char **options __attribute__((unused)),
+                      const char *message, const char *fname)
 {
     const char *notify;
     const char *buf[12];
@@ -71,8 +71,8 @@ char* notify_external(const char *class, const char *priority,
 
     /* check/parse options */
     if (!(notify = config_getstring(IMAPOPT_NOTIFY_EXTERNAL))) {
-	syslog(LOG_ERR, "ERROR: no external recipient (program) specified");
-	return strdup("NO Recipient unspecified");
+        syslog(LOG_ERR, "ERROR: no external recipient (program) specified");
+        return strdup("NO Recipient unspecified");
     }
 
     buf[0] = notify;
@@ -90,27 +90,27 @@ char* notify_external(const char *class, const char *priority,
 
     if (pipe(fds) < 0) {
        syslog(LOG_ERR,
-	      "notify_external: pipe() returned %s\n", strerror(errno));
+              "notify_external: pipe() returned %s\n", strerror(errno));
        return strdup("NO notify_external pipe failed");
     }
 
     if ((child_pid = fork()) == 0) {
-	/* i'm the child! run notify */
-	close(fds[1]);
-	/* make the pipe be stdin */
-	dup2(fds[0], 0);
-	execv(notify, (char **) buf);
+        /* i'm the child! run notify */
+        close(fds[1]);
+        /* make the pipe be stdin */
+        dup2(fds[0], 0);
+        execv(notify, (char **) buf);
 
         /* should never reach here */
-	syslog(LOG_ERR, "notify_external: exec returned %s", strerror(errno));
-	return strdup("NO notify_external exec failed");
+        syslog(LOG_ERR, "notify_external: exec returned %s", strerror(errno));
+        return strdup("NO notify_external exec failed");
     }
     /* i'm the parent */
     close(fds[0]);
     stream = fdopen(fds[1], "w");
 
     if (!stream) {
-	return strdup("NO notify_external could not open stream");
+        return strdup("NO notify_external could not open stream");
     }
 
     fprintf(stream, "%s\n", message);

@@ -50,8 +50,8 @@ struct vparse_entry {
     char *name;
     int multivalue;
     union {
-	char *value;
-	strarray_t *values;
+        char *value;
+        strarray_t *values;
     } v;
     struct vparse_param *params;
     struct vparse_entry *next;

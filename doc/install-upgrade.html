@@ -270,18 +270,18 @@ tlscache_db: berkeley-nosync
 <tr><td>-k</td><td>Removed, expunge data is always kept</td></tr>
 <tr><td>-g</td><td>Removed, GUIDs are always stored</td></tr>
 <tr><td>-G</td><td>Changed, now means "re-parse the message".
-		   If not specified, reconstruct only checks
-		   the message size and assumes the rest of
-		   the stuff in the index record is OK (pretty
-		   safe because we do CRC32 checks on index
-		   records now)</td></tr>
+                   If not specified, reconstruct only checks
+                   the message size and assumes the rest of
+                   the stuff in the index record is OK (pretty
+                   safe because we do CRC32 checks on index
+                   records now)</td></tr>
 <tr><td>-s</td><td>Added, skip the <tt>stat</tt> call, so
-		   reconstruct doesn't even check the message
-		   file size - just that a file with the
-		   correct name exists at all</td></tr>
+                   reconstruct doesn't even check the message
+                   file size - just that a file with the
+                   correct name exists at all</td></tr>
 <tr><td>-n</td><td>Added, don't make any changes, just report
-		   what would have been done if -n wasn't
-		   specified</td></tr>
+                   what would have been done if -n wasn't
+                   specified</td></tr>
 </table>
 
 If you try to use -k or -g, you will get a warning but the

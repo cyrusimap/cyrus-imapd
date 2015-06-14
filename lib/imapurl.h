@@ -43,8 +43,8 @@
 #define IMAPURL_H
 
 struct imapurl {
-    char *freeme;		/* copy of original URL + decoded mailbox;
-				   caller must free() */
+    char *freeme;               /* copy of original URL + decoded mailbox;
+                                   caller must free() */
 
     /* RFC 2192 */
     const char *user;
@@ -59,11 +59,11 @@ struct imapurl {
     unsigned long octet_count;
     /* URLAUTH */
     struct {
-	const char *access;
-	const char *mech;
-	const char *token;
-	time_t expire;
-	size_t rump_len;
+        const char *access;
+        const char *mech;
+        const char *token;
+        time_t expire;
+        size_t rump_len;
     } urlauth;
 };
 

@@ -27,12 +27,12 @@
 
 #include <glib.h>
 
-void		parse_olson_file		(char		*filename,
-						 GArray	       **zone_data,
-						 GHashTable    **rule_data,
-						 GHashTable    **link_data,
-						 int		*max_until_year);
+void            parse_olson_file                (char           *filename,
+                                                 GArray        **zone_data,
+                                                 GHashTable    **rule_data,
+                                                 GHashTable    **link_data,
+                                                 int            *max_until_year);
 
-GHashTable*	parse_zone_tab			(char		*filename);
+GHashTable*     parse_zone_tab                  (char           *filename);
 
 #endif /* _VZIC_PARSE_H_ */

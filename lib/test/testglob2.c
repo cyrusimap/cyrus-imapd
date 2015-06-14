@@ -46,48 +46,48 @@ int main (argc, argv)
     glob *g;
 
     for(i=0;patterns[i].pattern;i++) {
-	const char *pattern = patterns[i].pattern;
-	int succ = 0;
-	int exact = 0;
-	g = glob_init_suppress(pattern, GLOB_INBOXCASE|GLOB_HIERARCHY, "user.rjs3");
-	printf("%s/%d/%s/%s\n", pattern, g->flags, g->inbox, g->str);
+        const char *pattern = patterns[i].pattern;
+        int succ = 0;
+        int exact = 0;
+        g = glob_init_suppress(pattern, GLOB_INBOXCASE|GLOB_HIERARCHY, "user.rjs3");
+        printf("%s/%d/%s/%s\n", pattern, g->flags, g->inbox, g->str);
 
-	for(j=0;strings[j];j++) {
-	    const char *string = strings[j];
-	    int len = strlen(string);
-	    long min = 0;
-	    int result = glob_test(g, string, len, &min);
+        for(j=0;strings[j];j++) {
+            const char *string = strings[j];
+            int len = strlen(string);
+            long min = 0;
+            int result = glob_test(g, string, len, &min);
 
-	    if(result != -1) {
-		printf("  %s: %d\n", string, result);	
-		succ++;
-	    }
+            if(result != -1) {
+                printf("  %s: %d\n", string, result);
+                succ++;
+            }
 
-	    if(result == len) {
-		exact++;
-	    }
-	}
+            if(result == len) {
+                exact++;
+            }
+        }
 
-	if(succ == patterns[i].successes && exact == patterns[i].exacts) {
-	    printf("PASS! (got %d successes & %d exact)\n", succ, exact);
-	} else {
-	    printf("FAIL! (got %d/%d successes & %d/%d exact)\n",
-		succ, patterns[i].successes, exact, patterns[i].exacts);
-	    failed++;
-	}
+        if(succ == patterns[i].successes && exact == patterns[i].exacts) {
+            printf("PASS! (got %d successes & %d exact)\n", succ, exact);
+        } else {
+            printf("FAIL! (got %d/%d successes & %d/%d exact)\n",
+                succ, patterns[i].successes, exact, patterns[i].exacts);
+            failed++;
+        }
 
-	glob_free(&g);
+        glob_free(&g);
     }
 
     if(!failed) {
-	printf("All tests pass!\n");
+        printf("All tests pass!\n");
     } else {
-	printf("ERROR: %d tests failed!\n", failed);
+        printf("ERROR: %d tests failed!\n", failed);
     }
     return 0;
 }
 
 void fatal(char *s) {
-	(void)s;
-	exit(1);
+        (void)s;
+        exit(1);
 }

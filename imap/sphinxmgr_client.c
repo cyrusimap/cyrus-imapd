@@ -63,7 +63,7 @@
 #include "imap/imap_err.h"
 
 static int sphinxmgr_request(const char *req, size_t reqsize,
-			     char *reply, size_t maxreply)
+                             char *reply, size_t maxreply)
 {
     const char *sockname = config_getstring(IMAPOPT_SPHINXMGR_SOCKET);
     struct sockaddr_un asun;
@@ -76,30 +76,30 @@ static int sphinxmgr_request(const char *req, size_t reqsize,
 
     s = socket(PF_UNIX, SOCK_STREAM, 0);
     if (s < 0) {
-	syslog(LOG_ERR, "socket(PF_UNIX): %m");
-	r = IMAP_IOERROR;
-	goto out;
+        syslog(LOG_ERR, "socket(PF_UNIX): %m");
+        r = IMAP_IOERROR;
+        goto out;
     }
 
     r = connect(s, (struct sockaddr *)&asun, sizeof(asun));
     if (r < 0) {
-	syslog(LOG_ERR, "connect to %s failed: %m", sockname);
-	r = IMAP_IOERROR;
-	goto out;
+        syslog(LOG_ERR, "connect to %s failed: %m", sockname);
+        r = IMAP_IOERROR;
+        goto out;
     }
 
     r = retry_write(s, req, reqsize);
     if (r < 0) {
-	syslog(LOG_ERR, "write to %s failed: %m", sockname);
-	r = IMAP_IOERROR;
-	goto out;
+        syslog(LOG_ERR, "write to %s failed: %m", sockname);
+        r = IMAP_IOERROR;
+        goto out;
     }
 
     r = read(s, reply, maxreply-1);
     if (r < 0) {
-	syslog(LOG_ERR, "read from %s failed: %m", sockname);
-	r = IMAP_IOERROR;
-	goto out;
+        syslog(LOG_ERR, "read from %s failed: %m", sockname);
+        r = IMAP_IOERROR;
+        goto out;
     }
     reply[r] = '\0';
     r = 0;
@@ -119,8 +119,8 @@ int sphinxmgr_getsock(const char *mboxname, char **socknamep)
     r = sphinxmgr_request(buf, strlen(buf), buf, sizeof(buf));
     if (r) return r;
     if (strncmp(buf, "OK ", 3)) {
-	syslog(LOG_ERR, "sphinxmgr returned failure: %s", buf);
-	return IMAP_IOERROR;
+        syslog(LOG_ERR, "sphinxmgr returned failure: %s", buf);
+        return IMAP_IOERROR;
     }
     p = strpbrk(buf+3, " \t\n\r");
     if (p) *p = '\0';
@@ -138,8 +138,8 @@ int sphinxmgr_getconf(const char *mboxname, char **configp)
     r = sphinxmgr_request(buf, strlen(buf), buf, sizeof(buf));
     if (r) return r;
     if (strncmp(buf, "OK ", 3)) {
-	syslog(LOG_ERR, "sphinxmgr returned failure: %s", buf);
-	return IMAP_IOERROR;
+        syslog(LOG_ERR, "sphinxmgr returned failure: %s", buf);
+        return IMAP_IOERROR;
     }
     p = strpbrk(buf+3, " \t\n\r");
     if (p) *p = '\0';
@@ -156,8 +156,8 @@ int sphinxmgr_stop(const char *mboxname)
     r = sphinxmgr_request(buf, strlen(buf), buf, sizeof(buf));
     if (r) return r;
     if (strncmp(buf, "OK ", 3)) {
-	syslog(LOG_ERR, "sphinxmgr returned failure: %s", buf);
-	return IMAP_IOERROR;
+        syslog(LOG_ERR, "sphinxmgr returned failure: %s", buf);
+        return IMAP_IOERROR;
     }
     return 0;
 }

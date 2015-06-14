@@ -31,15 +31,15 @@ static int ptsmodule_standard_root_dn(const char *domain, const char **result)
     buf_setcstr(&buf, "dc=");
 
     while (part != NULL) {
-	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
+        syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
 
-	buf_appendcstr(&buf, part);
-	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
+        buf_appendcstr(&buf, part);
+        syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
 
-	part = strtok_r(NULL, ".", &tok_state);
+        part = strtok_r(NULL, ".", &tok_state);
 
-	if (part != NULL)
-	    buf_appendcstr(&buf, dc_sep);
+        if (part != NULL)
+            buf_appendcstr(&buf, dc_sep);
     }
 
     free(domain_copy);
@@ -63,20 +63,20 @@ int main(int argc, const char **argv) {
     int i;
 
     for (i = 1; i < argc; i++) {
-	const char *domain = argv[i];
-	char *result;
+        const char *domain = argv[i];
+        char *result;
 
-	printf("generating standard root dn from domain '%s'...\n", domain);
-	int r = ptsmodule_standard_root_dn(domain, &result);
+        printf("generating standard root dn from domain '%s'...\n", domain);
+        int r = ptsmodule_standard_root_dn(domain, &result);
 
-	if (0 == r) {
-	    printf(" => '%s'\n", result);
-	    free(result);
-	}
-	else {
-	    fprintf(stderr, "error: ptsmodule_standard_root_dn returned %i\n", r);
-	    errors ++;
-	}
+        if (0 == r) {
+            printf(" => '%s'\n", result);
+            free(result);
+        }
+        else {
+            fprintf(stderr, "error: ptsmodule_standard_root_dn returned %i\n", r);
+            errors ++;
+        }
     }
 
     return errors;

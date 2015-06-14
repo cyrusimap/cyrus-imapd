@@ -84,10 +84,10 @@ sub ouch {
     my $msg = shift;
 
     if ($force) {
-	print "fatal error: $msg\n";
+        print "fatal error: $msg\n";
     } else {
-	print "error: $msg\n";
-	exit 1;
+        print "error: $msg\n";
+        exit 1;
     }
 }
 
@@ -97,25 +97,25 @@ sub read_conf {
     open CONF, $file or die "can't open $file";
     print "reading configure file $file...\n";
     while (<CONF>) {
-	if (/^#/) { 
-	    next; 
-	}
-	if (/\@include:\s+(.*)$/) {
-	    push @configs, $1;
-	}
-	if (/^partition-(.*):\s*(.*)$/) {
-	    $parts{$1} = $2;
-	}
-	if (/^metapartition-(.*):\s*(.*)$/) {
-	    $mparts{$1} = $2;
-	}
-	if (/^metapartition_files:\s*(.*)$/) {
-	    # split the list of files and make a hash
-	    @metafiles = split(/\s+/, $1);
-	    foreach $file (@metafiles) {
-		$mfiles{$file} = 1;
-	    }
-	}
+        if (/^#/) {
+            next;
+        }
+        if (/\@include:\s+(.*)$/) {
+            push @configs, $1;
+        }
+        if (/^partition-(.*):\s*(.*)$/) {
+            $parts{$1} = $2;
+        }
+        if (/^metapartition-(.*):\s*(.*)$/) {
+            $mparts{$1} = $2;
+        }
+        if (/^metapartition_files:\s*(.*)$/) {
+            # split the list of files and make a hash
+            @metafiles = split(/\s+/, $1);
+            foreach $file (@metafiles) {
+                $mfiles{$file} = 1;
+            }
+        }
     }
     print "done\n";
     close CONF;
@@ -149,32 +149,32 @@ sub migrate {
 
     opendir DIR, $part . $path;
     while ($subdir = readdir DIR) {
-	my $subpath = $path . "/" . $subdir;
+        my $subpath = $path . "/" . $subdir;
 
-	# skip message files, '.' and '..'
-	next if ( $subdir =~ /^[0-9]+\.$/ || 
-	          $subdir =~ /^\.\.$/ || 
-		  $subdir =~ /^\.$/ );
-	# skip special subdirs
-	next if ( $subpath =~ /^\/socket$/ ||
-	          $subpath =~ /^\/stage\.$/ ||
-		  $subpath =~ /^\/sync\.$/ );
+        # skip message files, '.' and '..'
+        next if ( $subdir =~ /^[0-9]+\.$/ ||
+                  $subdir =~ /^\.\.$/ ||
+                  $subdir =~ /^\.$/ );
+        # skip special subdirs
+        next if ( $subpath =~ /^\/socket$/ ||
+                  $subpath =~ /^\/stage\.$/ ||
+                  $subpath =~ /^\/sync\.$/ );
 
-	if ($subdir =~ /^cyrus\.(.+)/s) {
-	    # cyrus.* file, see if we should migrate it
-	    if (defined($mfiles{$1})) {
-		copy($part . $subpath, $mpart . $subpath) ||
-		    ouch "couldn't copy $part$subpath to $mpart$subpath";
-		unlink($part . $subpath) ||
-		    ouch "couldn't delete $part$subpath";
-	    }
-	}
-	else {
-	    # this is a mailbox subdir, process it
-	    mkdir($mpart . $subpath, 0700) ||
-		ouch "couldn't create $mpart$subpath";
-	    migrate($part, $mpart, $subpath);
-	}
+        if ($subdir =~ /^cyrus\.(.+)/s) {
+            # cyrus.* file, see if we should migrate it
+            if (defined($mfiles{$1})) {
+                copy($part . $subpath, $mpart . $subpath) ||
+                    ouch "couldn't copy $part$subpath to $mpart$subpath";
+                unlink($part . $subpath) ||
+                    ouch "couldn't delete $part$subpath";
+            }
+        }
+        else {
+            # this is a mailbox subdir, process it
+            mkdir($mpart . $subpath, 0700) ||
+                ouch "couldn't create $mpart$subpath";
+            migrate($part, $mpart, $subpath);
+        }
     }
     closedir DIR;
 }
@@ -185,14 +185,14 @@ while (($name,$part) = each(%parts)) {
     if (!defined($mpart)) { next; } # no corresponding metapartition, skip it
 
     if ($interactive) {
-	print "upgrade $part? ";
-	$yn = <STDIN>;
+        print "upgrade $part? ";
+        $yn = <STDIN>;
     }
     if ($yn =~ /^y/) {
-	print "upgrading data partition $part...";
+        print "upgrading data partition $part...";
 
-	migrate($part, $mpart, "");
+        migrate($part, $mpart, "");
     }
-    
+
     print "done\n";
 }

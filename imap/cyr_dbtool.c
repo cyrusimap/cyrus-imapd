@@ -128,8 +128,8 @@ static int printer_cb(void *rock __attribute__((unused)),
 
 /* use IMAP literals for all communications */
 static int aprinter_cb(void *rock,
-		       const char *key, size_t keylen,
-		       const char *data, size_t datalen)
+                       const char *key, size_t keylen,
+                       const char *data, size_t datalen)
 {
     struct protstream *out = (struct protstream *)rock;
 
@@ -155,79 +155,79 @@ static void batch_commands(struct db *db)
     int r = 0;
 
     while (c != EOF) {
-	buf_reset(&cmd);
-	buf_reset(&key);
-	buf_reset(&val);
-	line++;
-	c = getword(in, &cmd);
-	if (c == ' ')
-	    c = getastring(in, NULL, &key);
-	if (c == ' ')
-	    c = getastring(in, NULL, &val);
-	if (c == '\r') c = prot_getc(in);
-	if (cmd.len) {
-	    /* got a command! */
-	    if (!strcmp(cmd.s, "BEGIN")) {
-		if (tidp) {
-		    r = IMAP_MAILBOX_LOCKED;
-		    goto done;
-		}
-		tidp = &tid;
-	    }
-	    else if (!strcmp(cmd.s, "SHOW")) {
-		r = cyrusdb_foreach(db, key.s, key.len, NULL, aprinter_cb, out, tidp);
-		if (r) goto done;
-		prot_flush(out);
-	    }
-	    else if (!strcmp(cmd.s, "SET")) {
-		r = cyrusdb_store(db, key.s, key.len, val.s, val.len, tidp);
-		if (r) goto done;
-	    }
-	    else if (!strcmp(cmd.s, "GET")) {
-		const char *res;
-		size_t reslen;
-		r = cyrusdb_fetch(db, key.s, key.len, &res, &reslen, tidp);
-		if (r) goto done;
-		aprinter_cb(out, key.s, key.len, res, reslen);
-		prot_flush(out);
-	    }
-	    else if (!strcmp(cmd.s, "DELETE")) {
-		r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
-		if (r) goto done;
-	    }
-	    else if (!strcmp(cmd.s, "COMMIT")) {
-		if (!tidp) {
-		    r = IMAP_NOTFOUND;
-		    goto done;
-		}
-		r = cyrusdb_commit(db, tid);
-		if (r) goto done;
-		tid = NULL;
-		tidp = NULL;
-	    }
-	    else if (!strcmp(cmd.s, "ABORT")) {
-		if (!tidp) {
-		    r = IMAP_NOTFOUND;
-		    goto done;
-		}
-		r = cyrusdb_abort(db, tid);
-		if (r) goto done;
-		tid = NULL;
-		tidp = NULL;
-	    }
-	    else {
-		r = IMAP_MAILBOX_NONEXISTENT;
-		goto done;
-	    }
-	}
-	if (c != '\n') break;
+        buf_reset(&cmd);
+        buf_reset(&key);
+        buf_reset(&val);
+        line++;
+        c = getword(in, &cmd);
+        if (c == ' ')
+            c = getastring(in, NULL, &key);
+        if (c == ' ')
+            c = getastring(in, NULL, &val);
+        if (c == '\r') c = prot_getc(in);
+        if (cmd.len) {
+            /* got a command! */
+            if (!strcmp(cmd.s, "BEGIN")) {
+                if (tidp) {
+                    r = IMAP_MAILBOX_LOCKED;
+                    goto done;
+                }
+                tidp = &tid;
+            }
+            else if (!strcmp(cmd.s, "SHOW")) {
+                r = cyrusdb_foreach(db, key.s, key.len, NULL, aprinter_cb, out, tidp);
+                if (r) goto done;
+                prot_flush(out);
+            }
+            else if (!strcmp(cmd.s, "SET")) {
+                r = cyrusdb_store(db, key.s, key.len, val.s, val.len, tidp);
+                if (r) goto done;
+            }
+            else if (!strcmp(cmd.s, "GET")) {
+                const char *res;
+                size_t reslen;
+                r = cyrusdb_fetch(db, key.s, key.len, &res, &reslen, tidp);
+                if (r) goto done;
+                aprinter_cb(out, key.s, key.len, res, reslen);
+                prot_flush(out);
+            }
+            else if (!strcmp(cmd.s, "DELETE")) {
+                r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
+                if (r) goto done;
+            }
+            else if (!strcmp(cmd.s, "COMMIT")) {
+                if (!tidp) {
+                    r = IMAP_NOTFOUND;
+                    goto done;
+                }
+                r = cyrusdb_commit(db, tid);
+                if (r) goto done;
+                tid = NULL;
+                tidp = NULL;
+            }
+            else if (!strcmp(cmd.s, "ABORT")) {
+                if (!tidp) {
+                    r = IMAP_NOTFOUND;
+                    goto done;
+                }
+                r = cyrusdb_abort(db, tid);
+                if (r) goto done;
+                tid = NULL;
+                tidp = NULL;
+            }
+            else {
+                r = IMAP_MAILBOX_NONEXISTENT;
+                goto done;
+            }
+        }
+        if (c != '\n') break;
     }
-    
+
 done:
     if (r) {
-	if (tid) cyrusdb_abort(db, tid);
-	fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
-	        line, (int)cmd.len, cmd.s, error_message(r));
+        if (tid) cyrusdb_abort(db, tid);
+        fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
+                line, (int)cmd.len, cmd.s, error_message(r));
     }
 }
 
@@ -251,61 +251,61 @@ int main(int argc, char *argv[])
     struct txn **tidp = NULL;
 
     while ((opt = getopt(argc, argv, "C:ntT")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	case 'n': /* create new */
-	    db_flags |= CYRUSDB_CREATE;
-	    break;
-	case 't': /* legacy - now the default, but don't break existing users */
-	    tidp = NULL;
-	    break;
-	case 'T':
-	    tidp = &tid;
-	    break;
-	}
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+        case 'n': /* create new */
+            db_flags |= CYRUSDB_CREATE;
+            break;
+        case 't': /* legacy - now the default, but don't break existing users */
+            tidp = NULL;
+            break;
+        case 'T':
+            tidp = &tid;
+            break;
+        }
     }
 
     if ((argc - optind) < 3) {
-	char sep;
-	strarray_t *backends = cyrusdb_backends();
+        char sep;
+        strarray_t *backends = cyrusdb_backends();
 
-	fprintf(stderr, "Usage: %s [-C altconfig] <db file> <db backend> <action> [<key>] [<value>]\n", argv[0]);
-	fprintf(stderr, "Usable Backends");
+        fprintf(stderr, "Usage: %s [-C altconfig] <db file> <db backend> <action> [<key>] [<value>]\n", argv[0]);
+        fprintf(stderr, "Usable Backends");
 
-	for(i=0, sep = ':'; i < backends->count; i++) {
-	    fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
-	    sep = ',';
-	}
-	strarray_free(backends);
+        for(i=0, sep = ':'; i < backends->count; i++) {
+            fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
+            sep = ',';
+        }
+        strarray_free(backends);
 
-	fprintf(stderr, "\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "Actions:\n");
-	fprintf(stderr, "* show [<prefix>]\n");
-	fprintf(stderr, "* get <key>\n");
-	fprintf(stderr, "* set <key> <value>\n");
-	fprintf(stderr, "* delete <key>\n");
-	fprintf(stderr, "* dump - internal format dump\n");
-	fprintf(stderr, "* consistent - check consistency\n");
-	fprintf(stderr, "* repack - repack/checkpoint the DB (if supported)\n");
-	fprintf(stderr, "* damage - start a commit then die during\n");
-	fprintf(stderr, "* batch - read from stdin and execute commands\n");
-	fprintf(stderr, "You may omit key or key/value and specify one per line on stdin\n");
-	fprintf(stderr, "keys are terminated by tab or newline, values are terminated by newline\n");
-	exit(-1);
+        fprintf(stderr, "\n");
+        fprintf(stderr, "\n");
+        fprintf(stderr, "Actions:\n");
+        fprintf(stderr, "* show [<prefix>]\n");
+        fprintf(stderr, "* get <key>\n");
+        fprintf(stderr, "* set <key> <value>\n");
+        fprintf(stderr, "* delete <key>\n");
+        fprintf(stderr, "* dump - internal format dump\n");
+        fprintf(stderr, "* consistent - check consistency\n");
+        fprintf(stderr, "* repack - repack/checkpoint the DB (if supported)\n");
+        fprintf(stderr, "* damage - start a commit then die during\n");
+        fprintf(stderr, "* batch - read from stdin and execute commands\n");
+        fprintf(stderr, "You may omit key or key/value and specify one per line on stdin\n");
+        fprintf(stderr, "keys are terminated by tab or newline, values are terminated by newline\n");
+        exit(-1);
     }
 
     fname = argv[optind];
     action = argv[optind+2];
 
     if(fname[0] != '/') {
-	printf("\nSorry, you cannot use this tool with relative path names.\n"
-	       "This is because some database backends (mainly berkeley) do not\n"
-	       "always do what you would expect with them.\n"
-	       "\nPlease use absolute pathnames instead.\n\n");
-	exit(EC_OSERR);
+        printf("\nSorry, you cannot use this tool with relative path names.\n"
+               "This is because some database backends (mainly berkeley) do not\n"
+               "always do what you would expect with them.\n"
+               "\nPlease use absolute pathnames instead.\n\n");
+        exit(EC_OSERR);
     }
 
     outfd = fileno(stdout);
@@ -314,7 +314,7 @@ int main(int argc, char *argv[])
 
     r = cyrusdb_open(argv[optind+1], fname, db_flags, &db);
     if(r != CYRUSDB_OK)
-	fatal("can't open database", EC_TEMPFAIL);
+        fatal("can't open database", EC_TEMPFAIL);
 
     if (( is_get = !strcmp(action, "get"))  ||
       (is_delete = !strcmp(action, "delete")) ||
@@ -346,7 +346,7 @@ int main(int argc, char *argv[])
           }
         }
     } else if (!strcmp(action, "batch")) {
-	batch_commands(db);
+        batch_commands(db);
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
             cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
@@ -360,22 +360,22 @@ int main(int argc, char *argv[])
             printf("Consistency Error for %s\n", fname);
         }
     } else if (!strcmp(action, "dump")) {
-	int level = 1;
-	if ((argc - optind) > 3)
-	    level = atoi(argv[optind+3]);
-	cyrusdb_dump(db, level);
+        int level = 1;
+        if ((argc - optind) > 3)
+            level = atoi(argv[optind+3]);
+        cyrusdb_dump(db, level);
     } else if (!strcmp(action, "consistent")) {
-	if (cyrusdb_consistent(db)) {
-	    printf("No, not consistent\n");
-	} else {
-	    printf("Yes, consistent\n");
-	}
+        if (cyrusdb_consistent(db)) {
+            printf("No, not consistent\n");
+        } else {
+            printf("Yes, consistent\n");
+        }
     } else if (!strcmp(action, "repack")) {
-	if (cyrusdb_repack(db))
-	    printf("Failed to repack\n");
+        if (cyrusdb_repack(db))
+            printf("Failed to repack\n");
     } else if (!strcmp(action, "damage")) {
-	cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
-	assert(!tid);
+        cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
+        assert(!tid);
     } else {
         printf("Unknown action %s\n", action);
     }

@@ -61,17 +61,17 @@ static volatile sig_atomic_t gotsignal[_NSIG];
 static volatile pid_t killer_pid;
 
 static void sighandler(int sig, siginfo_t *si,
-		       void *ucontext __attribute__((unused)))
+                       void *ucontext __attribute__((unused)))
 {
     if (sig < 1 || sig >= _NSIG)
-	sig = _NSIG-1;
+        sig = _NSIG-1;
     gotsignal[sig] = 1;
 
     /* remember a process that sent us a fatal signal */
     if ((sig == SIGINT || sig == SIGQUIT || sig == SIGTERM) &&
-	si &&
-	si->si_code == SI_USER)
-	killer_pid = si->si_pid;
+        si &&
+        si->si_code == SI_USER)
+        killer_pid = si->si_pid;
 }
 
 EXPORTED void signals_add_handlers(int alarm)
@@ -91,18 +91,18 @@ EXPORTED void signals_add_handlers(int alarm)
 
     /* SIGALRM used as a syscall timeout, so we don't set SA_RESTART */
     if (alarm && sigaction(SIGALRM, &action, NULL) < 0) {
-	fatal("unable to install signal handler for SIGALRM", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGALRM", EC_TEMPFAIL);
     }
 
     /* no restartable SIGQUIT thanks */
     if (sigaction(SIGQUIT, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGQUIT", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGQUIT", EC_TEMPFAIL);
     if (sigaction(SIGINT, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGINT", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGINT", EC_TEMPFAIL);
     if (sigaction(SIGTERM, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
     if (sigaction(SIGUSR2, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
 
     signals_reset_sighup_handler(1);
 }
@@ -117,14 +117,14 @@ EXPORTED void signals_reset_sighup_handler(int restartable)
     action.sa_flags = 0;
 #ifdef SA_RESTART
     if (restartable) {
-	action.sa_flags |= SA_RESTART;
+        action.sa_flags |= SA_RESTART;
     }
 #endif
     action.sa_sigaction = sighandler;
     action.sa_flags |= SA_SIGINFO;
 
     if (sigaction(SIGHUP, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGHUP", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGHUP", EC_TEMPFAIL);
 }
 
 static shutdownfn *shutdown_cb = NULL;
@@ -152,20 +152,20 @@ static char *describe_process(pid_t pid)
     cmdline[0] = '\0';
     fd = open(buf, O_RDONLY, 0);
     if (fd >= 0) {
-	n = read(fd, cmdline, sizeof(cmdline)-1);
-	if (n > 0) {
-	    if (!cmdline[n-1])
-		n--;	    /* ignore trailing nul */
-	    for (i = 0 ; i < n ; i++) {
-		if (cmdline[i] == '\0')
-		    cmdline[i] = ' ';
-	    }
-	    cmdline[n] = '\0';
-	}
-	close(fd);
+        n = read(fd, cmdline, sizeof(cmdline)-1);
+        if (n > 0) {
+            if (!cmdline[n-1])
+                n--;        /* ignore trailing nul */
+            for (i = 0 ; i < n ; i++) {
+                if (cmdline[i] == '\0')
+                    cmdline[i] = ' ';
+            }
+            cmdline[n] = '\0';
+        }
+        close(fd);
     }
     if (!cmdline[0])
-	strcpy(cmdline, "unknown");
+        strcpy(cmdline, "unknown");
     snprintf(buf, sizeof(buf), "%d (%s)", (int)pid, cmdline);
     return xstrdup(buf);
 #else
@@ -180,32 +180,32 @@ static int signals_poll_mask(sigset_t *oldmaskp)
     int sig;
 
     if (!signals_in_shutdown &&
-	(gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM])) {
+        (gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM])) {
 
-	if (killer_pid && killer_pid != getppid()) {
-	    /* whine in syslog if we were sent a graceful shutdown signal
-	     * by anyone other than the master process.  */
-	    char *desc = describe_process(killer_pid);
-	    syslog(LOG_NOTICE, "graceful shutdown initiated by "
-			       "unexpected process %s", desc);
-	    free(desc);
-	}
-	else {
-	    syslog(LOG_NOTICE, "graceful shutdown");
-	}
+        if (killer_pid && killer_pid != getppid()) {
+            /* whine in syslog if we were sent a graceful shutdown signal
+             * by anyone other than the master process.  */
+            char *desc = describe_process(killer_pid);
+            syslog(LOG_NOTICE, "graceful shutdown initiated by "
+                               "unexpected process %s", desc);
+            free(desc);
+        }
+        else {
+            syslog(LOG_NOTICE, "graceful shutdown");
+        }
 
-	if (oldmaskp)
-	    sigprocmask(SIG_SETMASK, oldmaskp, NULL);
-	if (shutdown_cb) {
-	    signals_in_shutdown = 1;
-	    shutdown_cb(EC_TEMPFAIL);
-	}
-	else exit(EC_TEMPFAIL);
+        if (oldmaskp)
+            sigprocmask(SIG_SETMASK, oldmaskp, NULL);
+        if (shutdown_cb) {
+            signals_in_shutdown = 1;
+            shutdown_cb(EC_TEMPFAIL);
+        }
+        else exit(EC_TEMPFAIL);
     }
     for (sig = 1 ; sig < _NSIG ; sig++) {
-	if (sig == SIGUSR2) continue; /* only ever polled explicitly */
-	if (gotsignal[sig])
-	    return sig;
+        if (sig == SIGUSR2) continue; /* only ever polled explicitly */
+        if (gotsignal[sig])
+            return sig;
     }
     return 0;
 }
@@ -222,7 +222,7 @@ EXPORTED int signals_poll(void)
  * of Cyrus processes.
  */
 EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
-			    fd_set *efds, struct timeval *tout)
+                            fd_set *efds, struct timeval *tout)
 {
 #if HAVE_PSELECT
     /* pselect() closes the race between SIGCHLD arriving
@@ -248,16 +248,16 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
     signals_poll_mask(&oldmask);
 
     if (tout) {
-	ts.tv_sec = tout->tv_sec;
-	ts.tv_nsec = tout->tv_usec * 1000;
-	tsptr = &ts;
+        ts.tv_sec = tout->tv_sec;
+        ts.tv_nsec = tout->tv_usec * 1000;
+        tsptr = &ts;
     }
 
     /* pselect() allows the restartable signals to arrive */
     r = pselect(nfds, rfds, wfds, efds, tsptr, &oldmask);
 
     if (r < 0 && (errno == EAGAIN || errno == EINTR))
-	signals_poll_mask(&oldmask);
+        signals_poll_mask(&oldmask);
 
     /* restore the old signal mask */
     saved_errno = errno;
@@ -270,7 +270,7 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
 
     r = select(nfds, rfds, wfds, efds, tout);
     if (r < 0 && (errno == EAGAIN || errno == EINTR))
-	signals_poll();
+        signals_poll();
 
     return r;
 #endif
@@ -279,14 +279,14 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
 EXPORTED void signals_clear(int sig)
 {
     if (sig >= 0 && sig < _NSIG)
-	gotsignal[sig] = 0;
+        gotsignal[sig] = 0;
 }
 
 EXPORTED int signals_cancelled()
 {
     if (gotsignal[SIGUSR2]) {
-	gotsignal[SIGUSR2] = 0;
-	return 1;
+        gotsignal[SIGUSR2] = 0;
+        return 1;
     }
 
     return 0;

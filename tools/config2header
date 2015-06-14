@@ -69,10 +69,10 @@ my $CC;
 # Look for CC=xxx "assigments" in the argument list.
 #
 while ($#ARGV >= 0) {
-	last unless ($ARGV[0] =~ m/^(\S+)=(.*)$/);
-	eval "\$$1='$2';";
-	die "$@" if ($@);
-	shift @ARGV;
+        last unless ($ARGV[0] =~ m/^(\S+)=(.*)$/);
+        eval "\$$1='$2';";
+        die "$@" if ($@);
+        shift @ARGV;
 }
 
 my $use_gcc_extension = ($CC and $CC eq 'gcc');
@@ -95,7 +95,7 @@ print HFILE "\n";
 
 # prototypes
 my @opttype = ("OPT_NOTOPT","OPT_STRING","OPT_INT","OPT_SWITCH",
-	       "OPT_ENUM","OPT_STRINGLIST","OPT_BITFIELD");
+               "OPT_ENUM","OPT_STRINGLIST","OPT_BITFIELD");
 print HFILE "enum opttype {\n";
 while (my $opt = pop (@opttype)) {
     if ($#opttype == -1) {
@@ -142,115 +142,115 @@ while (<STDIN>) {
     # the union, and we need to ensure we are initilizing the union with
     # something of a type that is in the union.
     if (m|{\s*\"(.*?)\"\s*,\s*(\"?.*?\"?)\s*,\s*(.*?)\s*(\(.*\))?\s*}|) {
-	my $opt = $1;
-	my $def;
-	my $enums = "";
+        my $opt = $1;
+        my $def;
+        my $enums = "";
 
-	print HFILE "  IMAPOPT_", uc($opt), ",\n";
+        print HFILE "  IMAPOPT_", uc($opt), ",\n";
 
-	if ($3 eq "STRING") {
-	    $def = $use_gcc_extension
-			? "(union config_value)((const char *) $2)"
-			: "{(void *)($2)}";
-	} elsif ($3 eq "ENUM") {
-	    my @values = eval $4;
-	    my $e;
-	    my $v;
-	    my $count = 0;
+        if ($3 eq "STRING") {
+            $def = $use_gcc_extension
+                        ? "(union config_value)((const char *) $2)"
+                        : "{(void *)($2)}";
+        } elsif ($3 eq "ENUM") {
+            my @values = eval $4;
+            my $e;
+            my $v;
+            my $count = 0;
 
-	    # strip quotes from default value
-	    $def = substr($2, 1, -1);
-	    $e = "IMAP_ENUM_" . uc($opt) . "_" . uc($def);
-	    $e =~ s/[^0-9A-Z_a-z]/_/g;
-	    $def = $use_gcc_extension
-			? "(union config_value)((enum enum_value) $e)"
-			: "{(void *)($e)}";
+            # strip quotes from default value
+            $def = substr($2, 1, -1);
+            $e = "IMAP_ENUM_" . uc($opt) . "_" . uc($def);
+            $e =~ s/[^0-9A-Z_a-z]/_/g;
+            $def = $use_gcc_extension
+                        ? "(union config_value)((enum enum_value) $e)"
+                        : "{(void *)($e)}";
 
-	    # output the enum_options
-	    foreach $v (@values) {
-		$e = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
-		$e =~ s/[^0-9A-Z_a-z]/_/g;
-		$enums .= " { \"$v\" , $e },\n     ";
+            # output the enum_options
+            foreach $v (@values) {
+                $e = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
+                $e =~ s/[^0-9A-Z_a-z]/_/g;
+                $enums .= " { \"$v\" , $e },\n     ";
 
-		# if this is the first enum value, normalize to zero
-		if (!$count) { $e .= " = 0"; }
-		
-		# add this enum to enum_values
-		push(@enum_values, $e);
+                # if this is the first enum value, normalize to zero
+                if (!$count) { $e .= " = 0"; }
 
-		$count += 1;  # count the number of values
-	    }
+                # add this enum to enum_values
+                push(@enum_values, $e);
 
-	    # [re]set the size of the enum_options array
-	    if ($count > $enum_size) { $enum_size = $count; }
-	} elsif ($3 eq "STRINGLIST") {
-	    my @values = eval $4;
-	    my $v;
-	    my $count = 0;
+                $count += 1;  # count the number of values
+            }
 
-	    $def = $use_gcc_extension
-			? "(union config_value)((const char *) $2)"
-			: "{(void*)($2)}";
+            # [re]set the size of the enum_options array
+            if ($count > $enum_size) { $enum_size = $count; }
+        } elsif ($3 eq "STRINGLIST") {
+            my @values = eval $4;
+            my $v;
+            my $count = 0;
 
-	    # output the enum_options
-	    foreach $v (@values) {
-		$enums .= " { \"$v\" , IMAP_ENUM_ZERO },\n     ";
-		$count += 1;  # count the number of values
-	    }
+            $def = $use_gcc_extension
+                        ? "(union config_value)((const char *) $2)"
+                        : "{(void*)($2)}";
 
-	    # [re]set the size of the enum_options array
-	    if ($count > $enum_size) { $enum_size = $count; }
-	} elsif ($3 eq "BITFIELD") {
-	    my @values;
-	    my $e;
-	    my $v;
-	    my $count = 0;
+            # output the enum_options
+            foreach $v (@values) {
+                $enums .= " { \"$v\" , IMAP_ENUM_ZERO },\n     ";
+                $count += 1;  # count the number of values
+            }
 
-	    # strip quotes from default value
-	    $def = substr($2, 1, -1);
+            # [re]set the size of the enum_options array
+            if ($count > $enum_size) { $enum_size = $count; }
+        } elsif ($3 eq "BITFIELD") {
+            my @values;
+            my $e;
+            my $v;
+            my $count = 0;
 
-	    # build the bitwise-or of the defaults
-	    @values = split(' ', $def);
-	    $e = "";
-	    foreach $v (@values) {
-		my $ev = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
-		$ev =~ s/[^0-9A-Z_a-z]/_/g;
-		$e .= "$ev\n\t\t\t | ";
-	    }
-	    $e .= "0";
-	    $def = $use_gcc_extension
-			? "(union config_value)((unsigned long) $e)"
-			: "{(void *)($e)}";
+            # strip quotes from default value
+            $def = substr($2, 1, -1);
 
-	    # output the enum_options
-	    @values = eval $4;
-	    foreach $v (@values) {
-		$e = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
-		$e =~ s/[^0-9A-Z_a-z]/_/g;
-		$enums .= " { \"$v\" , $e },\n     ";
+            # build the bitwise-or of the defaults
+            @values = split(' ', $def);
+            $e = "";
+            foreach $v (@values) {
+                my $ev = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
+                $ev =~ s/[^0-9A-Z_a-z]/_/g;
+                $e .= "$ev\n\t\t\t | ";
+            }
+            $e .= "0";
+            $def = $use_gcc_extension
+                        ? "(union config_value)((unsigned long) $e)"
+                        : "{(void *)($e)}";
 
-		# add the corresponding bit value
-		$e .= " = (1<<$count)";
-		
-		# add this enum to enum_values
-		push(@enum_values, $e);
+            # output the enum_options
+            @values = eval $4;
+            foreach $v (@values) {
+                $e = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
+                $e =~ s/[^0-9A-Z_a-z]/_/g;
+                $enums .= " { \"$v\" , $e },\n     ";
 
-		$count += 1;  # count the number of values
-	    }
+                # add the corresponding bit value
+                $e .= " = (1<<$count)";
 
-	    # [re]set the size of the enum_options array
-	    if ($count > $enum_size) { $enum_size = $count; }
-	} else {
-	    $def = $use_gcc_extension
-			? "(union config_value)((long) $2)"
-			: "{(void*)$2}";
-	}
+                # add this enum to enum_values
+                push(@enum_values, $e);
 
-	print CFILE "  { IMAPOPT_", uc($opt), ", \"$1\", 0, OPT_$3,\n",
-	"    $def,\n    $def,\n    {$enums { NULL, IMAP_ENUM_ZERO } } },\n";
+                $count += 1;  # count the number of values
+            }
+
+            # [re]set the size of the enum_options array
+            if ($count > $enum_size) { $enum_size = $count; }
+        } else {
+            $def = $use_gcc_extension
+                        ? "(union config_value)((long) $2)"
+                        : "{(void*)$2}";
+        }
+
+        print CFILE "  { IMAPOPT_", uc($opt), ", \"$1\", 0, OPT_$3,\n",
+        "    $def,\n    $def,\n    {$enums { NULL, IMAP_ENUM_ZERO } } },\n";
     } else {
-	#chomp;
-	#print "rejected '$_'\n";
+        #chomp;
+        #print "rejected '$_'\n";
     }
 }
 
@@ -278,11 +278,11 @@ print HFILE <<EOF
 
 union config_value {
     $dummy_field
-    const char *s;	/* OPT_STRING, OPT_STRINGLIST */
-    long i;		/* OPT_INT */
-    long b;		/* OPT_SWITCH */
-    enum enum_value e;	/* OPT_ENUM */
-    unsigned long x;	/* OPT_BITFIELD */
+    const char *s;      /* OPT_STRING, OPT_STRINGLIST */
+    long i;             /* OPT_INT */
+    long b;             /* OPT_SWITCH */
+    enum enum_value e;  /* OPT_ENUM */
+    unsigned long x;    /* OPT_BITFIELD */
 };
 
 struct enum_option_s {

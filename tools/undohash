@@ -50,25 +50,25 @@ sub read_conf {
 
     open CONF, $file or die "can't open $file";
     while (<CONF>) {
-	if (/^#/) { 
-	    next; 
-	}
-	if (/\@include:\s+(.*)$/) {
-	    push @configs, $1;
-	}
-	if (/^configdirectory:\s+(.*)$/) {
-	    $confdir = $1;
-	}
-	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
-	    if (grep /$1/, @parts) {
-		next;
-	    }
-	    push @parts, $1;
-	}
-	if (/^hashimapspool:\s*(1|t|yes|on)/) {
-	    $hashispool = 1;
-	    print "i will also hash partitions.\n";
-	}
+        if (/^#/) {
+            next;
+        }
+        if (/\@include:\s+(.*)$/) {
+            push @configs, $1;
+        }
+        if (/^configdirectory:\s+(.*)$/) {
+            $confdir = $1;
+        }
+        if (/^(?:meta)?partition-.*:\s+(.*)$/) {
+            if (grep /$1/, @parts) {
+                next;
+            }
+            push @parts, $1;
+        }
+        if (/^hashimapspool:\s*(1|t|yes|on)/) {
+            $hashispool = 1;
+            print "i will also hash partitions.\n";
+        }
     }
     close CONF;
 }
@@ -88,11 +88,11 @@ chdir $confdir or die "couldn't change to $confdir";
 # *** user subdirectory; holds subscription files
 print "user ";
 chdir "user" or die "couldn't change to user subdir";
-foreach $i ("a".."z") { 
+foreach $i ("a".."z") {
     opendir SUB, $i;
     while ($s = readdir SUB) {
-	if ($s =~ /^\./s) { next; }
-	rename("$i/$s", "$s") or die "couldn't move $s back!";
+        if ($s =~ /^\./s) { next; }
+        rename("$i/$s", "$s") or die "couldn't move $s back!";
     }
     closedir SUB;
     rmdir "$i" or die "couldn't remove $i";
@@ -108,8 +108,8 @@ foreach $i ("a".."z") {
     rename ($i, ".$i") or die "couldn't rename $i to .$i";
     opendir SUB, ".$i";
     while ($s = readdir SUB) {
-	if ($s =~ /^\./s) { next; }
-	rename(".$i/$s", $s) or die "couldn't move $s back!";
+        if ($s =~ /^\./s) { next; }
+        rename(".$i/$s", $s) or die "couldn't move $s back!";
     }
     closedir SUB;
     rmdir ".$i" or die "couldn't remove .$i";
@@ -122,31 +122,31 @@ print "done\n";
 while ($hashispool && ($part = shift @parts)) {
     print "downgrading data partition $part...";
     chdir $part or die "couldn't chdir to $part";
-    
+
     foreach $i ("a".."z") {
-	rename ("$i", ".$i") or die "couldn't rename $i to .$i";
+        rename ("$i", ".$i") or die "couldn't rename $i to .$i";
     }
 
     # process each subdir
     foreach $i ("a".."z") {
-	print "$i ";
+        print "$i ";
 
-	opendir SUB, ".$i";
-	while ($s = readdir SUB) {
-	    if ($s =~ /^\./s) { next; }
-	    mkdir $s, 0755;	# ignore errors as it might already exist
+        opendir SUB, ".$i";
+        while ($s = readdir SUB) {
+            if ($s =~ /^\./s) { next; }
+            mkdir $s, 0755;     # ignore errors as it might already exist
 
-	    opendir MV, ".$i/$s";
-	    while ($t = readdir MV) {
-		if ($t =~ /^\./s) { next; }
-		rename (".$i/$s/$t", "$s/$t") or 
-		    die "couldn't rename .$i/$s/$t to $s/$t";
-	    }
-	    closedir MV;
-	}
-	closedir SUB;
-	rmdir ".$i";
+            opendir MV, ".$i/$s";
+            while ($t = readdir MV) {
+                if ($t =~ /^\./s) { next; }
+                rename (".$i/$s/$t", "$s/$t") or
+                    die "couldn't rename .$i/$s/$t to $s/$t";
+            }
+            closedir MV;
+        }
+        closedir SUB;
+        rmdir ".$i";
     }
-    
+
     print "done\n";
 }

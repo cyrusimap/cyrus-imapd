@@ -397,10 +397,10 @@ static void test_multi_group_mixed(void)
 
     a = NULL;
     parseaddr_list("Buddies: Fred Bloggs <fbloggs@fastmail.fm>, "
-		   "Sarah Jane Smith <sjsmith@gmail.com>;, "
-		   "foobar@fastmail.fm, "
-		   "group2: Fred Bloggs Junior <fbloggs_jr@fastmail.fm>;",
-		   &a);
+                   "Sarah Jane Smith <sjsmith@gmail.com>;, "
+                   "foobar@fastmail.fm, "
+                   "group2: Fred Bloggs Junior <fbloggs_jr@fastmail.fm>;",
+                   &a);
 
     cur = a;
 

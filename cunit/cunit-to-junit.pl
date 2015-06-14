@@ -17,10 +17,10 @@ sub get_child
     my ($node, $name) = @_;
 
     croak "Invalid document"
-	unless defined $node;
+        unless defined $node;
     my $kids = $node->getElementsByTagName($name, 0);
     croak "Invalid document: name=$name"
-	unless (defined $kids && $kids->getLength == 1);
+        unless (defined $kids && $kids->getLength == 1);
     return $kids->item(0);
 }
 
@@ -29,14 +29,14 @@ sub get_child_maybe
     my ($node, $name) = @_;
 
     croak "Invalid document"
-	unless defined $node;
+        unless defined $node;
     my $kids = $node->getElementsByTagName($name, 0);
     return undef
-	if !defined $kids;
+        if !defined $kids;
     return undef
-	if $kids->getLength == 0;
+        if $kids->getLength == 0;
     croak "Invalid document"
-	if $kids->getLength > 1;
+        if $kids->getLength > 1;
     return $kids->item(0);
 }
 
@@ -45,7 +45,7 @@ sub get_children
     my ($node, $name) = @_;
 
     croak "Invalid document"
-	unless defined $node;
+        unless defined $node;
     return ( $node->getElementsByTagName($name, 0) );
 }
 
@@ -54,12 +54,12 @@ sub get_content
     my ($node, $name) = @_;
 
     croak "Invalid document"
-	unless defined $node;
+        unless defined $node;
     my $s = $node->getFirstChild->getData;
     if (defined $s)
     {
-	$s =~ s/^\s+//;
-	$s =~ s/\s+$//;
+        $s =~ s/^\s+//;
+        $s =~ s/\s+$//;
     }
     return $s;
 }
@@ -75,10 +75,10 @@ sub get_suite
     return $existing[0] if scalar @existing;
 
     my $s = {
-	name => $sname,
-	nerrors => 0,
-	tests => [],
-	tests_by_name => {},
+        name => $sname,
+        nerrors => 0,
+        tests => [],
+        tests_by_name => {},
     };
     push(@suites, $s);
     return $s;
@@ -91,12 +91,12 @@ sub _add_test
     my $t = $s->{tests_by_name}->{$tname};
     if (!defined $t)
     {
-	$t = {
-	    name => $tname,
-	    errors => [],
-	};
-	push(@{$s->{tests}}, $t);
-	$s->{tests_by_name}->{$tname} = $t;
+        $t = {
+            name => $tname,
+            errors => [],
+        };
+        push(@{$s->{tests}}, $t);
+        $s->{tests_by_name}->{$tname} = $t;
     }
     return $t;
 }
@@ -112,7 +112,7 @@ sub add_fail
 {
     my ($s, $tname, $msg) = @_;
     printf STDERR "     Test \"%s\": fail\n     %s\n", $tname, $msg
-	    if $verbose;
+            if $verbose;
     my $t = _add_test($s, $tname);
     push(@{$t->{errors}}, $msg);
     $s->{nerrors}++;
@@ -131,55 +131,55 @@ foreach my $suite (get_children($result, 'CUNIT_RUN_SUITE'))
 
     if (defined $succ)
     {
-	my $s = get_suite(get_content(get_child($succ, 'SUITE_NAME')));
+        my $s = get_suite(get_content(get_child($succ, 'SUITE_NAME')));
 
-	foreach my $record (get_children($succ, 'CUNIT_RUN_TEST_RECORD'))
-	{
-	    my $tr;
+        foreach my $record (get_children($succ, 'CUNIT_RUN_TEST_RECORD'))
+        {
+            my $tr;
 
-	    $tr = get_child_maybe($record, 'CUNIT_RUN_TEST_SUCCESS');
-	    if (defined $tr)
-	    {
-		my $tname = get_content(get_child($tr, 'TEST_NAME'));
-		add_pass($s, $tname);
-		next;
-	    }
+            $tr = get_child_maybe($record, 'CUNIT_RUN_TEST_SUCCESS');
+            if (defined $tr)
+            {
+                my $tname = get_content(get_child($tr, 'TEST_NAME'));
+                add_pass($s, $tname);
+                next;
+            }
 
-	    foreach $tr (get_children($record, 'CUNIT_RUN_TEST_FAILURE'))
-	    {
-		my $tname = get_content(get_child($tr, 'TEST_NAME'));
-		my $fname = get_content(get_child($tr, 'FILE_NAME'));
-		my $lineno = get_content(get_child($tr, 'LINE_NUMBER'));
-		my $cond = get_content(get_child($tr, 'CONDITION'));
-		add_fail($s, $tname, "$fname:$lineno: $cond");
-		next;
-	    }
-	}
+            foreach $tr (get_children($record, 'CUNIT_RUN_TEST_FAILURE'))
+            {
+                my $tname = get_content(get_child($tr, 'TEST_NAME'));
+                my $fname = get_content(get_child($tr, 'FILE_NAME'));
+                my $lineno = get_content(get_child($tr, 'LINE_NUMBER'));
+                my $cond = get_content(get_child($tr, 'CONDITION'));
+                add_fail($s, $tname, "$fname:$lineno: $cond");
+                next;
+            }
+        }
     }
     elsif (defined $fail)
     {
-	# TODO: there must be a way in the jUnit output format
-	# to report a failure of the suite fixture code, but
-	# I have no idea what it is.  Instead use a fake test name.
-	my $s = get_suite(get_content(get_child($fail, 'SUITE_NAME')));
-	my $reason = get_content(get_child($fail, 'FAILURE_REASON'));
+        # TODO: there must be a way in the jUnit output format
+        # to report a failure of the suite fixture code, but
+        # I have no idea what it is.  Instead use a fake test name.
+        my $s = get_suite(get_content(get_child($fail, 'SUITE_NAME')));
+        my $reason = get_content(get_child($fail, 'FAILURE_REASON'));
 
-	my $tname = '__wtf';
-	if ($reason =~ m/cleanup/i)
-	{
-	    $tname = '__cleanup';
-	}
-	elsif ($reason =~ m/initialization/i)
-	{
-	    $tname = '__cleanup';
-	}
+        my $tname = '__wtf';
+        if ($reason =~ m/cleanup/i)
+        {
+            $tname = '__cleanup';
+        }
+        elsif ($reason =~ m/initialization/i)
+        {
+            $tname = '__cleanup';
+        }
 
-	add_fail($s, $tname, $reason);
+        add_fail($s, $tname, $reason);
     }
     else
     {
-	carp "Neither a CUNIT_RUN_SUITE_SUCCESS nor a " .
-	     "CUNIT_RUN_SUITE_FAILURE child are present";
+        carp "Neither a CUNIT_RUN_SUITE_SUCCESS nor a " .
+             "CUNIT_RUN_SUITE_FAILURE child are present";
     }
 
 }
@@ -205,19 +205,19 @@ foreach my $s (@suites)
 
     foreach my $t (@{$s->{tests}})
     {
-	$nrun++;
+        $nrun++;
 
-	my $telt = $sdoc->createElement('testcase');
-	$telt->setAttribute(time => "0.001");
-	$telt->setAttribute(name => $t->{name});
-	$selt->appendChild($telt);
+        my $telt = $sdoc->createElement('testcase');
+        $telt->setAttribute(time => "0.001");
+        $telt->setAttribute(name => $t->{name});
+        $selt->appendChild($telt);
 
-	foreach my $e (@{$t->{errors}})
-	{
-	    my $eelt = $sdoc->createElement('error');
-	    $eelt->appendChild($sdoc->createTextNode($e));
-	    $telt->appendChild($eelt);
-	}
+        foreach my $e (@{$t->{errors}})
+        {
+            my $eelt = $sdoc->createElement('error');
+            $eelt->appendChild($sdoc->createTextNode($e));
+            $telt->appendChild($eelt);
+        }
     }
 
     my $fname = $outbase . $s->{name} . '.xml';

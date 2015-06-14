@@ -4,27 +4,27 @@
  */
 
 body, p, blockquote {
-	font-family: Helvetica,Verdana,Ariel,sans;
-	font-size: 12pt;
-	color: black;
-	background: #f8f8ff;
+        font-family: Helvetica,Verdana,Ariel,sans;
+        font-size: 12pt;
+        color: black;
+        background: #f8f8ff;
 }
 
 h1, h2, h3 {
-	font-family: Helvetica,Verdana,Ariel,sans;
-	color: black;
-	background: #f8f8ff;
+        font-family: Helvetica,Verdana,Ariel,sans;
+        color: black;
+        background: #f8f8ff;
 }
 h1 { font-size: 18pt; }
 h2 { font-size: 14pt; }
 h3 { font-size: 12pt; }
 
 blockquote.src, blockquote.cmds {
-	font-family: Courier,fixed;
-	font-size: 12pt;
-	color: black;
-	background: #c0c0c0;
-	white-space: pre;
+        font-family: Courier,fixed;
+        font-size: 12pt;
+        color: black;
+        background: #c0c0c0;
+        white-space: pre;
 }
 
 span.note {

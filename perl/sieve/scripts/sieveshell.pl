@@ -75,7 +75,7 @@ GetOptions("a|authname:s" => \$authname,
 pod2usage(1) if $help;
 pod2usage(-exitstatus => 0, -verbose => 2) if $man;
 
-if ($#ARGV != 0) { 
+if ($#ARGV != 0) {
     pod2usage("$0: need a server\n");
 }
 
@@ -102,7 +102,7 @@ if (! $ex eq "") {
 sub list_cb {
 
   my($name, $isactive) = @_ ;
-  
+
   print "$name ";
   if ($isactive == 1) {
     print " <- active script\n";
@@ -130,7 +130,7 @@ sub prompt {
 
   if ($type eq "password") {
       system "stty -echo -icanon min 1 time 0 2>/dev/null || " .
-	     "stty -echo cbreak";
+             "stty -echo cbreak";
       $str = "\n";
   }
 
@@ -138,7 +138,7 @@ sub prompt {
 
   $b = <STDIN>;
   chop($b);
-  
+
   print $str;
   system "stty $ostty";
 
@@ -164,7 +164,7 @@ sub show_help {
 print "connecting to $acapserver\n";
 
 my $obj = sieve_get_handle($acapserver,
-			   "prompt", "prompt", "prompt", "prompt");
+                           "prompt", "prompt", "prompt", "prompt");
 
 if (!defined $obj) {
     die "unable to connect to server";
@@ -175,104 +175,104 @@ my $term = Term::ReadLine->new("sieveshell");
 $term->ornaments(0);
 
 while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
-  
+
   $term->addhistory($_);
 
   my @words = split ' ',$_;
   my $str;
     if ($#words < 0) {
-	next;
+        next;
     }
 
-    if (($words[0] eq "put") || 
-	($words[0] eq "p")) {
+    if (($words[0] eq "put") ||
+        ($words[0] eq "p")) {
       if($#words == 1) {
-	$ret = sieve_put_file($obj, $words[1]);
+        $ret = sieve_put_file($obj, $words[1]);
       } elsif ($#words == 2) {
-	$ret = sieve_put_file_withdest($obj, $words[1], $words[2]);
+        $ret = sieve_put_file_withdest($obj, $words[1], $words[2]);
       } else {
-	print $puthelp;
-	next;
+        print $puthelp;
+        next;
       }
-      if ($ret != 0) { 
-	my $errstr = sieve_get_error($obj);
-	$errstr = "unknown error" if(!defined($errstr));
-	print "upload failed: $errstr\n"; 
+      if ($ret != 0) {
+        my $errstr = sieve_get_error($obj);
+        $errstr = "unknown error" if(!defined($errstr));
+        print "upload failed: $errstr\n";
       }
-    } elsif (($words[0] eq "list") || 
-	     ($words[0] eq "l") || 
-	     ($words[0] eq "ls")) {
-	$ret = sieve_list($obj, "list_cb");
-	if ($ret != 0) { 
-	    my $errstr = sieve_get_error($obj);
-	    $errstr = "unknown error" if(!defined($errstr));
-	    print "list failed: $errstr\n";
-	}
-    } elsif (($words[0] eq "activate") || 
-	     ($words[0] eq "a")) {
-	if ($#words != 1) {
-	    print $activatehelp;
-	    next;
-	}
-	$ret = sieve_activate($obj, $words[1]);
-	if ($ret != 0) { 
-	    my $errstr = sieve_get_error($obj);
-	    $errstr = "unknown error" if(!defined($errstr));
-	    print "activate failed: $errstr\n";
-	}
-    } elsif (($words[0] eq "deactivate") || 
-	     ($words[0] eq "da")) {
-	if ($#words != 0) {
-	    print $deactivatehelp;
-	    next;
-	}
-	$ret = sieve_activate($obj, "");
-	if ($ret != 0) { 
-	    my $errstr = sieve_get_error($obj);
-	    $errstr = "unknown error" if(!defined($errstr));
-	    print "deactivate failed: $errstr\n";
-	}
-    } elsif (($words[0] eq "delete") || 
-	     ($words[0] eq "d")) {    
-	if ($#words != 1) {
-	    print $deletehelp;
-	    next;
-	}
-	$ret = sieve_delete($obj, $words[1]);
-	if ($ret != 0) { 
-	    my $errstr = sieve_get_error($obj);
-	    $errstr = "unknown error" if(!defined($errstr));
-	    print "delete failed: $errstr\n"; 
-	}
-    } elsif (($words[0] eq "get") || 
-	     ($words[0] eq "g")) {
-	if ($#words != 1 && $#words != 2) {
-	    print $gethelp;
-	    next;
-	}
-	$str = "";
-	$ret = sieve_get($obj, $words[1], $str);
-	if ($ret != 0) { 
-	    my $errstr = sieve_get_error($obj);
-	    $errstr = "unknown error" if(!defined($errstr));
-	    print "get failed: $errstr\n"; 
-	} else {
-	    if ($words[2]) {
-		open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";
-		print OUTPUT $str;
-		close(OUTPUT);
-	    } else {
-		print $str;
-	    }
-	}
+    } elsif (($words[0] eq "list") ||
+             ($words[0] eq "l") ||
+             ($words[0] eq "ls")) {
+        $ret = sieve_list($obj, "list_cb");
+        if ($ret != 0) {
+            my $errstr = sieve_get_error($obj);
+            $errstr = "unknown error" if(!defined($errstr));
+            print "list failed: $errstr\n";
+        }
+    } elsif (($words[0] eq "activate") ||
+             ($words[0] eq "a")) {
+        if ($#words != 1) {
+            print $activatehelp;
+            next;
+        }
+        $ret = sieve_activate($obj, $words[1]);
+        if ($ret != 0) {
+            my $errstr = sieve_get_error($obj);
+            $errstr = "unknown error" if(!defined($errstr));
+            print "activate failed: $errstr\n";
+        }
+    } elsif (($words[0] eq "deactivate") ||
+             ($words[0] eq "da")) {
+        if ($#words != 0) {
+            print $deactivatehelp;
+            next;
+        }
+        $ret = sieve_activate($obj, "");
+        if ($ret != 0) {
+            my $errstr = sieve_get_error($obj);
+            $errstr = "unknown error" if(!defined($errstr));
+            print "deactivate failed: $errstr\n";
+        }
+    } elsif (($words[0] eq "delete") ||
+             ($words[0] eq "d")) {
+        if ($#words != 1) {
+            print $deletehelp;
+            next;
+        }
+        $ret = sieve_delete($obj, $words[1]);
+        if ($ret != 0) {
+            my $errstr = sieve_get_error($obj);
+            $errstr = "unknown error" if(!defined($errstr));
+            print "delete failed: $errstr\n";
+        }
+    } elsif (($words[0] eq "get") ||
+             ($words[0] eq "g")) {
+        if ($#words != 1 && $#words != 2) {
+            print $gethelp;
+            next;
+        }
+        $str = "";
+        $ret = sieve_get($obj, $words[1], $str);
+        if ($ret != 0) {
+            my $errstr = sieve_get_error($obj);
+            $errstr = "unknown error" if(!defined($errstr));
+            print "get failed: $errstr\n";
+        } else {
+            if ($words[2]) {
+                open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";
+                print OUTPUT $str;
+                close(OUTPUT);
+            } else {
+                print $str;
+            }
+        }
     } elsif (($words[0] eq "quit") || ($words[0] eq "q")) {
         sieve_logout($obj);
-	exit 0;
+        exit 0;
     } elsif (($words[0] eq "help") || ($words[0] eq "?")) {
-	show_help();
+        show_help();
     } else {
-	print "Invalid command: $words[0]\n";
-    } 
+        print "Invalid command: $words[0]\n";
+    }
 }
 
 __END__
@@ -283,7 +283,7 @@ sieveshell - remotely manipulate sieve scripts
 
 =head1 SYNOPSIS
 
-sieveshell [B<--user>=I<user>] [B<--authname>=I<authname>] 
+sieveshell [B<--user>=I<user>] [B<--authname>=I<authname>]
 [B<--realm>=I<realm>] [B<--exec>=I<script>] I<server>[B<:>I<port>]
 
 sieveshell B<--help>
@@ -315,20 +315,20 @@ B<deactivate> deactivate all scripts.
 
 =over 4
 
-=item B<-u> I<user>, B<--user>=I<user> 
+=item B<-u> I<user>, B<--user>=I<user>
 
 The authorization name to request; by default, derived from the
 authentication credentials.
 
-=item B<-a> I<authname>, B<--authname>=I<authname> 
+=item B<-a> I<authname>, B<--authname>=I<authname>
 
 The user to use for authentication (defaults to current user).
 
-=item B<-r> I<realm>, B<--realm>=I<realm> 
+=item B<-r> I<realm>, B<--realm>=I<realm>
 
 The realm to attempt authentication in.
 
-=item B<-e> I<script>, B<--exec>=I<script> 
+=item B<-e> I<script>, B<--exec>=I<script>
 
 Instead of working interactively, run commands from I<script>, and
 exit when done.

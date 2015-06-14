@@ -1,11 +1,11 @@
 require ["reject", "fileinto", "imapflags", "vacation", "notify",
-	"vacation-seconds", "copy", "imap4flags", "relational",
-	"comparator-i;ascii-numeric"];
+        "vacation-seconds", "copy", "imap4flags", "relational",
+        "comparator-i;ascii-numeric"];
 
 #this is for the extra thigns we have added to sieve
 
 #action extensions
-#reject fileinto imapflags vacation notify 
+#reject fileinto imapflags vacation notify
 
 #REJECT
 ##############################################
@@ -69,10 +69,10 @@ fileinto :flags "" "INBOX.fileinto.nullflags";
 if header :contains "subject" "vacation"
 {
 
-vacation :days 5 
-	 :addresses ["me@blah.com" , "me@somewhereelse.com"]
+vacation :days 5
+         :addresses ["me@blah.com" , "me@somewhereelse.com"]
          :subject "i'm at the beach"
-	 "I'll respond in a week or two, when i get back";
+         "I'll respond in a week or two, when i get back";
 }
 
 #VACATION-SECONDS
@@ -81,9 +81,9 @@ if header :contains "subject" "vacation-seconds"
 {
 
 vacation :seconds 60
-	 :addresses ["me@blah.com" , "me@somewhereelse.com"]
+         :addresses ["me@blah.com" , "me@somewhereelse.com"]
          :subject "i'm out of the room"
-	 "I'll respond in a minute, when i get back";
+         "I'll respond in a minute, when i get back";
 }
 
 #NOTIFY and DENOTIFY
@@ -91,7 +91,7 @@ vacation :seconds 60
 if header :contains "subject" "notify"
 {notify  :high :id "foobar" :message "whee: $subject$";}
 
-if header :contains "subject" "not" 
+if header :contains "subject" "not"
 {denotify :is "foobar" :high;
 
 }
@@ -100,6 +100,6 @@ if header :contains "subject" "n2"
 {notify   :id "foobar" :message "whee: $subject$";}
 
 
-if header :contains "subject" "denotify" 
+if header :contains "subject" "denotify"
 {denotify;}
 

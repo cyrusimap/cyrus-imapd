@@ -11,7 +11,7 @@
 #include "libcyr_cfg.h"
 #include "libconfig.h"
 
-#define DBDIR			"test-mb-dbdir"
+#define DBDIR                   "test-mb-dbdir"
 
 struct result
 {
@@ -102,17 +102,17 @@ static void test_getset(void)
 }
 
 static int finder(const duplicate_key_t *dkey, time_t mark,
-		  unsigned long uid, void *rock)
+                  unsigned long uid, void *rock)
 {
     struct result **head = (struct result **)rock;
     struct result **tail;
     struct result *res;
 
 //     if (verbose)
-// 	fprintf(stderr, "found: id=\"%s\" to=\"%s\" date=\"%s\" "
-// 			"mark=%lu uid=%lu\n",
-// 			dkey->id, dkey->to, dkey->date,
-// 			(unsigned long)mark, (unsigned long)uid);
+//      fprintf(stderr, "found: id=\"%s\" to=\"%s\" date=\"%s\" "
+//                      "mark=%lu uid=%lu\n",
+//                      dkey->id, dkey->to, dkey->date,
+//                      (unsigned long)mark, (unsigned long)uid);
 
     /* remember arguments for later perusal */
     res = xzmalloc(sizeof(*res));
@@ -124,7 +124,7 @@ static int finder(const duplicate_key_t *dkey, time_t mark,
 
     /* append to the list.  yes, it's inefficient. */
     for (tail = head ; *tail ; tail = &(*tail)->next)
-	;
+        ;
     *tail = res;
 
     return 0;
@@ -273,27 +273,27 @@ static int set_up(void)
     int r;
     const char * const *d;
     static const char * const dirs[] = {
-	DBDIR,
-	DBDIR"/db",
-	NULL
+        DBDIR,
+        DBDIR"/db",
+        NULL
     };
 
     r = system("rm -rf " DBDIR);
     if (r)
-	return r;
+        return r;
 
     for (d = dirs ; *d ; d++) {
-	r = mkdir(*d, 0777);
-	if (r < 0) {
-	    int e = errno;
-	    perror(*d);
-	    return e;
-	}
+        r = mkdir(*d, 0777);
+        if (r < 0) {
+            int e = errno;
+            perror(*d);
+            return e;
+        }
     }
 
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     config_read_string(
-	"configdirectory: "DBDIR"/conf\n"
+        "configdirectory: "DBDIR"/conf\n"
     );
 
     cyrusdb_init();

@@ -90,13 +90,13 @@ extern int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi);
 
 /* store a zoneinfo entry */
 extern int zoneinfo_store(const char *tzid, struct zoneinfo *zi,
-			  struct txn **tid);
+                          struct txn **tid);
 
 /* process all zoneinfo entries (optionally matching 'find') */
 extern int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
-			 int (*proc)(const char *tzid, int tzidlen,
-				     struct zoneinfo *zi, void *rock),
-			 void *rock);
+                         int (*proc)(const char *tzid, int tzidlen,
+                                     struct zoneinfo *zi, void *rock),
+                         void *rock);
 
 /* close the database (optionally committing txn) */
 extern void zoneinfo_close(struct txn *tid);

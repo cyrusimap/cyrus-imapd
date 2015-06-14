@@ -70,7 +70,7 @@ struct trans
 
 static int real_gettimeofday(struct timeval *, ...);
 
-#define MAX_TRANS_STACK	5
+#define MAX_TRANS_STACK 5
 static int n_trans_stack = 0;
 static struct trans trans_stack[MAX_TRANS_STACK];
 static const struct trans identity = { 0, 0, 1, 1 };
@@ -254,8 +254,8 @@ static void test_time_slowdown(void)
     time_push_rate(1, 5);
 
     for (i = 0 ; i < 20 ; i++) {
-	time(&clock); fputs(ctime(&clock), stderr);
-	sleep(1);
+        time(&clock); fputs(ctime(&clock), stderr);
+        sleep(1);
     }
     time(&clock); fputs(ctime(&clock), stderr);
 

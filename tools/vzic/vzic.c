@@ -38,37 +38,37 @@
 
 /* By default we output Outlook-compatible output. If --pure is used we
    output pure output, with no changes to be compatible with Outlook. */
-gboolean VzicPureOutput			= FALSE;
+gboolean VzicPureOutput                 = FALSE;
 
-gboolean VzicDumpOutput			= FALSE;
-gboolean VzicDumpChanges		= FALSE;
-gboolean VzicDumpZoneNamesAndCoords	= TRUE;
+gboolean VzicDumpOutput                 = FALSE;
+gboolean VzicDumpChanges                = FALSE;
+gboolean VzicDumpZoneNamesAndCoords     = TRUE;
 gboolean VzicDumpZoneTranslatableStrings= FALSE;
-gboolean VzicNoRRules			= FALSE;
-gboolean VzicNoRDates			= FALSE;
-char*    VzicOutputDir			= "zoneinfo";
+gboolean VzicNoRRules                   = FALSE;
+gboolean VzicNoRDates                   = FALSE;
+char*    VzicOutputDir                  = "zoneinfo";
 char*    VzicUrlPrefix                  = NULL;
 char*    VzicOlsonDir                   = OLSON_DIR;
 
-GList*	 VzicTimeZoneNames		= NULL;
+GList*   VzicTimeZoneNames              = NULL;
 
-static void	convert_olson_file		(char		*olson_file,
-						 GHashTable	*zones_hash);
+static void     convert_olson_file              (char           *olson_file,
+                                                 GHashTable     *zones_hash);
 
-static void	usage				(void);
+static void     usage                           (void);
 
-static void	free_zone_data			(GArray		*zone_data);
-static void	free_rule_array			(gpointer	 key,
-						 gpointer	 value,
-						 gpointer	 data);
-static void	free_link_data			(gpointer	 key,
-						 gpointer	 value,
-						 gpointer	 data);
+static void     free_zone_data                  (GArray         *zone_data);
+static void     free_rule_array                 (gpointer        key,
+                                                 gpointer        value,
+                                                 gpointer        data);
+static void     free_link_data                  (gpointer        key,
+                                                 gpointer        value,
+                                                 gpointer        data);
 
 
 int
-main				(int		 argc,
-				 char		*argv[])
+main                            (int             argc,
+                                 char           *argv[])
 {
   int i;
   char directory[PATHNAME_BUFFER_SIZE];
@@ -204,8 +204,8 @@ main				(int		 argc,
 
 
 static void
-convert_olson_file		(char		*olson_file,
-				 GHashTable	*zones_hash)
+convert_olson_file              (char           *olson_file,
+                                 GHashTable     *zones_hash)
 {
 
   char input_filename[PATHNAME_BUFFER_SIZE];
@@ -218,7 +218,7 @@ convert_olson_file		(char		*olson_file,
   sprintf (input_filename, "%s/%s", VzicOlsonDir, olson_file);
 
   parse_olson_file (input_filename, &zone_data, &rule_data, &link_data,
-		    &max_until_year);
+                    &max_until_year);
 
   if (VzicDumpOutput) {
     sprintf (dump_filename, "%s/ZonesVzic/%s", VzicOutputDir, olson_file);
@@ -229,7 +229,7 @@ convert_olson_file		(char		*olson_file,
   }
 
   output_vtimezone_files (VzicOutputDir, zone_data, rule_data, link_data,
-			  zones_hash, max_until_year);
+                          zones_hash, max_until_year);
 
   free_zone_data (zone_data);
   g_hash_table_foreach (rule_data, free_rule_array, NULL);
@@ -240,7 +240,7 @@ convert_olson_file		(char		*olson_file,
 
 
 static void
-usage				(void)
+usage                           (void)
 {
   fprintf (stderr, "Usage: vzic [--dump] [--dump-changes] [--no-rrules] [--no-rdates] [--pure] [--output-dir <directory>] [--url-prefix <url>] [--olson-dir <directory>]\n");
 
@@ -255,7 +255,7 @@ usage				(void)
  */
 
 static void
-free_zone_data			(GArray		*zone_data)
+free_zone_data                  (GArray         *zone_data)
 {
   ZoneData *zone;
   ZoneLineData *zone_line;
@@ -281,9 +281,9 @@ free_zone_data			(GArray		*zone_data)
 
 
 static void
-free_rule_array			(gpointer	 key,
-				 gpointer	 value,
-				 gpointer	 data)
+free_rule_array                 (gpointer        key,
+                                 gpointer        value,
+                                 gpointer        data)
 {
   char *name = key;
   GArray *rule_array = value;
@@ -306,9 +306,9 @@ free_rule_array			(gpointer	 key,
 
 
 static void
-free_link_data			(gpointer	 key,
-				 gpointer	 value,
-				 gpointer	 data)
+free_link_data                  (gpointer        key,
+                                 gpointer        value,
+                                 gpointer        data)
 {
   GList *link = data;
 

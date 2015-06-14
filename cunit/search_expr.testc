@@ -14,11 +14,11 @@ static const char *userid = "fred";
 static struct auth_state *authstate = NULL;
 static int isadmin = 0;
 
-#define DATE1_RFC3501	"8-Dec-2012"
-#define DATE1_BEGIN	"1354885200"
-#define DATE1_MID	"1354928400"
-#define DATE1_END	"1354971600"
-#define DATE1_MID_TIME	1354928400
+#define DATE1_RFC3501   "8-Dec-2012"
+#define DATE1_BEGIN     "1354885200"
+#define DATE1_MID       "1354928400"
+#define DATE1_END       "1354971600"
+#define DATE1_MID_TIME  1354928400
 
 static void test_get_search_program(void)
 {
@@ -26,35 +26,35 @@ static void test_get_search_program(void)
 /*TODO: test charset */
 #define TESTCASE(in, exp_out) \
     { \
-	static const char _in[] = in; \
-	static const char expected_out[] = exp_out; \
-	static const char expected_errs[] = ""; \
-	struct searchargs *searchargs; \
-	int c; \
-	char *actual_out = NULL; \
-	struct protstream *pin; \
-	struct protstream *pout; \
-	struct buf actual_errs = BUF_INITIALIZER; \
+        static const char _in[] = in; \
+        static const char expected_out[] = exp_out; \
+        static const char expected_errs[] = ""; \
+        struct searchargs *searchargs; \
+        int c; \
+        char *actual_out = NULL; \
+        struct protstream *pin; \
+        struct protstream *pout; \
+        struct buf actual_errs = BUF_INITIALIZER; \
  \
-	searchargs = new_searchargs(".", 0, &ns, userid, authstate, isadmin); \
-	pin = prot_readmap(_in, sizeof(_in)-1); \
-	pout = prot_writebuf(&actual_errs); \
-	c = get_search_program(pin, pout, searchargs); \
-	CU_ASSERT_EQUAL(c, '\r'); \
-	buf_cstring(&actual_errs); \
-	CU_ASSERT_STRING_EQUAL(actual_errs.s, expected_errs); \
-	if (c != EOF) { \
-	    CU_ASSERT_EQUAL(searchargs->charset, 0); \
-	    CU_ASSERT_PTR_NOT_NULL(searchargs->root); \
-	    actual_out = search_expr_serialise(searchargs->root); \
-	    CU_ASSERT_STRING_EQUAL(actual_out, expected_out); \
-	} \
+        searchargs = new_searchargs(".", 0, &ns, userid, authstate, isadmin); \
+        pin = prot_readmap(_in, sizeof(_in)-1); \
+        pout = prot_writebuf(&actual_errs); \
+        c = get_search_program(pin, pout, searchargs); \
+        CU_ASSERT_EQUAL(c, '\r'); \
+        buf_cstring(&actual_errs); \
+        CU_ASSERT_STRING_EQUAL(actual_errs.s, expected_errs); \
+        if (c != EOF) { \
+            CU_ASSERT_EQUAL(searchargs->charset, 0); \
+            CU_ASSERT_PTR_NOT_NULL(searchargs->root); \
+            actual_out = search_expr_serialise(searchargs->root); \
+            CU_ASSERT_STRING_EQUAL(actual_out, expected_out); \
+        } \
  \
-	free(actual_out); \
-	buf_free(&actual_errs); \
-	prot_free(pin); \
-	prot_free(pout); \
-	freesearchargs(searchargs); \
+        free(actual_out); \
+        buf_free(&actual_errs); \
+        prot_free(pin); \
+        prot_free(pout); \
+        freesearchargs(searchargs); \
     }
 
     /*
@@ -63,225 +63,225 @@ static void test_get_search_program(void)
 
     /* <sequence set> */
     TESTCASE("1\r\n",
-	     "(and (match msgno 1))");
+             "(and (match msgno 1))");
     TESTCASE("1:4\r\n",
-	     "(and (match msgno 1:4))");
+             "(and (match msgno 1:4))");
     TESTCASE("1:*\r\n",
-	     "(and (match msgno 1:*))");
+             "(and (match msgno 1:*))");
     TESTCASE("1,3,5\r\n",
-	     "(and (match msgno 1,3,5))");
+             "(and (match msgno 1,3,5))");
     TESTCASE("1,3,5:7\r\n",
-	     "(and (match msgno 1,3,5:7))");
+             "(and (match msgno 1,3,5:7))");
 
     /* ALL */
     TESTCASE("all\r\n",
-	     "(and (true))");
+             "(and (true))");
 
     /* ANSWERED */
     TESTCASE("answered\r\n",
-	     "(and (match systemflags \\Answered))");
+             "(and (match systemflags \\Answered))");
 
     /* BCC <string> */
     TESTCASE("bcc \"shoreditch\"\r\n",
-	     "(and (match bcc \"SHOREDITCH\"))");
+             "(and (match bcc \"SHOREDITCH\"))");
 
     /* BEFORE <date> */
     TESTCASE("before "DATE1_RFC3501"\r\n",
-	     "(and (lt internaldate "DATE1_BEGIN"))");
+             "(and (lt internaldate "DATE1_BEGIN"))");
 
     /* BODY <string> */
     TESTCASE("body \"williamsburg\"\r\n",
-	     "(and (match body \"WILLIAMSBURG\"))");
+             "(and (match body \"WILLIAMSBURG\"))");
 
     /* CC <string> */
     TESTCASE("cc \"brooklyn\"\r\n",
-	     "(and (match cc \"BROOKLYN\"))");
+             "(and (match cc \"BROOKLYN\"))");
 
     /* DELETED */
     TESTCASE("deleted\r\n",
-	     "(and (match systemflags \\Deleted))");
+             "(and (match systemflags \\Deleted))");
 
     /* DRAFT */
     TESTCASE("draft\r\n",
-	     "(and (match systemflags \\Draft))");
+             "(and (match systemflags \\Draft))");
 
     /* FLAGGED */
     TESTCASE("flagged\r\n",
-	     "(and (match systemflags \\Flagged))");
+             "(and (match systemflags \\Flagged))");
 
     /* FROM <string> */
     TESTCASE("from \"dreamcatcher\"\r\n",
-	     "(and (match from \"DREAMCATCHER\"))");
+             "(and (match from \"DREAMCATCHER\"))");
 
     /* HEADER <field-name> <string> */
     TESTCASE("header \"Cosby\" \"Sweater\"\r\n",
-	     "(and (match header:cosby \"SWEATER\"))");
+             "(and (match header:cosby \"SWEATER\"))");
 
     /* KEYWORD <flag> */
     TESTCASE("keyword $Mustache\r\n",
-	     "(and (match keyword \"$Mustache\"))");
+             "(and (match keyword \"$Mustache\"))");
 
     /* LARGER <n> */
     TESTCASE("larger 123\r\n",
-	     "(and (gt size 123))");
+             "(and (gt size 123))");
 
     /* NEW */
     TESTCASE("new\r\n",
-	     "(and "
-		"(and "
-		    "(not "
-			"(match indexflags \\Seen)"
-		    ")"
-		    " "
-		    "(match indexflags \\Recent)"
-		")"
-	     ")");
+             "(and "
+                "(and "
+                    "(not "
+                        "(match indexflags \\Seen)"
+                    ")"
+                    " "
+                    "(match indexflags \\Recent)"
+                ")"
+             ")");
 
     /* NOT <search-key> */
     TESTCASE("not subject \"tumblr\"\r\n",
-	     "(and (not (match subject \"TUMBLR\")))");
+             "(and (not (match subject \"TUMBLR\")))");
 
     /* OLD */
     /* inexplicably, the RFC specifies OLD != NOT NEW */
     TESTCASE("old\r\n",
-	     "(and (not (match indexflags \\Recent)))");
+             "(and (not (match indexflags \\Recent)))");
 
     /* ON <date> */
     TESTCASE("on "DATE1_RFC3501"\r\n",
-	     "(and "
-		 "(and "
-		    "(lt internaldate "DATE1_END")"
-		    " "
-		    "(ge internaldate "DATE1_BEGIN")"
-		 ")"
-	     ")");
+             "(and "
+                 "(and "
+                    "(lt internaldate "DATE1_END")"
+                    " "
+                    "(ge internaldate "DATE1_BEGIN")"
+                 ")"
+             ")");
 
     /* OR <search-key> <search-key> */
     TESTCASE("or subject \"black\" subject \"white\"\r\n",
-	     "(and "
-		"(or "
-		    "(match subject \"BLACK\")"
-		    " "
-		    "(match subject \"WHITE\")"
-		")"
-	     ")");
+             "(and "
+                "(or "
+                    "(match subject \"BLACK\")"
+                    " "
+                    "(match subject \"WHITE\")"
+                ")"
+             ")");
 
     /* RECENT */
     TESTCASE("recent\r\n",
-	     "(and (match indexflags \\Recent))");
+             "(and (match indexflags \\Recent))");
 
     /* SEEN */
     TESTCASE("seen\r\n",
-	     "(and (match indexflags \\Seen))");
+             "(and (match indexflags \\Seen))");
 
     /* SENTBEFORE <date> */
     TESTCASE("sentbefore "DATE1_RFC3501"\r\n",
-	     "(and (lt sentdate "DATE1_BEGIN"))");
+             "(and (lt sentdate "DATE1_BEGIN"))");
 
     /* SENTON <date> */
     TESTCASE("senton "DATE1_RFC3501"\r\n",
-	     "(and "
-		 "(and "
-		    "(lt sentdate "DATE1_END")"
-		    " "
-		    "(ge sentdate "DATE1_BEGIN")"
-		 ")"
-	     ")");
+             "(and "
+                 "(and "
+                    "(lt sentdate "DATE1_END")"
+                    " "
+                    "(ge sentdate "DATE1_BEGIN")"
+                 ")"
+             ")");
 
     /* SENTSINCE <date> */
     /* SENTSINCE, like SINCE, includes the given date */
     TESTCASE("sentsince "DATE1_RFC3501"\r\n",
-	     "(and (ge sentdate "DATE1_BEGIN"))");
+             "(and (ge sentdate "DATE1_BEGIN"))");
 
     /* SINCE <date> */
     /* Note: BEFORE excludes the date, SINCE includes it */
     TESTCASE("since "DATE1_RFC3501"\r\n",
-	     "(and (ge internaldate "DATE1_BEGIN"))");
+             "(and (ge internaldate "DATE1_BEGIN"))");
 
     /* SMALLER <n> */
     /* Note: neither LARGER nor SMALLER includes the exact size */
     TESTCASE("smaller 456\r\n",
-	     "(and (lt size 456))");
+             "(and (lt size 456))");
 
     /* SUBJECT <string> */
     TESTCASE("subject \"selvage\"\r\n",
-	     "(and (match subject \"SELVAGE\"))");
+             "(and (match subject \"SELVAGE\"))");
 
     /* TEXT <string> */
     TESTCASE("text \"letterpress\"\r\n",
-	     "(and (match text \"LETTERPRESS\"))");
+             "(and (match text \"LETTERPRESS\"))");
 
     /* TO <string> */
     TESTCASE("to \"readymade\"\r\n",
-	     "(and (match to \"READYMADE\"))");
+             "(and (match to \"READYMADE\"))");
 
     /* UID <sequence set> */
     TESTCASE("uid 1\r\n",
-	     "(and (match uid 1))");
+             "(and (match uid 1))");
     TESTCASE("uid 1:4\r\n",
-	     "(and (match uid 1:4))");
+             "(and (match uid 1:4))");
     TESTCASE("uid 1:*\r\n",
-	     "(and (match uid 1:*))");
+             "(and (match uid 1:*))");
     TESTCASE("uid 1,3,5\r\n",
-	     "(and (match uid 1,3,5))");
+             "(and (match uid 1,3,5))");
     TESTCASE("uid 1,3,5:7\r\n",
-	     "(and (match uid 1,3,5:7))");
+             "(and (match uid 1,3,5:7))");
 
     /* UNANSWERED */
     TESTCASE("unanswered\r\n",
-	     "(and (not (match systemflags \\Answered)))");
+             "(and (not (match systemflags \\Answered)))");
 
     /* UNDELETED */
     TESTCASE("undeleted\r\n",
-	     "(and (not (match systemflags \\Deleted)))");
+             "(and (not (match systemflags \\Deleted)))");
 
     /* UNDRAFT */
     TESTCASE("undraft\r\n",
-	     "(and (not (match systemflags \\Draft)))");
+             "(and (not (match systemflags \\Draft)))");
 
     /* UNFLAGGED */
     TESTCASE("unflagged\r\n",
-	     "(and (not (match systemflags \\Flagged)))");
+             "(and (not (match systemflags \\Flagged)))");
 
     /* UNKEYWORD <flag> */
     TESTCASE("unkeyword $Viral\r\n",
-	     "(and (not (match keyword \"$Viral\")))");
+             "(and (not (match keyword \"$Viral\")))");
 
     /* UNSEEN */
     TESTCASE("unseen\r\n",
-	     "(and (not (match indexflags \\Seen)))");
+             "(and (not (match indexflags \\Seen)))");
 
     /* ( <search-key>* ) */
     TESTCASE("(subject \"bicycle\" to \"rights\")\r\n",
-	     "(and "
-		"(and "
-		    "(match subject \"BICYCLE\")"
-		    " "
-		    "(match to \"RIGHTS\")"
-		")"
-	     ")");
+             "(and "
+                "(and "
+                    "(match subject \"BICYCLE\")"
+                    " "
+                    "(match to \"RIGHTS\")"
+                ")"
+             ")");
     TESTCASE("not (subject \"bicycle\" to \"rights\")\r\n",
-	     "(and "
-		"(not "
-		    "(and "
-			"(match subject \"BICYCLE\")"
-			" "
-			"(match to \"RIGHTS\")"
-		    ")"
-		")"
-	     ")");
+             "(and "
+                "(not "
+                    "(and "
+                        "(match subject \"BICYCLE\")"
+                        " "
+                        "(match to \"RIGHTS\")"
+                    ")"
+                ")"
+             ")");
     TESTCASE("or (subject \"bicycle\" to \"rights\") from \"quinoa\"\r\n",
-	     "(and "
-		"(or "
-		    "(and "
-			"(match subject \"BICYCLE\")"
-			" "
-			"(match to \"RIGHTS\")"
-		    ")"
-		    " "
-		    "(match from \"QUINOA\")"
-		")"
-	     ")");
+             "(and "
+                "(or "
+                    "(and "
+                        "(match subject \"BICYCLE\")"
+                        " "
+                        "(match to \"RIGHTS\")"
+                    ")"
+                    " "
+                    "(match from \"QUINOA\")"
+                ")"
+             ")");
 
     /*
      * Search criteria from RFC 4551
@@ -292,29 +292,29 @@ static void test_get_search_program(void)
      * MODSEQ [<entry-name> <entry-type-req>] <mod-sequence-valzer>
      * but we don't support the optional but in the middle */
 /*TODO: negative should fail*/
-    TESTCASE("modseq 0\r\n",	    /* not a valid modseq but we can search on it */
-	     "(and (ge modseq 0))");
+    TESTCASE("modseq 0\r\n",        /* not a valid modseq but we can search on it */
+             "(and (ge modseq 0))");
     TESTCASE("modseq 1\r\n",
-	     "(and (ge modseq 1))");
+             "(and (ge modseq 1))");
     TESTCASE("modseq 12345\r\n",
-	     "(and (ge modseq 12345))");
+             "(and (ge modseq 12345))");
     TESTCASE("modseq 12345678\r\n",
-	     "(and (ge modseq 12345678))");
+             "(and (ge modseq 12345678))");
     /* MODSEQ is a 64b value */
     TESTCASE("modseq 12345678901\r\n",
-	     "(and (ge modseq 12345678901))");
-    TESTCASE("modseq 2147483647\r\n",	/* 0x7fff_ffff */
-	     "(and (ge modseq 2147483647))");
-    TESTCASE("modseq 2147483648\r\n",	/* 0x8000_0000 */
-	     "(and (ge modseq 2147483648))");
-    TESTCASE("modseq 4294967295\r\n",	/* 0xffff_ffff */
-	     "(and (ge modseq 4294967295))");
-    TESTCASE("modseq 4294967296\r\n",	/* 0x1_0000_0000 */
-	     "(and (ge modseq 4294967296))");
+             "(and (ge modseq 12345678901))");
+    TESTCASE("modseq 2147483647\r\n",   /* 0x7fff_ffff */
+             "(and (ge modseq 2147483647))");
+    TESTCASE("modseq 2147483648\r\n",   /* 0x8000_0000 */
+             "(and (ge modseq 2147483648))");
+    TESTCASE("modseq 4294967295\r\n",   /* 0xffff_ffff */
+             "(and (ge modseq 4294967295))");
+    TESTCASE("modseq 4294967296\r\n",   /* 0x1_0000_0000 */
+             "(and (ge modseq 4294967296))");
     TESTCASE("modseq 12345678901234\r\n",
-	     "(and (ge modseq 12345678901234))");
+             "(and (ge modseq 12345678901234))");
     TESTCASE("modseq 18446744073709551615\r\n", /* 0xffff_ffff_ffff_ffff */
-	     "(and (ge modseq 18446744073709551615))");
+             "(and (ge modseq 18446744073709551615))");
 
     /*
      * Search criteria from RFC 5032
@@ -326,13 +326,13 @@ static void test_get_search_program(void)
      * include the specified second */
     time_push_fixed(DATE1_MID_TIME);
     TESTCASE("older 0\r\n",
-	     "(and (le internaldate "DATE1_MID"))");
+             "(and (le internaldate "DATE1_MID"))");
     TESTCASE("older 43200\r\n",
-	     "(and (le internaldate "DATE1_BEGIN"))");
+             "(and (le internaldate "DATE1_BEGIN"))");
     TESTCASE("younger 0\r\n",
-	     "(and (ge internaldate "DATE1_MID"))");
+             "(and (ge internaldate "DATE1_MID"))");
     TESTCASE("younger 43200\r\n",
-	     "(and (ge internaldate "DATE1_BEGIN"))");
+             "(and (ge internaldate "DATE1_BEGIN"))");
     time_pop();
 
     /*
@@ -340,90 +340,90 @@ static void test_get_search_program(void)
      */
     /* ANNOTATION <entry> <attrib> </value> */
     TESTCASE("annotation /comment value \"stumptown\"\r\n",
-	     "(and (match annotation (entry \"/comment\" attrib \"value\" value \"stumptown\")))");
+             "(and (match annotation (entry \"/comment\" attrib \"value\" value \"stumptown\")))");
     TESTCASE("annotation /comment value.priv \"stumptown\"\r\n",
-	     "(and (match annotation (entry \"/comment\" attrib \"value.priv\" value \"stumptown\")))");
+             "(and (match annotation (entry \"/comment\" attrib \"value.priv\" value \"stumptown\")))");
     TESTCASE("annotation /comment value.shared \"stumptown\"\r\n",
-	     "(and (match annotation (entry \"/comment\" attrib \"value.shared\" value \"stumptown\")))");
+             "(and (match annotation (entry \"/comment\" attrib \"value.shared\" value \"stumptown\")))");
 
     /*
      * Cyrus vendor specific search criteria
      */
     /* FOLDER <mboxname> */
     TESTCASE("folder INBOX\r\n",
-	     "(and (match folder \"user.fred\"))");
+             "(and (match folder \"user.fred\"))");
     TESTCASE("folder inbox\r\n",
-	     "(and (match folder \"user.fred\"))");
+             "(and (match folder \"user.fred\"))");
     TESTCASE("folder inbox.GastroPub\r\n",
-	     "(and (match folder \"user.fred.GastroPub\"))");
+             "(and (match folder \"user.fred.GastroPub\"))");
 
     /* XLISTID <string> */
     TESTCASE("xlistid \"semiotics\"\r\n",
-	     "(and (match listid \"SEMIOTICS\"))");
+             "(and (match listid \"SEMIOTICS\"))");
 
     /* XCONTENTTYPE <string> */
     TESTCASE("xcontenttype text\r\n",
-	     "(and (match contenttype \"TEXT\"))");
+             "(and (match contenttype \"TEXT\"))");
     TESTCASE("xcontenttype \"text\"\r\n",
-	     "(and (match contenttype \"TEXT\"))");
+             "(and (match contenttype \"TEXT\"))");
     TESTCASE("xcontenttype \"plain\"\r\n",
-	     "(and (match contenttype \"PLAIN\"))");
+             "(and (match contenttype \"PLAIN\"))");
     TESTCASE("xcontenttype \"text_plain\"\r\n",
-	     "(and (match contenttype \"TEXT_PLAIN\"))");
+             "(and (match contenttype \"TEXT_PLAIN\"))");
 
 /* TODO: test that conv* are rejected if conversations:off */
     /* CONVFLAG <flag> */
     TESTCASE("convflag $Forage\r\n",
-	     "(and (match convflags \"$forage\"))");
+             "(and (match convflags \"$forage\"))");
 
     /* CONVREAD */
     TESTCASE("convread\r\n",
-	     "(and (match convflags \"\\Seen\"))");
+             "(and (match convflags \"\\Seen\"))");
 
     /* CONVUNREAD */
     TESTCASE("convunread\r\n",
-	     "(and (not (match convflags \"\\Seen\")))");
+             "(and (not (match convflags \"\\Seen\")))");
 
     /* CONVSEEN */
     TESTCASE("convseen\r\n",
-	     "(and (match convflags \"\\Seen\"))");
+             "(and (match convflags \"\\Seen\"))");
 
     /* CONVUNSEEN */
     TESTCASE("convunseen\r\n",
-	     "(and (not (match convflags \"\\Seen\")))");
+             "(and (not (match convflags \"\\Seen\")))");
 
     /* CONVMODSEQ <modseq> */
-    TESTCASE("convmodseq 0\r\n",	    /* not a valid modseq but we can search on it */
-	     "(and (ge convmodseq 0))");
+    TESTCASE("convmodseq 0\r\n",            /* not a valid modseq but we can search on it */
+             "(and (ge convmodseq 0))");
     TESTCASE("convmodseq 1\r\n",
-	     "(and (ge convmodseq 1))");
+             "(and (ge convmodseq 1))");
     TESTCASE("convmodseq 12345\r\n",
-	     "(and (ge convmodseq 12345))");
+             "(and (ge convmodseq 12345))");
     TESTCASE("convmodseq 12345678\r\n",
-	     "(and (ge convmodseq 12345678))");
+             "(and (ge convmodseq 12345678))");
     /* MODSEQ is a 64b value */
     TESTCASE("convmodseq 12345678901\r\n",
-	     "(and (ge convmodseq 12345678901))");
-    TESTCASE("convmodseq 2147483647\r\n",	/* 0x7fff_ffff */
-	     "(and (ge convmodseq 2147483647))");
-    TESTCASE("convmodseq 2147483648\r\n",	/* 0x8000_0000 */
-	     "(and (ge convmodseq 2147483648))");
-    TESTCASE("convmodseq 4294967295\r\n",	/* 0xffff_ffff */
-	     "(and (ge convmodseq 4294967295))");
-    TESTCASE("convmodseq 4294967296\r\n",	/* 0x1_0000_0000 */
-	     "(and (ge convmodseq 4294967296))");
+             "(and (ge convmodseq 12345678901))");
+    TESTCASE("convmodseq 2147483647\r\n",       /* 0x7fff_ffff */
+             "(and (ge convmodseq 2147483647))");
+    TESTCASE("convmodseq 2147483648\r\n",       /* 0x8000_0000 */
+             "(and (ge convmodseq 2147483648))");
+    TESTCASE("convmodseq 4294967295\r\n",       /* 0xffff_ffff */
+             "(and (ge convmodseq 4294967295))");
+    TESTCASE("convmodseq 4294967296\r\n",       /* 0x1_0000_0000 */
+             "(and (ge convmodseq 4294967296))");
     TESTCASE("convmodseq 12345678901234\r\n",
-	     "(and (ge convmodseq 12345678901234))");
+             "(and (ge convmodseq 12345678901234))");
     TESTCASE("convmodseq 18446744073709551615\r\n", /* 0xffff_ffff_ffff_ffff */
-	     "(and (ge convmodseq 18446744073709551615))");
+             "(and (ge convmodseq 18446744073709551615))");
 
     /* CID <cid> */
     TESTCASE("cid NIL\r\n",
-	     "(and (match cid NIL))");
+             "(and (match cid NIL))");
     TESTCASE("cid 0000000000000000\r\n",
-	     "(and (match cid NIL))");
+             "(and (match cid NIL))");
     TESTCASE("cid 0123456789abcdef\r\n",
-	     "(and (match cid 0123456789abcdef))");
+             "(and (match cid 0123456789abcdef))");
 
     /* TODO: charset */
     /* TODO: return */
@@ -569,28 +569,28 @@ static void test_duplicate(void)
 {
 #define TESTCASE(in) \
     { \
-	static const char _in[] = (in); \
-	search_expr_t *e; \
-	search_expr_t *edup; \
-	char *s; \
-	char *sdup; \
+        static const char _in[] = (in); \
+        search_expr_t *e; \
+        search_expr_t *edup; \
+        char *s; \
+        char *sdup; \
  \
-	e = search_expr_unserialise(_in); \
-	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
-	edup = search_expr_duplicate(e); \
-	CU_ASSERT_PTR_NOT_NULL_FATAL(edup); \
-	CU_ASSERT_PTR_NOT_EQUAL(e, edup); \
-	s = search_expr_serialise(e); \
-	CU_ASSERT_STRING_EQUAL(s, _in); \
-	free(s); \
-	sdup = search_expr_serialise(edup); \
-	CU_ASSERT_STRING_EQUAL(sdup, _in); \
-	free(sdup); \
-	search_expr_free(e); \
-	sdup = search_expr_serialise(edup); \
-	CU_ASSERT_STRING_EQUAL(sdup, _in); \
-	free(sdup); \
-	search_expr_free(edup); \
+        e = search_expr_unserialise(_in); \
+        CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+        edup = search_expr_duplicate(e); \
+        CU_ASSERT_PTR_NOT_NULL_FATAL(edup); \
+        CU_ASSERT_PTR_NOT_EQUAL(e, edup); \
+        s = search_expr_serialise(e); \
+        CU_ASSERT_STRING_EQUAL(s, _in); \
+        free(s); \
+        sdup = search_expr_serialise(edup); \
+        CU_ASSERT_STRING_EQUAL(sdup, _in); \
+        free(sdup); \
+        search_expr_free(e); \
+        sdup = search_expr_serialise(edup); \
+        CU_ASSERT_STRING_EQUAL(sdup, _in); \
+        free(sdup); \
+        search_expr_free(edup); \
     }
 
     TESTCASE("(false)");
@@ -614,18 +614,18 @@ static void test_normalise(void)
 {
 #define TESTCASE(in, exp_out) \
     { \
-	static const char _in[] = (in); \
-	static const char expected_out[] = (exp_out); \
-	search_expr_t *e; \
-	char *s; \
+        static const char _in[] = (in); \
+        static const char expected_out[] = (exp_out); \
+        search_expr_t *e; \
+        char *s; \
  \
-	e = search_expr_unserialise(_in); \
-	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
-	search_expr_normalise(&e); \
-	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
-	s = search_expr_serialise(e); \
-	CU_ASSERT_STRING_EQUAL(s, expected_out); \
-	search_expr_free(e); \
+        e = search_expr_unserialise(_in); \
+        CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+        search_expr_normalise(&e); \
+        CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+        s = search_expr_serialise(e); \
+        CU_ASSERT_STRING_EQUAL(s, expected_out); \
+        search_expr_free(e); \
     }
 
     /*
@@ -633,84 +633,84 @@ static void test_normalise(void)
      * is already in DNF.
      */
     TESTCASE("(false)",
-	     "(false)");
+             "(false)");
     TESTCASE("(true)",
-	     "(true)");
+             "(true)");
     TESTCASE("(match subject \"ETSY\")",
-	     "(match subject \"ETSY\")");
+             "(match subject \"ETSY\")");
     TESTCASE("(le size 123)",
-	     "(le size 123)");
+             "(le size 123)");
     TESTCASE("(lt size 123)",
-	     "(lt size 123)");
+             "(lt size 123)");
     TESTCASE("(ge size 123)",
-	     "(ge size 123)");
+             "(ge size 123)");
     TESTCASE("(gt size 123)",
-	     "(gt size 123)");
+             "(gt size 123)");
 
     /*
      * A tree comprising a single comparison node
      * under a NOT node is already in DNF.
      */
     TESTCASE("(not (false))",
-	     "(not (false))");
+             "(not (false))");
     TESTCASE("(not (true))",
-	     "(not (true))");
+             "(not (true))");
     TESTCASE("(not (match subject \"ETSY\"))",
-	     "(not (match subject \"ETSY\"))");
+             "(not (match subject \"ETSY\"))");
     TESTCASE("(not (le size 123))",
-	     "(not (le size 123))");
+             "(not (le size 123))");
     TESTCASE("(not (lt size 123))",
-	     "(not (lt size 123))");
+             "(not (lt size 123))");
     TESTCASE("(not (ge size 123))",
-	     "(not (ge size 123))");
+             "(not (ge size 123))");
     TESTCASE("(not (gt size 123))",
-	     "(not (gt size 123))");
+             "(not (gt size 123))");
 
     /*
      * Ordering of nodes.
      */
     TESTCASE("(and "
-		"(match subject \"ALPHA\")"
-		" "
-		"(match subject \"BETA\")"
-		" "
-		"(match subject \"GAMMA\")"
-	     ")",
-	     "(and "
-		"(match subject \"ALPHA\")"
-		" "
-		"(match subject \"BETA\")"
-		" "
-		"(match subject \"GAMMA\")"
-	     ")");
+                "(match subject \"ALPHA\")"
+                " "
+                "(match subject \"BETA\")"
+                " "
+                "(match subject \"GAMMA\")"
+             ")",
+             "(and "
+                "(match subject \"ALPHA\")"
+                " "
+                "(match subject \"BETA\")"
+                " "
+                "(match subject \"GAMMA\")"
+             ")");
     TESTCASE("(and "
-		"(match subject \"GAMMA\")"
-		" "
-		"(match subject \"BETA\")"
-		" "
-		"(match subject \"ALPHA\")"
-	     ")",
-	     "(and "
-		"(match subject \"ALPHA\")"
-		" "
-		"(match subject \"BETA\")"
-		" "
-		"(match subject \"GAMMA\")"
-	     ")");
+                "(match subject \"GAMMA\")"
+                " "
+                "(match subject \"BETA\")"
+                " "
+                "(match subject \"ALPHA\")"
+             ")",
+             "(and "
+                "(match subject \"ALPHA\")"
+                " "
+                "(match subject \"BETA\")"
+                " "
+                "(match subject \"GAMMA\")"
+             ")");
     TESTCASE("(and "
-		"(match subject \"GAMMA\")"
-		" "
-		"(match subject \"ALPHA\")"
-		" "
-		"(match subject \"BETA\")"
-	     ")",
-	     "(and "
-		"(match subject \"ALPHA\")"
-		" "
-		"(match subject \"BETA\")"
-		" "
-		"(match subject \"GAMMA\")"
-	     ")");
+                "(match subject \"GAMMA\")"
+                " "
+                "(match subject \"ALPHA\")"
+                " "
+                "(match subject \"BETA\")"
+             ")",
+             "(and "
+                "(match subject \"ALPHA\")"
+                " "
+                "(match subject \"BETA\")"
+                " "
+                "(match subject \"GAMMA\")"
+             ")");
 
     /*
      * A tree comprising a single conjunctive node
@@ -718,11 +718,11 @@ static void test_normalise(void)
      * negations of comparison nodes, is already in DNF.
      */
     TESTCASE("(and (le size 123) (match subject \"ETSY\"))",
-	     "(and (le size 123) (match subject \"ETSY\"))");
+             "(and (le size 123) (match subject \"ETSY\"))");
     TESTCASE("(and (not (le size 123)) (match subject \"ETSY\"))",
-	     "(and (match subject \"ETSY\") (not (le size 123)))");
+             "(and (match subject \"ETSY\") (not (le size 123)))");
     TESTCASE("(and (le size 123) (not (match subject \"ETSY\")))",
-	     "(and (le size 123) (not (match subject \"ETSY\")))");
+             "(and (le size 123) (not (match subject \"ETSY\")))");
 
     /*
      * A tree comprising a single disjunctive node
@@ -730,11 +730,11 @@ static void test_normalise(void)
      * negations of comparison nodes, is already in DNF.
      */
     TESTCASE("(or (le size 123) (match subject \"ETSY\"))",
-	     "(or (le size 123) (match subject \"ETSY\"))");
+             "(or (le size 123) (match subject \"ETSY\"))");
     TESTCASE("(or (not (le size 123)) (match subject \"ETSY\"))",
-	     "(or (match subject \"ETSY\") (not (le size 123)))");
+             "(or (match subject \"ETSY\") (not (le size 123)))");
     TESTCASE("(or (le size 123) (not (match subject \"ETSY\")))",
-	     "(or (le size 123) (not (match subject \"ETSY\")))");
+             "(or (le size 123) (not (match subject \"ETSY\")))");
 
     /*
      * A tree already in fully populated DNF: one disjunctive
@@ -742,290 +742,290 @@ static void test_normalise(void)
      * then comparisons.
      */
     TESTCASE("(or "
-		"(and "
-		    "(le size 123)"
-		    " "
-		    "(not "
-			"(match subject \"ETSY\")"
-		    ")"
-		")"
-		" "
-		"(and "
-		    "(not "
-			"(le size 456)"
-		    ")"
-		    " "
-		    "(match subject \"TUMBLR\")"
-		")"
-	     ")",
-	     "(or "
-		"(and "
-		    "(le size 123)"
-		    " "
-		    "(not "
-			"(match subject \"ETSY\")"
-		    ")"
-		")"
-		" "
-		"(and "
-		    "(match subject \"TUMBLR\")"
-		    " "
-		    "(not "
-			"(le size 456)"
-		    ")"
-		")"
-	     ")");
+                "(and "
+                    "(le size 123)"
+                    " "
+                    "(not "
+                        "(match subject \"ETSY\")"
+                    ")"
+                ")"
+                " "
+                "(and "
+                    "(not "
+                        "(le size 456)"
+                    ")"
+                    " "
+                    "(match subject \"TUMBLR\")"
+                ")"
+             ")",
+             "(or "
+                "(and "
+                    "(le size 123)"
+                    " "
+                    "(not "
+                        "(match subject \"ETSY\")"
+                    ")"
+                ")"
+                " "
+                "(and "
+                    "(match subject \"TUMBLR\")"
+                    " "
+                    "(not "
+                        "(le size 456)"
+                    ")"
+                ")"
+             ")");
 
     /*
      * Elimination of trivial nodes
      */
     TESTCASE("(and "
-		"(match subject \"COSBY\")"
-	     ")",
-	    "(match subject \"COSBY\")");
+                "(match subject \"COSBY\")"
+             ")",
+            "(match subject \"COSBY\")");
     TESTCASE("(or "
-		"(match subject \"COSBY\")"
-	     ")",
-	    "(match subject \"COSBY\")");
+                "(match subject \"COSBY\")"
+             ")",
+            "(match subject \"COSBY\")");
     TESTCASE("(and (not) (match subject \"COSBY\"))",
-	    "(match subject \"COSBY\")");
+            "(match subject \"COSBY\")");
     TESTCASE("(or (not) (match subject \"COSBY\"))",
-	    "(match subject \"COSBY\")");
+            "(match subject \"COSBY\")");
 
     /*
      * Combining similar parent & child nodes
      */
     TESTCASE("(and "
-		"(match subject \"COSBY\")"
-		" "
-		"(and "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"TUMBLR\")"
-		")"
-		" "
-		"(match subject \"SWEATER\")"
-	     ")",
-	    "(and "
-		"(le size 123)"
-		" "
-		"(match subject \"COSBY\")"
-		" "
-		"(match subject \"SWEATER\")"
-		" "
-		"(match subject \"TUMBLR\")"
-	     ")");
+                "(match subject \"COSBY\")"
+                " "
+                "(and "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"TUMBLR\")"
+                ")"
+                " "
+                "(match subject \"SWEATER\")"
+             ")",
+            "(and "
+                "(le size 123)"
+                " "
+                "(match subject \"COSBY\")"
+                " "
+                "(match subject \"SWEATER\")"
+                " "
+                "(match subject \"TUMBLR\")"
+             ")");
     TESTCASE("(or "
-		"(match subject \"COSBY\")"
-		" "
-		"(or "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"TUMBLR\")"
-		")"
-		" "
-		"(match subject \"SWEATER\")"
-	     ")",
-	     "(or "
-		"(le size 123)"
-		" "
-		"(match subject \"COSBY\")"
-		" "
-		"(match subject \"SWEATER\")"
-		" "
-		"(match subject \"TUMBLR\")"
-	     ")");
+                "(match subject \"COSBY\")"
+                " "
+                "(or "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"TUMBLR\")"
+                ")"
+                " "
+                "(match subject \"SWEATER\")"
+             ")",
+             "(or "
+                "(le size 123)"
+                " "
+                "(match subject \"COSBY\")"
+                " "
+                "(match subject \"SWEATER\")"
+                " "
+                "(match subject \"TUMBLR\")"
+             ")");
     TESTCASE("(not "
-		"(not "
-		    "(match subject \"SELVAGE\")"
-		")"
-	     ")",
-	     "(match subject \"SELVAGE\")");
+                "(not "
+                    "(match subject \"SELVAGE\")"
+                ")"
+             ")",
+             "(match subject \"SELVAGE\")");
     TESTCASE("(not "
-		"(not "
-		    "(not "
-			"(match subject \"SELVAGE\")"
-		    ")"
-		")"
-	     ")",
-	     "(not "
-		"(match subject \"SELVAGE\")"
-	     ")");
+                "(not "
+                    "(not "
+                        "(match subject \"SELVAGE\")"
+                    ")"
+                ")"
+             ")",
+             "(not "
+                "(match subject \"SELVAGE\")"
+             ")");
     TESTCASE("(not "
-		"(not "
-		    "(not "
-			"(not "
-			    "(match subject \"SELVAGE\")"
-			")"
-		    ")"
-		")"
-	     ")",
-	     "(match subject \"SELVAGE\")");
+                "(not "
+                    "(not "
+                        "(not "
+                            "(match subject \"SELVAGE\")"
+                        ")"
+                    ")"
+                ")"
+             ")",
+             "(match subject \"SELVAGE\")");
 
     /*
      * Applying DeMorgan's laws to invert an AND or OR
      * which is a child or a NOT.
      */
     TESTCASE("(not "
-		"(and "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")",
-	     "(or "
-		"(not "
-		    "(le size 123)"
-		")"
-		" "
-		"(not "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")");
+                "(and "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")",
+             "(or "
+                "(not "
+                    "(le size 123)"
+                ")"
+                " "
+                "(not "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")");
     TESTCASE("(not "
-		"(or "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")",
-	     "(and "
-		"(not "
-		    "(le size 123)"
-		")"
-		" "
-		"(not "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")");
+                "(or "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")",
+             "(and "
+                "(not "
+                    "(le size 123)"
+                ")"
+                " "
+                "(not "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")");
 
     /*
      * DeMorgan's laws plus combination of similar nodes
      */
     TESTCASE("(not "
-		"(and "
-		    "(not "
-			"(le size 123)"
-		    ")"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")",
-	     "(or "
-		"(le size 123)"
-		" "
-		"(not "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")");
+                "(and "
+                    "(not "
+                        "(le size 123)"
+                    ")"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")",
+             "(or "
+                "(le size 123)"
+                " "
+                "(not "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")");
     TESTCASE("(not "
-		"(or "
-		    "(not "
-			"(le size 123)"
-		    ")"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")",
-	     "(and "
-		"(le size 123)"
-		" "
-		"(not "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")");
+                "(or "
+                    "(not "
+                        "(le size 123)"
+                    ")"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")",
+             "(and "
+                "(le size 123)"
+                " "
+                "(not "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")");
 
     /*
      * Distribution.
      */
     TESTCASE("(and "
-		"(match subject \"TUMBLR\")"
-		" "
-		"(or "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")",
-	     "(or "
-		"(and "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"TUMBLR\")"
-		")"
-		" "
-		"(and "
-		    "(match subject \"ETSY\")"
-		    " "
-		    "(match subject \"TUMBLR\")"
-		")"
-	     ")");
+                "(match subject \"TUMBLR\")"
+                " "
+                "(or "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")",
+             "(or "
+                "(and "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"TUMBLR\")"
+                ")"
+                " "
+                "(and "
+                    "(match subject \"ETSY\")"
+                    " "
+                    "(match subject \"TUMBLR\")"
+                ")"
+             ")");
     TESTCASE("(and "
-		"(or "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-		" "
-		"(match subject \"TUMBLR\")"
-	     ")",
-	     "(or "
-		"(and "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"TUMBLR\")"
-		")"
-		" "
-		"(and "
-		    "(match subject \"ETSY\")"
-		    " "
-		    "(match subject \"TUMBLR\")"
-		")"
-	     ")");
+                "(or "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+                " "
+                "(match subject \"TUMBLR\")"
+             ")",
+             "(or "
+                "(and "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"TUMBLR\")"
+                ")"
+                " "
+                "(and "
+                    "(match subject \"ETSY\")"
+                    " "
+                    "(match subject \"TUMBLR\")"
+                ")"
+             ")");
     TESTCASE("(and "
-		"(match subject \"COSBY\")"
-		" "
-		"(or "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-		" "
-		"(match subject \"SWEATER\")"
-	     ")",
-	     "(or "
-		"(and "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"COSBY\")"
-		    " "
-		    "(match subject \"SWEATER\")"
-		")"
-		" "
-		"(and "
-		    "(match subject \"COSBY\")"
-		    " "
-		    "(match subject \"ETSY\")"
-		    " "
-		    "(match subject \"SWEATER\")"
-		")"
-	     ")");
+                "(match subject \"COSBY\")"
+                " "
+                "(or "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+                " "
+                "(match subject \"SWEATER\")"
+             ")",
+             "(or "
+                "(and "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"COSBY\")"
+                    " "
+                    "(match subject \"SWEATER\")"
+                ")"
+                " "
+                "(and "
+                    "(match subject \"COSBY\")"
+                    " "
+                    "(match subject \"ETSY\")"
+                    " "
+                    "(match subject \"SWEATER\")"
+                ")"
+             ")");
 
     /*
      * Distribution plus elimination of trivial nodes
      */
     TESTCASE("(and "
-		"(or "
-		    "(le size 123)"
-		    " "
-		    "(match subject \"ETSY\")"
-		")"
-	     ")",
-	     "(or "
-		"(le size 123)"
-		" "
-		"(match subject \"ETSY\")"
-	     ")");
+                "(or "
+                    "(le size 123)"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+             ")",
+             "(or "
+                "(le size 123)"
+                " "
+                "(match subject \"ETSY\")"
+             ")");
 
 #undef TESTCASE
 }
@@ -1034,16 +1034,16 @@ static void test_countability(void)
 {
 #define TESTCASE(in, exp) \
     { \
-	static const char _in[] = (in); \
-	unsigned int expected = (exp); \
-	search_expr_t *e; \
-	unsigned int actual; \
+        static const char _in[] = (in); \
+        unsigned int expected = (exp); \
+        search_expr_t *e; \
+        unsigned int actual; \
  \
-	e = search_expr_unserialise(_in); \
-	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
-	actual = search_expr_get_countability(e); \
-	CU_ASSERT_EQUAL(actual, expected); \
-	search_expr_free(e); \
+        e = search_expr_unserialise(_in); \
+        CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+        actual = search_expr_get_countability(e); \
+        CU_ASSERT_EQUAL(actual, expected); \
+        search_expr_free(e); \
     }
 
     TESTCASE("(true)", SEC_EXISTS);
@@ -1060,11 +1060,11 @@ static void test_countability(void)
     TESTCASE("(match subject \"ETSY\")", SEC_UNCOUNTED);
     TESTCASE("(not (match subject \"ETSY\"))", SEC_UNCOUNTED|SEC_NOT);
     TESTCASE("(and (match indexflags \\Seen) (match subject \"ETSY\"))",
-	     SEC_UNCOUNTED|SEC_SEEN);
+             SEC_UNCOUNTED|SEC_SEEN);
     TESTCASE("(not (and (match indexflags \\Seen) (match subject \"ETSY\")))",
-	     SEC_UNCOUNTED|SEC_SEEN|SEC_NOT);
+             SEC_UNCOUNTED|SEC_SEEN|SEC_NOT);
     TESTCASE("(and (not (match indexflags \\Seen)) (match subject \"ETSY\"))",
-	     SEC_UNCOUNTED|SEC_SEEN|SEC_NOT);
+             SEC_UNCOUNTED|SEC_SEEN|SEC_NOT);
 
 #undef TESTCASE
 }
@@ -1075,12 +1075,12 @@ static void add_subquery(const char *mboxname, search_expr_t *indexed, search_ex
     char *s;
 
     if (mboxname)
-	buf_printf(buf, "mboxname \"%s\" ", mboxname);
+        buf_printf(buf, "mboxname \"%s\" ", mboxname);
 
     if (indexed) {
-	s = search_expr_serialise(indexed);
-	buf_printf(buf, "indexed %s ", s);
-	free(s);
+        s = search_expr_serialise(indexed);
+        buf_printf(buf, "indexed %s ", s);
+        free(s);
     }
 
     s = search_expr_serialise(e);
@@ -1098,16 +1098,16 @@ static void test_split_by_folder_and_index(void)
 {
 #define TESTCASE(in, exp) \
     { \
-	static const char _in[] = (in); \
-	static const char expected[] = (exp); \
-	search_expr_t *e; \
-	struct buf actual = BUF_INITIALIZER; \
+        static const char _in[] = (in); \
+        static const char expected[] = (exp); \
+        search_expr_t *e; \
+        struct buf actual = BUF_INITIALIZER; \
  \
-	e = search_expr_unserialise(_in); \
-	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
-	search_expr_split_by_folder_and_index(e, add_subquery, &actual); \
-	CU_ASSERT_STRING_EQUAL(actual.s, expected); \
-	buf_free(&actual); \
+        e = search_expr_unserialise(_in); \
+        CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+        search_expr_split_by_folder_and_index(e, add_subquery, &actual); \
+        CU_ASSERT_STRING_EQUAL(actual.s, expected); \
+        buf_free(&actual); \
     }
 
     /* Note, we expect that a (match message-id) node is NOT indexable
@@ -1116,112 +1116,112 @@ static void test_split_by_folder_and_index(void)
     /* comparison nodes and negations of comparison nodes, which don't
      * match any folders, get a NULL mboxname */
     TESTCASE("(false)",
-	     "(false)\n");
+             "(false)\n");
     TESTCASE("(true)",
-	     "(true)\n");
+             "(true)\n");
     TESTCASE("(match message-id \"ETSY\")",
-	     "(match message-id \"ETSY\")\n");
+             "(match message-id \"ETSY\")\n");
     TESTCASE("(not (match message-id \"ETSY\"))",
-	     "(not (match message-id \"ETSY\"))\n");
+             "(not (match message-id \"ETSY\"))\n");
 
     /* a folder match node a (true) node and that mboxname */
     TESTCASE("(match folder \"inbox.Cosby.Sweater\")",
-	     "mboxname \"inbox.Cosby.Sweater\" (true)\n");
+             "mboxname \"inbox.Cosby.Sweater\" (true)\n");
 
     /* negation of a folder match node gets a NULL mboxname - it's
      * supposed to match every folder *EXCEPT* the named one */
     TESTCASE("(not (match folder \"inbox.Cosby.Sweater\"))",
-	     "(not (match folder \"inbox.Cosby.Sweater\"))\n");
+             "(not (match folder \"inbox.Cosby.Sweater\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))",
-	     "(and (match message-id \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))\n");
+             "(and (match message-id \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))\n");
 
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
     TESTCASE("(and (match message-id \"ETSY\") (le size 123))",
-	     "(and (le size 123) (match message-id \"ETSY\"))\n");
+             "(and (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (le size 123)))",
-	     "(and (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(and (match message-id \"ETSY\") (not (le size 123)))\n");
     TESTCASE("(and (le size 123) (not (match message-id \"ETSY\")))",
-	     "(and (le size 123) (not (match message-id \"ETSY\")))\n");
+             "(and (le size 123) (not (match message-id \"ETSY\")))\n");
 
     /* a conjuctive node which does match a folder gets the remainder
      * of the expression and that named mboxname */
     TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (match message-id \"ETSY\"))",
-	     "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
+             "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
     TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (not (match message-id \"ETSY\")))",
-	     "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
+             "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
-	     "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
+             "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
     TESTCASE("(and (not (match message-id \"ETSY\")) (match folder \"inbox.Cosby.Sweater\"))",
-	     "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
+             "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
 
     /* a disjunctive node which doesn't match folders
      * or indexable attrs is untouched */
     TESTCASE("(or (match message-id \"ETSY\") (le size 123))",
-	     "(or (le size 123) (match message-id \"ETSY\"))\n");
+             "(or (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (match message-id \"ETSY\") (not (le size 123)))",
-	     "(or (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(or (match message-id \"ETSY\") (not (le size 123)))\n");
     TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
-	     "(or (le size 123) (not (match message-id \"ETSY\")))\n");
+             "(or (le size 123) (not (match message-id \"ETSY\")))\n");
 
     /* a disjuctive node which does match folders gets
      * split into two expressions each with the given mboxname*/
     TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (le size 123))",
-	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
-	     "(le size 123)\n");
+             "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+             "(le size 123)\n");
     TESTCASE("(or (match folder \"inbox.Mlkshk\") (match folder \"inbox.Tumblr\"))",
-	     "mboxname \"inbox.Mlkshk\" (true)\n"
-	     "mboxname \"inbox.Tumblr\" (true)\n");
+             "mboxname \"inbox.Mlkshk\" (true)\n"
+             "mboxname \"inbox.Tumblr\" (true)\n");
     TESTCASE("(or (and (ge size 456) (match folder \"inbox.Mlkshk\")) (and (le size 123) (match folder \"inbox.Tumblr\")))",
-	     "mboxname \"inbox.Mlkshk\" (ge size 456)\n"
-	     "mboxname \"inbox.Tumblr\" (le size 123)\n");
+             "mboxname \"inbox.Mlkshk\" (ge size 456)\n"
+             "mboxname \"inbox.Tumblr\" (le size 123)\n");
 
     /* indexed comparison nodes and their negations, which don't
      * match any folders, get a NULL mboxname and a trivial scan. */
     TESTCASE("(fuzzymatch subject \"ETSY\")",
-	     "indexed (fuzzymatch subject \"ETSY\") (true)\n");
+             "indexed (fuzzymatch subject \"ETSY\") (true)\n");
     TESTCASE("(not (fuzzymatch subject \"ETSY\"))",
-	     "indexed (not (fuzzymatch subject \"ETSY\")) (true)\n");
+             "indexed (not (fuzzymatch subject \"ETSY\")) (true)\n");
 
     /* conjunctions of indexed comparison nodes and their negations, which
      * don't match any folders, get a NULL mboxname and a trivial scan. */
     TESTCASE("(and (fuzzymatch subject \"ETSY\") (fuzzymatch subject \"TUMBLR\"))",
-	     "indexed (and (fuzzymatch subject \"ETSY\") (fuzzymatch subject \"TUMBLR\")) (true)\n");
+             "indexed (and (fuzzymatch subject \"ETSY\") (fuzzymatch subject \"TUMBLR\")) (true)\n");
 
     /* conjunctions of indexed comparison nodes and their negations, with
      * non-indexed nodes, which don't match any folders, get a NULL mboxname
      * two trees with the indexed nodes separated out */
     TESTCASE("(and (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\"))",
-	     "indexed (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\")\n");
+             "indexed (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\")\n");
     TESTCASE("(and (match message-id \"TUMBLR\") (fuzzymatch subject \"ETSY\"))",
-	     "indexed (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\")\n");
+             "indexed (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\")\n");
 
     /* conjunctions of indexed comparison nodes and their negations, which
      * do match folders either positively or negatively, get a NULL mboxname
      * because we favour the index */
     TESTCASE("(and (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\"))",
-	     "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
+             "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
     TESTCASE("(and (match folder \"inbox.Tumblr\") (fuzzymatch subject \"ETSY\"))",
-	     "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
+             "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
     TESTCASE("(and (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\")))",
-	     "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
+             "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
     TESTCASE("(and (not (match folder \"inbox.Tumblr\")) (fuzzymatch subject \"ETSY\"))",
-	     "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
+             "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
 
     /* a disjuctive node where one side contains indexed matches,
      * is split into multiple callbacks, some indexed, some not */
     TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
-	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
-	     "indexed (fuzzymatch subject \"ETSY\") (true)\n");
+             "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+             "indexed (fuzzymatch subject \"ETSY\") (true)\n");
     TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
-	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
-	     "indexed (fuzzymatch subject \"ETSY\") (true)\n");
+             "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+             "indexed (fuzzymatch subject \"ETSY\") (true)\n");
     TESTCASE("(or (fuzzymatch subject \"MLKSHK\") (fuzzymatch subject \"TUMBLR\"))",
-	     "indexed (fuzzymatch subject \"MLKSHK\") (true)\n"
-	     "indexed (fuzzymatch subject \"TUMBLR\") (true)\n");
+             "indexed (fuzzymatch subject \"MLKSHK\") (true)\n"
+             "indexed (fuzzymatch subject \"TUMBLR\") (true)\n");
     TESTCASE("(or (and (le size 123) (fuzzymatch subject \"TUMBLR\")) (and (ge size 456) (fuzzymatch subject \"MLKSHK\")))",
-	     "indexed (fuzzymatch subject \"TUMBLR\") (le size 123)\n"
-	     "indexed (fuzzymatch subject \"MLKSHK\") (ge size 456)\n");
+             "indexed (fuzzymatch subject \"TUMBLR\") (le size 123)\n"
+             "indexed (fuzzymatch subject \"MLKSHK\") (ge size 456)\n");
 }
 #undef TESTCASE
 

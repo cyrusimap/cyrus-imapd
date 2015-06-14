@@ -129,7 +129,7 @@ href="#comp_pat">compiled patterns</a> later. </dd>
 </dd>
 
 <dt><tt>int charset_searchfile(const char *substr, comp_pat *pat,
-			      const char *msg_base, int mapnl, int len,
+                              const char *msg_base, int mapnl, int len,
                               charset_index charset, int encoding)</tt></dt>
 
 <dd>
@@ -240,7 +240,7 @@ after encountering a JSR.
 <p>JSRs are useful for converting a two octet input character: the
 first octet in the character will make a JSR to some table; the second
 octet will produce a translation and RET to the current table.
-</p> 
+</p>
 
 <p>Since the virtual machine has a fixed size stack, it would be
 highly unusual for the virtual machine to encounter two different JSRs

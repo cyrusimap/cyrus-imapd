@@ -81,8 +81,8 @@ static int deluserseen(const mbentry_t *mbentry, void *rock __attribute__((unuse
 
     userid = mboxname_to_userid(mbentry->name);
     if (userid) {
-	printf("removing seen for %s on %s\n", userid, mailbox->name);
-	if (do_remove) seen_delete_mailbox(userid, mailbox);
+        printf("removing seen for %s on %s\n", userid, mailbox->name);
+        if (do_remove) seen_delete_mailbox(userid, mailbox);
     }
 
     mailbox_close(&mailbox);
@@ -98,23 +98,23 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((opt = getopt(argc, argv, "C:d")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 'd':
-	    do_remove = 1;
-	    break;
+        case 'd':
+            do_remove = 1;
+            break;
 
-	default:
-	    usage();
-	    break;
-	}
+        default:
+            usage();
+            break;
+        }
     }
 
     cyrus_init(alt_config, "cyr_userseen", 0, 0);

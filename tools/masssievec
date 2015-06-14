@@ -93,20 +93,20 @@ sub read_conf {
 
     open CONF, $file or die "can't open $file";
     while (<CONF>) {
-	if (/^#/) { 
-	    next; 
-	}
-	if (/\@include:\s+(.*)$/) {
-	    push @configs, $1;
-	}
-	if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
-	    $nosievedir = 1;
-	    print "you are storing sieve scripts in user's home directories, this script cannot deal with that\n";
-	    exit;
-	}
-	if (/^sievedir:\s+(.*)$/) {
-	    $sievedir = $1;
-	}
+        if (/^#/) {
+            next;
+        }
+        if (/\@include:\s+(.*)$/) {
+            push @configs, $1;
+        }
+        if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
+            $nosievedir = 1;
+            print "you are storing sieve scripts in user's home directories, this script cannot deal with that\n";
+            exit;
+        }
+        if (/^sievedir:\s+(.*)$/) {
+            $sievedir = $1;
+        }
     }
     close CONF;
 }
@@ -126,57 +126,57 @@ while (defined($s = readdir TOP)) {
     opendir THISONE, ".";
 
     while(defined($t = readdir THISONE)) {
-	next if ($t eq "." || $t eq "..");
-	print "processing user $t\n";
-	chdir $t;
+        next if ($t eq "." || $t eq "..");
+        print "processing user $t\n";
+        chdir $t;
 
-	opendir USER, ".";
-	while(defined($u = readdir USER)) {
-	    next if ($u eq "." || $u eq "..");
-	    if($u eq "default" && -l $u) {
-		# special case
-		$dest = readlink $u;
-		next unless($dest =~ m/\.script$/);
-		$dest =~ s/\.script$//;
-		symlink "$dest.bc", "defaultbc" || warn "can't symlink $dest.bc to defaultbc: $!";
-		unlink ("default");
-	    } elsif ($u eq "default.bc" && -l $u) {
-		# slightly different upgrade foramt
-		$dest = readlink $u;
-		next unless($dest =~ m/\.bc$/ && $dest ne "default.bc");
-		symlink "$dest", "defaultbc" || warn "can't symlink $dest to defaultbc: $!";
-		unlink ("default.bc");
-	    } elsif ($u eq "default" || $u eq "default.bc") {
-		warn "$u is not a symlink";
-	    } else {
-		next unless($u =~ m/\.script$/);
-		$out = $u;
-		$out =~ s/\.script$//;
+        opendir USER, ".";
+        while(defined($u = readdir USER)) {
+            next if ($u eq "." || $u eq "..");
+            if($u eq "default" && -l $u) {
+                # special case
+                $dest = readlink $u;
+                next unless($dest =~ m/\.script$/);
+                $dest =~ s/\.script$//;
+                symlink "$dest.bc", "defaultbc" || warn "can't symlink $dest.bc to defaultbc: $!";
+                unlink ("default");
+            } elsif ($u eq "default.bc" && -l $u) {
+                # slightly different upgrade foramt
+                $dest = readlink $u;
+                next unless($dest =~ m/\.bc$/ && $dest ne "default.bc");
+                symlink "$dest", "defaultbc" || warn "can't symlink $dest to defaultbc: $!";
+                unlink ("default.bc");
+            } elsif ($u eq "default" || $u eq "default.bc") {
+                warn "$u is not a symlink";
+            } else {
+                next unless($u =~ m/\.script$/);
+                $out = $u;
+                $out =~ s/\.script$//;
 
-	FORK: {
-		if($pid = fork()) {
-		    #parent, do nothing
-		    waitpid $pid, 0;
-		} elsif (defined $pid) {
-		    # child
-		    exec $SIEVEC, $u, "$out.bc";
-		    die "souldn't be here";
-		} elsif ($! =~ /No more process/) {
-		    # EAGAIN
-		    sleep 5; redo FORK;
-		} else {
-		    die "cant fork: $!";
-		}
-	      }
+        FORK: {
+                if($pid = fork()) {
+                    #parent, do nothing
+                    waitpid $pid, 0;
+                } elsif (defined $pid) {
+                    # child
+                    exec $SIEVEC, $u, "$out.bc";
+                    die "souldn't be here";
+                } elsif ($! =~ /No more process/) {
+                    # EAGAIN
+                    sleep 5; redo FORK;
+                } else {
+                    die "cant fork: $!";
+                }
+              }
 
-		$rc = $? & 0xff00;
-		$rc >>= 8;
-		if($rc) {
-		    print "got error compiling $u.\n";
-		}
-	    }
-	}
-	chdir $sievedir . "/$s";
+                $rc = $? & 0xff00;
+                $rc >>= 8;
+                if($rc) {
+                    print "got error compiling $u.\n";
+                }
+            }
+        }
+        chdir $sievedir . "/$s";
     }
     closedir THISONE;
 }

@@ -49,14 +49,14 @@
 
 extern int verbose;
 
-#define MAX_TZ_STACK	5
+#define MAX_TZ_STACK    5
 static int n_tz_stack = 0;
 static char *tz_stack[MAX_TZ_STACK];
 
 static inline void xxputenv(char *s, const char *f)
 {
     if (verbose > 1)
-	fprintf(stderr, "\n%s:putenv(\"%s\")\n", f, s);
+        fprintf(stderr, "\n%s:putenv(\"%s\")\n", f, s);
     putenv(s);
 }
 #define putenv(s) xxputenv((s), __FUNCTION__)
@@ -73,7 +73,7 @@ static char *stash_tz(const char *tz)
 void push_tz(const char *tz)
 {
     if (n_tz_stack == 0)
-	stash_tz(getenv("TZ"));
+        stash_tz(getenv("TZ"));
     putenv(stash_tz(tz));
     tzset();
 }
@@ -91,5 +91,5 @@ void pop_tz(void)
 void restore_tz(void)
 {
     while (n_tz_stack > 1)
-	pop_tz();
+        pop_tz();
 }

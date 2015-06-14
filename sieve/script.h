@@ -55,23 +55,23 @@ struct sieve_script {
 
     /* was a "require" done for these? */
     struct sieve_support {
-	int fileinto       : 1;
-	int reject         : 1;
-	int envelope       : 1;
-	int body           : 1;
-	int vacation       : 1;
-	int imapflags      : 1;
-	int notify         : 1;
-	int regex          : 1;
-	int subaddress     : 1;
-	int relational     : 1;
-	int i_ascii_numeric: 1;
-	int include        : 1;
-	int copy           : 1;
-	int date           : 1;
-	int index          : 1;
-	int vacation_seconds: 1;
-	int imap4flags     : 1;
+        int fileinto       : 1;
+        int reject         : 1;
+        int envelope       : 1;
+        int body           : 1;
+        int vacation       : 1;
+        int imapflags      : 1;
+        int notify         : 1;
+        int regex          : 1;
+        int subaddress     : 1;
+        int relational     : 1;
+        int i_ascii_numeric: 1;
+        int include        : 1;
+        int copy           : 1;
+        int date           : 1;
+        int index          : 1;
+        int vacation_seconds: 1;
+        int imap4flags     : 1;
     } support;
 
     void *script_context;
@@ -85,19 +85,19 @@ struct sieve_script {
 typedef struct sieve_bytecode sieve_bytecode_t;
 
 struct sieve_bytecode {
-    ino_t inode;		/* used to prevent mmapping the same script */
+    ino_t inode;                /* used to prevent mmapping the same script */
     const char *data;
     size_t len;
     int fd;
 
-    int is_executing;		/* used to prevent recursive INCLUDEs */
+    int is_executing;           /* used to prevent recursive INCLUDEs */
 
     sieve_bytecode_t *next;
 };
 
 struct sieve_execute {
-    sieve_bytecode_t *bc_list;	/* list of loaded bytecode buffers */
-    sieve_bytecode_t *bc_cur;	/* currently active bytecode buffer */
+    sieve_bytecode_t *bc_list;  /* list of loaded bytecode buffers */
+    sieve_bytecode_t *bc_cur;   /* currently active bytecode buffer */
 };
 
 int script_require(sieve_script_t *s, char *req);

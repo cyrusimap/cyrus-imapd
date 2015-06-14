@@ -61,7 +61,7 @@ time_t duplicate_check(const duplicate_key_t *dkey);
 void duplicate_log(const duplicate_key_t *dkey, const char *action);
 void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid);
 typedef int (*duplicate_find_proc_t)(const duplicate_key_t *, time_t,
-				     unsigned long, void *);
+                                     unsigned long, void *);
 int duplicate_find(const char *msgid, duplicate_find_proc_t, void *rock);
 
 int duplicate_prune(int seconds, struct hash_table *expire_table);

@@ -47,8 +47,8 @@
 
 #include "prot.h"
 
-int parser(struct protstream *sieved_out, 
-	   struct protstream *sieved_in);
+int parser(struct protstream *sieved_out,
+           struct protstream *sieved_in);
 
 
 #endif /* PARSER_H */

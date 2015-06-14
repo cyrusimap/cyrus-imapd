@@ -60,20 +60,20 @@ EXPORTED ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
 {
     size_t nread;
     char *buf = vbuf;
-    
+
     for (nread = 0; nread < nbyte; ) {
-	ssize_t n = read(fd, buf + nread, nbyte - nread);
-	if (n == 0) {
-	    /* end of file */
-	    return -1;
-	}
+        ssize_t n = read(fd, buf + nread, nbyte - nread);
+        if (n == 0) {
+            /* end of file */
+            return -1;
+        }
 
-	if (n == -1) {
-	    if (errno == EINTR || errno == EAGAIN) continue;
-	    return -1;
-	}
+        if (n == -1) {
+            if (errno == EINTR || errno == EAGAIN) continue;
+            return -1;
+        }
 
-	nread += n;
+        nread += n;
     }
 
     return nread;
@@ -91,14 +91,14 @@ EXPORTED ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
     if (nbyte == 0) return 0;
 
     for (written = 0; written < nbyte; ) {
-	ssize_t n = write(fd, buf + written, nbyte - written);
+        ssize_t n = write(fd, buf + written, nbyte - written);
 
-	if (n == -1) {
-	    if (errno == EINTR) continue;
-	    return -1;
-	}
+        if (n == -1) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
 
-	written += n;
+        written += n;
     }
 
     return written;
@@ -119,63 +119,63 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
     struct iovec *iov, *baseiov = NULL;
     static int iov_max =
 #ifdef MAXIOV
-	MAXIOV
+        MAXIOV
 #else
 #ifdef IOV_MAX
-	IOV_MAX
+        IOV_MAX
 #else
-	8192
+        8192
 #endif
 #endif
-	;
+        ;
 
     if (!iovcnt)
-	return 0;
+        return 0;
 
     for (i = 0; i < iovcnt; i++) {
-	len += srciov[i].iov_len;
+        len += srciov[i].iov_len;
     }
 
     n = written = writev(fd, srciov, iovcnt > iov_max ? iov_max : iovcnt);
 
     /* did we get lucky and write it all? */
     if (written == len)
-	return written;
+        return written;
 
     /* oh well, welcome to the slow path - we have copies */
     baseiov = iov = (struct iovec *)xmalloc(iovcnt * sizeof(struct iovec));
     for (i = 0; i < iovcnt; i++) {
-	iov[i].iov_base = srciov[i].iov_base;
-	iov[i].iov_len = srciov[i].iov_len;
+        iov[i].iov_base = srciov[i].iov_base;
+        iov[i].iov_len = srciov[i].iov_len;
     }
 
     for (;;) {
-	for (i = 0; i < iovcnt; i++) {
-	    if (iov[i].iov_len > (size_t)n) {
-		iov[i].iov_base += n;
-		iov[i].iov_len -= n;
-		break;
-	    }
-	    n -= iov[i].iov_len;
-	    iov++;
-	    iovcnt--;
-	    if (!iovcnt) fatal("ran out of iov", EC_SOFTWARE);
-	}
+        for (i = 0; i < iovcnt; i++) {
+            if (iov[i].iov_len > (size_t)n) {
+                iov[i].iov_base += n;
+                iov[i].iov_len -= n;
+                break;
+            }
+            n -= iov[i].iov_len;
+            iov++;
+            iovcnt--;
+            if (!iovcnt) fatal("ran out of iov", EC_SOFTWARE);
+        }
 
-	n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
-	if (n == -1) {
-	    if (errno == EINVAL && iov_max > 10) {
-		iov_max /= 2;
-		continue;
-	    }
-	    if (errno == EINTR) continue;
-	    free(baseiov);
-	    return -1;
-	}
+        n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
+        if (n == -1) {
+            if (errno == EINVAL && iov_max > 10) {
+                iov_max /= 2;
+                continue;
+            }
+            if (errno == EINTR) continue;
+            free(baseiov);
+            return -1;
+        }
 
-	written += n;
+        written += n;
 
-	if (written == len) break;
+        if (written == len) break;
     }
 
     free(baseiov);

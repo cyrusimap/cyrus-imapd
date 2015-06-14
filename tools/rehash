@@ -169,19 +169,19 @@ sub dir_hash_c {
     my ($h, $n);
 
     if ($fulldirhash) {
-	$name =~ s/\..*//; # remove trailing dots
-	$n = 0;
-	foreach my $b (split(/ */, $name)) {
-	    $n = (($n << 3) ^ ($n >> 5)) ^ ord($b);
-	    $n &= 4294967295; # UINT32_MAX
-	}
-	$h = chr(ord('A') + ($n % 23));
-	return $h;
+        $name =~ s/\..*//; # remove trailing dots
+        $n = 0;
+        foreach my $b (split(/ */, $name)) {
+            $n = (($n << 3) ^ ($n >> 5)) ^ ord($b);
+            $n &= 4294967295; # UINT32_MAX
+        }
+        $h = chr(ord('A') + ($n % 23));
+        return $h;
     }
     else {
-	$h = lc(substr($name, 0, 1));
-	if (!($h =~ /[a-z]/)) { $h = 'q'; }
-	return $h;
+        $h = lc(substr($name, 0, 1));
+        if (!($h =~ /[a-z]/)) { $h = 'q'; }
+        return $h;
     }
 }
 
@@ -195,13 +195,13 @@ sub hash_path {
 
     my $tohash = $item;
     if ($skiptochar) {
-	# strip up to and including the character
-	$tohash =~ s/^.*?\Q$skiptochar//;
-	if ($skiptochar eq '/' and $tohash =~ m/\./) {
-	    # we've got a top level directory, oops
-	    $tohash = $item;
-	    $tohash =~ s{/.*$}{};
-	}
+        # strip up to and including the character
+        $tohash =~ s/^.*?\Q$skiptochar//;
+        if ($skiptochar eq '/' and $tohash =~ m/\./) {
+            # we've got a top level directory, oops
+            $tohash = $item;
+            $tohash =~ s{/.*$}{};
+        }
     }
 
     return "$path/" . dir_hash_c($tohash) . "/$item";
@@ -212,39 +212,39 @@ sub read_conf {
 
     open CONF, $file or die "can't open $file";
     while (<CONF>) {
-	if (/^#/) { 
-	    next; 
-	}
-	if (/\@include:\s+(.*)$/) {
-	    push @configs, $1;
-	}
-	if (/^configdirectory:\s+(.*)$/) {
-	    $confdir = $1;
-	}
-	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
-	    if (grep /$1/, @parts) {
-		next;
-	    }
-	    push @parts, $1;
-	}
-	if (/^hashimapspool:\s*(1|t|yes|on)/) {
-	    $hashimapspool = 1;
-	    print "i will also hash partitions.\n";
-	}
-	if (/^fulldirhash/) {
-	    $fulldirhash = 1;
-	}
+        if (/^#/) {
+            next;
+        }
+        if (/\@include:\s+(.*)$/) {
+            push @configs, $1;
+        }
+        if (/^configdirectory:\s+(.*)$/) {
+            $confdir = $1;
+        }
+        if (/^(?:meta)?partition-.*:\s+(.*)$/) {
+            if (grep /$1/, @parts) {
+                next;
+            }
+            push @parts, $1;
+        }
+        if (/^hashimapspool:\s*(1|t|yes|on)/) {
+            $hashimapspool = 1;
+            print "i will also hash partitions.\n";
+        }
+        if (/^fulldirhash/) {
+            $fulldirhash = 1;
+        }
         if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
-	    $nosievedir = 1;
-	    print "you are storing sieve scripts in user's home directories.\n";
+            $nosievedir = 1;
+            print "you are storing sieve scripts in user's home directories.\n";
         }
         if (/^sievedir:\s+(.*)$/) {
-	    $sievedir = $1;
-	    print "you are using $sievedir as your sieve directory.\n";
+            $sievedir = $1;
+            print "you are using $sievedir as your sieve directory.\n";
         }
         if (/^virtdomains:\s+(1|t|yes|on|userid)/) {
-	    $virtdomains = 1;
-	    print "i will deal with virtual domains.\n";
+            $virtdomains = 1;
+            print "i will deal with virtual domains.\n";
         }
     }
     close CONF;
@@ -258,25 +258,25 @@ sub add_found {
     my $location = shift;
 
     if ($type ne 'part') {
-	if ($found->{$name}) {
-	    die "FOUND BOTH $found->{$name} and $location - you need to fix this by hand\n";
-	}
-	$found->{$name} = $location;
-	return;
+        if ($found->{$name}) {
+            die "FOUND BOTH $found->{$name} and $location - you need to fix this by hand\n";
+        }
+        $found->{$name} = $location;
+        return;
     }
 
     unless (opendir(SUB, $location)) {
-	print "Failed to open directory $location\n";
-	die unless $OPT_NoAction;
-	return;
+        print "Failed to open directory $location\n";
+        die unless $OPT_NoAction;
+        return;
     }
     while (my $sub = readdir SUB) {
-	next if $sub =~ m/^\./;
-	my $key = "$name/$sub";
-	if ($found->{$key}) {
-	    die "FOUND BOTH $found->{$key} and $location/$sub - you need to fix this by hand\n";
-	}
-	$found->{$key} = "$location/$sub";
+        next if $sub =~ m/^\./;
+        my $key = "$name/$sub";
+        if ($found->{$key}) {
+            die "FOUND BOTH $found->{$key} and $location/$sub - you need to fix this by hand\n";
+        }
+        $found->{$key} = "$location/$sub";
     }
     closedir(SUB);
 }
@@ -288,35 +288,35 @@ sub find_items {
     my @subs;
 
     unless (opendir(ITEMS, $path)) {
-	print "Failed to open directory $path\n";
-	die unless $OPT_NoAction;
-	return;
+        print "Failed to open directory $path\n";
+        die unless $OPT_NoAction;
+        return;
     }
     while (my $item = readdir ITEMS) {
-	# guaranteed evil
-	next if $item =~ m/^\./;
-	next if $item eq 'lost+found';
-	next if $item eq 'stage.';
-	next if $item eq 'sync.';
-	next if $item eq 'domain'; # this is just stupid, it should at LEAST have a dot
+        # guaranteed evil
+        next if $item =~ m/^\./;
+        next if $item eq 'lost+found';
+        next if $item eq 'stage.';
+        next if $item eq 'sync.';
+        next if $item eq 'domain'; # this is just stupid, it should at LEAST have a dot
 
-	if ($ishash{$item}) {
-	    push @subs, $item;
-	}
-	else {
-	    add_found($type, \%found, $item, "$path/$item");
-	}
+        if ($ishash{$item}) {
+            push @subs, $item;
+        }
+        else {
+            add_found($type, \%found, $item, "$path/$item");
+        }
     }
     closedir(ITEMS);
 
     foreach my $sub (@subs) {
-	next unless opendir(ITEMS, "$path/$sub");
-	while (my $item = readdir ITEMS) {
-	    next if $item =~ m/^\./;
-	    # we can't fix duplicate directories ourselves!
-	    add_found($type, \%found, $item, "$path/$sub/$item");
-	}
-	closedir(ITEMS);
+        next unless opendir(ITEMS, "$path/$sub");
+        while (my $item = readdir ITEMS) {
+            next if $item =~ m/^\./;
+            # we can't fix duplicate directories ourselves!
+            add_found($type, \%found, $item, "$path/$sub/$item");
+        }
+        closedir(ITEMS);
     }
 
     return %found;
@@ -329,19 +329,19 @@ sub do_moves {
     my %found = @_;
 
     foreach my $item (sort keys %found) {
-	my $src = $found{$item};
-	my $dst = hash_path($path, $item, $isspool, $skiptochar);
+        my $src = $found{$item};
+        my $dst = hash_path($path, $item, $isspool, $skiptochar);
 
-	if ($src ne $dst) {
-	    ensure_parent($dst);
-	    print "rename $src to $dst: " if $OPT_Verbose;
-	    if ($OPT_NoAction) {
-		print "skipped\n" if $OPT_Verbose;
-		next;
-	    }
-	    rename($src, $dst) or die "failed to rename $src to $dst";
-	    print "done\n" if $OPT_Verbose;
-	}
+        if ($src ne $dst) {
+            ensure_parent($dst);
+            print "rename $src to $dst: " if $OPT_Verbose;
+            if ($OPT_NoAction) {
+                print "skipped\n" if $OPT_Verbose;
+                next;
+            }
+            rename($src, $dst) or die "failed to rename $src to $dst";
+            print "done\n" if $OPT_Verbose;
+        }
     }
 }
 
@@ -354,20 +354,20 @@ sub move_domains {
 
     # let's do the subdirs first, then move the top levels
     foreach my $item (sort keys %found) {
-	if ($type_of_move eq 'conf') {
-	    if (-d "$found{$item}/quota") {
-		move_quotas("$found{$item}/quota");
-	    }
-	    if (-d "$found{$item}/user") {
-		move_users("$found{$item}/user");
-	    }
-	} elsif ($type_of_move eq 'sieve') {
-	    move_sieve($found{$item}, 1);
-	} elsif ($type_of_move eq 'part') {
-	    move_part($found{$item}, 1);
-	} else {
-	    die "bad domain move mode: $type_of_move";
-	}
+        if ($type_of_move eq 'conf') {
+            if (-d "$found{$item}/quota") {
+                move_quotas("$found{$item}/quota");
+            }
+            if (-d "$found{$item}/user") {
+                move_users("$found{$item}/user");
+            }
+        } elsif ($type_of_move eq 'sieve') {
+            move_sieve($found{$item}, 1);
+        } elsif ($type_of_move eq 'part') {
+            move_part($found{$item}, 1);
+        } else {
+            die "bad domain move mode: $type_of_move";
+        }
     }
 
     do_moves($path, $isspool, undef, %found);
@@ -397,8 +397,8 @@ sub move_sieve {
     my %found = find_items($path, 'sieve');
 
     if ($virtdomains and not $indomain) {
-	ensure_dir("$path/domain");
-	move_domains("$path/domain", 'sieve');
+        ensure_dir("$path/domain");
+        move_domains("$path/domain", 'sieve');
     }
 
     do_moves($path, 0, undef, %found);
@@ -414,8 +414,8 @@ sub move_part {
     my %found = find_items($path, 'part');
 
     if ($virtdomains and not $indomain) {
-	ensure_dir("$path/domain");
-	move_domains("$path/domain", 'part');
+        ensure_dir("$path/domain");
+        move_domains("$path/domain", 'part');
     }
 
     do_moves($path, 1, '/', %found);
@@ -425,14 +425,14 @@ sub move_part {
 sub ensure_dir {
     my $dir = shift;
     unless (-d $dir) {
-	ensure_parent($dir);
-	print "mkdir $dir: " if $OPT_Verbose;
-	if ($OPT_NoAction) {
-	    print "skipped\n" if $OPT_Verbose;
-	    return;
-	}
-	mkdir($dir, 0755) || die "Failed to create $dir: $!";
-	print "done\n" if $OPT_Verbose;
+        ensure_parent($dir);
+        print "mkdir $dir: " if $OPT_Verbose;
+        if ($OPT_NoAction) {
+            print "skipped\n" if $OPT_Verbose;
+            return;
+        }
+        mkdir($dir, 0755) || die "Failed to create $dir: $!";
+        print "done\n" if $OPT_Verbose;
     }
     return 1;
 }
@@ -448,23 +448,23 @@ sub remove_dir {
     return 1 unless -d $dir;
     print "rmdir $dir: " if $OPT_Verbose;
     if ($OPT_NoAction) {
-	print "skipped\n" if $OPT_Verbose;
-	return;
+        print "skipped\n" if $OPT_Verbose;
+        return;
     }
     if (opendir(DH, $dir)) {
-	my @extra;
-	while (my $item = readdir(DH)) {
-	    next if $item eq '.';
-	    next if $item eq '..';
-	    push @extra, $item;
-	}
-	closedir(DH);
-	if (@extra) {
-	    my $num = @extra;
-	    my $s = $num == 1 ? '' : 's';
-	    print "skipped, $num extra item$s found, including $dir/$extra[0]\n";
-	    return;
-	}
+        my @extra;
+        while (my $item = readdir(DH)) {
+            next if $item eq '.';
+            next if $item eq '..';
+            push @extra, $item;
+        }
+        closedir(DH);
+        if (@extra) {
+            my $num = @extra;
+            my $s = $num == 1 ? '' : 's';
+            print "skipped, $num extra item$s found, including $dir/$extra[0]\n";
+            return;
+        }
     }
     rmdir($dir) || die "Failed to remove $dir: $!";
     print "done\n" if $OPT_Verbose;
@@ -476,13 +476,13 @@ sub tidydir {
     my $onemore = shift;
 
     if ($onemore) {
-	if (opendir(DIR, $dir)) {
-	    while (my $item = readdir DIR) {
-		next if $item =~ m/^\./;
-		remove_dir("$dir/$item");
-	    }
-	    closedir(DIR);
-	}
+        if (opendir(DIR, $dir)) {
+            while (my $item = readdir DIR) {
+                next if $item =~ m/^\./;
+                remove_dir("$dir/$item");
+            }
+            closedir(DIR);
+        }
     }
 
     remove_dir($dir);
@@ -495,9 +495,9 @@ sub tidy_up {
 
 
     unless (not $fulldirhash and (not $isspool or $hashimapspool)) {
-	tidydir("$path/$_", $onemore) for @bdirs;
+        tidydir("$path/$_", $onemore) for @bdirs;
     }
     unless ($fulldirhash and (not $isspool or $hashimapspool)) {
-	tidydir("$path/$_", $onemore) for @fdirs;
+        tidydir("$path/$_", $onemore) for @fdirs;
     }
 }

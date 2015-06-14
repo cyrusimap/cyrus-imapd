@@ -112,30 +112,30 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((opt = getopt(argc, argv, "C:t")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 't':
-	    cmd = CMD_TIME;
-	    break;
+        case 't':
+            cmd = CMD_TIME;
+            break;
 
-	default:
-	    usage();
-	}
+        default:
+            usage();
+        }
     }
 
     cyrus_init(alt_config, "mbtool", 0, 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
-	syslog(LOG_ERR, "%s", error_message(r));
-	fatal(error_message(r), EC_CONFIG);
+        syslog(LOG_ERR, "%s", error_message(r));
+        fatal(error_message(r), EC_CONFIG);
     }
 
     mboxlist_init(0);
@@ -145,15 +145,15 @@ int main(int argc, char **argv)
     signals_add_handlers(0);
 
     if (optind == argc) {
-	usage();
+        usage();
     }
 
     for (i = optind; i < argc; i++) {
-	/* Handle virtdomains and separators in mailboxname */
-	(*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
-					       NULL, buf);
-	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
-					    do_cmd, &cmd);
+        /* Handle virtdomains and separators in mailboxname */
+        (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
+                                               NULL, buf);
+        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
+                                            do_cmd, &cmd);
     }
 
     mboxlist_close();
@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 static void usage(void)
 {
     fprintf(stderr,
-	    "usage: mbtool [-C <alt_config>] mailbox...\n");
+            "usage: mbtool [-C <alt_config>] mailbox...\n");
     exit(EC_USAGE);
 }
 
@@ -185,7 +185,7 @@ static int do_timestamp(char *name)
 
     /* Convert internal name to external */
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, name,
-					   "cyrus", ext_name_buf);
+                                           "cyrus", ext_name_buf);
     printf("Working on %s...\n", ext_name_buf);
 
     /* Open/lock header */
@@ -194,21 +194,21 @@ static int do_timestamp(char *name)
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((record = mailbox_iter_step(iter))) {
-	/* 1 day is close enough */
-	if (labs(record->internaldate - record->gmtime) < 86400)
-	    continue;
+        /* 1 day is close enough */
+        if (labs(record->internaldate - record->gmtime) < 86400)
+            continue;
 
-	struct index_record copyrecord = *record;
+        struct index_record copyrecord = *record;
 
-	time_to_rfc822(copyrecord.internaldate, olddate, sizeof(olddate));
-	time_to_rfc822(copyrecord.gmtime, newdate, sizeof(newdate));
-	printf("  %u: %s => %s\n", copyrecord.uid, olddate, newdate);
+        time_to_rfc822(copyrecord.internaldate, olddate, sizeof(olddate));
+        time_to_rfc822(copyrecord.gmtime, newdate, sizeof(newdate));
+        printf("  %u: %s => %s\n", copyrecord.uid, olddate, newdate);
 
-	/* switch internaldate */
-	copyrecord.internaldate = copyrecord.gmtime;
+        /* switch internaldate */
+        copyrecord.internaldate = copyrecord.gmtime;
 
-	r = mailbox_rewrite_index_record(mailbox, &copyrecord);
-	if (r) goto done;
+        r = mailbox_rewrite_index_record(mailbox, &copyrecord);
+        if (r) goto done;
     }
 
  done:
@@ -219,14 +219,14 @@ static int do_timestamp(char *name)
 }
 
 int do_cmd(char *name,
-	   int matchlen __attribute__((unused)),
-	   int maycreate __attribute__((unused)),
-	   void *rock)
+           int matchlen __attribute__((unused)),
+           int maycreate __attribute__((unused)),
+           void *rock)
 {
     int *valp = (int *)rock;
 
     if (*valp == CMD_TIME)
-	return do_timestamp(name);
+        return do_timestamp(name);
 
     return 0;
 }

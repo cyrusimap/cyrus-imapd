@@ -27,8 +27,8 @@ void CRYPTO_thread_setup(void)
     lock_count = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(long));
 
     for (i = 0; i < CRYPTO_num_locks(); i++) {
-	lock_count[i]=0;
-	pthread_mutex_init(&(lock_cs[i]),NULL);
+        lock_count[i]=0;
+        pthread_mutex_init(&(lock_cs[i]),NULL);
     }
 
     CRYPTO_set_id_callback((unsigned long (*)())pthreads_thread_id);
@@ -41,7 +41,7 @@ void CRYPTO_thread_cleanup(void)
 
     CRYPTO_set_locking_callback(NULL);
     for (i = 0; i < CRYPTO_num_locks(); i++) {
-	pthread_mutex_destroy(&(lock_cs[i]));
+        pthread_mutex_destroy(&(lock_cs[i]));
     }
 
     OPENSSL_free(lock_cs);
@@ -49,15 +49,15 @@ void CRYPTO_thread_cleanup(void)
 }
 
 void pthreads_locking_callback(int mode, int type,
-			       char *file __attribute__((unused)),
-			       int line __attribute__((unused)))
+                               char *file __attribute__((unused)),
+                               int line __attribute__((unused)))
 {
     if (mode & CRYPTO_LOCK) {
-	pthread_mutex_lock(&(lock_cs[type]));
-	lock_count[type]++;
+        pthread_mutex_lock(&(lock_cs[type]));
+        lock_count[type]++;
     }
     else {
-	pthread_mutex_unlock(&(lock_cs[type]));
+        pthread_mutex_unlock(&(lock_cs[type]));
     }
 }
 

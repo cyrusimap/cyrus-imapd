@@ -67,53 +67,53 @@ struct Taglist {
 struct Test {
     int type;
     union {
-	testlist_t *tl; /* anyof, allof */
-	strarray_t *sl; /* exists */
-	struct { /* it's a header or hasflag test */
-	    int index;
-	    int comptag;
-	    char * comparator;
-	    int relation;
-	    void *comprock;
-	    strarray_t *sl;
-	    strarray_t *pl;
-	} h;
-	struct { /* it's an address or envelope test */
-	    int index;
-	    int comptag;
-	    char * comparator;
-	    int relation; 
-	    void *comprock;
-	    strarray_t *sl;
-	    strarray_t *pl;
+        testlist_t *tl; /* anyof, allof */
+        strarray_t *sl; /* exists */
+        struct { /* it's a header or hasflag test */
+            int index;
+            int comptag;
+            char * comparator;
+            int relation;
+            void *comprock;
+            strarray_t *sl;
+            strarray_t *pl;
+        } h;
+        struct { /* it's an address or envelope test */
+            int index;
+            int comptag;
+            char * comparator;
+            int relation;
+            void *comprock;
+            strarray_t *sl;
+            strarray_t *pl;
             int addrpart;
-	} ae; 
-	struct { /* it's a body test */
-	    int comptag;
-	    int relation; 
-	    char * comparator;
-	    void *comprock;
-	    int transform;
-	    int offset;
-	    strarray_t *content_types;
-	    strarray_t *pl;
-	} b; 
-	test_t *t; /* not */
-	struct { /* size */
-	    int t; /* tag */
-	    int n; /* param */
-	} sz;
-	struct { /* it's a date test */
-	    int index;
-	    int zonetag;
-	    char *zone;
-	    int comptag;
-	    int relation;
-	    char *comparator;
-	    int date_part;
-	    char *header_name;
-	    strarray_t *kl;
-	} dt;
+        } ae;
+        struct { /* it's a body test */
+            int comptag;
+            int relation;
+            char * comparator;
+            void *comprock;
+            int transform;
+            int offset;
+            strarray_t *content_types;
+            strarray_t *pl;
+        } b;
+        test_t *t; /* not */
+        struct { /* size */
+            int t; /* tag */
+            int n; /* param */
+        } sz;
+        struct { /* it's a date test */
+            int index;
+            int zonetag;
+            char *zone;
+            int comptag;
+            int relation;
+            char *comparator;
+            int date_part;
+            char *header_name;
+            strarray_t *kl;
+        } dt;
     } u;
 };
 
@@ -126,54 +126,54 @@ struct Commandlist {
     int type;
     union {
         char *str;
-	strarray_t *sl; /* the parameters */
-	struct { /* it's an if statement */
-	    test_t *t;
-	    commandlist_t *do_then;
-	    commandlist_t *do_else;
-	} i;
-	struct { /* it's an include action */
-	    int location;
-	    int once;
-	    int optional;
-	    char *script;
-	} inc;
-	struct { /* it's a keep action */
-	    int copy;
-	    strarray_t *flags;
-	} k;
-	struct { /* it's a fileinto action */
-	    char *folder;
-	    int copy;
-	    strarray_t *flags;
-	} f;
-	struct { /* it's a redirect action */
-	    char *address;
-	    int copy;
-	} r;
-	struct { /* it's a vacation action */
-	    char *subject;
-	    int seconds;
-	    strarray_t *addresses;
-	    char *message;
-	    char *from;
-	    char *handle;
-	    int mime;
-	} v;
-	struct { /* it's a notify action */
-	    char *method;
-	    char *id;
-	    strarray_t *options;
-	    int priority;
-	    char *message;
-	} n;
-	struct { /* it's a denotify action */
-	    int comptag;
-	    int relation;
-	    void *comprock;
-	    void *pattern;
-	    int priority;
-	} d;
+        strarray_t *sl; /* the parameters */
+        struct { /* it's an if statement */
+            test_t *t;
+            commandlist_t *do_then;
+            commandlist_t *do_else;
+        } i;
+        struct { /* it's an include action */
+            int location;
+            int once;
+            int optional;
+            char *script;
+        } inc;
+        struct { /* it's a keep action */
+            int copy;
+            strarray_t *flags;
+        } k;
+        struct { /* it's a fileinto action */
+            char *folder;
+            int copy;
+            strarray_t *flags;
+        } f;
+        struct { /* it's a redirect action */
+            char *address;
+            int copy;
+        } r;
+        struct { /* it's a vacation action */
+            char *subject;
+            int seconds;
+            strarray_t *addresses;
+            char *message;
+            char *from;
+            char *handle;
+            int mime;
+        } v;
+        struct { /* it's a notify action */
+            char *method;
+            char *id;
+            strarray_t *options;
+            int priority;
+            char *message;
+        } n;
+        struct { /* it's a denotify action */
+            int comptag;
+            int relation;
+            void *comprock;
+            void *pattern;
+            int priority;
+        } d;
     } u;
     struct Commandlist *next;
 };

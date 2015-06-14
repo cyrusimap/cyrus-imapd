@@ -62,8 +62,8 @@ extern struct pts_module pts_ldap;
 extern struct pts_module pts_afskrb;
 
 struct auth_state *ptsmodule_make_authstate(const char *identifier,
-					    size_t size,
-					    const char **reply, int *dsize);
+                                            size_t size,
+                                            const char **reply, int *dsize);
 void ptsmodule_init(void);
 
 #endif /* INCLUDED_PTLOADER_H */

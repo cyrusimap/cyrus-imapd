@@ -3,7 +3,7 @@ dnl libwrap.m4 --- do we have libwrap, the access control library?
 AC_DEFUN([CMU_LIBWRAP], [
   AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
   AC_REQUIRE([CMU_SOCKETS])
-  AC_ARG_WITH(libwrap, 
+  AC_ARG_WITH(libwrap,
      [AS_HELP_STRING([--with-libwrap=DIR], [use libwrap (rooted in DIR) [yes] ])],
               with_libwrap=$withval, with_libwrap=yes)
   if test "$with_libwrap" != no; then
@@ -13,8 +13,8 @@ AC_DEFUN([CMU_LIBWRAP], [
     fi
     cmu_save_LIBS="$LIBS"
     AC_CHECK_LIB(wrap, request_init, [
-		 AC_CHECK_HEADER(tcpd.h,, with_libwrap=no)],
-		 with_libwrap=no, ${LIB_SOCKET})
+                 AC_CHECK_HEADER(tcpd.h,, with_libwrap=no)],
+                 with_libwrap=no, ${LIB_SOCKET})
     LIBS="$cmu_save_LIBS"
   fi
   AC_MSG_CHECKING(libwrap support)

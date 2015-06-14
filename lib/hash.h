@@ -41,7 +41,7 @@ typedef struct hash_table {
 */
 
 hash_table *construct_hash_table(hash_table *table, size_t size,
-				 int use_mpool);
+                                 int use_mpool);
 
 /*
 ** Inserts a pointer to 'data' in the table, with a copy of 'key' as its
@@ -75,7 +75,7 @@ void *hash_del(const char *key,hash_table *table);
 */
 
 void hash_enumerate(hash_table *table,void (*func)(const char *,void *,void *),
-		    void *rock);
+                    void *rock);
 
 /* counts the number of nodes in the hash table */
 

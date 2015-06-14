@@ -3,12 +3,12 @@ dnl Derrick Brashear
 
 AC_DEFUN([CMU_TELNET_WHICH_TERM], [
 AC_CHECK_LIB(termlib, setupterm, [
-AC_DEFINE(HAVE_SETUPTERM,, [Define to 1 if you have the `setupterm' function.]) 
+AC_DEFINE(HAVE_SETUPTERM,, [Define to 1 if you have the `setupterm' function.])
 AC_CHECK_LIB(c, setupterm, TCLIB="/usr/ccs/lib/libtermlib.a",TCLIB="-ltermlib","/usr/ccs/lib/libtermlib.a")
 ],  TCLIB="-ltermcap")
 ])
 
-AC_DEFUN([CMU_TELNET_CC_T], 
+AC_DEFUN([CMU_TELNET_CC_T],
 [
 AC_MSG_CHECKING(for cc_t definition)
 AC_CACHE_VAL(cmu_cv_cc_t_definition, [
@@ -33,17 +33,17 @@ AC_MSG_RESULT($cmu_cv_cc_t_definition)
 ])
 
 AC_DEFUN([CMU_STREAMS], [
-if test "$ac_cv_header_sys_stropts_h" = "yes" -o "$ac_cv_header_stropts_h" = "yes"; then 
-	AC_DEFINE(HAVE_STREAMS,, [STREAMS are available])dnl
+if test "$ac_cv_header_sys_stropts_h" = "yes" -o "$ac_cv_header_stropts_h" = "yes"; then
+        AC_DEFINE(HAVE_STREAMS,, [STREAMS are available])dnl
 fi
 ])
 
 AC_DEFUN([CMU_TERMIO_MODEL], [
-if test "$ac_cv_header_sys_termio_h" = "yes" -o "$ac_cv_header_sys_termios_h" = "yes"; then 
-	AC_DEFINE(USE_TERMIO,, [Use termios for tty configuration])dnl
-	if test "$ac_cv_header_sys_termios_h" = "no"; then
-		AC_DEFINE(SYSV_TERMIO,, [Use SysV termios])dnl
-	fi
+if test "$ac_cv_header_sys_termio_h" = "yes" -o "$ac_cv_header_sys_termios_h" = "yes"; then
+        AC_DEFINE(USE_TERMIO,, [Use termios for tty configuration])dnl
+        if test "$ac_cv_header_sys_termios_h" = "no"; then
+                AC_DEFINE(SYSV_TERMIO,, [Use SysV termios])dnl
+        fi
 fi
 ])
 
@@ -137,43 +137,43 @@ AC_MSG_RESULT($cmu_cv_des_ecb_encrypt_proto)
 ])
 
 AC_DEFUN([CMU_TELNET_GETTYTAB], [
-	 if test -f "/etc/gettytab"; then
-		AC_CHECK_FUNCS(getent getstr)
-	        if test "X$ac_cv_func_getent" != "Xyes"; then
-			AC_DEFINE(HAVE_GETTYTAB,, [gettytab support is present])
-			if test "X$ac_cv_func_getstr" = "Xyes"; then
-				CFLAGS="$CFLAGS -Dgetstr=ggetstr"
-			fi
-		fi
-	 else
-		AC_CHECK_FUNCS(cgetent)
-	 fi
-	 ])
+         if test -f "/etc/gettytab"; then
+                AC_CHECK_FUNCS(getent getstr)
+                if test "X$ac_cv_func_getent" != "Xyes"; then
+                        AC_DEFINE(HAVE_GETTYTAB,, [gettytab support is present])
+                        if test "X$ac_cv_func_getstr" = "Xyes"; then
+                                CFLAGS="$CFLAGS -Dgetstr=ggetstr"
+                        fi
+                fi
+         else
+                AC_CHECK_FUNCS(cgetent)
+         fi
+         ])
 
 AC_DEFUN([CMU_TELNET_ISSUE], [
-	 if test -f "/etc/issue.net"; then
-		AC_DEFINE(ISSUE_FILE, "/etc/issue.net", [path of issue file to use])
-	 else
-		if test -f "/etc/issue"; then
-			AC_DEFINE(ISSUE_FILE, "/etc/issue", [path of issue file to use])
-		fi
-	 fi
-	 ])
+         if test -f "/etc/issue.net"; then
+                AC_DEFINE(ISSUE_FILE, "/etc/issue.net", [path of issue file to use])
+         else
+                if test -f "/etc/issue"; then
+                        AC_DEFINE(ISSUE_FILE, "/etc/issue", [path of issue file to use])
+                fi
+         fi
+         ])
 
 AC_DEFUN([CMU_TELNET_PTYDIR], [
 
-	 if test -d /dev/pts -o -d /dev/pty; then
-	  	case "${host}" in
-		  *-*-irix*)
-		    ;;
-		  *-*-linux*)
-		    AC_DEFINE(PTYDIR,, [Has /dev/ptX and pty allocation funcs])
-		    ;;
-		  *)
-		    AC_DEFINE(PTYDIR,, [Has /dev/ptX and pty allocation funcs])
-		    AC_DEFINE(STREAMSPTY,, [ptys are streams devices])
-		    ;;
-		esac
-	 fi
-	 ])
+         if test -d /dev/pts -o -d /dev/pty; then
+                case "${host}" in
+                  *-*-irix*)
+                    ;;
+                  *-*-linux*)
+                    AC_DEFINE(PTYDIR,, [Has /dev/ptX and pty allocation funcs])
+                    ;;
+                  *)
+                    AC_DEFINE(PTYDIR,, [Has /dev/ptX and pty allocation funcs])
+                    AC_DEFINE(STREAMSPTY,, [ptys are streams devices])
+                    ;;
+                esac
+         fi
+         ])
 

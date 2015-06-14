@@ -17,7 +17,7 @@ have to create a Makefile for it.  I recommend you use Makefile.in as
 a guide.
 
 It should compile without libcyrus, but then it does not implement the
-"address" test.	 That's just too much work to do when I have a neato
+"address" test.  That's just too much work to do when I have a neato
 library to do it for me.
 
 There's a simple "test" application included, which is not built by

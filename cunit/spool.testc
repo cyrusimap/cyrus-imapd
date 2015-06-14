@@ -10,11 +10,11 @@
 #define FIRST_RX    "Fri, 29 Oct 2010 13:05:01 +1100"
 #define SECOND_RX   "Fri, 29 Oct 2010 13:03:03 +1100"
 #define THIRD_RX    "Fri, 29 Oct 2010 13:01:01 +1100"
-#define SENT	    "Thu, 28 Oct 2010 18:37:26 +1100"
-#define HFROM	    "Fred Bloggs <fbloggs@fastmail.fm>"
-#define HFROM2	    "Antoine Lavoisier <lavoisier@chemistry.fr>"
-#define HTO	    "Sarah Jane Smith <sjsmith@gmail.com>"
-#define HDATE	    SENT
+#define SENT        "Thu, 28 Oct 2010 18:37:26 +1100"
+#define HFROM       "Fred Bloggs <fbloggs@fastmail.fm>"
+#define HFROM2      "Antoine Lavoisier <lavoisier@chemistry.fr>"
+#define HTO         "Sarah Jane Smith <sjsmith@gmail.com>"
+#define HDATE       SENT
 #define HSUBJECT    "Simple testing email"
 #define HMESSAGEID  "<fake1000@fastmail.fm>"
 #define HRECEIVED1  "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); " FIRST_RX
@@ -247,27 +247,27 @@ static void test_bz3386(void)
     int i;
     char name[32];
     char body[128];
-    char body2[128];	/* use a different buffer Just In Case */
+    char body2[128];    /* use a different buffer Just In Case */
     const char **val;
 
     cache = spool_new_hdrcache();
     CU_ASSERT_PTR_NOT_NULL(cache);
 
     for (i = 0 ; i < N ; i++) {
-	snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
-	snprintf(body, sizeof(body), "value %d %c", i, 'A'+(i%26));
-	spool_cache_header(xstrdup(name), xstrdup(body), cache);
+        snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
+        snprintf(body, sizeof(body), "value %d %c", i, 'A'+(i%26));
+        spool_cache_header(xstrdup(name), xstrdup(body), cache);
     }
 
     strcpy(body, "Old Buffer");
 
     for (i = 0 ; i < N ; i++) {
-	snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
-	snprintf(body2, sizeof(body2), "value %d %c", i, 'A'+(i%26));
-	val = spool_getheader(cache, name);
-	CU_ASSERT_PTR_NOT_NULL(val);
-	CU_ASSERT_STRING_EQUAL(val[0], body2);
-	CU_ASSERT_PTR_NULL(val[1]);
+        snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
+        snprintf(body2, sizeof(body2), "value %d %c", i, 'A'+(i%26));
+        val = spool_getheader(cache, name);
+        CU_ASSERT_PTR_NOT_NULL(val);
+        CU_ASSERT_STRING_EQUAL(val[0], body2);
+        CU_ASSERT_PTR_NULL(val[1]);
     }
 
     spool_free_hdrcache(cache);
@@ -276,11 +276,11 @@ static void test_bz3386(void)
 
 static void test_replace(void)
 {
-#define FOOBAR1	    "If music be the foo of love"
-#define FOOBAR2	    "Foo glorious foo"
-#define FOOBAR3	    "Foo is an important part of a balanced diet"
-		    /* apologies to Fran Liebowitz */
-#define FOOBAR4	    "Foo and Drug Administration"
+#define FOOBAR1     "If music be the foo of love"
+#define FOOBAR2     "Foo glorious foo"
+#define FOOBAR3     "Foo is an important part of a balanced diet"
+                    /* apologies to Fran Liebowitz */
+#define FOOBAR4     "Foo and Drug Administration"
     hdrcache_t cache;
     const char **val;
 

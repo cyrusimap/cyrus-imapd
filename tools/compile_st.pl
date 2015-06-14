@@ -61,25 +61,25 @@ while (my $a = shift)
 {
     if ($a eq "-c")
     {
-	$c_flag = 1;
+        $c_flag = 1;
     }
     elsif ($a eq "-h")
     {
-	$h_flag = 1;
+        $h_flag = 1;
     }
     elsif ($a eq "--help")
     {
-	usage();
+        usage();
     }
     elsif ($a =~ m/^-/)
     {
-	usage();
+        usage();
     }
     else
     {
-	usage()
-	    if defined $infile;
-	$infile = $a;
+        usage()
+            if defined $infile;
+        $infile = $a;
     }
 }
 
@@ -115,71 +115,71 @@ open ST,'<',$infile
 while (<ST>)
 {
     chomp;
-    next if m/^\s*#/;	    # skip comments
-    next if m/^\s*$/;	    # skip empty lines
+    next if m/^\s*#/;       # skip comments
+    next if m/^\s*$/;       # skip empty lines
     my @a = split;
 
     if ($a[0] eq "%ignore-case" && scalar(@a) == 1)
     {
-	push(@gperf_directives, "ignore-case");
+        push(@gperf_directives, "ignore-case");
     }
     elsif ($a[0] =~ m/^%/)
     {
-	die "Unrecognised gperf declaration \"$_\"";
+        die "Unrecognised gperf declaration \"$_\"";
     }
     elsif ($a[0] eq "table")
     {
-	die "Wrong number of arguments for \"table\""
-	    unless scalar(@a) == 2;
-	$name = $a[1];
+        die "Wrong number of arguments for \"table\""
+            unless scalar(@a) == 2;
+        $name = $a[1];
     }
     elsif ($a[0] eq "ent")
     {
-	my $enum;
-	my $literal;
-	my $string;
-	my $value;
+        my $enum;
+        my $literal;
+        my $string;
+        my $value;
 
-	($enum) = ($a[1] =~ m/^([A-Za-z_][A-Za-z_0-9]*)$/);
-	if (!defined $enum)
-	{
-	    ($literal) = ($a[1] =~ m/^([0-9]+|0x[0-9a-fA-F]+)$/);
-	}
-	die "Bad syntax for \"ent\" at or near \"$_\""
-	    unless (defined $enum || defined $literal);
+        ($enum) = ($a[1] =~ m/^([A-Za-z_][A-Za-z_0-9]*)$/);
+        if (!defined $enum)
+        {
+            ($literal) = ($a[1] =~ m/^([0-9]+|0x[0-9a-fA-F]+)$/);
+        }
+        die "Bad syntax for \"ent\" at or near \"$_\""
+            unless (defined $enum || defined $literal);
 
-	if (defined $a[2])
-	{
-	    ($string) = m/^\s*ent\s+\S+\s+"([^"]+)"\s*$/;
-	    die "Bad syntax for \"ent\" at or near \"$_\""
-		unless defined $string;
-	}
+        if (defined $a[2])
+        {
+            ($string) = m/^\s*ent\s+\S+\s+"([^"]+)"\s*$/;
+            die "Bad syntax for \"ent\" at or near \"$_\""
+                unless defined $string;
+        }
 
-	if (!defined $string)
-	{
-	    $value = $next_unknown;
-	    $next_unknown--;
-	    $unknown = $enum
-		unless defined $unknown;
-	}
-	else
-	{
-	    $value = $next_known;
-	    $next_known++;
-	}
+        if (!defined $string)
+        {
+            $value = $next_unknown;
+            $next_unknown--;
+            $unknown = $enum
+                unless defined $unknown;
+        }
+        else
+        {
+            $value = $next_known;
+            $next_known++;
+        }
 
-	push(@entries, {
-	    enum => $enum,
-	    literal => $literal,
-	    value => $value,
-	    string => $string
-	});
-	$nenums++ if defined $enum;
-	$nliterals++ if defined $literal;
+        push(@entries, {
+            enum => $enum,
+            literal => $literal,
+            value => $value,
+            string => $string
+        });
+        $nenums++ if defined $enum;
+        $nliterals++ if defined $literal;
     }
     else
     {
-	die "Unrecognised keyword at or near \"$_\"";
+        die "Unrecognised keyword at or near \"$_\"";
     }
 }
 close ST;
@@ -204,23 +204,23 @@ if ($h_flag)
 
     if ($nenums)
     {
-	printf "enum %s {\n", $name;
-	foreach my $e (@entries)
-	{
-	    next if !defined $e->{enum};
-	    printf "    %s", $e->{enum};
-	    printf "=%d", $e->{value}
-		if defined $e->{value};
-	    printf ",\n"
-	}
-	printf "};\n";
+        printf "enum %s {\n", $name;
+        foreach my $e (@entries)
+        {
+            next if !defined $e->{enum};
+            printf "    %s", $e->{enum};
+            printf "=%d", $e->{value}
+                if defined $e->{value};
+            printf ",\n"
+        }
+        printf "};\n";
     }
 
     printf "extern %s %s_from_string(const char *s);\n", $type, $name;
     printf "extern %s %s_from_string_len(const char *s, size_t len);\n", $type, $name;
     if (!$nliterals)
     {
-	printf "extern const char *%s_to_string(%s v);\n", $name, $type;
+        printf "extern const char *%s_to_string(%s v);\n", $name, $type;
     }
 
     printf "\n";
@@ -235,7 +235,7 @@ if ($c_flag)
     printf $fh "%%define lookup-function-name __%s_lookup\n", $name;
     foreach my $d (@gperf_directives)
     {
-	printf $fh "%%%s\n", $d;
+        printf $fh "%%%s\n", $d;
     }
 
     printf $fh "%%{\n";
@@ -248,15 +248,15 @@ if ($c_flag)
 
     foreach my $e (@entries)
     {
-	next unless defined $e->{string};
-	if (defined $e->{enum})
-	{
-	    printf $fh "%s, %s\n", $e->{string}, $e->{enum};
-	}
-	elsif (defined $e->{literal})
-	{
-	    printf $fh "%s, %s\n", $e->{string}, $e->{literal};
-	}
+        next unless defined $e->{string};
+        if (defined $e->{enum})
+        {
+            printf $fh "%s, %s\n", $e->{string}, $e->{enum};
+        }
+        elsif (defined $e->{literal})
+        {
+            printf $fh "%s, %s\n", $e->{string}, $e->{literal};
+        }
     }
 
     printf $fh "%%%%\n";
@@ -275,38 +275,38 @@ if ($c_flag)
     printf $fh "\n";
     if (!$nliterals)
     {
-	printf $fh "const char *%s_to_string(%s v)\n", $name, $type;
-	printf $fh "{\n";
-	printf $fh "    static const char * const strs[] = {\n";
-	foreach my $e (@entries)
-	{
-	    next unless defined $e->{string};
-	    printf $fh "\t\"%s\", /* %s */\n", $e->{string}, $e->{enum};
-	}
-	printf $fh "    };\n";
-	printf $fh "    return (v >= 0 && v < (int)(sizeof(strs)/sizeof(strs[0])) ? strs[v] : NULL);\n";
-	printf $fh "}\n";
+        printf $fh "const char *%s_to_string(%s v)\n", $name, $type;
+        printf $fh "{\n";
+        printf $fh "    static const char * const strs[] = {\n";
+        foreach my $e (@entries)
+        {
+            next unless defined $e->{string};
+            printf $fh "\t\"%s\", /* %s */\n", $e->{string}, $e->{enum};
+        }
+        printf $fh "    };\n";
+        printf $fh "    return (v >= 0 && v < (int)(sizeof(strs)/sizeof(strs[0])) ? strs[v] : NULL);\n";
+        printf $fh "}\n";
     }
 
     close $fh;
 
     my @cmd = ( 'gperf', $filename );
     open GPERF,'-|',@cmd
-	or die "Couldn't run gperf";
+        or die "Couldn't run gperf";
 
     # Post-process to fix warnings due to missing
     # initializers in the wordlist.
     my $s = 0;
     while (<GPERF>)
     {
-	chomp;
+        chomp;
 
-	next if m/^#line/;
-	s/{""}/{"", 0}/g if ($s);
-	$s = 1 if m/wordlist/;
-	$s = 0 if ($s && m/};/);
+        next if m/^#line/;
+        s/{""}/{"", 0}/g if ($s);
+        $s = 1 if m/wordlist/;
+        $s = 0 if ($s && m/};/);
 
-	print "$_\n";
+        print "$_\n";
     }
 
     close GPERF;

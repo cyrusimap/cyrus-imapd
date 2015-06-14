@@ -46,7 +46,7 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
- 
+
 #include "sieve_interface.h"
 #include "bytecode.h"
 
@@ -58,26 +58,26 @@ static void print_spaces(int n)
 {
     int temp_n=0;
     while(temp_n++ < (n)) {
-	putchar(' ');
-	putchar(' ');
-	putchar(' ');
-	putchar(' ');
+        putchar(' ');
+        putchar(' ');
+        putchar(' ');
+        putchar(' ');
     }
 }
 
 
 /* Dump a stringlist.  Return the last address used by the list */
-static int dump_sl(bytecode_info_t *d, int ip, int level) 
+static int dump_sl(bytecode_info_t *d, int ip, int level)
 {
     int numstr = d->data[ip].listlen;
     int i;
-    
+
     for(i=0; i<numstr; i++) {
-	print_spaces(level);
-	printf(" {%d}",d->data[++ip].len);
-	printf("%s\n",d->data[++ip].str);
+        print_spaces(level);
+        printf(" {%d}",d->data[++ip].len);
+        printf("%s\n",d->data[++ip].str);
     }
-    
+
     return ip;
 }
 
@@ -88,13 +88,13 @@ static int dump_tl(bytecode_info_t *d, int ip, int level)
 {
     int numtest = d->data[ip].listlen;
     int i;
-    
+
     for(i=0; i<numtest; i++) {
-	print_spaces(level);
-	printf(" (until %d)\n", d->data[++ip].jump);
-	ip = dump_test(d, ++ip, level);
+        print_spaces(level);
+        printf(" (until %d)\n", d->data[++ip].jump);
+        ip = dump_test(d, ++ip, level);
     }
-    
+
     return ip;
 }
 
@@ -107,347 +107,347 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
     print_spaces(level);
     switch(opcode) {
     case BC_TRUE:
-	printf("%d: TRUE\n",ip);
-	break;
+        printf("%d: TRUE\n",ip);
+        break;
 
     case BC_FALSE:
-	printf("%d: FALSE\n",ip);
-	break;
+        printf("%d: FALSE\n",ip);
+        break;
 
     case BC_NOT:
-	printf("%d: NOT TEST(\n",ip++);
-	/*   printf("  (until %d)\n", d->data[ip++].jump);*/
-	ip = dump_test(d,ip, level);
-	print_spaces(level);
-	printf("    )\n");
-	break;
+        printf("%d: NOT TEST(\n",ip++);
+        /*   printf("  (until %d)\n", d->data[ip++].jump);*/
+        ip = dump_test(d,ip, level);
+        print_spaces(level);
+        printf("    )\n");
+        break;
 
     case BC_SIZE:
-	printf("%d: SIZE TAG(%d) NUM(%d)\n",ip,
-	       d->data[ip+1].value, d->data[ip+2].value);
-	ip+=2;
-	break;
+        printf("%d: SIZE TAG(%d) NUM(%d)\n",ip,
+               d->data[ip+1].value, d->data[ip+2].value);
+        ip+=2;
+        break;
 
     case BC_EXISTS:
-	printf("%d: EXISTS\n",ip++);
-	ip = dump_sl(d,ip,level);
-	break;
+        printf("%d: EXISTS\n",ip++);
+        ip = dump_sl(d,ip,level);
+        break;
 
     case BC_ALLOF:
     case BC_ANYOF:
-	printf("%d: %s (\n",ip,
-	       d->data[ip++].op == BC_ALLOF ? "ALLOF" : "ANYOF");
-	ip = dump_tl(d,ip,level);
-	print_spaces(level);
-	printf(")\n");
-	break;
+        printf("%d: %s (\n",ip,
+               d->data[ip++].op == BC_ALLOF ? "ALLOF" : "ANYOF");
+        ip = dump_tl(d,ip,level);
+        print_spaces(level);
+        printf(")\n");
+        break;
 
     case BC_HEADER:
-	has_index=1;
-	printf("%d: HEADER (\n",ip++);
+        has_index=1;
+        printf("%d: HEADER (\n",ip++);
 
-	if (has_index) {
-		print_spaces(level);
-		printf("      INDEX:%d\n", d->data[ip++].value);
-	}
+        if (has_index) {
+                print_spaces(level);
+                printf("      INDEX:%d\n", d->data[ip++].value);
+        }
 
-	print_spaces(level);
-	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
-	{
-	    printf("      MATCH:%d RELATION:%d COMP:%d HEADERS:\n",
-		   d->data[ip].value, d->data[ip+1].value,d->data[ip+2].value);
-	} else {
-	    printf("      MATCH:%d COMP:%d HEADERS:\n",d->data[ip].value, d->data[ip+2].value);
-	}
-	ip+=3;
-	ip = dump_sl(d,ip,level);
-	ip++;
-	print_spaces(level);
-	printf("      DATA:\n");
-	ip = dump_sl(d,ip,level);
-	break;
-	
+        print_spaces(level);
+        if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+        {
+            printf("      MATCH:%d RELATION:%d COMP:%d HEADERS:\n",
+                   d->data[ip].value, d->data[ip+1].value,d->data[ip+2].value);
+        } else {
+            printf("      MATCH:%d COMP:%d HEADERS:\n",d->data[ip].value, d->data[ip+2].value);
+        }
+        ip+=3;
+        ip = dump_sl(d,ip,level);
+        ip++;
+        print_spaces(level);
+        printf("      DATA:\n");
+        ip = dump_sl(d,ip,level);
+        break;
+
     case BC_HASFLAG:
-	printf("%d: HASFLAG (\n",ip++);
-	print_spaces(level);
-	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
-	{
-	    printf("      MATCH:%d RELATION:%d COMP:%d FLAG-VARS:\n",
-		   d->data[ip].value, d->data[ip+1].value,d->data[ip+2].value);
-	} else {
-	    printf("      MATCH:%d COMP:%d FLAG-VARS:\n",d->data[ip].value, d->data[ip+2].value);
-	}
-	ip+=3;
-	ip = dump_sl(d,ip,level);
-	ip++;
-	print_spaces(level);
-	printf("      DATA:\n");
-	ip = dump_sl(d,ip,level);
-	break;
+        printf("%d: HASFLAG (\n",ip++);
+        print_spaces(level);
+        if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+        {
+            printf("      MATCH:%d RELATION:%d COMP:%d FLAG-VARS:\n",
+                   d->data[ip].value, d->data[ip+1].value,d->data[ip+2].value);
+        } else {
+            printf("      MATCH:%d COMP:%d FLAG-VARS:\n",d->data[ip].value, d->data[ip+2].value);
+        }
+        ip+=3;
+        ip = dump_sl(d,ip,level);
+        ip++;
+        print_spaces(level);
+        printf("      DATA:\n");
+        ip = dump_sl(d,ip,level);
+        break;
 
     case BC_ADDRESS:
-	has_index = 1;
+        has_index = 1;
     case BC_ENVELOPE:
-	if (d->data[ip].op == BC_ADDRESS) {
-		printf("%d: ADDRESS (\n",ip++);
-	}
-	else {
-		printf("%d: ENVELOPE (\n",ip++);
-	}
+        if (d->data[ip].op == BC_ADDRESS) {
+                printf("%d: ADDRESS (\n",ip++);
+        }
+        else {
+                printf("%d: ENVELOPE (\n",ip++);
+        }
 
-	if (has_index) {
-		print_spaces(level);
-		printf("      INDEX:%d\n", d->data[ip++].value);
-	}
+        if (has_index) {
+                print_spaces(level);
+                printf("      INDEX:%d\n", d->data[ip++].value);
+        }
 
-	print_spaces(level);
-	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
-	{
-	    printf("      MATCH:%d RELATION:%d COMP: %d TYPE: %d HEADERS:\n",
-		   d->data[ip].value, d->data[ip+1].value, d->data[ip+2].value, d->data[ip+3].value);
-	} else {
-	    printf("      MATCH:%d COMP:%d TYPE:%d HEADERS:\n",
-		   d->data[ip].value,d->data[ip+1].value,d->data[ip+3].value);
-	}
-	ip+=4;
-	ip = dump_sl(d,ip,level); ip++;
-	print_spaces(level);
-	printf("      DATA:\n");
-	ip = dump_sl(d,ip,level);
-	break;
+        print_spaces(level);
+        if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+        {
+            printf("      MATCH:%d RELATION:%d COMP: %d TYPE: %d HEADERS:\n",
+                   d->data[ip].value, d->data[ip+1].value, d->data[ip+2].value, d->data[ip+3].value);
+        } else {
+            printf("      MATCH:%d COMP:%d TYPE:%d HEADERS:\n",
+                   d->data[ip].value,d->data[ip+1].value,d->data[ip+3].value);
+        }
+        ip+=4;
+        ip = dump_sl(d,ip,level); ip++;
+        print_spaces(level);
+        printf("      DATA:\n");
+        ip = dump_sl(d,ip,level);
+        break;
 
     case BC_BODY:
-	printf("%d: BODY (\n",ip++);
-	print_spaces(level);
-	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
-	{
-	    printf("      MATCH:%d RELATION: %d COMP: %d TRANSFORM: %d OFFSET: %d CONTENT-TYPES:\n", 
-		   d->data[ip].value,d->data[ip+1].value,d->data[ip+2].value,
-		   d->data[ip+3].value,d->data[ip+4].value);
-	} else {
-	    printf("      MATCH:%d COMP:%d TRANSFORM:%d OFFSET: %d CONTENT-TYPES:\n",
-		   d->data[ip].value,d->data[ip+1].value,d->data[ip+3].value,
-		   d->data[ip+4].value);
-	}
-	ip+=5;
-	ip = dump_sl(d,ip,level); ip++;
-	print_spaces(level);
-	printf("      DATA:\n");
-	ip = dump_sl(d,ip,level);
-	break;
+        printf("%d: BODY (\n",ip++);
+        print_spaces(level);
+        if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+        {
+            printf("      MATCH:%d RELATION: %d COMP: %d TRANSFORM: %d OFFSET: %d CONTENT-TYPES:\n",
+                   d->data[ip].value,d->data[ip+1].value,d->data[ip+2].value,
+                   d->data[ip+3].value,d->data[ip+4].value);
+        } else {
+            printf("      MATCH:%d COMP:%d TRANSFORM:%d OFFSET: %d CONTENT-TYPES:\n",
+                   d->data[ip].value,d->data[ip+1].value,d->data[ip+3].value,
+                   d->data[ip+4].value);
+        }
+        ip+=5;
+        ip = dump_sl(d,ip,level); ip++;
+        print_spaces(level);
+        printf("      DATA:\n");
+        ip = dump_sl(d,ip,level);
+        break;
 
     case BC_DATE:
-	has_index=1;
+        has_index=1;
     case BC_CURRENTDATE:
-	if (BC_DATE == opcode) {
-		printf("%d: DATE (\n", ip++);
-	}
-	else {
-		printf("%d: CURRENTDATE (\n", ip++);
-	}
+        if (BC_DATE == opcode) {
+                printf("%d: DATE (\n", ip++);
+        }
+        else {
+                printf("%d: CURRENTDATE (\n", ip++);
+        }
 
-	/* index */
-	if (has_index) {
-		print_spaces(level);
-		printf("      INDEX:%d\n", d->data[ip++].value);
-	}
+        /* index */
+        if (has_index) {
+                print_spaces(level);
+                printf("      INDEX:%d\n", d->data[ip++].value);
+        }
 
-	/* zone tag */
-	print_spaces(level);
-	printf("      ZONE-TAG:%d ", d->data[ip].value);
+        /* zone tag */
+        print_spaces(level);
+        printf("      ZONE-TAG:%d ", d->data[ip].value);
 
-	switch (d->data[ip++].value) {
-	case B_TIMEZONE:
-		printf("TIMEZONE:%d\n", d->data[ip++].value);
-		break;
-	case B_ORIGINALZONE:
-		printf("ORIGINALZONE\n");
-		break;
-	}
+        switch (d->data[ip++].value) {
+        case B_TIMEZONE:
+                printf("TIMEZONE:%d\n", d->data[ip++].value);
+                break;
+        case B_ORIGINALZONE:
+                printf("ORIGINALZONE\n");
+                break;
+        }
 
-	/* comparison */
-	print_spaces(level);
-	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
-	{
-	    printf("      MATCH:%d RELATION:%d COMP:%d\n",
-		   d->data[ip].value, d->data[ip+1].value, d->data[ip+2].value);
-	} else {
-	    printf("      MATCH:%d COMP:%d\n", d->data[ip].value, d->data[ip+2].value);
-	}
-	ip+=3;
+        /* comparison */
+        print_spaces(level);
+        if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+        {
+            printf("      MATCH:%d RELATION:%d COMP:%d\n",
+                   d->data[ip].value, d->data[ip+1].value, d->data[ip+2].value);
+        } else {
+            printf("      MATCH:%d COMP:%d\n", d->data[ip].value, d->data[ip+2].value);
+        }
+        ip+=3;
 
-	/* date type */
-	print_spaces(level);
-	printf("      DATE-TYPE:%d\n", d->data[ip++].value);
+        /* date type */
+        print_spaces(level);
+        printf("      DATE-TYPE:%d\n", d->data[ip++].value);
 
-	/* header name */
-	if (BC_DATE == opcode) {
-		print_spaces(level);
-		printf("      HEADER NAME: {%d}", d->data[ip++].len);
-		printf("%s\n",d->data[ip++].str);
-	}
+        /* header name */
+        if (BC_DATE == opcode) {
+                print_spaces(level);
+                printf("      HEADER NAME: {%d}", d->data[ip++].len);
+                printf("%s\n",d->data[ip++].str);
+        }
 
-	print_spaces(level);
-	printf("      KEY LIST:\n");
-	ip = dump_sl(d,ip,level);
-	break;
+        print_spaces(level);
+        printf("      KEY LIST:\n");
+        ip = dump_sl(d,ip,level);
+        break;
 
-	break;
+        break;
 
     default:
-	printf("%d: TEST(%d)\n",ip,d->data[ip].op);
-	break;
+        printf("%d: TEST(%d)\n",ip,d->data[ip].op);
+        break;
     }
 
     return ip;
 }
 
-void dump(bytecode_info_t *d, int level) 
+void dump(bytecode_info_t *d, int level)
 {
     int i;
     printf("Dumping almost flattened bytecode\n\n");
-    
+
     if(!d) return;
 
     for(i=0; i<d->scriptend; i++) {
-	print_spaces(level);
-	switch(d->data[i].op) {
-	case B_REJECT:
-	    printf("%d: REJECT {%d}%s\n",i,
-		   d->data[i+1].len,d->data[i+2].str);
-	    i+=2;
-	    break;
-	case B_IF:
-	    if (d->data[i+3].jump== -1)
-	    {
-		printf("%d: IF THEN(%d) POST(%d) TEST(\n",i,
-		       d->data[i+1].jump,d->data[i+2].jump);
-	    }
-	    else
-	    {
-		printf("%d: IF THEN(%d) ELSE(%d) POST(%d) TEST(\n",i,
-		       d->data[i+1].jump,d->data[i+2].jump,
-		       d->data[i+3].jump);
-	    }
-	    i = dump_test(d,i+4, level+1);
-	    printf(")\n");
-	    break;
+        print_spaces(level);
+        switch(d->data[i].op) {
+        case B_REJECT:
+            printf("%d: REJECT {%d}%s\n",i,
+                   d->data[i+1].len,d->data[i+2].str);
+            i+=2;
+            break;
+        case B_IF:
+            if (d->data[i+3].jump== -1)
+            {
+                printf("%d: IF THEN(%d) POST(%d) TEST(\n",i,
+                       d->data[i+1].jump,d->data[i+2].jump);
+            }
+            else
+            {
+                printf("%d: IF THEN(%d) ELSE(%d) POST(%d) TEST(\n",i,
+                       d->data[i+1].jump,d->data[i+2].jump,
+                       d->data[i+3].jump);
+            }
+            i = dump_test(d,i+4, level+1);
+            printf(")\n");
+            break;
 
-	case B_STOP:
-	    printf("%d: STOP\n",i);
-	    break;
+        case B_STOP:
+            printf("%d: STOP\n",i);
+            break;
 
-	case B_DISCARD:
-	    printf("%d: DISCARD\n",i);
-	    break;
-	    
-	case B_KEEP:
-	    printf("%d: KEEP FLAGS:\n",i++);
-	    i = dump_sl(d,i,level+1);
-	    i++;
-	    print_spaces(level+1);
-	    printf("COPY(%d)\n",i, d->data[i].value);
-	    break;
+        case B_DISCARD:
+            printf("%d: DISCARD\n",i);
+            break;
 
-	case B_MARK:
-	    printf("%d: MARK\n",i);
-	    break;
+        case B_KEEP:
+            printf("%d: KEEP FLAGS:\n",i++);
+            i = dump_sl(d,i,level+1);
+            i++;
+            print_spaces(level+1);
+            printf("COPY(%d)\n",i, d->data[i].value);
+            break;
 
-	case B_UNMARK:
-	    printf("%d: UNMARK\n",i);
-	    break;
+        case B_MARK:
+            printf("%d: MARK\n",i);
+            break;
 
-	case B_FILEINTO:
-	    printf("%d: FILEINTO FLAGS:\n",i++);
-	    i = dump_sl(d,i,level+1);
-	    print_spaces(level+1);
-	    printf("COPY(%d) FOLDER({%d}%s)\n",
-		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
-	    i+=3;
-	    break;
+        case B_UNMARK:
+            printf("%d: UNMARK\n",i);
+            break;
 
-	case B_REDIRECT:
-	    printf("%d: REDIRECT COPY(%d) ADDRESS({%d}%s)\n",i,
-		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
-	    i+=3;
-	    break;
+        case B_FILEINTO:
+            printf("%d: FILEINTO FLAGS:\n",i++);
+            i = dump_sl(d,i,level+1);
+            print_spaces(level+1);
+            printf("COPY(%d) FOLDER({%d}%s)\n",
+                   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+            i+=3;
+            break;
 
-	case B_SETFLAG:
-	    printf("%d: SETFLAG\n",i);
-	    i=dump_sl(d,++i, level);
-	    break;
+        case B_REDIRECT:
+            printf("%d: REDIRECT COPY(%d) ADDRESS({%d}%s)\n",i,
+                   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+            i+=3;
+            break;
 
-	case B_ADDFLAG:
-	    printf("%d: ADDFLAG\n",i);
-	    i=dump_sl(d,++i,level);
-	    break;
+        case B_SETFLAG:
+            printf("%d: SETFLAG\n",i);
+            i=dump_sl(d,++i, level);
+            break;
 
-	case B_REMOVEFLAG:
-	    printf("%d: REMOVEFLAG\n",i);
-	    i=dump_sl(d,++i,level);
-	    break;
+        case B_ADDFLAG:
+            printf("%d: ADDFLAG\n",i);
+            i=dump_sl(d,++i,level);
+            break;
 
-	case B_DENOTIFY:
-	    printf("%d: DENOTIFY priority %d,comp %d %d  %s\n", 
-		   i,
-		   d->data[i+1].value,
-		   d->data[i+2].value,
-		   d->data[i+3].value,
-		   (d->data[i+4].len == -1 ? "[nil]" : d->data[i+5].str));
-	    i+=5;
-	    break;
+        case B_REMOVEFLAG:
+            printf("%d: REMOVEFLAG\n",i);
+            i=dump_sl(d,++i,level);
+            break;
 
-	case B_NOTIFY: 
-	    printf("%d: NOTIFY\n   METHOD(%s),\n   ID(%s),\n   OPTIONS",
-		   i,
-		   d->data[i+2].str,
-		   (d->data[i+3].len == -1 ? "[nil]" : d->data[i+4].str));
-	    i+=5;
-	    i=dump_sl(d,i,level);
-	    printf("   PRIORITY(%d),\n   MESSAGE({%d}%s)\n", 
-		   d->data[i+1].value, d->data[i+2].len,d->data[i+3].str);
-	    i+=3;
-	    break;
+        case B_DENOTIFY:
+            printf("%d: DENOTIFY priority %d,comp %d %d  %s\n",
+                   i,
+                   d->data[i+1].value,
+                   d->data[i+2].value,
+                   d->data[i+3].value,
+                   (d->data[i+4].len == -1 ? "[nil]" : d->data[i+5].str));
+            i+=5;
+            break;
 
-	case B_VACATION_ORIG:
-	case B_VACATION:
-	    printf("%d:VACATION\n",i);
-	    i++;
-	    i=dump_sl(d,i,level);
-	    printf("SUBJ({%d}%s) MESG({%d}%s)\n SECONDS(%d) MIME(%d)\n"
-		   " FROM({%d}%s) HANDLE({%d}%s)\n",
-		   d->data[i+1].len, (d->data[i+1].len == -1 ? "[nil]" : d->data[i+2].str),
-		   d->data[i+3].len, (d->data[i+3].len == -1 ? "[nil]" : d->data[i+4].str),
-		   d->data[i+5].value * (d->data[i].op == B_VACATION ? 1 : (24 * 60 * 60 /* 1 day */)), d->data[i+6].value,
-		   d->data[i+7].len, (d->data[i+7].len == -1 ? "[nil]" : d->data[i+8].str),
-		   d->data[i+9].len, (d->data[i+9].len == -1 ? "[nil]" : d->data[i+10].str));
-	    i+=10;
-	
-	    break;
-	case B_JUMP:
-	    printf("%d: JUMP HUH?  this shouldn't be here>?!",i);
-	    break;
-	case B_NULL:
-	    printf("%d: NULL\n",i);
-	    break;
+        case B_NOTIFY:
+            printf("%d: NOTIFY\n   METHOD(%s),\n   ID(%s),\n   OPTIONS",
+                   i,
+                   d->data[i+2].str,
+                   (d->data[i+3].len == -1 ? "[nil]" : d->data[i+4].str));
+            i+=5;
+            i=dump_sl(d,i,level);
+            printf("   PRIORITY(%d),\n   MESSAGE({%d}%s)\n",
+                   d->data[i+1].value, d->data[i+2].len,d->data[i+3].str);
+            i+=3;
+            break;
 
-	case B_INCLUDE:
-	    printf("%d: INCLUDE ONCE:%s OPTIONAL:%s LOCATION:%s {%d}%s\n",i,
-		   d->data[i+1].value & 64 ? "yes" : "no",
-		   d->data[i+1].value & 128 ? "yes" : "no",
-		   (d->data[i+1].value & 63) == B_GLOBAL ? "global" : "local",
-		   d->data[i+2].len,d->data[i+3].str);
-	    i+=3;
-	    break;
+        case B_VACATION_ORIG:
+        case B_VACATION:
+            printf("%d:VACATION\n",i);
+            i++;
+            i=dump_sl(d,i,level);
+            printf("SUBJ({%d}%s) MESG({%d}%s)\n SECONDS(%d) MIME(%d)\n"
+                   " FROM({%d}%s) HANDLE({%d}%s)\n",
+                   d->data[i+1].len, (d->data[i+1].len == -1 ? "[nil]" : d->data[i+2].str),
+                   d->data[i+3].len, (d->data[i+3].len == -1 ? "[nil]" : d->data[i+4].str),
+                   d->data[i+5].value * (d->data[i].op == B_VACATION ? 1 : (24 * 60 * 60 /* 1 day */)), d->data[i+6].value,
+                   d->data[i+7].len, (d->data[i+7].len == -1 ? "[nil]" : d->data[i+8].str),
+                   d->data[i+9].len, (d->data[i+9].len == -1 ? "[nil]" : d->data[i+10].str));
+            i+=10;
 
-	case B_RETURN:
-	    printf("%d: RETURN\n",i);
-	    break;
+            break;
+        case B_JUMP:
+            printf("%d: JUMP HUH?  this shouldn't be here>?!",i);
+            break;
+        case B_NULL:
+            printf("%d: NULL\n",i);
+            break;
 
-	default:
-	    printf("%d: %d\n",i,d->data[i].op);
-	    break;
-	}
+        case B_INCLUDE:
+            printf("%d: INCLUDE ONCE:%s OPTIONAL:%s LOCATION:%s {%d}%s\n",i,
+                   d->data[i+1].value & 64 ? "yes" : "no",
+                   d->data[i+1].value & 128 ? "yes" : "no",
+                   (d->data[i+1].value & 63) == B_GLOBAL ? "global" : "local",
+                   d->data[i+2].len,d->data[i+3].str);
+            i+=3;
+            break;
+
+        case B_RETURN:
+            printf("%d: RETURN\n",i);
+            break;
+
+        default:
+            printf("%d: %d\n",i,d->data[i].op);
+            break;
+        }
     }
     printf("full len is: %d\n", d->scriptend);
 }

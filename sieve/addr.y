@@ -55,7 +55,7 @@
 #include "xstrlcpy.h"
 
 #define ADDRERR_SIZE 500
-    
+
 void yyerror(sieve_script_t*, const char *);
 extern int addrlex(YYSTYPE*, sieve_script_t*);
 
@@ -63,7 +63,7 @@ extern int addrlex(YYSTYPE*, sieve_script_t*);
 
 /* byacc default is 500, bison default is 10000 - go with the
    larger to support big sieve scripts (see Bug #3461) */
-#define YYSTACKSIZE 10000 
+#define YYSTACKSIZE 10000
 %}
 
 %token ATOM QTEXT DTEXT
@@ -73,41 +73,41 @@ extern int addrlex(YYSTYPE*, sieve_script_t*);
 %lex-param {sieve_script_t *parse_script}
 %pure_parser
 %%
-sieve_address: addrspec			/* simple address */
-	| phrase '<' addrspec '>'	/* name & addr-spec */
-	;
+sieve_address: addrspec                 /* simple address */
+        | phrase '<' addrspec '>'       /* name & addr-spec */
+        ;
 
-addrspec: localpart '@' domain		/* global-address */
-	;
+addrspec: localpart '@' domain          /* global-address */
+        ;
 
-localpart: word				/* uninterpreted, case-preserved */
-	| word '.' localpart
-	;
+localpart: word                         /* uninterpreted, case-preserved */
+        | word '.' localpart
+        ;
 
 domain: subdomain
-	| subdomain '.' domain
-	;
+        | subdomain '.' domain
+        ;
 
 subdomain: domainref
-	| domainlit
-	;
+        | domainlit
+        ;
 
-domainref: ATOM				/* symbolic reference */
-	;
+domainref: ATOM                         /* symbolic reference */
+        ;
 
 domainlit: '[' DTEXT ']'
-	;
+        ;
 
 phrase: word
-	| word phrase
-	;
+        | word phrase
+        ;
 
 word: ATOM
-	| qstring
-	;
+        | qstring
+        ;
 
 qstring: '"' QTEXT '"'
-	;
+        ;
 
 %%
 

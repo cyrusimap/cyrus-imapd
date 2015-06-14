@@ -44,7 +44,7 @@ struct server_state {
     int is_connected;
     int is_authenticated;
     int is_tls;
-    sasl_conn_t *saslconn;	    /* the sasl connection context */
+    sasl_conn_t *saslconn;          /* the sasl connection context */
 #ifdef HAVE_SSL
     SSL *tls_conn;
 #endif
@@ -53,10 +53,10 @@ struct server_state {
 };
 
 
-#define HOST		"localhost"
-#define SASLSERVICE	"vorpal"
-#define USERID		"fbloggs"
-#define PASSWORD	"shibboleth"
+#define HOST            "localhost"
+#define SASLSERVICE     "vorpal"
+#define USERID          "fbloggs"
+#define PASSWORD        "shibboleth"
 extern int verbose;
 
 static sasl_callback_t *callbacks;
@@ -85,50 +85,50 @@ static struct protocol_t test_prot =
     .sasl_service = SASLSERVICE,
     .type = TYPE_STD,
     .u.std = {
-	.banner = {
-	    .auto_capa = 1,
-	    .resp = "OK"
-	},
-	.capa_cmd = {
-	    .cmd = "XXCAPABILITY",
-	    .arg = NULL,
-	    .resp = "OK",
-	    .postcapability = NULL,
-	    .formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
-	    /* .capa is setup in default_conditions() */
-	},
-	.tls_cmd = {
-	    .cmd = "XXSTARTTLS",
-	    .ok = "OK",
-	    .fail = "NO",
-	    .auto_capa = 0
-	},
-	.sasl_cmd = {
-	    .cmd = "XXAUTHENTICATE",
-	    .maxlen = USHRT_MAX,
-	    .quote = 0,
-	    .ok = "OK",
-	    .fail = "NO",
-	    .cont = "+ ",
-	    .cancel = "*",
-	    .parse_success = NULL,
-	    .auto_capa = 0
-	},
-	.compress_cmd = {
-	    .cmd = NULL,
-	    .unsol = NULL,
-	    .ok = NULL
-	},
-	.ping_cmd = {
-	    .cmd = "XXNOOP",
-	    .unsol = NULL,
-	    .ok = "OK"
-	},
-	.logout_cmd = {
-	    .cmd = "XXLOGOUT",
-	    .unsol = NULL,
-	    .ok = "OK"
-	}
+        .banner = {
+            .auto_capa = 1,
+            .resp = "OK"
+        },
+        .capa_cmd = {
+            .cmd = "XXCAPABILITY",
+            .arg = NULL,
+            .resp = "OK",
+            .postcapability = NULL,
+            .formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
+            /* .capa is setup in default_conditions() */
+        },
+        .tls_cmd = {
+            .cmd = "XXSTARTTLS",
+            .ok = "OK",
+            .fail = "NO",
+            .auto_capa = 0
+        },
+        .sasl_cmd = {
+            .cmd = "XXAUTHENTICATE",
+            .maxlen = USHRT_MAX,
+            .quote = 0,
+            .ok = "OK",
+            .fail = "NO",
+            .cont = "+ ",
+            .cancel = "*",
+            .parse_success = NULL,
+            .auto_capa = 0
+        },
+        .compress_cmd = {
+            .cmd = NULL,
+            .unsol = NULL,
+            .ok = NULL
+        },
+        .ping_cmd = {
+            .cmd = "XXNOOP",
+            .unsol = NULL,
+            .ok = "OK"
+        },
+        .logout_cmd = {
+            .cmd = "XXLOGOUT",
+            .unsol = NULL,
+            .ok = "OK"
+        }
     }
 };
 
@@ -158,7 +158,7 @@ static void test_badhost(void)
     default_conditions();
 
     be = backend_connect(NULL, "nonexistanthost", &test_prot,
-			 USERID, callbacks, &auth_status, /*fd*/-1);
+                         USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NULL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 0);
 }
@@ -175,7 +175,7 @@ static void test_badservice(void)
     test_prot.service = "nonexistantservice";
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status, /*fd*/-1);
+                         USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NULL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 0);
 }
@@ -194,7 +194,7 @@ static void test_sasl_plain(void)
     server_state->config.sasl_plain = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status, /*fd*/-1);
+                         USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -228,7 +228,7 @@ static void not_test_sasl_login(void)
     server_state->config.sasl_login = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status, /*fd*/-1);
+                         USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -261,7 +261,7 @@ static void test_sasl_digestmd5(void)
     server_state->config.sasl_digestmd5 = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status, /*fd*/-1);
+                         USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -281,36 +281,36 @@ static void test_sasl_digestmd5(void)
 /* Common routine to test the semantics of capabilities */
 static void caps_common(void)
 {
-#define CAPA_FOO	(1<<(CAPA_COMPRESS+1))
-#define CAPA_BAZ	(1<<(CAPA_COMPRESS+2))
-#define CAPA_QUUX	(1<<(CAPA_COMPRESS+3))
-#define CAPA_FNORD	(1<<(CAPA_COMPRESS+4))
-#define CAPA_CAPITALS	(1<<(CAPA_COMPRESS+5))
-#define CAPA_MIA	(1<<(CAPA_COMPRESS+6))
+#define CAPA_FOO        (1<<(CAPA_COMPRESS+1))
+#define CAPA_BAZ        (1<<(CAPA_COMPRESS+2))
+#define CAPA_QUUX       (1<<(CAPA_COMPRESS+3))
+#define CAPA_FNORD      (1<<(CAPA_COMPRESS+4))
+#define CAPA_CAPITALS   (1<<(CAPA_COMPRESS+5))
+#define CAPA_MIA        (1<<(CAPA_COMPRESS+6))
     struct backend *be;
     const char *auth_status = NULL;
     char *params;
     int r;
     int n;
     static const struct capa_t extra_capa[] = {
-	{ "FOO", CAPA_FOO },
-	{ "BAZ", CAPA_BAZ },
-	{ "QUUX", CAPA_QUUX },
-	{ "FNORD=BOO", CAPA_FNORD },
-	{ "CAPITALS", CAPA_CAPITALS },
-	{ "MIA", CAPA_MIA },
-	{ NULL, 0 }
-	/* No more room in the fixed size array, dammit */
+        { "FOO", CAPA_FOO },
+        { "BAZ", CAPA_BAZ },
+        { "QUUX", CAPA_QUUX },
+        { "FNORD=BOO", CAPA_FNORD },
+        { "CAPITALS", CAPA_CAPITALS },
+        { "MIA", CAPA_MIA },
+        { NULL, 0 }
+        /* No more room in the fixed size array, dammit */
     };
 
     /* append some extra capabilities */
     n = sizeof(default_capa)/sizeof(default_capa[0]) - 1;
     CU_ASSERT_FATAL(n * sizeof(struct capa_t) +
-		    sizeof(extra_capa) <= sizeof(test_prot.u.std.capa_cmd.capa));
+                    sizeof(extra_capa) <= sizeof(test_prot.u.std.capa_cmd.capa));
     memcpy(&test_prot.u.std.capa_cmd.capa[n], extra_capa, sizeof(extra_capa));
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status, /*fd*/-1);
+                         USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -404,7 +404,7 @@ static void test_starttls(void)
     server_state->config.starttls = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status, /*fd*/-1);
+                         USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -454,24 +454,24 @@ static void *get_anonymous_page(void)
 #ifdef MAP_ANONYMOUS
     /* Linux and Solaris */
     page = mmap(NULL, pagesize, PROT_READ|PROT_WRITE,
-	        MAP_ANONYMOUS|MAP_SHARED, -1, 0);
+                MAP_ANONYMOUS|MAP_SHARED, -1, 0);
     if (page == MAP_FAILED) {
-	perror("mmap");
-	return NULL;
+        perror("mmap");
+        return NULL;
     }
 #else
     int fd;
 
     fd = open("/dev/zero", O_RDWR);
     if (fd < 0) {
-	perror("/dev/zero");
-	return NULL;
+        perror("/dev/zero");
+        return NULL;
     }
     page = mmap(NULL, pagesize, PROT_READ|PROT_WRITE,
-	        MAP_SHARED, fd, 0);
+                MAP_SHARED, fd, 0);
     if (page == MAP_FAILED) {
-	perror("mmap");
-	page = NULL;
+        perror("mmap");
+        page = NULL;
     }
     close(fd);
 #endif
@@ -502,40 +502,40 @@ static int create_server_socket(int *portp)
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock < 0) {
-	perror("socket(TCP)");
-	return -1;
+        perror("socket(TCP)");
+        return -1;
     }
 
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (*portp)
-	sin.sin_port = htons(*portp);
+        sin.sin_port = htons(*portp);
 
     r = bind(sock, (struct sockaddr *)&sin, sizeof(sin));
     if (r < 0) {
-	perror("bind");
-	goto error;
+        perror("bind");
+        goto error;
     }
 
     r = listen(sock, 5);
     if (r < 0) {
-	perror("listen");
-	goto error;
+        perror("listen");
+        goto error;
     }
 
     if (!*portp) {
-	socklen_t len = sizeof(sin);
-	r = getsockname(sock, (struct sockaddr *)&sin, &len);
-	if (r < 0) {
-	    perror("getsockname");
-	    goto error;
-	}
-	if (len != sizeof(sin) || sin.sin_family != AF_INET) {
-	    fprintf(stderr, "Bad address from getsockname()\n");
-	    goto error;
-	}
-	*portp = ntohs(sin.sin_port);
+        socklen_t len = sizeof(sin);
+        r = getsockname(sock, (struct sockaddr *)&sin, &len);
+        if (r < 0) {
+            perror("getsockname");
+            goto error;
+        }
+        if (len != sizeof(sin) || sin.sin_family != AF_INET) {
+            fprintf(stderr, "Bad address from getsockname()\n");
+            goto error;
+        }
+        *portp = ntohs(sin.sin_port);
     }
 
     return sock;
@@ -560,30 +560,30 @@ static int server_accept(struct server_state *state)
     int r;
 
     if (verbose > 1)
-	fprintf(stderr, "Server waiting for connection\n");
+        fprintf(stderr, "Server waiting for connection\n");
 
     conn_sock = accept(state->rend_sock, NULL, NULL);
     if (conn_sock < 0) {
-	perror("accept");
-	return -1;
+        perror("accept");
+        return -1;
     }
     if (verbose > 1)
-	fprintf(stderr, "Server accepted connection\n");
+        fprintf(stderr, "Server accepted connection\n");
 
     state->in = prot_new(conn_sock, /*read*/0);
     state->out = prot_new(dup(conn_sock), /*write*/1);
     if (!state->in || !state->out) {
-	perror("prot_new");
-	return -1;
+        perror("prot_new");
+        return -1;
     }
 
     r = sasl_server_new(SASLSERVICE, HOST,
-			/*user_realm*/NULL, /*iplocalport*/NULL,
-			/*ipremoteport*/NULL, /*callbacks*/NULL,
-			/*flags*/0, &state->saslconn);
+                        /*user_realm*/NULL, /*iplocalport*/NULL,
+                        /*ipremoteport*/NULL, /*callbacks*/NULL,
+                        /*flags*/0, &state->saslconn);
     if (r != SASL_OK) {
-	fprintf(stderr, "sasl_server_new() failed with error %d\n", r);
-	return -1;
+        fprintf(stderr, "sasl_server_new() failed with error %d\n", r);
+        return -1;
     }
 
     state->is_authenticated = 0;
@@ -611,8 +611,8 @@ static void server_unaccept(struct server_state *state)
     state->is_tls = 0;
 #ifdef HAVE_SSL
     if (state->tls_conn) {
-	tls_reset_servertls(&state->tls_conn);
-	state->tls_conn = NULL;
+        tls_reset_servertls(&state->tls_conn);
+        state->tls_conn = NULL;
     }
 #endif
 }
@@ -630,10 +630,10 @@ static void server_printf(struct server_state *state, const char *fmt, ...)
     char buf[2048];
 
     if (verbose > 1) {
-	va_start(args, fmt);
-	fprintf(stderr, "S: ");
-	vfprintf(stderr, fmt, args);
-	va_end(args);
+        va_start(args, fmt);
+        fprintf(stderr, "S: ");
+        vfprintf(stderr, fmt, args);
+        va_end(args);
     }
 
     va_start(args, fmt);
@@ -660,12 +660,12 @@ static void server_flush(struct server_state *state)
  * Returns: 0 on success, -1 on error or end of file.
  */
 static int server_getline(struct server_state *state,
-			  char *buf, int maxlen)
+                          char *buf, int maxlen)
 {
     if (!prot_fgets(buf, maxlen, state->in))
-	return -1;
+        return -1;
     if (verbose > 1)
-	fprintf(stderr, "C: %s\n", buf);
+        fprintf(stderr, "C: %s\n", buf);
     return 0;
 }
 
@@ -687,10 +687,10 @@ static void server_emit_caps(struct server_state *state)
     char *b;
     int n = 0;
     const char *name;
-    const char *words[256];	/* array of:
-				 * NAME, VALUE, VALUE, NULL,
-				 * NAME, VALUE, NULL,
-				 * NULL */
+    const char *words[256];     /* array of:
+                                 * NAME, VALUE, VALUE, NULL,
+                                 * NAME, VALUE, NULL,
+                                 * NULL */
     char line[1024];
     static const char banner[] = "Toy Test server v0.0.1";
 
@@ -699,54 +699,54 @@ static void server_emit_caps(struct server_state *state)
      * Note that we suppress them all if STARTTLS is enabled.
      */
     if (!state->config.starttls || state->is_tls) {
-	int got_login = 0;
-	int got_plain = 0;
-	int got_digestmd5 = 0;
+        int got_login = 0;
+        int got_plain = 0;
+        int got_digestmd5 = 0;
 
-	/* First see what mechanisms SASL has; no point reporting
-	 * mechanisms which aren't actually available. */
-	sasl_listmech(state->saslconn, /*user*/NULL, /*prefix*/"",
-		      /*sep*/" ", /*suffix*/"", &saslmechs, /*plen*/NULL,
-		      /*pcount*/NULL);
-	b = xstrdup(saslmechs);
-	/* Build our own list of mechanisms, which is the intersection
-	 * of the ones configured in SASL and the ones our server config
-	 * allows us. */
-	words[n++] = "ccSASL";
-	for (p = strtok(b, " ") ; p ; p = strtok(NULL, " ")) {
-	    if (!strcasecmp(p, "LOGIN") && state->config.sasl_login) {
-		words[n++] = "LOGIN";
-		got_login = 1;
-	    }
-	    if (!strcasecmp(p, "LOGIN") && state->config.sasl_plain) {
-		words[n++] = "PLAIN";
-		got_plain = 1;
-	    }
-	    if (!strcasecmp(p, "DIGEST-MD5") && state->config.sasl_digestmd5) {
-		words[n++] = "DIGEST-MD5";
-		got_digestmd5 = 1;
-	    }
-	}
-	words[n++] = NULL;
-	free(b);
+        /* First see what mechanisms SASL has; no point reporting
+         * mechanisms which aren't actually available. */
+        sasl_listmech(state->saslconn, /*user*/NULL, /*prefix*/"",
+                      /*sep*/" ", /*suffix*/"", &saslmechs, /*plen*/NULL,
+                      /*pcount*/NULL);
+        b = xstrdup(saslmechs);
+        /* Build our own list of mechanisms, which is the intersection
+         * of the ones configured in SASL and the ones our server config
+         * allows us. */
+        words[n++] = "ccSASL";
+        for (p = strtok(b, " ") ; p ; p = strtok(NULL, " ")) {
+            if (!strcasecmp(p, "LOGIN") && state->config.sasl_login) {
+                words[n++] = "LOGIN";
+                got_login = 1;
+            }
+            if (!strcasecmp(p, "LOGIN") && state->config.sasl_plain) {
+                words[n++] = "PLAIN";
+                got_plain = 1;
+            }
+            if (!strcasecmp(p, "DIGEST-MD5") && state->config.sasl_digestmd5) {
+                words[n++] = "DIGEST-MD5";
+                got_digestmd5 = 1;
+            }
+        }
+        words[n++] = NULL;
+        free(b);
 
-	if (state->config.sasl_login && !got_login)
-	    fprintf(stderr, "Server failed to find requested "
-			    "SASL mechanism \"LOGIN\"\n");
-	if (state->config.sasl_plain && !got_plain)
-	    fprintf(stderr, "Server failed to find requested "
-			    "SASL mechanism \"PLAIN\"\n");
-	if (state->config.sasl_digestmd5 && !got_digestmd5)
-	    fprintf(stderr, "Server failed to find requested "
-			    "SASL mechanism \"DIGEST-MD5\"\n");
+        if (state->config.sasl_login && !got_login)
+            fprintf(stderr, "Server failed to find requested "
+                            "SASL mechanism \"LOGIN\"\n");
+        if (state->config.sasl_plain && !got_plain)
+            fprintf(stderr, "Server failed to find requested "
+                            "SASL mechanism \"PLAIN\"\n");
+        if (state->config.sasl_digestmd5 && !got_digestmd5)
+            fprintf(stderr, "Server failed to find requested "
+                            "SASL mechanism \"DIGEST-MD5\"\n");
     }
 
     /*
      * The ccSTARTTLS cap reports the ability to do STARTTLS
      */
     if (state->config.starttls) {
-	words[n++] = "ccSTARTTLS";
-	words[n++] = NULL;
+        words[n++] = "ccSTARTTLS";
+        words[n++] = NULL;
     }
 
     /*
@@ -754,9 +754,9 @@ static void server_emit_caps(struct server_state *state)
      * compression.
      */
     if (state->config.deflate) {
-	words[n++] = "ccCOMPRESS";
-	words[n++] = "DEFLATE";
-	words[n++] = NULL;
+        words[n++] = "ccCOMPRESS";
+        words[n++] = "DEFLATE";
+        words[n++] = NULL;
     }
 
     /*
@@ -792,36 +792,36 @@ static void server_emit_caps(struct server_state *state)
      */
     n = 0;
     if (state->config.caps_one_per_line) {
-	/* Multi-line, one cap and all its values on each line (LMTP,
-	 * ManageSieve, POP3 and sync style) */
-	while ((name = words[n++])) {
-	    line[0] = '\0';
-	    for ( ; words[n] ; n++) {
-		strcat(line, " ");
-		strcat(line, words[n]);
-	    }
-	    n++;
-	    server_printf(state, "* %s%s\r\n", name, line);
-	}
-	server_printf(state, "OK %s\r\n", banner);
+        /* Multi-line, one cap and all its values on each line (LMTP,
+         * ManageSieve, POP3 and sync style) */
+        while ((name = words[n++])) {
+            line[0] = '\0';
+            for ( ; words[n] ; n++) {
+                strcat(line, " ");
+                strcat(line, words[n]);
+            }
+            n++;
+            server_printf(state, "* %s%s\r\n", name, line);
+        }
+        server_printf(state, "OK %s\r\n", banner);
     } else {
-	/* One-line, NAME=VALUE pairs inside IMAP-style response code */
-	line[0] = '\0';
-	while ((name = words[n++])) {
-	    if (words[n]) {
-		for ( ; words[n] ; n++) {
-		    strcat(line, " ");
-		    strcat(line, name);
-		    strcat(line, "=");
-		    strcat(line, words[n]);
-		}
-	    } else {
-		strcat(line, " ");
-		strcat(line, name);
-	    }
-	    n++;
-	}
-	server_printf(state, "OK [CAPABILITY%s] %s\r\n", line, banner);
+        /* One-line, NAME=VALUE pairs inside IMAP-style response code */
+        line[0] = '\0';
+        while ((name = words[n++])) {
+            if (words[n]) {
+                for ( ; words[n] ; n++) {
+                    strcat(line, " ");
+                    strcat(line, name);
+                    strcat(line, "=");
+                    strcat(line, words[n]);
+                }
+            } else {
+                strcat(line, " ");
+                strcat(line, name);
+            }
+            n++;
+        }
+        server_printf(state, "OK [CAPABILITY%s] %s\r\n", line, banner);
     }
     server_flush(state);
 }
@@ -834,7 +834,7 @@ static void server_emit_caps(struct server_state *state)
  * final status.  If successful, sets @state->is_authenticated.
  */
 static void cmd_authenticate(struct server_state *state,
-			     const char *mech, const char *initial_in_b64)
+                             const char *mech, const char *initial_in_b64)
 {
     char *word;
     const char *server_out;
@@ -845,54 +845,54 @@ static void cmd_authenticate(struct server_state *state,
     static const char sep[] = " \t\r\n";
 
     if (!mech)
-	goto badsyntax;
+        goto badsyntax;
 
     if (initial_in_b64) {
-	r = sasl_decode64(initial_in_b64, strlen(initial_in_b64),
-			  buf, sizeof(buf), &buflen);
-	if (r != SASL_OK)
-	    goto badsyntax;
+        r = sasl_decode64(initial_in_b64, strlen(initial_in_b64),
+                          buf, sizeof(buf), &buflen);
+        if (r != SASL_OK)
+            goto badsyntax;
     } else {
-	buflen = 0;
+        buflen = 0;
     }
 
     server_out = NULL;
     server_out_len = 0;
     r = sasl_server_start(state->saslconn, mech,
-			  buf, buflen,
-			  &server_out, &server_out_len);
+                          buf, buflen,
+                          &server_out, &server_out_len);
 
     while (r == SASL_CONTINUE) {
-	if (server_out_len)
-	    sasl_encode64(server_out, server_out_len, buf, sizeof(buf), NULL);
-	else
-	    strcpy(buf, "=");
-	server_printf(state, "+ %s\n", buf);
-	server_flush(state);
+        if (server_out_len)
+            sasl_encode64(server_out, server_out_len, buf, sizeof(buf), NULL);
+        else
+            strcpy(buf, "=");
+        server_printf(state, "+ %s\n", buf);
+        server_flush(state);
 
-	if (server_getline(state, buf, sizeof(buf)) < 0) {
-	    fprintf(stderr, "No response to AUTH challenge\n");
-	    return;
-	}
-	word = strtok(buf, sep);
-	if (word) {
-	    r = sasl_decode64(word, strlen(word), buf, sizeof(buf), &buflen);
-	    if (r != SASL_OK)
-		goto badsyntax;
-	} else {
-	    buflen = 0;
-	}
+        if (server_getline(state, buf, sizeof(buf)) < 0) {
+            fprintf(stderr, "No response to AUTH challenge\n");
+            return;
+        }
+        word = strtok(buf, sep);
+        if (word) {
+            r = sasl_decode64(word, strlen(word), buf, sizeof(buf), &buflen);
+            if (r != SASL_OK)
+                goto badsyntax;
+        } else {
+            buflen = 0;
+        }
 
-	server_out = NULL;
-	server_out_len = 0;
-	r = sasl_server_step(state->saslconn, buf, buflen,
-			     &server_out, &server_out_len);
+        server_out = NULL;
+        server_out_len = 0;
+        r = sasl_server_step(state->saslconn, buf, buflen,
+                             &server_out, &server_out_len);
     }
 
     if (r != SASL_OK) {
-	server_printf(state, "BAD sasl error code %d\r\n", r);
-	server_flush(state);
-	return;
+        server_printf(state, "BAD sasl error code %d\r\n", r);
+        server_flush(state);
+        return;
     }
 
     state->is_authenticated = 1;
@@ -918,11 +918,11 @@ static void cmd_starttls(struct server_state *state)
     sasl_ssf_t ssf;
 
     r = tls_init_serverengine("backend_test", /*verifydepth*/5,
-			      /*askcert*/1);
+                              /*askcert*/1);
     if (r < 0) {
-	server_printf(state, "BAD error initializing TLS\r\n");
-	server_flush(state);
-	return;
+        server_printf(state, "BAD error initializing TLS\r\n");
+        server_flush(state);
+        return;
     }
 
     server_printf(state, "OK Begin TLS negotiation now\r\n");
@@ -930,30 +930,30 @@ static void cmd_starttls(struct server_state *state)
     server_flush(state);
 
     r = tls_start_servertls(/*readfd*/state->in->fd,
-			    /*writefd*/state->out->fd,
-			    /*timeout_sec*/3000,
-			    (int *)&ssf, &auth_id, &tls_conn);
+                            /*writefd*/state->out->fd,
+                            /*timeout_sec*/3000,
+                            (int *)&ssf, &auth_id, &tls_conn);
     if (r < 0) {
-	server_printf(state, "BAD STARTTLS negotiation failed\r\n");
-	server_flush(state);
-	return;
+        server_printf(state, "BAD STARTTLS negotiation failed\r\n");
+        server_flush(state);
+        return;
     }
 
     /* tell SASL about the negotiated layer */
     r = sasl_setprop(state->saslconn, SASL_SSF_EXTERNAL, &ssf);
     if (r != SASL_OK) {
-	server_printf(state, "BAD sasl_setprop(SASL_SSF_EXTERNAL) "
-			      "failed: cmd_starttls()\r\n");
-	server_flush(state);
-	return;
+        server_printf(state, "BAD sasl_setprop(SASL_SSF_EXTERNAL) "
+                              "failed: cmd_starttls()\r\n");
+        server_flush(state);
+        return;
     }
 
     r = sasl_setprop(state->saslconn, SASL_AUTH_EXTERNAL, auth_id);
     if (r != SASL_OK) {
-	server_printf(state, "BAD sasl_setprop(SASL_AUTH_EXTERNAL) "
-			     "failed: cmd_starttls()\r\n");
-	server_flush(state);
-	return;
+        server_printf(state, "BAD sasl_setprop(SASL_AUTH_EXTERNAL) "
+                             "failed: cmd_starttls()\r\n");
+        server_flush(state);
+        return;
     }
 
     /* tell the prot layer about our new layers */
@@ -982,34 +982,34 @@ static void server_cmdloop(struct server_state *state)
     server_emit_caps(state);
 
     while (server_getline(state, buf, sizeof(buf)) == 0) {
-	command = strtok(buf, sep);
+        command = strtok(buf, sep);
 
-	if (!command) {
-	    server_printf(state, "BAD command\r\n");
-	    server_flush(state);
-	    continue;
-	}
+        if (!command) {
+            server_printf(state, "BAD command\r\n");
+            server_flush(state);
+            continue;
+        }
 
-	if (!strcasecmp(command, "XXLOGOUT")) {
-	    /* graceful disconnect */
-	    server_printf(state, "OK\r\n");
-	    server_flush(state);
-	    break;
-	} else if (!strcasecmp(command, "XXNOOP")) {
-	    server_printf(state, "OK\r\n");
-	    server_flush(state);
-	} else if (!strcasecmp(command, "XXCAPABILITY")) {
-	    server_emit_caps(state);
-	} else if (!strcasecmp(command, "XXAUTHENTICATE")) {
-	    char *mech = strtok(NULL, sep);
-	    char *initial_in = strtok(NULL, sep);
-	    cmd_authenticate(state, mech, initial_in);
-	} else if (!strcasecmp(command, "XXSTARTTLS")) {
-	    cmd_starttls(state);
-	} else {
-	    server_printf(state, "BAD command\r\n");
-	    server_flush(state);
-	}
+        if (!strcasecmp(command, "XXLOGOUT")) {
+            /* graceful disconnect */
+            server_printf(state, "OK\r\n");
+            server_flush(state);
+            break;
+        } else if (!strcasecmp(command, "XXNOOP")) {
+            server_printf(state, "OK\r\n");
+            server_flush(state);
+        } else if (!strcasecmp(command, "XXCAPABILITY")) {
+            server_emit_caps(state);
+        } else if (!strcasecmp(command, "XXAUTHENTICATE")) {
+            char *mech = strtok(NULL, sep);
+            char *initial_in = strtok(NULL, sep);
+            cmd_authenticate(state, mech, initial_in);
+        } else if (!strcasecmp(command, "XXSTARTTLS")) {
+            cmd_starttls(state);
+        } else {
+            server_printf(state, "BAD command\r\n");
+            server_flush(state);
+        }
     }
 }
 
@@ -1027,35 +1027,35 @@ static pid_t server_start(struct server_state *state)
 
     pid = fork();
     if (pid < 0) {
-	perror("fork");
-	return -1;
+        perror("fork");
+        return -1;
     }
     if (pid) {
-	/* We are the parent process.  We don't need to wait for the
-	 * child to finish starting, as we have a bound socket we can
-	 * connect immediately (it just might take the child a little
-	 * while to respond to the first command). */
-	close(state->rend_sock);
-	return pid;
+        /* We are the parent process.  We don't need to wait for the
+         * child to finish starting, as we have a bound socket we can
+         * connect immediately (it just might take the child a little
+         * while to respond to the first command). */
+        close(state->rend_sock);
+        return pid;
     }
     /* We are the child process. */
 
     if (init_sasl(/*client*/0) < 0)
-	exit(1);
+        exit(1);
 
     /* Main connection loop.  This is a toy, single-threaded server
      * which handles one connection at a time. */
     for (;;)
     {
-	/* Wait for a connection */
-	if (server_accept(state) < 0)
-	    exit(1);
+        /* Wait for a connection */
+        if (server_accept(state) < 0)
+            exit(1);
 
-	/* Run the main command loop for this connection */
-	server_cmdloop(state);
+        /* Run the main command loop for this connection */
+        server_cmdloop(state);
 
-	/* Forget the per-connection state */
-	server_unaccept(state);
+        /* Forget the per-connection state */
+        server_unaccept(state);
     }
 }
 
@@ -1070,17 +1070,17 @@ static void server_shutdown(pid_t pid)
 
     kill(pid, SIGTERM);
     for (;;) {
-	r = waitpid(pid, &status, 0);
-	if (r < 0) {
-	    if (errno == EINTR)
-		continue;
-	    if (errno != ESRCH)
-		perror("waitpid");
-	    return;
-	}
-	if (r == pid)
-	    return; /* ok, killed it */
-	fprintf(stderr, "WTF? waitpid(%d) = %d?\n", pid, r);
+        r = waitpid(pid, &status, 0);
+        if (r < 0) {
+            if (errno == EINTR)
+                continue;
+            if (errno != ESRCH)
+                perror("waitpid");
+            return;
+        }
+        if (r == pid)
+            return; /* ok, killed it */
+        fprintf(stderr, "WTF? waitpid(%d) = %d?\n", pid, r);
     }
 }
 
@@ -1090,16 +1090,16 @@ static void server_shutdown(pid_t pid)
  * available to the SASL server code, i.e. PLAIN and LOGIN.
  */
 static int server_checkpass(sasl_conn_t *conn __attribute__((unused)),
-			    void *context __attribute__((unused)),
-			    const char *user, const char *pass,
-			    unsigned passlen,
-			    struct propctx *propctx __attribute__((unused)))
+                            void *context __attribute__((unused)),
+                            const char *user, const char *pass,
+                            unsigned passlen,
+                            struct propctx *propctx __attribute__((unused)))
 {
     if (strcmp(user, USERID))
-	return SASL_NOUSER;
+        return SASL_NOUSER;
     if (passlen != strlen(PASSWORD) ||
-	strncmp(pass, PASSWORD, passlen))
-	return SASL_BADAUTH;
+        strncmp(pass, PASSWORD, passlen))
+        return SASL_BADAUTH;
     return SASL_OK;
 }
 
@@ -1119,28 +1119,28 @@ static int server_checkpass(sasl_conn_t *conn __attribute__((unused)),
  * from an auxprop plugin.
  */
 static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unused)),
-				 sasl_server_params_t *sparams,
-				 unsigned flags __attribute__((unused)),
-				 const char *user,
-				 unsigned ulen)
+                                 sasl_server_params_t *sparams,
+                                 unsigned flags __attribute__((unused)),
+                                 const char *user,
+                                 unsigned ulen)
 {
     const struct propval *prop;
 
     if (ulen != strlen(USERID) ||
-	strncmp(user, USERID, ulen))
-	return AUXPROP_RET;
+        strncmp(user, USERID, ulen))
+        return AUXPROP_RET;
 
     prop = sparams->utils->prop_get(sparams->propctx);
     if (!prop)
-	return AUXPROP_RET;
+        return AUXPROP_RET;
     for ( ; prop->name ; prop++) {
-	if (!strcmp(prop->name, "*userPassword") ||
-	    !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
-	    if (prop->values)
-		sparams->utils->prop_erase(sparams->propctx, prop->name);
-	    sparams->utils->prop_set(sparams->propctx, prop->name,
-				     PASSWORD, strlen(PASSWORD));
-	}
+        if (!strcmp(prop->name, "*userPassword") ||
+            !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
+            if (prop->values)
+                sparams->utils->prop_erase(sparams->propctx, prop->name);
+            sparams->utils->prop_set(sparams->propctx, prop->name,
+                                     PASSWORD, strlen(PASSWORD));
+        }
     }
 
     return AUXPROP_RET;
@@ -1153,15 +1153,15 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
  * client.
  */
 static int server_auxprop_init(const sasl_utils_t *utils __attribute__((unused)),
-			       int max_version,
-			       int *out_version,
-			       sasl_auxprop_plug_t **plugp,
-			       const char *plugname __attribute__((unused)))
+                               int max_version,
+                               int *out_version,
+                               sasl_auxprop_plug_t **plugp,
+                               const char *plugname __attribute__((unused)))
 {
     static sasl_auxprop_plug_t plug = {
-	.features = 0,
-	.auxprop_lookup = server_auxprop_lookup,
-	.name = "testserver-hack"
+        .features = 0,
+        .auxprop_lookup = server_auxprop_lookup,
+        .name = "testserver-hack"
     };
 
     *out_version = max_version;
@@ -1180,42 +1180,42 @@ static int init_sasl(int isclient)
 
     /* set the SASL allocation functions */
     sasl_set_alloc((sasl_malloc_t *)xmalloc,
-		   (sasl_calloc_t *)xcalloc,
-		   (sasl_realloc_t *)xrealloc,
-		   (sasl_free_t *)free);
+                   (sasl_calloc_t *)xcalloc,
+                   (sasl_realloc_t *)xrealloc,
+                   (sasl_free_t *)free);
 
     /* set the SASL mutex functions */
     sasl_set_mutex(cyrus_mutex_alloc, cyrus_mutex_lock,
-		   cyrus_mutex_unlock, cyrus_mutex_free);
+                   cyrus_mutex_unlock, cyrus_mutex_free);
 
     if (isclient) {
-	static const struct sasl_callback client_cb[] = {
-	    { SASL_CB_LIST_END, NULL, NULL }
-	};
+        static const struct sasl_callback client_cb[] = {
+            { SASL_CB_LIST_END, NULL, NULL }
+        };
 
-	/* load the SASL client plugins */
-	if (sasl_client_init(client_cb)) {
-	    fprintf(stderr, "could not init sasl client\n");
-	    return -1;
-	}
+        /* load the SASL client plugins */
+        if (sasl_client_init(client_cb)) {
+            fprintf(stderr, "could not init sasl client\n");
+            return -1;
+        }
 
-	callbacks = mysasl_callbacks(USERID, USERID, NULL, PASSWORD);
-	if (!callbacks)
-	    return -1;
+        callbacks = mysasl_callbacks(USERID, USERID, NULL, PASSWORD);
+        if (!callbacks)
+            return -1;
     } else {
-	static const struct sasl_callback server_cb[] = {
-	    { SASL_CB_SERVER_USERDB_CHECKPASS, (void *)&server_checkpass, NULL },
-	    { SASL_CB_LIST_END, NULL, NULL }
-	};
+        static const struct sasl_callback server_cb[] = {
+            { SASL_CB_SERVER_USERDB_CHECKPASS, (void *)&server_checkpass, NULL },
+            { SASL_CB_LIST_END, NULL, NULL }
+        };
 
-	/* load the SASL server plugins */
-	r = sasl_server_init(server_cb, "testserver");
-	if (r != SASL_OK) {
-	    fprintf(stderr, "sasl_server_init() failed: error %d\n", r);
-	    return -1;
-	}
+        /* load the SASL server plugins */
+        r = sasl_server_init(server_cb, "testserver");
+        if (r != SASL_OK) {
+            fprintf(stderr, "sasl_server_init() failed: error %d\n", r);
+            return -1;
+        }
 
-	sasl_auxprop_add_plugin("testserver", server_auxprop_init);
+        sasl_auxprop_add_plugin("testserver", server_auxprop_init);
     }
 
     return 0;
@@ -1245,12 +1245,12 @@ static int set_up(void)
     static char cwd[PATH_MAX];
 
     if (verbose > 1)
-	fprintf(stderr, "Starting server!\n");
+        fprintf(stderr, "Starting server!\n");
 
     sr = getcwd(cwd, sizeof(cwd));
     if (!sr) {
-	fprintf(stderr, "getcwd() failed: %s\n", strerror(errno));
-	return -1;
+        fprintf(stderr, "getcwd() failed: %s\n", strerror(errno));
+        return -1;
     }
 
     old_config_dir = (char *)config_dir;
@@ -1258,15 +1258,15 @@ static int set_up(void)
 
     old_tls_ca_file = (char *)imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s;
     imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s =
-	    strconcat(cwd, "/cacert.pem", (char *)NULL);
+            strconcat(cwd, "/cacert.pem", (char *)NULL);
 
     old_tls_cert_file = (char *)imapopts[IMAPOPT_TLS_SERVER_CERT].val.s;
     imapopts[IMAPOPT_TLS_SERVER_CERT].val.s =
-	    strconcat(cwd, "/cert.pem", (char *)NULL);
+            strconcat(cwd, "/cert.pem", (char *)NULL);
 
     old_tls_key_file = (char *)imapopts[IMAPOPT_TLS_SERVER_KEY].val.s;
     imapopts[IMAPOPT_TLS_SERVER_KEY].val.s =
-	    strconcat(cwd, "/key.pem", (char *)NULL);
+            strconcat(cwd, "/key.pem", (char *)NULL);
 
     /* disable SSL session caching */
     old_session_timeout = imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i;
@@ -1274,22 +1274,22 @@ static int set_up(void)
 
     rend_sock = create_server_socket(&port);
     if (rend_sock < 0)
-	return -1;
+        return -1;
 
     server_state = get_anonymous_page();
     if (!server_state) {
-	close(rend_sock);
-	return -1;
+        close(rend_sock);
+        return -1;
     }
     server_state->rend_sock = rend_sock;
 
     if (verbose > 1)
-	fprintf(stderr, "Bound to port tcp/%u\n", port);
+        fprintf(stderr, "Bound to port tcp/%u\n", port);
     snprintf(default_service, sizeof(default_service), "%d", port);
 
     server_pid = server_start(server_state);
     if (server_pid < 0)
-	return -1;
+        return -1;
 
     /*
      * Initialise the SASL library in the client process.  This init
@@ -1300,7 +1300,7 @@ static int set_up(void)
      * after we're done.
      */
     if (init_sasl(/*client*/1) < 0)
-	return -1;
+        return -1;
     sasl_initialised = 1;
 
     return 0;
@@ -1313,18 +1313,18 @@ static int set_up(void)
 static int tear_down(void)
 {
     if (verbose > 1)
-	fprintf(stderr, "Cleaning up server! NOT.\n");
+        fprintf(stderr, "Cleaning up server! NOT.\n");
     if (server_pid > 1)
-	server_shutdown(server_pid);
+        server_shutdown(server_pid);
     if (server_state)
-	free_anonymous_page(server_state);
+        free_anonymous_page(server_state);
     if (callbacks) {
-	free_callbacks(callbacks);
-	callbacks = NULL;
+        free_callbacks(callbacks);
+        callbacks = NULL;
     }
     if (sasl_initialised) {
-	sasl_done();
-	sasl_initialised = 0;
+        sasl_done();
+        sasl_initialised = 0;
     }
 
     free((char *)config_dir);

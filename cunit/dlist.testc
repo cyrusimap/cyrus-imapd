@@ -47,7 +47,7 @@ static void test_splice_middle(void)
     int i;
 
     for (i = 1; i <= 10; i++) {
-	dlist_setnum32(dl, "NUM", i);
+        dlist_setnum32(dl, "NUM", i);
     }
 
     dl2 = dlist_splice(dl, 5);
@@ -76,7 +76,7 @@ static void test_splice_none(void)
     int i;
 
     for (i = 1; i <= 10; i++) {
-	dlist_setnum32(dl, "NUM", i);
+        dlist_setnum32(dl, "NUM", i);
     }
 
     dl2 = dlist_splice(dl, 0);
@@ -105,7 +105,7 @@ static void test_splice_one(void)
     int i;
 
     for (i = 1; i <= 10; i++) {
-	dlist_setnum32(dl, "NUM", i);
+        dlist_setnum32(dl, "NUM", i);
     }
 
     dl2 = dlist_splice(dl, 1);
@@ -134,7 +134,7 @@ static void test_splice_allbut(void)
     int i;
 
     for (i = 1; i <= 10; i++) {
-	dlist_setnum32(dl, "NUM", i);
+        dlist_setnum32(dl, "NUM", i);
     }
 
     dl2 = dlist_splice(dl, 9);
@@ -163,7 +163,7 @@ static void test_splice_all(void)
     int i;
 
     for (i = 1; i <= 10; i++) {
-	dlist_setnum32(dl, "NUM", i);
+        dlist_setnum32(dl, "NUM", i);
     }
 
     dl2 = dlist_splice(dl, 10);
@@ -192,7 +192,7 @@ static void test_splice_over(void)
     int i;
 
     for (i = 1; i <= 10; i++) {
-	dlist_setnum32(dl, "NUM", i);
+        dlist_setnum32(dl, "NUM", i);
     }
 
     dl2 = dlist_splice(dl, 11);

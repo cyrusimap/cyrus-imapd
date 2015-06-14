@@ -54,15 +54,15 @@ struct proc_limits {
 };
 
 typedef int procdata_t(pid_t pid,
-		       const char *servicename, const char *clienthost,
-		       const char *userid, const char *mailbox,
-		       const char *cmd, void *rock);
+                       const char *servicename, const char *clienthost,
+                       const char *userid, const char *mailbox,
+                       const char *cmd, void *rock);
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
 extern void setproctitle(const char *fmt, ...);
 
 extern int proc_register(const char *servicename, const char *clienthost,
-		         const char *userid, const char *mailbox, const char *cmd);
+                         const char *userid, const char *mailbox, const char *cmd);
 
 extern void proc_cleanup(void);
 

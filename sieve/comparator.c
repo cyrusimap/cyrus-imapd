@@ -111,7 +111,7 @@ static int rel_le(const char *text, size_t tlen, const char *pat, void *rock)
 
 /* just compare the two; pat should be NULL terminated */
 static int octet_cmp_(const char *text, size_t tlen,
-		      const char *pat, int casemap)
+                      const char *pat, int casemap)
 {
     size_t plen, sl, i;
     int r = 0;
@@ -120,13 +120,13 @@ static int octet_cmp_(const char *text, size_t tlen,
     sl = tlen < plen ? tlen : plen;
 
     for (i = 0; !r && i < sl; i++) {
-	r = casemap ? toupper(text[i]) - toupper(pat[i]) : text[i] - pat[i];
+        r = casemap ? toupper(text[i]) - toupper(pat[i]) : text[i] - pat[i];
     }
 
     if (r == 0)
-	return (tlen - plen);
-    else 
-	return r;
+        return (tlen - plen);
+    else
+        return r;
 }
 
 static int octet_cmp(const char *text, size_t tlen, const char *pat)
@@ -146,24 +146,24 @@ int boyer_moore(char *text, char *pat)
 
     /* initialize skip table */
     for (i = 0; i < 256; i++)
-	skip[i] = M;
+        skip[i] = M;
     for (i = 0; i < M; i++)
-	skip[(int) pat[i]] = M-i-1;
-    
+        skip[(int) pat[i]] = M-i-1;
+
     /* look for pat in text */
     i = j = M-1;
     do {
-	if (pat[j] == text[i]) {
-	    i--;
-	    j--;
-	} else {
-	    if (M-j > skip[(int) text[i]]) {
-		i = i + M - j;
-	    } else {
-		i = i + skip[(int) text[i]];
-	    }
-	    j = M-1;
-	}
+        if (pat[j] == text[i]) {
+            i--;
+            j--;
+        } else {
+            if (M-j > skip[(int) text[i]]) {
+                i = i + M - j;
+            } else {
+                i = i + skip[(int) text[i]];
+            }
+            j = M-1;
+        }
     } while (!((j < 0) || (i >= N)));
     /* i+1 is the position of the match if i < N */
     return (i < N) ? 1 : 0;
@@ -172,7 +172,7 @@ int boyer_moore(char *text, char *pat)
 
 /* we do a brute force attack */
 static int octet_contains_(const char *text, size_t tlen,
-			   const char *pat, int casemap)
+                           const char *pat, int casemap)
 {
     int N = tlen;
     int M = strlen(pat);
@@ -180,14 +180,14 @@ static int octet_contains_(const char *text, size_t tlen,
 
     i = 0, j = 0;
     while ((j < M) && (i < N)) {
-	if ((text[i] == pat[j]) ||
-	    (casemap && (toupper(text[i]) == toupper(pat[j])))) {
-	    i++; j++;
-	} else {
-	    i = i - j + 1;
-	    j = 0;
-	}
-    }    
+        if ((text[i] == pat[j]) ||
+            (casemap && (toupper(text[i]) == toupper(pat[j])))) {
+            i++; j++;
+        } else {
+            i = i - j + 1;
+            j = 0;
+        }
+    }
 
     return (j == M); /* we found a match! */
 }
@@ -199,7 +199,7 @@ static int octet_contains(const char *text, size_t tlen, const char *pat,
 }
 
 static int octet_matches_(const char *text, size_t tlen,
-			  const char *pat, int casemap)
+                          const char *pat, int casemap)
 {
     const char *p;
     const char *t;
@@ -208,58 +208,58 @@ static int octet_matches_(const char *text, size_t tlen,
     t = text;
     p = pat;
     for (;;) {
-	if (*p == '\0') {
-	    /* ran out of pattern */
-	    return (!tlen);
-	}
-	c = *p++;
-	switch (c) {
-	case '?':
-	    if (!tlen) {
-		return 0;
-	    }
-	    t++; tlen--;
-	    break;
-	case '*':
-	    while (*p == '*' || *p == '?') {
-		if (*p == '?') {
-		    /* eat the character now */
-		    if (!tlen) {
-			return 0;
-		    }
-		    t++; tlen--;
-		}
-		/* coalesce into a single wildcard */
-		p++;
-	    }
-	    if (*p == '\0') {
-		/* wildcard at end of string, any remaining text is ok */
-		return 1;
-	    }
+        if (*p == '\0') {
+            /* ran out of pattern */
+            return (!tlen);
+        }
+        c = *p++;
+        switch (c) {
+        case '?':
+            if (!tlen) {
+                return 0;
+            }
+            t++; tlen--;
+            break;
+        case '*':
+            while (*p == '*' || *p == '?') {
+                if (*p == '?') {
+                    /* eat the character now */
+                    if (!tlen) {
+                        return 0;
+                    }
+                    t++; tlen--;
+                }
+                /* coalesce into a single wildcard */
+                p++;
+            }
+            if (*p == '\0') {
+                /* wildcard at end of string, any remaining text is ok */
+                return 1;
+            }
 
-	    while (tlen) {
-		/* recurse */
-		if (octet_matches_(t, tlen, p, casemap)) return 1;
-		t++; tlen--;
-	    }
-	    break;
-	case '\\':
-	    c = *p++;
-	    /* falls through */
-	default:
-	    if ((c == *t) || (casemap && (toupper(c) == toupper(*t)))) {
-		t++; tlen--;
-	    } else {
-		/* literal char doesn't match */
-		return 0;
-	    }
-	}
+            while (tlen) {
+                /* recurse */
+                if (octet_matches_(t, tlen, p, casemap)) return 1;
+                t++; tlen--;
+            }
+            break;
+        case '\\':
+            c = *p++;
+            /* falls through */
+        default:
+            if ((c == *t) || (casemap && (toupper(c) == toupper(*t)))) {
+                t++; tlen--;
+            } else {
+                /* literal char doesn't match */
+                return 0;
+            }
+        }
     }
 
     /* never reaches */
 }
 
-static int octet_matches(const char *text, size_t tlen, const char *pat, 
+static int octet_matches(const char *text, size_t tlen, const char *pat,
                          void *rock __attribute__((unused)))
 {
     return octet_matches_(text, tlen, pat, 0);
@@ -307,14 +307,14 @@ static int ascii_casemap_cmp(const char *text, size_t tlen, const char *pat)
 }
 
 static int ascii_casemap_contains(const char *text, size_t tlen,
-				  const char *pat,
-				  void *rock __attribute__((unused)))
+                                  const char *pat,
+                                  void *rock __attribute__((unused)))
 {
     return octet_contains_(text, tlen, pat, 1);
 }
 
 static int ascii_casemap_matches(const char *text, size_t tlen,
-				 const char *pat, 
+                                 const char *pat,
                                  void *rock __attribute__((unused)))
 {
     return octet_matches_(text, tlen, pat, 1);
@@ -322,8 +322,8 @@ static int ascii_casemap_matches(const char *text, size_t tlen,
 
 /* i;ascii-numeric; only supports relational tests
  *
- *  A \ B    number   not-num 
- *  number   A ? B    A < B 
+ *  A \ B    number   not-num
+ *  number   A ? B    A < B
  *  not-num  A > B    A == B
  */
 
@@ -344,59 +344,59 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
     unsigned pat_digit_len;
 
     if (Uisdigit(*pat)) {
-	if (Uisdigit(*text)) {
-	    /* Count how many digits each string has */
-	    for (text_digit_len = 0;
-		 tlen-- && Uisdigit(text[text_digit_len]);
-		 text_digit_len++);
-	    for (pat_digit_len = 0;
-		 Uisdigit(pat[pat_digit_len]);
-		 pat_digit_len++);
+        if (Uisdigit(*text)) {
+            /* Count how many digits each string has */
+            for (text_digit_len = 0;
+                 tlen-- && Uisdigit(text[text_digit_len]);
+                 text_digit_len++);
+            for (pat_digit_len = 0;
+                 Uisdigit(pat[pat_digit_len]);
+                 pat_digit_len++);
 
-	    if (text_digit_len < pat_digit_len) {
-		/* Pad "text" with leading 0s */
-		while (pat_digit_len > text_digit_len) {
-		    /* "text" can only be less or equal to "pat" */
-		    if ('0' < *pat) {
-			return (-1); 
-		    }
-		    pat++;
-		    pat_digit_len--;
-		}
-	    } else if (text_digit_len > pat_digit_len) {
-		/* Pad "pad" with leading 0s */
-		while (text_digit_len > pat_digit_len) {
-		    /* "pad" can only be greater or equal to "text" */
-		    if (*text > '0') {
-			return 1;
-		    }
-		    text++;
-		    text_digit_len--;
-		}
-	    }
+            if (text_digit_len < pat_digit_len) {
+                /* Pad "text" with leading 0s */
+                while (pat_digit_len > text_digit_len) {
+                    /* "text" can only be less or equal to "pat" */
+                    if ('0' < *pat) {
+                        return (-1);
+                    }
+                    pat++;
+                    pat_digit_len--;
+                }
+            } else if (text_digit_len > pat_digit_len) {
+                /* Pad "pad" with leading 0s */
+                while (text_digit_len > pat_digit_len) {
+                    /* "pad" can only be greater or equal to "text" */
+                    if (*text > '0') {
+                        return 1;
+                    }
+                    text++;
+                    text_digit_len--;
+                }
+            }
 
-	    /* CLAIM: If we here, we have two non-empty digital suffixes
-	       of equal length */
-	    while (text_digit_len > 0) {
-		if (*text < *pat) {
-		    return -1;
-		} else if (*text > *pat) {
-		    return 1;
-		}
-		/* Characters are equal, carry on */
-		text++;
-		pat++;
-		text_digit_len--;
-	    }
+            /* CLAIM: If we here, we have two non-empty digital suffixes
+               of equal length */
+            while (text_digit_len > 0) {
+                if (*text < *pat) {
+                    return -1;
+                } else if (*text > *pat) {
+                    return 1;
+                }
+                /* Characters are equal, carry on */
+                text++;
+                pat++;
+                text_digit_len--;
+            }
 
-	    return (0);
-	} else {
-	    return 1;
-	}
+            return (0);
+        } else {
+            return 1;
+        }
     } else if (Uisdigit(*text)) {
-	return -1;
+        return -1;
     } else {
-	return 0; /* both not digits */
+        return 0; /* both not digits */
     }
 }
 
@@ -408,100 +408,100 @@ static comparator_t *lookup_rel(int relation)
     switch (relation)
       {
       case B_EQ:
-	ret = &rel_eq;
-	break;
+        ret = &rel_eq;
+        break;
       case B_NE:
-	ret = &rel_ne; 
-	break;
-      case B_GT: 
-	ret = &rel_gt; 
-	break;
+        ret = &rel_ne;
+        break;
+      case B_GT:
+        ret = &rel_gt;
+        break;
       case B_GE:
-         ret = &rel_ge; 
-	 break;
+         ret = &rel_ge;
+         break;
       case B_LT:
-	ret = &rel_lt; 
-	break;
+        ret = &rel_lt;
+        break;
       case B_LE:
-	ret = &rel_le; 
+        ret = &rel_le;
       }
 
     return ret;
 }
 
 EXPORTED comparator_t *lookup_comp(int comp, int mode, int relation,
-			  void **comprock)
+                          void **comprock)
 {
     comparator_t *ret;
 
     ret = NULL;
     *comprock = NULL;
 #if VERBOSE
-    printf("comp%d mode%d relat%d     \n", comp, mode, relation); 
+    printf("comp%d mode%d relat%d     \n", comp, mode, relation);
 #endif
     switch (comp)
       {
-      case B_OCTET:    
- 	switch (mode) {
-	  case B_IS:
-	    ret = &rel_eq;
-	    *comprock = (void **) &octet_cmp;
-	    break;
-	  case B_CONTAINS:
-	    ret = &octet_contains;
-	    break;
-	  case B_MATCHES:
-	    ret = &octet_matches;
-	    break;
+      case B_OCTET:
+        switch (mode) {
+          case B_IS:
+            ret = &rel_eq;
+            *comprock = (void **) &octet_cmp;
+            break;
+          case B_CONTAINS:
+            ret = &octet_contains;
+            break;
+          case B_MATCHES:
+            ret = &octet_matches;
+            break;
 #ifdef ENABLE_REGEX
-	  case B_REGEX:
-	    ret = &octet_regex;
-	    break;
+          case B_REGEX:
+            ret = &octet_regex;
+            break;
 #endif
-	  case B_VALUE:
-	    ret = lookup_rel(relation);
-	    *comprock = (void **) &octet_cmp;
-	    break;
-	}
-	break; /*end of octet */
+          case B_VALUE:
+            ret = lookup_rel(relation);
+            *comprock = (void **) &octet_cmp;
+            break;
+        }
+        break; /*end of octet */
       case B_ASCIICASEMAP:
-     	switch (mode) {
-	case B_IS:
-	    ret = &rel_eq;
-	    *comprock = (void **) &ascii_casemap_cmp;
-	    break;
-	case B_CONTAINS:
-	    ret = &ascii_casemap_contains;
-	    break;
-	case B_MATCHES:
-	    ret = &ascii_casemap_matches;
-	    break;
+        switch (mode) {
+        case B_IS:
+            ret = &rel_eq;
+            *comprock = (void **) &ascii_casemap_cmp;
+            break;
+        case B_CONTAINS:
+            ret = &ascii_casemap_contains;
+            break;
+        case B_MATCHES:
+            ret = &ascii_casemap_matches;
+            break;
 #ifdef ENABLE_REGEX
-	case B_REGEX:
-	    /* the ascii-casemap destinction is made during
-	       the compilation of the regex in verify_regex() */
-	    ret = &octet_regex;
-	    break;
+        case B_REGEX:
+            /* the ascii-casemap destinction is made during
+               the compilation of the regex in verify_regex() */
+            ret = &octet_regex;
+            break;
 #endif
-	case B_VALUE:
-	    ret = lookup_rel(relation);
-	    *comprock = (void **) &ascii_casemap_cmp;
-	    break;
-	}
-	break;/*end of ascii casemap */
+        case B_VALUE:
+            ret = lookup_rel(relation);
+            *comprock = (void **) &ascii_casemap_cmp;
+            break;
+        }
+        break;/*end of ascii casemap */
       case B_ASCIINUMERIC:
-	switch (mode) {
-	case B_IS:
-	    ret = &rel_eq;
-	    *comprock = (void **) &ascii_numeric_cmp;
-	    break;
-	case B_COUNT:
-	case B_VALUE:
-	    ret = lookup_rel(relation);
-	    *comprock = (void **) &ascii_numeric_cmp;
-	    break;
-	}
-	break;
+        switch (mode) {
+        case B_IS:
+            ret = &rel_eq;
+            *comprock = (void **) &ascii_numeric_cmp;
+            break;
+        case B_COUNT:
+        case B_VALUE:
+            ret = lookup_rel(relation);
+            *comprock = (void **) &ascii_numeric_cmp;
+            break;
+        }
+        break;
       }
     return ret;
 }

@@ -53,8 +53,8 @@
 
 #define FNAME_GLOBALANNOTATIONS "/annotations.db"
 
-#define IMAP_ANNOT_NS		"/vendor/cmu/cyrus-imapd/"
-#define DAV_ANNOT_NS		"/vendor/cmu/cyrus-httpd/"
+#define IMAP_ANNOT_NS           "/vendor/cmu/cyrus-imapd/"
+#define DAV_ANNOT_NS            "/vendor/cmu/cyrus-httpd/"
 
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
@@ -88,16 +88,16 @@ void annotate_state_abort(annotate_state_t **statep);
 int annotate_state_commit(annotate_state_t **statep);
 void annotate_state_begin(annotate_state_t *state);
 void annotate_state_set_auth(annotate_state_t *state,
-		             int isadmin, const char *userid,
-		             struct auth_state *auth_state);
+                             int isadmin, const char *userid,
+                             struct auth_state *auth_state);
 int annotate_state_set_server(annotate_state_t *state);
 int annotate_state_set_mailbox(annotate_state_t *state,
-			       struct mailbox *mailbox);
+                               struct mailbox *mailbox);
 int annotate_state_set_mailbox_mbe(annotate_state_t *state,
-				   mbentry_t *);
+                                   mbentry_t *);
 int annotate_state_set_message(annotate_state_t *state,
-			       struct mailbox *mailbox,
-			       unsigned int uid);
+                               struct mailbox *mailbox,
+                               unsigned int uid);
 
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
@@ -106,77 +106,77 @@ void freestrlist(struct strlist *l);
 
 /* Attribute Management (also used by ID) */
 void appendattvalue(struct attvaluelist **l, const char *attrib,
-		    const struct buf *value);
+                    const struct buf *value);
 void dupattvalues(struct attvaluelist **dst,
-		  const struct attvaluelist *src);
+                  const struct attvaluelist *src);
 void freeattvalues(struct attvaluelist *l);
 
 /* Entry Management */
 void appendentryatt(struct entryattlist **l, const char *entry,
-		    struct attvaluelist *attvalues);
+                    struct attvaluelist *attvalues);
 void setentryatt(struct entryattlist **l, const char *entry,
-		 const char *attrib, const struct buf *value);
+                 const char *attrib, const struct buf *value);
 void clearentryatt(struct entryattlist **l, const char *entry,
-		   const char *attrib);
+                   const char *attrib);
 void dupentryatt(struct entryattlist **l,
-		 const struct entryattlist *);
+                 const struct entryattlist *);
 size_t sizeentryatts(const struct entryattlist *);
 void freeentryatts(struct entryattlist *l);
 
 /* initialize database structures */
 void annotate_init(
-		       int (*fetch_func)(const char *, const char *,
-					 const strarray_t *, const strarray_t *),
-		       int (*store_func)(const char *, const char *,
-					 struct entryattlist *));
+                       int (*fetch_func)(const char *, const char *,
+                                         const strarray_t *, const strarray_t *),
+                       int (*store_func)(const char *, const char *,
+                                         struct entryattlist *));
 
 /* open the annotation db */
 void annotatemore_open(void);
 
 typedef int (*annotatemore_find_proc_t)(const char *mailbox,
-		    uint32_t uid,
-		    const char *entry, const char *userid,
-		    const struct buf *value, void *rock);
+                    uint32_t uid,
+                    const char *entry, const char *userid,
+                    const struct buf *value, void *rock);
 
 /* For findall(), matches any non-zero uid */
 #define ANNOTATE_ANY_UID    ((unsigned int)~0)
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
 int annotatemore_findall(const char *mboxname, uint32_t uid, const char *entry,
-			 annotatemore_find_proc_t proc, void *rock);
+                         annotatemore_find_proc_t proc, void *rock);
 
 /* fetch annotations and output results */
 typedef void (*annotate_fetch_cb_t)(const char *mboxname, /* internal */
-				    uint32_t uid,
-				    const char *entry,
-				    struct attvaluelist *,
-				    void *rock);
+                                    uint32_t uid,
+                                    const char *entry,
+                                    struct attvaluelist *,
+                                    void *rock);
 int annotate_state_fetch(annotate_state_t *state,
-		         const strarray_t *entries, const strarray_t *attribs,
-		         annotate_fetch_cb_t callback, void *rock,
-		         int *maxsizeptr);
+                         const strarray_t *entries, const strarray_t *attribs,
+                         annotate_fetch_cb_t callback, void *rock,
+                         int *maxsizeptr);
 
 /* write a single annotation, avoiding all ACL checks and etc */
 int annotatemore_write(const char *mboxname, const char *entry,
-		       const char *userid, const struct buf *value);
+                       const char *userid, const struct buf *value);
 int annotatemore_msg_write(const char *mboxname, uint32_t uid, const char *entry,
-			   const char *userid, const struct buf *value);
+                           const char *userid, const struct buf *value);
 /* flat out ignore modseq and quota and everything */
 int annotatemore_rawwrite(const char *mboxname, const char *entry,
-		       const char *userid, const struct buf *value);
+                       const char *userid, const struct buf *value);
 
 
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
-			const char *userid, struct buf *value);
+                        const char *userid, struct buf *value);
 /* same but check shared if per-user doesn't exist */
 int annotatemore_lookupmask(const char *mboxname, const char *entry,
-			    const char *userid, struct buf *value);
+                            const char *userid, struct buf *value);
 /* lookup a single per-message annotation and return result */
 int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
-			    const char *userid, struct buf *value);
+                            const char *userid, struct buf *value);
 /* same but check shared if per-user doesn't exist */
 int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
-				const char *userid, struct buf *value);
+                                const char *userid, struct buf *value);
 
 /* store annotations.  Requires an open transaction */
 int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
@@ -184,10 +184,10 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
 /* low-level interface for use by mbdump routines.
  * Requires an open transaction. */
 int annotate_state_write(annotate_state_t *, const char *entry,
-			 const char *userid, const struct buf *value);
+                         const char *userid, const struct buf *value);
 /* same but write to shared if the user owns the mailbox */
 int annotate_state_writemask(annotate_state_t *, const char *entry,
-			     const char *userid, const struct buf *value);
+                             const char *userid, const struct buf *value);
 
 /* rename the annotations for 'oldmboxname' to 'newmboxname'
  * if 'olduserid' is non-NULL then the private annotations
@@ -195,12 +195,12 @@ int annotate_state_writemask(annotate_state_t *, const char *entry,
  * Uses its own transaction.
  */
 int annotate_rename_mailbox(struct mailbox *oldmailbox,
-			    struct mailbox *newmailbox);
+                            struct mailbox *newmailbox);
 /* Handle a message COPY, by copying all the appropriate
  * per-message annotations. */
 int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
-		      struct mailbox *newmailbox, uint32_t newuid,
-		      const char *userid);
+                      struct mailbox *newmailbox, uint32_t newuid,
+                      const char *userid);
 /* delete the annotations for the given message */
 int annotate_msg_cleanup(struct mailbox *mailbox, uint32_t uid);
 
@@ -210,10 +210,10 @@ int annotate_delete_mailbox(struct mailbox *mailbox);
 
 /* recalc APIs */
 int annotate_recalc_begin(struct mailbox *mailbox,
-			  annotate_recalc_state_t **arsp,
-			  int reconstruct);
+                          annotate_recalc_state_t **arsp,
+                          int reconstruct);
 void annotate_recalc_add(annotate_recalc_state_t *ars,
-			 uint32_t uid);
+                         uint32_t uid);
 int annotate_recalc_commit(annotate_recalc_state_t *ars);
 void annotate_recalc_abort(annotate_recalc_state_t *ars);
 

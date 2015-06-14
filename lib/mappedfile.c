@@ -104,15 +104,15 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 {
     /* we may be rewriting inside a file, so don't shrink, only extend */
     if (update) {
-	if (offset > mf->map_size)
-	    mf->was_resized = 1;
-	else
-	    offset = mf->map_size;
+        if (offset > mf->map_size)
+            mf->was_resized = 1;
+        else
+            offset = mf->map_size;
     }
 
     /* always give refresh another go, we may be map_nommap */
     buf_init_mmap(&mf->map_buf, /*onceonly*/0, mf->fd, mf->fname,
-		  offset, /*mboxname*/NULL);
+                  offset, /*mboxname*/NULL);
 
     mf->map_size = offset;
 }
@@ -120,7 +120,7 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 /* NOTE - we don't provide any guarantees that the file isn't open multiple
  * times.  So don't do that.  It will mess with your locking no end */
 EXPORTED int mappedfile_open(struct mappedfile **mfp,
-			     const char *fname, int flags)
+                             const char *fname, int flags)
 {
     struct mappedfile *mf;
     struct stat sbuf;
@@ -137,22 +137,22 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
 
     mf->fd = open(mf->fname, openmode, 0644);
     if (mf->fd < 0 && errno == ENOENT) {
-	if (!create || !mf->is_rw) {
-	    r = -errno;
-	    goto err;
-	}
-	r = cyrus_mkdir(mf->fname, 0755);
-	if (r < 0) {
-	    syslog(LOG_ERR, "IOERROR: cyrus_mkdir %s: %m", mf->fname);
-	    goto err;
-	}
-	mf->fd = open(mf->fname, O_RDWR | O_CREAT, 0644);
+        if (!create || !mf->is_rw) {
+            r = -errno;
+            goto err;
+        }
+        r = cyrus_mkdir(mf->fname, 0755);
+        if (r < 0) {
+            syslog(LOG_ERR, "IOERROR: cyrus_mkdir %s: %m", mf->fname);
+            goto err;
+        }
+        mf->fd = open(mf->fname, O_RDWR | O_CREAT, 0644);
     }
 
     if (mf->fd == -1) {
-	syslog(LOG_ERR, "IOERROR: open %s: %m", mf->fname);
-	r = -errno;
-	goto err;
+        syslog(LOG_ERR, "IOERROR: open %s: %m", mf->fname);
+        r = -errno;
+        goto err;
     }
 
     /* it's zero, but set it anyway */
@@ -161,8 +161,8 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
 
     r = fstat(mf->fd, &sbuf);
     if (r < 0) {
-	syslog(LOG_ERR, "IOERROR: fstat %s: %m", mf->fname);
-	goto err;
+        syslog(LOG_ERR, "IOERROR: fstat %s: %m", mf->fname);
+        goto err;
     }
 
     _ensure_mapped(mf, sbuf.st_size, /*update*/0);
@@ -188,7 +188,7 @@ EXPORTED int mappedfile_close(struct mappedfile **mfp)
     assert(!mf->dirty);
 
     if (mf->fd >= 0)
-	r = close(mf->fd);
+        r = close(mf->fd);
 
     buf_free(&mf->map_buf);
     free(mf->fname);
@@ -209,40 +209,40 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
     assert(!mf->dirty);
 
     for (;;) {
-	if (lock_shared(mf->fd, mf->fname) < 0) {
-	    syslog(LOG_ERR, "IOERROR: lock_shared %s: %m", mf->fname);
-	    return -EIO;
-	}
+        if (lock_shared(mf->fd, mf->fname) < 0) {
+            syslog(LOG_ERR, "IOERROR: lock_shared %s: %m", mf->fname);
+            return -EIO;
+        }
 
-	if (fstat(mf->fd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstat %s: %m", mf->fname);
-	    lock_unlock(mf->fd, mf->fname);
-	    return -EIO;
-	}
+        if (fstat(mf->fd, &sbuf) == -1) {
+            syslog(LOG_ERR, "IOERROR: fstat %s: %m", mf->fname);
+            lock_unlock(mf->fd, mf->fname);
+            return -EIO;
+        }
 
-	if (stat(mf->fname, &sbuffile) == -1) {
-	    syslog(LOG_ERR, "IOERROR: stat %s: %m", mf->fname);
-	    lock_unlock(mf->fd, mf->fname);
-	    return -EIO;
-	}
-	if (sbuf.st_ino == sbuffile.st_ino) break;
+        if (stat(mf->fname, &sbuffile) == -1) {
+            syslog(LOG_ERR, "IOERROR: stat %s: %m", mf->fname);
+            lock_unlock(mf->fd, mf->fname);
+            return -EIO;
+        }
+        if (sbuf.st_ino == sbuffile.st_ino) break;
 
-	newfd = open(mf->fname, O_RDWR, 0644);
-	if (newfd == -1) {
-	    syslog(LOG_ERR, "IOERROR: open %s: %m", mf->fname);
-	    lock_unlock(mf->fd, mf->fname);
-	    return -EIO;
-	}
+        newfd = open(mf->fname, O_RDWR, 0644);
+        if (newfd == -1) {
+            syslog(LOG_ERR, "IOERROR: open %s: %m", mf->fname);
+            lock_unlock(mf->fd, mf->fname);
+            return -EIO;
+        }
 
-	dup2(newfd, mf->fd);
-	close(newfd);
+        dup2(newfd, mf->fd);
+        close(newfd);
     }
 
     mf->lock_status = MF_READLOCKED;
 
     /* XXX - can we guarantee the fd isn't reused? */
     if (mf->map_ino != sbuf.st_ino) {
-	buf_free(&mf->map_buf);
+        buf_free(&mf->map_buf);
     }
 
     _ensure_mapped(mf, sbuf.st_size, /*update*/0);
@@ -263,14 +263,14 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
 
     r = lock_reopen(mf->fd, mf->fname, &sbuf, &lockfailaction);
     if (r < 0) {
-	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, mf->fname);
-	return r;
+        syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, mf->fname);
+        return r;
     }
     mf->lock_status = MF_WRITELOCKED;
 
     /* XXX - can we guarantee the fd isn't reused? */
     if (mf->map_ino != sbuf.st_ino) {
-	buf_free(&mf->map_buf);
+        buf_free(&mf->map_buf);
     }
 
     _ensure_mapped(mf, sbuf.st_size, /*update*/0);
@@ -291,8 +291,8 @@ EXPORTED int mappedfile_unlock(struct mappedfile *mf)
 
     r = lock_unlock(mf->fd, mf->fname);
     if (r < 0) {
-	syslog(LOG_ERR, "IOERROR: lock_unlock %s: %m", mf->fname);
-	return r;
+        syslog(LOG_ERR, "IOERROR: lock_unlock %s: %m", mf->fname);
+        return r;
     }
 
     mf->lock_status = MF_UNLOCKED;
@@ -305,21 +305,21 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
     assert(mf->fd != -1);
 
     if (!mf->dirty)
-	return 0; /* nice, nothing to do */
+        return 0; /* nice, nothing to do */
 
     assert(mf->is_rw);
 
     if (mf->was_resized) {
-	if (fsync(mf->fd) < 0) {
-	    syslog(LOG_ERR, "IOERROR: %s fsync: %m", mf->fname);
-	    return -EIO;
-	}
+        if (fsync(mf->fd) < 0) {
+            syslog(LOG_ERR, "IOERROR: %s fsync: %m", mf->fname);
+            return -EIO;
+        }
     }
     else {
-	if (fdatasync(mf->fd) < 0) {
-	    syslog(LOG_ERR, "IOERROR: %s fdatasync: %m", mf->fname);
-	    return -EIO;
-	}
+        if (fdatasync(mf->fd) < 0) {
+            syslog(LOG_ERR, "IOERROR: %s fdatasync: %m", mf->fname);
+            return -EIO;
+        }
     }
 
     mf->dirty = 0;
@@ -329,8 +329,8 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
 }
 
 EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
-				   const char *base, size_t len,
-				   off_t offset)
+                                   const char *base, size_t len,
+                                   off_t offset)
 {
     ssize_t written;
     off_t pos;
@@ -348,18 +348,18 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
     /* locate the file handle */
     pos = lseek(mf->fd, offset, SEEK_SET);
     if (pos < 0) {
-	syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
-	       (long long unsigned int)offset);
-	return -1;
+        syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
+               (long long unsigned int)offset);
+        return -1;
     }
 
     /* write the buffer */
     written = retry_write(mf->fd, base, len);
     if (written < 0) {
-	syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
-	       mf->fname, (long long unsigned int)len,
-	       (long long unsigned int)offset);
-	return -1;
+        syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
+               mf->fname, (long long unsigned int)len,
+               (long long unsigned int)offset);
+        return -1;
     }
 
     _ensure_mapped(mf, pos+written, /*update*/1);
@@ -368,15 +368,15 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
 }
 
 EXPORTED ssize_t mappedfile_pwritebuf(struct mappedfile *mf,
-				      const struct buf *buf,
-				      off_t offset)
+                                      const struct buf *buf,
+                                      off_t offset)
 {
     return mappedfile_pwrite(mf, buf->s, buf->len, offset);
 }
 
 EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
-				    const struct iovec *iov, int nio,
-				    off_t offset)
+                                    const struct iovec *iov, int nio,
+                                    off_t offset)
 {
     ssize_t written;
     off_t pos;
@@ -394,23 +394,23 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
     /* locate the file handle */
     pos = lseek(mf->fd, offset, SEEK_SET);
     if (pos < 0) {
-	syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
-	       (long long unsigned int)offset);
-	return -1;
+        syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
+               (long long unsigned int)offset);
+        return -1;
     }
 
     /* write the buffer */
     written = retry_writev(mf->fd, iov, nio);
     if (written < 0) {
-	size_t len = 0;
-	int i;
-	for (i = 0; i < nio; i++) {
-	    len += iov[i].iov_len;
-	}
-	syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
-	       mf->fname, (long long unsigned int)len,
-	       (long long unsigned int)offset);
-	return -1;
+        size_t len = 0;
+        int i;
+        for (i = 0; i < nio; i++) {
+            len += iov[i].iov_len;
+        }
+        syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
+               mf->fname, (long long unsigned int)len,
+               (long long unsigned int)offset);
+        return -1;
     }
 
     _ensure_mapped(mf, pos+written, /*update*/1);
@@ -429,8 +429,8 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 
     r = ftruncate(mf->fd, offset);
     if (r < 0) {
-	syslog(LOG_ERR, "IOERROR: ftruncate %s: %m", mf->fname);
-	return r;
+        syslog(LOG_ERR, "IOERROR: ftruncate %s: %m", mf->fname);
+        return r;
     }
 
     _ensure_mapped(mf, offset, /*update*/0);
@@ -445,8 +445,8 @@ EXPORTED int mappedfile_rename(struct mappedfile *mf, const char *newname)
 
     r = rename(mf->fname, newname);
     if (r < 0) {
-	syslog(LOG_ERR, "IOERROR: rename (%s, %s): %m", mf->fname, newname);
-	return r;
+        syslog(LOG_ERR, "IOERROR: rename (%s, %s): %m", mf->fname, newname);
+        return r;
     }
 
     free(mf->fname);

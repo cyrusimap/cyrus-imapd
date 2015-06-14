@@ -31,72 +31,72 @@ AC_DEFUN([CMU_LOGUSE], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(loguse,
-	[AS_HELP_STRING([--with-loguse=PREFIX], [Compile with LOGUSE support])],
-	[if test "X$with_loguse" = "X"; then
-		with_loguse=yes
-	fi])
+        [AS_HELP_STRING([--with-loguse=PREFIX], [Compile with LOGUSE support])],
+        [if test "X$with_loguse" = "X"; then
+                with_loguse=yes
+        fi])
 
-	if test "X$with_loguse" != "X"; then
-	  if test "$with_loguse" != "yes"; then
-	    ac_cv_loguse_where_lib=$with_loguse/$CMU_LIB_SUBDIR
-	  fi
-	fi
+        if test "X$with_loguse" != "X"; then
+          if test "$with_loguse" != "yes"; then
+            ac_cv_loguse_where_lib=$with_loguse/$CMU_LIB_SUBDIR
+          fi
+        fi
 
-	if test "X$with_loguse_lib" != "X"; then
-	  ac_cv_loguse_where_lib=$with_loguse_lib
-	fi
-	if test "X$ac_cv_loguse_where_lib" = "X"; then
-	  CMU_LOGUSE_LIB_WHERE(/usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
-	fi
+        if test "X$with_loguse_lib" != "X"; then
+          ac_cv_loguse_where_lib=$with_loguse_lib
+        fi
+        if test "X$ac_cv_loguse_where_lib" = "X"; then
+          CMU_LOGUSE_LIB_WHERE(/usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
+        fi
 
-	AC_MSG_CHECKING(whether to include loguse)
-	if test "X$ac_cv_loguse_where_lib" = "X"; then
-	  ac_cv_found_loguse=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_loguse=yes
-	  AC_DEFINE(HAVE_LOGUSE,, [Use libloguse])
-	  AC_MSG_RESULT(yes)
-	  LOGUSE_LIB_DIR=$ac_cv_loguse_where_lib
-	  LOGUSE_LIB_FLAGS="-L${LOGUSE_LIB_DIR} -lloguse"
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${LOGUSE_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${LOGUSE_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${LOGUSE_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${LOGUSE_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${LOGUSE_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	])
+        AC_MSG_CHECKING(whether to include loguse)
+        if test "X$ac_cv_loguse_where_lib" = "X"; then
+          ac_cv_found_loguse=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_loguse=yes
+          AC_DEFINE(HAVE_LOGUSE,, [Use libloguse])
+          AC_MSG_RESULT(yes)
+          LOGUSE_LIB_DIR=$ac_cv_loguse_where_lib
+          LOGUSE_LIB_FLAGS="-L${LOGUSE_LIB_DIR} -lloguse"
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${LOGUSE_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${LOGUSE_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${LOGUSE_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${LOGUSE_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${LOGUSE_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${LOGUSE_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        ])
 

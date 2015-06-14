@@ -450,7 +450,7 @@ static int recovery2(struct dbengine *db, int *count);
 static size_t roundup(size_t record_size, int howfar)
 {
     if (record_size % howfar)
-	record_size += howfar - (record_size % howfar);
+        record_size += howfar - (record_size % howfar);
     return record_size;
 }
 
@@ -458,8 +458,8 @@ static size_t roundup(size_t record_size, int howfar)
 static uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 {
     while (((float) rand() / (float) (RAND_MAX)) < PROB) {
-	lvl++;
-	if (lvl == maxlvl) break;
+        lvl++;
+        if (lvl == maxlvl) break;
     }
     return lvl;
 }
@@ -474,46 +474,46 @@ static int read_header(struct dbengine *db)
     assert(db && db->mf && db->is_open);
 
     if (SIZE(db) < HEADER_SIZE) {
-	syslog(LOG_ERR,
-	       "twoskip: file not large enough for header: %s", FNAME(db));
-	return CYRUSDB_IOERROR;
+        syslog(LOG_ERR,
+               "twoskip: file not large enough for header: %s", FNAME(db));
+        return CYRUSDB_IOERROR;
     }
 
     if (memcmp(BASE(db), HEADER_MAGIC, HEADER_MAGIC_SIZE)) {
-	syslog(LOG_ERR, "twoskip: invalid magic header: %s", FNAME(db));
-	return CYRUSDB_IOERROR;
+        syslog(LOG_ERR, "twoskip: invalid magic header: %s", FNAME(db));
+        return CYRUSDB_IOERROR;
     }
 
     db->header.version
-	= ntohl(*((uint32_t *)(BASE(db) + OFFSET_VERSION)));
+        = ntohl(*((uint32_t *)(BASE(db) + OFFSET_VERSION)));
 
     if (db->header.version > VERSION) {
-	syslog(LOG_ERR, "twoskip: version mismatch: %s has version %d",
-	       FNAME(db), db->header.version);
-	return CYRUSDB_IOERROR;
+        syslog(LOG_ERR, "twoskip: version mismatch: %s has version %d",
+               FNAME(db), db->header.version);
+        return CYRUSDB_IOERROR;
     }
 
     db->header.generation
-	= ntohll(*((uint64_t *)(BASE(db) + OFFSET_GENERATION)));
+        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_GENERATION)));
 
     db->header.num_records
-	= ntohll(*((uint64_t *)(BASE(db) + OFFSET_NUM_RECORDS)));
+        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_NUM_RECORDS)));
 
     db->header.repack_size
-	= ntohll(*((uint64_t *)(BASE(db) + OFFSET_REPACK_SIZE)));
+        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_REPACK_SIZE)));
 
     db->header.current_size
-	= ntohll(*((uint64_t *)(BASE(db) + OFFSET_CURRENT_SIZE)));
+        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_CURRENT_SIZE)));
 
     db->header.flags
-	= ntohl(*((uint32_t *)(BASE(db) + OFFSET_FLAGS)));
+        = ntohl(*((uint32_t *)(BASE(db) + OFFSET_FLAGS)));
 
     crc = ntohl(*((uint32_t *)(BASE(db) + OFFSET_CRC32)));
 
     if (crc32_map(BASE(db), OFFSET_CRC32) != crc) {
-	syslog(LOG_ERR, "DBERROR: %s: twoskip header CRC failure",
-	       FNAME(db));
-	return CYRUSDB_IOERROR;
+        syslog(LOG_ERR, "DBERROR: %s: twoskip header CRC failure",
+               FNAME(db));
+        return CYRUSDB_IOERROR;
     }
 
     db->end = db->header.current_size;
@@ -559,11 +559,11 @@ static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
     uint32_t crc;
 
     crc = crc32_map(BASE(db) + record->keyoffset,
-		    roundup(record->keylen + record->vallen, 8));
+                    roundup(record->keylen + record->vallen, 8));
     if (crc != record->crc32_tail) {
-	syslog(LOG_ERR, "DBERROR: invalid tail crc %s at %llX",
-	       FNAME(db), (LLU)record->offset);
-	return CYRUSDB_IOERROR;
+        syslog(LOG_ERR, "DBERROR: invalid tail crc %s at %llX",
+               FNAME(db), (LLU)record->offset);
+        return CYRUSDB_IOERROR;
     }
 
     return 0;
@@ -571,7 +571,7 @@ static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
 
 /* read a single skiprecord at the given offset */
 static int read_onerecord(struct dbengine *db, size_t offset,
-			  struct skiprecord *record)
+                          struct skiprecord *record)
 {
     const char *base;
     int i;
@@ -585,7 +585,7 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 
     /* need space for at least the header plus some details */
     if (record->offset + record->len > SIZE(db))
-	goto badsize;
+        goto badsize;
 
     base = BASE(db) + offset;
 
@@ -601,38 +601,38 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 
     /* long key */
     if (record->keylen == UINT16_MAX) {
-	base = BASE(db) + offset;
-	record->keylen = ntohll(*((uint64_t *)base));
-	offset += 8;
+        base = BASE(db) + offset;
+        record->keylen = ntohll(*((uint64_t *)base));
+        offset += 8;
     }
 
     /* long value */
     if (record->vallen == UINT32_MAX) {
-	base = BASE(db) + offset;
-	record->vallen = ntohll(*((uint64_t *)base));
-	offset += 8;
+        base = BASE(db) + offset;
+        record->vallen = ntohll(*((uint64_t *)base));
+        offset += 8;
     }
 
     /* we know the length now */
     record->len = (offset - record->offset) /* header including lengths */
-		+ 8 * (1 + record->level)   /* ptrs */
-		+ 8                         /* crc32s */
-		+ roundup(record->keylen + record->vallen, 8);  /* keyval */
+                + 8 * (1 + record->level)   /* ptrs */
+                + 8                         /* crc32s */
+                + roundup(record->keylen + record->vallen, 8);  /* keyval */
 
     if (record->offset + record->len > SIZE(db))
-	goto badsize;
+        goto badsize;
 
     for (i = 0; i <= record->level; i++) {
-	base = BASE(db) + offset;
-	record->nextloc[i] = ntohll(*((uint64_t *)base));
-	offset += 8;
+        base = BASE(db) + offset;
+        record->nextloc[i] = ntohll(*((uint64_t *)base));
+        offset += 8;
     }
 
     base = BASE(db) + offset;
     record->crc32_head = ntohl(*((uint32_t *)base));
     if (crc32_map(BASE(db) + record->offset, (offset - record->offset))
-	!= record->crc32_head)
-	return CYRUSDB_IOERROR;
+        != record->crc32_head)
+        return CYRUSDB_IOERROR;
 
     record->crc32_tail = ntohl(*((uint32_t *)(base+4)));
 
@@ -643,12 +643,12 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 
 badsize:
     syslog(LOG_ERR, "twoskip: attempt to read past end of file %s: %08llX > %08llX",
-	   FNAME(db), (LLU)record->offset + record->len, (LLU)SIZE(db));
+           FNAME(db), (LLU)record->offset + record->len, (LLU)SIZE(db));
     return CYRUSDB_IOERROR;
 }
 
 static int read_skipdelete(struct dbengine *db, size_t offset,
-			   struct skiprecord *record)
+                           struct skiprecord *record)
 {
     int r;
 
@@ -656,7 +656,7 @@ static int read_skipdelete(struct dbengine *db, size_t offset,
     if (r) return r;
 
     if (record->type == DELETE)
-	r = read_onerecord(db, record->nextloc[0], record);
+        r = read_onerecord(db, record->nextloc[0], record);
 
     return r;
 }
@@ -673,27 +673,27 @@ static void prepare_record(struct skiprecord *record, char *buf, size_t *sizep)
     buf[0] = record->type;
     buf[1] = record->level;
     if (record->keylen < UINT16_MAX) {
-	*((uint16_t *)(buf+2)) = htons(record->keylen);
+        *((uint16_t *)(buf+2)) = htons(record->keylen);
     }
     else {
-	*((uint16_t *)(buf+2)) = htons(UINT16_MAX);
-	*((uint64_t *)(buf+len)) = htonll(record->keylen);
-	len += 8;
+        *((uint16_t *)(buf+2)) = htons(UINT16_MAX);
+        *((uint64_t *)(buf+len)) = htonll(record->keylen);
+        len += 8;
     }
 
     if (record->vallen < UINT32_MAX) {
-	*((uint32_t *)(buf+4)) = htonl(record->vallen);
+        *((uint32_t *)(buf+4)) = htonl(record->vallen);
     }
     else {
-	*((uint32_t *)(buf+4)) = htonl(UINT32_MAX);
-	*((uint64_t *)(buf+len)) = htonll(record->vallen);
-	len += 8;
+        *((uint32_t *)(buf+4)) = htonl(UINT32_MAX);
+        *((uint64_t *)(buf+len)) = htonll(record->vallen);
+        len += 8;
     }
 
     /* got pointers? */
     for (i = 0; i <= record->level; i++) {
-	*((uint64_t *)(buf+len)) = htonll(record->nextloc[i]);
-	len += 8;
+        *((uint64_t *)(buf+len)) = htonll(record->nextloc[i]);
+        len += 8;
     }
 
     /* NOTE: crc32_tail does not change */
@@ -726,7 +726,7 @@ static int rewrite_record(struct dbengine *db, struct skiprecord *record)
 
 /* you can only write records at the end */
 static int write_record(struct dbengine *db, struct skiprecord *record,
-			const char *key, const char *val)
+                        const char *key, const char *val)
 {
     char zeros[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     uint64_t len;
@@ -778,7 +778,7 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
 /* helper to append a record, starting the transaction by dirtying the
  * header first if required */
 static int append_record(struct dbengine *db, struct skiprecord *record,
-			 const char *key, const char *val)
+                         const char *key, const char *val)
 {
     int r;
 
@@ -786,9 +786,9 @@ static int append_record(struct dbengine *db, struct skiprecord *record,
 
     /* dirty the header if not already dirty */
     if (!(db->header.flags & DIRTY)) {
-	db->header.flags |= DIRTY;
-	r = commit_header(db);
-	if (r) return r;
+        db->header.flags |= DIRTY;
+        r = commit_header(db);
+        if (r) return r;
     }
 
     return write_record(db, record, key, val);
@@ -799,45 +799,45 @@ static int append_record(struct dbengine *db, struct skiprecord *record,
 /* find the next record at a given level, encapsulating the
  * level 0 magic */
 static size_t _getloc(struct dbengine *db, struct skiprecord *record,
-		      uint8_t level)
+                      uint8_t level)
 {
     if (level)
-	return record->nextloc[level + 1];
+        return record->nextloc[level + 1];
 
     /* if one is past, must be the other */
     if (record->nextloc[0] >= db->end)
-	return record->nextloc[1];
+        return record->nextloc[1];
     else if (record->nextloc[1] >= db->end)
-	return record->nextloc[0];
+        return record->nextloc[0];
 
     /* highest remaining */
     else if (record->nextloc[0] > record->nextloc[1])
-	return record->nextloc[0];
+        return record->nextloc[0];
     else
-	return record->nextloc[1];
+        return record->nextloc[1];
 }
 
 /* set the next record at a given level, encapsulating the
  * level 0 magic */
 static void _setloc(struct dbengine *db, struct skiprecord *record,
-		    uint8_t level, size_t offset)
+                    uint8_t level, size_t offset)
 {
     if (level) {
-	record->nextloc[level+1] = offset;
-	return;
+        record->nextloc[level+1] = offset;
+        return;
     }
 
     /* level zero is special */
     /* already this transaction, update this one */
     if (record->nextloc[0] >= db->header.current_size)
-	record->nextloc[0] = offset;
+        record->nextloc[0] = offset;
     else if (record->nextloc[1] >= db->header.current_size)
-	record->nextloc[1] = offset;
+        record->nextloc[1] = offset;
     /* otherwise, update older one */
     else if (record->nextloc[1] > record->nextloc[0])
-	record->nextloc[0] = offset;
+        record->nextloc[0] = offset;
     else
-	record->nextloc[1] = offset;
+        record->nextloc[1] = offset;
 }
 
 /* finds a record, either an exact match or the record
@@ -869,53 +869,53 @@ static int relocate(struct dbengine *db)
 
     /* special case start pointer for efficiency */
     if (!loc->keybuf.len) {
-	for (i = 0; i < loc->record.level; i++) {
-	    loc->backloc[i] = loc->record.offset;
-	    loc->forwardloc[i] = _getloc(db, &loc->record, i);
-	}
-	return 0;
+        for (i = 0; i < loc->record.level; i++) {
+            loc->backloc[i] = loc->record.offset;
+            loc->forwardloc[i] = _getloc(db, &loc->record, i);
+        }
+        return 0;
     }
 
     while (level) {
-	offset = _getloc(db, &loc->record, level-1);
+        offset = _getloc(db, &loc->record, level-1);
 
-	loc->backloc[level-1] = loc->record.offset;
-	loc->forwardloc[level-1] = offset;
+        loc->backloc[level-1] = loc->record.offset;
+        loc->forwardloc[level-1] = offset;
 
-	if (offset != oldoffset) {
-	    oldoffset = offset;
-	    r = read_skipdelete(db, offset, &newrecord);
-	    if (r) return r;
+        if (offset != oldoffset) {
+            oldoffset = offset;
+            r = read_skipdelete(db, offset, &newrecord);
+            if (r) return r;
 
-	    if (newrecord.offset) {
-		assert(newrecord.level >= level);
+            if (newrecord.offset) {
+                assert(newrecord.level >= level);
 
-		cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
-				 loc->keybuf.s, loc->keybuf.len);
+                cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
+                                 loc->keybuf.s, loc->keybuf.len);
 
-		/* not there?  stay at this level */
-		if (cmp < 0) {
-		    /* move the offset range along */
-		    loc->record = newrecord;
-		    continue;
-		}
-	    }
-	}
+                /* not there?  stay at this level */
+                if (cmp < 0) {
+                    /* move the offset range along */
+                    loc->record = newrecord;
+                    continue;
+                }
+            }
+        }
 
-	level--;
+        level--;
     }
 
     if (cmp == 0) { /* we found it exactly */
-	loc->is_exactmatch = 1;
-	loc->record = newrecord;
+        loc->is_exactmatch = 1;
+        loc->record = newrecord;
 
-	for (i = 0; i < loc->record.level; i++)
-	    loc->forwardloc[i] = _getloc(db, &loc->record, i);
+        for (i = 0; i < loc->record.level; i++)
+            loc->forwardloc[i] = _getloc(db, &loc->record, i);
 
-	/* make sure this record is complete */
-	r = check_tailcrc(db, &loc->record);
+        /* make sure this record is complete */
+        r = check_tailcrc(db, &loc->record);
 
-	if (r) return r;
+        if (r) return r;
     }
 
     return 0;
@@ -930,62 +930,62 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
     int cmp, i, r;
 
     if (key != loc->keybuf.s)
-	buf_setmap(&loc->keybuf, key, keylen);
+        buf_setmap(&loc->keybuf, key, keylen);
     else if (keylen != loc->keybuf.len)
-	buf_truncate(&loc->keybuf, keylen);
+        buf_truncate(&loc->keybuf, keylen);
 
     /* can we special case advance? */
     if (keylen && loc->end == db->end
                && loc->generation == db->header.generation) {
-	cmp = db->compar(KEY(db, &loc->record), loc->record.keylen,
-			 loc->keybuf.s, loc->keybuf.len);
-	/* same place, and was exact.  Otherwise we're going back,
-	 * and the reverse pointers are no longer valid... */
-	if (db->loc.is_exactmatch && cmp == 0) {
-	    return 0;
-	}
+        cmp = db->compar(KEY(db, &loc->record), loc->record.keylen,
+                         loc->keybuf.s, loc->keybuf.len);
+        /* same place, and was exact.  Otherwise we're going back,
+         * and the reverse pointers are no longer valid... */
+        if (db->loc.is_exactmatch && cmp == 0) {
+            return 0;
+        }
 
-	/* we're looking after this record */
-	if (cmp < 0) {
-	    for (i = 0; i < db->loc.record.level; i++)
-		loc->backloc[i] = db->loc.record.offset;
+        /* we're looking after this record */
+        if (cmp < 0) {
+            for (i = 0; i < db->loc.record.level; i++)
+                loc->backloc[i] = db->loc.record.offset;
 
-	    /* read the next record */
-	    r = read_skipdelete(db, loc->forwardloc[0], &newrecord);
-	    if (r) return r;
+            /* read the next record */
+            r = read_skipdelete(db, loc->forwardloc[0], &newrecord);
+            if (r) return r;
 
-	    /* nothing afterwards? */
-	    if (!newrecord.offset) {
-		db->loc.is_exactmatch = 0;
-		return 0;
-	    }
+            /* nothing afterwards? */
+            if (!newrecord.offset) {
+                db->loc.is_exactmatch = 0;
+                return 0;
+            }
 
-	    /* now where is THIS record? */
-	    cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
-			     loc->keybuf.s, loc->keybuf.len);
+            /* now where is THIS record? */
+            cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
+                             loc->keybuf.s, loc->keybuf.len);
 
-	    /* exact match? */
-	    if (cmp == 0) {
-		db->loc.is_exactmatch = 1;
-		db->loc.record = newrecord;
+            /* exact match? */
+            if (cmp == 0) {
+                db->loc.is_exactmatch = 1;
+                db->loc.record = newrecord;
 
-		for (i = 0; i < newrecord.level; i++)
-		    loc->forwardloc[i] = _getloc(db, &newrecord, i);
+                for (i = 0; i < newrecord.level; i++)
+                    loc->forwardloc[i] = _getloc(db, &newrecord, i);
 
-		/* make sure this record is complete */
-		r = check_tailcrc(db, &loc->record);
-		if (r) return r;
+                /* make sure this record is complete */
+                r = check_tailcrc(db, &loc->record);
+                if (r) return r;
 
-		return 0;
-	    }
+                return 0;
+            }
 
-	    /* or in the gap */
-	    if (cmp > 0) {
-		db->loc.is_exactmatch = 0;
-		return 0;
-	    }
-	}
-	/* if we fell out here, it's not a "local" record, just search */
+            /* or in the gap */
+            if (cmp > 0) {
+                db->loc.is_exactmatch = 0;
+                return 0;
+            }
+        }
+        /* if we fell out here, it's not a "local" record, just search */
     }
 
     return relocate(db);
@@ -1001,13 +1001,13 @@ static int advance_loc(struct dbengine *db)
 
     /* has another session made changes?  Need to re-find the location */
     if (loc->end != db->end || loc->generation != db->header.generation) {
-	r = relocate(db);
-	if (r) return r;
+        r = relocate(db);
+        if (r) return r;
     }
 
     /* update back pointers */
     for (i = 0; i < loc->record.level; i++)
-	loc->backloc[i] = loc->record.offset;
+        loc->backloc[i] = loc->record.offset;
 
     /* ADVANCE */
     r = read_skipdelete(db, loc->forwardloc[0], &loc->record);
@@ -1015,13 +1015,13 @@ static int advance_loc(struct dbengine *db)
 
     /* reached the end? */
     if (!loc->record.offset) {
-	buf_reset(&loc->keybuf);
-	return relocate(db);
+        buf_reset(&loc->keybuf);
+        return relocate(db);
     }
 
     /* update forward pointers */
     for (i = 0; i < loc->record.level; i++)
-	loc->forwardloc[i] = _getloc(db, &loc->record, i);
+        loc->forwardloc[i] = _getloc(db, &loc->record, i);
 
     /* keep our location */
     buf_setmap(&loc->keybuf, KEY(db, &loc->record), loc->record.keylen);
@@ -1047,19 +1047,19 @@ static int stitch(struct dbengine *db, uint8_t maxlevel, size_t newoffset)
 
     oldrecord.level = 0;
     while (oldrecord.level < maxlevel) {
-	uint8_t level = oldrecord.level;
+        uint8_t level = oldrecord.level;
 
-	r = read_onerecord(db, loc->backloc[level], &oldrecord);
-	if (r) return r;
+        r = read_onerecord(db, loc->backloc[level], &oldrecord);
+        if (r) return r;
 
-	/* always getting higher */
-	assert(oldrecord.level > level);
+        /* always getting higher */
+        assert(oldrecord.level > level);
 
-	for (i = level; i < maxlevel; i++)
-	    _setloc(db, &oldrecord, i, loc->forwardloc[i]);
+        for (i = level; i < maxlevel; i++)
+            _setloc(db, &oldrecord, i, loc->forwardloc[i]);
 
-	r = rewrite_record(db, &oldrecord);
-	if (r) return r;
+        r = rewrite_record(db, &oldrecord);
+        if (r) return r;
     }
 
     /* re-read the "current record" */
@@ -1068,7 +1068,7 @@ static int stitch(struct dbengine *db, uint8_t maxlevel, size_t newoffset)
 
     /* and update the forward locations */
     for (i = 0; i < loc->record.level; i++)
-	loc->forwardloc[i] = _getloc(db, &loc->record, i);
+        loc->forwardloc[i] = _getloc(db, &loc->record, i);
 
     return 0;
 }
@@ -1085,8 +1085,8 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
     int r;
 
     if (loc->is_exactmatch) {
-	level = loc->record.level;
-	db->header.num_records--;
+        level = loc->record.level;
+        db->header.num_records--;
     }
 
     /* build a new record */
@@ -1096,9 +1096,9 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
     newrecord.keylen = loc->keybuf.len;
     newrecord.vallen = vallen;
     for (i = 0; i < newrecord.level; i++)
-	newrecord.nextloc[i+1] = loc->forwardloc[i];
+        newrecord.nextloc[i+1] = loc->forwardloc[i];
     if (newrecord.level > level)
-	level = newrecord.level;
+        level = newrecord.level;
 
     /* append to the file */
     r = append_record(db, &newrecord, loc->keybuf.s, val);
@@ -1106,7 +1106,7 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 
     /* get the nextlevel to point here for all this record's levels */
     for (i = 0; i < newrecord.level; i++)
-	loc->forwardloc[i] = newrecord.offset;
+        loc->forwardloc[i] = newrecord.offset;
 
     /* update all backpointers */
     r = stitch(db, level, newrecord.offset);
@@ -1130,7 +1130,7 @@ static int delete_here(struct dbengine *db)
     int r;
 
     if (!loc->is_exactmatch)
-	return CYRUSDB_NOTFOUND;
+        return CYRUSDB_NOTFOUND;
 
     db->header.num_records--;
 
@@ -1167,10 +1167,10 @@ static int delete_here(struct dbengine *db)
 static int db_is_clean(struct dbengine *db)
 {
     if (db->header.current_size != SIZE(db))
-	return 0;
+        return 0;
 
     if (db->header.flags & DIRTY)
-	return 0;
+        return 0;
 
     return 1;
 }
@@ -1187,12 +1187,12 @@ static int write_lock(struct dbengine *db)
 
     /* reread header */
     if (db->is_open) {
-	r = read_header(db);
-	if (r) return r;
+        r = read_header(db);
+        if (r) return r;
 
-	/* recovery checks for consistency */
-	r = recovery(db);
-	if (r) return r;
+        /* recovery checks for consistency */
+        r = recovery(db);
+        if (r) return r;
     }
 
     return 0;
@@ -1205,20 +1205,20 @@ static int read_lock(struct dbengine *db)
 
     /* reread header */
     if (db->is_open) {
-	r = read_header(db);
-	if (r) return r;
+        r = read_header(db);
+        if (r) return r;
 
-	/* we just take and keep a write lock if inconsistent,
-	 * the write lock will fix it up */
-	if (!db_is_clean(db)) {
-	    unlock(db);
-	    r = write_lock(db);
-	    if (r) return r;
-	    /* downgrade to a read lock again, since that what
-	     * was requested */
-	    unlock(db);
-	    return read_lock(db);
-	}
+        /* we just take and keep a write lock if inconsistent,
+         * the write lock will fix it up */
+        if (!db_is_clean(db)) {
+            unlock(db);
+            r = write_lock(db);
+            if (r) return r;
+            /* downgrade to a read lock again, since that what
+             * was requested */
+            unlock(db);
+            return read_lock(db);
+        }
     }
 
     return 0;
@@ -1251,9 +1251,9 @@ static void dispose_db(struct dbengine *db)
     if (!db) return;
 
     if (db->mf) {
-	if (mappedfile_islocked(db->mf))
-	    unlock(db);
-	mappedfile_close(&db->mf);
+        if (mappedfile_islocked(db->mf))
+            unlock(db);
+        mappedfile_close(&db->mf);
     }
 
     buf_free(&db->loc.keybuf);
@@ -1275,18 +1275,18 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
     if (flags & CYRUSDB_CREATE)
-	mappedfile_flags |= MAPPEDFILE_CREATE;
+        mappedfile_flags |= MAPPEDFILE_CREATE;
 
     db->open_flags = flags & ~CYRUSDB_CREATE;
     db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox
-					    : bsearch_ncompare_raw;
+                                            : bsearch_ncompare_raw;
 
     r = mappedfile_open(&db->mf, fname, mappedfile_flags);
     if (r) {
-	/* convert to CYRUSDB errors*/
-	if (r == -ENOENT) r = CYRUSDB_NOTFOUND;
-	else r = CYRUSDB_IOERROR;
-	goto done;
+        /* convert to CYRUSDB errors*/
+        if (r == -ENOENT) r = CYRUSDB_NOTFOUND;
+        else r = CYRUSDB_IOERROR;
+        goto done;
     }
 
     db->is_open = 0;
@@ -1298,45 +1298,45 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     /* if there's any issue which requires fixing, get a write lock */
     if (0) {
     retry_write:
-	unlock(db);
-	db->is_open = 0;
-	r = write_lock(db);
-	if (r) goto done;
+        unlock(db);
+        db->is_open = 0;
+        r = write_lock(db);
+        if (r) goto done;
     }
 
     /* if the map size is zero, it's a new file - we need to create an
      * initial header */
     if (mappedfile_size(db->mf) == 0) {
-	struct skiprecord dummy;
+        struct skiprecord dummy;
 
-	if (!mappedfile_iswritelocked(db->mf))
-	    goto retry_write;
+        if (!mappedfile_iswritelocked(db->mf))
+            goto retry_write;
 
-	/* create the dummy! */
-	memset(&dummy, 0, sizeof(struct skiprecord));
-	dummy.type = DUMMY;
-	dummy.level = MAXLEVEL;
+        /* create the dummy! */
+        memset(&dummy, 0, sizeof(struct skiprecord));
+        dummy.type = DUMMY;
+        dummy.level = MAXLEVEL;
 
-	/* append dummy after header location */
-	db->end = DUMMY_OFFSET;
-	r = write_record(db, &dummy, NULL, NULL);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: writing dummy node for %s: %m",
-		   fname);
-	    goto done;
-	}
+        /* append dummy after header location */
+        db->end = DUMMY_OFFSET;
+        r = write_record(db, &dummy, NULL, NULL);
+        if (r) {
+            syslog(LOG_ERR, "DBERROR: writing dummy node for %s: %m",
+                   fname);
+            goto done;
+        }
 
-	/* create the header */
-	db->header.version = VERSION;
-	db->header.generation = 1;
-	db->header.repack_size = db->end;
-	db->header.current_size = db->end;
-	r = commit_header(db);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: writing header for %s: %m",
-		   fname);
-	    goto done;
-	}
+        /* create the header */
+        db->header.version = VERSION;
+        db->header.generation = 1;
+        db->header.repack_size = db->end;
+        db->header.current_size = db->end;
+        r = commit_header(db);
+        if (r) {
+            syslog(LOG_ERR, "DBERROR: writing header for %s: %m",
+                   fname);
+            goto done;
+        }
     }
 
     db->is_open = 1;
@@ -1345,12 +1345,12 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     if (r) goto done;
 
     if (!db_is_clean(db)) {
-	if (!mappedfile_iswritelocked(db->mf))
-	    goto retry_write;
+        if (!mappedfile_iswritelocked(db->mf))
+            goto retry_write;
 
-	/* recovery will clean the flag once it's committed the fixes */
-	r = recovery(db);
-	if (r) goto done;
+        /* recovery will clean the flag once it's committed the fixes */
+        r = recovery(db);
+        if (r) goto done;
     }
 
     /* unlock the DB */
@@ -1359,8 +1359,8 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     *ret = db;
 
     if (mytid) {
-	r = newtxn(db, mytid);
-	if (r) goto done;
+        r = newtxn(db, mytid);
+        if (r) goto done;
     }
 
 done:
@@ -1376,16 +1376,16 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
 
     /* do we already have this DB open? */
     for (ent = open_twoskip; ent; ent = ent->next) {
-	if (strcmp(FNAME(ent->db), fname)) continue;
-	if (ent->db->current_txn)
-	    return CYRUSDB_LOCKED;
-	if (mytid) {
-	    r = newtxn(ent->db, mytid);
-	    if (r) return r;
-	}
-	ent->refcount++;
-	*ret = ent->db;
-	return 0;
+        if (strcmp(FNAME(ent->db), fname)) continue;
+        if (ent->db->current_txn)
+            return CYRUSDB_LOCKED;
+        if (mytid) {
+            r = newtxn(ent->db, mytid);
+            if (r) return r;
+        }
+        ent->refcount++;
+        *ret = ent->db;
+        return 0;
     }
 
     r = opendb(fname, flags, &mydb, mytid);
@@ -1413,18 +1413,18 @@ static int myclose(struct dbengine *db)
 
     /* remove this DB from the open list */
     while (ent && ent->db != db) {
-	prev = ent;
-	ent = ent->next;
+        prev = ent;
+        ent = ent->next;
     }
     assert(ent);
 
     if (--ent->refcount <= 0) {
-	if (prev) prev->next = ent->next;
-	else open_twoskip = ent->next;
-	free(ent);
-	if (mappedfile_islocked(db->mf))
-	    syslog(LOG_ERR, "twoskip: %s closed while still locked", FNAME(db));
-	dispose_db(db);
+        if (prev) prev->next = ent->next;
+        else open_twoskip = ent->next;
+        free(ent);
+        if (mappedfile_islocked(db->mf))
+            syslog(LOG_ERR, "twoskip: %s closed while still locked", FNAME(db));
+        dispose_db(db);
     }
 
     return 0;
@@ -1433,10 +1433,10 @@ static int myclose(struct dbengine *db)
 /*************** EXTERNAL APIS ***********************/
 
 static int myfetch(struct dbengine *db,
-	    const char *key, size_t keylen,
-	    const char **foundkey, size_t *foundkeylen,
-	    const char **data, size_t *datalen,
-	    struct txn **tidptr, int fetchnext)
+            const char *key, size_t keylen,
+            const char **foundkey, size_t *foundkeylen,
+            const char **data, size_t *datalen,
+            struct txn **tidptr, int fetchnext)
 {
     int r = 0;
 
@@ -1452,46 +1452,46 @@ static int myfetch(struct dbengine *db,
      * then just do the read within that transaction.
      */
     if (!tidptr && db->current_txn)
-	tidptr = &db->current_txn;
+        tidptr = &db->current_txn;
 
     if (tidptr) {
-	if (!*tidptr) {
-	    r = newtxn(db, tidptr);
-	    if (r) return r;
-	}
+        if (!*tidptr) {
+            r = newtxn(db, tidptr);
+            if (r) return r;
+        }
     } else {
-	/* grab a r lock */
-	r = read_lock(db);
-	if (r) return r;
+        /* grab a r lock */
+        r = read_lock(db);
+        if (r) return r;
     }
 
     r = find_loc(db, key, keylen);
     if (r) goto done;
 
     if (fetchnext) {
-	r = advance_loc(db);
-	if (r) goto done;
+        r = advance_loc(db);
+        if (r) goto done;
     }
 
     if (foundkey) *foundkey = db->loc.keybuf.s;
     if (foundkeylen) *foundkeylen = db->loc.keybuf.len;
 
     if (!r && db->loc.is_exactmatch) {
-	if (data) *data = VAL(db, &db->loc.record);
-	if (datalen) *datalen = db->loc.record.vallen;
+        if (data) *data = VAL(db, &db->loc.record);
+        if (datalen) *datalen = db->loc.record.vallen;
     }
     else {
-	/* we didn't get an exact match */
-	r = CYRUSDB_NOTFOUND;
+        /* we didn't get an exact match */
+        r = CYRUSDB_NOTFOUND;
     }
 
 done:
     if (!tidptr) {
-	/* release read lock */
-	int r1;
-	if ((r1 = unlock(db)) < 0) {
-	    return r1;
-	}
+        /* release read lock */
+        int r1;
+        if ((r1 = unlock(db)) < 0) {
+            return r1;
+        }
     }
 
     return r;
@@ -1501,10 +1501,10 @@ done:
    if there is a txn, 'cb' must make use of it.
 */
 static int myforeach(struct dbengine *db,
-		     const char *prefix, size_t prefixlen,
-		     foreach_p *goodp,
-		     foreach_cb *cb, void *rock,
-		     struct txn **tidptr)
+                     const char *prefix, size_t prefixlen,
+                     foreach_p *goodp,
+                     foreach_cb *cb, void *rock,
+                     struct txn **tidptr)
 {
     int r = 0, cb_r = 0;
     int need_unlock = 0;
@@ -1522,71 +1522,71 @@ static int myforeach(struct dbengine *db,
      * then just do the read within that transaction.
      */
     if (!tidptr && db->current_txn)
-	tidptr = &db->current_txn;
+        tidptr = &db->current_txn;
     if (tidptr) {
-	if (!*tidptr) {
-	    r = newtxn(db, tidptr);
-	    if (r) return r;
-	}
+        if (!*tidptr) {
+            r = newtxn(db, tidptr);
+            if (r) return r;
+        }
     } else {
-	/* grab a r lock */
-	r = read_lock(db);
-	if (r) return r;
-	need_unlock = 1;
+        /* grab a r lock */
+        r = read_lock(db);
+        if (r) return r;
+        need_unlock = 1;
     }
 
     r = find_loc(db, prefix, prefixlen);
     if (r) goto done;
 
     if (!db->loc.is_exactmatch) {
-	/* advance to the first match */
-	r = advance_loc(db);
-	if (r) goto done;
+        /* advance to the first match */
+        r = advance_loc(db);
+        if (r) goto done;
     }
 
     while (db->loc.is_exactmatch) {
-	/* does it match prefix? */
-	if (prefixlen) {
-	    if (db->loc.record.keylen < prefixlen) break;
-	    if (db->compar(KEY(db, &db->loc.record), prefixlen, prefix, prefixlen)) break;
-	}
+        /* does it match prefix? */
+        if (prefixlen) {
+            if (db->loc.record.keylen < prefixlen) break;
+            if (db->compar(KEY(db, &db->loc.record), prefixlen, prefix, prefixlen)) break;
+        }
 
-	val = VAL(db, &db->loc.record);
-	vallen = db->loc.record.vallen;
+        val = VAL(db, &db->loc.record);
+        vallen = db->loc.record.vallen;
 
-	if (!goodp || goodp(rock, db->loc.keybuf.s, db->loc.keybuf.len,
-				  val, vallen)) {
-	    if (!tidptr) {
-		/* release read lock */
-		r = unlock(db);
-		if (r) goto done;
-		need_unlock = 0;
-	    }
+        if (!goodp || goodp(rock, db->loc.keybuf.s, db->loc.keybuf.len,
+                                  val, vallen)) {
+            if (!tidptr) {
+                /* release read lock */
+                r = unlock(db);
+                if (r) goto done;
+                need_unlock = 0;
+            }
 
-	    /* take a copy of they key - just in case cb does actions on this database
-	     * and clobbers loc */
-	    buf_copy(&keybuf, &db->loc.keybuf);
+            /* take a copy of they key - just in case cb does actions on this database
+             * and clobbers loc */
+            buf_copy(&keybuf, &db->loc.keybuf);
 
-	    /* make callback */
-	    cb_r = cb(rock, db->loc.keybuf.s, db->loc.keybuf.len,
-			    val, vallen);
-	    if (cb_r) break;
+            /* make callback */
+            cb_r = cb(rock, db->loc.keybuf.s, db->loc.keybuf.len,
+                            val, vallen);
+            if (cb_r) break;
 
-	    if (!tidptr) {
-		/* grab a r lock */
-		r = read_lock(db);
-		if (r) goto done;
-		need_unlock = 1;
-	    }
+            if (!tidptr) {
+                /* grab a r lock */
+                r = read_lock(db);
+                if (r) goto done;
+                need_unlock = 1;
+            }
 
-	    /* should be cheap if we're already here */
-	    r = find_loc(db, keybuf.s, keybuf.len);
-	    if (r) goto done;
-	}
+            /* should be cheap if we're already here */
+            r = find_loc(db, keybuf.s, keybuf.len);
+            if (r) goto done;
+        }
 
-	/* move to the next one */
-	r = advance_loc(db);
-	if (r) goto done;
+        /* move to the next one */
+        r = advance_loc(db);
+        if (r) goto done;
     }
 
  done:
@@ -1594,9 +1594,9 @@ static int myforeach(struct dbengine *db,
     buf_free(&keybuf);
 
     if (need_unlock) {
-	/* release read lock */
-	int r1 = unlock(db);
-	if (r1) return r1;
+        /* release read lock */
+        int r1 = unlock(db);
+        if (r1) return r1;
     }
 
     return r ? r : cb_r;
@@ -1605,23 +1605,23 @@ static int myforeach(struct dbengine *db,
 /* helper function for all writes - wraps create and delete and the FORCE
  * logic for each */
 static int skipwrite(struct dbengine *db,
-		     const char *key, size_t keylen,
-		     const char *data, size_t datalen,
-		     int force)
+                     const char *key, size_t keylen,
+                     const char *data, size_t datalen,
+                     int force)
 {
     int r = find_loc(db, key, keylen);
     if (r) return r;
 
     /* could be a delete or a replace */
     if (db->loc.is_exactmatch) {
-	if (!data) return delete_here(db);
-	if (!force) return CYRUSDB_EXISTS;
-	/* unchanged?  Save the IO */
-	if (!db->compar(data, datalen,
-			VAL(db, &db->loc.record),
-			db->loc.record.vallen))
-	    return 0;
-	return store_here(db, data, datalen);
+        if (!data) return delete_here(db);
+        if (!force) return CYRUSDB_EXISTS;
+        /* unchanged?  Save the IO */
+        if (!db->compar(data, datalen,
+                        VAL(db, &db->loc.record),
+                        db->loc.record.vallen))
+            return 0;
+        return store_here(db, data, datalen);
     }
 
     /* only create if it's not a delete, obviously */
@@ -1643,7 +1643,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
 
     /* no need to abort if we're not dirty */
     if (!(db->header.flags & DIRTY))
-	goto done;
+        goto done;
 
     /* build a commit record */
     memset(&newrecord, 0, sizeof(struct skiprecord));
@@ -1666,30 +1666,30 @@ static int mycommit(struct dbengine *db, struct txn *tid)
 
  done:
     if (r) {
-	int r2;
+        int r2;
 
-	/* error during commit; we must abort */
-	r2 = myabort(db, tid);
-	if (r2) {
-	    syslog(LOG_ERR, "DBERROR: twoskip %s: commit AND abort failed",
-		   FNAME(db));
-	}
+        /* error during commit; we must abort */
+        r2 = myabort(db, tid);
+        if (r2) {
+            syslog(LOG_ERR, "DBERROR: twoskip %s: commit AND abort failed",
+                   FNAME(db));
+        }
     } else {
-	/* consider checkpointing */
-	int diff = db->header.current_size - db->header.repack_size;
-	if (diff > MINREWRITE &&
-	   ((float)diff / (float)db->header.current_size) > REWRITE_RATIO) {
-	    int r2 = mycheckpoint(db);
-	    if (r2) {
-		syslog(LOG_NOTICE, "twoskip: failed to checkpoint %s: %m",
-		       FNAME(db));
-	    }
-	}
-	else
-	    unlock(db);
+        /* consider checkpointing */
+        int diff = db->header.current_size - db->header.repack_size;
+        if (diff > MINREWRITE &&
+           ((float)diff / (float)db->header.current_size) > REWRITE_RATIO) {
+            int r2 = mycheckpoint(db);
+            if (r2) {
+                syslog(LOG_NOTICE, "twoskip: failed to checkpoint %s: %m",
+                       FNAME(db));
+            }
+        }
+        else
+            unlock(db);
 
-	free(tid);
-	db->current_txn = NULL;
+        free(tid);
+        db->current_txn = NULL;
     }
 
     return r;
@@ -1719,9 +1719,9 @@ static int myabort(struct dbengine *db, struct txn *tid)
 }
 
 static int mystore(struct dbengine *db,
-	    const char *key, size_t keylen,
-	    const char *data, size_t datalen,
-	    struct txn **tidptr, int force)
+            const char *key, size_t keylen,
+            const char *data, size_t datalen,
+            struct txn **tidptr, int force)
 {
     struct txn *localtid = NULL;
     int r = 0;
@@ -1736,19 +1736,19 @@ static int mystore(struct dbengine *db,
 
     /* make sure we're write locked and up to date */
     if (!*tidptr) {
-	r = newtxn(db, tidptr);
-	if (r) return r;
+        r = newtxn(db, tidptr);
+        if (r) return r;
     }
 
     r = skipwrite(db, key, keylen, data, datalen, force);
 
     if (r) {
-	r2 = myabort(db, *tidptr);
-	*tidptr = NULL;
+        r2 = myabort(db, *tidptr);
+        *tidptr = NULL;
     }
     else if (localtid) {
-	/* commit the store, which releases the write lock */
-	r = mycommit(db, localtid);
+        /* commit the store, which releases the write lock */
+        r = mycommit(db, localtid);
     }
 
     return r2 ? r2 : r;
@@ -1763,8 +1763,8 @@ struct copy_rock {
 };
 
 static int copy_cb(void *rock,
-		   const char *key, size_t keylen,
-		   const char *val, size_t vallen)
+                   const char *key, size_t keylen,
+                   const char *val, size_t vallen)
 {
     struct copy_rock *cr = (struct copy_rock *)rock;
 
@@ -1781,10 +1781,10 @@ static int mycheckpoint(struct dbengine *db)
 
     r = myconsistent(db, db->current_txn);
     if (r) {
-	syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
-	       FNAME(db));
-	unlock(db);
-	return r;
+        syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
+               FNAME(db));
+        unlock(db);
+        return r;
     }
 
     /* open fname.NEW */
@@ -1801,9 +1801,9 @@ static int mycheckpoint(struct dbengine *db)
 
     r = myconsistent(cr.db, cr.tid);
     if (r) {
-	syslog(LOG_ERR, "db %s, inconsistent post-checkpoint, bailing out",
-	       FNAME(db));
-	goto err;
+        syslog(LOG_ERR, "db %s, inconsistent post-checkpoint, bailing out",
+               FNAME(db));
+        goto err;
     }
 
     /* remember the repack size */
@@ -1830,12 +1830,12 @@ static int mycheckpoint(struct dbengine *db)
     free(cr.db); /* leaked? */
 
     {
-	syslog(LOG_INFO,
-	       "twoskip: checkpointed %s (%llu record%s, %llu => %llu bytes) in %2.3f seconds",
-	       FNAME(db), (LLU)db->header.num_records,
-	       db->header.num_records == 1 ? "" : "s", (LLU)old_size,
-	       (LLU)(db->header.current_size),
-	       (sclock() - start) / (double) CLOCKS_PER_SEC);
+        syslog(LOG_INFO,
+               "twoskip: checkpointed %s (%llu record%s, %llu => %llu bytes) in %2.3f seconds",
+               FNAME(db), (LLU)db->header.num_records,
+               db->header.num_records == 1 ? "" : "s", (LLU)old_size,
+               (LLU)(db->header.current_size),
+               (sclock() - start) / (double) CLOCKS_PER_SEC);
     }
 
     return 0;
@@ -1863,50 +1863,50 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
     int i;
 
     printf("HEADER: v=%lu fl=%lu num=%llu sz=(%08llX/%08llX)\n",
-	  (LU)db->header.version,
-	  (LU)db->header.flags,
-	  (LLU)db->header.num_records,
-	  (LLU)db->header.current_size,
-	  (LLU)db->header.repack_size);
+          (LU)db->header.version,
+          (LU)db->header.flags,
+          (LLU)db->header.num_records,
+          (LLU)db->header.current_size,
+          (LLU)db->header.repack_size);
 
     while (offset < db->header.current_size) {
-	printf("%08llX ", (LLU)offset);
+        printf("%08llX ", (LLU)offset);
 
-	r = read_onerecord(db, offset, &record);
+        r = read_onerecord(db, offset, &record);
 
-	if (r) {
-	    printf("ERROR\n");
-	    break;
-	}
+        if (r) {
+            printf("ERROR\n");
+            break;
+        }
 
-	switch (record.type) {
-	case DELETE:
-	    printf("DELETE ptr=%08llX\n", (LLU)record.nextloc[0]);
-	    break;
+        switch (record.type) {
+        case DELETE:
+            printf("DELETE ptr=%08llX\n", (LLU)record.nextloc[0]);
+            break;
 
-	case COMMIT:
-	    printf("COMMIT start=%08llX\n", (LLU)record.nextloc[0]);
-	    break;
+        case COMMIT:
+            printf("COMMIT start=%08llX\n", (LLU)record.nextloc[0]);
+            break;
 
-	case RECORD:
-	case DUMMY:
-	    buf_setmap(&scratch, KEY(db, &record), record.keylen);
-	    buf_replace_char(&scratch, '\0', '-');
-	    printf("%s kl=%llu dl=%llu lvl=%d (%s)\n",
-		   (record.type == RECORD ? "RECORD" : "DUMMY"),
-		   (LLU)record.keylen, (LLU)record.vallen,
-		   record.level, buf_cstring(&scratch));
-	    printf("\t");
-	    for (i = 0; i <= record.level; i++) {
-		printf("%08llX ", (LLU)record.nextloc[i]);
-		if (!(i % 8))
-		    printf("\n\t");
-	    }
-	    printf("\n");
-	    break;
-	}
+        case RECORD:
+        case DUMMY:
+            buf_setmap(&scratch, KEY(db, &record), record.keylen);
+            buf_replace_char(&scratch, '\0', '-');
+            printf("%s kl=%llu dl=%llu lvl=%d (%s)\n",
+                   (record.type == RECORD ? "RECORD" : "DUMMY"),
+                   (LLU)record.keylen, (LLU)record.vallen,
+                   record.level, buf_cstring(&scratch));
+            printf("\t");
+            for (i = 0; i <= record.level; i++) {
+                printf("%08llX ", (LLU)record.nextloc[i]);
+                if (!(i % 8))
+                    printf("\n\t");
+            }
+            printf("\n");
+            break;
+        }
 
-	offset += record.len;
+        offset += record.len;
     }
 
     buf_free(&scratch);
@@ -1947,65 +1947,65 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
 
     /* set up the location pointers */
     for (i = 0; i < MAXLEVEL; i++)
-	fwd[i] = _getloc(db, &prevrecord, i);
+        fwd[i] = _getloc(db, &prevrecord, i);
 
     while (fwd[0]) {
-	r = read_onerecord(db, fwd[0], &record);
-	if (r) return r;
+        r = read_onerecord(db, fwd[0], &record);
+        if (r) return r;
 
-	if (record.type == DELETE) {
-	    fwd[0] = record.nextloc[0];
-	    continue;
-	}
+        if (record.type == DELETE) {
+            fwd[0] = record.nextloc[0];
+            continue;
+        }
 
-	cmp = db->compar(KEY(db, &record), record.keylen,
-			 KEY(db, &prevrecord), prevrecord.keylen);
-	if (cmp <= 0) {
-	    syslog(LOG_ERR, "DBERROR: twoskip out of order %s: %.*s (%08llX) <= %.*s (%08llX)",
-		   FNAME(db), (int)record.keylen, KEY(db, &record),
-		   (LLU)record.offset,
-		   (int)prevrecord.keylen, KEY(db, &prevrecord),
-		   (LLU)prevrecord.offset);
-	    return CYRUSDB_INTERNAL;
-	}
+        cmp = db->compar(KEY(db, &record), record.keylen,
+                         KEY(db, &prevrecord), prevrecord.keylen);
+        if (cmp <= 0) {
+            syslog(LOG_ERR, "DBERROR: twoskip out of order %s: %.*s (%08llX) <= %.*s (%08llX)",
+                   FNAME(db), (int)record.keylen, KEY(db, &record),
+                   (LLU)record.offset,
+                   (int)prevrecord.keylen, KEY(db, &prevrecord),
+                   (LLU)prevrecord.offset);
+            return CYRUSDB_INTERNAL;
+        }
 
-	for (i = 0; i < record.level; i++) {
-	    /* check the old pointer was to here */
-	    if (fwd[i] != record.offset) {
-		syslog(LOG_ERR, "DBERROR: twoskip broken linkage %s: %08llX at %d, expected %08llX",
-		       FNAME(db), (LLU)record.offset, i, (LLU)fwd[i]);
-		return CYRUSDB_INTERNAL;
-	    }
-	    /* and advance to the new pointer */
-	    fwd[i] = _getloc(db, &record, i);
-	}
+        for (i = 0; i < record.level; i++) {
+            /* check the old pointer was to here */
+            if (fwd[i] != record.offset) {
+                syslog(LOG_ERR, "DBERROR: twoskip broken linkage %s: %08llX at %d, expected %08llX",
+                       FNAME(db), (LLU)record.offset, i, (LLU)fwd[i]);
+                return CYRUSDB_INTERNAL;
+            }
+            /* and advance to the new pointer */
+            fwd[i] = _getloc(db, &record, i);
+        }
 
-	/* keep a copy for comparison purposes */
-	num_records++;
-	prevrecord = record;
+        /* keep a copy for comparison purposes */
+        num_records++;
+        prevrecord = record;
     }
 
     for (i = 0; i < MAXLEVEL; i++) {
-	if (fwd[i]) {
-	    syslog(LOG_ERR, "DBERROR: twoskip broken tail %s: %08llX at %d",
-		   FNAME(db), (LLU)fwd[i], i);
-	    return CYRUSDB_INTERNAL;
-	}
+        if (fwd[i]) {
+            syslog(LOG_ERR, "DBERROR: twoskip broken tail %s: %08llX at %d",
+                   FNAME(db), (LLU)fwd[i], i);
+            return CYRUSDB_INTERNAL;
+        }
     }
 
     /* we walked the whole file and saw every pointer */
 
     if (num_records != db->header.num_records) {
-	syslog(LOG_ERR, "DBERROR: twoskip record count mismatch %s: %llu should be %llu",
-	       FNAME(db), (LLU)num_records, (LLU)db->header.num_records);
-	return CYRUSDB_INTERNAL;
+        syslog(LOG_ERR, "DBERROR: twoskip record count mismatch %s: %llu should be %llu",
+               FNAME(db), (LLU)num_records, (LLU)db->header.num_records);
+        return CYRUSDB_INTERNAL;
     }
 
     return 0;
 }
 
 static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
-		        struct skiprecord *commit)
+                        struct skiprecord *commit)
 {
     struct txn *tid = NULL;
     struct skiprecord record;
@@ -2014,23 +2014,23 @@ static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
     int r = 0;
 
     for (offset = commit->nextloc[0]; offset < commit->offset; offset += record.len) {
-	r = read_onerecord(db, offset, &record);
-	if (r) goto err;
-	switch (record.type) {
-	case DELETE:
-	    val = NULL;
-	    break;
-	case RECORD:
-	    val = VAL(db, &record);
-	    break;
-	default:
-	    r = CYRUSDB_IOERROR;
-	    goto err;
-	}
+        r = read_onerecord(db, offset, &record);
+        if (r) goto err;
+        switch (record.type) {
+        case DELETE:
+            val = NULL;
+            break;
+        case RECORD:
+            val = VAL(db, &record);
+            break;
+        default:
+            r = CYRUSDB_IOERROR;
+            goto err;
+        }
 
-	/* store into the new DB */
-	r = mystore(newdb, KEY(db, &record), record.keylen, val, record.vallen, &tid, 1);
-	if (r) goto err;
+        /* store into the new DB */
+        r = mystore(newdb, KEY(db, &record), record.keylen, val, record.vallen, &tid, 1);
+        if (r) goto err;
     }
 
     if (tid) r = mycommit(newdb, tid);
@@ -2067,29 +2067,29 @@ static int recovery2(struct dbengine *db, int *count)
 
     /* start with the dummy */
     for (offset = DUMMY_OFFSET; offset < SIZE(db); offset += record.len) {
-	r = read_onerecord(db, offset, &record);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: %s failed to read at %08llX in recovery2, truncating",
-		   FNAME(db), (LLU)offset);
-	    break;
-	}
-	if (record.type == COMMIT) {
-	    r = _copy_commit(db, newdb, &record);
-	    if (r) {
-		syslog(LOG_ERR, "DBERROR: %s failed to apply commit at %08llX in recovery2, truncating",
-		      FNAME(db), (LLU)offset);
-		break;
-	    }
-	}
+        r = read_onerecord(db, offset, &record);
+        if (r) {
+            syslog(LOG_ERR, "DBERROR: %s failed to read at %08llX in recovery2, truncating",
+                   FNAME(db), (LLU)offset);
+            break;
+        }
+        if (record.type == COMMIT) {
+            r = _copy_commit(db, newdb, &record);
+            if (r) {
+                syslog(LOG_ERR, "DBERROR: %s failed to apply commit at %08llX in recovery2, truncating",
+                      FNAME(db), (LLU)offset);
+                break;
+            }
+        }
     }
 
     if (!newdb->header.num_records) {
-	/* no records found - almost certainly bogus, and even if not,
-	 * there's no point recovering a zero record file */
-	syslog(LOG_ERR, "DBERROR: %s no records found in recovery2, aborting",
-	       FNAME(db));
-	r = CYRUSDB_NOTFOUND;
-	goto err;
+        /* no records found - almost certainly bogus, and even if not,
+         * there's no point recovering a zero record file */
+        syslog(LOG_ERR, "DBERROR: %s no records found in recovery2, aborting",
+               FNAME(db));
+        r = CYRUSDB_NOTFOUND;
+        goto err;
     }
 
     /* regardless, we had a commit during create, and in any _copy_commit, so
@@ -2110,7 +2110,7 @@ static int recovery2(struct dbengine *db, int *count)
     free(newdb); /* leaked? */
 
     syslog(LOG_NOTICE, "twoskip: recovery2 %s - rescued %llu of %llu records",
-	   FNAME(db), (LLU)db->header.num_records, (LLU)oldcount);
+           FNAME(db), (LLU)db->header.num_records, (LLU)oldcount);
 
     if (count) *count = db->header.num_records;
 
@@ -2142,16 +2142,16 @@ static int recovery1(struct dbengine *db, int *count)
 
     /* no need to run recovery if we're consistent */
     if (db_is_clean(db))
-	return 0;
+        return 0;
 
     /* we can't recovery a file that's not created yet */
     assert(db->header.current_size > HEADER_SIZE);
 
     /* dirty the header if not already dirty */
     if (!(db->header.flags & DIRTY)) {
-	db->header.flags |= DIRTY;
-	r = commit_header(db);
-	if (r) return r;
+        db->header.flags |= DIRTY;
+        r = commit_header(db);
+        if (r) return r;
     }
 
     /* start with the dummy */
@@ -2160,89 +2160,89 @@ static int recovery1(struct dbengine *db, int *count)
 
     /* and pointers forwards */
     for (i = 2; i <= MAXLEVEL; i++) {
-	prev[i] = prevrecord.offset;
-	next[i] = prevrecord.nextloc[i];
+        prev[i] = prevrecord.offset;
+        next[i] = prevrecord.nextloc[i];
     }
 
     /* check for broken level - pointers */
     for (i = 0; i < 2; i++) {
-	if (prevrecord.nextloc[i] >= db->end) {
-	    prevrecord.nextloc[i] = 0;
-	    r = rewrite_record(db, &prevrecord);
-	    changed++;
-	}
+        if (prevrecord.nextloc[i] >= db->end) {
+            prevrecord.nextloc[i] = 0;
+            r = rewrite_record(db, &prevrecord);
+            changed++;
+        }
     }
 
     nextoffset = _getloc(db, &prevrecord, 0);
 
     while (nextoffset) {
-	r = read_onerecord(db, nextoffset, &record);
-	if (r) return r;
+        r = read_onerecord(db, nextoffset, &record);
+        if (r) return r;
 
-	/* just skip over delele records */
-	if (record.type == DELETE) {
-	    nextoffset = record.nextloc[0];
-	    continue;
-	}
+        /* just skip over delele records */
+        if (record.type == DELETE) {
+            nextoffset = record.nextloc[0];
+            continue;
+        }
 
-	cmp = db->compar(KEY(db, &record), record.keylen,
-			 KEY(db, &prevrecord), prevrecord.keylen);
-	if (cmp <= 0) {
-	    syslog(LOG_ERR, "DBERROR: twoskip out of order %s: %.*s (%08llX) <= %.*s (%08llX)",
-		   FNAME(db), (int)record.keylen, KEY(db, &record),
-		   (LLU)record.offset,
-		   (int)prevrecord.keylen, KEY(db, &prevrecord),
-		   (LLU)prevrecord.offset);
-	    return CYRUSDB_INTERNAL;
-	}
+        cmp = db->compar(KEY(db, &record), record.keylen,
+                         KEY(db, &prevrecord), prevrecord.keylen);
+        if (cmp <= 0) {
+            syslog(LOG_ERR, "DBERROR: twoskip out of order %s: %.*s (%08llX) <= %.*s (%08llX)",
+                   FNAME(db), (int)record.keylen, KEY(db, &record),
+                   (LLU)record.offset,
+                   (int)prevrecord.keylen, KEY(db, &prevrecord),
+                   (LLU)prevrecord.offset);
+            return CYRUSDB_INTERNAL;
+        }
 
-	/* check for old offsets needing fixing */
-	for (i = 2; i <= record.level; i++) {
-	    if (next[i] != record.offset) {
-		/* need to fix up the previous record to point here */
-		r = read_onerecord(db, prev[i], &fixrecord);
-		if (r) return r;
+        /* check for old offsets needing fixing */
+        for (i = 2; i <= record.level; i++) {
+            if (next[i] != record.offset) {
+                /* need to fix up the previous record to point here */
+                r = read_onerecord(db, prev[i], &fixrecord);
+                if (r) return r;
 
-		/* XXX - optimise adjacent same records */
-		fixrecord.nextloc[i] = record.offset;
-		r = rewrite_record(db, &fixrecord);
-		if (r) return r;
-		changed++;
-	    }
-	    prev[i] = record.offset;
-	    next[i] = record.nextloc[i];
-	}
+                /* XXX - optimise adjacent same records */
+                fixrecord.nextloc[i] = record.offset;
+                r = rewrite_record(db, &fixrecord);
+                if (r) return r;
+                changed++;
+            }
+            prev[i] = record.offset;
+            next[i] = record.nextloc[i];
+        }
 
-	/* check for broken level - pointers */
-	for (i = 0; i < 2; i++) {
-	    if (record.nextloc[i] >= db->end) {
-		record.nextloc[i] = 0;
-		r = rewrite_record(db, &record);
-		changed++;
-	    }
-	}
+        /* check for broken level - pointers */
+        for (i = 0; i < 2; i++) {
+            if (record.nextloc[i] >= db->end) {
+                record.nextloc[i] = 0;
+                r = rewrite_record(db, &record);
+                changed++;
+            }
+        }
 
-	num_records++;
+        num_records++;
 
-	/* find the next record */
-	nextoffset = _getloc(db, &record, 0);
+        /* find the next record */
+        nextoffset = _getloc(db, &record, 0);
 
-	prevrecord = record;
+        prevrecord = record;
     }
 
     /* check for remaining offsets needing fixing */
     for (i = 2; i <= MAXLEVEL; i++) {
-	if (next[i]) {
-	    /* need to fix up the previous record to point to the end */
-	    r = read_onerecord(db, prev[i], &fixrecord);
-	    if (r) return r;
+        if (next[i]) {
+            /* need to fix up the previous record to point to the end */
+            r = read_onerecord(db, prev[i], &fixrecord);
+            if (r) return r;
 
-	    /* XXX - optimise, same as above */
-	    fixrecord.nextloc[i] = 0;
-	    r = rewrite_record(db, &fixrecord);
-	    if (r) return r;
-	    changed++;
-	}
+            /* XXX - optimise, same as above */
+            fixrecord.nextloc[i] = 0;
+            r = rewrite_record(db, &fixrecord);
+            if (r) return r;
+            changed++;
+        }
     }
 
     r = mappedfile_truncate(db->mf, db->header.current_size);
@@ -2270,85 +2270,85 @@ static int recovery(struct dbengine *db)
 
     /* no need to run recovery if we're consistent */
     if (db_is_clean(db))
-	return 0;
+        return 0;
 
     r = recovery1(db, &count);
     if (r) {
-	syslog(LOG_ERR, "DBERROR: recovery1 failed %s, trying recovery2", FNAME(db));
-	count = 0;
-	r = recovery2(db, &count);
-	if (r) return r;
+        syslog(LOG_ERR, "DBERROR: recovery1 failed %s, trying recovery2", FNAME(db));
+        count = 0;
+        r = recovery2(db, &count);
+        if (r) return r;
     }
 
     {
-	syslog(LOG_INFO,
-	       "twoskip: recovered %s (%llu record%s, %llu bytes) in %2.3f seconds - fixed %d offset%s",
-	       FNAME(db), (LLU)db->header.num_records,
-	       db->header.num_records == 1 ? "" : "s",
-	       (LLU)(db->header.current_size),
-	       (sclock() - start) / (double) CLOCKS_PER_SEC,
-	       count, count == 1 ? "" : "s");
+        syslog(LOG_INFO,
+               "twoskip: recovered %s (%llu record%s, %llu bytes) in %2.3f seconds - fixed %d offset%s",
+               FNAME(db), (LLU)db->header.num_records,
+               db->header.num_records == 1 ? "" : "s",
+               (LLU)(db->header.current_size),
+               (sclock() - start) / (double) CLOCKS_PER_SEC,
+               count, count == 1 ? "" : "s");
     }
 
     return 0;
 }
 
 static int fetch(struct dbengine *mydb,
-		 const char *key, size_t keylen,
-		 const char **data, size_t *datalen,
-		 struct txn **tidptr)
+                 const char *key, size_t keylen,
+                 const char **data, size_t *datalen,
+                 struct txn **tidptr)
 {
     assert(key);
     assert(keylen);
     return myfetch(mydb, key, keylen, NULL, NULL,
-		   data, datalen, tidptr, 0);
+                   data, datalen, tidptr, 0);
 }
 
 static int fetchnext(struct dbengine *mydb,
-		 const char *key, size_t keylen,
-		 const char **foundkey, size_t *fklen,
-		 const char **data, size_t *datalen,
-		 struct txn **tidptr)
+                 const char *key, size_t keylen,
+                 const char **foundkey, size_t *fklen,
+                 const char **data, size_t *datalen,
+                 struct txn **tidptr)
 {
     return myfetch(mydb, key, keylen, foundkey, fklen,
-		   data, datalen, tidptr, 1);
+                   data, datalen, tidptr, 1);
 }
 
 static int create(struct dbengine *db,
-		  const char *key, size_t keylen,
-		  const char *data, size_t datalen,
-		  struct txn **tid)
+                  const char *key, size_t keylen,
+                  const char *data, size_t datalen,
+                  struct txn **tid)
 {
     if (datalen) assert(data);
     return mystore(db, key, keylen, data ? data : "", datalen, tid, 0);
 }
 
 static int store(struct dbengine *db,
-		 const char *key, size_t keylen,
-		 const char *data, size_t datalen,
-		 struct txn **tid)
+                 const char *key, size_t keylen,
+                 const char *data, size_t datalen,
+                 struct txn **tid)
 {
     if (datalen) assert(data);
     return mystore(db, key, keylen, data ? data : "", datalen, tid, 1);
 }
 
 static int delete(struct dbengine *db,
-		 const char *key, size_t keylen,
-		 struct txn **tid, int force)
+                 const char *key, size_t keylen,
+                 struct txn **tid, int force)
 {
     return mystore(db, key, keylen, NULL, 0, tid, force);
 }
 
 /* twoskip compar function is set at open */
 static int mycompar(struct dbengine *db, const char *a, int alen,
-		    const char *b, int blen)
+                    const char *b, int blen)
 {
     return db->compar(a, alen, b, blen);
 }
 
 HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
 {
-    "twoskip",			/* name */
+    "twoskip",                  /* name */
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,

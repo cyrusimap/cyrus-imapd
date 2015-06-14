@@ -91,9 +91,9 @@ void imclient_xs_callback_free(struct xsccb *rock)
     }
     if (xcb) {
       if (xcb->prev)
-	xcb->prev->next = xcb->next;
+        xcb->prev->next = xcb->next;
       else
-	rock->client->cb = xcb->next;
+        rock->client->cb = xcb->next;
       if (xcb->next) xcb->next->prev = xcb->prev;
       if (xcb->name) safefree(xcb->name);
       safefree(xcb);
@@ -111,7 +111,7 @@ void imclient_xs_callback_free(struct xsccb *rock)
  */
 
 void imclient_xs_cb(struct imclient *client, void *prock,
-		    struct imclient_reply *reply)
+                    struct imclient_reply *reply)
 {
   dSP;
   SV* rv;
@@ -156,7 +156,7 @@ void imclient_xs_cb(struct imclient *client, void *prock,
  * simulates a non-callback-based invocation, for trivial clients.)
  */
 void imclient_xs_fcmdcb(struct imclient *client, void *prock,
-			struct imclient_reply *reply)
+                        struct imclient_reply *reply)
 {
   AV *av;
   struct xsccb *rock = (struct xsccb *) prock;
@@ -172,42 +172,42 @@ void imclient_xs_fcmdcb(struct imclient *client, void *prock,
 }
 
 static int get_username(void *context, int id,
-			const char **result, unsigned *len) {
+                        const char **result, unsigned *len) {
   Cyrus_IMAP text = (Cyrus_IMAP)context;
   if(id == SASL_CB_AUTHNAME) {
-	if(len) *len = strlen(text->authname);
-	*result = text->authname;
-	return SASL_OK;
+        if(len) *len = strlen(text->authname);
+        *result = text->authname;
+        return SASL_OK;
   } else if (id == SASL_CB_USER) {
-	if(text->username) {
-	    if(len) *len = strlen(text->username);
-	    *result = text->username;
-	} else {
-	    if(len) *len = 0;
-	    *result = "";
-	}
-	return SASL_OK;
-  } 
+        if(text->username) {
+            if(len) *len = strlen(text->username);
+            *result = text->username;
+        } else {
+            if(len) *len = 0;
+            *result = "";
+        }
+        return SASL_OK;
+  }
   return SASL_FAIL;
 }
 
 static int get_password(sasl_conn_t *conn, void *context, int id,
-			sasl_secret_t **psecret) {
+                        sasl_secret_t **psecret) {
   Cyrus_IMAP text = (Cyrus_IMAP)context;
   if(id != SASL_CB_PASS) return SASL_FAIL;
   if(!text->password) {
-	char *ptr;
-	/* Using fprintf because printf won't flush under perl 5.8.0 for some
-	 * reason */ 
-	fprintf(stdout, "Password: ");
-	fflush(stdout);
-	ptr = cyrus_getpass("");
-	text->password = safemalloc(sizeof(sasl_secret_t) + strlen(ptr));
-	text->password->len = strlen(ptr);
-	strncpy((char *) text->password->data, ptr, text->password->len);
+        char *ptr;
+        /* Using fprintf because printf won't flush under perl 5.8.0 for some
+         * reason */
+        fprintf(stdout, "Password: ");
+        fflush(stdout);
+        ptr = cyrus_getpass("");
+        text->password = safemalloc(sizeof(sasl_secret_t) + strlen(ptr));
+        text->password->len = strlen(ptr);
+        strncpy((char *) text->password->data, ptr, text->password->len);
   }
   *psecret = text->password;
-  return SASL_OK;  
+  return SASL_OK;
 }
 
 /* callbacks we support */
@@ -218,525 +218,525 @@ static const sasl_callback_t sample_callbacks[NUM_SUPPORTED_CALLBACKS] = {
   { SASL_CB_LIST_END, NULL, NULL }
 };
 
-MODULE = Cyrus::IMAP	PACKAGE = Cyrus::IMAP
+MODULE = Cyrus::IMAP    PACKAGE = Cyrus::IMAP
 PROTOTYPES: ENABLE
 
 int
 CONN_NONSYNCLITERAL()
 CODE:
-	RETVAL = IMCLIENT_CONN_NONSYNCLITERAL;
+        RETVAL = IMCLIENT_CONN_NONSYNCLITERAL;
 OUTPUT:
-	RETVAL
+        RETVAL
 
 int
 CONN_INITIALRESPONSE()
 CODE:
-	RETVAL = IMCLIENT_CONN_INITIALRESPONSE;
+        RETVAL = IMCLIENT_CONN_INITIALRESPONSE;
 OUTPUT:
-	RETVAL
+        RETVAL
 
 int
 CALLBACK_NUMBERED()
 CODE:
-	RETVAL = CALLBACK_NUMBERED;
+        RETVAL = CALLBACK_NUMBERED;
 OUTPUT:
-	RETVAL
+        RETVAL
 
 int
 CALLBACK_NOLITERAL()
 CODE:
-	RETVAL = CALLBACK_NOLITERAL;
+        RETVAL = CALLBACK_NOLITERAL;
 OUTPUT:
-	RETVAL
+        RETVAL
 
-MODULE = Cyrus::IMAP	PACKAGE = Cyrus::IMAP	PREFIX=imclient_
+MODULE = Cyrus::IMAP    PACKAGE = Cyrus::IMAP   PREFIX=imclient_
 PROTOTYPES: ENABLE
 
 SV *
 imclient_new(class, host = "localhost", port = 0, flags = 0)
-	char *class;
-	char *host
-	char *port
-	int flags;
+        char *class;
+        char *host
+        char *port
+        int flags;
 PREINIT:
-	struct imclient *client;
-	int rc;
-	SV *bang;
-	Cyrus_IMAP rv;
-	int i;
+        struct imclient *client;
+        int rc;
+        SV *bang;
+        Cyrus_IMAP rv;
+        int i;
 CODE:
-	/* Allocate and setup the return value */
-	rv = safemalloc(sizeof *rv);
+        /* Allocate and setup the return value */
+        rv = safemalloc(sizeof *rv);
 
-	rv->authenticated = 0;
+        rv->authenticated = 0;
 
-	memcpy(rv->callbacks, sample_callbacks, sizeof(sample_callbacks));
+        memcpy(rv->callbacks, sample_callbacks, sizeof(sample_callbacks));
 
-	/* Setup respective contexts */
-	for(i=0; i < NUM_SUPPORTED_CALLBACKS; i++) {
-	    rv->callbacks[i].context = rv;
-	}
+        /* Setup respective contexts */
+        for(i=0; i < NUM_SUPPORTED_CALLBACKS; i++) {
+            rv->callbacks[i].context = rv;
+        }
 
-	/* Connect */
-	rc = imclient_connect(&client, host, port, rv->callbacks);
-	switch (rc) {
-	case -1:
-	  Perl_croak(aTHX_ "imclient_connect: unknown host \"%s\"", host);
-	  safefree(rv);
-	  break;
-	case -2:
-	  Perl_croak(aTHX_ "imclient_connect: unknown service \"%s\"", port);
-	  safefree(rv);
-	  break;
-	case 0:
-	  if (client) {
-	    rv->class = safemalloc(strlen(class) + 1);
-	    strcpy(rv->class, class);
-	    rv->username = rv->authname = NULL;
-	    rv->password = NULL;
-	    rv->imclient = client;
-	    imclient_setflags(client, flags);
-	    rv->flags = flags;
-	    rv->cb = 0;
-	    rv->cnt = 1;
-	    break;
-	  }
-	  /*FALLTHROUGH*/
-	default:
-	  bang = perl_get_sv("^E", TRUE);
-	  sv_setiv(bang, rc);
-	  XSRETURN_UNDEF;
-	}
-	ST(0) = sv_newmortal();
-	/* fprintf(stderr, "!NEW %p %s\n", rv, class); */
-	sv_setref_pv(ST(0), class, (void *) rv);
+        /* Connect */
+        rc = imclient_connect(&client, host, port, rv->callbacks);
+        switch (rc) {
+        case -1:
+          Perl_croak(aTHX_ "imclient_connect: unknown host \"%s\"", host);
+          safefree(rv);
+          break;
+        case -2:
+          Perl_croak(aTHX_ "imclient_connect: unknown service \"%s\"", port);
+          safefree(rv);
+          break;
+        case 0:
+          if (client) {
+            rv->class = safemalloc(strlen(class) + 1);
+            strcpy(rv->class, class);
+            rv->username = rv->authname = NULL;
+            rv->password = NULL;
+            rv->imclient = client;
+            imclient_setflags(client, flags);
+            rv->flags = flags;
+            rv->cb = 0;
+            rv->cnt = 1;
+            break;
+          }
+          /*FALLTHROUGH*/
+        default:
+          bang = perl_get_sv("^E", TRUE);
+          sv_setiv(bang, rc);
+          XSRETURN_UNDEF;
+        }
+        ST(0) = sv_newmortal();
+        /* fprintf(stderr, "!NEW %p %s\n", rv, class); */
+        sv_setref_pv(ST(0), class, (void *) rv);
 
 void
 imclient_DESTROY(client)
-	Cyrus_IMAP client
+        Cyrus_IMAP client
 PREINIT:
-	struct xscb *nx;
+        struct xscb *nx;
 CODE:
 /* fprintf(stderr, "!DESTROY %p %d\n", client, client->cnt); */
-	if (!client->cnt--) {
+        if (!client->cnt--) {
 /* printf("closing\n"); */
-	  imclient_close(client->imclient);
-	  while (client->cb) {
-	    nx = client->cb->next;
-	    if (client->cb->name) safefree(client->cb->name);
-	    /* if (client->cb->rock->pcb) SvREFCNT_dec(client->cb->rock->pcb); */
-	    /* if (client->cb->rock->prock) SvREFCNT_dec(client->cb->rock->prock); */
-	    safefree(client->cb->rock);
-	    client->cb = nx;
-	  }
-	  safefree(client->password);
-	  safefree(client->class);
-	  safefree(client);
-	}
+          imclient_close(client->imclient);
+          while (client->cb) {
+            nx = client->cb->next;
+            if (client->cb->name) safefree(client->cb->name);
+            /* if (client->cb->rock->pcb) SvREFCNT_dec(client->cb->rock->pcb); */
+            /* if (client->cb->rock->prock) SvREFCNT_dec(client->cb->rock->prock); */
+            safefree(client->cb->rock);
+            client->cb = nx;
+          }
+          safefree(client->password);
+          safefree(client->class);
+          safefree(client);
+        }
 
 void
 imclient_setflags(client, flags)
-	Cyrus_IMAP client
-	int flags
+        Cyrus_IMAP client
+        int flags
 PPCODE:
-	imclient_setflags(client->imclient, flags);
-	client->flags |= flags;
+        imclient_setflags(client->imclient, flags);
+        client->flags |= flags;
 
 void
 imclient_clearflags(client, flags)
-	Cyrus_IMAP client
-	int flags
+        Cyrus_IMAP client
+        int flags
 PPCODE:
-	imclient_clearflags(client->imclient, flags);
-	client->flags &= ~flags;
+        imclient_clearflags(client->imclient, flags);
+        client->flags &= ~flags;
 
 int
 imclient_flags(client)
-	Cyrus_IMAP client
+        Cyrus_IMAP client
 PPCODE:
-	/* why is there no way to query this? */
-	RETVAL = client->flags;
+        /* why is there no way to query this? */
+        RETVAL = client->flags;
 
 char *
 imclient_servername(client)
-	Cyrus_IMAP client
+        Cyrus_IMAP client
 PREINIT:
-	char *cp;
+        char *cp;
 CODE:
-	cp = imclient_servername(client->imclient);
-	RETVAL = cp;
+        cp = imclient_servername(client->imclient);
+        RETVAL = cp;
 OUTPUT:
-	RETVAL
+        RETVAL
 
 void
 imclient_processoneevent(client)
-	Cyrus_IMAP client
+        Cyrus_IMAP client
 PPCODE:
-	imclient_processoneevent(client->imclient);
+        imclient_processoneevent(client->imclient);
 
 SV *
 imclient__authenticate(client, mechlist, service, user, auth, password, minssf, maxssf)
-	Cyrus_IMAP client
-	char* mechlist
-	char* service
-	char* user
-	char* auth
-	char* password
-	int minssf
-	int maxssf
+        Cyrus_IMAP client
+        char* mechlist
+        char* service
+        char* user
+        char* auth
+        char* password
+        int minssf
+        int maxssf
 PREINIT:
-	int rc;
+        int rc;
 CODE:
-	ST(0) = sv_newmortal();
+        ST(0) = sv_newmortal();
 
-	if(client->authenticated) {
-	  ST(0) = &PL_sv_no;
-	  return;
-	}
+        if(client->authenticated) {
+          ST(0) = &PL_sv_no;
+          return;
+        }
 
-	/* If the user parameter is undef, set user to be NULL */
-	if(!SvOK(ST(3))) user = NULL;
-	if(!SvOK(ST(5))) password = NULL;
+        /* If the user parameter is undef, set user to be NULL */
+        if(!SvOK(ST(3))) user = NULL;
+        if(!SvOK(ST(5))) password = NULL;
 
-	client->username = user; /* AuthZid */
-	client->authname = auth; /* Authid */
+        client->username = user; /* AuthZid */
+        client->authname = auth; /* Authid */
 
-	if(password) {
-	    if(client->password) safefree(client->password);
-	    client->password =
-		safemalloc(sizeof(sasl_secret_t) + strlen(password));
-	    client->password->len = strlen(password);
-	    strncpy((char *) client->password->data, password, client->password->len);
-	}
+        if(password) {
+            if(client->password) safefree(client->password);
+            client->password =
+                safemalloc(sizeof(sasl_secret_t) + strlen(password));
+            client->password->len = strlen(password);
+            strncpy((char *) client->password->data, password, client->password->len);
+        }
 
-	rc = imclient_authenticate(client->imclient, mechlist, service, user,
-				   minssf, maxssf);
-	if (rc)
-	  ST(0) = &PL_sv_no;
-	else {
-	  client->authenticated = 1;
-	  ST(0) = &PL_sv_yes;
-	}
+        rc = imclient_authenticate(client->imclient, mechlist, service, user,
+                                   minssf, maxssf);
+        if (rc)
+          ST(0) = &PL_sv_no;
+        else {
+          client->authenticated = 1;
+          ST(0) = &PL_sv_yes;
+        }
 
 int
 imclient_havetls()
 CODE:
 #ifdef HAVE_SSL
-	RETVAL = 1;
+        RETVAL = 1;
 #else
-	RETVAL = 0;
+        RETVAL = 0;
 #endif /* HAVE_SSL */
 OUTPUT:
-	RETVAL
+        RETVAL
 
 SV *
 imclient__starttls(client, tls_cert_file, tls_key_file, CAfile, CApath)
-	Cyrus_IMAP client
-	char* tls_cert_file
-	char* tls_key_file
+        Cyrus_IMAP client
+        char* tls_cert_file
+        char* tls_key_file
         char* CAfile
         char* CApath
 PREINIT:
-	int rc;
+        int rc;
 CODE:
-	ST(0) = sv_newmortal();
+        ST(0) = sv_newmortal();
 
-	/* If the tls_{cert, key}_file parameters are undef, set to be NULL */
-	if(!SvOK(ST(2))) tls_cert_file = NULL;
-	if(!SvOK(ST(3))) tls_key_file = NULL;
+        /* If the tls_{cert, key}_file parameters are undef, set to be NULL */
+        if(!SvOK(ST(2))) tls_cert_file = NULL;
+        if(!SvOK(ST(3))) tls_key_file = NULL;
 #ifdef HAVE_SSL
-	rc = imclient_starttls(client->imclient, tls_cert_file, tls_key_file, CAfile, CApath);
-	if (rc)
-	  ST(0) = &PL_sv_no;
-	else {
-	  ST(0) = &PL_sv_yes;
-	}
+        rc = imclient_starttls(client->imclient, tls_cert_file, tls_key_file, CAfile, CApath);
+        if (rc)
+          ST(0) = &PL_sv_no;
+        else {
+          ST(0) = &PL_sv_yes;
+        }
 #else
-	ST(0) = &PL_sv_no;
+        ST(0) = &PL_sv_no;
 #endif /* HAVE_SSL */
 
 void
 imclient_addcallback(client, ...)
-	Cyrus_IMAP client
+        Cyrus_IMAP client
 PREINIT:
-	int arg;
-	HV *cb;
-	char *keyword;
-	STRLEN klen;
-	int flags;
-	SV **val;
-	SV *pcb;
-	SV *prock;
-	struct xsccb *rock;
-	struct xscb *xcb;
+        int arg;
+        HV *cb;
+        char *keyword;
+        STRLEN klen;
+        int flags;
+        SV **val;
+        SV *pcb;
+        SV *prock;
+        struct xsccb *rock;
+        struct xscb *xcb;
 PPCODE:
-	/*
-	 * $client->addcallback(\%cb[, ...]);
-	 *
-	 * where %cb is:
-	 *
-	 * -trigger => 'OK' (or 'NO', etc.)
-	 * -flags => CALLBACK_NOLITERAL|CALLBACK_NUMBERED (optional)
-	 * -callback => \&sub or undef (optional)
-	 * -rock => SV, reference or undef (optional)
-	 *
-	 * this is moderately complicated because the callback is a Perl ref...
-	 */
-	for (arg = 1; arg < items; arg++) {
-	  if (!SvROK(ST(arg)) || SvTYPE(SvRV(ST(arg))) != SVt_PVHV)
-	    Perl_croak(aTHX_ "addcallback: arg %d not a hash reference", arg);
-	  cb = (HV *) SvRV(ST(arg));
-	  /* pull callback crud */
-	  if (((val = hv_fetch(cb, "-trigger", 8, 0)) ||
-	       (val = hv_fetch(cb, "Trigger", 7, 0))) &&
-	      SvTYPE(*val) == SVt_PV)
-	    keyword = SvPV(*val, klen);
-	  else
-	    Perl_croak(aTHX_ "addcallback: arg %d missing trigger", arg);
-	  if ((((val = hv_fetch(cb, "-flags", 6, 0)) ||
-		 (val = hv_fetch(cb, "Flags", 5, 0)))))
-	  {	
-	    flags = SvIV(*val);
+        /*
+         * $client->addcallback(\%cb[, ...]);
+         *
+         * where %cb is:
+         *
+         * -trigger => 'OK' (or 'NO', etc.)
+         * -flags => CALLBACK_NOLITERAL|CALLBACK_NUMBERED (optional)
+         * -callback => \&sub or undef (optional)
+         * -rock => SV, reference or undef (optional)
+         *
+         * this is moderately complicated because the callback is a Perl ref...
+         */
+        for (arg = 1; arg < items; arg++) {
+          if (!SvROK(ST(arg)) || SvTYPE(SvRV(ST(arg))) != SVt_PVHV)
+            Perl_croak(aTHX_ "addcallback: arg %d not a hash reference", arg);
+          cb = (HV *) SvRV(ST(arg));
+          /* pull callback crud */
+          if (((val = hv_fetch(cb, "-trigger", 8, 0)) ||
+               (val = hv_fetch(cb, "Trigger", 7, 0))) &&
+              SvTYPE(*val) == SVt_PV)
+            keyword = SvPV(*val, klen);
+          else
+            Perl_croak(aTHX_ "addcallback: arg %d missing trigger", arg);
+          if ((((val = hv_fetch(cb, "-flags", 6, 0)) ||
+                 (val = hv_fetch(cb, "Flags", 5, 0)))))
+          {
+            flags = SvIV(*val);
           } else {
             flags = 0;
           }
 
-	  if (((val = hv_fetch(cb, "-callback", 9, 0)) ||
-	       (val = hv_fetch(cb, "Callback", 8, 0))) &&
-	      ((SvROK(*val) && SvTYPE(SvRV(*val)) == SVt_PVCV) ||
-	       SvTYPE(*val) == SVt_PV))
-	    pcb = *val;
-	  else
-	    pcb = 0;
-	  if ((val = hv_fetch(cb, "-rock", 5, 0)) ||
-	      (val = hv_fetch(cb, "Rock", 4, 0)))
-	    prock = *val;
-	  else
-	    prock = &PL_sv_undef;
-	  /*
-	   * build our internal rock, which is used by our internal
-	   * callback handler to invoke the Perl callback
-	   */
-	  if (!pcb)
-	    rock = 0;
-	  else {
-	    rock = (struct xsccb *) safemalloc(sizeof *rock);
-	    /* bump refcounts on these so they don't go away */
-	    rock->pcb = SvREFCNT_inc(pcb);
-	    if (!prock) prock = &PL_sv_undef;
-	    rock->prock = SvREFCNT_inc(prock);
-	    rock->client = client;
-	    rock->autofree = 0;
-	  }
-	  /* and add the resulting callback */
-	  imclient_addcallback(client->imclient, keyword, flags,
-			       (pcb ? imclient_xs_cb : 0), rock, 0);
-	  /* update the callback list, possibly freeing old callback info */
-	  for (xcb = client->cb; xcb; xcb = xcb->next) {
-	    if (xcb->name && strcmp(xcb->name, keyword) == 0 &&
-		xcb->flags == flags)
-	      break;
-	  }
-	  if (xcb) {
-	    if (xcb->rock->pcb) SvREFCNT_dec(xcb->rock->pcb);
-	    if (xcb->rock->prock) SvREFCNT_dec(xcb->rock->prock);
-	    safefree(xcb->rock);
-	  }
-	  else if (pcb) {
-	    xcb = (struct xscb *) safemalloc(sizeof *xcb);
-	    xcb->prev = 0;
-	    xcb->name = safemalloc(strlen(keyword) + 1);
-	    strcpy(xcb->name, keyword);
-	    xcb->flags = flags;
-	    xcb->next = client->cb;
-	    client->cb = xcb;
-	  }
-	  if (pcb)
-	    xcb->rock = rock;
-	  else if (xcb) {
-	    if (xcb->prev)
-	      xcb->prev->next = xcb->next;
-	    else
-	      client->cb = xcb->next;
-	    if (xcb->next) xcb->next->prev = xcb->prev;
-	    safefree(xcb->name);
-	    safefree(xcb);
-	  }
-	}
-	
+          if (((val = hv_fetch(cb, "-callback", 9, 0)) ||
+               (val = hv_fetch(cb, "Callback", 8, 0))) &&
+              ((SvROK(*val) && SvTYPE(SvRV(*val)) == SVt_PVCV) ||
+               SvTYPE(*val) == SVt_PV))
+            pcb = *val;
+          else
+            pcb = 0;
+          if ((val = hv_fetch(cb, "-rock", 5, 0)) ||
+              (val = hv_fetch(cb, "Rock", 4, 0)))
+            prock = *val;
+          else
+            prock = &PL_sv_undef;
+          /*
+           * build our internal rock, which is used by our internal
+           * callback handler to invoke the Perl callback
+           */
+          if (!pcb)
+            rock = 0;
+          else {
+            rock = (struct xsccb *) safemalloc(sizeof *rock);
+            /* bump refcounts on these so they don't go away */
+            rock->pcb = SvREFCNT_inc(pcb);
+            if (!prock) prock = &PL_sv_undef;
+            rock->prock = SvREFCNT_inc(prock);
+            rock->client = client;
+            rock->autofree = 0;
+          }
+          /* and add the resulting callback */
+          imclient_addcallback(client->imclient, keyword, flags,
+                               (pcb ? imclient_xs_cb : 0), rock, 0);
+          /* update the callback list, possibly freeing old callback info */
+          for (xcb = client->cb; xcb; xcb = xcb->next) {
+            if (xcb->name && strcmp(xcb->name, keyword) == 0 &&
+                xcb->flags == flags)
+              break;
+          }
+          if (xcb) {
+            if (xcb->rock->pcb) SvREFCNT_dec(xcb->rock->pcb);
+            if (xcb->rock->prock) SvREFCNT_dec(xcb->rock->prock);
+            safefree(xcb->rock);
+          }
+          else if (pcb) {
+            xcb = (struct xscb *) safemalloc(sizeof *xcb);
+            xcb->prev = 0;
+            xcb->name = safemalloc(strlen(keyword) + 1);
+            strcpy(xcb->name, keyword);
+            xcb->flags = flags;
+            xcb->next = client->cb;
+            client->cb = xcb;
+          }
+          if (pcb)
+            xcb->rock = rock;
+          else if (xcb) {
+            if (xcb->prev)
+              xcb->prev->next = xcb->next;
+            else
+              client->cb = xcb->next;
+            if (xcb->next) xcb->next->prev = xcb->prev;
+            safefree(xcb->name);
+            safefree(xcb);
+          }
+        }
+
 void
 imclient__send(client, finishproc, finishrock, str)
-	Cyrus_IMAP client
-	SV *finishproc
-	SV *finishrock
-	char *str
+        Cyrus_IMAP client
+        SV *finishproc
+        SV *finishrock
+        char *str
 PREINIT:
-	STRLEN arg;
-	SV *pcb;
-	SV *prock;
-	struct xscb *xcb;
-	struct xsccb *rock;
-	char *cp, *dp, *xstr;
+        STRLEN arg;
+        SV *pcb;
+        SV *prock;
+        struct xscb *xcb;
+        struct xsccb *rock;
+        char *cp, *dp, *xstr;
 PPCODE:
-	/*
-	 * The C version does escapes.  It also does varargs, which I would
-	 * much rather not have to reimplement in XS code; so that is done in
-	 * Perl instead.  (The minus being that I have to track any changes
-	 * to the C API; but it'll be easier in Perl than in XS.)
-	 *
-	 * We still have to do the callback, though.
-	 *
-	 * @@@ the Perl code can't do synchronous literals
-	 */
-	if (SvROK(finishproc) && SvTYPE(SvRV(finishproc)) == SVt_PVCV)
-	  pcb = SvRV(finishproc);
-	else
-	  pcb = 0;
-	if (!pcb)
-	  prock = sv_2mortal(newRV_inc(&PL_sv_undef));
-	else if (finishrock)
-	  prock = finishrock;
-	else
-	  prock = sv_2mortal(newSVsv(&PL_sv_undef));
-	/*
-	 * build our internal rock, which is used by our internal
-	 * callback handler to invoke the Perl callback
-	 */
-	rock = (struct xsccb *) safemalloc(sizeof *rock);
+        /*
+         * The C version does escapes.  It also does varargs, which I would
+         * much rather not have to reimplement in XS code; so that is done in
+         * Perl instead.  (The minus being that I have to track any changes
+         * to the C API; but it'll be easier in Perl than in XS.)
+         *
+         * We still have to do the callback, though.
+         *
+         * @@@ the Perl code can't do synchronous literals
+         */
+        if (SvROK(finishproc) && SvTYPE(SvRV(finishproc)) == SVt_PVCV)
+          pcb = SvRV(finishproc);
+        else
+          pcb = 0;
+        if (!pcb)
+          prock = sv_2mortal(newRV_inc(&PL_sv_undef));
+        else if (finishrock)
+          prock = finishrock;
+        else
+          prock = sv_2mortal(newSVsv(&PL_sv_undef));
+        /*
+         * build our internal rock, which is used by our internal
+         * callback handler to invoke the Perl callback
+         */
+        rock = (struct xsccb *) safemalloc(sizeof *rock);
         /* bump refcounts on these so they don't go away */
-	if (!pcb) pcb = sv_2mortal(newSVsv(&PL_sv_undef));
-	rock->pcb = pcb;
-	if (!prock) prock = sv_2mortal(newSVsv(&PL_sv_undef));
-	rock->prock = prock;
-	rock->client = client;
-	rock->autofree = 1;
-	/* register this callback so it can be gc'ed properly (pointless?) */
-	xcb = (struct xscb *) safemalloc(sizeof *xcb);
-	xcb->prev = 0;
-	xcb->name = 0;
-	xcb->flags = 0;
-	xcb->rock = rock;
-	xcb->next = client->cb;
-	client->cb = xcb;
-	/* protect %'s in the string, since the caller does the dirty work */
-	arg = 0;
-	for (cp = str; *cp; cp++)
-	  if (*cp == '%') arg++;
-	xstr = safemalloc(strlen(str) + arg + 1);
-	dp = xstr;
-	for (cp = str; *cp; cp++) {
-	  *dp++ = *cp;
-	  if (*cp == '%') *dp++ = *cp;
-	}
-	*dp = 0;
-	/* and do it to it */
-	imclient_send(client->imclient,
-		      (SvTRUE(pcb) ?
-		       imclient_xs_cb :
-		       imclient_xs_fcmdcb),
-		      (void *) rock, xstr);
-	safefree(xstr);
-	/* if there was no Perl callback, spin on events until finished */
-	if (!SvTRUE(pcb)) {
-	  AV *av;
-	  while (SvTYPE(SvRV(prock)) != SVt_PVAV) {
-	    PUTBACK;
-	    imclient_processoneevent(client->imclient);
-	    SPAGAIN;
-	  }
-	  /* push the result; if scalar, stuff text in $@ */
-	  av = (AV *) SvRV(prock);
-	  if (GIMME_V == G_SCALAR) {
-	    EXTEND(SP, 1);
-	    pcb = av_shift(av);
-	    if (strcmp(SvPV(pcb, arg), "OK") == 0)
-	      PUSHs(&PL_sv_yes);
-	    else
-	      PUSHs(&PL_sv_no);
-	    pcb = perl_get_sv("@", TRUE);
-	    sv_setsv(pcb, av_shift(av));
-	    if (av_len(av) != -1) {
-	      pcb = perl_get_sv("^E", TRUE);
-	      sv_setsv(pcb, av_shift(av));
-	    }
-	  } else {
-	    EXTEND(SP, av_len(av) + 1);
-	    PUSHs(av_shift(av));
-	    PUSHs(av_shift(av));
-	    if (av_len(av) != -1) PUSHs(av_shift(av));
-	  }
-	  /* and free it */
-	  /* SvREFCNT_dec(prock); */
-	}
+        if (!pcb) pcb = sv_2mortal(newSVsv(&PL_sv_undef));
+        rock->pcb = pcb;
+        if (!prock) prock = sv_2mortal(newSVsv(&PL_sv_undef));
+        rock->prock = prock;
+        rock->client = client;
+        rock->autofree = 1;
+        /* register this callback so it can be gc'ed properly (pointless?) */
+        xcb = (struct xscb *) safemalloc(sizeof *xcb);
+        xcb->prev = 0;
+        xcb->name = 0;
+        xcb->flags = 0;
+        xcb->rock = rock;
+        xcb->next = client->cb;
+        client->cb = xcb;
+        /* protect %'s in the string, since the caller does the dirty work */
+        arg = 0;
+        for (cp = str; *cp; cp++)
+          if (*cp == '%') arg++;
+        xstr = safemalloc(strlen(str) + arg + 1);
+        dp = xstr;
+        for (cp = str; *cp; cp++) {
+          *dp++ = *cp;
+          if (*cp == '%') *dp++ = *cp;
+        }
+        *dp = 0;
+        /* and do it to it */
+        imclient_send(client->imclient,
+                      (SvTRUE(pcb) ?
+                       imclient_xs_cb :
+                       imclient_xs_fcmdcb),
+                      (void *) rock, xstr);
+        safefree(xstr);
+        /* if there was no Perl callback, spin on events until finished */
+        if (!SvTRUE(pcb)) {
+          AV *av;
+          while (SvTYPE(SvRV(prock)) != SVt_PVAV) {
+            PUTBACK;
+            imclient_processoneevent(client->imclient);
+            SPAGAIN;
+          }
+          /* push the result; if scalar, stuff text in $@ */
+          av = (AV *) SvRV(prock);
+          if (GIMME_V == G_SCALAR) {
+            EXTEND(SP, 1);
+            pcb = av_shift(av);
+            if (strcmp(SvPV(pcb, arg), "OK") == 0)
+              PUSHs(&PL_sv_yes);
+            else
+              PUSHs(&PL_sv_no);
+            pcb = perl_get_sv("@", TRUE);
+            sv_setsv(pcb, av_shift(av));
+            if (av_len(av) != -1) {
+              pcb = perl_get_sv("^E", TRUE);
+              sv_setsv(pcb, av_shift(av));
+            }
+          } else {
+            EXTEND(SP, av_len(av) + 1);
+            PUSHs(av_shift(av));
+            PUSHs(av_shift(av));
+            if (av_len(av) != -1) PUSHs(av_shift(av));
+          }
+          /* and free it */
+          /* SvREFCNT_dec(prock); */
+        }
 
 void
 imclient_getselectinfo(client)
-	Cyrus_IMAP client
+        Cyrus_IMAP client
 PREINIT:
-	int fd, writep;
+        int fd, writep;
 PPCODE:
-	imclient_getselectinfo(client->imclient, &fd, &writep);
-	/*
-	 * should this return a glob?  (evil, but would solve a nasty issue
-	 * in &send()...)
-	 *
-	 * also, should this check for scalar context and complain?
-	 */
-	EXTEND(SP, 2);
-	PUSHs(sv_2mortal(newSViv(fd)));
-	if (writep)
-	  PUSHs(&PL_sv_yes);
-	else
-	  PUSHs(&PL_sv_no);
+        imclient_getselectinfo(client->imclient, &fd, &writep);
+        /*
+         * should this return a glob?  (evil, but would solve a nasty issue
+         * in &send()...)
+         *
+         * also, should this check for scalar context and complain?
+         */
+        EXTEND(SP, 2);
+        PUSHs(sv_2mortal(newSViv(fd)));
+        if (writep)
+          PUSHs(&PL_sv_yes);
+        else
+          PUSHs(&PL_sv_no);
 
 void
 imclient_fromURL(client,url)
-	Cyrus_IMAP client
-	char *url
+        Cyrus_IMAP client
+        char *url
 PREINIT:
-	struct imapurl imapurl;
+        struct imapurl imapurl;
 PPCODE:
-	imapurl_fromURL(&imapurl, url);
+        imapurl_fromURL(&imapurl, url);
 
-	if(!imapurl.server || !imapurl.mailbox) {
-		safefree(imapurl.freeme);
-		XSRETURN_UNDEF;
-	}
+        if(!imapurl.server || !imapurl.mailbox) {
+                safefree(imapurl.freeme);
+                XSRETURN_UNDEF;
+        }
 
-	XPUSHs(sv_2mortal(newSVpv(imapurl.server, 0)));
-	XPUSHs(sv_2mortal(newSVpv(imapurl.mailbox, 0)));
+        XPUSHs(sv_2mortal(newSVpv(imapurl.server, 0)));
+        XPUSHs(sv_2mortal(newSVpv(imapurl.mailbox, 0)));
 
-	/* newSVpv copies the above */
-	safefree(imapurl.freeme);
-	
-	XSRETURN(2);
+        /* newSVpv copies the above */
+        safefree(imapurl.freeme);
+
+        XSRETURN(2);
 
 void
 imclient_toURL(client,server,box)
-	Cyrus_IMAP client
-	char *server
-	char *box
+        Cyrus_IMAP client
+        char *server
+        char *box
 PREINIT:
-	char *out_buf;
-	int len;
-	struct imapurl imapurl;
+        char *out_buf;
+        int len;
+        struct imapurl imapurl;
 PPCODE:
-	len = strlen(server)+strlen(box);
-	out_buf = safemalloc(4*len);
+        len = strlen(server)+strlen(box);
+        out_buf = safemalloc(4*len);
 
-	memset(&imapurl, 0, sizeof(struct imapurl));
-	imapurl.server = server;
-	imapurl.mailbox = box;
-	imapurl_toURL(out_buf, &imapurl);
+        memset(&imapurl, 0, sizeof(struct imapurl));
+        imapurl.server = server;
+        imapurl.mailbox = box;
+        imapurl_toURL(out_buf, &imapurl);
 
-	if(!out_buf[0]) {
-		safefree(out_buf);
-		XSRETURN_UNDEF;
-	}
+        if(!out_buf[0]) {
+                safefree(out_buf);
+                XSRETURN_UNDEF;
+        }
 
-	XPUSHs(sv_2mortal(newSVpv(out_buf, 0)));
+        XPUSHs(sv_2mortal(newSVpv(out_buf, 0)));
 
-	/* newSVpv copies this */
-	safefree(out_buf);
-	
-	XSRETURN(1);
+        /* newSVpv copies this */
+        safefree(out_buf);
+
+        XSRETURN(1);

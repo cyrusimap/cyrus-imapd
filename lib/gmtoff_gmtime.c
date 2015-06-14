@@ -58,11 +58,11 @@ EXPORTED int gmtoff_of(struct tm *tm, time_t time)
     /* Assume we are never more than 24 hours away. */
     offset = local.tm_yday - gmt.tm_yday;
     if (offset > 1) {
-	offset = -24;
+        offset = -24;
     } else if (offset < -1) {
-	offset = 24;
+        offset = 24;
     } else {
-	offset *= 24;
+        offset *= 24;
     }
 
     /* Scale in the hours and minutes; ignore seconds. */

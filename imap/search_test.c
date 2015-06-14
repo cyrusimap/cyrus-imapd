@@ -74,8 +74,8 @@ int verbose = 0;
 /* ====================================================================== */
 
 static void dump_one_folder(const char *key __attribute__((unused)),
-			    void *data,
-			    void *rock __attribute__((unused)))
+                            void *data,
+                            void *rock __attribute__((unused)))
 {
     search_folder_t *folder = data;
     int uid;
@@ -86,14 +86,14 @@ static void dump_one_folder(const char *key __attribute__((unused)),
     printf("count %u\n", search_folder_get_count(folder));
     printf("highestmodseq %llu\n", (unsigned long long)search_folder_get_highest_modseq(folder));
     search_folder_foreach(folder, uid) {
-	printf("uid %u\n", uid);
+        printf("uid %u\n", uid);
     }
 }
 
 static int do_search(const char *mboxname,
-		     int multiple,
-		     const char *userid,
-		     char **words, int nwords)
+                     int multiple,
+                     const char *userid,
+                     char **words, int nwords)
 {
     struct buf querytext = BUF_INITIALIZER;
     struct namespace ns;
@@ -110,18 +110,18 @@ static int do_search(const char *mboxname,
     memset(&init, 0, sizeof(struct index_init));
 
     for (i = 0 ; i < nwords ; i++) {
-	if (i) buf_putc(&querytext, ' ');
-	buf_appendcstr(&querytext, words[i]);
+        if (i) buf_putc(&querytext, ' ');
+        buf_appendcstr(&querytext, words[i]);
     }
     if (verbose)
-	fprintf(stderr, "search_test: IMAP query is \"%s\"\n", buf_cstring(&querytext));
+        fprintf(stderr, "search_test: IMAP query is \"%s\"\n", buf_cstring(&querytext));
     buf_putc(&querytext, '\r');
     buf_cstring(&querytext);
 
     r = mboxname_init_namespace(&ns, /*isadmin*/0);
     if (r) {
-	fprintf(stderr, "Failed to initialise namespace: %s\n", error_message(r));
-	goto out;
+        fprintf(stderr, "Failed to initialise namespace: %s\n", error_message(r));
+        goto out;
     }
 
     pin = prot_readmap(querytext.s, querytext.len);
@@ -133,8 +133,8 @@ static int do_search(const char *mboxname,
 
     r = index_open(mboxname, &init, &state);
     if (r) {
-	fprintf(stderr, "%s: %s\n", mboxname, error_message(r));
-	goto out;
+        fprintf(stderr, "%s: %s\n", mboxname, error_message(r));
+        goto out;
     }
 
     index_checkflags(state, 0, 0);
@@ -145,8 +145,8 @@ static int do_search(const char *mboxname,
 
     r = get_search_program(pin, pout, searchargs);
     if (r != '\r') {
-	fprintf(stderr, "Couldn't parse IMAP search program\n");
-	goto out;
+        fprintf(stderr, "Couldn't parse IMAP search program\n");
+        goto out;
     }
 
     query = search_query_new(state, searchargs);
@@ -154,16 +154,16 @@ static int do_search(const char *mboxname,
     query->verbose = verbose;
     r = search_query_run(query);
     if (r) {
-	fprintf(stderr, "Failed to run query: %s\n", error_message(r));
-	goto out;
+        fprintf(stderr, "Failed to run query: %s\n", error_message(r));
+        goto out;
     }
     gettimeofday(&end_time, NULL);
 
     hash_enumerate(&query->folders_by_name, dump_one_folder, query);
 
     if (verbose)
-	fprintf(stderr, "search_test: ran query in %.6f sec\n",
-		timesub(&start_time, &end_time));
+        fprintf(stderr, "search_test: ran query in %.6f sec\n",
+                timesub(&start_time, &end_time));
 
 out:
     if (pin) prot_free(pin);
@@ -193,18 +193,18 @@ static int do_serialise(char **words, int nwords)
     struct timeval start_time, end_time;
 
     for (i = 0 ; i < nwords ; i++) {
-	if (i) buf_putc(&querytext, ' ');
-	buf_appendcstr(&querytext, words[i]);
+        if (i) buf_putc(&querytext, ' ');
+        buf_appendcstr(&querytext, words[i]);
     }
     if (verbose)
-	fprintf(stderr, "search_test: IMAP query is \"%s\"\n", buf_cstring(&querytext));
+        fprintf(stderr, "search_test: IMAP query is \"%s\"\n", buf_cstring(&querytext));
     buf_putc(&querytext, '\r');
     buf_cstring(&querytext);
 
     r = mboxname_init_namespace(&ns, /*isadmin*/0);
     if (r) {
-	fprintf(stderr, "Failed to initialise namespace: %s\n", error_message(r));
-	goto out;
+        fprintf(stderr, "Failed to initialise namespace: %s\n", error_message(r));
+        goto out;
     }
 
     pin = prot_readmap(querytext.s, querytext.len);
@@ -214,23 +214,23 @@ static int do_serialise(char **words, int nwords)
 
     r = get_search_program(pin, pout, searchargs);
     if (r != '\r') {
-	fprintf(stderr, "Couldn't parse IMAP search program\n");
-	goto out;
+        fprintf(stderr, "Couldn't parse IMAP search program\n");
+        goto out;
     }
 
     gettimeofday(&start_time, NULL);
     str = search_expr_serialise(searchargs->root);
     gettimeofday(&end_time, NULL);
     if (verbose)
-	fprintf(stderr, "search_test: serialised query in %.6f sec\n",
-		timesub(&start_time, &end_time));
+        fprintf(stderr, "search_test: serialised query in %.6f sec\n",
+                timesub(&start_time, &end_time));
 
     gettimeofday(&start_time, NULL);
     e = search_expr_unserialise(str);
     gettimeofday(&end_time, NULL);
     if (verbose)
-	fprintf(stderr, "search_test: unserialised query in %.6f sec\n",
-		timesub(&start_time, &end_time));
+        fprintf(stderr, "search_test: unserialised query in %.6f sec\n",
+                timesub(&start_time, &end_time));
 
 out:
     if (pin) prot_free(pin);
@@ -254,53 +254,53 @@ int main(int argc, char **argv)
     int r = 0;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-	fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     while ((c = getopt(argc, argv, "C:LMSm:u:v")) != EOF) {
-	switch (c) {
+        switch (c) {
 
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 
-	case 'L':
-	    mode = SERIALISE;
-	    break;
+        case 'L':
+            mode = SERIALISE;
+            break;
 
-	case 'M':
-	    multiple = 1;
-	    break;
+        case 'M':
+            multiple = 1;
+            break;
 
-	case 'S':
-	    multiple = 0;
-	    break;
+        case 'S':
+            multiple = 0;
+            break;
 
-	case 'm':
-	    mboxname = optarg;
-	    break;
+        case 'm':
+            mboxname = optarg;
+            break;
 
-	case 'u':
-	    userid = optarg;
-	    break;
+        case 'u':
+            userid = optarg;
+            break;
 
-	case 'v':
-	    verbose++;
-	    break;
+        case 'v':
+            verbose++;
+            break;
 
-	default:
-	    usage(argv[0]);
-	    break;
-	}
+        default:
+            usage(argv[0]);
+            break;
+        }
     }
 
     if (optind == argc)
-	usage(argv[0]);
+        usage(argv[0]);
     if (mode == SEARCH && !mboxname)
-	usage(argv[0]);
+        usage(argv[0]);
 
     cyrus_init(alt_config, "search_test",
-	       CYRUSINIT_PERROR, CONFIG_NEED_PARTITION_DATA);
+               CYRUSINIT_PERROR, CONFIG_NEED_PARTITION_DATA);
 
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -309,18 +309,18 @@ int main(int argc, char **argv)
     switch (mode) {
 
     case SEARCH:
-	if (!userid) {
-	    userid = mboxname_to_userid(mboxname);
-	    if (!userid)
-		usage(argv[0]);
-	}
+        if (!userid) {
+            userid = mboxname_to_userid(mboxname);
+            if (!userid)
+                usage(argv[0]);
+        }
 
-	r = do_search(mboxname, multiple, userid, argv+optind, argc-optind);
-	break;
+        r = do_search(mboxname, multiple, userid, argv+optind, argc-optind);
+        break;
 
     case SERIALISE:
-	r = do_serialise(argv+optind, argc-optind);
-	break;
+        r = do_serialise(argv+optind, argc-optind);
+        break;
     }
 
     mboxlist_close();

@@ -54,9 +54,9 @@ extern int verbose;
 
 struct slmatch
 {
-    const char *re;	    /* NULL => disabled */
+    const char *re;         /* NULL => disabled */
     unsigned int count;
-    regex_t cre;	    /* compiled regex */
+    regex_t cre;            /* compiled regex */
 };
 #define MAX_SLMATCH 32
 static unsigned int nslmatches = 0;
@@ -77,7 +77,7 @@ static char *match_error(struct slmatch *sl, int r)
 
     buf[0] = '\0';
     if (sl->re)
-	snprintf(buf, sizeof(buf)-100, "/%s/: ", sl->re);
+        snprintf(buf, sizeof(buf)-100, "/%s/: ", sl->re);
 
     n = strlen(buf);
     regerror(r, &sl->cre, buf+n, sizeof(buf)-n-1);
@@ -89,42 +89,42 @@ static char *match_error(struct slmatch *sl, int r)
 static void vlog(int prio, const char *fmt, va_list args)
 {
     if (nslmatches) {
-	int e = errno;	    /* save errno Just In Case */
-	va_list args2;
-	unsigned int i;
-	int r;
-	char line[2048];
+        int e = errno;      /* save errno Just In Case */
+        va_list args2;
+        unsigned int i;
+        int r;
+        char line[2048];
 
-	/* This only works for all cases because of the glibc
-	 * extension which supports %m in printf() */
-	va_copy(args2, args);
-	vsnprintf(line, sizeof(line), fmt, args2);
-	va_end(args2);
+        /* This only works for all cases because of the glibc
+         * extension which supports %m in printf() */
+        va_copy(args2, args);
+        vsnprintf(line, sizeof(line), fmt, args2);
+        va_end(args2);
 
-	for (i = 0 ; i < MAX_SLMATCH ; i++) {
-	    if (!slmatches[i].re)
-		continue; /* empty slot */
-	    r = regexec(&slmatches[i].cre, line, 0, NULL, 0);
-	    if (!r) {
-		/* found */
-		if (verbose >= 2)
-		    fprintf(stderr, "\nSYSLOG matched /%s/\n", slmatches[i].re);
-		slmatches[i].count++;
-		break;
-	    } else {
-		fprintf(stderr, "\nSYSLOG didn't match '%s' against '%s'\n", line, slmatches[i].re);
-	    }
+        for (i = 0 ; i < MAX_SLMATCH ; i++) {
+            if (!slmatches[i].re)
+                continue; /* empty slot */
+            r = regexec(&slmatches[i].cre, line, 0, NULL, 0);
+            if (!r) {
+                /* found */
+                if (verbose >= 2)
+                    fprintf(stderr, "\nSYSLOG matched /%s/\n", slmatches[i].re);
+                slmatches[i].count++;
+                break;
+            } else {
+                fprintf(stderr, "\nSYSLOG didn't match '%s' against '%s'\n", line, slmatches[i].re);
+            }
 
-	    if (r != REG_NOMATCH) {
-		/* error */
-		const char *msg = match_error(&slmatches[i], r);
-		CU_assertImplementation(0, __LINE__, msg, __FILE__, NULL, CU_TRUE);
-		/* NOTREACHED */
-		break;
-	    }
-	}
+            if (r != REG_NOMATCH) {
+                /* error */
+                const char *msg = match_error(&slmatches[i], r);
+                CU_assertImplementation(0, __LINE__, msg, __FILE__, NULL, CU_TRUE);
+                /* NOTREACHED */
+                break;
+            }
+        }
 
-	errno = e;
+        errno = e;
     }
 
     /* glibc handles %m in vfprintf() so we don't need to do
@@ -132,7 +132,7 @@ static void vlog(int prio, const char *fmt, va_list args)
      /* TODO: find and expand %m on non-glibc platforms */
 
     if (verbose < 2)
-	return;
+        return;
     fprintf(stderr, "\nSYSLOG %d[", prio & LOG_PRIMASK);
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "]\n");
@@ -143,7 +143,7 @@ static void vlog(int prio, const char *fmt, va_list args)
 /* Under some but not all combinations of options, glibc
  * defines syslog() as an inline that calls this function */
 void __syslog_chk(int prio, int whatever __attribute__((unused)),
-		  const char *fmt, ...)
+                  const char *fmt, ...)
 {
     va_list args;
 
@@ -163,28 +163,28 @@ void syslog(int prio, const char *fmt, ...)
 }
 
 unsigned int CU_syslogMatchBegin(const char *re, const char *filename,
-				 unsigned int lineno)
+                                 unsigned int lineno)
 {
     unsigned int i;
     int r;
 
     /* find an empty slot */
     for (i = 0 ; i < MAX_SLMATCH ; i++) {
-	if (!slmatches[i].re) {
-	    /* found */
-	    slmatches[i].re = re;
-	    slmatches[i].count = 0;
-	    r = regcomp(&slmatches[i].cre, re, REG_EXTENDED|REG_ICASE|REG_NOSUB);
-	    if (r) {
-		const char *msg = match_error(&slmatches[i], r);
-		memset(&slmatches[i], 0, sizeof(slmatches[i]));
-		CU_assertImplementation(0, lineno, msg, filename, NULL, CU_TRUE);
-		/* NOTREACHED */
-		return 0;
-	    }
-	    nslmatches++;
-	    return i+1;
-	}
+        if (!slmatches[i].re) {
+            /* found */
+            slmatches[i].re = re;
+            slmatches[i].count = 0;
+            r = regcomp(&slmatches[i].cre, re, REG_EXTENDED|REG_ICASE|REG_NOSUB);
+            if (r) {
+                const char *msg = match_error(&slmatches[i], r);
+                memset(&slmatches[i], 0, sizeof(slmatches[i]));
+                CU_assertImplementation(0, lineno, msg, filename, NULL, CU_TRUE);
+                /* NOTREACHED */
+                return 0;
+            }
+            nslmatches++;
+            return i+1;
+        }
     }
     CU_assertImplementation(0, lineno, "No free syslog match slots", filename, NULL, CU_TRUE);
     /* NOTREACHED */
@@ -198,31 +198,31 @@ unsigned int CU_syslogMatchEnd(unsigned int match, const char **sp)
     const char *s = NULL;
 
     for (i = 0 ; i < MAX_SLMATCH ; i++) {
-	if (!slmatches[i].re)
-	    continue; /* empty slot */
-	if (match && match != i+1)
-	    continue; /* not the slot for @match */
+        if (!slmatches[i].re)
+            continue; /* empty slot */
+        if (match && match != i+1)
+            continue; /* not the slot for @match */
 
-	if (!s)
-	    s = slmatches[i].re;
-	else
-	    s = "(multiple matches)";
+        if (!s)
+            s = slmatches[i].re;
+        else
+            s = "(multiple matches)";
 
-	count += slmatches[i].count;
-	regfree(&slmatches[i].cre);
-	memset(&slmatches[i], 0, sizeof(slmatches[i]));
-	nslmatches--;
-	if (match)
-	    break;	/* only looking for a single slot */
+        count += slmatches[i].count;
+        regfree(&slmatches[i].cre);
+        memset(&slmatches[i], 0, sizeof(slmatches[i]));
+        nslmatches--;
+        if (match)
+            break;      /* only looking for a single slot */
     }
 
     if (match && !s) {
-	s = "invalid match number";
-	count = ~0U;
+        s = "invalid match number";
+        count = ~0U;
     }
 
     if (sp)
-	*sp = s;
+        *sp = s;
     return count;
 }
 

@@ -48,8 +48,8 @@ imclient library - authenticating callback interface to IMAP/IMSP servers
 .ft
 .if
 .LP
-.ft B 
-.BI "int imclient_connect(struct imclient **" imclient ", const char *" host ", const char *" port ");" 
+.ft B
+.BI "int imclient_connect(struct imclient **" imclient ", const char *" host ", const char *" port ");"
 .PP
 .BI "void imclient_close (struct imclient *" imclient ");"
 .sp .025i
@@ -87,7 +87,7 @@ to be called in case of any error within
 .PP
 All of the
 .B imclient
-functions begin with the prefix 
+functions begin with the prefix
 .I imclient
 and takes  an  argument of type
 .B struct imclient *
@@ -100,17 +100,17 @@ See below for a description of each function.
 
 .IP \fB\imclient_connect() \fP5
 Connects the client server to the host. If successful, it returns 0
-and sets the imclient argument to a pointer to an 
-.B imclient 
-struct. The 
-.B imclient 
+and sets the imclient argument to a pointer to an
+.B imclient
+struct. The
+.B imclient
 struct represents the current connection,  flags, and  callbacks. On failure, the current
 .B errno
-is returned if a system call failed,  -1 is returned if the host name was not found, and  -2 is returned if the service name was not found. 
+is returned if a system call failed,  -1 is returned if the host name was not found, and  -2 is returned if the service name was not found.
 .IP \fB\imclient_close() \fP5
-Closes and frees the 
-.B imclient 
-connection. 
+Closes and frees the
+.B imclient
+connection.
 .IP \fB\ imclient_setflags() \fP5
 Sets the flags specified by the
 .B flags
@@ -122,14 +122,14 @@ connection. Currently the only  flag allowed is
 .IP \fB\imclient_clearflags() \fP5
 Clears the flags specified by the
 .B flags
-argument on the 
+argument on the
 .B imclient
 connection.
 .IP \fB\imclient_servername() \fP5
 Returns a  char * pointer to the name of the server connected to by
 .B imclient.
 .IP \fB\imclient_addcallback() \fP5
-Adds an untagged data callback to the 
+Adds an untagged data callback to the
 .B imclient
 connection. The function
 .B imclient_addcallback
@@ -158,7 +158,7 @@ struct imclient_reply {
 .sp
 After the first argument
 .B imclient,
-there can be zero or more instances of the set of 
+there can be zero or more instances of the set of
 .B keyword,
 .B flags,
 .B proc,
@@ -166,7 +166,7 @@ and
 .B rock,
 each adding or changing a single callback.
 Each instance  adds or changes the callback for
-.B keyword. 
+.B keyword.
 The argument,
 .B flags,
 specifies information about the parsing of the untagged data.
@@ -186,22 +186,22 @@ on the
 connection. The callback function may over write  the text of untagged
 data.
 .IP \fB\imclient_send() \fP5
-Sends a new command to the 
+Sends a new command to the
 .B imclient
 connection.
 .B finishproc
-and 
+and
 .B finnishrock
-are the function and rock called when the  command completes. 
+are the function and rock called when the  command completes.
 .B functionproc
 may be a null pointer, in which case no callback is made. The call back function may not call the functions
-.B imclient_close(), imclient_send(), imclient_eof(),  imclient_processoneevent(), 
-or 
-.B imclient_authenticate() 
+.B imclient_close(), imclient_send(), imclient_eof(),  imclient_processoneevent(),
+or
+.B imclient_authenticate()
 on the connection.
 The argument,
 .B fmt
-, is a print like specification of the command. It must not include the 
+, is a print like specification of the command. It must not include the
 tag as the tag is automatically added by imclient_send().
 The defined %-sequences are:
 .sp .025i
@@ -236,14 +236,14 @@ descriptor to
 for read.
 .B wanttowrite
 is filled in with a
-nonzero value if select should be used for write as well. 
+nonzero value if select should be used for write as well.
 .IP \fB\imclient_processoneevent() \fP5
 Processes one input or output event on the
 .B imclient
 connection.
 .IP \fB\imclient_authenticate() \fP5
-Authenticates the 
-.B imclient 
+Authenticates the
+.B imclient
 connection using one of the mechanisms in
 .B availmech.
 The argument,
@@ -300,7 +300,7 @@ struct sasl_client;
 extern struct sasl_client krb_sasl_client;
 
 struct sasl_client *login_sasl_client[] = {
-    &krb_sasl_client, 
+    &krb_sasl_client,
     NULL
 };
 struct imclient *imclient;
@@ -313,52 +313,52 @@ void fatal(char* message, int rc) {
 }
 
 static void callback_capability(struct imclient *imclient,
-				void *rock,
-				struct imclient_reply *reply) {
+                                void *rock,
+                                struct imclient_reply *reply) {
     if (reply->text != NULL) {
-	*((char**)rock) = xstrdup( reply->text );
+        *((char**)rock) = xstrdup( reply->text );
     }
 }
 
 static void end_command (struct imclient *connection, void*
-			rock,  struct imclient_reply *inmsg) {
+                        rock,  struct imclient_reply *inmsg) {
     (*(int*)rock)--;
 }
 
 main() {
     char* capability_string;
     int nc;
-    
+
     if (imclient_connect(&imclient, server, port)) {
-	fprintf(stderr,
-		"error: Couldn't connect to %s %s\en",
-		server, port);
-	exit(1);
+        fprintf(stderr,
+                "error: Couldn't connect to %s %s\en",
+                server, port);
+        exit(1);
     }
 
     if (imclient_authenticate(imclient, login_sasl_client, "imap"
-			      /* service */,
-			      NULL /* user */, SASL_PROT_ANY)) {
-	exit(1);
+                              /* service */,
+                              NULL /* user */, SASL_PROT_ANY)) {
+        exit(1);
     }
 
     imclient_addcallback(imclient, "CAPABILITY",
-			 CALLBACK_NOLITERAL,
-			 callback_capability,
-			 &capability_string,
-			 NULL);
-    
+                         CALLBACK_NOLITERAL,
+                         callback_capability,
+                         &capability_string,
+                         NULL);
+
     nc = 1;
-    
+
     imclient_send(imclient, end_command,
-		  (void*) &nc, "CAPABILITY");
-    
+                  (void*) &nc, "CAPABILITY");
+
     while(nc > 0) {
-	imclient_processoneevent(imclient);
+        imclient_processoneevent(imclient);
     }
-    
+
     if (strstr("LITERAL+", capability_string)) {
-	imclient_setflags(imclient, IMCLIENT_CONN_NONSYNCLITERAL);
+        imclient_setflags(imclient, IMCLIENT_CONN_NONSYNCLITERAL);
     }
 
     imclient_send(imclient, NULL, NULL, "LOGOUT");

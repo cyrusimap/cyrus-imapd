@@ -44,8 +44,8 @@
    more than one occasion, we have gotten burned by this moving users around
    through various inadvisable means, screwing up the mailboxes file,
    whatever.
-   
-   We don't want to fail out permenantly on things like EX_USAGE, EX_SOFTWARE, 
+
+   We don't want to fail out permenantly on things like EX_USAGE, EX_SOFTWARE,
    etc., because that generally means someone was just screwing with the mail
    store and we don't want to lose mail.
 
@@ -57,7 +57,7 @@
 
    So other code uses the EC_* error, then we maybe change it to TEMPFAIL if
    we don't agree on whether the error should be permenant or not.
-   
+
    Comments below stolen from sysexits.h.  */
 
 #ifndef INCLUDED_EXITCODES_H
@@ -65,22 +65,22 @@
 
 #include <sysexits.h>
 
-#define EC_OK          0		/* successful termination */
+#define EC_OK          0                /* successful termination */
 
-#define EC_USAGE       EX_TEMPFAIL	/* command line usage error */
-#define EC_DATAERR     EX_DATAERR	/* data format error */
-#define EC_NOINPUT     EX_TEMPFAIL	/* cannot open input */
-#define EC_NOUSER      EX_NOUSER	/* addressee unknown */
-#define EC_NOHOST      EX_TEMPFAIL	/* host name unknown */
-#define EC_UNAVAILABLE EX_TEMPFAIL	/* service unavailable */
-#define EC_SOFTWARE    EX_TEMPFAIL	/* internal software error */
-#define EC_OSERR       EX_TEMPFAIL	/* system error (e.g., can't fork) */
-#define EC_OSFILE      EX_TEMPFAIL	/* critical OS file missing */
-#define EC_CANTCREAT   EX_TEMPFAIL	/* can't create (user) output file */
-#define EC_IOERR       EX_TEMPFAIL	/* input/output error */
-#define EC_TEMPFAIL    EX_TEMPFAIL	/* user is invited to retry */
-#define EC_PROTOCOL    EX_TEMPFAIL	/* remote error in protocol */
-#define EC_NOPERM      EX_NOPERM	/* permission denied */
-#define EC_CONFIG      EX_TEMPFAIL	/* configuration error */
+#define EC_USAGE       EX_TEMPFAIL      /* command line usage error */
+#define EC_DATAERR     EX_DATAERR       /* data format error */
+#define EC_NOINPUT     EX_TEMPFAIL      /* cannot open input */
+#define EC_NOUSER      EX_NOUSER        /* addressee unknown */
+#define EC_NOHOST      EX_TEMPFAIL      /* host name unknown */
+#define EC_UNAVAILABLE EX_TEMPFAIL      /* service unavailable */
+#define EC_SOFTWARE    EX_TEMPFAIL      /* internal software error */
+#define EC_OSERR       EX_TEMPFAIL      /* system error (e.g., can't fork) */
+#define EC_OSFILE      EX_TEMPFAIL      /* critical OS file missing */
+#define EC_CANTCREAT   EX_TEMPFAIL      /* can't create (user) output file */
+#define EC_IOERR       EX_TEMPFAIL      /* input/output error */
+#define EC_TEMPFAIL    EX_TEMPFAIL      /* user is invited to retry */
+#define EC_PROTOCOL    EX_TEMPFAIL      /* remote error in protocol */
+#define EC_NOPERM      EX_NOPERM        /* permission denied */
+#define EC_CONFIG      EX_TEMPFAIL      /* configuration error */
 
 #endif /* INCLUDED_EXITCODES_H */

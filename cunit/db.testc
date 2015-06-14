@@ -8,7 +8,7 @@
 #include "util.h"
 #include "hash.h"
 
-#define DBDIR	    "test-mb-dbdir"
+#define DBDIR       "test-mb-dbdir"
 
 struct binary_result
 {
@@ -42,7 +42,7 @@ static int fexists(const char *fname)
 
     r = stat(fname, &sb);
     if (r < 0)
-	r = -errno;
+        r = -errno;
     return r;
 }
 
@@ -57,33 +57,33 @@ static char *make_basedir(const char * const *reldirs)
 
     tmpdir = getenv("TMPDIR");
     if (!tmpdir)
-	tmpdir = "/tmp";
+        tmpdir = "/tmp";
 
     for (;;) {
-	if (unique)
-	    snprintf(path, sizeof(path), "%s/cunit-db-test.%d.%d", tmpdir, getpid(), unique);
-	else
-	    snprintf(path, sizeof(path), "%s/cunit-db-test.%d", tmpdir, getpid());
+        if (unique)
+            snprintf(path, sizeof(path), "%s/cunit-db-test.%d.%d", tmpdir, getpid(), unique);
+        else
+            snprintf(path, sizeof(path), "%s/cunit-db-test.%d", tmpdir, getpid());
 
-	r = mkdir(path, 0700);
-	if (!r)
-	    break;	/* success! */
-	if (errno != EEXIST) {
-	    perror(path);
-	    return NULL;
-	}
-	unique++;
+        r = mkdir(path, 0700);
+        if (!r)
+            break;      /* success! */
+        if (errno != EEXIST) {
+            perror(path);
+            return NULL;
+        }
+        unique++;
     }
     basedir = xstrdup(path);
 
     for (d = reldirs ; *d ; d++) {
-	snprintf(path, sizeof(path), "%s/%s", basedir, *d);
-	r = mkdir(path, 0700);
-	if (r < 0) {
-	    perror(path);
-	    free(basedir);
-	    return NULL;
-	}
+        snprintf(path, sizeof(path), "%s/%s", basedir, *d);
+        r = mkdir(path, 0700);
+        if (r < 0) {
+            perror(path);
+            free(basedir);
+            return NULL;
+        }
     }
 
     return basedir;
@@ -94,8 +94,8 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn);
 
-#define BADDATA		((const char *)0xdeadbeef)
-#define BADLEN		((int)0xcafebabe)
+#define BADDATA         ((const char *)0xdeadbeef)
+#define BADLEN          ((int)0xcafebabe)
 
 #define CANFETCH(key, keylen, expdata, expdatalen) \
 { \
@@ -266,24 +266,24 @@ static void test_multiopen(void)
     db1 = db;
     txn1 = txn;
     {
-	db = NULL;
-	txn = NULL;
+        db = NULL;
+        txn = NULL;
 
-	/* a second open() with the same filename returns
-	 * another reference to the same db */
-	r = cyrusdb_open(backend, filename, 0, &db);
-	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-	CU_ASSERT_PTR_NOT_NULL(db);
+        /* a second open() with the same filename returns
+         * another reference to the same db */
+        r = cyrusdb_open(backend, filename, 0, &db);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        CU_ASSERT_PTR_NOT_NULL(db);
 
-	/* 2nd txn starts */
-	CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-	CANCOMMIT();
-	/* 2nd txn ends */
+        /* 2nd txn starts */
+        CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+        CANCOMMIT();
+        /* 2nd txn ends */
 
-	/* closing succeeds and leaves the file in place */
-	r = cyrusdb_close(db);
-	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-	CU_ASSERT_EQUAL(fexists(filename), 0);
+        /* closing succeeds and leaves the file in place */
+        r = cyrusdb_close(db);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        CU_ASSERT_EQUAL(fexists(filename), 0);
     }
     db = db1;
     txn = txn1;
@@ -669,8 +669,8 @@ static void test_delete(void)
 }
 
 static int foreacher(void *rock,
-		     const char *key, size_t keylen,
-		     const char *data, size_t datalen)
+                     const char *key, size_t keylen,
+                     const char *data, size_t datalen)
 {
     struct binary_result **head = (struct binary_result **)rock;
     struct binary_result **tail;
@@ -691,7 +691,7 @@ static int foreacher(void *rock,
     res->datalen = datalen;
     /* append to the list.  yes, it's inefficient. */
     for (tail = head ; *tail ; tail = &(*tail)->next)
-	;
+        ;
     *tail = res;
 
     return 0;
@@ -703,8 +703,8 @@ struct deleteit {
 };
 
 static int deleter(void *rock,
-		   const char *key, size_t keylen,
-		   const char *data, size_t datalen)
+                   const char *key, size_t keylen,
+                   const char *data, size_t datalen)
 {
     struct deleteit *dd = rock;
     int r;
@@ -760,12 +760,12 @@ static void test_mboxlist(void)
     GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
     /* flat is always in mboxlist order! */
     if (!strcmp(backend, "flat")) {
-	GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
-	GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+        GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+        GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
     }
     else {
-	GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-	GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+        GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+        GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
     }
     /* foreach iterated over exactly all the keys */
     CU_ASSERT_PTR_NULL(results);
@@ -859,10 +859,10 @@ static void test_foreach(void)
 
     /* only check "fetchnext" iteration if it's defined for this backend */
     if (cyrusdb_canfetchnext(backend)) {
-	CANFETCHNEXT(NULL, 0, KEY1, strlen(KEY1), DATA1, strlen(DATA1));
-	CANFETCHNEXT(KEY1, strlen(KEY1), KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-	CANFETCHNEXT(KEY2, strlen(KEY2), KEY3, strlen(KEY3), DATA3, strlen(DATA3));
-	CANNOTFETCHNEXT(KEY3, strlen(KEY3), CYRUSDB_NOTFOUND);
+        CANFETCHNEXT(NULL, 0, KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+        CANFETCHNEXT(KEY1, strlen(KEY1), KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+        CANFETCHNEXT(KEY2, strlen(KEY2), KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+        CANNOTFETCHNEXT(KEY3, strlen(KEY3), CYRUSDB_NOTFOUND);
     }
 
     /* close the txn - it doesn't matter here if we commit or abort */
@@ -921,9 +921,9 @@ struct ffrock {
 #define K6 "zebra"
 
 static int ffstatemachine(void *rockp,
-			  const char *key, size_t keylen,
-			  const char *data __attribute((unused)),
-			  size_t datalen __attribute((unused)))
+                          const char *key, size_t keylen,
+                          const char *data __attribute((unused)),
+                          size_t datalen __attribute((unused)))
 {
     struct ffrock *fr = (struct ffrock *)rockp;
     char *kcopy = xstrndup(key, keylen);
@@ -932,50 +932,50 @@ static int ffstatemachine(void *rockp,
     /* oh yeah, state machine time */
     switch (fr->state) {
     case 0:
-	CU_ASSERT_STRING_EQUAL(kcopy, K1);
-	fr->state = 1;
-	break;
+        CU_ASSERT_STRING_EQUAL(kcopy, K1);
+        fr->state = 1;
+        break;
     case 1:
-	CU_ASSERT_STRING_EQUAL(kcopy, K2);
-	/* test prior-location store */
-	r = cyrusdb_store(fr->db, K0, strlen(K0), "", 0, fr->tid);
-	CU_ASSERT_EQUAL(r, 0);
-	fr->state = 2;
-	break;
+        CU_ASSERT_STRING_EQUAL(kcopy, K2);
+        /* test prior-location store */
+        r = cyrusdb_store(fr->db, K0, strlen(K0), "", 0, fr->tid);
+        CU_ASSERT_EQUAL(r, 0);
+        fr->state = 2;
+        break;
     case 2:
-	CU_ASSERT_STRING_EQUAL(kcopy, K3);
-	/* test prior non-existent fetch - can cause infinite loops if buggy */
-	r = cyrusdb_fetch(fr->db, K0U, strlen(K0U), NULL, NULL, fr->tid);
-	CU_ASSERT_EQUAL(r, CYRUSDB_NOTFOUND);
-	fr->state = 3;
-	break;
+        CU_ASSERT_STRING_EQUAL(kcopy, K3);
+        /* test prior non-existent fetch - can cause infinite loops if buggy */
+        r = cyrusdb_fetch(fr->db, K0U, strlen(K0U), NULL, NULL, fr->tid);
+        CU_ASSERT_EQUAL(r, CYRUSDB_NOTFOUND);
+        fr->state = 3;
+        break;
     case 3:
-	CU_ASSERT_STRING_EQUAL(kcopy, K4);
-	r = cyrusdb_store(fr->db, K4A, strlen(K4A), "", 0, fr->tid);
-	CU_ASSERT_EQUAL(r, 0);
-	fr->state = 4;
-	break;
+        CU_ASSERT_STRING_EQUAL(kcopy, K4);
+        r = cyrusdb_store(fr->db, K4A, strlen(K4A), "", 0, fr->tid);
+        CU_ASSERT_EQUAL(r, 0);
+        fr->state = 4;
+        break;
     case 4:
-	/* we found the after-added record correctly */
-	CU_ASSERT_STRING_EQUAL(kcopy, K4A);
-	r = cyrusdb_store(fr->db, K4A, strlen(K4A), "another", 7, fr->tid);
-	CU_ASSERT_EQUAL(r, 0);
-	fr->state = 5;
-	break;
+        /* we found the after-added record correctly */
+        CU_ASSERT_STRING_EQUAL(kcopy, K4A);
+        r = cyrusdb_store(fr->db, K4A, strlen(K4A), "another", 7, fr->tid);
+        CU_ASSERT_EQUAL(r, 0);
+        fr->state = 5;
+        break;
     case 5:
-	/* didn't repeat after replacing */
-	CU_ASSERT_STRING_EQUAL(kcopy, K5);
-	r = cyrusdb_delete(fr->db, K5, strlen(K5), fr->tid, /*force*/1);
-	fr->state = 6;
-	break;
+        /* didn't repeat after replacing */
+        CU_ASSERT_STRING_EQUAL(kcopy, K5);
+        r = cyrusdb_delete(fr->db, K5, strlen(K5), fr->tid, /*force*/1);
+        fr->state = 6;
+        break;
     case 6:
-	/* moved on after deleting */
-	CU_ASSERT_STRING_EQUAL(kcopy, K6);
-	fr->state = 7;
-	break;
+        /* moved on after deleting */
+        CU_ASSERT_STRING_EQUAL(kcopy, K6);
+        fr->state = 7;
+        break;
     default:
-	CU_ASSERT(0); /* bogus state found */
-	break;
+        CU_ASSERT(0); /* bogus state found */
+        break;
     }
 
     free(kcopy);
@@ -1092,8 +1092,8 @@ static void test_binary_keys(void)
     static const char KEY4[] = "seitan\nraw\ndenim";
     static const char DATA4[] = "fap";
     static const char KEY5[] = { 0x01, 0x02, 0x04, 0x08,
-			         0x10, 0x20, 0x40, 0x80,
-				 0x00/*unused*/};
+                                 0x10, 0x20, 0x40, 0x80,
+                                 0x00/*unused*/};
     static const char DATA5[] = "farm-to-table";
     struct binary_result *results = NULL;
     int r;
@@ -1199,8 +1199,8 @@ static void test_binary_data(void)
     static const char DATA4[] = "readymade\ncliche\nterry\nrichardson";
     static const char KEY5[] = "fixie";
     static const char DATA5[] = { 0x01, 0x02, 0x04, 0x08,
-			          0x10, 0x20, 0x40, 0x80,
-				  0x00/*unused*/};
+                                  0x10, 0x20, 0x40, 0x80,
+                                  0x00/*unused*/};
     struct binary_result *results = NULL;
     int r;
 
@@ -1291,30 +1291,30 @@ static void test_binary_data(void)
 
 
 const char *nth_compound(unsigned int n,
-			 const char * const * words /*[37]*/,
-			 const char *sep,
-			 struct buf *res)
+                         const char * const * words /*[37]*/,
+                         const char *sep,
+                         struct buf *res)
 {
     buf_reset(res);
 
     if ((n / 1000) % 10) {
-	buf_appendcstr(res, words[28 + (n / 1000) % 10]);
+        buf_appendcstr(res, words[28 + (n / 1000) % 10]);
     }
 
     if ((n / 100) % 10) {
-	if (res->len && sep)
-	    buf_appendcstr(res, sep);
-	buf_appendcstr(res, words[19 + (n / 100) % 10]);
+        if (res->len && sep)
+            buf_appendcstr(res, sep);
+        buf_appendcstr(res, words[19 + (n / 100) % 10]);
     }
 
     if ((n / 10) % 10) {
-	if (res->len && sep)
-	    buf_appendcstr(res, sep);
-	buf_appendcstr(res, words[10 + (n / 10) % 10]);
+        if (res->len && sep)
+            buf_appendcstr(res, sep);
+        buf_appendcstr(res, words[10 + (n / 10) % 10]);
     }
 
     if (res->len && sep)
-	buf_appendcstr(res, sep);
+        buf_appendcstr(res, sep);
     buf_appendcstr(res, words[n % 10]);
 
     return buf_cstring(res);
@@ -1323,14 +1323,14 @@ const char *nth_compound(unsigned int n,
 static const char *nth_key(unsigned int n)
 {
     static const char * const words[37] = {
-	"dray", "bite", "cue", "ado", "felt",
-	"firm", "sal", "ahab", "cab", "lord",
-	"blob", "be", "coil", "hay",
-	"bled", "got", "leta", "sept", "deft",
-	"ibm", "kama", "bean", "ado",
-	"cord", "firm", "ben", "fore", "huck",
-	"haas", "jack", "aden", "nerf",
-	"gash", "stu", "nona", "gel", "ale"
+        "dray", "bite", "cue", "ado", "felt",
+        "firm", "sal", "ahab", "cab", "lord",
+        "blob", "be", "coil", "hay",
+        "bled", "got", "leta", "sept", "deft",
+        "ibm", "kama", "bean", "ado",
+        "cord", "firm", "ben", "fore", "huck",
+        "haas", "jack", "aden", "nerf",
+        "gash", "stu", "nona", "gel", "ale"
     };
     static struct buf buf = BUF_INITIALIZER;
     return nth_compound(n, words, ".", &buf);
@@ -1339,22 +1339,22 @@ static const char *nth_key(unsigned int n)
 static const char *nth_data(unsigned int n)
 {
     static const char * const words[37] = {
-	"abettor", "afresh", "aisling", "arthur", "ascots",
-	"belled", "berserk", "border", "bourbon", "brawny",
-	"carpels", "cavils", "coating", "cologne",
-	"concern", "consul", "crater", "crocks", "deirdre",
-	"dewier", "disdain", "dowdier", "duncan",
-	"eighth", "enigma", "evelyn", "fennel", "flowery",
-	"flukier", "forums", "gametes", "gamins",
-	"gavels", "gibbers", "gulags", "gunther", "gunwale"
+        "abettor", "afresh", "aisling", "arthur", "ascots",
+        "belled", "berserk", "border", "bourbon", "brawny",
+        "carpels", "cavils", "coating", "cologne",
+        "concern", "consul", "crater", "crocks", "deirdre",
+        "dewier", "disdain", "dowdier", "duncan",
+        "eighth", "enigma", "evelyn", "fennel", "flowery",
+        "flukier", "forums", "gametes", "gamins",
+        "gavels", "gibbers", "gulags", "gunther", "gunwale"
     };
     static struct buf buf = BUF_INITIALIZER;
     return nth_compound(n, words, " ", &buf);
 }
 
 static int finder(void *rock,
-		  const char *key, size_t keylen,
-		  const char *data, size_t datalen)
+                  const char *key, size_t keylen,
+                  const char *data, size_t datalen)
 {
     hash_table *exphash = (hash_table *)rock;
     char *expected;
@@ -1381,8 +1381,8 @@ static int finder(void *rock,
 }
 
 static void count_cb(const char *key __attribute__((unused)),
-		     void *data __attribute__((unused)),
-		     void *rock)
+                     void *data __attribute__((unused)),
+                     void *rock)
 {
     unsigned int *np = (unsigned int *)rock;
     (*np)++;
@@ -1400,12 +1400,12 @@ static unsigned int hash_count(hash_table *ht)
     unsigned int nsubset = 0; \
     unsigned int i; \
     for (i = 0 ; i <= MAXN ; i++) { \
-	const char *key = nth_key(i); \
-	const char *data = nth_data(i); \
-	if ((condition)) { \
-	    hash_insert(key, (void *)xstrdup(data), &exphash); \
-	    nsubset++; \
-	} \
+        const char *key = nth_key(i); \
+        const char *data = nth_data(i); \
+        if ((condition)) { \
+            hash_insert(key, (void *)xstrdup(data), &exphash); \
+            nsubset++; \
+        } \
     } \
     CU_ASSERT_EQUAL(nsubset, expcount); \
     CU_ASSERT_EQUAL(hash_count(&exphash), nsubset); \
@@ -1425,7 +1425,7 @@ static void test_many(void)
     struct db *db = NULL;
     struct txn *txn = NULL;
     hash_table exphash = HASH_TABLE_INITIALIZER;
-#define MAXN	4095
+#define MAXN    4095
     unsigned int n;
     int r;
 
@@ -1437,9 +1437,9 @@ static void test_many(void)
 
     /* store() some records */
     for (n = 0 ; n <= MAXN ; n++) {
-	const char *key = nth_key(n);
-	const char *data = nth_data(n);
-	CANSTORE(key, strlen(key), data, strlen(data));
+        const char *key = nth_key(n);
+        const char *data = nth_data(n);
+        CANSTORE(key, strlen(key), data, strlen(data));
     }
 
     /* commit succeeds */
@@ -1448,34 +1448,34 @@ static void test_many(void)
     /* check the records all made it */
     for (n = 0 ; n <= MAXN ; n++)
     {
-	const char *key = nth_key(n);
-	const char *data = nth_data(n);
-	CANFETCH(key, strlen(key), data, strlen(data));
+        const char *key = nth_key(n);
+        const char *data = nth_data(n);
+        CANFETCH(key, strlen(key), data, strlen(data));
     }
 
     /* prefix=NULL: iterate all the records */
     FOREACH_TEST(/*prefix*/NULL, /*prefixlen*/0,
-	         /*good*/NULL, /*condition*/1, MAXN+1);
+                 /*good*/NULL, /*condition*/1, MAXN+1);
 
     /* prefix="": iterate all the records */
     FOREACH_TEST(/*prefix*/"", /*prefixlen*/0,
-	         /*good*/NULL, /*condition*/1, MAXN+1);
+                 /*good*/NULL, /*condition*/1, MAXN+1);
 
     /* prefix=an uncommon prefix: iterate some of the records */
     FOREACH_TEST(/*prefix*/"jack.", /*prefixlen*/5,
-		 /*good*/NULL, /*condition*/i / 1000 == 1, 1000);
+                 /*good*/NULL, /*condition*/i / 1000 == 1, 1000);
 
     /* delete records one by one, checking that foreach
      * walks over the expected number from time to time */
     for (n = 0 ; n <= MAXN ; n++) {
-	const char *key = nth_key(n);
-	r = cyrusdb_delete(db, key, strlen(key), &txn, 1);
-	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-	CU_ASSERT_PTR_NOT_NULL(txn);
-	if (n && n % 301 == 0) {
-	    FOREACH_TEST(/*prefix*/NULL, /*prefixlen*/0,
-			 /*good*/NULL, /*condition*/i > n, MAXN-n);
-	}
+        const char *key = nth_key(n);
+        r = cyrusdb_delete(db, key, strlen(key), &txn, 1);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        CU_ASSERT_PTR_NOT_NULL(txn);
+        if (n && n % 301 == 0) {
+            FOREACH_TEST(/*prefix*/NULL, /*prefixlen*/0,
+                         /*good*/NULL, /*condition*/i > n, MAXN-n);
+        }
     }
 
     /* close the txn - it doesn't matter here if we commit or abort */
@@ -1495,17 +1495,17 @@ static int set_up(void)
 {
     char buf[PATH_MAX];
     static const char * const reldirs[] = {
-	"db",
-	"conf",
-	"conf/lock/",
-	"conf/lock/user",
-	"stuff",
-	NULL
+        "db",
+        "conf",
+        "conf/lock/",
+        "conf/lock/user",
+        "stuff",
+        NULL
     };
 
     basedir = make_basedir(reldirs);
     if (!basedir)
-	return -1;
+        return -1;
 
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, basedir);
     snprintf(buf, sizeof(buf), "configdirectory: %s/conf\n", basedir);
@@ -1526,10 +1526,10 @@ static int tear_down(void)
     cyrusdb_done();
 
     if (basedir) {
-	char buf[PATH_MAX];
-	snprintf(buf, sizeof(buf), "rm -rf \"%s\"", basedir);
-	r = system(buf);
-	if (r) r = -1;
+        char buf[PATH_MAX];
+        snprintf(buf, sizeof(buf), "rm -rf \"%s\"", basedir);
+        r = system(buf);
+        if (r) r = -1;
     }
 
     free(filename);

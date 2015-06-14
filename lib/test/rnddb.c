@@ -15,7 +15,7 @@ struct cyrusdb_backend *DB = &cyrusdb_skiplist;
 
 #define TRY(s) { r = s; \
                  if (r && r != CYRUSDB_NOTFOUND) { \
-		     printf("%s failed (i=%d): %d\n", #s, i, r); exit(1); } }
+                     printf("%s failed (i=%d): %d\n", #s, i, r); exit(1); } }
 
 char *victim;
 int count;
@@ -40,8 +40,8 @@ int c_find = 0;
                                 { a.tv_sec++; a.tv_usec -= 1000000; } } while (0)
 
 int countem(void *rock,
-	const char *key, int keylen,
-	const char *data, int datalen)
+        const char *key, int keylen,
+        const char *data, int datalen)
 {
     (void)rock; (void)key; (void)keylen; (void)data; (void)datalen;
     count++;
@@ -49,14 +49,14 @@ int countem(void *rock,
 }
 
 int findvictim(void *rock,
-	       const char *key, int keylen,
-	       const char *data, int datalen)
+               const char *key, int keylen,
+               const char *data, int datalen)
 {
     (void)rock; (void)keylen; (void)data; (void)datalen;
     if (!victim) {
-	if ((rand() % count) == 0) {
-	    victim = xstrdup(key);
-	}
+        if ((rand() % count) == 0) {
+            victim = xstrdup(key);
+        }
     }
     count--;
     return 0;
@@ -68,10 +68,10 @@ char *genrand(int len)
     char *p = ret;
 
     while (len--) {
-	*p++ = 'a' + (rand() % 26);
+        *p++ = 'a' + (rand() % 26);
     }
     *p = '\0';
-    
+
     return ret;
 }
 
@@ -90,19 +90,19 @@ void do_report(void)
     printf("*** find %ld.%ld %d\n", t_find.tv_sec, t_find.tv_usec, c_find);
 
     printf("\n");
-    printf("*** add %lf\n", ((double) t_add.tv_sec + 
-			     ((double) t_add.tv_usec) / 1000000) /
-	   (double) c_add);
-    printf("*** mod %lf\n", ((double) t_mod.tv_sec + 
-			     ((double) t_mod.tv_usec) / 1000000) /
-	   (double) c_mod);
-    printf("*** del %lf\n", ((double) t_del.tv_sec + 
-			     ((double) t_del.tv_usec) / 1000000) /
-	   (double) c_del);
-    printf("*** find %lf\n", ((double) t_find.tv_sec + 
-			     ((double) t_find.tv_usec) / 1000000) /
-	   (double) c_find);
-    
+    printf("*** add %lf\n", ((double) t_add.tv_sec +
+                             ((double) t_add.tv_usec) / 1000000) /
+           (double) c_add);
+    printf("*** mod %lf\n", ((double) t_mod.tv_sec +
+                             ((double) t_mod.tv_usec) / 1000000) /
+           (double) c_mod);
+    printf("*** del %lf\n", ((double) t_del.tv_sec +
+                             ((double) t_del.tv_usec) / 1000000) /
+           (double) c_del);
+    printf("*** find %lf\n", ((double) t_find.tv_sec +
+                             ((double) t_find.tv_usec) / 1000000) /
+           (double) c_find);
+
 
 }
 
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
     int initsize;
 
     if (argc > 1) {
-	iter = atoi(argv[1]);
+        iter = atoi(argv[1]);
     } else {
       printf("%s [iterations] [rndseed] [initsize]\n", argv[0]);
       printf("if iterations is negative, run forever and report every -iter\n");
@@ -131,32 +131,32 @@ int main(int argc, char *argv[])
     TRY(DB->init(".", 0));
 
     if (argc > 2) {
-	srand(atoi(argv[2]));
+        srand(atoi(argv[2]));
     }
 
     TRY(cyrusdb_open(DB, "scratch", &db));
 
     if (cyrusdb_consistent) {
-	TRY(cyrusdb_consistent(db));
+        TRY(cyrusdb_consistent(db));
     }
 
     if (argc > 3) {
       initsize = atoi(argv[3]);
-      
+
       txn = NULL;
       for (i = 0; i < initsize; i++) {
-	/* generate a random key */
-	key = genrand(10 + (rand() % 10));
-	
-	/* generate a random value */
-	val = genrand(10 + (rand() % 100));
-	
-	TRY(cyrusdb_store(db, key, strlen(key), val, strlen(val), &txn));
+        /* generate a random key */
+        key = genrand(10 + (rand() % 10));
+
+        /* generate a random value */
+        val = genrand(10 + (rand() % 100));
+
+        TRY(cyrusdb_store(db, key, strlen(key), val, strlen(val), &txn));
       }
 
       TRY(cyrusdb_commit(db, txn));
       if (cyrusdb_consistent) {
-	TRY(cyrusdb_consistent(db));
+        TRY(cyrusdb_consistent(db));
       }
     }
 
@@ -164,131 +164,131 @@ int main(int argc, char *argv[])
 
     /* repeat for ever if iter < 0 */
     for (i = 0; iter > 0 ? (i < iter) : 1; i++) {
-	int oper = rand() % 10;
+        int oper = rand() % 10;
 
-	if (i > 0 && iter < 0 && ((i % -iter) == 0)) {
-	  do_report();
-	}
+        if (i > 0 && iter < 0 && ((i % -iter) == 0)) {
+          do_report();
+        }
 
-	switch (oper) {
-	case 0:
-	    /* do an ADD */
-	    
-	    if (verbose) printf("A");
+        switch (oper) {
+        case 0:
+            /* do an ADD */
 
-	    /* insert it */
-	    gettimeofday(&t1, NULL);
+            if (verbose) printf("A");
 
-	    /* generate a random key */
-	    key = genrand(10 + (rand() % 10));
+            /* insert it */
+            gettimeofday(&t1, NULL);
 
-	    /* generate a random value */
-	    val = genrand(10 + (rand() % 100));
+            /* generate a random key */
+            key = genrand(10 + (rand() % 10));
 
-	    txn = NULL;
-	    TRY(cyrusdb_store(db, key, strlen(key), val, strlen(val), &txn));
-	    TRY(cyrusdb_commit(db, txn));
-	    gettimeofday(&t2, NULL);
+            /* generate a random value */
+            val = genrand(10 + (rand() % 100));
 
-	    ADDDIFF(t_add, t1, t2);
-	    c_add++;
+            txn = NULL;
+            TRY(cyrusdb_store(db, key, strlen(key), val, strlen(val), &txn));
+            TRY(cyrusdb_commit(db, txn));
+            gettimeofday(&t2, NULL);
 
-	    free(key);
-	    free(val);
+            ADDDIFF(t_add, t1, t2);
+            c_add++;
 
-	    break;
+            free(key);
+            free(val);
 
-	case 1: /* do a modify */
-	    if (verbose) printf("M");
+            break;
 
-	    gettimeofday(&t1, NULL);
+        case 1: /* do a modify */
+            if (verbose) printf("M");
 
-	    /* pick a random victim */
-	    count = 0;
-	    victim = NULL;
-	    txn = NULL;
-	    TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
-	    
-	    if (count == 0) continue;
+            gettimeofday(&t1, NULL);
 
-	    TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
+            /* pick a random victim */
+            count = 0;
+            victim = NULL;
+            txn = NULL;
+            TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
 
-	    assert(victim != NULL);
+            if (count == 0) continue;
 
-	    /* generate a random value */
-	    val = genrand(10 + (rand() % 100));
-	    
-	    /* do an add */
-	    TRY(cyrusdb_store(db, victim, strlen(victim), val, strlen(val), &txn));
-	    free(val);
+            TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
 
-	    TRY(cyrusdb_commit(db, txn));
-	    free(victim); victim = NULL;
+            assert(victim != NULL);
 
-	    gettimeofday(&t2, NULL);
+            /* generate a random value */
+            val = genrand(10 + (rand() % 100));
 
-	    ADDDIFF(t_mod, t1, t2);
-	    c_mod++;
+            /* do an add */
+            TRY(cyrusdb_store(db, victim, strlen(victim), val, strlen(val), &txn));
+            free(val);
 
-	    break;
+            TRY(cyrusdb_commit(db, txn));
+            free(victim); victim = NULL;
 
-	case 2: /* do a delete */
-	    if (verbose) printf("D");
+            gettimeofday(&t2, NULL);
 
-	    gettimeofday(&t1, NULL);
+            ADDDIFF(t_mod, t1, t2);
+            c_mod++;
 
-	    /* pick a random victim */
-	    count = 0;
-	    victim = NULL;
-	    txn = NULL;
-	    TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
-	    
-	    if (count == 0) continue;
+            break;
 
-	    TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
-	    assert(victim != NULL);
+        case 2: /* do a delete */
+            if (verbose) printf("D");
 
-	    /* delete it */
-	    TRY(cyrusdb_delete(db, victim, strlen(victim), &txn, 0));
+            gettimeofday(&t1, NULL);
 
-	    TRY(cyrusdb_commit(db, txn));
-	    free(victim); victim = NULL;
+            /* pick a random victim */
+            count = 0;
+            victim = NULL;
+            txn = NULL;
+            TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
 
-	    gettimeofday(&t2, NULL);
+            if (count == 0) continue;
 
-	    ADDDIFF(t_del, t1, t2);
-	    c_del++;
+            TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
+            assert(victim != NULL);
 
-	    break;
-	    
-	default:
-	    /* do a "read" */
-	    if (verbose) printf("R");
+            /* delete it */
+            TRY(cyrusdb_delete(db, victim, strlen(victim), &txn, 0));
 
-	    gettimeofday(&t1, NULL);
+            TRY(cyrusdb_commit(db, txn));
+            free(victim); victim = NULL;
 
-	    /* generate a random key */
-	    key = genrand(10 + (rand() % 10));
+            gettimeofday(&t2, NULL);
 
-	    txn = NULL;
-	    TRY(cyrusdb_fetch(db, key, strlen(key), &data, &datalen, &txn));
-	    TRY(cyrusdb_commit(db, txn));
+            ADDDIFF(t_del, t1, t2);
+            c_del++;
 
-	    gettimeofday(&t2, NULL);
+            break;
 
-	    ADDDIFF(t_find, t1, t2);
-	    c_find++;
+        default:
+            /* do a "read" */
+            if (verbose) printf("R");
 
-	    free(key);
-	}
+            gettimeofday(&t1, NULL);
 
-	fflush(stdout);
+            /* generate a random key */
+            key = genrand(10 + (rand() % 10));
+
+            txn = NULL;
+            TRY(cyrusdb_fetch(db, key, strlen(key), &data, &datalen, &txn));
+            TRY(cyrusdb_commit(db, txn));
+
+            gettimeofday(&t2, NULL);
+
+            ADDDIFF(t_find, t1, t2);
+            c_find++;
+
+            free(key);
+        }
+
+        fflush(stdout);
 
 #if 0
-	/* run the consistency function, if any */
-	if (cyrusdb_consistent) {
-	    TRY(cyrusdb_consistent(db));
-	}
+        /* run the consistency function, if any */
+        if (cyrusdb_consistent) {
+            TRY(cyrusdb_consistent(db));
+        }
 #endif
     }
 

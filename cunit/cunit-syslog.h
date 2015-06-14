@@ -45,7 +45,7 @@
 
 /* returns an active match number from 1 up */
 extern unsigned int CU_syslogMatchBegin(const char *re,
-			const char *filename, unsigned int lineno);
+                        const char *filename, unsigned int lineno);
 /* returns count of given match (or 0 for sum of all matches), and remove the match */
 extern unsigned int CU_syslogMatchEnd(unsigned int match, const char **s);
 /* reset all matches, call before each test */

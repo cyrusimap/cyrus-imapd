@@ -58,21 +58,21 @@
 #include "imap/http_err.h"
 
 static int webdav_parse_path(const char *path,
-			     struct request_target_t *tgt, const char **errstr);
+                             struct request_target_t *tgt, const char **errstr);
 
 static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
-		      struct index_record *record, void *data);
+                      struct index_record *record, void *data);
 static int webdav_put(struct transaction_t *txn, void *obj,
-		      struct mailbox *mailbox, const char *resource,
-		      void *davdb);
+                      struct mailbox *mailbox, const char *resource,
+                      void *davdb);
 
 struct meth_params webdav_params = {
     .mime_types = NULL,
     .parse_path = &webdav_parse_path,
     .check_precond = &dav_check_precond,
     .davdb = { .open_db = (db_open_proc_t) &webdav_open_mailbox,
-	       .close_db = (db_close_proc_t) &webdav_close,
-	       .lookup_resource = (db_lookup_proc_t) &webdav_lookup_resource },
+               .close_db = (db_close_proc_t) &webdav_close,
+               .lookup_resource = (db_lookup_proc_t) &webdav_lookup_resource },
     .get = &webdav_get,
     .put = { 0, &webdav_put }
 };
@@ -80,7 +80,7 @@ struct meth_params webdav_params = {
 
 /* Parse request-target path in WebDAV namespace */
 static int webdav_parse_path(const char *path __attribute__((unused)),
-			     struct request_target_t *tgt, const char **errstr)
+                             struct request_target_t *tgt, const char **errstr)
 {
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -90,18 +90,18 @@ static int webdav_parse_path(const char *path __attribute__((unused)),
 
 /* Perform a GET/HEAD request on a WebDAV resource */
 static int webdav_get(struct transaction_t *txn,
-		      struct mailbox *mailbox __attribute__((unused)),
-		      struct index_record *record, void *data)
+                      struct mailbox *mailbox __attribute__((unused)),
+                      struct index_record *record, void *data)
 {
     if (record && record->uid) {
-	/* GET on a resource */
-	struct webdav_data *wdata = (struct webdav_data *) data;
+        /* GET on a resource */
+        struct webdav_data *wdata = (struct webdav_data *) data;
 
-	assert(!buf_len(&txn->buf));
-	buf_printf(&txn->buf, "%s/%s", wdata->type, wdata->subtype);
-	txn->resp_body.type = buf_cstring(&txn->buf);
-	txn->resp_body.fname = wdata->filename;
-	return 0;
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s", wdata->type, wdata->subtype);
+        txn->resp_body.type = buf_cstring(&txn->buf);
+        txn->resp_body.fname = wdata->filename;
+        return 0;
     }
 
     /* Get on a user/collection */
@@ -111,8 +111,8 @@ static int webdav_get(struct transaction_t *txn,
 
 /* Perform a PUT request on a WebDAV resource */
 static int webdav_put(struct transaction_t *txn, void *obj,
-		      struct mailbox *mailbox, const char *resource,
-		      void *destdb)
+                      struct mailbox *mailbox, const char *resource,
+                      void *destdb)
 {
     struct webdav_db *db = (struct webdav_db *)destdb;
     struct buf *buf = (struct buf *)obj;
@@ -128,45 +128,45 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
-	/* Fetch index record for the resource */
-	oldrecord = &record;
-	mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
+        /* Fetch index record for the resource */
+        oldrecord = &record;
+        mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
     }
 
     /* Get filename of attachment */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Disposition"))) {
-	char *dparam;
-	tok_t tok;
+        char *dparam;
+        tok_t tok;
 
-	tok_initm(&tok, (char *) *hdr, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-	while ((dparam = tok_next(&tok))) {
-	    if (!strncasecmp(dparam, "filename=", 9)) {
-		filename = dparam+9;
-		if (*filename++ == '"') filename[strlen(filename)-1] = '\0';
-		break;
-	    }
-	}
-	tok_fini(&tok);
+        tok_initm(&tok, (char *) *hdr, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        while ((dparam = tok_next(&tok))) {
+            if (!strncasecmp(dparam, "filename=", 9)) {
+                filename = dparam+9;
+                if (*filename++ == '"') filename[strlen(filename)-1] = '\0';
+                break;
+            }
+        }
+        tok_fini(&tok);
     }
 
     /* Create and cache RFC 5322 header fields for resource */
     if (filename) {
-	spool_replace_header(xstrdup("Subject"),
-			     xstrdup(filename), txn->req_hdrs);
-	spool_replace_header(xstrdup("Content-Description"),
-			     xstrdup(filename), txn->req_hdrs);
+        spool_replace_header(xstrdup("Subject"),
+                             xstrdup(filename), txn->req_hdrs);
+        spool_replace_header(xstrdup("Content-Description"),
+                             xstrdup(filename), txn->req_hdrs);
     }
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "<%s@%s>", resource, config_servername);
     spool_replace_header(xstrdup("Message-ID"),
-			 buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
     spool_replace_header(xstrdup("Content-Disposition"),
-			 buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf), txn->req_hdrs);
 
     /* Store the resource */
     return dav_store_resource(txn, buf_cstring(buf), buf_len(obj),
-			      mailbox, oldrecord, NULL);
+                              mailbox, oldrecord, NULL);
 }

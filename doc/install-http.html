@@ -62,7 +62,7 @@
 
 <h2 id="Install">Installation</h2>
 
-<p>You will need to build Cyrus with 
+<p>You will need to build Cyrus with
   the <tt>--enable-http</tt> configure option.  This builds httpd
   and the associated modules and utilities based on the availability
   of the prerequisites listed below.</p>
@@ -106,7 +106,7 @@
   have <a href="http://www.opendkim.org/">OpenDKIM</a> with support
   for iSchedule canonicalization installed (currently requires a
   <a href="http://git.cyrusimap.org/cyrus-imapd/plain/contrib/dkim_canon_ischedule.patch?h=caldav-2.4"/>
-  CMU patch</a>).</li> 
+  CMU patch</a>).</li>
 </ul>
 
 <h3>Additional Time Zone Distribution Service (TZdist) Requirements</h3>
@@ -275,7 +275,7 @@
 <ol>
 <li>Set the <tt>href</tt> value in
   the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
-  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt> 
+  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt>
   <br>Note that the trailing "/" is REQUIRED.</li>
 <li>Set the <tt>globalSettingsType</tt> option
   to <tt>addressbook-home-set</tt></li>
@@ -537,7 +537,7 @@
 <ol>
 <li>Set the <tt>href</tt> value in
   the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
-  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt> 
+  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt>
   <br>Note that the trailing "/" is REQUIRED.</li>
 <li>Set the <tt>globalSettingsType</tt> option
   to <tt>calendar-home-set</tt></li>
@@ -556,7 +556,7 @@
   freebusy information of Cyrus CalDAV users.  Access to the freebusy
   information is controlled by the "free/busy"
   <a href="#ACLs">ACL</a> on a user's calendar-home-set (e.g. a
-  mailbox named <tt>user.murch.#calendars</tt>).</p> 
+  mailbox named <tt>user.murch.#calendars</tt>).</p>
 
 <p>Freebusy information is accessed via URLs of the following form:
   <tt>https://&lt;servername&gt;/freebusy/user/&lt;userid&gt;</tt>
@@ -603,9 +603,9 @@ Freebusy Read URL</a>.
     <li>Convert the raw data into iCalendar format by
       running <tt>vzic</tt>  as follows:
       <p><tt>vzic --pure --olson-dir &lt;location-of-raw-data&gt;
-	  --output-dir &lt;configdir&gt;/zoneinfo</tt></p>
+          --output-dir &lt;configdir&gt;/zoneinfo</tt></p>
       <p>This will create and install iCalendar data directly into
-	the <tt>configdir/zoneinfo/</tt> directory.</p>
+        the <tt>configdir/zoneinfo/</tt> directory.</p>
       </li>
   </ol>
   <p><i>Updating Data Only</i></p>
@@ -614,7 +614,7 @@ Freebusy Read URL</a>.
       running <tt>vzic</tt> as follows:
       <p><tt>vzic --pure --olson-dir &lt;location-of-raw-data&gt;</tt></p>
       <p>This will create a <tt>zoneinfo/</tt> subdirectory in your
-	current location (preferably <tt>tools/vzic/</tt>).</p>
+        current location (preferably <tt>tools/vzic/</tt>).</p>
     </li>
     <li>Merge new/updated iCalendar data into
       the <tt>configdir/zoneinfo/</tt> directory by
@@ -720,7 +720,7 @@ Freebusy Read URL</a>.
 
 <h2 id="install">Installation</h2>
 
-<p>You will need to build Cyrus with 
+<p>You will need to build Cyrus with
   the <tt>--enable-http</tt> configure option.  This builds httpd
   and the associated modules and utilities based on the availability
   of the prerequisites listed below.</p>
@@ -1080,7 +1080,7 @@ Freebusy Read URL</a>.
 <ol>
 <li>Set the <tt>href</tt> value in
   the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
-  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt> 
+  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt>
   <br>Note that the trailing "/" is REQUIRED.</li>
 <li>Set the <tt>globalSettingsType</tt> option
   to <tt>calendar-home-set</tt></li>
@@ -1172,7 +1172,7 @@ Freebusy Read URL</a>.
 <ol>
 <li>Set the <tt>href</tt> value in
   the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
-  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt> 
+  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt>
   <br>Note that the trailing "/" is REQUIRED.</li>
 <li>Set the <tt>globalSettingsType</tt> option
   to <tt>addressbook-home-set</tt></li>

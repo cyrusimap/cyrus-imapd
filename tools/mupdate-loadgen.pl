@@ -14,14 +14,14 @@ for($i=0; $i<=$lups; $i++) {
 $tag = 0;
 
 foreach $item (@thelist) {
-	print $tag++ . " RESERVE \"" . $item . "\" \"borked.andrew.cmu.edu\"\r\n";
-	$todo = int(rand $lookups) + 1;
-	for($i=1; $i<$todo; $i++) {
-	    print $tag++ . " FIND \"" . $thelist[int(rand scalar @thelist)] . "\"\r\n";
-	}
+        print $tag++ . " RESERVE \"" . $item . "\" \"borked.andrew.cmu.edu\"\r\n";
+        $todo = int(rand $lookups) + 1;
+        for($i=1; $i<$todo; $i++) {
+            print $tag++ . " FIND \"" . $thelist[int(rand scalar @thelist)] . "\"\r\n";
+        }
 }
 
 foreach $item (@thelist) {
-	print $tag++ . " DELETE \"" . $item . "\"\r\n";
+        print $tag++ . " DELETE \"" . $item . "\"\r\n";
 }
 

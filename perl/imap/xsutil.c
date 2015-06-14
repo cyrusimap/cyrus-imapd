@@ -63,7 +63,7 @@ fatal(char *s, int exit)
  */
 
 void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
-		    struct imclient_reply *reply)
+                    struct imclient_reply *reply)
 {
   dSP;
   dTARG;
@@ -106,7 +106,7 @@ void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
  * simulates a non-callback-based invocation, for trivial clients.)
  */
 void imclient_xs_fcmdcb(struct imclient *client, struct xsccb *rock,
-			struct imclient_reply *reply)
+                        struct imclient_reply *reply)
 {
   AV *av;
 
@@ -135,9 +135,9 @@ void imclient_xs_callback_free(struct xsccb *rock)
     }
     if (xcb) {
       if (xcb->prev)
-	xcb->prev->next = xcb->next;
+        xcb->prev->next = xcb->next;
       else
-	rock->client->cb = xcb->next;
+        rock->client->cb = xcb->next;
       if (xcb->next) xcb->next->prev = xcb->prev;
       if (xcb->name) safefree(xcb->name);
       safefree(xcb);

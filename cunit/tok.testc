@@ -3,11 +3,11 @@
 #include "tok.h"
 #include "xmalloc.h"
 
-#define WORD0	"lorem"
-#define WORD1	"ipsum"
-#define WORD2	"dolor"
-#define WORD3	"sit"
-#define WORD4	"amet"
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+#define WORD2   "dolor"
+#define WORD3   "sit"
+#define WORD4   "amet"
 
 static void test_simple(void)
 {
@@ -266,11 +266,11 @@ static void test_offset(void)
     p = tok_next(&tok);
     CU_ASSERT_STRING_EQUAL(p, WORD3);
     CU_ASSERT_EQUAL(tok_offset(&tok),
-		    sizeof(WORD0" "WORD1" "WORD2" ")-1);
+                    sizeof(WORD0" "WORD1" "WORD2" ")-1);
     p = tok_next(&tok);
     CU_ASSERT_STRING_EQUAL(p, WORD4);
     CU_ASSERT_EQUAL(tok_offset(&tok),
-		    sizeof(WORD0" "WORD1" "WORD2" "WORD3" " )-1);
+                    sizeof(WORD0" "WORD1" "WORD2" "WORD3" " )-1);
     p = tok_next(&tok);
     CU_ASSERT_PTR_NULL(p);
 
@@ -360,27 +360,27 @@ static void test_memmem(void)
 {
 #define TESTCASEN(haystack, haystacklen, needle, expoff) \
     { \
-	static const char _haystack[] = (haystack); \
-	int _haystacklen = (haystacklen); \
-	static const char _needle[] = (needle); \
-	int _expoff = (expoff); \
-	void *p; \
+        static const char _haystack[] = (haystack); \
+        int _haystacklen = (haystacklen); \
+        static const char _needle[] = (needle); \
+        int _expoff = (expoff); \
+        void *p; \
  \
-	p = memmem(_haystack, _haystacklen, \
-		   _needle, sizeof(_needle)-1); \
-	if (_expoff < 0) { \
-	    CU_ASSERT_PTR_NULL(p); \
-	} \
-	else { \
-	    CU_ASSERT_PTR_NOT_NULL(p); \
-	    CU_ASSERT((const char *)p >= _haystack); \
-	    CU_ASSERT((const char *)p < \
-	    _haystack+sizeof(_haystack)-1); \
-	    CU_ASSERT_PTR_EQUAL(p, _haystack+_expoff); \
-	} \
+        p = memmem(_haystack, _haystacklen, \
+                   _needle, sizeof(_needle)-1); \
+        if (_expoff < 0) { \
+            CU_ASSERT_PTR_NULL(p); \
+        } \
+        else { \
+            CU_ASSERT_PTR_NOT_NULL(p); \
+            CU_ASSERT((const char *)p >= _haystack); \
+            CU_ASSERT((const char *)p < \
+            _haystack+sizeof(_haystack)-1); \
+            CU_ASSERT_PTR_EQUAL(p, _haystack+_expoff); \
+        } \
     }
 #define TESTCASE(haystack, needle, expoff) \
-	TESTCASEN(haystack, sizeof(haystack)-1, needle, expoff)
+        TESTCASEN(haystack, sizeof(haystack)-1, needle, expoff)
 
     /* needle easily found */
     TESTCASE("quinoa etsy dreamcatcher", "etsy", 7);

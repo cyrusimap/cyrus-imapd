@@ -45,7 +45,7 @@
 #ifndef HAVE_STRLCPY
 /* strlcpy -- copy string smartly.
  *
- * i believe/hope this is compatible with the BSD strlcpy(). 
+ * i believe/hope this is compatible with the BSD strlcpy().
  */
 EXPORTED size_t strlcpy(char *dst, const char *src, size_t len)
 {
@@ -58,12 +58,12 @@ EXPORTED size_t strlcpy(char *dst, const char *src, size_t len)
 
     /* assert(len >= 1); */
     for (n = 0; n < len-1; n++) {
-	if ((dst[n] = src[n]) == '\0') break;
+        if ((dst[n] = src[n]) == '\0') break;
     }
     if (n >= len-1) {
-	/* ran out of space */
-	dst[n] = '\0';
-	while(src[n]) n++;
+        /* ran out of space */
+        dst[n] = '\0';
+        while(src[n]) n++;
     }
     return n;
 }

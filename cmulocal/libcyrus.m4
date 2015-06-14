@@ -58,97 +58,97 @@ AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_SASL2])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(libcyrus,
-	[AS_HELP_STRING([--with-libcyrus=PREFIX], [Compile with Libcyrus support])],
-	[if test "X$with_libcyrus" = "X"; then
-		with_libcyrus=yes
-	fi])
+        [AS_HELP_STRING([--with-libcyrus=PREFIX], [Compile with Libcyrus support])],
+        [if test "X$with_libcyrus" = "X"; then
+                with_libcyrus=yes
+        fi])
 AC_ARG_WITH(libcyrus-lib,
-	[AS_HELP_STRING([--with-libcyrus-lib=DIR], [use libcyrus libraries in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-libcyrus-lib])
-	fi])
+        [AS_HELP_STRING([--with-libcyrus-lib=DIR], [use libcyrus libraries in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-libcyrus-lib])
+        fi])
 AC_ARG_WITH(libcyrus-include,
-	[AS_HELP_STRING([--with-libcyrus-include=DIR], [use libcyrus headers in DIR])],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-libcyrus-include])
-	fi])
+        [AS_HELP_STRING([--with-libcyrus-include=DIR], [use libcyrus headers in DIR])],
+        [if test "$withval" = "yes" -o "$withval" = "no"; then
+                AC_MSG_ERROR([No argument for --with-libcyrus-include])
+        fi])
 
-	if test "X$with_libcyrus" != "X"; then
-	  if test "$with_libcyrus" != "yes" -a "$with_libcyrus" != no; then
-	    ac_cv_cyrus_where_lib=$with_libcyrus/$CMU_LIB_SUBDIR
-	    ac_cv_cyrus_where_inc=$with_libcyrus/include
-	  fi
-	fi
+        if test "X$with_libcyrus" != "X"; then
+          if test "$with_libcyrus" != "yes" -a "$with_libcyrus" != no; then
+            ac_cv_cyrus_where_lib=$with_libcyrus/$CMU_LIB_SUBDIR
+            ac_cv_cyrus_where_inc=$with_libcyrus/include
+          fi
+        fi
 
-	if test "$with_libcyrus" != "no"; then 
-	  if test "X$with_libcyrus_lib" != "X"; then
-	    ac_cv_cyrus_where_lib=$with_libcyrus_lib
-	  fi
-	  if test "X$ac_cv_cyrus_where_lib" = "X"; then
-	    CMU_LIBCYRUS_LIB_WHERE(/usr/cyrus/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
-	  fi
+        if test "$with_libcyrus" != "no"; then
+          if test "X$with_libcyrus_lib" != "X"; then
+            ac_cv_cyrus_where_lib=$with_libcyrus_lib
+          fi
+          if test "X$ac_cv_cyrus_where_lib" = "X"; then
+            CMU_LIBCYRUS_LIB_WHERE(/usr/cyrus/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
+          fi
 
-	  if test "X$with_libcyrus_include" != "X"; then
-	    ac_cv_cyrus_where_inc=$with_libcyrus_include
-	  fi
-	  if test "X$ac_cv_cyrus_where_inc" = "X"; then
-	    CMU_LIBCYRUS_INC_WHERE(/usr/cyrus/include /usr/local/include /usr/local/include/cyrus /usr/include/cyrus)
-	  fi
-	fi
+          if test "X$with_libcyrus_include" != "X"; then
+            ac_cv_cyrus_where_inc=$with_libcyrus_include
+          fi
+          if test "X$ac_cv_cyrus_where_inc" = "X"; then
+            CMU_LIBCYRUS_INC_WHERE(/usr/cyrus/include /usr/local/include /usr/local/include/cyrus /usr/include/cyrus)
+          fi
+        fi
 
-	AC_MSG_CHECKING(whether to include libcyrus)
-	if test "X$ac_cv_cyrus_where_lib" = "X" -o "X$ac_cv_cyrus_where_inc" = "X"; then
-	  ac_cv_found_cyrus=no
-	  AC_MSG_RESULT(no)
-	else
-	  ac_cv_found_cyrus=yes
-	  AC_MSG_RESULT(yes)
-	  LIBCYRUS_INC_DIR=$ac_cv_cyrus_where_inc
-	  LIBCYRUS_LIB_DIR=$ac_cv_cyrus_where_lib
-	  LIBCYRUS_INC_FLAGS="-I${LIBCYRUS_INC_DIR}"
-	  LIBCYRUS_LIB_FLAGS="-L${LIBCYRUS_LIB_DIR} -lcyrus"
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${LIBCYRUS_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${LIBCYRUS_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${LIBCYRUS_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${LIBCYRUS_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${LIBCYRUS_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
-	fi
-	AC_SUBST(LIBCYRUS_INC_DIR)
-	AC_SUBST(LIBCYRUS_LIB_DIR)
-	AC_SUBST(LIBCYRUS_INC_FLAGS)
-	AC_SUBST(LIBCYRUS_LIB_FLAGS)
-	])
+        AC_MSG_CHECKING(whether to include libcyrus)
+        if test "X$ac_cv_cyrus_where_lib" = "X" -o "X$ac_cv_cyrus_where_inc" = "X"; then
+          ac_cv_found_cyrus=no
+          AC_MSG_RESULT(no)
+        else
+          ac_cv_found_cyrus=yes
+          AC_MSG_RESULT(yes)
+          LIBCYRUS_INC_DIR=$ac_cv_cyrus_where_inc
+          LIBCYRUS_LIB_DIR=$ac_cv_cyrus_where_lib
+          LIBCYRUS_INC_FLAGS="-I${LIBCYRUS_INC_DIR}"
+          LIBCYRUS_LIB_FLAGS="-L${LIBCYRUS_LIB_DIR} -lcyrus"
+          if test "X$RPATH" = "X"; then
+                RPATH=""
+          fi
+          case "${host}" in
+            *-*-linux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${LIBCYRUS_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
+              fi
+              ;;
+            *-*-hpux*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,+b${LIBCYRUS_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
+              fi
+              ;;
+            *-*-irix*)
+              if test "X$RPATH" = "X"; then
+                RPATH="-Wl,-rpath,${LIBCYRUS_LIB_DIR}"
+              else
+                RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
+              fi
+              ;;
+            *-*-solaris2*)
+              if test "$ac_cv_prog_gcc" = yes; then
+                if test "X$RPATH" = "X"; then
+                  RPATH="-Wl,-R${LIBCYRUS_LIB_DIR}"
+                else
+                  RPATH="${RPATH}:${LIBCYRUS_LIB_DIR}"
+                fi
+              else
+                RPATH="${RPATH} -R${LIBCYRUS_LIB_DIR}"
+              fi
+              ;;
+          esac
+          AC_SUBST(RPATH)
+        fi
+        AC_SUBST(LIBCYRUS_INC_DIR)
+        AC_SUBST(LIBCYRUS_LIB_DIR)
+        AC_SUBST(LIBCYRUS_INC_FLAGS)
+        AC_SUBST(LIBCYRUS_LIB_FLAGS)
+        ])
 

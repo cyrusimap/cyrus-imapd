@@ -44,7 +44,7 @@ struct charmap {
     unsigned int c;
     unsigned char next;
 };
-  
+
 struct charset {
     char *name;
     const struct charmap (*table)[256];

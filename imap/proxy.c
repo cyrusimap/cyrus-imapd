@@ -61,46 +61,46 @@
 #include "imap/imap_err.h"
 
 EXPORTED void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
-		   const char *server, const char *authas)
+                   const char *server, const char *authas)
 {
     struct dest *d;
 
-    /* see if we currently have a 'mailboxdata->server'/'authas' 
+    /* see if we currently have a 'mailboxdata->server'/'authas'
        combination. */
     for (d = *dlist; d != NULL; d = d->next) {
-	if (!strcmp(d->server, server) && 
-	    !strcmp(d->authas, authas ? authas : "")) break;
+        if (!strcmp(d->server, server) &&
+            !strcmp(d->authas, authas ? authas : "")) break;
     }
 
     if (d == NULL) {
-	/* create a new one */
-	d = xmalloc(sizeof(struct dest));
-	strlcpy(d->server, server, sizeof(d->server));
-	strlcpy(d->authas, authas ? authas : "", sizeof(d->authas));
-	d->rnum = 0;
-	d->to = NULL;
-	d->next = *dlist;
-	*dlist = d;
+        /* create a new one */
+        d = xmalloc(sizeof(struct dest));
+        strlcpy(d->server, server, sizeof(d->server));
+        strlcpy(d->authas, authas ? authas : "", sizeof(d->authas));
+        d->rnum = 0;
+        d->to = NULL;
+        d->next = *dlist;
+        *dlist = d;
     }
 
     if (rcpt) {
-	struct rcpt *new_rcpt = xmalloc(sizeof(struct rcpt));
+        struct rcpt *new_rcpt = xmalloc(sizeof(struct rcpt));
 
-	strlcpy(new_rcpt->rcpt, rcpt, sizeof(new_rcpt->rcpt));
-	new_rcpt->rcpt_num = rcpt_num;
-    
-	/* add rcpt to d */
-	d->rnum++;
-	new_rcpt->next = d->to;
-	d->to = new_rcpt;
+        strlcpy(new_rcpt->rcpt, rcpt, sizeof(new_rcpt->rcpt));
+        new_rcpt->rcpt_num = rcpt_num;
+
+        /* add rcpt to d */
+        d->rnum++;
+        new_rcpt->next = d->to;
+        d->to = new_rcpt;
     }
 }
 
 EXPORTED void proxy_downserver(struct backend *s)
 {
     if (!s || (s->sock == -1)) {
-	/* already disconnected */
-	return;
+        /* already disconnected */
+        return;
     }
 
     /* need to logout of server */
@@ -117,73 +117,73 @@ EXPORTED void proxy_downserver(struct backend *s)
     s->clientin = NULL;
 }
 
-static struct prot_waitevent * 
+static struct prot_waitevent *
 backend_timeout(struct protstream *s __attribute__((unused)),
-		struct prot_waitevent *ev, void *rock)
+                struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
     int is_active = (be->context ? *((int *) be->context) : 0);
 
     if ((!be->current || (be != *(be->current))) && !is_active) {
-	/* server is not our current server, and idle too long.
-	 * down the backend server (removes the event as a side-effect)
-	 */
-	proxy_downserver(be);
-	return NULL;
+        /* server is not our current server, and idle too long.
+         * down the backend server (removes the event as a side-effect)
+         */
+        proxy_downserver(be);
+        return NULL;
     }
     else {
-	/* it will timeout in IDLE_TIMEOUT seconds from now */
-	ev->mark = time(NULL) + IDLE_TIMEOUT;
-	return ev;
+        /* it will timeout in IDLE_TIMEOUT seconds from now */
+        ev->mark = time(NULL) + IDLE_TIMEOUT;
+        return ev;
     }
 }
 
 /* return the connection to the server */
-EXPORTED struct backend * proxy_findserver(const char *server,		/* hostname of backend */
-		 struct protocol_t *prot,	/* protocol we're speaking */
-		 const char *userid,		/* proxy as userid (ext form)*/
-		 struct backend ***cache,	/* ptr to backend cache */
-		 struct backend **current,	/* ptr to current backend */
-		 struct backend **inbox,	/* ptr to inbox backend */
-		 struct protstream *clientin)	/* protstream from client to
-						   proxy (if non-NULL a timeout
-						   will be setup) */
+EXPORTED struct backend * proxy_findserver(const char *server,          /* hostname of backend */
+                 struct protocol_t *prot,       /* protocol we're speaking */
+                 const char *userid,            /* proxy as userid (ext form)*/
+                 struct backend ***cache,       /* ptr to backend cache */
+                 struct backend **current,      /* ptr to current backend */
+                 struct backend **inbox,        /* ptr to inbox backend */
+                 struct protstream *clientin)   /* protstream from client to
+                                                   proxy (if non-NULL a timeout
+                                                   will be setup) */
 {
     int i = 0;
     struct backend *ret = NULL;
 
     if (current && *current && !strcmp(server, (*current)->hostname)) {
-	/* this is our current backend */
-	return *current;
+        /* this is our current backend */
+        return *current;
     }
 
     /* check if we already a connection to this backend */
     while (cache && *cache && (*cache)[i]) {
-	if (!strcmp(server, ((*cache)[i])->hostname)) {
-	    ret = (*cache)[i];
-	    /* ping/noop the server */
-	    if ((ret->sock != -1) && backend_ping(ret, userid)) {
-		backend_disconnect(ret);
-	    }
-	    break;
-	}
-	i++;
+        if (!strcmp(server, ((*cache)[i])->hostname)) {
+            ret = (*cache)[i];
+            /* ping/noop the server */
+            if ((ret->sock != -1) && backend_ping(ret, userid)) {
+                backend_disconnect(ret);
+            }
+            break;
+        }
+        i++;
     }
 
     if (!ret || (ret->sock == -1)) {
-	/* need to (re)establish connection to server or create one */
-	ret = backend_connect(ret, server, prot, userid, NULL, NULL, -1);
-	if (!ret) return NULL;
+        /* need to (re)establish connection to server or create one */
+        ret = backend_connect(ret, server, prot, userid, NULL, NULL, -1);
+        if (!ret) return NULL;
 
-	if (clientin) {
-	    /* add the timeout */
-	    ret->clientin = clientin;
-	    ret->timeout = prot_addwaitevent(clientin,
-					     time(NULL) + IDLE_TIMEOUT,
-					     backend_timeout, ret);
+        if (clientin) {
+            /* add the timeout */
+            ret->clientin = clientin;
+            ret->timeout = prot_addwaitevent(clientin,
+                                             time(NULL) + IDLE_TIMEOUT,
+                                             backend_timeout, ret);
 
-	    ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-	}
+            ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
+        }
     }
 
     ret->current = current;
@@ -191,10 +191,10 @@ EXPORTED struct backend * proxy_findserver(const char *server,		/* hostname of b
 
     /* insert server in list of cache connections */
     if (cache && (!*cache || !(*cache)[i])) {
-	*cache = (struct backend **) 
-	    xrealloc(*cache, (i + 2) * sizeof(struct backend *));
-	(*cache)[i] = ret;
-	(*cache)[i + 1] = NULL;
+        *cache = (struct backend **)
+            xrealloc(*cache, (i + 2) * sizeof(struct backend *));
+        (*cache)[i] = ret;
+        (*cache)[i + 1] = NULL;
     }
 
     return ret;
@@ -211,78 +211,78 @@ EXPORTED struct backend * proxy_findserver(const char *server,		/* hostname of b
  *   - returns 1 if input from clientin is pending, otherwise returns 0.
  */
 EXPORTED int proxy_check_input(struct protgroup *protin,
-		      struct protstream *clientin,
-		      struct protstream *clientout,
-		      struct protstream *serverin,
-		      struct protstream *serverout,
-		      unsigned long timeout_sec)
+                      struct protstream *clientin,
+                      struct protstream *clientout,
+                      struct protstream *serverin,
+                      struct protstream *serverout,
+                      unsigned long timeout_sec)
 {
     struct protgroup *protout = NULL;
     struct timeval timeout = { timeout_sec, 0 };
     int n, ret = 0;
 
     n = prot_select(protin, PROT_NO_FD, &protout, NULL,
-		    timeout_sec ? &timeout : NULL);
+                    timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
-	syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
-	fatal("prot_select() failed in proxy_check_input()", EC_TEMPFAIL);
+        syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
+        fatal("prot_select() failed in proxy_check_input()", EC_TEMPFAIL);
     }
 
     if (n && protout) {
-	/* see who has input */
-	for (; n; n--) {
-	    struct protstream *pin = protgroup_getelement(protout, n-1);
-	    struct protstream *pout = NULL;
+        /* see who has input */
+        for (; n; n--) {
+            struct protstream *pin = protgroup_getelement(protout, n-1);
+            struct protstream *pout = NULL;
 
-	    if (pin == clientin) {
-		/* input from client */
-		if (serverout) {
-		    /* stream it to server */
-		    pout = serverout;
-		} else {
-		    /* notify the caller */
-		    ret = 1;
-		}
-	    }
-	    else if (pin == serverin) {
-		/* input from server, stream it to client */
-		pout = clientout;
-	    }
-	    else {
-		/* XXX shouldn't get here !!! */
-		fatal("unknown protstream returned by prot_select in proxy_check_input()",
-		      EC_SOFTWARE);
-	    }
+            if (pin == clientin) {
+                /* input from client */
+                if (serverout) {
+                    /* stream it to server */
+                    pout = serverout;
+                } else {
+                    /* notify the caller */
+                    ret = 1;
+                }
+            }
+            else if (pin == serverin) {
+                /* input from server, stream it to client */
+                pout = clientout;
+            }
+            else {
+                /* XXX shouldn't get here !!! */
+                fatal("unknown protstream returned by prot_select in proxy_check_input()",
+                      EC_SOFTWARE);
+            }
 
-	    if (pout) {
-		const char *err;
+            if (pout) {
+                const char *err;
 
-		do {
-		    char buf[4096];
-		    int c = prot_read(pin, buf, sizeof(buf));
+                do {
+                    char buf[4096];
+                    int c = prot_read(pin, buf, sizeof(buf));
 
-		    if (c == 0 || c < 0) break;
-		    prot_write(pout, buf, c);
-		} while (pin->cnt > 0);
+                    if (c == 0 || c < 0) break;
+                    prot_write(pout, buf, c);
+                } while (pin->cnt > 0);
 
-		if ((err = prot_error(pin)) != NULL) {
-		    if (serverout && !strcmp(err, PROT_EOF_STRING)) {
-			/* we're pipelining, and the connection closed */
-			ret = -1;
-		    }
-		    else {
-			/* uh oh, we're not happy */
-			fatal("Lost connection to input stream",
-			      EC_UNAVAILABLE);
-		    }
-		}
-		else {
-		    return 0;
-		}
-	    }
-	}
+                if ((err = prot_error(pin)) != NULL) {
+                    if (serverout && !strcmp(err, PROT_EOF_STRING)) {
+                        /* we're pipelining, and the connection closed */
+                        ret = -1;
+                    }
+                    else {
+                        /* uh oh, we're not happy */
+                        fatal("Lost connection to input stream",
+                              EC_UNAVAILABLE);
+                    }
+                }
+                else {
+                    return 0;
+                }
+            }
+        }
 
-	protgroup_free(protout);
+        protgroup_free(protout);
     }
 
     return ret;

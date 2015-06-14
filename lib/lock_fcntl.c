@@ -66,7 +66,7 @@ EXPORTED const char *lock_method_desc = "fcntl";
  *
  */
 EXPORTED int lock_reopen(int fd, const char *filename,
-			 struct stat *sbuf, const char **failaction)
+                         struct stat *sbuf, const char **failaction)
 {
     int r;
     struct flock fl;
@@ -76,43 +76,43 @@ EXPORTED int lock_reopen(int fd, const char *filename,
     if (!sbuf) sbuf = &sbufspare;
 
     for (;;) {
-	fl.l_type= F_WRLCK;
-	fl.l_whence = SEEK_SET;
-	fl.l_start = 0;
-	fl.l_len = 0;
-	r = fcntl(fd, F_SETLKW, &fl);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    if (failaction) *failaction = "locking";
-	    return -1;
-	}
+        fl.l_type= F_WRLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = 0;
+        r = fcntl(fd, F_SETLKW, &fl);
+        if (r == -1) {
+            if (errno == EINTR) continue;
+            if (failaction) *failaction = "locking";
+            return -1;
+        }
 
-	r = fstat(fd, sbuf);
-	if (!r) r = stat(filename, &sbuffile);
-	if (r == -1) {
-	    if (failaction) *failaction = "stating";
-	    fl.l_type= F_UNLCK;
-	    fl.l_whence = SEEK_SET;
-	    fl.l_start = 0;
-	    fl.l_len = 0;
-	    r = fcntl(fd, F_SETLKW, &fl);
-	    return -1;
-	}
+        r = fstat(fd, sbuf);
+        if (!r) r = stat(filename, &sbuffile);
+        if (r == -1) {
+            if (failaction) *failaction = "stating";
+            fl.l_type= F_UNLCK;
+            fl.l_whence = SEEK_SET;
+            fl.l_start = 0;
+            fl.l_len = 0;
+            r = fcntl(fd, F_SETLKW, &fl);
+            return -1;
+        }
 
-	if (sbuf->st_ino == sbuffile.st_ino) return 0;
+        if (sbuf->st_ino == sbuffile.st_ino) return 0;
 
-	newfd = open(filename, O_RDWR);
-	if (newfd == -1) {
-	    if (failaction) *failaction = "opening";
-	    fl.l_type= F_UNLCK;
-	    fl.l_whence = SEEK_SET;
-	    fl.l_start = 0;
-	    fl.l_len = 0;
-	    r = fcntl(fd, F_SETLKW, &fl);
-	    return -1;
-	}
-	dup2(newfd, fd);
-	close(newfd);
+        newfd = open(filename, O_RDWR);
+        if (newfd == -1) {
+            if (failaction) *failaction = "opening";
+            fl.l_type= F_UNLCK;
+            fl.l_whence = SEEK_SET;
+            fl.l_start = 0;
+            fl.l_len = 0;
+            r = fcntl(fd, F_SETLKW, &fl);
+            return -1;
+        }
+        dup2(newfd, fd);
+        close(newfd);
     }
 }
 
@@ -126,7 +126,7 @@ EXPORTED int lock_reopen(int fd, const char *filename,
  * appropriate error code.
  */
 EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
-			  const char *filename  __attribute__((unused)))
+                          const char *filename  __attribute__((unused)))
 {
     int r;
     struct flock fl;
@@ -134,14 +134,14 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
     int cmd = (nonblock ? F_SETLK : F_SETLKW);
 
     for (;;) {
-	fl.l_type= type;
-	fl.l_whence = SEEK_SET;
-	fl.l_start = 0;
-	fl.l_len = 0;
-	r = fcntl(fd, cmd, &fl);
-	if (r != -1) return 0;
-	if (errno == EINTR) continue;
-	return -1;
+        fl.l_type= type;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = 0;
+        r = fcntl(fd, cmd, &fl);
+        if (r != -1) return 0;
+        if (errno == EINTR) continue;
+        return -1;
     }
 }
 
@@ -149,7 +149,7 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
  * Release any lock on 'fd'.  Always returns success.
  */
 EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
-{ 
+{
     struct flock fl;
     int r;
 

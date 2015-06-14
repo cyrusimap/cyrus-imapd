@@ -68,7 +68,7 @@ EXPORTED const char *lock_method_desc = "flock";
  *
  */
 EXPORTED int lock_reopen(int fd, const char *filename,
-			 struct stat *sbuf, const char **failaction)
+                         struct stat *sbuf, const char **failaction)
 {
     int r;
     struct stat sbuffile, sbufspare;
@@ -77,31 +77,31 @@ EXPORTED int lock_reopen(int fd, const char *filename,
     if (!sbuf) sbuf = &sbufspare;
 
     for (;;) {
-	r = flock(fd, LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    if (failaction) *failaction = "locking";
-	    return -1;
-	}
+        r = flock(fd, LOCK_EX);
+        if (r == -1) {
+            if (errno == EINTR) continue;
+            if (failaction) *failaction = "locking";
+            return -1;
+        }
 
-	fstat(fd, sbuf);
-	r = stat(filename, &sbuffile);
-	if (r == -1) {
-	    if (failaction) *failaction = "stating";
-	    flock(fd, LOCK_UN);
-	    return -1;
-	}
+        fstat(fd, sbuf);
+        r = stat(filename, &sbuffile);
+        if (r == -1) {
+            if (failaction) *failaction = "stating";
+            flock(fd, LOCK_UN);
+            return -1;
+        }
 
-	if (sbuf->st_ino == sbuffile.st_ino) return 0;
+        if (sbuf->st_ino == sbuffile.st_ino) return 0;
 
-	newfd = open(filename, O_RDWR);
-	if (newfd == -1) {
-	    if (failaction) *failaction = "opening";
-	    flock(fd, LOCK_UN);
-	    return -1;
-	}
-	dup2(newfd, fd);
-	close(newfd);
+        newfd = open(filename, O_RDWR);
+        if (newfd == -1) {
+            if (failaction) *failaction = "opening";
+            flock(fd, LOCK_UN);
+            return -1;
+        }
+        dup2(newfd, fd);
+        close(newfd);
     }
 }
 
@@ -115,17 +115,17 @@ EXPORTED int lock_reopen(int fd, const char *filename,
  * appropriate error code.
  */
 EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
-			  const char *filename __attribute__((unused)))
+                          const char *filename __attribute__((unused)))
 {
     int r;
     int op = (exclusive ? LOCK_EX : LOCK_SH);
     if (nonblock) op |= LOCK_NB;
 
     for (;;) {
-	r = flock(fd, op);
-	if (r != -1) return 0;
-	if (errno == EINTR) continue;
-	return -1;
+        r = flock(fd, op);
+        if (r != -1) return 0;
+        if (errno == EINTR) continue;
+        return -1;
     }
 }
 
@@ -137,11 +137,11 @@ EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
     int r;
 
     for (;;) {
-	r = flock(fd, LOCK_UN);
-	if (r != -1) return 0;
-	if (errno == EINTR) continue;
-	/* xxx help! */
-	return -1;
+        r = flock(fd, LOCK_UN);
+        if (r != -1) return 0;
+        if (errno == EINTR) continue;
+        /* xxx help! */
+        return -1;
     }
 }
 

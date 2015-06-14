@@ -57,9 +57,9 @@ extern int verbose;
  * replace the macros with improved ones, keeping the same API.
  */
 extern CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue, unsigned int uiLine,
-					     char strFile[], char strFunction[],
-					     CU_BOOL bFatal,
-					     char strConditionFormat[], ...);
+                                             char strFile[], char strFunction[],
+                                             CU_BOOL bFatal,
+                                             char strConditionFormat[], ...);
 extern void __cunit_wrap_test(const char *name, void (*fn)(void));
 extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
 
@@ -194,7 +194,7 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
 
 /* for parametrised tests */
 
-#define CUNIT_PARAM(x)	    (x)
+#define CUNIT_PARAM(x)      (x)
 
 struct cunit_param
 {
