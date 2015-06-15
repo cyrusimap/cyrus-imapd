@@ -167,33 +167,4 @@ static void test_star_substring(void)
     glob_free(&g);
 }
 
-static void test_star_icase(void)
-{
-    glob *g;
-    int r;
-
-    g = glob_init("fo*", GLOB_ICASE|GLOB_HIERARCHY);
-    CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
-
-    r = glob_test(g, "foo", 0, NULL);
-    CU_ASSERT_EQUAL(r, 3);
-
-    r = glob_test(g, "meh", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
-
-    r = glob_test(g, "FOO", 0, NULL);
-    CU_ASSERT_EQUAL(r, 3);
-
-    r = glob_test(g, "MEH", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
-
-    r = glob_test(g, "Foo", 0, NULL);
-    CU_ASSERT_EQUAL(r, 3);
-
-    r = glob_test(g, "Meh", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
-
-    glob_free(&g);
-}
-
 /* vim: set ft=c: */
