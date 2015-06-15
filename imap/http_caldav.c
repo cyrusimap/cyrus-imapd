@@ -1630,7 +1630,8 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     memset(&lrock, 0, sizeof(struct list_cal_rock));
-    mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
+    int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+    mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
                      httpd_authstate, list_cal_cb, &lrock);
 
     /* Sort calendars by displayname */
@@ -4534,7 +4535,8 @@ static int report_cal_query(struct transaction_t *txn,
         }
         else {
             /* Add responses for all contained calendar collections */
-            mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
+            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+            mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
                              httpd_authstate, propfind_by_collection, fctx);
         }
 
@@ -4871,7 +4873,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
         }
         else {
             /* Get busytime for all contained calendar collections */
-            mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
+            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+            mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
                              httpd_authstate, busytime_by_collection, fctx);
         }
 

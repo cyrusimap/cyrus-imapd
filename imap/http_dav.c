@@ -4580,7 +4580,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         }
         else {
             /* Add responses for all calendar collections */
-            r = mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
+            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+            r = mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
                                  httpd_authstate, propfind_by_collection, &fctx);
         }
 
@@ -5479,7 +5480,8 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
         }
         else {
             /* Add responses for all calendar collections */
-            r = mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
+            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+            r = mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
                                  httpd_authstate, propfind_by_collection, fctx);
         }
 
@@ -5774,7 +5776,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
     /* Only search DAV:principal-collection-set */
     if (apply_prin_set || !fctx->req_tgt->userid) {
         /* Add responses for all calendar collections */
-        ret = mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
+        int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+        ret = mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
                                httpd_authstate, principal_search, fctx);
     }
 
