@@ -5775,9 +5775,10 @@ static int report_prin_prop_search(struct transaction_t *txn,
 
     /* Only search DAV:principal-collection-set */
     if (apply_prin_set || !fctx->req_tgt->userid) {
-        /* Add responses for all calendar collections */
-        int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-        ret = mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
+        /* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
+
+        /* Add responses for all users with INBOX on server (as admin) */
+        ret = mboxlist_findall(&httpd_namespace, "user.%", 1, httpd_userid,
                                httpd_authstate, principal_search, fctx);
     }
 
