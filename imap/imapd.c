@@ -9363,7 +9363,6 @@ static int apply_mailbox_pattern(annotate_state_t *state,
                                  void *data)
 {
     struct apply_rock arock;
-    char mboxpat[MAX_MAILBOX_BUFFER];
     int r = 0;
 
     memset(&arock, 0, sizeof(arock));
@@ -9371,14 +9370,8 @@ static int apply_mailbox_pattern(annotate_state_t *state,
     arock.proc = proc;
     arock.data = data;
 
-    /* copy the pattern so we can change hiersep */
-    strlcpy(mboxpat, pattern, sizeof(mboxpat));
-    mboxname_hiersep_tointernal(&imapd_namespace, mboxpat,
-                                config_virtdomains ?
-                                strcspn(mboxpat, "@") : 0);
-
     r = imapd_namespace.mboxlist_findall(&imapd_namespace,
-                                         mboxpat,
+                                         pattern,
                                          imapd_userisadmin || imapd_userisproxyadmin,
                                          imapd_userid,
                                          imapd_authstate,
@@ -12461,10 +12454,6 @@ static void canonical_list_patterns(const char *reference,
                           canonical_list_pattern(reference, p));
             p = patterns->data[i];
         }
-        /* Translate any separators in pattern */
-        mboxname_hiersep_tointernal(&imapd_namespace, p,
-                                    config_virtdomains ?
-                                    strcspn(p, "@") : 0);
     }
 }
 
