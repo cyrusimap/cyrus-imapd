@@ -2153,12 +2153,6 @@ static int find_p(void *rockp,
         /* always suppress deleted for non-admin */
         if (mboxname_isdeletedmailbox(mbentry->name, NULL)) goto done;
 
-        /* also suppress calendar */
-        if (mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype)) goto done;
-
-        /* and addressbook */
-        if (mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype)) goto done;
-
         /* check the acls */
         if (!(cyrus_acl_myrights(rock->auth_state, mbentry->acl) & ACL_LOOKUP)) goto done;
     }
