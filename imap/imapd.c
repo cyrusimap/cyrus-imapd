@@ -12090,6 +12090,9 @@ static void list_response(const char *name, int attributes,
     }
     else if (r) return;
 
+    /* skip all non-IMAP folders */
+    else if (!imapd_userisadmin && (mbentry->mbtype & MBTYPES_NONIMAP)) goto done;
+
     else if (listargs->scan) {
         /* SCAN mailbox for content */
 
