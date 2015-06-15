@@ -12083,8 +12083,11 @@ static void list_response(const char *name, int attributes,
     }
     else if (r) return;
 
-    /* skip all non-IMAP folders */
-    else if (!imapd_userisadmin && (mbentry->mbtype & MBTYPES_NONIMAP)) goto done;
+    /* skip all non-IMAP folders (unless an admin or listing subscriptions) */
+    else if ((mbentry->mbtype & MBTYPES_NONIMAP) &&
+             !(imapd_userisadmin || (listargs->sel & LIST_SEL_SUBSCRIBED))) {
+        goto done;
+    }
 
     else if (listargs->scan) {
         /* SCAN mailbox for content */
