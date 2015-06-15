@@ -4874,7 +4874,9 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
         else {
             /* Get busytime for all contained calendar collections */
             int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-            mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
+            char mboxpat[MAX_MAILBOX_BUFFER+1];
+            snprintf(mboxpat, sizeof(mboxpat), "%s.%%", mailboxname);
+            mboxlist_findall(&httpd_namespace, mboxpat, isadmin, httpd_userid,
                              httpd_authstate, busytime_by_collection, fctx);
         }
 
