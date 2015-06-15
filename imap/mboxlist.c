@@ -2068,14 +2068,17 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 struct find_rock {
     struct glob *g;
     struct namespace *namespace;
+    const char *userid;
     int find_namespace;
     int domainlen;
+    int is_the_inbox;
     int inboxoffset;
     const char *usermboxname;
     size_t usermboxnamelen;
     int checkmboxlist;
     int issubs;
     int checkshared;
+    int checkuser;
     struct db *db;
     int isadmin;
     struct auth_state *auth_state;
@@ -2096,47 +2099,42 @@ static int find_p(void *rockp,
     long matchlen;
     mbentry_t *mbentry = NULL;
     int ret = 0;
+    char intname[MAX_MAILBOX_PATH+1];
+    char extname[MAX_MAILBOX_PATH+1]; // bogus path length
+
+    memcpy(intname, key, keylen);
+    intname[keylen] = 0;
 
     /* don't list mailboxes outside of the default domain */
-    if (!rock->domainlen && !rock->isadmin && memchr(key, '!', keylen)) return 0;
+    if (!rock->domainlen && !rock->isadmin && strchr(intname, '!')) return 0;
+
+    /* don't list "user" by itself */
+    if (!strcmp(intname+rock->domainlen, "user")) return 0;
+
+    int isuserspace = !strncmp(intname+rock->domainlen, "user.", 5);
+
+    if (rock->find_namespace == NAMESPACE_INBOX) {
+        if (!isuserspace) return 0;
+        if (rock->isadmin) return 0;
+    }
+    else if (rock->find_namespace == NAMESPACE_USER) {
+        /* this would've been output with the inbox stuff, so skip it */
+        if (!isuserspace) return 0;
+        if (!rock->isadmin && mboxname_userownsmailbox(rock->userid, intname)) return 0;
+    }
+    else {
+        /* this would've been output with the user stuff, so skip it */
+        if (isuserspace) return 0;
+    }
+
+    rock->namespace->mboxname_toexternal(rock->namespace, intname, rock->userid, extname);
+
 
     minmatch = 0;
-    if (rock->inboxoffset) {
-        char namebuf[MAX_MAILBOX_BUFFER];
-
-        if (keylen >= (int) sizeof(namebuf)) {
-            syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_p()");
-            return 0;
-        }
-        memcpy(namebuf, key, keylen);
-        namebuf[keylen] = '\0';
-
-        matchlen = glob_test(g, namebuf+rock->inboxoffset,
-                             keylen-rock->inboxoffset, &minmatch);
-    } else {
-        matchlen = glob_test(g, key, keylen, &minmatch);
-    }
+    matchlen = glob_test(g, extname, strlen(extname), &minmatch);
 
     /* If its not a match, skip it -- partial matches are ok. */
-    if(matchlen == -1) return 0;
-
-    if (rock->find_namespace != NAMESPACE_INBOX &&
-        rock->usermboxname &&
-        keylen >= rock->usermboxnamelen &&
-        (keylen == rock->usermboxnamelen ||
-         key[rock->usermboxnamelen] == '.') &&
-        !strncmp(key, rock->usermboxname, rock->usermboxnamelen)) {
-        /* this would've been output with the inbox stuff, so skip it */
-        return 0;
-    }
-
-    if (rock->find_namespace == NAMESPACE_SHARED &&
-        rock->namespace && rock->namespace->isalt &&
-        !strncmp(key+rock->domainlen, "user", 4) &&
-        (key[rock->domainlen+4] == '\0' || key[rock->domainlen+4] == '.')) {
-        /* this would've been output with the user stuff, so skip it */
-        return 0;
-    }
+    if (matchlen == -1) return 0;
 
     /* subs DB has empty keys */
     if (rock->issubs)
@@ -2174,11 +2172,11 @@ done:
     return ret;
 }
 
-static int check_name(struct find_rock *rock,
-                      const char *base, int len)
+static int check_name(struct find_rock *rock, const char *base)
 {
+    size_t len = strlen(base);
     if (rock->prev) {
-        if (cyrusdb_compar(rock->db, base, len, rock->prev, rock->prevlen) < 0)
+        if (cyrusdb_compar(rock->db, base, len, rock->prev, rock->prevlen) <= 0)
             return 0; /* previous name, skip it */
         free(rock->prev);
     }
@@ -2194,86 +2192,71 @@ static int find_cb(void *rockp,
                    const char *data __attribute__((unused)),
                    size_t datalen __attribute__((unused)))
 {
-    char namebuf[MAX_MAILBOX_BUFFER];
     struct find_rock *rock = (struct find_rock *) rockp;
-    int r = 0;
-    long minmatch;
     struct glob *g = rock->g;
 
-    /* foreach match, do this test */
-    minmatch = 0;
-    while (minmatch >= 0) {
-        long matchlen;
+    char intname[MAX_MAILBOX_PATH+1];
+    char extname[MAX_MAILBOX_PATH+1]; // bogus path length
 
-        if(keylen >= (int) sizeof(namebuf)) {
-            syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_cb()");
-            return 0;
-        }
-        memcpy(namebuf, key, keylen);
-        namebuf[keylen] = '\0';
+    /* we passed find_p, so we're a valid thing to output */
 
-        if (rock->find_namespace != NAMESPACE_INBOX &&
-            rock->usermboxname &&
-            !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)
-            && (keylen == rock->usermboxnamelen ||
-                namebuf[rock->usermboxnamelen] == '.')) {
-            /* this would've been output with the inbox stuff, so skip it */
-            return 0;
-        }
+    memcpy(intname, key, keylen);
+    intname[keylen] = 0;
 
-        /* make sure it's in the mailboxes db */
-        if (rock->checkmboxlist) {
-            r = mboxlist_lookup(namebuf, NULL, NULL);
-        } else {
-            r = 0;              /* don't bother checking */
-        }
+    if (!check_name(rock, intname)) return 0;
 
-        matchlen = glob_test(g, namebuf+rock->inboxoffset,
-                             keylen-rock->inboxoffset, &minmatch);
-
-        if (matchlen == -1) {
-            r = 0;
-            break;
-        }
-
-        switch (r) {
-        case 0:
-            /* found the entry; output it */
-            if (rock->find_namespace == NAMESPACE_SHARED &&
-                rock->checkshared && rock->namespace) {
-                /* special case:  LIST "" *% -- output prefix */
-                r = (*rock->proc)(rock->namespace->prefix[NAMESPACE_SHARED],
-                                  strlen(rock->namespace->prefix[NAMESPACE_SHARED])-1,
-                                  1, rock->procrock);
-
-                if (rock->checkshared > 1) {
-                    /* special case:  LIST "" % -- output prefix only */
-                    /* short-circuit the foreach - one mailbox is sufficient */
-                    return CYRUSDB_DONE;
-                }
-            }
-
-            rock->checkshared = 0;
-
-            if (check_name(rock, namebuf+rock->inboxoffset, matchlen))
-                r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen,
-                                  1, rock->procrock);
-
-            break;
-
-        case IMAP_MAILBOX_NONEXISTENT:
-            /* didn't find the entry */
-            r = 0;
-            break;
-
-        default:
-            break;
-        }
-
-        if (r) break;
+    if (rock->checkmboxlist) {
+        int r = mboxlist_lookup(intname, NULL, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
+        if (r) return r;
     }
 
-    return r;
+    /* XXX - cache in the rock? */
+    rock->namespace->mboxname_toexternal(rock->namespace, intname, rock->userid, extname);
+    int extlen = strlen(extname);
+    if (!extlen) return 0;
+
+    long minmatch = 0;
+    long matchlen = glob_test(g, extname, extlen, &minmatch);
+
+    if (matchlen == -1) return 0;
+
+    if (rock->find_namespace == NAMESPACE_USER && rock->checkuser) {
+        char *user = rock->namespace->prefix[NAMESPACE_USER];
+        /* special case:  LIST "" *% -- output prefix */
+        int r = (*rock->proc)(user, strlen(user), 1, rock->procrock);
+        if (r) return r;
+
+        if (rock->checkuser > 1) {
+            /* special case:  LIST "" % -- output prefix only */
+            /* short-circuit the foreach - one mailbox is sufficient */
+            return CYRUSDB_DONE;
+        }
+        rock->checkuser = 0;
+    }
+
+    /* found an entry; output it */
+    if (rock->find_namespace == NAMESPACE_SHARED && rock->checkshared) {
+        char *shared = rock->namespace->prefix[NAMESPACE_SHARED];
+        /* special case:  LIST "" *% -- output prefix */
+        int r = (*rock->proc)(shared, strlen(shared), 1, rock->procrock);
+        if (r) return r;
+
+        if (rock->checkshared > 1) {
+            /* special case:  LIST "" % -- output prefix only */
+            /* short-circuit the foreach - one mailbox is sufficient */
+            return CYRUSDB_DONE;
+        }
+        rock->checkshared = 0;
+    }
+
+    /* we need to recalculate matchlen against the internal mailbox name.
+     * There are various possiblities, but simplest is just to assume the
+     * same number of characters from the end is the same point */
+
+    long intmatchlen = matchlen - strlen(extname) + strlen(intname);
+
+    return (*rock->proc)(intname, intmatchlen, !rock->is_the_inbox, rock->procrock);
 }
 
 struct allmb_rock {
@@ -2432,308 +2415,79 @@ done:
  * case it wants some persistant storage or extra data.
  */
 /* Find all mailboxes that match 'pattern'. */
-EXPORTED int mboxlist_findall(struct namespace *namespace,
-                     const char *pattern, int isadmin, const char *userid,
-                     struct auth_state *auth_state, int (*proc)(), void *rock)
+
+static int mboxlist_do_find(struct find_rock *rock, const char *pattern, int isalt)
 {
-    struct find_rock cbrock;
-    char usermboxname[MAX_MAILBOX_BUFFER];
-    size_t usermboxnamelen = 0;
-    const char *data;
-    size_t datalen;
-    int r = 0;
-    char *p;
-    size_t prefixlen;
-    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
-    char domainpat[MAX_MAILBOX_BUFFER] = ""; /* do intra-domain fetches only */
-    char *pat = NULL;
+    const char *userid = rock->userid;
+    int isadmin = rock->isadmin;
 
-    if (!namespace) namespace = mboxname_get_adminnamespace();
-
-    if (config_virtdomains) {
-        char *domain;
-
-        if (userid && (domain = strrchr(userid, '@'))) {
-            userlen = domain - userid;
-            domainlen = strlen(domain); /* includes separator */
-
-            if ((p = strchr(pattern , '!'))) {
-                if ((p-pattern != domainlen-1) ||
-                    strncmp(pattern, domain+1, domainlen-1)) {
-                    /* don't allow cross-domain access */
-                    return IMAP_MAILBOX_BADNAME;
-                }
-
-                pattern = p+1;
-            }
-
-            snprintf(domainpat, sizeof(domainpat), "%s!%s", domain+1, pattern);
-        }
-        if ((p = strrchr(pattern, '@'))) {
-            /* global admin specified mbox@domain */
-            if (domainlen) {
-                /* can't do both user@domain and mbox@domain */
-                return IMAP_MAILBOX_BADNAME;
-            }
-
-            /* don't prepend default domain */
-            if (!(config_defdomain && !strcasecmp(config_defdomain, p+1))) {
-                snprintf(domainpat, sizeof(domainpat), "%s!", p+1);
-                domainlen = strlen(p);
-            }
-            snprintf(domainpat+domainlen, sizeof(domainpat)-domainlen,
-                     "%.*s", (int) (p - pattern), pattern);
-        }
-    }
-
-    if (domainpat[0] == '\0')
-        strlcpy(domainpat, pattern, sizeof(domainpat));
-
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
-    cbrock.namespace = NULL;
-    cbrock.domainlen = domainlen;
-    cbrock.isadmin = isadmin;
-    cbrock.auth_state = auth_state;
-    cbrock.checkmboxlist = 0;   /* don't duplicate work */
-    cbrock.issubs = 0;
-    cbrock.checkshared = 0;
-    cbrock.proc = proc;
-    cbrock.procrock = rock;
-    cbrock.prev = NULL;
-    cbrock.prevlen = 0;
-    cbrock.db = mbdb;
-
-    /* Build usermboxname */
-    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
-        strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
-        if (domainlen)
-            snprintf(usermboxname, sizeof(usermboxname),
-                     "%s!", userid+userlen+1);
-        snprintf(usermboxname+domainlen, sizeof(usermboxname)-domainlen,
-                 "user.%.*s", userlen, userid);
-        usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-        userid = NULL;
-    }
-
-    /* Check for INBOX first of all */
-    if (userid) {
-        if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-            r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
-                              &data, &datalen, NULL);
-            if (r == CYRUSDB_NOTFOUND) r = 0;
-            else if (!r)
-                r = (*proc)("INBOX", 5, 1, rock);
-        }
-        else if (!strncmp(pattern,
-                          usermboxname+domainlen, usermboxnamelen-domainlen) &&
-                 GLOB_TEST(cbrock.g, usermboxname+domainlen) != -1) {
-            r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
-                              &data, &datalen, NULL);
-            if (r == CYRUSDB_NOTFOUND) r = 0;
-            else if (!r)
-                r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
-        }
-        strlcat(usermboxname, ".", sizeof(usermboxname));
-        usermboxnamelen++;
-
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
-    } else {
-        cbrock.usermboxname = NULL;
-        cbrock.usermboxnamelen = 0;
-    }
-
-    if (r) goto done;
-
-    /* Make a working copy of pattern */
-    pattern = pat = xstrdup(pattern);
-
-    /* Find fixed-string pattern prefix */
-    for (p = pat; *p; p++) {
-        if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
-    }
-    prefixlen = p - pattern;
-    *p = '\0';
-
-    /*
-     * If user.X.* or INBOX.* can match pattern,
-     * search for those mailboxes next
-     */
-    if (userid &&
-        (!strncmp(usermboxname+domainlen, pattern, MIN(prefixlen, usermboxnamelen-domainlen-1)) ||
-         !strncasecmp("inbox.", pattern, MIN(prefixlen, 6)))) {
-
-        if (!strncmp(usermboxname+domainlen, pattern, MIN(prefixlen, usermboxnamelen-domainlen-1))) {
-            /* switch to pattern with domain prepended */
-            glob_free(&cbrock.g);
-            cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-            cbrock.inboxoffset = 0;
-        }
-        else {
-            cbrock.inboxoffset = domainlen + userlen;
-        }
-
-        cbrock.find_namespace = NAMESPACE_INBOX;
-        /* iterate through prefixes matching usermboxname */
-        r = cyrusdb_foreach(mbdb,
-                            usermboxname, usermboxnamelen,
-                            &find_p, &find_cb, &cbrock,
-                            NULL);
-
-        free(cbrock.prev);
-        cbrock.prev = NULL;
-        cbrock.prevlen = 0;
-    }
-
-    if (!r && (isadmin || namespace->accessible[NAMESPACE_USER])) {
-        cbrock.find_namespace = NAMESPACE_USER;
-        /* switch to pattern with domain prepended */
-        glob_free(&cbrock.g);
-        cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-        cbrock.inboxoffset = 0;
-        if (usermboxnamelen) {
-            usermboxname[--usermboxnamelen] = '\0';
-            cbrock.usermboxname = usermboxname;
-            cbrock.usermboxnamelen = usermboxnamelen;
-        }
-        /* search for all remaining mailboxes.
-           just bother looking at the ones that have the same pattern
-           prefix. */
-        r = cyrusdb_foreach(mbdb,
-                            domainpat, domainlen + prefixlen,
-                            &find_p, &find_cb, &cbrock,
-                            NULL);
-
-        free(cbrock.prev);
-        cbrock.prev = NULL;
-        cbrock.prevlen = 0;
-    }
-
-  done:
-    glob_free(&cbrock.g);
-    if (pat) free(pat);
-
-    return r;
-}
-
-HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
-                         const char *pattern, int isadmin, const char *userid,
-                         struct auth_state *auth_state, int (*proc)(),
-                         void *rock)
-{
-    struct find_rock cbrock;
-    char usermboxname[MAX_MAILBOX_BUFFER], patbuf[MAX_MAILBOX_BUFFER];
-    size_t usermboxnamelen = 0;
-    const char *data;
-    size_t datalen;
-    int r = 0;
-    char *p;
+    char inbox[MAX_MAILBOX_BUFFER];
+    size_t inboxlen = 0;
     size_t prefixlen, len;
-    size_t userlen = userid ? strlen(userid) : 0, domainlen = 0;
+    size_t userlen = userid ? strlen(userid) : 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char *pat = NULL;
+    int r = 0;
+    char *p;
 
-    if (!namespace) namespace = mboxname_get_adminnamespace();
+    rock->g = glob_init_sep(pattern, GLOB_HIERARCHY, rock->namespace->hier_sep);
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
         userlen = p - userid;
-        domainlen = strlen(p); /* includes separator */
+        rock->domainlen = strlen(p); /* includes separator */
         snprintf(domainpat, sizeof(domainpat), "%s!", p+1);
     }
     else
         domainpat[0] = '\0';
 
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
-    cbrock.namespace = namespace;
-    cbrock.domainlen = domainlen;
-    cbrock.isadmin = isadmin;
-    cbrock.auth_state = auth_state;
-    cbrock.checkmboxlist = 0;   /* don't duplicate work */
-    cbrock.issubs = 0;
-    cbrock.checkshared = 0;
-    cbrock.proc = proc;
-    cbrock.procrock = rock;
-    cbrock.prev = NULL;
-    cbrock.prevlen = 0;
-    cbrock.db = mbdb;
-
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
         strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
-        if (domainlen)
-            snprintf(usermboxname, sizeof(usermboxname),
-                     "%s!", userid+userlen+1);
-        snprintf(usermboxname+domainlen, sizeof(usermboxname)-domainlen,
+        if (rock->domainlen)
+            snprintf(inbox, sizeof(inbox), "%s!", userid+userlen+1);
+        snprintf(inbox+rock->domainlen, sizeof(inbox)-rock->domainlen,
                  "user.%.*s", (int)userlen, userid);
-        usermboxnamelen = strlen(usermboxname);
+        inboxlen = strlen(inbox);
     }
     else {
         userid = 0;
     }
 
-    /* Check for INBOX first of all */
-    if (userid) {
-        if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-            r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
-                              &data, &datalen, NULL);
-            if (r == CYRUSDB_NOTFOUND) r = 0;
-            else if (!r)
-                r = (*proc)("INBOX", 5, 0, rock);
-        }
-
-        strlcat(usermboxname, ".", sizeof(usermboxname));
-        usermboxnamelen++;
-
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
-    } else {
-        cbrock.usermboxname = NULL;
-        cbrock.usermboxnamelen = 0;
-    }
-
-    if (r) goto done;
-
-    glob_free(&cbrock.g);
-
     /* Make a working copy of pattern */
-    pattern = pat = xstrdup(pattern);
+    pat = xstrdup(pattern);
 
     /* Find fixed-string pattern prefix */
     for (p = pat; *p; p++) {
         if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
-    prefixlen = p - pattern;
+    prefixlen = p - pat;
 
     /*
-     * Personal (INBOX) namespace
-     *
-     * Append pattern to "INBOX.", search for those mailboxes next
+     * Personal (INBOX) namespace (only if not admin)
      */
-    if (userid) {
-        strlcpy(patbuf, usermboxname, sizeof(patbuf));
-        strlcat(patbuf, pattern, sizeof(patbuf));
-        cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
-        cbrock.inboxoffset = 0;
-        cbrock.find_namespace = NAMESPACE_INBOX;
+    if (userid && !isadmin) {
+        rock->find_namespace = NAMESPACE_INBOX;
 
-        /* iterate through prefixes matching usermboxname */
-        cyrusdb_foreach(mbdb,
-                        usermboxname, usermboxnamelen,
-                        &find_p, &find_cb, &cbrock,
-                        NULL);
+        /* special case magic for now */
+        rock->is_the_inbox = isalt;
+        r = cyrusdb_forone(rock->db, inbox, inboxlen, &find_p, &find_cb, rock, NULL);
+        if (r == CYRUSDB_DONE) r = 0;
+        if (r) goto done;
 
-        free(cbrock.prev);
-        cbrock.prev = NULL;
-        cbrock.prevlen = 0;
-        glob_free(&cbrock.g);
-    }
+        rock->is_the_inbox = 0;
 
-    if (usermboxnamelen) {
-        usermboxname[--usermboxnamelen] = '\0';
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
+        /* only do subfolders of the user themselves, not everyone else with a similar prefix */
+        inbox[inboxlen] = '.';
+
+        /* iterate through prefixes matching usermboxname - no prefixing here, just
+         * check every mailbox */
+        r = cyrusdb_foreach(rock->db, inbox, inboxlen+1, &find_p, &find_cb, rock, NULL);
+        if (r == CYRUSDB_DONE) r = 0;
+        if (r) goto done;
+
+        free(rock->prev);
+        rock->prev = NULL;
+        rock->prevlen = 0;
     }
 
     /*
@@ -2741,37 +2495,30 @@ HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
      *
      * If "Other Users*" can match pattern, search for those mailboxes next
      */
-    if (isadmin || namespace->accessible[NAMESPACE_USER]) {
-        len = strlen(namespace->prefix[NAMESPACE_USER]);
-        if(len>0) len--;
+    if (isadmin || rock->namespace->accessible[NAMESPACE_USER]) {
+        len = strlen(rock->namespace->prefix[NAMESPACE_USER]);
+        if (len) len--; // trailing separator
 
-        if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
-                 prefixlen < len ? prefixlen : len)) {
-
+        if (!strncmp(rock->namespace->prefix[NAMESPACE_USER], pattern, MIN(len, prefixlen))) {
             if (prefixlen < len) {
-                strlcpy(domainpat+domainlen, pattern+prefixlen,
-                    sizeof(domainpat)-domainlen);
-                cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+                /* we match all users */
+                strlcpy(domainpat+rock->domainlen, "user.", sizeof(domainpat)-rock->domainlen);
             }
             else {
-                strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-                strlcat(domainpat, pattern+len, sizeof(domainpat));
-                cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+                strlcpy(domainpat+rock->domainlen, "user.", sizeof(domainpat)-rock->domainlen);
+                /* XXX - improve efficiency by filtering on username part from pattern */
             }
-            cbrock.find_namespace = NAMESPACE_USER;
-            cbrock.inboxoffset = 0;
+
+            rock->find_namespace = NAMESPACE_USER;
 
             /* iterate through prefixes matching usermboxname */
-            strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-            cyrusdb_foreach(mbdb,
-                            domainpat, strlen(domainpat),
-                            &find_p, &find_cb, &cbrock,
-                            NULL);
+            r = cyrusdb_foreach(rock->db, domainpat, strlen(domainpat), &find_p, &find_cb, rock, NULL);
+            if (r == CYRUSDB_DONE) r = 0;
+            if (r) goto done;
 
-            glob_free(&cbrock.g);
-            free(cbrock.prev);
-            cbrock.prev = NULL;
-            cbrock.prevlen = 0;
+            free(rock->prev);
+            rock->prev = NULL;
+            rock->prevlen = 0;
         }
     }
 
@@ -2781,14 +2528,12 @@ HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
      * search for all remaining mailboxes.
      * just bother looking at the ones that have the same pattern prefix.
      */
-    if (isadmin || namespace->accessible[NAMESPACE_SHARED]) {
-        len = strlen(namespace->prefix[NAMESPACE_SHARED]);
-        if(len>0) len--;
-        if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-                prefixlen < len ? prefixlen : len)) {
+    if (isadmin || rock->namespace->accessible[NAMESPACE_SHARED]) {
+        len = strlen(rock->namespace->prefix[NAMESPACE_SHARED]);
+        if (len) len--; // trailing separator
 
-            cbrock.find_namespace = NAMESPACE_SHARED;
-            cbrock.inboxoffset = 0;
+        if (!strncmp(rock->namespace->prefix[NAMESPACE_SHARED], pattern, MIN(len, prefixlen))) {
+            rock->find_namespace = NAMESPACE_SHARED;
 
             if (prefixlen <= len) {
                 /* Skip pattern which matches shared namespace prefix */
@@ -2799,49 +2544,74 @@ HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
                 }
 
                 if (*pattern && !strchr(pattern, '.') &&
-                    pattern[strlen(pattern)-1] == '%')
-                /* special case:  LIST "" *% -- output prefix */
-                    cbrock.checkshared = 1;
+                    pattern[strlen(pattern)-1] == '%') {
+                    /* special case:  LIST "" *% -- output prefix */
+                    rock->checkshared = 1;
+                }
 
-                if ((cbrock.checkshared || prefixlen == len) && !*p) {
+                if ((rock->checkshared || prefixlen == len) && !*p) {
                     /* special case:  LIST "" % -- output prefix
                        (if we have a shared mbox) and quit */
-                    strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
-                    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-                    cbrock.checkshared = 2;
+                    rock->checkshared = 2;
                 }
-                else {
-                    strlcpy(domainpat+domainlen, p, sizeof(domainpat)-domainlen);
-                    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-                }
-
-                domainpat[domainlen] = '\0';
-                cyrusdb_foreach(mbdb,
-                                domainpat, domainlen,
-                                &find_p, &find_cb, &cbrock,
-                                NULL);
             }
-            else if (pattern[len] == '.') {
-                strlcpy(domainpat+domainlen, pattern+len+1,
-                        sizeof(domainpat)-domainlen);
-                cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 
-                cyrusdb_foreach(mbdb,
-                                domainpat, domainlen+prefixlen-(len+1),
-                                &find_p, &find_cb, &cbrock,
-                                NULL);
-            }
-            free(cbrock.prev);
-            cbrock.prev = NULL;
-            cbrock.prevlen = 0;
+            r = cyrusdb_foreach(rock->db, domainpat, rock->domainlen, &find_p, &find_cb, rock, NULL);
+            if (r == CYRUSDB_DONE) r = 0;
+            if (r) goto done;
+
+            free(rock->prev);
+            rock->prev = NULL;
+            rock->prevlen = 0;
         }
     }
 
-  done:
-    glob_free(&cbrock.g);
+ done:
+    glob_free(&rock->g);
+    free(rock->prev);
     if (pat) free(pat);
 
     return r;
+}
+
+static int mboxlist_findall_raw(struct namespace *namespace,
+                                const char *pattern, int isadmin, const char *userid,
+                                struct auth_state *auth_state, int (*proc)(),
+                                void *rock, int isalt)
+{
+    struct find_rock cbrock;
+
+    if (!namespace) namespace = mboxname_get_adminnamespace();
+
+    memset(&cbrock, 0, sizeof(struct find_rock));
+
+    cbrock.auth_state = auth_state;
+    cbrock.db = mbdb;
+    cbrock.isadmin = isadmin;
+    cbrock.namespace = namespace;
+    cbrock.proc = proc;
+    cbrock.procrock = rock;
+    cbrock.userid = userid;
+
+    return mboxlist_do_find(&cbrock, pattern, isalt);
+}
+
+EXPORTED int mboxlist_findall(struct namespace *namespace,
+                              const char *pattern, int isadmin, const char *userid,
+                              struct auth_state *auth_state, int (*proc)(),
+                              void *rock)
+{
+    return mboxlist_findall_raw(namespace, pattern, isadmin, userid,
+                                auth_state, proc, rock, 0);
+}
+
+HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
+                              const char *pattern, int isadmin, const char *userid,
+                              struct auth_state *auth_state, int (*proc)(),
+                              void *rock)
+{
+    return mboxlist_findall_raw(namespace, pattern, isadmin, userid,
+                                auth_state, proc, rock, 1);
 }
 
 static int child_cb(char *name,
@@ -3277,167 +3047,57 @@ static void mboxlist_closesubs(struct db *sub)
  * is the user's login id.  For each matching mailbox, calls
  * 'proc' with the name of the mailbox.
  */
-EXPORTED int mboxlist_findsub(struct namespace *namespace,
-                     const char *pattern, int isadmin __attribute__((unused)),
+static int mboxlist_findsub_raw(struct namespace *namespace,
+                     const char *pattern, int isadmin,
                      const char *userid, struct auth_state *auth_state,
-                     int (*proc)(), void *rock, int force)
+                     int (*proc)(), void *rock, int force, int isalt)
 {
     struct db *subs = NULL;
     struct find_rock cbrock;
-    char usermboxname[MAX_MAILBOX_BUFFER];
-    size_t usermboxnamelen = 0;
-    const char *data;
-    size_t datalen;
     int r = 0;
-    char *p;
-    size_t prefixlen;
-    size_t userlen = userid ? strlen(userid) : 0, domainlen = 0;
-    char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
-    char *pat = NULL;
 
     if (!namespace) namespace = mboxname_get_adminnamespace();
 
-    if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
-        userlen = p - userid;
-        domainlen = strlen(p); /* includes separator */
-        snprintf(domainpat, sizeof(domainpat), "%s!%s", p+1, pattern);
-    }
-    else
-        xstrncpy(domainpat, pattern, sizeof(domainpat));
-
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
-    cbrock.namespace = NULL;
-    cbrock.domainlen = domainlen;
-    cbrock.isadmin = 1;         /* user can always see their subs */
-    cbrock.auth_state = auth_state;
-    cbrock.checkmboxlist = !force;
-    cbrock.issubs = 1;
-    cbrock.checkshared = 0;
-    cbrock.proc = proc;
-    cbrock.procrock = rock;
-    cbrock.prev = NULL;
-    cbrock.prevlen = 0;
+    memset(&cbrock, 0, sizeof(struct find_rock));
 
     /* open the subscription file that contains the mailboxes the
        user is subscribed to */
-    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
-        goto done;
-    }
+    r = mboxlist_opensubs(userid, &subs);
+    if (r) return r;
 
+    cbrock.auth_state = auth_state;
+    cbrock.checkmboxlist = !force;
     cbrock.db = subs;
+    cbrock.isadmin = isadmin;
+    cbrock.issubs = 1;
+    cbrock.namespace = namespace;
+    cbrock.proc = proc;
+    cbrock.procrock = rock;
+    cbrock.userid = userid;
 
-    /* Build usermboxname */
-    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
-        strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
-        if (domainlen)
-            snprintf(usermboxname, sizeof(usermboxname),
-                     "%s!", userid+userlen+1);
-        snprintf(usermboxname+domainlen, sizeof(usermboxname)-domainlen,
-                 "user.%.*s", (int)userlen, userid);
-        usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-        userid = 0;
-    }
+    r = mboxlist_do_find(&cbrock, pattern, isalt);
 
-    /* Check for INBOX first of all */
-    if (userid) {
-        if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-            r = cyrusdb_fetch(subs, usermboxname, usermboxnamelen,
-                             &data, &datalen, NULL);
-            if (r == CYRUSDB_NOTFOUND) r = 0;
-            else if (!r)
-                r = (*proc)("INBOX", 5, 1, rock);
-        }
-        else if (!strncmp(pattern,
-                          usermboxname+domainlen, usermboxnamelen-domainlen) &&
-                 GLOB_TEST(cbrock.g, usermboxname+domainlen) != -1) {
-            r = cyrusdb_fetch(subs, usermboxname, usermboxnamelen,
-                             &data, &datalen, NULL);
-            if (r == CYRUSDB_NOTFOUND) r = 0;
-            else if (!r)
-                r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
-        }
-        strlcat(usermboxname, ".", sizeof(usermboxname));
-        usermboxnamelen++;
-
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
-    }
-
-    if (r) goto done;
-
-    /* Make a working copy of pattern */
-    pattern = pat = xstrdup(pattern);
-
-    /* Find fixed-string pattern prefix */
-    for (p = pat; *p; p++) {
-        if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
-    }
-    prefixlen = p - pattern;
-    *p = '\0';
-
-    /*
-     * If user.X.* or INBOX.* can match pattern,
-     * search for those mailboxes next
-     */
-    if (userid &&
-        (!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1) ||
-         !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
-
-        if (!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1)) {
-            /* switch to pattern with domain prepended */
-            glob_free(&cbrock.g);
-            cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-            cbrock.inboxoffset = 0;
-        }
-        else {
-            cbrock.inboxoffset = strlen(userid);
-        }
-
-        cbrock.find_namespace = NAMESPACE_INBOX;
-        /* iterate through prefixes matching usermboxname */
-        cyrusdb_foreach(subs,
-                        usermboxname, usermboxnamelen,
-                        &find_p, &find_cb, &cbrock,
-                        NULL);
-        free(cbrock.prev);
-        cbrock.prev = NULL;
-        cbrock.prevlen = 0;
-
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
-    } else {
-        cbrock.usermboxname = NULL;
-        cbrock.usermboxnamelen = 0;
-    }
-
-    if (isadmin || namespace->accessible[NAMESPACE_USER]) {
-        cbrock.find_namespace = NAMESPACE_USER;
-        /* switch to pattern with domain prepended */
-        glob_free(&cbrock.g);
-        cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-        cbrock.inboxoffset = 0;
-        if (usermboxnamelen) {
-            usermboxname[--usermboxnamelen] = '\0';
-            cbrock.usermboxname = usermboxname;
-            cbrock.usermboxnamelen = usermboxnamelen;
-        }
-        /* search for all remaining mailboxes.
-           just bother looking at the ones that have the same pattern prefix. */
-        cyrusdb_foreach(subs, domainpat, domainlen + prefixlen,
-                        &find_p, &find_cb, &cbrock, NULL);
-        free(cbrock.prev);
-        cbrock.prev = NULL;
-        cbrock.prevlen = 0;
-   }
-
-  done:
-    if (subs) mboxlist_closesubs(subs);
-    glob_free(&cbrock.g);
-    if (pat) free(pat);
+    mboxlist_closesubs(subs);
 
     return r;
+}
+
+EXPORTED int mboxlist_findsub(struct namespace *namespace,
+                     const char *pattern, int isadmin,
+                     const char *userid, struct auth_state *auth_state,
+                     int (*proc)(), void *rock, int force)
+{
+    return mboxlist_findsub_raw(namespace, pattern, isadmin, userid,
+                                auth_state, proc, rock, force, 0);
+}
+
+HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
+                     const char *pattern, int isadmin,
+                     const char *userid, struct auth_state *auth_state,
+                     int (*proc)(), void *rock, int force)
+{
+    return mboxlist_findsub_raw(namespace, pattern, isadmin, userid,
+                                auth_state, proc, rock, force, 1);
 }
 
 static int subsadd_cb(void *rock, const char *key, size_t keylen,
@@ -3472,247 +3132,7 @@ done:
     return list;
 }
 
-HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
-                         const char *pattern, int isadmin __attribute__((unused)),
-                         const char *userid, struct auth_state *auth_state,
-                         int (*proc)(), void *rock, int force)
-{
-    struct db *subs = NULL;
-    struct find_rock cbrock;
-    char usermboxname[MAX_MAILBOX_BUFFER], patbuf[MAX_MAILBOX_BUFFER];
-    size_t usermboxnamelen = 0;
-    const char *data;
-    size_t datalen;
-    int r = 0;
-    char *p;
-    size_t prefixlen, len;
-    size_t userlen = userid ? strlen(userid) : 0, domainlen = 0;
-    char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
-    char *pat = NULL;
 
-    if (!namespace) namespace = mboxname_get_adminnamespace();
-
-    if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
-        userlen = p - userid;
-        domainlen = strlen(p); /* includes separator */
-        snprintf(domainpat, sizeof(domainpat), "%s!", p+1);
-    }
-    else
-        domainpat[0] = '\0';
-
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
-    cbrock.namespace = namespace;
-    cbrock.domainlen = domainlen;
-    cbrock.isadmin = 1;         /* user can always see their subs */
-    cbrock.auth_state = auth_state;
-    cbrock.checkmboxlist = !force;
-    cbrock.issubs = 1;
-    cbrock.checkshared = 0;
-    cbrock.proc = proc;
-    cbrock.procrock = rock;
-    cbrock.prev = NULL;
-    cbrock.prevlen = 0;
-
-    /* open the subscription file that contains the mailboxes the
-       user is subscribed to */
-    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
-        goto done;
-    }
-
-    cbrock.db = subs;
-
-    /* Build usermboxname */
-    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
-        strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
-        if (domainlen)
-            snprintf(usermboxname, sizeof(usermboxname),
-                     "%s!", userid+userlen+1);
-        snprintf(usermboxname+domainlen, sizeof(usermboxname)-domainlen,
-                 "user.%.*s", (int)userlen, userid);
-        usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-        userid = 0;
-    }
-
-    /* Check for INBOX first of all */
-    if (userid) {
-        if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-            r = cyrusdb_fetch(subs, usermboxname, usermboxnamelen,
-                              &data, &datalen, NULL);
-            if (r == CYRUSDB_NOTFOUND) r = 0;
-            else if (!r)
-                r = (*proc)("INBOX", 5, 0, rock);
-        }
-        strlcat(usermboxname, ".", sizeof(usermboxname));
-        usermboxnamelen++;
-
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
-    }
-
-    if (r) goto done;
-
-    glob_free(&cbrock.g);
-
-    /* Make a working copy of pattern */
-    pattern = pat = xstrdup(pattern);
-
-    /* Find fixed-string pattern prefix */
-    for (p = pat; *p; p++) {
-        if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
-    }
-    prefixlen = p - pattern;
-
-    /*
-     * Personal (INBOX) namespace
-     *
-     * Append pattern to "INBOX.", search for those subscriptions next
-     */
-    if (userid) {
-        strlcpy(patbuf, usermboxname, sizeof(patbuf));
-        strlcat(patbuf, pattern, sizeof(patbuf));
-        cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
-        cbrock.inboxoffset = 0;
-        cbrock.find_namespace = NAMESPACE_INBOX;
-
-        /* iterate through prefixes matching usermboxname */
-        cyrusdb_foreach(subs,
-                        usermboxname, usermboxnamelen,
-                        &find_p, &find_cb, &cbrock,
-                        NULL);
-        free(cbrock.prev);
-        cbrock.prev = NULL;
-        cbrock.prevlen = 0;
-
-        glob_free(&cbrock.g);
-
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
-    } else {
-        cbrock.usermboxname = NULL;
-        cbrock.usermboxnamelen = 0;
-    }
-
-    if (usermboxnamelen) {
-        usermboxname[--usermboxnamelen] = '\0';
-        cbrock.usermboxname = usermboxname;
-        cbrock.usermboxnamelen = usermboxnamelen;
-    }
-
-    /*
-     * Other Users namespace
-     *
-     * If "Other Users*" can match pattern, search for those subscriptions next
-     */
-
-    if (isadmin || namespace->accessible[NAMESPACE_USER]) {
-        len = strlen(namespace->prefix[NAMESPACE_USER]);
-        if(len>0) len--; /* Remove Separator */
-        if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
-                     prefixlen < len ? prefixlen : len)) {
-
-            if (prefixlen < len) {
-                strlcpy(domainpat+domainlen, pattern+prefixlen,
-                        sizeof(domainpat)-domainlen);
-                cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-            }
-            else {
-                strlcpy(domainpat+domainlen, "user",
-                        sizeof(domainpat)-domainlen);
-                strlcat(domainpat, pattern+len, sizeof(domainpat));
-                cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-            }
-            cbrock.find_namespace = NAMESPACE_USER;
-            cbrock.inboxoffset = 0;
-
-            /* iterate through prefixes matching usermboxname */
-            strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-            cyrusdb_foreach(subs,
-                            domainpat, strlen(domainpat),
-                            &find_p, &find_cb, &cbrock,
-                            NULL);
-            free(cbrock.prev);
-            cbrock.prev = NULL;
-            cbrock.prevlen = 0;
-
-            glob_free(&cbrock.g);
-        }
-    }
-
-    /*
-     * Shared namespace
-     *
-     * search for all remaining subscriptions.
-     * just bother looking at the ones that have the same pattern prefix.
-     */
-    if (isadmin || namespace->accessible[NAMESPACE_SHARED]) {
-        len = strlen(namespace->prefix[NAMESPACE_SHARED]);
-        if(len>0) len--; /* Remove Separator */
-        if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-                     prefixlen < len ? prefixlen : len)) {
-
-            cbrock.find_namespace = NAMESPACE_SHARED;
-            cbrock.inboxoffset = 0;
-
-            if (prefixlen <= len) {
-                /* Skip pattern which matches shared namespace prefix */
-                for (p = pat+prefixlen; *p; p++) {
-                    if (*p == '%') continue;
-                    else if (*p == '.') p++;
-                    break;
-                }
-
-                if (*pattern && !strchr(pattern, '.') &&
-                    pattern[strlen(pattern)-1] == '%') {
-                    /* special case:  LSUB "" *% -- output prefix */
-                    cbrock.checkshared = 1;
-                }
-
-                if ((cbrock.checkshared || prefixlen == len) && !*p) {
-                    /* special case:  LSUB "" % -- output prefix
-                       (if we have a shared mbox) and quit */
-                    strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
-                    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-                    cbrock.checkshared = 2;
-                }
-                else {
-                    strlcpy(domainpat+domainlen, p, sizeof(domainpat)-domainlen);
-                    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-                }
-
-                domainpat[domainlen] = '\0';
-                cyrusdb_foreach(subs,
-                                domainpat, domainlen,
-                                &find_p, &find_cb, &cbrock,
-                                NULL);
-                free(cbrock.prev);
-                cbrock.prev = NULL;
-                cbrock.prevlen = 0;
-            }
-            else if (pattern[len] == '.') {
-                strlcpy(domainpat+domainlen, pattern+len+1,
-                        sizeof(domainpat)-domainlen);
-                cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-
-                cyrusdb_foreach(subs,
-                                domainpat, domainlen+prefixlen-(len+1),
-                                &find_p, &find_cb, &cbrock,
-                                NULL);
-                free(cbrock.prev);
-                cbrock.prev = NULL;
-                cbrock.prevlen = 0;
-            }
-        }
-    }
-
-  done:
-    if (subs) mboxlist_closesubs(subs);
-    glob_free(&cbrock.g);
-    if (pat) free(pat);
-
-    return r;
-}
 
 /* returns CYRUSDB_NOTFOUND if the folder doesn't exist, and 0 if it does! */
 EXPORTED int mboxlist_checksub(const char *name, const char *userid)

@@ -50,8 +50,6 @@
 #include "glob.h"
 #include "xmalloc.h"
 
-#define SEPCHAR '.'
-
 /* initialize globbing structure
  *  This makes the following changes to the input string:
  *   1) '*' added to each end if GLOB_SUBSTRING
@@ -60,18 +58,16 @@
  *   4) '*' eats all '*'s and '%'s connected by any wildcard
  *   5) '%' eats all adjacent '%'s
  */
-EXPORTED glob *glob_init_suppress(const char *str, int flags,
-                         const char *suppress)
+EXPORTED glob *glob_init_sep(const char *str, int flags, char sep)
 {
     glob *g;
     char *dst;
-    int slen = 0, newglob;
+    int newglob;
 
     newglob = flags & GLOB_HIERARCHY;
-    if (suppress) slen = strlen(suppress);
-    g = (glob *) xmalloc(sizeof (glob) + slen + strlen(str) + 1);
+    g = (glob *) xmalloc(sizeof (glob) + strlen(str) + 1);
     if (g != 0) {
-        g->sep_char = '.';
+        g->sep_char = sep;
         dst = g->str;
         /* if we're doing a substring match, put a '*' prefix (1) */
         if (flags & GLOB_SUBSTRING) {
@@ -124,22 +120,6 @@ EXPORTED glob *glob_init_suppress(const char *str, int flags,
         }
         *dst++ = '\0';
         g->flags = flags;
-
-        /* set suppress string if:
-         *  1) the suppress string isn't a prefix of the glob pattern and
-         *  2) the suppress string prefix matches the glob pattern
-         */
-        g->suppress = 0;
-        if (suppress) {
-            dst = g->str + strlen(g->str) + 1;
-            strcpy(dst, suppress);
-            str = g->str;
-            if (strncmp(suppress, str, slen) ||
-                (str[slen] != '\0' && str[slen] != g->sep_char
-                     && str[slen] != '*' && str[slen] != '%')) {
-                while (*str && *str == *suppress) ++str, ++suppress;
-            }
-        }
     }
 
     return (g);
@@ -186,13 +166,6 @@ EXPORTED int glob_test(glob* g, const char* ptr,
     gstar = ghier = NULL;
     newglob = g->flags & GLOB_HIERARCHY;
     phier = pstar = NULL;       /* initialize to eliminate warnings */
-
-    /* check for suppress string */
-    if (g->suppress && !strncmp(g->suppress, ptr, g->slen) &&
-        (ptr[g->slen] == '\0' || ptr[g->slen] == g->sep_char)) {
-        if (min) *min = -1;
-        return (-1);
-    }
 
     /* main globbing loops */
 

@@ -987,8 +987,7 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     assert(mboxname);
     assert(entry);
     frock.mglob = glob_init(mboxname, GLOB_HIERARCHY);
-    frock.eglob = glob_init(entry, GLOB_HIERARCHY);
-    GLOB_SET_SEPARATOR(frock.eglob, '/');
+    frock.eglob = glob_init_sep(entry, GLOB_HIERARCHY, '/');
     frock.uid = uid;
     frock.proc = proc;
     frock.rock = rock;
@@ -2258,8 +2257,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
         int j;
         int check_db = 0; /* should we check the db for this entry? */
 
-        g = glob_init(s, GLOB_HIERARCHY);
-        GLOB_SET_SEPARATOR(g, '/');
+        g = glob_init_sep(s, GLOB_HIERARCHY, '/');
 
         for (j = 0 ; j < non_db_entries->count ; j++) {
             const annotate_entrydesc_t *desc = non_db_entries->data[j];
