@@ -230,6 +230,23 @@ EXPORTED int cyrusdb_foreach(struct db *db,
                                 p, cb, rock, tid);
 }
 
+EXPORTED int cyrusdb_forone(struct db *db,
+               const char *key, size_t keylen,
+               foreach_p *p,
+               foreach_cb *cb, void *rock,
+               struct txn **tid)
+{
+    const char *data;
+    size_t datalen;
+    int r = cyrusdb_fetch(db, key, keylen, &data, &datalen, tid);
+    if (r == CYRUSDB_NOTFOUND) return 0;
+    if (r) return r;
+
+    if (p(rock, key, keylen, data, datalen))
+        r = cb(rock, key, keylen, data, datalen);
+    return r;
+}
+
 EXPORTED int cyrusdb_create(struct db *db,
               const char *key, size_t keylen,
               const char *data, size_t datalen,

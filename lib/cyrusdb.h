@@ -259,6 +259,11 @@ extern int cyrusdb_foreach(struct db *db,
                            foreach_p *p,
                            foreach_cb *cb, void *rock,
                            struct txn **tid);
+extern int cyrusdb_forone(struct db *db,
+                           const char *key, size_t keylen,
+                           foreach_p *p,
+                           foreach_cb *cb, void *rock,
+                           struct txn **tid);
 int cyrusdb_create(struct db *db,
                           const char *key, size_t keylen,
                           const char *data, size_t datalen,
