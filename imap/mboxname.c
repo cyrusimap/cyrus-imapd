@@ -82,21 +82,6 @@ static struct mboxlocklist *open_mboxlocks = NULL;
 
 static struct namespace *admin_namespace;
 
-/* Mailbox patterns which the design of the server prohibits */
-static const char * const badmboxpatterns[] = {
-    "",
-    "*\t*",
-    "*\n*",
-    "*/*",
-    ".*",
-    "*.",
-    "*..*",
-    "user",
-    "user.anyone",
-    "user.anonymous",
-};
-#define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
-
 #define XX 127
 /*
  * Table for decoding modified base64 for IMAP UTF-7 mailbox names
@@ -1196,12 +1181,11 @@ EXPORTED void mboxname_free_parts(struct mboxname_parts *parts)
 HIDDEN int mboxname_policycheck(const char *name)
 {
     const char *p;
-    unsigned i;
-    struct glob *g;
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
     int unixsep;
+    int namelen = strlen(name);
 
     unixsep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP);
 
@@ -1215,7 +1199,7 @@ HIDDEN int mboxname_policycheck(const char *name)
     if (mboxname_isdeletedmailbox(name, NULL))
         return 0;
 
-    if (strlen(name) > MAX_MAILBOX_NAME)
+    if (namelen > MAX_MAILBOX_NAME)
         return IMAP_MAILBOX_BADNAME;
 
     /* find the virtual domain, if any.  We don't sanity check domain
@@ -1228,16 +1212,27 @@ HIDDEN int mboxname_policycheck(const char *name)
             return IMAP_MAILBOX_BADNAME;
     }
 
-    for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
-        g = glob_init(badmboxpatterns[i], GLOB_ICASE);
-        if (GLOB_TEST(g, name) != -1) {
-            glob_free(&g);
-            return IMAP_MAILBOX_BADNAME;
-        }
-        glob_free(&g);
-    }
+    /* bad mbox patterns */
+    // empty name
+    if (!name[0]) return IMAP_MAILBOX_BADNAME;
+    // leading dot
+    if (name[0] == '.') return IMAP_MAILBOX_BADNAME;
+    // leading ~
+    if (name[0] == '~') return IMAP_MAILBOX_BADNAME;
+    // trailing dot
+    if (name[namelen-1] == '.') return IMAP_MAILBOX_BADNAME;
+    // double dot (zero length path item)
+    if (strstr(name, "..")) return IMAP_MAILBOX_BADNAME;
+    // non-" " whitespace
+    if (strchr(name, '\r')) return IMAP_MAILBOX_BADNAME;
+    if (strchr(name, '\n')) return IMAP_MAILBOX_BADNAME;
+    if (strchr(name, '\t')) return IMAP_MAILBOX_BADNAME;
+    // top level user
+    if (!strcmp(name, "user")) return IMAP_MAILBOX_BADNAME;
+    // special users
+    if (!strcmp(name, "user.anyone")) return IMAP_MAILBOX_BADNAME;
+    if (!strcmp(name, "user.anonymous")) return IMAP_MAILBOX_BADNAME;
 
-    if (*name == '~') return IMAP_MAILBOX_BADNAME;
     while (*name) {
         if (*name == '&') {
             /* Modified UTF-7 */
