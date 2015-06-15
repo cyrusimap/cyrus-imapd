@@ -12072,7 +12072,6 @@ static void list_response(const char *name, int attributes,
                           struct listargs *listargs)
 {
     const struct mbox_name_attribute *attr;
-    char internal_name[MAX_MAILBOX_PATH+1];
     int r;
     char mboxname[MAX_MAILBOX_PATH+1];
     const char *sep;
@@ -12082,18 +12081,8 @@ static void list_response(const char *name, int attributes,
 
     if (!name) return;
 
-    /* first convert "INBOX" to "user.<userid>" */
-    if (!strchr(name, '!') && !strncasecmp(name, "inbox", 5)
-        && (!name[5] || name[5] == '.') ) {
-        (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
-                                               imapd_userid, internal_name);
-        strlcat(internal_name, name+5, sizeof(internal_name));
-    }
-    else
-        strlcpy(internal_name, name, sizeof(internal_name));
-
     /* get info and set flags */
-    r = mboxlist_lookup(internal_name, &mbentry, NULL);
+    r = mboxlist_lookup(name, &mbentry, NULL);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         attributes |= (listargs->cmd & LIST_CMD_EXTENDED) ?
@@ -12131,7 +12120,7 @@ static void list_response(const char *name, int attributes,
 
             goto done;
         }
-        else if (!strcmpsafe(internal_name, index_mboxname(imapd_index))) {
+        else if (!strcmpsafe(name, index_mboxname(imapd_index))) {
             /* currently selected mailbox */
             if (!index_scan(imapd_index, listargs->scan))
                 goto done; /* no matching messages */
@@ -12147,7 +12136,7 @@ static void list_response(const char *name, int attributes,
             init.authstate = imapd_authstate;
             init.out = imapd_out;
 
-            r = index_open(internal_name, &init, &state);
+            r = index_open(name, &init, &state);
 
             if (!r)
                 doclose = 1;
@@ -12245,7 +12234,7 @@ static void list_response(const char *name, int attributes,
     /* can we read the status data ? */
     if ((listargs->ret & LIST_RET_STATUS) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
-        r = imapd_statusdata(internal_name, listargs->statusitems, &sdata);
+        r = imapd_statusdata(name, listargs->statusitems, &sdata);
         if (r) {
             /* RFC 5819: the STATUS response MUST NOT be returned and the
              * LIST response MUST include the \NoSelect attribute. */
