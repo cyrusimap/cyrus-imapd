@@ -69,7 +69,6 @@ typedef struct glob {
 /* glob_init flags: */
 #define GLOB_SUBSTRING    (1<<0)  /* match a substring */
 #define GLOB_HIERARCHY    (1<<1)  /* use '%' as hierarchy matching and no '?' */
-#define GLOB_INBOXCASE    (1<<2)  /* match "inbox" prefix case insensitive */
 
 /* initialize globbing structure
  *  str      -- globbing string
@@ -96,7 +95,6 @@ extern int glob_test P((glob *g, const char *str, long len, long *min));
 
 /* macros */
 #define glob_init(str, flags) glob_init_suppress((str), (flags), NULL)
-#define glob_inboxcase(g) ((g)->inbox)
 #define GLOB_TEST(g, str) glob_test((g), (str), 0, NULL)
 #define GLOB_SET_SEPARATOR(g, c) ((g)->sep_char = (c))
 

@@ -2071,7 +2071,6 @@ struct find_rock {
     int find_namespace;
     int domainlen;
     int inboxoffset;
-    const char *inboxcase;
     const char *usermboxname;
     size_t usermboxnamelen;
     int checkmboxlist;
@@ -2111,14 +2110,6 @@ static int find_p(void *rockp,
         }
         memcpy(namebuf, key, keylen);
         namebuf[keylen] = '\0';
-
-        if (rock->inboxoffset) {
-            namebuf[rock->inboxoffset] = rock->inboxcase[0];
-            namebuf[rock->inboxoffset+1] = rock->inboxcase[1];
-            namebuf[rock->inboxoffset+2] = rock->inboxcase[2];
-            namebuf[rock->inboxoffset+3] = rock->inboxcase[3];
-            namebuf[rock->inboxoffset+4] = rock->inboxcase[4];
-        }
 
         matchlen = glob_test(g, namebuf+rock->inboxoffset,
                              keylen-rock->inboxoffset, &minmatch);
@@ -2235,14 +2226,6 @@ static int find_cb(void *rockp,
             r = mboxlist_lookup(namebuf, NULL, NULL);
         } else {
             r = 0;              /* don't bother checking */
-        }
-
-        if (!r && rock->inboxoffset) {
-            namebuf[rock->inboxoffset] = rock->inboxcase[0];
-            namebuf[rock->inboxoffset+1] = rock->inboxcase[1];
-            namebuf[rock->inboxoffset+2] = rock->inboxcase[2];
-            namebuf[rock->inboxoffset+3] = rock->inboxcase[3];
-            namebuf[rock->inboxoffset+4] = rock->inboxcase[4];
         }
 
         matchlen = glob_test(g, namebuf+rock->inboxoffset,
@@ -2506,10 +2489,9 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
     if (domainpat[0] == '\0')
         strlcpy(domainpat, pattern, sizeof(domainpat));
 
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
     cbrock.namespace = NULL;
     cbrock.domainlen = domainlen;
-    cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = 0;   /* don't duplicate work */
@@ -2542,7 +2524,7 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
                               &data, &datalen, NULL);
             if (r == CYRUSDB_NOTFOUND) r = 0;
             else if (!r)
-                r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+                r = (*proc)("INBOX", 5, 1, rock);
         }
         else if (!strncmp(pattern,
                           usermboxname+domainlen, usermboxnamelen-domainlen) &&
@@ -2663,10 +2645,9 @@ HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
     else
         domainpat[0] = '\0';
 
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
     cbrock.namespace = namespace;
     cbrock.domainlen = domainlen;
-    cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = 0;   /* don't duplicate work */
@@ -2699,7 +2680,7 @@ HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
                               &data, &datalen, NULL);
             if (r == CYRUSDB_NOTFOUND) r = 0;
             else if (!r)
-                r = (*proc)(cbrock.inboxcase, 5, 0, rock);
+                r = (*proc)("INBOX", 5, 0, rock);
         }
 
         strlcat(usermboxname, ".", sizeof(usermboxname));
@@ -3324,10 +3305,9 @@ EXPORTED int mboxlist_findsub(struct namespace *namespace,
     else
         xstrncpy(domainpat, pattern, sizeof(domainpat));
 
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
     cbrock.namespace = NULL;
     cbrock.domainlen = domainlen;
-    cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = 1;         /* user can always see their subs */
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = !force;
@@ -3367,7 +3347,7 @@ EXPORTED int mboxlist_findsub(struct namespace *namespace,
                              &data, &datalen, NULL);
             if (r == CYRUSDB_NOTFOUND) r = 0;
             else if (!r)
-                r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+                r = (*proc)("INBOX", 5, 1, rock);
         }
         else if (!strncmp(pattern,
                           usermboxname+domainlen, usermboxnamelen-domainlen) &&
@@ -3520,10 +3500,9 @@ HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
     else
         domainpat[0] = '\0';
 
-    cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.g = glob_init(pattern, GLOB_HIERARCHY);
     cbrock.namespace = namespace;
     cbrock.domainlen = domainlen;
-    cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = 1;         /* user can always see their subs */
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = !force;
@@ -3563,7 +3542,7 @@ HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
                               &data, &datalen, NULL);
             if (r == CYRUSDB_NOTFOUND) r = 0;
             else if (!r)
-                r = (*proc)(cbrock.inboxcase, 5, 0, rock);
+                r = (*proc)("INBOX", 5, 0, rock);
         }
         strlcat(usermboxname, ".", sizeof(usermboxname));
         usermboxnamelen++;
