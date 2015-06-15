@@ -67,10 +67,9 @@ typedef struct glob {
 } glob;
 
 /* glob_init flags: */
-#define GLOB_ICASE        0x01  /* case insensitive */
-#define GLOB_SUBSTRING    0x02  /* match a substring */
-#define GLOB_HIERARCHY    0x04  /* use '%' as hierarchy matching and no '?' */
-#define GLOB_INBOXCASE    0x08  /* match "inbox" prefix case insensitive */
+#define GLOB_SUBSTRING    (1<<0)  /* match a substring */
+#define GLOB_HIERARCHY    (1<<1)  /* use '%' as hierarchy matching and no '?' */
+#define GLOB_INBOXCASE    (1<<2)  /* match "inbox" prefix case insensitive */
 
 /* initialize globbing structure
  *  str      -- globbing string

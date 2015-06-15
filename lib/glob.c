@@ -128,7 +128,6 @@ EXPORTED glob *glob_init_suppress(const char *str, int flags,
             *dst++ = '*';
         }
         *dst++ = '\0';
-        if (flags & GLOB_ICASE) lcase(g->str);
         g->flags = flags;
 
         /* pre-match "INBOX" to the pattern case insensitively and save state
@@ -244,189 +243,96 @@ EXPORTED int glob_test(glob* g, const char* ptr,
     }
 
     /* main globbing loops */
-    if (!(g->flags & GLOB_ICASE)) {
-        /* case sensitive version */
 
-        /* loop to manage wildcards */
-        do {
-            sepfound = 0;
-            /* see if we match to the next '%' or '*' wildcard */
-            while (*gptr != '*' && *gptr != '%' && ptr != pend
-                   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
-                ++ptr, ++gptr;
+    /* loop to manage wildcards */
+    do {
+        sepfound = 0;
+        /* see if we match to the next '%' or '*' wildcard */
+        while (*gptr != '*' && *gptr != '%' && ptr != pend
+               && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
+            ++ptr, ++gptr;
+        }
+
+        if (*gptr == '\0' && ptr == pend) {
+            /* End of pattern and end of string -- match! */
+            break;
+        }
+
+        if (*gptr == '*') {
+            ghier = NULL;
+            gstar = ++gptr;
+            pstar = ptr;
+        }
+        if (*gptr == '%') {
+            ghier = ++gptr;
+            phier = ptr;
+        }
+
+        if (ghier) {
+            /* look for a match with first char following '%',
+             * stop at a sep_char unless we're doing "*%"
+             */
+            ptr = phier;
+            while (ptr != pend && *ghier != *ptr
+                   && (*ptr != g->sep_char ||
+                       (!*ghier && gstar && *gstar == '%' && min
+                        && ptr - start < *min))) {
+                ++ptr;
             }
-
-            if (*gptr == '\0' && ptr == pend) {
-                /* End of pattern and end of string -- match! */
+            if (ptr == pend) {
+                gptr = ghier;
+                break;
+            }
+            if (*ptr == g->sep_char) {
+                if (!*ghier && min
+                    && *min < ptr - start && ptr != pend
+                    && *ptr == g->sep_char
+                    ) {
+                    *min = gstar ? ptr - start + 1 : -1;
+                    return (ptr - start);
+                }
+                ghier = NULL;
+                sepfound = 1;
+            } else {
+                phier = ++ptr;
+                gptr = ghier + 1;
+            }
+        }
+        if (gstar && !ghier) {
+            /* was the * at the end of the pattern? */
+            if (!*gstar) {
+                ptr = pend;
                 break;
             }
 
-            if (*gptr == '*') {
-                ghier = NULL;
-                gstar = ++gptr;
-                pstar = ptr;
-            }
-            if (*gptr == '%') {
-                ghier = ++gptr;
-                phier = ptr;
-            }
-
-            if (ghier) {
-                /* look for a match with first char following '%',
-                 * stop at a sep_char unless we're doing "*%"
-                 */
-                ptr = phier;
-                while (ptr != pend && *ghier != *ptr
-                       && (*ptr != g->sep_char ||
-                           (!*ghier && gstar && *gstar == '%' && min
-                            && ptr - start < *min))) {
-                    ++ptr;
+            /* look for a match with first char following '*' */
+            while (pstar != pend && *gstar != *pstar) ++pstar;
+            if (pstar == pend) {
+                if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
+                    *ptr == g->sep_char) {
+                    /* The pattern ended on a hierarchy separator
+                     * return a partial match */
+                    *min = ptr - start + 1;
+                    return ptr - start;
                 }
-                if (ptr == pend) {
-                    gptr = ghier;
-                    break;
-                }
-                if (*ptr == g->sep_char) {
-                    if (!*ghier && min
-                        && *min < ptr - start && ptr != pend
-                        && *ptr == g->sep_char
-                        ) {
-                        *min = gstar ? ptr - start + 1 : -1;
-                        return (ptr - start);
-                    }
-                    ghier = NULL;
-                    sepfound = 1;
-                } else {
-                    phier = ++ptr;
-                    gptr = ghier + 1;
-                }
-            }
-            if (gstar && !ghier) {
-                /* was the * at the end of the pattern? */
-                if (!*gstar) {
-                    ptr = pend;
-                    break;
-                }
-
-                /* look for a match with first char following '*' */
-                while (pstar != pend && *gstar != *pstar) ++pstar;
-                if (pstar == pend) {
-                    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
-                        *ptr == g->sep_char) {
-                        /* The pattern ended on a hierarchy separator
-                         * return a partial match */
-                        *min = ptr - start + 1;
-                        return ptr - start;
-                    }
-                    gptr = gstar;
-                    break;
-                }
-
-                ptr = ++pstar;
-                gptr = gstar + 1;
-            }
-            if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
-                *ptr == g->sep_char) {
-                /* The pattern ended on a hierarchy separator
-                 * return a partial match */
-                *min = ptr - start + 1;
-                return ptr - start;
-            }
-
-            /* continue if at wildcard or we passed an asterisk */
-        } while (*gptr == '*' || *gptr == '%' ||
-                 ((gstar || ghier || sepfound) && (*gptr || ptr != pend)));
-    } else {
-        /* case insensitive version (same as above, but with TOLOWER()) */
-
-        /* loop to manage wildcards */
-        do {
-            sepfound = 0;
-            /* see if we match to the next '%' or '*' wildcard */
-            while (*gptr != '*' && *gptr != '%' && ptr != pend
-                   && ((unsigned char) *gptr == TOLOWER(*ptr) ||
-                        (!newglob && *gptr == '?'))) {
-                ++ptr, ++gptr;
-            }
-            if (*gptr == '\0' && ptr == pend) {
-                /* End of pattern and end of string -- match! */
+                gptr = gstar;
                 break;
             }
 
-            if (*gptr == '*') {
-                ghier = NULL;
-                gstar = ++gptr;
-                pstar = ptr;
-            }
-            if (*gptr == '%') {
-                ghier = ++gptr;
-                phier = ptr;
-            }
+            ptr = ++pstar;
+            gptr = gstar + 1;
+        }
+        if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
+            *ptr == g->sep_char) {
+            /* The pattern ended on a hierarchy separator
+             * return a partial match */
+            *min = ptr - start + 1;
+            return ptr - start;
+        }
 
-            if (ghier) {
-                /* look for a match with first char following '%',
-                 * stop at a sep_char unless we're doing "*%"
-                 */
-                ptr = phier;
-                while (ptr != pend && (unsigned char) *ghier != TOLOWER(*ptr)
-                       && (*ptr != g->sep_char ||
-                           (!*ghier && gstar && *gstar == '%' && min
-                            && ptr - start < *min))) {
-                    ++ptr;
-                }
-                if (ptr == pend) {
-                    gptr = ghier;
-                    break;
-                }
-                if (*ptr == g->sep_char) {
-                    if (!*ghier && min
-                        && *min < ptr - start && ptr != pend
-                        && *ptr == g->sep_char
-                        ) {
-                        *min = gstar ? ptr - start + 1 : -1;
-                        return (ptr - start);
-                    }
-                    ghier = NULL;
-                    sepfound = 1;
-                } else {
-                    phier = ++ptr;
-                    gptr = ghier + 1;
-                }
-            }
-            if (gstar && !ghier) {
-                if (!*gstar) {
-                    ptr = pend;
-                    break;
-                }
-                /* look for a match with first char following '*' */
-                while (pstar != pend &&
-                       (unsigned char) *gstar != TOLOWER(*pstar)) ++pstar;
-                if (pstar == pend) {
-                    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
-                        *ptr == g->sep_char) {
-                        /* The pattern ended on a hierarchy separator
-                         * return a partial match */
-                        *min = ptr - start + 1;
-                        return ptr - start;
-                    }
-                    gptr = gstar;
-                    break;
-                }
-                ptr = ++pstar;
-                gptr = gstar + 1;
-            }
-            if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
-                *ptr == g->sep_char) {
-                /* The pattern ended on a hierarchy separator
-                 * return a partial match */
-                *min = ptr - start + 1;
-                return ptr - start;
-            }
-
-            /* continue if at wildcard or we passed an asterisk */
-        } while (*gptr == '*' || *gptr == '%' ||
-                 ((gstar || ghier || sepfound) && (*gptr || ptr != pend)));
-    }
+        /* continue if at wildcard or we passed an asterisk */
+    } while (*gptr == '*' || *gptr == '%' ||
+             ((gstar || ghier || sepfound) && (*gptr || ptr != pend)));
 
     if (min) *min = -1;
     return (*gptr == '\0' && ptr == pend ? ptr - start : -1);
