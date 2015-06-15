@@ -622,7 +622,7 @@ static int list_feeds(struct transaction_t *txn)
     buf_reset(body);
     lrock.txn = txn;
     lrock.last = &root;
-    mboxlist_findall(&httpd_namespace, "user.*", 1, httpd_userid,
+    mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
                      httpd_authstate, list_cb, &lrock);
 
     /* Close out the tree */

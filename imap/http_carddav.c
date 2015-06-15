@@ -969,7 +969,7 @@ static int report_card_query(struct transaction_t *txn,
         }
         else {
             /* Add responses for all contained addressbook collections */
-            mboxlist_findall(&httpd_namespace, "user.*", 1, httpd_userid,
+            mboxlist_findall(&httpd_namespace, "*", 1, httpd_userid,
                              httpd_authstate, propfind_by_collection, fctx);
         }
 
