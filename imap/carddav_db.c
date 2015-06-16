@@ -2775,6 +2775,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     struct appendstate as;
     time_t now = time(0);
     char *freeme = NULL;
+    char datestr[80];
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
@@ -2782,15 +2783,19 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
         return -1;
     }
 
+    /* set the REVision time */
+    time_to_iso8601(now, datestr, sizeof(datestr), 0);
+    _card_val(vcard, "REV", datestr);
+
     /* Create header for resource */
     const char *uid = vparse_stringval(vcard, "uid");
     const char *fullname = vparse_stringval(vcard, "fn");
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
-    char datestr[80];
-    time_to_rfc822(now, datestr, sizeof(datestr));
     struct buf buf = BUF_INITIALIZER;
     vparse_tobuf(vcard, &buf);
     const char *mbuserid = mboxname_to_userid(mailbox->name);
+
+    time_to_rfc822(now, datestr, sizeof(datestr));
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
     header = charset_encode_mimeheader(mbuserid, 0);
