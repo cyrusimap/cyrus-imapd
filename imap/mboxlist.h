@@ -207,10 +207,6 @@ int mboxlist_sync_setacls(const char *name, const char *acl);
 int mboxlist_findall(struct namespace *namespace,
                      const char *pattern, int isadmin, const char *userid,
                      struct auth_state *auth_state, int (*proc)(), void *rock);
-int mboxlist_findall_alt(struct namespace *namespace,
-                         const char *pattern, int isadmin, const char *userid,
-                         struct auth_state *auth_state, int (*proc)(),
-                         void *rock);
 
 /* Find a mailbox's parent (if any) */
 int mboxlist_findparent(const char *mboxname,
@@ -231,10 +227,6 @@ int mboxlist_findsub(struct namespace *namespace,
                      const char *pattern, int isadmin, const char *userid,
                      struct auth_state *auth_state, int (*proc)(), void *rock,
                      int force);
-int mboxlist_findsub_alt(struct namespace *namespace,
-                         const char *pattern, int isadmin, char const *userid,
-                         struct auth_state *auth_state, int (*proc)(),
-                         void *rock, int force);
 
 /* given a mailbox 'name', where should we stage messages for it?
    'stagedir' should be MAX_MAILBOX_PATH. */

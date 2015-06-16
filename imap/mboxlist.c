@@ -2410,7 +2410,7 @@ done:
  */
 /* Find all mailboxes that match 'pattern'. */
 
-static int mboxlist_do_find(struct find_rock *rock, const char *pattern, int isalt)
+static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
 {
     const char *userid = rock->userid;
     int isadmin = rock->isadmin;
@@ -2463,7 +2463,8 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern, int isa
         rock->find_namespace = NAMESPACE_INBOX;
 
         /* special case magic for now */
-        rock->is_the_inbox = isalt;
+        rock->is_the_inbox = rock->namespace->isalt;
+
         r = cyrusdb_forone(rock->db, inbox, inboxlen, &find_p, &find_cb, rock, NULL);
         if (r == CYRUSDB_DONE) r = 0;
         if (r) goto done;
@@ -2568,10 +2569,10 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern, int isa
     return r;
 }
 
-static int mboxlist_findall_raw(struct namespace *namespace,
-                                const char *pattern, int isadmin, const char *userid,
-                                struct auth_state *auth_state, int (*proc)(),
-                                void *rock, int isalt)
+EXPORTED int mboxlist_findall(struct namespace *namespace,
+                            const char *pattern, int isadmin, const char *userid,
+                            struct auth_state *auth_state, int (*proc)(),
+                            void *rock)
 {
     struct find_rock cbrock;
 
@@ -2587,25 +2588,7 @@ static int mboxlist_findall_raw(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.userid = userid;
 
-    return mboxlist_do_find(&cbrock, pattern, isalt);
-}
-
-EXPORTED int mboxlist_findall(struct namespace *namespace,
-                              const char *pattern, int isadmin, const char *userid,
-                              struct auth_state *auth_state, int (*proc)(),
-                              void *rock)
-{
-    return mboxlist_findall_raw(namespace, pattern, isadmin, userid,
-                                auth_state, proc, rock, 0);
-}
-
-HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
-                              const char *pattern, int isadmin, const char *userid,
-                              struct auth_state *auth_state, int (*proc)(),
-                              void *rock)
-{
-    return mboxlist_findall_raw(namespace, pattern, isadmin, userid,
-                                auth_state, proc, rock, 1);
+    return mboxlist_do_find(&cbrock, pattern);
 }
 
 static int child_cb(char *name,
@@ -3041,10 +3024,10 @@ static void mboxlist_closesubs(struct db *sub)
  * is the user's login id.  For each matching mailbox, calls
  * 'proc' with the name of the mailbox.
  */
-static int mboxlist_findsub_raw(struct namespace *namespace,
-                     const char *pattern, int isadmin,
-                     const char *userid, struct auth_state *auth_state,
-                     int (*proc)(), void *rock, int force, int isalt)
+EXPORTED int mboxlist_findsub(struct namespace *namespace,
+                            const char *pattern, int isadmin,
+                            const char *userid, struct auth_state *auth_state,
+                            int (*proc)(), void *rock, int force)
 {
     struct db *subs = NULL;
     struct find_rock cbrock;
@@ -3069,29 +3052,11 @@ static int mboxlist_findsub_raw(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.userid = userid;
 
-    r = mboxlist_do_find(&cbrock, pattern, isalt);
+    r = mboxlist_do_find(&cbrock, pattern);
 
     mboxlist_closesubs(subs);
 
     return r;
-}
-
-EXPORTED int mboxlist_findsub(struct namespace *namespace,
-                     const char *pattern, int isadmin,
-                     const char *userid, struct auth_state *auth_state,
-                     int (*proc)(), void *rock, int force)
-{
-    return mboxlist_findsub_raw(namespace, pattern, isadmin, userid,
-                                auth_state, proc, rock, force, 0);
-}
-
-HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
-                     const char *pattern, int isadmin,
-                     const char *userid, struct auth_state *auth_state,
-                     int (*proc)(), void *rock, int force)
-{
-    return mboxlist_findsub_raw(namespace, pattern, isadmin, userid,
-                                auth_state, proc, rock, force, 1);
 }
 
 static int subsadd_cb(void *rock, const char *key, size_t keylen,
