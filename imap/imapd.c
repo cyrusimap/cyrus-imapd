@@ -12083,12 +12083,6 @@ static void list_response(const char *name, int attributes,
     }
     else if (r) return;
 
-    /* skip all non-IMAP folders (unless an admin or listing subscriptions) */
-    else if ((mbentry->mbtype & MBTYPES_NONIMAP) &&
-             !(imapd_userisadmin || (listargs->sel & LIST_SEL_SUBSCRIBED))) {
-        goto done;
-    }
-
     else if (listargs->scan) {
         /* SCAN mailbox for content */
 
@@ -12332,6 +12326,15 @@ static void perform_output(const char *name, size_t matchlen,
     }
 
     if (name) {
+        mbentry_t *mbentry = NULL;
+        if (!imapd_userisadmin && !mboxlist_lookup(name, &mbentry, NULL)) {
+            /* skip all non-IMAP folders */
+            if (mbentry->mbtype & MBTYPES_NONIMAP) {
+                mboxlist_entry_free(&mbentry);
+                return;
+            }
+            mboxlist_entry_free(&mbentry);
+        }
         rock->last_name = xstrndup(name, matchlen);
         rock->last_attributes = 0;
     }
