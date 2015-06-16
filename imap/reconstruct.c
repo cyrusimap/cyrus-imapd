@@ -313,8 +313,8 @@ int main(int argc, char **argv)
         }
         assert(!rflag);
         strlcpy(buf, "*", sizeof(buf));
-        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
-                                            do_reconstruct, NULL);
+        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
+                         do_reconstruct, NULL);
     }
 
     for (i = optind; i < argc; i++) {
@@ -334,9 +334,9 @@ int main(int argc, char **argv)
                                     strcspn(buf, "@") : 0);
 
         /* reconstruct the first mailbox/pattern */
-        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
-                                            0, do_reconstruct,
-                                            fflag ? &discovered : NULL);
+        mboxlist_findall(&recon_namespace, buf, 1, 0,
+                         0, do_reconstruct,
+                         fflag ? &discovered : NULL);
         if (rflag) {
             /* build a pattern for submailboxes */
             char *p = strchr(buf, '@');
@@ -347,9 +347,9 @@ int main(int argc, char **argv)
             if (domain) strlcat(buf, domain, sizeof(buf));
 
             /* reconstruct the submailboxes */
-            (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
-                                                0, do_reconstruct,
-                                                fflag ? &discovered : NULL);
+            mboxlist_findall(&recon_namespace, buf, 1, 0,
+                             0, do_reconstruct,
+                             fflag ? &discovered : NULL);
         }
     }
 

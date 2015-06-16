@@ -297,8 +297,7 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
     if (!nmboxnames) {
         assert(!recursive_flag);
         strlcpy(buf, "*", sizeof(buf));
-        (*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
-                                             0, 0, addmbox, sa);
+        mboxlist_findall(&squat_namespace, buf, 1, 0, 0, addmbox, sa);
     }
 
     for (i = 0; i < nmboxnames; i++) {
@@ -315,8 +314,7 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
         strarray_append(sa, buf);
         if (recursive_flag || user_mode) {
             strlcat(buf, ".*", sizeof(buf));
-            (*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
-                                                 0, 0, addmbox, sa);
+            mboxlist_findall(&squat_namespace, buf, 1, 0, 0, addmbox, sa);
         }
     }
 }
@@ -615,8 +613,7 @@ static void add_user(strarray_t *folders, const char *user)
     char *expr = strconcat(mbox, ".*", (char *)NULL);
 
     strarray_append(folders, mbox);
-    (*squat_namespace.mboxlist_findall) (&squat_namespace, expr, 1,
-                                         0, 0, addmbox, folders);
+    mboxlist_findall(&squat_namespace, expr, 1, 0, 0, addmbox, folders);
 
     free(expr);
     free(mbox);

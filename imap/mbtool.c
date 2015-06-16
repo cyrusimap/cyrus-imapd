@@ -152,8 +152,8 @@ int main(int argc, char **argv)
         /* Handle virtdomains and separators in mailboxname */
         (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
                                                NULL, buf);
-        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
-                                            do_cmd, &cmd);
+        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
+                         do_cmd, &cmd);
     }
 
     mboxlist_close();

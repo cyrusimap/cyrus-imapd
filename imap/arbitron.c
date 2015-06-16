@@ -217,8 +217,8 @@ int main(int argc,char **argv)
 
     /* Get the mailbox list */
     fprintf(stderr, "Loading Mailboxes...");
-    (*arb_namespace.mboxlist_findall)(&arb_namespace, pattern, 1, 0, 0,
-                                      do_mailbox, NULL);
+    mboxlist_findall(&arb_namespace, pattern, 1, 0, 0,
+                     do_mailbox, NULL);
 
     fprintf(stderr, "Done\nLoading Users");
 

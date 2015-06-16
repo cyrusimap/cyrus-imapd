@@ -2662,20 +2662,20 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
         char deletedname[MAX_MAILBOX_BUFFER];
         mboxname_todeleted(buf, deletedname, 0);
         strlcat(deletedname, ".*", sizeof(deletedname));
-        r = (*sstate->namespace->mboxlist_findall)(sstate->namespace,
-                                              deletedname,
-                                              sstate->userisadmin,
-                                              userid, sstate->authstate,
-                                              mailbox_cb, &mrock);
+        r = mboxlist_findall(sstate->namespace,
+                             deletedname,
+                             sstate->userisadmin,
+                             userid, sstate->authstate,
+                             mailbox_cb, &mrock);
         if (r) goto bail;
     }
 
     /* And then all folders */
     strlcat(buf, ".*", sizeof(buf));
-    r = (*sstate->namespace->mboxlist_findall)(sstate->namespace, buf,
-                                              sstate->userisadmin,
-                                              userid, sstate->authstate,
-                                              mailbox_cb, &mrock);
+    r = mboxlist_findall(sstate->namespace, buf,
+                         sstate->userisadmin,
+                         userid, sstate->authstate,
+                         mailbox_cb, &mrock);
     if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {

@@ -9370,12 +9370,12 @@ static int apply_mailbox_pattern(annotate_state_t *state,
     arock.proc = proc;
     arock.data = data;
 
-    r = imapd_namespace.mboxlist_findall(&imapd_namespace,
-                                         pattern,
-                                         imapd_userisadmin || imapd_userisproxyadmin,
-                                         imapd_userid,
-                                         imapd_authstate,
-                                         apply_cb, &arock);
+    r = mboxlist_findall(&imapd_namespace,
+                         pattern,
+                         imapd_userisadmin || imapd_userisproxyadmin,
+                         imapd_userid,
+                         imapd_authstate,
+                         apply_cb, &arock);
 
     if (!r && !arock.nseen)
         r = IMAP_MAILBOX_NONEXISTENT;
@@ -12559,15 +12559,6 @@ static void list_data_recursivematch(struct listargs *listargs,
 /* Retrieves the data and prints the untagged responses for a LIST command. */
 static void list_data(struct listargs *listargs)
 {
-    int (*findall)(struct namespace *namespace,
-                   const char *pattern, int isadmin, const char *userid,
-                   struct auth_state *auth_state, int (*proc)(),
-                   void *rock);
-    int (*findsub)(struct namespace *namespace,
-                   const char *pattern, int isadmin, const char *userid,
-                   struct auth_state *auth_state, int (*proc)(),
-                   void *rock, int force);
-
     canonical_list_patterns(listargs->ref, &listargs->pat);
 
     /* Check to see if we should only list the personal namespace */
@@ -12575,15 +12566,10 @@ static void list_data(struct listargs *listargs)
             && !strcmp(listargs->pat.data[0], "*")
             && config_getswitch(IMAPOPT_FOOLSTUPIDCLIENTS)) {
         strarray_set(&listargs->pat, 0, "INBOX*");
-        findsub = mboxlist_findsub;
-        findall = mboxlist_findall;
-    } else {
-        findsub = imapd_namespace.mboxlist_findsub;
-        findall = imapd_namespace.mboxlist_findall;
     }
 
     if (listargs->sel & LIST_SEL_RECURSIVEMATCH) {
-        list_data_recursivematch(listargs, findsub);
+        list_data_recursivematch(listargs, mboxlist_findsub);
     } else {
         char **pattern;
         struct list_rock rock;
@@ -12592,8 +12578,8 @@ static void list_data(struct listargs *listargs)
 
         if (listargs->sel & LIST_SEL_SUBSCRIBED) {
             for (pattern = listargs->pat.data ; pattern && *pattern ; pattern++) {
-                findsub(&imapd_namespace, *pattern, imapd_userisadmin,
-                        imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
+                mboxlist_findsub(&imapd_namespace, *pattern, imapd_userisadmin,
+                                 imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
                 perform_output(NULL, 0, &rock);
             }
         } else {
@@ -12602,8 +12588,8 @@ static void list_data(struct listargs *listargs)
             }
 
             for (pattern = listargs->pat.data ; pattern && *pattern ; pattern++) {
-                findall(&imapd_namespace, *pattern, imapd_userisadmin,
-                        imapd_userid, imapd_authstate, list_cb, &rock);
+                mboxlist_findall(&imapd_namespace, *pattern, imapd_userisadmin,
+                                 imapd_userid, imapd_authstate, list_cb, &rock);
                 perform_output(NULL, 0, &rock);
             }
 

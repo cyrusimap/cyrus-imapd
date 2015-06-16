@@ -965,8 +965,7 @@ int main(int argc, char **argv)
             fatal(error_message(r), EC_CONFIG);
         }
 
-        (*conv_namespace.mboxlist_findall)(&conv_namespace, buf, 1, 0, 0,
-                                           do_mailbox, NULL);
+        mboxlist_findall(&conv_namespace, buf, 1, 0, 0, do_mailbox, NULL);
 
         free(prev_userid);
         free(buf);

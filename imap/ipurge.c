@@ -194,8 +194,8 @@ int main (int argc, char *argv[]) {
 
   if (optind == argc) { /* do the whole partition */
     strcpy(buf, "*");
-    (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
-                                        purge_me, NULL);
+    mboxlist_findall(&purge_namespace, buf, 1, 0, 0,
+                     purge_me, NULL);
   } else {
     for (; optind < argc; optind++) {
       strncpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
@@ -203,8 +203,8 @@ int main (int argc, char *argv[]) {
       mboxname_hiersep_tointernal(&purge_namespace, buf,
                                   config_virtdomains ?
                                   strcspn(buf, "@") : 0);
-      (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
-                                          purge_me, NULL);
+      mboxlist_findall(&purge_namespace, buf, 1, 0, 0,
+                       purge_me, NULL);
     }
   }
 

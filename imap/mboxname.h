@@ -69,20 +69,12 @@ struct namespace {
     /* Convert the internal mailbox 'name' to an external name. */
     int (*mboxname_toexternal)(struct namespace *namespace, const char *name,
                                const char *userid, char *result);
-    int (*mboxlist_findall)(struct namespace *namespace,
-                            const char *pattern, int isadmin, const char *userid,
-                            struct auth_state *auth_state, int (*proc)(),
-                            void *rock);
-    int (*mboxlist_findsub)(struct namespace *namespace,
-                            const char *pattern, int isadmin, const char *userid,
-                            struct auth_state *auth_state, int (*proc)(),
-                            void *rock, int force);
 };
 
 #define NAMESPACE_INITIALIZER { '.', 0, 0, \
                                 { "INBOX.", "user.", "" }, \
                                 { 0, 0, 0, }, \
-                                NULL, NULL, NULL, NULL }
+                                NULL, NULL }
 
 struct mboxlock {
     char *name;

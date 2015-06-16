@@ -156,18 +156,18 @@ int main(int argc, char **argv)
 
     if (optind == argc) {
         strlcpy(buf, "*", sizeof(buf));
-        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
-                                            quotachk ? do_quota : do_examine,
-                                            NULL);
+        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
+                         quotachk ? do_quota : do_examine,
+                         NULL);
     }
 
     for (i = optind; i < argc; i++) {
         /* Handle virtdomains and separators in mailboxname */
         (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
                                                NULL, buf);
-        (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
-                                            quotachk ? do_quota : do_examine,
-                                            NULL);
+        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
+                         quotachk ? do_quota : do_examine,
+                         NULL);
     }
 
     mboxlist_close();

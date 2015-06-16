@@ -127,8 +127,8 @@ int main(int argc, char *argv[])
         mboxname_hiersep_tointernal(&dump_namespace, buf,
                                     config_virtdomains ?
                                     strcspn(buf, "@") : 0);
-        (*dump_namespace.mboxlist_findall)(&dump_namespace, buf, 1, 0, 0,
-                                           dump_me, &irec);
+        mboxlist_findall(&dump_namespace, buf, 1, 0, 0,
+                         dump_me, &irec);
     }
 
     mboxlist_close();
