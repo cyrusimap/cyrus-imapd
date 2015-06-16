@@ -1360,7 +1360,7 @@ envelope_err:
                             tm.tm_hour, tm.tm_min, tm.tm_sec);
                         break;
                 case B_ISO8601:
-                        time_to_iso8601(t, buffer, sizeof(buffer));
+                        time_to_iso8601(t, buffer, sizeof(buffer), 1);
                         break;
                 case B_STD11:
                         time_to_rfc822(t, buffer, sizeof(buffer));

@@ -68,7 +68,7 @@ int time_to_rfc822(time_t t, char *buf, size_t len);
  * ISO8601 (RFC3339) datetime format
  */
 int time_from_iso8601(const char *s, time_t *);
-int time_to_iso8601(time_t t, char *buf, size_t len);
+int time_to_iso8601(time_t t, char *buf, size_t len, int withsep);
 int timeval_to_iso8601(const struct timeval *t, enum timeval_precision tv_prec,
                        char *buf, size_t len);
 

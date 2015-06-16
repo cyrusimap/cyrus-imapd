@@ -442,11 +442,12 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
 
 static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
                                      enum timeval_precision tv_precision,
-                                     char *buf, size_t len)
+                                     char *buf, size_t len, int withsep)
 {
     long gmtoff = gmtoff_of(tm, t->tv_sec);
     int gmtnegative = 0;
     size_t rlen;
+    const char *datefmt = withsep ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S";
 
     /*assert(date > 0); - it turns out these can happen, annoyingly enough */
     assert(tm->tm_year >= 69);
@@ -457,7 +458,7 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
     }
     gmtoff /= 60;
 
-    rlen = strftime(buf, len, "%Y-%m-%dT%H:%M:%S", tm);
+    rlen = strftime(buf, len, datefmt, tm);
     if (rlen > 0) {
         switch(tv_precision) {
         case timeval_ms:
@@ -486,12 +487,12 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
  *
  * Returns: number of characters in @buf generated, or -1 on error.
  */
-EXPORTED int time_to_iso8601(time_t t, char *buf, size_t len)
+EXPORTED int time_to_iso8601(time_t t, char *buf, size_t len, int withsep)
 {
     struct tm *tm = (struct tm *) gmtime(&t);
     struct timeval tv = { t, 0 };
 
-    return breakdown_time_to_iso8601(&tv, tm, timeval_s, buf, len);
+    return breakdown_time_to_iso8601(&tv, tm, timeval_s, buf, len, withsep);
 }
 
 /*
@@ -504,7 +505,7 @@ EXPORTED int timeval_to_iso8601(const struct timeval *tv, enum timeval_precision
                        char *buf, size_t len)
 {
     struct tm *tm = localtime(&(tv->tv_sec));
-    return breakdown_time_to_iso8601(tv, tm, tv_prec, buf, len);
+    return breakdown_time_to_iso8601(tv, tm, tv_prec, buf, len, 1);
 }
 
 EXPORTED int time_to_rfc3339(time_t t, char *buf, size_t len)

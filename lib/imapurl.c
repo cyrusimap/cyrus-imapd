@@ -480,7 +480,7 @@ EXPORTED void imapurl_toURL(char *dst, const struct imapurl *url)
         if (url->urlauth.expire) {
             strcpy(dst, ";EXPIRE=");
             dst += strlen(dst);
-            dst += time_to_iso8601(url->urlauth.expire, dst, INT_MAX);
+            dst += time_to_iso8601(url->urlauth.expire, dst, INT_MAX, 1);
         }
         dst += sprintf(dst, ";URLAUTH=%s", url->urlauth.access);
         if (url->urlauth.mech) {
