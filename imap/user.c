@@ -246,14 +246,14 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 }
 
 struct rename_rock {
-    char *olduser;
-    char *newuser;
-    char *oldinbox;
-    char *newinbox;
+    const char *olduser;
+    const char *newuser;
+    const char *oldinbox;
+    const char *newinbox;
     int domainchange;
 };
 
-static int user_renamesub(char *name, int matchlen __attribute__((unused)),
+static int user_renamesub(const char *name, int matchlen __attribute__((unused)),
                           int maycreate __attribute__((unused)), void* rock)
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
@@ -282,7 +282,7 @@ static int user_renamesub(char *name, int matchlen __attribute__((unused)),
     return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1);
 }
 
-static int user_renamesieve(char *olduser, char *newuser)
+static int user_renamesieve(const char *olduser, const char *newuser)
 {
     char hash, *domain;
     char oldpath[2048], newpath[2048];
@@ -348,8 +348,8 @@ static int user_renamesieve(char *olduser, char *newuser)
     return r;
 }
 
-EXPORTED int user_renamedata(char *olduser, char *newuser,
-                    char *userid __attribute__((unused)),
+EXPORTED int user_renamedata(const char *olduser, const char *newuser,
+                    const char *userid __attribute__((unused)),
                     struct auth_state *authstate)
 {
     struct namespace namespace;
@@ -406,8 +406,8 @@ EXPORTED int user_renamedata(char *olduser, char *newuser,
     return r;
 }
 
-EXPORTED int user_renameacl(struct namespace *namespace, char *name,
-                            char *olduser, char *newuser)
+EXPORTED int user_renameacl(struct namespace *namespace, const char *name,
+                            const char *olduser, const char *newuser)
 {
     int r = 0;
     char *acl;
@@ -447,7 +447,7 @@ EXPORTED int user_renameacl(struct namespace *namespace, char *name,
     return r;
 }
 
-EXPORTED int user_copyquotaroot(char *oldname, char *newname)
+EXPORTED int user_copyquotaroot(const char *oldname, const char *newname)
 {
     int r = 0;
     struct quota q;
