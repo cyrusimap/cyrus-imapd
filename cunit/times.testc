@@ -333,7 +333,7 @@ test_gen_iso8601(void)
     char buf[30];
     int r;
 
-    r = time_to_iso8601(TIMET, buf, sizeof(buf));
+    r = time_to_iso8601(TIMET, buf, sizeof(buf), 1);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_UTC);
 }
