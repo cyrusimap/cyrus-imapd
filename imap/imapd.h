@@ -345,7 +345,8 @@ enum {
     LIST_SEL_SUBSCRIBED =       (1<<0),
     LIST_SEL_REMOTE =           (1<<1),
     LIST_SEL_RECURSIVEMATCH =   (1<<2),
-    LIST_SEL_SPECIALUSE =       (1<<3)
+    LIST_SEL_SPECIALUSE =       (1<<3),
+    LIST_SEL_DAV =              (1<<4)
 };
 
 /* Bitmask for List return options */

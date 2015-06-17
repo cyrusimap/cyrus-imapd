@@ -1649,6 +1649,8 @@ static void cmdloop(void)
                 memset(&listargs, 0, sizeof(struct listargs));
                 listargs.cmd = LIST_CMD_LSUB;
                 listargs.sel = LIST_SEL_SUBSCRIBED;
+                if (!strcasecmpsafe(imapd_magicplus, "+dav"))
+                    listargs.sel |= LIST_SEL_DAV;
                 listargs.ref = arg1.s;
                 strarray_append(&listargs.pat, arg2.s);
 
@@ -7370,6 +7372,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
         prot_ungetc(c, imapd_in);
 
     if (!strcmpsafe(imapd_magicplus, "+")) listargs->sel |= LIST_SEL_SUBSCRIBED;
+    else if (!strcasecmpsafe(imapd_magicplus, "+dav")) listargs->sel |= LIST_SEL_DAV;
 
     /* Read in reference name */
     c = getastring(imapd_in, imapd_out, &reference);
@@ -12329,11 +12332,18 @@ static void perform_output(const char *name, size_t matchlen,
         mbentry_t *mbentry = NULL;
         if (!imapd_userisadmin && !mboxlist_lookup(name, &mbentry, NULL)) {
             /* skip all non-IMAP folders */
-            if (mbentry->mbtype & MBTYPES_NONIMAP) {
-                mboxlist_entry_free(&mbentry);
+            int mbtype = mbentry->mbtype;
+
+            mboxlist_entry_free(&mbentry);
+            switch (mbtype) {
+            case MBTYPE_CALENDAR:
+            case MBTYPE_ADDRESSBOOK:
+            case MBTYPE_COLLECTION:
+                if (rock->listargs->sel & LIST_SEL_DAV) break;
+
+            case MBTYPE_NETNEWS:
                 return;
             }
-            mboxlist_entry_free(&mbentry);
         }
         rock->last_name = xstrndup(name, matchlen);
         rock->last_attributes = 0;
