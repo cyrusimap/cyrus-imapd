@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#         Opera Software Australia Pty. Ltd.
+#         Level 50, 120 Collins St
+#         Melbourne 3000
+#         Victoria
+#         Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -62,7 +62,7 @@ sub init
     $basedir = abs_path($basedir);
 
     my $supp = $cassini->val('imaptest', 'suppress',
-			     'listext subscribe');
+                             'listext subscribe');
     map { $suppressed{$_} = 1; } split(/\s+/, $supp);
 
     $binary = "$basedir/src/imaptest";
@@ -73,7 +73,13 @@ init;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({}, @_);
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(virtdomains => 'userid');
+    $config->set(unixhierarchysep => 'on');
+    $config->set(altnamespace => 'yes');
+
+    return $class->SUPER::new({ config => $config }, @args);
+
 }
 
 sub set_up
@@ -94,18 +100,18 @@ sub list_tests
 
     if (!defined $basedir)
     {
-	return ( 'test_warning_imaptest_is_not_installed' );
+        return ( 'test_warning_imaptest_is_not_installed' );
     }
 
     opendir TESTS, $testdir
-	or die "Cannot open directory $testdir: $!";
+        or die "Cannot open directory $testdir: $!";
     while (my $e = readdir TESTS)
     {
-	next if $e =~ m/^\./;
-	next if $e =~ m/\.mbox$/;
-	next if $suppressed{$e};
-	next if ( ! -f "$testdir/$e" );
-	push(@tests, "test_$e");
+        next if $e =~ m/^\./;
+        next if $e =~ m/\.mbox$/;
+        next if $suppressed{$e};
+        next if ( ! -f "$testdir/$e" );
+        push(@tests, "test_$e");
     }
     closedir TESTS;
 
@@ -118,11 +124,11 @@ sub run_test
 
     if (!defined $basedir)
     {
-	xlog "ImapTests are not enabled.  To enabled them, please";
-	xlog "install ImapTest from http://www.imapwiki.org/ImapTest/";
-	xlog "and edit [imaptest]basedir in cassandane.ini";
-	xlog "This is not a failure";
-	return;
+        xlog "ImapTests are not enabled.  To enabled them, please";
+        xlog "install ImapTest from http://www.imapwiki.org/ImapTest/";
+        xlog "and edit [imaptest]basedir in cassandane.ini";
+        xlog "This is not a failure";
+        return;
     }
 
     my $name = $self->name();
@@ -138,29 +144,29 @@ sub run_test
     my $errfile = $self->{instance}->{basedir} .  "/$name.errors";
     my $status;
     $self->{instance}->run_command({
-	    redirects => { stderr => $errfile },
-	    handlers => {
-		exited_normally => sub { $status = 1; },
-		exited_abnormally => sub { $status = 0; },
-	    },
-	},
-	$binary,
-	"host=" . $params->{host},
-	"port=" . $params->{port},
-	"user=" . $params->{username},
-	"pass=" . $params->{password},
-	"rawlog",
-	"test=$testdir/$name");
+            redirects => { stderr => $errfile },
+            handlers => {
+                exited_normally => sub { $status = 1; },
+                exited_abnormally => sub { $status = 0; },
+            },
+        },
+        $binary,
+        "host=" . $params->{host},
+        "port=" . $params->{port},
+        "user=" . $params->{username},
+        "pass=" . $params->{password},
+        "rawlog",
+        "test=$testdir/$name");
 
     if ((!$status || get_verbose) && -f $errfile)
     {
-	open FH, '<', $errfile
-	    or die "Cannot open $errfile for reading: $!";
-	while (readline FH)
-	{
-	    xlog $_;
-	}
-	close FH;
+        open FH, '<', $errfile
+            or die "Cannot open $errfile for reading: $!";
+        while (readline FH)
+        {
+            xlog $_;
+        }
+        close FH;
     }
     $self->assert($status);
 }
