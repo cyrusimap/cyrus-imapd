@@ -200,7 +200,7 @@ static struct {
                    { 239,  -1,  -1, 439 } };
 
 static void cmdloop(void);
-static int open_group(char *name, int has_prefix,
+static int open_group(const char *name, int has_prefix,
                       struct backend **ret, int *postable);
 static int getuserpass(struct protstream *in, struct buf *buf);
 static int parserange(char *str, uint32_t *uid, uint32_t *last,
@@ -1729,7 +1729,7 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
     return (gmt ? mkgmtime(&tm) : mktime(&tm));
 }
 
-static int open_group(char *name, int has_prefix, struct backend **ret,
+static int open_group(const char *name, int has_prefix, struct backend **ret,
                       int *postable /* used for LIST ACTIVE only */)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -2450,7 +2450,7 @@ static void cmd_help(void)
 }
 
 struct list_rock {
-    int (*proc)(char *, void *);
+    int (*proc)(const char *, void *);
     struct wildmat *wild;
     struct hash_table server_table;
 };
@@ -2458,7 +2458,7 @@ struct list_rock {
 /*
  * mboxlist_findall() callback function to LIST
  */
-static int list_cb(char *name, int matchlen,
+static int list_cb(const char *name, int matchlen,
                    int maycreate __attribute__((unused)), void *rock)
 {
     static char lastname[MAX_MAILBOX_BUFFER];
@@ -2526,7 +2526,7 @@ static void list_proxy(const char *server, void *data __attribute__((unused)), v
 /*
  * perform LIST ACTIVE (backend) or create a server hash table (proxy)
  */
-static int do_active(char *name, void *rock)
+static int do_active(const char *name, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
     int r, postable;
@@ -2559,7 +2559,7 @@ static int do_active(char *name, void *rock)
 /*
  * perform LIST NEWSGROUPS (backend) or create a server hash table (proxy)
  */
-static int do_newsgroups(char *name, void *rock)
+static int do_newsgroups(const char *name, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
     mbentry_t *mbentry = NULL;

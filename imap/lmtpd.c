@@ -400,7 +400,7 @@ struct fuzz_rock {
 
 #define WSP_CHARS "- _"
 
-static int fuzzy_match_cb(char *name,
+static int fuzzy_match_cb(const char *name,
                           int matchlen __attribute__((unused)),
                           int maycreate __attribute__((unused)),
                           void *rock)

@@ -1408,7 +1408,7 @@ struct list_cal_rock {
     unsigned alloc;
 };
 
-static int list_cal_cb(char *name,
+static int list_cal_cb(const char *name,
                        int matchlen __attribute__((unused)),
                        int maycreate __attribute__((unused)),
                        void *rock)
@@ -4642,7 +4642,7 @@ static int busytime_by_resource(void *rock, void *data)
 
 
 /* mboxlist_findall() callback to find busytime of a collection */
-static int busytime_by_collection(char *mboxname, int matchlen,
+static int busytime_by_collection(const char *mboxname, int matchlen,
                                   int maycreate, void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;

@@ -460,20 +460,20 @@ static void appendfieldlist(struct fieldlist **l, char *section,
 static void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
 
-static int set_haschildren(char *name, int matchlen, int maycreate,
-                           int *attributes);
+static int set_haschildren(const char *name, int matchlen, int maycreate,
+                           void *rock);
 static void list_response(const char *name, int attributes,
                           struct listargs *listargs);
-static int set_subscribed(char *name, int matchlen, int maycreate,
+static int set_subscribed(const char *name, int matchlen, int maycreate,
                           void *rock);
 static char *canonical_list_pattern(const char *reference,
                                     const char *pattern);
 static void canonical_list_patterns(const char *reference,
                                     strarray_t *patterns);
-static int list_cb(char *name, int matchlen, int maycreate,
-                  struct list_rock *rock);
-static int subscribed_cb(const char *name, int matchlen, int maycreate,
-                         struct list_rock *rock);
+static int list_cb(const char *name, int matchlen, int maycreate,
+                   void *rock);
+static int subscribed_cb(const const char *name, int matchlen, int maycreate,
+                         void *rock);
 static void list_data(struct listargs *listargs);
 static int list_data_remote(char *tag, struct listargs *listargs);
 
@@ -6561,7 +6561,7 @@ done:
 }
 
 /* Callback for use by cmd_delete */
-static int delmbox(char *name,
+static int delmbox(const char *name,
                    int matchlen __attribute__((unused)),
                    int maycreate __attribute__((unused)),
                    void *rock __attribute__((unused)))
@@ -6733,7 +6733,7 @@ struct renrock
 };
 
 /* Callback for use by cmd_rename */
-static int checkmboxname(char *name,
+static int checkmboxname(const char *name,
                          int matchlen __attribute__((unused)),
                          int maycreate __attribute__((unused)),
                          void *rock)
@@ -6756,7 +6756,7 @@ static int checkmboxname(char *name,
 }
 
 /* Callback for use by cmd_rename */
-static int renmbox(char *name,
+static int renmbox(const char *name,
                    int matchlen __attribute__((unused)),
                    int maycreate __attribute__((unused)),
                    void *rock)
@@ -7953,7 +7953,7 @@ static void print_quota_limits(struct protstream *o, const struct quota *q)
  * Callback for (get|set)quota, to ensure that all of the
  * submailboxes are on the same server.
  */
-static int quota_cb(char *name, int matchlen __attribute__((unused)),
+static int quota_cb(const char *name, int matchlen __attribute__((unused)),
                     int maycreate __attribute__((unused)), void *rock)
 {
     const char *servername = (const char *)rock;
@@ -8667,7 +8667,7 @@ static void cmd_status(char *tag, char *name)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-static int namespacedata(char *name,
+static int namespacedata(const char *name,
                          int matchlen __attribute__((unused)),
                          int maycreate __attribute__((unused)),
                          void *rock)
@@ -9304,7 +9304,7 @@ struct apply_rock {
     unsigned int nseen;
 };
 
-static int apply_cb(char *name, int matchlen,
+static int apply_cb(const char *name, int matchlen,
                     int maycreate __attribute__((unused)), void* rock)
 {
     struct apply_rock *arock = (struct apply_rock *)rock;
@@ -10798,7 +10798,7 @@ static int xfer_undump(struct xfer_header *xfer)
     return 0;
 }
 
-static int xfer_user_cb(char *name, int matchlen, int maycreate, void *rock);
+static int xfer_user_cb(const char *name, int matchlen, int maycreate, void *rock);
 static int xfer_addsubmailboxes(struct xfer_header *xfer, const char *mboxname);
 
 static int xfer_initialsync(struct xfer_header *xfer)
@@ -11208,7 +11208,7 @@ static void xfer_recover(struct xfer_header *xfer)
     }
 }
 
-static int xfer_user_cb(char *name,
+static int xfer_user_cb(const char *name,
                         int matchlen __attribute__((unused)),
                         int maycreate __attribute__((unused)),
                         void *rock)
@@ -12017,10 +12017,11 @@ static void freefieldlist(struct fieldlist *l)
     }
 }
 
-static int set_haschildren(char *name, int matchlen,
+static int set_haschildren(const char *name, int matchlen,
                            int maycreate __attribute__((unused)),
-                           int *attributes)
+                           void *rock)
 {
+    int *attributes = (int *)rock;
     list_callback_calls++;
     if (name[matchlen]) {
         *attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
@@ -12303,7 +12304,7 @@ done:
     mboxlist_entry_free(&mbentry);
 }
 
-static int set_subscribed(char *name, int matchlen,
+static int set_subscribed(const char *name, int matchlen,
                           int maycreate __attribute__((unused)),
                           void *rock)
 {
@@ -12352,9 +12353,10 @@ static void perform_output(const char *name, size_t matchlen,
 
 /* callback for mboxlist_findall
  * used when the SUBSCRIBED selection option is NOT given */
-static int list_cb(char *name, int matchlen, int maycreate,
-                  struct list_rock *rock)
+static int list_cb(const char *name, int matchlen, int maycreate,
+                   void *rockp)
 {
+    struct list_rock *rock = (struct list_rock *)rockp;
     int last_len;
     int last_name_is_ancestor =
         rock->last_name
@@ -12389,8 +12391,9 @@ static int list_cb(char *name, int matchlen, int maycreate,
 /* callback for mboxlist_findsub
  * used when SUBSCRIBED but not RECURSIVEMATCH is given */
 static int subscribed_cb(const char *name, int matchlen, int maycreate,
-                         struct list_rock *rock)
+                         void *rockp)
 {
+    struct list_rock *rock = (struct list_rock *)rockp;
     int last_len;
     int last_name_is_ancestor =
         rock->last_name

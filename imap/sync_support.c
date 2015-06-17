@@ -2469,7 +2469,7 @@ struct mbox_rock {
     struct sync_name_list *qrl;
 };
 
-static int mailbox_cb(char *name,
+static int mailbox_cb(const char *name,
                       int matchlen __attribute__((unused)),
                       int maycreate __attribute__((unused)),
                       void *rock)

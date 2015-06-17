@@ -1773,7 +1773,7 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 
 /* Callback for cmd_startupdate to be passed to mboxlist_findall. */
 /* Requires that C->streaming be set to the tag to respond with */
-static int sendupdate(char *name,
+static int sendupdate(const char *name,
                       int matchlen __attribute__((unused)),
                       int maycreate __attribute__((unused)),
                       void *rock)
@@ -2305,7 +2305,7 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
 }
 
 /* Callback for mupdate_synchronize to be passed to mboxlist_findall. */
-static int sync_findall_cb(char *name,
+static int sync_findall_cb(const char *name,
                            int matchlen __attribute__((unused)),
                            int maycreate __attribute__((unused)),
                            void *rock)

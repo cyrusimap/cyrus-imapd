@@ -4221,7 +4221,7 @@ int propfind_by_resource(void *rock, void *data)
 
 
 /* mboxlist_findall() callback to find props on a collection */
-int propfind_by_collection(char *mboxname, int matchlen,
+int propfind_by_collection(const char *mboxname, int matchlen,
                            int maycreate __attribute__((unused)),
                            void *rock)
 {
@@ -5607,7 +5607,7 @@ struct search_crit {
 
 
 /* mboxlist_findall() callback to find user principals (has Inbox) */
-static int principal_search(char *mboxname,
+static int principal_search(const char *mboxname,
                             int matchlen __attribute__((unused)),
                             int maycreate __attribute__((unused)),
                             void *rock)

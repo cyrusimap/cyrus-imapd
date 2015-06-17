@@ -272,7 +272,7 @@ again:
     return r;
 }
 
-static int addmbox(char *name,
+static int addmbox(const char *name,
                    int matchlen __attribute__((unused)),
                    int maycreate __attribute__((unused)),
                    void *rock)

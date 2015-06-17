@@ -288,7 +288,7 @@ static int meth_post(struct transaction_t *txn,
 
 
 /* mboxlist_findall() callback to list mailboxes */
-int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
+int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
                     int maycreate __attribute__((unused)),
                     void *rock)
 {

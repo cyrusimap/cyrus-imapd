@@ -203,10 +203,12 @@ int mboxlist_setacl(struct namespace *namespace, const char *name,
 /* Change all ACLs on mailbox */
 int mboxlist_sync_setacls(const char *name, const char *acl);
 
+typedef int findall_cb(const char *name, int matchlen, int maycreate, void *rock);
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,
-                     const char *pattern, int isadmin, const char *userid,
-                     struct auth_state *auth_state, int (*proc)(), void *rock);
+                     const char *pattern, int isadmin,
+                     const char *userid, struct auth_state *auth_state,
+                     findall_cb *proc, void *rock);
 
 /* Find a mailbox's parent (if any) */
 int mboxlist_findparent(const char *mboxname,
@@ -224,8 +226,9 @@ strarray_t *mboxlist_sublist(const char *userid);
 
 /* Find subscribed mailboxes that match 'pattern'. */
 int mboxlist_findsub(struct namespace *namespace,
-                     const char *pattern, int isadmin, const char *userid,
-                     struct auth_state *auth_state, int (*proc)(), void *rock,
+                     const char *pattern, int isadmin,
+                     const char *userid, struct auth_state *auth_state,
+                     findall_cb *proc, void *rock,
                      int force);
 
 /* given a mailbox 'name', where should we stage messages for it?

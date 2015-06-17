@@ -835,7 +835,7 @@ static int do_user(const char *userid)
     return r;
 }
 
-static int do_mailbox(char *name,
+static int do_mailbox(const char *name,
                       int namelen,
                       int maycreate __attribute__((unused)),
                       void *rock __attribute__((unused)))

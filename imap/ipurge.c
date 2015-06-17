@@ -97,7 +97,7 @@ static struct namespace purge_namespace;
 static int verbose = 1;
 static int forceall = 0;
 
-static int purge_me(char *, int, int, void *);
+static int purge_me(const char *, int, int, void *);
 static unsigned purge_check(struct mailbox *mailbox,
                             const struct index_record *record,
                             void *rock);
@@ -236,7 +236,7 @@ static int usage(const char *name)
 }
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
-static int purge_me(char *name, int matchlen __attribute__((unused)),
+static int purge_me(const char *name, int matchlen __attribute__((unused)),
                     int maycreate __attribute__((unused)),
                     void *rock __attribute__((unused)))
 {

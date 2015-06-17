@@ -407,7 +407,7 @@ struct list_rock {
     struct node *last;
 };
 
-static int list_cb(char *name, int matchlen, int maycreate, void *rock)
+static int list_cb(const char *name, int matchlen, int maycreate, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
     struct node *last = lrock->last;

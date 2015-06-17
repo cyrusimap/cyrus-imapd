@@ -95,7 +95,7 @@ extern char *optarg;
 static struct namespace recon_namespace;
 
 /* forward declarations */
-static int do_cmd(char *name, int matchlen, int maycreate, void *rock);
+static int do_cmd(const char *name, int matchlen, int maycreate, void *rock);
 
 static void usage(void);
 void shut_down(int code);
@@ -172,7 +172,7 @@ static void usage(void)
 /*
  * mboxlist_findall() callback function to examine a mailbox
  */
-static int do_timestamp(char *name)
+static int do_timestamp(const char *name)
 {
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
@@ -218,7 +218,7 @@ static int do_timestamp(char *name)
     return r;
 }
 
-int do_cmd(char *name,
+int do_cmd(const char *name,
            int matchlen __attribute__((unused)),
            int maycreate __attribute__((unused)),
            void *rock)

@@ -2084,7 +2084,7 @@ struct find_rock {
     struct auth_state *auth_state;
     char *prev;
     int prevlen;
-    int (*proc)(char *, int, int, void *rock);
+    findall_cb *proc;
     void *procrock;
 };
 
@@ -2570,14 +2570,15 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
 }
 
 EXPORTED int mboxlist_findall(struct namespace *namespace,
-                            const char *pattern, int isadmin, const char *userid,
-                            struct auth_state *auth_state, int (*proc)(),
-                            void *rock)
+                              const char *pattern, int isadmin,
+                              const char *userid, struct auth_state *auth_state,
+                              findall_cb *proc, void *rock)
 {
-    struct find_rock cbrock;
+    int r = 0;
 
     if (!namespace) namespace = mboxname_get_adminnamespace();
 
+    struct find_rock cbrock;
     memset(&cbrock, 0, sizeof(struct find_rock));
 
     cbrock.auth_state = auth_state;
@@ -2588,10 +2589,12 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.userid = userid;
 
-    return mboxlist_do_find(&cbrock, pattern);
+    r = mboxlist_do_find(&cbrock, pattern);
+
+    return r;
 }
 
-static int child_cb(char *name,
+static int child_cb(const char *name,
                     int matchlen __attribute__((unused)),
                     int maycreate __attribute__((unused)),
                     void *rock)
@@ -3025,20 +3028,21 @@ static void mboxlist_closesubs(struct db *sub)
  * 'proc' with the name of the mailbox.
  */
 EXPORTED int mboxlist_findsub(struct namespace *namespace,
-                            const char *pattern, int isadmin,
-                            const char *userid, struct auth_state *auth_state,
-                            int (*proc)(), void *rock, int force)
+                              const char *pattern, int isadmin,
+                              const char *userid, struct auth_state *auth_state,
+                              findall_cb *proc, void *rock,
+                              int force)
 {
-    struct db *subs = NULL;
-    struct find_rock cbrock;
     int r = 0;
 
     if (!namespace) namespace = mboxname_get_adminnamespace();
 
+    struct find_rock cbrock;
     memset(&cbrock, 0, sizeof(struct find_rock));
 
     /* open the subscription file that contains the mailboxes the
        user is subscribed to */
+    struct db *subs = NULL;
     r = mboxlist_opensubs(userid, &subs);
     if (r) return r;
 

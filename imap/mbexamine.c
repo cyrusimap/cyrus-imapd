@@ -95,8 +95,8 @@ extern char *optarg;
 static struct namespace recon_namespace;
 
 /* forward declarations */
-static int do_examine(char *name, int matchlen, int maycreate, void *rock);
-static int do_quota(char *name, int matchlen, int maycreate, void *rock);
+static int do_examine(const char *name, int matchlen, int maycreate, void *rock);
+static int do_quota(const char *name, int matchlen, int maycreate, void *rock);
 static void usage(void);
 void shut_down(int code);
 
@@ -193,7 +193,7 @@ static void print_rec(const char *name, const struct buf *citem)
 /*
  * mboxlist_findall() callback function to examine a mailbox
  */
-static int do_examine(char *name,
+static int do_examine(const char *name,
                       int matchlen __attribute__((unused)),
                       int maycreate __attribute__((unused)),
                       void *rock __attribute__((unused)))
@@ -346,7 +346,7 @@ static int do_examine(char *name,
 /*
  * mboxlist_findall() callback function to examine a mailbox quota usage
  */
-static int do_quota(char *name,
+static int do_quota(const char *name,
                     int matchlen __attribute__((unused)),
                     int maycreate __attribute__((unused)),
                     void *rock __attribute__((unused)))

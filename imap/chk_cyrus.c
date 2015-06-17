@@ -71,7 +71,7 @@ static void usage(void)
 
 static const char *check_part = NULL; /* partition we are checking */
 
-static int chkmbox(char *name,
+static int chkmbox(const char *name,
                    int matchlen __attribute__((unused)),
                    int maycreate __attribute__((unused)),
                    void *rock __attribute__((unused)))

@@ -4715,7 +4715,7 @@ static void mailbox_delete_files(const char *path)
 }
 
 /* Callback for use by cmd_delete */
-static int chkchildren(char *name,
+static int chkchildren(const char *name,
                        int matchlen __attribute__((unused)),
                        int maycreate __attribute__((unused)),
                        void *rock)
