@@ -128,19 +128,9 @@ sub run_test
     my $name = $self->name();
     $name =~ s/^test_//;
 
-    die "No such test: $name"
-	if ( ! -f "$testdir/$name" );
+    die "No such test: $name" if ( ! -f "$testdir/$name" );
     my $mbox = "$name.mbox";
-    $mbox = "default.mbox"
-	if ( ! -f "$testdir/$mbox" );
-
-    my $farm = $self->{instance}->{basedir} . "/" . $name . ".d";
-    mkpath($farm)
-	or die "Cannot mkpath($farm): $!";
-    symlink("$testdir/$name", "$farm/$name")
-	or die "Cannot symlink $testdir/$name to $farm/$name: $!";
-    symlink("$testdir/$mbox", "$farm/$mbox")
-	or die "Cannot symlink $testdir/$mbox to $farm/$mbox: $!";
+    $mbox = "default.mbox" if ( ! -f "$testdir/$mbox" );
 
     my $svc = $self->{instance}->get_service('imap');
     my $params = $svc->store_params();
@@ -160,8 +150,7 @@ sub run_test
 	"user=" . $params->{username},
 	"pass=" . $params->{password},
 	"rawlog",
-	"box=inbox.imaptest",
-	"test=$farm");
+	"test=$testdir/$name");
 
     if ((!$status || get_verbose) && -f $errfile)
     {
