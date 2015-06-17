@@ -202,7 +202,7 @@ sbin_PROGRAMS += imap/idled
 endif # IDLED
 
 if MURDER
-sbin_PROGRAMS += imap/mupdate
+libexec_PROGRAMS += imap/mupdate
 endif # MURDER
 
 if NNTPD
