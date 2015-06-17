@@ -11823,6 +11823,8 @@ static int getlistselopts(char *tag, struct listargs *args)
 
         if (!strcmp(buf.s, "subscribed")) {
             args->sel |= LIST_SEL_SUBSCRIBED | LIST_RET_SUBSCRIBED;
+        } else if (!strcmp(buf.s, "vendor.cmu-dav")) {
+            args->sel |= LIST_SEL_DAV;
         } else if (!strcmp(buf.s, "remote")) {
             args->sel |= LIST_SEL_REMOTE;
         } else if (!strcmp(buf.s, "recursivematch")) {
@@ -12633,6 +12635,9 @@ static int list_data_remote(char *tag, struct listargs *listargs)
         prot_printf(backend_inbox->out, "%s Lsub ", tag);
     } else {
         prot_printf(backend_inbox->out, "%s List (subscribed", tag);
+        if (listargs->sel & LIST_SEL_DAV) {
+            prot_printf(backend_inbox->out, " vendor.cmu-dav");
+        }
         if (listargs->sel & LIST_SEL_REMOTE) {
             prot_printf(backend_inbox->out, " remote");
         }
