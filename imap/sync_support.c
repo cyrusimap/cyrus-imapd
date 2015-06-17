@@ -2976,23 +2976,15 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     }
 
     strarray_truncate(list, 0);
-    r = mboxlist_allusermbox(userid, addmbox_cb, list, /*incdel*/0);
+    r = mboxlist_usermboxtree(userid, addmbox_cb, list, MBOXTREE_DELETED);
     if (r) goto done;
 
-    /* skip first item (INBOX) */
-    for (i = 1; i < list->count; i++) {
-        const char *name = strarray_nth(list, i);
+    /* delete in reverse so INBOX is last */
+    for (i = list->count; i; i--) {
+        const char *name = strarray_nth(list, i-1);
         r = mboxlist_deletemailbox(name, sstate->userisadmin,
                                    sstate->userid, sstate->authstate,
                                    NULL, 0, sstate->local_only, 1);
-        if (r) goto done;
-    }
-
-    /* Nuke INBOX last */
-    if (list->count) {
-        const char *name = strarray_nth(list, 0);
-        r = mboxlist_deletemailbox(name, sstate->userisadmin, sstate->userid,
-                                   sstate->authstate, NULL, 0, sstate->local_only, 0);
         if (r) goto done;
     }
 
@@ -5061,7 +5053,7 @@ static int do_user_main(const char *user,
     info.mboxlist = sync_name_list_create();
     info.quotalist = sync_name_list_create();
 
-    r = mboxlist_allusermbox(user, do_mailbox_info, &info, /*incdel*/1);
+    r = mboxlist_usermboxtree(user, do_mailbox_info, &info, MBOXTREE_DELETED);
 
     /* we know all the folders present on the master, so it's safe to delete
      * anything not mentioned here on the replica - at least until we get

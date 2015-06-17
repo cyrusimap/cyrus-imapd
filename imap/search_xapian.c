@@ -1873,7 +1873,7 @@ static int mbox_vector_cb(const mbentry_t *mbentry, void *rock)
 static int build_mbfilter(const char *userid, struct mbfilter *filter)
 {
     construct_hash_table(&filter->mboxes, 1024, 0);
-    return mboxlist_allusermbox(userid, mbox_vector_cb, filter, /*include_deleted*/0);
+    return mboxlist_usermboxtree(userid, mbox_vector_cb, filter, 0);
 }
 
 static void free_mbfilter(struct mbfilter *filter)

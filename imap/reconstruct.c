@@ -319,7 +319,7 @@ int main(int argc, char **argv)
 
     for (i = optind; i < argc; i++) {
         if (dousers) {
-            mboxlist_allusermbox(argv[i], do_reconstruct_p, NULL, /*include_deleted*/1);
+            mboxlist_usermboxtree(argv[i], do_reconstruct_p, NULL, MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
             continue;
         }
         char *domain = NULL;

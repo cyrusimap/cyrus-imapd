@@ -839,8 +839,8 @@ EXPORTED int search_query_run(search_query_t *query)
         /* We have a scan expression which applies to all folders.
          * Walk over every folder, applying the scan expression. */
         if (query->multiple)
-            r = mboxlist_allusermbox(mboxname_to_userid(index_mboxname(query->state)),
-                                     subquery_run_global_cb, query, /*+deleted*/0);
+            r = mboxlist_usermboxtree(mboxname_to_userid(index_mboxname(query->state)),
+                                      subquery_run_global_cb, query, /*flags*/0);
         else
             r = subquery_run_global(query, index_mboxname(query->state));
         if (r) goto out;

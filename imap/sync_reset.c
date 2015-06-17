@@ -143,18 +143,18 @@ static int reset_single(const char *userid)
     strarray_t *mblist = strarray_new();
 
     /* ignore failures here - the subs file gets deleted soon anyway */
-    for (i = 0; i < sublist->count; i++) {
-        const char *name = strarray_nth(sublist, i);
+    for (i = sublist->count; i; i--) {
+        const char *name = strarray_nth(sublist, i-1);
         (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
     }
 
-    r = mboxlist_allusermbox(userid, addmbox_cb, mblist, /*incdel*/1);
+    r = mboxlist_usermboxtree(userid, addmbox_cb, mblist, MBOXTREE_DELETED);
     if (r) goto fail;
 
-    for (i = 0; i < mblist->count; i++) {
-        const char *name = strarray_nth(mblist, i);
+    for (i = mblist->count; i; i--) {
+        const char *name = strarray_nth(mblist, i-1);
         r = mboxlist_deletemailbox(name, 1, sync_userid,
-                                   sync_authstate, NULL, 0, 1, 0);
+                                   sync_authstate, NULL, 0, 1, 1);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             printf("skipping already removed mailbox %s\n", name);
         }

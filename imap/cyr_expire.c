@@ -603,9 +603,9 @@ int main(int argc, char *argv[])
         time_t archive_mark = time(0) - archive_seconds;
         /* XXX - add syslog? */
         if (do_user)
-            mboxlist_allusermbox(do_user, archive, &archive_mark, /*include_deleted*/1);
+            mboxlist_usermboxtree(do_user, archive, &archive_mark, MBOXTREE_DELETED);
         else
-            mboxlist_allmbox(find_prefix, archive, &archive_mark, /*include_deleted*/1);
+            mboxlist_allmbox(find_prefix, archive, &archive_mark, 0);
     }
 
     if (do_expunge && (expunge_seconds >= 0 || expire_seconds || erock.do_userflags)) {
@@ -628,9 +628,9 @@ int main(int argc, char *argv[])
         }
 
         if (do_user)
-            mboxlist_allusermbox(do_user, expire, &erock, /*include_deleted*/1);
+            mboxlist_usermboxtree(do_user, expire, &erock, MBOXTREE_DELETED);
         else
-            mboxlist_allmbox(find_prefix, expire, &erock, /*include_deleted*/1);
+            mboxlist_allmbox(find_prefix, expire, &erock, 0);
 
         syslog(LOG_NOTICE, "Expired %lu and expunged %lu out of %lu "
                             "messages from %lu mailboxes",
@@ -667,9 +667,9 @@ int main(int argc, char *argv[])
                     (double)(cid_expire_seconds/86400));
 
         if (do_user)
-            mboxlist_allusermbox(do_user, expire_conversations, &crock, /*include_deleted*/1);
+            mboxlist_usermboxtree(do_user, expire_conversations, &crock, MBOXTREE_DELETED);
         else
-            mboxlist_allmbox(find_prefix, expire_conversations, &crock, /*include_deleted*/1);
+            mboxlist_allmbox(find_prefix, expire_conversations, &crock, 0);
 
         syslog(LOG_NOTICE, "Expired %lu entries of %lu entries seen "
                             "in %lu conversation databases",
@@ -702,9 +702,9 @@ int main(int argc, char *argv[])
         drock.delete_mark = time(0) - delete_seconds;
 
         if (do_user)
-            mboxlist_allusermbox(do_user, delete, &drock, /*include_deleted*/1);
+            mboxlist_usermboxtree(do_user, delete, &drock, MBOXTREE_DELETED);
         else
-            mboxlist_allmbox(find_prefix, delete, &drock, /*include_deleted*/1);
+            mboxlist_allmbox(find_prefix, delete, &drock, 0);
 
         for (i = 0 ; i < drock.to_delete.count ; i++) {
             char *name = drock.to_delete.data[i];

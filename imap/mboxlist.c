@@ -2066,7 +2066,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 }
 
 struct find_rock {
-    struct glob *g;
+    ptrarray_t globs;
     struct namespace *namespace;
     const char *userid;
     int find_namespace;
@@ -2094,13 +2094,11 @@ static int find_p(void *rockp,
                   const char *data, size_t datalen)
 {
     struct find_rock *rock = (struct find_rock *) rockp;
-    long minmatch;
-    struct glob *g = rock->g;
-    long matchlen;
     mbentry_t *mbentry = NULL;
     int ret = 0;
     char intname[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_PATH+1]; // bogus path length
+    int i;
 
     memcpy(intname, key, keylen);
     intname[keylen] = 0;
@@ -2129,9 +2127,12 @@ static int find_p(void *rockp,
 
     rock->namespace->mboxname_toexternal(rock->namespace, intname, rock->userid, extname);
 
-
-    minmatch = 0;
-    matchlen = glob_test(g, extname, strlen(extname), &minmatch);
+    long matchlen = -1;
+    for (i = 0; i < rock->globs.count; i++) {
+        long minmatch = 0;
+        long thismatch = glob_test(ptrarray_nth(&rock->globs, i), extname, strlen(extname), &minmatch);
+        if (thismatch > matchlen) matchlen = thismatch;
+    }
 
     /* If its not a match, skip it -- partial matches are ok. */
     if (matchlen == -1) return 0;
@@ -2187,10 +2188,9 @@ static int find_cb(void *rockp,
                    size_t datalen __attribute__((unused)))
 {
     struct find_rock *rock = (struct find_rock *) rockp;
-    struct glob *g = rock->g;
-
     char intname[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_PATH+1]; // bogus path length
+    int i;
 
     /* we passed find_p, so we're a valid thing to output */
 
@@ -2210,15 +2210,19 @@ static int find_cb(void *rockp,
     int extlen = strlen(extname);
     if (!extlen) return 0;
 
-    long minmatch = 0;
-    long matchlen = glob_test(g, extname, extlen, &minmatch);
+    /* re-check the match */
+    long matchlen = -1;
+    for (i = 0; i < rock->globs.count; i++) {
+        long minmatch = 0;
+        long thismatch = glob_test(ptrarray_nth(&rock->globs, i), extname, strlen(extname), &minmatch);
+        if (thismatch > matchlen) matchlen = thismatch;
+    }
 
     if (matchlen == -1) return 0;
 
     if (rock->find_namespace == NAMESPACE_USER && rock->checkuser) {
-        char *user = rock->namespace->prefix[NAMESPACE_USER];
         /* special case:  LIST "" *% -- output prefix */
-        int r = (*rock->proc)(user, strlen(user), 1, rock->procrock);
+        int r = (*rock->proc)("user", 4, 1, rock->procrock);
         if (r) return r;
 
         if (rock->checkuser > 1) {
@@ -2231,9 +2235,8 @@ static int find_cb(void *rockp,
 
     /* found an entry; output it */
     if (rock->find_namespace == NAMESPACE_SHARED && rock->checkshared) {
-        char *shared = rock->namespace->prefix[NAMESPACE_SHARED];
-        /* special case:  LIST "" *% -- output prefix */
-        int r = (*rock->proc)(shared, strlen(shared), 1, rock->procrock);
+        /* special case:  LIST "" *% -- output shared prefix */
+        int r = (*rock->proc)("", 0, 1, rock->procrock);
         if (r) return r;
 
         if (rock->checkshared > 1) {
@@ -2255,7 +2258,7 @@ static int find_cb(void *rockp,
 
 struct allmb_rock {
     struct mboxlist_entry *mbentry;
-    int incdel;
+    int flags;
     mboxlist_cb *proc;
     void *rock;
 };
@@ -2291,30 +2294,57 @@ static int allmbox_p(void *rock,
     r = mboxlist_parse_entry(&mbrock->mbentry, key, keylen, data, datalen);
     if (r) return 0;
 
-    if (!mbrock->incdel && (mbrock->mbentry->mbtype & MBTYPE_DELETED))
+    if (!(mbrock->flags & MBOXTREE_TOMBSTONES) && (mbrock->mbentry->mbtype & MBTYPE_DELETED))
         return 0;
 
     return 1; /* process this record */
 }
 
-EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock,
-                              int incdel)
+EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int incdel)
 {
-    char *search = prefix ? (char *)prefix : "";
-    struct allmb_rock mbrock;
+    struct allmb_rock mbrock = { NULL, 0, proc, rock };
+    int r = 0;
 
-    mbrock.mbentry = NULL;
-    mbrock.incdel = incdel;
-    mbrock.proc = proc;
-    mbrock.rock = rock;
+    if (incdel) mbrock.flags |= MBOXTREE_TOMBSTONES;
+    if (!prefix) prefix = "";
 
-    int r = cyrusdb_foreach(mbdb, search, strlen(search),
-                            allmbox_p, allmbox_cb, &mbrock, 0);
+    r = cyrusdb_foreach(mbdb, prefix, strlen(prefix),
+                        allmbox_p, allmbox_cb, &mbrock, 0);
 
     mboxlist_entry_free(&mbrock.mbentry);
 
     return r;
 }
+
+EXPORTED int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int flags)
+{
+    struct allmb_rock mbrock = { NULL, flags, proc, rock };
+    int r = 0;
+
+    if (!(flags & MBOXTREE_SKIP_ROOT)) {
+        r = cyrusdb_forone(mbdb, mboxname, strlen(mboxname), allmbox_p, allmbox_cb, &mbrock, 0);
+        if (r) goto done;
+    }
+
+    if (!(flags & MBOXTREE_SKIP_CHILDREN)) {
+        char *prefix = strconcat(mboxname, ".", (char *)NULL);
+        r = cyrusdb_foreach(mbdb, prefix, strlen(prefix), allmbox_p, allmbox_cb, &mbrock, 0);
+        free(prefix);
+        if (r) goto done;
+    }
+
+    if ((flags & MBOXTREE_DELETED)) {
+        char *prefix = strconcat(mboxname, ".", (char *)NULL);
+        r = cyrusdb_foreach(mbdb, prefix, strlen(prefix), allmbox_p, allmbox_cb, &mbrock, 0);
+        free(prefix);
+        if (r) goto done;
+    }
+
+ done:
+    mboxlist_entry_free(&mbrock.mbentry);
+    return r;
+}
+
 
 struct alluser_rock {
     char *prev;
@@ -2346,55 +2376,16 @@ EXPORTED int mboxlist_alluser(user_cb *proc, void *rock)
     urock.prev = NULL;
     urock.proc = proc;
     urock.rock = rock;
-    r = mboxlist_allmbox("", alluser_cb, &urock, /*incdel*/0);
+    r = mboxlist_allmbox("", alluser_cb, &urock, /*flags*/0);
     free(urock.prev);
     return r;
 }
 
-EXPORTED int mboxlist_allusermbox(const char *userid, mboxlist_cb *proc,
-                                  void *rock, int incdel)
+EXPORTED int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc,
+                                   void *rock, int flags)
 {
-    struct allmb_rock mbrock;
     char *inbox = mboxname_user_mbox(userid, 0);
-    size_t inboxlen = strlen(inbox);
-    char *search = strconcat(inbox, ".", (char *)NULL);
-    const char *data = NULL;
-    size_t datalen = 0;
-    int r;
-
-    mbrock.mbentry = NULL;
-    mbrock.incdel = incdel;
-    mbrock.proc = proc;
-    mbrock.rock = rock;
-
-    r = cyrusdb_fetch(mbdb, inbox, inboxlen, &data, &datalen, NULL);
-    if (!r) {
-        /* process inbox first */
-        if (allmbox_p(&mbrock, inbox, inboxlen, data, datalen))
-            r = allmbox_cb(&mbrock, inbox, inboxlen, data, datalen);
-    }
-    else if (r == CYRUSDB_NOTFOUND) {
-        /* don't process inbox! */
-        r = 0;
-    }
-    if (r) goto done;
-
-    /* process all the sub folders */
-    r = cyrusdb_foreach(mbdb, search, strlen(search), allmbox_p, allmbox_cb, &mbrock, 0);
-    if (r) goto done;
-
-    /* don't check if delayed delete is enabled, maybe the caller wants to
-     * clean up deleted stuff after it's been turned off */
-    if (incdel) {
-        const char *prefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-        char *name = strconcat(prefix, ".", inbox, ".", (char *)NULL);
-        r = cyrusdb_foreach(mbdb, name, strlen(name), allmbox_p, allmbox_cb, &mbrock, 0);
-        free(name);
-    }
-
-done:
-    mboxlist_entry_free(&mbrock.mbentry);
-    free(search);
+    int r = mboxlist_mboxtree(inbox, proc, rock, flags);
     free(inbox);
     return r;
 }
@@ -2410,7 +2401,7 @@ done:
  */
 /* Find all mailboxes that match 'pattern'. */
 
-static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
+static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 {
     const char *userid = rock->userid;
     int isadmin = rock->isadmin;
@@ -2420,11 +2411,15 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
     size_t prefixlen, len;
     size_t userlen = userid ? strlen(userid) : 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
-    char *pat = NULL;
+    char commonpat[MAX_MAILBOX_BUFFER];
     int r = 0;
-    char *p;
+    int i;
+    const char *p;
 
-    rock->g = glob_init_sep(pattern, GLOB_HIERARCHY, rock->namespace->hier_sep);
+    for (i = 0; i < patterns->count; i++) {
+        glob *g = glob_init_sep(strarray_nth(patterns, i), GLOB_HIERARCHY, rock->namespace->hier_sep);
+        ptrarray_append(&rock->globs, g);
+    }
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
         userlen = p - userid;
@@ -2447,14 +2442,19 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
         userid = 0;
     }
 
-    /* Make a working copy of pattern */
-    pat = xstrdup(pattern);
-
-    /* Find fixed-string pattern prefix */
-    for (p = pat; *p; p++) {
-        if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
+    /* Find the common search prefix of all patterns */
+    const char *firstpat = strarray_nth(patterns, 0);
+    for (prefixlen = 0; firstpat[prefixlen]; prefixlen++) {
+        char c = firstpat[prefixlen];
+        for (i = 1; i < patterns->count; i++) {
+            const char *pat = strarray_nth(patterns, i);
+            if (pat[prefixlen] != c) break;
+        }
+        if (i < patterns->count) break;
+        if (c == '*' || c == '%' || c == '?' || c == '@') break;
+        commonpat[prefixlen] = c;
     }
-    prefixlen = p - pat;
+    commonpat[prefixlen] = '\0';
 
     /*
      * Personal (INBOX) namespace (only if not admin)
@@ -2494,14 +2494,15 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
         len = strlen(rock->namespace->prefix[NAMESPACE_USER]);
         if (len) len--; // trailing separator
 
-        if (!strncmp(rock->namespace->prefix[NAMESPACE_USER], pattern, MIN(len, prefixlen))) {
+        if (!strncmp(rock->namespace->prefix[NAMESPACE_USER], commonpat, MIN(len, prefixlen))) {
             if (prefixlen < len) {
                 /* we match all users */
                 strlcpy(domainpat+rock->domainlen, "user.", sizeof(domainpat)-rock->domainlen);
             }
             else {
+                /* just those in this prefix */
                 strlcpy(domainpat+rock->domainlen, "user.", sizeof(domainpat)-rock->domainlen);
-                /* XXX - improve efficiency by filtering on username part from pattern */
+                strlcpy(domainpat+rock->domainlen+5, commonpat+len+1, sizeof(domainpat)-rock->domainlen-5);
             }
 
             rock->find_namespace = NAMESPACE_USER;
@@ -2527,19 +2528,19 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
         len = strlen(rock->namespace->prefix[NAMESPACE_SHARED]);
         if (len) len--; // trailing separator
 
-        if (!strncmp(rock->namespace->prefix[NAMESPACE_SHARED], pattern, MIN(len, prefixlen))) {
+        if (!strncmp(rock->namespace->prefix[NAMESPACE_SHARED], commonpat, MIN(len, prefixlen))) {
             rock->find_namespace = NAMESPACE_SHARED;
 
-            if (prefixlen <= len) {
+            if (prefixlen <= len && patterns->count == 1) {
                 /* Skip pattern which matches shared namespace prefix */
-                for (p = pat+prefixlen; *p; p++) {
+                for (p = firstpat+prefixlen; *p; p++) {
                     if (*p == '%') continue;
                     else if (*p == '.') p++;
                     break;
                 }
 
-                if (*pattern && !strchr(pattern, '.') &&
-                    pattern[strlen(pattern)-1] == '%') {
+                if (*firstpat && !strchr(firstpat, '.') &&
+                    firstpat[strlen(firstpat)-1] == '%') {
                     /* special case:  LIST "" *% -- output prefix */
                     rock->checkshared = 1;
                 }
@@ -2562,17 +2563,20 @@ static int mboxlist_do_find(struct find_rock *rock, const char *pattern)
     }
 
  done:
-    glob_free(&rock->g);
+    for (i = 0; i < rock->globs.count; i++) {
+        glob *g = ptrarray_nth(&rock->globs, i);
+        glob_free(&g);
+    }
+    ptrarray_fini(&rock->globs);
     free(rock->prev);
-    if (pat) free(pat);
 
     return r;
 }
 
-EXPORTED int mboxlist_findall(struct namespace *namespace,
-                              const char *pattern, int isadmin,
-                              const char *userid, struct auth_state *auth_state,
-                              findall_cb *proc, void *rock)
+EXPORTED int mboxlist_findallmulti(struct namespace *namespace,
+                                   const strarray_t *patterns, int isadmin,
+                                   const char *userid, struct auth_state *auth_state,
+                                   findall_cb *proc, void *rock)
 {
     int r = 0;
 
@@ -2589,7 +2593,22 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.userid = userid;
 
-    r = mboxlist_do_find(&cbrock, pattern);
+    r = mboxlist_do_find(&cbrock, patterns);
+
+    return r;
+}
+
+EXPORTED int mboxlist_findall(struct namespace *namespace,
+                              const char *pattern, int isadmin,
+                              const char *userid, struct auth_state *auth_state,
+                              findall_cb *proc, void *rock)
+{
+    strarray_t patterns = STRARRAY_INITIALIZER;
+    strarray_append(&patterns, pattern);
+
+    int r = mboxlist_findallmulti(namespace, &patterns, isadmin, userid, auth_state, proc, rock);
+
+    strarray_fini(&patterns);
 
     return r;
 }
@@ -3027,11 +3046,11 @@ static void mboxlist_closesubs(struct db *sub)
  * is the user's login id.  For each matching mailbox, calls
  * 'proc' with the name of the mailbox.
  */
-EXPORTED int mboxlist_findsub(struct namespace *namespace,
-                              const char *pattern, int isadmin,
-                              const char *userid, struct auth_state *auth_state,
-                              findall_cb *proc, void *rock,
-                              int force)
+EXPORTED int mboxlist_findsubmulti(struct namespace *namespace,
+                                   const strarray_t *patterns, int isadmin,
+                                   const char *userid, struct auth_state *auth_state,
+                                   findall_cb *proc, void *rock,
+                                   int force)
 {
     int r = 0;
 
@@ -3056,9 +3075,25 @@ EXPORTED int mboxlist_findsub(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.userid = userid;
 
-    r = mboxlist_do_find(&cbrock, pattern);
+    r = mboxlist_do_find(&cbrock, patterns);
 
     mboxlist_closesubs(subs);
+
+    return r;
+}
+
+EXPORTED int mboxlist_findsub(struct namespace *namespace,
+                              const char *pattern, int isadmin,
+                              const char *userid, struct auth_state *auth_state,
+                              findall_cb *proc, void *rock,
+                              int force)
+{
+    strarray_t patterns = STRARRAY_INITIALIZER;
+    strarray_append(&patterns, pattern);
+
+    int r = mboxlist_findsubmulti(namespace, &patterns, isadmin, userid, auth_state, proc, rock, force);
+
+    strarray_fini(&patterns);
 
     return r;
 }

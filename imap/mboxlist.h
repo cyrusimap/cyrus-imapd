@@ -209,6 +209,10 @@ int mboxlist_findall(struct namespace *namespace,
                      const char *pattern, int isadmin,
                      const char *userid, struct auth_state *auth_state,
                      findall_cb *proc, void *rock);
+int mboxlist_findallmulti(struct namespace *namespace,
+                          const strarray_t *patterns, int isadmin,
+                          const char *userid, struct auth_state *auth_state,
+                          findall_cb *proc, void *rock);
 
 /* Find a mailbox's parent (if any) */
 int mboxlist_findparent(const char *mboxname,
@@ -219,8 +223,14 @@ typedef int user_cb(const char *userid, void *rock);
 int mboxlist_alluser(user_cb *proc, void *rock);
 
 typedef int mboxlist_cb(const mbentry_t *mbentry, void *rock);
+
 int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int incdel);
-int mboxlist_allusermbox(const char *userid, mboxlist_cb *proc, void *rock, int incdel);
+#define MBOXTREE_TOMBSTONES (1<<0)
+#define MBOXTREE_SKIP_ROOT (1<<2)
+#define MBOXTREE_SKIP_CHILDREN (1<<3)
+#define MBOXTREE_DELETED (1<<4)
+int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int flags);
+int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc, void *rock, int flags);
 
 strarray_t *mboxlist_sublist(const char *userid);
 
@@ -230,6 +240,11 @@ int mboxlist_findsub(struct namespace *namespace,
                      const char *userid, struct auth_state *auth_state,
                      findall_cb *proc, void *rock,
                      int force);
+int mboxlist_findsubmulti(struct namespace *namespace,
+                          const strarray_t *patterns, int isadmin,
+                          const char *userid, struct auth_state *auth_state,
+                          findall_cb *proc, void *rock,
+                          int force);
 
 /* given a mailbox 'name', where should we stage messages for it?
    'stagedir' should be MAX_MAILBOX_PATH. */
