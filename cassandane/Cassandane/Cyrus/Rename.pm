@@ -49,6 +49,9 @@ use Cassandane::Instance;
 Cassandane::Cyrus::TestCase::magic(Partition2 => sub {
     shift->config_set('partition-p2' => '@basedir@/data-p2');
 });
+Cassandane::Cyrus::TestCase::magic(VirtDomains => sub {
+    shift->config_set('virtdomains' => 'userid');
+});
 Cassandane::Cyrus::TestCase::magic(MetaPartition => sub {
     shift->config_set(
 	'metapartition-default' => '@basedir@/meta',
@@ -158,7 +161,7 @@ sub test_rename_inbox
 #
 # Test rename a folder with subfolders
 #
-sub test_rename_withsub
+sub test_rename_withsub_dom
 {
     my ($self) = @_;
 
@@ -183,6 +186,42 @@ sub test_rename_withsub
 
     $imaptalk->select("INBOX.a.b.c") || die;
     my @postdata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @postdata);
+}
+
+#
+# Test rename a folder with subfolders, domain user
+#
+sub test_rename_withsub
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("renameuser\@example.com");
+    my $domstore = $self->{instance}->get_service('imap')->create_store(username => "renameuser\@example.com");
+    my $domtalk = $domstore->get_client();
+
+    $domtalk->create("INBOX.a");
+    $domtalk->create("INBOX.b");
+    $domtalk->create("INBOX.c");
+
+    $domstore->set_folder("INBOX.c");
+    $domstore->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $domstore->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $domstore->write_end();
+
+    $domtalk->select("INBOX.c") || die;
+    my @predata = $domtalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $domtalk->rename("INBOX.c", "INBOX.b.c") || die;
+    $domtalk->rename("INBOX.b", "INBOX.a.b") || die;
+
+    $domtalk->select("INBOX.a.b.c") || die;
+    my @postdata = $domtalk->search("SEEN");
     $self->assert_num_equals(1, scalar @postdata);
 }
 
