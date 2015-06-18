@@ -12111,6 +12111,11 @@ static void list_response(const char *name, int attributes,
             attributes |= MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_HASCHILDREN;
         attributes &= ~MBOX_ATTRIBUTE_SUBSCRIBED;
     }
+    /* As CHILDINFO extended data item is not allowed if the
+     * RECURSIVEMATCH selection option is not specified */
+    else if (!(listargs->sel & LIST_SEL_RECURSIVEMATCH)) {
+        attributes &= ~MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+    }
 
     /* no inferiors means no children (this basically means the INBOX
      * in alt namespace mode */
