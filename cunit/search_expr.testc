@@ -352,9 +352,7 @@ static void test_get_search_program(void)
     /* FOLDER <mboxname> */
     TESTCASE("folder INBOX\r\n",
              "(and (match folder \"user.fred\"))");
-    TESTCASE("folder inbox\r\n",
-             "(and (match folder \"user.fred\"))");
-    TESTCASE("folder inbox.GastroPub\r\n",
+    TESTCASE("folder INBOX.GastroPub\r\n",
              "(and (match folder \"user.fred.GastroPub\"))");
 
     /* XLISTID <string> */
@@ -1125,15 +1123,15 @@ static void test_split_by_folder_and_index(void)
              "(not (match message-id \"ETSY\"))\n");
 
     /* a folder match node a (true) node and that mboxname */
-    TESTCASE("(match folder \"inbox.Cosby.Sweater\")",
-             "mboxname \"inbox.Cosby.Sweater\" (true)\n");
+    TESTCASE("(match folder \"INBOX.Cosby.Sweater\")",
+             "mboxname \"INBOX.Cosby.Sweater\" (true)\n");
 
     /* negation of a folder match node gets a NULL mboxname - it's
      * supposed to match every folder *EXCEPT* the named one */
-    TESTCASE("(not (match folder \"inbox.Cosby.Sweater\"))",
-             "(not (match folder \"inbox.Cosby.Sweater\"))\n");
-    TESTCASE("(and (match message-id \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))",
-             "(and (match message-id \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))\n");
+    TESTCASE("(not (match folder \"INBOX.Cosby.Sweater\"))",
+             "(not (match folder \"INBOX.Cosby.Sweater\"))\n");
+    TESTCASE("(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))",
+             "(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))\n");
 
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
@@ -1146,14 +1144,14 @@ static void test_split_by_folder_and_index(void)
 
     /* a conjuctive node which does match a folder gets the remainder
      * of the expression and that named mboxname */
-    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (match message-id \"ETSY\"))",
-             "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
-    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (not (match message-id \"ETSY\")))",
-             "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
-    TESTCASE("(and (match message-id \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
-             "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
-    TESTCASE("(and (not (match message-id \"ETSY\")) (match folder \"inbox.Cosby.Sweater\"))",
-             "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
+    TESTCASE("(and (match folder \"INBOX.Cosby.Sweater\") (match message-id \"ETSY\"))",
+             "mboxname \"INBOX.Cosby.Sweater\" (match message-id \"ETSY\")\n");
+    TESTCASE("(and (match folder \"INBOX.Cosby.Sweater\") (not (match message-id \"ETSY\")))",
+             "mboxname \"INBOX.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
+    TESTCASE("(and (match message-id \"ETSY\") (match folder \"INBOX.Cosby.Sweater\"))",
+             "mboxname \"INBOX.Cosby.Sweater\" (match message-id \"ETSY\")\n");
+    TESTCASE("(and (not (match message-id \"ETSY\")) (match folder \"INBOX.Cosby.Sweater\"))",
+             "mboxname \"INBOX.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
 
     /* a disjunctive node which doesn't match folders
      * or indexable attrs is untouched */
@@ -1166,15 +1164,15 @@ static void test_split_by_folder_and_index(void)
 
     /* a disjuctive node which does match folders gets
      * split into two expressions each with the given mboxname*/
-    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (le size 123))",
-             "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+    TESTCASE("(or (match folder \"INBOX.Cosby.Sweater\") (le size 123))",
+             "mboxname \"INBOX.Cosby.Sweater\" (true)\n"
              "(le size 123)\n");
-    TESTCASE("(or (match folder \"inbox.Mlkshk\") (match folder \"inbox.Tumblr\"))",
-             "mboxname \"inbox.Mlkshk\" (true)\n"
-             "mboxname \"inbox.Tumblr\" (true)\n");
-    TESTCASE("(or (and (ge size 456) (match folder \"inbox.Mlkshk\")) (and (le size 123) (match folder \"inbox.Tumblr\")))",
-             "mboxname \"inbox.Mlkshk\" (ge size 456)\n"
-             "mboxname \"inbox.Tumblr\" (le size 123)\n");
+    TESTCASE("(or (match folder \"INBOX.Mlkshk\") (match folder \"INBOX.Tumblr\"))",
+             "mboxname \"INBOX.Mlkshk\" (true)\n"
+             "mboxname \"INBOX.Tumblr\" (true)\n");
+    TESTCASE("(or (and (ge size 456) (match folder \"INBOX.Mlkshk\")) (and (le size 123) (match folder \"INBOX.Tumblr\")))",
+             "mboxname \"INBOX.Mlkshk\" (ge size 456)\n"
+             "mboxname \"INBOX.Tumblr\" (le size 123)\n");
 
     /* indexed comparison nodes and their negations, which don't
      * match any folders, get a NULL mboxname and a trivial scan. */
@@ -1199,22 +1197,22 @@ static void test_split_by_folder_and_index(void)
     /* conjunctions of indexed comparison nodes and their negations, which
      * do match folders either positively or negatively, get a NULL mboxname
      * because we favour the index */
-    TESTCASE("(and (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\"))",
-             "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
-    TESTCASE("(and (match folder \"inbox.Tumblr\") (fuzzymatch subject \"ETSY\"))",
-             "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
-    TESTCASE("(and (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\")))",
-             "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
-    TESTCASE("(and (not (match folder \"inbox.Tumblr\")) (fuzzymatch subject \"ETSY\"))",
-             "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
+    TESTCASE("(and (fuzzymatch subject \"ETSY\") (match folder \"INBOX.Tumblr\"))",
+             "indexed (fuzzymatch subject \"ETSY\") (match folder \"INBOX.Tumblr\")\n");
+    TESTCASE("(and (match folder \"INBOX.Tumblr\") (fuzzymatch subject \"ETSY\"))",
+             "indexed (fuzzymatch subject \"ETSY\") (match folder \"INBOX.Tumblr\")\n");
+    TESTCASE("(and (fuzzymatch subject \"ETSY\") (not (match folder \"INBOX.Tumblr\")))",
+             "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"INBOX.Tumblr\"))\n");
+    TESTCASE("(and (not (match folder \"INBOX.Tumblr\")) (fuzzymatch subject \"ETSY\"))",
+             "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"INBOX.Tumblr\"))\n");
 
     /* a disjuctive node where one side contains indexed matches,
      * is split into multiple callbacks, some indexed, some not */
-    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
-             "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+    TESTCASE("(or (match folder \"INBOX.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
+             "mboxname \"INBOX.Cosby.Sweater\" (true)\n"
              "indexed (fuzzymatch subject \"ETSY\") (true)\n");
-    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
-             "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+    TESTCASE("(or (match folder \"INBOX.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
+             "mboxname \"INBOX.Cosby.Sweater\" (true)\n"
              "indexed (fuzzymatch subject \"ETSY\") (true)\n");
     TESTCASE("(or (fuzzymatch subject \"MLKSHK\") (fuzzymatch subject \"TUMBLR\"))",
              "indexed (fuzzymatch subject \"MLKSHK\") (true)\n"
