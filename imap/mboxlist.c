@@ -2072,16 +2072,13 @@ struct find_rock {
     int find_namespace;
     int domainlen;
     int is_the_inbox;
-    int inboxoffset;
     int checkmboxlist;
     int issubs;
-    int checkshared;
     int checkuser;
+    int checkshared;
     struct db *db;
     int isadmin;
     struct auth_state *auth_state;
-    char *prev;
-    int prevlen;
     findall_cb *proc;
     void *procrock;
 };
@@ -2165,21 +2162,6 @@ done:
     return ret;
 }
 
-static int check_name(struct find_rock *rock, const char *base)
-{
-    size_t len = strlen(base);
-    if (rock->prev) {
-        if (cyrusdb_compar(rock->db, base, len, rock->prev, rock->prevlen) <= 0)
-            return 0; /* previous name, skip it */
-        free(rock->prev);
-    }
-
-    rock->prev = xstrndup(base, len);
-    rock->prevlen = len;
-
-    return 1;
-}
-
 static int find_cb(void *rockp,
                    const char *key, size_t keylen,
                    const char *data __attribute__((unused)),
@@ -2194,8 +2176,6 @@ static int find_cb(void *rockp,
 
     memcpy(intname, key, keylen);
     intname[keylen] = 0;
-
-    if (!check_name(rock, intname)) return 0;
 
     if (rock->checkmboxlist) {
         int r = mboxlist_lookup(intname, NULL, NULL);
@@ -2476,10 +2456,6 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         r = cyrusdb_foreach(rock->db, inbox, inboxlen+1, &find_p, &find_cb, rock, NULL);
         if (r == CYRUSDB_DONE) r = 0;
         if (r) goto done;
-
-        free(rock->prev);
-        rock->prev = NULL;
-        rock->prevlen = 0;
     }
 
     /*
@@ -2508,10 +2484,6 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             r = cyrusdb_foreach(rock->db, domainpat, strlen(domainpat), &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
-
-            free(rock->prev);
-            rock->prev = NULL;
-            rock->prevlen = 0;
         }
     }
 
@@ -2553,10 +2525,6 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             r = cyrusdb_foreach(rock->db, domainpat, rock->domainlen, &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
-
-            free(rock->prev);
-            rock->prev = NULL;
-            rock->prevlen = 0;
         }
     }
 
@@ -2566,7 +2534,6 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         glob_free(&g);
     }
     ptrarray_fini(&rock->globs);
-    free(rock->prev);
 
     return r;
 }
