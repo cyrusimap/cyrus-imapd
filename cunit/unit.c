@@ -83,28 +83,6 @@ EXPORTED void fatal(const char *s, int code __attribute__((unused)))
     exit(1);
 }
 
-/*
- * Accumulate the RunSummary between tests.  We need to do this
- * only because all the external CUnit interfaces for running
- * tests will explicitly zero the summary first.  Meh.
- *
- * Fortunately we don't need to accumulate the failure records
- * between test runs, as the Basic interface's all_complete
- * handler does nothing with them anyway.
- */
-static void accumulate_summary(CU_RunSummary *summp)
-{
-    const CU_RunSummary *ss = CU_get_run_summary();
-
-    summp->nSuitesRun += ss->nSuitesRun;
-    summp->nSuitesFailed += ss->nSuitesFailed;
-    summp->nTestsRun += ss->nTestsRun;
-    summp->nTestsFailed += ss->nTestsFailed;
-    summp->nAsserts += ss->nAsserts;
-    summp->nAssertsFailed += ss->nAssertsFailed;
-    summp->nFailureRecords += ss->nFailureRecords;
-}
-
 /* Each test gets a maximum of 20 seconds. */
 #define TEST_TIMEOUT_MS (20*1000)
 
@@ -310,12 +288,8 @@ static void run_tests(void)
     CU_Suite *suite;
     CU_Test *test;
     CU_ErrorCode err;
-    int failed = 0;
     char *testname;
     char suitename[256];
-    CU_RunSummary summ;
-    CU_FailureRecord *failures = NULL;
-    CU_AllTestsCompleteMessageHandler all_complete;
 
     /* Setup to catch long-running tests.  This seems to be
      * particularly a problem on CentOS 5.5. */
@@ -352,23 +326,8 @@ static void run_tests(void)
     /*
      * Run the specified suites and/or tests.
      *
-     * Newer versions of CUnit have an 'active' flag in the suite
-     * and test structures which could be used to implement this
-     * behaviour.  However, this method works with older CUnits
-     * and also allows the user to specify that a test be run
-     * multiple times, which I think is a useful feature.
+     * bail on the first failure
      */
-
-    /* This is a hack: it runs no tests but has the side effects
-     * of emitting the CUnit blurb and initialising the Basic
-     * interface's global callbacks. */
-    CU_basic_run_suite(NULL);
-
-    /* More hackery: disable the all_complete handler temporarily */
-    all_complete = CU_get_all_test_complete_handler();
-    CU_set_all_test_complete_handler(NULL);
-
-    memset(&summ, 0, sizeof(summ));
 
     for (i = 0 ; i < num_testspecs ; i++) {
         strncpy(suitename, testspecs[i], sizeof(suitename));
@@ -381,45 +340,29 @@ static void run_tests(void)
         suite = CU_get_suite_by_name(suitename, CU_get_registry());
         if (suite == NULL) {
             fprintf(stderr, "unit: no such suite \"%s\"\n", suitename);
-            failed++;
-            continue;
+            exit(1);
         }
 
         if (testname == NULL) {
-            /* Run each test */
-            for (test = suite->pTest ; test != NULL ; test = test->pNext) {
-                err = CU_run_test(suite, test);
-                running = IDLE; /* Just In Case */
-                accumulate_summary(&summ);
-                if (err != CUE_SUCCESS)
-                    failed++;
-            }
+            err = CU_basic_run_suite(suite);
+            running = IDLE; /* Just In Case */
         } else {
             /* run the named test in the named suite */
             test = CU_get_test_by_name(testname, suite);
             if (test == NULL) {
                 fprintf(stderr, "unit: no such test \"%s\" in suite \"%s\"\n",
                         testname, suitename);
-                err = CUE_NOTEST;
-            } else {
-                err = CU_run_test(suite, test);
-                running = IDLE; /* Just In Case */
-                accumulate_summary(&summ);
+                exit(1);
             }
-            if (err != CUE_SUCCESS)
-                failed++;
+            err = CU_basic_run_test(suite, test);
+            running = IDLE; /* Just In Case */
         }
+        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed)
+            exit(1);
     }
 
     if (timeouts_flag)
         timeout_fini();
-
-    *(CU_RunSummary *)CU_get_run_summary() = summ;
-    if (all_complete)
-        all_complete(failures);
-
-    if (failed || summ.nAssertsFailed)
-        exit(1);
 }
 
 static void list_tests(void)

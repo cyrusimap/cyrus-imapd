@@ -707,6 +707,16 @@ check-local:
 			$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl ; \
 		fi ; \
 		exit $$retval
+
+check-%: cunit/unit
+	@echo "Running unit tests for $*"
+	@vg= ; \
+		test -z "$$VG" || vg="$(VALGRIND)" ; \
+		cd cunit ; \
+		./unit -v $* ; \
+		retval=$$? ; \
+		exit $$retval
+
 endif
 
 doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
