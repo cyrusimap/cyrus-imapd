@@ -2073,8 +2073,6 @@ struct find_rock {
     int domainlen;
     int is_the_inbox;
     int inboxoffset;
-    const char *usermboxname;
-    size_t usermboxnamelen;
     int checkmboxlist;
     int issubs;
     int checkshared;
@@ -2429,7 +2427,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     else
         domainpat[0] = '\0';
 
-    /* Build usermboxname */
+    /* calculate the inbox */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
         strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
         if (rock->domainlen)
@@ -2474,8 +2472,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         /* only do subfolders of the user themselves, not everyone else with a similar prefix */
         inbox[inboxlen] = '.';
 
-        /* iterate through prefixes matching usermboxname - no prefixing here, just
-         * check every mailbox */
+        /* iterate through all the mailboxes under the user's inbox */
         r = cyrusdb_foreach(rock->db, inbox, inboxlen+1, &find_p, &find_cb, rock, NULL);
         if (r == CYRUSDB_DONE) r = 0;
         if (r) goto done;
@@ -2507,7 +2504,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 
             rock->find_namespace = NAMESPACE_USER;
 
-            /* iterate through prefixes matching usermboxname */
+            /* iterate through all the other user folders on the server */
             r = cyrusdb_foreach(rock->db, domainpat, strlen(domainpat), &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
@@ -2552,6 +2549,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
                 }
             }
 
+            /* iterate through all the non-user folders on the server */
             r = cyrusdb_foreach(rock->db, domainpat, rock->domainlen, &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
