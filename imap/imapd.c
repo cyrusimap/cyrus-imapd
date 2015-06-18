@@ -3243,10 +3243,6 @@ static int getliteralsize(const char *p, int c,
     if (c == '\r') {
         c = prot_getc(imapd_in);
     }
-    else {
-        prot_ungetc(c, imapd_in);
-        c = ' ';                /* Force a syntax error */
-    }
 
     if (*p != '}' || p[1] || c != '\n') {
         *parseerr = "Invalid literal in Append command";
