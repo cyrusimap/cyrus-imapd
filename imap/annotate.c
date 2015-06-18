@@ -931,9 +931,9 @@ static int find_p(void *rock, const char *key, size_t keylen,
         frock->uid != ANNOTATE_ANY_UID &&
         frock->uid != uid)
         return 0;
-    if (GLOB_TEST(frock->mglob, mboxname) == -1)
+    if (!GLOB_MATCH(frock->mglob, mboxname))
         return 0;
-    if (GLOB_TEST(frock->eglob, entry) == -1)
+    if (!GLOB_MATCH(frock->eglob, entry))
         return 0;
     return 1;
 }
@@ -986,8 +986,8 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
 
     assert(mboxname);
     assert(entry);
-    frock.mglob = glob_init(mboxname, GLOB_HIERARCHY);
-    frock.eglob = glob_init_sep(entry, GLOB_HIERARCHY, '/');
+    frock.mglob = glob_init(mboxname, '.');
+    frock.eglob = glob_init(entry, '/');
     frock.uid = uid;
     frock.proc = proc;
     frock.rock = rock;
@@ -2209,12 +2209,12 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
          * extension, but not in later drafts where those characters are
          * actually illegal in attribute names.
          */
-        g = glob_init(s, GLOB_HIERARCHY);
+        g = glob_init(s, '.');
 
         for (attribcount = 0;
              annotation_attributes[attribcount].name;
              attribcount++) {
-            if (GLOB_TEST(g, annotation_attributes[attribcount].name) != -1) {
+            if (GLOB_MATCH(g, annotation_attributes[attribcount].name)) {
                 if (annotation_attributes[attribcount].entry & ATTRIB_DEPRECATED) {
                     if (strcmp(s, "*"))
                         syslog(LOG_WARNING, "annotatemore_fetch: client used "
@@ -2257,7 +2257,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
         int j;
         int check_db = 0; /* should we check the db for this entry? */
 
-        g = glob_init_sep(s, GLOB_HIERARCHY, '/');
+        g = glob_init(s, '/');
 
         for (j = 0 ; j < non_db_entries->count ; j++) {
             const annotate_entrydesc_t *desc = non_db_entries->data[j];
@@ -2265,7 +2265,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
             if (!desc->get)
                 continue;
 
-            if (GLOB_TEST(g, desc->name) != -1) {
+            if (GLOB_MATCH(g, desc->name)) {
                 /* Add this entry to our list only if it
                    applies to our particular server type */
                 if ((desc->proxytype != PROXY_ONLY)

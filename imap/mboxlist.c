@@ -2124,8 +2124,8 @@ static int find_p(void *rockp,
 
     long matchlen = -1;
     for (i = 0; i < rock->globs.count; i++) {
-        long minmatch = 0;
-        long thismatch = glob_test(ptrarray_nth(&rock->globs, i), extname, strlen(extname), &minmatch);
+        glob *g = ptrarray_nth(&rock->globs, i);
+        long thismatch = glob_test(g, extname);
         if (thismatch > matchlen) matchlen = thismatch;
     }
 
@@ -2191,8 +2191,8 @@ static int find_cb(void *rockp,
     /* re-check the match */
     long matchlen = -1;
     for (i = 0; i < rock->globs.count; i++) {
-        long minmatch = 0;
-        long thismatch = glob_test(ptrarray_nth(&rock->globs, i), extname, strlen(extname), &minmatch);
+        glob *g = ptrarray_nth(&rock->globs, i);
+        long thismatch = glob_test(g, extname);
         if (thismatch > matchlen) matchlen = thismatch;
     }
 
@@ -2395,7 +2395,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     const char *p;
 
     for (i = 0; i < patterns->count; i++) {
-        glob *g = glob_init_sep(strarray_nth(patterns, i), GLOB_HIERARCHY, rock->namespace->hier_sep);
+        glob *g = glob_init(strarray_nth(patterns, i), rock->namespace->hier_sep);
         ptrarray_append(&rock->globs, g);
     }
 

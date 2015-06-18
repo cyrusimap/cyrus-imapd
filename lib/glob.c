@@ -52,85 +52,71 @@
 
 /* initialize globbing structure
  *  This makes the following changes to the input string:
- *   1) '*' added to each end if GLOB_SUBSTRING
- *   2) '%' converted to '?' if no GLOB_HIERARCHY
- *   3) '?'s moved to left of '*'
- *   4) '*' eats all '*'s and '%'s connected by any wildcard
- *   5) '%' eats all adjacent '%'s
+ *   1) '*' eats all '*'s and '%'s connected by any wildcard
+ *   2) '%' eats all adjacent '%'s
  */
-EXPORTED glob *glob_init_sep(const char *str, int flags, char sep)
+EXPORTED glob *glob_init(const char *str, char sep)
 {
-    glob *g;
-    char *dst;
-    int newglob;
+    struct buf buf = BUF_INITIALIZER;
 
-    newglob = flags & GLOB_HIERARCHY;
-    g = (glob *) xmalloc(sizeof (glob) + strlen(str) + 1);
-    if (g != 0) {
-        g->sep_char = sep;
-        dst = g->str;
-        /* if we're doing a substring match, put a '*' prefix (1) */
-        if (flags & GLOB_SUBSTRING) {
-            /* skip over unneeded glob prefixes (3,4) */
-            if (newglob) {
+    buf_appendcstr(&buf, "(^");
+    while (*str) {
+        switch (*str) {
+        case '*':
+        case '%':
+            /* remove duplicate hierarchy match (2) */
+            while (*str == '%') ++str;
+            /* If we found a '*', treat '%' as '*' (1) */
+            if (*str == '*') {
+                /* remove duplicate wildcards (1) */
                 while (*str == '*' || (*str == '%' && str[1])) ++str;
-            } else {
-                while (*str == '%' || *str == '*' || *str == '?') {
-                    if (*str++ != '*') *dst++ = '?';
-                }
+                buf_appendcstr(&buf, ".*");
             }
-            *dst++ = '*';
-        }
-        if (!newglob) {
-            while (*str) {
-                if (*str == '*') {
-                    /* move '?' to left of '*' (3) */
-                    while (*str == '*' || *str == '%' || *str == '?') {
-                        if (*str++ != '*') *dst++ = '?';
-                    }
-                    *dst++ = '*';
-                } else {
-                    *dst++ = (char)((*str == '%') ? '?' : *str);
-                    ++str;
-                }
+            else {
+                buf_appendcstr(&buf, "[^");
+                if (sep == '\\') buf_putc(&buf, '\\');
+                buf_putc(&buf, sep);
+                buf_appendcstr(&buf, "]*");
             }
-        } else {
-            while (*str) {
-                if (*str == '*' || *str == '%') {
-                    /* remove duplicate hierarchy match (5) */
-                    while (*str == '%') ++str;
-                    /* If we found a '*', treat '%' as '*' (4) */
-                    if (*str == '*') {
-                        /* remove duplicate wildcards (4) */
-                        while (*str == '*' || (*str == '%' && str[1])) ++str;
-                        *dst++ = '*';
-                    } else {
-                        *dst++ = '%';
-                    }
-                } else {
-                    *dst++ = *str++;
-                }
-            }
+            break;
+        /* http://stackoverflow.com/questions/399078/what-special-characters-must-be-escaped-in-regular-expressions
+         * In POSIX basic regular expressions (BRE), these are metacharacters
+         * that you need to escape to suppress their meaning:
+         * .^$*
+         * (and we're already handling * above)
+         */
+        case '.':
+        case '^':
+        case '$':
+            buf_putc(&buf, '\\');
+            /* fall through */
+        default:
+            buf_putc(&buf, *str++);
+            break;
         }
-        /* put a '*' suffix (1) */
-        if (flags & GLOB_SUBSTRING && dst[-1] != '*') {
-            /* remove duplicate wildcards (4) */
-            if (newglob) while (dst[-1] == '%') --dst;
-            *dst++ = '*';
-        }
-        *dst++ = '\0';
-        g->flags = flags;
     }
+    buf_appendcstr(&buf, ")([");
+    if (sep == '\\') buf_putc(&buf, '\\');
+    buf_putc(&buf, sep);
+    buf_appendcstr(&buf, "]|$)");
 
-    return (g);
+    glob *g = xmalloc(sizeof(glob));
+    regcomp(&g->regex, buf_cstring(&buf), 0);
+    buf_free(&buf);
+
+    return g;
 }
 
 /* free a glob structure
  */
-EXPORTED void glob_free(glob **g)
+EXPORTED void glob_free(glob **gp)
 {
-    if (*g) free((void *) *g);
-    *g = NULL;
+    glob *g = *gp;
+    if (g) {
+        regfree(&g->regex);
+        free(g);
+    }
+    *gp = NULL;
 }
 
 /* returns -1 if no match, otherwise length of match or partial-match
@@ -141,125 +127,12 @@ EXPORTED void glob_free(glob **g)
  *            set to return value + 1 on partial match, otherwise -1
  *            if NULL, partial matches not allowed
  */
-EXPORTED int glob_test(glob* g, const char* ptr,
-              long int len, long int *min)
+EXPORTED int glob_test(glob *g, const char *str)
 {
-    const char *gptr, *pend;    /* glob pointer, end of ptr string */
-    const char *gstar, *pstar;  /* pointers for '*' patterns */
-    const char *ghier, *phier;  /* pointers for '%' patterns */
-    const char *start;          /* start of input string */
-    int newglob;
-    int sepfound;               /* Set to 1 when a separator is found
-                                 * after a '%'. Otherwise 0.
-                                 */
+    regmatch_t match[3];
 
-    /* check for remaining partial matches */
-    if (min && *min < 0) return (-1);
+    if (regexec(&g->regex, str, 2, match, 0))
+        return -1;
 
-    /* get length */
-    if (!len) len = strlen(ptr);
-
-    /* initialize globbing */
-    gptr = g->str;
-    start = ptr;
-    pend = ptr + len;
-    gstar = ghier = NULL;
-    newglob = g->flags & GLOB_HIERARCHY;
-    phier = pstar = NULL;       /* initialize to eliminate warnings */
-
-    /* main globbing loops */
-
-    /* loop to manage wildcards */
-    do {
-        sepfound = 0;
-        /* see if we match to the next '%' or '*' wildcard */
-        while (*gptr != '*' && *gptr != '%' && ptr != pend
-               && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
-            ++ptr, ++gptr;
-        }
-
-        if (*gptr == '\0' && ptr == pend) {
-            /* End of pattern and end of string -- match! */
-            break;
-        }
-
-        if (*gptr == '*') {
-            ghier = NULL;
-            gstar = ++gptr;
-            pstar = ptr;
-        }
-        if (*gptr == '%') {
-            ghier = ++gptr;
-            phier = ptr;
-        }
-
-        if (ghier) {
-            /* look for a match with first char following '%',
-             * stop at a sep_char unless we're doing "*%"
-             */
-            ptr = phier;
-            while (ptr != pend && *ghier != *ptr
-                   && (*ptr != g->sep_char ||
-                       (!*ghier && gstar && *gstar == '%' && min
-                        && ptr - start < *min))) {
-                ++ptr;
-            }
-            if (ptr == pend) {
-                gptr = ghier;
-                break;
-            }
-            if (*ptr == g->sep_char) {
-                if (!*ghier && min
-                    && *min < ptr - start && ptr != pend
-                    && *ptr == g->sep_char
-                    ) {
-                    *min = gstar ? ptr - start + 1 : -1;
-                    return (ptr - start);
-                }
-                ghier = NULL;
-                sepfound = 1;
-            } else {
-                phier = ++ptr;
-                gptr = ghier + 1;
-            }
-        }
-        if (gstar && !ghier) {
-            /* was the * at the end of the pattern? */
-            if (!*gstar) {
-                ptr = pend;
-                break;
-            }
-
-            /* look for a match with first char following '*' */
-            while (pstar != pend && *gstar != *pstar) ++pstar;
-            if (pstar == pend) {
-                if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
-                    *ptr == g->sep_char) {
-                    /* The pattern ended on a hierarchy separator
-                     * return a partial match */
-                    *min = ptr - start + 1;
-                    return ptr - start;
-                }
-                gptr = gstar;
-                break;
-            }
-
-            ptr = ++pstar;
-            gptr = gstar + 1;
-        }
-        if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
-            *ptr == g->sep_char) {
-            /* The pattern ended on a hierarchy separator
-             * return a partial match */
-            *min = ptr - start + 1;
-            return ptr - start;
-        }
-
-        /* continue if at wildcard or we passed an asterisk */
-    } while (*gptr == '*' || *gptr == '%' ||
-             ((gstar || ghier || sepfound) && (*gptr || ptr != pend)));
-
-    if (min) *min = -1;
-    return (*gptr == '\0' && ptr == pend ? ptr - start : -1);
+    return match[1].rm_eo;
 }
-

@@ -9,35 +9,59 @@ static void test_star(void)
     glob *g;
     int r;
 
-    g = glob_init("fo*", GLOB_HIERARCHY);
+    g = glob_init("fo*", '.');
     CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
 
-    r = glob_test(g, "foo", 0, NULL);
+    r = glob_test(g, "foo");
     CU_ASSERT_EQUAL(r, 3);
 
-    r = glob_test(g, "meh", 0, NULL);
+    r = glob_test(g, "meh");
     CU_ASSERT_EQUAL(r, -1);
 
-    r = glob_test(g, "mofoo", 0, NULL);
+    r = glob_test(g, "mofoo");
     CU_ASSERT_EQUAL(r, -1);
 
-    r = glob_test(g, "fnarp", 0, NULL);
+    r = glob_test(g, "fnarp");
     CU_ASSERT_EQUAL(r, -1);
 
-    r = glob_test(g, "fod", 0, NULL);
+    r = glob_test(g, "fod");
     CU_ASSERT_EQUAL(r, 3);
 
-    r = glob_test(g, "foonly", 0, NULL);
+    r = glob_test(g, "foonly");
     CU_ASSERT_EQUAL(r, 6);
 
-    r = glob_test(g, "foon.ly", 0, NULL);
+    r = glob_test(g, "foon.ly");
     CU_ASSERT_EQUAL(r, 7);
 
-    r = glob_test(g, "fo.only", 0, NULL);
+    r = glob_test(g, "fo.only");
     CU_ASSERT_EQUAL(r, 7);
 
-    r = glob_test(g, "f.oonly", 0, NULL);
+    r = glob_test(g, "f.oonly");
     CU_ASSERT_EQUAL(r, -1);
+
+    glob_free(&g);
+}
+
+static void test_globmatch(void)
+{
+    glob *g;
+
+    g = glob_init("fo*", '.');
+    CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
+
+    CU_ASSERT(GLOB_MATCH(g, "foo"));
+
+    CU_ASSERT(!GLOB_MATCH(g, "meh"));
+
+    glob_free(&g);
+
+    g = glob_init("/a/b/c", '/');
+
+    CU_ASSERT(GLOB_MATCH(g, "/a/b/c"));
+
+    CU_ASSERT(!GLOB_MATCH(g, "/a/b/c/d"));
+
+    CU_ASSERT(!GLOB_MATCH(g, "/a/b"));
 
     glob_free(&g);
 }
@@ -47,31 +71,31 @@ static void test_percent(void)
     glob *g;
     int r;
 
-    g = glob_init("fo%", GLOB_HIERARCHY);
+    g = glob_init("fo%", '.');
     CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
 
-    r = glob_test(g, "foo", 0, NULL);
+    r = glob_test(g, "foo");
     CU_ASSERT_EQUAL(r, 3);
 
-    r = glob_test(g, "meh", 0, NULL);
+    r = glob_test(g, "meh");
     CU_ASSERT_EQUAL(r, -1);
 
-    r = glob_test(g, "fnarp", 0, NULL);
+    r = glob_test(g, "fnarp");
     CU_ASSERT_EQUAL(r, -1);
 
-    r = glob_test(g, "fod", 0, NULL);
+    r = glob_test(g, "fod");
     CU_ASSERT_EQUAL(r, 3);
 
-    r = glob_test(g, "foonly", 0, NULL);
+    r = glob_test(g, "foonly");
     CU_ASSERT_EQUAL(r, 6);
 
-    r = glob_test(g, "foon.ly", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
+    r = glob_test(g, "foon.ly");
+    CU_ASSERT_EQUAL(r, 4);
 
-    r = glob_test(g, "fo.only", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
+    r = glob_test(g, "fo.only");
+    CU_ASSERT_EQUAL(r, 2);
 
-    r = glob_test(g, "f.oonly", 0, NULL);
+    r = glob_test(g, "f.oonly");
     CU_ASSERT_EQUAL(r, -1);
 
     glob_free(&g);
@@ -82,87 +106,43 @@ static void test_percent_percent(void)
     glob *g;
     int r;
 
-    g = glob_init("fo%.%", GLOB_HIERARCHY);
+    g = glob_init("fo%.%", '.');
     CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
 
-    r = glob_test(g, "foonly", 0, NULL);
+    r = glob_test(g, "foonly");
     CU_ASSERT_EQUAL(r, -1);
 
-    r = glob_test(g, "foon.ly", 0, NULL);
+    r = glob_test(g, "foon.ly");
     CU_ASSERT_EQUAL(r, 7);
 
-    r = glob_test(g, "fo.only", 0, NULL);
+    r = glob_test(g, "fo.only");
     CU_ASSERT_EQUAL(r, 7);
 
-    r = glob_test(g, "f.oonly", 0, NULL);
+    r = glob_test(g, "f.oonly");
     CU_ASSERT_EQUAL(r, -1);
 
     glob_free(&g);
 }
 
-static void test_questionmark(void)
+static void test_star_fullmatch(void)
 {
     glob *g;
     int r;
 
-    g = glob_init("fo?", 0);
+    g = glob_init("INBOX*m8", '.');
     CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
 
-    r = glob_test(g, "foo", 0, NULL);
-    CU_ASSERT_EQUAL(r, 3);
+    r = glob_test(g, "INBOX.m8");
+    CU_ASSERT_EQUAL(r, 8);
 
-    r = glob_test(g, "meh", 0, NULL);
+    r = glob_test(g, "INBOX.m89");
     CU_ASSERT_EQUAL(r, -1);
 
-    r = glob_test(g, "fnarp", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
+    r = glob_test(g, "INBOX.m8.m8");
+    CU_ASSERT_EQUAL(r, 11);
 
-    r = glob_test(g, "fod", 0, NULL);
-    CU_ASSERT_EQUAL(r, 3);
-
-    r = glob_test(g, "foonly", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
-
-    glob_free(&g);
-}
-
-static void test_star_substring(void)
-{
-    glob *g;
-    int r;
-
-    g = glob_init("fo*", GLOB_SUBSTRING|GLOB_HIERARCHY);
-    CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
-
-    r = glob_test(g, "foo", 0, NULL);
-    CU_ASSERT_EQUAL(r, 3);
-
-    r = glob_test(g, "meh", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
-
-    r = glob_test(g, "mofoo", 0, NULL);
-    CU_ASSERT_EQUAL(r, 5);
-
-    r = glob_test(g, "fnarp", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
-
-    r = glob_test(g, "fod", 0, NULL);
-    CU_ASSERT_EQUAL(r, 3);
-
-    r = glob_test(g, "foonly", 0, NULL);
-    CU_ASSERT_EQUAL(r, 6);
-
-    r = glob_test(g, "foon.ly", 0, NULL);
-    CU_ASSERT_EQUAL(r, 7);
-
-    r = glob_test(g, "fo.only", 0, NULL);
-    CU_ASSERT_EQUAL(r, 7);
-
-    r = glob_test(g, "f.oonly", 0, NULL);
-    CU_ASSERT_EQUAL(r, -1);
-
-    r = glob_test(g, "mo.foo", 0, NULL);
-    CU_ASSERT_EQUAL(r, 6);
+    r = glob_test(g, "INBOX.m8.m9");
+    CU_ASSERT_EQUAL(r, 8);
 
     glob_free(&g);
 }

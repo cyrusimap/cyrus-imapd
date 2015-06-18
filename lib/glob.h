@@ -41,56 +41,39 @@
  *
  * Author: Chris Newman
  * Start Date: 4/5/93
+ *
+ * Basically rewritten with all the non-necessary bits stripped by
+ * Bron Gondwana, 2015.
  */
 
 #ifndef INCLUDED_GLOB_H
 #define INCLUDED_GLOB_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
+#include <pcreposix.h>
 
 /* "compiled" glob structure: may change
  */
 typedef struct glob {
-    int flags;                  /* glob flags, see below */
-    const char *gstar, *ghier, *gptr;   /* INBOX prefix comparison state */
-    char sep_char;              /* separator character */
-    char str[3];                /* glob string & suppress string */
+    regex_t regex;              /* separator character */
 } glob;
-
-/* glob_init flags: */
-#define GLOB_SUBSTRING    (1<<0)  /* match a substring */
-#define GLOB_HIERARCHY    (1<<1)  /* use '%' as hierarchy matching and no '?' */
 
 /* initialize globbing structure
  *  str      -- globbing string
- *  flags    -- see flag values above
- *  suppress -- prefix to suppress
+ *  sep      -- hierarchy separator
  */
-extern glob *glob_init_sep(const char *str, int flags, char sep);
+extern glob *glob_init(const char *str, char sep);
 
 /* free a glob structure
  */
-extern void glob_free(glob **g);
+extern void glob_free(glob **gp);
 
 /* returns -1 if no match, otherwise length of match or partial-match
  *  g         pre-processed glob string
  *  ptr       string to perform glob on
- *  len       length of ptr string (if 0, strlen() is used)
- *  min       pointer to minimum length of a valid partial-match.
- *            Set to -1 if no more matches.  Set to return value + 1
- *            if another match is possible.  If NULL, no partial-matches
- *            are returned.
  */
-extern int glob_test (glob *g, const char *str, long len, long *min);
+extern int glob_test(glob *g, const char *str);
 
-/* macros */
-#define glob_init(str, flags) glob_init_sep((str), (flags), '.')
-#define GLOB_TEST(g, str) glob_test((g), (str), 0, NULL)
+/* MACROS */
+#define GLOB_MATCH(g, str) ((int)strlen(str) == glob_test((g), (str)))
 
 #endif /* INCLUDED_GLOB_H */
