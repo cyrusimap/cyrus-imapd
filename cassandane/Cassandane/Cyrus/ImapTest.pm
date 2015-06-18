@@ -73,12 +73,13 @@ init;
 sub new
 {
     my $class = shift;
+
     my $config = Cassandane::Config->default()->clone();
     $config->set(virtdomains => 'userid');
     $config->set(unixhierarchysep => 'on');
     $config->set(altnamespace => 'yes');
 
-    return $class->SUPER::new({ config => $config }, @args);
+    return $class->SUPER::new({ config => $config }, @_);
 
 }
 
@@ -134,9 +135,8 @@ sub run_test
     my $name = $self->name();
     $name =~ s/^test_//;
 
-    die "No such test: $name" if ( ! -f "$testdir/$name" );
-    my $mbox = "$name.mbox";
-    $mbox = "default.mbox" if ( ! -f "$testdir/$mbox" );
+    my $logdir = "$self->{instance}->{basedir}/rawlog/";
+    mkdir($logdir);
 
     my $svc = $self->{instance}->get_service('imap');
     my $params = $svc->store_params();
@@ -145,6 +145,7 @@ sub run_test
     my $status;
     $self->{instance}->run_command({
             redirects => { stderr => $errfile },
+            workingdir => $logdir,
             handlers => {
                 exited_normally => sub { $status = 1; },
                 exited_abnormally => sub { $status = 0; },
@@ -158,16 +159,27 @@ sub run_test
         "rawlog",
         "test=$testdir/$name");
 
-    if ((!$status || get_verbose) && -f $errfile)
-    {
-        open FH, '<', $errfile
-            or die "Cannot open $errfile for reading: $!";
-        while (readline FH)
-        {
-            xlog $_;
+    if ((!$status || get_verbose)) {
+        if (-f $errfile) {
+            open FH, '<', $errfile
+                or die "Cannot open $errfile for reading: $!";
+            while (readline FH) {
+                xlog $_;
+            }
+            close FH;
         }
-        close FH;
+        opendir(DH, $logdir) or die "Can't open logdir $logdir";
+        while (my $item = readdir(DH)) {
+            next unless $item =~ m/^rawlog\./;
+            print "============> $item <=============\n";
+            open(FH, '<', "$logdir/$item") or die "Can't open $logdir/$item";
+            while (readline FH) {
+                print $_;
+            }
+            close(FH);
+        }
     }
+
     $self->assert($status);
 }
 
