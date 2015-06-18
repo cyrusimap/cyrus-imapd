@@ -407,33 +407,33 @@ EXPORTED int getmodseq(struct protstream *pin, modseq_t *num)
  */
 EXPORTED void eatline(struct protstream *pin, int c)
 {
-    int state = 0;
-    char *statediagram = " {+}\r";
-    uint32_t size = 0;
-
     for (;;) {
         if (c == '\n') return;
-        if (c == statediagram[state+1]) {
-            state++;
-            if (state == 1) size = 0;
-            else if (c == '\r') {
-                /* Got a non-synchronizing literal */
-                c = prot_getc(pin);/* Eat newline */
-                while (size--) {
-                    c = prot_getc(pin); /* Eat contents */
-                }
-                state = 0;      /* Go back to scanning for eol */
+        if (c == EOF) return;
+        /* see if it's a literal */
+        if (c == '{') {
+            c = prot_getc(pin);
+            uint64_t size = 0;
+            while (cyrus_isdigit(c)) {
+                if (size > 429496729 || (size == 429496729 && (c > '5')))
+                    break; /* don't fatal, just drop out of literal parsing */
+                size = size * 10 + c - '0';
+                c = prot_getc(pin);
+            }
+            if (c != '+') continue;
+            c = prot_getc(pin);
+            if (c != '}') continue;
+            c = prot_getc(pin);
+            /* optional \r */
+            if (c == '\r') c = prot_getc(pin);
+            if (c != '\n') continue;
+            /* successful literal, consume it */
+            while (size--) {
+                c = prot_getc(pin);
+                if (c == EOF) return;
             }
         }
-        else if (state == 1 && cyrus_isdigit(c)) {
-            if (size > 429496729 || (size == 429496729 && (c > '5')))
-                fatal("num too big", EC_IOERR);
-            size = size * 10 + c - '0';
-        }
-        else state = 0;
-
         c = prot_getc(pin);
-        if (c == EOF) return;
     }
 }
 
