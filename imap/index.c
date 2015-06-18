@@ -3354,7 +3354,13 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     n = octet_count ? octet_count : size;
 
     /* Sanity check the requested size */
-    if (start_octet + n > size) n = size - start_octet;
+    if (start_octet > size) {
+        start_octet = size;
+        n = 0;
+    }
+    else if (start_octet + n > size) {
+        n = size - start_octet;
+    }
 
     if (outsize) {
 	/* Return size (CATENATE) */
@@ -3374,7 +3380,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     /* Non-text literal -- tell the protstream about it */
     if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
 
-    prot_write(pout, data + start_octet, n);
+    if (n) prot_write(pout, data + start_octet, n);
 
     /* End of non-text literal -- tell the protstream about it */
     if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
