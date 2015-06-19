@@ -84,10 +84,12 @@ EXPORTED glob *glob_init(const char *str, char sep)
          * that you need to escape to suppress their meaning:
          * .^$*
          * (and we're already handling * above)
+         * also discovered that prceposix will segfault if we don't escape +
          */
         case '.':
         case '^':
         case '$':
+        case '+':
             buf_putc(&buf, '\\');
             /* fall through */
         default:

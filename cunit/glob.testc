@@ -147,4 +147,19 @@ static void test_star_fullmatch(void)
     glob_free(&g);
 }
 
+static void test_messyname(void)
+{
+    glob *g;
+    int r;
+    const char *str = "INBOX.+++ hello.+++ WORLD.+ test,ca";
+
+    g = glob_init(str, '.');
+    CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
+
+    r = glob_test(g, str);
+    CU_ASSERT_EQUAL(r, strlen(str));
+
+    glob_free(&g);
+}
+
 /* vim: set ft=c: */
