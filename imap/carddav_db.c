@@ -2832,7 +2832,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
     fclose(f);
 
-    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0, ignorequota ? NULL : qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox->name, error_message(r));
         goto done;
