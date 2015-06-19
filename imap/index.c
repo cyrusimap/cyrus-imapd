@@ -1684,8 +1684,11 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
 	if (searchargs->tag) {
 	    prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
 	}
+        /* RFC4731: 3.1
+         * An extended UID SEARCH command MUST cause an ESEARCH response with
+         * the UID indicator present. */
+	if (usinguid) prot_printf(state->out, " UID");
 	if (n) {
-	    if (usinguid) prot_printf(state->out, " UID");
 	    if (searchargs->returnopts & SEARCH_RETURN_MIN)
 		prot_printf(state->out, " MIN %u", list[0]);
 	    if (searchargs->returnopts & SEARCH_RETURN_MAX)
