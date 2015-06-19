@@ -396,7 +396,6 @@ EXTRA_DIST += \
 	lib/test/cyrusdbtxn.OUTPUT \
 	lib/test/pool.c \
 	lib/test/rnddb.c \
-	lib/test/testglob2.c \
 	master/CYRUS-MASTER.mib \
 	master/conf/cmu-backend.conf \
 	master/conf/cmu-frontend.conf \
@@ -1427,10 +1426,6 @@ lib/imapopts.h: lib/imapopts.c
 
 lib/imapopts.c: lib/imapoptions tools/config2header
 	$(AM_V_GEN)$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
-
-#this is from lib/test/Makefile.in, however testglob.c does not exist in
-#/lib/test, instead testglob2.c is there.
-#lib_test_testglob_LIRBARIES = lib/libcyrus.la lib/libcyrus_min.la -ldb-4.0
 
 
 @SET_MAKE@
