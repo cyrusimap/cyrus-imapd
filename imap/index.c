@@ -4146,8 +4146,12 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     int32_t skip = 0;
     int n, r = 0;
     char *decbuf = NULL;
-    struct mailbox *mailbox = state->mailbox;
     struct index_record record;
+
+    r = index_lock(state);
+    if (r) return r;
+
+    struct mailbox *mailbox = state->mailbox;
 
     if (!strcasecmpsafe(section, "TEXT.MIME"))
         section = text_mime;
@@ -4155,14 +4159,16 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     if (outsize) *outsize = 0;
 
     r = index_reload_record(state, msgno, &record);
-    if (r) return r;
+    if (r) goto done;
 
     r = mailbox_cacherecord(mailbox, &record);
-    if (r) return r;
+    if (r) goto done;
 
     /* Open the message file */
-    if (mailbox_map_record(mailbox, &record, &buf))
-        return IMAP_NO_MSGGONE;
+    if (mailbox_map_record(mailbox, &record, &buf)) {
+        r = IMAP_NO_MSGGONE;
+        goto done;
+    }
 
     data = buf.s;
     size = buf.len;
@@ -4311,6 +4317,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
   done:
     /* Close the message file */
+    index_unlock(state);
     buf_free(&buf);
 
     if (decbuf) free(decbuf);
