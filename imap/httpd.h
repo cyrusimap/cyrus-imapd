@@ -414,6 +414,8 @@ extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 extern unsigned long config_httpmodules;
 extern int config_httpprettytelemetry;
 
+extern int ignorequota;
+
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
 extern struct accept *parse_accept(const char **hdr);

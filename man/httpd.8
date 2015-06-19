@@ -64,6 +64,9 @@ httpd \- HTTP server process
 .B \-s
 ]
 [
+.B \-q
+]
+[
 .B \-p
 .I ssf
 ]
@@ -109,6 +112,9 @@ timeout.  The default is 60.
 .TP
 .BI \-D
 Run external debugger specified in debug_command.
+.TP
+.BI \-q
+Ignore quota limits
 .TP
 .BI \-s
 Serve HTTP over SSL (https).  All data to and from

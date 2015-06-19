@@ -123,7 +123,6 @@ extern int optind;
 extern char *optarg;
 extern int opterr;
 
-
 #ifdef HAVE_SSL
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
@@ -156,6 +155,8 @@ int config_httpprettytelemetry;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
+
+int ignorequota = 0;
 
 static void digest_send_success(const char *name __attribute__((unused)),
                                 const char *data)
@@ -462,7 +463,7 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&httpd_namespace);
 
-    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "sp:q")) != EOF) {
         switch(opt) {
         case 's': /* https (do TLS right away) */
             https = 1;
@@ -471,6 +472,10 @@ int service_init(int argc __attribute__((unused)),
                 fatal("https: required OpenSSL options not present",
                       EC_CONFIG);
             }
+            break;
+
+        case 'q':
+            ignorequota = 1;
             break;
 
         case 'p': /* external protection */
