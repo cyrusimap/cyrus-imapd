@@ -209,7 +209,7 @@ static int meth_post(struct transaction_t *txn,
      * our operations */
     int r = mailbox_open_iwl(inboxname, &mailbox);
     if (r) {
-        txn->error.desc = "Unable to lock user INBOX\r\n";
+        txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -253,7 +253,7 @@ static int meth_post(struct transaction_t *txn,
         buf_free(&buf);
 
         if (r) {
-            txn->error.desc = "Unable to create JSON response body\r\n";
+            txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
             goto done;
         }
