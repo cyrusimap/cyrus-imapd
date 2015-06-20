@@ -52,6 +52,9 @@ Cassandane::Cyrus::TestCase::magic(DuplicateSuppressionOff => sub {
 Cassandane::Cyrus::TestCase::magic(DuplicateSuppressionOn => sub {
     shift->config_set(duplicatesuppression => 1);
 });
+Cassandane::Cyrus::TestCase::magic(FuzzyMatch => sub {
+    shift->config_set(lmtp_fuzzy_mailbox_match => 1);
+});
 sub new
 {
     my $class = shift;
@@ -70,6 +73,110 @@ sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
+}
+
+sub test_plus_address_exact
+    :FuzzyMatch
+{
+    my ($self) = @_;
+
+    xlog "Testing behaviour of plus addressing where case matches";
+
+    my $folder = "INBOX.telephone";
+
+    xlog "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+telephone");
+
+    xlog "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
+
+sub test_plus_address_case
+    :FuzzyMatch
+{
+    my ($self) = @_;
+
+    xlog "Testing behaviour of plus addressing where case matches";
+
+    my $folder = "INBOX.ApplePie";
+
+    xlog "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+applepie");
+
+    xlog "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
+
+sub test_plus_address_partial
+    :FuzzyMatch
+{
+    my ($self) = @_;
+
+    xlog "Testing behaviour of plus addressing where subfolder doesn't exist";
+
+    my $folder = "INBOX.lists";
+
+    xlog "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+lists.nonexists");
+
+    xlog "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
+
+sub test_plus_address_partial_case
+    :FuzzyMatch
+{
+    my ($self) = @_;
+
+    xlog "Testing behaviour of plus addressing where subfolder doesn't exist";
+
+    my $folder = "INBOX.Twists";
+
+    xlog "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+twists.nonexists");
+
+    xlog "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
 sub test_duplicate_suppression_off
