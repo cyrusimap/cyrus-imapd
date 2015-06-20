@@ -400,27 +400,24 @@ struct fuzz_rock {
 
 #define WSP_CHARS "- _"
 
-static int fuzzy_match_cb(const char *name,
-                          int matchlen __attribute__((unused)),
-                          int maycreate __attribute__((unused)),
-                          void *rock)
+static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
 {
     struct fuzz_rock *frock = (struct fuzz_rock *) rock;
     unsigned i;
 
-    for (i = frock->prefixlen; name[i] && frock->pat[i]; i++) {
-        if (tolower((int) name[i]) != frock->pat[i] &&
-            !(strchr(WSP_CHARS, name[i]) &&
+    for (i = frock->prefixlen; mbentry->name[i] && frock->pat[i]; i++) {
+        if (tolower((int) mbentry->name[i]) != frock->pat[i] &&
+            !(strchr(WSP_CHARS, mbentry->name[i]) &&
               strchr(WSP_CHARS, frock->pat[i]))) {
             break;
         }
     }
 
     /* see if we have a [partial] match */
-    if (!name[i] && (!frock->pat[i] || frock->pat[i] == '.') &&
+    if (!mbentry->name[i] && (!frock->pat[i] || frock->pat[i] == '.') &&
         i > frock->matchlen) {
         frock->matchlen = i;
-        strlcpy(frock->mboxname, name, i+1);
+        strlcpy(frock->mboxname, mbentry->name, i+1);
         if (i == frock->patlen) return CYRUSDB_DONE;
     }
 
@@ -460,8 +457,7 @@ static int fuzzy_match(char *mboxname)
     frock.patlen = strlen(name);
     frock.matchlen = 0;
 
-    strlcat(prefix, "*", sizeof(prefix));
-    mboxlist_findall(NULL, prefix, 1, NULL, NULL, fuzzy_match_cb, &frock);
+    mboxlist_allmbox(prefix, fuzzy_match_cb, &frock, 0);
 
     return frock.matchlen;
 }
