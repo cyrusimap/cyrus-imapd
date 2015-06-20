@@ -75,6 +75,7 @@ sub new
     my $class = shift;
 
     my $config = Cassandane::Config->default()->clone();
+    $config->set(servername => "127.0.0.1"); # urlauth needs matching servername
     $config->set(virtdomains => 'userid');
     $config->set(unixhierarchysep => 'on');
     $config->set(altnamespace => 'yes');
