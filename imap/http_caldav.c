@@ -1418,7 +1418,6 @@ static int list_cal_cb(const char *name,
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
     static size_t defaultlen = 0;
-    static size_t mattachlen = 0;
     char *shortname;
     mbentry_t *mbentry = NULL;
     size_t len;
@@ -1430,26 +1429,27 @@ static int list_cal_cb(const char *name,
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
     if (!defaultlen) defaultlen = strlen(SCHED_DEFAULT) - 1;
-    if (!mattachlen) mattachlen = strlen(MANAGED_ATTACH) - 1;
 
     shortname = strrchr(name, '.') + 1;
     len = strlen(shortname);
 
-    /* Don't list scheduling Inbox/Outbox or Attachments */
-    if ((len == inboxlen && !strncmp(shortname, SCHED_INBOX, inboxlen)) ||
-        (len == outboxlen && !strncmp(shortname, SCHED_OUTBOX, outboxlen)) ||
-        (len == mattachlen && !strncmp(shortname, MANAGED_ATTACH, mattachlen)))
-        goto done;
-
     /* Don't list deleted mailboxes */
     if (mboxname_isdeletedmailbox(name, 0)) goto done;
 
-    /* Lookup the mailbox and make sure its readable */
+    /* Lookup the mailbox */
     r = http_mlookup(name, &mbentry, NULL);
     if (r) goto done;
 
+    /* Make sure its a calendar */
+    if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
+
+    /* Make sure its readable */
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
-    if ((rights & DACL_READ) != DACL_READ)
+    if ((rights & DACL_READ) != DACL_READ) goto done;
+
+    /* Don't list scheduling Inbox/Outbox */
+    if ((len == inboxlen && !strncmp(shortname, SCHED_INBOX, inboxlen)) ||
+        (len == outboxlen && !strncmp(shortname, SCHED_OUTBOX, outboxlen)))
         goto done;
 
     /* Lookup DAV:displayname */
