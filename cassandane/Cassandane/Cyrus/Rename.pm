@@ -49,9 +49,6 @@ use Cassandane::Instance;
 Cassandane::Cyrus::TestCase::magic(Partition2 => sub {
     shift->config_set('partition-p2' => '@basedir@/data-p2');
 });
-Cassandane::Cyrus::TestCase::magic(VirtDomains => sub {
-    shift->config_set('virtdomains' => 'userid');
-});
 Cassandane::Cyrus::TestCase::magic(MetaPartition => sub {
     shift->config_set(
 	'metapartition-default' => '@basedir@/meta',

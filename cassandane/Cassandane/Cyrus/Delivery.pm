@@ -55,9 +55,6 @@ Cassandane::Cyrus::TestCase::magic(DuplicateSuppressionOn => sub {
 Cassandane::Cyrus::TestCase::magic(FuzzyMatch => sub {
     shift->config_set(lmtp_fuzzy_mailbox_match => 1);
 });
-Cassandane::Cyrus::TestCase::magic(VirtDomains => sub {
-    shift->config_set(virtdomains => 'userid');
-});
 sub new
 {
     my $class = shift;

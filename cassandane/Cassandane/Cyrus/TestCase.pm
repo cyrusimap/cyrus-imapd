@@ -178,6 +178,9 @@ magic(DefaultExpunge => sub {
 magic(DelayedExpunge => sub {
     shift->config_set(expunge_mode => 'delayed');
 });
+magic(VirtDomains => sub {
+    shift->config_set(virtdomains => 'userid');
+});
 magic(Admin => sub {
     shift->want('adminstore');
 });
