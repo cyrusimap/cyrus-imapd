@@ -4029,40 +4029,19 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         return HTTP_FORBIDDEN;
     }
 
-    /* Check if we are allowed to create the mailbox */
-    r = mboxlist_createmailboxcheck(txn->req_tgt.mbentry->name, 0, NULL,
-                                    httpd_userisadmin || httpd_userisproxyadmin,
-                                    httpd_userid, httpd_authstate,
-                                    NULL, &partition, 0);
-    switch (r) {
-    case 0:
-        break;
-
-    case IMAP_MAILBOX_EXISTS:
-        txn->error.precond = DAV_RSRC_EXISTS;
-        ret = HTTP_FORBIDDEN;
-        goto done;
-
-    case IMAP_PERMISSION_DENIED:
-        ret = HTTP_NO_PRIVS;
-        goto done;
-
-    default:
-        ret = HTTP_SERVER_ERROR;
-        txn->error.desc = error_message(r);
-        goto done;
-    }
-
-    if (!config_partitiondir(partition)) {
-        /* Invalid partition, assume its a server (remote mailbox) */
-        char *server = partition, *p;
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* Remote mailbox - find the parent */
+        mbentry_t *parent = NULL;
         struct backend *be;
 
-        /* Trim remote partition */
-        p = strchr(server, '!');
-        if (p) *p++ = '\0';
+        r = mboxlist_findparent(txn->req_tgt.mbentry->name, &parent);
+        if (r) {
+            txn->error.precond = CALDAV_LOCATION_OK;
+            ret = HTTP_FORBIDDEN;
+            goto done;
+	}
 
-        be = proxy_findserver(server, &http_protocol, proxy_userid,
+        be = proxy_findserver(parent->server, &http_protocol, proxy_userid,
                               &backend_cached, NULL, NULL, httpd_in);
 
         if (!be) ret = HTTP_UNAVAILABLE;
