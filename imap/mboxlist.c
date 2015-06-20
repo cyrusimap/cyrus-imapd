@@ -2312,9 +2312,18 @@ EXPORTED int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *ro
     }
 
     if ((flags & MBOXTREE_DELETED)) {
-        char *prefix = strconcat(mboxname, ".", (char *)NULL);
+        struct buf buf = BUF_INITIALIZER;
+        const char *p = strchr(mboxname, '!');
+        const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
+        if (p) {
+            buf_printf(&buf, "%.*s!%s.%s", (int)(p-mboxname), mboxname, dp, p+1);
+        }
+        else {
+            buf_printf(&buf, "%s.%s", dp, mboxname);
+        }
+        const char *prefix = buf_cstring(&buf);
         r = cyrusdb_foreach(mbdb, prefix, strlen(prefix), allmbox_p, allmbox_cb, &mbrock, 0);
-        free(prefix);
+        buf_free(&buf);
         if (r) goto done;
     }
 
