@@ -6179,10 +6179,11 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     }
     if (r) return r;
 
-    r = mailbox_reconstruct_uniqueid(mailbox, flags);
+    /* NOTE: we have to do this first, because it reads the header */
+    r = mailbox_reconstruct_acl(mailbox, flags);
     if (r) goto close;
 
-    r = mailbox_reconstruct_acl(mailbox, flags);
+    r = mailbox_reconstruct_uniqueid(mailbox, flags);
     if (r) goto close;
 
     /* Validate user flags */
