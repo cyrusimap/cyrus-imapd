@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 
     construct_hash_table(&unqid_table, 2047, 1);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOnV:u")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUMoOnV:u")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -211,6 +211,10 @@ int main(int argc, char **argv)
 
         case 'O':
             reconstruct_flags |= RECONSTRUCT_REMOVE_ODDFILES;
+            break;
+
+        case 'M':
+            reconstruct_flags |= RECONSTRUCT_PREFER_MBOXLIST;
             break;
 
         case 'V':

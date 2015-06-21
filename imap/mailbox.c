@@ -770,6 +770,13 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
     return updatenotifier;
 }
 
+static void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid)
+{
+    free(mailbox->uniqueid);
+    mailbox->uniqueid = xstrdup(uniqueid);
+    mailbox->header_dirty = 1;
+}
+
 /*
  * Create the unique identifier for a mailbox named 'name' with
  * uidvalidity 'uidvalidity'.  We use Ted Ts'o's libuuid if available,
@@ -777,9 +784,7 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
  */
 EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
 {
-    free(mailbox->uniqueid);
-    mailbox->uniqueid = xstrdup(makeuuid());
-    mailbox->header_dirty = 1;
+    mailbox_set_uniqueid(mailbox, makeuuid());
 }
 
 EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf)
@@ -5565,9 +5570,14 @@ static int mailbox_reconstruct_uniqueid(struct mailbox *mailbox, int flags)
         printf("%s: update uniqueid from header %s => %s\n", mailbox->name,
                mbentry->uniqueid, mailbox->uniqueid);
         if (make_changes) {
-            free(mbentry->uniqueid);
-            mbentry->uniqueid = xstrdup(mailbox->uniqueid);
-            r = mboxlist_update(mbentry, 0);
+            if ((flags & RECONSTRUCT_PREFER_MBOXLIST) && mbentry->uniqueid) {
+                mailbox_set_uniqueid(mailbox, mbentry->uniqueid);
+            }
+            else {
+                free(mbentry->uniqueid);
+                mbentry->uniqueid = xstrdup(mailbox->uniqueid);
+                r = mboxlist_update(mbentry, 0);
+            }
         }
     }
 
@@ -5590,9 +5600,14 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
             mbentry_t *mbentry = NULL;
             r = mboxlist_lookup(mailbox->name, &mbentry, NULL);
             if (!r) {
-                free(mbentry->acl);
-                mbentry->acl = xstrdup(acl);
-                r = mboxlist_update(mbentry, 0);
+                if ((flags & RECONSTRUCT_PREFER_MBOXLIST) && mbentry->acl) {
+                    mailbox_set_acl(mailbox, mbentry->acl, /*dirty_modseq*/0);
+                }
+                else {
+                    free(mbentry->acl);
+                    mbentry->acl = xstrdup(acl);
+                    r = mboxlist_update(mbentry, 0);
+                }
             }
             mboxlist_entry_free(&mbentry);
         }

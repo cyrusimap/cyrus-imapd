@@ -404,6 +404,7 @@ struct mailbox_iter {
 #define RECONSTRUCT_GUID_UNLINK     (1<<6)
 #define RECONSTRUCT_REMOVE_ODDFILES (1<<7)
 #define RECONSTRUCT_IGNORE_ODDFILES (1<<8)
+#define RECONSTRUCT_PREFER_MBOXLIST (1<<9)
 
 struct mailbox_header_cache {
     const char *name; /* Name of header */
