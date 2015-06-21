@@ -2469,10 +2469,7 @@ struct mbox_rock {
     struct sync_name_list *qrl;
 };
 
-static int mailbox_cb(const char *name,
-                      int matchlen __attribute__((unused)),
-                      int maycreate __attribute__((unused)),
-                      void *rock)
+static int mailbox_byname(const char *name, void *rock)
 {
     struct mbox_rock *mrock = (struct mbox_rock *) rock;
     struct sync_name_list *qrl = mrock->qrl;
@@ -2512,6 +2509,11 @@ out:
     return r;
 }
 
+static int mailbox_cb(const mbentry_t *mbentry, void *rock)
+{
+    return mailbox_byname(mbentry->name, rock);
+}
+
 int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     struct mailbox *mailbox = NULL;
@@ -2541,7 +2543,7 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
     struct mbox_rock mrock = { sstate->pout, NULL };
 
     for (ki = kin->head; ki; ki = ki->next)
-        mailbox_cb(ki->sval, 0, 0, &mrock);
+        mailbox_byname(ki->sval, &mrock);
 
     return 0;
 }
@@ -2640,7 +2642,6 @@ int sync_get_meta(struct dlist *kin, struct sync_state *sstate)
 
 int sync_get_user(struct dlist *kin, struct sync_state *sstate)
 {
-    char buf[MAX_MAILBOX_PATH];
     int r;
     struct sync_name_list *quotaroots;
     struct sync_name *qr;
@@ -2651,32 +2652,7 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     mrock.qrl = quotaroots;
     mrock.pout = sstate->pout;
 
-    /* inbox */
-    (*sstate->namespace->mboxname_tointernal)(sstate->namespace, "INBOX",
-                                             userid, buf);
-    r = mailbox_cb(buf, 0, 0, &mrock);
-    if (r) goto bail;
-
-    /* deleted namespace items if enabled */
-    if (mboxlist_delayed_delete_isenabled()) {
-        char deletedname[MAX_MAILBOX_BUFFER];
-        mboxname_todeleted(buf, deletedname, 0);
-        strlcat(deletedname, ".*", sizeof(deletedname));
-        r = mboxlist_findall(sstate->namespace,
-                             deletedname,
-                             sstate->userisadmin,
-                             userid, sstate->authstate,
-                             mailbox_cb, &mrock);
-        if (r) goto bail;
-    }
-
-    /* And then all folders */
-    strlcat(buf, ".*", sizeof(buf));
-    r = mboxlist_findall(sstate->namespace, buf,
-                         sstate->userisadmin,
-                         userid, sstate->authstate,
-                         mailbox_cb, &mrock);
-    if (r) goto bail;
+    r = mboxlist_usermboxtree(userid, mailbox_cb, &mrock, MBOXTREE_DELETED);
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
         r = quota_work(qr->name, sstate->pout);
