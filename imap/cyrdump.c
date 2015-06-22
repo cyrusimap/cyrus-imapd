@@ -71,9 +71,6 @@ static void print_seq(const char *tag, const char *attrib,
                       unsigned *seq, int n);
 static int usage(const char *name);
 
-/* current namespace */
-static struct namespace dump_namespace;
-
 struct incremental_record {
     unsigned incruid;
 };
@@ -81,8 +78,7 @@ struct incremental_record {
 int main(int argc, char *argv[])
 {
     int option;
-    char buf[MAX_MAILBOX_PATH+1];
-    int i, r;
+    int i;
     char *alt_config = NULL;
     struct incremental_record irec;
 
@@ -114,22 +110,15 @@ int main(int argc, char *argv[])
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&dump_namespace, 1)) != 0) {
-        syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
-    }
-
     irec.incruid = 0;
+    strarray_t *array = strarray_new();
     for (i = optind; i < argc; i++) {
-        strlcpy(buf, argv[i], sizeof(buf));
-        /* Translate any separators in mailboxname */
-        mboxname_hiersep_tointernal(&dump_namespace, buf,
-                                    config_virtdomains ?
-                                    strcspn(buf, "@") : 0);
-        mboxlist_findall(&dump_namespace, buf, 1, 0, 0,
-                         dump_me, &irec);
+        strarray_append(array, argv[i]);
     }
+    if (array->count)
+        mboxlist_findallmulti(NULL, array, 1, 0, 0, dump_me, &irec);
+
+    strarray_free(array);
 
     mboxlist_close();
     mboxlist_done();
