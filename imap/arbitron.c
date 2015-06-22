@@ -212,9 +212,6 @@ int main(int argc,char **argv)
     construct_hash_table(&mailbox_table, 2047, 1);
     construct_hash_table(&mboxname_table, 2047, 1);
 
-    /* Translate any separators in mailboxname */
-    mboxname_hiersep_tointernal(&arb_namespace, pattern, 0);
-
     /* Get the mailbox list */
     fprintf(stderr, "Loading Mailboxes...");
     mboxlist_findall(&arb_namespace, pattern, 1, 0, 0,
