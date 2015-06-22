@@ -91,9 +91,6 @@ typedef struct mbox_stats_s {
 
 } mbox_stats_t;
 
-/* current namespace */
-static struct namespace purge_namespace;
-
 static int verbose = 1;
 static int forceall = 0;
 
@@ -106,9 +103,7 @@ static void print_stats(mbox_stats_t *stats);
 
 int main (int argc, char *argv[]) {
   int option;           /* getopt() returns an int */
-  char buf[MAX_MAILBOX_PATH+1];
   char *alt_config = NULL;
-  int r;
 
   if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
       fatal("must run as the Cyrus user", EC_USAGE);
@@ -175,14 +170,6 @@ int main (int argc, char *argv[]) {
   /* setup for mailbox event notifications */
   mboxevent_init();
 
-  /* Set namespace -- force standard (internal) */
-  if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
-      syslog(LOG_ERR, "%s", error_message(r));
-      fatal(error_message(r), EC_CONFIG);
-  }
-
-  mboxevent_setnamespace(&purge_namespace);
-
   mboxlist_init(0);
   mboxlist_open(NULL);
 
@@ -193,19 +180,16 @@ int main (int argc, char *argv[]) {
   sync_log_init();
 
   if (optind == argc) { /* do the whole partition */
-    strcpy(buf, "*");
-    mboxlist_findall(&purge_namespace, buf, 1, 0, 0,
-                     purge_me, NULL);
+    mboxlist_findall(NULL, "*", 1, 0, 0, purge_me, NULL);
   } else {
+    /* do all matching mailboxes in one pass */
+    strarray_t *array = strarray_new();
     for (; optind < argc; optind++) {
-      strncpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
-      /* Translate any separators in mailboxname */
-      mboxname_hiersep_tointernal(&purge_namespace, buf,
-                                  config_virtdomains ?
-                                  strcspn(buf, "@") : 0);
-      mboxlist_findall(&purge_namespace, buf, 1, 0, 0,
-                       purge_me, NULL);
+      strarray_append(array, argv[optind]);
     }
+    if (array->count)
+      mboxlist_findallmulti(NULL, array, 1, 0, 0, purge_me, NULL);
+    strarray_free(array);
   }
 
   sync_log_done();
@@ -253,12 +237,7 @@ static int purge_me(const char *name, int matchlen __attribute__((unused)),
   memset(&stats, '\0', sizeof(mbox_stats_t));
 
   if (verbose) {
-      char mboxname[MAX_MAILBOX_BUFFER];
-
-      /* Convert internal name to external */
-      (*purge_namespace.mboxname_toexternal)(&purge_namespace, name,
-                                             "cyrus", mboxname);
-      printf("Working on %s...\n", mboxname);
+      printf("Working on %s...\n", name);
   }
 
   r = mailbox_open_iwl(name, &mailbox);
