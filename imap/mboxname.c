@@ -1202,8 +1202,10 @@ HIDDEN int mboxname_policycheck(const char *name)
        names yet - maybe we should */
     p = strchr(name, '!');
     if (p) {
-        if (config_virtdomains)
+        if (config_virtdomains) {
             name = p + 1;
+            namelen = strlen(name);
+        }
         else
             return IMAP_MAILBOX_BADNAME;
     }
