@@ -389,7 +389,6 @@ int http_read_response(struct backend *be, unsigned meth, unsigned *code,
 {
     static char statbuf[2048];
     const char **conn;
-    int c = EOF;
 
     if (statline) *statline = statbuf;
     *errstr = NULL;
@@ -406,7 +405,7 @@ int http_read_response(struct backend *be, unsigned meth, unsigned *code,
         *errstr = "Unable to read status-line/headers from backend";
         return HTTP_BAD_GATEWAY;
     }
-    eatline(be->in, c); /* CRLF separating headers & body */
+    eatline(be->in, ' '); /* CRLF separating headers & body */
 
     /* 1xx (provisional) response - nothing else to do */
     if (*code < 200) return 0;
