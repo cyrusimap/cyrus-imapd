@@ -145,16 +145,14 @@ out:
     return r;
 }
 
-static int zero_cid_cb(const char *mboxname,
-                       int matchlen __attribute__((unused)),
-                       int maycreate __attribute__((unused)),
+static int zero_cid_cb(const mbentry_t *mbentry,
                        void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
     const struct index_record *record;
     int r;
 
-    r = mailbox_open_iwl(mboxname, &mailbox);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) return r;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
@@ -175,39 +173,32 @@ static int zero_cid_cb(const char *mboxname,
     return r;
 }
 
-static int do_zero(const char *inboxname)
+static int do_zero(const char *userid)
 {
-    char buf[MAX_MAILBOX_NAME];
-    int r;
     struct conversations_state *state = NULL;
+    int r;
 
-    r = conversations_open_mbox(inboxname, &state);
-
-    r = zero_cid_cb(inboxname, 0, 0, NULL);
+    r = conversations_open_user(userid, &state);
     if (r) return r;
 
-    snprintf(buf, sizeof(buf), "%s.*", inboxname);
-    r = mboxlist_findall(NULL, buf, 1, NULL,
-                         NULL, zero_cid_cb, NULL);
+    r = mboxlist_usermboxtree(userid, zero_cid_cb, NULL, 0);
 
     conversations_commit(&state);
 
     return r;
 }
 
-static int build_cid_cb(const char *mboxname,
-                        int matchlen __attribute__((unused)),
-                        int maycreate __attribute__((unused)),
+static int build_cid_cb(const mbentry_t *mbentry,
                         void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
     const struct index_record *record;
     int r;
-    struct conversations_state *cstate = conversations_get_mbox(mboxname);
+    struct conversations_state *cstate = conversations_get_mbox(mbentry->name);
 
     if (!cstate) return IMAP_CONVERSATIONS_NOT_OPEN;
 
-    r = mailbox_open_iwl(mboxname, &mailbox);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) return r;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
@@ -234,38 +225,31 @@ static int build_cid_cb(const char *mboxname,
     return r;
 }
 
-static int do_build(const char *inboxname)
+static int do_build(const char *userid)
 {
-    char buf[MAX_MAILBOX_NAME];
-    int r;
     struct conversations_state *state = NULL;
+    int r;
 
-    r = conversations_open_mbox(inboxname, &state);
-
-    r = build_cid_cb(inboxname, 0, 0, NULL);
+    r = conversations_open_user(userid, &state);
     if (r) return r;
 
-    snprintf(buf, sizeof(buf), "%s.*", inboxname);
-    r = mboxlist_findall(NULL, buf, 1, NULL,
-                         NULL, build_cid_cb, NULL);
+    r = mboxlist_usermboxtree(userid, build_cid_cb, NULL, 0);
 
     conversations_commit(&state);
     return r;
 }
 
-static int recalc_counts_cb(const char *mboxname,
-                            int matchlen __attribute__((unused)),
-                            int maycreate __attribute__((unused)),
+static int recalc_counts_cb(const mbentry_t *mbentry,
                             void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
     int r;
 
-    r = mailbox_open_irl(mboxname, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) return r;
 
     if (verbose)
-        printf("%s\n", mboxname);
+        printf("%s\n", mbentry->name);
 
     r = mailbox_add_conversations(mailbox);
 
@@ -273,19 +257,17 @@ static int recalc_counts_cb(const char *mboxname,
     return r;
 }
 
-static int audit_counts_cb(const char *mboxname,
-                           int matchlen __attribute__((unused)),
-                           int maycreate __attribute__((unused)),
+static int audit_counts_cb(const mbentry_t *mbentry,
                            void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
     int r;
 
-    r = mailbox_open_irl(mboxname, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) return r;
 
     if (verbose)
-        printf("%s\n", mboxname);
+        printf("%s\n", mbentry->name);
 
     r = mailbox_add_conversations(mailbox);
 
@@ -293,24 +275,18 @@ static int audit_counts_cb(const char *mboxname,
     return r;
 }
 
-static int do_recalc(const char *inboxname)
+static int do_recalc(const char *userid)
 {
-    char buf[MAX_MAILBOX_NAME];
-    int r;
     struct conversations_state *state = NULL;
+    int r;
 
-    r = conversations_open_mbox(inboxname, &state);
+    r = conversations_open_user(userid, &state);
     if (r) return r;
 
     r = conversations_zero_counts(state);
     if (r) goto err;
 
-    r = recalc_counts_cb(inboxname, 0, 0, NULL);
-    if (r) goto err;
-
-    snprintf(buf, sizeof(buf), "%s.*", inboxname);
-    r = mboxlist_findall(NULL, buf, 1, NULL,
-                         NULL, recalc_counts_cb, NULL);
+    r = mboxlist_usermboxtree(userid, recalc_counts_cb, NULL, 0);
     if (r) goto err;
 
     r = conversations_cleanup_zero(state);
@@ -591,17 +567,17 @@ next:
     return 0;
 }
 
-int do_checkfolders(const char *inboxname)
+int do_checkfolders(const char *userid)
 {
     int r;
     struct conversations_state *state = NULL;
     strarray_t *copy1, *copy2;
 
     /* open the DB */
-    r = conversations_open_mbox(inboxname, &state);
+    r = conversations_open_user(userid, &state);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
-                inboxname, error_message(r));
+                userid, error_message(r));
         goto out;
     }
 
@@ -613,10 +589,10 @@ int do_checkfolders(const char *inboxname)
     strarray_sort(copy2, cmpstringp_raw);
     strarray_uniq(copy2);
     if (copy1->count != copy2->count) {
-        printf("DUPLICATE %s\n", inboxname);
+        printf("DUPLICATE %s\n", userid);
     }
     else {
-        printf("OK %s\n", inboxname);
+        printf("OK %s\n", userid);
     }
     strarray_free(copy1);
     strarray_free(copy2);
@@ -626,9 +602,8 @@ out:
     return r;
 }
 
-static int do_audit(const char *inboxname)
+static int do_audit(const char *userid)
 {
-    char buf[MAX_MAILBOX_NAME];
     int r;
     char temp_suffix[64];
     char *filename_temp = NULL;
@@ -638,7 +613,7 @@ static int do_audit(const char *inboxname)
     unsigned int ndiffs = 0;
 
     if (verbose)
-        printf("Inbox %s\n", inboxname);
+        printf("User %s\n", userid);
 
     if (verbose)
         printf("Pass 1: recalculate counts into temporary db\n");
@@ -648,10 +623,10 @@ static int do_audit(const char *inboxname)
              "conversations.audit.%d", (int)getpid());
 
     /* Get the filenames */
-    filename_real = conversations_getmboxpath(inboxname);
+    filename_real = conversations_getuserpath(userid);
     conversations_set_suffix(temp_suffix);
     conversations_set_directory(audit_temp_directory);
-    filename_temp = conversations_getmboxpath(inboxname);
+    filename_temp = conversations_getmboxpath(userid);
     conversations_set_suffix(NULL);
     conversations_set_directory(NULL);
     assert(strcmp(filename_temp, filename_real));
@@ -688,16 +663,7 @@ static int do_audit(const char *inboxname)
     conversations_set_suffix(temp_suffix);
     conversations_set_directory(audit_temp_directory);
 
-    r = audit_counts_cb(inboxname, 0, 0, NULL);
-    if (r) {
-        fprintf(stderr, "Failed to recalculate counts in %s: %s\n",
-                filename_temp, error_message(r));
-        goto out;
-    }
-
-    snprintf(buf, sizeof(buf), "%s.*", inboxname);
-    r = mboxlist_findall(NULL, buf, 1, NULL,
-                         NULL, audit_counts_cb, NULL);
+    r = mboxlist_usermboxtree(userid, audit_counts_cb, NULL, 0);
     if (r) {
         fprintf(stderr, "Failed to recalculate counts in %s: %s\n",
                 filename_temp, error_message(r));
@@ -746,9 +712,9 @@ static int do_audit(const char *inboxname)
 
     ndiffs += diff_records(state_real, state_temp);
     if (ndiffs)
-        printf("%s is BROKEN (%u differences)\n", inboxname, ndiffs);
+        printf("%s is BROKEN (%u differences)\n", userid, ndiffs);
     else if (verbose)
-        printf("%s is OK\n", inboxname);
+        printf("%s is OK\n", userid);
 
 out:
     if (state_temp)
@@ -769,7 +735,6 @@ static int usage(const char *name)
 
 static int do_user(const char *userid)
 {
-    char *inboxname;
     char *fname;
     int r = 0;
 
@@ -778,13 +743,6 @@ static int do_user(const char *userid)
         fprintf(stderr, "Unable to get conversations database "
                         "filename for userid \"%s\"\n",
                         userid);
-        return EC_USAGE;
-    }
-
-    inboxname = mboxname_user_mbox(userid, NULL);
-    if (inboxname == NULL) {
-        free(fname);
-        fprintf(stderr, "Invalid userid %s", userid);
         return EC_USAGE;
     }
 
@@ -801,27 +759,27 @@ static int do_user(const char *userid)
         break;
 
     case ZERO:
-        if (do_zero(inboxname))
+        if (do_zero(userid))
             r = EC_NOINPUT;
         break;
 
     case BUILD:
-        if (do_build(inboxname))
+        if (do_build(userid))
             r = EC_NOINPUT;
         break;
 
     case RECALC:
-        if (do_recalc(inboxname))
+        if (do_recalc(userid))
             r = EC_NOINPUT;
         break;
 
     case AUDIT:
-        if (do_audit(inboxname))
+        if (do_audit(userid))
             r = EC_NOINPUT;
         break;
 
     case CHECKFOLDERS:
-        if (do_checkfolders(inboxname))
+        if (do_checkfolders(userid))
             r = EC_NOINPUT;
         break;
 
@@ -830,7 +788,6 @@ static int do_user(const char *userid)
     }
 
     free(fname);
-    free(inboxname);
 
     return r;
 }
