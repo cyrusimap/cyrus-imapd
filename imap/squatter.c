@@ -272,19 +272,16 @@ again:
     return r;
 }
 
-static int addmbox(const char *name,
-                   int matchlen __attribute__((unused)),
-                   int maycreate __attribute__((unused)),
-                   void *rock)
+static int addmbox(const mbentry_t *mbentry, void *rock)
 {
     strarray_t *sa = (strarray_t *) rock;
 
-    if (strcmpsafe(name, name_starts_from) < 0)
+    if (strcmpsafe(mbentry->name, name_starts_from) < 0)
         return 0;
-    if (mboxname_isdeletedmailbox(name, NULL))
+    if (mboxname_isdeletedmailbox(mbentry->name, NULL))
         return 0;
 
-    strarray_append(sa, name);
+    strarray_append(sa, mbentry->name);
     return 0;
 }
 
@@ -296,25 +293,19 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
 
     if (!nmboxnames) {
         assert(!recursive_flag);
-        strlcpy(buf, "*", sizeof(buf));
-        mboxlist_findall(&squat_namespace, buf, 1, 0, 0, addmbox, sa);
+        mboxlist_allmbox(NULL, addmbox, sa, 0);
     }
 
     for (i = 0; i < nmboxnames; i++) {
         if (user_mode) {
-            char *mbox = mboxname_user_mbox(mboxnames[i], NULL);
-            strlcpy(buf, mbox, sizeof(buf));
-            free(mbox);
+            mboxlist_usermboxtree(mboxnames[i], addmbox, sa, 0);
         }
         else {
             /* Translate any separators in mailboxname */
             (*squat_namespace.mboxname_tointernal) (&squat_namespace,
                                                     mboxnames[i], NULL, buf);
-        }
-        strarray_append(sa, buf);
-        if (recursive_flag || user_mode) {
-            strlcat(buf, ".*", sizeof(buf));
-            mboxlist_findall(&squat_namespace, buf, 1, 0, 0, addmbox, sa);
+            int flags = recursive_flag ? 0 : MBOXTREE_SKIP_CHILDREN;
+            mboxlist_mboxtree(buf, addmbox, sa, flags);
         }
     }
 }
@@ -607,18 +598,6 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
     return 0;
 }
 
-static void add_user(strarray_t *folders, const char *user)
-{
-    char *mbox = mboxname_user_mbox(user, NULL);
-    char *expr = strconcat(mbox, ".*", (char *)NULL);
-
-    strarray_append(folders, mbox);
-    mboxlist_findall(&squat_namespace, expr, 1, 0, 0, addmbox, folders);
-
-    free(expr);
-    free(mbox);
-}
-
 static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
 {
     const char *args[3];
@@ -630,7 +609,7 @@ static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
                 strarray_add(folders, args[1]);
         }
         else if (!strcmp(args[0], "USER"))
-            add_user(folders, args[1]);
+            mboxlist_usermboxtree(args[1], addmbox, folders, /*flags*/0);
     }
 
     return folders;
