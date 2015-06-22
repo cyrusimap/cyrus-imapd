@@ -4724,26 +4724,15 @@ static void mailbox_delete_files(const char *path)
 }
 
 /* Callback for use by cmd_delete */
-static int chkchildren(const char *name,
-                       int matchlen __attribute__((unused)),
-                       int maycreate __attribute__((unused)),
+static int chkchildren(const mbentry_t *mbentry,
                        void *rock)
 {
     const char *part = (const char *)rock;
-    mbentry_t *mbentry;
-    int r;
-
-    r = mboxlist_lookup(name, &mbentry, 0);
-    /* deleted mailboxes don't count as children */
-    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
-    if (r) return r;
 
     if (!strcmp(part, mbentry->partition))
-        r = CYRUSDB_DONE;
+        return CYRUSDB_DONE;
 
-    mboxlist_entry_free(&mbentry);
-
-    return r;
+    return 0;
 }
 
 #ifdef WITH_DAV
@@ -5002,8 +4991,7 @@ HIDDEN int mailbox_delete_cleanup(const char *part, const char *name, const char
 
     do {
         /* Check if the mailbox has children */
-        strcpy(ntail, ".*");
-        r = mboxlist_findall(NULL, nbuf, 1, NULL, NULL, chkchildren, (void *)part);
+        r = mboxlist_mboxtree(nbuf, chkchildren, (void *)part, MBOXTREE_SKIP_ROOT);
         if (r != 0) break; /* We short-circuit with CYRUSDB_DONE */
 
         /* no children, remove the directories */
@@ -5019,7 +5007,6 @@ HIDDEN int mailbox_delete_cleanup(const char *part, const char *name, const char
         }
 
         /* Check if parent mailbox exists */
-        *ntail = '\0';
         ntail = strrchr(nbuf, '.');
         if (!ntail || strchr(ntail, '!')) {
             /* Hit top of hierarchy or domain separator */
