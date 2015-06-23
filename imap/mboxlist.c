@@ -2451,6 +2451,10 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     /* Find the common search prefix of all patterns */
     const char *firstpat = strarray_nth(patterns, 0);
     for (prefixlen = 0; firstpat[prefixlen]; prefixlen++) {
+        if (prefixlen >= MAX_MAILBOX_NAME) {
+            r = IMAP_MAILBOX_BADNAME;
+            goto done;
+        }
         char c = firstpat[prefixlen];
         for (i = 1; i < patterns->count; i++) {
             const char *pat = strarray_nth(patterns, i);
