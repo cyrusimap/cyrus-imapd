@@ -1270,6 +1270,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Set the length of the NNTP server's inactivity autologout timer,
    in minutes.  The minimum value is 3, the default. */
 
+{ "notesmailbox", NULL, STRING }
+/* The top level mailbox in each user's account which is used to store
+ * Apple-style Notes.  Default is blank (disabled) */
+
 { "notifysocket", "{configdirectory}/socket/notify", STRING }
 /* Unix domain socket that the mail notification daemon listens on. */
 

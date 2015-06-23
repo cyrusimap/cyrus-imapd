@@ -1149,11 +1149,12 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         struct mboxname_counters counters;
         struct buf value = BUF_INITIALIZER;
 
-        mboxname_read_counters(mailbox->name, &counters);
-        buf_printf(&value, "%u %llu %llu %llu %llu %u",
-                   counters.version, counters.highestmodseq,
-                   counters.mailmodseq, counters.caldavmodseq,
-                   counters.carddavmodseq, counters.uidvalidity);
+        int r = mboxname_read_counters(mailbox->name, &counters);
+        if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %u",
+                           counters.version, counters.highestmodseq,
+                           counters.mailmodseq, counters.caldavmodseq,
+                           counters.carddavmodseq, counters.notesmodseq,
+                           counters.uidvalidity);
 
         FILL_STRING_PARAM(event, EVENT_COUNTERS, buf_release(&value));
     }

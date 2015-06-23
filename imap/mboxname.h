@@ -166,6 +166,11 @@ int mboxname_iscalendarmailbox(const char *name, int mbtype);
  */
 int mboxname_isaddressbookmailbox(const char *name, int mbtype);
 
+/* If (internal) mailbox is a user's top-level Notes mailbox,
+ * returns boolean
+ */
+int mboxname_isnotesmailbox(const char *name, int mbtype);
+
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
 
@@ -237,8 +242,8 @@ struct mboxname_counters {
     modseq_t mailmodseq;
     modseq_t caldavmodseq;
     modseq_t carddavmodseq;
+    modseq_t notesmodseq;
     uint32_t uidvalidity;
-    uint32_t crc;
 };
 
 int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals);

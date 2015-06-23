@@ -969,6 +969,30 @@ int mboxname_isaddressbookmailbox(const char *name, int mbtype)
 }
 
 /*
+ * If (internal) mailbox 'name' is a user's "Notes" mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__((unused)))
+{
+    const char *boxname = config_getstring(IMAPOPT_NOTESMAILBOX);
+    const char *p;
+    const char *start = name;
+
+    if (!boxname) return 0;
+
+    /* step past the domain part */
+    if (config_virtdomains && (p = strchr(start, '!')))
+        start = p + 1;
+
+    /* step past the user part */
+    if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
+        start = p + 1;
+    else return 0;
+
+    return (!strcmp(start, boxname));
+}
+
+/*
  * Translate (internal) inboxname into corresponding userid.
  */
 EXPORTED const char *mboxname_to_userid(const char *mboxname)
@@ -1713,30 +1737,57 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
     return fileval;
 }
 
+#define MV_VERSION 1
+
 #define MV_OFF_GENERATION 0
 #define MV_OFF_VERSION 4
 #define MV_OFF_HIGHESTMODSEQ 8
 #define MV_OFF_MAILMODSEQ 16
 #define MV_OFF_CALDAVMODSEQ 24
 #define MV_OFF_CARDDAVMODSEQ 32
-#define MV_OFF_UIDVALIDITY 40
-#define MV_OFF_CRC 44
-#define MV_LENGTH 48
+#define MV_OFF_NOTESMODSEQ 40
+#define MV_OFF_UIDVALIDITY 48
+#define MV_OFF_CRC 52
+#define MV_LENGTH 56
 
 /* NOTE: you need a MV_LENGTH byte base here */
-static int mboxname_buf_to_counters(const char *base, struct mboxname_counters *vals)
+static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxname_counters *vals)
 {
-    vals->generation = ntohl(*((uint32_t *)(base+MV_OFF_GENERATION)));
-    vals->version = ntohl(*((uint32_t *)(base+MV_OFF_VERSION)));
-    vals->highestmodseq = ntohll(*((uint64_t *)(base+MV_OFF_HIGHESTMODSEQ)));
-    vals->mailmodseq = ntohll(*((uint64_t *)(base+MV_OFF_MAILMODSEQ)));
-    vals->caldavmodseq = ntohll(*((uint64_t *)(base+MV_OFF_CALDAVMODSEQ)));
-    vals->carddavmodseq = ntohll(*((uint64_t *)(base+MV_OFF_CARDDAVMODSEQ)));
-    vals->uidvalidity = ntohl(*((uint32_t *)(base+MV_OFF_UIDVALIDITY)));
-    vals->crc = ntohl(*((uint32_t *)(base+MV_OFF_CRC)));
+    vals->generation = ntohl(*((uint32_t *)(base)));
+    vals->version = ntohl(*((uint32_t *)(base+4)));
 
-    if (crc32_map(base, MV_OFF_CRC) != vals->crc)
-        return IMAP_MAILBOX_CHECKSUM;
+    /* dodgy broken version storage in v0 code, it could be anything */
+    if (len == 48) vals->version = 0;
+
+    switch (vals->version) {
+    case 0:
+        if (len != 48) return IMAP_MAILBOX_CHECKSUM;
+        if (crc32_map(base, 44) != ntohl(*((uint32_t *)(base+44))))
+            return IMAP_MAILBOX_CHECKSUM;
+
+        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
+        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
+        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
+        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
+        vals->uidvalidity = ntohl(*((uint32_t *)(base+40)));
+        break;
+
+    case 1:
+        if (len != 56) return IMAP_MAILBOX_CHECKSUM;
+        if (crc32_map(base, 52) != ntohl(*((uint32_t *)(base+52))))
+            return IMAP_MAILBOX_CHECKSUM;
+
+        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
+        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
+        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
+        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
+        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
+        vals->uidvalidity = ntohl(*((uint32_t *)(base+48)));
+        break;
+
+    default:
+        return IMAP_MAILBOX_BADFORMAT;
+    }
 
     return 0;
 }
@@ -1745,11 +1796,12 @@ static int mboxname_buf_to_counters(const char *base, struct mboxname_counters *
 static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char *base)
 {
     *((uint32_t *)(base+MV_OFF_GENERATION)) = htonl(vals->generation);
-    *((uint32_t *)(base+MV_OFF_VERSION)) = htonl(vals->version);
+    *((uint32_t *)(base+MV_OFF_VERSION)) = htonl(MV_VERSION);
     align_htonll(base+MV_OFF_HIGHESTMODSEQ, vals->highestmodseq);
     align_htonll(base+MV_OFF_MAILMODSEQ, vals->mailmodseq);
     align_htonll(base+MV_OFF_CALDAVMODSEQ, vals->caldavmodseq);
     align_htonll(base+MV_OFF_CARDDAVMODSEQ, vals->carddavmodseq);
+    align_htonll(base+MV_OFF_NOTESMODSEQ, vals->notesmodseq);
     *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
     *((uint32_t *)(base+MV_OFF_CRC)) = htonl(crc32_map(base, MV_OFF_CRC));
 }
@@ -1766,6 +1818,8 @@ static int mboxname_load_counters(const char *mboxname, struct mboxname_counters
     size_t len = 0;
     struct mboxname_parts parts;
     int r = 0;
+
+    memset(vals, 0, sizeof(struct mboxname_counters));
 
     mboxname_to_parts(mboxname, &parts);
 
@@ -1810,11 +1864,11 @@ static int mboxname_load_counters(const char *mboxname, struct mboxname_counters
         goto done;
     }
 
-    if (sbuf.st_size >= MV_LENGTH) {
+    if (sbuf.st_size >= 8) {
         /* read the old value */
         map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
-        if (len >= MV_LENGTH) {
-            r = mboxname_buf_to_counters(base, vals);
+        if (len >= 8) {
+            r = mboxname_buf_to_counters(base, len, vals);
         }
         map_free(&base, &len);
     }
@@ -1957,10 +2011,10 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
         goto done;
     }
 
-    if (sbuf.st_size >= MV_LENGTH) {
+    if (sbuf.st_size >= 8) {
         map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
-        if (len >= MV_LENGTH)
-            r = mboxname_buf_to_counters(base, vals);
+        if (len >= 8)
+            r = mboxname_buf_to_counters(base, len, vals);
         map_free(&base, &len);
     }
 
@@ -1997,10 +2051,12 @@ EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int m
     if (mboxname_load_counters(mboxname, &counters, &fd))
         return last + 1;
 
-    if (mbtype & MBTYPE_ADDRESSBOOK)
+    if (mboxname_isaddressbookmailbox(mboxname, mbtype))
         typemodseqp = &counters.carddavmodseq;
-    else if (mbtype & MBTYPE_CALENDAR)
+    else if (mboxname_iscalendarmailbox(mboxname, mbtype))
         typemodseqp = &counters.caldavmodseq;
+    else if (mboxname_isnotesmailbox(mboxname, mbtype))
+        typemodseqp = &counters.notesmodseq;
     else
         typemodseqp = &counters.mailmodseq;
 
@@ -2031,10 +2087,12 @@ EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbt
     if (mboxname_load_counters(mboxname, &counters, &fd))
         return val;
 
-    if (mbtype & MBTYPE_ADDRESSBOOK)
+    if (mboxname_isaddressbookmailbox(mboxname, mbtype))
         typemodseqp = &counters.carddavmodseq;
-    else if (mbtype & MBTYPE_CALENDAR)
+    else if (mboxname_iscalendarmailbox(mboxname, mbtype))
         typemodseqp = &counters.caldavmodseq;
+    else if (mboxname_isnotesmailbox(mboxname, mbtype))
+        typemodseqp = &counters.notesmodseq;
     else
         typemodseqp = &counters.mailmodseq;
 
