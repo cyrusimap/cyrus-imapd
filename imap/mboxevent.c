@@ -732,7 +732,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add Message-Id to midset or NIL if doesn't exists */
     if (mboxevent_expected_param(event->type, (EVENT_MIDSET))) {
-	msgid = mailbox_cache_get_msgid(mailbox, record);
+        msgid = mailbox_cache_get_env(mailbox, record, ENV_MSGID);
 	strarray_add(&event->midset, msgid ? msgid : "NIL");
 
 	if (msgid)

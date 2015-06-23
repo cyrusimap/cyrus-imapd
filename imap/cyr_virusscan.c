@@ -58,6 +58,7 @@
 #include "imap/imap_err.h"
 #include "index.h"
 #include "mailbox.h"
+#include "message.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "prot.h"
@@ -78,7 +79,6 @@ struct infected_msg {
 
 struct infected_mbox {
     char *owner;
-    uint32_t recno; /* running count of which message we're scanning */
     struct infected_msg *msgs;
     struct infected_mbox *next;
 };
@@ -94,9 +94,6 @@ int disinfect = 0;
 int notify = 0;
 struct infected_mbox *public = NULL;
 struct infected_mbox *user = NULL;
-
-/* current namespace */
-static struct namespace scan_namespace;
 
 int verbose = 1;
 
@@ -221,18 +218,16 @@ struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
 
 /* forward declarations */
 int usage(char *name);
-int scan_me(char *, int, int, void *);
+int scan_me(const char *, int, int, void *);
 unsigned virus_check(struct mailbox *mailbox,
-		     struct index_record *record,
+                     struct index_record *record,
 		     void *rock);
 void append_notifications();
 
 
 int main (int argc, char *argv[]) {
     int option;		/* getopt() returns an int */
-    char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL;
-    int r;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -267,12 +262,6 @@ int main (int argc, char *argv[]) {
 
     engine.state = engine.init();
 
-    /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
-	syslog(LOG_ERR, "%s", error_message(r));
-	fatal(error_message(r), EC_CONFIG);
-    }
-
     mboxlist_init(0);
     mboxlist_open(NULL);
 
@@ -284,21 +273,12 @@ int main (int argc, char *argv[]) {
 
     /* setup for mailbox event notifications */
     mboxevent_init();
-    mboxevent_setnamespace(&scan_namespace);
 
     if (optind == argc) { /* do the whole partition */
-	strcpy(buf, "*");
-	(*scan_namespace.mboxlist_findall)(&scan_namespace, buf, 1, 0, 0,
-					   scan_me, NULL);
+        mboxlist_findall(NULL, "*", 1, 0, 0, scan_me, NULL);
     } else {
 	for (; optind < argc; optind++) {
-	    strncpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
-	    /* Translate any separators in mailboxname */
-	    mboxname_hiersep_tointernal(&scan_namespace, buf,
-					config_virtdomains ?
-					strcspn(buf, "@") : 0);
-	    (*scan_namespace.mboxlist_findall)(&scan_namespace, buf, 1, 0, 0,
-					       scan_me, NULL);
+	    mboxlist_findall(NULL, argv[optind], 1, 0, 0, scan_me, NULL);
 	}
     }
 
@@ -329,8 +309,7 @@ int usage(char *name)
     exit(0);
 }
 
-/* we don't check what comes in on matchlen and maycreate, should we? */
-int scan_me(char *name,
+int scan_me(const char *name,
 	    int matchlen __attribute__((unused)),
 	    int maycreate __attribute__((unused)),
 	    void *rock __attribute__((unused)))
@@ -340,34 +319,24 @@ int scan_me(char *name,
     struct infected_mbox *i_mbox = NULL;
 
     if (verbose) {
-	char mboxname[MAX_MAILBOX_BUFFER];
-
-	/* Convert internal name to external */
-	(*scan_namespace.mboxname_toexternal)(&scan_namespace, name,
-					     "cyrus", mboxname);
-	printf("Working on %s...\n", mboxname);
+        printf("Working on %s...\n", name);
     }
 
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) { /* did we find it? */
-	syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
+    if (r) {
+        printf("failed to open %s (%s)\n", name, error_message(r));
 	return 0;
     }
 
     if (notify) {
-	/* XXX  Need to handle virtdomains */
-	if (!strncmp(name, "user.", 5)) {
-	    size_t ownerlen;
-
-	    if (user && (ownerlen = strlen(user->owner)) &&
-		!strncmp(name, user->owner, ownerlen) &&
-		(name[ownerlen] == '.' || name[ownerlen] =='\0')) {
-		/* mailbox belongs to current owner */
+        const char *owner = mboxname_to_userid(name);
+        if (owner) {
+            if (!strcmp(owner, user->owner)) {
 		i_mbox = user;
 	    } else {
 		/* new owner (Inbox) */
 		struct infected_mbox *new = xzmalloc(sizeof(struct infected_mbox));
-		new->owner = xstrdup(name);
+                new->owner = xstrdup(owner);
 		new->next = user;
 		i_mbox = user = new;
 	    }
@@ -382,8 +351,6 @@ int scan_me(char *name,
 	    i_mbox = public;
 	}
 #endif
-
-	if (i_mbox) i_mbox->recno = 1;
     }
 
     mailbox_expunge(mailbox, virus_check, i_mbox, NULL, EVENT_MESSAGE_EXPUNGE);
@@ -392,22 +359,19 @@ int scan_me(char *name,
     return 0;
 }
 
-void create_digest(struct infected_mbox *i_mbox, struct mailbox *mbox,
-		   uint32_t recno, unsigned long uid, const char *virname)
+void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
+                   struct index_record *record, const char *virname)
 {
-    struct infected_msg *i_msg = xmalloc(sizeof(struct infected_msg));
-    struct nntp_overview *over;
+    struct infected_msg *i_msg = xzmalloc(sizeof(struct infected_msg));
 
-    i_msg->mboxname = xstrdup(mbox->name);
+    i_msg->mboxname = xstrdup(mailbox->name);
     i_msg->virname = xstrdup(virname);
-    i_msg->uid= uid;
+    i_msg->uid = record->uid;
 
-    index_operatemailbox(mbox);
-    over = index_overview(mbox, recno);
-    i_msg->msgid = strdup(over->msgid);
-    i_msg->date = strdup(over->date);
-    i_msg->from = strdup(over->from);
-    i_msg->subj = strdup(over->subj);
+    i_msg->msgid = mailbox_cache_get_env(mailbox, record, ENV_MSGID);
+    i_msg->date = mailbox_cache_get_env(mailbox, record, ENV_DATE);
+    i_msg->from = mailbox_cache_get_env(mailbox, record, ENV_FROM);
+    i_msg->subj = mailbox_cache_get_env(mailbox, record, ENV_SUBJECT);
 
     i_msg->next = i_mbox->msgs;
     i_mbox->msgs = i_msg;
@@ -416,7 +380,7 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mbox,
 /* thumbs up routine, checks for virus and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 unsigned virus_check(struct mailbox *mailbox,
-		     struct index_record *record,
+                     struct index_record *record,
 		     void *deciderock)
 {
     struct infected_mbox *i_mbox = (struct infected_mbox *) deciderock;
@@ -428,16 +392,14 @@ unsigned virus_check(struct mailbox *mailbox,
 
     if ((r = engine.scanfile(engine.state, fname, &virname))) {
 	if (verbose) {
-	    printf("Virus detected in message %lu: %s\n", record->uid, virname);
+            printf("Virus detected in message %u: %s\n", record->uid, virname);
 	}
 	if (disinfect) {
 	    if (notify && i_mbox) {
-		create_digest(i_mbox, mailbox, i_mbox->recno, record->uid, virname);
+                create_digest(i_mbox, mailbox, record, virname);
 	    }
 	}
     }
-
-    if (i_mbox) i_mbox->recno++;
 
     return r;
 }

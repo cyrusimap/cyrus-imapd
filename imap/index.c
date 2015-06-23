@@ -5613,7 +5613,7 @@ EXPORTED char *index_get_msgid(struct index_state *state,
     if (index_reload_record(state, msgno, &record))
 	return NULL;
 
-    return mailbox_cache_get_msgid(mailbox, &record);
+    return mailbox_cache_get_env(mailbox, &record, ENV_MSGID);
 }
 
 static void massage_header(char *hdr)
