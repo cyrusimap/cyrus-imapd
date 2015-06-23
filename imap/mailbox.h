@@ -494,8 +494,9 @@ extern int mailbox_map_record(struct mailbox *mailbox, const struct index_record
 /* cache record API */
 int mailbox_cacherecord(struct mailbox *mailbox,
                         const struct index_record *record);
-char *mailbox_cache_get_msgid(struct mailbox *mailbox,
-                              struct index_record *record);
+char *mailbox_cache_get_env(struct mailbox *mailbox,
+                            const struct index_record *record,
+                            int field);
 
 /* field-based lookup functions */
 const char *cacheitem_base(const struct index_record *record, int field);

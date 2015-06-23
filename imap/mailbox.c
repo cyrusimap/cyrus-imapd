@@ -499,12 +499,13 @@ static int cache_parserecord(struct mappedfile *cachefile, size_t cache_offset,
     return 0;
 }
 
-char *mailbox_cache_get_msgid(struct mailbox *mailbox,
-                              struct index_record *record)
+EXPORTED char *mailbox_cache_get_env(struct mailbox *mailbox,
+                                     const struct index_record *record,
+                                     int token)
 {
     char *env;
     char *envtokens[NUMENVTOKENS];
-    char *msgid;
+    char *field;
 
     if (mailbox_cacherecord(mailbox, record))
         return NULL;
@@ -512,7 +513,7 @@ char *mailbox_cache_get_msgid(struct mailbox *mailbox,
     if (cacheitem_size(record, CACHE_ENVELOPE) <= 2)
         return NULL;
 
-    /* get msgid out of the envelope
+    /* get field out of the envelope
      *
      * get a working copy; strip outer ()'s
      * +1 -> skip the leading paren
@@ -522,12 +523,12 @@ char *mailbox_cache_get_msgid(struct mailbox *mailbox,
                    cacheitem_size(record, CACHE_ENVELOPE) - 2);
     parse_cached_envelope(env, envtokens, VECTOR_SIZE(envtokens));
 
-    msgid = envtokens[ENV_MSGID] ? xstrdup(envtokens[ENV_MSGID]) : NULL;
+    field = xstrdupnull(envtokens[token]);
 
     /* free stuff */
     free(env);
 
-    return msgid;
+    return field;
 }
 
 EXPORTED int mailbox_index_islocked(struct mailbox *mailbox, int write)
