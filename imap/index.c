@@ -2867,21 +2867,23 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
     }
 
     /* Handle PARTIAL request */
-    offset += start_octet;
-    if (octet_count) size = octet_count;
+    n = octet_count ? octet_count : size;
 
     /* Sanity check the requested size */
-    if (size && (offset + size > msg_size))
-	n = msg_size - offset;
-    else
-	n = size;
+    if (start_octet > size) {
+	start_octet = size;
+	n = 0;
+    }
+    else if (start_octet + n > size) {
+	n = size - start_octet;
+    }
 
     if (outsize)
 	*outsize = n;
     else
 	prot_printf(pout, "{%u}\r\n", n);
 
-    prot_write(pout, msg_base + offset, n);
+    if (n) prot_write(pout, msg_base + offset + start_octet, n);
 
   done:
     /* Close the message file */
