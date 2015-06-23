@@ -119,54 +119,47 @@ static void usage(void)
 }
 
 /* Callback for use by recover_reserved */
-static int fixmbox(const char *name,
-                   int matchlen __attribute__((unused)),
-                   int maycreate __attribute__((unused)),
+static int fixmbox(const mbentry_t *mbentry,
                    void *rock __attribute__((unused)))
 {
-    mbentry_t *mbentry = NULL;
     int r;
 
-    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
-    if (r) return 0;
-
     if (mbentry->legacy_specialuse) {
-        const char *userid = mboxname_to_userid(name);
+        const char *userid = mboxname_to_userid(mbentry->name);
         if (userid) {
             struct buf buf = BUF_INITIALIZER;
             buf_setcstr(&buf, mbentry->legacy_specialuse);
-            annotatemore_rawwrite(name, "/specialuse", userid, &buf);
+            annotatemore_rawwrite(mbentry->name, "/specialuse", userid, &buf);
             buf_free(&buf);
         }
-        free(mbentry->legacy_specialuse);
-        mbentry->legacy_specialuse = NULL;
-        mboxlist_update(mbentry, /*localonly*/1);
+        mbentry_t *copy = mboxlist_entry_copy(mbentry);
+        /* XXX - const correctness */
+        free(copy->legacy_specialuse);
+        copy->legacy_specialuse = NULL;
+        mboxlist_update(copy, /*localonly*/1);
+        mboxlist_entry_free(&copy);
     }
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = mboxlist_deletemailbox(name, 1, NULL, NULL, NULL, 0, 0, 1);
+        r = mboxlist_deletemailbox(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1);
         if (r) {
             /* log the error */
             syslog(LOG_ERR,
                    "could not remove reserved mailbox '%s': %s",
-                   name, error_message(r));
+                   mbentry->name, error_message(r));
         } else {
-            syslog(LOG_ERR,
+            syslog(LOG_NOTICE,
                    "removed reserved mailbox '%s'",
-                   name);
+                   mbentry->name);
         }
     }
-
-    mboxlist_entry_free(&mbentry);
 
     return 0;
 }
 
 static void recover_reserved(void)
 {
-    char pattern[2] = { '*', '\0' };
-
     mboxlist_init(0);
     mboxlist_open(NULL);
 
@@ -180,8 +173,7 @@ static void recover_reserved(void)
     quotadb_open(NULL);
 
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_findall(NULL, pattern, 1, NULL,
-                     NULL, fixmbox, NULL);
+    mboxlist_allmbox(NULL, fixmbox, NULL, 0);
 
     quotadb_close();
     quotadb_done();

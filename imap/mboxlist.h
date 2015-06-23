@@ -97,12 +97,14 @@ typedef struct mboxlist_entry mbentry_t;
 
 mbentry_t *mboxlist_entry_create();
 
-EXPORTED char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int isnew);
-EXPORTED char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t);
+char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int isnew);
+char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t);
 
-EXPORTED int mboxlist_parse_entry(mbentry_t **mbentryptr,
-                                  const char *name, size_t namelen,
-                                  const char *data, size_t datalen);
+int mboxlist_parse_entry(mbentry_t **mbentryptr,
+                         const char *name, size_t namelen,
+                         const char *data, size_t datalen);
+
+mbentry_t *mboxlist_entry_copy(const mbentry_t *src);
 
 void mboxlist_entry_free(mbentry_t **mbentryptr);
 
