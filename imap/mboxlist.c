@@ -97,8 +97,7 @@ static void mboxlist_closesubs(struct db *sub);
 
 static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
                             void *rock);
-static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
-                                void *rock);
+static int mboxlist_changequota(const mbentry_t *mbentry, void *rock);
 
 EXPORTED mbentry_t *mboxlist_entry_create(void)
 {
@@ -2587,13 +2586,11 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
     return r;
 }
 
-static int child_cb(const char *name,
-                    int matchlen __attribute__((unused)),
-                    int maycreate __attribute__((unused)),
-                    void *rock)
+static int exists_cb(const mbentry_t *mbentry __attribute__((unused)), void *rock)
 {
-    if (!name) return 0;
-    return (*((int *) rock) = 1);
+    int *exists = (int *)rock;
+    *exists = 1;
+    return CYRUSDB_DONE; /* one is enough */
 }
 
 /*
@@ -2602,9 +2599,7 @@ static int child_cb(const char *name,
 EXPORTED int mboxlist_setquotas(const char *root,
                        quota_t newquotas[QUOTA_NUMRESOURCES], int force)
 {
-    char pattern[MAX_MAILBOX_PATH+1];
     struct quota q;
-    int have_mailbox = 1;
     int r;
     int res;
     struct txn *tid = NULL;
@@ -2677,31 +2672,20 @@ EXPORTED int mboxlist_setquotas(const char *root,
     if (r != IMAP_QUOTAROOT_NONEXISTENT)
         goto done;
 
-    /*
-     * Have to create a new quota root
-     */
-    strlcpy(pattern, root, sizeof(pattern));
-
     if (config_virtdomains && root[strlen(root)-1] == '!') {
         /* domain quota */
-        have_mailbox = 0;
-        strlcat(pattern, "*", sizeof(pattern));
     }
     else {
         mbentry_t *mbentry = NULL;
-        strlcat(pattern, ".*", sizeof(pattern));
 
         /* look for a top-level mailbox in the proposed quotaroot */
         r = mboxlist_lookup(root, &mbentry, NULL);
         if (r) {
             if (!force && r == IMAP_MAILBOX_NONEXISTENT) {
-                /* look for a child mailbox in the proposed quotaroot */
-                 mboxlist_findall(NULL, pattern, 1, NULL, NULL,
-                                 child_cb, (void *) &force);
+                mboxlist_mboxtree(root, exists_cb, &force, MBOXTREE_SKIP_ROOT);
             }
             /* are we going to force the create anyway? */
             if (force) {
-                have_mailbox = 0;
                 r = 0;
             }
         }
@@ -2734,12 +2718,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
 
     /* recurse through mailboxes, setting the quota and finding
      * out the usage */
-    /* top level mailbox */
-    if (have_mailbox)
-        mboxlist_changequota(root, 0, 0, (void *)root);
-
-    /* submailboxes - we're using internal names here */
-    mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, (void *)root);
+    mboxlist_mboxtree(root, mboxlist_changequota, (void *)root, 0);
 
     quota_changelockrelease();
 
@@ -2862,10 +2841,7 @@ static int mboxlist_rmquota(const char *name,
  * Helper function to change the quota root for 'name' to that pointed
  * to by the static global struct pointer 'mboxlist_newquota'.
  */
-static int mboxlist_changequota(const char *name,
-                                int matchlen __attribute__((unused)),
-                                int maycreate __attribute__((unused)),
-                                void *rock)
+static int mboxlist_changequota(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
@@ -2875,7 +2851,7 @@ static int mboxlist_changequota(const char *name,
 
     assert(root);
 
-    r = mailbox_open_iwl(name, &mailbox);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
 
     mailbox_get_usage(mailbox, quota_usage);
@@ -2908,7 +2884,7 @@ static int mboxlist_changequota(const char *name,
 
     if (r) {
         syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
-               name, root, error_message(r));
+               mbentry->name, root, error_message(r));
     }
 
     /* Note, we're a callback, and it's not a huge tragedy if we
