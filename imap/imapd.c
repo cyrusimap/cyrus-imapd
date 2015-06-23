@@ -6687,7 +6687,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     if (!r && !localonly && mboxname_isusermailbox(mailboxname, 1)) {
         const char *userid = mboxname_to_userid(mailboxname);
 
-        r = mboxlist_usermboxtree(userid, delmbox, NULL, MBOXTREE_DELETED);
+        r = mboxlist_usermboxtree(userid, delmbox, NULL, 0);
 
         if (!r) r = user_deletedata(userid, 1);
     }
