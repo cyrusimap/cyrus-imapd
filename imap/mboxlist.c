@@ -2382,7 +2382,7 @@ EXPORTED int mboxlist_alluser(user_cb *proc, void *rock)
     urock.prev = NULL;
     urock.proc = proc;
     urock.rock = rock;
-    r = mboxlist_allmbox("", alluser_cb, &urock, /*flags*/0);
+    r = mboxlist_allmbox(NULL, alluser_cb, &urock, /*flags*/0);
     free(urock.prev);
     return r;
 }

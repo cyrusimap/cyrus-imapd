@@ -70,13 +70,11 @@
 
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
-static struct namespace conv_namespace;
 
 enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
 
 int verbose = 0;
 
-char *prev_userid;
 int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
@@ -733,7 +731,7 @@ out:
 static int usage(const char *name)
     __attribute__((noreturn));
 
-static int do_user(const char *userid)
+static int do_user(const char *userid, void *rock __attribute__((unused)))
 {
     char *fname;
     int r = 0;
@@ -790,30 +788,6 @@ static int do_user(const char *userid)
     free(fname);
 
     return r;
-}
-
-static int do_mailbox(const char *name,
-                      int namelen,
-                      int maycreate __attribute__((unused)),
-                      void *rock __attribute__((unused)))
-{
-    char *mboxname = xstrndup(name, namelen);
-    const char *userid = mboxname_to_userid(mboxname);
-
-    if (mboxname_isdeletedmailbox(mboxname, NULL))
-        goto done;
-
-    if (userid && strcmp(userid, prev_userid)) {
-        printf("%s\n", userid);
-        do_user(userid);
-        free(prev_userid);
-        prev_userid = xstrdup(userid);
-    }
-
-done:
-    free(mboxname);
-
-    return 0;
 }
 
 int main(int argc, char **argv)
@@ -912,23 +886,10 @@ int main(int argc, char **argv)
     sync_log_init();
 
     if (recursive) {
-        char *buf = xmalloc(strlen(userid) + 2);
-        prev_userid = xstrdup("");
-        strcpy(buf, userid);
-        strcat(buf, "*");
-
-        if ((r = mboxname_init_namespace(&conv_namespace, 1)) != 0) {
-            syslog(LOG_ERR, "%s", error_message(r));
-            fatal(error_message(r), EC_CONFIG);
-        }
-
-        mboxlist_findall(&conv_namespace, buf, 1, 0, 0, do_mailbox, NULL);
-
-        free(prev_userid);
-        free(buf);
+        mboxlist_alluser(do_user, NULL);
     }
     else
-        do_user(userid);
+        do_user(userid, NULL);
 
     sync_log_done();
 
