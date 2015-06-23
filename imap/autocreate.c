@@ -705,8 +705,11 @@ int autocreate_user(struct namespace *namespace,
 	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
 	    newquotas[res] = QUOTA_UNLIMITED;
 
-	newquotas[QUOTA_STORAGE] = autocreatequota !=0 ? autocreatequota : QUOTA_UNLIMITED;
-	newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
+	if (autocreatequota)
+	    newquotas[QUOTA_STORAGE] = autocreatequota;
+
+	if (autocreatequotamessage)
+	    newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
 	r = mboxlist_setquotas(inboxname, newquotas, 0);
 	if (r) {

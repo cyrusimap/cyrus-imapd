@@ -338,7 +338,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    \fIautocreate_post\fR is enabled, receive the message quota
    configured in this option.
 .PP
-   The default of -1 disables assigning message quota. */
+   The default of -1 disables assigning message quota.
+.PP
+   For consistency with \fIautocreate_quota\fR, a value of zero is treated
+   as unlimited message quota, rather than a message quota of zero. */
 
 { "autocreate_sieve_folders", NULL, STRING }
 /* A "|" separated list of subfolders of INBOX that will be
