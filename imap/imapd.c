@@ -6121,7 +6121,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
                        ignorequota);
     }
 
-    if (ismove && !r) {
+    if (ismove && copyuid && !r) {
         prot_printf(imapd_out, "* OK [COPYUID %s] %s\r\n",
                     copyuid, error_message(IMAP_OK_COMPLETED));
         free(copyuid);
