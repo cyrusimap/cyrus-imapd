@@ -319,6 +319,7 @@ static struct capa_struct base_capabilities[] = {
     { "LIST-EXTENDED",         2 },
     { "LIST-STATUS",           2 },
     { "LIST-MYRIGHTS",         2 }, /* not standard */
+    { "LIST-METADATA",         2 }, /* not standard */
     { "WITHIN",                2 },
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
@@ -327,8 +328,8 @@ static struct capa_struct base_capabilities[] = {
     { "MOVE",                  2 }, /* draft */
     { "SPECIAL-USE",           2 },
     { "CREATE-SPECIAL-USE",    2 },
-    { "DIGEST=SHA1",           2 },
-    { "X-REPLICATION",         2 },
+    { "DIGEST=SHA1",           2 }, /* not standard */
+    { "X-REPLICATION",         2 }, /* not standard */
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
@@ -7421,6 +7422,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
 
   freeargs:
     strarray_fini(&listargs->pat);
+    strarray_fini(&listargs->metaitems);
     return;
 }
 
@@ -7465,6 +7467,7 @@ static void cmd_list(char *tag, struct listargs *listargs)
     }
 
     strarray_fini(&listargs->pat);
+    strarray_fini(&listargs->metaitems);
 
     imapd_check((listargs->sel & LIST_SEL_SUBSCRIBED) ?  NULL : backend_inbox, 0);
 
@@ -8908,7 +8911,7 @@ static int parse_metadata_string_or_list(const char *tag,
 
     // Assume by default the arguments are a list of entries,
     // until proven otherwise.
-    *is_list = 1;
+    if (is_list) *is_list = 1;
 
     c = prot_getc(imapd_in);
     if (c == EOF) {
@@ -8941,7 +8944,7 @@ static int parse_metadata_string_or_list(const char *tag,
             goto baddata;
         }
 
-        *is_list = 0;
+        if (is_list) *is_list = 0;
 
         c = prot_getc(imapd_in);
     }
@@ -8960,11 +8963,11 @@ static int parse_metadata_string_or_list(const char *tag,
         // It is only not a list if there are no wildcards
         if (!strchr(arg.s, '*') && !strchr(arg.s, '%')) {
             // Not a list
-            *is_list = 0;
+            if (is_list) *is_list = 0;
         }
     }
 
-    if (c == ' ' || c == '\r') return c;
+    if (c == ' ' || c == '\r' || c == ')') return c;
 
   baddata:
     if (c != EOF) prot_ungetc(c, imapd_in);
@@ -9538,9 +9541,10 @@ static int _metadata_to_annotate(const strarray_t *entries,
             have_shared = 1;
         }
         else {
-            prot_printf(imapd_out,
-                        "%s BAD entry must begin with /shared or /private\r\n",
-                        tag);
+            if (tag)
+                prot_printf(imapd_out,
+                            "%s BAD entry must begin with /shared or /private\r\n",
+                            tag);
             return IMAP_NO_NOSUCHMSG;
         }
         strarray_append(newe, entry);
@@ -11825,6 +11829,12 @@ static int getlistretopts(char *tag, struct listargs *args)
                 return EOF;
             }
         }
+        else if (!strcmp(buf.s, "metadata")) {
+            args->ret |= LIST_RET_METADATA;
+            /* outputs the error for us */
+            c = parse_metadata_string_or_list(tag, &args->metaitems, NULL);
+            if (c == EOF) return EOF;
+        }
         else {
             prot_printf(imapd_out,
                         "%s BAD Invalid List return option \"%s\"\r\n",
@@ -11964,6 +11974,26 @@ static void specialuse_flags(mbentry_t *mbentry, const char *sep,
     }
     /* otherwise it's actually another user who matches for
      * the substr.  Ok to just print nothing */
+}
+
+static void printmetadata(mbentry_t *mbentry,
+                          const strarray_t *entries)
+{
+    annotate_state_t *astate = annotate_state_new();
+    strarray_t newa = STRARRAY_INITIALIZER;
+    strarray_t newe = STRARRAY_INITIALIZER;
+    annotate_state_set_auth(astate,
+                            imapd_userisadmin || imapd_userisproxyadmin,
+                            imapd_userid, imapd_authstate);
+    int r = annotate_state_set_mailbox_mbe(astate, mbentry);
+    if (r) goto done;
+    r = _metadata_to_annotate(entries, &newa, &newe, NULL, 0);
+    if (r) goto done;
+
+    annotate_state_fetch(astate, &newe, &newa, getmetadata_response, NULL, NULL);
+
+done:
+    annotate_state_abort(&astate);
 }
 
 /* Print LIST or LSUB untagged response */
@@ -12203,6 +12233,11 @@ static void list_response(const char *name, int attributes,
     if ((listargs->ret & LIST_RET_MYRIGHTS) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
         /*ignore result*/printmyrights(mboxname, mbentry);
+    }
+
+    if ((listargs->ret & LIST_RET_METADATA) &&
+        !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
+        printmetadata(mbentry, &listargs->metaitems);
     }
 
 done:

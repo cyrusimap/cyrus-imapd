@@ -330,6 +330,7 @@ struct listargs {
     const char *scan;           /* SCAN content */
     hash_table server_table;    /* for proxying SCAN */
     unsigned statusitems;       /* for RETURN STATUS */
+    strarray_t metaitems;       /* for RETURN METADATA */
 };
 
 /* Value for List command variant */
@@ -355,7 +356,8 @@ enum {
     LIST_RET_CHILDREN =         (1<<1),
     LIST_RET_SPECIALUSE =       (1<<2),
     LIST_RET_STATUS =           (1<<3),
-    LIST_RET_MYRIGHTS =         (1<<4)
+    LIST_RET_MYRIGHTS =         (1<<4),
+    LIST_RET_METADATA =         (1<<5)
 };
 
 /* Bitmask for List name attributes */
