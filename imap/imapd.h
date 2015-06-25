@@ -320,6 +320,13 @@ enum {
 
 #define STATUS_CONVITEMS (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ)
 
+struct getmetadata_options {
+    int parsed;
+    int biggest;
+    int maxsize;
+    int depth;
+};
+
 /* Arguments to List functions */
 struct listargs {
     unsigned cmd;               /* Command variant */
@@ -330,6 +337,7 @@ struct listargs {
     const char *scan;           /* SCAN content */
     hash_table server_table;    /* for proxying SCAN */
     unsigned statusitems;       /* for RETURN STATUS */
+    struct getmetadata_options metaopts; /* for RETURN METADATA */
     strarray_t metaitems;       /* for RETURN METADATA */
 };
 
@@ -347,7 +355,8 @@ enum {
     LIST_SEL_REMOTE =           (1<<1),
     LIST_SEL_RECURSIVEMATCH =   (1<<2),
     LIST_SEL_SPECIALUSE =       (1<<3),
-    LIST_SEL_DAV =              (1<<4)
+    LIST_SEL_DAV =              (1<<4),
+    LIST_SEL_METADATA =         (1<<5)
 };
 
 /* Bitmask for List return options */

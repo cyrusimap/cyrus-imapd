@@ -7473,11 +7473,18 @@ static void cmd_list(char *tag, struct listargs *listargs)
 
     snprintf(mytime, sizeof(mytime), "%2.3f",
              (clock() - start) / (double) CLOCKS_PER_SEC);
-    prot_printf(imapd_out, "%s OK %s (%s secs", tag,
-                error_message(IMAP_OK_COMPLETED), mytime);
-    if (list_callback_calls)
-        prot_printf(imapd_out, " %u calls", list_callback_calls);
-    prot_printf(imapd_out, ")\r\n");
+    if (listargs->sel & LIST_SEL_METADATA && listargs->metaopts.parsed &&
+        listargs->metaopts.maxsize >= 0 && listargs->metaopts.biggest > listargs->metaopts.maxsize) {
+        prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %d] %s", tag,
+                    listargs->metaopts.biggest, error_message(IMAP_OK_COMPLETED));
+    }
+    else {
+        prot_printf(imapd_out, "%s OK %s (%s secs", tag,
+                    error_message(IMAP_OK_COMPLETED), mytime);
+        if (list_callback_calls)
+            prot_printf(imapd_out, " %u calls", list_callback_calls);
+        prot_printf(imapd_out, ")\r\n");
+    }
 
     if (global_conversations) {
         conversations_abort(&global_conversations);
@@ -9229,14 +9236,18 @@ struct annot_fetch_rock
     strarray_t *entries;
     strarray_t *attribs;
     annotate_fetch_cb_t callback;
-    int *sizeptr;
+    int maxsize;
+    int biggest;
 };
 
 static int annot_fetch_cb(annotate_state_t *astate, void *rock)
 {
     struct annot_fetch_rock *arock = rock;
-    return annotate_state_fetch(astate, arock->entries, arock->attribs,
-                                arock->callback, NULL, arock->sizeptr);
+    int size = arock->maxsize;
+    int r = annotate_state_fetch(astate, arock->entries, arock->attribs,
+                                arock->callback, NULL, arock->maxsize >= 0 ? &size : NULL);
+    if (size > arock->biggest) arock->biggest = size;
+    return r;
 }
 
 struct annot_store_rock
@@ -9406,7 +9417,8 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
         arock.entries = &entries;
         arock.attribs = &attribs;
         arock.callback = getannotation_response;
-        arock.sizeptr = NULL;
+        arock.maxsize = -1;
+        arock.biggest = 0;
         r = apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
     }
     /* we didn't write anything */
@@ -9466,12 +9478,6 @@ static void getmetadata_response(const char *mboxname,
     buf_free(&mentry);
 }
 
-struct getmetadata_options
-{
-    int maxsize;
-    int depth;
-};
-
 static int parse_getmetadata_options(const strarray_t *sa,
                                      struct getmetadata_options *opts)
 {
@@ -9480,6 +9486,10 @@ static int parse_getmetadata_options(const strarray_t *sa,
     struct getmetadata_options dummy;
 
     if (!opts) opts = &dummy;
+
+    /* initialise values */
+    opts->maxsize = -1;
+    opts->parsed = 1;
 
     for (i = 0 ; i < sa->count ; i+=2) {
         const char *option = sa->data[i];
@@ -9585,12 +9595,12 @@ static void cmd_getmetadata(const char *tag)
     struct buf arg1 = BUF_INITIALIZER;
     int mbox_is_pattern = 0;
     struct getmetadata_options opts;
-    int basesize = 0;
-    int *sizeptr = NULL;
     annotate_state_t *astate = NULL;
 
     opts.maxsize = -1;
+    opts.biggest = -1;
     opts.depth = 0;
+    opts.parsed = 0;
 
     while (nlists < 3)
     {
@@ -9683,11 +9693,7 @@ static void cmd_getmetadata(const char *tag)
         }
     }
 
-    if (options) {
-        parse_getmetadata_options(options, &opts);
-        if (opts.maxsize >= 0)
-            sizeptr = &opts.maxsize;
-    }
+    if (options) parse_getmetadata_options(options, &opts);
 
     if (_metadata_to_annotate(entries, &newa, &newe, tag, opts.depth))
         goto freeargs;
@@ -9696,23 +9702,24 @@ static void cmd_getmetadata(const char *tag)
     annotate_state_set_auth(astate,
                             imapd_userisadmin || imapd_userisproxyadmin,
                             imapd_userid, imapd_authstate);
-    basesize = opts.maxsize;
     if (!mboxes->count || !strcmpsafe(mboxes->data[0], NULL)) {
         r = annotate_state_set_server(astate);
         if (!r)
             r = annotate_state_fetch(astate, &newe, &newa,
-                                     getmetadata_response, NULL, sizeptr);
+                                     getmetadata_response, NULL, (opts.parsed && opts.maxsize >= 0) ? &opts.biggest : NULL);
     }
     else {
         struct annot_fetch_rock arock;
         arock.entries = &newe;
         arock.attribs = &newa;
         arock.callback = getmetadata_response;
-        arock.sizeptr = sizeptr;
+        arock.maxsize = opts.maxsize;
+        arock.biggest = opts.biggest;
         if (mbox_is_pattern)
             r = apply_mailbox_pattern(astate, mboxes->data[0], annot_fetch_cb, &arock);
         else
             r = apply_mailbox_array(astate, mboxes, annot_fetch_cb, &arock);
+        opts.biggest = arock.biggest;
     }
     /* we didn't write anything */
     annotate_state_abort(&astate);
@@ -9721,9 +9728,9 @@ static void cmd_getmetadata(const char *tag)
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    } else if (sizeptr && *sizeptr > basesize) {
+    } else if (opts.maxsize >= 0 && opts.biggest > opts.maxsize) {
         prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %d] %s\r\n",
-                    tag, *sizeptr, error_message(IMAP_OK_COMPLETED));
+                    tag, opts.biggest, error_message(IMAP_OK_COMPLETED));
     } else {
         prot_printf(imapd_out, "%s OK %s\r\n",
                     tag, error_message(IMAP_OK_COMPLETED));
@@ -11740,6 +11747,13 @@ static int getlistselopts(char *tag, struct listargs *args)
             args->sel |= LIST_SEL_RECURSIVEMATCH;
         } else if (!strcmp(buf.s, "special-use")) {
             args->sel |= LIST_SEL_SPECIALUSE;
+        } else if (!strcmp(buf.s, "metadata")) {
+            args->sel |= LIST_SEL_METADATA;
+            strarray_t options = STRARRAY_INITIALIZER;
+            c = parse_metadata_string_or_list(tag, &options, NULL);
+            parse_getmetadata_options(&options, &args->metaopts);
+            strarray_fini(&options);
+            if (c == EOF) return EOF;
         } else {
             prot_printf(imapd_out,
                         "%s BAD Invalid List selection option \"%s\"\r\n",
@@ -11977,7 +11991,8 @@ static void specialuse_flags(mbentry_t *mbentry, const char *sep,
 }
 
 static void printmetadata(mbentry_t *mbentry,
-                          const strarray_t *entries)
+                          const strarray_t *entries,
+                          struct getmetadata_options *opts)
 {
     annotate_state_t *astate = annotate_state_new();
     strarray_t newa = STRARRAY_INITIALIZER;
@@ -11987,10 +12002,10 @@ static void printmetadata(mbentry_t *mbentry,
                             imapd_userid, imapd_authstate);
     int r = annotate_state_set_mailbox_mbe(astate, mbentry);
     if (r) goto done;
-    r = _metadata_to_annotate(entries, &newa, &newe, NULL, 0);
+    r = _metadata_to_annotate(entries, &newa, &newe, NULL, opts->depth);
     if (r) goto done;
 
-    annotate_state_fetch(astate, &newe, &newa, getmetadata_response, NULL, NULL);
+    annotate_state_fetch(astate, &newe, &newa, getmetadata_response, NULL, (opts->parsed && opts->maxsize >= 0) ? &opts->biggest : NULL);
 
 done:
     annotate_state_abort(&astate);
@@ -12237,7 +12252,7 @@ static void list_response(const char *name, int attributes,
 
     if ((listargs->ret & LIST_RET_METADATA) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
-        printmetadata(mbentry, &listargs->metaitems);
+        printmetadata(mbentry, &listargs->metaitems, &listargs->metaopts);
     }
 
 done:
