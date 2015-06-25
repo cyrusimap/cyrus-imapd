@@ -99,7 +99,7 @@ sub test_delete
     $self->assert($talk->get_last_error() =~ m/permission denied/i);
 }
 
-sub test_xmove
+sub test_move
 {
     my ($self) = @_;
 
@@ -112,7 +112,7 @@ sub test_xmove
     $self->{store}->set_folder('user.archive.cassandane.sent');
     $self->{store}->_select();
 
-    my $res = $talk->xmove('1', "INBOX");
+    my $res = $talk->move('1', "INBOX");
     $self->assert_null($res); # means it failed
     $self->assert_str_equals('no', $talk->get_last_completion_response());
     $self->assert($talk->get_last_error() =~ m/permission denied/i);

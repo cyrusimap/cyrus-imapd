@@ -416,7 +416,7 @@ sub test_move_near_limit
     $self->assert($talk->get_last_error() =~ m/over quota/i);
 
     xlog "move the messages";
-    $talk->xmove("1:*", "INBOX.target");
+    $talk->move("1:*", "INBOX.target");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 }
 
