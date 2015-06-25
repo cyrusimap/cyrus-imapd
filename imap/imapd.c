@@ -9441,7 +9441,7 @@ static void getmetadata_response(const char *mboxname,
                                  void *rock)
 {
     struct getmetadata_options *opts = (struct getmetadata_options *)rock;
-    int sep = '(';
+    int started = 0;
     struct attvaluelist *l;
     struct buf mentry = BUF_INITIALIZER;
     char ext_mboxname[MAX_MAILBOX_BUFFER];
@@ -9449,9 +9449,6 @@ static void getmetadata_response(const char *mboxname,
     imapd_namespace.mboxname_toexternal(&imapd_namespace, mboxname,
                                         imapd_userid, ext_mboxname);
 
-    prot_printf(imapd_out, "* METADATA ");
-    prot_printastring(imapd_out, ext_mboxname);
-    prot_putc(' ', imapd_out);
     for (l = attvalues ; l ; l = l->next) {
         /* size check */
         if (opts->maxsize >= 0 && (int)l->value.len > opts->maxsize) {
@@ -9469,13 +9466,21 @@ static void getmetadata_response(const char *mboxname,
         buf_appendcstr(&mentry, entry);
         buf_cstring(&mentry);
 
-        prot_putc(sep, imapd_out);
-        sep = ' ';
+        if (started) {
+            prot_putc(' ', imapd_out);
+        }
+        else {
+            prot_printf(imapd_out, "* METADATA ");
+            prot_printastring(imapd_out, ext_mboxname);
+            prot_putc(' ', imapd_out);
+            prot_putc('(', imapd_out);
+            started = 1;
+        }
         prot_printastring(imapd_out, mentry.s);
         prot_putc(' ',  imapd_out);
         prot_printmap(imapd_out, l->value.s, l->value.len);
     }
-    prot_printf(imapd_out, ")\r\n");
+    if (started) prot_printf(imapd_out, ")\r\n");
     buf_free(&mentry);
 }
 
