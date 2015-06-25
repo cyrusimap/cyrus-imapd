@@ -152,8 +152,7 @@ typedef void (*annotate_fetch_cb_t)(const char *mboxname, /* internal */
                                     void *rock);
 int annotate_state_fetch(annotate_state_t *state,
                          const strarray_t *entries, const strarray_t *attribs,
-                         annotate_fetch_cb_t callback, void *rock,
-                         int *maxsizeptr);
+                         annotate_fetch_cb_t callback, void *rock);
 
 /* write a single annotation, avoiding all ACL checks and etc */
 int annotatemore_write(const char *mboxname, const char *entry,

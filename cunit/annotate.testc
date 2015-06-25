@@ -127,8 +127,7 @@ static void test_getset_server_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -158,8 +157,7 @@ static void test_getset_server_shared(void)
 
     /* check that we can fetch the value back in the same txn */
     r = annotate_state_fetch(astate, &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -188,8 +186,7 @@ static void test_getset_server_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -221,8 +218,7 @@ static void test_getset_server_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -263,8 +259,7 @@ static void test_getset_server_shared(void)
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -321,8 +316,7 @@ static void test_getset_mailbox_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -349,8 +343,7 @@ static void test_getset_mailbox_shared(void)
     /* check that we can fetch the value back in the same txn */
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -379,8 +372,7 @@ static void test_getset_mailbox_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -412,8 +404,7 @@ static void test_getset_mailbox_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -451,8 +442,7 @@ static void test_getset_mailbox_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -510,8 +500,7 @@ static void test_getset_message_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -539,8 +528,7 @@ static void test_getset_message_shared(void)
     /* check that we can fetch the value back in the same txn */
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -571,8 +559,7 @@ static void test_getset_message_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -608,8 +595,7 @@ static void test_getset_message_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -649,8 +635,7 @@ static void test_getset_message_shared(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1439,8 +1424,7 @@ static void test_getset_server_undefined(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1478,8 +1462,7 @@ static void test_getset_server_undefined(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1537,8 +1520,7 @@ static void test_getset_server_defined(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1569,8 +1551,7 @@ static void test_getset_server_defined(void)
     /* check that we can fetch the value back in the same txn */
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1600,8 +1581,7 @@ static void test_getset_server_defined(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1634,8 +1614,7 @@ static void test_getset_server_defined(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1674,8 +1653,7 @@ static void test_getset_server_defined(void)
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             fetch_cb, &results,
-                             NULL);
+                             fetch_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \

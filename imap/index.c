@@ -3718,8 +3718,7 @@ static int index_fetchannotations(struct index_state *state,
 
     r = annotate_state_fetch(astate,
                              &fetchargs->entries, &fetchargs->attribs,
-                             fetch_annotation_response, &rock,
-                             0);
+                             fetch_annotation_response, &rock);
 
     return r;
 }

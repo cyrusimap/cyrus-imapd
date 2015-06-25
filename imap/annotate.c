@@ -148,8 +148,6 @@ struct annotate_state
     const char *orig_mailbox;
     const strarray_t *orig_entry;
     const strarray_t *orig_attribute;
-    int maxsize;
-    int *sizeptr;
 
     /* state for output_entryatt */
     struct attvaluelist *attvalues;
@@ -1265,7 +1263,6 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     const char *mboxname;
     char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     struct buf buf = BUF_INITIALIZER;
-    int vallen;
 
     if (!userid) userid = "";
 
@@ -1307,14 +1304,6 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     strlcat(key, userid, sizeof(key));
     if (hash_lookup(key, &state->entry_table)) return;
     hash_insert(key, (void *)0xDEADBEEF, &state->entry_table);
-
-    vallen = value->len;
-    if (state->sizeptr && state->maxsize < vallen) {
-        /* too big - track the size of the largest */
-        int *sp = state->sizeptr;
-        if (*sp < vallen) *sp = vallen;
-        return;
-    }
 
     if (!userid[0]) { /* shared annotation */
         if ((state->attribs & ATTRIB_VALUE_SHARED)) {
@@ -2181,8 +2170,7 @@ static void _annotate_fetch_entries(annotate_state_t *state,
 
 EXPORTED int annotate_state_fetch(annotate_state_t *state,
                          const strarray_t *entries, const strarray_t *attribs,
-                         annotate_fetch_cb_t callback, void *rock,
-                         int *maxsizeptr)
+                         annotate_fetch_cb_t callback, void *rock)
 {
     int i;
     struct glob *g;
@@ -2193,10 +2181,6 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
     annotate_state_start(state);
     state->callback = callback;
     state->callback_rock = rock;
-    if (maxsizeptr) {
-        state->maxsize = *maxsizeptr; /* copy to check against */
-        state->sizeptr = maxsizeptr; /* pointer to push largest back */
-    }
 
     /* Build list of attributes to fetch */
     for (i = 0 ; i < attribs->count ; i++)

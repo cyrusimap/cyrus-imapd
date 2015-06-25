@@ -1637,8 +1637,7 @@ static int search_annotation_match(message_t *m, const union search_value *v,
 
     r = annotate_state_fetch(astate,
                              &entries, &attribs,
-                             _search_annot_callback, &rock,
-                             0);
+                             _search_annot_callback, &rock);
     if (r >= 0)
         r = rock.result;
 

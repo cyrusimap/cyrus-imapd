@@ -9236,18 +9236,14 @@ struct annot_fetch_rock
     strarray_t *entries;
     strarray_t *attribs;
     annotate_fetch_cb_t callback;
-    int maxsize;
-    int biggest;
+    void *cbrock;
 };
 
 static int annot_fetch_cb(annotate_state_t *astate, void *rock)
 {
     struct annot_fetch_rock *arock = rock;
-    int size = arock->maxsize;
-    int r = annotate_state_fetch(astate, arock->entries, arock->attribs,
-                                arock->callback, NULL, arock->maxsize >= 0 ? &size : NULL);
-    if (size > arock->biggest) arock->biggest = size;
-    return r;
+    return annotate_state_fetch(astate, arock->entries, arock->attribs,
+                                arock->callback, arock->cbrock);
 }
 
 struct annot_store_rock
@@ -9410,15 +9406,14 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
         r = annotate_state_set_server(astate);
         if (!r)
             r = annotate_state_fetch(astate, &entries, &attribs,
-                                     getannotation_response, NULL, 0);
+                                     getannotation_response, NULL);
     }
     else {
         struct annot_fetch_rock arock;
         arock.entries = &entries;
         arock.attribs = &attribs;
         arock.callback = getannotation_response;
-        arock.maxsize = -1;
-        arock.biggest = 0;
+        arock.cbrock = NULL;
         r = apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
     }
     /* we didn't write anything */
@@ -9443,8 +9438,9 @@ static void getmetadata_response(const char *mboxname,
                                     __attribute__((unused)),
                                  const char *entry,
                                  struct attvaluelist *attvalues,
-                                 void *rock __attribute__((unused)))
+                                 void *rock)
 {
+    struct getmetadata_options *opts = (struct getmetadata_options *)rock;
     int sep = '(';
     struct attvaluelist *l;
     struct buf mentry = BUF_INITIALIZER;
@@ -9457,6 +9453,11 @@ static void getmetadata_response(const char *mboxname,
     prot_printastring(imapd_out, ext_mboxname);
     prot_putc(' ', imapd_out);
     for (l = attvalues ; l ; l = l->next) {
+        /* size check */
+        if (opts->maxsize >= 0 && (int)l->value.len > opts->maxsize) {
+            if ((int)l->value.len > opts->biggest) opts->biggest = l->value.len;
+            continue;
+        }
         /* check if it's a value we print... */
         buf_reset(&mentry);
         if (!strcmp(l->attrib, "value.shared"))
@@ -9706,20 +9707,18 @@ static void cmd_getmetadata(const char *tag)
         r = annotate_state_set_server(astate);
         if (!r)
             r = annotate_state_fetch(astate, &newe, &newa,
-                                     getmetadata_response, NULL, (opts.parsed && opts.maxsize >= 0) ? &opts.biggest : NULL);
+                                     getmetadata_response, &opts);
     }
     else {
         struct annot_fetch_rock arock;
         arock.entries = &newe;
         arock.attribs = &newa;
         arock.callback = getmetadata_response;
-        arock.maxsize = opts.maxsize;
-        arock.biggest = opts.biggest;
+        arock.cbrock = &opts;
         if (mbox_is_pattern)
             r = apply_mailbox_pattern(astate, mboxes->data[0], annot_fetch_cb, &arock);
         else
             r = apply_mailbox_array(astate, mboxes, annot_fetch_cb, &arock);
-        opts.biggest = arock.biggest;
     }
     /* we didn't write anything */
     annotate_state_abort(&astate);
@@ -12005,7 +12004,7 @@ static void printmetadata(mbentry_t *mbentry,
     r = _metadata_to_annotate(entries, &newa, &newe, NULL, opts->depth);
     if (r) goto done;
 
-    annotate_state_fetch(astate, &newe, &newa, getmetadata_response, NULL, (opts->parsed && opts->maxsize >= 0) ? &opts->biggest : NULL);
+    annotate_state_fetch(astate, &newe, &newa, getmetadata_response, opts);
 
 done:
     annotate_state_abort(&astate);
