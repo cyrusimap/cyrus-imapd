@@ -2386,6 +2386,14 @@ sub fetch_meta {
   return \%FetchRes;
 }
 
+sub move {
+  my $Self = shift;
+  my $Uids = _fix_message_ids(+shift);
+  my $FolderName = $Self->_fix_folder_name(+shift);
+  $Self->cb_folder_changed($FolderName);
+  return $Self->_imap_cmd("move", 1, "", $Uids, $FolderName, @_);
+}
+
 sub xmove {
   my $Self = shift;
   my $Uids = _fix_message_ids(+shift);
@@ -2841,7 +2849,11 @@ Examples:
 sub find_message {
   my (%MsgComponents);
 
-  my %KnownTextParts = map { $_ => 1 } qw(plain html text enriched);
+  my %KnownTextParts = (
+    plain => 'text', text => 'text', enriched => 'text',
+    html => 'html',
+    'application/octet-stream' => 'text'
+  );
 
   my @PartList = ([ undef, $_[0], 0, '', \(my $Tmp = '') ]);
 
@@ -2850,6 +2862,7 @@ sub find_message {
     my ($Parent, $BS, $Pos, $InMultiList, $MultiTypeRef) = @$Part;
 
     my $InsideAlt = $InMultiList =~ /\balternative\b/ ? 1 : 0;
+    my $InsideEnc = $InMultiList =~ /\bencrypted\b/ ? 1 : 0;
 
     # Pull out common MIME fields we'll look at
     my ($MTT, $MT, $ST, $SP) = @$BS{qw(MIME-TxtType MIME-Type MIME-Subtype MIME-Subparts)};
@@ -2858,57 +2871,62 @@ sub find_message {
     #  with "$DT ne 'attachment'", rather than "$DT eq 'inline'"
     my ($DT, $CD) = @$BS{qw(Disposition-Type Content-Disposition)};
 
-    # Yay, found text component that ins't an attachment or has a filename
-    if ($MT eq 'text' && ($DT ne 'attachment' && !$CD->{filename} && !$CD->{'filename*'})) {
+    # Parts we want to treat as "text"
+    my $IsInline = 0;
+    # Text component of type we understand that isn't an attachment or has a filename
+    $IsInline = 1 if $MT eq 'text' &&
+                     $KnownTextParts{$ST} &&
+                     $DT ne 'attachment' &&
+                     !$CD->{filename} &&
+                     !$CD->{'filename*'};
+    # Bah, PGP has application/octet-stream inside an application/pgp-encrypted part
+    $IsInline = 1 if $MTT eq 'application/octet-stream' &&
+                     $InsideEnc &&
+                     $CD->{filename} =~ /encrypted/;
 
-      # See if it's a sub-type we understand/want
-      if ($KnownTextParts{$ST}) {
+    if ($IsInline) {
+      # Map to just text or html type
+      my $UT = $KnownTextParts{$MTT} // $KnownTextParts{$ST};
 
-        # Map plain, text, enriched -> text
-        my $UT = $ST;
-        $UT = 'text' if $ST eq 'plain' || $ST eq 'enriched';
+      # Found it if not already found one of this type
+      if ( !exists $MsgComponents{$UT} ) {
 
-        # Found it if not already found one of this type
-        if ( !exists $MsgComponents{$UT} ) {
-
-          # Don't treat html parts in a multipart/mixed as an
-          #  alternative representation unless the first part
-          if ( $ST eq 'html'
-            && $Parent
-            && $Parent->{'MIME-Subtype'} eq 'mixed'
-            && $Pos > 0 )
-          {
-          }
-          else {
-            $MsgComponents{$UT} ||= $BS;
-          }
-
-        }
-
-        # Override existing part if old part is <= 10 bytes (eg 5 blank
-        # lines), and new part is > 10 bytes.  Or if old part has
-        # 0 lines and new part has some lines
-        elsif ( ( $MsgComponents{$UT}->{'Size'} <= 10 && $BS->{'Size'} > 10 )
-          || ( $MsgComponents{$UT}->{Lines} < 1 && $BS->{Lines} > 0 ) )
+        # Don't treat html parts in a multipart/mixed as an
+        #  alternative representation unless the first part
+        if ( $ST eq 'html'
+          && $Parent
+          && $Parent->{'MIME-Subtype'} eq 'mixed'
+          && $Pos > 0 )
         {
-          $MsgComponents{$UT} = $BS;
+        }
+        else {
+          $MsgComponents{$UT} ||= $BS;
         }
 
-        # Add to textlist/htmllist if not in alternative part
-        #  or best part type if we are
-        if ($UT eq 'text' || !$InsideAlt) {
-          push @{$MsgComponents{'textlist'}}, $BS;
-          $$MultiTypeRef ||= $UT;
-        }
-        if ($UT eq 'html' || !$InsideAlt) {
-          push @{$MsgComponents{'htmllist'}}, $BS;
-          $$MultiTypeRef ||= $UT;
-        }
-
-        # Ok got a known part, move to next
-        next;
       }
-      # Wasn't a known text type, will add as an attachment
+
+      # Override existing part if old part is <= 10 bytes (eg 5 blank
+      # lines), and new part is > 10 bytes.  Or if old part has
+      # 0 lines and new part has some lines
+      elsif ( ( $MsgComponents{$UT}->{'Size'} <= 10 && $BS->{'Size'} > 10 )
+        || ( $MsgComponents{$UT}->{Lines} < 1 && $BS->{Lines} > 0 ) )
+      {
+        $MsgComponents{$UT} = $BS;
+      }
+
+      # Add to textlist/htmllist if not in alternative part
+      #  or best part type if we are
+      if ($UT eq 'text' || !$InsideAlt) {
+        push @{$MsgComponents{'textlist'}}, $BS;
+        $$MultiTypeRef ||= $UT;
+      }
+      if ($UT eq 'html' || !$InsideAlt) {
+        push @{$MsgComponents{'htmllist'}}, $BS;
+        $$MultiTypeRef ||= $UT;
+      }
+
+      # Ok got a known part, move to next
+      next;
 
     } elsif ($MT eq 'image') {
 
@@ -2961,7 +2979,11 @@ sub find_message {
     };
   }
 
-  delete $MsgComponents{htmllist} if !$MsgComponents{html};
+  # If there's no simple text or html bit, remove any
+  #  corresponding list versions as well
+  for (qw(text html)) {
+    $MsgComponents{$_} || delete $MsgComponents{$_ . "list"};
+  }
 
   return \%MsgComponents;
 }
@@ -3903,7 +3925,8 @@ sub _parse_response {
     } elsif ($Res1 eq 'metadata') {
       my ($Name, $Bits) = @{$Self->_remaining_atoms()};
       $Name = ($UnfixCache{$Name} ||= $Self->_unfix_folder_name($Name));
-      $DataResp{metadata}->{$Name}->{$Bits->[0]} = $Bits->[1];
+      my %Hash = @$Bits;
+      $DataResp{metadata}->{$Name}->{$_} = $Hash{$_} for keys %Hash;
 
     } elsif (($Res1 eq 'bye') && ($Self->{LastCmd} ne 'logout')) {
       $Self->{Cache}->{bye} = $Self->_remaining_line();
