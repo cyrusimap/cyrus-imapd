@@ -9258,7 +9258,6 @@ struct apply_rock {
     int (*proc)(annotate_state_t *, void *data);
     void *data;
     char lastname[MAX_MAILBOX_PATH+1];
-    int sawuser;
     unsigned int nseen;
 };
 
@@ -9268,47 +9267,29 @@ static int apply_cb(const char *name, int matchlen,
     struct apply_rock *arock = (struct apply_rock *)rock;
     annotate_state_t *state = arock->state;
     mbentry_t *mbentry = NULL;
-    char int_mboxname[MAX_MAILBOX_BUFFER];
     char ext_mboxname[MAX_MAILBOX_BUFFER];
     int r;
 
     /* Suppress any output of a partial match */
-    if (name[matchlen] && strncmp(arock->lastname, name, matchlen) == 0)
+    if (name[matchlen])
         return 0;
-
-    /*
-     * We can get a partial match for "user" multiple times with
-     * other matches inbetween.  Handle it as a special case
-     */
-    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
-        if (arock->sawuser)
-            return 0;
-        arock->sawuser = 1;
-    }
 
     strlcpy(arock->lastname, name, sizeof(arock->lastname));
     arock->lastname[matchlen] = '\0';
 
-    if (!strncasecmp(arock->lastname, "INBOX", 5)) {
-        imapd_namespace.mboxname_tointernal(&imapd_namespace, "INBOX",
-                                            imapd_userid, int_mboxname);
-        strlcat(int_mboxname, arock->lastname+5, sizeof(int_mboxname));
-    }
-    else
-        strlcpy(int_mboxname, arock->lastname, sizeof(int_mboxname));
-
     r = 0;
-    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
+    if (mboxlist_lookup(name, &mbentry, NULL))
         goto out;
+
+    // Store the external name in the mbentry as ext_name, for later reference
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name, imapd_userid, ext_mboxname);
+    // malloc extra-long to have room for pattern shenanigans later
+    mbentry->ext_name = xmalloc(sizeof(ext_mboxname)+1);
+    strlcpy(mbentry->ext_name, ext_mboxname, sizeof(ext_mboxname));
 
     r = annotate_state_set_mailbox_mbe(state, mbentry);
     if (r)
         goto out;
-
-    // Store the external name in the mbentry as ext_name, for later reference
-    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, int_mboxname, imapd_userid, ext_mboxname);
-    mbentry->ext_name = xmalloc(sizeof(ext_mboxname)+1);
-    strlcpy(mbentry->ext_name, ext_mboxname, sizeof(ext_mboxname));
 
     r = arock->proc(state, arock->data);
     arock->nseen++;
