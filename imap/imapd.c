@@ -76,6 +76,7 @@
 #include "assert.h"
 #include "backend.h"
 #include "bsearch.h"
+#include "bufarray.h"
 #include "charset.h"
 #include "dlist.h"
 #include "exitcodes.h"
@@ -7473,10 +7474,10 @@ static void cmd_list(char *tag, struct listargs *listargs)
 
     snprintf(mytime, sizeof(mytime), "%2.3f",
              (clock() - start) / (double) CLOCKS_PER_SEC);
-    if (listargs->sel & LIST_SEL_METADATA && listargs->metaopts.parsed &&
-        listargs->metaopts.maxsize >= 0 && listargs->metaopts.biggest > listargs->metaopts.maxsize) {
-        prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %d] %s", tag,
-                    listargs->metaopts.biggest, error_message(IMAP_OK_COMPLETED));
+    if ((listargs->sel & LIST_SEL_METADATA) && listargs->metaopts.maxsize &&
+        listargs->metaopts.biggest > listargs->metaopts.maxsize) {
+        prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %u] %s", tag,
+                    (unsigned)listargs->metaopts.biggest, error_message(IMAP_OK_COMPLETED));
     }
     else {
         prot_printf(imapd_out, "%s OK %s (%s secs", tag,
@@ -9434,54 +9435,63 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 }
 
 static void getmetadata_response(const char *mboxname,
-                                 uint32_t uid
-                                    __attribute__((unused)),
+                                 uint32_t uid __attribute__((unused)),
                                  const char *entry,
                                  struct attvaluelist *attvalues,
                                  void *rock)
 {
     struct getmetadata_options *opts = (struct getmetadata_options *)rock;
-    int started = 0;
-    struct attvaluelist *l;
-    struct buf mentry = BUF_INITIALIZER;
-    char ext_mboxname[MAX_MAILBOX_BUFFER];
 
-    imapd_namespace.mboxname_toexternal(&imapd_namespace, mboxname,
-                                        imapd_userid, ext_mboxname);
-
-    for (l = attvalues ; l ; l = l->next) {
-        /* size check */
-        if (opts->maxsize >= 0 && (int)l->value.len > opts->maxsize) {
-            if ((int)l->value.len > opts->biggest) opts->biggest = l->value.len;
-            continue;
-        }
-        /* check if it's a value we print... */
-        buf_reset(&mentry);
-        if (!strcmp(l->attrib, "value.shared"))
-            buf_appendcstr(&mentry, "/shared");
-        else if (!strcmp(l->attrib, "value.priv"))
-            buf_appendcstr(&mentry, "/private");
-        else
-            continue;
-        buf_appendcstr(&mentry, entry);
-        buf_cstring(&mentry);
-
-        if (started) {
-            prot_putc(' ', imapd_out);
-        }
-        else {
+    if (strcmpsafe(mboxname, opts->lastname) || !entry) {
+        if (opts->items.count) {
+            char ext_mboxname[MAX_MAILBOX_BUFFER];
+            size_t i;
+            if (opts->lastname)
+                imapd_namespace.mboxname_toexternal(&imapd_namespace, opts->lastname,
+                                                    imapd_userid, ext_mboxname);
+            else
+                ext_mboxname[0] = '\0';
             prot_printf(imapd_out, "* METADATA ");
             prot_printastring(imapd_out, ext_mboxname);
             prot_putc(' ', imapd_out);
-            prot_putc('(', imapd_out);
-            started = 1;
+            for (i = 0; i + 1 < opts->items.count; i+=2) {
+                prot_putc(i ? ' ' : '(', imapd_out);
+                const struct buf *key = bufarray_nth(&opts->items, i);
+                prot_printmap(imapd_out, key->s, key->len);
+                prot_putc(' ', imapd_out);
+                const struct buf *val = bufarray_nth(&opts->items, i+1);
+                prot_printmap(imapd_out, val->s, val->len);
+            }
+            prot_printf(imapd_out, ")\r\n");
         }
-        prot_printastring(imapd_out, mentry.s);
-        prot_putc(' ',  imapd_out);
-        prot_printmap(imapd_out, l->value.s, l->value.len);
+        free(opts->lastname);
+        opts->lastname = xstrdupnull(mboxname);
+        bufarray_fini(&opts->items);
     }
-    if (started) prot_printf(imapd_out, ")\r\n");
-    buf_free(&mentry);
+
+    struct attvaluelist *l;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (l = attvalues ; l ; l = l->next) {
+        /* size check */
+        if (opts->maxsize && l->value.len >= opts->maxsize) {
+            if (l->value.len > opts->biggest) opts->biggest = l->value.len;
+            continue;
+        }
+        /* check if it's a value we print... */
+        buf_reset(&buf);
+        if (!strcmp(l->attrib, "value.shared"))
+            buf_appendcstr(&buf, "/shared");
+        else if (!strcmp(l->attrib, "value.priv"))
+            buf_appendcstr(&buf, "/private");
+        else
+            continue;
+        buf_appendcstr(&buf, entry);
+
+        bufarray_append(&opts->items, &buf);
+        bufarray_append(&opts->items, &l->value);
+    }
+    buf_free(&buf);
 }
 
 static int parse_getmetadata_options(const strarray_t *sa,
@@ -9489,13 +9499,9 @@ static int parse_getmetadata_options(const strarray_t *sa,
 {
     int i;
     int n = 0;
-    struct getmetadata_options dummy;
+    struct getmetadata_options dummy = OPTS_INITIALIZER;
 
     if (!opts) opts = &dummy;
-
-    /* initialise values */
-    opts->maxsize = -1;
-    opts->parsed = 1;
 
     for (i = 0 ; i < sa->count ; i+=2) {
         const char *option = sa->data[i];
@@ -9504,7 +9510,9 @@ static int parse_getmetadata_options(const strarray_t *sa,
             return -1;
         if (!strcasecmp(option, "MAXSIZE")) {
             char *end = NULL;
-            opts->maxsize = strtoul(value, &end, 10);
+            /* we add one so that it's "less than" maxsize
+             * and zero works but is still true */
+            opts->maxsize = strtoul(value, &end, 10) + 1;
             if (!end || *end || end == value)
                 return -1;
             n++;
@@ -9600,13 +9608,8 @@ static void cmd_getmetadata(const char *tag)
     strarray_t newa = STRARRAY_INITIALIZER;
     struct buf arg1 = BUF_INITIALIZER;
     int mbox_is_pattern = 0;
-    struct getmetadata_options opts;
+    struct getmetadata_options opts = OPTS_INITIALIZER;
     annotate_state_t *astate = NULL;
-
-    opts.maxsize = -1;
-    opts.biggest = -1;
-    opts.depth = 0;
-    opts.parsed = 0;
 
     while (nlists < 3)
     {
@@ -9728,13 +9731,15 @@ static void cmd_getmetadata(const char *tag)
     /* we didn't write anything */
     annotate_state_abort(&astate);
 
+    getmetadata_response(NULL, 0, NULL, NULL, &opts);
+
     imapd_check(NULL, 0);
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    } else if (opts.maxsize >= 0 && opts.biggest > opts.maxsize) {
-        prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %d] %s\r\n",
-                    tag, opts.biggest, error_message(IMAP_OK_COMPLETED));
+    } else if (opts.maxsize && opts.biggest > opts.maxsize) {
+        prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %u] %s\r\n",
+                    tag, (unsigned)opts.biggest, error_message(IMAP_OK_COMPLETED));
     } else {
         prot_printf(imapd_out, "%s OK %s\r\n",
                     tag, error_message(IMAP_OK_COMPLETED));
@@ -11752,10 +11757,12 @@ static int getlistselopts(char *tag, struct listargs *args)
         } else if (!strcmp(buf.s, "special-use")) {
             args->sel |= LIST_SEL_SPECIALUSE;
         } else if (!strcmp(buf.s, "metadata")) {
+            struct getmetadata_options opts = OPTS_INITIALIZER;
             args->sel |= LIST_SEL_METADATA;
             strarray_t options = STRARRAY_INITIALIZER;
             c = parse_metadata_string_or_list(tag, &options, NULL);
-            parse_getmetadata_options(&options, &args->metaopts);
+            parse_getmetadata_options(&options, &opts);
+            args->metaopts = opts;
             strarray_fini(&options);
             if (c == EOF) return EOF;
         } else {
@@ -12010,6 +12017,7 @@ static void printmetadata(mbentry_t *mbentry,
     if (r) goto done;
 
     annotate_state_fetch(astate, &newe, &newa, getmetadata_response, opts);
+    getmetadata_response(NULL, 0, NULL, NULL, opts);
 
 done:
     annotate_state_abort(&astate);

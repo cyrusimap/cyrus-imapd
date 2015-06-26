@@ -44,6 +44,7 @@
 #define INCLUDED_IMAPD_H
 
 #include "annotate.h"
+#include "bufarray.h"
 #include "hash.h"
 #include "mailbox.h"
 #include "message.h"
@@ -321,11 +322,14 @@ enum {
 #define STATUS_CONVITEMS (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ)
 
 struct getmetadata_options {
-    int parsed;
-    int biggest;
-    int maxsize;
+    size_t biggest;
+    size_t maxsize;
     int depth;
+    char *lastname;
+    bufarray_t items;
 };
+
+#define OPTS_INITIALIZER { 0, 0, 0, NULL, BUFARRAY_INITIALIZER }
 
 /* Arguments to List functions */
 struct listargs {
