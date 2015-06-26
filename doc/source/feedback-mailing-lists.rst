@@ -1,7 +1,6 @@
 Mailing Lists
 =============
 
-.. todo:: Check if the -cvs lists are still in use and need to be listed.
 
 * cyrus-announce@lists.andrew.cmu.edu
 
@@ -21,14 +20,6 @@ Mailing Lists
 
     This is a mailing list for the use of Cyrus developers and package
     maintainers, for all the Cyrus software.
-
-* cyrus-cvs@lists.andrew.cmu.edu
-
-    This is the CVS commits mailing list for Cyrus IMAP.
-
-* sasl-cvs@lists.andrew.cmu.edu
-
-    This is the CVS commits mailing list for Cyrus SASL.
 
 * cyrus-bugzilla@lists.andrew.cmu.edu (no archive)
 
@@ -52,15 +43,11 @@ The list archives can be accessed as follows:
     `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-sasl>`__: `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-sasl>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-sasl/>`__
 * **cyrus-devel**
     `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/archive.cyrus-devel>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/archive.cyrus-devel>`__ or `Pipermail <http://lists.andrew.cmu.edu/pipermail/cyrus-devel/>`__
-* **cyrus-cvs**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/org.acs.asg.project.mail.commits>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/org.acs.asg.project.mail.commits>`__
-* **sasl-cvs**
-    `Anonymous IMAP <imap://cyrus.andrew.cmu.edu/org.acs.asg.project.sasl.commits>`__ : `Web/HTTP <http://asg.web.cmu.edu/bb/org.acs.asg.project.sasl.commits>`__
 
 Subscribe/Unsubscribe
 ---------------------
 
-The mailing lists are managed by GNU Mailman. You can manage your list susbscription options by visiting
+The mailing lists are managed by GNU Mailman. You can manage your list subscription options by visiting
 https://lists.andrew.cmu.edu/
 
 or send mail to the following addresses to subscribe:
@@ -76,12 +63,6 @@ or send mail to the following addresses to subscribe:
 
     To subscribe to cyrus-devel send email to
     cyrus-devel-subscribe@lists.andrew.cmu.edu.
-
-    To subscribe to cyrus-cvs send email to
-    cyrus-cvs-subscribe@lists.andrew.cmu.edu.
-
-    To subscribe to sasl-cvs send email to
-    sasl-cvs-subscribe@lists.andrew.cmu.edu.
 
     To subscribe to cyrus-bugzilla send email to
     cyrus-bugzilla-subscribe@lists.andrew.cmu.edu.
@@ -99,12 +80,6 @@ Or to these addresses to unsubscribe:
 
     To unsubscribe from cyrus-devel email
     cyrus-devel-unsubscribe@lists.andrew.cmu.edu
-
-    To unsubscribe from cyrus-cvs email
-    cyrus-cvs-unsubscribe@lists.andrew.cmu.edu
-
-    To unsubscribe from sasl-cvs email
-    sasl-cvs-unsubscribe@lists.andrew.cmu.edu
 
     To unsubscribe from cyrus-bugzilla email
     cyrus-bugzilla-unsubscribe@lists.andrew.cmu.edu

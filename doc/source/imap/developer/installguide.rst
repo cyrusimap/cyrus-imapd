@@ -1,3 +1,4 @@
+.. _imapinstallguide:
 ==================================
 Developer Environment Installation
 ==================================
@@ -15,16 +16,17 @@ Fetching Cyrus
 You'll need access to the cyrus-imapd git repository.
 
 1. You'll need a public key. If you don't already have a `~/.ssh/id_rsa.pub`, then create one with `ssh-keygen(1)`.
-	* Follow `steps 1-3`_
+    * Use the GitHub guide, following `steps 1-3`_
 2. Login to Phabricator_
-	* Go to the `SSH Keys settings panel`_.
-	* Click **Upload public key**
-	* Paste the contents of your ``~/.ssh/id_rsa.pub`` (n.b. NOT ``~/.ssh/id_rsa``!) into the public key box.
-	* Give it a descriptive name and click **Upload**
+    * Go to the `SSH Keys settings panel`_.
+    * Click **Upload public key**
+    * Paste the contents of your ``~/.ssh/id_rsa.pub`` (n.b. NOT ``~/.ssh/id_rsa``!) into the public key box.
+    * Give it a descriptive name and click **Upload**
 3. Install git if you don't already have it:
-	* ``sudo apt-get install git``
+    * ``sudo apt-get install git``    
 4. Clone the cyrus-imapd repository (you can get this URL from the Diffusion app within Phabricator):
-	* ``git clone ssh://git@git.cyrus.foundation/diffusion/I/cyrus-imapd.git``
+    * If you are a member of `IMAP Committers`_, use ``git clone ssh://git@git.cyrus.foundation/diffusion/I/cyrus-imapd.git``
+    * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/I/cyrus-imapd.git``
 
 Setting up dependencies
 -----------------------
@@ -37,6 +39,7 @@ Setting up dependencies
 .. _steps 1-3: https://help.github.com/articles/generating-ssh-keys/
 .. _Phabricator: https://git.cyrus.foundation/
 .. _SSH Keys settings panel: https://git.cyrus.foundation/settings/panel/ssh/
+.. _IMAP Committers: https://git.cyrus.foundation/tag/imap_committers/
 
 
 Compile Cyrus
@@ -57,7 +60,10 @@ Compile Cyrus
 	make
 
 	make check
+    
+    make install
 
+.. _imapinstallguide_cassandane:
 Cassandane
 ==========
 
@@ -73,7 +79,9 @@ Install and configure Cassandane
 --------------------------------
 
 1. Clone the Cassandane repository (you can get the URL from the Diffusion app within Phabricator)
-	* ``git clone ssh://git@git.cyrus.foundation/diffusion/C/cassandane.git``
+    * If you are a member of `IMAP Committers`_, use: ``git clone ssh://git@git.cyrus.foundation/diffusion/C/cassandane.git``
+    * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/I/cassandane.git``
+
 2. Install dependencies
 
 .. code-block:: bash
@@ -86,8 +94,9 @@ Install and configure Cassandane
 
 3. Copy ``cassandane.ini.example`` to ``cassandane.ini``
 4. Edit ``cassandane.ini`` to set up your cassandane environment. 
-	* Assuming you configure cyrus with ``--prefix=/usr/cyrus`` (as above), then the defaults are mostly fine
-	* Set ``destdir`` to ``/var/tmp/cyrus``
+    * Assuming you configure cyrus with ``--prefix=/usr/cyrus`` (as above), then the defaults are mostly fine
+    * Set ``destdir`` to ``/var/tmp/cyrus``
+    
 5. Create a ``cyrus`` user and matching group and also add ``cyrus`` to group ``mail``
 
 .. code-block:: bash
@@ -134,15 +143,17 @@ Arcanist is a tool for managing workflow (code review, etc), which sits between 
 	Conrad says: "Installing arcanist on Ubuntu was apparently as easy as ``sudo apt-get install arcanist``. But, the folks over at arcanist say: "clone the code from GitHub."
 
 1. `Install Arcanist`_
-2. `Set up Arcanist`_
-3. Get familiar with the `Arcanist workflow`_
+2. Set up Arcanist
+    * cd in to any of the GIT repositories (so that the ./.arcconfig file included in those has the upper hand for the next step)
+    * Link your local arc to Phabricator: ``arc install-certificate``
+    
+3. Get familiar with the :ref:`Arcanist workflow <devprocess>`
 
-.. _Install Arcanist: https://git.cyrus.foundation/w/installing_arcanist/
-.. _Set up Arcanist: https://git.cyrus.foundation/w/setting_up_arcanist/
-.. _Arcanist workflow: https://git.cyrus.foundation/w/arcanist_workflow/
+.. _Install Arcanist: https://secure.phabricator.com/book/phabricator/article/arcanist/#installing-arcanist
 
 Setting up syslog
 =================
+
 A lot of Cyrus's debugging information gets logged with ``syslog``, so you'll want to be able to capture it and find it later (especially when debugging cassandane tests)
 
 1. Find the correct place to edit syslog config for your system (for me, I needed to create ``/etc/rsyslog.d/cyrus.conf``)

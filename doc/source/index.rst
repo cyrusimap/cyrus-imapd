@@ -5,9 +5,68 @@ Cyrus IMAP and SASL
 Welcome to the Cyrus IMAP and SASL documentation site, provided to you
 by the `Cyrus Foundation`_.
 
+--------
 
-Cyrus IMAP  
-==========  
+What is Cyrus IMAP?
+===================
+
+Cyrus IMAP is an email, contacts and calendar server.
+
+The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
+
+Features
+--------
+
+This is the highlight reel of Cyrus's full list of features_.
+
+* **Security**: Cyrus runs on sealed servers, where normal users can't log in. Users access mail through IMAP/POP or KPOP.
+* **Performance and scalability**: The mail spool uses a filesystem layout.
+* **Filtering**: Server-side mail filtering via Sieve.
+* **Efficiency**, ease of administration: The private mailbox database design gives Cyrus considerable advantages. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
+* **Beyond Email**: Support for CalDAV and CardDAV provides an integrated calendaring and email solution.
+* **Scalability**: Cyrus Murder provides horizontal scalability: distributing the load across a pool of servers, without limiting to a particular subset of the IMAP namespace.
+* **Authentication**: Supports X.509 PKI auth via STARTTLS and EXTERNAL. Plus all the Cyrus SASL options.
+
+.. todo::
+    Not sure how many of these are ok?
+    * **Antispam**: ?? DNSBL	SURBL	Spamtraps	Greylisting	SPF	DKIM	DMARC	Tarpit	Bayesian filters	Regular expressions	Embedded Antivirus	Embedded Antispam
+
+.. _features: imap/features.html
+
+--------
+
+What is Cyrus SASL?
+===================
+Simple Authentication and Security Layer (SASL_) is a specification that describes how authentication mechanisms can be plugged into an application protocol on the wire. Cyrus SASL is an implementation of SASL that makes it easy for application developers to integrate authentication mechanisms into their application in a generic way.
+
+The latest stable version of Cyrus SASL is |sasl_current_stable_version|.
+
+Features
+--------
+Cyrus SASL provides a number of authentication plugins out of the box.
+
+    Berkeley DB, GDBM, or NDBM (sasldb), PAM, MySQL, PostgreSQL, SQLite, LDAP, Active Directory(LDAP), DCE, Kerberos 4 and 5, proxied IMAP auth, getpwent, shadow, SIA, Courier Authdaemon, httpform, APOP and SASL mechanisms: ANONYMOUS, CRAM-MD5, DIGEST-MD5, EXTERNAL, GSSAPI, LOGIN, NTLM, OTP, PASSDSS, PLAIN, SR
+
+Cyrus IMAP uses Cyrus SASL to provide authentication support to the mail server, however it is just one project using Cyrus SASL.
+
+.. _SASL: http://en.wikipedia.org/wiki/Simple_Authentication_and_Security_Layer
+
+--------
+
+How can we help you?
+====================
+
+Administrators_, looking to install and maintain Cyrus.
+
+Contributors_, looking to add to Cyrus. (We include testers and documenters too!)
+
+.. _Administrators: imap/admin.html
+.. _Contributors: imap/developer.html
+
+
+
+Cyrus IMAP
+==========
 
 The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
 
@@ -20,6 +79,12 @@ The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
     imap/deployment
     imap/admin
     imap/developer
+    
+.. toctree::
+    :hidden:
+
+    overview/about_cyrus
+    feedback
 
 Cyrus IMAP Release Notes
 ------------------------
@@ -53,37 +118,7 @@ Cyrus SASL
     :hidden:
 
     imap/rfc-support
+    sasl/index
 
-Feedback
-========
-
-.. toctree::
-    :maxdepth: 1
-
-    feedback-bugs
-    feedback-irc
-    feedback-mailing-lists
-	
-.. toctree::
-    :hidden:
-	
-    feedback
-	
-About
-=====
-
-.. toctree::
-	:maxdepth: 1
-	
-	overview/about_cyrus
-	
-.. toctree::
-	:hidden:
-	
-	overview/what_is_cyrus
-	overview/who_is_cyrus
-	overview/cyrus_roadmap
-	overview/cyrus_bylaws
-	overview/cyrus_history
 
 .. _Cyrus Foundation: https://cyrus.foundation

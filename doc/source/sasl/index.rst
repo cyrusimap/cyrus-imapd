@@ -20,10 +20,14 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-
+    
    getting_started
    auxiliary_properties
    authentication_mechanisms
    pwcheck
    faq
 
+.. toctree::
+   :hidden:
+   
+   installation
