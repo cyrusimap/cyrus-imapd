@@ -2878,6 +2878,12 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
 	n = size - start_octet;
     }
 
+    /* Paranoia: ensure section calcs haven't given us a bad offset */
+    if (offset + start_octet + n > msg_size) {
+	r = IMAP_INTERNAL;
+	goto done;
+    }
+
     if (outsize)
 	*outsize = n;
     else
