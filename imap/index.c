@@ -3320,8 +3320,16 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 	    goto done;
 	}
 
-	data += CACHE_ITEM_BIT32(cacheitem);
-	size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
+        size_t section_offset = CACHE_ITEM_BIT32(cacheitem);
+        size_t section_size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
+
+        if (section_offset + section_size > size) {
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+
+        data += section_offset;
+        size = section_size;
     }
 
     /* Handle extended URLFETCH parameters */
