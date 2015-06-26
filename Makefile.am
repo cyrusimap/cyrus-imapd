@@ -732,6 +732,7 @@ include_HEADERS = \
 	lib/auth_pts.h \
 	lib/bitvector.h \
 	lib/bsearch.h \
+	lib/bufarray.h \
 	lib/charset.h \
 	lib/chartable.h \
 	lib/command.h \
@@ -1381,6 +1382,7 @@ lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 lib_libcyrus_min_la_SOURCES = \
 	lib/arrayu64.c \
 	lib/assert.c \
+	lib/bufarray.c \
 	lib/hash.c \
 	lib/hashu64.c \
 	lib/imapopts.c \
