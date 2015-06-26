@@ -11,31 +11,33 @@ Synopsis
 
 .. parsed-literal::
 
-    cyr_expire [ -C config-file ] [ -A archive-duration ]
-    [ -D delete-duration ] [ -E expire-duration ] [ -X expunge-duration ]
-    [ -p mailbox-pre‐fix ] [ -u username ] [ -t ] [ -v ]
+    **cyr_expire** [ **-C** *config-file* ] [ **-A** *archive-duration* ]
+    [ **-D** *delete-duration* ] [ **-E** *expire-duration* ] [ **-X** *expunge-duration* ]
+    [ **-p** *mailbox-pre‐fix* ] [ **-u** *username* ] [ **-t** ] [ **-v** ]
 
 Description
 ===========
 
 **cyr_expire** is used to run a number of regular maintenance tasks
 on Cyrus databases, specifically:
-  - expire messages from mailboxes, and
-  - expire entries from the duplicate delivery database, and
-  - cleanse mailboxes of partially expunged messages (when using the "delayed" expunge mode), and
-  - remove deleted mailboxes (when using the "delayed" delete mode), and
-  - expire entries from conversations databases.
-  
-The expiration of messages is controlled by the ``/vendor/cmu/cyrus-imapd/expire``
-mailbox annotation which specifies the age (in days) of messages in the
-given mailbox that should be deleted.  A value of 0 means that no
-expiration is to be performed on that mailbox.
 
-The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is
-inherited by all children of the mailbox on which it is set, so an entire
-mailbox tree can be configured by setting a single annotation on the
-root of that tree.  If a mailbox does not have a
-``/vendor/cmu/cyrus-imapd/expire`` annotation set on it (or does not
+- expire messages from mailboxes, and
+- expire entries from the duplicate delivery database, and
+- cleanse mailboxes of partially expunged messages (when using the "delayed" expunge mode), and
+- remove deleted mailboxes (when using the "delayed" delete mode), and
+- expire entries from conversations databases.
+  
+The expiration of messages is controlled by the 
+``/vendor/cmu/cyrus-imapd/expire`` mailbox annotation which specifies 
+the age (in days) of messages in the given mailbox that should be 
+deleted.  A value of 0 means that no expiration is to be performed on 
+that mailbox.
+
+The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is 
+inherited by all children of the mailbox on which it is set, so an 
+entire mailbox tree can be configured by setting a single annotation on 
+the root of that tree.  If a mailbox does not have a 
+``/vendor/cmu/cyrus-imapd/expire`` annotation set on it (or does not 
 inherit one), then no messages are expired from the mailbox.
 
 The annotation can be examined using the **info** command of

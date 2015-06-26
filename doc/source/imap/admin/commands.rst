@@ -20,6 +20,7 @@ List of Command-line Utilities
     commands/ctl_conversationsdb
     commands/ctl_deliver
     commands/ctl_mboxlist
+    commands/ctl_zoneinfo
     commands/cvt_cyrusdb
     commands/cyradm
     commands/cyrfetchnews
@@ -77,6 +78,7 @@ the form of actual man-pages.
     commands/lmtpd
     commands/lmtpproxyd
     commands/masssievec
+    commands/master
     commands/migrate-metadata
     commands/mknewsgroups
     commands/mupdate
@@ -92,6 +94,8 @@ the form of actual man-pages.
     commands/sync_reset
     commands/sync_server
     commands/timsieved
+    commands/tls_prune
     commands/translatesieve
     commands/undohash
     commands/upgradesieve
+    commands/template

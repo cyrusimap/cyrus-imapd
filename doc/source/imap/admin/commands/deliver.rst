@@ -1,8 +1,8 @@
 .. _imap-admin-commands-deliver:
 
-==========
+===========
 **deliver**
-==========
+===========
 
 intro
 

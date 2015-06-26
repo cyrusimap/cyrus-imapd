@@ -38,7 +38,7 @@ Options
 
 .. program:: ipurge
 
-.. option_group:: -C config-file
+.. option:: -C config-file
 
     |cli-dash-c-text|
     

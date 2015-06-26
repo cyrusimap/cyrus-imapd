@@ -1,7 +1,7 @@
 .. _imap-admin-commands-cyrus-master:
 
 ================
-``cyrus-master``
+**cyrus-master**
 ================
 
 The Cyrus IMAP master process.
@@ -47,7 +47,7 @@ Options
 
     Increase the listen queue backlog. By default, the listen queue is 
     set to 32.   On systems with a high connection rate, it may be 
-    desirable to increase this value. refer to \fBlisten(2)\fR for 
+    desirable to increase this value. refer to :manpage:`listen(2)` for 
     details.
 
 .. option:: -j  janitor full-sweeps per second
@@ -78,7 +78,7 @@ Options
 
     Don't close stdin/stdout/stderr. Primarily useful for debugging. 
     Note that **-d** and **-D** cannot be used together; consider using 
-    **-L ** instead.
+    **-L** instead.
 
 .. option:: -L  logfile
 

@@ -183,9 +183,11 @@ Examples
 
 .. parsed-literal::
 
-**arbitron -D** *04012015*\ :\ *04152015*
+    **arbitron -D** *04012015*\ :\ *04152015*
 
-    Normal short list Within date range of 12 - 15 April, 2015.
+..
+
+        Normal short list Within date range of 12 - 15 April, 2015.
 
 .. only:: html
 
