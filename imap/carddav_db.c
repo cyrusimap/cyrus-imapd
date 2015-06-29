@@ -1281,7 +1281,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
             const char *label = NULL;
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "type")) {
-                    if (!strcasecmp(param->value, "personal")) {
+                    if (!strcasecmp(param->value, "home")) {
                         type = "personal";
                     }
                     else if (!strcasecmp(param->value, "work")) {
@@ -2037,6 +2037,8 @@ static int _emails_to_card(struct vparse_card *card, json_t *arg)
 
         struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", value);
 
+        if (!strcmpsafe(type, "personal"))
+            type = "home";
         if (strcmpsafe(type, "other"))
             vparse_add_param(entry, "type", type);
 
