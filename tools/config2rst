@@ -74,11 +74,11 @@ our $opt = '';
 # Do not change the order of the first four pairs.
 our %ftags = (
     'R'  => '',     # (1) Times Roman
-    'I'  => '*',	# (2) Times Italic
-    'B'  => '**',	# (3) Times Bold
+    'I'  => '*',        # (2) Times Italic
+    'B'  => '**',       # (3) Times Bold
     'BI' => '**',   # (4) Times Bold Italic
-    'C'  => '``',	# Courier
-    'CW' => '``',	# constant width
+    'C'  => '``',       # Courier
+    'CW' => '``',       # constant width
     'U'  => ''      # unknown font
     );
 
@@ -136,7 +136,7 @@ sub switch_font {
         }
         else {
             # push unknown font on stack
-            push(@fstack, 'U');	# unknown
+            push(@fstack, 'U'); # unknown
             warn("unknown font '", $font, "'\n");
         }
     }
@@ -172,20 +172,20 @@ our $lnum;
     if ($section == 1 && $tabs == 0) {
         $tabs = 1;
     }
-    
+
     # We have a hanging indent from the last pass
     if ($inl > 0) {
         $tabs = $inl;
         #$inl--;
     }
-    
+
     # Trim leading and trailing whitespace
     #s/^\s+|\s+$//g;
-    
+
     # Escape backticks and asterisks
     s/`/\\`/g;
     s/\*/\\*/g;
-    
+
     # Title
     if (/^\.TH\s+(\S+).*$/) {
         $file = lc $1;
@@ -276,28 +276,28 @@ our $lnum;
         s/\"//g;
         s/\\\-(\w)\s+(\w+)/.. option:: -$1    $2/;
     }
-    
+
     # Now clean up the font markup...
     while (/\\f(\w|\(\w\w|\[\S+\])/) {
         my $font = $1;
         my $esc = '';
 
-        $font =~ s/^\((\w\w)/$1/;	# \f(xx
-        $font =~ s/^\[(\S+)\]/$1/;	# \f[xxx]
+        $font =~ s/^\((\w\w)/$1/;       # \f(xx
+        $font =~ s/^\[(\S+)\]/$1/;      # \f[xxx]
         s/\\f(\w|\(\w\w|\[\S+\])/&switch_font($font)/e;
     }
-    
-    # Handle the special case of tags getting bunched up with trailing 
+
+    # Handle the special case of tags getting bunched up with trailing
     # text
     s/\`(\d+)/\`\\ $1/g;
     s/\*(\d+)/\*\\ $1/g;
-    
+
     # Note RFCs
     s/RFC\s*(\d+)/:rfc:`$1`/g;
-    
+
     # Unescape hyphens
     s/\\-/\-/g;
-    
+
     for ($i=$tabs;$i>0;$i--) {
         $prefix .= "    ";
     }
@@ -354,8 +354,8 @@ while (<>) {
             print print_man2rst($1);
             if ($enums) { print_values($enums); }
             $mode = 0; # back to search mode
-            if ($opt ne '') { 
-                print "\n"; 
+            if ($opt ne '') {
+                print "\n";
             }
             $tabs = 0;
             $opt = '';
