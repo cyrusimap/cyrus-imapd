@@ -1649,16 +1649,21 @@ If all partitions are over that limit, this feature is not used anymore.
 .PP
 .IP \fIrandom\fR 5
 (pseudo-)random selection
+.\"
 .IP \fIfreespace-most\fR 5
 backend with the most (total) free space (KiB)
+.\"
 .IP \fIfreespace-percent-most\fR 5
 backend whose partition has the most free space (%)
+.\"
 .IP \fIfreespace-percent-weighted\fR 5
 same as for partition selection, comparing the free space (%) of the least used
 partition of each backend
+.\"
 .IP \fIfreespace-percent-weighted-delta\fR 5
 same as for partition selection, comparing the free space (%) of the least used
-partition of each backend
+partition of each backend.
+.PP
  */
 
 { "serverlist_select_usage_reinit", 0, INT }
@@ -1695,7 +1700,9 @@ product version in the capabilities */
 
 { "sharedprefix", "Shared Folders", STRING }
 /* If using the alternate IMAP namespace, the prefix for the shared
-   namespace.  The hierarchy delimiter will be automatically appended. */
+   namespace.  The hierarchy delimiter will be automatically appended. 
+.PP
+*/
 
 { "sieve_allowreferrals", 1, SWITCH }
 /* If enabled, timsieved will issue referrals to clients when the
