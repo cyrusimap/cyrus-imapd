@@ -183,8 +183,8 @@ are listed with ``<none>''.
 
 { "annotation_allow_undefined", 0, SWITCH }
 /* Allow clients to store values for entries which are not
- * defined either by Cyrus or in the annotations_definitions
- * file. */
+   defined either by Cyrus or in the annotations_definitions
+   file. */
 
 { "annotation_definitions", NULL, STRING }
 /* File containing external (third-party) annotation definitions.
@@ -317,22 +317,24 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "autocreate_inbox_folders", NULL, STRING }
 /* If a user does not have an INBOX already, and the INBOX is to be
    created, create the list of folders in this setting as well.
+   \fIautocreate_inbox_folders\fR is a list of INBOX's subfolders
+   separated by a "|", that are automatically created by the server
+   under the following two scenarios. Leading and trailing whitespace is
+   stripped, so "Junk | Trash" results in two folders: "Junk" and
+   "Trash".
 .PP
    INBOX folders are created under both the following conditions:
 .\"
 .IP 1.
    The user logins via the IMAP or the POP3 protocol.
    \fIautocreate_quota\fR option must have a value of zero or greater.
+.\"
 .IP 2.
    A message arrives for the user through the \fIlmtpd(8)\fR.
    \fIautocreate_post\fR option must be enabled.
 .PP
-   \fIautocreate_inbox_folders\fR is a list of INBOX's subfolders
-   separated by a "|", that are automatically created by the server
-   under the previous two scenarios. Leading and trailing whitespace is
-   stripped, so "Junk | Trash" results in two folders: "Junk" and
-   "Trash". */
-
+ */
+   
 { "autocreate_post", 0, SWITCH }
 /* If enabled, when \fIlmtpd(8)\fR receives an incoming mail for an
    INBOX that does not exist, then the INBOX is automatically created
@@ -1279,10 +1281,13 @@ The external program will be called with the following
 command line options:
 .TP
 .BI \-c " class"
+.\"
 .TP
 .BI \-p " priority"
+.\"
 .TP
 .BI \-u " user"
+.\"
 .TP
 .BI \-m " mailbox"
 .PP
@@ -1303,18 +1308,21 @@ And the notification message will be available on \fIstdin\fR.
 .PP
 .IP \fIrandom\fR 5
 (pseudo-)random selection
+.\"
 .IP \fIfreespace-most\fR 5
 partition with the most free space (KiB)
+.\"
 .IP \fIfreespace-percent-most\fR 5
 partition with the most free space (%)
+.\"
 .IP \fIfreespace-percent-weighted\fR 5
 each partition is weighted according to its free space (%); the more free space
 the partition has, the more chances it has to be selected
+.\"
 .IP \fIfreespace-percent-weighted-delta\fR 5
 each partition is weighted according to its difference of free space (%)
 compared to the most used partition; the more the partition is lagging behind
-the most used
-partition, the more chances it has to be selected
+the most used partition, the more chances it has to be selected
 .PP
 Note that actually even the most used partition has a few chances to be
 selected, and those chances increase when other partitions get closer
@@ -1595,19 +1603,19 @@ If all partitions are over that limit, this feature is not used anymore.
 
 { "search_normalisation_max", 1000, INT }
 /* A resource bound for the combinatorial explosion of search expression
- * tree complexity caused by normalising expressions with many OR nodes.
- * These can use more CPU time to optimise than they save IO time in scanning
- * folders. */
+   tree complexity caused by normalising expressions with many OR nodes.
+   These can use more CPU time to optimise than they save IO time in scanning
+   folders. */
 
 { "search_engine", "none", ENUM("none", "squat", "sphinx", "xapian") }
 /* The indexing engine used to speed up searching.  */
 
 { "search_index_headers", 1, SWITCH }
 /* Whether to index headers other than From, To, Cc, Bcc, and Subject.
- * Experiment shows that some headers such as Received and DKIM-Signature
- * can contribute up to 2/3rds of the index size but almost nothing to
- * the utility of searching.  Note that is header indexing is disabled,
- * headers can still be searched, the searches will just be slower.
+   Experiment shows that some headers such as Received and DKIM-Signature
+   can contribute up to 2/3rds of the index size but almost nothing to
+   the utility of searching.  Note that is header indexing is disabled,
+   headers can still be searched, the searches will just be slower.
  */
 
 { "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
