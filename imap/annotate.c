@@ -1609,6 +1609,21 @@ static void annotation_get_pop3showafter(annotate_state_t *state,
     buf_free(&value);
 }
 
+static void annotation_get_synccrcs(annotate_state_t *state,
+                                    struct annotate_entry_list *entry)
+{
+    struct mailbox *mailbox = state->mailbox;
+    struct buf value = BUF_INITIALIZER;
+
+    assert(mailbox);
+
+    buf_printf(&value, "%u %u", mailbox->i.synccrcs.basic,
+                                mailbox->i.synccrcs.annot);
+
+    output_entryatt(state, entry->name, "", &value);
+    buf_free(&value);
+}
+
 static void annotation_get_usermodseq(annotate_state_t *state,
                                       struct annotate_entry_list *entry)
 {
@@ -1961,6 +1976,15 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         annotation_get_fromdb,
         annotation_set_todb,
         NULL
+    },{
+        IMAP_ANNOT_NS "synccrcs",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_synccrcs,
+        NULL,
+        NULL,
     },{
         IMAP_ANNOT_NS "uniqueid",
         ATTRIB_TYPE_STRING,
