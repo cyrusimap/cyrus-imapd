@@ -334,7 +334,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    \fIautocreate_post\fR option must be enabled.
 .PP
  */
-   
+
 { "autocreate_post", 0, SWITCH }
 /* If enabled, when \fIlmtpd(8)\fR receives an incoming mail for an
    INBOX that does not exist, then the INBOX is automatically created
@@ -1708,7 +1708,7 @@ product version in the capabilities */
 
 { "sharedprefix", "Shared Folders", STRING }
 /* If using the alternate IMAP namespace, the prefix for the shared
-   namespace.  The hierarchy delimiter will be automatically appended. 
+   namespace.  The hierarchy delimiter will be automatically appended.
 .PP
 */
 
