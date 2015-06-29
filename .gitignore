@@ -37,6 +37,7 @@ coverage.xml
 cscope.out
 depcomp
 doc/man/
+doc/rst/
 doc/text/
 imap/arbitron
 imap/chk_cyrus
