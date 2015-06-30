@@ -7476,7 +7476,7 @@ static void cmd_list(char *tag, struct listargs *listargs)
              (clock() - start) / (double) CLOCKS_PER_SEC);
     if ((listargs->sel & LIST_SEL_METADATA) && listargs->metaopts.maxsize &&
         listargs->metaopts.biggest > listargs->metaopts.maxsize) {
-        prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %u] %s", tag,
+        prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %u] %s\r\n", tag,
                     (unsigned)listargs->metaopts.biggest, error_message(IMAP_OK_COMPLETED));
     }
     else {
