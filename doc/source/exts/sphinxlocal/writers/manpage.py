@@ -13,14 +13,12 @@
 """
 
 from docutils import nodes
-try:
-    from sphinx.writers.manpage import MACRO_DEF, ManualPageWriter, \
-         ManualPageTranslator as BaseTranslator
-    has_manpage_writer = True
-except ImportError:
-    # define the classes in any case, sphinx.application needs it
-    Writer = BaseTranslator = object
-    has_manpage_writer = False
+from sphinx.writers.manpage import (
+    MACRO_DEF,
+    ManualPageWriter,
+    ManualPageTranslator as BaseTranslator
+)
+
 
 from sphinx import addnodes
 from sphinx.locale import admonitionlabels, _
