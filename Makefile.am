@@ -541,6 +541,7 @@ dist_noinst_SCRIPTS = \
 	tools/compile_st.pl \
 	tools/config2header \
 	tools/config2man \
+	tools/config2rst \
 	tools/convert-sieve.pl \
 	tools/dohash \
 	tools/fixsearchpath.pl \
