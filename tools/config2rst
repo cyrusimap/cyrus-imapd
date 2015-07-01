@@ -88,7 +88,7 @@ our $spaces = 0;
 our $inl = 0;
 our $section = 0;
 
-my $blank = "";
+my $blank = "rst";
 my $version = "\$Revision: 1.6 $blank";
 
 sub print_values {
@@ -327,7 +327,7 @@ while (<>) {
             # Drop a tag into the output so we can find this section
             # later, from an include directive.
             $save = "\n    .. startblob $opt\n\n";
-            $save .= print_man2rst('\fB' . $opt . ':\fR ' . $def . "\n");
+            $save .= print_man2rst('\fC' . $opt . ':\fR ' . $def . "\n");
             $enums = $4;
         }
 
