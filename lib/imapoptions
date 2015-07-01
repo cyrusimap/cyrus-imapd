@@ -1589,7 +1589,7 @@ If all partitions are over that limit, this feature is not used anymore.
 
 # Commented out - used by libsasl
 # { "sasl_option", 0, STRING }
-/* Any SASL option can be set by preceding it with "sasl_".  This
+/* Any SASL option can be set by preceding it with \fBsasl_\fR.  This
    file overrides the SASL configuration file. */
 
 # Commented out - used by libsasl
