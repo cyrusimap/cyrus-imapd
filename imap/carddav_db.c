@@ -1609,7 +1609,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
             syslog(LOG_NOTICE, "jmap: create group %s/%s/%s (%s)", req->userid, addressbookId, uid, name);
 
-            if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL, req->userid, req->authstate);
+            if (!r) r = carddav_store(mailbox, card, NULL, req->ignorequota,
+                                      NULL, NULL, req->userid, req->authstate);
 
             vparse_free_card(card);
 
@@ -1758,7 +1759,9 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
             syslog(LOG_NOTICE, "jmap: update group %s/%s", req->userid, resource);
 
-            r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, NULL, NULL, req->userid, req->authstate);
+            r = carddav_store(newmailbox ? newmailbox : mailbox,
+                              card, resource, req->ignorequota, NULL, NULL,
+                              req->userid, req->authstate);
             if (!r) r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
             mailbox_close(&newmailbox);
 
@@ -2528,7 +2531,8 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
             }
 
             syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)", req->userid, addressbookId, uid);
-            r = carddav_store(mailbox, card, NULL, flags, annots, req->userid, req->authstate);
+            r = carddav_store(mailbox, card, NULL, req->ignorequota,
+                              flags, annots, req->userid, req->authstate);
             vparse_free_card(card);
             strarray_free(flags);
             freeentryatts(annots);
@@ -2665,7 +2669,10 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
             }
 
             syslog(LOG_NOTICE, "jmap: update contact %s/%s", req->userid, resource);
-            r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, flags, annots, req->userid, req->authstate);
+
+            r = carddav_store(newmailbox ? newmailbox : mailbox,
+                              card, resource, req->ignorequota,
+                              flags, annots, req->userid, req->authstate);
             if (!r) r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
 
          finish:
@@ -2821,7 +2828,7 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 }
 
 EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                           const char *resource,
+                           const char *resource, unsigned ignorequota,
                            strarray_t *flags, struct entryattlist *annots,
                            const char *userid, struct auth_state *authstate)
 {
@@ -2890,7 +2897,9 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
     fclose(f);
 
-    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0, ignorequota ? NULL : qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0,
+                               ignorequota ? NULL : qdiffs,
+                               0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox->name, error_message(r));
         goto done;

@@ -265,6 +265,7 @@ struct txn_flags_t {
     unsigned char ranges;               /* Accept range requests for resource */
     unsigned char vary;                 /* Headers on which response varied */
     unsigned char trailer;              /* Headers which will be in trailer */
+    unsigned char ignorequota;          /* Ignore quota on mailbox appends */
 };
 
 /* Transaction context */
@@ -413,8 +414,6 @@ extern struct namespace httpd_namespace;
 extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 extern unsigned long config_httpmodules;
 extern int config_httpprettytelemetry;
-
-extern int ignorequota;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
