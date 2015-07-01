@@ -11,24 +11,24 @@ Synopsis
 
 .. parsed-literal::
 
-    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ] 
-            [ **-d** *days* | **-b** *bytes* | **-k** *Kbytes* | **-m** *Mbytes* ] 
+    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ]
+            [ **-d** *days* | **-b** *bytes* | **-k** *Kbytes* | **-m** *Mbytes* ]
             [ *mailbox-pattern*... ]
 
 Description
 ===========
 
-*ipurge* deletes messages from the mailbox(es) specified by 
-*Imailbox-pattern* that are older or larger than specified by the 
-**-d**, **-b**, **-k** or **-m** options.  If no *mailbox-pattern* is 
-given, *ipurge* works on all mailboxes.  If the **-x** option is given, 
-the message age and size MUST match exactly those specified by **-d**, 
-**-b**, **-k** or **-m**.  The are no default values, and at least one 
+*ipurge* deletes messages from the mailbox(es) specified by
+*Imailbox-pattern* that are older or larger than specified by the
+**-d**, **-b**, **-k** or **-m** options.  If no *mailbox-pattern* is
+given, *ipurge* works on all mailboxes.  If the **-x** option is given,
+the message age and size MUST match exactly those specified by **-d**,
+**-b**, **-k** or **-m**.  The are no default values, and at least one
 of **-d**, **-b**, **-k** or **-m** MUST be specified.
 
-*Ipurge* by default only deletes mail below shared folders, which means 
-that mails in mailbox(es) below INBOX.* and user.* stay untouched. Use 
-the option **-f** to also delete mail in mailbox(es) below these 
+*Ipurge* by default only deletes mail below shared folders, which means
+that mails in mailbox(es) below INBOX.* and user.* stay untouched. Use
+the option **-f** to also delete mail in mailbox(es) below these
 folders.
 
 *ipurge* |default-conf-text|
@@ -41,7 +41,7 @@ Options
 .. option:: -C config-file
 
     |cli-dash-c-text|
-    
+
 .. option:: -f
 
     Force deletion of mail in *all* mailboxes.
@@ -72,7 +72,7 @@ Options
 
 .. option:: -i
 
-    Invert match logic: -x means not equal, date is for newer, size is 
+    Invert match logic: -x means not equal, date is for newer, size is
     for smaller.
 
 .. option:: -s

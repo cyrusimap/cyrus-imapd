@@ -26,18 +26,18 @@ on Cyrus databases, specifically:
 - cleanse mailboxes of partially expunged messages (when using the "delayed" expunge mode), and
 - remove deleted mailboxes (when using the "delayed" delete mode), and
 - expire entries from conversations databases.
-  
-The expiration of messages is controlled by the 
-``/vendor/cmu/cyrus-imapd/expire`` mailbox annotation which specifies 
-the age (in days) of messages in the given mailbox that should be 
-deleted.  A value of 0 means that no expiration is to be performed on 
+
+The expiration of messages is controlled by the
+``/vendor/cmu/cyrus-imapd/expire`` mailbox annotation which specifies
+the age (in days) of messages in the given mailbox that should be
+deleted.  A value of 0 means that no expiration is to be performed on
 that mailbox.
 
-The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is 
-inherited by all children of the mailbox on which it is set, so an 
-entire mailbox tree can be configured by setting a single annotation on 
-the root of that tree.  If a mailbox does not have a 
-``/vendor/cmu/cyrus-imapd/expire`` annotation set on it (or does not 
+The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is
+inherited by all children of the mailbox on which it is set, so an
+entire mailbox tree can be configured by setting a single annotation on
+the root of that tree.  If a mailbox does not have a
+``/vendor/cmu/cyrus-imapd/expire`` annotation set on it (or does not
 inherit one), then no messages are expired from the mailbox.
 
 The annotation can be examined using the **info** command of
@@ -51,14 +51,14 @@ annotation applies to the mailbox then duplicate database entries are
 expired using the value given to the **-E** option.
 
 Expiration of conversations database entries occurs if the
-**conversations** option is present in :manpage:`imapd.conf(5)`.  
+**conversations** option is present in :manpage:`imapd.conf(5)`.
 Expiration can be disabled using the **-c** option.  The period used to
 expire entries is controlled by the **conversations_expire_days**
 option in :manpage:`imapd.conf(5)`.
 
 **cyr_expire** |default-conf-text|
 
-**cyr_expire** requires at least one of **-A -D -E -X** or **-t** to be 
+**cyr_expire** requires at least one of **-A -D -E -X** or **-t** to be
 supplied.
 
 Options
@@ -74,9 +74,9 @@ Options
 
     Archive non-flagged messages older than *archive-duration* to the
     archive partition, allowing mailbox messages to be split between fast
-    storage and slow large storage.  Only does anything if 
+    storage and slow large storage.  Only does anything if
     ``archivepartition-*`` has been set in your config.
-    
+
     |v3-new-feature|
 
 .. option:: -D delete-duration
@@ -110,9 +110,9 @@ Options
 
 .. option:: -x
 
-    Do not expunge messages even if using delayed expunge mode.  This 
-    reduces IO traffic considerably, allowing ``cyr_expire`` to be run 
-    frequently to clean up the duplicate database without overloading 
+    Do not expunge messages even if using delayed expunge mode.  This
+    reduces IO traffic considerably, allowing ``cyr_expire`` to be run
+    frequently to clean up the duplicate database without overloading
     the machine.
 
 .. option:: -p mailbox-prefix
@@ -137,7 +137,7 @@ Options
 .. option:: -a
 
     Skip the annotation lookup, so all ``/vendor/cmu/cyrus-imapd/expire``
-    annotations are ignored entirely.  It behaves as if they were not 
+    annotations are ignored entirely.  It behaves as if they were not
     set, so only *expire-days* is considered for all mailboxes.
 
 Examples
@@ -160,8 +160,8 @@ Examples
 
 ..
 
-        Perform migration of message older than *7* days to Archive 
-        partition whilst not altering conversation database nor 
+        Perform migration of message older than *7* days to Archive
+        partition whilst not altering conversation database nor
         expunging messages.
 
 History

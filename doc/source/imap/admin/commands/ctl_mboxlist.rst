@@ -38,58 +38,58 @@ Options
 .. option:: -d
 
     Dump the contents of the database to standard output in a portable
-    flat-text format.  NOTE: In Cyrus versions 2.2.13 and earlier, the 
+    flat-text format.  NOTE: In Cyrus versions 2.2.13 and earlier, the
     dump format did not include the mailbox type flags, breaking remote
-    mailboxes (frontends, mupdate master, unified backends) when 
+    mailboxes (frontends, mupdate master, unified backends) when
     undumped.
 
 .. option:: -x
 
     When performing a dump, remove the mailboxes dumped from the mailbox
     list (mostly useful when specified with **-p**).
-    
+
 .. option:: -p partition
 
-    When performing a dump, dump only thise mailboxes that live on 
+    When performing a dump, dump only thise mailboxes that live on
     *partition*.
-    
+
 .. option:: -f filename
 
     Use the database specified by *filename* instead of the default
     (*configdirectory/mailboxes.db**).
-    
+
 .. option:: -u
 
-    Load the contents of the database from standard input.  The input 
-    MUST be in the format output by the **-d** option.  
+    Load the contents of the database from standard input.  The input
+    MUST be in the format output by the **-d** option.
 
 .. NOTE::
-    Both the old and new formats can be loaded, but the old format will 
+    Both the old and new formats can be loaded, but the old format will
     break remote mailboxes.
 
 .. option:: -m
 
-    For backend servers in the Cyrus Murder, synchronize the local 
+    For backend servers in the Cyrus Murder, synchronize the local
     mailbox list file with the MUPDATE server.
-    
+
 .. option:: -a
 
-    When used with **-m**, assume the local mailboxes file is authoritiative, 
-    that is, only change the mupdate server, do not delete any local 
-    mailboxes.  
+    When used with **-m**, assume the local mailboxes file is authoritiative,
+    that is, only change the mupdate server, do not delete any local
+    mailboxes.
 
 .. IMPORTANT::
-    USE THIS OPTION WITH CARE, as it allows namespace collisions into 
+    USE THIS OPTION WITH CARE, as it allows namespace collisions into
     the murder.
 
 .. option:: -w
 
-    When used with **-m**, print out what would be done but do not perform 
+    When used with **-m**, print out what would be done but do not perform
     the operations.
 
 .. option:: -i
 
-    When used with **-m**, asks for verification before deleting local 
+    When used with **-m**, asks for verification before deleting local
     mailboxes.
 
 .. option:: -v
@@ -112,7 +112,7 @@ Examples
         Dump the mailboxes list in portable text format.
 
 .. only:: html
-    
+
     ::
 
         tech	0 default anyone	lrsp	group:tech	lrswipkxtecda
@@ -126,7 +126,7 @@ Examples
         tech.systems.files	0 default anyone	lrsp	group:tech	lrswipkxtecda
         tech.systems.printer	0 default anyone	lrsp	group:tech	lrswipkxtecda
         tech.technet	0 default anyone	lrsp	group:tech	lrswipkxtecda
-..    
+..
 
 .. parsed-literal::
 
@@ -134,7 +134,7 @@ Examples
 
 ..
 
-        Undump (restore) the mailboxes database from *newmboxlist.dump*, 
+        Undump (restore) the mailboxes database from *newmboxlist.dump*,
         a portable text formatted file.
 
 .. parsed-literal::
@@ -144,13 +144,13 @@ Examples
 ..
 
         Synchronize our mailboxes database with the MUPDATE server.  (One may
-        commonly put a command like this into the **START** section of 
+        commonly put a command like this into the **START** section of
         :manpage:`cyrus.conf(5)` on backend nodes of a Murder cluster to cause
-        the backend to syncronize its mailbox list with the mupdate master upon 
+        the backend to syncronize its mailbox list with the mupdate master upon
         startup).
 
 .. only:: html
-    
+
     ::
 
         START {

@@ -8,6 +8,16 @@ Administrative Commands & Utilities
     this particular part of the documentation is pending the resolution
     of :task:`84`.
 
+List of Configuration Files, Formats and Settings
+=================================================
+
+.. toctree::
+    :maxdepth: 1
+
+    configs/cyrus.conf
+    configs/imapd.conf
+    configs/krb.equiv
+
 List of Command-line Utilities
 ==============================
 
@@ -34,15 +44,37 @@ List of Command-line Utilities
     commands/deliver
     commands/fud
     commands/httpd
+    commands/idled
+    commands/imapd
+    commands/imtest
+    commands/installsieve
     commands/ipurge
+    commands/lmtpd
+    commands/lmtptest
+    commands/master
     commands/mbexamine
     commands/mbpath
     commands/mbtool
     commands/mkimap
+    commands/mupdate
+    commands/mupdatetest
+    commands/nntpd
+    commands/nntptest
+    commands/notifyd
+    commands/pop3d
+    commands/pop3test
     commands/quota
     commands/reconstruct
+    commands/rmnews
+    commands/sivtest
+    commands/smmapd
+    commands/smtptest
     commands/squatter
     commands/sync_client
+    commands/sync_reset
+    commands/sync_server
+    commands/timsieved
+    commands/tls_prune
     commands/unexpunge
 
 Work-in-Progress
@@ -73,28 +105,15 @@ the form of actual man-pages.
     commands/cyrdump
     commands/dohash
     commands/fixsearchpath.pl
-    commands/idled
     commands/imapd
-    commands/lmtpd
-    commands/lmtpproxyd
     commands/masssievec
-    commands/master
     commands/migrate-metadata
     commands/mknewsgroups
-    commands/mupdate
     commands/mupdate-loadgen.pl
-    commands/nntpd
-    commands/notifyd
-    commands/pop3d
     commands/proxyd
     commands/rehash
     commands/sievec
     commands/sieved
-    commands/smmapd
-    commands/sync_reset
-    commands/sync_server
-    commands/timsieved
-    commands/tls_prune
     commands/translatesieve
     commands/undohash
     commands/upgradesieve

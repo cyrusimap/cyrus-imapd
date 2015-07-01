@@ -44,11 +44,11 @@ mailbox(es), incrementally updating indexes.
 In the second synopsis, **squatter** recurses from the specified user(s),
 rather than from specified mailbox(es).
 
-In the third synopsis, **squatter** runs in rolling mode.  In this mode 
-**squatter** backgrounds itself and runs as a daemon, listening to a 
-sync log channel (chosen using **-n** option, and set up using the 
-*sync_log_channels* setting in :manpage:`imapd.conf(5)`).  Very soon 
-after messages are delivered or uploaded to mailboxes **squatter** will 
+In the third synopsis, **squatter** runs in rolling mode.  In this mode
+**squatter** backgrounds itself and runs as a daemon, listening to a
+sync log channel (chosen using **-n** option, and set up using the
+*sync_log_channels* setting in :manpage:`imapd.conf(5)`).  Very soon
+after messages are delivered or uploaded to mailboxes **squatter** will
 incrementally index the affected mailbox.
 
 In the fourth synopsis, **squatter** reads a single sync log file and
@@ -56,13 +56,12 @@ performs incremental indexing on the mailboxes listed therein.  This is
 sometimes useful for cleaning up after problems with rolling mode.
 
 .. Note::
-    Incremental updates are very inefficient with the SQUAT
-    search engine.  If using SQUAT for large and active mailboxes, you
-    should run **squatter** periodically as an EVENT in
-    :manpage:`cyrus.conf(5)`.
+    Incremental updates are very inefficient with the SQUAT search
+    engine.  If using SQUAT for large and active mailboxes, you should
+    run **squatter** periodically as an EVENT in ``cyrus.conf(5)``.
     Incremental updates are much more efficient with Sphinx, so if using
     Sphinx you should run **squatter -R** as a START in
-    :manpage:`cyrus.conf(5)`.
+    ``cyrus.conf(5)``.
 
 .. Note::
     Messages and mailboxes that have not been indexed CAN still be

@@ -52,7 +52,7 @@ Changes to the Cyrus IMAP Server Since Version 1.6.10
 *   deliver now uses tm_gmtoff if available to check for the local timezone.
 *   The default format for reading information from INN has changed. If you use INN to feed imapd news, you must change your "newsfeeds" file to contain
 
-*   collectnews!:*:Tf,WO:collectnews
+*   collectnews!:\*:Tf,WO:collectnews
 
 *   The dohash script now takes a "-i" option to run interactively and the "-f" option to issue warnings instead of fatal errors.
 
@@ -324,7 +324,7 @@ Changes to the Cyrus IMAP Server Since Version 1.0-Beta
 *   Added a bunch more "configure" options.
 *   Ported to HPUX.
 *   Fixed a bug in the LIST/LSUB \Noselect code.
-*   Fixed bug in the globbing code which caused the "*%" pattern to work incorrectly.
+*   Fixed bug in the globbing code which caused the "\*%" pattern to work incorrectly.
 *   Client-side Kerberos support is now conditionalized on HAVE_ACTE_KRB, which is set by configure.
 *   Fixed some invalid buffer-alignment assumptions in the Kerberos code.
 *   Made the lexers compatible with flex. Configure now looks for and prefers to use flex and bison/byacc.

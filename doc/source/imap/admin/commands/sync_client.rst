@@ -19,9 +19,9 @@ Synopsis
 Description
 ===========
 
-**sync_client** is the client side of the replication system.  It runs 
-on the client (master) system and connects to the target (replica) 
-system and generates an appropriate sequence of transactions to 
+**sync_client** is the client side of the replication system.  It runs
+on the client (master) system and connects to the target (replica)
+system and generates an appropriate sequence of transactions to
 synchronize the replica system with the master system.
 
 **sync_client** |default-conf-text|
@@ -57,8 +57,8 @@ Options
 .. option:: -z
 
     Require compression.
-    The replication protocol will always try to enable deflate 
-    compression if both ends support it.  Set this flag when you want 
+    The replication protocol will always try to enable deflate
+    compression if both ends support it.  Set this flag when you want
     to abort if compression is not available.
 
 .. option:: -S servername

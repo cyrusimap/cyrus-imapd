@@ -18,12 +18,12 @@ Synopsis
 Description
 ===========
 
-**mbexamine** will examine the header, index, and cache files of a 
-cyrus format mailbox and dump the information contained therein.  It 
-can also limit its output to a specific uid or sequence number, through 
+**mbexamine** will examine the header, index, and cache files of a
+cyrus format mailbox and dump the information contained therein.  It
+can also limit its output to a specific uid or sequence number, through
 use of the **-s** and **-u** switches.
 
-**mbexamine** |default-conf-text| It uses 
+**mbexamine** |default-conf-text| It uses
 <configdirectory>/mailboxes.db to locate the mailbox on disk.
 
 Options
@@ -45,8 +45,8 @@ Options
 
 .. option:: -q
 
-    Compare the quota usage in cyrus.index to the actual message file 
-    sizes and report any differences.  If there are differences, the 
+    Compare the quota usage in cyrus.index to the actual message file
+    sizes and report any differences.  If there are differences, the
     mailbox SHOULD be reconstructed.
 
 Examples
@@ -63,7 +63,7 @@ Examples
 .. only:: html
 
     ::
-    
+
         Examining user.jsmith...
          Mailbox Header Info:
           Path to mailbox: /var/spool/imap/user/jsmith
@@ -84,8 +84,8 @@ Examples
           Highest Mod Sequence: 15
 
          Message Info:
-        000001> UID:00000001   INT_DATE:1361982429 SENTDATE:1361966400 SIZE:6762  
-              > HDRSIZE:1443   LASTUPD :1361982447 SYSFLAGS:00000010   LINES:125   
+        000001> UID:00000001   INT_DATE:1361982429 SENTDATE:1361966400 SIZE:6762
+              > HDRSIZE:1443   LASTUPD :1361982447 SYSFLAGS:00000010   LINES:125
               > CACHEVER:3  GUID:69bdb40dac9de4d17057a5245c34544f2d6849db MODSEQ:3
               > USERFLAGS: 00000000 00000000 00000000 00000000
         <...>
@@ -123,8 +123,8 @@ Examples
           Highest Mod Sequence: 15
 
          Message Info:
-        000001> UID:00000004   INT_DATE:1377891971 SENTDATE:1377864000 SIZE:4097  
-              > HDRSIZE:1771   LASTUPD :1377891971 SYSFLAGS:00000000   LINES:60    
+        000001> UID:00000004   INT_DATE:1377891971 SENTDATE:1377864000 SIZE:4097
+              > HDRSIZE:1771   LASTUPD :1377891971 SYSFLAGS:00000000   LINES:60
               > CACHEVER:3  GUID:dc814658a4d676789578bff3de35b45914abd774 MODSEQ:7
               > USERFLAGS: 00000000 00000000 00000000 00000000
         <...>

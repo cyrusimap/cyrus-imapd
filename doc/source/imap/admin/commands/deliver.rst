@@ -15,11 +15,11 @@ Synopsis
            [ **-f** *address* ] [ **-m** *mailbox* ] [ **-a** *auth-id* ]
            [ **-q** ] [ *userid* ]...
     **deliver** [ **-C** *config-file* ] **-l**
-    
+
 Description
 ===========
 
-**deliver** reads a message from the standard input and delivers it to 
+**deliver** reads a message from the standard input and delivers it to
 one or more IMAP mailboxes.
 
 
@@ -38,7 +38,7 @@ Options
 .. option:: -d
 
     Ignored for compatability with **/bin/mail**.
-    
+
 .. option:: -r  address
 
     Insert a **Return-Path:** header containing *address*.
@@ -46,17 +46,17 @@ Options
 .. option:: -f  address
 
     Insert a **Return-Path:** header containing *address*.
-    
+
 .. option:: -m  mailbox
 
-    Deliver to **mailbox**.  If any *userid*\ s are specified, attempts 
-    to deliver to ``user.``\ *userid*\ ``.mailbox`` for each *userid*\ .  
-    If the ACL on any such mailbox does not grant the sender the "p" 
-    right or if **-m** is not specified, then delivers to the INBOX for 
+    Deliver to **mailbox**.  If any *userid*\ s are specified, attempts
+    to deliver to ``user.``\ *userid*\ ``.mailbox`` for each *userid*\ .
+    If the ACL on any such mailbox does not grant the sender the "p"
+    right or if **-m** is not specified, then delivers to the INBOX for
     the *userid*, regardless of the ACL on the INBOX.
 
-    If no *userid*\ s are specified, attempts to deliver to *mailbox*\ 
-    . If the ACL on *mailbox* does not grant the sender the "p" right, 
+    If no *userid*\ s are specified, attempts to deliver to *mailbox*\
+    . If the ACL on *mailbox* does not grant the sender the "p" right,
     the delivery fails.
 
 .. option:: -a  auth-id

@@ -18,10 +18,10 @@ Synopsis
 Description
 ===========
 
-**cyr_deny** is used to deny individual users access to Cyrus services. 
-The first synopsis denies user *user* access to Cyrus services, the 
-second synopsis allows access again.  **cyr_deny** works by adding an 
-entry to the Cyrus ``user_deny.db`` database; the third synopsis lists 
+**cyr_deny** is used to deny individual users access to Cyrus services.
+The first synopsis denies user *user* access to Cyrus services, the
+second synopsis allows access again.  **cyr_deny** works by adding an
+entry to the Cyrus ``user_deny.db`` database; the third synopsis lists
 the entries in the database.
 
 **cyr_deny** |default-conf-text|
@@ -42,8 +42,8 @@ Options
 
 .. option:: -s services
 
-    Deny access only to the given *services*, which is a 
-    comma-separated list of wildcard patterns.  The default is "*" 
+    Deny access only to the given *services*, which is a
+    comma-separated list of wildcard patterns.  The default is "*"
     which denies access to all services.
 
 

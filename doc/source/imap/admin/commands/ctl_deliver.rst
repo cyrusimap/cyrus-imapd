@@ -16,7 +16,7 @@ Synopsis
 Description
 ===========
 
-**ctl_deliver** is used to perform various administrative operations on 
+**ctl_deliver** is used to perform various administrative operations on
 the duplicate delivery database.
 
 **ctl_deliver** |default-conf-text|
@@ -30,12 +30,12 @@ Options
 .. option:: -C config-file
 
     |cli-dash-c-text|
-    
+
 .. option:: -d
 
     Dump the contents of the database to standard output in a portable
     flat-text format.
-    
+
 .. option:: -f filename
 
     Use the database specified by *filename* instead of the default
@@ -80,5 +80,5 @@ See Also
 
 Files
 =====
-/etc/imapd.conf, 
+/etc/imapd.conf,
 <configdirectory>/deliver.db

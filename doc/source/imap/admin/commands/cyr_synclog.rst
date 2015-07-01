@@ -4,7 +4,7 @@
 **cyr_synclog**
 ===============
 
-is used to append a value to the log file.  You can either specify 
+is used to append a value to the log file.  You can either specify
 the log type and value, or an entire log line.
 
 Synopsis
@@ -18,7 +18,7 @@ Synopsis
 Description
 ===========
 
-**cyr_synclog** is used to append a value to the log file.  You can 
+**cyr_synclog** is used to append a value to the log file.  You can
 either specify the log type and value, or an entire log line.
 
 Running without any options will print a short usage document.
@@ -81,7 +81,7 @@ Examples
 
 ..
 
-        Add a log entry to mark mailbox *user.brong* as seen by user 
+        Add a log entry to mark mailbox *user.brong* as seen by user
         *brong*.
 
 .. parsed-literal::
@@ -89,7 +89,7 @@ Examples
     **cyr_synclog** *"SEEN user.brong brong"*
 ..
 
-        Add a log line, using the raw format, to mark mailbox 
+        Add a log line, using the raw format, to mark mailbox
         *user.brong* as seen by user *brong*.
 
 History

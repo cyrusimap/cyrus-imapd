@@ -16,7 +16,7 @@ Synopsis
 Description
 ===========
 
-**cyr_info** is a tool for getting information from Cyrus.  The intent 
+**cyr_info** is a tool for getting information from Cyrus.  The intent
 is to extend this tool with useful commands to make managing and
 configuring Cyrus easier.
 
@@ -30,7 +30,7 @@ Options
 .. option:: -C config-file
 
     |cli-dash-c-text|
-    
+
 .. option:: -M config-file
 
     Read service specifications from *config-file* (cyrus.conf format).
@@ -47,7 +47,7 @@ Commands
     Print ALL configuration options - including default options
 
 *conf*
-    
+
     Print only the configuration options which are not the same as
     default (regardless of whether you have specified them or not)
 

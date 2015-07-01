@@ -16,11 +16,11 @@ Synopsis
 Description
 ===========
 
-Given a mailbox name or a space separated list of mailbox names, 
+Given a mailbox name or a space separated list of mailbox names,
 **mbpath** outputs the filesystem path to the mailbox.
 
 
-**mbpath** |default-conf-text| It uses <configdirectory>/mailboxes.db 
+**mbpath** |default-conf-text| It uses <configdirectory>/mailboxes.db
 to locate the mailbox on disk.
 
 Options
@@ -42,7 +42,7 @@ Options
 
 .. option:: -m
 
-    Output the path to the metadata files (if different from the 
+    Output the path to the metadata files (if different from the
     message files).
 
 Examples

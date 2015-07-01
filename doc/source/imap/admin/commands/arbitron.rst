@@ -11,13 +11,13 @@ Synopsis
 
 .. parsed-literal::
 
-    **arbitron** [ **-C** *config-file* ] [ **-o** ] [ **-u** ] [ **-l** ] [ **-p** *months* ] 
+    **arbitron** [ **-C** *config-file* ] [ **-o** ] [ **-u** ] [ **-l** ] [ **-p** *months* ]
              [ **-d** *days* | **-D** *mmddyyyy*\ [\ **:**\ *mmddyyyy*] ] *mailbox*...
 
 Description
 ===========
 
-**arbitron** collects and reports readership statistics for mailboxes 
+**arbitron** collects and reports readership statistics for mailboxes
 on the server. It also optionally prunes the mailboxes of ``\Seen``
 state for dormant users.
 
@@ -59,7 +59,7 @@ Options
 
 .. option:: -l
 
-    Enable long reporting (comma delimited table consisting of mbox, 
+    Enable long reporting (comma delimited table consisting of mbox,
     userid, r/s, start time, end time).
 
 .. option:: -d days
@@ -100,9 +100,9 @@ Examples
         Long-format list.
 
 .. only:: html
-    
+   
     ::
-    
+   
         tech.Commits,john,s,04-28-2015 09:45:35,05-28-2015 09:45:35
         tech.Commits.archive,mary,s,04-28-2015 09:45:35,05-28-2015 09:45:35
         tech.Commits.archive,john,s,04-28-2015 09:45:35,05-28-2015 09:45:35

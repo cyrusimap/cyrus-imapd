@@ -11,7 +11,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyrus-master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ] 
+    **cyrus-master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ]
         [ **-l** *listen queue* ] [ **-p** *pidfile* ] [ **-P** *snmp agentx ping interval* ]
         [ **-j** *janitor period* ] [ **-d** | **-D** ] [ **-L** *logfile* ]
         [ **-x** *snmp agentx socket* ]
@@ -19,9 +19,9 @@ Synopsis
 Description
 ===========
 
-**cyrus-master** is the process that controls all of the Cyrus 
-processes. This process is responsible for creating all imapd, pop3d, 
-lmtpd and sieved child processes. This process also initializes the 
+**cyrus-master** is the process that controls all of the Cyrus
+processes. This process is responsible for creating all imapd, pop3d,
+lmtpd and sieved child processes. This process also initializes the
 Berkeley DB code and performs scheduled cleanup/maintenance.
 
 If this process dies, then no new sessions will be started.
@@ -45,39 +45,39 @@ Options
 
 .. option:: -l  listen queue backlog
 
-    Increase the listen queue backlog. By default, the listen queue is 
-    set to 32.   On systems with a high connection rate, it may be 
-    desirable to increase this value. refer to :manpage:`listen(2)` for 
+    Increase the listen queue backlog. By default, the listen queue is
+    set to 32.   On systems with a high connection rate, it may be
+    desirable to increase this value. refer to :manpage:`listen(2)` for
     details.
 
 .. option:: -j  janitor full-sweeps per second
 
-    Sets the amount of times per second the janitor should sweep the 
-    entire child table.  Leave it at the default of 1 unless you have a 
-    really high fork rate (and you have not increased the child hash 
-    table size when you compiled Cyrus from its default of 10000 
+    Sets the amount of times per second the janitor should sweep the
+    entire child table.  Leave it at the default of 1 unless you have a
+    really high fork rate (and you have not increased the child hash
+    table size when you compiled Cyrus from its default of 10000
     entries).
 
 .. option:: -p  pidfile
 
-    Use *pidfile* as the pidfile.  If not specified, defaults to 
+    Use *pidfile* as the pidfile.  If not specified, defaults to
     ``/var/run/cyrus-master.pid``
-    
+
 .. option:: -P  snmp agentx ping interval
 
-    Sets the amount on time in seconds the subagent will try and 
-    reconnect to the master agent (snmpd) if it ever becomes (or 
+    Sets the amount on time in seconds the subagent will try and
+    reconnect to the master agent (snmpd) if it ever becomes (or
     starts) disconnected.  Requires net-snmp 5.0 or higher.
 
 .. option:: -d
 
-    Start in daemon mode (run in background and disconnect from 
+    Start in daemon mode (run in background and disconnect from
     controlling terminal).
-    
+
 .. option:: -D
 
-    Don't close stdin/stdout/stderr. Primarily useful for debugging. 
-    Note that **-d** and **-D** cannot be used together; consider using 
+    Don't close stdin/stdout/stderr. Primarily useful for debugging.
+    Note that **-d** and **-D** cannot be used together; consider using
     **-L** instead.
 
 .. option:: -L  logfile
@@ -92,44 +92,44 @@ Options
 Configuration
 =============
 
-Upon execution, **cyrus-master** reads its configuration information 
+Upon execution, **cyrus-master** reads its configuration information
 out of the :manpage:`cyrus.conf(5)` file, or an alternative if **-M**
 is used.
 
-**cyrus-master** rereads its configuration file when it receives a 
-hangup signal, SIGHUP.  Services and events may be added, deleted or 
-modified when the configuration file is reread.  Any active services 
-removed from the configuration file will be allowed to run until 
+**cyrus-master** rereads its configuration file when it receives a
+hangup signal, SIGHUP.  Services and events may be added, deleted or
+modified when the configuration file is reread.  Any active services
+removed from the configuration file will be allowed to run until
 completion.
 
-**cyrus-master** propagates the hangup signal, SIGHUP, to its child 
-service processes, so that they stop waiting for incoming connections 
-and exit, allowing them to be recycled.  This is useful to make 
-services take into account a new version of the 
-:manpage:`imapd.conf(5)` file.  Children that are servicing a client 
-connection when SIGHUP is received are allowed to run until the client 
-logouts before being recycled. It may take a long time until the client 
-logouts, so a log message is generated for processes that have not been 
+**cyrus-master** propagates the hangup signal, SIGHUP, to its child
+service processes, so that they stop waiting for incoming connections
+and exit, allowing them to be recycled.  This is useful to make
+services take into account a new version of the
+:manpage:`imapd.conf(5)` file.  Children that are servicing a client
+connection when SIGHUP is received are allowed to run until the client
+logouts before being recycled. It may take a long time until the client
+logouts, so a log message is generated for processes that have not been
 recycled whithin 30s.
 
 Notes
 =====
 
 The environment variable **CYRUS_VERBOSE** can be set to log additional
-debugging information. Setting the value to 1 results in base level logging. 
+debugging information. Setting the value to 1 results in base level logging.
 Setting it higher results in more log messages being generated.
 
 History
 =======
 
-The name of the command was changed from ``master`` to ``cyrus-master`` 
+The name of the command was changed from ``master`` to ``cyrus-master``
 in Cyrus IMAP version |imap_version_master_renamed|.
 
 Files
 =====
 
-/etc/cyrus.conf, 
-/etc/imapd.conf, 
+/etc/cyrus.conf,
+/etc/imapd.conf,
 /var/run/cyrus-master.pid
 
 See Also

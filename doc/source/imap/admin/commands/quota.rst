@@ -80,7 +80,7 @@ Examples
 .. only:: html
 
     ::
-    
+
         Quota     % Used     Used              Resource Root
         1048576       21   228429              STORAGE example.org!user.jane
                              9459              MESSAGE example.org!user.jane

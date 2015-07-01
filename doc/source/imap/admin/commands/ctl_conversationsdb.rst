@@ -36,7 +36,7 @@ store the conversations database.
 
 The third synopsis is used to reconstruct conversations information
 in various ways for a specific user, and the fourth to reconstruct
-conversations information for all users.  See ``OPTIONS`` below for 
+conversations information for all users.  See ``OPTIONS`` below for
 details.
 
 |v3-new-command|
@@ -53,14 +53,14 @@ Options
 .. option:: -d userid
 
     Dump the conversations database which corresponds to the user *userid*
-    to standard output in an ASCII format.  The resulting file can be 
+    to standard output in an ASCII format.  The resulting file can be
     used to recreate a database using the **-u** option.
 
 .. option:: -u userid
 
     "Undumps" the conversations database corresponding to the user *userid*,
-    i.e. replaces all the entries with data from ASCII records parsed 
-    from standard input.  The output from the **-d** option can be used 
+    i.e. replaces all the entries with data from ASCII records parsed
+    from standard input.  The output from the **-d** option can be used
     as input.
 
 .. option:: -v
@@ -69,35 +69,35 @@ Options
 
 .. option:: -r
 
-    Be recursive; apply the main operation to every user.  Warning: do 
+    Be recursive; apply the main operation to every user.  Warning: do
     not combine with **-u**, it will not do what you expect.
 
 .. option:: -z
 
-    Remove all conversation information from the conversations database 
-    for user *userid*, and from all the user's mailboxes.  The 
-    information can all be recalculated (eventually) from message 
+    Remove all conversation information from the conversations database
+    for user *userid*, and from all the user's mailboxes.  The
+    information can all be recalculated (eventually) from message
     headers, using the **-b** option.
 
 .. option:: -b
 
-    Rebuild all conversation information in the conversations database 
-    for user *userid*, and in all the user's mailboxes, from the header 
-    information in messages.  Does not affect messages which already 
+    Rebuild all conversation information in the conversations database
+    for user *userid*, and in all the user's mailboxes, from the header
+    information in messages.  Does not affect messages which already
     have conversation information.
-    
-    This is a bulk mode version of what happens to each message when it 
-    arrives, and can be used to add missing conversation information 
-    for past messages, e.g. after using **-z** or after upgrading 
-    Cyrus from older versions.  Note: this operation uses information 
-    from *cyrus.cache* files so it does not need to read every single 
+
+    This is a bulk mode version of what happens to each message when it
+    arrives, and can be used to add missing conversation information
+    for past messages, e.g. after using **-z** or after upgrading
+    Cyrus from older versions.  Note: this operation uses information
+    from *cyrus.cache* files so it does not need to read every single
     message file.
 
 .. option:: -R
 
-    Recalculate counts of messages stored in existing conversations in 
-    the conversations database for user *userid*.  This is a limited 
-    subset of **-b**; in particular it does not create conversations or 
+    Recalculate counts of messages stored in existing conversations in
+    the conversations database for user *userid*.  This is a limited
+    subset of **-b**; in particular it does not create conversations or
     assign messages to conversations.
 
 Examples

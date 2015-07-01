@@ -549,6 +549,8 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
+                    u'David Carter (dpc22@cam.ac.uk)', 
+                    u'Ken Murchison (ken@oceana.com)',
                     u'Nic Bernstein (Onlight)'
                 ],
             8
@@ -590,6 +592,17 @@ man_pages = [
         (
             'imap/admin/commands/cyrus-master',
             'cyrus-master',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/master',
+            'master',
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
@@ -691,6 +704,287 @@ man_pages = [
         (
             'imap/admin/commands/httpd',
             'httpd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/idled',
+            'idled',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/imapd',
+            'imapd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/developer/libraries/imclient',
+            'imclient',
+            u'Cyrus IMAP Libraries Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            3
+    ),
+
+        (
+            'imap/admin/commands/imtest',
+            'imtest',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/commands/installsieve',
+            'installsieve',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/configs/cyrus.conf',
+            'cyrus.conf',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            5
+    ),
+
+        (
+            'imap/admin/configs/imapd.conf',
+            'imapd.conf',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            5
+    ),
+
+        (
+            'imap/admin/configs/krb.equiv',
+            'krb.equiv',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            5
+    ),
+
+        (
+            'imap/admin/commands/lmtpd',
+            'lmtpd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/lmtptest',
+            'lmtptest',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/commands/mupdatetest',
+            'mupdatetest',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/commands/mupdate',
+            'mupdate',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/nntpd',
+            'nntpd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/nntptest',
+            'nntptest',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/commands/notifyd',
+            'notifyd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/pop3d',
+            'pop3d',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/pop3test',
+            'pop3test',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/commands/rmnews',
+            'rmnews',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/sivtest',
+            'sivtest',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/commands/smmapd',
+            'smmapd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/smtptest',
+            'smtptest',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            1
+    ),
+
+        (
+            'imap/admin/commands/sync_reset',
+            'sync_reset',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'David Carter (dpc22@cam.ac.uk)', 
+                    u'Ken Murchison (ken@oceana.com)',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/sync_server',
+            'sync_server',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'David Carter (dpc22@cam.ac.uk)', 
+                    u'Ken Murchison (ken@oceana.com)',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/timsieved',
+            'timsieved',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'David Carter (dpc22@cam.ac.uk)', 
+                    u'Ken Murchison (ken@oceana.com)',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/tls_prune',
+            'tls_prune',
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',

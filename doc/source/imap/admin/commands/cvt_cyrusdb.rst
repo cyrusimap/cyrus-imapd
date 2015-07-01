@@ -16,8 +16,8 @@ Synopsis
 Description
 ===========
 
-**cvt_cyrusdb** is used to convert a cyrusdb file between different 
-database backends.  Note that you should not attempt to use the same 
+**cvt_cyrusdb** is used to convert a cyrusdb file between different
+database backends.  Note that you should not attempt to use the same
 file for input and output.
 
 Running without any options will list the available database backends.
@@ -25,7 +25,7 @@ Running without any options will list the available database backends.
 **cvt_cyrusdb** |default-conf-text|
 
 .. NOTE::
-    Note that the file locations are NOT read out of the configuration 
+    Note that the file locations are NOT read out of the configuration
     file, and must be supplied on the command line.
 
 
@@ -52,7 +52,7 @@ Examples
 .. only:: html
 
     ::
-    
+
         Usage: /usr/lib/cyrus/bin/cvt_cyrusdb [-C altconfig] <old db> <old db backend> <new db> <new db backend>
         Usable Backends:  berkeley, berkeley-nosync, berkeley-hash, berkeley-hash-nosync, flat, skiplist, quotalegacy
 
@@ -67,7 +67,7 @@ Examples
 
 .. only:: html
 
-    :: 
+    ::
 
         Converting from /var/lib/imap/mailboxes.db (skiplist) to /tmp/mailboxes.db (berkeley-nosync)
 

@@ -1,10 +1,10 @@
 .. _imap-admin-commands-tls_prune:
 
 =============
-``tls_prune``
+**tls_prune**
 =============
 
-intro
+Prune expired sessions from the TLS sessions database
 
 Synopsis
 ========
@@ -16,20 +16,34 @@ Synopsis
 Description
 ===========
 
-The ``tls_prune`` program outputs a list of files and/or directories
-that it expects to exist, but that in fact do not.
+    **CMD** [ **-C** *config-file* ]
+
+Description
+===========
+
+**CMD** is used to prune expired sessions from the TLS sessions
+database.  The lifetime of a TLS session is determined by the
+``tls_session_timeout`` configuration option.
+
+
+**CMD** |default-conf-text|
 
 Options
 =======
 
-.. program:: tls_prune
+.. program:: CMD
 
 .. option:: -C config-file
 
     |cli-dash-c-text|
 
-Examples
-========
+Files
+=====
+
+/etc/imapd.conf
 
 See Also
 ========
+
+:manpage:`imapd.conf(5)`,
+:manpage:`master(8)`

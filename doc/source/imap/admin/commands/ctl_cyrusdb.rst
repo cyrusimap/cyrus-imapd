@@ -37,9 +37,9 @@ Options
     Recover the database after an application or system failure. Also
     performs database cleanups like removing mailbox reservations (and
     the associated mailbox files).
-    
-    All mailbox files are also checked to make sure the file format 
-    matches the configured database type in imapd.conf.  If not, the 
+
+    All mailbox files are also checked to make sure the file format
+    matches the configured database type in imapd.conf.  If not, the
     file is automatically converted using the same logic as cvt_cyrusdb.
 
 .. option:: -x
@@ -66,7 +66,7 @@ Examples
 
 ..
 
-        Recover databases, performing cleanup.  This is commonly used in 
+        Recover databases, performing cleanup.  This is commonly used in
         the **START** section of :manpage:`cyrus.conf(5)`.
 
 .. only:: html
@@ -77,7 +77,7 @@ Examples
             # do not delete this entry!
             recover     cmd="/usr/local/bin/ctl_cyrusdb -r"
           <...>
-    
+
 
 .. parsed-literal::
 
@@ -94,7 +94,7 @@ Examples
 
 ..
 
-        Checkpoint databases.  Commonly used in the **EVENTS** section of 
+        Checkpoint databases.  Commonly used in the **EVENTS** section of
         :manpage:`cyrus.conf(5)`.
 
 .. only:: html
@@ -105,7 +105,7 @@ Examples
             # this is required
             checkpoint	cmd="/usr/local/bin/ctl_cyrusdb -c" period=30
           <...>
-    
+
 Files
 =====
 /etc/imapd.conf

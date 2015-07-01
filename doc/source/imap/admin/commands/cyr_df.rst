@@ -16,7 +16,7 @@ Synopsis
 Description
 ===========
 
-**cyr_df** examines the Cyrus spool partitions and reports on their 
+**cyr_df** examines the Cyrus spool partitions and reports on their
 disk space usage.
 
 **cyr_df** |default-conf-text|
@@ -48,7 +48,7 @@ Examples
 .. only:: html
 
     ::
-    
+
         Partition       1k-blocks         Used    Available Use% Location
         default          19610300     13460832      5153412  72% /var/spool/imap
 

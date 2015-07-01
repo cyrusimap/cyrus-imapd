@@ -87,7 +87,7 @@ Examples
 .. only:: html
 
     ::
-    
+
         UID: 278786
             Size: 2548
             Sent: Sat Mar  7 12:00:00 2015
@@ -132,13 +132,13 @@ Examples
 .. only:: html
 
     ::
-    
+
         restoring expunged messages in mailbox 'example/org!user/john'
         restored 2 expunged messages
 
     .. NOTE::
-        The output of the unexpunge command may not match the input 
-        terms, in the case above, the mailbox ``user/john@example.org`` 
+        The output of the unexpunge command may not match the input
+        terms, in the case above, the mailbox ``user/john@example.org``
         appears in the output as ``example/org!user/john``.
 
 .. parsed-literal::
@@ -152,7 +152,7 @@ Examples
 .. only:: html
 
     ::
-    
+
         (...snip...)
         000001> UID:00278862   INT_DATE:1425728572 SENTDATE:1425726000 SIZE:2545
             > HDRSIZE:2259   LASTUPD :1425912731 SYSFLAGS:00000014   LINES:6
@@ -192,7 +192,7 @@ Examples
 
 ..
 
-        Unexpunge a select message based on its UID, clearing the 
+        Unexpunge a select message based on its UID, clearing the
         *\\Deleted* flag.
 
 .. parsed-literal::
@@ -201,7 +201,7 @@ Examples
 
 ..
 
-        Unexpunge all messages in a user's Trash, but leave them 
+        Unexpunge all messages in a user's Trash, but leave them
         flagged *\\Deleted*.
 
 .. parsed-literal::
@@ -210,7 +210,7 @@ Examples
 
 ..
 
-        The same, but setting user flag *\\Flagged* to facilitate later 
+        The same, but setting user flag *\\Flagged* to facilitate later
         bulk operations.
 
 .. parsed-literal::
@@ -227,7 +227,7 @@ Examples
 
 ..
 
-        The same command, supporting the ``unixhierarchysep: yes`` 
+        The same command, supporting the ``unixhierarchysep: yes``
         option in :manpage:`imapd.conf(5)`.
 
 Files

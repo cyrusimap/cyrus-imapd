@@ -25,8 +25,13 @@ except ImportError:
 from sphinx import addnodes
 from sphinx.locale import admonitionlabels, _
 from sphinx.util.osutil import ustrftime
-from sphinx.util.compat import docutils_version
+##
+# NB: The following was removed for compatibility with sphinx
+# version 1.1.3.
+#
+#from sphinx.util.compat import docutils_version
 
+LITERAL_BLOCK_INDENT = 3.5
 
 class CyrusManualPageWriter(ManualPageWriter):
 
@@ -77,13 +82,8 @@ class CyrusManualPageTranslator(BaseTranslator):
         self._docinfo['version'] = builder.config.version
         self._docinfo['manual_group'] = builder.config.project
 
-        # In docutils < 0.11 self.append_header() was never called
-        if docutils_version < (0, 11):
-            self.body.append(MACRO_DEF)
-
-        # Overwrite admonition label translations with our own
-        for label, translation in admonitionlabels.items():
-            self.language.labels[label] = self.deunicode(translation)
+        # since self.append_header() is never called, need to do this here
+        self.body.append(MACRO_DEF)
 
         # overwritten -- don't wrap literal_block with font calls
         self.defs['literal_block'] = ('.sp\n.nf\n', '\n.fi\n')
@@ -98,3 +98,164 @@ class CyrusManualPageTranslator(BaseTranslator):
     def depart_literal_block(self, node):
         self._in_literal = False
         self.body.append(self.defs['literal_block'][1])
+
+    ##
+    # Everything below this comment has been back-ported from newer
+    # versions of docutils and sphinx.  The manpage writers in the old
+    # versions of these packages, as installed on Wheezy, are not
+    # capable of writing proper man pages as they sit.  Everything
+    # from this comment on down should be removed for newer versions
+    # of these packages, such as docutils >= 0.11 or sphinx >= 1.2
+    
+    # overwritten -- fix bugs in docutils-0.8.1 definitions (these fixes
+    # are all cribbed from docutils-0.11.3)
+    def visit_Text(self, node):
+        text = node.astext()
+        text = text.replace('\\','\\e')
+        replace_pairs = [
+            (u'-', ur'\-'),
+            (u'\'', ur'\(aq'),
+            (u'´', ur'\''),
+            (u'`', ur'\(ga'),
+            ]
+        for (in_char, out_markup) in replace_pairs:
+            text = text.replace(in_char, out_markup)
+        # unicode
+        text = self.deunicode(text)
+        # prevent interpretation of "." at line start
+        if text.startswith('.'):
+            text = '\\&' + text
+        if self._in_literal:
+            text = text.replace('\n.', '\n\\&.')
+        self.body.append(text)
+
+    def ensure_eol(self):
+        """Ensure the last line in body is terminated by new line."""
+        if len(self.body) > 0 and self.body[-1][-1] != '\n':
+            self.body.append('\n')
+
+    def astext(self):
+        """Return the final formatted document as a string."""
+        if not self.header_written:
+            # ensure we get a ".TH" as viewers require it.
+            self.append_header()
+        # filter body
+        for i in xrange(len(self.body)-1, 0, -1):
+            # remove superfluous vertical gaps.
+            if self.body[i] == '.sp\n':
+                if self.body[i - 1][:4] in ('.BI ','.IP '):
+                    self.body[i] = '.\n'
+                elif (self.body[i - 1][:3] == '.B ' and
+                    self.body[i - 2][:4] == '.TP\n'):
+                    self.body[i] = '.\n'
+                elif (self.body[i - 1] == '\n' and
+                    not self.possibly_a_roff_command.match(self.body[i - 2]) and
+                    (self.body[i - 3][:7] == '.TP\n.B '
+                        or self.body[i - 3][:4] == '\n.B ')
+                     ):
+                    self.body[i] = '.\n'
+        return ''.join(self.head + self.body + self.foot)
+
+    def append_header(self):
+        """append header with .TH and .SH NAME"""
+        # NOTE before everything
+        # .TH title_upper section date source manual
+        if self.header_written:
+            return
+        self.head.append(self.header())
+        self.head.append(MACRO_DEF)
+        self.header_written = 1
+
+    def visit_admonition(self, node, name=None):
+        #
+        # Make admonitions a simple block quote
+        # with a strong heading
+        #
+        # Using .IP/.RE doesn't preserve indentation
+        # when admonitions contain bullets, literal,
+        # and/or block quotes.
+        #
+        if name:
+            # .. admonition:: has no name
+            self.body.append('.sp\n')
+            name = '%s%s:%s\n' % (
+                self.defs['strong'][0],
+                self.language.labels.get(name, name).upper(),
+                self.defs['strong'][1],
+                )        
+            self.body.append(name)
+        self.visit_block_quote(node)
+
+    def depart_admonition(self, node):
+        self.depart_block_quote(node)
+
+    def visit_document(self, node):
+        # no blank line between comment and header.
+        self.head.append(self.comment(self.document_start).rstrip()+'\n')
+        # writing header is postboned
+        self.header_written = 0
+
+    def visit_option(self, node):
+        # each form of the option will be presented separately
+        if self.context[-1] > 0:
+            self.body.append('\\fP,\\fB ')
+        if self.context[-3] == '.BI':
+            self.body.append('\\')
+        self.body.append(' ')
+
+
+    # overwritten -- fix bugs in sphinx-1.1.3 definitions (these fixes
+    # are all cribbed from sphinx-1.2.3)
+    def visit_seealso(self, node):
+        self.visit_admonition(node, 'seealso')
+
+    def visit_productionlist(self, node):
+        self.ensure_eol()
+        names = []
+        self.in_productionlist += 1
+        self.body.append('.sp\n.nf\n')
+        for production in node:
+            names.append(production['tokenname'])
+        maxlen = max(len(name) for name in names)
+        lastname = None
+        for production in node:
+            if production['tokenname']:
+                lastname = production['tokenname'].ljust(maxlen)
+                self.body.append(self.defs['strong'][0])
+                self.body.append(self.deunicode(lastname))
+                self.body.append(self.defs['strong'][1])
+                self.body.append(' ::= ')
+            elif lastname is not None:
+                self.body.append('%s     ' % (' '*len(lastname)))
+            production.walkabout(self)
+            self.body.append('\n')
+        self.body.append('\n.fi\n')
+        self.in_productionlist -= 1
+        raise nodes.SkipNode
+
+    def visit_reference(self, node):
+        self.body.append(self.defs['reference'][0])
+        self.visit_Text(node)  # avoid repeating escaping code... fine since
+                               # visit_Text calls astext() and only works
+                               # on that afterwards
+        self.body.append(self.defs['reference'][1])
+
+        uri = node.get('refuri', '')
+        if uri.startswith('mailto:') or uri.startswith('http:') or \
+                 uri.startswith('https:') or uri.startswith('ftp:'):
+            # if configured, put the URL after the link
+            if self.builder.config.man_show_urls and \
+                   node.astext() != uri:
+                if uri.startswith('mailto:'):
+                    uri = uri[7:]
+                self.body.extend([
+                    ' <',
+                    self.defs['strong'][0], uri, self.defs['strong'][1],
+                    '>'])
+        raise nodes.SkipNode
+
+    def visit_literal_strong(self, node):
+        return self.visit_strong(node)
+
+    def depart_literal_strong(self, node):
+        return self.depart_strong(node)

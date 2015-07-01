@@ -11,7 +11,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_dbtool** [ **-C** *config-file* ] [ **-n** ] [ **-o** ] [ **-T** ] *db-file* 
+    **cyr_dbtool** [ **-C** *config-file* ] [ **-n** ] [ **-o** ] [ **-T** ] *db-file*
             *db-backend* *action* [ *key* ] [ *value* ]
 
 Description
@@ -31,7 +31,7 @@ Description
 
     **repack**
 
-You may omit *key* or *key/value* and specify one per line on stdin. 
+You may omit *key* or *key/value* and specify one per line on stdin.
 Keys are terminated by tab or newline, values are terminated by newline.
 
 Running without any options will list the available database backends and
@@ -46,14 +46,14 @@ on backends which support it.  It's a NOOP otherwise.
 **cyr_dbtool** |default-conf-text|
 
 .. Note::
-    Note that the file locations are NOT read out of the configuration 
+    Note that the file locations are NOT read out of the configuration
     file, and must be supplied on the command line.
 
 .. Tip::
     The format of all Cyrus databases is detailed in the distribution in
     file doc/internal/database-formats.html.  Please consult that for
     details.
-    
+
 Options
 =======
 
@@ -62,7 +62,7 @@ Options
 .. option:: -C config-file
 
     |cli-dash-c-text|
-    
+
 .. option:: -n
 
     Create the database file if it doesn't already exist.
@@ -93,13 +93,13 @@ those as used in :manpage:`cyrus.conf(5)`.
 .. Note::
 
     Given that *keys* are tab-delimited, these examples use the notation
-    <tab> to indicate the tab character.  When entering this via the 
-    command line, remember to escape tabs.  In a normal shell, one can 
-    do so with <ctrl-v> (^v).  The sequence "<ctrl-v><ctrl-i>" (^v^i) 
+    <tab> to indicate the tab character.  When entering this via the
+    command line, remember to escape tabs.  In a normal shell, one can
+    do so with <ctrl-v> (^v).  The sequence "<ctrl-v><ctrl-i>" (^v^i)
     works well to enter tab characters.
 
 .. parsed-literal::
-    
+
     **cyr_dbtool** /var/lib/imap/user_deny.db flat baduser "2<tab>pop3,imap<tab>Denied"
 
 ..
@@ -110,7 +110,7 @@ those as used in :manpage:`cyrus.conf(5)`.
 
     Subsequent login attempts by this user would result in authentication
     failures, and log entries like this::
-    
+
         # grep baduser /var/log/mail.log
         Sep 19 14:34:57 cyrushost cyrus/imap[635]: fetching user_deny.db entry for 'baduser'
         Sep 19 14:34:57 cyrushost cyrus/imap[635]: user 'baduser' denied access to service 'imap'
@@ -118,7 +118,7 @@ those as used in :manpage:`cyrus.conf(5)`.
         Sep 19 14:38:21 cyrushost cyrus/imap[816]: badlogin: cyrus.example.org [192.168.190.14] plaintext baduser SASL(-13): authentication failure: checkpass failed
 
 .. parsed-literal::
-    
+
     **cyr_dbtool** /var/lib/imap/user_deny.db flat show
 
 ..
@@ -128,11 +128,11 @@ those as used in :manpage:`cyrus.conf(5)`.
 .. only:: html
 
     ::
-    
+
         baduser	2	pop3,imap	Denied
 
 .. parsed-literal::
-    
+
     **cyr_dbtool** /var/lib/imap/user_deny.db flat get baduser
 
 ..
@@ -142,7 +142,7 @@ those as used in :manpage:`cyrus.conf(5)`.
 .. only:: html
 
     ::
-    
+
         2	pop3,imap	Denied
 
 Files

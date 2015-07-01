@@ -53,13 +53,13 @@ Examples
 
 ..
 
-        Create necessary directories based on settings in 
+        Create necessary directories based on settings in
         */etc/imapd.conf*.
 
 .. only:: html
 
     ::
-    
+
         reading configure file /etc/imapd.conf...
         i will configure directory /var/lib/imap.
         i saw partition /var/spool/imap/mail.
