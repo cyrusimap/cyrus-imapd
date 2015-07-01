@@ -53,23 +53,72 @@ Additional features of this functionality include;
 To enable the automatic creation of mailboxes, set the following options
 in :manpage:`imapd.conf(5)`:
 
-*   ``autocreate_quota``
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_quota
+        :end-before: endblob autocreate_quota
 
-    Set ``autocreate_quota`` to a value of zero or greater to allow
-    successful login events to create a user's INBOX if it does not
-    already exist.
 
-    .. NOTE::
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_post
+        :end-before: endblob autocreate_post
 
-        A value of ``0`` corresponds with no quota. The value depicts
-        quota in kilobytes.
+Other settings in :manpage:`imapd.conf(5)` affecting automatic options.
 
-        The default is for this configuration option is ``-1``.
+Autocreation of mailboxes
+-------------------------
 
-*   ``autocreate_post``
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_inbox_folders
+        :end-before: endblob autocreate_inbox_folders
 
-    Set ``autocreate_post`` to ``1`` to allow :manpage:`lmtpd(8)` to
-    create user's INBOX (and sub-) folders.
+Automatic quota settings
+------------------------
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_quota_messages
+        :end-before: endblob autocreate_quota_messages
+
+
+Autocreation of Sieve scripts
+-----------------------------
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_sieve_folders
+        :end-before: endblob autocreate_sieve_folders
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_sieve_script
+        :end-before: endblob autocreate_sieve_script
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_sieve_script_compile
+        :end-before: endblob autocreate_sieve_script_compile
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_sieve_script_compiled
+        :end-before: endblob autocreate_sieve_script_compiled
+
+Automated folder subscriptions
+------------------------------
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_subscribe_folders
+        :end-before: endblob autocreate_subscribe_folders
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_subscribe_sharedfolders
+        :end-before: endblob autocreate_subscribe_sharedfolders
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_subscribe_sharedfolders_all
+        :end-before: endblob autocreate_subscribe_sharedfolders_all
+
+Autocreation of users
+---------------------
+
+*   .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob autocreate_users
+        :end-before: endblob autocreate_users
 
 See :manpage:`imapd.conf(5)` for the full documentation of all options.
 
