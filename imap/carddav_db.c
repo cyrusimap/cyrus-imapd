@@ -673,7 +673,7 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
     }
     else {
         const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
-        buf_printf(&buf, "/dav/addressbooks/user/%s/%s@%s/%s",
+        buf_printf(&buf, "/dav/addressbooks/user/%s@%s/%s/%s",
                    userid, domain, strrchr(mboxname, '.')+1,
                    resource);
     }
