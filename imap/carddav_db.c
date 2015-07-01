@@ -719,9 +719,18 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
 
     struct buf buf = BUF_INITIALIZER;
     /* XXX - look up root path from namespace? */
-    buf_printf(&buf, "/dav/addressbooks/user/%s/%s/%s",
-               mboxname_to_userid(mboxname), strrchr(mboxname, '.')+1,
-               resource);
+    const char *userid = mboxname_to_userid(mboxname);
+    if (strchr(userid, '@')) {
+        buf_printf(&buf, "/dav/addressbooks/user/%s/%s/%s",
+                   userid, strrchr(mboxname, '.')+1,
+                   resource);
+    }
+    else {
+        const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
+        buf_printf(&buf, "/dav/addressbooks/user/%s/%s@%s/%s",
+                   userid, domain, strrchr(mboxname, '.')+1,
+                   resource);
+    }
     json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
     buf_free(&buf);
 
