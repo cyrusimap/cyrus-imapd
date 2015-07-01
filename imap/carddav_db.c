@@ -661,6 +661,26 @@ struct cards_rock {
     int mboxoffset;
 };
 
+static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
+{
+    /* XXX - look up root path from namespace? */
+    struct buf buf = BUF_INITIALIZER;
+    const char *userid = mboxname_to_userid(mboxname);
+    if (strchr(userid, '@')) {
+        buf_printf(&buf, "/dav/addressbooks/user/%s/%s/%s",
+                   userid, strrchr(mboxname, '.')+1,
+                   resource);
+    }
+    else {
+        const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
+        buf_printf(&buf, "/dav/addressbooks/user/%s/%s@%s/%s",
+                   userid, domain, strrchr(mboxname, '.')+1,
+                   resource);
+    }
+    json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
+    buf_free(&buf);
+}
+
 static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct cards_rock *grock = (struct cards_rock *)rock;
@@ -717,22 +737,7 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
     json_t *contactids = json_pack("[]");
     json_t *otherids = json_pack("{}");
 
-    struct buf buf = BUF_INITIALIZER;
-    /* XXX - look up root path from namespace? */
-    const char *userid = mboxname_to_userid(mboxname);
-    if (strchr(userid, '@')) {
-        buf_printf(&buf, "/dav/addressbooks/user/%s/%s/%s",
-                   userid, strrchr(mboxname, '.')+1,
-                   resource);
-    }
-    else {
-        const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
-        buf_printf(&buf, "/dav/addressbooks/user/%s/%s@%s/%s",
-                   userid, domain, strrchr(mboxname, '.')+1,
-                   resource);
-    }
-    json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
-    buf_free(&buf);
+    _add_xhref(obj, mboxname, resource);
 
     for (ventry = vcard->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
@@ -1149,12 +1154,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     struct buf buf = BUF_INITIALIZER;
 
     if (_wantprop(grock->props, "x-href")) {
-        buf_reset(&buf);
-        /* XXX - look up root path from namespace? */
-        buf_printf(&buf, "/dav/addressbooks/user/%s/%s/%s",
-                   mboxname_to_userid(mboxname), strrchr(mboxname, '.')+1,
-                   resource);
-        json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
+        _add_xhref(obj, mboxname, resource);
     }
 
     if (_wantprop(grock->props, "x-importance")) {
