@@ -3847,9 +3847,10 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             return 0;
         }
     }
+    int ischanged = im->told_modseq < record.modseq;
 
     /* display flags if asked _OR_ if they've changed */
-    if (fetchitems & FETCH_FLAGS || im->told_modseq < record.modseq) {
+    if (fetchitems & FETCH_FLAGS || ischanged) {
         index_fetchflags(state, msgno);
         sepchar = ' ';
     }
@@ -3859,7 +3860,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "* %u FETCH ", msgno);
         started = 1;
     }
-    if (fetchitems & FETCH_UID) {
+    if (fetchitems & FETCH_UID || (ischanged && (client_capa & CAPA_QRESYNC))) {
         prot_printf(state->out, "%cUID %u", sepchar, record.uid);
         sepchar = ' ';
     }
@@ -3879,7 +3880,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                     sepchar, datebuf);
         sepchar = ' ';
     }
-    if (fetchitems & FETCH_MODSEQ) {
+    if (fetchitems & FETCH_MODSEQ || (ischanged && (client_capa & CAPA_CONDSTORE))) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, record.modseq);
         sepchar = ' ';
