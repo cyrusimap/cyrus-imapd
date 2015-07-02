@@ -2306,6 +2306,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
     json_t *jval;
     struct vparse_entry *fn = vparse_get_entry(card, NULL, "fn");
     int name_is_dirty = 0;
+    int record_is_dirty = 0;
     /* we'll be updating you later anyway... create early so that it's
      * at the top of the card */
     if (!fn) {
@@ -2374,14 +2375,17 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
         else if (!strcmp(key, "nickname")) {
             int r = _kv_to_card(card, "nickname", jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "birthday")) {
             int r = _date_to_card(card, "bday", jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "anniversary")) {
             int r = _kv_to_card(card, "anniversary", jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "company")) {
             const char *val = json_string_value(jval);
@@ -2389,6 +2393,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
                 return -1;
             struct vparse_entry *org = _card_multi(card, "org");
             strarray_set(org->v.values, 0, val);
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "department")) {
             const char *val = json_string_value(jval);
@@ -2396,6 +2401,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
                 return -1;
             struct vparse_entry *org = _card_multi(card, "org");
             strarray_set(org->v.values, 1, val);
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "jobTitle")) {
             const char *val = json_string_value(jval);
@@ -2403,26 +2409,32 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
                 return -1;
             struct vparse_entry *org = _card_multi(card, "org");
             strarray_set(org->v.values, 2, val);
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "emails")) {
             int r = _emails_to_card(card, jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "phones")) {
             int r = _phones_to_card(card, jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "online")) {
             int r = _online_to_card(card, jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "addresses")) {
             int r = _addresses_to_card(card, jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "notes")) {
             int r = _kv_to_card(card, "note", jval);
             if (r) return r;
+            record_is_dirty = 1;
         }
 
         else {
@@ -2431,8 +2443,13 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
         }
     }
 
-    if (name_is_dirty)
+    if (name_is_dirty) {
         _make_fn(card);
+        record_is_dirty = 1;
+    }
+
+    if (!record_is_dirty)
+        return HTTP_NO_CONTENT;
 
     return 0;
 }
@@ -2605,11 +2622,20 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
                 strarray_free(flags);
                 freeentryatts(annots);
                 mailbox_close(&newmailbox);
+                free(resource);
                 continue;
             }
             struct vparse_card *card = vparser.card->objects;
 
             r = _json_to_card(card, arg, flags, &annots);
+            if (r == HTTP_NO_CONTENT) {
+                r = 0;
+                if (!newmailbox) {
+                    /* just bump the modseq if in the same mailbox and no data change */
+                    r = mailbox_rewrite_index_record(mailbox, &record);
+                    goto finish;
+                }
+            }
             if (r) {
                 /* this is just a failure to create the JSON, not an error */
                 r = 0;
@@ -2619,10 +2645,13 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
                 strarray_free(flags);
                 freeentryatts(annots);
                 mailbox_close(&newmailbox);
+                free(resource);
                 continue;
             }
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, flags, annots, req->userid, req->authstate);
             if (!r) r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
+
+         finish:
             mailbox_close(&newmailbox);
             strarray_free(flags);
             freeentryatts(annots);
