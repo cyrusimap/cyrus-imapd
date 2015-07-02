@@ -597,7 +597,11 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     offset += 8;
 
     /* make sure we fit */
-    assert(record->level <= MAXLEVEL);
+    if (record->level > MAXLEVEL) {
+        syslog(LOG_ERR, "DBERROR: twoskip invalid level %d for %s at %08llX",
+               record->level, FNAME(db), (LLU)offset);
+        return CYRUSDB_IOERROR;
+    }
 
     /* long key */
     if (record->keylen == UINT16_MAX) {
@@ -631,8 +635,11 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     base = BASE(db) + offset;
     record->crc32_head = ntohl(*((uint32_t *)base));
     if (crc32_map(BASE(db) + record->offset, (offset - record->offset))
-	!= record->crc32_head)
-	return CYRUSDB_IOERROR;
+        != record->crc32_head) {
+        syslog(LOG_ERR, "DBERROR: twoskip checksum head error for %s at %08llX",
+               FNAME(db), (LLU)offset);
+        return CYRUSDB_IOERROR;
+    }
 
     record->crc32_tail = ntohl(*((uint32_t *)(base+4)));
 
