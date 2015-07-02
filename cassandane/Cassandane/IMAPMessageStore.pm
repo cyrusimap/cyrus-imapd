@@ -96,6 +96,7 @@ sub connect
     my $client = Mail::IMAPTalk->new(
 			    Socket => $sock,
 			    Pedantic => 1,
+                            PreserveINBOX => 1,
 			    Uid => 0
 			)
 	or die "Cannot connect to server: $@";
