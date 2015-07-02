@@ -2645,6 +2645,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
                         record.system_flags &= ~FLAG_FLAGGED;
                     annotate_state_t *state = NULL;
                     r = mailbox_get_annotate_state(mailbox, record.uid, &state);
+                    annotate_state_set_auth(state, 0, req->userid, req->authstate);
                     if (!r) r = annotate_state_store(state, annots);
                     if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
                     goto finish;
