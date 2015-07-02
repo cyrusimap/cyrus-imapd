@@ -1607,6 +1607,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
                 r = mailbox_open_iwl(mboxname, &mailbox);
             }
 
+            syslog(LOG_NOTICE, "jmap: create group %s/%s/%s (%s)", req->userid, addressbookId, uid, name);
+
             if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL, req->userid, req->authstate);
 
             vparse_free_card(card);
@@ -1754,6 +1756,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
                 }
             }
 
+            syslog(LOG_NOTICE, "jmap: update group %s/%s", req->userid, resource);
+
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, NULL, NULL, req->userid, req->authstate);
             if (!r) r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
             mailbox_close(&newmailbox);
@@ -1807,6 +1811,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
             /* XXX - alive check */
 
+            syslog(LOG_NOTICE, "jmap: destroy group %s (%s)", req->userid, uid);
             r = carddav_remove(mailbox, olduid, /*isreplace*/0);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, cdata->dav.imap_uid);
@@ -2449,7 +2454,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
     }
 
     if (!record_is_dirty)
-        return HTTP_NO_CONTENT;
+        return 204;  /* no content */
 
     return 0;
 }
@@ -2522,6 +2527,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
                 continue;
             }
 
+            syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)", req->userid, addressbookId, uid);
             r = carddav_store(mailbox, card, NULL, flags, annots, req->userid, req->authstate);
             vparse_free_card(card);
             strarray_free(flags);
@@ -2628,10 +2634,11 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
             struct vparse_card *card = vparser.card->objects;
 
             r = _json_to_card(card, arg, flags, &annots);
-            if (r == HTTP_NO_CONTENT) {
+            if (r == 204) {
                 r = 0;
                 if (!newmailbox) {
                     /* just bump the modseq if in the same mailbox and no data change */
+                    syslog(LOG_NOTICE, "jmap: touch contact %s/%s", req->userid, resource);
                     r = mailbox_rewrite_index_record(mailbox, &record);
                     goto finish;
                 }
@@ -2648,6 +2655,8 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
                 free(resource);
                 continue;
             }
+
+            syslog(LOG_NOTICE, "jmap: update contact %s/%s", req->userid, resource);
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, flags, annots, req->userid, req->authstate);
             if (!r) r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
 
@@ -2706,6 +2715,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
             /* XXX - fricking mboxevent */
 
+            syslog(LOG_NOTICE, "jmap: remove contact %s/%s", req->userid, uid);
             r = carddav_remove(mailbox, olduid, /*isreplace*/0);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: setContacts remove failed for %s %u", mailbox->name, olduid);
