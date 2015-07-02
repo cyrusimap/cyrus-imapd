@@ -12,6 +12,19 @@ Cassandane needs the following software to work:
     but it's based on the old CPAN version so we use one
     built from git.
 
+ * Mail::JMAPTalk
+ * Net::DAVTalk
+ * Net::CalDAVTalk
+ * Net::CardDAVTalk
+
+    These are all packages built by FastMail and available in git for now
+    while we nail down the APIs, sorry.  You'll have to pull them from:
+
+    https://github.com/brong/Mail-JMAPTalk
+    https://github.com/brong/Net-DAVTalk
+    https://github.com/brong/Net-CalDAVTalk
+    https://github.com/brong/Net-CardDAVTalk
+
  * Encode::IMAPUTF7
     Needed by Mail::IMAPTalk
     CPAN package http://search.cpan.org/perldoc?Encode::IMAPUTF7
