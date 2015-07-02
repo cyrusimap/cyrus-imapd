@@ -2643,7 +2643,10 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
                         record.system_flags |= FLAG_FLAGGED;
                     else
                         record.system_flags &= ~FLAG_FLAGGED;
-                    r = mailbox_rewrite_index_record(mailbox, &record);
+                    annotate_state_t *state = NULL;
+                    r = mailbox_get_annotate_state(mailbox, record.uid, &state);
+                    if (!r) r = annotate_state_store(state, annots);
+                    if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
                     goto finish;
                 }
             }
