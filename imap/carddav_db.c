@@ -2639,6 +2639,10 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
                 if (!newmailbox) {
                     /* just bump the modseq if in the same mailbox and no data change */
                     syslog(LOG_NOTICE, "jmap: touch contact %s/%s", req->userid, resource);
+                    if (strarray_find_case(flags, "\\Flagged", 0) >= 0)
+                        record.system_flags |= FLAG_FLAGGED;
+                    else
+                        record.system_flags &= ~FLAG_FLAGGED;
                     r = mailbox_rewrite_index_record(mailbox, &record);
                     goto finish;
                 }
