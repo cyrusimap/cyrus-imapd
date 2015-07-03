@@ -136,6 +136,32 @@ static void test_qp(void)
 #undef TESTCASE
 }
 
+static void test_encode_mimeheader(void)
+{
+    /* corner cases in Quoted-Printable */
+#define TESTCASE(in, exp) \
+    { \
+        static const char _in[] = (in); \
+        static const char _exp[] = (exp); \
+        char *s = charset_encode_mimeheader(_in, 0); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _exp); \
+        free(s); \
+    }
+
+    TESTCASE("abc", "abc");
+
+    TESTCASE("abc\r\n", "=?UTF-8?Q?abc?=");
+
+    /* bogus indent */
+    TESTCASE("abc\r\nxyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=");
+
+    /* wrap */
+    TESTCASE("abc\r\n xyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=");
+
+#undef TESTCASE
+}
+
 
 static void test_decode_mimeheader(void)
 {
