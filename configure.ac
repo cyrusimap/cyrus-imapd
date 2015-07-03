@@ -825,7 +825,7 @@ AC_ARG_WITH(
     clamav,
     [  --with-clamav=DIR use ClamAV from PATH (yes)],
     with_clamav=$withval,
-    with_clamav=yes
+    with_clamav=no
 )
 
 if test "$with_clamav" != no; then
