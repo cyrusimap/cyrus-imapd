@@ -803,9 +803,9 @@ sub create_user
     {
 	$adminclient->create($mb)
 	    or die "Cannot create $mb: $@";
-	$adminclient->setacl($mb, admin => 'lrswipkxtecda')
+	$adminclient->setacl($mb, admin => 'lrswipkxtecdan')
 	    or die "Cannot setacl for $mb: $@";
-	$adminclient->setacl($mb, $user => 'lrswipkxtecd')
+	$adminclient->setacl($mb, $user => 'lrswipkxtecdn')
 	    or die "Cannot setacl for $mb: $@";
 	$adminclient->setacl($mb, anyone => 'p')
 	    or die "Cannot setacl for $mb: $@";
