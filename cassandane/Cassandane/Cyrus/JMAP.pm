@@ -117,7 +117,7 @@ sub test_jmap_create
     $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
 }
 
-sub test_importance
+sub test_importance_later
 {
     my ($self) = @_;
 
@@ -135,7 +135,156 @@ sub test_importance
     $self->assert_str_equals($fetch->[0][0], 'contacts');
     $self->assert_str_equals($fetch->[0][2], 'R2');
     $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
-    $self->assert_str_equals($fetch->[0][1]{list}[0]{"x-importance"}, '0');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, 0.0);
+
+    $res = $jmap->Request([['setContacts', {update => {$id => {"x-importance" => -0.1}}}, "R3"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R3');
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R4');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -0.1);
+}
+
+sub test_importance_upfront
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create with importance in initial create";
+    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R2');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -5.2);
+
+    $res = $jmap->Request([['setContacts', {update => {$id => {"firstName" => "second"}}}, "R3"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R3');
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R4');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'second');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -5.2);
+}
+
+sub test_importance_multiedit
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create with no importance";
+    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R2');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -5.2);
+
+    $res = $jmap->Request([['setContacts', {update => {$id => {"firstName" => "second", "x-importance" => -0.2}}}, "R3"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R3');
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R4');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'second');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -0.2);
+}
+
+sub test_importance_zero_multi
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create with no importance";
+    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R2');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -5.2);
+
+    $res = $jmap->Request([['setContacts', {update => {$id => {"firstName" => "second", "x-importance" => 0}}}, "R3"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R3');
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R4');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'second');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, 0);
+}
+
+sub test_importance_zero_byself
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create with no importance";
+    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R2');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -5.2);
+
+    $res = $jmap->Request([['setContacts', {update => {$id => {"x-importance" => 0}}}, "R3"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R3');
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R4');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, 0);
 }
 
 1;
