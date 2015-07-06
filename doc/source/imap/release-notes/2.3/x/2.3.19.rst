@@ -1,0 +1,12 @@
+===============================
+Cyrus IMAP 2.3.19 Release Notes
+===============================
+
+*   Security fix: handle urlfetch range starting outside message range
+*   Disable use of SSLv2/SSLv3
+*   Support for Berkeley DB 5.x (thanks Ondrej Sury)
+*   Support for newer glibc versions (thanks Thomas Jarosch)
+*   Fixed bug #3465: support for perl 5.14 (thanks hsk@imb-jena.de)
+*   Fixed bug #3640: reject NULL bytes in headers on LMTP delivery (thanks Julien Coloos)
+
+:ref:`imap-release-notes-2.3`
