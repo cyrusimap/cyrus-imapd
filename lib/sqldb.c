@@ -67,21 +67,19 @@ EXPORTED int sqldb_init(void)
 {
     if (!sqldb_active++) {
         sqlite3_initialize();
+        assert(!open_sqldbs);
     }
-
-    assert(!open_sqldbs);
 
     return 0;
 }
 
 EXPORTED int sqldb_done(void)
 {
-    if (--sqldb_active) {
+    if (!--sqldb_active) {
         sqlite3_shutdown();
+        /* XXX - report the problems? */
+        assert(!open_sqldbs);
     }
-
-    /* XXX - report the problems? */
-    assert(!open_sqldbs);
 
     return 0;
 }
