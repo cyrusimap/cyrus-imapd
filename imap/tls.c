@@ -663,10 +663,9 @@ int     tls_init_serverengine(const char *ident,
     };
 
     off |= SSL_OP_ALL;		/* Work around all known bugs */
-    if (tlsonly) {
 	off |= SSL_OP_NO_SSLv2;
 	off |= SSL_OP_NO_SSLv3;
-    }
+
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, (void (*)()) apps_ssl_info_callback);
 
@@ -1202,6 +1201,9 @@ int tls_init_clientengine(int verifydepth,
     };
     
     off |= SSL_OP_ALL;		/* Work around all known bugs */
+	off |= SSL_OP_NO_SSLv2;
+	off |= SSL_OP_NO_SSLv3;
+
     SSL_CTX_set_options(c_ctx, off);
     SSL_CTX_set_info_callback(c_ctx, (void (*)()) apps_ssl_info_callback);
     
