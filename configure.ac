@@ -270,6 +270,68 @@ AC_MSG_RESULT($with_mysql)
 
 dnl End MySQL Detection
 
+dnl OpenIO Detection
+
+dnl deps: metautils gridclient oiosds curl 
+
+AC_ARG_WITH(openio,
+        [AS_HELP_STRING([--with-openio=yes|no], [use OpenIO ("yes" or "no")])],
+        with_openio=$withval, with_openio="no")
+
+case "$with_openio" in
+  no)
+	use_openio="no"
+	;;
+  yes)
+	use_openio="yes"
+	with_openio_lib=none
+	with_openio_inc=none
+	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+	;;
+  *)
+	use_openio="yes"
+	with_openio_lib="$with_openio/lib64"
+	with_openio_inc="$with_openio/include"
+	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+	;;
+esac
+
+AC_ARG_WITH(openio-libdir,
+        [AS_HELP_STRING([--with-openio-libdir=DIR], [OpenIO lib files are in DIR])],
+        with_openio_lib=$withval,
+        [ test "${with_openio_lib+set}" = set || with_openio_lib=none])
+AC_ARG_WITH(openio-incdir,
+        [AS_HELP_STRING([--with-openio-incdir=DIR], [OpenIO include files are in DIR])],
+        with_openio_inc=$withval,
+        [ test "${with_openio_inc+set}" = set || with_openio_inc=none ])
+
+if test "$use_openio" = "yes"; then
+	if test ! -d "$with_openio_lib"; then
+		AC_MSG_ERROR([OpenIO library directory '$with_openio_lib' does not exist.])
+	fi
+	if test ! -d "$with_openio_inc"; then
+		AC_MSG_ERROR([OpenIO include directory '$with_openio_inc' does not exist.])
+	fi
+
+	LDFLAGS="$LDFLAGS -L$with_openio_lib"
+	CFLAGS="$CFLAGS -I$with_openio_inc"
+	openio_headers="oio_sds.h metautils/lib/hc_url.h"
+	for h in $openio_headers; do
+		AC_CHECK_HEADER($h,[],[
+			AC_MSG_ERROR([Header $h is missing.])
+		])
+	done
+	AC_CHECK_LIB([oiosds],[oio_error_free],[],[AC_MSG_ERROR([Library oiosds not found.])])
+	AC_CHECK_LIB([metautils],[hc_url_empty],[],[AC_MSG_ERROR([Library metautils not found.])])
+	AC_CHECK_LIB([curl],[curl_version],[],[AC_MSG_ERROR([Library curl not found.])])
+	AC_CHECK_LIB([neon],[ne_move],[],[AC_MSG_ERROR([Library neon not found.])])
+
+	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -lmetautils -lgridclient -lcurl -lneon"
+fi
+
+dnl End OpenIO Detection
+
+
 
 dnl PgSQL Detection
 AC_ARG_WITH(pgsql,
@@ -1868,6 +1930,7 @@ Cyrus Server configured components
    replication:        $enable_replication
    sieve:              $enable_sieve
    calalarmd:          $enable_calalarmd
+   openio:             $use_openio
 
 External dependencies:
    ldap:               $have_ldap
