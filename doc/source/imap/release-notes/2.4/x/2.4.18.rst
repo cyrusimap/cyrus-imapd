@@ -2,6 +2,7 @@
 Cyrus IMAP 2.4.18 Release Notes
 ===============================
 
+*   Security fix: handle urlfetch range starting outside message range
 *   A bunch of cleanups and fixes to compiling
 *   A bunch of sieve cleanups
 *   Enhanced SSL/TLS configuration options
