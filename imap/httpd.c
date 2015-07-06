@@ -156,7 +156,7 @@ int config_httpprettytelemetry;
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
 
-static int ignorequota = 0;
+int ignorequota = 0;
 
 static void digest_send_success(const char *name __attribute__((unused)),
                                 const char *data)
@@ -960,7 +960,6 @@ static void cmdloop(void)
         memset(&txn.flags, 0, sizeof(struct txn_flags_t));
         txn.flags.conn = 0;
         txn.flags.vary = VARY_AE;
-        txn.flags.ignorequota = ignorequota;
         memset(req_line, 0, sizeof(struct request_line_t));
         memset(&txn.req_tgt, 0, sizeof(struct request_target_t));
         construct_hash_table(&txn.req_qparams, 10, 1);

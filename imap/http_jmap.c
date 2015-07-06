@@ -247,7 +247,6 @@ static int meth_post(struct transaction_t *txn,
         req.response = resp;
         req.tag = tag;
         req.idmap = &idmap;
-        req.ignorequota = txn->flags.ignorequota;
 
         r = mp->proc(&req);
 

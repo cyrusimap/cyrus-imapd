@@ -4894,8 +4894,7 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Check if we can append a new message to mailbox */
     if ((r = append_check(txn->req_tgt.mbentry->name,
-                          httpd_authstate, ACL_INSERT,
-                          txn->flags.ignorequota ? NULL : qdiffs))) {
+                          httpd_authstate, ACL_INSERT, ignorequota ? NULL : qdiffs))) {
         syslog(LOG_ERR, "append_check(%s) failed: %s",
                txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);

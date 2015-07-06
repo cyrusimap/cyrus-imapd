@@ -61,7 +61,6 @@ struct jmap_req {
     json_t *response;
     const char *state; // if changing things, this is pre-change state
     const char *tag;
-    unsigned ignorequota; // ignore quota on mailbox appends
 };
 
 #endif // JMAP_H
