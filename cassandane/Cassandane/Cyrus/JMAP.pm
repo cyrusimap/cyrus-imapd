@@ -47,6 +47,7 @@ use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
 use JSON::XS;
+use Net::CalDAVTalk;
 use Net::CardDAVTalk;
 use Mail::JMAPTalk;
 use Data::Dumper;
@@ -58,7 +59,7 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
     $config->set(conversations => 'yes');
-    $config->set(httpmodules => 'carddav jmap');
+    $config->set(httpmodules => 'carddav caldav jmap');
     $config->set(httpallowcompress => 'no');
     $config->set(sasl_mech_list => 'PLAIN LOGIN');
     return $class->SUPER::new({
@@ -73,6 +74,15 @@ sub set_up
     $self->SUPER::set_up();
     my $service = $self->{instance}->get_service("http");
     $self->{carddav} = Net::CardDAVTalk->new(
+	user => 'cassandane',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+    $self->{caldav} = Net::CalDAVTalk->new(
 	user => 'cassandane',
 	password => 'pass',
 	host => $service->host(),
@@ -115,6 +125,23 @@ sub test_jmap_create
     $self->assert_str_equals($fetch->[0][0], 'contacts');
     $self->assert_str_equals($fetch->[0][2], 'R2');
     $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+}
+
+sub test_calendars
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $id = $caldav->NewCalendar({ name => "calname" });
+
+    my $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendars');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
+    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
 }
 
 sub test_importance_later
