@@ -2135,6 +2135,21 @@ product version in the capabilities */
 /* The absolute path to the zoneinfo db file.  If not specified,
    will be confdir/zoneinfo.db */
 
+{ "object_storage_enabled", 0, SWITCH }
+/* Is Object storage enabled for this server.  You also need to have 
+   archiving enabled and archivepartition for the mailbox.  
+   Only email files will be stored on object Storage 
+   archivepartition will be used to store any other files */
+
+{ "openio_namespace", NULL, STRING }
+/* The OpenIO namespace used to store archived email messages. */
+
+{ "openio_rawx_timeout", 30, INT }
+/* The OpenIO timeout to query to the RAWX services (default 30 sec). */
+
+{ "openio_proxy_timeout", 5, INT }
+/* The OpenIO timeout to query to the PROXY services (default 5 sec). */
+
 /*
 .SH SEE ALSO
 .PP

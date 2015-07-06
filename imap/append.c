@@ -79,6 +79,7 @@
 #include "message_guid.h"
 #include "strarray.h"
 #include "conversations.h"
+#include "objectstore.h"
 
 struct stagemsg {
     char fname[1024];
@@ -836,6 +837,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     strarray_t *newflags = NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
+    int object_storage_enable = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -918,9 +920,8 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     /* should we archive it straight away? */
-    if (mailbox_should_archive(mailbox, &record, NULL)) {
+    if (mailbox_should_archive(mailbox, &record, NULL))
         record.system_flags |= FLAG_ARCHIVED;
-    }
 
     /* Create message file */
     as->nummsg++;
@@ -1009,6 +1010,17 @@ out:
     mboxevent_extract_mailbox(mboxevent, mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
+
+
+    if (object_storage_enable && record.system_flags & FLAG_ARCHIVED){
+    	r = objectstore_put(mailbox, &record, fname) ;
+    	if (!r){
+    		// file in object store now; must delete local copy
+    		if (unlink(fname) != 0) // unlink shoud do it.
+    			if (!remove (fname))       // we must insist
+    				syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
+    	}
+    }
 
     return 0;
 }

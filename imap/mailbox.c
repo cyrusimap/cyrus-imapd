@@ -109,6 +109,8 @@
 #include "xstrlcat.h"
 #include "xstats.h"
 
+#include "objectstore.h"
+
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
@@ -247,7 +249,7 @@ static const char *mailbox_archive_fname(struct mailbox *mailbox, uint32_t uid)
 EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
                                           const struct index_record *record)
 {
-    if (record->system_flags & FLAG_ARCHIVED)
+    if (!config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) && record->system_flags & FLAG_ARCHIVED)
         return mailbox_archive_fname(mailbox, record->uid);
     else
         return mailbox_spool_fname(mailbox, record->uid);
@@ -788,14 +790,11 @@ EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
     mailbox_set_uniqueid(mailbox, makeuuid());
 }
 
-EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf)
+
+static int _map_local_record(struct mailbox *mailbox, const struct index_record *record, const char *fname, struct buf *buf)
 {
-    const char *fname;
     struct stat sbuf;
     int msgfd;
-
-    xstats_inc(MESSAGE_MAP);
-    fname = mailbox_record_fname(mailbox, record);
 
     msgfd = open(fname, O_RDONLY, 0666);
     if (msgfd == -1) return errno;
@@ -810,6 +809,28 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_reco
 
     return 0;
 }
+
+EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf)
+{
+    const char *fname;
+    int rc;
+
+    xstats_inc(MESSAGE_MAP);
+
+    fname = mailbox_record_fname(mailbox, record);
+    rc = _map_local_record(mailbox, record, fname, buf);
+    if (!rc) return 0;
+
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)){
+        rc = objectstore_get(mailbox, record, fname);
+        if (rc)
+        	return rc;
+        rc = _map_local_record(mailbox, record, fname, buf);
+        remove ( fname ) ;
+    }
+    return rc;
+}
+
 
 static void mailbox_release_resources(struct mailbox *mailbox)
 {
@@ -3718,6 +3739,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 {
     const char *spoolfname = mailbox_spool_fname(mailbox, record->uid);
     const char *archivefname = mailbox_archive_fname(mailbox, record->uid);
+    int object_storage_enable = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
     int r;
 
     if (record->system_flags & FLAG_UNLINKED) {
@@ -3731,13 +3753,17 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
                        record->uid, record->system_flags);
         }
 
-        if (unlink(archivefname) == 0) {
-            if (config_auditlog)
-                syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
-                       "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%u>",
-                       session_id(), mailbox->name, mailbox->uniqueid,
-                       record->uid, record->system_flags);
-        }
+   		if (object_storage_enable)
+   			objectstore_delete(mailbox, record);
+   		else{
+  			if (unlink(archivefname) == 0) {
+  				if (config_auditlog)
+  					syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
+  						   "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%u>",
+  						   session_id(), mailbox->name, mailbox->uniqueid,
+   						   record->uid, record->system_flags);
+   			}
+   		}
 
         r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
         if (r) {
@@ -3754,20 +3780,23 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         }
     }
 
-    /* nothing to cleanup if it's the same file! */
-    if (!strcmp(spoolfname, archivefname))
-        return;
+    if (!object_storage_enable){
+  		/* nothing to cleanup if it's the same file! */
+   		if (!strcmp(spoolfname, archivefname))
+   			return;
 
-    /* otherwise check for archived/nonarchived */
-    else if (record->system_flags & FLAG_ARCHIVED) {
-        /* XXX - stat to make sure the other file exists first? - we mostly
-         * trust that we didn't do stupid things everywhere else, so maybe not */
+   		/* otherwise check for archived/nonarchived */
+   		else if (record->system_flags & FLAG_ARCHIVED) {
+   			/* XXX - stat to make sure the other file exists first? - we mostly
+   			 * trust that we didn't do stupid things everywhere else, so maybe not */
+   			unlink(spoolfname);
+   		}
+   		else {
+   			unlink(archivefname);
+   		}
+    }
+    else
         unlink(spoolfname);
-    }
-
-    else {
-        unlink(archivefname);
-    }
 }
 
 /* need a mailbox exclusive lock, we're removing files */
@@ -4197,6 +4226,15 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
     return 0;
 }
 
+//  this is used to get message back from ObjectStore
+EXPORTED unsigned mailbox_should_unarchive(struct mailbox *mailbox,
+                                           const struct index_record *record,
+                                           void *rock)
+{
+	return 0 ;
+}
+
+
 EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
                                          const struct index_record *record,
                                          void *rock)
@@ -4263,16 +4301,18 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     struct index_record copyrecord;
     const char *srcname;
     const char *destname;
+    const char *spoolname;
     char *spoolcache = xstrdup(mailbox_meta_fname(mailbox, META_CACHE));
     char *archivecache = xstrdup(mailbox_meta_fname(mailbox, META_ARCHIVECACHE));
     int differentcache = strcmp(spoolcache, archivecache);
+    int object_storage_enable = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
     free(spoolcache);
     free(archivecache);
 
     assert(mailbox_index_islocked(mailbox, 1));
     if (!decideproc) decideproc = &mailbox_should_archive;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, (decideproc == &mailbox_should_archive) ?  ITER_SKIP_EXPUNGED : 0);
     while ((record = mailbox_iter_step(iter))) {
         const char *action = NULL;
         if (decideproc(mailbox, record, deciderock)) {
@@ -4289,6 +4329,18 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                        mailbox->name, copyrecord.uid, error_message(r));
                 continue;
             }
+
+            if (object_storage_enable){
+  				/* upload on the blob store */
+   				spoolname = mailbox_spool_fname(mailbox, copyrecord.uid);
+  				objectstore_put(mailbox, &copyrecord, spoolname);
+   				if (r)
+   					continue;
+  				r = unlink (mailbox_spool_fname(mailbox, copyrecord.uid));
+   				if (r < 0)
+  					syslog(LOG_ERR, "unlink(%s) failed: %m", spoolname);
+            }
+
 
             copyrecord.system_flags |= FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
             action = "archive";
@@ -4308,18 +4360,28 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             }
 
+            if (object_storage_enable){
+                /* recover from the blob store */
+                r = objectstore_get(mailbox, &copyrecord, mailbox_spool_fname(mailbox, copyrecord.uid));
+            	if (r)
+            	    continue;
+            	objectstore_delete(mailbox, record);
+            }
+
             copyrecord.system_flags &= ~FLAG_ARCHIVED;
             copyrecord.system_flags |= FLAG_NEEDS_CLEANUP;
             action = "unarchive";
         }
 
-        /* got a file to copy! */
-        if (strcmp(srcname, destname)) {
-            r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
-            if (r) {
-                syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
-                       mailbox->name, copyrecord.uid, srcname, destname, error_message(r));
-                continue;
+        if (!object_storage_enable){
+        	/* got a file to copy! */
+            if (strcmp(srcname, destname)) {
+            	r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
+            	if (r) {
+            		syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
+            				mailbox->name, copyrecord.uid, srcname, destname, error_message(r));
+            		continue;
+            	}
             }
         }
 
@@ -5047,6 +5109,14 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     struct meta_file *mf;
     const struct index_record *record;
     int r = 0;
+    int object_storage_enable = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+
+    if (object_storage_enable){
+    // need to change     if (mboxname_isdeletedmailbox(mailbox->name, NULL))  or  config_getstring(IMAPOPT_DELETEDPREFIX)
+      	const char *ret = strstr(newname, "DELETED") ;
+        if ( ret &&  ret == newname )  // Delayed delete == ? bring back all files from object storage
+        mailbox_archive(mailbox, mailbox_should_unarchive, NULL);
+    }
 
     /* Copy over meta files */
     for (mf = meta_files; mf->metaflag; mf++) {
@@ -5069,7 +5139,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     while ((record = mailbox_iter_step(iter))) {
         xstrncpy(oldbuf, mailbox_record_fname(mailbox, record),
                 MAX_MAILBOX_PATH);
-        if (record->system_flags & FLAG_ARCHIVED)
+        if (!object_storage_enable && record->system_flags & FLAG_ARCHIVED)
             xstrncpy(newbuf, mboxname_archivepath(newpart, newname, newuniqueid, record->uid),
                     MAX_MAILBOX_PATH);
         else
