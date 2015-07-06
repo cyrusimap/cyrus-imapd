@@ -8,6 +8,16 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.3.18</h1>
+<ul>
+<li>Security fix: handle urlfetch range starting outside message range</li>
+<li>Disable use of SSLv2/SSLv3</li>
+<li>Support for Berkeley DB 5.x (thanks Ondrej Sury)</li>
+<li>Support for newer glibc versions (thanks Thomas Jarosch)</li>
+<li>Fixed bug #3465: support for perl 5.14 (thanks hsk@imb-jena.de)</li>
+<li>Fixed bug #3640: reject NULL bytes in headers on LMTP delivery (thanks Julien Coloos)</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.3.17</h1>
 <ul>
 <li>Fix for incomplete authentication checks in nntpd,
