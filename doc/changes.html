@@ -8,6 +8,14 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.5.3</h1>
+<ul>
+<li>Security fix: handle urlfetch range starting outside message range</li>
+<li>Fixed bug: better error messages when reading corrupted twoskip databases</li>
+<li>Fixed bug: treat autocreate_quota_messages:0 as unlimited</li>
+<li>Fixed T203: make autocreate_quota:0 work as documented</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.5.2</h1>
 <ul>
 <li>Fixed T183: don't crash on login when event notifications are enabled</li>
