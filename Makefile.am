@@ -1193,7 +1193,6 @@ imap_httpd_SOURCES = \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
 	imap/http_jmap.c \
-	imap/http_jmap.h \
 	imap/http_proxy.c \
 	imap/http_rss.c \
 	imap/http_tzdist.c \

@@ -59,9 +59,6 @@
 #define NULL_ETAG       "da39a3ee5e6b4b0d3255bfef95601890afd80709"
                         /* SHA1("") */
 
-#define DFLAG_UNBIND    "DAV:unbind"
-#define DFLAG_UNCHANGED "DAV:unchanged"
-
 #define SERVER_INFO     ".server-info"
 #define SCHED_INBOX     "Inbox/"
 #define SCHED_OUTBOX    "Outbox/"
@@ -74,7 +71,6 @@
 #define XML_NS_CARDDAV  "urn:ietf:params:xml:ns:carddav"
 #define XML_NS_ISCHED   "urn:ietf:params:xml:ns:ischedule"
 #define XML_NS_CS       "http://calendarserver.org/ns/"
-#define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
 
