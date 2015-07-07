@@ -682,6 +682,7 @@ struct icalrecur_parser {
 };
 
 extern icalrecurrencetype_frequency icalrecur_string_to_freq(const char* str);
+extern icalrecurrencetype_weekday icalrecur_string_to_weekday(const char* str);
 #ifdef HAVE_RSCALE
 extern icalrecurrencetype_skip icalrecur_string_to_skip(const char* str);
 #endif
