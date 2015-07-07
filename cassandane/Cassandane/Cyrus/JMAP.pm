@@ -107,6 +107,53 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub test_jmap_multicontact
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->Request([['setContacts', {
+        create => {
+            "#1" => {firstName => "first", lastName => "last"},
+            "#2" => {firstName => "second", lastName => "last"},
+        }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
+
+    my $fetch = $jmap->Request([['getContacts', {ids => [$id1, 'notacontact']}, "R2"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R2');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_not_null($fetch->[0][1]{notFound});
+    $self->assert_str_equals($fetch->[0][1]{notFound}[0], 'notacontact');
+
+    $fetch = $jmap->Request([['getContacts', {ids => [$id2]}, "R3"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R3');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'second');
+    $self->assert_null($fetch->[0][1]{notFound});
+
+    $fetch = $jmap->Request([['getContacts', {ids => [$id1, $id2]}, "R4"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R4');
+    $self->assert_num_equals(scalar @{$fetch->[0][1]{list}}, 2);
+    $self->assert_null($fetch->[0][1]{notFound});
+
+    $fetch = $jmap->Request([['getContacts', {}, "R5"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R5');
+    $self->assert_num_equals(scalar @{$fetch->[0][1]{list}}, 2);
+    $self->assert_null($fetch->[0][1]{notFound});
+}
+
 
 sub test_jmap_create
 {
