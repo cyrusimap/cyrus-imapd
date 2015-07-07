@@ -849,7 +849,7 @@ EXTRA_DIST += \
 endif # HAVE_CLAMAV
 
 if HTTPD
-imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c
+imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
 imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 else # HTTPD
 EXTRA_DIST += \
@@ -1048,47 +1048,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_db.h \
 	imap/dav_util.c \
 	imap/dav_util.h \
-	imap/http_caldav.c \
-	imap/http_caldav_sched.c \
-	imap/http_caldav_sched.h \
-	imap/http_carddav.c \
-	imap/http_client.c \
-	imap/http_client.h \
-	imap/http_dav.c \
-	imap/http_dav.h \
-	imap/http_dblookup.c \
-	imap/http_ischedule.c \
-	imap/http_jmap.c \
-	imap/http_proxy.c \
-	imap/http_proxy.h \
-	imap/http_rss.c \
-	imap/http_tzdist.c \
-	imap/http_webdav.c \
-	imap/httpd.c \
-	imap/httpd.h \
-	imap/ical_support.c \
-	imap/ical_support.h \
-	imap/jcal.c \
-	imap/jcal.h \
-	imap/proxy.c \
-	imap/proxy.h \
-	imap/smtpclient.c \
-	imap/smtpclient.h \
-	imap/spool.c \
-	imap/spool.h \
 	imap/webdav_db.c \
-	imap/webdav_db.h \
-	imap/xcal.c \
-	imap/xcal.h \
-	imap/xml_support.c \
-	imap/xml_support.h \
-	imap/zoneinfo_db.c \
-	imap/zoneinfo_db.h
-
-nodist_imap_libcyrus_imap_la_SOURCES += \
-	imap/http_caldav_js.h \
-	imap/http_err.c \
-	imap/tz_err.c
+	imap/webdav_db.h
 
 endif # HTTPD
 
