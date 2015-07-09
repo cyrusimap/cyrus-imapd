@@ -1,6 +1,7 @@
 /* blobstore_openio.h
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 2015 OpenIO, as a part of Cyrus
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,22 +55,66 @@
 #include "objectstore.h"
 
 static struct oio_sds_s *sds = NULL;
+static const char *namespace = NULL;
+static const char *account = NULL;
 
 static int openio_sds_lazy_init (void)
 {
     struct oio_error_s *err = NULL;
     int v, rc;
-    const char *namespace;
 
     if (sds) return 0;
 
-    namespace = config_getstring(IMAPOPT_OPENIO_NAMESPACE);
+	/* Turn the OIO logging ON/OFF */
+	const char *verbosity = config_getstring(IMAPOPT_OPENIO_VERBOSITY);
+	if (!verbosity) {
+		oio_log_nothing();
+	} else {
+		int found = 0;
+		oio_log_to_syslog();
+		switch (*verbosity) {
+			case 't':
+			case 'T':
+				if (!found && strcasecmp(verbosity, "trace"))
+					break;
+				found = 1;
+				oio_log_more();
+				/* FALLTHROUGH */
+			case 'd':
+			case 'D':
+				if (!found && strcasecmp(verbosity, "debug"))
+					break;
+				found = 1;
+				oio_log_more();
+				/* FALLTHROUGH */
+			case 'i':
+			case 'I':
+				if (!found && strcasecmp(verbosity, "info"))
+					break;
+				found = 1;
+				oio_log_more();
+				/* FALLTHROUGH */
+			case 'n':
+			case 'N':
+				if (!found && strcasecmp(verbosity, "notice"))
+					break;
+				found = 1;
+				oio_log_more();
+		}
+	}
+
+	if (!namespace)
+		namespace = config_getstring(IMAPOPT_OPENIO_NAMESPACE);
+	if (!account)
+		account = config_getstring(IMAPOPT_OPENIO_ACCOUNT);
+
     // XXX - this may not be the right error here, it should say "no namespace is set"
-    if (!namespace) {
+    if (!namespace || !*namespace) {
         syslog(LOG_ERR, "OIOSDS: no namespace is set in config, "
                 "set 'openio_namespace: <ns_name>'");
         return ENOTSUP;
     }
+
     err = oio_sds_init (&sds, namespace);
     if (err) {
         syslog(LOG_ERR, "OIOSDS: NS init failure %s : (%d) %s",
@@ -114,18 +159,12 @@ static struct hc_url_s *
 mailbox_openio_name (struct mailbox *mailbox, const struct index_record *record)
 {
     struct hc_url_s *url;
-    const char *namespace;
     const char *filename = mailbox_record_blobname(mailbox, record) ;
-
-    namespace = config_getstring(IMAPOPT_OPENIO_NAMESPACE);
-    // XXX - this may not be the right error here, it should say "no namespace is set"
-    if (!namespace) {
-        syslog(LOG_ERR, "OIOSDS: no namespace is set in config, set 'openio_namespace: <ns_name>'");
-        return NULL;
-    }
 
     url = hc_url_empty ();
     hc_url_set (url, HCURL_NS, namespace);
+	if (account)
+		hc_url_set (url, HCURL_ACCOUNT, account);
     hc_url_set (url, HCURL_USER, mboxname_to_userid(mailbox->name));
     hc_url_set (url, HCURL_PATH, filename);
     return url;
@@ -138,10 +177,10 @@ int objectstore_put (struct mailbox *mailbox,
     struct hc_url_s *url;
     int rc, already_saved = 0;
 
-    url = mailbox_openio_name (mailbox, record);
-
     rc = openio_sds_lazy_init ();
     if (rc) return rc;
+
+    url = mailbox_openio_name (mailbox, record);
 
     rc = objectstore_is_filename_in_container (mailbox, record, &already_saved);
     if (rc) return rc;
@@ -151,7 +190,12 @@ int objectstore_put (struct mailbox *mailbox,
         return 0;
     }
 
-    err = oio_sds_upload_from_file (sds, url, fname);
+	struct oio_source_s src = {
+		.autocreate = config_getswitch(IMAPOPT_OPENIO_AUTOCREATE),
+		.type = OIO_SRC_FILE,
+		.data.path = fname,
+	};
+    err = oio_sds_upload_from_source (sds, url, &src);
     if (!err) {
         syslog(LOG_INFO, "OIOSDS: blob %s uploaded for %u",
                 hc_url_get(url, HCURL_WHOLE), record->uid);
@@ -179,6 +223,7 @@ int objectstore_get (struct mailbox *mailbox,
     if (rc) return rc;
 
     url = mailbox_openio_name (mailbox, record);
+
     err = oio_sds_download_to_file (sds, url, fname);
     if (!err) {
         syslog(LOG_INFO, "OIOSDS: blob %s downloaded for %u",
@@ -207,6 +252,7 @@ int objectstore_delete (struct mailbox *mailbox,
     if (rc) return rc;
 
     url = mailbox_openio_name (mailbox, record);
+
     err = oio_sds_delete (sds, url);
     if (!err) {
         syslog(LOG_INFO, "OIOSDS: blob %s deleted for %u", hc_url_get(url, HCURL_WHOLE), record->uid);
@@ -230,13 +276,14 @@ int objectstore_is_filename_in_container (struct mailbox *mailbox,
     struct hc_url_s *url;
     int rc, has;
 
-    rc = openio_sds_lazy_init ();
-    if (rc) return rc;
-
     assert (phas != NULL);
     *phas = 0;
 
+    rc = openio_sds_lazy_init ();
+    if (rc) return rc;
+
     url = mailbox_openio_name (mailbox, record);
+
     err = oio_sds_has (sds, url, &has);
     if (!err) {
         rc = 0;
