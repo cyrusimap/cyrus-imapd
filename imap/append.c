@@ -838,7 +838,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     strarray_t *newflags = NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
-    int object_storage_enable = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -956,17 +955,18 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         flags = newflags;
     }
 
-    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)) {
     /* straight to archive? */
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) && (record.system_flags & FLAG_ARCHIVED)) {
         if (!record.internaldate)
             record.internaldate = time(NULL);
-        if (mailbox_should_archive(mailbox, &record, NULL)){
-            r = objectstore_put(mailbox, &record, fname) ;
-            if (!r){
-                // file in object store now; must delete local copy
-                record.system_flags |= FLAG_ARCHIVED;
-                in_object_storage = 1 ;
-            }
+        r = objectstore_put(mailbox, &record, fname) ;
+        if (r) {
+            // file in object store now; must delete local copy
+            record.system_flags &= ~FLAG_ARCHIVED;
+        }
+        else {
+            in_object_storage = 1 ;
+            r = 0;
         }
     }
 
@@ -983,7 +983,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     r = mailbox_append_index_record(mailbox, &record);
     if (r) goto out;
 
-    if (in_object_storage){  // must delete local file
+    if (in_object_storage) {  // must delete local file
         if (unlink(fname) != 0) // unlink shoud do it.
             if (!remove (fname))  // we must insist
                 syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
@@ -1014,6 +1014,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
             goto out;
         }
     }
+
 out:
     if (newflags)
         strarray_free(newflags);
@@ -1030,17 +1031,6 @@ out:
     mboxevent_extract_mailbox(mboxevent, mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
-
-
-    if (object_storage_enable && record.system_flags & FLAG_ARCHIVED){
-    	r = objectstore_put(mailbox, &record, fname) ;
-    	if (!r){
-    		// file in object store now; must delete local copy
-    		if (unlink(fname) != 0) // unlink shoud do it.
-    			if (!remove (fname))       // we must insist
-    				syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
-    	}
-    }
 
     return 0;
 }
