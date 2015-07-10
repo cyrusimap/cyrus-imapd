@@ -4279,7 +4279,7 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
         return 0;
 
     /* archive all other old messages */
-    if (record->internaldate < cutoff)
+    if (record->internaldate <= cutoff)
         return 1;
 
     /* and don't archive anything else! */
