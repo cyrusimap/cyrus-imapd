@@ -247,13 +247,15 @@ static int dump_cb(void *rockp,
 
 	    // The partition is always there...
 	    r = dlist_getatom(dl, "P", (const char **)&part);
-
-	    if (!r && !(mbtype & MBTYPE_DELETED)) {
-		syslog(
-			LOG_ERR,
-			"No partition for mailbox '%s'",
-			name
-		    );
+	    // ...except when it's not XXX
+	    if (!r) {
+		if (!(mbtype & MBTYPE_DELETED)) {
+		    syslog(
+			    LOG_ERR,
+			    "No partition for mailbox '%s'",
+			    name
+			);
+		}
 
 		part = NULL;
 	    }
