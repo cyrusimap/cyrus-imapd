@@ -950,8 +950,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
                 record.system_flags |= FLAG_ARCHIVED;
                 in_object_storage = 1 ;
             }
-            else
-                r = 0;
         }
     }
 
@@ -990,9 +988,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         }
         if (r) goto out;
     }
-
-
-
 out:
     if (newflags)
         strarray_free(newflags);
