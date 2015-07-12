@@ -624,7 +624,7 @@ static int do_audit(const char *userid)
     filename_real = conversations_getuserpath(userid);
     conversations_set_suffix(temp_suffix);
     conversations_set_directory(audit_temp_directory);
-    filename_temp = conversations_getmboxpath(userid);
+    filename_temp = conversations_getuserpath(userid);
     conversations_set_suffix(NULL);
     conversations_set_directory(NULL);
     assert(strcmp(filename_temp, filename_real));
