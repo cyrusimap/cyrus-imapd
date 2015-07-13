@@ -904,7 +904,7 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
  * If (internal) mailbox 'name' is a CALENDAR mailbox
  * returns boolean
  */
-int mboxname_iscalendarmailbox(const char *name, int mbtype)
+EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
 {
     static const char *calendarprefix = NULL;
     static int calendarprefix_len = 0;
@@ -938,7 +938,7 @@ int mboxname_iscalendarmailbox(const char *name, int mbtype)
  * If (internal) mailbox 'name' is a ADDRESSBOOK mailbox
  * returns boolean
  */
-int mboxname_isaddressbookmailbox(const char *name, int mbtype)
+EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
 {
     static const char *addressbookprefix = NULL;
     static int addressbookprefix_len = 0;
