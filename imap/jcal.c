@@ -544,14 +544,16 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
         if (json_is_object(jvalue)) {
             struct buf rrule = BUF_INITIALIZER;
             struct icalrecurrencetype rt;
-            char *key, *sep = "";
+            const char *key, *sep = "";
             json_t *val;
 
             /* create an iCal RRULE string from jCal 'recur' object */
             json_object_foreach(jvalue, key, val) {
-                buf_printf(&rrule, "%s%s=", sep, ucase(key));
+                char *mykey = xstrdup(key);
+                buf_printf(&rrule, "%s%s=", sep, ucase(mykey));
                 buf_appendjson(&rrule, val);
                 sep = ";";
+                free(mykey);
             }
 
             /* parse our iCal RRULE string */
