@@ -588,6 +588,7 @@ static int carddav_write_groups(struct carddav_db *carddavdb, int rowid, const s
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
     struct sqldb_bindval bval[] = {
+        { ":rowid",        SQLITE_INTEGER, { .i = cdata->dav.rowid        } },
         { ":alive",        SQLITE_INTEGER, { .i = cdata->dav.alive        } },
         { ":creationdate", SQLITE_INTEGER, { .i = cdata->dav.creationdate } },
         { ":mailbox",      SQLITE_TEXT,    { .s = cdata->dav.mailbox      } },
