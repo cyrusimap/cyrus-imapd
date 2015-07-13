@@ -2255,15 +2255,12 @@ static int _json_to_card(struct vparse_card *card,
             double dval = json_number_value(jval);
             const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
             const char *attrib = "value.shared";
+            struct buf buf = BUF_INITIALIZER;
             if (dval) {
-                struct buf buf = BUF_INITIALIZER;
                 buf_printf(&buf, "%e", dval);
-                setentryatt(annotsp, ns, attrib, &buf);
-                buf_free(&buf);
             }
-            else {
-                clearentryatt(annotsp, ns, attrib);
-            }
+            setentryatt(annotsp, ns, attrib, &buf);
+            buf_free(&buf);
         }
         else if (!strcmp(key, "avatar")) {
             /* XXX - file handling */
