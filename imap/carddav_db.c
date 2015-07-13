@@ -783,7 +783,8 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
 EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                            const char *resource,
                            strarray_t *flags, struct entryattlist *annots,
-                           const char *userid, struct auth_state *authstate)
+                           const char *userid, struct auth_state *authstate,
+                           int ignorequota)
 {
     int r = 0;
     FILE *f = NULL;
