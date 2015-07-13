@@ -823,7 +823,7 @@ AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "$have_ldap" = "yes"
 
 AC_ARG_WITH(
     clamav,
-    [  --with-clamav=DIR use ClamAV from PATH (yes)],
+    [AS_HELP_STRING([--with-clamav=DIR], [use ClamAV from PATH (no)])],
     with_clamav=$withval,
     with_clamav=no
 )
