@@ -495,25 +495,29 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
 }
 
 
+#define CMD_DELETE_EMAIL "DELETE FROM vcard_emails WHERE objid = :objid"
 #define CMD_INSERT_EMAIL                                                \
     "INSERT INTO vcard_emails ( objid, pos, email, ispref )"            \
     " VALUES ( :objid, :pos, :email, :ispref );"
 
-static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_data *cdata)
+static int carddav_write_emails(struct carddav_db *carddavdb, int rowid, const strarray_t *emails)
 {
     struct sqldb_bindval bval[] = {
-        { ":objid",        SQLITE_INTEGER, { .i = cdata->dav.rowid        } },
-        { ":pos",          SQLITE_INTEGER, { .i = 0                       } },
-        { ":email",        SQLITE_TEXT,    { .s = NULL                    } },
-        { ":ispref",       SQLITE_INTEGER, { .i = 0                       } },
-        { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
+        { ":objid",        SQLITE_INTEGER, { .i = rowid  } },
+        { ":pos",          SQLITE_INTEGER, { .i = 0      } },
+        { ":email",        SQLITE_TEXT,    { .s = NULL   } },
+        { ":ispref",       SQLITE_INTEGER, { .i = 0      } },
+        { NULL,            SQLITE_NULL,    { .s = NULL   } } };
     int r;
     int i;
 
-    for (i = 0; i < strarray_size(&cdata->emails)/2; i++) {
-        const char *pref = strarray_safenth(&cdata->emails, i*2+1);
+    /* clean up existing records if any */
+    r = sqldb_exec(carddavdb->db, CMD_DELETE_EMAIL, bval, NULL, NULL);
+    if (r) return r;
+    for (i = 0; i < strarray_size(emails)/2; i++) {
+        const char *pref = strarray_safenth(emails, i*2+1);
         bval[1].val.i = i;
-        bval[2].val.s = strarray_safenth(&cdata->emails, i*2);
+        bval[2].val.s = strarray_safenth(emails, i*2);
         bval[3].val.i = *pref ? 1 : 0;
         r = sqldb_exec(carddavdb->db, CMD_INSERT_EMAIL, bval, NULL, NULL);
         if (r) return r;
@@ -522,25 +526,29 @@ static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_dat
     return 0;
 }
 
+#define CMD_DELETE_GROUP "DELETE FROM vcard_groups WHERE objid = :objid"
 #define CMD_INSERT_GROUP                                                \
     "INSERT INTO vcard_groups ( objid, pos, member_uid, otheruser )"    \
     " VALUES ( :objid, :pos, :member_uid, :otheruser );"
 
-static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_data *cdata)
+static int carddav_write_groups(struct carddav_db *carddavdb, int rowid, const strarray_t *member_uids)
 {
     struct sqldb_bindval bval[] = {
-        { ":objid",        SQLITE_INTEGER, { .i = cdata->dav.rowid        } },
-        { ":pos",          SQLITE_INTEGER, { .i = 0                       } },
-        { ":member_uid",   SQLITE_TEXT,    { .s = NULL                    } },
-        { ":otheruser",    SQLITE_TEXT,    { .s = NULL                    } },
-        { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
+        { ":objid",        SQLITE_INTEGER, { .i = rowid        } },
+        { ":pos",          SQLITE_INTEGER, { .i = 0            } },
+        { ":member_uid",   SQLITE_TEXT,    { .s = NULL         } },
+        { ":otheruser",    SQLITE_TEXT,    { .s = NULL         } },
+        { NULL,            SQLITE_NULL,    { .s = NULL         } } };
     int r;
     int i;
 
-    for (i = 0; i < strarray_size(&cdata->member_uids)/2; i++) {
+    /* remove any existing first */
+    r = sqldb_exec(carddavdb->db, CMD_DELETE_GROUP, bval, NULL, NULL);
+    if (r) return r;
+    for (i = 0; i < strarray_size(member_uids)/2; i++) {
         bval[1].val.i = i;
-        bval[2].val.s = strarray_safenth(&cdata->member_uids, 2*i);
-        bval[3].val.s = strarray_safenth(&cdata->member_uids, 2*i+1);
+        bval[2].val.s = strarray_safenth(member_uids, 2*i);
+        bval[3].val.s = strarray_safenth(member_uids, 2*i+1);
         r = sqldb_exec(carddavdb->db, CMD_INSERT_GROUP, bval, NULL, NULL);
         if (r) return r;
     }
@@ -557,6 +565,25 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
     "  :alive, :creationdate, :mailbox, :resource, :imap_uid, :modseq," \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
     "  :version, :vcard_uid, :kind, :fullname, :name, :nickname );"
+
+#define CMD_UPDATE                      \
+    "UPDATE vcard_objs SET"             \
+    "  alive = :alive,"                 \
+    "  creationdate = :creationdate,"   \
+    "  imap_uid     = :imap_uid,"       \
+    "  modseq       = :modseq,"         \
+    "  lock_token   = :lock_token,"     \
+    "  lock_owner   = :lock_owner,"     \
+    "  lock_ownerid = :lock_ownerid,"   \
+    "  lock_expire  = :lock_expire,"    \
+    "  version      = :version,"        \
+    "  vcard_uid    = :vcard_uid,"      \
+    "  kind         = :kind,"           \
+    "  fullname     = :fullname,"       \
+    "  name         = :name,"           \
+    "  nickname     = :nickname"        \
+    " WHERE rowid = :rowid;"
+
 
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
@@ -581,20 +608,14 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
     int r;
 
     if (cdata->dav.rowid) {
-        r = carddav_delete(carddavdb, cdata->dav.rowid);
+        r = sqldb_exec(carddavdb->db, CMD_UPDATE, bval, NULL, NULL);
         if (r) return r;
     }
-
-    r = sqldb_exec(carddavdb->db, CMD_INSERT, bval, NULL, NULL);
-    if (r) return r;
-
-    cdata->dav.rowid = sqldb_lastid(carddavdb->db);
-
-    r = carddav_write_emails(carddavdb, cdata);
-    if (r) return r;
-
-    r = carddav_write_groups(carddavdb, cdata);
-    if (r) return r;
+    else {
+        r = sqldb_exec(carddavdb->db, CMD_INSERT, bval, NULL, NULL);
+        if (r) return r;
+        cdata->dav.rowid = sqldb_lastid(carddavdb->db);
+    }
 
     return 0;
 }
@@ -693,9 +714,13 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     return r;
 }
 
-EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata)
+EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data *cdata,
+                               struct vparse_card *vcard)
 {
     struct vparse_entry *ventry;
+
+    strarray_t emails = STRARRAY_INITIALIZER;
+    strarray_t member_uids = STRARRAY_INITIALIZER;
 
     for (ventry = vcard->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
@@ -724,26 +749,35 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
                 if (!strcasecmp(param->name, "type") && !strcasecmp(param->value, "pref"))
                     ispref = 1;
             }
-            strarray_append(&cdata->emails, propval);
-            strarray_append(&cdata->emails, ispref ? "1" : "");
+            strarray_append(&emails, propval);
+            strarray_append(&emails, ispref ? "1" : "");
         }
         else if (!strcmp(name, "x-addressbookserver-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
-            strarray_append(&cdata->member_uids, propval+9);
-            strarray_append(&cdata->member_uids, "");
+            strarray_append(&member_uids, propval+9);
+            strarray_append(&member_uids, "");
         }
         else if (!strcmp(name, "x-fm-otheraccount-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
-            strarray_append(&cdata->member_uids, propval+9);
-            strarray_append(&cdata->member_uids, param->value);
+            strarray_append(&member_uids, propval+9);
+            strarray_append(&member_uids, param->value);
         }
         else if (!strcmp(name, "x-addressbookserver-kind")) {
             if (!strcasecmp(propval, "group"))
                 cdata->kind = CARDDAV_KIND_GROUP;
-            /* default case is KIND_CARD */
+            /* default case is CARDDAV_KIND_CONTACT */
         }
     }
+
+    int r = carddav_write(carddavdb, cdata);
+    if (!r) r = carddav_write_emails(carddavdb, cdata->dav.rowid, &emails);
+    if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
+
+    strarray_fini(&emails);
+    strarray_fini(&member_uids);
+
+    return r;
 }
 
 EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,

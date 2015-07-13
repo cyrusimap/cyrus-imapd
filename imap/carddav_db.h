@@ -64,8 +64,8 @@ struct carddav_data {
     const char *fullname;
     const char *name;
     const char *nickname;
-    strarray_t emails;
-    strarray_t member_uids;
+    strarray_t *emails;
+    strarray_t *member_uids;
 };
 
 typedef int carddav_cb_t(void *rock, struct carddav_data *cdata);
@@ -129,6 +129,10 @@ int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
 
+/* write an entry form a vcard */
+int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data *cdata,
+                      struct vparse_card *vcard);
+
 /* delete an entry from 'carddavdb' */
 int carddav_delete(struct carddav_db *carddavdb, unsigned rowid);
 
@@ -143,9 +147,6 @@ int carddav_commit(struct carddav_db *carddavdb);
 
 /* abort transaction */
 int carddav_abort(struct carddav_db *carddavdb);
-
-/* create carddav_data from vparse_card */
-void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
 
 /* store a vcard to mailbox/resource */
 int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,

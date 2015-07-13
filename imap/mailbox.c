@@ -2942,9 +2942,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         if (!cdata->dav.creationdate)
             cdata->dav.creationdate = new->internaldate;
 
-        carddav_make_entry(vparser.card->objects, cdata);
-
-        r = carddav_write(carddavdb, cdata);
+        r = carddav_writecard(carddavdb, cdata, vparser.card->objects);
 
         vparse_free(&vparser);
     }
