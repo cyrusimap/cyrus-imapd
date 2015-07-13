@@ -147,6 +147,8 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 /* write an entry to 'caldavdb' */
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
+int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,
+                      icalcomponent *ical);
 
 /* delete an entry from 'caldavdb' */
 int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
@@ -162,9 +164,6 @@ int caldav_commit(struct caldav_db *caldavdb);
 
 /* abort transaction */
 int caldav_abort(struct caldav_db *caldavdb);
-
-/* create caldav_data from icalcomponent */
-void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata);
 
 char *caldav_mboxname(const char *userid, const char *name);
 

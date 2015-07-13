@@ -605,14 +605,13 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
         { ":name",         SQLITE_TEXT,    { .s = cdata->name             } },
         { ":nickname",     SQLITE_TEXT,    { .s = cdata->nickname         } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
-    int r;
 
     if (cdata->dav.rowid) {
-        r = sqldb_exec(carddavdb->db, CMD_UPDATE, bval, NULL, NULL);
+        int r = sqldb_exec(carddavdb->db, CMD_UPDATE, bval, NULL, NULL);
         if (r) return r;
     }
     else {
-        r = sqldb_exec(carddavdb->db, CMD_INSERT, bval, NULL, NULL);
+        int r = sqldb_exec(carddavdb->db, CMD_INSERT, bval, NULL, NULL);
         if (r) return r;
         cdata->dav.rowid = sqldb_lastid(carddavdb->db);
     }

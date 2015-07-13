@@ -439,19 +439,18 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
         { ":sched_tag",    SQLITE_TEXT,    { .s = cdata->sched_tag        } },
         { ":comp_flags",   SQLITE_INTEGER, { .i = comp_flags              } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
-    const char *cmd;
-    int r;
 
     if (cdata->dav.rowid) {
-        cmd = CMD_UPDATE;
+        int r = sqldb_exec(caldavdb->db, CMD_UPDATE, bval, NULL, NULL);
+        if (r) return r;
     }
     else {
-        cmd = CMD_INSERT;
+        int r = sqldb_exec(caldavdb->db, CMD_INSERT, bval, NULL, NULL);
+        if (r) return r;
+        cdata->dav.rowid = sqldb_lastid(caldavdb->db);
     }
 
-    r = sqldb_exec(caldavdb->db, cmd, bval, NULL, NULL);
-
-    return r;
+    return 0;
 }
 
 
@@ -673,7 +672,8 @@ static void recur_cb(icalcomponent *comp, struct icaltime_span *span,
 }
 
 
-EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
+EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,
+                               icalcomponent *ical)
 {
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind;
@@ -808,6 +808,8 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     cdata->dtstart = icaltime_as_ical_string(span.start);
     cdata->dtend = icaltime_as_ical_string(span.end);
     cdata->comp_flags.recurring = recurring;
+
+    return caldav_write(caldavdb, cdata);
 }
 
 

@@ -3046,8 +3046,6 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->sched_tag = sched_tag;
         cdata->comp_flags.tzbyref = tzbyref;
 
-        caldav_make_entry(ical, cdata);
-
         sqldb_t *alarmdb = mailbox_open_caldav_alarm(mailbox);
 
         struct caldav_alarm_data alarmdata = {
@@ -3073,7 +3071,8 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
             }
         }
 
-        r = caldav_write(caldavdb, cdata);
+        r = caldav_writeentry(caldavdb, cdata, ical);
+
         icalcomponent_free(ical);
     }
 
