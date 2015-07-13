@@ -46,6 +46,7 @@
 
 #include <config.h>
 
+#include "auth.h"
 #include "dav_db.h"
 #include "strarray.h"
 #include "util.h"
@@ -66,6 +67,9 @@ struct carddav_data {
     strarray_t emails;
     strarray_t member_uids;
 };
+
+typedef int carddav_cb_t(void *rock, struct carddav_data *cdata);
+
 
 /* prepare for carddav operations in this process */
 int carddav_init(void);
@@ -110,20 +114,17 @@ strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
 /* process each entry of type 'kind' for 'mailbox' in 'carddavdb' with cb() */
 int carddav_get_cards(struct carddav_db *carddavdb,
                       const char *mailbox, const char *vcard_uid, int kind,
-                      int (*cb)(void *rock, struct carddav_data *cdata),
-                      void *rock);
+                      carddav_cb_t *cb, void *rock);
 
 /* process each entry of type 'kind' and updated since 'oldmodseq'
    in 'carddavdb' with cb() */
 int carddav_get_updates(struct carddav_db *carddavdb,
                         modseq_t oldmodseq, int kind,
-                        int (*cb)(void *rock, struct carddav_data *cdata),
-                        void *rock);
+                        carddav_cb_t *cb, void *rock);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
-                   int (*cb)(void *rock, struct carddav_data *data),
-                   void *rock);
+                    carddav_cb_t *cb, void *rock);
 
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
@@ -145,5 +146,15 @@ int carddav_abort(struct carddav_db *carddavdb);
 
 /* create carddav_data from vparse_card */
 void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
+
+/* store a vcard to mailbox/resource */
+int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+                  const char *resource,
+                  strarray_t *flags, struct entryattlist *annots,
+                  const char *userid, struct auth_state *authstate);
+
+/* delete a carddav entry */
+int carddav_remove(struct mailbox *mailbox,
+                   uint32_t olduid, int isreplace);
 
 #endif /* CARDDAV_DB_H */

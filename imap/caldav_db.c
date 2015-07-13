@@ -199,7 +199,7 @@ struct read_rock {
     struct caldav_db *db;
     struct caldav_data *cdata;
     int flags;
-    int (*cb)(void *rock, void *data);
+    caldav_cb_t *cb;
     void *rock;
 };
 
@@ -371,8 +371,7 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
     " WHERE mailbox = :mailbox AND alive = 1;"
 
 EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-                   int (*cb)(void *rock, void *data),
-                   void *rock)
+                            caldav_cb_t *cb, void *rock)
 {
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
@@ -845,4 +844,41 @@ EXPORTED char *caldav_mboxname(const char *userid, const char *name)
     buf_free(&boxbuf);
 
     return res;
+}
+
+#define CMD_SELMBOX CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND alive = 1;"
+
+EXPORTED int caldav_get_events(struct caldav_db *caldavdb,
+                               const char *mailbox, const char *ical_uid,
+                               caldav_cb_t *cb, void *rock)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",  SQLITE_TEXT, { .s = mailbox } },
+        { ":ical_uid", SQLITE_TEXT, { .s = ical_uid } },
+        { NULL,        SQLITE_NULL, { .s = NULL    } } };
+    struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+    struct buf sqlbuf = BUF_INITIALIZER;
+
+    buf_setcstr(&sqlbuf, CMD_READFIELDS);
+    buf_appendcstr(&sqlbuf, " WHERE alive = 1");
+    if (mailbox)
+        buf_appendcstr(&sqlbuf, " AND mailbox = :mailbox");
+    if (ical_uid)
+        buf_appendcstr(&sqlbuf, " AND ical_uid = :ical_uid");
+    buf_appendcstr(&sqlbuf, " ORDER BY mailbox, imap_uid;");
+
+    /* XXX - tombstones */
+
+    int r = sqldb_exec(caldavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
+    buf_free(&sqlbuf);
+
+    if (r) {
+        syslog(LOG_ERR, "carddav error %s", error_message(r));
+        /* XXX - free memory */
+    }
+
+
+    return r;
 }

@@ -149,7 +149,7 @@ struct read_rock {
     struct carddav_db *db;
     struct carddav_data *cdata;
     int tombstones;
-    int (*cb)(void *rock, struct carddav_data *data);
+    carddav_cb_t *cb;
     void *rock;
 };
 
@@ -744,4 +744,129 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
             /* default case is KIND_CARD */
         }
     }
+}
+
+EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+                           const char *resource,
+                           strarray_t *flags, struct entryattlist *annots,
+                           const char *userid, struct auth_state *authstate)
+{
+    int r = 0;
+    FILE *f = NULL;
+    struct stagemsg *stage;
+    char *header;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    struct appendstate as;
+    time_t now = time(0);
+    char *freeme = NULL;
+    char datestr[80];
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+        return -1;
+    }
+
+    /* set the REVision time */
+    time_to_iso8601(now, datestr, sizeof(datestr), 0);
+    vparse_replace_entry(vcard, NULL, "REV", datestr);
+
+    /* Create header for resource */
+    const char *uid = vparse_stringval(vcard, "uid");
+    const char *fullname = vparse_stringval(vcard, "fn");
+    if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
+    struct buf buf = BUF_INITIALIZER;
+    vparse_tobuf(vcard, &buf);
+    const char *mbuserid = mboxname_to_userid(mailbox->name);
+
+    time_to_rfc822(now, datestr, sizeof(datestr));
+
+    /* XXX  This needs to be done via an LDAP/DB lookup */
+    header = charset_encode_mimeheader(mbuserid, 0);
+    fprintf(f, "From: %s <>\r\n", header);
+    free(header);
+
+    header = charset_encode_mimeheader(fullname, 0);
+    fprintf(f, "Subject: %s\r\n", header);
+    free(header);
+
+    fprintf(f, "Date: %s\r\n", datestr);
+
+    if (strchr(uid, '@'))
+        fprintf(f, "Message-ID: <%s>\r\n", uid);
+    else
+        fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+
+    fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
+
+    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&buf));
+    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
+
+    /* XXX  Check domain of data and use appropriate CTE */
+
+    fprintf(f, "MIME-Version: 1.0\r\n");
+    fprintf(f, "\r\n");
+
+    /* Write the vCard data to the file */
+    fprintf(f, "%s", buf_cstring(&buf));
+    buf_free(&buf);
+
+    qdiffs[QUOTA_STORAGE] = ftell(f);
+    qdiffs[QUOTA_MESSAGE] = 1;
+
+    fclose(f);
+
+    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0,
+                               ignorequota ? NULL : qdiffs, 0, 0,
+                               EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+        syslog(LOG_ERR, "append_setup(%s) failed: %s",
+               mailbox->name, error_message(r));
+        goto done;
+    }
+
+    struct body *body = NULL;
+
+    r = append_fromstage(&as, &body, stage, now, flags, 0, annots);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+
+    if (r) {
+        syslog(LOG_ERR, "append_fromstage() failed");
+        append_abort(&as);
+        goto done;
+    }
+
+    /* Commit the append to the calendar mailbox */
+    r = append_commit(&as);
+    if (r) {
+        syslog(LOG_ERR, "append_commit() failed");
+        goto done;
+    }
+
+done:
+    append_removestage(stage);
+    free(freeme);
+    return r;
+}
+
+EXPORTED int carddav_remove(struct mailbox *mailbox,
+                          uint32_t olduid, int isreplace)
+{
+
+    int userflag;
+    int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
+    struct index_record oldrecord;
+    if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
+    if (!r && !(oldrecord.system_flags & FLAG_EXPUNGED)) {
+        if (isreplace) oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+        oldrecord.system_flags |= FLAG_EXPUNGED;
+        r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+    }
+    if (r) {
+        syslog(LOG_ERR, "expunging record (%s) failed: %s",
+               mailbox->name, error_message(r));
+    }
+    return r;
 }

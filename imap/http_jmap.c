@@ -55,6 +55,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
+#include "caldav_db.h"
 #include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
@@ -63,6 +64,7 @@
 #include "http_proxy.h"
 #include "mailbox.h"
 #include "mboxlist.h"
+#include "mboxname.h"
 #include "statuscache.h"
 #include "times.h"
 #include "util.h"
@@ -89,8 +91,8 @@ struct namespace jmap_namespace;
 static time_t compile_time;
 static void jmap_init(struct buf *serverinfo);
 static void jmap_auth(const char *userid);
-static int meth_get(struct transaction_t *txn, void *params);
-static int meth_post(struct transaction_t *txn, void *params);
+static int jmap_get(struct transaction_t *txn, void *params);
+static int jmap_post(struct transaction_t *txn, void *params);
 static int getMailboxes(struct jmap_req *req);
 static int getContactGroups(struct jmap_req *req);
 static int getContactGroupUpdates(struct jmap_req *req);
@@ -98,6 +100,9 @@ static int setContactGroups(struct jmap_req *req);
 static int getContacts(struct jmap_req *req);
 static int getContactUpdates(struct jmap_req *req);
 static int setContacts(struct jmap_req *req);
+
+static int getCalendars(struct jmap_req *req);
+static int getCalendarEvents(struct jmap_req *req);
 
 static const struct message_t {
     const char *name;
@@ -110,6 +115,8 @@ static const struct message_t {
     { "getContacts",            &getContacts },
     { "getContactUpdates",      &getContactUpdates },
     { "setContacts",            &setContacts },
+    { "getCalendars",           &getCalendars },
+    { "getCalendarEvents",      &getCalendarEvents },
     { NULL,             NULL}
 };
 
@@ -122,14 +129,14 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
-        { &meth_get,            NULL },                 /* GET          */
-        { &meth_get,            NULL },                 /* HEAD         */
+        { &jmap_get,            NULL },                 /* GET          */
+        { &jmap_get,            NULL },                 /* HEAD         */
         { NULL,                 NULL },                 /* LOCK         */
         { NULL,                 NULL },                 /* MKCALENDAR   */
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
-        { &meth_post,           NULL },                 /* POST */
+        { &jmap_post,           NULL },                 /* POST */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
@@ -160,14 +167,14 @@ static void jmap_auth(const char *userid __attribute__((unused)))
 
 
 /* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn __attribute__((unused)),
+static int jmap_get(struct transaction_t *txn __attribute__((unused)),
                      void *params __attribute__((unused)))
 {
     return HTTP_NO_CONTENT;
 }
 
 /* Perform a POST request */
-static int meth_post(struct transaction_t *txn,
+static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
     const char **hdr;
@@ -390,20 +397,28 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
     /* XXX - look up root path from namespace? */
     struct buf buf = BUF_INITIALIZER;
     const char *userid = mboxname_to_userid(mboxname);
+
+    const char *prefix = NULL;
+    if (mboxname_isaddressbookmailbox(mboxname, 0)) {
+        prefix = namespace_addressbook.prefix;
+    }
+    else if (mboxname_iscalendarmailbox(mboxname, 0)) {
+        prefix = namespace_calendar.prefix;
+    }
+
     if (strchr(userid, '@')) {
-        buf_printf(&buf, "%s/user/%s/%s/%s",
-                   namespace_addressbook.prefix,
-                   userid, strrchr(mboxname, '.')+1,
-                   resource);
+        buf_printf(&buf, "%s/user/%s/%s",
+                   prefix, userid, strrchr(mboxname, '.')+1);
     }
     else {
         const char *domain =
             httpd_extradomain ? httpd_extradomain : config_defdomain;
-        buf_printf(&buf, "%s/user/%s@%s/%s/%s",
-                   namespace_addressbook.prefix,
-                   userid, domain, strrchr(mboxname, '.')+1,
-                   resource);
+        buf_printf(&buf, "%s/user/%s@%s/%s",
+                   prefix, userid, domain, strrchr(mboxname, '.')+1);
     }
+    if (resource)
+        buf_printf(&buf, "/%s", resource);
+
     json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
     buf_free(&buf);
 }
@@ -411,10 +426,9 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
 struct cards_rock {
     struct jmap_req *req;
     json_t *array;
-    struct hash_table *need;
     struct hash_table *props;
     struct mailbox *mailbox;
-    int mboxoffset;
+    int rows;
 };
 
 static int getgroups_cb(void *rock, struct carddav_data *cdata)
@@ -422,14 +436,6 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     struct cards_rock *crock = (struct cards_rock *) rock;
     struct index_record record;
     int r;
-
-    if (crock->need) {
-        /* skip records not in hash */
-        if (!hash_lookup(cdata->vcard_uid, crock->need))
-            return 0;
-        /* mark 2 == seen */
-        hash_insert(cdata->vcard_uid, (void *)2, crock->need);
-    }
 
     if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
         mailbox_close(&crock->mailbox);
@@ -439,6 +445,8 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
     if (r) return r;
+
+    crock->rows++;
 
     /* XXX - this could definitely be refactored from here and mailbox.c */
     struct buf msg_buf = BUF_INITIALIZER;
@@ -465,7 +473,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
 
     json_object_set_new(obj, "addressbookId",
-                        json_string(cdata->dav.mailbox + crock->mboxoffset));
+                        json_string(strrchr(cdata->dav.mailbox, '.')+1));
 
     json_t *contactids = json_pack("[]");
     json_t *otherids = json_pack("{}");
@@ -507,82 +515,62 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
-static void _add_notfound(const char *key, void *data, void *rock)
-{
-    json_t *list = (json_t *)rock;
-    /* magic "pointer" of 1 equals wanted but not found */
-    if (data == (void *)1)
-        json_array_append_new(list, json_string(key));
-}
-
-static int getContactGroups(struct jmap_req *req)
+static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
+                             int kind, const char *resname)
 {
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
 
-    const char *addressbookId = "Default";
+    const char *addressbookId = NULL;
     json_t *abookid = json_object_get(req->args, "addressbookId");
     if (abookid && json_string_value(abookid)) {
         /* XXX - invalid arguments */
         addressbookId = json_string_value(abookid);
     }
-    const char *abookname = mboxname_abook(req->userid, addressbookId);
 
     struct cards_rock rock;
     int r = -1;
 
     rock.array = json_pack("[]");
-    rock.need = NULL;
     rock.props = NULL;
     rock.mailbox = NULL;
-    rock.mboxoffset = strlen(abookname) - strlen(addressbookId);
 
     json_t *want = json_object_get(req->args, "ids");
+    json_t *notFound = json_array();
     if (want) {
-        rock.need = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.need, 1024, 0);
         int i;
         int size = json_array_size(want);
         for (i = 0; i < size; i++) {
+            rock.rows = 0;
             const char *id = json_string_value(json_array_get(want, i));
-            if (id == NULL) {
-                free_hash_table(rock.need, NULL);
-                free(rock.need);
-                goto done;
+            if (!id) continue;
+            r = carddav_get_cards(db, addressbookId, id, kind, cb, &rock);
+            if (r || !rock.rows) {
+                json_array_append_new(notFound, json_string(id));
             }
-            /* 1 == want */
-            hash_insert(id, (void *)1, rock.need);
-        }
-    }
-
-    r = carddav_get_cards(db, abookname, NULL, CARDDAV_KIND_GROUP,
-                          &getgroups_cb, &rock);
-    if (r) goto done;
-
-    json_t *contactGroups = json_pack("{}");
-    json_object_set_new(contactGroups, "accountId", json_string(req->userid));
-    json_object_set_new(contactGroups, "state", json_string(req->state));
-    json_object_set_new(contactGroups, "list", rock.array);
-    if (rock.need) {
-        json_t *notfound = json_array();
-        hash_enumerate(rock.need, _add_notfound, notfound);
-        free_hash_table(rock.need, NULL);
-        free(rock.need);
-        if (json_array_size(notfound)) {
-            json_object_set_new(contactGroups, "notFound", notfound);
-        }
-        else {
-            json_decref(notfound);
-            json_object_set_new(contactGroups, "notFound", json_null());
         }
     }
     else {
-        json_object_set_new(contactGroups, "notFound", json_null());
+        rock.rows = 0;
+        r = carddav_get_cards(db, addressbookId, NULL, kind, cb, &rock);
+    }
+    if (r) goto done;
+
+    json_t *toplevel = json_pack("{}");
+    json_object_set_new(toplevel, "accountId", json_string(req->userid));
+    json_object_set_new(toplevel, "state", json_string(req->state));
+    json_object_set_new(toplevel, "list", rock.array);
+    if (json_array_size(notFound)) {
+        json_object_set_new(toplevel, "notFound", notFound);
+    }
+    else {
+        json_decref(notFound);
+        json_object_set_new(toplevel, "notFound", json_null());
     }
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactGroups"));
-    json_array_append_new(item, contactGroups);
+    json_array_append_new(item, json_string(resname));
+    json_array_append_new(item, toplevel);
     json_array_append_new(item, json_string(req->tag));
 
     json_array_append_new(req->response, item);
@@ -593,6 +581,10 @@ static int getContactGroups(struct jmap_req *req)
     return r;
 }
 
+static int getContactGroups(struct jmap_req *req)
+{
+    return jmap_contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP, "contactGroups");
+}
 
 static const char *_json_object_get_string(const json_t *obj, const char *key)
 {
@@ -705,140 +697,6 @@ static int getContactGroupUpdates(struct jmap_req *req)
 
   done:
     carddav_close(db);
-    return r;
-}
-
-static void _card_val(struct vparse_card *card, const char *name,
-                      const char *value)
-{
-    struct vparse_entry *res = vparse_get_entry(card, NULL, name);
-    if (!res) res = vparse_add_entry(card, NULL, name, NULL);
-    free(res->v.value);
-    res->v.value = xstrdupnull(value);
-}
-
-static int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                         const char *resource,
-                         strarray_t *flags, struct entryattlist *annots,
-                         const char *userid, struct auth_state *authstate)
-{
-    int r = 0;
-    FILE *f = NULL;
-    struct stagemsg *stage;
-    char *header;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
-    struct appendstate as;
-    time_t now = time(0);
-    char *freeme = NULL;
-    char datestr[80];
-
-    /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
-        return -1;
-    }
-
-    /* set the REVision time */
-    time_to_iso8601(now, datestr, sizeof(datestr), 0);
-    _card_val(vcard, "REV", datestr);
-
-    /* Create header for resource */
-    const char *uid = vparse_stringval(vcard, "uid");
-    const char *fullname = vparse_stringval(vcard, "fn");
-    if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vcard, &buf);
-    const char *mbuserid = mboxname_to_userid(mailbox->name);
-
-    time_to_rfc822(now, datestr, sizeof(datestr));
-
-    /* XXX  This needs to be done via an LDAP/DB lookup */
-    header = charset_encode_mimeheader(mbuserid, 0);
-    fprintf(f, "From: %s <>\r\n", header);
-    free(header);
-
-    header = charset_encode_mimeheader(fullname, 0);
-    fprintf(f, "Subject: %s\r\n", header);
-    free(header);
-
-    fprintf(f, "Date: %s\r\n", datestr);
-
-    if (strchr(uid, '@'))
-        fprintf(f, "Message-ID: <%s>\r\n", uid);
-    else
-        fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
-
-    fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
-
-    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&buf));
-    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
-
-    /* XXX  Check domain of data and use appropriate CTE */
-
-    fprintf(f, "MIME-Version: 1.0\r\n");
-    fprintf(f, "\r\n");
-
-    /* Write the vCard data to the file */
-    fprintf(f, "%s", buf_cstring(&buf));
-    buf_free(&buf);
-
-    qdiffs[QUOTA_STORAGE] = ftell(f);
-    qdiffs[QUOTA_MESSAGE] = 1;
-
-    fclose(f);
-
-    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0,
-                               ignorequota ? NULL : qdiffs, 0, 0,
-                               EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
-        goto done;
-    }
-
-    struct body *body = NULL;
-
-    r = append_fromstage(&as, &body, stage, now, flags, 0, annots);
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-
-    if (r) {
-        syslog(LOG_ERR, "append_fromstage() failed");
-        append_abort(&as);
-        goto done;
-    }
-
-    /* Commit the append to the calendar mailbox */
-    r = append_commit(&as);
-    if (r) {
-        syslog(LOG_ERR, "append_commit() failed");
-        goto done;
-    }
-
-done:
-    append_removestage(stage);
-    free(freeme);
-    return r;
-}
-
-static int carddav_remove(struct mailbox *mailbox,
-                          uint32_t olduid, int isreplace)
-{
-
-    int userflag;
-    int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
-    struct index_record oldrecord;
-    if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
-    if (!r && !(oldrecord.system_flags & FLAG_EXPUNGED)) {
-        if (isreplace) oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
-        oldrecord.system_flags |= FLAG_EXPUNGED;
-        r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-    }
-    if (r) {
-        syslog(LOG_ERR, "expunging record (%s) failed: %s",
-               mailbox->name, error_message(r));
-    }
     return r;
 }
 
@@ -1377,14 +1235,6 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     strarray_t *empty = NULL;
     int r = 0;
 
-    if (crock->need) {
-        /* skip records not in hash */
-        if (!hash_lookup(cdata->vcard_uid, crock->need))
-            return 0;
-        /* mark 2 == seen */
-        hash_insert(cdata->vcard_uid, (void *)2, crock->need);
-    }
-
     if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(cdata->dav.mailbox, &crock->mailbox);
@@ -1393,6 +1243,8 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
     if (r) return r;
+
+    crock->rows++;
 
     /* XXX - this could definitely be refactored from here and mailbox.c */
     struct buf msg_buf = BUF_INITIALIZER;
@@ -1421,7 +1273,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
 
     json_object_set_new(obj, "addressbookId",
-                        json_string(cdata->dav.mailbox + crock->mboxoffset));
+                        json_string(strrchr(cdata->dav.mailbox, '.')+1));
 
     if (_wantprop(crock->props, "isFlagged")) {
         json_object_set_new(obj, "isFlagged",
@@ -1766,99 +1618,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
 static int getContacts(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(req->userid);
-    if (!db) return -1;
-
-    const char *addressbookId = "Default";
-    json_t *abookid = json_object_get(req->args, "addressbookId");
-    if (abookid && json_string_value(abookid)) {
-        /* XXX - invalid arguments */
-        addressbookId = json_string_value(abookid);
-    }
-    const char *abookname = mboxname_abook(req->userid, addressbookId);
-
-    struct cards_rock rock;
-    int r = -1; /* XXX - need better error codes */
-
-    rock.array = json_pack("[]");
-    rock.need = NULL;
-    rock.props = NULL;
-    rock.mailbox = NULL;
-    rock.mboxoffset = strlen(abookname) - strlen(addressbookId);
-
-    json_t *want = json_object_get(req->args, "ids");
-    if (want) {
-        rock.need = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.need, 1024, 0);
-        int i;
-        int size = json_array_size(want);
-        for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(want, i));
-            if (id == NULL) {
-                free_hash_table(rock.need, NULL);
-                free(rock.need);
-                goto done;
-            }
-            /* 1 == want */
-            hash_insert(id, (void *)1, rock.need);
-        }
-    }
-
-    json_t *properties = json_object_get(req->args, "properties");
-    if (properties) {
-        rock.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.props, 1024, 0);
-        int i;
-        int size = json_array_size(properties);
-        for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) {
-                free_hash_table(rock.need, NULL);
-                free(rock.need);
-                goto done;
-            }
-            /* 1 == properties */
-            hash_insert(id, (void *)1, rock.props);
-        }
-    }
-
-    r = carddav_get_cards(db, abookname, NULL, CARDDAV_KIND_CONTACT,
-                          &getcontacts_cb, &rock);
-    if (r) goto done;
-
-    json_t *contacts = json_pack("{}");
-    json_object_set_new(contacts, "accountId", json_string(req->userid));
-    json_object_set_new(contacts, "state", json_string(req->state));
-    json_object_set_new(contacts, "list", rock.array);
-    if (rock.need) {
-        json_t *notfound = json_array();
-        hash_enumerate(rock.need, _add_notfound, notfound);
-        free_hash_table(rock.need, NULL);
-        free(rock.need);
-        if (json_array_size(notfound)) {
-            json_object_set_new(contacts, "notFound", notfound);
-        }
-        else {
-            json_decref(notfound);
-            json_object_set_new(contacts, "notFound", json_null());
-        }
-    }
-    else {
-        json_object_set_new(contacts, "notFound", json_null());
-    }
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contacts"));
-    json_array_append_new(item, contacts);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-  done:
-    if (rock.props) free_hash_table(rock.props, NULL);
-    mailbox_close(&rock.mailbox);
-    carddav_close(db);
-    return r;
+    return jmap_contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT, "contacts");
 }
 
 static int getContactUpdates(struct jmap_req *req)
@@ -2183,7 +1943,7 @@ static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval)
     const char *val = json_string_value(jval);
     if (!val)
         return -1;
-    _card_val(card, key, val);
+    vparse_replace_entry(card, NULL, key, val);
     return 0;
 }
 
@@ -2227,7 +1987,7 @@ static void _make_fn(struct vparse_card *card)
 
     char *fn = strarray_join(name, " ");
 
-     _card_val(card, "fn", fn);
+    vparse_replace_entry(card, NULL, "fn", fn);
 }
 
 static int _json_to_card(struct vparse_card *card,
@@ -2709,3 +2469,291 @@ done:
     carddav_close(db);
     return r;
 }
+
+/*********************** CALENDARS **********************/
+
+struct calendars_rock {
+    struct jmap_req *req;
+    json_t *array;
+    struct hash_table *props;
+    int rows;
+};
+
+/*
+    id: String The id of the calendar. This property is immutable.
+    name: String The user-visible name of the calendar. This may be any UTF-8 string of at least 1 character in length and maximum 256 bytes in size.
+    colour: String Any valid CSS colour value. The colour to be used when displaying events associated with the calendar. The colour SHOULD have sufficient contrast to be used as text on a white background.
+    isVisible: Boolean Should the calendar’s events be displayed to the user at the moment?
+    mayReadFreeBusy: Boolean The user may read the free-busy information for this calendar. In JMAP terms, this means the user may use this calendar as part of a filter in a getCalendarEventList call, however unless mayRead == true, the events returned for this calendar will only contain free-busy information, and be stripped of any other data. This property MUST be true if mayRead is true.
+    mayReadItems: Boolean The user may fetch the events in this calendar. In JMAP terms, this means the user may use this calendar as part of a filter in a getCalendarEventList call
+    mayAddItems: Boolean The user may add events to this calendar. In JMAP terms, this means the user may call setCalendarEvents to create new events in this calendar or move existing events into this calendar from another calenadr. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
+    mayModifyItems: Boolean The user may edit events in this calendar by calling setCalendarEvents with the update argument referencing events in this collection. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
+    mayRemoveItems: Boolean The user may remove events from this calendar by calling setCalendarEvents with the destroy argument referencing events in this collection, or by updating their calendarId property to a different calendar. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
+    mayRename: Boolean The user may rename the calendar. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
+    mayDelete: Boolean The user may delete the calendar itself. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
+*/
+
+static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct calendars_rock *crock = (struct calendars_rock *)rock;
+
+    /* only calendars */
+    if (!(mbentry->mbtype & MBTYPE_CALENDAR)) return 0;
+
+    /* only VISIBLE calendars */
+    int rights = cyrus_acl_myrights(crock->req->authstate, mbentry->acl);
+    if (!(rights & ACL_LOOKUP)) return 0;
+
+    /* OK, we want this one */
+    const char *collection = strrchr(mbentry->name, '.') + 1;
+
+    /* unless it's one of the special names... XXX - check
+     * the specialuse magic on these instead */
+    if (!strcmp(collection, "#calendars")) return 0;
+    if (!strcmp(collection, "Inbox")) return 0;
+    if (!strcmp(collection, "Outbox")) return 0;
+
+    crock->rows++;
+
+    json_t *obj = json_pack("{}");
+
+    json_object_set_new(obj, "id", json_string(collection));
+
+    if (_wantprop(crock->props, "x-href")) {
+        _add_xhref(obj, mbentry->name, NULL);
+    }
+
+    if (_wantprop(crock->props, "name")) {
+        static const char *displayname_annot =
+            DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+        struct buf attrib = BUF_INITIALIZER;
+        int r = annotatemore_lookupmask(mbentry->name, displayname_annot, httpd_userid, &attrib);
+        /* fall back to last part of mailbox name */
+        if (r || !attrib.len) buf_setcstr(&attrib, collection);
+        json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
+        buf_free(&attrib);
+    }
+
+    if (_wantprop(crock->props, "colour")) {
+        static const char *color_annot =
+            DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
+        struct buf attrib = BUF_INITIALIZER;
+        int r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
+        if (!r && attrib.len)
+            json_object_set_new(obj, "colour", json_string(buf_cstring(&attrib)));
+        buf_free(&attrib);
+    }
+
+    if (_wantprop(crock->props, "isVisible")) {
+        /* XXX - fill this */
+    }
+
+    if (_wantprop(crock->props, "mayReadFreeBusy")) {
+        int bool = rights & DACL_READFB;
+        json_object_set_new(obj, "mayReadFreeBusy", bool ? json_true() : json_false());
+    }
+
+    if (_wantprop(crock->props, "mayReadItems")) {
+        int bool = rights & DACL_READ;
+        json_object_set_new(obj, "mayReadItems", bool ? json_true() : json_false());
+    }
+
+    if (_wantprop(crock->props, "mayAddItems")) {
+        int bool = rights & DACL_WRITECONT;
+        json_object_set_new(obj, "mayAddItems", bool ? json_true() : json_false());
+    }
+
+    if (_wantprop(crock->props, "mayModifyItems")) {
+        int bool = rights & DACL_WRITECONT;
+        json_object_set_new(obj, "mayModifyItems", bool ? json_true() : json_false());
+    }
+
+    if (_wantprop(crock->props, "mayRemoveItems")) {
+        int bool = rights & DACL_RMRSRC;
+        json_object_set_new(obj, "mayRemoveItems", bool ? json_true() : json_false());
+    }
+
+    if (_wantprop(crock->props, "mayRename")) {
+        int bool = rights & DACL_RMCOL;
+        json_object_set_new(obj, "mayRename", bool ? json_true() : json_false());
+    }
+
+    if (_wantprop(crock->props, "mayDelete")) {
+        int bool = rights & DACL_RMCOL;
+        json_object_set_new(obj, "mayDelete", bool ? json_true() : json_false());
+    }
+
+    json_array_append_new(crock->array, obj);
+
+    return 0;
+}
+
+static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
+                              const char *resname)
+{
+    struct caldav_db *db = caldav_open_userid(req->userid);
+    if (!db) return -1;
+
+    const char *calendarId = NULL;
+    json_t *calid = json_object_get(req->args, "calendarId");
+    if (calid && json_string_value(calid)) {
+        /* XXX - invalid arguments */
+        calendarId = json_string_value(calid);
+    }
+
+    struct cards_rock rock;
+    int r = -1;
+
+    rock.array = json_pack("[]");
+    rock.props = NULL;
+    rock.mailbox = NULL;
+
+    json_t *want = json_object_get(req->args, "ids");
+    json_t *notFound = json_array();
+    if (want) {
+        int i;
+        int size = json_array_size(want);
+        for (i = 0; i < size; i++) {
+            rock.rows = 0;
+            const char *id = json_string_value(json_array_get(want, i));
+            if (!id) continue;
+            r = caldav_get_events(db, calendarId, id, cb, &rock);
+            if (r || !rock.rows) {
+                json_array_append_new(notFound, json_string(id));
+            }
+        }
+    }
+    else {
+        rock.rows = 0;
+        r = caldav_get_events(db, calendarId, NULL, cb, &rock);
+    }
+    if (r) goto done;
+
+    json_t *toplevel = json_pack("{}");
+    json_object_set_new(toplevel, "accountId", json_string(req->userid));
+    json_object_set_new(toplevel, "state", json_string(req->state));
+    json_object_set_new(toplevel, "list", rock.array);
+    if (json_array_size(notFound)) {
+        json_object_set_new(toplevel, "notFound", notFound);
+    }
+    else {
+        json_decref(notFound);
+        json_object_set_new(toplevel, "notFound", json_null());
+    }
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string(resname));
+    json_array_append_new(item, toplevel);
+    json_array_append_new(item, json_string(req->tag));
+
+    json_array_append_new(req->response, item);
+
+  done:
+    mailbox_close(&rock.mailbox);
+    caldav_close(db);
+    return r;
+}
+
+/* jmap calendar APIs */
+static int getCalendars(struct jmap_req *req)
+{
+    struct calendars_rock rock;
+    int r;
+
+    rock.array = json_pack("[]");
+    rock.req = req;
+    rock.props = NULL;
+    rock.rows = 0;
+
+    json_t *properties = json_object_get(req->args, "properties");
+    if (properties) {
+        rock.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(rock.props, 1024, 0);
+        int i;
+        int size = json_array_size(properties);
+        for (i = 0; i < size; i++) {
+            const char *id = json_string_value(json_array_get(properties, i));
+            if (id == NULL) goto err;
+            /* 1 == properties */
+            hash_insert(id, (void *)1, rock.props);
+        }
+    }
+
+    json_t *want = json_object_get(req->args, "ids");
+    json_t *notfound = json_array();
+    if (want) {
+        int i;
+        int size = json_array_size(want);
+        for (i = 0; i < size; i++) {
+            const char *id = json_string_value(json_array_get(want, i));
+            const char *mboxname = caldav_mboxname(req->userid, id);
+            rock.rows = 0;
+            r = mboxlist_mboxtree(mboxname, &getcalendars_cb, &rock, MBOXTREE_SKIP_CHILDREN);
+            if (r) goto err;
+            if (!rock.rows) {
+                json_array_append_new(notfound, json_string(id));
+            }
+        }
+    }
+    else {
+        r = mboxlist_usermboxtree(req->userid, &getcalendars_cb, &rock, /*flags*/0);
+        if (r) goto err;
+    }
+
+    if (rock.props) free_hash_table(rock.props, NULL);
+
+    json_t *calendars = json_pack("{}");
+    json_object_set_new(calendars, "accountId", json_string(req->userid));
+    json_object_set_new(calendars, "state", json_string(req->state));
+    json_object_set_new(calendars, "list", rock.array);
+    if (json_array_size(notfound)) {
+        json_object_set_new(calendars, "notFound", notfound);
+    }
+    else {
+        json_decref(notfound);
+        json_object_set_new(calendars, "notFound", json_null());
+    }
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("calendars"));
+    json_array_append_new(item, calendars);
+    json_array_append_new(item, json_string(req->tag));
+
+    json_array_append_new(req->response, item);
+
+    return 0;
+
+err:
+    syslog(LOG_ERR, "caldav error %s", error_message(r));
+    if (rock.props) free_hash_table(rock.props, NULL);
+    json_decref(rock.array);
+    /* XXX - free memory */
+    return r;
+}
+
+static int getevents_cb(void *rock, struct caldav_data *cdata)
+{
+    struct calendars_rock *crock = (struct calendars_rock *)rock;
+
+    crock->rows++;
+
+    json_t *obj = json_pack("{}");
+
+    json_object_set_new(obj, "id", json_string(cdata->ical_uid));
+
+    if (_wantprop(crock->props, "x-href")) {
+        _add_xhref(obj, cdata->dav.mailbox, cdata->dav.resource);
+    }
+
+    /* XXX - other fields */
+
+    json_array_append_new(crock->array, obj);
+
+    return 0;
+}
+
+static int getCalendarEvents(struct jmap_req *req)
+{
+    return jmap_calendars_get(req, &getevents_cb, "calendarEvents");
+}
+
