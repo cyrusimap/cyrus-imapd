@@ -528,7 +528,7 @@ static int getContactGroups(struct jmap_req *req)
     const char *abookname = mboxname_abook(req->userid, addressbookId);
 
     struct cards_rock rock;
-    int r;
+    int r = -1;
 
     rock.array = json_pack("[]");
     rock.need = NULL;
@@ -547,7 +547,7 @@ static int getContactGroups(struct jmap_req *req)
             if (id == NULL) {
                 free_hash_table(rock.need, NULL);
                 free(rock.need);
-                return -1; /* XXX - need codes */
+                goto done;
             }
             /* 1 == want */
             hash_insert(id, (void *)1, rock.need);
@@ -654,16 +654,17 @@ static int getContactGroupUpdates(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
 
+    int r = -1;
     const char *since = _json_object_get_string(req->args, "sinceState");
-    if (!since) return -1;
+    if (!since) goto done;
     modseq_t oldmodseq = str2uint64(since);
 
     struct updates_rock rock;
     rock.changed = json_array();
     rock.removed = json_array();
 
-    int r = carddav_get_updates(db, oldmodseq, CARDDAV_KIND_GROUP,
-                                &getupdates_cb, &rock);
+    r = carddav_get_updates(db, oldmodseq, CARDDAV_KIND_GROUP,
+                            &getupdates_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -909,7 +910,7 @@ static int setContactGroups(struct jmap_req *req)
             json_t *item = json_pack("[s, {s:s}, s]",
                                      "error", "type", "stateMismatch", req->tag);
             json_array_append_new(req->response, item);
-            return 0;
+            goto done;
         }
     }
     json_t *set = json_pack("{s:s,s:s}",
@@ -1776,7 +1777,7 @@ static int getContacts(struct jmap_req *req)
     const char *abookname = mboxname_abook(req->userid, addressbookId);
 
     struct cards_rock rock;
-    int r;
+    int r = -1; /* XXX - need better error codes */
 
     rock.array = json_pack("[]");
     rock.need = NULL;
@@ -1795,7 +1796,7 @@ static int getContacts(struct jmap_req *req)
             if (id == NULL) {
                 free_hash_table(rock.need, NULL);
                 free(rock.need);
-                return -1; /* XXX - need codes */
+                goto done;
             }
             /* 1 == want */
             hash_insert(id, (void *)1, rock.need);
@@ -1813,7 +1814,7 @@ static int getContacts(struct jmap_req *req)
             if (id == NULL) {
                 free_hash_table(rock.need, NULL);
                 free(rock.need);
-                return -1; /* XXX - need codes */
+                goto done;
             }
             /* 1 == properties */
             hash_insert(id, (void *)1, rock.props);
@@ -1863,16 +1864,17 @@ static int getContactUpdates(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
 
+    int r = -1;
     const char *since = _json_object_get_string(req->args, "sinceState");
-    if (!since) return -1;
+    if (!since) goto done;
     modseq_t oldmodseq = str2uint64(since);
 
     struct updates_rock rock;
     rock.changed = json_array();
     rock.removed = json_array();
 
-    int r = carddav_get_updates(db, oldmodseq, CARDDAV_KIND_CONTACT,
-                                &getupdates_cb, &rock);
+    r = carddav_get_updates(db, oldmodseq, CARDDAV_KIND_CONTACT,
+                            &getupdates_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -2393,7 +2395,7 @@ static int setContacts(struct jmap_req *req)
                                      "error", "type", "stateMismatch",
                                      req->tag);
             json_array_append_new(req->response, item);
-            return 0;
+            goto done;
         }
     }
     json_t *set = json_pack("{s:s,s:s}",
