@@ -521,11 +521,12 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
 
-    const char *addressbookId = NULL;
+    char *mboxname = NULL;
     json_t *abookid = json_object_get(req->args, "addressbookId");
     if (abookid && json_string_value(abookid)) {
         /* XXX - invalid arguments */
-        addressbookId = json_string_value(abookid);
+        const char *addressbookId = json_string_value(abookid);
+        mboxname = carddav_mboxname(req->userid, addressbookId);
     }
 
     struct cards_rock rock;
@@ -544,7 +545,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
             rock.rows = 0;
             const char *id = json_string_value(json_array_get(want, i));
             if (!id) continue;
-            r = carddav_get_cards(db, addressbookId, id, kind, cb, &rock);
+            r = carddav_get_cards(db, mboxname, id, kind, cb, &rock);
             if (r || !rock.rows) {
                 json_array_append_new(notFound, json_string(id));
             }
@@ -552,7 +553,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     }
     else {
         rock.rows = 0;
-        r = carddav_get_cards(db, addressbookId, NULL, kind, cb, &rock);
+        r = carddav_get_cards(db, mboxname, NULL, kind, cb, &rock);
     }
     if (r) goto done;
 
@@ -576,6 +577,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     json_array_append_new(req->response, item);
 
   done:
+    free(mboxname);
     mailbox_close(&rock.mailbox);
     carddav_close(db);
     return r;
@@ -857,7 +859,7 @@ static int setContactGroups(struct jmap_req *req)
             }
 
             syslog(LOG_NOTICE, "jmap: create group %s/%s/%s (%s)",
-                   req->userid, addressbookId, uid, name);
+                   req->userid, mboxname, uid, name);
 
             if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL,
                                       req->userid, req->authstate, ignorequota);
@@ -2217,7 +2219,7 @@ static int setContacts(struct jmap_req *req)
             }
 
             syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)",
-                   req->userid, addressbookId, uid);
+                   req->userid, mboxname, uid);
             r = carddav_store(mailbox, card, NULL,
                               flags, annots, req->userid, req->authstate, ignorequota);
             vparse_free_card(card);
@@ -2594,11 +2596,12 @@ static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
     struct caldav_db *db = caldav_open_userid(req->userid);
     if (!db) return -1;
 
-    const char *calendarId = NULL;
+    char *mboxname = NULL;
     json_t *calid = json_object_get(req->args, "calendarId");
     if (calid && json_string_value(calid)) {
         /* XXX - invalid arguments */
-        calendarId = json_string_value(calid);
+        const char *calendarId = json_string_value(calid);
+        mboxname = caldav_mboxname(req->userid, calendarId);
     }
 
     struct cards_rock rock;
@@ -2617,7 +2620,7 @@ static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
             rock.rows = 0;
             const char *id = json_string_value(json_array_get(want, i));
             if (!id) continue;
-            r = caldav_get_events(db, calendarId, id, cb, &rock);
+            r = caldav_get_events(db, mboxname, id, cb, &rock);
             if (r || !rock.rows) {
                 json_array_append_new(notFound, json_string(id));
             }
@@ -2625,7 +2628,7 @@ static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
     }
     else {
         rock.rows = 0;
-        r = caldav_get_events(db, calendarId, NULL, cb, &rock);
+        r = caldav_get_events(db, mboxname, NULL, cb, &rock);
     }
     if (r) goto done;
 
@@ -2650,6 +2653,7 @@ static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
 
   done:
     mailbox_close(&rock.mailbox);
+    free(mboxname);
     caldav_close(db);
     return r;
 }

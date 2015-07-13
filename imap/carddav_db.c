@@ -905,3 +905,24 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
     }
     return r;
 }
+
+EXPORTED char *carddav_mboxname(const char *userid, const char *name)
+{
+    struct buf boxbuf = BUF_INITIALIZER;
+    char *res = NULL;
+
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+
+    if (name) {
+        size_t len = strcspn(name, "/");
+        buf_putc(&boxbuf, '.');
+        buf_appendmap(&boxbuf, name, len);
+    }
+
+    res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+
+    buf_free(&boxbuf);
+
+    return res;
+}
+
