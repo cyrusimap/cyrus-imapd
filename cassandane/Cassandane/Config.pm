@@ -80,6 +80,8 @@ sub default
 	    improved_mboxlist_sort => 'yes',
 	    # default changed, we want to be explicit about it
 	    unixhierarchysep => 'no',
+            # let's hear all about it
+            debug => 'yes',
 	);
 	my $defs = Cassandane::Cassini->instance()->get_section('config');
 	$default->set(%$defs);
