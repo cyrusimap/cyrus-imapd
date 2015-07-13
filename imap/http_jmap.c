@@ -1710,6 +1710,20 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
                                     json_string(value ? value : entry->v.value));
                 json_array_append_new(online, item);
             }
+            if (!strcasecmp(entry->name, "x-fm-online-other")) {
+                json_t *item = json_pack("{}");
+                const struct vparse_param *param;
+                const char *label = NULL;
+                for (param = entry->params; param; param = param->next) {
+                    if (!strcasecmp(param->name, "label")) {
+                        label = param->value;
+                    }
+                }
+                json_object_set_new(item, "type", json_string("other"));
+                if (label) json_object_set_new(item, "label", json_string(label));
+                json_object_set_new(item, "value", json_string(entry->v.value));
+                json_array_append_new(online, item);
+            }
         }
 
         json_object_set_new(obj, "online", online);
@@ -1997,6 +2011,7 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
     vparse_delete_entries(card, NULL, "url");
     vparse_delete_entries(card, NULL, "impp");
     vparse_delete_entries(card, NULL, "x-social-profile");
+    vparse_delete_entries(card, NULL, "x-fm-online-other");
 
     int i;
     int size = json_array_size(arg);
@@ -2018,7 +2033,7 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
             if (label && _is_im(label)) {
                 struct vparse_entry *entry =
                     vparse_add_entry(card, NULL, "impp", value);
-                vparse_add_param(entry, "x-type", label);
+                vparse_add_param(entry, "x-service-type", label);
             }
             else {
                 struct vparse_entry *entry =
@@ -2028,7 +2043,11 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
                 vparse_add_param(entry, "x-user", value);
             }
         }
-        /* XXX other? */
+        else if (!strcmp(type, "other")) {
+            struct vparse_entry *entry = vparse_add_entry(card, NULL, "x-fm-online-other", value);
+            if (label)
+                vparse_add_param(entry, "label", label);
+        }
     }
     return 0;
 }
