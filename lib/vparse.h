@@ -90,6 +90,7 @@ extern void vparse_free_card(struct vparse_card *card);
 extern void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name);
 extern struct vparse_entry *vparse_get_entry(struct vparse_card *card, const char *group, const char *name);
 extern struct vparse_entry *vparse_add_entry(struct vparse_card *card, const char *group, const char *name, const char *value);
+extern void vparse_replace_entry(struct vparse_card *card, const char *group, const char *name, const char *value);
 extern void vparse_set_value(struct vparse_entry *entry, const char *value);
 /* XXX - multivalue should be strarray_t */
 //extern void vparse_set_multivalue(struct vparse_entry *entry, const strarray_t *values);
