@@ -60,6 +60,11 @@
 
 #ifndef json_boolean
 #define json_boolean(val)       ((val) ? json_true() : json_false())
+#endif /* json_boolean */
+
+#ifndef json_boolean_value
+#define json_boolean_value(val) ((val) == json_true() ? 1 : 0)
+#endif /* json_boolean_value */
 
 #ifndef json_object_foreach
 #define json_object_foreach(obj, key, val)                      \
@@ -70,7 +75,6 @@
               && (val = json_object_iter_value(_iter_));        \
           _iter_ = json_object_iter_next(obj, _iter_))
 #endif /* json_object_foreach */
-#endif /* json_boolean */
 
 
 /*
