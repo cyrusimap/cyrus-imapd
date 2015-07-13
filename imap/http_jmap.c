@@ -1854,6 +1854,7 @@ static int getContacts(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
   done:
+    if (rock.props) free_hash_table(rock.props, NULL);
     mailbox_close(&rock.mailbox);
     carddav_close(db);
     return r;
