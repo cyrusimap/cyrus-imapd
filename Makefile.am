@@ -1161,6 +1161,7 @@ imap_httpd_SOURCES = \
 	imap/http_tzdist.c \
 	imap/http_webdav.c \
 	imap/httpd.c \
+	imap/ical_support.c \
 	imap/jcal.c \
 	imap/mutex_fake.c \
 	imap/proxy.c \
