@@ -59,6 +59,7 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
+#include "http_dav.h"
 #include "http_proxy.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -554,7 +555,7 @@ static int getContactGroups(struct jmap_req *req)
         }
     }
 
-    r = carddav_get_cards(db, abookname, CARDDAV_KIND_GROUP,
+    r = carddav_get_cards(db, abookname, NULL, CARDDAV_KIND_GROUP,
                           &getgroups_cb, &rock);
     if (r) goto done;
 
@@ -1821,7 +1822,7 @@ static int getContacts(struct jmap_req *req)
         }
     }
 
-    r = carddav_get_cards(db, abookname, CARDDAV_KIND_CONTACT,
+    r = carddav_get_cards(db, abookname, NULL, CARDDAV_KIND_CONTACT,
                           &getcontacts_cb, &rock);
     if (r) goto done;
 

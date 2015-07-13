@@ -109,7 +109,7 @@ strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
 
 /* process each entry of type 'kind' for 'mailbox' in 'carddavdb' with cb() */
 int carddav_get_cards(struct carddav_db *carddavdb,
-                      const char *mailbox, int kind,
+                      const char *mailbox, const char *vcard_uid, int kind,
                       int (*cb)(void *rock, struct carddav_data *cdata),
                       void *rock);
 
@@ -122,7 +122,7 @@ int carddav_get_updates(struct carddav_db *carddavdb,
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
-                   int (*cb)(void *rock, void *data),
+                   int (*cb)(void *rock, struct carddav_data *data),
                    void *rock);
 
 /* write an entry to 'carddavdb' */

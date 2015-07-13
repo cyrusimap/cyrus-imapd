@@ -145,12 +145,11 @@ EXPORTED int carddav_abort(struct carddav_db *carddavdb)
     return sqldb_rollback(carddavdb->db, "carddav");
 }
 
-
 struct read_rock {
     struct carddav_db *db;
     struct carddav_data *cdata;
     int tombstones;
-    int (*cb)(void *rock, void *data);
+    int (*cb)(void *rock, struct carddav_data *data);
     void *rock;
 };
 
@@ -294,7 +293,7 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
     " WHERE mailbox = :mailbox AND alive = 1;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
-                   int (*cb)(void *rock, void *data),
+                   int (*cb)(void *rock, struct carddav_data *data),
                    void *rock)
 {
     struct sqldb_bindval bval[] = {
@@ -632,46 +631,33 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
     return 0;
 }
 
-#define CMD_GETCARDS \
-  "SELECT vcard_uid, mailbox, resource, imap_uid" \
-  " FROM vcard_objs" \
-  " WHERE mailbox = :mailbox AND kind = :kind AND alive = 1" \
-  " ORDER BY mailbox, imap_uid;"
-
-struct cards_rock {
-    int (*cb)(void *rock, struct carddav_data *cdata);
-    void *rock;
-};
-
-static int getcards_cb(sqlite3_stmt *stmt, void *rock)
-{
-    struct cards_rock *crock = (struct cards_rock *) rock;
-    struct carddav_data cdata;
-
-    memset(&cdata, 0, sizeof(struct carddav_data));
-
-    cdata.vcard_uid = (const char *) sqlite3_column_text(stmt, 0);
-    cdata.dav.mailbox = (const char *)sqlite3_column_text(stmt, 1);
-    cdata.dav.resource = (const char *)sqlite3_column_text(stmt, 2);
-    cdata.dav.imap_uid = sqlite3_column_int(stmt, 3);
-
-    return crock->cb(crock->rock, &cdata);
-}
-
 EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
-                               const char *abookname, int kind,
+                               const char *abookname,
+                               const char *vcard_uid, int kind,
                                int (*cb)(void *rock,
                                          struct carddav_data *cdata),
                                void *rock)
 {
     struct sqldb_bindval bval[] = {
-        { ":kind",    SQLITE_INTEGER, { .i = kind      } },
-        { ":mailbox", SQLITE_TEXT,    { .s = abookname } },
-        { NULL,       SQLITE_NULL,    { .s = NULL      } }
+        { ":kind",      SQLITE_INTEGER, { .i = kind      } },
+        { ":mailbox",   SQLITE_TEXT,    { .s = abookname } },
+        { ":vcard_uid", SQLITE_TEXT,    { .s = vcard_uid } },
+        { NULL,         SQLITE_NULL,    { .s = NULL      } }
     };
-    struct cards_rock crock = { cb, rock };
+    static struct carddav_data cdata;
+    struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
+    struct buf sqlbuf = BUF_INITIALIZER;
 
-    int r = sqldb_exec(carddavdb->db, CMD_GETCARDS, bval, &getcards_cb, &crock);
+    buf_setcstr(&sqlbuf, CMD_GETFIELDS);
+    buf_appendcstr(&sqlbuf, " WHERE alive = 1 AND kind = :kind");
+    if (abookname)
+        buf_appendcstr(&sqlbuf, " AND mailbox = :mailbox");
+    if (vcard_uid)
+        buf_appendcstr(&sqlbuf, " AND vcard_uid = :vcard_uid");
+    buf_appendcstr(&sqlbuf, " ORDER BY mailbox, imap_uid;");
+
+    int r = sqldb_exec(carddavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
+    buf_free(&sqlbuf);
     if (r) {
         syslog(LOG_ERR, "caldav error %s", error_message(r));
         /* XXX - free memory */
@@ -680,23 +666,8 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
     return r;
 }
 
-#define CMD_GETUPDATES \
-  "SELECT vcard_uid, alive " \
-  "FROM vcard_objs "\
+#define CMD_GETUPDATES CMD_GETFIELDS \
   "WHERE kind = :kind AND modseq > :modseq;"
-
-static int getupdates_cb(sqlite3_stmt *stmt, void *rock)
-{
-    struct cards_rock *crock = (struct cards_rock *) rock;
-    struct carddav_data cdata;
-
-    memset(&cdata, 0, sizeof(struct carddav_data));
-
-    cdata.vcard_uid = (const char *) sqlite3_column_text(stmt, 0);
-    cdata.dav.alive = sqlite3_column_int(stmt, 1);
-
-    return crock->cb(crock->rock, &cdata);
-}
 
 EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
                                  modseq_t oldmodseq, int kind,
@@ -709,10 +680,11 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
         { ":kind",   SQLITE_INTEGER, { .i = kind      } },
         { NULL,      SQLITE_NULL,    { .s = NULL      } }
     };
-    struct cards_rock crock = { cb, rock };
+    static struct carddav_data cdata;
+    struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
     int r;
 
-    r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &getupdates_cb, &crock);
+    r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
     if (r) {
         syslog(LOG_ERR, "caldav error %s", error_message(r));
         /* XXX - free memory */
