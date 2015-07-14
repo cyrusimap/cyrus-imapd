@@ -2662,7 +2662,7 @@ static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
 static int getCalendars(struct jmap_req *req)
 {
     struct calendars_rock rock;
-    int r;
+    int r = 0;
 
     rock.array = json_pack("[]");
     rock.req = req;
@@ -2677,7 +2677,7 @@ static int getCalendars(struct jmap_req *req)
         int size = json_array_size(properties);
         for (i = 0; i < size; i++) {
             const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) goto err;
+            if (id == NULL) continue;
             /* 1 == properties */
             hash_insert(id, (void *)1, rock.props);
         }
