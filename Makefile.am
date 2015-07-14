@@ -1142,12 +1142,7 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.h
 
 imap_httpd_SOURCES = \
-	imap/caldav_alarm.c \
 	imap/caldav_db.c \
-	imap/carddav_db.c \
-	imap/carddav_db.h \
-	imap/dav_db.c \
-	imap/dav_util.c \
 	imap/http_caldav.c \
 	imap/http_caldav_sched.c \
 	imap/http_carddav.c \
@@ -1167,7 +1162,6 @@ imap_httpd_SOURCES = \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
-	imap/webdav_db.c \
 	imap/xcal.c \
 	imap/xml_support.c \
 	imap/zoneinfo_db.c \
