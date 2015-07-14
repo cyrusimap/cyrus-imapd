@@ -277,6 +277,7 @@ enum {
     STATUS_UIDVALIDITY =	(1<<3),
     STATUS_UNSEEN =		(1<<4),
     STATUS_HIGHESTMODSEQ =	(1<<5)
+    /* XXX  New items MUST be handled in imapd.c:list_data_remote() */
 };
 
 /* Arguments to List functions */
@@ -305,6 +306,7 @@ enum {
     LIST_SEL_REMOTE =		(1<<1),
     LIST_SEL_RECURSIVEMATCH =	(1<<2),
     LIST_SEL_SPECIALUSE =	(1<<3)
+    /* XXX  New options MUST be handled in imapd.c:list_data_remote() */
 };
 
 /* Bitmask for List return options */
@@ -314,6 +316,7 @@ enum {
     LIST_RET_SPECIALUSE =	(1<<2),
     LIST_RET_STATUS =		(1<<3),
     LIST_RET_MYRIGHTS =		(1<<4)
+    /* XXX  New options MUST be handled in imapd.c:list_data_remote() */
 };
 
 /* Bitmask for List name attributes */
