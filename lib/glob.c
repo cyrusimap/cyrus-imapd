@@ -90,6 +90,10 @@ EXPORTED glob *glob_init(const char *str, char sep)
         case '^':
         case '$':
         case '+':
+        case '(':
+        case ')':
+        case '[':
+        case ']':
         case '\\':
             buf_putc(&buf, '\\');
             /* fall through */
