@@ -12603,17 +12603,41 @@ static int list_data_remote(char *tag, struct listargs *listargs)
     if (listargs->cmd & LIST_CMD_LSUB) {
         prot_printf(backend_inbox->out, "%s Lsub ", tag);
     } else {
-        prot_printf(backend_inbox->out, "%s List (subscribed", tag);
-        if (listargs->sel & LIST_SEL_DAV) {
-            prot_printf(backend_inbox->out, " vendor.cmu-dav");
+        const char *select_opts[] = {
+            /* XXX  MUST be in same order as LIST_SEL_* bitmask */
+            "subscribed", "remote", "recursivematch",
+            "special-use", "vendor.cmu-dav", "metadata", NULL
+        };
+        char c = '(';
+        int i;
+
+        prot_printf(backend_inbox->out, "%s List ", tag);
+        for (i = 0; select_opts[i]; i++) {
+            unsigned opt = (1 << i);
+            
+            if (!(listargs->sel & opt)) continue;
+
+            prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
+            c = ' ';
+
+            if (opt == LIST_SEL_METADATA) {
+                /* print metadata options */
+                prot_puts(backend_inbox->out, " (depth ");
+                if (listargs->metaopts.depth < 0) {
+                    prot_puts(backend_inbox->out, "infinity");
+                }
+                else {
+                    prot_printf(backend_inbox->out, "%d",
+                                listargs->metaopts.depth);
+                }
+                if (listargs->metaopts.maxsize) {
+                    prot_printf(backend_inbox->out, " maxsize %zu",
+                                listargs->metaopts.maxsize);
+                }
+                (void)prot_putc(')', backend_inbox->out);
+            }
         }
-        if (listargs->sel & LIST_SEL_REMOTE) {
-            prot_printf(backend_inbox->out, " remote");
-        }
-        if (listargs->sel & LIST_SEL_RECURSIVEMATCH) {
-            prot_printf(backend_inbox->out, " recursivematch");
-        }
-        prot_printf(backend_inbox->out, ") ");
+        prot_puts(backend_inbox->out, ") ");
     }
 
     /* print reference argument */
@@ -12638,16 +12662,54 @@ static int list_data_remote(char *tag, struct listargs *listargs)
 
     /* print list return options */
     if (listargs->ret) {
+        const char *return_opts[] = {
+            /* XXX  MUST be in same order as LIST_RET_* bitmask */
+            "subscribed", "children", "special-use",
+            "status ", "myrights", "metadata ", NULL
+        };
         char c = '(';
+        int i, j;
 
-        prot_printf(backend_inbox->out, " return ");
-        if (listargs->ret & LIST_RET_SUBSCRIBED) {
-            prot_printf(backend_inbox->out, "%csubscribed", c);
+        prot_puts(backend_inbox->out, " return ");
+        for (i = 0; return_opts[i]; i++) {
+            unsigned opt = (1 << i);
+            
+            if (!(listargs->ret & opt)) continue;
+
+            prot_printf(backend_inbox->out, "%c%s", c, return_opts[i]);
             c = ' ';
-        }
-        if (listargs->ret & LIST_RET_CHILDREN) {
-            prot_printf(backend_inbox->out, "%cchildren", c);
-            c = ' ';
+
+            if (opt == LIST_RET_STATUS) {
+                /* print status items */
+                const char *status_items[] = {
+                    /* XXX  MUST be in same order as STATUS_* bitmask */
+                    "messages", "recent", "uidnext", "uidvalidity", "unseen",
+                    "highestmodseq", "xconvexists", "xconvunseen",
+                    "xconvmodseq", NULL
+                };
+
+                c = '(';
+                for (j = 0; status_items[j]; j++) {
+                    if (!(listargs->statusitems & (1 << j))) continue;
+                    
+                    prot_printf(backend_inbox->out, "%c%s", c,
+                                status_items[j]);
+                    c = ' ';
+                }
+                (void)prot_putc(')', backend_inbox->out);
+            }
+            else if (opt == LIST_RET_METADATA) {
+                /* print metadata items */
+                int n = strarray_size(&listargs->metaitems);
+                
+                c = '(';
+                for (j = 0; j < n; j++) {
+                    prot_printf(backend_inbox->out, "%c\"%s\"", c,
+                                strarray_nth(&listargs->metaitems, j));
+                    c = ' ';
+                }
+                (void)prot_putc(')', backend_inbox->out);
+            }
         }
         (void)prot_putc(')', backend_inbox->out);
     }
