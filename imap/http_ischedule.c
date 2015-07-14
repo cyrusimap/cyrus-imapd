@@ -212,7 +212,7 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Generate ETag based on compile date/time of this source file,
        the number of available RSCALEs and the config file size/mtime */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%d-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, "%ld-%zu-%ld-%ld", (long) compile_time,
                rscale_calendars ? rscale_calendars->num_elements : 0,
                sbuf.st_mtime, sbuf.st_size);
 
