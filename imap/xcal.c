@@ -161,45 +161,47 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
                                    void (*add_str)(void *, const char *,
                                                    const char *))
 {
-    struct icaltimetype until;
     char *rrule, *rpart;
     tok_t rparts;
 
-    /* split out 'until' rpart so we can use ISO date-time format (below) */
-    until = recur->until;
-    recur->until = icaltime_null_time();
-
-    /* generate iCal string for remaining rparts */
+    /* generate an iCal RRULE string */
     rrule = icalrecurrencetype_as_string_r(recur);
     
     /* split string into rparts & values */
     tok_initm(&rparts, rrule, "=;", TOK_TRIMLEFT|TOK_TRIMRIGHT);
     while ((rpart = tok_next(&rparts))) {
-        /* assume the rpart has multiple values - split them */
-        tok_t vlist;
-        char *val, *p;
+        if (!strcmp(rpart, "UNTIL")) {
+            /* need to translate date format to ISO */
+            struct icaltimetype until = icaltime_from_string(tok_next(&rparts));
 
-        tok_init(&vlist, tok_next(&rparts), ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        while ((val = tok_next(&vlist))) {
-            if (add_int) {
-                /* try converting value to integer */
-                int n = strtol(val, &p, 10);
-
-                if (n && !*p) {
-                    add_int(obj, lcase(rpart), n);
-                    continue;
-                }
-            }
-
-            add_str(obj, lcase(rpart), val);
+            add_str(obj, "until", icaltime_as_iso_string(until));
         }
-        tok_fini(&vlist);
+        else {
+            /* assume the rpart has multiple values - split them */
+            tok_t vlist;
+            char *val, *p;
+
+            tok_init(&vlist, tok_next(&rparts), ",",
+                     TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            while ((val = tok_next(&vlist))) {
+                if (add_int) {
+                    /* try converting value to integer */
+                    int n = strtol(val, &p, 10);
+
+                    if (n && !*p) {
+                        add_int(obj, lcase(rpart), n);
+                        continue;
+                    }
+                }
+
+                add_str(obj, lcase(rpart), val);
+            }
+            tok_fini(&vlist);
+        }
     }
     tok_fini(&rparts);
 
     free(rrule);
-
-    if (until.year) add_str(obj, "until", icaltime_as_iso_string(until));
 }
 
 
