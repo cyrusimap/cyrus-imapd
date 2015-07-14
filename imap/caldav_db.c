@@ -392,7 +392,7 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  comp_type, ical_uid, organizer, dtstart, dtend,"                 \
     "  comp_flags, sched_tag )"                                         \
     " VALUES ("                                                         \
-    "  :alive, mailbox, :resource, :creationdate, :imap_uid, :modseq,"  \
+    "  :alive, :mailbox, :resource, :creationdate, :imap_uid, :modseq," \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"            \
     "  :comp_flags, :sched_tag );"
