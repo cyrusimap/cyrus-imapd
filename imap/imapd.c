@@ -472,7 +472,7 @@ static void canonical_list_patterns(const char *reference,
                                     strarray_t *patterns);
 static int list_cb(const char *name, int matchlen, int maycreate,
                    void *rock);
-static int subscribed_cb(const const char *name, int matchlen, int maycreate,
+static int subscribed_cb(const char *name, int matchlen, int maycreate,
                          void *rock);
 static void list_data(struct listargs *listargs);
 static int list_data_remote(char *tag, struct listargs *listargs);
