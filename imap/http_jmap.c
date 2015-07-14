@@ -1350,6 +1350,9 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     if (_wantprop(crock->props, "department"))
         json_object_set_new(obj, "department",
                             json_string(strarray_safenth(org, 1)));
+    if (_wantprop(crock->props, "jobTitle"))
+        json_object_set_new(obj, "jobTitle",
+                            json_string(strarray_safenth(org, 1)));
     /* XXX - position? */
 
     /* address - we need to open code this, because it's repeated */
