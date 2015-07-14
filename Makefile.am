@@ -1096,7 +1096,7 @@ SNMPGEN = $(abs_top_srcdir)/snmp/snmpgen
 imap/lmtpstats.c: imap/lmtpstats.snmp $(SNMPGEN)
 	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
-imap/pushstats.c: imap/pushstats.snmp snmp/snmpgen
+imap/pushstats.c: imap/pushstats.snmp $(SNMPGEN)
 	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
