@@ -292,6 +292,9 @@ static struct capa_struct base_capabilities[] = {
     { "LITERAL+",              3 },
     { "ID",                    3 },
     { "ENABLE",                3 },
+#ifdef ENABLE_APPLEPUSHSERVICE
+    { "XAPPLEPUSHSERVICE",     3 }, /* apple push service for mail.app */
+#endif
 /* post-auth capabilities */
     { "ACL",                   2 },
     { "RIGHTS=kxten",          2 },
@@ -402,6 +405,10 @@ static int do_xconvfetch(struct dlist *cidlist,
                          struct fetchargs *fetchargs);
 static void cmd_xsnippets(char *tag);
 static void cmd_xstats(char *tag, int c);
+
+#ifdef ENABLE_APPLEPUSHSERVICE
+static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *applepushserviceargs);
+#endif
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -1200,6 +1207,9 @@ static void cmdloop(void)
     double commandmintimerd = 0.0;
     struct sync_reserve_list *reserve_list =
         sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
+#ifdef ENABLE_APPLEPUSHSERVICE
+    struct applepushserviceargs applepushserviceargs;
+#endif
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -2304,6 +2314,62 @@ static void cmdloop(void)
                 cmd_xmeid(tag.s, arg1.s);
             }
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+            else if (!strcmp(cmd.s, "Xapplepushservice")) {
+                if (c != ' ') goto missingargs;
+
+                memset(&applepushserviceargs, 0, sizeof(struct applepushserviceargs));
+
+                do {
+                    c = getastring(imapd_in, imapd_out, &arg1);
+                    if (c == EOF) goto aps_missingargs;
+
+                    if (!strcmp(arg1.s, "mailboxes")) {
+                        c = prot_getc(imapd_in);
+                        if (c != '(')
+                            goto aps_missingargs;
+
+                        c = prot_getc(imapd_in);
+                        if (c != ')') {
+                            prot_ungetc(c, imapd_in);
+                            do {
+                                c = getastring(imapd_in, imapd_out, &arg2);
+                                if (c == EOF) break;
+                                strarray_push(&applepushserviceargs.mailboxes, arg2.s);
+                            } while (c == ' ');
+                        }
+
+                        if (c != ')')
+                            goto aps_missingargs;
+                        c = prot_getc(imapd_in);
+                    }
+
+                    else {
+                        c = getastring(imapd_in, imapd_out, &arg2);
+
+                        // regular key/value
+                        if (!strcmp(arg1.s, "aps-version")) {
+                            if (!imparse_isnumber(arg2.s)) goto aps_extraargs;
+                            applepushserviceargs.aps_version = atoi(arg2.s);
+                        }
+                        else if (!strcmp(arg1.s, "aps-account-id"))
+                            buf_copy(&applepushserviceargs.aps_account_id, &arg2);
+                        else if (!strcmp(arg1.s, "aps-device-token"))
+                            buf_copy(&applepushserviceargs.aps_device_token, &arg2);
+                        else if (!strcmp(arg1.s, "aps-subtopic"))
+                            buf_copy(&applepushserviceargs.aps_subtopic, &arg2);
+                        else
+                            goto aps_extraargs;
+                    }
+                } while (c == ' ');
+
+                if (c == '\r') c = prot_getc(imapd_in);
+                if (c != '\n') goto aps_extraargs;
+
+                cmd_xapplepushservice(tag.s, &applepushserviceargs);
+            }
+#endif
+
             else goto badcmd;
             break;
 
@@ -2337,11 +2403,25 @@ static void cmdloop(void)
         eatline(imapd_in, c);
         continue;
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+    aps_missingargs:
+        buf_free(&applepushserviceargs.aps_account_id);
+        buf_free(&applepushserviceargs.aps_device_token);
+        buf_free(&applepushserviceargs.aps_subtopic);
+        strarray_fini(&applepushserviceargs.mailboxes);
+#endif
     missingargs:
         prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
         continue;
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+    aps_extraargs:
+        buf_free(&applepushserviceargs.aps_account_id);
+        buf_free(&applepushserviceargs.aps_device_token);
+        buf_free(&applepushserviceargs.aps_subtopic);
+        strarray_fini(&applepushserviceargs.mailboxes);
+#endif
     extraargs:
         prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
@@ -13528,3 +13608,75 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
     else
         *reserve_listp = NULL;
 }
+
+#ifdef ENABLE_APPLEPUSHSERVICE
+static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *applepushserviceargs)
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_BUFFER];
+    strarray_t notif_mailboxes = STRARRAY_INITIALIZER;
+    int i;
+    mbentry_t *mbentry = NULL;
+
+    const char *aps_topic = config_getstring(IMAPOPT_APS_TOPIC);
+    if (!aps_topic) {
+        syslog(LOG_ERR, "aps_topic not configured, can't complete XAPPLEPUSHSERVICE response");
+        prot_printf(imapd_out, "%s NO Server configuration error\r\n", tag);
+        return;
+    }
+
+    if (!buf_len(&applepushserviceargs->aps_account_id)) {
+        prot_printf(imapd_out, "%s NO Missing APNS account ID\r\n", tag);
+        return;
+    }
+    if (!buf_len(&applepushserviceargs->aps_device_token)) {
+        prot_printf(imapd_out, "%s NO Missing APNS device token\r\n", tag);
+        return;
+    }
+    if (!buf_len(&applepushserviceargs->aps_subtopic)) {
+        prot_printf(imapd_out, "%s NO Missing APNS sub-topic\r\n", tag);
+        return;
+    }
+
+    // v1 is inbox-only, so override the mailbox list
+    if (applepushserviceargs->aps_version == 1) {
+        strarray_truncate(&applepushserviceargs->mailboxes, 0);
+        strarray_push(&applepushserviceargs->mailboxes, "INBOX");
+        applepushserviceargs->aps_version = 1;
+    }
+    else {
+        // 2 is the most we support
+        applepushserviceargs->aps_version = 2;
+    }
+
+    for (i = 0; i < strarray_size(&applepushserviceargs->mailboxes); i++) {
+        const char *name = strarray_nth(&applepushserviceargs->mailboxes, i);
+        r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name, imapd_userid, mailboxname);
+        if (!r)
+            r = mlookup(tag, name, mailboxname, &mbentry);
+        if (!r && mbentry->mbtype == 0) {
+            strarray_push(&notif_mailboxes, name);
+            if (applepushserviceargs->aps_version >= 2) {
+                prot_puts(imapd_out, "* XAPPLEPUSHSERVICE \"mailbox\" ");
+                prot_printstring(imapd_out, name);
+                prot_puts(imapd_out, "\r\n");
+            }
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+
+    prot_printf(imapd_out, "* XAPPLEPUSHSERVICE \"aps-version\" \"%d\" \"aps-topic\" \"%s\"\r\n", applepushserviceargs->aps_version, aps_topic);
+    prot_printf(imapd_out, "%s OK XAPPLEPUSHSERVICE completed.\r\n", tag);
+
+    struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE);
+    mboxevent_set_applepushservice(mboxevent, applepushserviceargs, &notif_mailboxes, imapd_userid);
+    mboxevent_notify(mboxevent);
+    mboxevent_free(&mboxevent);
+
+    buf_release(&applepushserviceargs->aps_account_id);
+    buf_release(&applepushserviceargs->aps_device_token);
+    buf_release(&applepushserviceargs->aps_subtopic);
+    strarray_fini(&applepushserviceargs->mailboxes);
+    strarray_fini(&notif_mailboxes);
+}
+#endif

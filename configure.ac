@@ -1206,6 +1206,16 @@ if test "$enable_event_notification" != "no"; then
         [check_jansson=false]
           [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])]
           enable_event_notification="no")
+
+    dnl support for Apple Push Service registration
+    dnl disabled by default
+    AC_ARG_ENABLE(apple-push-service,
+            [AS_HELP_STRING([--enable-apple-push-service], [enable support for Apple Push Service (requires event notifications])],,
+            [enable_apple_push_service="no";])
+
+    if test "$enable_apple_push_service" != "no"; then
+        AC_DEFINE(ENABLE_APPLEPUSHSERVICE,[],[Build with support for Apple Push Service])
+    fi
 fi
 AM_CONDITIONAL(JANSSON, test x$check_jansson = xtrue)
 
@@ -1858,6 +1868,7 @@ echo "
 Cyrus Server configured components
 
    event notification: $enable_event_notification
+   apple push service: $enable_apple_push_service
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled
