@@ -408,8 +408,7 @@ static void my_carddav_auth(const char *userid)
                 proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
                                  &backend_cached, NULL, NULL, httpd_in);
                 mboxlist_entry_free(&mbentry);
-                free(mailboxname);
-                return;
+                goto done;
             }
             mboxlist_entry_free(&mbentry);
         }
@@ -423,8 +422,9 @@ static void my_carddav_auth(const char *userid)
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mailboxname, error_message(r));
     }
-    free(mailboxname);
     if (r) goto done;
+
+    free(mailboxname);
 
     /* Default addressbook */
     buf_printf(&boxbuf, ".%s", DEFAULT_ADDRBOOK);
@@ -439,9 +439,9 @@ static void my_carddav_auth(const char *userid)
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mailboxname, error_message(r));
     }
-    free(mailboxname);
 
  done:
+    free(mailboxname);
     buf_free(&boxbuf);
 }
 
