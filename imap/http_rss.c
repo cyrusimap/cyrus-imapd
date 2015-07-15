@@ -108,8 +108,9 @@ static struct body *body_fetch_section(struct body *body, const char *section);
 
 /* Namespace for RSS feeds of mailboxes */
 struct namespace_t namespace_rss = {
-    URL_NS_RSS, 0, "/rss", NULL, 1 /* auth */, ALLOW_READ,
+    URL_NS_RSS, 0, "/rss", NULL, 1 /* auth */,
     /*mbtype*/0,
+    ALLOW_READ,
     rss_init, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */

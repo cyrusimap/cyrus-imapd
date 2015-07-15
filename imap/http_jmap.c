@@ -123,8 +123,10 @@ static const struct message_t {
 
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
-    URL_NS_JMAP, 0, "/jmap", NULL, 1 /* auth */, (ALLOW_READ | ALLOW_POST),
-    /*type*/0, &jmap_init, &jmap_auth, NULL, NULL,
+    URL_NS_JMAP, 0, "/jmap", NULL, 1 /* auth */,
+    /*mbtype*/0, 
+    (ALLOW_READ | ALLOW_POST),
+    &jmap_init, &jmap_auth, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* COPY         */
