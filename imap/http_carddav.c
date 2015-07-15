@@ -424,7 +424,7 @@ static void my_carddav_auth(const char *userid)
                       mailboxname, error_message(r));
     }
     free(mailboxname);
-    if (r) return;
+    if (r) goto done;
 
     /* Default addressbook */
     buf_printf(&boxbuf, ".%s", DEFAULT_ADDRBOOK);
@@ -441,6 +441,7 @@ static void my_carddav_auth(const char *userid)
     }
     free(mailboxname);
 
+ done:
     buf_free(&boxbuf);
 }
 
