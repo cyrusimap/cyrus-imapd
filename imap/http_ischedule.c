@@ -213,7 +213,7 @@ static int meth_get_isched(struct transaction_t *txn,
        the number of available RSCALEs and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "%ld-%zu-%ld-%ld", (long) compile_time,
-               rscale_calendars ? rscale_calendars->num_elements : 0,
+               rscale_calendars ? (size_t)rscale_calendars->num_elements : 0,
                sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
