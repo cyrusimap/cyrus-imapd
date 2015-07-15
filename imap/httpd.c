@@ -1288,7 +1288,9 @@ static void cmdloop(void)
         }
 
         /* Register service/module and method */
-        buf_printf(&txn.buf, "%s%s", config_ident, namespace->prefix);
+        buf_printf(&txn.buf, "%s%s", config_ident,
+                   namespace->well_known ? strrchr(namespace->well_known, '/') :
+                   namespace->prefix);
         proc_register(buf_cstring(&txn.buf), httpd_clienthost, httpd_userid,
                       txn.req_line.uri, txn.req_line.meth);
         buf_reset(&txn.buf);
