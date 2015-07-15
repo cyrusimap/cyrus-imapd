@@ -627,7 +627,7 @@ int service_main(int argc __attribute__((unused)),
     }
     httpd_tls_required = !avail_auth_schemes;
 
-    proc_register("httpd", httpd_clienthost, NULL, NULL, NULL);
+    proc_register(config_ident, httpd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     httpd_timeout = config_getint(IMAPOPT_HTTPTIMEOUT);
@@ -982,6 +982,8 @@ static void cmdloop(void)
             ret = HTTP_SERVER_ERROR;
         }
 
+        proc_register(config_ident, httpd_clienthost, httpd_userid, NULL, NULL);
+
       req_line:
         do {
             /* Flush any buffered output */
@@ -1283,6 +1285,12 @@ static void cmdloop(void)
                 auth_success(&txn);
             }
         }
+
+        /* Register service/module and method */
+        buf_printf(&txn.buf, "%s%s", config_ident, namespace->prefix);
+        proc_register(buf_cstring(&txn.buf), httpd_clienthost, httpd_userid,
+                      txn.req_line.uri, txn.req_line.meth);
+        buf_reset(&txn.buf);
 
         /* Request authentication, if necessary */
         switch (txn.meth) {
@@ -2808,8 +2816,6 @@ static void auth_success(struct transaction_t *txn)
     int i;
 
     httpd_userisanonymous = is_userid_anonymous(httpd_userid);
-
-    proc_register("httpd", httpd_clienthost, httpd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",
            httpd_clienthost, httpd_userid, scheme->name,
