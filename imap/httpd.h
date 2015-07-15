@@ -125,7 +125,8 @@ enum {
     URL_NS_TZDIST,
     URL_NS_RSS,
     URL_NS_DBLOOKUP,
-    URL_NS_JMAP
+    URL_NS_JMAP,
+    URL_NS_ADMIN
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -399,6 +400,7 @@ extern struct namespace_t namespace_tzdist;
 extern struct namespace_t namespace_jmap;
 extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;
+extern struct namespace_t namespace_admin;
 
 
 /* XXX  These should be included in struct transaction_t */
