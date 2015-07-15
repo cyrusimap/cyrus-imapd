@@ -654,11 +654,19 @@ static int getContactGroupUpdates(struct jmap_req *req)
     if (!since) goto done;
     modseq_t oldmodseq = str2uint64(since);
 
+    char *mboxname = NULL;
+    json_t *abookid = json_object_get(req->args, "addressbookId");
+    if (abookid && json_string_value(abookid)) {
+        /* XXX - invalid arguments */
+        const char *addressbookId = json_string_value(abookid);
+        mboxname = carddav_mboxname(req->userid, addressbookId);
+    }
+
     struct updates_rock rock;
     rock.changed = json_array();
     rock.removed = json_array();
 
-    r = carddav_get_updates(db, oldmodseq, CARDDAV_KIND_GROUP,
+    r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
                             &getupdates_cb, &rock);
     if (r) goto done;
 
@@ -686,7 +694,6 @@ static int getContactGroupUpdates(struct jmap_req *req)
         struct jmap_req subreq = *req; // struct copy, woot
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.changed);
-        json_t *abookid = json_object_get(req->args, "addressbookId");
         if (abookid) {
             json_object_set(subreq.args, "addressbookId", abookid);
         }
@@ -1633,11 +1640,19 @@ static int getContactUpdates(struct jmap_req *req)
     if (!since) goto done;
     modseq_t oldmodseq = str2uint64(since);
 
+    char *mboxname = NULL;
+    json_t *abookid = json_object_get(req->args, "addressbookId");
+    if (abookid && json_string_value(abookid)) {
+        /* XXX - invalid arguments */
+        const char *addressbookId = json_string_value(abookid);
+        mboxname = carddav_mboxname(req->userid, addressbookId);
+    }
+
     struct updates_rock rock;
     rock.changed = json_array();
     rock.removed = json_array();
 
-    r = carddav_get_updates(db, oldmodseq, CARDDAV_KIND_CONTACT,
+    r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
                             &getupdates_cb, &rock);
     if (r) goto done;
 
@@ -1664,7 +1679,6 @@ static int getContactUpdates(struct jmap_req *req)
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.changed);
         if (doprops) json_object_set(subreq.args, "properties", doprops);
-        json_t *abookid = json_object_get(req->args, "addressbookId");
         if (abookid) {
             json_object_set(subreq.args, "addressbookId", abookid);
         }

@@ -690,22 +690,29 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
 #define CMD_GETUPDATES CMD_GETFIELDS \
   " WHERE kind = :kind AND modseq > :modseq;"
 
+#define CMD_GETUPDATES_MBOX CMD_GETFIELDS \
+  " WHERE mboxname = :mailbox AND kind = :kind AND modseq > :modseq;"
+
 EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
-                                 modseq_t oldmodseq, int kind,
+                                 modseq_t oldmodseq, const char *mboxname, int kind,
                                  int (*cb)(void *rock,
                                            struct carddav_data *cdata),
                                  void *rock)
 {
     struct sqldb_bindval bval[] = {
-        { ":modseq", SQLITE_INTEGER, { .i = oldmodseq } },
-        { ":kind",   SQLITE_INTEGER, { .i = kind      } },
-        { NULL,      SQLITE_NULL,    { .s = NULL      } }
+        { ":mailbox", SQLITE_TEXT,    { .s = mboxname  } },
+        { ":modseq",  SQLITE_INTEGER, { .i = oldmodseq } },
+        { ":kind",    SQLITE_INTEGER, { .i = kind      } },
+        { NULL,       SQLITE_NULL,    { .s = NULL      } }
     };
     static struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
     int r;
 
-    r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
+    if (mboxname)
+        r = sqldb_exec(carddavdb->db, CMD_GETUPDATES_MBOX, bval, &read_cb, &rrock);
+    else
+        r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
     if (r) {
         syslog(LOG_ERR, "caldav error %s", error_message(r));
         /* XXX - free memory */

@@ -119,7 +119,7 @@ int carddav_get_cards(struct carddav_db *carddavdb,
 /* process each entry of type 'kind' and updated since 'oldmodseq'
    in 'carddavdb' with cb() */
 int carddav_get_updates(struct carddav_db *carddavdb,
-                        modseq_t oldmodseq, int kind,
+                        modseq_t oldmodseq, const char *mboxname, int kind,
                         carddav_cb_t *cb, void *rock);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
