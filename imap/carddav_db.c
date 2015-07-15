@@ -691,7 +691,7 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
   " WHERE kind = :kind AND modseq > :modseq;"
 
 #define CMD_GETUPDATES_MBOX CMD_GETFIELDS \
-  " WHERE mboxname = :mailbox AND kind = :kind AND modseq > :modseq;"
+  " WHERE mailbox = :mailbox AND kind = :kind AND modseq > :modseq;"
 
 EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
                                  modseq_t oldmodseq, const char *mboxname, int kind,
