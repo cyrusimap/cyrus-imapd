@@ -54,10 +54,13 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "global.h"
 #include "httpd.h"
 #include "proc.h"
+#include "time.h"
 #include "util.h"
 #include "version.h"
 #include "xstrlcpy.h"
@@ -150,17 +153,110 @@ static int meth_get(struct transaction_t *txn,
 
 
 /* Perform a proc action */
+struct proc_rock {
+    time_t now;
+    time_t boottime;
+    struct buf *buf;
+    struct buf *body;
+    unsigned *level;
+};
+
+static const char *proc_states[] = {
+    /* A */ "", /* B */ "", /* C */ "",
+    /* D */ " (waiting)",
+    /* E */ "", /* F */ "", /* G */ "", /* H */ "", /* I */ "", /* J */ "",
+    /* K */ "", /* L */ "", /* M */ "", /* N */ "", /* O */ "", /* P */ "",
+    /* Q */ "",
+    /* R */ " (running)",
+    /* S */ " (sleeping)",
+    /* T */ " (stopped)",
+    /* U */ "", /* V */ "",
+    /* W */ " (paging)",
+    /* X */ "", /* Y */ "",
+    /* Z */ " (zombie)"
+};
+
 static int print_procinfo(pid_t pid,
                           const char *servicename, const char *host,
                           const char *user, const char *mailbox,
                           const char *cmdname,
                           void *rock)
 {
-    struct buf *body = (struct buf *) rock;
+    struct proc_rock *prock = (struct proc_rock *) rock;
+    struct stat sbuf;
+    FILE *f;
+    char state;
+    unsigned long vmsize = 0;
+    unsigned long long starttime = 0;
 
-    buf_printf_markup(body, 3, "<tr><td>%d<td>%s<td>%s<td>%s<td>%s<td>%s",
-                      (int) pid, servicename, host, user ? user : "",
-                      mailbox ? mailbox : "", cmdname ? cmdname : "");
+    buf_reset(prock->buf);
+    buf_printf(prock->buf, "/proc/%d", pid);
+    if (stat(buf_cstring(prock->buf), &sbuf)) return 0;
+
+    buf_appendcstr(prock->buf, "/stat");
+    f = fopen(buf_cstring(prock->buf), "r");
+    if (f) {
+        int d;
+        long ld;
+        unsigned u;
+        unsigned long lu;
+        char *s = NULL;
+
+        fscanf(f, "%d %ms %c " /* 1-3 */
+               "%d %d %d %d %d %u " /* 4-9 */
+               "%lu %lu %lu %lu %lu %lu " /* 10-15 */
+               "%ld %ld %ld %ld %ld %ld " /* 16-21 */
+               "%llu %lu %ld", /* 22-24 */
+               &d, &s, &state,
+               &d, &d, &d, &d, &d, &u,
+               &lu, &lu, &lu, &lu, &lu, &lu,
+               &ld, &ld, &ld, &ld, &ld, &ld,
+               &starttime, &vmsize, &ld);
+
+        free(s);
+        fclose(f);
+    }
+
+    buf_printf_markup(prock->body, *prock->level,
+                      "<tr><td>%d<td>%s", (int) pid, servicename);
+
+    if (vmsize) {
+        const char *state_str = "";
+
+        if (state >= 'A' && state <= 'Z')
+            state_str = proc_states[state - 'A'];
+
+        buf_reset(prock->buf);
+        if (prock->boottime) {
+            const char *monthname[] = {
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+            };
+            time_t start = prock->boottime + starttime/sysconf(_SC_CLK_TCK);
+            struct tm start_tm;
+
+            localtime_r(&start, &start_tm);
+            if (start - prock->now >= 86400 /* 24 hrs */) {
+                buf_printf(prock->buf, "%s %02d",
+                           monthname[start_tm.tm_mon], start_tm.tm_mday);
+            }
+            else {
+                buf_printf(prock->buf, "%02d:%02d",
+                           start_tm.tm_hour, start_tm.tm_min);
+            }
+        }
+
+        buf_printf_markup(prock->body, *prock->level+1,
+                          "<td>%c%s<td>%s<td>%lu",
+                          state, state_str,
+                          buf_cstring(prock->buf), vmsize/1024);
+    }
+    else buf_printf_markup(prock->body, *prock->level+1, "<td><td><td>");
+
+    buf_printf_markup(prock->body, *prock->level+1,
+                      "<td>%s<td>%s<td>%s<td>%s",
+                      host, user, mailbox, cmdname);
+
     return 0;
 }
 
@@ -168,6 +264,8 @@ static int action_proc(struct transaction_t *txn)
 {
     unsigned level = 0;
     struct buf *body = &txn->resp_body.payload;
+    struct proc_rock prock = { time(0), 0, &txn->buf, body, &level };
+    FILE *f;
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
@@ -177,6 +275,18 @@ static int action_proc(struct transaction_t *txn)
     if (txn->meth == METH_HEAD) {
         response_header(HTTP_OK, txn);
         goto done;
+    }
+
+    f = fopen("/proc/stat", "r");
+    if (f) {
+        char buf[1024];
+
+        while (fgets(buf, sizeof(buf), f)) {
+            if (sscanf(buf, "btime %ld\n", &prock.boottime) == 1) break;
+            while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), f)) {
+            }
+        }
+        fclose(f);
     }
 
     /* Send HTML header */
@@ -193,13 +303,16 @@ static int action_proc(struct transaction_t *txn)
     buf_printf_markup(body, level, "<h2>%s</h2>",
                       "Currently Running Cyrus Services");
     buf_printf_markup(body, level++, "<table border cellpadding=5>");
-    buf_printf_markup(body, level++, "<tr><th>PID<th>Service<th>"
-                      "Client<th>User<th>Resource<th>Command");
+    buf_printf_markup(body, level, "<caption>%s</caption>", ctime(&prock.now));
+    buf_printf_markup(body, level++, "<tr><th>PID<th>Service"
+                      "<th>State<th>Start<th>VmSize"
+                      "<th>Client<th>User<th>Resource<th>Command");
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
 
     /* Add running services */
-    proc_foreach(print_procinfo, body);
+    proc_foreach(print_procinfo, &prock);
+    buf_reset(&txn->buf);
 
     /* Finish list */
     buf_printf_markup(body, --level, "</table>");
