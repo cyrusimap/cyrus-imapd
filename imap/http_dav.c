@@ -3116,7 +3116,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         /* Remote source mailbox */
 
         /* Replace cached Destination header with just the absolute path */
-        spool_replace_header("Destination", dest_tgt.path, txn->req_hdrs);
+        spool_replace_header(xstrdup("Destination"),
+                             dest_tgt.path, txn->req_hdrs);
 
         if (!dest_tgt.mbentry->server) {
             /* Local destination mailbox */
