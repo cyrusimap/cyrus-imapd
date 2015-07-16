@@ -63,6 +63,8 @@
 #include "time.h"
 #include "util.h"
 #include "version.h"
+#include "xmalloc.h"
+#include "xstrlcat.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -152,55 +154,63 @@ static int meth_get(struct transaction_t *txn,
 }
 
 
-/* Perform a proc action */
-struct proc_rock {
-    time_t now;
-    time_t boottime;
-    struct buf *buf;
-    struct buf *body;
-    unsigned *level;
+struct proc_info {
+    pid_t pid;
+    char *servicename;
+    char *user;
+    char *host;
+    char *mailbox;
+    char *cmdname;
+    char state;
+    time_t start;
+    unsigned long vmsize;
 };
 
-static const char *proc_states[] = {
-    /* A */ "", /* B */ "", /* C */ "",
-    /* D */ " (waiting)",
-    /* E */ "", /* F */ "", /* G */ "", /* H */ "", /* I */ "", /* J */ "",
-    /* K */ "", /* L */ "", /* M */ "", /* N */ "", /* O */ "", /* P */ "",
-    /* Q */ "",
-    /* R */ " (running)",
-    /* S */ " (sleeping)",
-    /* T */ " (stopped)",
-    /* U */ "", /* V */ "",
-    /* W */ " (paging)",
-    /* X */ "", /* Y */ "",
-    /* Z */ " (zombie)"
-};
+typedef struct {
+    unsigned count;
+    unsigned alloc;
+    struct proc_info **data;
+} piarray_t;
 
-static int print_procinfo(pid_t pid,
-                          const char *servicename, const char *host,
-                          const char *user, const char *mailbox,
-                          const char *cmdname,
-                          void *rock)
+static int add_procinfo(pid_t pid,
+                        const char *servicename, const char *host,
+                        const char *user, const char *mailbox,
+                        const char *cmdname,
+                        void *rock)
 {
-    struct proc_rock *prock = (struct proc_rock *) rock;
+    piarray_t *piarray = (piarray_t *) rock;
+    struct proc_info *pinfo;
+    char procpath[100];
     struct stat sbuf;
     FILE *f;
-    char state;
-    unsigned long vmsize = 0;
-    unsigned long long starttime = 0;
 
-    buf_reset(prock->buf);
-    buf_printf(prock->buf, "/proc/%d", pid);
-    if (stat(buf_cstring(prock->buf), &sbuf)) return 0;
+    snprintf(procpath, sizeof(procpath), "/proc/%d", pid);
+    if (stat(procpath, &sbuf)) return 0;
 
-    buf_appendcstr(prock->buf, "/stat");
-    f = fopen(buf_cstring(prock->buf), "r");
+    if (piarray->count >= piarray->alloc) {
+        piarray->alloc += 100;
+        piarray->data = xrealloc(piarray->data,
+                                 piarray->alloc * sizeof(struct proc_info *));
+    }
+
+    pinfo = piarray->data[piarray->count++] =
+        (struct proc_info *) xzmalloc(sizeof(struct proc_info));
+    pinfo->pid = pid;
+    pinfo->servicename = xstrdupsafe(servicename);
+    pinfo->host = xstrdupsafe(host);
+    pinfo->user = xstrdupsafe(user);
+    pinfo->mailbox = xstrdupsafe(mailbox);
+    pinfo->cmdname = xstrdupsafe(cmdname);
+
+    strlcat(procpath, "/stat", sizeof(procpath));
+    f = fopen(procpath, "r");
     if (f) {
         int d;
         long ld;
         unsigned u;
-        unsigned long lu;
-        char *s = NULL;
+        unsigned long vmsize = 0, lu;
+        unsigned long long starttime = 0;
+        char state = 0, *s = NULL;
 
         fscanf(f, "%d %ms %c " /* 1-3 */
                "%d %d %d %d %d %u " /* 4-9 */
@@ -215,57 +225,91 @@ static int print_procinfo(pid_t pid,
 
         free(s);
         fclose(f);
+
+        pinfo->state = state;
+        pinfo->vmsize = vmsize;
+        pinfo->start = starttime/sysconf(_SC_CLK_TCK);
     }
-
-    buf_printf_markup(prock->body, *prock->level,
-                      "<tr><td>%d<td>%s", (int) pid, servicename);
-
-    if (vmsize) {
-        const char *state_str = "";
-
-        if (state >= 'A' && state <= 'Z')
-            state_str = proc_states[state - 'A'];
-
-        buf_reset(prock->buf);
-        if (prock->boottime) {
-            const char *monthname[] = {
-                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-            };
-            time_t start = prock->boottime + starttime/sysconf(_SC_CLK_TCK);
-            struct tm start_tm;
-
-            localtime_r(&start, &start_tm);
-            if (start - prock->now >= 86400 /* 24 hrs */) {
-                buf_printf(prock->buf, "%s %02d",
-                           monthname[start_tm.tm_mon], start_tm.tm_mday);
-            }
-            else {
-                buf_printf(prock->buf, "%02d:%02d",
-                           start_tm.tm_hour, start_tm.tm_min);
-            }
-        }
-
-        buf_printf_markup(prock->body, *prock->level+1,
-                          "<td>%c%s<td>%s<td>%lu",
-                          state, state_str,
-                          buf_cstring(prock->buf), vmsize/1024);
-    }
-    else buf_printf_markup(prock->body, *prock->level+1, "<td><td><td>");
-
-    buf_printf_markup(prock->body, *prock->level+1,
-                      "<td>%s<td>%s<td>%s<td>%s",
-                      host, user, mailbox, cmdname);
 
     return 0;
 }
 
+static int sort_procinfo(const struct proc_info **a, const struct proc_info **b,
+                         const char *key)
+{
+    int r;
+    int rev = islower((int) *key);
+
+    switch (toupper((int) *key)) {
+    default:
+    case 'P':
+        r = (*a)->pid - (*b)->pid;
+        break;
+
+    case 'S':
+        r = strcmp((*a)->servicename, (*b)->servicename);
+        break;
+
+    case 'Q':
+        r = (*a)->state - (*b)->state;
+        break;
+
+    case 'T':
+        r = (*a)->start - (*b)->start;
+        break;
+
+    case 'V':
+        r = (*a)->vmsize - (*b)->vmsize;
+        break;
+
+    case 'H':
+        r = strcmp((*a)->host, (*b)->host);
+        break;
+
+    case 'U':
+        r = strcmp((*a)->user, (*b)->user);
+        break;
+
+    case 'R':
+        r = strcmp((*a)->mailbox, (*b)->mailbox);
+        break;
+
+    case 'C':
+        r = strcmp((*a)->cmdname, (*b)->cmdname);
+        break;
+    }
+
+    return (rev ? -r : r);
+}
+
+/* Perform a proc action */
 static int action_proc(struct transaction_t *txn)
 {
-    unsigned level = 0;
+    unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
-    struct proc_rock prock = { time(0), 0, &txn->buf, body, &level };
+    piarray_t piarray = { 0, 0, NULL };
+    time_t now = time(0), boot_time = 0;
+    struct strlist *param;
+    struct tm tnow;
+    char key = 0;
     FILE *f;
+    struct proc_columns {
+        char key;
+        const char *name;
+    } columns[] = {
+        { 'P', "PID" },
+        { 'S', "Service" },
+        { 'Q', "State" },
+        { 'T', "Start" },
+        { 'V', "VmSize" },
+        { 'H', "Client" },
+        { 'U', "User" },
+        { 'R', "Resource" },
+        { 'C', "Command" },
+        { 0, NULL}
+    };
+
+    localtime_r(&now, &tnow);
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
@@ -277,17 +321,41 @@ static int action_proc(struct transaction_t *txn)
         goto done;
     }
 
+    /* Check for a sort key */
+    param = hash_lookup("sort", &txn->req_qparams);
+    if (param) {
+        char Ukey = toupper((int) *param->s);
+        for (i = 0; columns[i].key; i++) {
+            if (Ukey == columns[i].key) {
+                key = *param->s;
+                if (isupper((int) key)) columns[i].key = tolower((int) key);
+                break;
+            }
+        }
+    }
+    if (!key) {
+        key = 'P';
+        columns[0].key = 'p';
+    }
+
+    /* Find boot time in /proc/stat (needed for calculating process start) */
     f = fopen("/proc/stat", "r");
     if (f) {
         char buf[1024];
 
         while (fgets(buf, sizeof(buf), f)) {
-            if (sscanf(buf, "btime %ld\n", &prock.boottime) == 1) break;
+            if (sscanf(buf, "btime %ld\n", &boot_time) == 1) break;
             while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), f)) {
             }
         }
         fclose(f);
     }
+
+    /* Get and sort info for running processes */
+    proc_foreach(add_procinfo, &piarray);
+
+    qsort_r(piarray.data, piarray.count, sizeof(struct proc_info *),
+            (int (*)(const void *, const void *, void *)) &sort_procinfo, &key);
 
     /* Send HTML header */
     buf_reset(body);
@@ -303,18 +371,89 @@ static int action_proc(struct transaction_t *txn)
     buf_printf_markup(body, level, "<h2>%s</h2>",
                       "Currently Running Cyrus Services");
     buf_printf_markup(body, level++, "<table border cellpadding=5>");
-    buf_printf_markup(body, level, "<caption>%s</caption>", ctime(&prock.now));
-    buf_printf_markup(body, level++, "<tr><th>PID<th>Service"
-                      "<th>State<th>Start<th>VmSize"
-                      "<th>Client<th>User<th>Resource<th>Command");
-    write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
-    buf_reset(body);
+    buf_printf_markup(body, level, "<caption><b>%.*s</b></caption>",
+                      24 /* clip LF */, asctime(&tnow));
+    buf_printf_markup(body, level++, "<tr>");
+    for (i = 0; columns[i].key; i++) {
+        buf_printf_markup(body, level, "<th><a href=\"%s?sort=%c\">%s</a></th>",
+                          txn->req_uri->path, columns[i].key, columns[i].name);
+    }
+    buf_printf_markup(body, --level, "</tr>");
 
-    /* Add running services */
-    proc_foreach(print_procinfo, &prock);
-    buf_reset(&txn->buf);
+    /* Add processes to table */
+    for (i = 0; i < piarray.count; i++) {
+        struct proc_info *pinfo = piarray.data[i];
 
-    /* Finish list */
+        /* Send a chunk every 100 processes */
+        if (!(i % 100)) {
+            write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
+            buf_reset(body);
+        }
+
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td>%d</td>", (int) pinfo->pid);
+        buf_printf_markup(body, level, "<td>%s</td>", pinfo->servicename);
+
+        if (pinfo->vmsize) {
+            const char *proc_states[] = {
+                /* A */ "", /* B */ "", /* C */ "",
+                /* D */ " (waiting)",
+                /* E */ "", /* F */ "", /* G */ "", /* H */ "", /* I */ "",
+                /* J */ "", /* K */ "", /* L */ "", /* M */ "", /* N */ "",
+                /* O */ "", /* P */ "", /* Q */ "",
+                /* R */ " (running)",
+                /* S */ " (sleeping)",
+                /* T */ " (stopped)",
+                /* U */ "", /* V */ "",
+                /* W */ " (paging)",
+                /* X */ "", /* Y */ "",
+                /* Z */ " (zombie)"
+            };
+            const char *monthname[] = {
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+            };
+
+            buf_printf_markup(body, level, "<td>%c%s</td>", pinfo->state,
+                              isupper((int) pinfo->state) ?
+                              proc_states[pinfo->state - 'A'] : "");
+
+            if (boot_time) {
+                struct tm start;
+
+                pinfo->start += boot_time;
+                localtime_r(&pinfo->start, &start);
+                if (start.tm_yday != tnow.tm_yday) {
+                    buf_printf_markup(body, level, "<td>%s %02d</td>",
+                                      monthname[start.tm_mon], start.tm_mday);
+                }
+                else {
+                    buf_printf_markup(body, level, "<td>%02d:%02d</td>",
+                                      start.tm_hour, start.tm_min);
+                }
+            }
+            else buf_printf_markup(body, level, "<td></td>");
+                              
+            buf_printf_markup(body, level, "<td>%lu</td>", pinfo->vmsize/1024);
+        }
+        else buf_printf_markup(body, level, "<td></td><td></td><td></td>");
+
+        buf_printf_markup(body, level, "<td>%s</td>", pinfo->host);
+        buf_printf_markup(body, level, "<td>%s</td>", pinfo->user);
+        buf_printf_markup(body, level, "<td>%s</td>", pinfo->mailbox);
+        buf_printf_markup(body, level, "<td>%s</td>", pinfo->cmdname);
+        buf_printf_markup(body, --level, "</tr>");
+
+        free(pinfo->servicename);
+        free(pinfo->host);
+        free(pinfo->user);
+        free(pinfo->mailbox);
+        free(pinfo->cmdname);
+        free(pinfo);
+    }
+    free(piarray.data);
+
+    /* Finish table */
     buf_printf_markup(body, --level, "</table>");
 
     /* Finish HTML */
