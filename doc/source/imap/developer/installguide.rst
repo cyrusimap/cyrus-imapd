@@ -31,9 +31,9 @@ You'll need access to the cyrus-imapd git repository.
 Setting up dependencies
 -----------------------
 1. Install tools for building
-	* ``sudo apt-get install build-essential autoconf automake libtool pkg-config bison flex valgrind``
+    * ``sudo apt-get install build-essential autoconf automake libtool pkg-config bison flex valgrind``
 2. Install dependencies for master branch
-	* ``sudo apt-get install libjansson-dev libxml2-dev libsqlite3-dev libical-dev libsasl2-dev libssl-dev libopendkim-dev libcunit1-dev libpcre3-dev uuid-dev``
+    * ``sudo apt-get install libjansson-dev libxml2-dev libsqlite3-dev libical-dev libsasl2-dev libssl-dev libopendkim-dev libcunit1-dev libpcre3-dev uuid-dev``
 3. Additional dependencies for cyrus-imapd-2.5: you'll need the ``-dev`` package to match whichever version of libdb you already have installed (assuming it's probably already installed). I needed ``libdb5.3-dev`` on debian 8.0, but ``libdb5.1-dev`` on 7.8.
 
 .. _steps 1-3: https://help.github.com/articles/generating-ssh-keys/
@@ -47,22 +47,24 @@ Compile Cyrus
 
 ::
 
-	cd /path/to/cyrus-imapd
-	
-	autoreconf -i -s   # generates a configure script, and its various dependencies
-	
-	./configure CFLAGS="-Wno-unused-parameter -g -O0 -Wall -Wextra -Werror" --enable-coverage \
-	--enable-http --enable-unit-tests --enable-replication --with-openssl=yes --enable-nntp \
-	--enable-murder --enable-idled --enable-event-notification --prefix=/usr/cyrus
+    cd /path/to/cyrus-imapd
+    
+    autoreconf -i -s   # generates a configure script, and its various dependencies
+    
+    ./configure CFLAGS="-Wno-unused-parameter -g -O0 -Wall -Wextra -Werror" --enable-coverage \
+    --enable-http --enable-unit-tests --enable-replication --with-openssl=yes --enable-nntp \
+    --enable-murder --enable-idled --enable-event-notification --prefix=/usr/cyrus
 
-	make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
+    make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
 
-	make
+    make
 
-	make check
+    make check
     
     make install
 
+You may see warnings regarding libical v2.0 being recommended to support certain functionality. Currently libical v1.0.1 is sufficient, unless you need/want RSCALE (non-gregorian recurrences), VPOLL (consensus scheduling), or VAVAILABILITY (specifying availability over time) functionality. If v2 is required, it will need to be installed from `github <https://github.com/libical/libical>`_.  
+    
 .. _imapinstallguide_cassandane:
 Cassandane
 ==========
@@ -86,11 +88,11 @@ Install and configure Cassandane
 
 .. code-block:: bash
 
-	sudo apt-get install libtest-unit-perl libconfig-inifiles-perl libdatetime-perl libbsd-resource-perl \
-	  libxml-generator-perl libencode-imaputf7-perl libio-stringy-perl libnews-nntpclient-perl \
-	  libfile-chdir-perl libnet-server-perl libunix-syslog-perl
-	cd /path/to/cassandane
-	make
+    sudo apt-get install libtest-unit-perl libconfig-inifiles-perl libdatetime-perl libbsd-resource-perl \
+      libxml-generator-perl libencode-imaputf7-perl libio-stringy-perl libnews-nntpclient-perl \
+      libfile-chdir-perl libnet-server-perl libunix-syslog-perl
+    cd /path/to/cassandane
+    make
 
 3. Copy ``cassandane.ini.example`` to ``cassandane.ini``
 4. Edit ``cassandane.ini`` to set up your cassandane environment. 
@@ -101,32 +103,32 @@ Install and configure Cassandane
 
 .. code-block:: bash
 
-	sudo adduser --system --group cyrus
-	sudo adduser cyrus mail
-	
+    sudo adduser --system --group cyrus
+    sudo adduser cyrus mail
+    
 6. Give your user account access to sudo as ``cyrus``
 
-	* ``sudo visudo``
-	* add a line like:``username ALL = (cyrus) NOPASSWD: ALL``, where "username" is your own username
+    * ``sudo visudo``
+    * add a line like:``username ALL = (cyrus) NOPASSWD: ALL``, where "username" is your own username
 
 7. Make the ``destdir`` directory, as the ``cyrus`` user
 
-	* ``sudo -u cyrus mkdir /var/tmp/cass``
+    * ``sudo -u cyrus mkdir /var/tmp/cass``
 
 Building cyrus-imapd for Cassandane
 -----------------------------------
-	* ``cd /path/to/cyrus-imapd``
-	* `Compile Cyrus`_ (as above)
-	* ``make -e DESTDIR=/var/tmp/cyrus install``
+    * ``cd /path/to/cyrus-imapd``
+    * `Compile Cyrus`_ (as above)
+    * ``make -e DESTDIR=/var/tmp/cyrus install``
 
 Running cassandane tests:
 -------------------------
-	
-	* As user ``cyrus``, run the tests.
+    
+    * As user ``cyrus``, run the tests.
 .. code-block:: bash
 
-	cd /path/to/cassandane
-	./testrunner.pl -f pretty -j 8
+    cd /path/to/cassandane
+    ./testrunner.pl -f pretty -j 8
 
 Read the script to see other options. If you're having problems, add more ``-v`` options to the testrunner to get more info out.
 
@@ -140,7 +142,7 @@ Arcanist is a tool for managing workflow (code review, etc), which sits between 
 
 .. note::
 
-	Conrad says: "Installing arcanist on Ubuntu was apparently as easy as ``sudo apt-get install arcanist``. But, the folks over at arcanist say: "clone the code from GitHub."
+    Conrad says: "Installing arcanist on Ubuntu was apparently as easy as ``sudo apt-get install arcanist``. But, the folks over at arcanist say: "clone the code from GitHub."
 
 1. `Install Arcanist`_
 2. Set up Arcanist
@@ -159,29 +161,29 @@ A lot of Cyrus's debugging information gets logged with ``syslog``, so you'll wa
 1. Find the correct place to edit syslog config for your system (for me, I needed to create ``/etc/rsyslog.d/cyrus.conf``)
 2. Add lines like
 
-	``local6.*        /var/log/imapd.log``
-	
-	``auth.debug      /var/log/auth.log``
-	
+    ``local6.*        /var/log/imapd.log``
+    
+    ``auth.debug      /var/log/auth.log``
+    
 3. Restart the rsyslog service
 
-	``sudo /etc/init.d/rsyslog restart``
-	
+    ``sudo /etc/init.d/rsyslog restart``
+    
 4. Arrange to rotate ``/var/log/imapd.log`` so it doesn't get stupendously large. Create ``/etc/logrotate.d/cyrus.conf`` with content like::
 
-	/etc/logrotate.d/cyrus.conf
-	/var/log/imapd.log
-	{
-		rotate 4
-		weekly
-		missingok
-		notifempty
-		compress
-		delaycompress
-		sharedscripts
-		postrotate
-		invoke-rc.d rsyslog rotate > /dev/null
-		endscript
-	}
+    /etc/logrotate.d/cyrus.conf
+    /var/log/imapd.log
+    {
+        rotate 4
+        weekly
+        missingok
+        notifempty
+        compress
+        delaycompress
+        sharedscripts
+        postrotate
+        invoke-rc.d rsyslog rotate > /dev/null
+        endscript
+    }
 
 .. _FastMail : https://www.fastmail.com
