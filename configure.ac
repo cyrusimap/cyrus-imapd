@@ -940,7 +940,7 @@ if test "$with_krbdes" = "yes"; then
       else
           KRB_LIBS="-ldes"
       fi,
-  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.  You might want --with-auth=unix.]))
+  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
 fi
 fi
 

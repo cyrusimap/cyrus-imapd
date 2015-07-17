@@ -118,7 +118,6 @@ esac
 
 # settings; we have to disable these on some platforms
 DEBUG=""
-WITHAUTH="--with-auth=pts --with-afs=/usr/local --enable-krb5afspts --without-krbdes"
 SSL_CONFIG="--with-openssl=/usr/local/lib"
 
 # the defaults are good enough for us
