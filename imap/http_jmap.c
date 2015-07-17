@@ -532,7 +532,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     }
 
     struct cards_rock rock;
-    int r = -1;
+    int r = 0;
 
     rock.array = json_pack("[]");
     rock.props = NULL;
