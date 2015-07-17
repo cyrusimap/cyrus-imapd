@@ -277,6 +277,128 @@ I recommend you check ``/var/log/syslog`` for errors so you can quickly understa
 
 Time to cheer!
  
+Setting up SSL certificates
+---------------------------
+Let's set up encryption with TLS. It may sound difficult, but it's actually pretty easy to do.
+
+First, we'll create a TLS certificate. This is done with a tool called OpenSSL. Here's how you can generate the certificate and store it in the /var/imap/server.pem file:
+
+::
+
+    sudo openssl req -new -x509 -nodes -out /var/imap/server.pem \
+    -keyout /var/imap/server.pem -days 365 \
+    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost"  
+    
+This creates a TLS certificate (`-out`) and private key (`-keyout`) in the `X.509 <https://en.wikipedia.org/wiki/X.509>`_ format (`-x509`). The certificate is set to expire in 365 days (`-days`) and has default information set up (`-subj ...`). The contents of the -subj is non-trivial and defined in `RFC 5280 <http://www.ietf.org/rfc/rfc5280.txt>`_, a brief summary is available on `stackexchange <http://stackoverflow.com/questions/6464129/certificate-subject-x-509>_` which is enough to decode our sample above.
+
+Great! You should now have a file at /var/imap/server.pem.  
+
+Now, let's give Cyrus access to this file:
+
+::
+
+    sudo chown cyrus:mail /var/imap/server.pem 
+ 
+Awesome! Almost done. We will now configure the Cyrus IMAP server to actually use this TLS certificate.
+
+Open your Cyrus configuration file /etc/imapd.conf and add the following to lines at the end of it:
+
+::
+
+    tls_server_cert: /var/imap/server.pem  
+    tls_server_key: /var/imap/server.pem  
+
+This tells the server where to find the TLS certificate and the key. It may seem weird to specify the same file twice, but since the file has the x509 format, the server will know what to do. Cyrus is there for you, always (unless your hard drive burns down) ! :-)
+
+The other configuration file we have to edit is /etc/cyrus.conf. Open it up with your favorite text editor and in the **SERVICES** section, add this line:
+
+::
+
+    imaps        cmd="imapd" listen="imaps" prefork=0  
+    
+Notice the `s` at the end of `imaps`. This says we are using TLS.   
+
+If you now restart (or start) your Cyrus server, you should have Cyrus listening on port **993** (the IMAPS port) with the **STARTTLS IMAP extension** enabled. You can check that TLS works as expected with the following command:
+
+::
+
+    imtest -t "" -u imapuser -a imapuser -w secret localhost  
+    
+Make sure to replace `imapuser` with whatever user you set up with saslpasswd2 before, and to replace `secret` with the actual password you set for that user. 
+
+Sending a test email
+--------------------
+
+We will now send a test email to our local development environment to see if everything works as expected:
+
+* Sendmail should accept the incoming email,
+* LMTP should transmit the email to Cyrus IMAP,
+* You should be able to see the email stored on your filesystem.
+
+But first, let's create a mailbox that we will send the test email to. We'll call this test mailbox `example@localhost`.
+
+Creating the mailbox is done easily with a single command and the `cyradm` tool:
+
+::
+
+    echo 'createmailbox user.example@localhost' | cyradm -u imapuser -w secret localhost  
+    
+Notice how we seem to be creating a mailbox named `user.example@localhost`. In fact, Cyrus understands this to be `example@localhost`, so we're fine. As usual, adjust the password via the `-w` option to the password you set above.
+
+If you have explicitly enabled `unixhierarchysep` in `/etc/imapd.conf`, you should replace `user.example@localhost` with `user/example@localhost`. You can read more about unixhierarchysep in the imapd MAN page.
+
+Also, note that the command above might produce some weird looking output, such as:
+
+::
+
+    localhost> localhost>  
+    
+This happens because cyradm is normally used interactively, with a prompt. We aren't using a prompt, so this output is fine and expected. 
+
+Now that the mailbox exists, we'll send it an email. We won't be using Fastmail or Yahoo Mail or Google Mail. No, no.
+
+We will use the good old telnet with raw SMTP commands. Let's do this!
+
+First, connect to the Sendmail SMTP server:
+
+::
+
+    telnet localhost smtp 
+    
+You should see a prompt appear:
+
+::
+
+    Trying ::1...  
+    Trying 127.0.0.1...  
+    Connected to localhost.  
+    Escape character is '^]'.  
+    220 ... ESMTP Sendmail ...  
+    
+Now, we'll send the `SMTP commands <https://www.ietf.org/rfc/rfc2821.txt>`_ to the server. These are responsible for ordering Sendmail to store an email:
+
+::
+
+    EHLO localhost  
+    MAIL FROM:<hello@localhost>  
+    RCPT TO:<example@localhost>  
+    DATA  
+    Hello world!  
+    .
+    QUIT  
+    
+If you are using Sendmail as your SMTP server, you should be able to safely copy and paste this bit into the terminal before hitting your ENTER key. If not, you may want to paste these commands one by one (or make sure you enable `PIPELINING` in the SMTP config).
+
+If you see a message like `250 2.0.0 ... Message accepted for delivery`, you did it! You should now have a file called `1.` in the `/var/spool/imap/user/example` directory, with the content of the email you sent just before.
+
+If not, you may want to check `syslog` to see if any error messages show up and go through the previous steps again.
+
+Checking carddav
+----------------
+
+Checking caldav
+---------------
+
 Troubleshooting
 ---------------
 Some common issues are explained below. You are welcome to join us in the :ref:`#cyrus IRC channel on Freenode <feedback>` if you need help or just want to chat about Cyrus, IMAP, donuts, etc :-)
@@ -321,17 +443,3 @@ More information is almost always logged to **syslog**. Make sure you start sysl
 
     /etc/init.d/rsyslog start 
 
-setting up SSL certificates
----------------------------
-
-setting up lmtp daemon delivery
--------------------------------
-
-Sending a test email
---------------------
-
-Checking carddav
-----------------
-
-Checking caldav
----------------
