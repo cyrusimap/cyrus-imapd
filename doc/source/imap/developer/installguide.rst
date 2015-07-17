@@ -17,23 +17,29 @@ You'll need access to the cyrus-imapd git repository.
 
 1. You'll need a public key. If you don't already have a `~/.ssh/id_rsa.pub`, then create one with `ssh-keygen(1)`.
     * Use the GitHub guide, following `steps 1-3`_
+    
 2. Login to Phabricator_
     * Go to the `SSH Keys settings panel`_.
     * Click **Upload public key**
     * Paste the contents of your ``~/.ssh/id_rsa.pub`` (n.b. NOT ``~/.ssh/id_rsa``!) into the public key box.
     * Give it a descriptive name and click **Upload**
+    
 3. Install git if you don't already have it:
     * ``sudo apt-get install git``    
+    
 4. Clone the cyrus-imapd repository (you can get this URL from the Diffusion app within Phabricator):
     * If you are a member of `IMAP Committers`_, use ``git clone ssh://git@git.cyrus.foundation/diffusion/I/cyrus-imapd.git``
     * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/I/cyrus-imapd.git``
 
 Setting up dependencies
 -----------------------
+
 1. Install tools for building
     * ``sudo apt-get install build-essential autoconf automake libtool pkg-config bison flex valgrind``
+    
 2. Install dependencies for master branch
     * ``sudo apt-get install libjansson-dev libxml2-dev libsqlite3-dev libical-dev libsasl2-dev libssl-dev libopendkim-dev libcunit1-dev libpcre3-dev uuid-dev``
+    
 3. Additional dependencies for cyrus-imapd-2.5: you'll need the ``-dev`` package to match whichever version of libdb you already have installed (assuming it's probably already installed). I needed ``libdb5.3-dev`` on debian 8.0, but ``libdb5.1-dev`` on 7.8.
 
 .. _steps 1-3: https://help.github.com/articles/generating-ssh-keys/
@@ -53,7 +59,7 @@ Compile Cyrus
     
     ./configure CFLAGS="-Wno-unused-parameter -g -O0 -Wall -Wextra -Werror" --enable-coverage \
     --enable-http --enable-unit-tests --enable-replication --with-openssl=yes --enable-nntp \
-    --enable-murder --enable-idled --enable-event-notification --prefix=/usr/cyrus
+    --enable-murder --enable-idled --enable-event-notification --enable-sieve --prefix=/usr/cyrus
 
     make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
 
@@ -63,9 +69,12 @@ Compile Cyrus
     
     make install
 
+The ``--prefix`` option sets where Cyrus is installed to. Adjust to suit.
+    
 You may see warnings regarding libical v2.0 being recommended to support certain functionality. Currently libical v1.0.1 is sufficient, unless you need/want RSCALE (non-gregorian recurrences), VPOLL (consensus scheduling), or VAVAILABILITY (specifying availability over time) functionality. If v2 is required, it will need to be installed from `github <https://github.com/libical/libical>`_.  
     
 .. _imapinstallguide_cassandane:
+
 Cassandane
 ==========
 
@@ -117,6 +126,7 @@ Install and configure Cassandane
 
 Building cyrus-imapd for Cassandane
 -----------------------------------
+
     * ``cd /path/to/cyrus-imapd``
     * `Compile Cyrus`_ (as above)
     * ``make -e DESTDIR=/var/tmp/cyrus install``
@@ -125,6 +135,7 @@ Running cassandane tests:
 -------------------------
     
     * As user ``cyrus``, run the tests.
+    
 .. code-block:: bash
 
     cd /path/to/cassandane
@@ -170,7 +181,7 @@ A lot of Cyrus's debugging information gets logged with ``syslog``, so you'll wa
     ``sudo /etc/init.d/rsyslog restart``
     
 4. Arrange to rotate ``/var/log/imapd.log`` so it doesn't get stupendously large. Create ``/etc/logrotate.d/cyrus.conf`` with content like::
-
+404
     /etc/logrotate.d/cyrus.conf
     /var/log/imapd.log
     {
@@ -186,4 +197,8 @@ A lot of Cyrus's debugging information gets logged with ``syslog``, so you'll wa
         endscript
     }
 
+----
+
+Ready to get a :ref:`basic server <basicserver>` up and running now you're all installed?
+    
 .. _FastMail : https://www.fastmail.com
