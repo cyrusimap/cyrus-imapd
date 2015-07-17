@@ -2169,6 +2169,9 @@ static int setContacts(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
 
+    struct mailbox *mailbox = NULL;
+    struct mailbox *newmailbox = NULL;
+
     int r = 0;
     json_t *jcheckState = json_object_get(req->args, "ifInState");
     if (jcheckState) {
@@ -2184,9 +2187,6 @@ static int setContacts(struct jmap_req *req)
     json_t *set = json_pack("{s:s,s:s}",
                             "oldState", req->state,
                             "accountId", req->userid);
-
-    struct mailbox *mailbox = NULL;
-    struct mailbox *newmailbox = NULL;
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
