@@ -181,7 +181,7 @@ A lot of Cyrus's debugging information gets logged with ``syslog``, so you'll wa
     ``sudo /etc/init.d/rsyslog restart``
     
 4. Arrange to rotate ``/var/log/imapd.log`` so it doesn't get stupendously large. Create ``/etc/logrotate.d/cyrus.conf`` with content like::
-404
+
     /etc/logrotate.d/cyrus.conf
     /var/log/imapd.log
     {
