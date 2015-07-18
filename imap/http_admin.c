@@ -59,7 +59,9 @@
 
 #include "global.h"
 #include "httpd.h"
+#include "http_proxy.h"
 #include "proc.h"
+#include "proxy.h"
 #include "time.h"
 #include "util.h"
 #include "version.h"
@@ -121,12 +123,13 @@ static int meth_get(struct transaction_t *txn,
 {
     struct request_target_t *tgt = &txn->req_tgt;
     int (*action)(struct transaction_t *txn) = NULL;
+    size_t len;
     char *p;
 
     if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
     /* Admins only */
-    if (!httpd_userisadmin) return HTTP_FORBIDDEN;
+    if (!(httpd_userisadmin || httpd_userisproxyadmin)) return HTTP_FORBIDDEN;
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, txn->req_uri->path, sizeof(tgt->path));
@@ -135,6 +138,22 @@ static int meth_get(struct transaction_t *txn,
     /* Skip namespace */
     p += strlen(namespace_admin.prefix);
     if (*p == '/') *p++ = '\0';
+
+    if (config_mupdate_server) {
+        /* Check if we're in murder space */
+        len = strcspn(p, "/");
+        if (!strncmp(p, "murder", len)) {
+            p += len;
+            if (!*p || !*++p) return 0;
+
+            /* Get backend server */
+            len = strcspn(p, "/");
+            tgt->userid = xstrndup(p, len);
+
+            p += len;
+            if (!*p || !*++p) return 0;
+        }
+    }
 
     /* Check for path after prefix */
     if (*p) {
@@ -149,6 +168,18 @@ static int meth_get(struct transaction_t *txn,
     }
 
     if (!action) return HTTP_NOT_FOUND;
+
+    if (tgt->userid && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* Proxy to backend */
+        struct backend *be;
+
+        be = proxy_findserver(tgt->userid,
+                              &http_protocol, proxy_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
+    }
 
     return action(txn);
 }
@@ -368,8 +399,8 @@ static int action_proc(struct transaction_t *txn)
                       "Currently Running Cyrus Services");
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
-    buf_printf_markup(body, level, "<h2>%s</h2>",
-                      "Currently Running Cyrus Services");
+    buf_printf_markup(body, level, "<h2>%s @ %s</h2>",
+                      "Currently Running Cyrus Services", config_servername);
     buf_printf_markup(body, level++, "<table border cellpadding=5>");
     buf_printf_markup(body, level, "<caption><b>%.*s</b></caption>",
                       24 /* clip LF */, asctime(&tnow));
