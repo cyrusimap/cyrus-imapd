@@ -823,6 +823,7 @@ static void mailbox_release_resources(struct mailbox *mailbox)
 
     /* release and unmap index */
     xclose(mailbox->index_fd);
+    mailbox->index_locktype = 0; /* lock was released by closing fd */
     if (mailbox->index_base)
         map_free(&mailbox->index_base, &mailbox->index_len);
 
@@ -5137,19 +5138,16 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     r = mailbox_open_index(newmailbox);
     if (r) goto fail;
 
-    /* Re-open header file */
-    r = mailbox_read_index_header(newmailbox);
-    if (r) goto fail;
-
-    /* read in the flags */
-    r = mailbox_read_header(newmailbox, NULL);
-    if (r) goto fail;
+    /* Re-lock index */
+    r = mailbox_lock_index_internal(newmailbox, LOCK_EXCLUSIVE);
 
     /* INBOX rename - change uniqueid */
-    if (userid) mailbox_make_uniqueid(newmailbox);
+    if (userid) {
+        mailbox_make_uniqueid(newmailbox);
 
-    r = seen_copy(userid, oldmailbox, newmailbox);
-    if (r) goto fail;
+        r = seen_copy(userid, oldmailbox, newmailbox);
+        if (r) goto fail;
+    }
 
     /* copy any mailbox annotations (but keep the known quota
      * amount, because we already counted that usage.  XXX horrible
