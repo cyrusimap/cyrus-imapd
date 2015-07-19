@@ -2157,7 +2157,7 @@ product version in the capabilities */
 { "openio_proxy_timeout", 5, INT }
 /* The OpenIO timeout to query to the PROXY services (default 5 sec). */
 
-{ "openio_autocreate", NULL, SWITCH }
+{ "openio_autocreate", 0, SWITCH }
 /* Allow the OpenIO SDK to autocreate containers. Mainly destined to be turned
    on development environments. In production, the container should have been
    provisioned with the mailboxes. */
