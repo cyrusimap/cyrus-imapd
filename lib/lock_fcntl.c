@@ -91,11 +91,7 @@ EXPORTED int lock_reopen(int fd, const char *filename,
         if (!r) r = stat(filename, &sbuffile);
         if (r == -1) {
             if (failaction) *failaction = "stating";
-            fl.l_type= F_UNLCK;
-            fl.l_whence = SEEK_SET;
-            fl.l_start = 0;
-            fl.l_len = 0;
-            r = fcntl(fd, F_SETLKW, &fl);
+            r = lock_unlock(fd, filename);
             return -1;
         }
 
@@ -104,11 +100,7 @@ EXPORTED int lock_reopen(int fd, const char *filename,
         newfd = open(filename, O_RDWR);
         if (newfd == -1) {
             if (failaction) *failaction = "opening";
-            fl.l_type= F_UNLCK;
-            fl.l_whence = SEEK_SET;
-            fl.l_start = 0;
-            fl.l_len = 0;
-            r = fcntl(fd, F_SETLKW, &fl);
+            r = lock_unlock(fd, filename);
             return -1;
         }
         dup2(newfd, fd);
