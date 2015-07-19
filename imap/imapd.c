@@ -10989,19 +10989,23 @@ void cmd_enable(char *tag)
 	return;
     }
 
-    prot_printf(imapd_out, "* ENABLED");
+    int started = 0;
     if (!(imapd_client_capa & CAPA_CONDSTORE) &&
 	 (new_capa & CAPA_CONDSTORE)) {
+	if (!started) prot_printf(imapd_out, "* ENABLED");
+	started = 1;
 	prot_printf(imapd_out, " CONDSTORE");
     }
     if (!(imapd_client_capa & CAPA_QRESYNC) &&
 	 (new_capa & CAPA_QRESYNC)) {
+	if (!started) prot_printf(imapd_out, "* ENABLED");
+	started = 1;
 	prot_printf(imapd_out, " QRESYNC");
 	/* RFC5161 says that enable while selected is actually bogus,
 	 * but it's no skin off our nose to support it */
 	if (imapd_index) imapd_index->qresync = 1;
     }
-    prot_printf(imapd_out, "\r\n");
+    if (started) prot_printf(imapd_out, "\r\n");
 
     /* track the new capabilities */
     imapd_client_capa = new_capa;
