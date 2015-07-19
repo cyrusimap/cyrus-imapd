@@ -174,19 +174,20 @@ int objectstore_put (struct mailbox *mailbox,
         const struct index_record *record, const char *fname)
 {
     struct oio_error_s *err = NULL;
-    struct hc_url_s *url;
+    struct hc_url_s *url = NULL;
     int rc, already_saved = 0;
 
     rc = openio_sds_lazy_init ();
     if (rc) return rc;
 
-    url = mailbox_openio_name (mailbox, record);
-
     rc = objectstore_is_filename_in_container (mailbox, record, &already_saved);
     if (rc) return rc;
+
+    url = mailbox_openio_name (mailbox, record);
     if (already_saved) {
         syslog(LOG_DEBUG, "OIOSDS: blob %s already uploaded for %u",
                 hc_url_get(url, HCURL_WHOLE), record->uid);
+        hc_url_pclean (&url);
         return 0;
     }
 
@@ -205,7 +206,7 @@ int objectstore_put (struct mailbox *mailbox,
                 hc_url_get(url, HCURL_WHOLE), record->uid,
                 oio_error_code(err), oio_error_message(err));
         oio_error_pfree(&err);
-        rc = EAGAIN;                      // XXX jfs : smarter error necessary
+        rc = EAGAIN;
     }
 
     hc_url_pclean (&url);
@@ -234,7 +235,7 @@ int objectstore_get (struct mailbox *mailbox,
                 hc_url_get(url, HCURL_WHOLE), record->uid,
                 oio_error_code(err), oio_error_message(err));
         oio_error_pfree (&err);
-        rc = EAGAIN;                          //* XXX jfs : smarter error necessary, according to err->code
+        rc = EAGAIN;
     }
 
     hc_url_pclean (&url);
