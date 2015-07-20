@@ -288,7 +288,7 @@ static int action_murder(struct transaction_t *txn)
         /* Add servers */
         tok_init(&tok, serverlist, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         while ((server = tok_next(&tok))) {
-            buf_printf_markup(&resp, level, "<a href=\"%s%s%s\">%s</a>",
+            buf_printf_markup(&resp, level, "<p><a href=\"%s%s%s\">%s</a>",
                               txn->req_uri->path, sep, server, server);
         }
         tok_fini(&tok);
@@ -366,7 +366,7 @@ static int action_menu(struct transaction_t *txn)
 
         /* Add actions */
         for (i = 1; actions[i].name; i++) {
-            buf_printf_markup(&resp, level, "<a href=\"%s%s%s\">%s</a>",
+            buf_printf_markup(&resp, level, "<p><a href=\"%s%s%s\">%s</a>",
                               txn->req_uri->path, sep, actions[i].name,
                               actions[i].desc);
         }
