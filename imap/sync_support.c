@@ -4905,30 +4905,28 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list,
     struct sync_name *mbox;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
     struct dlist *kl = NULL;
+    struct buf buf = BUF_INITIALIZER;
     int r;
 
-    if (flags & SYNC_FLAG_VERBOSE) {
-        printf("MAILBOXES");
-        for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
-            printf(" %s", mbox->name);
-        }
-        printf("\n");
-    }
-
-    if (flags & SYNC_FLAG_LOGGING) {
-        struct buf buf = BUF_INITIALIZER;
-
-        buf_setcstr(&buf, "MAILBOXES");
-        for (mbox = mboxname_list->head; mbox; mbox = mbox->next)
-            buf_printf(&buf, " %s", mbox->name);
-        syslog(LOG_INFO, "%s", buf_cstring(&buf));
-        buf_free(&buf);
-    }
-
     kl = dlist_newlist(NULL, "MAILBOXES");
-    for (mbox = mboxname_list->head; mbox; mbox = mbox->next)
+
+    for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
         dlist_setatom(kl, "MBOXNAME", mbox->name);
+
+        if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
+            buf_printf(&buf, " %s", mbox->name);
+    }
+
+    if (flags & SYNC_FLAG_VERBOSE)
+        printf("MAILBOXES%s\n", buf_cstring(&buf));
+
+    if (flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "MAILBOXES%s", buf_cstring(&buf));
+
+    buf_free(&buf);
+
     sync_send_lookup(kl, sync_be->out);
+
     dlist_free(&kl);
 
     r = sync_response_parse(sync_be->in, "MAILBOXES", replica_folders,
