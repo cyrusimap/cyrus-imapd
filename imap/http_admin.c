@@ -63,6 +63,7 @@
 #include "proc.h"
 #include "proxy.h"
 #include "time.h"
+#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -75,6 +76,8 @@
 static time_t compile_time;
 static void admin_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
+static int action_murder(struct transaction_t *txn);
+static int action_menu(struct transaction_t *txn);
 static int action_proc(struct transaction_t *txn);
 
 
@@ -116,6 +119,16 @@ static void admin_init(struct buf *serverinfo __attribute__((unused)))
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
+const struct action_t {
+    const char *name;
+    const char *desc;
+    int (*func)(struct transaction_t *txn);
+} actions[] = {
+    { "", "    Available Cyrus Admin Functions",  &action_menu },
+    { "proc", "Currently Running Cyrus Services", &action_proc },
+    { NULL, NULL, NULL }
+};
+
 
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
@@ -125,6 +138,7 @@ static int meth_get(struct transaction_t *txn,
     int (*action)(struct transaction_t *txn) = NULL;
     size_t len;
     char *p;
+    int i;
 
     if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
@@ -139,37 +153,35 @@ static int meth_get(struct transaction_t *txn,
     p += strlen(namespace_admin.prefix);
     if (*p == '/') *p++ = '\0';
 
-    if (config_mupdate_server) {
-        /* Check if we're in murder space */
+    /* Check if we're in murder space */
+    len = strcspn(p, "/");
+    if (config_mupdate_server && len == 6 && !strncmp(p, "murder", len)) {
+        p += len;
+        if (!*p || !*++p) return action_murder(txn);
+
+        /* Get backend server */
         len = strcspn(p, "/");
-        if (!strncmp(p, "murder", len)) {
-            p += len;
-            if (!*p || !*++p) return 0;
-
-            /* Get backend server */
-            len = strcspn(p, "/");
-            tgt->userid = xstrndup(p, len);
-
-            p += len;
-            if (!*p || !*++p) return 0;
-        }
+        tgt->userid = xstrndup(p, len);
+        p += len;
+        if (*p == '/') *p++ = '\0';
     }
 
-    /* Check for path after prefix */
-    if (*p) {
-        /* Get collection (action) */
-        tgt->collection = p;
-        p += strcspn(p, "/");
-        if (*p == '/') *p++ = '\0';
+    /* Get collection (action) */
+    tgt->collection = p;
+    p += strcspn(p, "/");
+    if (*p == '/') *p++ = '\0';
 
-        if (!strcmp(tgt->collection, "proc")) {
-            if (!*p) action = &action_proc;
+    /* Find the matching action */
+    for (i = 0; actions[i].name; i++) {
+        if (!strcmp(tgt->collection, actions[i].name) && !*p) {
+            action = actions[i].func;
+            break;
         }
     }
 
     if (!action) return HTTP_NOT_FOUND;
 
-    if (tgt->userid && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+    else if (tgt->userid && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* Proxy to backend */
         struct backend *be;
 
@@ -181,7 +193,197 @@ static int meth_get(struct transaction_t *txn,
         return http_pipe_req_resp(be, txn);
     }
 
-    return action(txn);
+    else return action(txn);
+}
+
+
+/* Perform a murder action */
+static int action_murder(struct transaction_t *txn)
+{
+    int precond;
+    struct message_guid guid;
+    const char *etag, *serverlist = config_getstring(IMAPOPT_SERVERLIST);
+    static time_t lastmod = 0;
+    unsigned level = 0;
+    static struct buf resp = BUF_INITIALIZER;
+    struct stat sbuf;
+    time_t mtime;
+
+    if (!serverlist) {
+        /* Add HTML header */
+        buf_reset(&resp);
+        buf_printf_markup(&resp, level, HTML_DOCTYPE);
+        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<head>");
+        buf_printf_markup(&resp, level, "<title>%s</title>",
+                          "Available Cyrus Backend Servers");
+        buf_printf_markup(&resp, --level, "</head>");
+        buf_printf_markup(&resp, level++, "<body>");
+        buf_printf_markup(&resp, level, "<h2>%s</h2>",
+                          "Error: Can not generate a list of backend servers "
+                          "without <tt>serverlist</tt> option being set "
+                          "in <tt>imapd.conf</tt>");
+
+        /* Finish HTML */
+        buf_printf_markup(&resp, --level, "</body>");
+        buf_printf_markup(&resp, --level, "</html>");
+
+        /* Output the HTML response */
+        txn->resp_body.type = "text/html; charset=utf-8";
+        write_body(HTTP_UNAVAILABLE, txn, buf_cstring(&resp), buf_len(&resp));
+
+        return 0;
+    }
+
+    /* Generate ETag based on compile date/time of this source file,
+       and the config file size/mtime */
+    assert(!buf_len(&txn->buf));
+    stat(config_filename, &sbuf);
+    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+               sbuf.st_mtime, sbuf.st_size);
+
+    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    etag = message_guid_encode(&guid);
+    mtime = MAX(compile_time, sbuf.st_mtime);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, etag, mtime);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+        /* Fill in Etag,  Last-Modified, Expires */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = mtime;
+        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->flags.cc |= CC_MAXAGE;
+
+        if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        return precond;
+    }
+
+    if (txn->resp_body.lastmod > lastmod) {
+        /* Add HTML header */
+        const char *sep =
+            txn->req_uri->path[strlen(txn->req_uri->path)-1] == '/' ? "" : "/";
+        char *server;
+        tok_t tok;
+
+        buf_reset(&resp);
+        buf_printf_markup(&resp, level, HTML_DOCTYPE);
+        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<head>");
+        buf_printf_markup(&resp, level, "<title>%s</title>",
+                          "Available Cyrus Backend Servers");
+        buf_printf_markup(&resp, --level, "</head>");
+        buf_printf_markup(&resp, level++, "<body>");
+        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
+                          "Available Cyrus Backend Servers", config_servername);
+
+        /* Add servers */
+        tok_init(&tok, serverlist, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        while ((server = tok_next(&tok))) {
+            buf_printf_markup(&resp, level, "<a href=\"%s%s%s\">%s</a>",
+                              txn->req_uri->path, sep, server, server);
+        }
+        tok_fini(&tok);
+
+        /* Finish HTML */
+        buf_printf_markup(&resp, --level, "</body>");
+        buf_printf_markup(&resp, --level, "</html>");
+
+        /* Update lastmod */
+        lastmod = txn->resp_body.lastmod;
+    }
+
+    /* Output the HTML response */
+    txn->resp_body.type = "text/html; charset=utf-8";
+    write_body(precond, txn, buf_cstring(&resp), buf_len(&resp));
+
+    return 0;
+}
+
+
+/* Perform a menu action */
+static int action_menu(struct transaction_t *txn)
+{
+    int precond;
+    struct message_guid guid;
+    const char *etag;
+    static time_t lastmod = 0;
+    unsigned level = 0, i;
+    static struct buf resp = BUF_INITIALIZER;
+
+    /* Generate ETag based on compile date/time of this source file.
+     * Extend this to include config file size/mtime if we add run-time options.
+     */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld", (long) compile_time);
+    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    etag = message_guid_encode(&guid);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, etag, compile_time);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+        /* Fill in Etag,  Last-Modified, Expires */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = compile_time;
+        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->flags.cc |= CC_MAXAGE;
+
+        if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        return precond;
+    }
+
+    if (txn->resp_body.lastmod > lastmod) {
+        /* Add HTML header */
+        const char *sep =
+            txn->req_uri->path[strlen(txn->req_uri->path)-1] == '/' ? "" : "/";
+
+        buf_reset(&resp);
+        buf_printf_markup(&resp, level, HTML_DOCTYPE);
+        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<head>");
+        buf_printf_markup(&resp, level, "<title>%s</title>",
+                          "Available Cyrus Admin Functions");
+        buf_printf_markup(&resp, --level, "</head>");
+        buf_printf_markup(&resp, level++, "<body>");
+        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
+                          actions[0].desc, config_servername);
+
+        /* Add actions */
+        for (i = 1; actions[i].name; i++) {
+            buf_printf_markup(&resp, level, "<a href=\"%s%s%s\">%s</a>",
+                              txn->req_uri->path, sep, actions[i].name,
+                              actions[i].desc);
+        }
+
+        /* Finish HTML */
+        buf_printf_markup(&resp, --level, "</body>");
+        buf_printf_markup(&resp, --level, "</html>");
+
+        /* Update lastmod */
+        lastmod = txn->resp_body.lastmod;
+    }
+
+    /* Output the HTML response */
+    txn->resp_body.type = "text/html; charset=utf-8";
+    write_body(precond, txn, buf_cstring(&resp), buf_len(&resp));
+
+    return 0;
 }
 
 
