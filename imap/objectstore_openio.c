@@ -65,60 +65,66 @@ static int openio_sds_lazy_init (void)
 
     if (sds) return 0;
 
-	/* Turn the OIO logging ON/OFF */
-	const char *verbosity = config_getstring(IMAPOPT_OPENIO_VERBOSITY);
-	if (!verbosity) {
-		oio_log_nothing();
-	} else {
-		int found = 0;
-		oio_log_to_syslog();
-		switch (*verbosity) {
-			case 't':
-			case 'T':
-				if (!found && strcasecmp(verbosity, "trace"))
-					break;
-				found = 1;
-				oio_log_more();
-				/* FALLTHROUGH */
-			case 'd':
-			case 'D':
-				if (!found && strcasecmp(verbosity, "debug"))
-					break;
-				found = 1;
-				oio_log_more();
-				/* FALLTHROUGH */
-			case 'i':
-			case 'I':
-				if (!found && strcasecmp(verbosity, "info"))
-					break;
-				found = 1;
-				oio_log_more();
-				/* FALLTHROUGH */
-			case 'n':
-			case 'N':
-				if (!found && strcasecmp(verbosity, "notice"))
-					break;
-				found = 1;
-				oio_log_more();
-		}
-	}
+    /* Turn the OIO logging ON/OFF */
+    const char *verbosity = config_getstring(IMAPOPT_OPENIO_VERBOSITY);
+    if (!verbosity) {
+        oio_log_to_syslog(); // let the default (warn)
+        oio_log_more();
+    } else {
+        int found = 0;
+        oio_log_to_syslog();
+        switch (*verbosity) {
+            case 'q':
+            case 'Q':
+                if (!strcasecmp(verbosity, "quiet"))
+                    oio_log_nothing ();
+                break;
+            case 't':
+            case 'T':
+                if (!found && strcasecmp(verbosity, "trace"))
+                    break;
+                found = 1;
+                oio_log_more();
+                /* FALLTHROUGH */
+            case 'd':
+            case 'D':
+                if (!found && strcasecmp(verbosity, "debug"))
+                    break;
+                found = 1;
+                oio_log_more();
+                /* FALLTHROUGH */
+            case 'i':
+            case 'I':
+                if (!found && strcasecmp(verbosity, "info"))
+                    break;
+                found = 1;
+                oio_log_more();
+                /* FALLTHROUGH */
+            case 'n':
+            case 'N':
+                if (!found && strcasecmp(verbosity, "notice"))
+                    break;
+                found = 1;
+                oio_log_more();
+                /* one more call to pass from ERR to WARN */
+                oio_log_more();
+        }
+    }
 
-	if (!namespace)
-		namespace = config_getstring(IMAPOPT_OPENIO_NAMESPACE);
-	if (!account)
-		account = config_getstring(IMAPOPT_OPENIO_ACCOUNT);
+    if (!namespace)
+        namespace = config_getstring(IMAPOPT_OPENIO_NAMESPACE);
+    if (!account)
+        account = config_getstring(IMAPOPT_OPENIO_ACCOUNT);
 
-    // XXX - this may not be the right error here, it should say "no namespace is set"
     if (!namespace || !*namespace) {
-        syslog(LOG_ERR, "OIOSDS: no namespace is set in config, "
-                "set 'openio_namespace: <ns_name>'");
+        syslog(LOG_ERR, "OIOSDS: no namespace configured");
         return ENOTSUP;
     }
 
     err = oio_sds_init (&sds, namespace);
     if (err) {
         syslog(LOG_ERR, "OIOSDS: NS init failure %s : (%d) %s",
-            namespace, oio_error_code(err), oio_error_message(err));
+                namespace, oio_error_code(err), oio_error_message(err));
         oio_error_pfree (&err);
         return ENOTSUP;
     }
@@ -163,8 +169,8 @@ mailbox_openio_name (struct mailbox *mailbox, const struct index_record *record)
 
     url = hc_url_empty ();
     hc_url_set (url, HCURL_NS, namespace);
-	if (account)
-		hc_url_set (url, HCURL_ACCOUNT, account);
+    if (account)
+        hc_url_set (url, HCURL_ACCOUNT, account);
     hc_url_set (url, HCURL_USER, mboxname_to_userid(mailbox->name));
     hc_url_set (url, HCURL_PATH, filename);
     return url;
@@ -191,11 +197,11 @@ int objectstore_put (struct mailbox *mailbox,
         return 0;
     }
 
-	struct oio_source_s src = {
-		.autocreate = config_getswitch(IMAPOPT_OPENIO_AUTOCREATE),
-		.type = OIO_SRC_FILE,
-		.data.path = fname,
-	};
+    struct oio_source_s src = {
+        .autocreate = config_getswitch(IMAPOPT_OPENIO_AUTOCREATE),
+        .type = OIO_SRC_FILE,
+        .data.path = fname,
+    };
     err = oio_sds_upload_from_source (sds, url, &src);
     if (!err) {
         syslog(LOG_INFO, "OIOSDS: blob %s uploaded for %u",
