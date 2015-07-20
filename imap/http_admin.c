@@ -55,6 +55,7 @@
 #include <syslog.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/types.h>
 
 #include "global.h"
@@ -79,6 +80,7 @@ static int meth_get(struct transaction_t *txn, void *params);
 static int action_murder(struct transaction_t *txn);
 static int action_menu(struct transaction_t *txn);
 static int action_proc(struct transaction_t *txn);
+static int action_df(struct transaction_t *txn);
 
 
 /* Namespace for admin service */
@@ -124,8 +126,9 @@ const struct action_t {
     const char *desc;
     int (*func)(struct transaction_t *txn);
 } actions[] = {
-    { "", "    Available Cyrus Admin Functions",  &action_menu },
-    { "proc", "Currently Running Cyrus Services", &action_proc },
+    { "",     "Available Admin Functions",  &action_menu },
+    { "proc", "Currently Running Services", &action_proc },
+    { "df",   "Spool Partition Disk Usage", &action_df },
     { NULL, NULL, NULL }
 };
 
@@ -216,7 +219,7 @@ static int action_murder(struct transaction_t *txn)
         buf_printf_markup(&resp, level++, "<html>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>",
-                          "Available Cyrus Backend Servers");
+                          "Available Backend Servers");
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
         buf_printf_markup(&resp, level, "<h2>%s</h2>",
@@ -279,11 +282,11 @@ static int action_murder(struct transaction_t *txn)
         buf_printf_markup(&resp, level++, "<html>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>",
-                          "Available Cyrus Backend Servers");
+                          "Available Backend Servers");
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
         buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
-                          "Available Cyrus Backend Servers", config_servername);
+                          "Available Backend Servers", config_servername);
 
         /* Add servers */
         tok_init(&tok, serverlist, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -357,8 +360,7 @@ static int action_menu(struct transaction_t *txn)
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
         buf_printf_markup(&resp, level++, "<html>");
         buf_printf_markup(&resp, level++, "<head>");
-        buf_printf_markup(&resp, level, "<title>%s</title>",
-                          "Available Cyrus Admin Functions");
+        buf_printf_markup(&resp, level, "<title>%s</title>", actions[0].desc);
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
         buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
@@ -597,12 +599,11 @@ static int action_proc(struct transaction_t *txn)
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<meta http-equiv=\"%s\" content=\"%s\">",
                       "Refresh", "1");
-    buf_printf_markup(body, level, "<title>%s</title>",
-                      "Currently Running Cyrus Services");
+    buf_printf_markup(body, level, "<title>%s</title>", actions[1].desc);
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
     buf_printf_markup(body, level, "<h2>%s @ %s</h2>",
-                      "Currently Running Cyrus Services", config_servername);
+                      actions[1].desc, config_servername);
     buf_printf_markup(body, level++, "<table border cellpadding=5>");
     buf_printf_markup(body, level, "<caption><b>%.*s</b></caption>",
                       24 /* clip LF */, asctime(&tnow));
@@ -698,5 +699,149 @@ static int action_proc(struct transaction_t *txn)
     write_body(0, txn, NULL, 0);
 
  done:
+    return 0;
+}
+
+
+/* Perform a disk usage action */
+/*
+ * config_foreachoverflowstring() callback function to find partition-
+ * options and print filesystem stats
+ */
+struct part_rock {
+    const char *defpart;
+    unsigned meta;
+    struct buf *body;
+    unsigned *level;
+};
+
+static void get_part_stats(const char *key, const char *val, void *rock)
+{
+    struct part_rock *prock = (struct part_rock *) rock;
+    struct buf *body = prock->body;
+    unsigned level = *prock->level;
+    const char *part, *path;
+    struct statvfs s;
+    long blocks_used;
+    long blocks_percent_used;
+
+    if (prock->meta) {
+        if (strncmp("meta", key, 4)) return;
+        key += 4;
+    }
+    if (strncmp("partition-", key, 10)) return;
+
+    part = key+10;
+    path = val;
+
+    if (statvfs(path, &s)) return;
+
+    blocks_used = s.f_blocks - s.f_bfree;
+    blocks_percent_used = (long)
+        (blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
+
+    buf_printf_markup(body, level++, "<tr>");
+    if (prock->defpart && !strcmp(part, prock->defpart))
+        buf_printf_markup(body, level, "<td><i>%s</i></td>", part);
+    else
+        buf_printf_markup(body, level, "<td>%s</td>", part);
+    buf_printf_markup(body, level, "<td align=\"right\">%ld</td>",
+                      (long) (s.f_blocks * (s.f_frsize / 1024.0)));
+    buf_printf_markup(body, level, "<td align=\"right\">%ld</td>",
+                      (long) ((s.f_blocks - s.f_bfree) * (s.f_frsize / 1024.0)));
+    buf_printf_markup(body, level, "<td align=\"right\">%ld</td>",
+                      (long) (s.f_bavail * (s.f_frsize / 1024.0)));
+    buf_printf_markup(body, level, "<td align=\"right\">%ld%%</td>",
+                      blocks_percent_used);
+    buf_printf_markup(body, level, "<td>%s</td>", path);
+    buf_printf_markup(body, --level, "</tr>");
+
+    *prock->level = level;
+}
+
+static int action_df(struct transaction_t *txn)
+{
+    int precond;
+    struct message_guid guid;
+    const char *etag;
+    static time_t lastmod = 0;
+    unsigned level = 0;
+    static struct buf resp = BUF_INITIALIZER;
+    struct stat sbuf;
+    time_t mtime;
+
+    /* Generate ETag based on compile date/time of this source file,
+       and the config file size/mtime */
+    assert(!buf_len(&txn->buf));
+    stat(config_filename, &sbuf);
+    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+               sbuf.st_mtime, sbuf.st_size);
+
+    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    etag = message_guid_encode(&guid);
+    mtime = MAX(compile_time, sbuf.st_mtime);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, etag, mtime);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+        /* Fill in Etag,  Last-Modified, Expires */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = mtime;
+        txn->resp_body.maxage = 600;  /* 10 min */
+        txn->flags.cc |= CC_MAXAGE;
+
+        if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        return precond;
+    }
+
+    if (txn->resp_body.lastmod > lastmod) {
+        /* Add HTML header */
+        struct part_rock prock = { config_defpartition, 0, &resp, &level };
+
+        buf_reset(&resp);
+        buf_printf_markup(&resp, level, HTML_DOCTYPE);
+        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<head>");
+        buf_printf_markup(&resp, level, "<title>%s</title>", actions[2].desc);
+        buf_printf_markup(&resp, --level, "</head>");
+        buf_printf_markup(&resp, level++, "<body>");
+        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
+                          actions[2].desc, config_servername);
+        buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
+        buf_printf_markup(&resp, level++, "<tr>");
+        buf_printf_markup(&resp, level, "<th>Partition</th>");
+        buf_printf_markup(&resp, level, "<th align=\"right\">1k-blocks</th>");
+        buf_printf_markup(&resp, level, "<th align=\"right\">Used</th>");
+        buf_printf_markup(&resp, level, "<th align=\"right\">Available</th>");
+        buf_printf_markup(&resp, level, "<th align=\"right\">Use%%</th>");
+        buf_printf_markup(&resp, level, "<th>Location</th>");
+        buf_printf_markup(&resp, --level, "</tr>");
+
+        /* Add partition stats */
+        config_foreachoverflowstring(get_part_stats, &prock);
+
+        /* Finish table */
+        buf_printf_markup(&resp, --level, "</table>");
+
+        /* Finish HTML */
+        buf_printf_markup(&resp, --level, "</body>");
+        buf_printf_markup(&resp, --level, "</html>");
+
+        /* Update lastmod */
+        lastmod = txn->resp_body.lastmod;
+    }
+
+    /* Output the HTML response */
+    txn->resp_body.type = "text/html; charset=utf-8";
+    write_body(precond, txn, buf_cstring(&resp), buf_len(&resp));
+
     return 0;
 }
