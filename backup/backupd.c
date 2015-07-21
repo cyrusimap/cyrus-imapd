@@ -44,9 +44,33 @@
 #include <config.h>
 
 #include <stdlib.h>
+#include <syslog.h>
 
 /* for config.c */
 const int config_need_data = 0;
+
+static void shut_down(int code)
+{
+    exit(code);
+}
+
+EXPORTED void fatal(const char* s, int code)
+{
+    static int recurse_code = 0;
+
+    if (recurse_code) {
+        /* We were called recursively. Just give up */
+//        proc_cleanup();
+        exit(recurse_code);
+    }
+    recurse_code = code;
+//    if (sync_out) {
+//        prot_printf(sync_out, "* Fatal error: %s\r\n", s);
+//        prot_flush(sync_out);
+//    }
+    syslog(LOG_ERR, "Fatal error: %s", s);
+    shut_down(code);
+}
 
 /*
  * run once when process is forked;
@@ -62,7 +86,7 @@ EXPORTED int service_init(int argc __attribute__((unused)),
 /* Called by service API to shut down the service */
 EXPORTED void service_abort(int error)
 {
-
+    shut_down(error);
 }
 
 /*
@@ -75,7 +99,3 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     return -1;
 }
 
-EXPORTED void fatal(const char* s, int code)
-{
-    exit(code);
-}
