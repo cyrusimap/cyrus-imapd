@@ -1995,17 +1995,11 @@ static void _make_fn(struct vparse_card *card)
         if (v && v[0]) strarray_append(name, v);
     }
 
-    if (!strarray_size(name)) {
-        /* XXX - grep type=pref?  Meh */
-        v = vparse_stringval(card, "email");
-        if (v && v[0]) strarray_append(name, v);
-    }
-
-    if (!strarray_size(name)) {
-        strarray_append(name, "No Name");
-    }
-
-    char *fn = strarray_join(name, " ");
+    char *fn = NULL;
+    if (strarray_size(name))
+        fn = strarray_join(name, " ");
+    else
+        fn = xstrdup(" ");
 
     vparse_replace_entry(card, NULL, "fn", fn);
 }
