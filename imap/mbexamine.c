@@ -273,7 +273,7 @@ static int do_examine(const char *name,
     printf("\n Message Info:\n");
 
     msgno = 1;
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((record = mailbox_iter_step(iter))) {
         if (wantvalue) {
             if (wantuid) {
