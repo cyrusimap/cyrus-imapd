@@ -1587,7 +1587,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         /* XXX - rollback DB changes if it was an mupdate failure */
         if (newmailbox) mailbox_delete(&newmailbox);
         if (partitionmove && newpartition)
-            mailbox_delete_cleanup(newpartition, newname, oldmailbox->uniqueid);
+            mailbox_delete_cleanup(NULL, newpartition, newname, oldmailbox->uniqueid);
         mailbox_close(&oldmailbox);
     } else {
         if (newmailbox) {
@@ -1623,7 +1623,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
                        oldmailbox->name, oldmailbox->uniqueid,
                        oldpartition, partition);
             mailbox_close(&oldmailbox);
-            mailbox_delete_cleanup(oldpartition, oldname, olduniqueid);
+            mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);
             free(olduniqueid);
             free(oldpartition);
         }
