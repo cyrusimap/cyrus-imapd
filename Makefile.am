@@ -932,7 +932,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/append.h \
 	imap/backend.c \
 	imap/backend.h \
-        imap/blobstore_openio.c \
+	imap/objectstore_openio.c \
+	imap/objectstore.h \
 	imap/conversations.c \
 	imap/conversations.h \
 	imap/convert_code.c \

@@ -2109,19 +2109,41 @@ product version in the capabilities */
    will be confdir/zoneinfo.db */
 
 { "object_storage_enabled", 0, SWITCH }
-/* Is Object storage enabled for this server.  You also need to have 
-   archiving enabled and archivepartition for the mailbox.  
-   Only email files will be stored on object Storage 
-   archivepartition will be used to store any other files */
+/* Is Object storage enabled for this server.  You also need to have
+   archiving enabled and archivepartition for the mailbox.
+   Only email files will be stored on object Storage archive partition will be
+   used to store any other files */
 
 { "openio_namespace", NULL, STRING }
-/* The OpenIO namespace used to store archived email messages. */
+/* The OpenIO namespace used to store archived email messages. A namespace
+   identifies the physical platform cyrus must contact. This directive is used
+   by the OpenIO's SDK to locate its platform entry point. */
+
+{ "openio_account", NULL, STRING }
+/* The OpenIO account used to account for stored emails. Accounts are unique
+   in their namespace. They provides virtual partitions, with quotas and QoS
+   features. */
 
 { "openio_rawx_timeout", 30, INT }
 /* The OpenIO timeout to query to the RAWX services (default 30 sec). */
 
 { "openio_proxy_timeout", 5, INT }
 /* The OpenIO timeout to query to the PROXY services (default 5 sec). */
+
+{ "openio_autocreate", 0, SWITCH }
+/* Allow the OpenIO SDK to autocreate containers. Mainly destined to be turned
+   on development environments. In production, the container should have been
+   provisioned with the mailboxes. */
+
+{ "openio_verbosity", NULL, STRING }
+/* Sets the logging verbosity of the OpenIO's internal behavior. Admissible
+   values are: "warning", "notice", "info", "debug", "trace", "quiet".
+   The default verbosity is "warning". Set to "notice" for a few lines on a
+   per-client basis. Set to "info" for a few lines on a per-request basis. Set
+   to "debug" Set to "trace" to activate the underlying libcurl debug
+   output. Enabling a verbosity higher to equal than "debug" requires
+   the cyrus to be set in debug mode. The special "quiet" value disables all
+   kinds of logging at the GLib level. */
 
 /*
 .SH SEE ALSO
