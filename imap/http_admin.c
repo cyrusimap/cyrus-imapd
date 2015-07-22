@@ -854,7 +854,24 @@ static int action_df(struct transaction_t *txn)
 }
 
 
-/* Perform a conf action */
+struct service_item {
+    char *prefix;
+    int prefixlen;
+    struct service_item *next;
+};
+
+static void add_service(const char *name,
+                        struct entry *e __attribute__((unused)),
+                        void *rock)
+{
+    struct service_item **ksp = (struct service_item **)rock;
+    struct service_item *knew = xmalloc(sizeof(struct service_item));
+    knew->prefix = strconcat(name, "_", (char *)NULL);
+    knew->prefixlen = strlen(knew->prefix);
+    knew->next = *ksp;
+    *ksp = knew;
+}
+
 enum {
     OVER_UNKNOWN = 0,
     OVER_SERVICE,
@@ -899,24 +916,6 @@ static unsigned known_overflow(const char *key)
         config_getoverflowstring(match+6, NULL)) return OVER_PARTITION;
 
     return OVER_UNKNOWN;
-}
-
-struct service_item {
-    char *prefix;
-    int prefixlen;
-    struct service_item *next;
-};
-
-static void add_service(const char *name,
-                        struct entry *e __attribute__((unused)),
-                        void *rock)
-{
-    struct service_item **ksp = (struct service_item **)rock;
-    struct service_item *knew = xmalloc(sizeof(struct service_item));
-    knew->prefix = strconcat(name, "_", (char *)NULL);
-    knew->prefixlen = strlen(knew->prefix);
-    knew->next = *ksp;
-    *ksp = knew;
 }
 
 struct option_t {
@@ -964,6 +963,7 @@ static int optcmp(struct option_t **a, struct option_t **b)
     return strcmp((*a)->key, (*b)->key);
 }
 
+/* Perform a conf action */
 static int action_conf(struct transaction_t *txn)
 {
     int precond;
