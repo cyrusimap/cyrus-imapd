@@ -1022,9 +1022,10 @@ static int action_conf(struct transaction_t *txn)
         buf_printf_markup(&resp, level++, "<body>");
         buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
                           actions[3].desc, config_servername);
+        buf_printf_markup(&resp, level++, "<form>");
         buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
         buf_printf_markup(&resp, level, "<caption>Default values shown "
-                          "in <i>italics</i></caption>");
+                          "in <b>bold</b></caption>");
         buf_printf_markup(&resp, level++, "<tr>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Option</th>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Value</th>");
@@ -1040,59 +1041,111 @@ static int action_conf(struct transaction_t *txn)
             switch (imapopts[i].t) {
             case OPT_BITFIELD:
                 buf_printf_markup(&resp, level++, "<td>");
-                if (imapopts[i].def.x == imapopts[i].val.x)
-                    buf_printf_markup(&resp, level, "<i>");
-
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
-                    if (imapopts[i].val.x & (1<<j)) {
-                        buf_printf_markup(&resp, level, "%s ",
+                    buf_printf_markup(&resp, level++,
+                                      "<input disabled type=checkbox "
+                                      "name=\"%s\" value=\"%s\" %s>",
+                                      imapopts[i].optname,
+                                      imapopts[i].enum_options[j].name,
+                                      (imapopts[i].val.x & (1<<j)) ?
+                                      "checked" : "");
+                    if (imapopts[i].def.x & (1<<j)) {
+                        buf_printf_markup(&resp, level--, "<b>%s</b>",
                                           imapopts[i].enum_options[j].name);
                     }
-                }
+                    else {
+                        buf_printf_markup(&resp, level--, "%s",
+                                          imapopts[i].enum_options[j].name);
+                    }
 
-                if (imapopts[i].def.x == imapopts[i].val.x)
-                    buf_printf_markup(&resp, level, "</i>");
+                    if (!((j+1) % 8)) buf_printf_markup(&resp, level, "<br>");
+                }
                 buf_printf_markup(&resp, --level, "</td>");
                 break;
 
             case OPT_ENUM:
+                buf_printf_markup(&resp, level++, "<td>");
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
-                    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
-                        if (imapopts[i].def.e == imapopts[i].val.e)
-                            buf_printf_markup(&resp, level,
-                                              "<td><i>%s</i></td>",
-                                              imapopts[i].enum_options[j].name);
-                        else
-                            buf_printf_markup(&resp, level,
-                                              "<td>%s</td>",
-                                              imapopts[i].enum_options[j].name);
-                        break;
+                    buf_printf_markup(&resp, level++,
+                                      "<input disabled type=radio "
+                                      "name=\"%s\" value=\"%s\" %s>",
+                                      imapopts[i].optname,
+                                      imapopts[i].enum_options[j].name,
+                                      (imapopts[i].val.e ==
+                                       imapopts[i].enum_options[j].val) ?
+                                      "checked" : "");
+                    if (imapopts[i].def.e == imapopts[i].enum_options[j].val) {
+                        buf_printf_markup(&resp, level--, "<b>%s</b>",
+                                          imapopts[i].enum_options[j].name);
+                    }
+                    else {
+                        buf_printf_markup(&resp, level--, "%s",
+                                          imapopts[i].enum_options[j].name);
                     }
                 }
+                buf_printf_markup(&resp, --level, "</td>");
                 break;
 
             case OPT_INT:
-                if (imapopts[i].def.i == imapopts[i].val.i)
-                    buf_printf_markup(&resp, level, "<td><i>%ld</i></td>",
-                                      imapopts[i].val.i);
-                else
-                    buf_printf_markup(&resp, level, "<td>%ld</td>",
-                                      imapopts[i].val.i);
+                    buf_printf_markup(&resp, level,
+                                      "<td>%ld <sub><b>%ld</b></sub></td>",
+                                      imapopts[i].val.i, imapopts[i].def.i);
                 break;
 
             case OPT_STRING:
+                if (imapopts[i].def.s && *imapopts[i].def.s) {
+                    buf_printf_markup(&resp, level,
+                                      "<td>%s <sub><b>%s</b></sub></td>",
+                                      imapopts[i].val.s, imapopts[i].def.s);
+                }
+                else {
+                    tok_t tok;
+                    const char *val;
+
+                    buf_printf_markup(&resp, level++, "<td>");
+                    tok_init(&tok, imapopts[i].val.s, " \t",
+                        TOK_TRIMLEFT|TOK_TRIMRIGHT);
+                    while ((val = tok_next(&tok))) {
+                        buf_printf_markup(&resp, level, "%s<br>", val);
+                    }
+                    tok_fini(&tok);
+                    buf_printf_markup(&resp, --level, "</td>");
+                }
+                break;
+
             case OPT_STRINGLIST:
-                buf_printf_markup(&resp, level, "<td>%s</td>",
-                                  imapopts[i].val.s ? imapopts[i].val.s : "");
+                buf_printf_markup(&resp, level++, "<td>");
+                for (j = 0; imapopts[i].enum_options[j].name; j++) {
+                    buf_printf_markup(&resp, level++,
+                                      "<input disabled type=radio "
+                                      "name=\"%s\" value=\"%s\" %s>",
+                                      imapopts[i].optname,
+                                      imapopts[i].enum_options[j].name,
+                                      !strcmp(imapopts[i].val.s,
+                                              imapopts[i].enum_options[j].name)?
+                                      "checked" : "");
+                    if (!strcmp(imapopts[i].def.s,
+                                imapopts[i].enum_options[j].name)) {
+                        buf_printf_markup(&resp, level--, "<b>%s</b>",
+                                          imapopts[i].enum_options[j].name);
+                    }
+                    else {
+                        buf_printf_markup(&resp, level--, "%s",
+                                          imapopts[i].enum_options[j].name);
+                    }
+                }
+                buf_printf_markup(&resp, --level, "</td>");
                 break;
 
             case OPT_SWITCH:
-                if (imapopts[i].def.b == imapopts[i].val.b)
-                    buf_printf_markup(&resp, level, "<td><i>%s</i></td>",
-                                      imapopts[i].val.b ? "yes" : "no");
-                else
-                    buf_printf_markup(&resp, level, "<td>%s</td>",
-                                      imapopts[i].val.b ? "yes" : "no");
+                buf_printf_markup(&resp, level++, "<td>");
+                buf_printf_markup(&resp, level,
+                                  "<input disabled type=checkbox "
+                                  "name=\"%s\" value=\"on\" %s> %s",
+                                  imapopts[i].optname,
+                                  imapopts[i].val.b ? "checked" : "",
+                                  imapopts[i].def.b ? "<b>on</b>" : "on");
+                buf_printf_markup(&resp, --level, "</td>");
                 break;
 
             default:
@@ -1163,6 +1216,7 @@ static int action_conf(struct transaction_t *txn)
 
         /* Finish table */
         buf_printf_markup(&resp, --level, "</table>");
+        buf_printf_markup(&resp, --level, "</form>");
 
         /* Finish HTML */
         buf_printf_markup(&resp, --level, "</body>");
