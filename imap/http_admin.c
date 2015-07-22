@@ -1024,8 +1024,9 @@ static int action_conf(struct transaction_t *txn)
                           actions[3].desc, config_servername);
         buf_printf_markup(&resp, level++, "<form>");
         buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
-        buf_printf_markup(&resp, level, "<caption>Default values shown "
-                          "in <b>bold</b></caption>");
+        buf_printf_markup(&resp, level,
+                          "<caption>Default values shown in <b>bold</b> and "
+                          "possibly <b><sub>subscripted</sub></b></caption>");
         buf_printf_markup(&resp, level++, "<tr>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Option</th>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Value</th>");
@@ -1087,16 +1088,28 @@ static int action_conf(struct transaction_t *txn)
                 break;
 
             case OPT_INT:
+                if (imapopts[i].val.i == imapopts[i].def.i) {
+                    buf_printf_markup(&resp, level, "<td><b>%ld</b></td>",
+                                      imapopts[i].val.i);
+                }
+                else {
                     buf_printf_markup(&resp, level,
                                       "<td>%ld <sub><b>%ld</b></sub></td>",
                                       imapopts[i].val.i, imapopts[i].def.i);
+                }
                 break;
 
             case OPT_STRING:
                 if (imapopts[i].def.s && *imapopts[i].def.s) {
-                    buf_printf_markup(&resp, level,
-                                      "<td>%s <sub><b>%s</b></sub></td>",
-                                      imapopts[i].val.s, imapopts[i].def.s);
+                    if (!strcmp(imapopts[i].val.s, imapopts[i].def.s)) {
+                        buf_printf_markup(&resp, level, "<td><b>%s</b></td>",
+                                          imapopts[i].val.s);
+                    }
+                    else {
+                        buf_printf_markup(&resp, level,
+                                          "<td>%s <sub><b>%s</b></sub></td>",
+                                          imapopts[i].val.s, imapopts[i].def.s);
+                    }
                 }
                 else {
                     tok_t tok;
@@ -1203,10 +1216,20 @@ static int action_conf(struct transaction_t *txn)
                               (int (*)(const void **, const void **)) &optcmp);
                 for (i = 0; i < crock.overflow[k].count; i++) {
                     struct option_t *opt = ptrarray_nth(&crock.overflow[k], i);
+                    tok_t tok;
+                    const char *val;
 
                     buf_printf_markup(&resp, level++, "<tr>");
                     buf_printf_markup(&resp, level, "<td>%s</td>", opt->key);
-                    buf_printf_markup(&resp, level, "<td>%s</td>", opt->val);
+
+                    buf_printf_markup(&resp, level++, "<td>");
+                    tok_init(&tok, opt->val, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+                    while ((val = tok_next(&tok))) {
+                        buf_printf_markup(&resp, level, "%s<br>", val);
+                    }
+                    tok_fini(&tok);
+                    buf_printf_markup(&resp, --level, "</td>");
+
                     buf_printf_markup(&resp, --level, "</tr>");
                     free(opt);
                 }
