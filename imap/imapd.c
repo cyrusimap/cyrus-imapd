@@ -9628,7 +9628,7 @@ static int _metadata_to_annotate(const strarray_t *entries,
      * the old annotation system works. */
     for (i = 0 ; i < entries->count ; i++) {
         char *ent = entries->data[i];
-        char entry[MAX_MAILBOX_NAME];
+        char entry[MAX_MAILBOX_NAME+1];
 
         lcase(ent);
         /* there's no way to perfect this - unfortunately - the old style
