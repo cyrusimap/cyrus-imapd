@@ -1166,6 +1166,7 @@ imap_httpd_SOURCES = \
 	imap/xcal.c \
 	imap/xml_support.c \
 	imap/zoneinfo_db.c \
+	master/masterconf.c \
 	master/service.c
 
 imap_httpd_LDADD = $(LD_SERVER_ADD)

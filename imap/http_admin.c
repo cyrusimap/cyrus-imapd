@@ -61,8 +61,10 @@
 #include "global.h"
 #include "httpd.h"
 #include "http_proxy.h"
+#include "../master/masterconf.h"
 #include "proc.h"
 #include "proxy.h"
+#include "ptrarray.h"
 #include "time.h"
 #include "tok.h"
 #include "util.h"
@@ -70,6 +72,9 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+
+/* config.c stuff */
+const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -81,6 +86,7 @@ static int action_murder(struct transaction_t *txn);
 static int action_menu(struct transaction_t *txn);
 static int action_proc(struct transaction_t *txn);
 static int action_df(struct transaction_t *txn);
+static int action_conf(struct transaction_t *txn);
 
 
 /* Namespace for admin service */
@@ -128,7 +134,8 @@ const struct action_t {
 } actions[] = {
     { "",     "Available Admin Functions",  &action_menu },
     { "proc", "Currently Running Services", &action_proc },
-    { "df",   "Spool Partition Disk Usage", &action_df },
+    { "df",   "Spool Partition Disk Usage", &action_df   },
+    { "conf", "Cyrus Configuration File",   &action_conf },
     { NULL, NULL, NULL }
 };
 
@@ -827,6 +834,332 @@ static int action_df(struct transaction_t *txn)
 
         /* Add partition stats */
         config_foreachoverflowstring(get_part_stats, &prock);
+
+        /* Finish table */
+        buf_printf_markup(&resp, --level, "</table>");
+
+        /* Finish HTML */
+        buf_printf_markup(&resp, --level, "</body>");
+        buf_printf_markup(&resp, --level, "</html>");
+
+        /* Update lastmod */
+        lastmod = txn->resp_body.lastmod;
+    }
+
+    /* Output the HTML response */
+    txn->resp_body.type = "text/html; charset=utf-8";
+    write_body(precond, txn, buf_cstring(&resp), buf_len(&resp));
+
+    return 0;
+}
+
+
+/* Perform a conf action */
+enum {
+    OVER_UNKNOWN = 0,
+    OVER_SERVICE,
+    OVER_SASL,
+    OVER_PARTITION,
+    OVER_LAST
+};
+
+static int known_regular(const char *key)
+{
+    int i;
+
+    for (i = 1; i < IMAPOPT_LAST; i++) {
+        if (!strcmp(imapopts[i].optname, key))
+            return 1;
+    }
+
+    return 0;
+}
+
+static unsigned known_overflow(const char *key)
+{
+    const char *match;
+
+    /* any SASL key is OK */
+    if (!strncmp(key, "sasl_", 5)) return OVER_SASL;
+
+    /* any partition is OK */
+    if (!strncmp(key, "partition-", 10)) return OVER_PARTITION;
+
+    /* only valid if there's a partition with the same name */
+    if (!strncmp(key, "metapartition-", 14) &&
+        config_getoverflowstring(key+4, NULL)) return OVER_PARTITION;
+
+    /* only valid if there's a partition with the same name */
+    if (!strncmp(key, "archivepartition-", 17) &&
+        config_getoverflowstring(key+7, NULL)) return OVER_PARTITION;
+
+
+    /* only valid if there's a partition with the same name */
+    if ((match = strstr(key, "searchpartition-")) &&
+        config_getoverflowstring(match+6, NULL)) return OVER_PARTITION;
+
+    return OVER_UNKNOWN;
+}
+
+struct service_item {
+    char *prefix;
+    int prefixlen;
+    struct service_item *next;
+};
+
+static void add_service(const char *name,
+                        struct entry *e __attribute__((unused)),
+                        void *rock)
+{
+    struct service_item **ksp = (struct service_item **)rock;
+    struct service_item *knew = xmalloc(sizeof(struct service_item));
+    knew->prefix = strconcat(name, "_", (char *)NULL);
+    knew->prefixlen = strlen(knew->prefix);
+    knew->next = *ksp;
+    *ksp = knew;
+}
+
+struct option_t {
+    const char *key;
+    const char *val;
+};
+
+struct conf_rock {
+    struct service_item *known_services;
+    ptrarray_t overflow[OVER_LAST];
+};
+
+static void overflow_cb(const char *key, const char *val, void *rock)
+{
+    struct conf_rock *crock = (struct conf_rock *) rock;
+    struct option_t *newopt = xmalloc(sizeof(struct option_t));
+    unsigned known = known_overflow(key);
+    struct service_item *svc;
+
+    newopt->key = key;
+    newopt->val = val;
+
+    if (known) {
+        ptrarray_append(&crock->overflow[known], newopt);
+        return;
+    }
+
+    for (svc = crock->known_services; svc; svc = svc->next) {
+        if (!strncmp(key, svc->prefix, svc->prefixlen)) {
+            /* check if it's a known key */
+            if (known_regular(key+svc->prefixlen) ||
+                known_overflow(key+svc->prefixlen)) {
+                ptrarray_append(&crock->overflow[OVER_SERVICE], newopt);
+                return;
+            }
+        }
+    }
+
+    ptrarray_append(&crock->overflow[OVER_UNKNOWN], newopt);
+    return;
+}
+
+static int optcmp(struct option_t **a, struct option_t **b)
+{
+    return strcmp((*a)->key, (*b)->key);
+}
+
+static int action_conf(struct transaction_t *txn)
+{
+    int precond;
+    struct message_guid guid;
+    const char *etag;
+    static time_t lastmod = 0;
+    static struct buf resp = BUF_INITIALIZER;
+    struct stat sbuf;
+    time_t mtime;
+
+    /* Generate ETag based on compile date/time of this source file,
+       and the config file size/mtime */
+    assert(!buf_len(&txn->buf));
+    stat(config_filename, &sbuf);
+    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+               sbuf.st_mtime, sbuf.st_size);
+
+    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    etag = message_guid_encode(&guid);
+    mtime = MAX(compile_time, sbuf.st_mtime);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, etag, mtime);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+        /* Fill in Etag,  Last-Modified, Expires */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = mtime;
+        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->flags.cc |= CC_MAXAGE;
+
+        if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        return precond;
+    }
+
+    if (txn->resp_body.lastmod > lastmod) {
+        /* Add HTML header */
+        unsigned level = 0, j;
+        struct conf_rock crock;
+        struct service_item *ks;
+        int i, k;
+
+        buf_reset(&resp);
+        buf_printf_markup(&resp, level, HTML_DOCTYPE);
+        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<head>");
+        buf_printf_markup(&resp, level, "<title>%s</title>", actions[3].desc);
+        buf_printf_markup(&resp, --level, "</head>");
+        buf_printf_markup(&resp, level++, "<body>");
+        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
+                          actions[3].desc, config_servername);
+        buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
+        buf_printf_markup(&resp, level, "<caption>Default values shown "
+                          "in <i>italics</i></caption>");
+        buf_printf_markup(&resp, level++, "<tr>");
+        buf_printf_markup(&resp, level, "<th align=\"left\">Option</th>");
+        buf_printf_markup(&resp, level, "<th align=\"left\">Value</th>");
+        buf_printf_markup(&resp, --level, "</tr>");
+
+        /* Add config options */
+        for (i = IMAPOPT_ZERO; i < IMAPOPT_LAST; i++) {
+            if (!imapopts[i].seen) continue;
+
+            buf_printf_markup(&resp, level++, "<tr>");
+            buf_printf_markup(&resp, level, "<td>%s</td>", imapopts[i].optname);
+
+            switch (imapopts[i].t) {
+            case OPT_BITFIELD:
+                buf_printf_markup(&resp, level++, "<td>");
+                if (imapopts[i].def.x == imapopts[i].val.x)
+                    buf_printf_markup(&resp, level, "<i>");
+
+                for (j = 0; imapopts[i].enum_options[j].name; j++) {
+                    if (imapopts[i].val.x & (1<<j)) {
+                        buf_printf_markup(&resp, level, "%s ",
+                                          imapopts[i].enum_options[j].name);
+                    }
+                }
+
+                if (imapopts[i].def.x == imapopts[i].val.x)
+                    buf_printf_markup(&resp, level, "</i>");
+                buf_printf_markup(&resp, --level, "</td>");
+                break;
+
+            case OPT_ENUM:
+                for (j = 0; imapopts[i].enum_options[j].name; j++) {
+                    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
+                        if (imapopts[i].def.e == imapopts[i].val.e)
+                            buf_printf_markup(&resp, level,
+                                              "<td><i>%s</i></td>",
+                                              imapopts[i].enum_options[j].name);
+                        else
+                            buf_printf_markup(&resp, level,
+                                              "<td>%s</td>",
+                                              imapopts[i].enum_options[j].name);
+                        break;
+                    }
+                }
+                break;
+
+            case OPT_INT:
+                if (imapopts[i].def.i == imapopts[i].val.i)
+                    buf_printf_markup(&resp, level, "<td><i>%ld</i></td>",
+                                      imapopts[i].val.i);
+                else
+                    buf_printf_markup(&resp, level, "<td>%ld</td>",
+                                      imapopts[i].val.i);
+                break;
+
+            case OPT_STRING:
+            case OPT_STRINGLIST:
+                buf_printf_markup(&resp, level, "<td>%s</td>",
+                                  imapopts[i].val.s ? imapopts[i].val.s : "");
+                break;
+
+            case OPT_SWITCH:
+                if (imapopts[i].def.b == imapopts[i].val.b)
+                    buf_printf_markup(&resp, level, "<td><i>%s</i></td>",
+                                      imapopts[i].val.b ? "yes" : "no");
+                else
+                    buf_printf_markup(&resp, level, "<td>%s</td>",
+                                      imapopts[i].val.b ? "yes" : "no");
+                break;
+
+            default:
+                break;
+            }
+
+            buf_printf_markup(&resp, --level, "</tr>");
+        }
+
+        /* Pull the config from cyrus.conf to get service names */
+        memset(&crock, 0, sizeof(struct conf_rock));
+        masterconf_getsection("SERVICES", &add_service, &crock.known_services);
+
+        /* Build overflow arrays */
+        config_foreachoverflowstring(overflow_cb, &crock);
+
+        /* Clean up service items */
+        ks = crock.known_services;
+        while (ks) {
+            struct service_item *next = ks->next;
+            free(ks->prefix);
+            free(ks);
+            ks = next;
+        }
+
+        /* Add the overflows */
+        for (k = OVER_PARTITION; k >= OVER_UNKNOWN; k--) {
+            if (crock.overflow[k].count) {
+                const char *colname;
+
+                switch (k) {
+                case OVER_UNKNOWN:
+                    colname = "Unknown/Invalid Option"; break;
+
+                case OVER_SERVICE:
+                    colname = "Service-specific Option"; break;
+
+                case OVER_SASL:
+                    colname = "SASL Option"; break;
+
+                case OVER_PARTITION:
+                    colname = "Partition Option"; break;
+                }
+
+                buf_printf_markup(&resp, level,
+                                  "<tr><td colspan=2><br></td></tr>");
+                buf_printf_markup(&resp, level++, "<tr>");
+                buf_printf_markup(&resp, level,
+                                  "<th align=\"left\">%s</th>", colname);
+                buf_printf_markup(&resp, level,
+                                  "<th align=\"left\">Value</th>");
+                buf_printf_markup(&resp, --level, "</tr>");
+
+                ptrarray_sort(&crock.overflow[k],
+                              (int (*)(const void **, const void **)) &optcmp);
+                for (i = 0; i < crock.overflow[k].count; i++) {
+                    struct option_t *opt = ptrarray_nth(&crock.overflow[k], i);
+
+                    buf_printf_markup(&resp, level++, "<tr>");
+                    buf_printf_markup(&resp, level, "<td>%s</td>", opt->key);
+                    buf_printf_markup(&resp, level, "<td>%s</td>", opt->val);
+                    buf_printf_markup(&resp, --level, "</tr>");
+                    free(opt);
+                }
+                ptrarray_fini(&crock.overflow[k]);
+            }
+        }
 
         /* Finish table */
         buf_printf_markup(&resp, --level, "</table>");
