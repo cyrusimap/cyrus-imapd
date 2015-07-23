@@ -963,6 +963,139 @@ static int optcmp(struct option_t **a, struct option_t **b)
     return strcmp((*a)->key, (*b)->key);
 }
 
+static void print_imapopt(struct imapopt_s *imapopt,
+                          struct buf *resp, unsigned level)
+{
+    const union config_value *val =
+        imapopt->seen ? &imapopt->val : &imapopt->def;
+    int i;
+    
+    buf_printf_markup(resp, level++, "<tr>");
+    buf_printf_markup(resp, level, "<td>%s</td>", imapopt->optname);
+    buf_printf_markup(resp, level++, "<td>");
+    
+    switch (imapopt->t) {
+    case OPT_BITFIELD:
+        for (i = 0; imapopt->enum_options[i].name; i++) {
+            buf_printf_markup(resp, level++,
+                              "<input disabled type=checkbox "
+                              "name=\"%s\" value=\"%s\" %s>",
+                              imapopt->optname,
+                              imapopts->enum_options[i].name,
+                              (val->x & (1<<i)) ? "checked" : "");
+            if (imapopt->def.x & (1<<i)) {
+                buf_printf_markup(resp, level--, "<b>%s</b>",
+                                  imapopt->enum_options[i].name);
+            }
+            else {
+                buf_printf_markup(resp, level--, "%s",
+                                  imapopt->enum_options[i].name);
+            }
+ 
+            if (!((i+1) % 6)) buf_printf_markup(resp, level, "<br>");
+        }
+        break;
+
+    case OPT_ENUM:
+        for (i = 0; imapopt->enum_options[i].name; i++) {
+            buf_printf_markup(resp, level++,
+                              "<input disabled type=radio "
+                              "name=\"%s\" value=\"%s\" %s>",
+                              imapopt->optname,
+                              imapopt->enum_options[i].name,
+                              (val->e == imapopt->enum_options[i].val) ?
+                              "checked" : "");
+            if (imapopt->def.e == imapopt->enum_options[i].val) {
+                buf_printf_markup(resp, level--, "<b>%s</b>",
+                                  imapopt->enum_options[i].name);
+            }
+            else {
+                buf_printf_markup(resp, level--, "%s",
+                                  imapopt->enum_options[i].name);
+            }
+        }
+        break;
+
+    case OPT_INT:
+        if (val->i == imapopt->def.i) {
+            buf_printf_markup(resp, level, "<b>%ld</b>", val->i);
+        }
+        else {
+            buf_printf_markup(resp, level, "%ld <sub><b>%ld</b></sub>",
+                              val->i, imapopt->def.i);
+        }
+        break;
+
+    case OPT_STRING:
+        if (imapopt->def.s && *imapopt->def.s) {
+            const char *defval = imapopt->def.s;
+            char *freeme = NULL;
+
+            if (!strncasecmp(defval, "{configdirectory}", 17)) {
+                freeme = strconcat(config_dir, defval+17, NULL);
+                defval = freeme;
+            }
+            if (!imapopt->seen || !strcasecmp(val->s, defval)) {
+                buf_printf_markup(resp, level, "<b>%s</b>", defval);
+            }
+            else {
+                buf_printf_markup(resp, level, "%s <sub><b>%s</b></sub>",
+                                  val->s, defval);
+            }
+            free(freeme);
+        }
+        else if (val->s) {
+            tok_t tok;
+            const char *str;
+
+            tok_init(&tok, val->s, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            while ((str = tok_next(&tok))) {
+                buf_printf_markup(resp, level, "%s<br>", str);
+            }
+            tok_fini(&tok);
+        }
+        break;
+
+    case OPT_STRINGLIST:
+        for (i = 0; imapopt->enum_options[i].name; i++) {
+            buf_printf_markup(resp, level++,
+                              "<input disabled type=radio "
+                              "name=\"%s\" value=\"%s\" %s>",
+                              imapopt->optname,
+                              imapopt->enum_options[i].name,
+                              (val->s &&
+                               !strcasecmp(val->s,
+                                           imapopt->enum_options[i].name)) ?
+                              "checked" : "");
+            if (imapopt->def.s &&
+                !strcasecmp(imapopt->def.s,
+                            imapopt->enum_options[i].name)) {
+                buf_printf_markup(resp, level--, "<b>%s</b>",
+                                  imapopt->enum_options[i].name);
+            }
+            else {
+                buf_printf_markup(resp, level--, "%s",
+                                  imapopt->enum_options[i].name);
+            }
+        }
+        break;
+
+    case OPT_SWITCH:
+        buf_printf_markup(resp, level,
+                          "<input disabled type=checkbox "
+                          "name=\"%s\" value=\"on\" %s> %s",
+                          imapopt->optname, val->b ? "checked" : "",
+                          imapopt->def.b ? "<b>on</b>" : "on");
+        break;
+
+    default:
+        break;
+    }
+
+    buf_printf_markup(resp, --level, "</td>");
+    buf_printf_markup(resp, --level, "</tr>");
+}
+
 /* Perform a conf action */
 static int action_conf(struct transaction_t *txn)
 {
@@ -1008,7 +1141,8 @@ static int action_conf(struct transaction_t *txn)
 
     if (txn->resp_body.lastmod > lastmod) {
         /* Add HTML header */
-        unsigned level = 0, j;
+        ptrarray_t unset = PTRARRAY_INITIALIZER;
+        unsigned level = 0;
         struct conf_rock crock;
         struct service_item *ks;
         int i, k;
@@ -1028,152 +1162,19 @@ static int action_conf(struct transaction_t *txn)
                           "<b>bold</b> and are possibly "
                           "<b><sub>subscripted</sub></b></caption>");
         buf_printf_markup(&resp, level++, "<tr>");
-        buf_printf_markup(&resp, level, "<th align=\"left\">Option</th>");
+        buf_printf_markup(&resp, level,
+                          "<th align=\"left\">Standard Options</th>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Value</th>");
         buf_printf_markup(&resp, --level, "</tr>");
 
         /* Add config options */
-        for (i = IMAPOPT_ZERO; i < IMAPOPT_LAST; i++) {
-            if (!imapopts[i].seen) continue;
-
-            buf_printf_markup(&resp, level++, "<tr>");
-            buf_printf_markup(&resp, level, "<td>%s</td>", imapopts[i].optname);
-
-            switch (imapopts[i].t) {
-            case OPT_BITFIELD:
-                buf_printf_markup(&resp, level++, "<td>");
-                for (j = 0; imapopts[i].enum_options[j].name; j++) {
-                    buf_printf_markup(&resp, level++,
-                                      "<input disabled type=checkbox "
-                                      "name=\"%s\" value=\"%s\" %s>",
-                                      imapopts[i].optname,
-                                      imapopts[i].enum_options[j].name,
-                                      (imapopts[i].val.x & (1<<j)) ?
-                                      "checked" : "");
-                    if (imapopts[i].def.x & (1<<j)) {
-                        buf_printf_markup(&resp, level--, "<b>%s</b>",
-                                          imapopts[i].enum_options[j].name);
-                    }
-                    else {
-                        buf_printf_markup(&resp, level--, "%s",
-                                          imapopts[i].enum_options[j].name);
-                    }
-
-                    if (!((j+1) % 8)) buf_printf_markup(&resp, level, "<br>");
-                }
-                buf_printf_markup(&resp, --level, "</td>");
-                break;
-
-            case OPT_ENUM:
-                buf_printf_markup(&resp, level++, "<td>");
-                for (j = 0; imapopts[i].enum_options[j].name; j++) {
-                    buf_printf_markup(&resp, level++,
-                                      "<input disabled type=radio "
-                                      "name=\"%s\" value=\"%s\" %s>",
-                                      imapopts[i].optname,
-                                      imapopts[i].enum_options[j].name,
-                                      (imapopts[i].val.e ==
-                                       imapopts[i].enum_options[j].val) ?
-                                      "checked" : "");
-                    if (imapopts[i].def.e == imapopts[i].enum_options[j].val) {
-                        buf_printf_markup(&resp, level--, "<b>%s</b>",
-                                          imapopts[i].enum_options[j].name);
-                    }
-                    else {
-                        buf_printf_markup(&resp, level--, "%s",
-                                          imapopts[i].enum_options[j].name);
-                    }
-                }
-                buf_printf_markup(&resp, --level, "</td>");
-                break;
-
-            case OPT_INT:
-                if (imapopts[i].val.i == imapopts[i].def.i) {
-                    buf_printf_markup(&resp, level, "<td><b>%ld</b></td>",
-                                      imapopts[i].val.i);
-                }
-                else {
-                    buf_printf_markup(&resp, level,
-                                      "<td>%ld <sub><b>%ld</b></sub></td>",
-                                      imapopts[i].val.i, imapopts[i].def.i);
-                }
-                break;
-
-            case OPT_STRING:
-                if (imapopts[i].def.s && *imapopts[i].def.s) {
-                    const char *defval = imapopts[i].def.s;
-                    char *freeme = NULL;
-
-                    if (!strncasecmp(defval, "{configdirectory}", 17)) {
-                        freeme = strconcat(config_dir, defval+17, NULL);
-                        defval = freeme;
-                    }
-                    if (!strcasecmp(imapopts[i].val.s, defval)) {
-                        buf_printf_markup(&resp, level, "<td><b>%s</b></td>",
-                                          imapopts[i].val.s);
-                    }
-                    else {
-                        buf_printf_markup(&resp, level,
-                                          "<td>%s <sub><b>%s</b></sub></td>",
-                                          imapopts[i].val.s, defval);
-                    }
-                    free(freeme);
-                }
-                else {
-                    tok_t tok;
-                    const char *val;
-
-                    buf_printf_markup(&resp, level++, "<td>");
-                    tok_init(&tok, imapopts[i].val.s, " \t",
-                        TOK_TRIMLEFT|TOK_TRIMRIGHT);
-                    while ((val = tok_next(&tok))) {
-                        buf_printf_markup(&resp, level, "%s<br>", val);
-                    }
-                    tok_fini(&tok);
-                    buf_printf_markup(&resp, --level, "</td>");
-                }
-                break;
-
-            case OPT_STRINGLIST:
-                buf_printf_markup(&resp, level++, "<td>");
-                for (j = 0; imapopts[i].enum_options[j].name; j++) {
-                    buf_printf_markup(&resp, level++,
-                                      "<input disabled type=radio "
-                                      "name=\"%s\" value=\"%s\" %s>",
-                                      imapopts[i].optname,
-                                      imapopts[i].enum_options[j].name,
-                                      !strcasecmp(imapopts[i].val.s,
-                                                  imapopts[i].enum_options[j].name)?
-                                      "checked" : "");
-                    if (!strcasecmp(imapopts[i].def.s,
-                                    imapopts[i].enum_options[j].name)) {
-                        buf_printf_markup(&resp, level--, "<b>%s</b>",
-                                          imapopts[i].enum_options[j].name);
-                    }
-                    else {
-                        buf_printf_markup(&resp, level--, "%s",
-                                          imapopts[i].enum_options[j].name);
-                    }
-                }
-                buf_printf_markup(&resp, --level, "</td>");
-                break;
-
-            case OPT_SWITCH:
-                buf_printf_markup(&resp, level++, "<td>");
-                buf_printf_markup(&resp, level,
-                                  "<input disabled type=checkbox "
-                                  "name=\"%s\" value=\"on\" %s> %s",
-                                  imapopts[i].optname,
-                                  imapopts[i].val.b ? "checked" : "",
-                                  imapopts[i].def.b ? "<b>on</b>" : "on");
-                buf_printf_markup(&resp, --level, "</td>");
-                break;
-
-            default:
-                break;
+        for (i = 1; i < IMAPOPT_LAST; i++) {
+            if (imapopts[i].seen) {
+                print_imapopt(&imapopts[i], &resp, level);
             }
-
-            buf_printf_markup(&resp, --level, "</tr>");
+            else {
+                ptrarray_append(&unset, &imapopts[i]);
+            }
         }
 
         /* Pull the config from cyrus.conf to get service names */
@@ -1192,23 +1193,23 @@ static int action_conf(struct transaction_t *txn)
             ks = next;
         }
 
-        /* Add the overflows */
+        /* Add the overflow options */
         for (k = OVER_PARTITION; k >= OVER_UNKNOWN; k--) {
             if (crock.overflow[k].count) {
                 const char *colname;
 
                 switch (k) {
                 case OVER_UNKNOWN:
-                    colname = "Unknown/Invalid Option"; break;
+                    colname = "Unknown/Invalid Options"; break;
 
                 case OVER_SERVICE:
-                    colname = "Service-specific Option"; break;
+                    colname = "Service-specific Options"; break;
 
                 case OVER_SASL:
-                    colname = "SASL Option"; break;
+                    colname = "SASL Options"; break;
 
                 case OVER_PARTITION:
-                    colname = "Partition Option"; break;
+                    colname = "Partition Options"; break;
                 }
 
                 buf_printf_markup(&resp, level,
@@ -1244,6 +1245,21 @@ static int action_conf(struct transaction_t *txn)
                 ptrarray_fini(&crock.overflow[k]);
             }
         }
+
+        /* Add the unset options */
+        buf_printf_markup(&resp, level,
+                          "<tr><td colspan=2><br></td></tr>");
+        buf_printf_markup(&resp, level++, "<tr>");
+        buf_printf_markup(&resp, level,
+                          "<th align=\"left\">Unset Options</th>");
+        buf_printf_markup(&resp, level,
+                          "<th align=\"left\">Value</th>");
+        buf_printf_markup(&resp, --level, "</tr>");
+
+        for (i = 0; i < unset.count; i++) {
+            print_imapopt(ptrarray_nth(&unset, i), &resp, level);
+        }
+        ptrarray_fini(&unset);
 
         /* Finish table */
         buf_printf_markup(&resp, --level, "</table>");
