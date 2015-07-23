@@ -87,29 +87,6 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-static void shut_down(int code)
-{
-    in_shutdown = 1;
-
-    proc_cleanup();
-
-    if (backupd_in) {
-        prot_NONBLOCK(backupd_in);
-        prot_fill(backupd_in);
-        prot_free(backupd_in);
-    }
-
-    if (backupd_out) {
-        prot_flush(backupd_out);
-        prot_free(backupd_out);
-    }
-
-// FIXME is this needed? i don't see init being called
-//    cyrus_done();
-
-    exit(code);
-}
-
 static void usage(void)
 {
     // FIXME
@@ -127,7 +104,75 @@ static void cmdloop(void)
 
 static void backupd_reset(void)
 {
-    // FIXME
+    proc_cleanup();
+
+    if (backupd_in) {
+        prot_NONBLOCK(backupd_in);
+        prot_fill(backupd_in);
+        prot_free(backupd_in);
+        backupd_in = NULL;
+    }
+
+    if (backupd_out) {
+        prot_flush(backupd_out);
+        prot_free(backupd_out);
+        backupd_out = NULL;
+    }
+
+//#ifdef HAVE_SSL
+//    if (tls_conn) {
+//        tls_reset_servertls(&tls_conn);
+//        tls_conn = NULL;
+//    }
+//#endif
+
+    cyrus_reset_stdio();
+
+    backupd_clienthost = "[local]";
+//    if (sync_logfd != -1) {
+//        close(sync_logfd);
+//        sync_logfd = -1;
+//    }
+    if (backupd_userid != NULL) {
+        free(backupd_userid);
+        backupd_userid = NULL;
+    }
+    if (backupd_authstate) {
+        auth_freestate(backupd_authstate);
+        backupd_authstate = NULL;
+    }
+    if (backupd_saslconn) {
+        sasl_dispose(&backupd_saslconn);
+        backupd_saslconn = NULL;
+    }
+//    backupd_starttls_done = 0;
+//    backupd_compress_done = 0;
+
+    if(saslprops.iplocalport) {
+       free(saslprops.iplocalport);
+       saslprops.iplocalport = NULL;
+    }
+    if(saslprops.ipremoteport) {
+       free(saslprops.ipremoteport);
+       saslprops.ipremoteport = NULL;
+    }
+    if(saslprops.authid) {
+       free(saslprops.authid);
+       saslprops.authid = NULL;
+    }
+    saslprops.ssf = 0;
+}
+
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    backupd_reset();
+
+// FIXME is this needed? i don't see init being called
+//    cyrus_done();
+
+    exit(code);
 }
 
 EXPORTED void fatal(const char* s, int code)
