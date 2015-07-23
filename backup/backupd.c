@@ -52,12 +52,14 @@
 #include <sys/types.h>
 
 #include "exitcodes.h"
+#include "imparse.h"
 #include "signals.h"
 #include "xmalloc.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
 #include "imap/proc.h"
+#include "imap/telemetry.h"
 #include "imap/tls.h"
 #include "imap/version.h"
 
@@ -73,6 +75,7 @@ static const char *backupd_clienthost = "[local]";
 static sasl_conn_t *backupd_saslconn = NULL;
 static int backupd_starttls_done = 0;
 static int backupd_compress_done = 0;
+static int backupd_logfd = -1;
 
 static struct {
     char *ipremoteport;
@@ -92,12 +95,20 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
+extern int saslserver(sasl_conn_t *conn, const char *mech,
+                      const char *init_resp, const char *resp_prefix,
+                      const char *continuation, const char *empty_resp,
+                      struct protstream *pin, struct protstream *pout,
+                      int *sasl_result, char **success_data);
+
 static void backupd_reset(void);
 static void dobanner(void);
+static int reset_saslconn(sasl_conn_t **conn);
 static void shut_down(int code);
 static void usage(void);
 
 static void cmdloop(void);
+static void cmd_authenticate(char *mech, char *resp);
 
 /****************************************************************************/
 
@@ -284,10 +295,10 @@ static void backupd_reset(void)
     cyrus_reset_stdio();
 
     backupd_clienthost = "[local]";
-//    if (sync_logfd != -1) {
-//        close(sync_logfd);
-//        sync_logfd = -1;
-//    }
+    if (backupd_logfd != -1) {
+        close(backupd_logfd);
+        backupd_logfd = -1;
+    }
     if (backupd_userid != NULL) {
         free(backupd_userid);
         backupd_userid = NULL;
@@ -349,6 +360,51 @@ static void dobanner(void)
     prot_flush(backupd_out);
 }
 
+/* Reset the given sasl_conn_t to a sane state */
+static int reset_saslconn(sasl_conn_t **conn)
+{
+    int ret;
+    sasl_security_properties_t *secprops = NULL;
+
+    sasl_dispose(conn);
+    /* do initialization typical of service_main */
+    ret = sasl_server_new("csync", config_servername,
+                         NULL, NULL, NULL,
+                         NULL, 0, conn);
+    if (ret != SASL_OK) return ret;
+
+    if (saslprops.ipremoteport)
+       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
+                          saslprops.ipremoteport);
+    if (ret != SASL_OK) return ret;
+
+    if (saslprops.iplocalport)
+       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
+                          saslprops.iplocalport);
+    if (ret != SASL_OK) return ret;
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
+    ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
+    if (ret != SASL_OK) return ret;
+    /* end of service_main initialization excepting SSF */
+
+    /* If we have TLS/SSL info, set it */
+    if (saslprops.ssf) {
+        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    } else {
+        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
+    }
+
+    if (ret != SASL_OK) return ret;
+
+    if (saslprops.authid) {
+       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
+       if(ret != SASL_OK) return ret;
+    }
+    /* End TLS/SSL Info */
+
+    return SASL_OK;
+}
+
 static void shut_down(int code)
 {
     in_shutdown = 1;
@@ -373,6 +429,7 @@ static void cmdloop(void)
     int c;
     char *p;
     static struct buf cmd;
+    static struct buf arg1, arg2;
 
     for (;;) {
         prot_flush(backupd_out);
@@ -399,8 +456,27 @@ static void cmdloop(void)
         switch (cmd.s[0]) {
         case 'A':
             if (!strcmp(cmd.s, "Authenticate")) {
-                prot_printf(backupd_out, "NO command not implemented\r\n");
-                eatline(backupd_in, c);
+                int haveinitresp = 0;
+                if (c != ' ') goto missingargs;
+                c = getword(backupd_in, &arg1);
+                if (!imparse_isatom(arg1.s)) {
+                    prot_printf(backupd_out, "BAD Invalid mechanism\r\n");
+                    eatline(backupd_in, c);
+                    continue;
+                }
+                if (c == ' ') {
+                    haveinitresp = 1;
+                    c = getword(backupd_in, &arg2);
+                    if (c == EOF) goto missingargs;
+                }
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+
+                if (backupd_userid) {
+                    prot_printf(backupd_out, "BAD Already authenticated\r\n");
+                    continue;
+                }
+                cmd_authenticate(arg1.s, haveinitresp ? arg2.s : NULL);
                 continue;
             }
             if (!backupd_userid) goto nologin;
@@ -481,10 +557,10 @@ static void cmdloop(void)
         eatline(backupd_in, c);
         continue;
 
-//    missingargs:
-//        prot_printf(backupd_out, "BAD Missing required argument to %s\r\n", cmd.s);
-//        eatline(backupd_in, c);
-//        continue;
+    missingargs:
+        prot_printf(backupd_out, "BAD Missing required argument to %s\r\n", cmd.s);
+        eatline(backupd_in, c);
+        continue;
 
     extraargs:
         prot_printf(backupd_out, "BAD Unexpected extra arguments to %s\r\n", cmd.s);
@@ -494,4 +570,107 @@ static void cmdloop(void)
 
 exit:
     c = c; // FIXME placeholder to allow exit label, remove when there's something to do here
+}
+
+static void cmd_authenticate(char *mech, char *resp)
+{
+    int r, sasl_result;
+    sasl_ssf_t ssf;
+    const char *ssfmsg = NULL;
+    const void *val;
+    int failedloginpause;
+
+    if (backupd_userid) {
+        prot_printf(backupd_out, "BAD Already authenticated\r\n");
+        return;
+    }
+
+    r = saslserver(backupd_saslconn, mech, resp, "", "+ ", "",
+                   backupd_in, backupd_out, &sasl_result, NULL);
+
+    if (r) {
+        const char *errorstring = NULL;
+
+        switch (r) {
+        case IMAP_SASL_CANCEL:
+            prot_printf(backupd_out,
+                        "BAD Client canceled authentication\r\n");
+            break;
+        case IMAP_SASL_PROTERR:
+            errorstring = prot_error(backupd_in);
+
+            prot_printf(backupd_out,
+                        "NO Error reading client response: %s\r\n",
+                        errorstring ? errorstring : "");
+            break;
+        default:
+            /* failed authentication */
+            errorstring = sasl_errstring(sasl_result, NULL, NULL);
+
+            syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
+                   backupd_clienthost, mech, sasl_errdetail(backupd_saslconn));
+
+            failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+            if (failedloginpause != 0) {
+                sleep(failedloginpause);
+            }
+
+            if (errorstring) {
+                prot_printf(backupd_out, "NO %s\r\n", errorstring);
+            } else {
+                prot_printf(backupd_out, "NO Error authenticating\r\n");
+            }
+        }
+
+        reset_saslconn(&backupd_saslconn);
+        return;
+    }
+
+    /* successful authentication */
+
+    /* get the userid from SASL --- already canonicalized from
+     * mysasl_proxy_policy()
+     */
+    sasl_result = sasl_getprop(backupd_saslconn, SASL_USERNAME, &val);
+    if (sasl_result != SASL_OK) {
+        prot_printf(backupd_out, "NO weird SASL error %d SASL_USERNAME\r\n",
+                    sasl_result);
+        syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
+               sasl_result);
+        reset_saslconn(&backupd_saslconn);
+        return;
+    }
+
+    backupd_userid = xstrdup((const char *) val);
+    proc_register(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
+
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", backupd_clienthost, backupd_userid,
+           mech, backupd_starttls_done ? "+TLS" : "", "User logged in");
+
+    sasl_getprop(backupd_saslconn, SASL_SSF, &val);
+    ssf = *((sasl_ssf_t *) val);
+
+    /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
+       but the current libsasl doesn't allow that. */
+    if (backupd_starttls_done) {
+        switch(ssf) {
+        case 0: ssfmsg = "tls protection"; break;
+        case 1: ssfmsg = "tls plus integrity protection"; break;
+        default: ssfmsg = "tls plus privacy protection"; break;
+        }
+    } else {
+        switch(ssf) {
+        case 0: ssfmsg = "no protection"; break;
+        case 1: ssfmsg = "integrity protection"; break;
+        default: ssfmsg = "privacy protection"; break;
+        }
+    }
+
+    prot_printf(backupd_out, "OK Success (%s)\r\n", ssfmsg);
+
+    prot_setsasl(backupd_in,  backupd_saslconn);
+    prot_setsasl(backupd_out, backupd_saslconn);
+
+    /* Create telemetry log */
+    backupd_logfd = telemetry_log(backupd_userid, backupd_in, backupd_out, 0);
 }
