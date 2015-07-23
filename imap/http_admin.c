@@ -1024,9 +1024,9 @@ static int action_conf(struct transaction_t *txn)
                           actions[3].desc, config_servername);
         buf_printf_markup(&resp, level++, "<form>");
         buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
-        buf_printf_markup(&resp, level,
-                          "<caption>Default values shown in <b>bold</b> and "
-                          "possibly <b><sub>subscripted</sub></b></caption>");
+        buf_printf_markup(&resp, level, "<caption>Default values are shown in "
+                          "<b>bold</b> and are possibly "
+                          "<b><sub>subscripted</sub></b></caption>");
         buf_printf_markup(&resp, level++, "<tr>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Option</th>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Value</th>");
@@ -1101,15 +1101,23 @@ static int action_conf(struct transaction_t *txn)
 
             case OPT_STRING:
                 if (imapopts[i].def.s && *imapopts[i].def.s) {
-                    if (!strcmp(imapopts[i].val.s, imapopts[i].def.s)) {
+                    const char *defval = imapopts[i].def.s;
+                    char *freeme = NULL;
+
+                    if (!strncasecmp(defval, "{configdirectory}", 17)) {
+                        freeme = strconcat(config_dir, defval+17, NULL);
+                        defval = freeme;
+                    }
+                    if (!strcasecmp(imapopts[i].val.s, defval)) {
                         buf_printf_markup(&resp, level, "<td><b>%s</b></td>",
                                           imapopts[i].val.s);
                     }
                     else {
                         buf_printf_markup(&resp, level,
                                           "<td>%s <sub><b>%s</b></sub></td>",
-                                          imapopts[i].val.s, imapopts[i].def.s);
+                                          imapopts[i].val.s, defval);
                     }
+                    free(freeme);
                 }
                 else {
                     tok_t tok;
@@ -1134,11 +1142,11 @@ static int action_conf(struct transaction_t *txn)
                                       "name=\"%s\" value=\"%s\" %s>",
                                       imapopts[i].optname,
                                       imapopts[i].enum_options[j].name,
-                                      !strcmp(imapopts[i].val.s,
-                                              imapopts[i].enum_options[j].name)?
+                                      !strcasecmp(imapopts[i].val.s,
+                                                  imapopts[i].enum_options[j].name)?
                                       "checked" : "");
-                    if (!strcmp(imapopts[i].def.s,
-                                imapopts[i].enum_options[j].name)) {
+                    if (!strcasecmp(imapopts[i].def.s,
+                                    imapopts[i].enum_options[j].name)) {
                         buf_printf_markup(&resp, level--, "<b>%s</b>",
                                           imapopts[i].enum_options[j].name);
                     }
