@@ -91,120 +91,14 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-static void usage(void)
-{
-    // FIXME
-}
+static void backupd_reset(void);
+static void dobanner(void);
+static void shut_down(int code);
+static void usage(void);
 
-static void dobanner(void)
-{
-    const char *mechlist;
-    int mechcount;
+static void cmdloop(void);
 
-    if (!backupd_userid) {
-        if (sasl_listmech(backupd_saslconn, NULL,
-                          "* SASL ", " ", "\r\n",
-                          &mechlist, NULL, &mechcount) == SASL_OK
-            && mechcount > 0) {
-            prot_printf(backupd_out, "%s", mechlist);
-        }
-
-        if (tls_enabled() && !backupd_starttls_done) {
-            prot_printf(backupd_out, "* STARTTLS\r\n");
-        }
-
-#ifdef HAVE_ZLIB
-        if (!backupd_compress_done && !backupd_starttls_done) {
-            prot_printf(backupd_out, "* COMPRESS DEFLATE\r\n");
-        }
-#endif
-    }
-
-    prot_printf(backupd_out,
-                "* OK %s Cyrus backup server %s\r\n",
-                config_servername, cyrus_version());
-
-    prot_flush(backupd_out);
-}
-
-static void cmdloop(void)
-{
-    // FIXME
-}
-
-static void backupd_reset(void)
-{
-    proc_cleanup();
-
-    if (backupd_in) {
-        prot_NONBLOCK(backupd_in);
-        prot_fill(backupd_in);
-        prot_free(backupd_in);
-        backupd_in = NULL;
-    }
-
-    if (backupd_out) {
-        prot_flush(backupd_out);
-        prot_free(backupd_out);
-        backupd_out = NULL;
-    }
-
-//#ifdef HAVE_SSL
-//    if (tls_conn) {
-//        tls_reset_servertls(&tls_conn);
-//        tls_conn = NULL;
-//    }
-//#endif
-
-    cyrus_reset_stdio();
-
-    backupd_clienthost = "[local]";
-//    if (sync_logfd != -1) {
-//        close(sync_logfd);
-//        sync_logfd = -1;
-//    }
-    if (backupd_userid != NULL) {
-        free(backupd_userid);
-        backupd_userid = NULL;
-    }
-    if (backupd_authstate) {
-        auth_freestate(backupd_authstate);
-        backupd_authstate = NULL;
-    }
-    if (backupd_saslconn) {
-        sasl_dispose(&backupd_saslconn);
-        backupd_saslconn = NULL;
-    }
-
-    backupd_starttls_done = 0;
-    backupd_compress_done = 0;
-
-    if(saslprops.iplocalport) {
-       free(saslprops.iplocalport);
-       saslprops.iplocalport = NULL;
-    }
-    if(saslprops.ipremoteport) {
-       free(saslprops.ipremoteport);
-       saslprops.ipremoteport = NULL;
-    }
-    if(saslprops.authid) {
-       free(saslprops.authid);
-       saslprops.authid = NULL;
-    }
-    saslprops.ssf = 0;
-}
-
-static void shut_down(int code)
-{
-    in_shutdown = 1;
-
-    backupd_reset();
-
-// FIXME is this needed? i don't see init being called
-//    cyrus_done();
-
-    exit(code);
-}
+/****************************************************************************/
 
 EXPORTED void fatal(const char* s, int code)
 {
@@ -358,4 +252,122 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     backupd_reset();
 
     return 0;
+}
+
+/****************************************************************************/
+
+static void backupd_reset(void)
+{
+    proc_cleanup();
+
+    if (backupd_in) {
+        prot_NONBLOCK(backupd_in);
+        prot_fill(backupd_in);
+        prot_free(backupd_in);
+        backupd_in = NULL;
+    }
+
+    if (backupd_out) {
+        prot_flush(backupd_out);
+        prot_free(backupd_out);
+        backupd_out = NULL;
+    }
+
+//#ifdef HAVE_SSL
+//    if (tls_conn) {
+//        tls_reset_servertls(&tls_conn);
+//        tls_conn = NULL;
+//    }
+//#endif
+
+    cyrus_reset_stdio();
+
+    backupd_clienthost = "[local]";
+//    if (sync_logfd != -1) {
+//        close(sync_logfd);
+//        sync_logfd = -1;
+//    }
+    if (backupd_userid != NULL) {
+        free(backupd_userid);
+        backupd_userid = NULL;
+    }
+    if (backupd_authstate) {
+        auth_freestate(backupd_authstate);
+        backupd_authstate = NULL;
+    }
+    if (backupd_saslconn) {
+        sasl_dispose(&backupd_saslconn);
+        backupd_saslconn = NULL;
+    }
+
+    backupd_starttls_done = 0;
+    backupd_compress_done = 0;
+
+    if(saslprops.iplocalport) {
+       free(saslprops.iplocalport);
+       saslprops.iplocalport = NULL;
+    }
+    if(saslprops.ipremoteport) {
+       free(saslprops.ipremoteport);
+       saslprops.ipremoteport = NULL;
+    }
+    if(saslprops.authid) {
+       free(saslprops.authid);
+       saslprops.authid = NULL;
+    }
+    saslprops.ssf = 0;
+}
+static void dobanner(void)
+{
+    const char *mechlist;
+    int mechcount;
+
+    if (!backupd_userid) {
+        if (sasl_listmech(backupd_saslconn, NULL,
+                          "* SASL ", " ", "\r\n",
+                          &mechlist, NULL, &mechcount) == SASL_OK
+            && mechcount > 0) {
+            prot_printf(backupd_out, "%s", mechlist);
+        }
+
+        if (tls_enabled() && !backupd_starttls_done) {
+            prot_printf(backupd_out, "* STARTTLS\r\n");
+        }
+
+#ifdef HAVE_ZLIB
+        if (!backupd_compress_done && !backupd_starttls_done) {
+            prot_printf(backupd_out, "* COMPRESS DEFLATE\r\n");
+        }
+#endif
+    }
+
+    prot_printf(backupd_out,
+                "* OK %s Cyrus backup server %s\r\n",
+                config_servername, cyrus_version());
+
+    prot_flush(backupd_out);
+}
+
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    backupd_reset();
+
+// FIXME is this needed? i don't see init being called
+//    cyrus_done();
+
+    exit(code);
+}
+
+static void usage(void)
+{
+    // FIXME
+}
+
+/****************************************************************************/
+
+static void cmdloop(void)
+{
+    // FIXME
 }
