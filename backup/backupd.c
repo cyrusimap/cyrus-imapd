@@ -56,6 +56,7 @@
 #include "xmalloc.h"
 
 #include "imap/global.h"
+#include "imap/imap_err.h"
 #include "imap/proc.h"
 #include "imap/tls.h"
 #include "imap/version.h"
@@ -369,5 +370,128 @@ static void usage(void)
 
 static void cmdloop(void)
 {
-    // FIXME
+    int c;
+    char *p;
+    static struct buf cmd;
+
+    for (;;) {
+        prot_flush(backupd_out);
+
+        /* Parse command name */
+        if ((c = getword(backupd_in, &cmd)) == EOF)
+            break;
+
+        if (!cmd.s[0]) {
+            prot_printf(backupd_out, "BAD Null command\r\n");
+            eatline(backupd_in, c);
+            continue;
+        }
+
+        if (Uislower(cmd.s[0]))
+            cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+        for (p = &cmd.s[1]; *p; p++) {
+            if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+        }
+
+        /* Must be an admin */
+        if (backupd_userid && !backupd_userisadmin) goto noperm;
+
+        switch (cmd.s[0]) {
+        case 'A':
+            if (!strcmp(cmd.s, "Authenticate")) {
+                prot_printf(backupd_out, "NO command not implemented\r\n");
+                eatline(backupd_in, c);
+                continue;
+            }
+            if (!backupd_userid) goto nologin;
+            if (!strcmp(cmd.s, "Apply")) {
+                prot_printf(backupd_out, "NO command not implemented\r\n");
+                eatline(backupd_in, c);
+                continue;
+            }
+            break;
+
+        case 'C':
+            if (!strcmp(cmd.s, "Compress")) {
+                prot_printf(backupd_out, "NO command not implemented\r\n");
+                eatline(backupd_in, c);
+                continue;
+            }
+            break;
+
+        case 'G':
+            if (!backupd_userid) goto nologin;
+            if (!strcmp(cmd.s, "Get")) {
+                prot_printf(backupd_out, "NO command not implemented\r\n");
+                eatline(backupd_in, c);
+                continue;
+            }
+            break;
+
+        case 'E':
+            if (!strcmp(cmd.s, "Exit")) {
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+                prot_printf(backupd_out, "OK Finished\r\n");
+                prot_flush(backupd_out);
+                goto exit;
+            }
+            break;
+
+        case 'N':
+            if (!strcmp(cmd.s, "Noop")) {
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+                prot_printf(backupd_out, "OK Noop completed\r\n");
+                continue;
+            }
+            break;
+
+        case 'R':
+            if (!strcmp(cmd.s, "Restart")) {
+                prot_printf(backupd_out, "NO command not implemented\r\n");
+                eatline(backupd_in, c);
+                continue;
+            }
+            break;
+
+        case 'S':
+            if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+                prot_printf(backupd_out, "NO command not implemented\r\n");
+                eatline(backupd_in, c);
+                continue;
+            }
+            break;
+
+        }
+
+        syslog(LOG_ERR, "IOERROR: received bad command: %s", cmd.s);
+        prot_printf(backupd_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
+        eatline(backupd_in, c);
+        continue;
+
+    nologin:
+        prot_printf(backupd_out, "NO Please authenticate first\r\n");
+        eatline(backupd_in, c);
+        continue;
+
+    noperm:
+        prot_printf(backupd_out, "NO %s\r\n",
+                    error_message(IMAP_PERMISSION_DENIED));
+        eatline(backupd_in, c);
+        continue;
+
+//    missingargs:
+//        prot_printf(backupd_out, "BAD Missing required argument to %s\r\n", cmd.s);
+//        eatline(backupd_in, c);
+//        continue;
+
+    extraargs:
+        prot_printf(backupd_out, "BAD Unexpected extra arguments to %s\r\n", cmd.s);
+        eatline(backupd_in, c);
+        continue;
+    }
+
+exit:
+    c = c; // FIXME placeholder to allow exit label, remove when there's something to do here
 }
