@@ -48,10 +48,12 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include <netinet/tcp.h>
 #include <sys/types.h>
 
 #include "exitcodes.h"
 #include "signals.h"
+#include "xmalloc.h"
 
 #include "imap/global.h"
 #include "imap/proc.h"
@@ -61,6 +63,18 @@ static sasl_ssf_t extprops_ssf = 0;
 
 static struct auth_state *backupd_authstate = 0;
 static int backupd_userisadmin = 0;
+static char *backupd_userid = NULL;
+static struct protstream *backupd_out = NULL;
+static struct protstream *backupd_in = NULL;
+static const char *backupd_clienthost = "[local]";
+static sasl_conn_t *backupd_saslconn = NULL;
+
+static struct {
+    char *ipremoteport;
+    char *iplocalport;
+    sasl_ssf_t ssf;
+    char *authid;
+} saslprops = { NULL, NULL, 0, NULL};
 
 static struct proxy_context backupd_proxyctx = {
     0, 1, &backupd_authstate, &backupd_userisadmin, NULL
@@ -75,10 +89,43 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void shut_down(int code)
 {
+    in_shutdown = 1;
+
+    proc_cleanup();
+
+    if (backupd_in) {
+        prot_NONBLOCK(backupd_in);
+        prot_fill(backupd_in);
+        prot_free(backupd_in);
+    }
+
+    if (backupd_out) {
+        prot_flush(backupd_out);
+        prot_free(backupd_out);
+    }
+
+// FIXME is this needed? i don't see init being called
+//    cyrus_done();
+
     exit(code);
 }
 
 static void usage(void)
+{
+    // FIXME
+}
+
+static void dobanner(void)
+{
+    // FIXME
+}
+
+static void cmdloop(void)
+{
+    // FIXME
+}
+
+static void backupd_reset(void)
 {
     // FIXME
 }
@@ -89,14 +136,15 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-//        proc_cleanup();
+        proc_cleanup();
         exit(recurse_code);
     }
     recurse_code = code;
-//    if (sync_out) {
-//        prot_printf(sync_out, "* Fatal error: %s\r\n", s);
-//        prot_flush(sync_out);
-//    }
+
+    if (backupd_out) {
+        prot_printf(backupd_out, "* Fatal error: %s\r\n", s);
+        prot_flush(backupd_out);
+    }
     syslog(LOG_ERR, "Fatal error: %s", s);
     shut_down(code);
 }
@@ -147,6 +195,91 @@ EXPORTED int service_main(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
-    return -1;
-}
+    struct protoent *proto;
+    const char *localip, *remoteip;
+    sasl_security_properties_t *secprops = NULL;
+    int timeout;
 
+    signals_poll();
+
+    backupd_in = prot_new(0, 0);
+    backupd_out = prot_new(1, 1);
+
+    /* Force use of LITERAL+ so we don't need two way communications */
+    prot_setisclient(backupd_in, 1);
+    prot_setisclient(backupd_out, 1);
+
+    /* Find out name of client host */
+    backupd_clienthost = get_clienthost(0, &localip, &remoteip);
+    if (!strcmp(backupd_clienthost, UNIX_SOCKET)) {
+        /* we're not connected to an internet socket! */
+        backupd_userid = xstrdup("cyrus");
+        backupd_userisadmin = 1;
+    }
+    else {
+        /* other params should be filled in */
+        if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
+                            NULL, 0, &backupd_saslconn) != SASL_OK)
+            fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
+
+        /* will always return something valid */
+        secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
+        if (sasl_setprop(backupd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
+            fatal("Failed to set SASL property", EC_TEMPFAIL);
+
+        if (sasl_setprop(backupd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
+            fatal("Failed to set SASL property", EC_TEMPFAIL);
+
+        if (localip) {
+            sasl_setprop(backupd_saslconn, SASL_IPLOCALPORT, localip);
+            saslprops.iplocalport = xstrdup(localip);
+        }
+
+        if (remoteip) {
+            if (sasl_setprop(backupd_saslconn, SASL_IPREMOTEPORT, remoteip) != SASL_OK)
+                fatal("failed to set sasl property", EC_TEMPFAIL);
+            saslprops.ipremoteport = xstrdup(remoteip);
+        }
+
+        /* Disable Nagle's Algorithm => increase throughput
+         *
+         * http://en.wikipedia.org/wiki/Nagle's_algorithm
+         */
+        if ((proto = getprotobyname("tcp")) != NULL) {
+            int on = 1;
+
+            if (setsockopt(1, proto->p_proto, TCP_NODELAY,
+                           (void *) &on, sizeof(on)) != 0) {
+                syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+            }
+        }
+        else {
+            syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
+        }
+    }
+
+    proc_register(config_ident, backupd_clienthost, NULL, NULL, NULL);
+
+    /* Set inactivity timer */
+    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
+    if (timeout < 3) timeout = 3;
+    prot_settimeout(backupd_in, timeout);
+
+    prot_setflushonread(backupd_in, backupd_out);
+
+//  FIXME sync logging?
+//    sync_log_init();
+//    if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+//        sync_log_suppress();
+
+    dobanner();
+
+    cmdloop();
+
+    /* EXIT executed */
+
+    /* cleanup */
+    backupd_reset();
+
+    return 0;
+}
