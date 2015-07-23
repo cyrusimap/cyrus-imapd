@@ -57,6 +57,8 @@
 
 #include "imap/global.h"
 #include "imap/proc.h"
+#include "imap/tls.h"
+#include "imap/version.h"
 
 const int config_need_data = 0;
 static sasl_ssf_t extprops_ssf = 0;
@@ -68,6 +70,8 @@ static struct protstream *backupd_out = NULL;
 static struct protstream *backupd_in = NULL;
 static const char *backupd_clienthost = "[local]";
 static sasl_conn_t *backupd_saslconn = NULL;
+static int backupd_starttls_done = 0;
+static int backupd_compress_done = 0;
 
 static struct {
     char *ipremoteport;
@@ -94,7 +98,33 @@ static void usage(void)
 
 static void dobanner(void)
 {
-    // FIXME
+    const char *mechlist;
+    int mechcount;
+
+    if (!backupd_userid) {
+        if (sasl_listmech(backupd_saslconn, NULL,
+                          "* SASL ", " ", "\r\n",
+                          &mechlist, NULL, &mechcount) == SASL_OK
+            && mechcount > 0) {
+            prot_printf(backupd_out, "%s", mechlist);
+        }
+
+        if (tls_enabled() && !backupd_starttls_done) {
+            prot_printf(backupd_out, "* STARTTLS\r\n");
+        }
+
+#ifdef HAVE_ZLIB
+        if (!backupd_compress_done && !backupd_starttls_done) {
+            prot_printf(backupd_out, "* COMPRESS DEFLATE\r\n");
+        }
+#endif
+    }
+
+    prot_printf(backupd_out,
+                "* OK %s Cyrus backup server %s\r\n",
+                config_servername, cyrus_version());
+
+    prot_flush(backupd_out);
 }
 
 static void cmdloop(void)
@@ -145,8 +175,9 @@ static void backupd_reset(void)
         sasl_dispose(&backupd_saslconn);
         backupd_saslconn = NULL;
     }
-//    backupd_starttls_done = 0;
-//    backupd_compress_done = 0;
+
+    backupd_starttls_done = 0;
+    backupd_compress_done = 0;
 
     if(saslprops.iplocalport) {
        free(saslprops.iplocalport);
