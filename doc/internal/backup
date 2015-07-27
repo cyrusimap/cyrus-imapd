@@ -1,0 +1,346 @@
+Notes for backup implementation
+
+Backup index database (one per user):
+
+backup:
+    int id
+    timestamp ts
+    int offset
+    int length
+
+backup_mailbox:
+    int id
+    int backup_id
+    char uniqueid
+    char mboxname
+    int last_uid
+    int highestmodseq
+    int recentuid
+    timestamp recenttime
+    timestamp last_appenddate
+    ? pop3_last_login
+    ? pop3_show_after
+    timestamp uidvalidity
+    char partition
+    char acl
+    char options
+    int sync_crc
+    int sync_crc_annot
+    char quotaroot
+    int xconvmodseq
+    [annotations]
+
+mailbox_record:
+    char mailbox_uniqueid
+    int uid
+    int modseq
+    timestamp last_updated
+    [flags]
+    timestamp internaldate
+    int size
+    char guid
+    [annotations]
+    boolean expunged # duplicated from [flags]?
+
+message:
+    int id
+    char partition
+    char guid
+    int backup_id
+    int offset
+    int length
+
+sieve scripts and messages are both identified by a GUID
+but APPLY SIEVE doesn't take a GUID, it seems to be generated locally?
+the GUID in the response to APPLY SIEVE is generated in the process of
+reading the script from disk (sync_sieve_list_generate)
+
+
+do i need a small table with the current state of the mailboxes, just pointing to the
+most recent backup_mailbox record for each? like:
+
+mailbox:
+    char uniqueid
+    char mboxname
+    int backup_mailbox_id (fk backup_mailbox.id)
+
+
+messages
+--------
+
+APPLY MESSAGE is a list of messages, not necessarily only one message.
+
+Cheap first implementation is to index the start/end of the entire APPLY
+MESSAGE command identically for each message within it, and at restore time
+we grab that chunk and loop over it looking for the correct guid.
+
+Ideal implementation would be to index the offset and length of each message
+exactly (even excluding the dlist wrapper), but this is rather complicated
+by the dlist API.
+
+DL_SFILE type within dlist will have the correct offset/size when parsed from
+an existing dlist out of a backup file (i.e. for reindex).  But for actually
+creating the backup, the offset it will obtain is the offset in the connection
+from the sync_client, which is not useful to us -- we need the offset within
+the gzip stream that we are producing.
+
+Compressing will need to consider this too...
+
+locking
+-------
+
+foo.gz:   only one process may write to it, but anyone can read it
+foo.idx:  only writer of foo.gz may write to it, but anyone can read it
+foo.lock: holder can write, everyone else can read or wait
+
+or, just use a normal flock/fcntl lock on the .gz file and only open the index
+if that lock succeeded??
+
+backup:   needs to append foo.fz and update foo.idx
+reindex:  only needs to read foo.gz, but needs a write lock to prevent writes
+          while it does so. needs to write to (replace) foo.idx
+compress: needs to re-write foo.gz and foo.idx
+restore:  needs to read
+
+
+
+mailboxes database ??
+
+
+
+reindex
+-------
+
+* convert user mailbox name to backup name
+* complain if there's no backup data file?
+* lock, rename .idx to .idx.old, init new .idx
+* foreach file chunk:
+*   timestamp is from first line in chunk
+*   complain if timestamp has gone backwards?
+*   index records from chunk
+* unlock
+* clean up .idx.old
+
+on error:
+* discard partial new index
+* restore .idx.old
+* bail out
+
+
+backupd
+-------
+
+cmdloop:
+* (periodic cleanup)
+* read command, determine backup name
+* already holding lock ? bump timestamp : obtain lock
+* write data to gzname
+* index data
+
+periodic cleanup:
+* check timestamp of each held lock
+* if stale (define: stale?), release
+
+sync restart:
+* release each held lock
+
+exit:
+* release each held lock
+
+need a "backup_index_abort" to complete the backup_index_start/end set.
+_start should create a transaction, _end should commit it, and _abort should roll it back.
+then, if backupd fails to write to the gzip file for some reason, the (now invalid) index
+info we added can be discarded too.
+
+sql snippets
+-----------
+
+sqlite> select id, backup_id, substr(uniqueid,1,6),mboxname from backup_mailbox;
+id|backup_id|substr(uniqueid,1,6)|mboxname
+1|1|c9b238|fastmail.com!user.seleniumbetauser5
+2|2|c9b238|fastmail.com!user.seleniumbetauser5
+3|3|c9b238|fastmail.com!user.seleniumbetauser5
+4|3|1475ff|fastmail.com!user.seleniumbetauser5.Archive
+5|4|afd5c4|fastmail.com!user.seleniumbetauser5.#calendars.b7eb1eab-a6dc-4ef5-b44f-ac67efcfb5e0
+6|4|6e15a6|fastmail.com!user.seleniumbetauser5.testfolder
+7|5|c9b238|fastmail.com!user.seleniumbetauser5
+8|5|1475ff|fastmail.com!user.seleniumbetauser5.Archive
+9|5|6e15a6|fastmail.com!user.seleniumbetauser5.testfolder renamed
+sqlite> select bm.id, z.backup_id, substr(bm.uniqueid,1,6), bm.mboxname from backup_mailbox as bm inner join ( select uniqueid, max(backup_id) as backup_id from backup_mailbox group by uniqueid) as z on bm.uniqueid = z.uniqueid and bm.backup_id = z.backup_id;
+id|backup_id|substr(bm.uniqueid,1,6)|mboxname
+8|5|1475ff|fastmail.com!user.seleniumbetauser5.Archive
+9|5|6e15a6|fastmail.com!user.seleniumbetauser5.testfolder renamed
+5|4|afd5c4|fastmail.com!user.seleniumbetauser5.#calendars.b7eb1eab-a6dc-4ef5-b44f-ac67efcfb5e0
+7|5|c9b238|fastmail.com!user.seleniumbetauser5
+
+
+
+
+redesigned index database
+-------------------------
+
+i don't think i need to index every version of every mailbox, just the most recent version
+
+backup:
+    int id
+    timestamp ts
+    int offset
+    int length
+
+mailbox:
+    int id
+    int last_backup_id
+    char uniqueid               -> unique
+    char mboxname               -> altered by a rename
+    char mboxtype
+    int last_uid
+    int highestmodseq
+    int recentuid
+    timestamp recenttime
+    timestamp last_appenddate
+    timestamp pop3_last_login
+    timestamp pop3_show_after
+    timestamp uidvalidity
+    char partition
+    char acl
+    char options
+    int sync_crc
+    int sync_crc_annot
+    char quotaroot
+    int xconvmodseq
+    char annotations
+    timestamp deleted           -> set by unmailbox i guess
+
+message:
+    int id
+    char guid
+    char partition              -> this is used to set the spool directory for the temp file - we might not need it
+    int backup_id
+    int offset
+    int length
+
+mailbox_message:
+    int mailbox_id
+    int message_id
+    int last_backup_id          -> mailbox has its own one of these, not sure if this needs it too?
+    int uid
+    int modseq
+    timestamp last_updated
+    char flags
+    timestamp internaldate
+    int size
+    char annotations
+    timestamp expunged          -> time that it was expunged, or 0 if still alive
+
+questions
+---------
+* what does it look like when uidvalidity changes?
+
+
+restore
+-------
+
+* restored: runs on master servers listening for sync commands from the restore client
+* restore: sbin program for selecting and restoring messages
+
+restoration is effectively a reverse-direction replication (replicating TO master),
+which means we can't supply things like uid, modseq, etc without racing against normal
+message arrivals.  so instead we add an extra command to the protocol to restore a
+message to a folder but let the server determine the tasty bits.
+
+protocol flow looks something like:
+
+c: APPLY RESERVE ... # as usual
+s: MISSING GUID foo
+s: MISSING GUID bar
+s: OK
+c: APPLY MESSAGE ... # as usual
+s: OK
+c: [new command: APPLY RESTORE? RESTORE MAILBOX?]
+s: OK
+
+we introduce a new command, RESTORE MAILBOX, which is similar to an inversion of the
+usual APPLY MAILBOX.  i.e. instead of specifying the mailbox state plus a list of
+message records indexed by uid, we instead supply the message guid plus a list of
+mailbox-records describing the mailboxes it should be added to and the flags/annotations
+for each one.  the server adds it into the mailbox as per delivery of a new message
+-- generating uid, modseq, etc itself, rather than receiving them from the sync client
+
+this will end up generating new events in the backup channel's sync log, and then the
+messages will be backed up again with their new uids, etc.  additional wire transfer
+of message data should be avoided by keeping the same guid.
+
+
+compress
+--------
+
+settings:
+
+* backup retention period
+* chunk combination size (byte length or elapsed time)
+
+three kinds of compression (probably at least two simultaneously):
+
+* removing unused chunks
+* combining adjacent chunks into a single chunk (for better gz compression)
+* removing unused messages from within a chunk (important after combining)
+
+"unused messages"
+    messages for which all records have been expunged for longer
+    than the retention period
+"unused chunks"
+    chunks which contain only unused messages
+
+algorithm:
+
+*   open (and lock) backup and backup.new (or bail out)
+*   use backup index to identify chunks we still need
+*   create a chunk in backup.new
+*   foreach chunk we still need:
+*       foreach line in the chunk:
+*           if we still need the line, or if we're not doing message granularity
+*               write and index it to backup.new
+*       if the new chunk is big enough, or if we're not combining
+*           end chunk and start a new one
+*   end the new chunk
+*   rename backup->backup.old, backup.new->backup
+*   close (and unlock) backup.old and backup
+
+
+backup_lock
+-----------
+
+command line utility to lock a backup (for e.g. safely poking around in the
+.index on a live system).
+
+example failure:
+$bulock /path/to/backup.gz
+* Trying to obtain lock on /path/to/backup.gz...
+NO some error
+<EOF>
+
+example success:
+$bulock /path/to/backup.gz
+* Trying to obtain lock on /path/to/backup.gz...
+[potentially a delay here if we need to wait for another process to release the lock]
+OK locked
+[bulock waits for its stdin to close, then unlocks and exits]
+
+if you need to rummage around in backup.index, run this program in another
+shell, do your work, then ^D it when you're finished.
+
+you could also call this from e.g. perl over a bidirectional pipe - wait to
+read "OK locked", then you've got your lock.  close the pipe to unlock when
+you're finished working.  if you don't read "OK locked" before the pipe closes
+then something went wrong and you didn't get the lock.
+
+
+reconstruct
+-----------
+
+* compress/reindex are probably both invocations of a backup reconstruct tool
+  rather than distinct tools
+* functionality for re-ordering a backup.gz whose data is in funky order?
+  it shouldn't be able to get out of order if it's only being written to by
+  backupd but if you've got funky home-grown stuff around the edges, or you're
+  working on the backup system itself, ...
