@@ -24,6 +24,7 @@ makedepend.log
 aclocal.m4
 autom4te.cache/
 backup/backupd
+backup/reindex
 cmulocal/
 compile
 config.guess
