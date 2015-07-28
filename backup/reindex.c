@@ -47,6 +47,59 @@
  * the backup system and its utilities.
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <zlib.h>
+
+#include "lib/exitcodes.h"
+
+static void usage(const char *name) {
+    fprintf(stderr, "Usage: %s backup_filename\n", name);
+    exit(EC_USAGE);
+}
+
+static void chomp(char *str) {
+    if (str[strlen(str) - 1] == '\n')
+        str[strlen(str) - 1] = '\0';
+}
+
 int main (int argc, char **argv) {
-    return 0;
+    if (argc != 2) usage(argv[0]);
+
+    const char *backup_filename = argv[1];
+
+    fprintf(stderr, "reindexing %s...\n", backup_filename);
+
+    gzFile gzf = gzopen(backup_filename, "r");
+    gzbuffer(gzf, 128 * 1024); /* gzip manual suggests 128K buffer for fast reads */
+
+    if (gzdirect(gzf)) {
+        gzclose(gzf);
+        fprintf(stderr, "error: %s is not a gzipped file\n", backup_filename);
+        usage(argv[0]);
+    }
+
+    int r = 0;
+
+    while (!gzeof(gzf)) {
+        char line[1024];
+
+        z_off_t read_start = gzoffset(gzf);
+
+        if (NULL == gzgets(gzf, line, sizeof(line))) break;
+
+        fprintf(stderr, "read %lu bytes from offset %lu:\n", strlen(line), read_start);
+        chomp(line);
+        fprintf(stderr, "> %.70s...\n", line);
+    }
+
+    if (!gzeof(gzf)) {
+        const char *err = gzerror(gzf, &r);
+        if (err) fprintf(stderr, "gzgets: %s\n", err);
+    }
+
+    gzclose(gzf);
+
+    return r;
 }
