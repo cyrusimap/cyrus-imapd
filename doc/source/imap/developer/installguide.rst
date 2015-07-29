@@ -97,9 +97,16 @@ Install and configure Cassandane
 
 .. code-block:: bash
 
+    cpan -i JSON::XS JSON Tie::DataUUID XML::Spice Net::DAVTalk::XMLParser Net::DAVTalk \
+      /Net::DAVTalk::XMLParser/ /XMLParser/ /Net::DAVTalk::XMLParser/ XML::Fast Data::ICal \
+      Data::ICal::TimeZone DateTime::Format::ICal Net::CalDAVTalk::TimeZones \
+      Net::CalDAVTalk::VERSION Net::CalDAVTalk DateTime::Format::ISO8601DateTime::Format::ISO8601 \
+      DateTime::Format::ISO8601 Text::LevenshteinXS Text::VCardFast MIME::Types MIME::Types
+    
     sudo apt-get install libtest-unit-perl libconfig-inifiles-perl libdatetime-perl libbsd-resource-perl \
       libxml-generator-perl libencode-imaputf7-perl libio-stringy-perl libnews-nntpclient-perl \
       libfile-chdir-perl libnet-server-perl libunix-syslog-perl
+      
     cd /path/to/cassandane
     make
 
@@ -181,7 +188,7 @@ A lot of Cyrus's debugging information gets logged with ``syslog``, so you'll wa
     ``sudo /etc/init.d/rsyslog restart``
     
 4. Arrange to rotate ``/var/log/imapd.log`` so it doesn't get stupendously large. Create ``/etc/logrotate.d/cyrus.conf`` with content like::
-404
+
     /etc/logrotate.d/cyrus.conf
     /var/log/imapd.log
     {
