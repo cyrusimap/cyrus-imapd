@@ -100,27 +100,42 @@ Install and configure Cassandane
     sudo apt-get install libtest-unit-perl libconfig-inifiles-perl libdatetime-perl libbsd-resource-perl \
       libxml-generator-perl libencode-imaputf7-perl libio-stringy-perl libnews-nntpclient-perl \
       libfile-chdir-perl libnet-server-perl libunix-syslog-perl
+
+3. Compile and install Cassandane
+
+.. code-block:: bash
+
     cd /path/to/cassandane
+
+    autoreconf -vi
+
+    ./configure
+
     make
 
-3. Copy ``cassandane.ini.example`` to ``cassandane.ini``
-4. Edit ``cassandane.ini`` to set up your cassandane environment. 
+    make check
+
+    sudo make install
+
+4. Copy ``cassandane.ini.example`` to ``cassandane.ini``
+
+5. Edit ``cassandane.ini`` to set up your cassandane environment.
     * Assuming you configure cyrus with ``--prefix=/usr/cyrus`` (as above), then the defaults are mostly fine
     * Set ``destdir`` to ``/var/tmp/cyrus``
     
-5. Create a ``cyrus`` user and matching group and also add ``cyrus`` to group ``mail``
+6. Create a ``cyrus`` user and matching group and also add ``cyrus`` to group ``mail``
 
 .. code-block:: bash
 
     sudo adduser --system --group cyrus
     sudo adduser cyrus mail
     
-6. Give your user account access to sudo as ``cyrus``
+7. Give your user account access to sudo as ``cyrus``
 
     * ``sudo visudo``
     * add a line like:``username ALL = (cyrus) NOPASSWD: ALL``, where "username" is your own username
 
-7. Make the ``destdir`` directory, as the ``cyrus`` user
+8. Make the ``destdir`` directory, as the ``cyrus`` user
 
     * ``sudo -u cyrus mkdir /var/tmp/cass``
 
