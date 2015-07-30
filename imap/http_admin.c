@@ -1156,7 +1156,6 @@ static int action_conf(struct transaction_t *txn)
         buf_printf_markup(&resp, level++, "<body>");
         buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
                           actions[3].desc, config_servername);
-        buf_printf_markup(&resp, level++, "<form>");
         buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
         buf_printf_markup(&resp, level, "<caption>Default values are shown in "
                           "<b>bold</b> and are possibly "
@@ -1263,7 +1262,6 @@ static int action_conf(struct transaction_t *txn)
 
         /* Finish table */
         buf_printf_markup(&resp, --level, "</table>");
-        buf_printf_markup(&resp, --level, "</form>");
 
         /* Finish HTML */
         buf_printf_markup(&resp, --level, "</body>");
