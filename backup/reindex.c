@@ -54,14 +54,22 @@
 
 #include "lib/exitcodes.h"
 
+#include "backup/gzuncat.h"
+
 static void usage(const char *name) {
     fprintf(stderr, "Usage: %s backup_filename\n", name);
     exit(EC_USAGE);
 }
 
-static void chomp(char *str) {
-    if (str[strlen(str) - 1] == '\n')
-        str[strlen(str) - 1] = '\0';
+static void oneline(char *str) {
+    char *p;
+
+    for (p = str; *p; p++) {
+        if (*p == '\n') {
+            *p = '\0';
+            break;
+        }
+    }
 }
 
 int main (int argc, char **argv) {
@@ -71,35 +79,36 @@ int main (int argc, char **argv) {
 
     fprintf(stderr, "reindexing %s...\n", backup_filename);
 
-    gzFile gzf = gzopen(backup_filename, "r");
-    gzbuffer(gzf, 128 * 1024); /* gzip manual suggests 128K buffer for fast reads */
+    struct gzuncat *gzuc = gzuc_open(backup_filename);
 
-    if (gzdirect(gzf)) {
-        gzclose(gzf);
-        fprintf(stderr, "error: %s is not a gzipped file\n", backup_filename);
-        usage(argv[0]);
+    while (gzuc && !gzuc_eof(gzuc)) {
+        gzuc_member_start(gzuc);
+
+        fprintf(stderr, "found member at offset %jd\n", gzuc_member_offset(gzuc));
+
+        while (!gzuc_member_eof(gzuc)) {
+            char buf[1024];
+            ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
+
+            if (n > 0) {
+                fprintf(stderr, "read %lu bytes from offset %jd:\n", n, gzuc_member_offset(gzuc));
+                oneline(buf);
+                fprintf(stderr, "> %.70s ...\n", buf);
+            }
+            else if (n < 0) {
+                fprintf(stderr, "gzuc_read returned %ld\n", n);
+            }
+            else {
+                fprintf(stderr, "found end of member\n");
+            }
+        }
+
+        gzuc_member_end(gzuc, NULL);
     }
 
-    int r = 0;
+    fprintf(stderr, "reached end of file\n");
 
-    while (!gzeof(gzf)) {
-        char line[1024];
+    gzuc_close(&gzuc);
 
-        z_off_t read_start = gzoffset(gzf);
-
-        if (NULL == gzgets(gzf, line, sizeof(line))) break;
-
-        fprintf(stderr, "read %lu bytes from offset %lu:\n", strlen(line), read_start);
-        chomp(line);
-        fprintf(stderr, "> %.70s...\n", line);
-    }
-
-    if (!gzeof(gzf)) {
-        const char *err = gzerror(gzf, &r);
-        if (err) fprintf(stderr, "gzgets: %s\n", err);
-    }
-
-    gzclose(gzf);
-
-    return r;
+    return 0;
 }
