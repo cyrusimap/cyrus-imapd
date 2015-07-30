@@ -1679,19 +1679,20 @@ static int list_calendars(struct transaction_t *txn, int rights)
                           base_path, cal->shortname, cal->displayname);
 
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share "
-                          "onclick=\"shareCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s name=share"
+                          " onclick=\"shareCalendar('%s%s', this.checked)\">"
                           "Public</td>",
                           !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
                           (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
                           base_path, cal->shortname);
 
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=transp "
-                          "onclick=\"transpCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s name=transp"
+                          " onclick=\"transpCalendar('%s%s', this.checked)\">"
                           "Transparent</td>",
                           !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
-                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "");
+                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "",
+                          base_path, cal->shortname);
 
         buf_printf_markup(body, --level, "</tr>");
     }
