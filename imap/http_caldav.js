@@ -146,6 +146,30 @@ function shareCalendar(url, share) {
 }
 
 
+// Make a calendar collection transparent/opaque
+function transpCalendar(url, transp) {
+    // Build PROPPATCH body
+    var xml = XML_DECLARATION + '<D:propertyupdate ' + XML_NS_DECL + '>';
+
+    if (transp) {
+        xml += '<D:set><D:prop><C:schedule-calendar-transp>' +
+            '<C:transparent/></C:schedule-calendar-transp></D:prop></D:set>';
+    }
+    else {
+        xml += '<D:remove><D:prop><C:schedule-calendar-transp/>' +
+            '</D:prop></D:remove>';
+    }
+
+    xml += '</D:propertyupdate>';
+
+    // Send PROPPATCH request
+    var req = new XMLHttpRequest();
+    req.open('PROPPATCH', url);
+    req.setRequestHeader('Content-Type', 'application/xml');
+    req.send(xml);
+}
+
+
 // Delete a calendar collection
 function deleteCalendar(url, name) {
     if (window.confirm('Are you sure you want to delete calendar \"' +

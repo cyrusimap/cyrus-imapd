@@ -1399,7 +1399,8 @@ enum {
     CAL_IS_DEFAULT =    (1<<0),
     CAL_CAN_DELETE =    (1<<1),
     CAL_CAN_ADMIN =     (1<<2),
-    CAL_IS_PUBLIC =     (1<<3)
+    CAL_IS_PUBLIC =     (1<<3),
+    CAL_IS_TRANSP =     (1<<4)
 };
 
 struct list_cal_rock {
@@ -1424,7 +1425,9 @@ static int list_cal_cb(const char *name,
     int r, rights, any_rights = 0;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    struct buf displayname = BUF_INITIALIZER;
+    static const char *schedtransp_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+    struct buf displayname = BUF_INITIALIZER, schedtransp = BUF_INITIALIZER;
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
@@ -1453,7 +1456,8 @@ static int list_cal_cb(const char *name,
         goto done;
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(name, displayname_annot, httpd_userid, &displayname);
+    r = annotatemore_lookupmask(name, displayname_annot,
+                                httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
@@ -1495,6 +1499,14 @@ static int list_cal_cb(const char *name,
     if ((any_rights & DACL_READ) == DACL_READ) {
         cal->flags |= CAL_IS_PUBLIC;
     }
+
+    /* Is this calendar transparent? */
+    r = annotatemore_lookupmask(name, schedtransp_annot,
+                                httpd_userid, &schedtransp);
+    if (!r && !strcmp(buf_cstring(&schedtransp), "transparent")) {
+        cal->flags |= CAL_IS_TRANSP;
+    }
+    buf_free(&schedtransp);
 
     lrock->len++;
 
@@ -1667,11 +1679,19 @@ static int list_calendars(struct transaction_t *txn, int rights)
                           base_path, cal->shortname, cal->displayname);
 
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share onclick=\""
-                          "shareCalendar('%s%s', this.checked)\">Public</td>",
+                          "<td><input type=checkbox%s%s name=share "
+                          "onclick=\"shareCalendar('%s%s', this.checked)\">"
+                          "Public</td>",
                           !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
                           (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
                           base_path, cal->shortname);
+
+        buf_printf_markup(body, level,
+                          "<td><input type=checkbox%s%s name=transp "
+                          "onclick=\"transpCalendar('%s%s', this.checked)\">"
+                          "Transparent</td>",
+                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
+                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "");
 
         buf_printf_markup(body, --level, "</tr>");
     }
