@@ -227,41 +227,53 @@ static void config_ispartition(const char *key,
 
 static void config_option_deprecate(const int dopt, const int opt, char *since)
 {
-    syslog(
-            LOG_WARNING,
-            "Option '%s' is deprecated in favor of '%s' since version %s.",
-            imapopts[dopt].optname,
-            imapopts[opt].optname,
-            since
-        );
+    imapopts[dopt].deprecated_since = since;
+    imapopts[dopt].preferred_opt = opt;
+
+    /* Don't log anything if we haven't seen this option */
+    if (!imapopts[dopt].seen) return;
+
+    if (opt == IMAPOPT_ZERO) {
+        syslog(LOG_WARNING, "Option '%s' is deprecated in version %s.",
+               imapopts[dopt].optname, since);
+    }
+    else {
+        syslog(LOG_WARNING,
+               "Option '%s' is deprecated in favor of '%s' since version %s.",
+               imapopts[dopt].optname, imapopts[opt].optname, since );
+    }
+
+    /* Don't override values if the preferred option has been seen */
+    if (imapopts[opt].seen) return;
+
+    imapopts[opt].seen = imapopts[dopt].seen;
 
     switch (imapopts[dopt].t) {
-            case OPT_BITFIELD: {
-                    imapopts[opt].val.x = imapopts[dopt].val.x;
-                    break;
-                }
-            case OPT_ENUM: {
-                    imapopts[opt].val.e = imapopts[dopt].val.e;
-                    break;
-                }
-            case OPT_SWITCH: {
-                    imapopts[opt].val.b = imapopts[dopt].val.b;
-                    break;
-                }
-            case OPT_INT: {
-                    imapopts[opt].val.i = imapopts[dopt].val.i;
-                    break;
-                }
-            case OPT_STRINGLIST:
-            case OPT_STRING: {
-                    imapopts[opt].val.s = xstrdup(imapopts[dopt].val.s);
-                    free((char *)imapopts[dopt].val.s);
-                    break;
-                }
-            default: {
-                    break;
-                }
-        }
+    case OPT_BITFIELD:
+        imapopts[opt].val.x = imapopts[dopt].val.x;
+        break;
+
+    case OPT_ENUM:
+        imapopts[opt].val.e = imapopts[dopt].val.e;
+        break;
+
+    case OPT_SWITCH:
+        imapopts[opt].val.b = imapopts[dopt].val.b;
+        break;
+
+    case OPT_INT:
+        imapopts[opt].val.i = imapopts[dopt].val.i;
+        break;
+
+    case OPT_STRINGLIST:
+    case OPT_STRING:
+        imapopts[opt].val.s = imapopts[dopt].val.s;
+        imapopts[dopt].val.s = NULL;
+        break;
+
+    default:
+        break;
+    }
 }
 
 static void config_option_deprecated(const int opt)
@@ -304,11 +316,7 @@ static void config_option_deprecated(const int opt)
             break;
         }
         case IMAPOPT_FLUSHSEENSTATE: {
-            syslog(
-                    LOG_WARNING,
-                    "Option '%s' is deprecated in version 2.5.0.",
-                    imapopts[opt].optname
-                );
+            config_option_deprecate(opt, IMAPOPT_ZERO, "2.5.0");
             break;
         }
         case IMAPOPT_GENERATE_COMPILED_SIEVE_SCRIPT: {
@@ -498,11 +506,8 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     }
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        /* See if the option configured is a part of the deprecated hash.
-         */
-        if (imapopts[opt].seen) {
-            config_option_deprecated(opt);
-        }
+        /* See if the option is a part of the deprecated hash. */
+        config_option_deprecated(opt);
     }
 
     /* Look up default partition */

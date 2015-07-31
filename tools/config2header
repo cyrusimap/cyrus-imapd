@@ -126,7 +126,7 @@ print CFILE <<EOF
 
 EXPORTED struct imapopt_s imapopts[] =
 {
-  { IMAPOPT_ZERO, "", 0, OPT_NOTOPT, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } },
+  { IMAPOPT_ZERO, "", 0, OPT_NOTOPT, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } },
 EOF
     ;
 
@@ -247,6 +247,7 @@ while (<STDIN>) {
         }
 
         print CFILE "  { IMAPOPT_", uc($opt), ", \"$1\", 0, OPT_$3,\n",
+        "    NULL, IMAPOPT_ZERO,\n",
         "    $def,\n    $def,\n    {$enums { NULL, IMAP_ENUM_ZERO } } },\n";
     } else {
         #chomp;
@@ -296,6 +297,8 @@ struct imapopt_s {
     const char *optname;
     int seen;
     const enum opttype t;
+    const char *deprecated_since;
+    enum imapopt preferred_opt;
     union config_value val;
     const union config_value def;
 EOF
@@ -313,7 +316,7 @@ EOF
     ;
 
 print CFILE <<EOF
-  { IMAPOPT_LAST, NULL, 0, OPT_NOTOPT, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } }
+  { IMAPOPT_LAST, NULL, 0, OPT_NOTOPT, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } }
 };
 
 /* c code goes here */
