@@ -1141,6 +1141,7 @@ static int action_conf(struct transaction_t *txn)
 
     if (txn->resp_body.lastmod > lastmod) {
         /* Add HTML header */
+        ptrarray_t deprecated = PTRARRAY_INITIALIZER;
         ptrarray_t unset = PTRARRAY_INITIALIZER;
         unsigned level = 0;
         struct conf_rock crock;
@@ -1168,7 +1169,12 @@ static int action_conf(struct transaction_t *txn)
 
         /* Add config options */
         for (i = 1; i < IMAPOPT_LAST; i++) {
-            if (imapopts[i].seen) {
+            if (imapopts[i].deprecated_since) {
+                if (imapopts[i].seen) {
+                    ptrarray_append(&deprecated, &imapopts[i]);
+                }
+            }
+            else if (imapopts[i].seen) {
                 print_imapopt(&imapopts[i], &resp, level);
             }
             else {
@@ -1245,20 +1251,53 @@ static int action_conf(struct transaction_t *txn)
             }
         }
 
-        /* Add the unset options */
-        buf_printf_markup(&resp, level,
-                          "<tr><td colspan=2><br></td></tr>");
-        buf_printf_markup(&resp, level++, "<tr>");
-        buf_printf_markup(&resp, level,
-                          "<th align=\"left\">Unset Options</th>");
-        buf_printf_markup(&resp, level,
-                          "<th align=\"left\">Value</th>");
-        buf_printf_markup(&resp, --level, "</tr>");
+        if (deprecated.count) {
+            /* Add the deprecated options */
+            buf_printf_markup(&resp, level,
+                              "<tr><td colspan=2><br></td></tr>");
+            buf_printf_markup(&resp, level++, "<tr>");
+            buf_printf_markup(&resp, level,
+                              "<th align=\"left\">Deprecated Options</th>");
+            buf_printf_markup(&resp, level,
+                              "<th align=\"left\">History</th>");
+            buf_printf_markup(&resp, --level, "</tr>");
 
-        for (i = 0; i < unset.count; i++) {
-            print_imapopt(ptrarray_nth(&unset, i), &resp, level);
+            for (i = 0; i < deprecated.count; i++) {
+                struct imapopt_s *imapopt = ptrarray_nth(&deprecated, i);
+
+                buf_printf_markup(&resp, level++, "<tr>");
+                buf_printf_markup(&resp, level, "<td>%s</td>",
+                                  imapopt->optname);
+                buf_printf_markup(&resp, level++, "<td>");
+                buf_printf_markup(&resp, level, "Since %s",
+                                  imapopt->deprecated_since);
+                if (imapopt->preferred_opt != IMAPOPT_ZERO) {
+                    buf_printf_markup(&resp, level, " in favor of <b>%s</b>",
+                                      imapopts[imapopt->preferred_opt].optname);
+                }
+
+                buf_printf_markup(&resp, --level, "</td>");
+                buf_printf_markup(&resp, --level, "</tr>");
+            }
+            ptrarray_fini(&deprecated);
         }
-        ptrarray_fini(&unset);
+
+        if (unset.count) {
+            /* Add the unset options */
+            buf_printf_markup(&resp, level,
+                              "<tr><td colspan=2><br></td></tr>");
+            buf_printf_markup(&resp, level++, "<tr>");
+            buf_printf_markup(&resp, level,
+                              "<th align=\"left\">Unset (Default) Options</th>");
+            buf_printf_markup(&resp, level,
+                              "<th align=\"left\">Value</th>");
+            buf_printf_markup(&resp, --level, "</tr>");
+
+            for (i = 0; i < unset.count; i++) {
+                print_imapopt(ptrarray_nth(&unset, i), &resp, level);
+            }
+            ptrarray_fini(&unset);
+        }
 
         /* Finish table */
         buf_printf_markup(&resp, --level, "</table>");
