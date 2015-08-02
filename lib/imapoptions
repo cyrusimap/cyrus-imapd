@@ -290,31 +290,31 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5")}
 /* The authorization mechanism to use. */
 
-{ "autocreateinboxfolders", NULL, STRING }
+{ "autocreateinboxfolders", NULL, STRING, "2.5.0", "autocreate_inbox_folders" }
 /* Deprecated in favor of \fIautocreate_inbox_folders\fR. */
 
-{ "autocreatequota", 0, INT }
+{ "autocreatequota", 0, INT, "2.5.0", "autocreate_quota" }
 /* Deprecated in favor of \fIautocreate_quota\fR. */
 
-{ "autocreatequotamsg", -1, INT }
+{ "autocreatequotamsg", -1, INT, "2.5.0", "autocreate_quota_messages" }
 /* Deprecated in favor of \fIautocreate_quota_messages\fR. */
 
-{ "autosievefolders", NULL, STRING }
+{ "autosievefolders", NULL, STRING, "2.5.0", "autocreate_sieve_folders" }
 /* Deprecated in favor of \fIautocreate_sieve_folders\fR. */
 
-{ "generate_compiled_sieve_script", NULL, SWITCH }
+{ "generate_compiled_sieve_script", 0, SWITCH, "2.5.0", "autocreate_sieve_script_compile" }
 /* Deprecated in favor of \fIautocreate_sieve_script_compile\fR. */
 
-{ "autocreate_sieve_compiled_script", NULL, STRING }
+{ "autocreate_sieve_compiled_script", NULL, STRING, "2.5.0", "autocreate_sieve_script_compiled" }
 /* Deprecated in favor of \fIautocreate_sieve_script_compiled\fR. */
 
-{ "autosubscribeinboxfolders", NULL, STRING }
+{ "autosubscribeinboxfolders", NULL, STRING, "2.5.0", "autocreate_subscribe_folders" }
 /* Deprecated in favor of \fIautocreate_subscribe_folders\fR. */
 
-{ "autosubscribesharedfolders", NULL, STRING }
+{ "autosubscribesharedfolders", NULL, STRING, "2.5.0", "autocreate_subscribe_sharedfolders" }
 /* Deprecated in favor of \fIautocreate_subscribe_sharedfolders\fR. */
 
-{ "autosubscribe_all_sharedfolders", 0, SWITCH }
+{ "autosubscribe_all_sharedfolders", 0, SWITCH, "2.5.0", "autocreate_subscribe_sharedfolders_all" }
 /* Deprecated in favor of \fIautocreate_subscribe_sharedfolders_all\fR. */
 
 { "autocreate_inbox_folders", NULL, STRING }
@@ -487,7 +487,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The pathname of the IMAP configuration directory.  This field is
    required. */
 
-{ "createonpost", 0, SWITCH }
+{ "createonpost", 0, SWITCH, "2.5.0", "autocreate_post" }
 /* Deprecated in favor of \fIautocreate_post\fR. */
 
 { "conversations", 0, SWITCH }
@@ -655,7 +655,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "failedloginpause", 3, INT }
 /* Number of seconds to pause after a failed login. */
 
-{ "flushseenstate", 1, SWITCH }
+{ "flushseenstate", 1, SWITCH, "2.5.0" }
 /* Deprecated. No longer used */
 
 { "foolstupidclients", 0, SWITCH }
@@ -926,25 +926,25 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_sasl", 1, SWITCH }
 /* Use SASL for LDAP binds in the LDAP PTS module. */
 
-{ "ldap_sasl_authc", NULL, STRING }
+{ "ldap_sasl_authc", NULL, STRING, "2.5.0", "ldap_id" }
 /* Deprecated.  Use ldap_id */
 
-{ "ldap_sasl_authz", NULL, STRING }
+{ "ldap_sasl_authz", NULL, STRING, "2.5.0", "ldap_authz" }
 /* Deprecated.  Use ldap_authz */
 
-{ "ldap_sasl_mech", NULL, STRING }
+{ "ldap_sasl_mech", NULL, STRING, "2.5.0", "ldap_mech" }
 /* Deprecated.  Use ldap_mech */
 
-{ "ldap_sasl_password", NULL, STRING }
+{ "ldap_sasl_password", NULL, STRING, "2.5.0", "ldap_password" }
 /* Deprecated.  User ldap_password */
 
-{ "ldap_sasl_realm", NULL, STRING }
+{ "ldap_sasl_realm", NULL, STRING, "2.5.0", "ldap_realm" }
 /* Deprecated.  Use ldap_realm */
 
 { "ldap_scope", "sub", STRINGLIST("sub", "one", "base") }
 /* Specify search scope. */
 
-{ "ldap_servers", "ldap://localhost/", STRING }
+{ "ldap_servers", "ldap://localhost/", STRING, "2.5.0", "ldap_uri" }
 /* Deprecated.  Use ldap_uri */
 
 { "ldap_size_limit", 1, INT }
@@ -966,36 +966,36 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_ca_file", NULL, STRING }
 /* Patch to a file containing CA (Certificate Authority) certificate(s). */
 
+{ "ldap_ciphers", NULL, STRING }
+/* List of SSL/TLS ciphers to allow.  The format of the string is
+   described in ciphers(1). */
+
 { "ldap_client_cert", NULL, STRING }
 /* File containing the client certificate. */
+
+{ "ldap_client_key", NULL, STRING }
+/* File containing the private client key. */
 
 { "ldap_verify_peer", 0, SWITCH }
 /* Require and verify server certificate.  If this option is yes,
    you must specify ldap_ca_file or ldap_ca_dir. */
 
-{ "ldap_ciphers", NULL, STRING }
-/* List of SSL/TLS ciphers to allow.  The format of the string is
-   described in ciphers(1). */
-
-{ "ldap_client_key", NULL, STRING }
-/* File containing the private client key. */
-
-{ "ldap_tls_cacert_dir", NULL, STRING }
+{ "ldap_tls_cacert_dir", NULL, STRING, "2.5.0", "ldap_ca_dir" }
 /* Deprecated in favor of \fIldap_ca_dir\fR. */
 
-{ "ldap_tls_cacert_file", NULL, STRING }
+{ "ldap_tls_cacert_file", NULL, STRING, "2.5.0", "ldap_ca_file" }
 /* Deprecated in favor of \fIldap_ca_file\fR. */
 
-{ "ldap_tls_cert", NULL, STRING }
+{ "ldap_tls_cert", NULL, STRING, "2.5.0", "ldap_client_cert" }
 /* Deprecated in favor of \fIldap_client_cert\fR. */
 
-{ "ldap_tls_key", NULL, STRING }
+{ "ldap_tls_key", NULL, STRING, "2.5.0", "ldap_client_key" }
 /* Deprecated in favor of \fIldap_client_key\fR. */
 
-{ "ldap_tls_check_peer", NULL, STRING }
+{ "ldap_tls_check_peer", 0, SWITCH, "2.5.0", "ldap_verify_peer" }
 /* Deprecated in favor of \fIldap_verify_peer\fR. */
 
-{ "ldap_tls_ciphers", NULL, STRING }
+{ "ldap_tls_ciphers", NULL, STRING, "2.5.0", "ldap_ciphers" }
 /* Deprecated in favor of \fIldap_ciphers\fR. */
 
 { "ldap_uri", NULL, STRING }
@@ -1963,22 +1963,22 @@ product version in the capabilities */
 /* The length of the IMAP server's inactivity autologout timer,
    in minutes.  The minimum value is 30, the default. */
 
-{ "tls_ca_file", "DEFAULT", STRING }
+{ "tls_ca_file", NULL, STRING, "2.5.0", "tls_client_ca_file" }
 /* Deprecated in favor of \fItls_client_ca_file\fR. */
 
-{ "tls_ca_path", "DEFAULT", STRING }
+{ "tls_ca_path", NULL, STRING, "2.5.0", "tls_client_ca_dir" }
 /* Deprecated in favor of \fItls_client_ca_dir\fR. */
 
-{ "tlscache_db", "DEFAULT", STRING }
+{ "tlscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "2.5.0", "tls_sessions_db" }
 /* Deprecated in favor of \fItls_sessions_db\fR. */
 
-{ "tlscache_db_path", "DEFAULT", STRING }
+{ "tlscache_db_path", NULL, STRING, "2.5.0", "tls_sessions_db_path" }
 /* Deprecated in favor of \fItls_sessions_db_path\fR. */
 
-{ "tls_cert_file", "DEFAULT", STRING }
+{ "tls_cert_file", NULL, STRING, "2.5.0", "tls_server_cert" }
 /* Deprecated in favor of \fItls_server_cert\fR. */
 
-{ "tls_cipher_list", "DEFAULT", STRING }
+{ "tls_cipher_list", "DEFAULT", STRING, "2.5.0", "tls_ciphers" }
 /* Deprecated in favor of \fItls_ciphers\fR. */
 
 { "tls_ciphers", "DEFAULT", STRING }
@@ -2014,7 +2014,7 @@ product version in the capabilities */
 /* The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
    See 'openssl ecparam -list_curves' for possible values. */
 
-{ "tls_key_file", "DEFAULT", STRING }
+{ "tls_key_file", NULL, STRING, "2.5.0", "tls_server_key" }
 /* Deprecated in favor of \fItls_server_key\fR. */
 
 { "tls_prefer_server_ciphers", 0, SWITCH }

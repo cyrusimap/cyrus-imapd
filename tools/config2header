@@ -141,9 +141,11 @@ while (<STDIN>) {
     # Namely, we need to initialize the union itself, not the members of
     # the union, and we need to ensure we are initilizing the union with
     # something of a type that is in the union.
-    if (m|{\s*\"(.*?)\"\s*,\s*(\"?.*?\"?)\s*,\s*(.*?)\s*(\(.*\))?\s*}|) {
+    if (m|{\s*\"(.*?)\"\s*,\s*(\"?.*?\"?)\s*,\s*(.*?)\s*(\(.*\))?\s*(,.*)?}|) {
         my $opt = $1;
         my $def;
+        my $depver = "NULL";
+        my $newopt = "ZERO";
         my $enums = "";
 
         print HFILE "  IMAPOPT_", uc($opt), ",\n";
@@ -246,8 +248,19 @@ while (<STDIN>) {
                         : "{(void*)$2}";
         }
 
+        if ($5) {
+            # option is deprecated
+            if ($5 =~ m|,\s*(\"[^,]+\")\s*(,\s*\"(.+)\")?|) {
+                $depver = $1;
+                $newopt = $3 if $3;
+            } else {
+                #chomp;
+                #print "rejected '$5'\n";
+            }
+        }
+
         print CFILE "  { IMAPOPT_", uc($opt), ", \"$1\", 0, OPT_$3,\n",
-        "    NULL, IMAPOPT_ZERO,\n",
+        "    $depver, IMAPOPT_", uc($newopt), ",\n",
         "    $def,\n    $def,\n    {$enums { NULL, IMAP_ENUM_ZERO } } },\n";
     } else {
         #chomp;
@@ -298,7 +311,7 @@ struct imapopt_s {
     int seen;
     const enum opttype t;
     const char *deprecated_since;
-    enum imapopt preferred_opt;
+    const enum imapopt preferred_opt;
     union config_value val;
     const union config_value def;
 EOF
