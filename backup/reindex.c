@@ -47,6 +47,7 @@
  * the backup system and its utilities.
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,6 +56,11 @@
 #include "lib/exitcodes.h"
 
 #include "backup/gzuncat.h"
+
+EXPORTED void fatal(const char *error, int code) {
+    fprintf(stderr, "fatal error: %s\n", error);
+    exit(code);
+}
 
 static void usage(const char *name) {
     fprintf(stderr, "Usage: %s backup_filename\n", name);

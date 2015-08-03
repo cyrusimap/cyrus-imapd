@@ -1244,8 +1244,8 @@ imap_sync_server_LDADD = $(LD_SERVER_ADD)
 backup_backupd_SOURCES = imap/mutex_fake.c backup/backupd.c imap/sync_support.c imap/sync_support.h master/service.c
 backup_backupd_LDADD = $(LD_SERVER_ADD)
 
-backup_reindex_SOURCES = backup/reindex.c backup/gzuncat.c backup/gzuncat.h
-backup_reindex_LDADD =
+backup_reindex_SOURCES = imap/mutex_fake.c backup/reindex.c backup/gzuncat.c backup/gzuncat.h
+backup_reindex_LDADD = $(LD_UTILITY_ADD)
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
