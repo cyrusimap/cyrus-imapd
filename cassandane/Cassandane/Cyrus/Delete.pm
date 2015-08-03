@@ -107,6 +107,39 @@ sub check_folder_ondisk
     }
 }
 
+sub test_repeated_delete
+    :DelayedDelete :DefaultExpunge
+{
+    my ($self) = @_;
+
+    xlog "Testing that if a user deletes the same mailbox more than 20 times,";
+    xlog "they only keep the most recent 20 DELETED folders";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+    my $subfolder = 'INBOX.foo';
+
+    for (1..30) {
+        xlog "First create a sub folder $_";
+        $talk->create($subfolder)
+            or die "Cannot create folder $subfolder: $@";
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        xlog "Then delete it $_";
+        $talk->delete($subfolder);
+
+        my $admintalk = $self->{adminstore}->get_client();
+        my $list = $admintalk->list("DELETED.user.cassandane.foo", "*");
+        my $num = $_;
+        $num = 20 if $num > 20;
+        $self->assert_equals($num, scalar(@$list));
+
+        xlog "And sleep until the name will have changed";
+        sleep 2;
+    }
+
+}
+
 sub check_folder_not_ondisk
 {
     my ($self, $folder, %params) = @_;
