@@ -113,7 +113,7 @@ int main (int argc, char **argv) {
                 break;
 
             if (strcmp(buf_cstring(&buf), "APPLY") == 0) {
-                c = dlist_parse(&dl, 1, member);
+                c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, member);
 
                 if (dl) {
                     struct buf out = BUF_INITIALIZER;
