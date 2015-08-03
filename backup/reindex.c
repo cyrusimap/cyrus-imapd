@@ -54,6 +54,9 @@
 #include <zlib.h>
 
 #include "lib/exitcodes.h"
+#include "lib/util.h"
+
+#include "imap/imapparse.h"
 
 #include "backup/gzuncat.h"
 
@@ -67,15 +70,11 @@ static void usage(const char *name) {
     exit(EC_USAGE);
 }
 
-static void oneline(char *str) {
-    char *p;
-
-    for (p = str; *p; p++) {
-        if (*p == '\n') {
-            *p = '\0';
-            break;
-        }
-    }
+static ssize_t fill_cb(unsigned char *buf, size_t len, void *rock) {
+    struct gzuncat *gzuc = (struct gzuncat *) rock;
+    ssize_t r = gzuc_read(gzuc, buf, len);
+    fprintf(stderr, "fill_cb read %ld bytes\n", r);
+    return r;
 }
 
 int main (int argc, char **argv) {
@@ -90,25 +89,45 @@ int main (int argc, char **argv) {
     while (gzuc && !gzuc_eof(gzuc)) {
         gzuc_member_start(gzuc);
 
-        fprintf(stderr, "found member at offset %jd\n", gzuc_member_offset(gzuc));
+        fprintf(stderr, "\nfound member at offset %jd\n\n", gzuc_member_offset(gzuc));
 
-        while (!gzuc_member_eof(gzuc)) {
-            char buf[1024];
-            ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
+        struct protstream *member = prot_readcb(fill_cb, gzuc);
+        prot_setisclient(member, 1); /* don't sync literals */
 
-            if (n > 0) {
-                fprintf(stderr, "read %lu bytes from offset %jd:\n", n, gzuc_member_offset(gzuc));
-                oneline(buf);
-                fprintf(stderr, "> %.70s ...\n", buf);
-            }
-            else if (n < 0) {
-                fprintf(stderr, "gzuc_read returned %ld\n", n);
+        while (1) {
+            struct dlist *dl = NULL;
+            struct buf buf = BUF_INITIALIZER;
+            int c;
+
+            c = prot_getc(member);
+            if (c == '#') {
+                eatline(member, c);
+                fprintf(stderr, "ate a comment\n");
             }
             else {
-                fprintf(stderr, "found end of member\n");
+                prot_ungetc(c, member);
+            }
+
+            c = getword(member, &buf);
+            if (c == EOF)
+                break;
+
+            if (strcmp(buf_cstring(&buf), "APPLY") == 0) {
+                c = dlist_parse(&dl, 1, member);
+
+                if (dl) {
+                    struct buf out = BUF_INITIALIZER;
+
+                    dlist_printbuf(dl, 1, &out);
+                    fprintf(stderr, "parsed dlist: %s\n", buf_release(&out));
+                }
+                else {
+                    fprintf(stderr, "\ndidn't parse dlist from, error %i\n", c);
+                }
             }
         }
 
+        prot_free(member);
         gzuc_member_end(gzuc, NULL);
     }
 
