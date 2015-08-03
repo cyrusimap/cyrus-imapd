@@ -1141,6 +1141,13 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     return r;
 }
 
+static int addmbox_to_list(const mbentry_t *mbentry, void *rock)
+{
+    strarray_t *list = (strarray_t *)rock;
+    strarray_append(list, mbentry->name);
+    return 0;
+}
+
 /*
  * Delayed Delete a mailbox: translate delete into rename
  */
@@ -1154,6 +1161,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                int force)
 {
     mbentry_t *mbentry = NULL;
+    strarray_t existing = STRARRAY_INITIALIZER;
+    int i;
     char newname[MAX_MAILBOX_BUFFER];
     int r;
     long myrights;
@@ -1178,7 +1187,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     }
 
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) return r;
+    if (r) goto done;
 
     /* check if user has Delete right (we've already excluded non-admins
      * from deleting a user mailbox) */
@@ -1195,10 +1204,22 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
             r = (isadmin || (myrights & ACL_LOOKUP)) ?
                 IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 
-            mboxlist_entry_free(&mbentry);
-
-            return r;
+            goto done;
         }
+    }
+
+    /* check if there are already too many! */
+    mboxname_todeleted(name, newname, 0);
+    r = mboxlist_mboxtree(newname, addmbox_to_list, &existing, MBOXTREE_SKIP_ROOT);
+    if (r) goto done;
+
+    /* keep the last 19, so the new one is the 20th */
+    for (i = 0; i < (int)existing.count - 19; i++) {
+        const char *subname = strarray_nth(&existing, i);
+        syslog(LOG_NOTICE, "too many subfolders for %s, deleting %s (%d / %d)",
+               newname, subname, i+1, (int)existing.count);
+        r = mboxlist_deletemailbox(subname, 1, userid, auth_state, NULL, 0, 1, 1);
+        if (r) goto done;
     }
 
     /* get the deleted name */
@@ -1213,6 +1234,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                localonly /* local_only */,
                                force, 1);
 
+done:
+    strarray_fini(&existing);
     mboxlist_entry_free(&mbentry);
 
     return r;
