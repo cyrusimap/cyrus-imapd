@@ -91,7 +91,7 @@ Install and configure Cassandane
 
 1. Clone the Cassandane repository (you can get the URL from the Diffusion app within Phabricator)
     * If you are a member of `IMAP Committers`_, use: ``git clone ssh://git@git.cyrus.foundation/diffusion/C/cassandane.git``
-    * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/I/cassandane.git``
+    * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/C/cassandane.git``
 
 2. Install dependencies
 
