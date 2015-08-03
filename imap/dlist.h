@@ -81,12 +81,14 @@ enum dlist_t {
     DL_GUID,
     DL_FILE,
     DL_KVLIST,
-    DL_ATOMLIST
+    DL_ATOMLIST,
+    DL_SFILE
 };
 
 /* bit field of flags for dlist_parse and friends */
 enum {
     DLIST_PARSEKEY = (1 << 0),
+    DLIST_SFILE    = (1 << 1),
 };
 
 struct dlist {
@@ -98,6 +100,7 @@ struct dlist {
     char *sval;
     bit64 nval;
     struct message_guid *gval; /* guid if any */
+    off_t oval; /* offset value if any */
     char *part; /* so what if we're big! */
 };
 
@@ -115,6 +118,9 @@ void dlist_makeguid(struct dlist *dl, const struct message_guid *guid);
 void dlist_makefile(struct dlist *dl,
                     const char *part, const struct message_guid *guid,
                     unsigned long size, const char *fname);
+void dlist_makesfile(struct dlist *dl,
+                     const char *part, const struct message_guid *guid,
+                     const char *contents, unsigned long size, off_t offset);
 
 /* parse fields */
 int dlist_toatom(struct dlist *dl, const char **valp);
@@ -136,6 +142,7 @@ int dlist_tofile(struct dlist *dl,
 int dlist_isatomlist(const struct dlist *dl);
 int dlist_iskvlist(const struct dlist *dl);
 int dlist_isfile(const struct dlist *dl);
+int dlist_issfile(const struct dlist *dl);
 /* XXX - these two aren't const, they can fiddle internals */
 int dlist_isnum(struct dlist *dl);
 int dlist_ishex64(struct dlist *dl);
@@ -169,6 +176,9 @@ struct dlist *dlist_setguid(struct dlist *parent, const char *name,
 struct dlist *dlist_setfile(struct dlist *parent, const char *name,
                             const char *part, const struct message_guid *guid,
                             size_t size, const char *fname);
+struct dlist *dlist_setsfile(struct dlist *parent, const char *name,
+                             const char *part, const struct message_guid *guid,
+                             const char *contents, size_t size, off_t offset);
 
 struct dlist *dlist_updateatom(struct dlist *parent, const char *name,
                                const char *val);

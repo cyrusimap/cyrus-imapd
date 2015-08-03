@@ -135,6 +135,42 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     map_free(&msg_base, &msg_len);
 }
 
+static void printsfile(struct protstream *out, const struct dlist *dl) {
+    size_t size;
+    struct message_guid guid2;
+
+    assert(dlist_issfile(dl));
+
+    size = strlen(dl->sval);
+    if (size != dl->nval) {
+        syslog(LOG_ERR, "IOERROR: Size mismatch %s (" SIZE_T_FMT " != " MODSEQ_FMT ")",
+               message_guid_encode(dl->gval), size, dl->nval);
+
+        fprintf(stderr, "\n\nwrong size:\n%s\n\n", dl->sval);
+
+        prot_printf(out, "NIL");
+        return;
+    }
+
+    message_guid_generate(&guid2, dl->sval, size);
+
+    if (!message_guid_equal(&guid2, dl->gval)) {
+        syslog(LOG_ERR, "IOERROR: GUID mismatch %s %s",
+               message_guid_encode(dl->gval),
+               message_guid_encode(&guid2));
+        prot_printf(out, "NIL");
+        return;
+    }
+
+    prot_printf(out, "%%{");
+    prot_printastring(out, dl->part);
+    prot_printf(out, " ");
+    prot_printastring(out, message_guid_encode(dl->gval));
+    prot_printf(out, " " SIZE_T_FMT "}\r\n", size);
+    prot_write(out, dl->sval, dl->nval);
+}
+
+
 /* XXX - these two functions should be out in append.c or reserve.c
  * or something more general */
 EXPORTED const char *dlist_reserve_path(const char *part, int isarchive,
@@ -388,6 +424,25 @@ void dlist_makefile(struct dlist *dl,
         dl->type = DL_NIL;
 }
 
+EXPORTED void dlist_makesfile(struct dlist *dl,
+                              const char *part, const struct message_guid *guid,
+                              const char *contents, unsigned long size, off_t offset)
+{
+    if (!dl) return;
+    _dlist_clean(dl);
+    if (part && guid && contents) {
+        dl->type = DL_SFILE;
+        dl->oval = offset;
+        dl->gval = xzmalloc(sizeof(struct message_guid));
+        message_guid_copy(dl->gval, guid);
+        dl->sval = xstrndup(contents, size);
+        dl->nval = size;
+        dl->part = xstrdup(part);
+    }
+    else
+        dl->type = DL_NIL;
+}
+
 EXPORTED void dlist_makemap(struct dlist *dl, const char *val, size_t len)
 {
     if (!dl) return;
@@ -493,6 +548,15 @@ EXPORTED struct dlist *dlist_setfile(struct dlist *parent, const char *name,
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makefile(dl, part, guid, size, fname);
+    return dl;
+}
+
+EXPORTED struct dlist *dlist_setsfile(struct dlist *parent, const char *name,
+                                      const char *part, const struct message_guid *guid,
+                                      const char *contents, size_t size, off_t offset)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makesfile(dl, part, guid, contents, size, offset);
     return dl;
 }
 
@@ -629,6 +693,9 @@ EXPORTED void dlist_print(const struct dlist *dl, int printkeys,
                 prot_printf(out, " ");
         }
         prot_printf(out, ")");
+        break;
+    case DL_SFILE:
+        printsfile(out, dl);
         break;
     }
 }
@@ -894,7 +961,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstr
         }
         else if (c == '{') {
             struct message_guid tmp_guid;
-            static struct buf pbuf, gbuf;
+            static struct buf pbuf, gbuf, sbuf;
             unsigned size = 0;
             const char *fname;
             c = getastring(in, NULL, &pbuf);
@@ -907,8 +974,20 @@ EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstr
             if (c == '\r') c = prot_getc(in);
             if (c != '\n') goto fail;
             if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
-            if (reservefile(in, pbuf.s, &tmp_guid, size, &fname)) goto fail;
-            dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
+            if ((flags & DLIST_SFILE)) {
+                off_t offset = prot_bytes_in(in);
+                buf_reset(&sbuf);
+                while (size) {
+                    int n = prot_readbuf(in, &sbuf, size > 8192 ? 8192 : size);
+                    if (n <= 0) goto fail;
+                    size -= n;
+                }
+                dl = dlist_setsfile(NULL, kbuf.s, pbuf.s, &tmp_guid, sbuf.s, sbuf.len, offset);
+            }
+            else {
+                if (reservefile(in, pbuf.s, &tmp_guid, size, &fname)) goto fail;
+                dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
+            }
             /* file literal */
         }
         else {
@@ -1303,6 +1382,12 @@ int dlist_isfile(const struct dlist *dl)
     if (!dl) return 0;
 
     return (dl->type == DL_FILE);
+}
+
+int dlist_issfile(const struct dlist *dl)
+{
+    if (!dl) return 0;
+    return (dl->type == DL_SFILE);
 }
 
 /* XXX - these ones aren't const, because they can change
