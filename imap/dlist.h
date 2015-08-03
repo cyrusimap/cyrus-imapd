@@ -84,6 +84,11 @@ enum dlist_t {
     DL_ATOMLIST
 };
 
+/* bit field of flags for dlist_parse and friends */
+enum {
+    DLIST_PARSEKEY = (1 << 0),
+};
+
 struct dlist {
     char *name;
     struct dlist *head;
@@ -217,11 +222,11 @@ void dlist_print(const struct dlist *dl, int printkeys,
                  struct protstream *out);
 void dlist_printbuf(const struct dlist *dl, int printkeys,
                     struct buf *outbuf);
-char dlist_parse(struct dlist **dlp, int parsekeys,
+char dlist_parse(struct dlist **dlp, unsigned int flags,
                  struct protstream *in);
-char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
+char dlist_parse_asatomlist(struct dlist **dlp, unsigned int flags,
                             struct protstream *in);
-int dlist_parsemap(struct dlist **dlp, int parsekeys,
+int dlist_parsemap(struct dlist **dlp, unsigned int flags,
                    const char *base, unsigned len);
 
 typedef int dlistsax_cb_t(int type, struct dlistsax_data *data);

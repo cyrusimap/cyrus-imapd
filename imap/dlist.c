@@ -843,7 +843,7 @@ static char next_nonspace(struct protstream *in, char c)
     return c;
 }
 
-EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
+EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstream *in)
 {
     struct dlist *dl = NULL;
     static struct buf kbuf;
@@ -851,7 +851,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *i
     int c;
 
     /* handle the key if wanted */
-    if (parsekey) {
+    if ((flags & DLIST_PARSEKEY)) {
         c = getword(in, &kbuf);
         c = next_nonspace(in, c);
     }
@@ -870,7 +870,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *i
         while (c != ')') {
             struct dlist *di = NULL;
             prot_ungetc(c, in);
-            c = dlist_parse(&di, 0, in);
+            c = dlist_parse(&di, (flags & ~DLIST_PARSEKEY), in);
             if (di) dlist_stitch(dl, di);
             c = next_nonspace(in, c);
             if (c == EOF) goto fail;
@@ -886,7 +886,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *i
             while (c != ')') {
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
-                c = dlist_parse(&di, 1, in);
+                c = dlist_parse(&di, (flags | DLIST_PARSEKEY), in);
                 if (di) dlist_stitch(dl, di);
                 c = next_nonspace(in, c);
                 if (c == EOF) goto fail;
@@ -943,10 +943,10 @@ fail:
     return EOF;
 }
 
-EXPORTED char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
+EXPORTED char dlist_parse_asatomlist(struct dlist **dlp, unsigned int flags,
                             struct protstream *in)
 {
-    char c = dlist_parse(dlp, parsekey, in);
+    char c = dlist_parse(dlp, flags, in);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -958,7 +958,7 @@ EXPORTED char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
     return c;
 }
 
-EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
+EXPORTED int dlist_parsemap(struct dlist **dlp, unsigned int flags,
                    const char *base, unsigned len)
 {
     struct protstream *stream;
@@ -967,7 +967,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
 
     stream = prot_readmap(base, len);
     prot_setisclient(stream, 1); /* don't sync literals */
-    c = dlist_parse(&dl, parsekey, stream);
+    c = dlist_parse(&dl, flags, stream);
     prot_free(stream);
 
     if (c != EOF) {
