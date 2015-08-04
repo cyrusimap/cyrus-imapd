@@ -269,7 +269,8 @@ struct propfind_entry_list {
 enum {
     PRIV_IMPLICIT =             (1<<0),
     PRIV_INBOX =                (1<<1),
-    PRIV_OUTBOX =               (1<<2)
+    PRIV_OUTBOX =               (1<<2),
+    PRIV_CONTAINED =            (1<<3)
 };
 
 
@@ -631,8 +632,8 @@ struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types)
 }
 
 
-static int add_privs(int rights, unsigned flags,
-                     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns);
+static void add_privs(int rights, unsigned flags,
+                      xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns);
 
 
 /* Ensure that we have a given namespace.  If it doesn't exist in what we
@@ -1504,115 +1505,166 @@ int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-static int add_privs(int rights, unsigned flags,
-                     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns)
+static void add_privs(int rights, unsigned flags,
+                      xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns)
 {
     xmlNodePtr priv;
+    int do_contained;
 
+    /* DAV:all */
     if ((rights & DACL_ALL) == DACL_ALL &&
         /* DAV:all on CALDAV:schedule-in/outbox MUST include CALDAV:schedule */
         (!(flags & (PRIV_INBOX|PRIV_OUTBOX)) ||
          (rights & DACL_SCHED) == DACL_SCHED)) {
         priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
         xmlNewChild(priv, NULL, BAD_CAST "all", NULL);
+
+        if (!(flags & PRIV_CONTAINED)) return;
     }
+
+    /* DAV:read */
     if ((rights & DACL_READ) == DACL_READ) {
         priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
         xmlNewChild(priv, NULL, BAD_CAST "read", NULL);
         if (flags & PRIV_IMPLICIT) rights |= DACL_READFB;
+
+        do_contained = (flags & PRIV_CONTAINED);
     }
-    if ((rights & DACL_READFB) &&
-        /* CALDAV:read-free-busy does not apply to CALDAV:schedule-in/outbox */
-        !(flags & (PRIV_INBOX|PRIV_OUTBOX))) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
-        xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST  "read-free-busy", NULL);
+    else do_contained = 1;
+
+    if (do_contained) {
+        if ((rights & DACL_READFB) &&
+            /* CALDAV:read-free-busy doesn't apply to CALDAV:sched-in/outbox */
+            !(flags & (PRIV_INBOX|PRIV_OUTBOX))) {
+            priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+            ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+            xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST  "read-free-busy", NULL);
+        }
     }
+
+    /* DAV:write */
     if ((rights & DACL_WRITE) == DACL_WRITE) {
         priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
         xmlNewChild(priv, NULL, BAD_CAST "write", NULL);
+
+        do_contained = (flags & PRIV_CONTAINED);
     }
-    if (rights & DACL_WRITECONT) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, NULL, BAD_CAST "write-content", NULL);
-    }
-    if (rights & DACL_WRITEPROPS) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, NULL, BAD_CAST "write-properties", NULL);
+    else do_contained = 1;
+
+    if (do_contained) {
+        if (rights & DACL_WRITECONT) {
+            priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+            xmlNewChild(priv, NULL, BAD_CAST "write-content", NULL);
+        }
+        if (rights & DACL_WRITEPROPS) {
+            priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+            xmlNewChild(priv, NULL, BAD_CAST "write-properties", NULL);
+        }
+
+        if (rights & (DACL_BIND|DACL_UNBIND)) {
+            ensure_ns(ns, NS_CYRUS, root, XML_NS_CYRUS, "CY");
+
+            /* DAV:bind */
+            if ((rights & DACL_BIND) == DACL_BIND) {
+                priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+                xmlNewChild(priv, NULL, BAD_CAST "bind", NULL);
+
+                do_contained = (flags & PRIV_CONTAINED);
+            }
+            else do_contained = 1;
+
+            if (do_contained) {
+                if (rights & DACL_MKCOL) {
+                    priv = xmlNewChild(parent, NULL,
+                                       BAD_CAST "privilege", NULL);
+                    xmlNewChild(priv, ns[NS_CYRUS],
+                                BAD_CAST "make-collection", NULL);
+                }
+                if (rights & DACL_ADDRSRC) {
+                    priv = xmlNewChild(parent, NULL,
+                                       BAD_CAST "privilege", NULL);
+                    xmlNewChild(priv, ns[NS_CYRUS],
+                                BAD_CAST "add-resource", NULL);
+                }
+            }
+
+            /* DAV:unbind */
+            if ((rights & DACL_UNBIND) == DACL_UNBIND) {
+                priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+                xmlNewChild(priv, NULL, BAD_CAST "unbind", NULL);
+
+                do_contained = (flags & PRIV_CONTAINED);
+            }
+            else do_contained = 1;
+
+            if (do_contained) {
+                if (rights & DACL_RMCOL) {
+                    priv = xmlNewChild(parent, NULL,
+                                       BAD_CAST "privilege", NULL);
+                    xmlNewChild(priv, ns[NS_CYRUS],
+                                BAD_CAST "remove-collection", NULL);
+                }
+                if ((rights & DACL_RMRSRC) == DACL_RMRSRC) {
+                    priv = xmlNewChild(parent, NULL,
+                                       BAD_CAST "privilege", NULL);
+                    xmlNewChild(priv, ns[NS_CYRUS],
+                                BAD_CAST "remove-resource", NULL);
+                }
+            }
+        }
     }
 
-    if (rights & (DACL_BIND|DACL_UNBIND|DACL_ADMIN)) {
-        ensure_ns(ns, NS_CYRUS, root, XML_NS_CYRUS, "CY");
-    }
-
-    if ((rights & DACL_BIND) == DACL_BIND) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, NULL, BAD_CAST "bind", NULL);
-    }
-    if (rights & DACL_MKCOL) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "make-collection", NULL);
-    }
-    if (rights & DACL_ADDRSRC) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "add-resource", NULL);
-    }
-    if ((rights & DACL_UNBIND) == DACL_UNBIND) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, NULL, BAD_CAST "unbind", NULL);
-    }
-    if (rights & DACL_RMCOL) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "remove-collection", NULL);
-    }
-    if ((rights & DACL_RMRSRC) == DACL_RMRSRC) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "remove-resource", NULL);
-    }
+    /* CYRUS:admin */
     if (rights & DACL_ADMIN) {
+        ensure_ns(ns, NS_CYRUS, root, XML_NS_CYRUS, "CY");
         priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
         xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST  "admin", NULL);
     }
 
-    if (rights & DACL_SCHED) {
-        ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
-    }
-    if ((rights & DACL_SCHED) == DACL_SCHED) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        if (flags & PRIV_INBOX)
-            xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST "schedule-deliver", NULL);
-        else if (flags & PRIV_OUTBOX)
-            xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST "schedule-send", NULL);
-    }
-    if (rights & DACL_INVITE) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        if (flags & PRIV_INBOX)
-            xmlNewChild(priv, ns[NS_CALDAV],
-                        BAD_CAST "schedule-deliver-invite", NULL);
-        else if (flags & PRIV_OUTBOX)
-            xmlNewChild(priv, ns[NS_CALDAV],
-                        BAD_CAST "schedule-send-invite", NULL);
-    }
-    if (rights & DACL_REPLY) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        if (flags & PRIV_INBOX)
-            xmlNewChild(priv, ns[NS_CALDAV],
-                        BAD_CAST "schedule-deliver-reply", NULL);
-        else if (flags & PRIV_OUTBOX)
-            xmlNewChild(priv, ns[NS_CALDAV],
-                        BAD_CAST "schedule-send-reply", NULL);
-    }
-    if (rights & DACL_SCHEDFB) {
-        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-        if (flags & PRIV_INBOX)
-            xmlNewChild(priv, ns[NS_CALDAV],
-                        BAD_CAST "schedule-query-freebusy", NULL);
-        else if (flags & PRIV_OUTBOX)
-            xmlNewChild(priv, ns[NS_CALDAV],
-                        BAD_CAST "schedule-send-freebusy", NULL);
-    }
+    if ((rights & DACL_SCHED) && (flags & (PRIV_INBOX|PRIV_OUTBOX))) {
+        struct buf buf = BUF_INITIALIZER;
+        size_t len;
 
-    return 0;
+        if (flags & PRIV_INBOX) buf_setcstr(&buf, "schedule-deliver");
+        else buf_setcstr(&buf, "schedule-send");
+        len = buf_len(&buf);
+
+        ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+
+        /* CALDAV:schedule */
+        if ((rights & DACL_SCHED) == DACL_SCHED) {
+            priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+            xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST buf_cstring(&buf), NULL);
+            
+            do_contained = (flags & PRIV_CONTAINED);
+        }
+        else do_contained = 1;
+
+        if (do_contained) {
+            if (rights & DACL_INVITE) {
+                buf_truncate(&buf, len);
+                buf_appendcstr(&buf, "-invite");
+                priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+                xmlNewChild(priv, ns[NS_CALDAV],
+                            BAD_CAST buf_cstring(&buf), NULL);
+            }
+            if (rights & DACL_REPLY) {
+                buf_truncate(&buf, len);
+                buf_appendcstr(&buf, "-reply");
+                priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+                xmlNewChild(priv, ns[NS_CALDAV],
+                            BAD_CAST buf_cstring(&buf), NULL);
+            }
+            if (rights & DACL_SCHEDFB) {
+                if (flags & PRIV_INBOX) buf_setcstr(&buf, "schedule-query");
+                else buf_truncate(&buf, len);
+                buf_appendcstr(&buf, "-freebusy");
+                priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+                xmlNewChild(priv, ns[NS_CALDAV],
+                            BAD_CAST buf_cstring(&buf), NULL);
+            }
+        }
+    }
 }
 
 
@@ -1659,6 +1711,8 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
                     flags = PRIV_OUTBOX;
             }
         }
+
+        flags += PRIV_CONTAINED;
 
         add_privs(rights, flags, set, resp->parent, fctx->ns);
     }
