@@ -1,7 +1,7 @@
 .. _imap-release-notes-3.0:
 
 =============================
-Other Cyrus IMAP 3.0 Releases
+Cyrus IMAP 3.0 Releases
 =============================
 
 .. toctree::
@@ -9,3 +9,4 @@ Other Cyrus IMAP 3.0 Releases
     :glob:
 
     x/?.?.?
+    x/?.?.?-beta?

@@ -10,6 +10,15 @@ Currently Supported Versions
     :glob:
 
     2.5/x/?.?.?
+  
+Current Development Version
+===========================
+
+.. toctree::
+    :maxdepth: 1
+    :glob:
+    
+    3.0/x/3.0.0*
 
 Currently Supported Product Series
 ==================================
