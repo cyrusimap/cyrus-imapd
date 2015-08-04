@@ -491,12 +491,19 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
         return IMTEST_FAIL;
     }
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+    tls_ctx = SSL_CTX_new(TLS_client_method());
+#else
     tls_ctx = SSL_CTX_new(SSLv23_client_method());
+#endif
     if (tls_ctx == NULL) {
         return IMTEST_FAIL;
     };
 
-    off |= SSL_OP_ALL;          /* Work around all known bugs */
+    off |= SSL_OP_ALL;            /* Work around all known bugs */
+    off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
+    off |= SSL_OP_NO_SSLv3;       /* Disable insecure SSLv3 */
+    off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
     SSL_CTX_set_options(tls_ctx, off);
     SSL_CTX_set_info_callback(tls_ctx, apps_ssl_info_callback);
 
