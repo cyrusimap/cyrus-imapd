@@ -6601,7 +6601,7 @@ localcreate:
         goto done;
 
     } else { // (r == IMAP_PERMISSION_DENIED)
-	/* no error: carry on */
+        /* no error: carry on */
     } // (r == IMAP_PERMISSION_DENIED)
 
 #else // USE_AUTOCREATE
