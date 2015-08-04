@@ -1667,7 +1667,7 @@ static int tls_init_clientengine(struct imclient *imclient,
 
     if (c_cert_file || c_key_file)
         if (!set_cert_stuff(imclient->tls_ctx, c_cert_file, c_key_file)) {
-            printf("[ TLS engine: cannot load cert/key data ]\n");
+            printf("[ TLS engine: cannot load cert/key data, may be a cert/key mismatch]\n");
             return -1;
         }
     SSL_CTX_set_tmp_rsa_callback(imclient->tls_ctx, tmp_rsa_cb);

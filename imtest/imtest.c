@@ -63,6 +63,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
@@ -525,7 +526,7 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
 
     if (c_cert_file || c_key_file)
         if (!set_cert_stuff(tls_ctx, c_cert_file, c_key_file)) {
-            printf("TLS engine: cannot load cert/key data\n");
+            printf("TLS engine: cannot load cert/key data, may be a cert/key mismatch?\n");
             return IMTEST_FAIL;
         }
     SSL_CTX_set_tmp_rsa_callback(tls_ctx, tmp_rsa_cb);
