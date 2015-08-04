@@ -1227,7 +1227,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
         /* can't have this and a file for input */
         sunsock.sun_family = AF_UNIX;
-        strcpy(sunsock.sun_path, output_socket);
+        strlcpy(sunsock.sun_path, output_socket, sizeof(sunsock.sun_path));
         unlink(output_socket);
 
         listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
