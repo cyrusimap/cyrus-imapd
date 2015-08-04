@@ -586,9 +586,10 @@ static int cap_setuid(int uid, int is_master)
 EXPORTED int become_cyrus(int is_master)
 {
     struct passwd *p;
-    int newuid, newgid;
+    uid_t newuid;
+    gid_t newgid;
     int result;
-    static int uid = 0;
+    static uid_t uid = 0;
 
     if (uid) return cap_setuid(uid, is_master);
 
@@ -602,10 +603,10 @@ EXPORTED int become_cyrus(int is_master)
     newuid = p->pw_uid;
     newgid = p->pw_gid;
 
-    if (newuid == (int)geteuid() &&
-        newuid == (int)getuid() &&
-	newgid == (int)getegid() &&
-	newgid == (int)getgid()) {
+    if (newuid == geteuid() &&
+        newuid == getuid() &&
+        newgid == getegid() &&
+        newgid == getgid()) {
 	/* already the Cyrus user, stop trying */
 	uid = newuid;
 	set_caps(AFTER_SETUID, is_master);
