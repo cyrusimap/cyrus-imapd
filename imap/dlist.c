@@ -145,9 +145,6 @@ static void printsfile(struct protstream *out, const struct dlist *dl) {
     if (size != dl->nval) {
         syslog(LOG_ERR, "IOERROR: Size mismatch %s (" SIZE_T_FMT " != " MODSEQ_FMT ")",
                message_guid_encode(dl->gval), size, dl->nval);
-
-        fprintf(stderr, "\n\nwrong size:\n%s\n\n", dl->sval);
-
         prot_printf(out, "NIL");
         return;
     }
