@@ -769,6 +769,8 @@ static int _add_othergroup_entries(struct jmap_req *req,
 
 static int setContactGroups(struct jmap_req *req)
 {
+    struct mailbox *mailbox = NULL;
+    struct mailbox *newmailbox = NULL;
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
 
@@ -786,9 +788,6 @@ static int setContactGroups(struct jmap_req *req)
     json_t *set = json_pack("{s:s,s:s}",
                             "oldState", req->state,
                             "accountId", req->userid);
-
-    struct mailbox *mailbox = NULL;
-    struct mailbox *newmailbox = NULL;
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
