@@ -836,7 +836,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     }
 
     if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
-	syslog(LOG_ERR, "TLS server engine: cannot load server cert/key data.");
+        syslog(LOG_ERR, "TLS server engine: cannot load cert/key data, may be a cert/key mismatch?");
 	return (-1);
     }
 
@@ -1441,7 +1441,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     
     if (client_cert || client_key) {
 	if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
-	    syslog(LOG_ERR,"TLS client engine: cannot load client cert/key data");
+            syslog(LOG_ERR,"TLS client engine: cannot load cert/key data, may be a cert/key mismatch?");
 	    return (-1);
 	}
     }
