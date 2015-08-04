@@ -8,6 +8,53 @@
 </head>
 <body>
 
+<h1>Changes in 3.0.0-beta1</h1>
+
+<!-- https://docs.cyrus.foundation/imap/admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf -->
+<h2>Major changes</h2>
+<ul>
+<li><p>Support added for FastMail-style conversations (threaded messages).
+(See the <em>conversations</em> options in <a href="https://docs.cyrus.foundation/imap/admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><em>imapd.conf</em></a>)</p>
+</li>
+<li><p>Optional <a href="http://xapian.org">Xapian</a> integration for faster and shinier search. Note that this requires custom
+patches to Xapian, in this release. (See the <em>search_engine</em> option in
+<a href="https://docs.cyrus.foundation/imap/admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><em>imapd.conf</em></a>)</p>
+</li>
+<li><p>Archive support has arrived! Requires addition of an archive partition. (See <em>archive_*</em>
+options in <a href="https://docs.cyrus.foundation/imap/admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><em>imapd.conf</em></a>)</p>
+</li>
+<li><p>Basic <a href="http://jmap.io">JMAP</a> support. (See <em>httpmodules</em> in <a href="https://docs.cyrus.foundation/imap/admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><em>imapd.conf</em></a>)</p>
+</li>
+<li><p>Optional <a href="http://www.clamav.net">ClamAV</a> integration for AntiVirus support is now working again.
+Requires separate installation of <a href="http://www.clamav.net">ClamAV</a>. (See configure.ac <em>--with-clamav=DIR</em>)</p>
+</li>
+<li><p>Dropped support for Berkeley DB.</p>
+</li>
+<li><p>The handling of configure options has changed, dropping support for
+<em>--with-cyrus-prefix</em> and <em>--with-service-path</em> in favour of the more conventional
+<em>--prefix</em>, <em>--bindir</em>, <em>--sbindir</em>, and <em>--libexecdir</em>.</p>
+</li>
+<li><p>Binaries executed by the <a href="https://docs.cyrus.foundation/imap/admin/commands/cyrus-master.html#imap-admin-commands-cyrus-master"><em>cyrus-master(8)</em></a>
+service process are now installed to <em>--libexecdir</em>.  Other binaries are installed to
+<em>--bindir</em> and/or <em>--sbindir</em>.</p>
+<p>The <em>make installbinsymlinks</em> target can be used to set up symlinks to everything in
+<em>--bindir</em>, if you need that in your environment.</p>
+</li>
+</ul>
+
+<h2>Significant bugfixes</h2>
+<ul>
+<li><p>Lots of fixes to caldav and carddav.</p>
+<p>Includes the addition of a new daemon (calalarmd) which periodically processes a global
+database containing the &#8220;next&#8221; alarm for each item, and sends the relevant mboxevents.
+(See configure.ac <em>--with-calalarmd</em>)</p>
+</li>
+<li><p>Replication reliability fixes.</p>
+</li>
+<li><p>Improved <em>LIST-EXTENDED</em>: more imap tests now succeed.</p>
+</li>
+</ul>
+
 <h1>Changes from 2.4 to 2.5</h1>
 <ul>
 <li>Check the release notes online at <a href="https://docs.cyrus.foundation/imap/release-notes/2.5.0.html">https://docs.cyrus.foundation/imap/release-notes/2.5.0.html</a></li>
