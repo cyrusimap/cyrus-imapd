@@ -51,6 +51,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "assert.h"
 #include "charset.h"
@@ -427,7 +428,11 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
     if (!fname || !ret) return SIEVE_FAIL;
     
     if (stat(fname, &sbuf) == -1) {
-	syslog(LOG_DEBUG, "IOERROR: fstating sieve script %s: %m", fname);
+	if (errno == ENOENT) {
+	    syslog(LOG_DEBUG, "WARNING: sieve script %s doesn't exist: %m", fname);
+	} else {
+	    syslog(LOG_DEBUG, "IOERROR: fstating sieve script %s: %m", fname);
+	}
 	return SIEVE_FAIL;
     }
 
