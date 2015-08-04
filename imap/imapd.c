@@ -5676,9 +5676,7 @@ localcreate:
 	goto done;
 
     } else { // (r == IMAP_PERMISSION_DENIED)
-	prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
-	goto done;
-
+	/* no error: carry on */
     } // (r == IMAP_PERMISSION_DENIED)
 
 #else // USE_AUTOCREATE
