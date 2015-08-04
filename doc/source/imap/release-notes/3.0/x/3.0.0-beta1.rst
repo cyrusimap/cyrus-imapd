@@ -25,22 +25,29 @@ Download via FTP:
 Major changes
 =============
 
-*   Support added for FastMail-style conversations (threaded messages). (See the ``conversations`` options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
+*   Support added for FastMail-style conversations (threaded messages).
+    (See the ``conversations`` options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
 
-*   Optional Xapian_ integration for faster and shinier search. Note that this requires custom patches to Xapian, in this release. (See the ``search_engine`` option in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
+*   Optional Xapian_ integration for faster and shinier search. Note that this requires custom
+    patches to Xapian, in this release. (See the ``search_engine`` option in
+    :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
 
-*   Archive support has arrived! Requires addition of an archive partition. (See ``archive_*`` options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
+*   Archive support has arrived! Requires addition of an archive partition. (See ``archive_*``
+    options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
 
 *   Basic JMAP_ support. (See ``httpmodules`` in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
 
-*   Optional ClamAV_ integration for AntiVirus support is now working again. Requires separate installation of ClamAV_. (See configure.ac ``--with-clamav=DIR``)
+*   Optional ClamAV_ integration for AntiVirus support is now working again.
+    Requires separate installation of ClamAV_. (See configure.ac ``--with-clamav=DIR``)
 
 *   Dropped support for Berkeley DB.
 
 *   The handling of configure options has changed, dropping support for
     ``-with-cyrus-prefix`` and ``--with-service-path``.
 
-*    The binaries not executed by the :ref:`cyrus-master(8) <imap-admin-commands-cyrus-master>` service process are now in ``--bindir`` or ``--sbindir``, and the binaries to be executed by :ref:`cyrus-master(8) <imap-admin-commands-cyrus-master>` are in ``--libexecdir``.
+*   The binaries not executed by the :ref:`cyrus-master(8) <imap-admin-commands-cyrus-master>`
+    service process are now in ``--bindir`` or ``--sbindir``, and the binaries to be executed by
+    :ref:`cyrus-master(8) <imap-admin-commands-cyrus-master>` are in ``--libexecdir``.
 
     While these paths have changed, you can retain the old paths by using ``make installbinsymlinks``.
 
@@ -50,7 +57,9 @@ Significant bugfixes
 
 *   Lots of fixes to caldav and carddav.
 
-    Includes the addition of a new daemon (calalarmd) which periodically processes a global database containing the "next" alarm for each item, and sends the relevant mboxevents. (See configure.ac ``--with-calalarmd``)
+    Includes the addition of a new daemon (calalarmd) which periodically processes a global
+    database containing the "next" alarm for each item, and sends the relevant mboxevents.
+    (See configure.ac ``--with-calalarmd``)
 
 *   Replication reliability fixes.
 
