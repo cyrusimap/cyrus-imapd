@@ -43,13 +43,15 @@ Major changes
 *   Dropped support for Berkeley DB.
 
 *   The handling of configure options has changed, dropping support for
-    ``-with-cyrus-prefix`` and ``--with-service-path``.
+    ``--with-cyrus-prefix`` and ``--with-service-path`` in favour of the more conventional
+    ``--prefix``, ``--bindir``, ``--sbindir``, and ``--libexecdir``.
 
-*   The binaries not executed by the :ref:`cyrus-master(8) <imap-admin-commands-cyrus-master>`
-    service process are now in ``--bindir`` or ``--sbindir``, and the binaries to be executed by
-    :ref:`cyrus-master(8) <imap-admin-commands-cyrus-master>` are in ``--libexecdir``.
+*   Binaries executed by the :ref:`cyrus-master(8) <imap-admin-commands-cyrus-master>`
+    service process are now installed to ``--libexecdir``.  Other binaries are installed to
+    ``--bindir`` and/or ``--sbindir``.
 
-    While these paths have changed, you can retain the old paths by using ``make installbinsymlinks``.
+    The ``make installbinsymlinks`` target can be used to set up symlinks to everything in
+    ``--bindir``, if you need that in your environment.
 
 
 Significant bugfixes
