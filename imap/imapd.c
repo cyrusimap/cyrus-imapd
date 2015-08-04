@@ -6546,7 +6546,7 @@ localcreate:
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
-        if (strcasecmp(name, "INBOX")) {
+        if (!strcasecmp(name, "INBOX")) {
             int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
 
             if (autocreatequotastorage > 0) {
