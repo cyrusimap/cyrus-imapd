@@ -1764,6 +1764,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
         int rights;
         char *rightstr, *nextid;
         xmlNodePtr ace, node;
+        int deny = 0;
 
         rightstr = strchr(userid, '\t');
         if (!rightstr) break;
@@ -1774,10 +1775,9 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
         *nextid++ = '\0';
 
         /* Check for negative rights */
-        /* XXX  Does this correspond to DAV:deny? */
         if (*userid == '-') {
-            userid = nextid;
-            continue;
+            deny = 1;
+            userid++;
         }
 
         rights = cyrus_acl_strtomask(rightstr);
@@ -1794,11 +1794,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
             rights |= DACL_ADMIN;
         }
         else if (!strcmp(userid, "anyone"))
-            xmlNewChild(node, NULL, BAD_CAST "authenticated", NULL);
-        /* XXX - well, it's better than a user called 'anonymous'
-         * Is there any IMAP equivalent to "unauthenticated"?
-         * Is there any DAV equivalent to "anonymous"?
-         */
+            xmlNewChild(node, NULL, BAD_CAST "all", NULL);
         else if (!strcmp(userid, "anonymous"))
             xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
         else if (!strncmp(userid, "group:", 6)) {
@@ -1814,7 +1810,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
             xml_add_href(node, NULL, buf_cstring(&fctx->buf));
         }
 
-        node = xmlNewChild(ace, NULL, BAD_CAST "grant", NULL);
+        node = xmlNewChild(ace, NULL, BAD_CAST (deny ? "deny" : "grant"), NULL);
         add_privs(rights, flags, node, resp->parent, fctx->ns);
 
         /* system userids are protected */
@@ -2843,7 +2839,7 @@ int meth_acl(struct transaction_t *txn, void *params)
         if (ace->type == XML_ELEMENT_NODE) {
             xmlNodePtr child = NULL, prin = NULL, privs = NULL;
             const char *userid = NULL;
-            int rights = 0;
+            int deny = 0, rights = 0;
             char rightstr[100];
             struct request_target_t tgt;
 
@@ -2870,10 +2866,15 @@ int meth_acl(struct transaction_t *txn, void *params)
                              privs->type != XML_ELEMENT_NODE; privs = privs->next);
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
-                        /* DAV:grant-only */
-                        txn->error.precond = DAV_GRANT_ONLY;
-                        ret = HTTP_FORBIDDEN;
-                        goto done;
+                        if (privs) {
+                            txn->error.desc = "Multiple grant|deny in ACE\r\n";
+                            ret = HTTP_BAD_REQUEST;
+                            goto done;
+                        }
+
+                        for (privs = child->children; privs &&
+                             privs->type != XML_ELEMENT_NODE; privs = privs->next);
+                        deny = 1;
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
                         /* DAV:no-invert */
@@ -2895,8 +2896,17 @@ int meth_acl(struct transaction_t *txn, void *params)
             else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
                 userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
             }
-            else if (!xmlStrcmp(prin->name, BAD_CAST "authenticated")) {
+            else if (!xmlStrcmp(prin->name, BAD_CAST "all")) {
                 userid = "anyone";
+            }
+            else if (!xmlStrcmp(prin->name, BAD_CAST "authenticated")) {
+                if (deny) {
+                    /* DAV:grant-only */
+                    txn->error.precond = DAV_GRANT_ONLY;
+                    ret = HTTP_FORBIDDEN;
+                    goto done;
+                }
+                userid = "\a"; /* flagged for use below */
             }
             else if (!xmlStrcmp(prin->name, BAD_CAST "unauthenticated")) {
                 userid = "anonymous";
@@ -2953,7 +2963,10 @@ int meth_acl(struct transaction_t *txn, void *params)
                         /* WebDAV privileges */
                         if (!xmlStrcmp(priv->name,
                                        BAD_CAST "all")) {
-                            rights |= DACL_ALL;
+                            if (deny)
+                                rights |= ACL_FULL; /* wipe EVERYTHING */
+                            else
+                                rights |= DACL_ALL;
                         }
                         else if (!xmlStrcmp(priv->name,
                                             BAD_CAST "read"))
@@ -3042,7 +3055,15 @@ int meth_acl(struct transaction_t *txn, void *params)
             /* gotta have something to do! */
             if (rights) {
                 cyrus_acl_masktostr(rights, rightstr);
-                buf_printf(&acl, "%s\t%s\t", userid, rightstr);
+                if (*userid == '\a') {
+                    /* authenticated */
+                    buf_printf(&acl, "anyone\t%s\t-anonymous\t%s\t",
+                               rightstr, rightstr);
+                }
+                else {
+                    buf_printf(&acl, "%s%s\t%s\t",
+                               deny ? "-" : "", userid, rightstr);
+                }
             }
         }
     }
