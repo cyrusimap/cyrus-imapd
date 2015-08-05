@@ -3114,7 +3114,14 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     msubj = buf_cstring(&msubject);
 
     for (i = 0 ; i < 4 ; i++) {
+        int hcount = 0;
         while ((msgid = find_msgid(hdrs[i], &hdrs[i])) != NULL) {
+            hcount++;
+            if (hcount > 20) {
+                free(msgid);
+                syslog(LOG_NOTICE, "too many references, skipping the rest");
+                break;
+            }
             /*
              * The issue of case sensitivity of msgids is curious.
              * RFC2822 seems to imply they're case-insensitive,
@@ -3141,6 +3148,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
             for (j = 0; j < cids.count; j++) {
                 conversation_id_t cid = arrayu64_nth(&cids, j);
+                conversation_free(conv);
+                conv = NULL;
                 r = conversation_load(state, cid, &conv);
                 if (r) goto out;
                 if (!conv)
