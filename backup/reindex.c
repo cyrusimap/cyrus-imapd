@@ -97,6 +97,7 @@ int main (int argc, char **argv) {
         while (1) {
             struct dlist *dl = NULL;
             struct buf buf = BUF_INITIALIZER;
+            int64_t ts;
             int c;
 
             c = prot_getc(member);
@@ -107,6 +108,10 @@ int main (int argc, char **argv) {
             else {
                 prot_ungetc(c, member);
             }
+
+            c = getint64(member, &ts);
+            if (c == EOF)
+                break;
 
             c = getword(member, &buf);
             if (c == EOF)
@@ -124,6 +129,16 @@ int main (int argc, char **argv) {
                 else {
                     fprintf(stderr, "\ndidn't parse dlist from, error %i\n", c);
                 }
+
+                if (c == '\r') c = prot_getc(member);
+                if (c != '\n') {
+                    fprintf(stderr, "expected newline, got '%c'\n", c);
+                    eatline(member, c);
+                }
+            }
+            else {
+                fprintf(stderr, "parse error: expected APPLY, got '%s'\n", buf_cstring(&buf));
+                eatline(member, c);
             }
         }
 
