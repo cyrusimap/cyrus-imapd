@@ -51,6 +51,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <zlib.h>
 
 #include "lib/exitcodes.h"
@@ -77,6 +78,71 @@ static ssize_t fill_cb(unsigned char *buf, size_t len, void *rock) {
     return r;
 }
 
+static int backup_parse_command(struct protstream *in, time_t *ts, struct buf *cmd, struct dlist **kin) {
+    struct dlist *dl = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int64_t t;
+    int c;
+
+    c = prot_getc(in);
+    if (c == '#') {
+        eatline(in, c);
+        fprintf(stderr, "ate a comment\n");
+    }
+    else {
+        prot_ungetc(c, in);
+    }
+
+    c = getint64(in, &t);
+    if (c == EOF)
+        goto fail;
+
+    c = getword(in, &buf);
+    if (c == EOF)
+        goto fail;
+
+    c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, in);
+
+    if (!dl) {
+        fprintf(stderr, "\ndidn't parse dlist, error %i\n", c);
+        goto fail;
+    }
+
+    if (c == '\r') c = prot_getc(in);
+    if (c != '\n') {
+        fprintf(stderr, "expected newline, got '%c'\n", c);
+        eatline(in, c);
+        goto fail;
+    }
+
+    if (kin) *kin = dl;
+    if (cmd) buf_copy(cmd, &buf);
+    if (ts) *ts = (time_t) t;
+    buf_free(&buf);
+    return c;
+
+fail:
+    if (dl) dlist_free(&dl);
+    buf_free(&buf);
+    return c;
+}
+
+static int backup_apply_mailbox(time_t ts, struct dlist *dl) {
+    struct buf out = BUF_INITIALIZER;
+
+    dlist_printbuf(dl, 1, &out);
+    fprintf(stderr, "backup_apply_mailbox: %.24s %s\n", ctime(&ts), buf_release(&out));
+    return 0;
+}
+
+static int backup_apply_message(time_t ts, struct dlist *dl) {
+    struct buf out = BUF_INITIALIZER;
+
+    dlist_printbuf(dl, 1, &out);
+    fprintf(stderr, "backup_apply_message: %.24s %s\n", ctime(&ts), buf_release(&out));
+    return 0;
+}
+
 int main (int argc, char **argv) {
     if (argc != 2) usage(argv[0]);
 
@@ -94,51 +160,45 @@ int main (int argc, char **argv) {
         struct protstream *member = prot_readcb(fill_cb, gzuc);
         prot_setisclient(member, 1); /* don't sync literals */
 
+        // FIXME stricter timestamp sequence checks
+        time_t member_ts = -1;
+
         while (1) {
+            struct buf cmd = BUF_INITIALIZER;
+            time_t ts;
             struct dlist *dl = NULL;
-            struct buf buf = BUF_INITIALIZER;
-            int64_t ts;
-            int c;
 
-            c = prot_getc(member);
-            if (c == '#') {
-                eatline(member, c);
-                fprintf(stderr, "ate a comment\n");
+            int c = backup_parse_command(member, &ts, &cmd, &dl);
+            if (c == EOF) break;
+
+            if (member_ts == -1)
+                member_ts = ts;
+            else if (member_ts > ts)
+                fatal("timestamp older than previous", -1);
+
+            if (strcmp(buf_cstring(&cmd), "APPLY") != 0) {
+                fprintf(stderr, "skipping unrecognised command: %s\n", buf_cstring(&cmd));
+                continue;
             }
+
+            ucase(dl->name);
+
+            int r;
+
+            if (0) { }
+
+            else if (strcmp(dl->name, "MAILBOX") == 0)
+                r = backup_apply_mailbox(member_ts, dl);
+            else if (strcmp(dl->name, "MESSAGE") == 0)
+                r = backup_apply_message(member_ts, dl);
+
             else {
-                prot_ungetc(c, member);
+                fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dl->name);
+                continue;
             }
 
-            c = getint64(member, &ts);
-            if (c == EOF)
-                break;
-
-            c = getword(member, &buf);
-            if (c == EOF)
-                break;
-
-            if (strcmp(buf_cstring(&buf), "APPLY") == 0) {
-                c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, member);
-
-                if (dl) {
-                    struct buf out = BUF_INITIALIZER;
-
-                    dlist_printbuf(dl, 1, &out);
-                    fprintf(stderr, "parsed dlist: %s\n", buf_release(&out));
-                }
-                else {
-                    fprintf(stderr, "\ndidn't parse dlist from, error %i\n", c);
-                }
-
-                if (c == '\r') c = prot_getc(member);
-                if (c != '\n') {
-                    fprintf(stderr, "expected newline, got '%c'\n", c);
-                    eatline(member, c);
-                }
-            }
-            else {
-                fprintf(stderr, "parse error: expected APPLY, got '%s'\n", buf_cstring(&buf));
-                eatline(member, c);
+            if (r) {
+                // FIXME do something
             }
         }
 
