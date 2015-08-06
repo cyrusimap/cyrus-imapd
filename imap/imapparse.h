@@ -83,7 +83,9 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 #define getnastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NASTRING)
 #define getcharset(pin, pout, buf) getxstring((pin), (pout), (buf), GXS_ATOM|GXS_QUOTED)
 int getint32(struct protstream *pin, int *num);
+int getint64(struct protstream *pin, int64_t *num);
 int getsint32(struct protstream *pin, int *num);
+int getsint64(struct protstream *pin, int64_t *num);
 int getuint32(struct protstream *pin, unsigned int *num);
 int getuint64(struct protstream *pin, uint64_t *num);
 int getmodseq(struct protstream *pin, modseq_t *num);
