@@ -73,9 +73,7 @@ static void usage(const char *name) {
 
 static ssize_t fill_cb(unsigned char *buf, size_t len, void *rock) {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
-    ssize_t r = gzuc_read(gzuc, buf, len);
-    fprintf(stderr, "fill_cb read %ld bytes\n", r);
-    return r;
+    return gzuc_read(gzuc, buf, len);
 }
 
 static int backup_parse_command(struct protstream *in, time_t *ts, struct buf *cmd, struct dlist **kin) {
@@ -85,13 +83,10 @@ static int backup_parse_command(struct protstream *in, time_t *ts, struct buf *c
     int c;
 
     c = prot_getc(in);
-    if (c == '#') {
+    if (c == '#')
         eatline(in, c);
-        fprintf(stderr, "ate a comment\n");
-    }
-    else {
+    else
         prot_ungetc(c, in);
-    }
 
     c = getint64(in, &t);
     if (c == EOF)
@@ -176,10 +171,8 @@ int main (int argc, char **argv) {
             else if (member_ts > ts)
                 fatal("timestamp older than previous", -1);
 
-            if (strcmp(buf_cstring(&cmd), "APPLY") != 0) {
-                fprintf(stderr, "skipping unrecognised command: %s\n", buf_cstring(&cmd));
+            if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
                 continue;
-            }
 
             ucase(dl->name);
 
