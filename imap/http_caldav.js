@@ -43,8 +43,8 @@
 
 
 // XML constants for requests
-var XML_DECLARATION = '<?xml version=\"1.0\" encoding=\"utf-8\"?>';
-var XML_NS_DECL = 'xmlns:D=\"DAV:\" xmlns:C=\"urn:ietf:params:xml:ns:caldav\"';
+var XML_DAV_NS = 'DAV:';
+var XML_CALDAV_NS = 'urn:ietf:params:xml:ns:caldav';
 
 
 // Calculate hash of a string
@@ -75,42 +75,58 @@ function createCalendar(url) {
         '-' + strHash(create.name.value).toString(16) +
         '-' + now.getTime() + '-' + rand.toFixed(0);
 
-    // Build Extended MKCOL body
-    var xml = XML_DECLARATION + '<D:mkcol ' + XML_NS_DECL + '>' +
-        '<D:set><D:prop>' +
-        '<D:resourcetype><D:collection/><C:calendar/></D:resourcetype>' +
-        '<D:displayname>' + create.name.value + '</D:displayname>';
+    // Build Extended MKCOL document
+    var doc = document.implementation.createDocument(XML_DAV_NS,
+                                                     "D:mkcol", null);
+    var mkcol = doc.documentElement;
+    var set = doc.createElementNS(XML_DAV_NS, "D:set");
+    mkcol.appendChild(set);
+
+    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
+    set.appendChild(props);
+
+    var prop = doc.createElementNS(XML_DAV_NS, "D:resourcetype");
+    prop.appendChild(doc.createElementNS(XML_DAV_NS, "D:collection"));
+    prop.appendChild(doc.createElementNS(XML_CALDAV_NS, "C:calendar"));
+    props.appendChild(prop);
+
+    prop = doc.createElementNS(XML_DAV_NS, "D:displayname");
+    prop.appendChild(doc.createTextNode(create.name.value));
+    props.appendChild(prop);
 
     if (create.desc.value.length !== 0) {
-        xml += '<C:calendar-description>' + create.desc.value +
-            '</C:calendar-description>';
+        prop = doc.createElementNS(XML_CALDAV_NS, "C:calendar-description");
+        prop.appendChild(doc.createTextNode(create.desc.value));
+        props.appendChild(prop);
     }
 
     if (create.tzid.value.length !== 0) {
-        xml += '<C:calendar-timezone-id>' + create.tzid.value +
-            '</C:calendar-timezone-id>';
+        prop = doc.createElementNS(XML_CALDAV_NS, "C:calendar-timezone-id");
+        prop.appendChild(doc.createTextNode(create.tzid.value));
+        props.appendChild(prop);
     }
 
-    var i, compSet = "";
-    for (i = 0; i < create.comp.length; i++) {
+    var compset = null;
+    for (var i = 0; i < create.comp.length; i++) {
         if (create.comp[i].checked) {
-            compSet += '<C:comp name=\"' + create.comp[i].value + '\"/>';
+            var comp = doc.createElementNS(XML_CALDAV_NS, "C:comp");
+            comp.setAttribute("name", create.comp[i].value);
+
+            if (!compset) {
+                compset =
+                    doc.createElementNS(XML_CALDAV_NS,
+                                        "C:supported-calendar-component-set");
+                props.appendChild(compset);
+            }
+            compset.appendChild(comp);
         }
     }
-
-    if (compSet !== "") {
-        xml += '<C:supported-calendar-component-set>' + compSet +
-            '</C:supported-calendar-component-set>';
-    }
-
-    xml += '</D:prop></D:set></D:mkcol>';
 
     // Send MKCOL request (minimal response)
     var req = new XMLHttpRequest();
     req.open('MKCOL', url, false);
-    req.setRequestHeader('Content-Type', 'application/xml');
     req.setRequestHeader('Prefer', 'return=minimal');
-    req.send(xml);
+    req.send(doc);
 
     // Refresh calendar list
     document.location.reload();
@@ -119,54 +135,81 @@ function createCalendar(url) {
 
 // [Un]share a calendar collection ([un]readable by 'anyone')
 function shareCalendar(url, share) {
-    // Build ACL body
-    var xml = XML_DECLARATION + '<D:acl ' + XML_NS_DECL + '>' +
-        '<D:ace><D:principal><D:authenticated/></D:principal>';
+    // Build ACL document
+    var doc = document.implementation.createDocument(XML_DAV_NS, "D:acl", null);
+    var acl = doc.documentElement;
+    acl.setAttribute("mode", "modify");
+
+    var ace = doc.createElementNS(XML_DAV_NS, "D:ace");
+    acl.appendChild(ace);
+
+    var prin = doc.createElementNS(XML_DAV_NS, "D:principal");
+    prin.appendChild(doc.createElementNS(XML_DAV_NS, "D:all"));
+    ace.appendChild(prin);
+
+    var grant = doc.createElementNS(XML_DAV_NS, "D:grant");
+
+    var priv = doc.createElementNS(XML_DAV_NS, "D:privilege");
+    priv.appendChild(doc.createElementNS(XML_DAV_NS, "D:read"));
+    grant.appendChild(priv);
 
     if (share) {
-        // Add 'read' privilege
-        xml += '<D:grant><D:privilege><D:read/></D:privilege></D:grant>';
+        grant.setAttribute("mode", "add");
+        ace.appendChild(grant);
     }
     else {
-        // Remove 'read' privilege, keeping 'read-free-busy' privilege
-        xml += '<D:deny><D:privilege><D:read/></D:privilege></D:deny></D:ace>' +
-            '<D:ace><D:principal><D:authenticated/></D:principal>' +
-            '<D:grant><D:privilege><C:read-free-busy/>' +
-            '</D:privilege></D:grant>';
-    }
+        var ace2 = ace.cloneNode(true);
+        acl.appendChild(ace2);
 
-    xml += '</D:ace></D:acl>';
+        grant.setAttribute("mode", "remove");
+        ace.appendChild(grant);
+
+        grant = doc.createElementNS(XML_DAV_NS, "D:grant");
+        grant.setAttribute("mode", "add");
+        ace2.appendChild(grant);
+
+        priv = doc.createElementNS(XML_DAV_NS, "D:privilege");
+        priv.appendChild(doc.createElementNS(XML_CALDAV_NS,
+                                             "C:read-free-busy"));
+        grant.appendChild(priv);
+    }
 
     // Send ACL request (non-overwrite mode)
     var req = new XMLHttpRequest();
     req.open('ACL', url);
-    req.setRequestHeader('Content-Type', 'application/xml');
-    req.setRequestHeader('Overwrite', 'F');
-    req.send(xml);
+    req.send(doc);
 }
 
 
 // Make a calendar collection transparent/opaque
 function transpCalendar(url, transp) {
-    // Build PROPPATCH body
-    var xml = XML_DECLARATION + '<D:propertyupdate ' + XML_NS_DECL + '>';
+    // Build PROPPATCH document
+    var doc = document.implementation.createDocument(XML_DAV_NS,
+                                                     "D:propertyupdate", null);
+    var propupdate = doc.documentElement;
+    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
+    var caltransp = doc.createElementNS(XML_CALDAV_NS,
+                                        "C:schedule-calendar-transp");
+    props.appendChild(caltransp);
 
+    var op;
     if (transp) {
-        xml += '<D:set><D:prop><C:schedule-calendar-transp>' +
-            '<C:transparent/></C:schedule-calendar-transp></D:prop></D:set>';
+        op = doc.createElementNS(XML_DAV_NS, "D:set");
+        caltransp.appendChild(doc.createElementNS(XML_CALDAV_NS,
+                                                  "C:transparent"));
     }
     else {
-        xml += '<D:remove><D:prop><C:schedule-calendar-transp/>' +
-            '</D:prop></D:remove>';
+        op = doc.createElementNS(XML_DAV_NS, "D:remove");
     }
 
-    xml += '</D:propertyupdate>';
+    op.appendChild(props);
+    propupdate.appendChild(op);
 
-    // Send PROPPATCH request
+    // Send PROPPATCH request (minimal response)
     var req = new XMLHttpRequest();
     req.open('PROPPATCH', url);
-    req.setRequestHeader('Content-Type', 'application/xml');
-    req.send(xml);
+    req.setRequestHeader('Prefer', 'return=minimal');
+    req.send(doc);
 }
 
 
