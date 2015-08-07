@@ -1634,7 +1634,13 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
             mailbox_add_dav(newmailbox);
 #endif
 
+            /* log the rename before we close the new mailbox */
+            sync_log_mailbox_double(oldname, newname);
+
             mailbox_close(&newmailbox);
+
+            /* and log an append so that squatter indexes it */
+            sync_log_append(newname);
         }
         else if (partitionmove) {
             char *oldpartition = xstrdup(oldmailbox->part);
@@ -1645,6 +1651,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
                        session_id(),
                        oldmailbox->name, oldmailbox->uniqueid,
                        oldpartition, partition);
+            /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);
             mailbox_delete_cleanup(oldpartition, oldname, olduniqueid);
             free(olduniqueid);
@@ -1652,11 +1659,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         }
         else
             abort(); /* impossible, in theory */
-
-        /* log the rename */
-        sync_log_mailbox_double(oldname, newname);
-        /* and log an append so that squatter indexes it */
-        sync_log_append(newname);
     }
 
     /* free memory */
