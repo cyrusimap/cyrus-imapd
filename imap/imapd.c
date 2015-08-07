@@ -6860,8 +6860,6 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
 
         prot_printf(imapd_out, "* OK rename %s %s\r\n",
                     oldextname, newextname);
-
-        sync_log_mailbox_double(mbentry->name, text->newmailboxname);
     }
 
 done:
@@ -7239,7 +7237,6 @@ submboxes:
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
-        sync_log_mailbox_double(oldmailboxname2, newmailboxname2);
         if (rename_user) sync_log_user(newuser);
     }
 
