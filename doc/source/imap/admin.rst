@@ -7,6 +7,7 @@ Administrator Guide
 .. toctree::
     :maxdepth: 2
 
+    developer/architecture
     admin/deleted-expired-expunged-purged
     admin/tweaking
     admin/sop

@@ -13,6 +13,7 @@ Getting Started
     developer/installguide
     developer/basicserver
     developer/process
+    developer/architecture
 
 Resources
 =========
