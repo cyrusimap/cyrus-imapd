@@ -14,11 +14,17 @@ upgrade at some point, and cannot guarantee this upgrade will run
 smoothly -- even though we do our best.
 
 To install the version of Cyrus IMAP that comes with the operating
-system, issue the following command:
+system, issue the following command for Fedora 18 or below:
 
 .. parsed-literal::
 
     # :command:`yum install cyrus-imapd cyrus-sasl cyrus-sasl-plain`
+
+or for Fedora 19 and above:
+
+.. parsed-literal::
+
+    # :command:`dnf install cyrus-imapd cyrus-sasl cyrus-sasl-plain`
 
 Next, set a password for the default administrative user ``cyrus``:
 
@@ -31,13 +37,20 @@ Next, set a password for the default administrative user ``cyrus``:
     passwd: all authentication tokens updated successfully.
 
 Start and configure to start when the system boots, the
-:manpage:`saslauthd(8)` service:
+:manpage:`saslauthd(8)` service. For Fedora 14 and below:
 
 .. parsed-literal::
 
     # :command:`service saslauthd start`
     Starting saslauthd:                                        [  OK  ]
     # :command:`chkconfig saslauthd on`
+
+or for Fedora 15 and above:
+
+.. parsed-literal::
+
+    # :command:`systemctl start saslauthd`
+    # :command:`systemctl enable saslauthd`
 
 You should at this moment be able to authenticate against
 :manpage:`saslauthd(8)`:
@@ -49,12 +62,19 @@ You should at this moment be able to authenticate against
 If this does not succeed, see :ref:`sasl-troubleshooting-saslauthd`.
 
 Start the service, and ensure the service starts up when the system
-boots:
+boots. For Fedora 14 and below:
 
 .. parsed-literal::
 
     # :command:`service cyrus-imapd start`
     # :command:`chkconfig cyrus-imapd on`
+
+or for Fedora 15 and above:
+
+.. parsed-literal::
+
+    # :command:`systemctl start cyrus-imapd`
+    # :command:`systemctl enable cyrus-imapd`
 
 You should now be able to login as the ``cyrus`` user, which is
 configured by default as an administrator for Cyrus IMAP:
