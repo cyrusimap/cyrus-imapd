@@ -41,7 +41,7 @@ static void test_getint32(void)
     static const int32_t VAL1 = 0;
     static const char STR2[] = "1234567890 ";
     static const int32_t VAL2 = 1234567890;
-//     static const char STR3[] = "12345678901234567890 ";
+    static const char STR3[] = "12345678901234567890 ";
     static const char STR4[] = "123)";
     static const int32_t VAL4 = 123;
     static const char STR5[] = "y&+123 ";
@@ -62,11 +62,11 @@ static void test_getint32(void)
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL2);
 
-// This test fatal()s which we cannot catch for now
-//     /* test a string with too many digits */
-//     c = wrap_getint32(STR3, &val);
-//     CU_ASSERT_EQUAL(c, EOF);
-//     CU_ASSERT_EQUAL(val, CANARY);
+    /* test a string with too many digits */
+    CU_EXPECT_CYRFATAL();
+    c = wrap_getint32(STR3, &val);
+    CU_ASSERT_CYRFATAL();
+    CU_UNEXPECT_CYRFATAL();
 
     /* test a valid value with a different terminator */
     c = wrap_getint32(STR4, &val);
@@ -119,7 +119,7 @@ static void test_getsint32(void)
     static const int32_t VAL1 = 0;
     static const char STR2[] = "1234567890 ";
     static const int32_t VAL2 = 1234567890;
-//     static const char STR3[] = "12345678901234567890 ";
+    static const char STR3[] = "12345678901234567890 ";
     static const char STR4[] = "123)";
     static const int32_t VAL4 = 123;
     static const char STR5[] = "y&+123 ";
@@ -142,11 +142,11 @@ static void test_getsint32(void)
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL2);
 
-// This test fatal()s which we cannot catch for now
-//     /* test a string with too many digits */
-//     c = wrap_getsint32(STR3, &val);
-//     CU_ASSERT_EQUAL(c, EOF);
-//     CU_ASSERT_EQUAL(val, CANARY);
+    /* test a string with too many digits */
+    CU_EXPECT_CYRFATAL();
+    c = wrap_getsint32(STR3, &val);
+    CU_ASSERT_CYRFATAL();
+    CU_UNEXPECT_CYRFATAL();
 
     /* test a valid value with a different terminator */
     c = wrap_getsint32(STR4, &val);
@@ -226,6 +226,7 @@ static void test_getmodseq(void)
     CU_ASSERT_EQUAL(val, VAL3);
 
 // This test fatal()s which we cannot catch for now
+// XXX when converted to test for fatal, this doesn't actually fatal ??
 //     /* test a string with too many digits */
 //     c = wrap_getmodseq(STR3a, &val);
 //     CU_ASSERT_EQUAL(c, EOF);
