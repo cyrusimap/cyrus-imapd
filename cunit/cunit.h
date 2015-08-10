@@ -47,6 +47,7 @@
 #include <stdarg.h>
 #include <CUnit/CUnit.h>
 #include "cunit-syslog.h"
+#include "cyrfatal.h"
 
 extern int verbose;
 
@@ -191,6 +192,22 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     CU_assertFormatImplementation((_a == _e), __LINE__, \
      __FILE__, "", CU_TRUE, \
     "CU_ASSERT_SYSLOG_FATAL(/%s/=%u, " #expected "=%u)", _s, _a, _e); }
+
+
+#define CU_EXPECT_CYRFATAL() \
+    CU_cyrfatal_expect()
+
+#define CU_UNEXPECT_CYRFATAL() \
+    CU_cyrfatal_reset()
+
+#define CU_ASSERT_CYRFATAL_STRING_EQUAL(expected) \
+    CU_ASSERT_STRING_EQUAL(CU_cyrfatal_string(), (expected))
+
+#define CU_ASSERT_CYRFATAL_CODE_EQUAL(expected) \
+    CU_ASSERT_EQUAL(CU_cyrfatal_code(), (expected))
+
+#define CU_ASSERT_CYRFATAL() \
+  CU_ASSERT_NOT_EQUAL(CU_cyrfatal_code(), 0)
 
 /* for parametrised tests */
 

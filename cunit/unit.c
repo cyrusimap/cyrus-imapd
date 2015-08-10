@@ -77,10 +77,18 @@ int timeouts_flag = 1;
     fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2))
 #endif
 
-EXPORTED void fatal(const char *s, int code __attribute__((unused)))
+static void real_fatal(const char *s, int code __attribute__((unused)))
 {
     log1("fatal(%s)", s);
     exit(1);
+}
+
+EXPORTED void fatal(const char *s, int code)
+{
+    if (CU_cyrfatal_expected())
+	CU_cyrfatal_got(s, code);
+    else
+	real_fatal(s, code);
 }
 
 /* Each test gets a maximum of 20 seconds. */
@@ -134,6 +142,7 @@ void __cunit_wrap_test(const char *name, void (*fn)(void))
 {
     code = name;
     running = INTEST;
+    CU_cyrfatal_reset();
     if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0)
         exit(1);
     fn();
@@ -149,6 +158,7 @@ int __cunit_wrap_fixture(const char *name, int (*fn)(void))
         return r;
     code = name;
     running = INFIXTURE;
+    CU_cyrfatal_reset();
     if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0)
         exit(1);
     r = fn();
