@@ -8,6 +8,14 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.5.4</h1>
+<ul>
+<li>Security fix: compiling with --enable-autocreate no longer allows arbitrary mailbox creation</li>
+<li>Fixed T207: don't segfault on mboxutil -d of MBTYPE_DELETED mailboxes (thanks Chris Stromsoe)</li>
+<li>Fixed lock management over rename (thanks Thomas Jarosch)</li>
+<li>Miscellaneous other fixes (thanks Thomas Jarosch)</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.5.3</h1>
 <ul>
 <li>Security fix: handle urlfetch range starting outside message range</li>
