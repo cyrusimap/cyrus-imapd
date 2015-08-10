@@ -1192,10 +1192,10 @@ static void display_part(struct transaction_t *txn,
             (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
             /* Display non-attachment text part */
             int ishtml = !strcmp(body->subtype, "HTML");
-            int charset = body->charset_cte >> 16;
+            int charset = (body->charset_cte << 16) & 0xffff;
             int encoding = body->charset_cte & 0xff;
 
-            if (charset < 0) charset = 0; /* unknown, try ASCII */
+            if (charset == 0xffff) charset = 0; /* unknown, try ASCII */
             body->decoded_body =
                 charset_to_utf8(buf_base(msg_buf) + body->content_offset,
                                 body->content_size, charset, encoding);

@@ -2190,7 +2190,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             buf_appendbit32(buf, body->subpart->content_size);
-            buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+            buf_appendbit32(buf, 0x0000ffff);
             for (part = 0; part < body->subpart->numparts; part++) {
                 buf_appendbit32(buf, body->subpart->subpart[part].header_offset);
                 buf_appendbit32(buf, body->subpart->subpart[part].header_size);
@@ -2220,14 +2220,14 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             buf_appendbit32(buf, body->subpart->content_size);
-            buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+            buf_appendbit32(buf, 0x0000ffff);
             buf_appendbit32(buf, body->subpart->header_offset);
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             if (strcmp(body->subpart->type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
-                buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+                buf_appendbit32(buf, 0x0000ffff);
             }
             else {
                 buf_appendbit32(buf, body->subpart->content_size);
@@ -2246,7 +2246,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
         buf_appendbit32(buf, -1);
         buf_appendbit32(buf, 0);
         buf_appendbit32(buf, -1);
-        buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+        buf_appendbit32(buf, 0x0000ffff);
         for (part = 0; part < body->numparts; part++) {
             buf_appendbit32(buf, body->subpart[part].header_offset);
             buf_appendbit32(buf, body->subpart[part].header_size);
@@ -2255,7 +2255,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
                 strcmp(body->subpart[part].type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
-                buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+                buf_appendbit32(buf, 0x0000ffff);
             }
             else {
                 buf_appendbit32(buf, body->subpart[part].content_size);
@@ -2283,7 +2283,9 @@ static void message_write_charset(struct buf *buf, const struct body *body)
 
     message_parse_charset(body, &encoding, &charset);
 
-    buf_appendbit32(buf, (charset<<16)|encoding);
+    if (charset == -1) charset = 0xffff;
+
+    buf_appendbit32(buf, (encoding & 0xff)|((charset & 0xffff)>>16));
 }
 
 /*
