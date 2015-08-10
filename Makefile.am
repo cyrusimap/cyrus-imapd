@@ -643,6 +643,7 @@ cunit_TESTS = \
 	cunit/guid.testc \
 	cunit/hash.testc \
 	cunit/imapurl.testc \
+	cunit/lock_file.testc \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
 	cunit/message.testc \
@@ -1345,6 +1346,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/imapopts.c \
 	lib/libconfig.c \
+	lib/lock_file.c \
 	lib/mpool.c \
 	lib/retry.c \
 	lib/strarray.c \
