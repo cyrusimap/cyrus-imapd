@@ -1813,20 +1813,22 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
 	prot_printf(nntp_out, "STARTTLS\r\n");
 
-    /* check for SASL mechs */
-    sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
-		  &mechlist, NULL, &mechcount);
+    if (nntp_starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+	/* check for SASL mechs */
+	sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
+	              &mechlist, NULL, &mechcount);
 
-    /* add the AUTHINFO variants */
-    if (!nntp_authstate) {
-	prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
-		    (nntp_starttls_done || (extprops_ssf > 1) ||
-		     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
-		    " USER" : "", mechcount ? " SASL" : "");
+	/* add the AUTHINFO variants */
+	if (!nntp_authstate) {
+	    prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
+		(nntp_starttls_done || (extprops_ssf > 1) ||
+		    config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
+		" USER" : "", mechcount ? " SASL" : "");
+	}
+
+	/* add the SASL mechs */
+	if (mechcount) prot_printf(nntp_out, "%s", mechlist);
     }
-
-    /* add the SASL mechs */
-    if (mechcount) prot_printf(nntp_out, "%s", mechlist);
 
     /* add the reader capabilities/extensions */
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
@@ -1974,9 +1976,10 @@ static void cmd_authinfo_user(char *user)
 	return;
     }
 
-    /* possibly disallow USER */
-    if (!(nntp_starttls_done || (extprops_ssf > 1) ||
-	  config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
+    /* possibly disallow AUTHINFO USER */
+    if ((!(nntp_starttls_done || (extprops_ssf > 1) ||
+	   config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) ||
+	(!nntp_starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH))) {
 	prot_printf(nntp_out,
 		    "483 AUTHINFO USER command only available under a layer\r\n");
 	return;
@@ -2084,6 +2087,13 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     const void *val;
     int failedloginpause;
     struct proc_limits limits;
+
+    /* possibly disallow AUTHINFO SASL */
+    if (!nntp_starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+	prot_printf(nntp_out,
+		    "483 AUTHINFO SASL command only available under a layer\r\n");
+	return;
+    }
 
     /* Conceal initial response in telemetry log */
     if (nntp_logfd != -1 && resp) {

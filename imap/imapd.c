@@ -2398,9 +2398,11 @@ static void cmd_login(char *tag, char *user)
     }
 
     /* possibly disallow login */
-    if (!imapd_starttls_done && (extprops_ssf < 2) &&
-	!config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
-	!is_userid_anonymous(canon_user)) {
+    if ((!imapd_starttls_done && (extprops_ssf < 2) &&
+	 !config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
+	 !is_userid_anonymous(canon_user)) ||
+	(!imapd_starttls_done &&
+	 config_getswitch(IMAPOPT_FORCETLSAUTH))) {
 	eatline(imapd_in, ' ');
 	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
 		    tag);
@@ -2547,6 +2549,14 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     int r;
     int failedloginpause;
+
+    if (!imapd_starttls_done &&
+        config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+        eatline(imapd_in, ' ');
+        prot_printf(imapd_out, "%s NO Auth only available under a layer\r\n",
+                    tag);
+        return;
+    }
 
     r = saslserver(imapd_saslconn, authtype, resp, "", "+ ", "",
 		   imapd_in, imapd_out, &sasl_result, NULL);
@@ -3039,6 +3049,7 @@ static void capa_response(int flags)
 
     /* add the SASL mechs */
     if ((!imapd_authstate || saslprops.ssf) &&
+        (imapd_starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH)) &&
 	sasl_listmech(imapd_saslconn, NULL, 
 		      "AUTH=", " AUTH=",
 		      !imapd_authstate ? " SASL-IR" : "", &sasllist,
