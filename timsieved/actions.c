@@ -177,9 +177,19 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     int mechcount;
 
     /* implementation */
-    prot_printf(conn,
-		"\"IMPLEMENTATION\" \"Cyrus timsieved%s %s\"\r\n",
-		config_mupdate_server ? " (Murder)" : "", cyrus_version());
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(conn,
+		    "\"IMPLEMENTATION\" \"Cyrus timsieved%s %s\"\r\n",
+		    config_mupdate_server ? " (Murder)" : "", cyrus_version());
+    } else if (config_serverinfo == IMAP_ENUM_SERVERINFO_MIN) {
+	prot_printf(conn,
+		    "\"IMPLEMENTATION\" \"Cyrus timsieved%s\"\r\n",
+		    config_mupdate_server ? " (Murder)" : "");
+    } else {
+    /* IMAP_ENUM_SERVERINFO_OFF */
+	prot_printf(conn,
+		    "\"IMPLEMENTATION\" \"ManageSieve\"\r\n");
+    }
     
     /* SASL */
     if ((!authenticated || sasl_ssf) &&
