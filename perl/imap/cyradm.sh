@@ -53,6 +53,7 @@ cyradm - Cyrus administration shell, alter ego of Cyrus::IMAP::Shell
 
   $ cyradm [--user user] [--[no]rc] [--systemrc file] [--userrc file] \
   > [--port n] [--auth mechanism] [--tlskey keyfile] [--notls] \
+  > [--cafile cacertfile] [--cadir cacertdir] \
   > [--server] server
 
 but possibly
