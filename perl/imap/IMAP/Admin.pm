@@ -880,21 +880,21 @@ sub getinfo {
                         # 5
 
                         if ($text =~
-                               /^\s*\"?([^"]*)"?\s+"?([^"]*)"?\s+\(\"?([^"]*)\"?\s+\"?([^"]*)\"?(?:\s+\"?([^"]*)\"?\s+\"?([^"]*)\"?)?\)/) {
+                               /^\s*\"?([^"]*)"?\s+"?([^"]*)"?\s+\(\"?([^"\{]*)\"?\s+\"?([^"\{]*)\"?(?:\s+\"?([^"\{]*)\"?\s+\"?([^"\{]*)\"?)?\)/) {
                           my $key;
                           if($1 ne "") {
-                                $key = "/mailbox$2";
+                                $key = "/mailbox/$2";
                           } else {
-                                $key = "/server$2";
+                                $key = "/server/$2";
                           }
                           $d{-rock}->{"$1"}->{_attribname2access($3)}->{$key} = $4;
                           $d{-rock}->{"$1"}->{_attribname2access($5)}->{$key} = $6 if (defined ($5) && defined ($6));
                         }  elsif ($text =~
-                               /^\s*"([^"]*)"\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n/ ||
+                               /^\s*"([^"]*)"\s+"([^"]*)"\s+\("([^"\{]*)"\s+\{(.*)\}\r\n/ ||
                            $text =~
-                               /^\s*([^\s]+)\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n/) {
+                               /^\s*([^\s]+)\s+"([^"]*)"\s+\("([^"\{]*)"\s+\{(.*)\}\r\n/) {
                           my $len = $4;
-                          $text =~ s/^\s*"*([^"\s]*)"*\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n//s;
+                          $text =~ s/^\s*"*([^"\s]*)"*\s+"([^"]*)"\s+\("([^"\{]*)"\s+\{(.*)\}\r\n//s;
                           $text = substr($text, 0, $len);
                           # Single annotation (literal style),
                           # possibly multiple values -- multiple
@@ -1074,51 +1074,52 @@ sub getmetadata {
                         # this is the only possible response.
 
                         if ($text =~
-                               /^\s*\"?([^\(]*?)\"?\s*\(\"?(\S+)\"?\s+\"?([^"\)\{]*)\"?\)/) {
-                          # note that we require mailbox and entry to be qstrings
-                          # Single annotation, not literal,
-                          # but possibly multiple values
-                          # however, we are only asking for one value, so...
-                          my $key;
-                          if($1 ne "") {
-                                $key = "/mailbox/{$1}$2";
-                                if ($key =~ /private/) {
-                                    $key .= "(private)";
-                                } elsif ($key =~ /shared/) {
-                                    $key .= "(shared)";
+                                /^\s*\"?([^\(]*?)\"?\s+\(\"?([^"\{]*)\"?\s+\"?([^"\)\{]*)\"?\)/) {
+                            my $mdbox = $1;
+                            my $mdkey = $2;
+                            my $mdvalue = $3;
+                            if($mdbox ne "") {
+                                $mdkey = "/mailbox/$mdkey";
+                                if ($mdkey =~ /private/) {
+                                    $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+                                } elsif ($mdkey =~ /shared/) {
+                                    $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
                                 }
                           } else {
-                                $key = "/server$1";
-                                if ($key =~ /private/) {
-                                    $key .= "(private)";
-                                } elsif ($key =~ /shared/) {
-                                    $key .= "(shared)";
+                                $mdkey = "/server/$mdkey";
+                                if ($mdkey =~ /private/) {
+                                    $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+                                } elsif ($mdkey =~ /shared/) {
+                                    $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
                                 }
-                          }
-                          $d{-rock}{$key} = $3;
-                          # xxx have to figure out how to present
-                          # shared and private. Now just block shared when
-                          # it is NIL.
-                          #$text = $3;
-                          #$text =~ s/(.*)\/shared\/.*NIL/$1/g;
-                          #$d{-rock}{$key} = $text;
+                            }
                         }  elsif ($text =~
-                               /^\s*\"?([^\(]*?)\"?\s*\(\"?(\S+)\"?\s+\{(.*)\}\r\n/) {
+                                /^\s*\"?([^\(]*?)\"?\s+\(\"?([^"\{]*?)\"?\s+\{(.*)\}\r\n/) {
+                          my $mdbox = $1;
+                          my $mdkey = $2;
                           my $len = $3;
-                          $text =~ s/^\s*\"?([^\(]*?)\"?\s*\(\"?(\S+)\"?\s+\{(.*)\}\r\n//s;
-                          $text = substr($text, 0, $len);
-                          # note that we require mailbox and entry to be qstrings
+                          $text =~ s/^\s*\"?([^\(]*?)\"?\s+\(\"?([^"]*)\"?\s+\{(.*)\}\r\n//s;
+                          my $mdvalue = substr($text, 0, $len);
                           # Single annotation (literal style),
-                          # possibly multiple values
-                          # however, we are only asking for one value, so...
-                          my $key;
-                          if($1 ne "") {
-                                $key = "/mailbox/{$1}$2";
+                          # possibly multiple values -- multiple
+                          # values not tested.
+                          if($mdbox ne "") {
+                              $mdkey = "/mailbox/$mdkey";
+                              if ($mdkey =~ /private/) {
+                                  $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+                              } elsif ($mdkey =~ /shared/) {
+                                  $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+                              }
                           } else {
-                                $key = "/server$2";
+                              $mdkey = "/server/$mdkey";
+                              if ($mdkey =~ /private/) {
+                                  $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+                              } elsif ($mdkey =~ /shared/) {
+                                  $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+                              }
                           }
-                          $d{-rock}{$key} = $text;
                         } else {
+                            ; # XXX: unrecognized line, how to notify caller?
                           1;
                         }
                       },
@@ -1150,7 +1151,7 @@ sub getmetadata {
 *info = *getmetadata;
 
 sub setmetadata {
-  my ($self, $mailbox, $entry, $value) = @_;
+  my ($self, $mailbox, $entry, $value, $private) = @_;
 
   my %values = ( "comment" => "/private/comment",
                  "expire" => "/shared/vendor/cmu/cyrus-imapd/expire",
@@ -1175,6 +1176,9 @@ sub setmetadata {
   my ($rc, $msg);
 
   $value = undef if($value eq "none");
+  if (defined ($private)) {
+    $entry =~ s/^\/shared\//\/private\//i;
+  }
 
   if(defined($value)) {
     ($rc, $msg) = $self->send('', '',

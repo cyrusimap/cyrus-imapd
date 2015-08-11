@@ -149,7 +149,7 @@ my %builtins = (exit =>
                   [\&_sc_setinfo, '[motd|comment|admin|shutdown|expire|squat] text',
                    'set server metadata'],
                 setmetadata =>
-                  [\&_sc_setmetadata, 'mailbox [comment|expire|news2mail|sieve|squat|/<explicit annotation>] value',
+                  [\&_sc_setmetadata, '[--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit annotation>] value',
                    'set metadata to mailbox'],
                 setmd => 'setmetadata',
                 setquota =>
@@ -1480,7 +1480,27 @@ sub _sc_getmetadata {
       last;
     }
   }
-  push(@nargv, @argv);
+  while (defined ($opt = shift(@argv))) {
+    if ($opt eq 'comment') {
+       push(@nargv, '/private/comment');
+    } elsif ($opt eq 'expire') {
+       push(@nargv, '/shared/vendor/cmu/cyrus-imapd/expire');
+    } elsif ($opt eq 'news2mail') {
+       push(@nargv, '/shared/vendor/cmu/cyrus-imapd/news2mail');
+    } elsif ($opt eq 'pop3showafter') {
+       push(@nargv, '/shared/vendor/cmu/cyrus-imapd/pop3showafter');
+    } elsif ($opt eq 'sharedseen') {
+       push(@nargv, '/shared/vendor/cmu/cyrus-imapd/sharedseen');
+    } elsif ($opt eq 'sieve') {
+       push(@nargv, '/shared/vendor/cmu/cyrus-imapd/sieve');
+    } elsif ($opt eq 'specialuse') {
+       push(@nargv, '/private/specialuse');
+    } elsif ($opt eq 'squat') {
+       push(@nargv, '/shared/vendor/cmu/cyrus-imapd/squat');
+    } else {
+      push(@nargv, $opt);
+    }
+  }
   if (!$cyrref || !$$cyrref) {
     die "info: no connection to server\n";
   }
@@ -1490,35 +1510,40 @@ sub _sc_getmetadata {
     return 1;
   }
 
-  # keep track of what mailboxes we've printed a header for already
-  my %section = ();
-  foreach my $attrib (sort keys %info) {
-    $attrib =~ /(\{.*\})/;
-    my $sect = $1;
-    if(!defined($sect)) {
-        $sect = "Server Wide";
+  foreach my $mailbox (sort keys %info) {
+      if($mailbox eq "") {
+        print "{Server Wide}\n";
+      } else {
+        print "{$mailbox}:\n";
+      }
+
+    my %attribname = ();
+    foreach my $attribname (sort keys %{$info{$mailbox}}) {
+      foreach my $attrib (sort keys %{$info{$mailbox}->{$attribname}}) {
+        if(!exists $attribname{$attribname}) {
+          $attribname{$attribname} = 'x';
+          print "  $attribname:\n";
+        }
+        $attrib =~ /([^\/]*)$/;
+        my $attrname = $1;
+
+        $lfh->[1]->print("    ", $attrname, ": ", $info{$mailbox}->{$attribname}->{$attrib}, "\n");
+      }
     }
-
-    if(!exists $section{$sect}) {
-        $section{$sect} = 'x';
-        print "$sect:\n";
-    }
-
-    $attrib =~ /([^\/]*)$/;
-    my $attrname = $1;
-
-    $lfh->[1]->print("  ", $attrname, ": ", $info{$attrib}, "\n");
   }
+  0;
 }
 
 sub _sc_setmetadata {
   my ($cyrref, $name, $fh, $lfh, @argv) = @_;
-  my (@nargv, $opt);
+  my (@nargv, $opt, $private);
   shift(@argv);
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
-    if ($opt =~ /^-/) {
-      die "usage: setmetadata mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
+    if ($opt ne '' && '-private' =~ /^\Q$opt/ || $opt eq '--private') {
+      $private = 1;
+    } elsif ($opt =~ /^-/) {
+      die "usage: setmetadata [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1527,7 +1552,10 @@ sub _sc_setmetadata {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: setmetadata mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
+    die "usage: setmetadata [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
+  }
+  if (defined ($private)) {
+    push(@nargv, $private);
   }
   if (!$cyrref || !$$cyrref) {
     die "setmetadata: no connection to server\n";
