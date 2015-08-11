@@ -147,7 +147,19 @@ are listed with ``<none>''.
   enabled when absolutely necessary. */
 
 { "allowplaintext", 0, SWITCH }
-/* Allow the use of cleartext passwords on the wire. */
+/* If enabled, allows the use of cleartext passwords on the wire.
+.PP
+  In its default setting (disabled) disallow cleartext passwords without
+  TLS/SSL encryption, but allows authentication with encrypted password,
+  like SHA1/MD5, without TLS/SSL encryption needed. */
+
+{ "forcetlsauth", 0, SWITCH }
+/* Force TLS/SSL encryption before any authentication take place.
+.PP
+  Note this option is somehow independent of "allowplaintext".
+  Enabling this option makes sure all sessions, and passwords, are
+  always protected by TLS/SSL security layer. All authentication is
+  disabled until a TLS/SSL session is started. */
 
 { "allowusermoves", 0, SWITCH }
 /* Allow moving user accounts (with associated meta-data) via RENAME

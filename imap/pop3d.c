@@ -1351,6 +1351,13 @@ static void cmd_apop(char *response)
     const void *canon_user;
     int failedloginpause;
 
+    /* possibly disallow APOP */
+    if (!popd_starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+        prot_printf(popd_out,
+                    "-ERR [AUTH] APOP command only available under a layer\r\n");
+        return;
+    }
+
     assert(response != NULL);
 
     if (popd_userid) {
@@ -1420,7 +1427,8 @@ static void cmd_user(char *user)
 
     /* possibly disallow USER */
     if (!(kflag || popd_starttls_done || (extprops_ssf > 1) ||
-          config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
+          config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ||
+         (!popd_starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH))) {
         prot_printf(popd_out,
                     "-ERR [AUTH] USER command only available under a layer\r\n");
         return;
@@ -1572,6 +1580,7 @@ static void cmd_capa(void)
 
     /* SASL special case: print SASL, then a list of supported capabilities */
     if ((!popd_authstate || saslprops.ssf) &&
+         (popd_starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH)) &&
         sasl_listmech(popd_saslconn,
                       NULL, /* should be id string */
                       "SASL ", " ", "\r\n",
@@ -1596,9 +1605,10 @@ static void cmd_capa(void)
     prot_printf(popd_out, "RESP-CODES\r\n");
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
-    if (!popd_authstate &&
-        (kflag || popd_starttls_done || (extprops_ssf > 1)
-         || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
+    if ((!popd_authstate &&
+         (kflag || popd_starttls_done || (extprops_ssf > 1)
+          || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) &&
+        (popd_starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH))) {
         prot_printf(popd_out, "USER\r\n");
     }
 
@@ -1620,6 +1630,13 @@ static void cmd_auth(char *arg)
     const void *val;
     const char *canon_user;
     int failedloginpause;
+
+    /* possibly disallow AUTH */
+    if (!popd_starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+        prot_printf(popd_out,
+                    "-ERR [AUTH] AUTH command only available under a layer\r\n");
+        return;
+    }
 
     /* if client didn't specify an argument we give them the list
      *

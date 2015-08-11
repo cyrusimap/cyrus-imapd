@@ -626,7 +626,10 @@ int service_main(int argc __attribute__((unused)),
             }
         }
     }
-    httpd_tls_required = !avail_auth_schemes;
+    if (config_getswitch(IMAPOPT_FORCETLSAUTH))
+        httpd_tls_required = 1;
+    else
+        httpd_tls_required = !avail_auth_schemes;
 
     proc_register(config_ident, httpd_clienthost, NULL, NULL, NULL);
 

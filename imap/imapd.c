@@ -2573,9 +2573,11 @@ static void cmd_login(char *tag, char *user)
     }
 
     /* possibly disallow login */
-    if (!imapd_starttls_done && (extprops_ssf < 2) &&
-        !config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
-        !is_userid_anonymous(canon_user)) {
+    if ((!imapd_starttls_done && (extprops_ssf < 2) &&
+         !config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
+         !is_userid_anonymous(canon_user)) ||
+        (!imapd_starttls_done &&
+         config_getswitch(IMAPOPT_FORCETLSAUTH))) {
         eatline(imapd_in, ' ');
         prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
                     tag);
@@ -2722,6 +2724,14 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     int r;
     int failedloginpause;
+
+    if (!imapd_starttls_done &&
+        config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+        eatline(imapd_in, ' ');
+        prot_printf(imapd_out, "%s NO Auth only available under a layer\r\n",
+                    tag);
+        return;
+    }
 
     r = saslserver(imapd_saslconn, authtype, resp, "", "+ ", "",
                    imapd_in, imapd_out, &sasl_result, NULL);
@@ -3223,6 +3233,7 @@ static void capa_response(int flags)
 
     /* add the SASL mechs */
     if ((!imapd_authstate || saslprops.ssf) &&
+        (imapd_starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH)) &&
         sasl_listmech(imapd_saslconn, NULL,
                       "AUTH=", " AUTH=",
                       !imapd_authstate ? " SASL-IR" : "", &sasllist,
@@ -12689,7 +12700,7 @@ static int list_data_remote(char *tag, struct listargs *listargs)
         prot_printf(backend_inbox->out, "%s List ", tag);
         for (i = 0; select_opts[i]; i++) {
             unsigned opt = (1 << i);
-            
+
             if (!(listargs->sel & opt)) continue;
 
             prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
@@ -12748,7 +12759,7 @@ static int list_data_remote(char *tag, struct listargs *listargs)
         prot_puts(backend_inbox->out, " return ");
         for (i = 0; return_opts[i]; i++) {
             unsigned opt = (1 << i);
-            
+
             if (!(listargs->ret & opt)) continue;
 
             prot_printf(backend_inbox->out, "%c%s", c, return_opts[i]);
@@ -12766,7 +12777,7 @@ static int list_data_remote(char *tag, struct listargs *listargs)
                 c = '(';
                 for (j = 0; status_items[j]; j++) {
                     if (!(listargs->statusitems & (1 << j))) continue;
-                    
+
                     prot_printf(backend_inbox->out, "%c%s", c,
                                 status_items[j]);
                     c = ' ';
@@ -12776,7 +12787,7 @@ static int list_data_remote(char *tag, struct listargs *listargs)
             else if (opt == LIST_RET_METADATA) {
                 /* print metadata items */
                 int n = strarray_size(&listargs->metaitems);
-                
+
                 c = '(';
                 for (j = 0; j < n; j++) {
                     prot_printf(backend_inbox->out, "%c\"%s\"", c,

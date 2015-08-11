@@ -187,6 +187,10 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       break;
 
   case AUTHENTICATE:
+    if (!starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+      error_msg = "AUTHENTICATE only available under a layer";
+      goto error;
+    }
     if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "SPACE must occur after AUTHENTICATE";
