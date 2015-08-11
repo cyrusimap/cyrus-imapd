@@ -444,9 +444,9 @@ sub run {
 # programs, as opposed to things expected from within a program.)
 sub shell {
   my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech, $pw,
-      $tlskey, $notls) =
+      $tlskey, $notls, $cacert, $capath) =
     ('', 143, undef, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
-     "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef, undef, undef);
+     "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef, undef, undef, undef, undef);
   GetOptions('user|u=s' => \$auth,
 	     'authz|z=s' => \$authz,
 	     'rc|r!' => \$dorc,
@@ -456,8 +456,10 @@ sub shell {
 	     'port|p=i' => \$port,
 	     'auth|a=s' => \$mech,
 	     'password|w=s' => \$pw,
-  	     'tlskey|t:s' => \$tlskey,
-  	     'notls' => \$notls,
+	     'tlskey|t:s' => \$tlskey,
+	     'notls' => \$notls,
+	     'cafile=s' => \$cacert,
+	     'cadir=s' => \$capath,
 	     'help|h' => sub { cyradm_usage(); exit(0); },
 	     'version|v' => sub { cyradm_version(); exit(0); }
 	    );
@@ -478,7 +480,8 @@ sub shell {
 			  -rock => \$cyradm});
     $cyradm->authenticate(-authz => $authz, -user => $auth,
 			  -mechanism => $mech, -password => $pw,
-			  -tlskey => $tlskey, -notls => $notls)
+			  -tlskey => $tlskey, -notls => $notls,
+			  -cafile => $cacert, -cadir => $capath)
       or die "cyradm: cannot authenticate to server with $mech as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];
@@ -507,6 +510,11 @@ Usage: cyradm [args] server
   --userrc <file>       Use user configuration <file>
   --port <port>         Connect to server on <port>
   --auth <mechanism>    Authenticate with <mechanism>
+  --tlskey <keyfile>    Use certicate with keyfile to authenticate with server
+  --notls               Disable StartTLS negotiation
+  --cafile <cacertfile> Use CA certificate file to validate server certificate
+  --cadir <cacertdirectory> Use CA certificate directory to validate
+                            server certificate
   --help                This help message
   --version             The version of Cyrus IMAP this utility is a part of
 
@@ -834,9 +842,19 @@ sub _sc_auth {
 	$want = '-notls';
 	next;
       }
+      if ($opt ne '' && '-cafile' =~ /^\Q$opt/ || $opt eq '--cafile') {
+	$want = '-cafile';
+	next;
+      }
+      if ($opt ne '' && '-cadir' =~ /^\Q$opt/ || $opt eq '--cadir') {
+	$want = '-cadir';
+	next;
+      }
       if ($opt =~ /^-/) {
 	die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
-	    "                    [-service name] [-tlskey keyfile] [-notls] [user]\n";
+	    "                    [-service name] [-tlskey keyfile] [-notls] [user]\n".
+	    "                    [-cafile cacertfile] [-cadir cacertdir]\n".
+	    "                    [user]\n";
       }
     }
     if ($opt =~ /^-/) {
@@ -852,7 +870,9 @@ sub _sc_auth {
   if (@nargv > 1) {
     if (Cyrus::IMAP::havetls()) {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
-          "                    [-service name] [-tlskey keyfile] [-notls] [user]\n";
+          "                    [-service name] [-tlskey keyfile] [-notls] [user]\n".
+          "                    [-cafile cacertfile] [-cadir cacertdir]\n".
+          "                    [user]\n";
     } else {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
           "                    [-service name] [user]\n";
