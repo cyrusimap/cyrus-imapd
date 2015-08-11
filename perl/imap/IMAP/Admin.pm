@@ -1049,6 +1049,174 @@ sub setinfoserver {
 }
 *setinfo = *setinfoserver;
 
+sub getmetadata {
+  my $self = shift;
+  my $box = shift;
+  my @entries = @_;
+
+  if(!defined($box)) {
+    $box = "";
+  }
+
+  if(!$self->{support_metadata}) {
+    $self->{error} = "Remote does not support METADATA.";
+    return undef;
+  }
+
+  my %info = ();
+  $self->addcallback({-trigger => 'METADATA',
+                      -callback => sub {
+                        my %d = @_;
+                        my $text = $d{-text};
+
+                        # There were several draft iterations of this,
+                        # but since we send only the latest form command,
+                        # this is the only possible response.
+
+                        if ($text =~
+                               /^\s*\"?([^\(]*?)\"?\s*\(\"?(\S+)\"?\s+\"?([^"\)\{]*)\"?\)/) {
+                          # note that we require mailbox and entry to be qstrings
+                          # Single annotation, not literal,
+                          # but possibly multiple values
+                          # however, we are only asking for one value, so...
+                          my $key;
+                          if($1 ne "") {
+                                $key = "/mailbox/{$1}$2";
+                                if ($key =~ /private/) {
+                                    $key .= "(private)";
+                                } elsif ($key =~ /shared/) {
+                                    $key .= "(shared)";
+                                }
+                          } else {
+                                $key = "/server$1";
+                                if ($key =~ /private/) {
+                                    $key .= "(private)";
+                                } elsif ($key =~ /shared/) {
+                                    $key .= "(shared)";
+                                }
+                          }
+                          $d{-rock}{$key} = $3;
+                          # xxx have to figure out how to present
+                          # shared and private. Now just block shared when
+                          # it is NIL.
+                          #$text = $3;
+                          #$text =~ s/(.*)\/shared\/.*NIL/$1/g;
+                          #$d{-rock}{$key} = $text;
+                        }  elsif ($text =~
+                               /^\s*\"?([^\(]*?)\"?\s*\(\"?(\S+)\"?\s+\{(.*)\}\r\n/) {
+                          my $len = $3;
+                          $text =~ s/^\s*\"?([^\(]*?)\"?\s*\(\"?(\S+)\"?\s+\{(.*)\}\r\n//s;
+                          $text = substr($text, 0, $len);
+                          # note that we require mailbox and entry to be qstrings
+                          # Single annotation (literal style),
+                          # possibly multiple values
+                          # however, we are only asking for one value, so...
+                          my $key;
+                          if($1 ne "") {
+                                $key = "/mailbox/{$1}$2";
+                          } else {
+                                $key = "/server$2";
+                          }
+                          $d{-rock}{$key} = $text;
+                        } else {
+                          1;
+                        }
+                      },
+                      -rock => \%info});
+
+  # send getmetadata "/mailbox/name/* or /private/* and /shared/*"
+  my($rc, $msg);
+  if(scalar(@entries)) {
+    foreach my $annot (@entries) {
+      ($rc, $msg) = $self->send('', '', "GETMETADATA %s (%q)",
+                                $box, $annot);
+      last if($rc ne 'OK');
+    }
+  } else {
+    ($rc, $msg) = $self->send('', '', "GETMETADATA %s (\"/private/*\")",
+                              $box);
+    ($rc, $msg) = $self->send('', '', "GETMETADATA %s (\"/shared/*\")",
+                              $box);
+  }
+  $self->addcallback({-trigger => 'METADATA'});
+  if ($rc eq 'OK') {
+    $self->{error} = undef;
+    %info;
+  } else {
+    $self->{error} = $msg;
+    ();
+  }
+}
+*info = *getmetadata;
+
+sub setmetadata {
+  my ($self, $mailbox, $entry, $value) = @_;
+
+  my %values = ( "comment" => "/private/comment",
+                 "expire" => "/shared/vendor/cmu/cyrus-imapd/expire",
+                 "news2mail" => "/shared/vendor/cmu/cyrus-imapd/news2mail",
+                 "sharedseen" => "/shared/vendor/cmu/cyrus-imapd/sharedseen",
+                 "sieve" => "/shared/vendor/cmu/cyrus-imapd/sieve",
+                 "specialuse" => "/private/specialuse",
+                 "squat" => "/shared/vendor/cmu/cyrus-imapd/squat",
+                 "pop3showafter" => "/shared/vendor/cmu/cyrus-imapd/pop3showafter" );
+
+  if(!$self->{support_metadata}) {
+    $self->{error} = "Remote does not support METADATA.";
+    return undef;
+  }
+
+  if(exists($values{$entry})) {
+    $entry = $values{$entry};
+  } else {
+    $self->{error} = "Unknown parameter $entry" unless substr($entry,0,1) eq "/";
+  }
+
+  my ($rc, $msg);
+
+  $value = undef if($value eq "none");
+
+  if(defined($value)) {
+    ($rc, $msg) = $self->send('', '',
+                              "SETMETADATA %q (%q %q)",
+                              $mailbox, $entry, $value);
+  } else {
+    ($rc, $msg) = $self->send('', '',
+                              "SETMETADATA %q (%q NIL)",
+                              $mailbox, $entry);
+  }
+
+  if ($rc eq 'OK') {
+    $self->{error} = undef;
+    1;
+  } else {
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = $self->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+        $refserver =~ /([^:]+):(\d+)/;
+        $refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+        or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+                            -callback => \&_cb_ref_eof,
+                            -rock => \$cyradm});
+      $cyradm->authenticate(@{$self->_getauthopts()})
+        or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->mboxconfig($mailbox, $entry, $value);
+      $cyradm = undef;
+      return $ret;
+    }
+    $self->{error} = $msg;
+    undef;
+  }
+}
+*setinfo = *setmetadata;
+
 sub subscribemailbox {
   my ($self, $mbx) = @_;
   my ($rc, $msg) = $self->send('', '', 'SUBSCRIBE %s', $mbx);
