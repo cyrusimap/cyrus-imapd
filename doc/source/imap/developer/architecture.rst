@@ -113,9 +113,26 @@ Log file
 --------
 The log file is a list of either users or mailboxes which have been altered.  When sync_log is enabled, all of the daemons which might alter a mailbox or user will write a line to this log each time they do so.  That means the obvious suspects -- imapd, pop3d, timsieved, lmtpd, etc. -- but also cyr_expire and friends.
 
-So when sync_client processes a sync_log, it needs to look at an actual copy of the user/mailbox in order to determine its current state, and needs to look at both copies to work out what to replicate between them.
+So when sync_client processes a sync_log, it needs to look at an actual copy of the user/mailbox in order to determine its current state, and needs to look at both copies to work out what to replicate between them. It uses sync_send_lookup to ask for the current state of an item, and sync_response_parse to process the response to then make suitable changes to perform the synchronisation.
 
 Sync client supports doing a single user with '-u', a single mailbox with '-m', etc.  All the entries in the sync_log file are triggers to replicate with that same value, so a line ``USER vader@darth.net`` is the same as running ``sync_client -u vader@darth.net``.
 
+Starting and Configuring Cyrus
+==============================
 
+Cyrus has two primary configuration files which control its operation:
+    1. /etc/imapd.conf
+    2. /etc/cyrus.conf
+    
+imapd.conf
+----------
+Cyrus is invoked via ``imapd -C path/to/imapd.conf``.
 
+The format of :ref:`imapd.conf <imap-admin-configs-imapd.conf>` is in ``key: value`` pairs.
+
+cyrus.conf
+----------    
+This is the config file for the Cyrus master process. It has a :ref:`custom file format <imap-admin-configs-cyrus.conf>`, which defines
+    1. **START**: What processes to begin once at startup,
+    2. **SERVICES**: Which daemons to spawn
+    3. **EVENTS**: What processes to periodically invoke, similar to cron.
