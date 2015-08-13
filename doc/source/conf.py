@@ -1095,8 +1095,8 @@ rst_prolog = """
 .. |imap_last_stable_version| replace:: 2.4.18
 .. |imap_last_stable_branch| replace:: `cyrus-imapd-2.4`
 .. |imap_last_stable_next_version| replace:: 2.4.18 + patches
-.. |imap_current_stable_version| replace:: 2.5.4
-.. |imap_current_stable_next_version| replace:: 2.5.4 + patches
+.. |imap_current_stable_version| replace:: 2.5.5
+.. |imap_current_stable_next_version| replace:: 2.5.5 + patches
 .. |imap_current_stable_branch| replace:: `cyrus-imapd-2.5`
 .. |imap_latest_development_version| replace:: 3.0
 .. |imap_latest_development_branch| replace:: master
