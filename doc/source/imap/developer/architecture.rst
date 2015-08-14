@@ -35,6 +35,7 @@ For security between the user and cyrus, usually SSL is applied.
 .. _nginx: http://nginx.org/en/
 
 .. _architecture_murder:
+
 Cyrus Murder
 ============
 
@@ -73,6 +74,7 @@ Should each datastore be configured to contain the complete set of all data, and
     Migrate information from https://cyrusimap.org/mediawiki/index.php/Cyrus_Murder_Design
 
 .. _architecture_replication:    
+
 Replication
 ===========
 Replication is not :ref:`Cyrus Murder<architecture_murder>`. Replication provides high availability and hot backups. It is designed to replicate the mailstore on a standalone Cyrus install, or multiple backend servers in a :ref:`murder <architecture_murder>` configuration. (It is not for replicating front ends or mupdate master servers.)
@@ -90,6 +92,8 @@ Each channel (ie: each replica) has its own set of log files on the master, and 
 When a master generates a change, it calls **sync_log**. This writes the change to all the log files (one per channel). The log files are rotated every few seconds. The $PID on the log file set is that of the particular sync_client who processed the change. 
 
 Replication is idempotent: you can safely run the same log multiple times.
+
+See the :ref:`Replication installation and admin guide <replication>` for more information.
 
 Channels
 --------
@@ -117,8 +121,10 @@ So when sync_client processes a sync_log, it needs to look at an actual copy of 
 
 Sync client supports doing a single user with '-u', a single mailbox with '-m', etc.  All the entries in the sync_log file are triggers to replicate with that same value, so a line ``USER vader@darth.net`` is the same as running ``sync_client -u vader@darth.net``.
 
-Starting and Configuring Cyrus
-==============================
+.. _architecture_invoking:   
+
+Invoking Cyrus
+==============
 
 Cyrus has two primary configuration files which control its operation:
     1. /etc/imapd.conf
