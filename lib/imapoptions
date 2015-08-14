@@ -2114,6 +2114,11 @@ product version in the capabilities */
    Only email files will be stored on object Storage archive partition will be
    used to store any other files */
 
+{ "object_storage_dummy_spool", NULL, STRING }
+/* Dummy object storage spool; this is for test only.
+   Spool where user directory (container) will be created to store all emails 
+   in a flat structure  */
+
 { "openio_namespace", NULL, STRING }
 /* The OpenIO namespace used to store archived email messages. A namespace
    identifies the physical platform cyrus must contact. This directive is used

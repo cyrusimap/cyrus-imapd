@@ -963,6 +963,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     r = mailbox_append_index_record(mailbox, &record);
     if (r) goto out;
 
+
     if (in_object_storage){  // must delete local file
         if (unlink(fname) != 0) // unlink shoud do it.
             if (!remove (fname))  // we must insist
@@ -1209,8 +1210,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     struct index_record record;
     char *srcfname = NULL;
     char *destfname = NULL;
-    int object_store_get = 0 ;
-    int object_store_put = 0 ;
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
     int r = 0;
     int userflag;
@@ -1283,27 +1282,21 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
         /* we're not modifying the ARCHIVED flag here, just keeping it */
 
-
         /* Link/copy message file */
         free(srcfname);
         free(destfname);
         srcfname = xstrdup(mailbox_record_fname(mailbox, &records[msg]));
         destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
 
-        if (object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED ) {
-            r = objectstore_get(mailbox, &records[msg], srcfname);
-            if (r) goto out;
-            object_store_get = 1 ;
-        }
 
-        r = mailbox_copyfile(srcfname, destfname, nolink);
+        if (!(object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED))   // if object storage do not move file
+           r = mailbox_copyfile(srcfname, destfname, nolink);
 
         if (r) goto out;
 
-        if (object_store_get) {
-            r = objectstore_put(as->mailbox, &record, destfname);
+        if (object_storage_enabled) {
+            r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
             if (r) goto out;
-            object_store_put = 1 ;
         }
 
         /* Write out index file entry */
@@ -1326,12 +1319,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     }
 
 out:
-    if ( object_store_get )
-        remove (srcfname) ;
-    if (object_store_put ){
-        remove (destfname) ;
-    }
-
     free(srcfname);
     free(destfname);
     if (r) {

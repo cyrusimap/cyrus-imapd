@@ -51,8 +51,8 @@
 #include "mailbox.h"
 #include "mboxname.h"
 #include "libconfig.h"
-
 #include "objectstore.h"
+#include "objectstore_db.h"
 
 static struct oio_sds_s *sds = NULL;
 static const char *namespace = NULL;
@@ -66,6 +66,7 @@ static int openio_sds_lazy_init (void)
     if (sds) return 0;
 
     /* Turn the OIO logging ON/OFF */
+
     const char *verbosity = config_getstring(IMAPOPT_OPENIO_VERBOSITY);
     if (!verbosity) {
         oio_log_to_syslog(); // let the default (warn)
@@ -85,28 +86,28 @@ static int openio_sds_lazy_init (void)
                     break;
                 found = 1;
                 oio_log_more();
-                /* FALLTHROUGH */
+                // FALLTHROUGH
             case 'd':
             case 'D':
                 if (!found && strcasecmp(verbosity, "debug"))
                     break;
                 found = 1;
                 oio_log_more();
-                /* FALLTHROUGH */
+                // FALLTHROUGH
             case 'i':
             case 'I':
                 if (!found && strcasecmp(verbosity, "info"))
                     break;
                 found = 1;
                 oio_log_more();
-                /* FALLTHROUGH */
+                // FALLTHROUGH
             case 'n':
             case 'N':
                 if (!found && strcasecmp(verbosity, "notice"))
                     break;
                 found = 1;
                 oio_log_more();
-                /* one more call to pass from ERR to WARN */
+                // one more call to pass from ERR to WARN
                 oio_log_more();
         }
     }
@@ -146,19 +147,7 @@ static int openio_sds_lazy_init (void)
 static const char *mailbox_record_blobname(struct mailbox *mailbox,
         const struct index_record *record)
 {
-    static char filename[MAX_MAILBOX_PATH+1];
-    char *ret ;
-
-    snprintf(filename, sizeof(filename), "%s.%u", mailbox->name, record->uid);
-    const char *user = mboxname_to_userid(mailbox->name);
-
-    ret = NULL ;
-
-    // now remove front part user/<username>/
-    ret = strstr(filename, user);
-    if (ret) ret += (strlen (user) + 1);
-
-    return ret;
+    return message_guid_encode(&record->guid);
 }
 
 static struct hc_url_s *
@@ -189,6 +178,8 @@ int objectstore_put (struct mailbox *mailbox,
     rc = objectstore_is_filename_in_container (mailbox, record, &already_saved);
     if (rc) return rc;
 
+    add_message_guid (mailbox, record) ;
+
     url = mailbox_openio_name (mailbox, record);
     if (already_saved) {
         syslog(LOG_DEBUG, "OIOSDS: blob %s already uploaded for %u",
@@ -202,6 +193,7 @@ int objectstore_put (struct mailbox *mailbox,
         .type = OIO_SRC_FILE,
         .data.path = fname,
     };
+
     err = oio_sds_upload_from_source (sds, url, &src);
     if (!err) {
         syslog(LOG_INFO, "OIOSDS: blob %s uploaded for %u",
@@ -260,16 +252,20 @@ int objectstore_delete (struct mailbox *mailbox,
 
     url = mailbox_openio_name (mailbox, record);
 
-    err = oio_sds_delete (sds, url);
-    if (!err) {
-        syslog(LOG_INFO, "OIOSDS: blob %s deleted for %u", hc_url_get(url, HCURL_WHOLE), record->uid);
-        rc = 0;
-    } else {
-        syslog(LOG_ERR, "OIOSDS: blob %s delete error : [record:%u] (%d) %s",
-                hc_url_get(url, HCURL_WHOLE), record->uid,
-                oio_error_code(err), oio_error_message(err));
-        oio_error_pfree (&err);
-        rc = EAGAIN;
+    int count = 0;
+    delete_message_guid (mailbox, record, &count) ;
+    if (!count){
+        err = oio_sds_delete (sds, url);
+        if (!err) {
+            syslog(LOG_INFO, "OIOSDS: blob %s deleted for %u", hc_url_get(url, HCURL_WHOLE), record->uid);
+            rc = 0;
+        } else {
+            syslog(LOG_ERR, "OIOSDS: blob %s delete error : [record:%u] (%d) %s",
+                    hc_url_get(url, HCURL_WHOLE), record->uid,
+                    oio_error_code(err), oio_error_message(err));
+            oio_error_pfree (&err);
+            rc = EAGAIN;
+        }
     }
 
     hc_url_pclean(&url);

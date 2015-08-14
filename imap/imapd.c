@@ -121,6 +121,7 @@
 #include "imap/pushstats.h"             /* SNMP interface */
 
 #include "iostat.h"
+#include "objectstore_db.h"
 
 extern int optind;
 extern char *optarg;
@@ -6114,6 +6115,9 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     if (ismove && !(imapd_index->myrights & ACL_EXPUNGE))
         r = IMAP_PERMISSION_DENIED;
 
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+        keep_user_message_db_open (1);   // will make all db changes to commit at once
+
     /* local mailbox -> local mailbox */
     if (!r) {
         r = index_copy(imapd_index, sequence, usinguid, mailboxname,
@@ -6132,6 +6136,8 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 
     imapd_check(NULL, ismove || usinguid);
 
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+        keep_user_message_db_open (0);
   done:
 
     if (r && !(usinguid && r == IMAP_NO_NOSUCHMSG)) {
@@ -6845,6 +6851,9 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         return;
     }
 
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+        keep_user_message_db_open (1);  // will make all db changes to commit at once
+
     /* Keep temporary copy: master is trashed */
     strcpy(oldmailboxname2, oldmailboxname);
     strcpy(newmailboxname2, newmailboxname);
@@ -7058,6 +7067,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
                                    0, 0, rename_user);
+
         /* it's OK to not exist if there are subfolders */
         if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
            mboxname_userownsmailbox(imapd_userid, oldmailboxname) &&
@@ -7167,6 +7177,9 @@ submboxes:
 
 done:
     mboxlist_entry_free(&mbentry);
+
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+        keep_user_message_db_open (0);
 }
 
 /*

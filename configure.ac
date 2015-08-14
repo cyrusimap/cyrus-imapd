@@ -270,6 +270,15 @@ AC_MSG_RESULT($with_mysql)
 
 dnl End MySQL Detection
 
+
+dnl
+dnl see if we're compiling with dummy_objstore support
+dnl
+AC_ARG_ENABLE(dummy_objstore,
+        [AS_HELP_STRING([--enable-dummy_objstore], [enable IMAP dummy_objstore support])],,enable_dummy_objstore="yes")
+AM_CONDITIONAL([DUMMY_OBJSTORE], [test "$enable_dummy_objstore" = "yes"])
+
+
 dnl OpenIO Detection
 
 dnl deps: metautils gridclient oiosds curl 
@@ -328,10 +337,8 @@ if test "$use_openio" = "yes"; then
 
 	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -lmetautils -lgridclient -lcurl -lneon"
 fi
-
 dnl End OpenIO Detection
-
-
+AM_CONDITIONAL([WITH_OPENIO], [test "$use_openio" = "yes"])
 
 dnl PgSQL Detection
 AC_ARG_WITH(pgsql,
@@ -1931,6 +1938,7 @@ Cyrus Server configured components
    sieve:              $enable_sieve
    calalarmd:          $enable_calalarmd
    openio:             $use_openio
+   dummy_objstore:     $enable_dummy_objstore
 
 External dependencies:
    ldap:               $have_ldap

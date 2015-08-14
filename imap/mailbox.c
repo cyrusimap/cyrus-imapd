@@ -110,6 +110,7 @@
 #include "xstats.h"
 
 #include "objectstore.h"
+#include "objectstore_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -3705,8 +3706,9 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     if (!(record->system_flags & FLAG_UNLINKED)) {
         /* make the file timestamp correct */
         settime.actime = settime.modtime = record->internaldate;
-        if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
-            return IMAP_IOERROR;
+        if (!(config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) && record->system_flags & FLAG_ARCHIVED ))  // mabe there is no file in directory.
+            if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
+                return IMAP_IOERROR;
 
         /* write the cache record before buffering the message, it
          * will set the cache_offset field. */
@@ -4286,7 +4288,8 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
  * should be in the spool - if 1, the message should be in the archive.
  */
 EXPORTED void mailbox_archive(struct mailbox *mailbox,
-                              mailbox_decideproc_t *decideproc, void *deciderock)
+                              mailbox_decideproc_t *decideproc, void *deciderock, unsigned flags)
+
 {
     int r;
     int dirtycache = 0;
@@ -4305,7 +4308,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     assert(mailbox_index_islocked(mailbox, 1));
     if (!decideproc) decideproc = &mailbox_should_archive;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, (decideproc == &mailbox_should_archive) ?  ITER_SKIP_EXPUNGED : 0);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, flags);
+
     while ((record = mailbox_iter_step(iter))) {
         const char *action = NULL;
         if (decideproc(mailbox, record, deciderock)) {
@@ -4351,14 +4355,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             }
             if (object_storage_enabled){
-                /* recover from the blob store */
-                r = objectstore_get(mailbox, &copyrecord, mailbox_spool_fname(mailbox, copyrecord.uid));
-                if (r)
-                    continue;
-                objectstore_delete(mailbox, record);
-                copyrecord.system_flags &= ~FLAG_ARCHIVED;
-                copyrecord.system_flags |= FLAG_NEEDS_CLEANUP;
-                action = "unarchive";
+                objectstore_delete(mailbox, record);  // this should only lower ref count.
             }
         }
 
@@ -4921,7 +4918,13 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
 
     proc_killmbox(mailbox->name);
 
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+        keep_user_message_db_open (1);  // will make all db changes to commit at once
+
     mailbox_close(mailboxptr);
+
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+        keep_user_message_db_open (0);
 
     return 0;
 }
@@ -5024,11 +5027,13 @@ HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, con
     char *ntail;
     char *p;
 
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
+
     strncpy(nbuf, name, sizeof(nbuf));
     ntail = nbuf + strlen(nbuf);
 
-    if (mailbox && config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)){
-        mailbox_archive(mailbox, mailbox_should_unarchive, NULL);
+    if (mailbox && object_storage_enabled){
+        mailbox_archive(mailbox, mailbox_should_unarchive, NULL, 0);
     }
 
     /* XXX - double XXX - this is a really ugly function.  It should be
@@ -5103,8 +5108,6 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     const struct index_record *record;
     int r = 0;
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
-    int object_store_get = 0;
-    int object_store_put = 0;
 
     /* Copy over meta files */
     for (mf = meta_files; mf->metaflag; mf++) {
@@ -5134,30 +5137,18 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
             xstrncpy(newbuf, mboxname_datapath(newpart, newname, newuniqueid, record->uid),
                     MAX_MAILBOX_PATH);
 
-        if (object_storage_enabled && record->system_flags & FLAG_ARCHIVED ) {
-            r = objectstore_get(mailbox, record, oldbuf);
-            if (r) break;
-            object_store_get = 1 ;
-        }
-
-        r = mailbox_copyfile(oldbuf, newbuf, 0);
+        if (!(object_storage_enabled && record->system_flags & FLAG_ARCHIVED ))    // if object storage do not move file
+           r = mailbox_copyfile(oldbuf, newbuf, 0);
 
         if (r) break;
 
-        if (object_store_get) {
-            struct mailbox newmailbox ;
-            newmailbox.name = (char *) newname ;
-
-            r = objectstore_put(&newmailbox, record, newbuf);
+        if (object_storage_enabled) {
+            struct mailbox new_mailbox;
+            new_mailbox.name = (char*) newname;
+            new_mailbox.part = (char*) config_defpartition ;
+            r = objectstore_put(&new_mailbox, record, newbuf);   // put should just add to refcount.
             if (r) break;
-            object_store_put = 1 ;
         }
-        if ( object_store_get ){
-            remove (oldbuf) ;
-        }
-
-        if (object_store_put )
-            remove (newbuf) ;
     }
     mailbox_iter_done(&iter);
 
@@ -5316,6 +5307,7 @@ fail:
 
 EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
 {
+
     int r = 0;
     struct mailbox *oldmailbox = *mailboxptr;
     char *name = xstrdup(oldmailbox->name);
