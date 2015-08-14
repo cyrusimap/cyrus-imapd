@@ -23,7 +23,7 @@ Cyrus usually uses **saslauthd** (Cyrus SASL) to provide authentication services
 
 Cyrus stores the mailspool, indexes and search data on disk. While these are inherently files, their structure and function is database-centric and should be treated as such. *(Do not attempt to manually edit these files. That way lies madness.)* Cyrus itself provides no inherent backup capacity: this must be configured externally using tools best suited for your environment.
 
-For administrative actions on your server - such as creating users, editing mailbox details, etc - use :ref:`cyradm <imap-admin-commands-cyradm>`. This is a command, not a daemon, and it communicates with cyrus imapd via the IMAP protocol, and authenticating as an admin user.
+For administrative actions on your server - such as creating users, editing mailbox details, etc - use :cyrusman:`cyradm(8)`. This is a command, not a daemon, and it communicates with cyrus imapd via the IMAP protocol, and authenticating as an admin user.
 
 For security between the user and cyrus, usually SSL is applied.
 
@@ -128,11 +128,11 @@ imapd.conf
 ----------
 Cyrus is invoked via ``imapd -C path/to/imapd.conf``.
 
-The format of :cyrusman:`imapd(5)` is in ``key: value`` pairs.
+The format of :cyrusman:`imapd.conf(5)` is in ``key: value`` pairs.
 
 cyrus.conf
 ----------    
-This is the config file for the Cyrus master process. The format of :cyrusman:`cyrus(5)` defines
+This is the config file for the Cyrus master process. The format of :cyrusman:`cyrus.conf(5)` defines
     1. **START**: What processes to begin once at startup,
     2. **SERVICES**: Which daemons to spawn
     3. **EVENTS**: What processes to periodically invoke, similar to cron.

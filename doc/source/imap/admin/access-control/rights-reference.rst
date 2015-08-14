@@ -320,7 +320,7 @@ Individual Rights Reference
 
     We say "remove from all visibility", because the implementation of
     expunging messages in Cyrus IMAP is subject to the ``expunge_mode``
-    setting in :manpage:`/etc/imapd.conf`, which when set to ``delayed``
+    setting in :manpage:`imapd.conf(5)`, which when set to ``delayed``
     only causes the reference to the expunged messages to be deleted
     from the folder index database -- effectively removing the expunged
     message(s) from all visibility, while the individual message files
@@ -360,7 +360,7 @@ Individual Rights Reference
 
     .. NOTE::
 
-        The ``deleteright`` setting in :manpage:`/etc/imapd.conf`
+        The ``deleteright`` setting in :manpage:`imapd.conf(5)`
         controls the :rfc:`2086` right which controls whether or not the
         ACI subject may delete a folder. However, this setting (as the
         original specification for the delete right was considered

@@ -40,7 +40,7 @@ extensions = [
 ]
 
 extensions.append('sphinxlocal.builders.manpage')
-extensions.append('sphinxlocal.writers.cyrusman')
+extensions.append('sphinxlocal.roles.cyrusman')
 
 mathjax_path = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
 

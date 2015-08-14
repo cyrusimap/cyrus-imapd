@@ -145,7 +145,7 @@ corresponding user.
 .. NOTE::
 
     Note that in the above example, the ``unixhierarchysep`` setting in
-    :manpage:`/etc/imapd.conf` is set to ``0``. When using the UNIX
+    :manpage:`imapd.conf(5)` is set to ``0``. When using the UNIX
     hierarchy seperator, the ``/`` (forward slash) character would be
     used as the hierarchy seperator, and the example would look as
     follows.

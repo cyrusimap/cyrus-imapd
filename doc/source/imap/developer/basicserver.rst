@@ -170,7 +170,7 @@ Cyrus uses assorted protocols, which need to have their ports defined in ``/etc/
 --------------------
 (Nearly there)
 
-Before you launch Cyrus for the first time, create the Cyrus directory structure: use :ref:`mkimap <imap-admin-commands-mkimap>`.
+Before you launch Cyrus for the first time, create the Cyrus directory structure: use :cyrusman:`mkimap(8)`.
 
 ::
 
@@ -187,7 +187,7 @@ Now set up a simple directory structure for Cyrus to store emails, owned by the 
     
 Let's add some basic configuration for the Cyrus IMAP server. Two files have to be added: ``/etc/imapd.conf`` and ``/etc/cyrus.conf``.
 
-For :ref:`/etc/imapd.conf <imap-admin-configs-imapd.conf>`, start with this:
+For :cyrusman:`imapd.conf(5)`, start with this:
 
 ::
 
@@ -203,7 +203,7 @@ Note that **configdirectory** and **partition-default** are set to the folders w
 
 The admin user is the ``imapuser`` created in step 4, for authentication against sasl. Change this value if you named your user something different.
 
-For :ref:`/etc/cyrus.conf <imap-admin-configs-cyrus.conf>`, start with this:
+For :cyrusman:`cyrus.conf(5)`, start with this:
 
 ::
 
@@ -308,7 +308,7 @@ But first, let's create a mailbox that we will send the test email to. We'll cal
     
 Notice how we seem to be creating a mailbox named `user.example@localhost`. In fact, Cyrus understands this to be `example@localhost`, so we're fine. As usual, adjust the password via the `-w` option to the password you set above.
 
-If you have explicitly enabled `unixhierarchysep` in `/etc/imapd.conf`, you should replace `user.example@localhost` with `user/example@localhost`. You can read more about unixhierarchysep in the :ref:`imapd MAN page <imap-admin-configs-imapd.conf>`.
+If you have explicitly enabled `unixhierarchysep` in `/etc/imapd.conf`, you should replace `user.example@localhost` with `user/example@localhost`. You can read more about unixhierarchysep in :cyrusman:`imapd.conf(5)`.
 
 Also, note that the command above might produce some weird looking output, such as:
 
