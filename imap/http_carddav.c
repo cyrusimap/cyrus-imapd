@@ -414,8 +414,7 @@ static void my_carddav_auth(const char *userid)
         }
         else r = 0;
 
-        /* XXX - set rights */
-        r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
+        r = mboxlist_createmailbox(mailboxname, MBTYPE_COLLECTION,
                                    NULL, 0,
                                    userid, httpd_authstate,
                                    0, 0, 0, 0, NULL);
@@ -431,7 +430,6 @@ static void my_carddav_auth(const char *userid)
     mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* XXX - set rights */
         r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
                                    NULL, 0,
                                    userid, httpd_authstate,
