@@ -128,11 +128,11 @@ imapd.conf
 ----------
 Cyrus is invoked via ``imapd -C path/to/imapd.conf``.
 
-The format of :ref:`imapd.conf <imap-admin-configs-imapd.conf>` is in ``key: value`` pairs.
+The format of :cyrusman:`imapd(5)` is in ``key: value`` pairs.
 
 cyrus.conf
 ----------    
-This is the config file for the Cyrus master process. It has a :ref:`custom file format <imap-admin-configs-cyrus.conf>`, which defines
+This is the config file for the Cyrus master process. The format of :cyrusman:`cyrus(5)` defines
     1. **START**: What processes to begin once at startup,
     2. **SERVICES**: Which daemons to spawn
     3. **EVENTS**: What processes to periodically invoke, similar to cron.
