@@ -1,4 +1,4 @@
-/* objectstore.h
+/* objectstore_db.h
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,19 +41,17 @@
 */
 
 
-#ifndef OBJECT_STORE
-#define OBJECT_STORE
+#ifndef OBJECT_STORE_DB
+#define OBJECT_STORE_DB
 
-int objectstore_put (struct mailbox *mailbox,
-        const struct index_record *record, const char *fname);
+struct message_info
+{
+    int mailboxes;
+    char **mailbox ;
+};
 
-int objectstore_get (struct mailbox *mailbox,
-        const struct index_record *record, const char *fname);
+EXPORTED int add_message_guid (struct mailbox *mailbox, const struct index_record *record);
+EXPORTED int delete_message_guid (struct mailbox *mailbox, const struct index_record *record, int *count);
+EXPORTED int keep_user_message_db_open (int bopen) ;
 
-int objectstore_delete (struct mailbox *mailbox,
-    const struct index_record *record);
-
-int objectstore_is_filename_in_container (struct mailbox *mailbox,
-        const struct index_record *record, int *isthere);
-
-#endif /*OBJECT_STORE*/
+#endif /*OBJECT_STORE_DB*/

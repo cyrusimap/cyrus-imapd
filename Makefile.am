@@ -933,8 +933,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/append.h \
 	imap/backend.c \
 	imap/backend.h \
-	imap/objectstore_openio.c \
-	imap/objectstore.h \
 	imap/conversations.c \
 	imap/conversations.h \
 	imap/convert_code.c \
@@ -1016,6 +1014,22 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/xstats.c \
 	imap/xstats.h \
 	imap/xstats_metrics.h
+
+if WITH_OPENIO
+imap_libcyrus_imap_la_SOURCES += \
+        imap/objectstore_db.c \
+        imap/objectstore_db.h \
+	imap/objectstore_openio.c \
+        imap/objectstore.h 
+else
+if DUMMY_OBJSTORE
+imap_libcyrus_imap_la_SOURCES += \
+        imap/objectstore_db.c \
+        imap/objectstore_db.h \
+        imap/objectstore_dummy.c \
+        imap/objectstore.h 
+endif
+endif
 
 if USE_SQUAT
 imap_libcyrus_imap_la_SOURCES += \
