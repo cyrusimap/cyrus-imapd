@@ -49,6 +49,8 @@
 #include "prot.h"
 #include "util.h"
 
+extern int sieved_tls_required;
+
 /*
  * Get the list of capabilities
  *

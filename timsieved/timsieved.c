@@ -80,6 +80,8 @@
 /* global state */
 const int config_need_data = 0;
 
+int sieved_tls_required = 0;
+
 sieve_interp_t *interp = NULL;
 
 static struct
@@ -278,6 +280,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 
     if (actions_init() != TIMSIEVE_OK)
       fatal("Error initializing actions",-1);
+
+    sieved_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     cmdloop();
 

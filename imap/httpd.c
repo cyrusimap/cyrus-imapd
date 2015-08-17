@@ -115,7 +115,7 @@
 static const char tls_message[] =
     HTML_DOCTYPE
     "<html>\n<head>\n<title>TLS Required</title>\n</head>\n" \
-    "<body>\n<h2>TLS is required to use Basic authentication</h2>\n" \
+    "<body>\n<h2>TLS is required prior to authentication</h2>\n" \
     "Use <a href=\"%s\">%s</a> instead.\n" \
     "</body>\n</html>\n";
 
@@ -626,10 +626,8 @@ int service_main(int argc __attribute__((unused)),
             }
         }
     }
-    if (config_getswitch(IMAPOPT_FORCETLSAUTH))
-        httpd_tls_required = 1;
-    else
-        httpd_tls_required = !avail_auth_schemes;
+    httpd_tls_required =
+        config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
     proc_register(config_ident, httpd_clienthost, NULL, NULL, NULL);
 
@@ -1253,14 +1251,20 @@ static void cmdloop(void)
                 txn.auth_chal.scheme = NULL;
             }
 
-            /* Check the auth credentials */
-            r = http_auth(hdr[0], &txn);
-            if ((r < 0) || !txn.auth_chal.scheme) {
-                /* Auth failed - reinitialize */
-                syslog(LOG_DEBUG, "auth failed - reinit");
-                reset_saslconn(&httpd_saslconn);
-                txn.auth_chal.scheme = NULL;
+            if (httpd_tls_required) {
+                /* TLS required - redirect handled below */
                 ret = HTTP_UNAUTHORIZED;
+            }
+            else {
+                /* Check the auth credentials */
+                r = http_auth(hdr[0], &txn);
+                if ((r < 0) || !txn.auth_chal.scheme) {
+                    /* Auth failed - reinitialize */
+                    syslog(LOG_DEBUG, "auth failed - reinit");
+                    reset_saslconn(&httpd_saslconn);
+                    txn.auth_chal.scheme = NULL;
+                    ret = HTTP_UNAUTHORIZED;
+                }
             }
         }
         else if (!httpd_userid && txn.auth_chal.scheme) {

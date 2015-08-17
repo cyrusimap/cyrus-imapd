@@ -179,6 +179,7 @@ static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
+static int imapd_tls_required = 0; /* is tls required? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
@@ -961,6 +962,8 @@ int service_main(int argc __attribute__((unused)),
         sasl_setprop(imapd_saslconn, SASL_IPLOCALPORT, localip);
         saslprops.iplocalport = xstrdup(localip);
     }
+
+    imapd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
@@ -2573,11 +2576,10 @@ static void cmd_login(char *tag, char *user)
     }
 
     /* possibly disallow login */
-    if ((!imapd_starttls_done && (extprops_ssf < 2) &&
+    if (imapd_tls_required ||
+        (!imapd_starttls_done && (extprops_ssf < 2) &&
          !config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
-         !is_userid_anonymous(canon_user)) ||
-        (!imapd_starttls_done &&
-         config_getswitch(IMAPOPT_FORCETLSAUTH))) {
+         !is_userid_anonymous(canon_user))) {
         eatline(imapd_in, ' ');
         prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
                     tag);
@@ -2725,11 +2727,9 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
     int r;
     int failedloginpause;
 
-    if (!imapd_starttls_done &&
-        config_getswitch(IMAPOPT_FORCETLSAUTH)) {
-        eatline(imapd_in, ' ');
-        prot_printf(imapd_out, "%s NO Auth only available under a layer\r\n",
-                    tag);
+    if (imapd_tls_required) {
+        prot_printf(imapd_out,
+                    "%s NO Authenticate only available under a layer\r\n", tag);
         return;
     }
 
@@ -3225,15 +3225,14 @@ static void capa_response(int flags)
     if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
         prot_printf(imapd_out, " STARTTLS");
     }
-    if (imapd_authstate ||
+    if (imapd_tls_required || imapd_authstate ||
         (!imapd_starttls_done && (extprops_ssf < 2) &&
          !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
         prot_printf(imapd_out, " LOGINDISABLED");
     }
 
     /* add the SASL mechs */
-    if ((!imapd_authstate || saslprops.ssf) &&
-        (imapd_starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH)) &&
+    if (!imapd_tls_required && (!imapd_authstate || saslprops.ssf) &&
         sasl_listmech(imapd_saslconn, NULL,
                       "AUTH=", " AUTH=",
                       !imapd_authstate ? " SASL-IR" : "", &sasllist,
@@ -8439,6 +8438,7 @@ static void cmd_starttls(char *tag, int imaps)
     prot_settls(imapd_out, tls_conn);
 
     imapd_starttls_done = 1;
+    imapd_tls_required = 0;
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);

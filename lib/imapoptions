@@ -149,17 +149,11 @@ are listed with ``<none>''.
 { "allowplaintext", 0, SWITCH }
 /* If enabled, allows the use of cleartext passwords on the wire.
 .PP
-  In its default setting (disabled) disallow cleartext passwords without
-  TLS/SSL encryption, but allows authentication with encrypted password,
-  like SHA1/MD5, without TLS/SSL encryption needed. */
-
-{ "forcetlsauth", 0, SWITCH }
-/* Force TLS/SSL encryption before any authentication take place.
-.PP
-  Note this option is somehow independent of "allowplaintext".
-  Enabling this option makes sure all sessions, and passwords, are
-  always protected by TLS/SSL security layer. All authentication is
-  disabled until a TLS/SSL session is started. */
+  By default, the use of cleartext passwords requires a TLS/SSL
+  encryption layer to be negotiated prior to any cleartext
+  authentication mechanisms being advertised or allowed.  To require a
+  TLS/SSL encryption layer to be negotiated prior to ANY
+  authentication, see the \fItls_required\fR option. */
 
 { "allowusermoves", 0, SWITCH }
 /* Allow moving user accounts (with associated meta-data) via RENAME
@@ -2028,6 +2022,10 @@ product version in the capabilities */
 
 { "tls_key_file", NULL, STRING, "2.5.0", "tls_server_key" }
 /* Deprecated in favor of \fItls_server_key\fR. */
+
+{ "tls_required", 0, SWITCH }
+/* If enabled, require a TLS/SSL encryption layer to be negotiated
+   prior to ANY authentication mechanisms being advertised or allowed. */
 
 { "tls_prefer_server_ciphers", 0, SWITCH }
 /* Prefer the ciphers on the server side instead of client side. */
