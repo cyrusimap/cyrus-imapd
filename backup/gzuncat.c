@@ -79,12 +79,12 @@ struct gzuncat {
     size_t in_buf_size;
 };
 
-EXPORTED struct gzuncat *gzuc_open(const char *filename)
+EXPORTED struct gzuncat *gzuc_open(int fd)
 {
     struct gzuncat *gz = malloc(sizeof(*gz));
     if (!gz) return NULL;
 
-    gz->file = fopen(filename, "rb");
+    gz->file = fdopen(dup(fd), "rb");
     if (!gz->file) goto error;
 
     gz->current_offset = -1;

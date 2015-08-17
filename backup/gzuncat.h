@@ -44,7 +44,7 @@
 
 struct gzuncat;
 
-struct gzuncat *gzuc_open(const char *filename);
+struct gzuncat *gzuc_open(int fd);
 int gzuc_set_bufsize(struct gzuncat *gz, size_t size);
 int gzuc_member_start_from(struct gzuncat *gz, off_t offset);
 int gzuc_member_start(struct gzuncat *gz);

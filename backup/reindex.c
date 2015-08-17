@@ -145,7 +145,8 @@ int main (int argc, char **argv) {
 
     fprintf(stderr, "reindexing %s...\n", backup_filename);
 
-    struct gzuncat *gzuc = gzuc_open(backup_filename);
+    int fd = open(backup_filename, O_RDONLY);
+    struct gzuncat *gzuc = gzuc_open(fd);
 
     while (gzuc && !gzuc_eof(gzuc)) {
         gzuc_member_start(gzuc);
@@ -202,6 +203,7 @@ int main (int argc, char **argv) {
     fprintf(stderr, "reached end of file\n");
 
     gzuc_close(&gzuc);
+    close(fd);
 
     return 0;
 }
