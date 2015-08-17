@@ -44,4 +44,6 @@
 #ifndef BACKUP_API_H
 #define BACKUP_API_H
 
+struct backup;
+
 #endif
