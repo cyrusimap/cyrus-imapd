@@ -192,8 +192,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     }
     
     /* SASL */
-    if ((!authenticated || sasl_ssf) &&
-	(starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH)) &&
+    if (!sieved_tls_required && (!authenticated || sasl_ssf) &&
 	sasl_listmech(saslconn, NULL,
 		      "\"SASL\" \"", " ", "\"\r\n",
 		      &sasllist,

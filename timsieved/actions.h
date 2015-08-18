@@ -49,13 +49,15 @@
 #include "prot.h"
 #include "util.h"
 
+extern int sieved_tls_required;
+
 /*
  * Get the list of capabilities
  *
  */
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
-		 int starttls_done, int authenticated, sasl_ssf_t sasl_ssf);
+                 int starttls_done, int authenticated, sasl_ssf_t sasl_ssf);
 
 /*
  * Get a sieve script with name "name" and output it's contents
@@ -70,7 +72,7 @@ int getscript(struct protstream *conn, const struct buf *name);
  */
 
 int putscript(struct protstream *conn, const struct buf *name,
-	      const struct buf *data, int verify_only);
+              const struct buf *data, int verify_only);
 
 /*
  * Delete the script with name 'name'

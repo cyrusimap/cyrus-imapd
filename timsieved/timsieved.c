@@ -80,9 +80,11 @@
 /* global state */
 const int config_need_data = 0;
 
+int sieved_tls_required = 0;
+
 sieve_interp_t *interp = NULL;
 
-static struct 
+static struct
 {
     char *ipremoteport;
     char *iplocalport;
@@ -125,8 +127,8 @@ void shut_down(int code)
 
     /* close backend connection */
     if (backend) {
-	backend_disconnect(backend);
-	free(backend);
+        backend_disconnect(backend);
+        free(backend);
     }
 
     /* close mailboxes */
@@ -135,8 +137,8 @@ void shut_down(int code)
 
     /* cleanup */
     if (sieved_out) {
-	prot_flush(sieved_out);
-	prot_free(sieved_out);
+        prot_flush(sieved_out);
+        prot_free(sieved_out);
     }
     if (sieved_in) prot_free(sieved_in);
 
@@ -149,7 +151,7 @@ void shut_down(int code)
     cyrus_done();
 
     cyrus_reset_stdio();
-    
+
     /* done */
     exit(code);
 }
@@ -157,10 +159,10 @@ void shut_down(int code)
 static void cmdloop(void)
 {
     int ret = FALSE;
-    
+
     if (chdir("/tmp/")) {
-	syslog(LOG_ERR, "Failed to chdir to /tmp/");
-	ret = TRUE; /* exit immediately */
+        syslog(LOG_ERR, "Failed to chdir to /tmp/");
+        ret = TRUE; /* exit immediately */
     }
 
     capabilities(sieved_out, sieved_saslconn, 0, 0, 0);
@@ -170,15 +172,15 @@ static void cmdloop(void)
 
     while (ret != TRUE)
     {
-	if (backend) {
-	    /* create a pipe from client to backend */
-	    bitpipe();
+        if (backend) {
+            /* create a pipe from client to backend */
+            bitpipe();
 
-	    /* pipe has been closed */
-	    return;
-	}
+            /* pipe has been closed */
+            return;
+        }
 
-	ret = parser(sieved_out, sieved_in);
+        ret = parser(sieved_out, sieved_in);
     }
 
     sync_log_done();
@@ -192,8 +194,8 @@ EXPORTED void fatal(const char *s, int code)
     static int recurse_code = 0;
 
     if (recurse_code) {
-	/* We were called recursively. Just give up */
-	exit(recurse_code);
+        /* We were called recursively. Just give up */
+        exit(recurse_code);
     }
     recurse_code = code;
 
@@ -211,8 +213,8 @@ static struct sasl_callback mysasl_cb[] = {
 };
 
 EXPORTED int service_init(int argc __attribute__((unused)),
-		 char **argv __attribute__((unused)),
-		 char **envp __attribute__((unused)))
+                 char **argv __attribute__((unused)),
+                 char **envp __attribute__((unused)))
 {
     global_sasl_init(1, 1, mysasl_cb);
 
@@ -232,8 +234,8 @@ EXPORTED void service_abort(int error)
 }
 
 EXPORTED int service_main(int argc __attribute__((unused)),
-		 char **argv __attribute__((unused)),
-		 char **envp __attribute__((unused)))
+                 char **argv __attribute__((unused)),
+                 char **envp __attribute__((unused)))
 {
     const char *remoteip, *localip;
     sasl_security_properties_t *secprops = NULL;
@@ -259,17 +261,17 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 
     /* other params should be filled in */
     if (sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
-			NULL, NULL, NULL, SASL_SUCCESS_DATA,
-			&sieved_saslconn) != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_new()", -1); 
+                        NULL, NULL, NULL, SASL_SUCCESS_DATA,
+                        &sieved_saslconn) != SASL_OK)
+        fatal("SASL failed initializing: sasl_server_new()", -1);
 
     if (remoteip) {
-	sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);
-	saslprops.ipremoteport = xstrdup(remoteip);
+        sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);
+        saslprops.ipremoteport = xstrdup(remoteip);
     }
     if (localip) {
-	sasl_setprop(sieved_saslconn, SASL_IPLOCALPORT, localip);
-	saslprops.iplocalport = xstrdup(localip);
+        sasl_setprop(sieved_saslconn, SASL_IPLOCALPORT, localip);
+        saslprops.iplocalport = xstrdup(localip);
     }
 
     /* will always return something valid */
@@ -278,6 +280,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 
     if (actions_init() != TIMSIEVE_OK)
       fatal("Error initializing actions",-1);
+
+    sieved_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     cmdloop();
 
@@ -294,20 +298,20 @@ int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
     sasl_dispose(conn);
     /* do initialization typical of service_main */
     ret = sasl_server_new(SIEVE_SERVICE_NAME, config_servername,
-		          NULL, NULL, NULL,
-			  NULL, SASL_SUCCESS_DATA, conn);
+                          NULL, NULL, NULL,
+                          NULL, SASL_SUCCESS_DATA, conn);
     if(ret != SASL_OK) return ret;
 
     if(saslprops.ipremoteport)
-	ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-			   saslprops.ipremoteport);
+        ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
+                           saslprops.ipremoteport);
     if(ret != SASL_OK) return ret;
-    
+
     if(saslprops.iplocalport)
-	ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-			   saslprops.iplocalport);
+        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
+                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
-    
+
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
@@ -316,13 +320,13 @@ int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
 
     /* If we have TLS/SSL info, set it */
     if(ssf) {
-	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &ssf);
-	if(ret != SASL_OK) return ret;
+        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &ssf);
+        if(ret != SASL_OK) return ret;
     }
-    
+
     if(authid) {
-	ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, authid);
-	if(ret != SASL_OK) return ret;
+        ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, authid);
+        if(ret != SASL_OK) return ret;
     }
     /* End TLS/SSL Info */
 
@@ -341,17 +345,17 @@ static void bitpipe(void)
     protgroup_insert(protin, backend->in);
 
     do {
-	/* Flush any buffered output */
-	prot_flush(sieved_out);
-	prot_flush(backend->out);
+        /* Flush any buffered output */
+        prot_flush(sieved_out);
+        prot_flush(backend->out);
 
-	/* check for shutdown file */
-	if (shutdown_file(buf, sizeof(buf))) {
-	    shutdown = 1;
-	    goto done;
-	}
+        /* check for shutdown file */
+        if (shutdown_file(buf, sizeof(buf))) {
+            shutdown = 1;
+            goto done;
+        }
     } while (!proxy_check_input(protin, sieved_in, sieved_out,
-				backend->in, backend->out, 0));
+                                backend->in, backend->out, 0));
 
  done:
     /* ok, we're done. */

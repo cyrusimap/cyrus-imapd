@@ -161,6 +161,7 @@ static unsigned nntp_capa = MODE_READ | MODE_FEED; /* general-purpose */
 static sasl_ssf_t extprops_ssf = 0;
 static int nntps = 0;
 static int nntp_starttls_done = 0;
+static int nntp_tls_required = 0;
 
 /* the sasl proxy policy context */
 static struct proxy_context nntp_proxyctx = {
@@ -563,6 +564,8 @@ int service_main(int argc __attribute__((unused)),
 	if ((p = strchr(hbuf, ';'))) *p = '\0';
 	nntp_logfd = telemetry_log(hbuf, nntp_in, nntp_out, 0);
     }
+
+    nntp_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     /* Set inactivity timer */
     nntp_timeout = config_getint(IMAPOPT_NNTPTIMEOUT);
@@ -1813,7 +1816,7 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
 	prot_printf(nntp_out, "STARTTLS\r\n");
 
-    if (nntp_starttls_done || !config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+    if (!nntp_tls_required) {
 	/* check for SASL mechs */
 	sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
 	              &mechlist, NULL, &mechcount);
@@ -1977,9 +1980,9 @@ static void cmd_authinfo_user(char *user)
     }
 
     /* possibly disallow AUTHINFO USER */
-    if ((!(nntp_starttls_done || (extprops_ssf > 1) ||
-	   config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) ||
-	(!nntp_starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH))) {
+    if (nntp_tls_required ||
+        !(nntp_starttls_done || (extprops_ssf > 1) ||
+          config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(nntp_out,
 		    "483 AUTHINFO USER command only available under a layer\r\n");
 	return;
@@ -2089,7 +2092,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     struct proc_limits limits;
 
     /* possibly disallow AUTHINFO SASL */
-    if (!nntp_starttls_done && config_getswitch(IMAPOPT_FORCETLSAUTH)) {
+    if (nntp_tls_required) {
 	prot_printf(nntp_out,
 		    "483 AUTHINFO SASL command only available under a layer\r\n");
 	return;
@@ -4156,6 +4159,7 @@ static void cmd_starttls(int nntps)
     prot_settls(nntp_out, tls_conn);
 
     nntp_starttls_done = 1;
+    nntp_tls_required = 0;
 
     /* close any selected group */
     if (group_state)
