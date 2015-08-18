@@ -752,6 +752,7 @@ include_HEADERS = \
 	lib/iostat.h \
 	lib/iptostring.h \
 	lib/libcyr_cfg.h \
+	lib/lock_file.h \
 	lib/lsort.h \
 	lib/map.h \
 	lib/mappedfile.h \
