@@ -432,6 +432,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* A space separated list of users and/or groups that are allowed their INBOX to be
    automatically created. */
 
+{ "backup_data_path", NULL, STRING }
+/* Path to backup data files - FIXME default? */
+
+{ "backups_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
+/* The cyrusdb backend to use for the backup locations database. */
+
+{ "backups_db_path", NULL, STRING }
+/* The absolute path to the backup db file.  If not specified,
+   will be confdir/backups.db */
+
 { "boundary_limit", 1000, INT }
 /* messages are parsed recursively and a deep enough MIME structure
    can cause a stack overflow.  Do not parse deeper than this many

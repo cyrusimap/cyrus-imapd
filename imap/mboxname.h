@@ -204,6 +204,8 @@ char *mboxname_archivepath(const char *partition,
                            const char *uniqueid,
                            unsigned long uid);
 
+char *mboxname_backuppath(const mbname_t *mbname);
+
 char *mboxname_metapath(const char *partition,
                         const char *mboxname,
                         const char *uniqueid,

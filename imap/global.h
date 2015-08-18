@@ -147,6 +147,7 @@ extern const char *config_statuscache_db;
 extern const char *config_userdeny_db;
 extern const char *config_zoneinfo_db;
 extern const char *config_conversations_db;
+extern const char *config_backups_db;
 extern int charset_flags;
 
 /* Session ID */
