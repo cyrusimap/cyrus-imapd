@@ -273,7 +273,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "archive_enabled", 0, SWITCH }
 /* Is archiving enabled for this server.  You also need to have an
    archivepartition for the mailbox.  Archiving allows older email
-   to be stored on slower, cheaper disks - even within a the same
+   to be stored on slower, cheaper disks - even within the same
    mailbox, as distinct from partitions. */
 
 { "archive_days", 7, INT }
@@ -285,8 +285,19 @@ Blank lines and lines beginning with ``#'' are ignored.
    immediately.  Default is 1Mb */
 
 { "archive_keepflagged", 0, SWITCH }
-/* if set, keep messages with \Flagged system flag on the archive
-   partition forever, so long as they are smaller than maxsize */
+/* If set, messages with the \\Flagged system flag won't be archived,
+   provided they are smaller than \fBarchive_maxsize\fR. */
+
+# Commented out - there's no such thing as "archivepartition-name",
+# but we need this for the man page
+# { "archivepartition-name", NULL, STRING }
+/* The pathname of the archive partition \fIname\fR, corresponding to
+   spool partition \fBpartition-name\fR.  For any mailbox residing in
+   a directory on \fBpartition-name\fR, the archived messages will be
+   stored in a corresponding directory on \fBarchivepartition-name\fR.
+   Note that not every \fBpartition-name\fR option is strictly required
+   to have a corresponding \fBarchivepartition-name\fR option, but that
+   without one there's no benefit to enabling archiving. */
 
 { "auditlog", 0, SWITCH }
 /* Should cyrus output log entries for every action taken on a message
