@@ -46,9 +46,8 @@
 
 #include <syslog.h>
 
+#include <jansson.h>
 #include <libical/ical.h>
-#include <libxml/HTMLparser.h>
-#include <libxml/tree.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -56,6 +55,7 @@
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
+#include "notify.h"
 #include "md5.h"
 #include "smtpclient.h"
 #include "strhash.h"
@@ -160,360 +160,22 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
     return 0;
 }
 
-
-struct address_t {
-    const char *addr;
-    const char *name;
-    char *qpname;
-    const char *role;
-    const char *partstat;
-    struct address_t *next;
-};
-
-static void add_address(struct address_t **recipients, icalproperty *prop,
-                        const char* (*icalproperty_get_address)(icalproperty *))
-{
-    struct address_t *new = xzmalloc(sizeof(struct address_t));
-    icalparameter *param;
-
-    new->addr = icalproperty_get_address(prop) + 7;
-    param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
-    if (param) {
-        new->name = icalparameter_get_cn(param);
-        new->qpname = charset_encode_mimeheader(new->name, 0);
-    }
-    param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
-    if (param)
-        new->role = icalparameter_enum_to_string(icalparameter_get_role(param));
-    param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-    if (param)
-        new->partstat =
-            icalparameter_enum_to_string(icalparameter_get_partstat(param));
-
-    new->next = *recipients;
-    *recipients = new;
-}
-
-static void HTMLencode(struct buf *output, const char *input)
-{
-    int inlen = strlen(input);
-    int outlen = 8*inlen;  /* room for every char to become a named entity */
-
-    buf_ensure(output, outlen+1);
-    htmlEncodeEntities((unsigned char *) buf_base(output), &outlen,
-                       (unsigned char *) input, &inlen, 0);
-    buf_truncate(output, outlen);
-    buf_replace_all(output, "\n", "\n  <br>");
-}
-
-#define TEXT_INDENT     "             "
-#define HTML_ROW        "<tr><td><b>%s</b></td><td>%s</td></tr>\r\n"
-
 /* Send an iMIP request for attendees in 'ical' */
-static int imip_send(icalcomponent *ical)
+static int imip_send(icalcomponent *ical, const char *recipient)
 {
-    int r;
-    icalcomponent *comp;
-    icalproperty *prop;
-    icalproperty_method meth;
-    icalcomponent_kind kind;
-    const char *argv[7], *uid, *msg_type, *summary, *location, *descrip, *status;
-    struct address_t *recipients = NULL, *originator = NULL, *recip;
-    struct icaltimetype start, end;
-    char *cp, when[2*RFC822_DATETIME_MAX+4], datestr[RFC822_DATETIME_MAX+1];
-    char boundary[100], *mimebody, *ical_str;
-    size_t outlen;
-    struct buf plainbuf = BUF_INITIALIZER, tmpbuf = BUF_INITIALIZER;
-    FILE *sm;
-    pid_t sm_pid, p = getpid();
-    time_t t = time(NULL);
-    static unsigned send_count = 0;
-    const char *day_of_week[] = {
-        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-    };
-    const char *month_of_year[] = {
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    };
+    const char *notifier = config_getstring(IMAPOPT_IMIPNOTIFIER);
 
-    meth = icalcomponent_get_method(ical);
-    comp = icalcomponent_get_first_real_component(ical);
-    kind = icalcomponent_isa(comp);
-    uid = icalcomponent_get_uid(comp);
+    /* nothing to send */
+    if (!notifier) return -1;
 
-    /* Determine Originator and Recipient(s) based on method and component */
-    if (meth == ICAL_METHOD_REPLY) {
-        msg_type = "a RSVP";
+    const char *ical_str = icalcomponent_as_ical_string(ical);
+    json_t *val = json_pack("{s:s s:s}", "recipient", recipient, "ical", ical_str);
+    char *serial = json_dumps(val, JSON_COMPACT);
+    notify(notifier, "IMIP", NULL, httpd_userid, NULL, 0, NULL, serial, NULL);
+    free(serial);
+    json_decref(val);
 
-        prop = icalcomponent_get_first_invitee(comp);
-        add_address(&originator, prop, &icalproperty_get_invitee);
-
-        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        add_address(&recipients, prop,
-                    (const char*(*)(icalproperty *))&icalproperty_get_organizer);
-    }
-    else {
-        msg_type =
-            (meth == ICAL_METHOD_CANCEL) ? "a cancellation" : "an invitation";
-
-        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        add_address(&originator, prop,
-                    (const char*(*)(icalproperty *))&icalproperty_get_organizer);
-
-        for (prop = icalcomponent_get_first_invitee(comp);
-             prop;
-             prop = icalcomponent_get_next_invitee(comp)) {
-
-            add_address(&recipients, prop, &icalproperty_get_invitee);
-        }
-    }
-
-    argv[0] = "sendmail";
-    argv[1] = "-f";
-    argv[2] = originator->addr;
-    argv[3] = "-t";             /* get recipients from body */
-    argv[4] = "-N";             /* notify on failure or delay */
-    argv[5] = "failure,delay";
-    argv[6] = NULL;
-
-    sm_pid = open_sendmail(argv, &sm);
-
-    if (sm == NULL) {
-        r = HTTP_UNAVAILABLE;
-        goto done;
-    }
-
-    /* Get other useful properties/values */
-    summary = icalcomponent_get_summary(comp);
-    location = icalcomponent_get_location(comp);
-    descrip = icalcomponent_get_description(comp);
-    if ((prop = icalcomponent_get_first_property(comp, ICAL_STATUS_PROPERTY))) {
-        status = icalproperty_get_value_as_string(prop);
-    }
-    else status = NULL;
-
-    start = icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc_zone);
-    end = icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc_zone);
-
-    cp = when;
-    cp += sprintf(cp, "%s, %02u %s %04u",
-                  day_of_week[icaltime_day_of_week(start)-1],
-                  start.day, month_of_year[start.month-1], start.year);
-    if (!start.is_date) {
-        cp += sprintf(cp, " %02u:%02u", start.hour, start.minute);
-        if (start.second) cp += sprintf(cp, ":%02u", start.second);
-        strcpy(cp, " UTC");
-    }
-    else icaltime_adjust(&end, -1, 0, 0, 0);
-
-    if (icaltime_compare(end, start)) {
-        strcpy(cp, " -");
-        cp += 2;
-        if (icaltime_compare_date_only(end, start)) {
-            cp += sprintf(cp, " %s, %02u %s %04u",
-                          day_of_week[icaltime_day_of_week(end)-1],
-                          end.day, month_of_year[end.month-1], end.year);
-        }
-        if (!end.is_date) {
-            cp += sprintf(cp, " %02u:%02u", end.hour, end.minute);
-            if (end.second) cp += sprintf(cp, ":%02u", end.second);
-            strcpy(cp, " UTC");
-        }
-    }
-
-    /* Create multipart/alternative iMIP message */
-    fprintf(sm, "From: %s <%s>\r\n",
-            originator->qpname ? originator->qpname : "", originator->addr);
-
-    for (recip = recipients; recip; recip = recip->next) {
-        if (strcmp(recip->addr, originator->addr)) {
-            fprintf(sm, "To: %s <%s>\r\n",
-                    recip->qpname ? recip->qpname : "", recip->addr);
-        }
-    }
-
-    if (summary) {
-        char *mimehdr = charset_encode_mimeheader(summary, 0);
-        fprintf(sm, "Subject: %s\r\n", mimehdr);
-        free(mimehdr);
-    }
-    else {
-        fprintf(sm, "Subject: %s %s\r\n", icalcomponent_kind_to_string(kind),
-                icalproperty_method_to_string(meth));
-    }
-
-    time_to_rfc822(t, datestr, sizeof(datestr));
-    fprintf(sm, "Date: %s\r\n", datestr);
-
-    fprintf(sm, "Message-ID: <cyrus-caldav-%u-%ld-%u@%s>\r\n",
-            p, t, send_count++, config_servername);
-
-    /* Create multipart boundary */
-    snprintf(boundary, sizeof(boundary), "%s=_%ld=_%ld=_%ld",
-             config_servername, (long) p, (long) t, (long) rand());
-
-    fprintf(sm, "Content-Type: multipart/alternative;"
-            "\r\n\tboundary=\"%s\"\r\n", boundary);
-
-    fprintf(sm, "iMIP-Content-ID: <%s@%s>\r\n", uid, config_servername);
-
-    fputs("Auto-Submitted: auto-generated\r\n", sm);
-    fputs("MIME-Version: 1.0\r\n", sm);
-    fputs("\r\n", sm);
-
-    /* preamble */
-    fputs("This is a message with multiple parts in MIME format.\r\n", sm);
-
-    /* plain text part */
-    fprintf(sm, "\r\n--%s\r\n", boundary);
-
-    fputs("Content-Type: text/plain; charset=utf-8\r\n", sm);
-    fputs("Content-Transfer-Encoding: quoted-printable\r\n", sm);
-    fputs("Content-Disposition: inline\r\n", sm);
-    fputs("\r\n", sm);
-
-    buf_printf(&plainbuf, "You have received %s from %s <%s>\r\n\r\n", msg_type,
-               originator->name ? originator->name : "", originator->addr);
-    if (summary) {
-        buf_setcstr(&tmpbuf, summary);
-        buf_replace_all(&tmpbuf, "\n", "\r\n" TEXT_INDENT);
-        buf_printf(&plainbuf, "Summary    : %s\r\n", buf_cstring(&tmpbuf));
-    }
-    if (location) {
-        buf_setcstr(&tmpbuf, location);
-        buf_replace_all(&tmpbuf, "\n", "\r\n" TEXT_INDENT);
-        buf_printf(&plainbuf, "Location   : %s\r\n", buf_cstring(&tmpbuf));
-    }
-    buf_printf(&plainbuf, "When       : %s\r\n", when);
-    if (meth == ICAL_METHOD_REPLY) {
-        if (originator->partstat)
-            buf_printf(&plainbuf, "RSVP       : %s\r\n", originator->partstat);
-    }
-    else {
-        if (status) buf_printf(&plainbuf, "Status     : %s\r\n", status);
-
-        for (cp = "Attendees  : ", recip=recipients; recip; recip=recip->next) {
-            buf_printf(&plainbuf, "%s* %s <%s>",
-                       cp, recip->name ? recip->name : "", recip->addr);
-            if (recip->role) buf_printf(&plainbuf, "\t(%s)", recip->role);
-            buf_appendcstr(&plainbuf, "\r\n");
-
-            cp = TEXT_INDENT;
-        }
-
-        if (descrip) {
-            buf_setcstr(&tmpbuf, descrip);
-            buf_replace_all(&tmpbuf, "\n", "\r\n" TEXT_INDENT);
-            buf_printf(&plainbuf, "Description: %s\r\n", buf_cstring(&tmpbuf));
-        }
-    }
-
-    mimebody = charset_qpencode_mimebody(buf_base(&plainbuf),
-                                         buf_len(&plainbuf), &outlen);
-    buf_free(&plainbuf);
-    fwrite(mimebody, outlen, 1, sm);
-    free(mimebody);
-
-    /* HTML part */
-    fprintf(sm, "\r\n--%s\r\n", boundary);
-
-    fprintf(sm, "Content-Type: text/html; charset=utf-8\r\n");
-    fputs("Content-Disposition: inline\r\n", sm);
-    fputs("\r\n", sm);
-
-    fputs(HTML_DOCTYPE "\r\n<html><head><title></title></head><body>\r\n", sm);
-
-    if (originator->name) {
-        HTMLencode(&tmpbuf, originator->name);
-        originator->name = buf_cstring(&tmpbuf);
-    }
-    else originator->name = originator->addr;
-
-    fprintf(sm, "<b>You have received %s from"
-            " <a href=\"mailto:%s\">%s</a></b><p>\r\n",
-            msg_type, originator->addr, originator->name);
-
-    fputs("<table border cellpadding=5>\r\n", sm);
-    if (summary) {
-        HTMLencode(&tmpbuf, summary);
-        fprintf(sm, HTML_ROW, "Summary", buf_cstring(&tmpbuf));
-    }
-    if (location) {
-        HTMLencode(&tmpbuf, location);
-        fprintf(sm, HTML_ROW, "Location", buf_cstring(&tmpbuf));
-    }
-    fprintf(sm, HTML_ROW, "When", when);
-    if (meth == ICAL_METHOD_REPLY) {
-        if (originator->partstat)
-            fprintf(sm, HTML_ROW, "RSVP", originator->partstat);
-    }
-    else {
-        if (status) fprintf(sm, HTML_ROW, "Status", status);
-
-        fputs("<tr><td><b>Attendees</b></td>", sm);
-        for (cp = "<td>", recip = recipients; recip; recip = recip->next) {
-            if (recip->name) {
-                HTMLencode(&tmpbuf, recip->name);
-                recip->name = buf_cstring(&tmpbuf);
-            }
-            else recip->name = recip->addr;
-
-            fprintf(sm, "%s&#8226; <a href=\"mailto:%s\">%s</a>",
-                    cp, recip->addr, recip->name);
-            if (recip->role) fprintf(sm, " <i>(%s)</i>", recip->role);
-
-            cp = "\n  <br>";
-        }
-        fputs("</td></tr>\r\n", sm);
-
-        if (descrip) {
-            HTMLencode(&tmpbuf, descrip);
-            fprintf(sm, HTML_ROW, "Description", buf_cstring(&tmpbuf));
-        }
-    }
-    fprintf(sm, "</table></body></html>\r\n");
-
-    /* iCalendar part */
-    fprintf(sm, "\r\n--%s\r\n", boundary);
-
-    fprintf(sm, "Content-Type: text/calendar; charset=utf-8");
-    fprintf(sm, "; method=%s; component=%s \r\n",
-            icalproperty_method_to_string(meth),
-            icalcomponent_kind_to_string(kind));
-
-    fputs("Content-Transfer-Encoding: base64\r\n", sm);
-    fputs("Content-Disposition: attachment\r\n", sm);
-
-    fprintf(sm, "Content-ID: <%s@%s>\r\n", uid, config_servername);
-
-    fputs("\r\n", sm);
-
-    ical_str = icalcomponent_as_ical_string(ical);
-    charset_encode_mimebody(NULL, strlen(ical_str), NULL, &outlen, NULL);
-    buf_ensure(&tmpbuf, outlen);
-    charset_encode_mimebody(ical_str, strlen(ical_str),
-                            (char *) buf_base(&tmpbuf), &outlen, NULL);
-    fwrite(buf_base(&tmpbuf), outlen, 1, sm);
-
-    /* end boundary and epilogue */
-    fprintf(sm, "\r\n--%s--\r\n\r\nEnd of MIME multipart body.\r\n", boundary);
-
-    fclose(sm);
-
-    while (waitpid(sm_pid, &r, 0) < 0);
-
-  done:
-    buf_free(&tmpbuf);
-    free(originator->qpname);
-    free(originator);
-    do {
-        struct address_t *freeme = recipients;
-        recipients = recipients->next;
-        free(freeme->qpname);
-        free(freeme);
-    } while (recipients);
-
-    return r;
+    return 0;
 }
 
 
@@ -975,8 +637,10 @@ static void sched_deliver_remote(const char *recipient,
         }
     }
     else {
-        /* Use iMIP */
-        r = imip_send(sched_data->itip);
+        if (!strncasecmp(recipient, "mailto:", 7))
+            r = imip_send(sched_data->itip, recipient + 7);
+        else
+            r = 1; /* code doesn't matter */
         if (!r) {
             sched_data->status =
                 sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
