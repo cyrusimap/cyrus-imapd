@@ -26,7 +26,7 @@ def make_link_node(rawtext, app, name, manpage_num, options):
     """Create a link to a man page.
     """
 #   These section names map to directory names. ie: section 8 will generate a url to 'commands'
-    sections = ['general','system','library','special','configs','games','misc','commands']
+    sections = ['commands','system','library','special','configs','games','misc','commands']
     manpage_section = sections[int(manpage_num)-1]
     ref = None
     ref = app.config.cyrus_man_url_regex
@@ -46,7 +46,9 @@ def man_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
     """
     env = inliner.document.settings.env
     app = env.app
-    p = re.compile("(?P<name>[a-zA-Z0-9_\.-_]+)(\((?P<section>\d)\))?")
+#   name: alphanumeric including dots, dashes and underscores.
+#   section: Is in brackets, and is a single digit number. There may also be some non-numeric stuff after the number that we don't care about.    
+    p = re.compile("(?P<name>[a-zA-Z0-9_\.\-_]+)(\((?P<section>\d)(?:[^\d])*\))?")
     m = p.match(text)
     if (m.group('section')):
         manpage_num = m.group('section')
