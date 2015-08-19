@@ -213,7 +213,7 @@ static sqldb_t *open_db_userid (struct mailbox *mailbox) {
     // now remove tail part part after user/<username>/
     path = strstr(user_path, user);
     if (path){
-        path [strlen (user) + 1] = '\0' ;
+        path [strlen (user)] = '\0' ;
     }
     /* change all '.'s to '/' */
     char *p ;
@@ -223,7 +223,7 @@ static sqldb_t *open_db_userid (struct mailbox *mailbox) {
 
     path = strstr(user_path, "user");
 
-    snprintf(filename, sizeof(filename), "%s/%smessage.db", config_partitiondir(mailbox->part), path );
+    snprintf(filename, sizeof(filename), "%s/%s/message.db", config_partitiondir(mailbox->part), path );
     path = filename ;
 
 
