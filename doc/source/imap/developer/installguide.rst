@@ -5,7 +5,7 @@ Developer Environment Installation
 
 You've decided to help add to the Cyrus project, excellent!
 
-These instructions by Ellie Timony(@elliefm) from FastMail_, are based on Debian 8.0, cause that's what she was setting up as she wrote it. Other Linux distros will probably be similar in the broad ideas but perhaps different in the specifics. If you already have a preferred distro, use that (we assume you know how to use its package management system). If you don't already have a preferred distro, maybe consider using Debian.
+These instructions are based on Debian 8.0 because it has to be based on something. Other Linux distributions will be similar in the broad ideas but may differ in the specifics. If you already have a preferred distro, use that (we assume you know how to use its package management system). If you don't already have a preferred distro, maybe consider using Debian.
 
 Cyrus
 =====
@@ -40,7 +40,7 @@ Setting up dependencies
 2. Install dependencies for master branch
     * ``sudo apt-get install libjansson-dev libxml2-dev libsqlite3-dev libical-dev libsasl2-dev libssl-dev libopendkim-dev libcunit1-dev libpcre3-dev uuid-dev``
 
-3. Additional dependencies for cyrus-imapd-2.5: you'll need the ``-dev`` package to match whichever version of libdb you already have installed (assuming it's probably already installed). I needed ``libdb5.3-dev`` on debian 8.0, but ``libdb5.1-dev`` on 7.8.
+3. Additional dependencies for cyrus-imapd-2.5: you'll need the ``-dev`` package to match whichever version of libdb you already have installed (assuming it's probably already installed). On Debian 8.0, ``libdb5.3-dev`` is needed, but ``libdb5.1-dev`` on 7.8.
 
 .. _steps 1-3: https://help.github.com/articles/generating-ssh-keys/
 .. _Phabricator: https://git.cyrus.foundation/
@@ -206,7 +206,7 @@ Arcanist is a tool for managing workflow (code review, etc), which sits between 
 
 .. note::
 
-    Conrad says: "Installing arcanist on Ubuntu was apparently as easy as ``sudo apt-get install arcanist``. But, the folks over at arcanist say: "clone the code from GitHub."
+    Conrad (@conradk) says: "Installing arcanist on Ubuntu was apparently as easy as ``sudo apt-get install arcanist``. But, the folks over at arcanist say: "clone the code from GitHub."
 
 1. `Install Arcanist`_
 2. Set up Arcanist
