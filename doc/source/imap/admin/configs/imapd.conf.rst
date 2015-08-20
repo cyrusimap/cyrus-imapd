@@ -2449,6 +2449,15 @@ FIELD DESCRIPTIONS
 
     .. endblob nntptimeout
 
+    .. startblob notesmailbox
+
+    ``notesmailbox:`` <none>
+
+        The top level mailbox in each user's account which is used to store
+        Apple-style Notes.  Default is blank (disabled) 
+
+    .. endblob notesmailbox
+
     .. startblob notifysocket
 
     ``notifysocket:`` {configdirectory}/socket/notify

@@ -32,6 +32,21 @@ purging the folder hierarchy from the filesystem;
 *   can be delayed as to ensure that the next backup cycle includes the
     deleted folder hierarchy.
 
+-----------------------------------------
+Configuring Cyrus IMAP for Delayed Delete
+-----------------------------------------
+
+To enable or disable Delayed Delete, please check the following settings
+in :cyrusman:`imapd.conf(5)`.
+
+    .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob delete_mode
+        :end-before: endblob delete_mode
+
+    .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob deletedprefix
+        :end-before: endblob deletedprefix
+
 .. seealso::
 
     *   :ref:`imap-features-delayed-expunge`

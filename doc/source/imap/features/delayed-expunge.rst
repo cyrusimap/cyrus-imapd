@@ -24,8 +24,20 @@ This enables administrators to quickly recover access to messages that
 have been accidentally deleted, as well as allows the environment to
 ensure messages remain available for includion in the next backup cycle.
 
+------------------------------------------
+Configuring Cyrus IMAP for Delayed Expunge
+------------------------------------------
+
+To enable or disable Delayed Expunge, please check the following
+settings in :cyrusman:`imapd.conf(5)`.
+
+    .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob expunge_mode
+        :end-before: endblob expunge_mode
+
 .. seealso::
 
+    *   :ref:`imap-admin-commands-unexpunge`
     *   :ref:`imap-features-delayed-delete`
     *   :ref:`imap-admin-deleted-expired-expunged-purged`
 

@@ -51,7 +51,7 @@ Additional features of this functionality include;
     this functionality, the actual functionality may not be available.
 
 To enable the automatic creation of mailboxes, set the following options
-in :manpage:`imapd.conf(5)`:
+in :cyrusman:`imapd.conf(5)`.
 
 .. include:: /imap/admin/configs/imapd.conf.rst
     :start-after: startblob autocreate_quota
@@ -62,7 +62,8 @@ in :manpage:`imapd.conf(5)`:
     :start-after: startblob autocreate_post
     :end-before: endblob autocreate_post
 
-Other settings in :manpage:`imapd.conf(5)` affecting automatic options.
+Other settings in :cyrusman:`imapd.conf(5)` affecting automatic
+options.
 
 Autocreation of mailboxes
 -------------------------
@@ -120,7 +121,8 @@ Autocreation of users
     :start-after: startblob autocreate_users
     :end-before: endblob autocreate_users
 
-See :manpage:`imapd.conf(5)` for the full documentation of all options.
+See :cyrusman:`imapd.conf(5)` for the full documentation of
+all options.
 
 .. seealso::
 

@@ -32,7 +32,11 @@ Two means exist to suppress sharing folders between users:
 
 #.  Suppress the listing of the
     :ref:`imap-features-namespaces-other-users` by enabling
-    ``disable_user_namespace`` in :manpage:`imapd.conf(5)`.
+    ``disable_user_namespace`` in :cyrusman:`imapd.conf(5)`.
+
+    .. include:: /imap/admin/configs/imapd.conf.rst
+        :start-after: startblob disable_user_namespace
+        :end-before: endblob disable_user_namespace
 
 .. seealso::
 
