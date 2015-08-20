@@ -54,7 +54,7 @@ Cyrus Murder
 ============
 
 Cyrus Murder, or IMAP Aggregation, provides the ability to split a
-common IMAP mailbox namespace(s) across multiple back ends. Cyrus
+common IMAP mailbox namespace(s) across multiple backends. Cyrus
 murder is not :ref:`replication <architecture_replication>`; it is load
 and resource sharing for performance.
 
@@ -64,23 +64,23 @@ and resource sharing for performance.
     :alt: Cyrus Murder architecture.
     :align: center
     
-Consider a set of front ends (F1..Fn) which contain no user data. They
-are essentially stateless.  Users access mailboxes from any front end.
-Front ends are IMAP/POP3/Sieve/LMTP proxies.
+Consider a set of frontends (F1..Fn) which contain no user data. They
+are essentially stateless.  Users access mailboxes from any frontend.
+Frontends are IMAP/POP3/Sieve/LMTP proxies.
 
-There is also a set of back ends (B1..Bn) which manage user data
-stores. Unlike the front ends, each back ends is unique: each holds a
-subset of data. Back ends are IMAP/POP3/Sieve/LMTP servers.
+There is also a set of backends (B1..Bn) which manage user data
+stores. Unlike the frontends, each backends is unique: each holds a
+subset of data. Backends are IMAP/POP3/Sieve/LMTP servers.
 
-So when a user logs in to a front end (say F1), how does F1 know from
-which back end to fetch the user's data? This is where **mupdate**
+So when a user logs in to a frontend (say F1), how does F1 know from
+which backend to fetch the user's data? This is where **mupdate**
 comes in: the **mupdate** master holds the mapping of mailboxes to back
-ends. Any time a back end has a change to their user data (i.e. mailbox
+ends. Any time a backend has a change to their user data (i.e. mailbox
 add/delete/move/subscribe), it sends the change to the **mupdate**
-master which then notifies all the front ends of the latest mapping.
+master which then notifies all the frontends of the latest mapping.
 
-A user's data is not necessarily all stored on a single back end,
-either: it can be split across disk partitions or back ends.
+A user's data is not necessarily all stored on a single backend,
+either: it can be split across disk partitions or backends.
 
 The mapping on mupdate goes something like this:
 
@@ -96,11 +96,11 @@ u3               b1!bigdisk
 Mupdate is multithreaded. 
 
 Should each datastore be configured to contain the complete set of all
-data, and any front end can also behave as a back end (and vice versa),
+data, and any frontend can also behave as a backend (and vice versa),
 this is known as **Unified Murder**: where everything has everything.
 
-.. todo:
-    Migrate information from https://cyrusimap.org/mediawiki/index.php/Cyrus_Murder_Design
+See the :ref:`Cyrus Murder installation and admin guide <murder>`
+for more information.
 
 .. _architecture_replication:    
 
@@ -110,7 +110,7 @@ Replication is not Aggregation or :ref:`Cyrus Murder<architecture_murder>`.
 Replication provides high availability and hot backups. It is designed to
 replicate the mailstore on a standalone Cyrus install, or multiple backend
 servers in a :ref:`murder <architecture_murder>` configuration. (It does
-not replicate mupdate master servers (front ends have no state to replicate).
+not replicate mupdate master servers (frontends have no state to replicate).
 
 .. image:: images/image3-replication.jpg
     :height: 385 px 
@@ -140,9 +140,6 @@ for more information.
 Channels
 --------
 
-A channel is a (real thing? virtual construct? To the best of my
-knowledge, there isn't a channel config file per se).
-
 A channel is a way of describing the linkage between a replication master and one
 of its replicas. It encompasses the configuration on the master to know
 which sync logs to write to, and the configuration on the master to
@@ -158,10 +155,10 @@ There's two standard channel configurations:
    replica 1, which updates replica 2)
 
 The only real benefit to chaining is bandwidth use reduction - if
-you have two replicas in a different datacentre, you can chain them and
+you have two replicas in a different data centre, you can chain them and
 avoid sending all the data over the link twice.  You can always re-
 establish replication to the second replica by creating a direct channel
-and running sync_client -A to make sure everything is up-to-date.
+and running ``sync_client -A`` to make sure everything is up-to-date.
 
 Log file
 --------

@@ -63,9 +63,9 @@ messages via the :cyrusman:`sync_server(8)` process.
 
 .. Important::
     Within a Cyrus :ref:`Murder <architecture_murder>` environment,
-    replicas **MUST NOT** be configured to invoke
+    replicas must **not** be configured to invoke
     :cyrusman:`ctl_mboxlist(8)` on startup (pushing the local mailbox
-    list to the **Mupdate Master**).  This **MAY ONLY** be done on the
+    list to the **Mupdate Master**).  This may only be done on the
     Master instance.
 
 1. :ref:`Configure a standalone server <installguide>`.
@@ -110,6 +110,7 @@ Specify the hostname of the replica server and how to authenticate to
 it in :cyrusman:`imapd.conf(5)` using these options:
 
     * sync_host
+    * sync_port
     * sync_authname
     * sync_realm
     * sync_password
