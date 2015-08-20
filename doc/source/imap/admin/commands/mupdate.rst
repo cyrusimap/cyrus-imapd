@@ -67,7 +67,7 @@ Examples
         # (mupdate master, only one in the entire cluster)
         **mupdate     cmd="mupdate -m" listen="mupdate" prefork=1**
         #
-        # (mupdate slave, run on each frontend host in the cluster)
+        # (mupdate slave, run on each front-end host in the cluster)
         # mupdate     cmd="mupdate" listen="mupdate" prefork=1
     }
 
