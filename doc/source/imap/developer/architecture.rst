@@ -99,8 +99,8 @@ Should each datastore be configured to contain the complete set of all
 data, and any front end can also behave as a back end (and vice versa),
 this is known as **Unified Murder**: where everything has everything.
 
-.. todo:
-    Migrate information from https://cyrusimap.org/mediawiki/index.php/Cyrus_Murder_Design
+See the :ref:`Cyrus Murder installation and admin guide <murder>`
+for more information.
 
 .. _architecture_replication:    
 
@@ -140,9 +140,6 @@ for more information.
 Channels
 --------
 
-A channel is a (real thing? virtual construct? To the best of my
-knowledge, there isn't a channel config file per se).
-
 A channel is a way of describing the linkage between a replication master and one
 of its replicas. It encompasses the configuration on the master to know
 which sync logs to write to, and the configuration on the master to
@@ -158,10 +155,10 @@ There's two standard channel configurations:
    replica 1, which updates replica 2)
 
 The only real benefit to chaining is bandwidth use reduction - if
-you have two replicas in a different datacentre, you can chain them and
+you have two replicas in a different data centre, you can chain them and
 avoid sending all the data over the link twice.  You can always re-
 establish replication to the second replica by creating a direct channel
-and running sync_client -A to make sure everything is up-to-date.
+and running ``sync_client -A`` to make sure everything is up-to-date.
 
 Log file
 --------

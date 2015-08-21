@@ -5,6 +5,10 @@ Standard Operating Procedures
 .. toctree::
     :maxdepth: 2
 
+    sop/replication
+    sop/murder-concepts
+    sop/murder
+    
     sop/mailbox-operations
     sop/reloading
     sop/altnamespace
