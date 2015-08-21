@@ -115,21 +115,23 @@ Configuring the frontends is a two step process. First, you want to set mupdate_
   
 As this is a threaded service, you must prefork at least 1 of them so that the database can be synchronized at startup. Otherwise, the service will not start running until after you recieve an mupdate client connection to the slave (which is not a recommended configuration at this point).
 
-Also change all of your imapd entries to be proxyd, and all of your lmtpd entries to be lmtpproxyd. Your SERVICES section should look like this now:
+Your SERVICES section should look like this now:
 
 ::
 
-  mupdate       cmd="/usr/cyrus/bin/mupdate" listen=3905 prefork=1
+  mupdate       cmd="mupdate" listen=3905 prefork=1
 
-  imap          cmd="proxyd" listen="imap" prefork=5
-  imaps         cmd="proxyd -s" listen="imaps" prefork=1
+  imap          cmd="imap" listen="imap" prefork=5
+  imaps         cmd="imap -s" listen="imaps" prefork=1
   pop3          cmd="pop3d" listen="pop3" prefork=0
   pop3s         cmd="pop3d -s" listen="pop3s" prefork=0
   kpop          cmd="pop3d -k" listen="kpop" prefork=0
   nntp          cmd="nntpd" listen="nntp" prefork=0
   nntps         cmd="nntpd -s" listen="nntps" prefork=0
+  http          cmd="httpd" listen="http" prefork=0
+  https         cmd="httpd -s" listen="https" prefork=0
   sieve         cmd="timsieved" listen="sieve" prefork=0
-  lmtp          cmd="lmtpproxyd" listen="/var/imap/socket/lmtp" prefork=0
+  lmtp          cmd="lmtpd" listen="/var/imap/socket/lmtp" prefork=0
   
 Note that timsieved does not need a proxy daemon, the managesieve protocol deals with the murder with referrals to the backends internally.
 
@@ -227,4 +229,4 @@ Troubleshooting
     It probably actually exists on both hosts. Delete the mailbox from all but one of the hosts, and run a ``ctl_mboxlist -m`` on the one where you want it to actually live.
 
 **Databases are never created on the frontends/slaves**
-    Check to ensure that the mupdate slave process is started, (is prefork=1)    
+    Check to ensure that the mupdate slave process is started, (is prefork=1)

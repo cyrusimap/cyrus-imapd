@@ -7,7 +7,10 @@ Cyrus Murder: Concepts
 The Cyrus IMAP Aggregator transparently distributes IMAP and POP 
 mailboxes across multiple servers. Unlike other systems for load 
 balancing IMAP mailboxes, the aggregator allows users to access 
-mailboxes on any of the IMAP servers in the system. 
+mailboxes on any of the IMAP servers in the system.
+
+Note that although this document focuses on IMAP and POP, the same
+concepts also apply to NNTP and HTTP (CalDAV, CardDAV, RSS).
 
 
 
