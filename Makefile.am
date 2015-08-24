@@ -682,12 +682,12 @@ cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
 
 .testc.o:
-	$(CUNIT_PL) --generate-wrapper $<
-	$(COMPILE) -c -o $@ $<-cunit.c
-	$(RM) $<-cunit.c
+	$(AM_V_at)$(CUNIT_PL) --generate-wrapper $<
+	$(AM_V_CC)$(COMPILE) -c -o $@ $<-cunit.c
+	$(AM_V_at)$(RM) $<-cunit.c
 
 $(CUNIT_PROJECT):
-	@$(RM) $@
+	$(AM_V_at)$(RM) $@
 	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
 
 cunit/registers.h: $(CUNIT_PROJECT)
