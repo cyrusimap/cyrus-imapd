@@ -110,7 +110,7 @@ static int _version_cb(void *rock, int ncol, char **vals, char **names __attribu
 
 /* Open DAV DB corresponding in file */
 EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
-                             int version, struct sqldb_upgrade *upgradesql)
+                             int version, const struct sqldb_upgrade *upgradesql)
 {
     int rc = SQLITE_OK;
     struct stat sbuf;

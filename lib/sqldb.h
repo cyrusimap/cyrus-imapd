@@ -85,7 +85,7 @@ int sqldb_init(void);
 int sqldb_done(void);
 
 sqldb_t *sqldb_open(const char *fname, const char *initsql,
-                   int version, struct sqldb_upgrade *upgradesql);
+                   int version, const struct sqldb_upgrade *upgradesql);
 
 /* execute 'cmd' and process results with 'cb'
    'cmd' is prepared as 'stmt' with 'bval' as bound values */
