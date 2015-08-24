@@ -183,6 +183,28 @@ EXPORTED int lf_touch(struct lockf *lf)
     return 0;
 }
 
+EXPORTED time_t lf_age(struct lockf *lf, struct timespec *agep)
+{
+    if (!lf_ismine(lf)) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%s: lock no longer ours: %s", __func__, lf->filename);
+        fatal(buf_release(&buf), EC_SOFTWARE);
+    }
+
+    time_t age_seconds = time(NULL) - lf->ts.tv_sec;
+
+    if (agep) {
+        /*
+        * XXX: would be nice to calculate age as struct timespec
+        * and pass it back properly in *agep, but portability?
+        */
+        agep->tv_sec = age_seconds;
+        agep->tv_nsec = 0;
+    }
+
+    return age_seconds;
+}
+
 EXPORTED int lf_unlock(struct lockf **lfp)
 {
     struct lockf *lf = *lfp;
