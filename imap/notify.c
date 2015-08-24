@@ -160,9 +160,10 @@ EXPORTED void notify(const char *method,
     int i, r = 0;
 
     if (!strncmp(notify_sock, "dlist:", 6)) {
-        return notify_dlist(notify_sock+6, method, class, priority,
+        notify_dlist(notify_sock+6, method, class, priority,
                             user, mailbox, nopt, options,
                             message, fname);
+        return;
     }
 
     soc = socket(AF_UNIX, SOCK_DGRAM, 0);
