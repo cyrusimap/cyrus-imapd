@@ -58,9 +58,9 @@ The Cyrus IMAP Aggregator has three classes of servers:
     3. MUPDATE. 
     
 The frontend servers act as the primary communication point between the 
-end user clients and the back endservers. The frontends use the MUPDATE 
+end user clients and the backendservers. The frontends use the MUPDATE 
 server as an authoritative source for mailbox names, locations, and 
-permissions. The back end servers store the actual IMAP data (and keep 
+permissions. The backend servers store the actual IMAP data (and keep 
 the MUPDATE server appraised as to changes in the Mailbox list). 
 
 Backend Servers
@@ -85,11 +85,11 @@ the same mailbox before proceeding. Once the local aspects of mailbox
 creation are complete, the mailbox is activated on the MUPDATE server, 
 and is considered available to any client through the frontends. 
 
-Front End Servers
+Frontend Servers
 -----------------
 
-The front end servers, unlike the back end servers, are fully 
-interchangeable with each other and the front end servers can be 
+The frontend servers, unlike the backend servers, are fully 
+interchangeable with each other and the frontend servers can be 
 considered 'dataless'; any loss of a proxy results in no loss of data. 
 The only persistent data that is needed (the mailbox list) is kept on 
 the MUPDATE master server. This list is synchronized between the 
@@ -110,15 +110,15 @@ Mail Delivery
 
 The incoming mail messages go to an lmtp proxy (either running on a 
 frontend, a mail exchanger, or any other server). The lmtp proxy running 
-on the front end server uses the master MUPDATE server to determine the 
+on the frontend server uses the master MUPDATE server to determine the 
 location of the destination folder and then transfers the message to the 
-appropriate back end server via LMTP. If the backend is not up (or 
+appropriate backend server via LMTP. If the backend is not up (or 
 otherwise fails to accept the message), then the LMTP proxy returns a 
 failure to the connected MTA. 
 
 If a sieve script is present, the lmtp proxy server must do the 
 processing as the end result of the processing may result in the mail 
-message going to a different back end server than where the user's INBOX 
+message going to a different backend server than where the user's INBOX 
 is. 
 
 .. note::
@@ -128,9 +128,9 @@ Clients
 -------
 
 Clients that support :rfc:`2193` IMAP referrals can bypass the 
-aggregator front end. See `IMAP Referrals`_ for more details. 
+aggregator frontend. See `IMAP Referrals`_ for more details. 
 
-Clients are encouraged to bypass the front ends via approved mechanisms. 
+Clients are encouraged to bypass the frontends via approved mechanisms. 
 This should result in better performance for the client and less load 
 for the servers. 
 
@@ -143,7 +143,7 @@ Assumptions
     * Operations that change the mailbox list are (comparatively) rare. 
     The vast majority of IMAP sessions do not manipulate the state of the mailbox list.
     * Read operations on the mailbox list are very frequent.
-    * A mailbox name must be unique among all the back end servers.
+    * A mailbox name must be unique among all the backend servers.
     * The MUPDATE master server will be able to handle the load from the frontend, 
     backend, and LMTP proxy servers. Currently, the MUPDATE master can be a bottleneck 
     in the throughput of mailbox operations, but as the MUPDATE protocol allows for 
@@ -169,11 +169,11 @@ Authentication
 
 The user authenticates to the frontend server via any supported SASL 
 mechanism or via plaintext. If authentication is successful, the front 
-end server will authenticate to the back end server using a SASL 
+end server will authenticate to the backend server using a SASL 
 mechanism (in our case KERBEROS_V4 or GSSAPI) as a privileged user. This 
 user is able to switch to the authorization of the actual user being 
 proxied for and any authorization checks happen as if the user actually 
-authenticated directly to the back end server. Note this is a native 
+authenticated directly to the backend server. Note this is a native 
 feature of many SASL mechanisms and nothing special with the aggregator. 
 
 To help protect the backends from a compromised frontends, all 
@@ -191,8 +191,8 @@ Subscriptions
 
 ``[LSUB, SUBSCRIBE, UNSUBSCRIBE]``
 
-The front end server directs the LSUB to the back end server that has 
-the user's INBOX. As such, the back end server may have entries in the 
+The frontend server directs the LSUB to the backend server that has 
+the user's INBOX. As such, the backend server may have entries in the 
 subscription database that do not exist on that server. The frontend 
 server needs to process the list returned by the backend server and 
 either remove or tag with \\NoSelect the entries which are not currently 
@@ -210,7 +210,7 @@ Finding a Mailbox
 
 ``[SETQUOTA, GETQUOTA, EXAMINE, STATUS]``
 
-The front end machine looks up the location of the mailbox, connects via IMAP to the back end server, and issues the equivalent command there.
+The frontend machine looks up the location of the mailbox, connects via IMAP to the backend server, and issues the equivalent command there.
 A quota root is not allowed to span across multiple servers. At least, not with the semantics that it will be inclusive across the murder.
 
 ``[SELECT]``
@@ -218,7 +218,7 @@ A quota root is not allowed to span across multiple servers. At least, not with 
     To SELECT a mailbox:
 
     1. proxyd: lookup foo.bar in local mailboxes database
-    2. if yes, proxyd -> back end: send SELECT
+    2. if yes, proxyd -> backend: send SELECT
     3. if no, proxyd -> mupdate slave -> mupdate master: send a ping along the UPDATE channel in order to ensure that we have received the latest data from the MUPDATE master.
     4. if mailbox still doesn't exist, fail operation
     5. if mailbox does exist, and the client supports referrals, refer the client. Otherwise continue as a proxy with a selected mailbox.
@@ -230,52 +230,52 @@ Operations within a Mailbox
 
 ``[APPEND, CHECK, CLOSE, EXPUNGE, SEARCH, FETCH, STORE, UID]``
 
-These commands are sent to the appropriate back end server. The aggregator does not need to modify any of these commands before sending them to the back end server.
+These commands are sent to the appropriate backend server. The aggregator does not need to modify any of these commands before sending them to the backend server.
 
 COPY
 ----
 
 COPY is somewhat special as it acts upon messages in the currently SELECT'd mailbox but then interacts with another mailbox.
 
-In the case where the destination mailbox is on the same back end server as the the source folder, the COPY command is issued to the back end server and the back end server takes care of the command.
+In the case where the destination mailbox is on the same backend server as the the source folder, the COPY command is issued to the backend server and the backend server takes care of the command.
 
-If the destination folder is on a different back end server, the front end intervenes and does the COPY by FETCHing the messages from the source back end server and then APPENDs the messages to the destination server.
+If the destination folder is on a different backend server, the frontend intervenes and does the COPY by FETCHing the messages from the source backend server and then APPENDs the messages to the destination server.
 
 Operations on the Mailbox List
 ------------------------------
 
 ``[CREATE, DELETE, RENAME, SETACL]``
 
-These commands are all done by the back end server using the MUPDATE server as a lock manager. Changes are then propagated to the frontend via the MUPDATE protocol.
+These commands are all done by the backend server using the MUPDATE server as a lock manager. Changes are then propagated to the frontend via the MUPDATE protocol.
 
 ``[LIST]``
 
-    LIST is handled by the front end servers; no interaction is required with the back end server as the front ends have a local database that is never more than a few seconds out of date.
+    LIST is handled by the frontend servers; no interaction is required with the backend server as the frontends have a local database that is never more than a few seconds out of date.
 
 ``[CREATE]``
     
-    CREATE creates the mailbox on the same back end server as the parent mailbox. If the parent exists but exists on multiple back end servers, if there is no parent folder, a tagged NO response is returned.
+    CREATE creates the mailbox on the same backend server as the parent mailbox. If the parent exists but exists on multiple backend servers, if there is no parent folder, a tagged NO response is returned.
 
-    When this happens, the administrator has two choices. He may connect directly to a back end server and issue the CREATE on that server. Alternatively, a second argument can be given to CREATE after the mailbox name. This argument specifies the specific host name on which the mailbox is to be created.
+    When this happens, the administrator has two choices. He may connect directly to a backend server and issue the CREATE on that server. Alternatively, a second argument can be given to CREATE after the mailbox name. This argument specifies the specific host name on which the mailbox is to be created.
 
-    The following operations occur for CREATE on the front end:
+    The following operations occur for CREATE on the frontend:
 
     * proxyd: verify that mailbox doesn't exist in MUPDATE mailbox list.
     * proxyd: decide where to send CREATE (the server of the parent mailbox, as top level mailboxes cannot be created by the proxies).
-    * proxyd -> back end: duplicate CREATE command and verifies that the CREATE does not create an inconsistency in the mailbox list (i.e. the folder name is still unique).
+    * proxyd -> backend: duplicate CREATE command and verifies that the CREATE does not create an inconsistency in the mailbox list (i.e. the folder name is still unique).
 
-    The following operations occur for CREATE on the back end:
+    The following operations occur for CREATE on the backend:
 
     * imapd: verify ACLs to best of ability (CRASH: aborted)
     * imapd: start mailboxes transaction (CRASH: aborted)
     * imapd may have to open an MUPDATE connection here if one doesn't already exist
     * imapd -> MUPDATE: set foo.bar reserved (CRASH: MUPDATE externally inconsistent)
-    * imapd: create foo.bar in spool disk (CRASH: MUPDATE externally inconsistent, back end externally inconsistent, this can be resolved when the backend comes back up by clearing the state from both MUPDATE and the backend)
+    * imapd: create foo.bar in spool disk (CRASH: MUPDATE externally inconsistent, backend externally inconsistent, this can be resolved when the backend comes back up by clearing the state from both MUPDATE and the backend)
     * imapd: add foo.bar to mailboxes dataset (CRASH: ditto)
     * imapd: commit transaction (CRASH: ditto, but the recovery can activate the mailbox in mupdate instead)
     * imapd -> MUPDATE: set foo.bar active (CRASH: committed)
 
-    Failure modes: Above, all back end inconsistencies result in the next CREATE attempt failing. The earlier MUPDATE inconsistency results in any attempts to CREATE the mailbox on another back end failing. The latter one makes the mailbox unreachable and un-createable. Though, this is safer than potentially having the mailbox appaear in two places when the failed backend comes back up.
+    Failure modes: Above, all backend inconsistencies result in the next CREATE attempt failing. The earlier MUPDATE inconsistency results in any attempts to CREATE the mailbox on another backend failing. The latter one makes the mailbox unreachable and un-createable. Though, this is safer than potentially having the mailbox appaear in two places when the failed backend comes back up.
 
 ``[RENAME]``
 
@@ -285,25 +285,25 @@ These commands are all done by the back end server using the MUPDATE server as a
 IMAP Referrals
 --------------
 
-If clients support IMAP Mailbox Referrals (:rfc:`2193`), the client can improve performance and reduce the load on the aggregator by using the IMAP referrals that are sent to it and going to the appropriate back end servers.
+If clients support IMAP Mailbox Referrals (:rfc:`2193`), the client can improve performance and reduce the load on the aggregator by using the IMAP referrals that are sent to it and going to the appropriate backend servers.
 
-The front end servers will advertise the ``MAILBOX-REFERRALS`` capability. The back end servers will also advertise this capability (but only because they need to refer clients while a mailbox is moving between servers).
+The frontend servers will advertise the ``MAILBOX-REFERRALS`` capability. The backend servers will also advertise this capability (but only because they need to refer clients while a mailbox is moving between servers).
 
 Since there is no way for the server to know if a client supports referrals, the Cyrus IMAP Aggregator will assume the clients do not support referrals unless the client issues a RLSUB or a RLIST command.
 
 Once a client issues one of those commands, then the aggregator will issue referrals for any command that is safe for the client to contact the IMAP server directly. Most commands that perform operations within a mailbox (cf Section 3.3) fall into this category. Some commands will not be possible without a referrals-capable client (such as most commands done as administrator).
 
-:rfc:`2193` indicates that the client does not stick the referred server. As such the SELECT will get issued to the front end server and not the referred server. Additionally, CREATE, RENAME, and DELETE get sent to the frontend which will proxy the command to the correct back end server.
+:rfc:`2193` indicates that the client does not stick the referred server. As such the SELECT will get issued to the frontend server and not the referred server. Additionally, CREATE, RENAME, and DELETE get sent to the frontend which will proxy the command to the correct backend server.
 
 POP
 ---
 
-POP is easy given that POP only allows access to the user's INBOX. When it comes to POP, the IMAP Aggregator acts just like a :ref:`multiplexor <appendix-b-imap-multiplexing>`. The user authenticates to front end server. The front end determines where the user's INBOX is located and does a direct pass through of the POP commands from the client to the appropriate back end server.
+POP is easy given that POP only allows access to the user's INBOX. When it comes to POP, the IMAP Aggregator acts just like a :ref:`multiplexor <appendix-b-imap-multiplexing>`. The user authenticates to frontend server. The frontend determines where the user's INBOX is located and does a direct pass through of the POP commands from the client to the appropriate backend server.
 
 MUPDATE
 -------
 
-The mupdate (slave) process (one per front end) holds open an MUPDATE connection and listens for updates from the MUPDATE master server (as backends inform it of updates). The slave makes these modifications on the local copy of the mailboxes database.
+The mupdate (slave) process (one per frontend) holds open an MUPDATE connection and listens for updates from the MUPDATE master server (as backends inform it of updates). The slave makes these modifications on the local copy of the mailboxes database.
 
 Analysis
 ========
@@ -311,9 +311,9 @@ Analysis
 Mailboxes Database
 ------------------
 
-A benefit of having the mailbox information on the front end is that 
-LIST is very cheap. The front end servers can process this request 
-without having to contact each back end server. 
+A benefit of having the mailbox information on the frontend is that 
+LIST is very cheap. The frontend servers can process this request 
+without having to contact each backend server. 
 
 We're also assuming that LIST is a much more frequent operation than any 
 of the mailbox operations and thus should be the case to optimize. (In 
@@ -324,13 +324,13 @@ in the mailbox list are also quite frequent).
 Failure Mode Analysis
 ---------------------
 
-What happens when a back end server comes up?
+What happens when a backend server comes up?
 #############################################
     Resynchronization with the MUPDATE server. Any mailboxes that exist locally but are not in MUPDATE are pushed to MUPDATE. Any mailboxes that exist locally but are in MUPDATE as living on a different server are deleted. Any mailboxes that do not exist locally but exist in MUPDATE as living on this server are removed from MUPDATE.
 
-What happens when a front end server comes up? 
+What happens when a frontend server comes up? 
 ##############################################
-    The only thing that needs to happen is for the front end to connect to the MUPDATE server, issue an UPDATE command, and resynchronize its local database copy with the copy on the master server.
+    The only thing that needs to happen is for the frontend to connect to the MUPDATE server, issue an UPDATE command, and resynchronize its local database copy with the copy on the master server.
     
 Where's the true mailboxes file? 
 ################################
@@ -339,10 +339,10 @@ Where's the true mailboxes file?
 Summary of Benefits
 -------------------
 
-* **Availability** - By allowing multiple front-ends, failures of the front-end only result in a reduction of capacity. Users currently connected still lose their session but can just reconnect to get back online.
-    * The failure of the back-ends will result in the loss of availability. However, given that the data is distributed among multiple servers, the failure of a single server does not result the entire system being down. Our experience with AFS was that this type of partitioned failure was acceptable (if not ideal).
+* **Availability** - By allowing multiple frontends, failures of the frontend only result in a reduction of capacity. Users currently connected still lose their session but can just reconnect to get back online.
+    * The failure of the backends will result in the loss of availability. However, given that the data is distributed among multiple servers, the failure of a single server does not result the entire system being down. Our experience with AFS was that this type of partitioned failure was acceptable (if not ideal).
     * The failure of the mupdate master will cause write operations to the mailbox list to fail, but accesses to mailboxes themselves (as well as read operations to the mailbox list) will continue uninterrupted.
-    * At this point, there may be some ideas but no plans for providing a high availability solution which would allow for back-end servers or the MUPDATE server to fail with no availability impact.
+    * At this point, there may be some ideas but no plans for providing a high availability solution which would allow for backend servers or the MUPDATE server to fail with no availability impact.
 * **Load scalability** - We have not done any specific benchmarks to show that this system actually performs better. However, it is clear that it scales to a larger number of users than a single server architechure would. Though, based on the fact that we have not had any performance problems similar to when we were running a single machine, and we are handling about 20% more concurrent users, things have been a rousing success.
 * **Management benefits** - As with AFS, administrators have the flexibility of placement of data on the servers, "live" move of data between servers,
 * **User benefits** - The user only needs to know a single server name for configuration. The same name can be handed out to all users.
@@ -392,7 +392,7 @@ Appendix B: IMAP Multiplexing
 
 Another method of spreading out the load is to use IMAP multiplexing. This is very similar to the IMAP Aggregator in that there are frontend and backend servers. The frontend servers do the lookup and then forward the request to the appropriate backend server.
 
-The multiplexor looks at the user who has authenticated. Once the user has authenticated, the frontend does a lookup for the backend server and then connects the session to a single backend server. This provides the flexibility of balancing the users among any arbitrary server but it creates a problem where a user can not share a folder with a user on a different back end server.
+The multiplexor looks at the user who has authenticated. Once the user has authenticated, the frontend does a lookup for the backend server and then connects the session to a single backend server. This provides the flexibility of balancing the users among any arbitrary server but it creates a problem where a user can not share a folder with a user on a different backend server.
 
 Multiplexors references:
 
