@@ -465,7 +465,7 @@ static int do_reconstruct(const char *name,
     r = mailbox_reconstruct(lastname, reconstruct_flags);
     if (r) {
 	com_err(lastname, r, "%s",
-		(r == IMAP_IOERROR) ? error_message(errno) : NULL);
+		(r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
 	return 0;
     }
 
