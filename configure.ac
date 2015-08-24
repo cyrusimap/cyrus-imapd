@@ -1282,7 +1282,8 @@ if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
 dnl
-        PKG_CHECK_MODULES([XML2], [libxml-2.0],,
+        PKG_CHECK_MODULES([XML2], [libxml-2.0],
+                LIBS="$LIBS ${XML2_LIBS}",
                 AC_MSG_ERROR([Need libxml-2.0 for http]))
 
         AC_CHECK_LIB(xml2, xmlFirstElementChild, [
@@ -1298,8 +1299,10 @@ dnl
                 AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),
                 AC_MSG_ERROR([Need sqlite3 for http]))
 
-        PKG_CHECK_MODULES([ICAL], [libical],
-                AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?]),
+        PKG_CHECK_MODULES([ICAL], [libical], [
+                AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
+                LIBS="$LIBS ${ICAL_LIBS}"
+                ],
                 AC_MSG_ERROR([Need libical for http]))
 
         AC_CHECK_LIB(ical, icalparameter_new_iana, [
@@ -1340,7 +1343,7 @@ dnl
 
         PKG_CHECK_MODULES([JANSSON], [jansson],
                 AC_DEFINE(WITH_JSON,[],
-                        [Build jCal/jCard/TZdist support into httpd?]),
+                        [Build jCal/jCard/JMAP/TZdist support into httpd?]),
                 AC_MSG_ERROR([Need jansson for http]))
 
         PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
