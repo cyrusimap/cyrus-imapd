@@ -44,6 +44,16 @@
 #ifndef BACKUP_API_H
 #define BACKUP_API_H
 
+#include "imap/dlist.h"
+
 struct backup;
+
+int backup_create(struct backup **backupp, const char *name);
+int backup_close(struct backup **backupp);
+
+int backup_reindex(const char *name);
+
+int backup_write_dlist(struct backup *backup, time_t ts, struct dlist *dl);
+int backup_index_dlist(struct backup *backup, time_t ts, struct dlist *dl);
 
 #endif

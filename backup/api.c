@@ -51,8 +51,10 @@
 #include "lib/xmalloc.h"
 
 #include "imap/dlist.h"
+#include "imap/imapparse.h"
 
 #include "backup/api.h"
+#include "backup/gzuncat.h"
 #include "backup/sqlconsts.h"
 
 enum backup_lock_type {
@@ -97,10 +99,10 @@ struct backup {
  *  - restore needs to read gz and index (shared)
  */
 
-static int backup_open(struct backup **backupp, const char *name,
-                       enum backup_lock_type lock_type,
-                       enum backup_data_mode data_mode,
-                       enum backup_index_mode index_mode)
+static int backup_open_internal(struct backup **backupp, const char *name,
+                                enum backup_lock_type lock_type,
+                                enum backup_data_mode data_mode,
+                                enum backup_index_mode index_mode)
 {
     assert(backup_is_valid_lock_type(lock_type));
     assert(backup_is_valid_data_mode(data_mode));
@@ -200,9 +202,111 @@ error:
 //    return backup_open(backupp, name, BACKUP_LOCK_EXCLUSIVE);
 //}
 
+static ssize_t fill_cb(unsigned char *buf, size_t len, void *rock) {
+    struct gzuncat *gzuc = (struct gzuncat *) rock;
+    return gzuc_read(gzuc, buf, len);
+}
+
+static int backup_parse_command(struct protstream *in, time_t *ts, struct buf *cmd, struct dlist **kin) {
+    struct dlist *dl = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int64_t t;
+    int c;
+
+    c = prot_getc(in);
+    if (c == '#')
+        eatline(in, c);
+    else
+        prot_ungetc(c, in);
+
+    c = getint64(in, &t);
+    if (c == EOF)
+        goto fail;
+
+    c = getword(in, &buf);
+    if (c == EOF)
+        goto fail;
+
+    c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, in);
+
+    if (!dl) {
+        fprintf(stderr, "\ndidn't parse dlist, error %i\n", c);
+        goto fail;
+    }
+
+    if (c == '\r') c = prot_getc(in);
+    if (c != '\n') {
+        fprintf(stderr, "expected newline, got '%c'\n", c);
+        eatline(in, c);
+        goto fail;
+    }
+
+    if (kin) *kin = dl;
+    if (cmd) buf_copy(cmd, &buf);
+    if (ts) *ts = (time_t) t;
+    buf_free(&buf);
+    return c;
+
+fail:
+    if (dl) dlist_free(&dl);
+    buf_free(&buf);
+    return c;
+}
+
 EXPORTED int backup_reindex(const char *name)
 {
-    return -1;
+    struct backup *backup = NULL;
+    int r = backup_open_internal(&backup, name, BACKUP_LOCK_EXCLUSIVE, BACKUP_DATA_NORMAL, BACKUP_INDEX_CREATE);
+    if (r) return r;
+    assert(backup != NULL);
+
+    struct gzuncat *gzuc = gzuc_open(backup->fd);
+
+    while (gzuc && !gzuc_eof(gzuc)) {
+        gzuc_member_start(gzuc);
+
+        fprintf(stderr, "\nfound member at offset %jd\n\n", gzuc_member_offset(gzuc));
+
+        struct protstream *member = prot_readcb(fill_cb, gzuc);
+        prot_setisclient(member, 1); /* don't sync literals */
+
+        // FIXME stricter timestamp sequence checks
+        time_t member_ts = -1;
+
+        while (1) {
+            struct buf cmd = BUF_INITIALIZER;
+            time_t ts;
+            struct dlist *dl = NULL;
+
+            int c = backup_parse_command(member, &ts, &cmd, &dl);
+            if (c == EOF) break;
+
+            if (member_ts == -1)
+                member_ts = ts;
+            else if (member_ts > ts)
+                fatal("timestamp older than previous", -1);
+
+            if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
+                continue;
+
+            ucase(dl->name);
+
+            r = backup_index_dlist(backup, ts, dl);
+            if (r) {
+                // FIXME do something
+            }
+        }
+
+        prot_free(member);
+        gzuc_member_end(gzuc, NULL);
+    }
+
+    fprintf(stderr, "reached end of file\n");
+
+    gzuc_close(&gzuc);
+    backup_close(&backup);
+
+    return r;
 }
 
 EXPORTED int backup_create(struct backup **backupp, const char *name)

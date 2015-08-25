@@ -49,17 +49,10 @@
 
 #include <config.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <zlib.h>
 
 #include "lib/exitcodes.h"
-#include "lib/util.h"
 
-#include "imap/imapparse.h"
-
-#include "backup/gzuncat.h"
+#include "backup/api.h"
 
 EXPORTED void fatal(const char *error, int code) {
     fprintf(stderr, "fatal error: %s\n", error);
@@ -67,143 +60,16 @@ EXPORTED void fatal(const char *error, int code) {
 }
 
 static void usage(const char *name) {
-    fprintf(stderr, "Usage: %s backup_filename\n", name);
+    fprintf(stderr, "Usage: %s backup_name\n", name);
     exit(EC_USAGE);
-}
-
-static ssize_t fill_cb(unsigned char *buf, size_t len, void *rock) {
-    struct gzuncat *gzuc = (struct gzuncat *) rock;
-    return gzuc_read(gzuc, buf, len);
-}
-
-static int backup_parse_command(struct protstream *in, time_t *ts, struct buf *cmd, struct dlist **kin) {
-    struct dlist *dl = NULL;
-    struct buf buf = BUF_INITIALIZER;
-    int64_t t;
-    int c;
-
-    c = prot_getc(in);
-    if (c == '#')
-        eatline(in, c);
-    else
-        prot_ungetc(c, in);
-
-    c = getint64(in, &t);
-    if (c == EOF)
-        goto fail;
-
-    c = getword(in, &buf);
-    if (c == EOF)
-        goto fail;
-
-    c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, in);
-
-    if (!dl) {
-        fprintf(stderr, "\ndidn't parse dlist, error %i\n", c);
-        goto fail;
-    }
-
-    if (c == '\r') c = prot_getc(in);
-    if (c != '\n') {
-        fprintf(stderr, "expected newline, got '%c'\n", c);
-        eatline(in, c);
-        goto fail;
-    }
-
-    if (kin) *kin = dl;
-    if (cmd) buf_copy(cmd, &buf);
-    if (ts) *ts = (time_t) t;
-    buf_free(&buf);
-    return c;
-
-fail:
-    if (dl) dlist_free(&dl);
-    buf_free(&buf);
-    return c;
-}
-
-static int backup_apply_mailbox(time_t ts, struct dlist *dl) {
-    struct buf out = BUF_INITIALIZER;
-
-    dlist_printbuf(dl, 1, &out);
-    fprintf(stderr, "backup_apply_mailbox: %.24s %s\n", ctime(&ts), buf_release(&out));
-    return 0;
-}
-
-static int backup_apply_message(time_t ts, struct dlist *dl) {
-    struct buf out = BUF_INITIALIZER;
-
-    dlist_printbuf(dl, 1, &out);
-    fprintf(stderr, "backup_apply_message: %.24s %s\n", ctime(&ts), buf_release(&out));
-    return 0;
 }
 
 int main (int argc, char **argv) {
     if (argc != 2) usage(argv[0]);
 
-    const char *backup_filename = argv[1];
+    const char *backup_name = argv[1];
 
-    fprintf(stderr, "reindexing %s...\n", backup_filename);
+    fprintf(stderr, "reindexing %s...\n", backup_name);
 
-    int fd = open(backup_filename, O_RDONLY);
-    struct gzuncat *gzuc = gzuc_open(fd);
-
-    while (gzuc && !gzuc_eof(gzuc)) {
-        gzuc_member_start(gzuc);
-
-        fprintf(stderr, "\nfound member at offset %jd\n\n", gzuc_member_offset(gzuc));
-
-        struct protstream *member = prot_readcb(fill_cb, gzuc);
-        prot_setisclient(member, 1); /* don't sync literals */
-
-        // FIXME stricter timestamp sequence checks
-        time_t member_ts = -1;
-
-        while (1) {
-            struct buf cmd = BUF_INITIALIZER;
-            time_t ts;
-            struct dlist *dl = NULL;
-
-            int c = backup_parse_command(member, &ts, &cmd, &dl);
-            if (c == EOF) break;
-
-            if (member_ts == -1)
-                member_ts = ts;
-            else if (member_ts > ts)
-                fatal("timestamp older than previous", -1);
-
-            if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
-                continue;
-
-            ucase(dl->name);
-
-            int r;
-
-            if (0) { }
-
-            else if (strcmp(dl->name, "MAILBOX") == 0)
-                r = backup_apply_mailbox(member_ts, dl);
-            else if (strcmp(dl->name, "MESSAGE") == 0)
-                r = backup_apply_message(member_ts, dl);
-
-            else {
-                fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dl->name);
-                continue;
-            }
-
-            if (r) {
-                // FIXME do something
-            }
-        }
-
-        prot_free(member);
-        gzuc_member_end(gzuc, NULL);
-    }
-
-    fprintf(stderr, "reached end of file\n");
-
-    gzuc_close(&gzuc);
-    close(fd);
-
-    return 0;
+    return backup_reindex(backup_name);
 }
