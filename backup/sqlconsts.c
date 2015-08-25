@@ -45,4 +45,70 @@
 
 #define QUOTE(...) #__VA_ARGS__
 
-const char backup_index_sql[] = QUOTE();
+const int backup_index_version = 1;
+
+const char backup_index_initsql[] = QUOTE(
+    CREATE TABLE gzchunk(
+        id INTEGER PRIMARY KEY ASC,
+        offset INTEGER UNIQUE,
+        length INTEGER
+    );
+
+    CREATE TABLE backup(
+        id INTEGER PRIMARY KEY ASC,
+        timestamp INTEGER,
+        gzchunk_id INTEGER REFERENCES gzchunk(id)
+    );
+
+    CREATE TABLE message(
+        id INTEGER PRIMARY KEY ASC,
+        guid CHAR UNIQUE,
+        gzchunk_id INTEGER REFERENCES gzchunk(id),
+        offset INTEGER,
+        length INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_msg_guid ON message(guid);
+
+    CREATE TABLE backup_mailbox(
+        id INTEGER PRIMARY KEY ASC,
+        backup_id INTEGER NOT NULL REFERENCES backup(id),
+        uniqueid CHAR NOT NULL,
+        mboxname CHAR NOT NULL,
+        last_uid INTEGER,
+        highestmodseq INTEGER,
+        recentuid INTEGER,
+        recenttime INTEGER,
+        last_appenddate INTEGER,
+        pop3_last_login INTEGER,
+        pop3_show_after INTEGER,
+        uidvalidity INTEGER,
+        partition CHAR,
+        acl CHAR,
+        options CHAR,
+        sync_crc INTEGER,
+        sync_crc_annot INTEGER,
+        quotaroot CHAR,
+        xconvmodseq INTEGER,
+        /* [annotations] */
+        UNIQUE ( backup_id, uniqueid ) /* ??? */
+    );
+    CREATE INDEX IF NOT EXISTS idx_bmb_uid ON backup_mailbox(uniqueid);
+
+    CREATE TABLE mailbox_record(
+        id INTEGER PRIMARY KEY ASC,
+        backup_mailbox_id INTEGER NOT NULL REFERENCES backup_mailbox(id),
+        message_id INTEGER NOT NULL REFERENCES message(id),
+        uid INTEGER,
+        modseq INTEGER,
+        last_updated INTEGER,
+        /* [flags] ??? */
+        internaldate INTEGER
+        /* [annotations] */
+        /* expunged INTEGER, -- duplicated from [flags]? */
+    );
+    CREATE INDEX IF NOT EXISTS idx_mbr_uid ON mailbox_record(uid);
+);
+
+const struct sqldb_upgrade backup_index_upgrade[] = {
+    { 0, NULL, NULL } /* leave me last */
+};

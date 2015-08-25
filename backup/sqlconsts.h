@@ -44,6 +44,12 @@
 #ifndef BACKUP_SQLCONSTS_H
 #define BACKUP_SQLCONSTS_H
 
-extern const char backup_index_sql[];
+#include "lib/sqldb.h"
+
+extern const char backup_index_initsql[];
+
+extern const struct sqldb_upgrade backup_index_upgrade[];
+
+extern const int backup_index_version;
 
 #endif
