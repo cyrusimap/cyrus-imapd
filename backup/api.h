@@ -45,15 +45,60 @@
 #define BACKUP_API_H
 
 #include "imap/dlist.h"
+#include "imap/mboxname.h"
 
 struct backup;
 
-int backup_create(struct backup **backupp, const char *name);
+struct backup *backup_open(const char *name);
 int backup_close(struct backup **backupp);
 
 int backup_reindex(const char *name);
 
 int backup_write_dlist(struct backup *backup, time_t ts, struct dlist *dl);
-int backup_index_dlist(struct backup *backup, time_t ts, struct dlist *dl);
+int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len);
 
+int backup_index_start(struct backup *backup, time_t ts, off_t offset);
+int backup_index_end(struct backup *backup, size_t length);
+
+/* FIXME new api? */
+
+struct backup_message {
+    int id;
+    struct message_guid *guid;
+    char *partition;
+    int backup_id;
+    off_t offset;
+    size_t length;
+};
+
+struct backup_mailbox {
+    int id;
+    int last_backup_id;
+    int deleted;
+    struct dlist *dlist;
+};
+
+typedef int (*backup_mailbox_foreach_cb)(const struct backup_mailbox *mailbox,
+                                         void *rock);
+int backup_mailbox_foreach(struct backup *backup, int want_records,
+                           backup_mailbox_foreach_cb cb, void *rock);
+struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup, const mbname_t *mbname, int want_records);
+void backup_mailbox_free(struct backup_mailbox **mailbox);
+
+int backup_get_message_id(struct backup *backup, const char *guid);
+struct backup_message *backup_get_message(struct backup *backup, const struct message_guid *guid);
+char *backup_get_message_content(struct backup *backup, const struct backup_message *message);
+void backup_message_free(struct backup_message **message);
+
+int backup_append_start(struct backup *backup, time_t ts);
+int backup_append(struct backup *backup, struct dlist *dlist, time_t ts);
+int backup_append_done(struct backup *backup);
+
+int backup_index_start(struct backup *backup, time_t ts, off_t offset);
+int backup_index(struct backup *backup, struct dlist *dlist, time_t ts);
+int backup_index_done(struct backup *backup, size_t len);
+
+int backup_close(struct backup **backupp); // also ends index/append ops
+
+/******************/
 #endif
