@@ -2252,7 +2252,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
             continue;
         }
-        else if (this == '\r' && next == '\n') {
+        else if (!isheader && this == '\r' && next == '\n') {
             /* line break (CRLF) */
             n++;
             continue;
@@ -2308,19 +2308,20 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             else if (this == '\r' && next == '\n') {
                 if (isheader) {
                     /* folded header, split encoded token */
-                    buf_appendcstr(&buf, "?=");
-                    buf_appendcstr(&buf, "\r\n");
-                    buf_putc(&buf, data[n+2]);
-                    buf_appendcstr(&buf, "=?UTF-8?Q?");
-                    cnt = 11;
-                    n += 2;
+                    if (n < len - 2) {
+                        /* only if actually a folding character, skip it */
+                        if (data[n+2] == ' ' || data[n+2] == '\t')
+                            n++;
+                        buf_appendcstr(&buf, "?=\r\n =?UTF-8?Q?");
+                        cnt = 12;
+                    }
                 }
                 else {
                     /* line break (CRLF) in body */
                     buf_appendcstr(&buf, "\r\n");
                     cnt = 0;
-                    n++;
                 }
+                n++;
             }
             else {
                 /* 8-bit representation */

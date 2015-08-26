@@ -643,6 +643,7 @@ cunit_TESTS = \
 	cunit/guid.testc \
 	cunit/hash.testc \
 	cunit/imapurl.testc \
+	cunit/lock_file.testc \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
 	cunit/message.testc \
@@ -681,12 +682,12 @@ cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
 
 .testc.o:
-	$(CUNIT_PL) --generate-wrapper $<
-	$(COMPILE) -c -o $@ $<-cunit.c
-	$(RM) $<-cunit.c
+	$(AM_V_at)$(CUNIT_PL) --generate-wrapper $<
+	$(AM_V_CC)$(COMPILE) -c -o $@ $<-cunit.c
+	$(AM_V_at)$(RM) $<-cunit.c
 
 $(CUNIT_PROJECT):
-	@$(RM) $@
+	$(AM_V_at)$(RM) $@
 	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
 
 cunit/registers.h: $(CUNIT_PROJECT)
@@ -751,6 +752,7 @@ include_HEADERS = \
 	lib/iostat.h \
 	lib/iptostring.h \
 	lib/libcyr_cfg.h \
+	lib/lock_file.h \
 	lib/lsort.h \
 	lib/map.h \
 	lib/mappedfile.h \
@@ -849,7 +851,7 @@ EXTRA_DIST += \
 endif # HAVE_CLAMAV
 
 if HTTPD
-imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c
+imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
 imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 else # HTTPD
 EXTRA_DIST += \
@@ -1064,47 +1066,10 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_db.h \
 	imap/dav_util.c \
 	imap/dav_util.h \
-	imap/http_caldav.c \
-	imap/http_caldav_sched.c \
-	imap/http_caldav_sched.h \
-	imap/http_carddav.c \
-	imap/http_client.c \
-	imap/http_client.h \
-	imap/http_dav.c \
-	imap/http_dav.h \
-	imap/http_dblookup.c \
-	imap/http_ischedule.c \
-	imap/http_jmap.c \
-	imap/http_proxy.c \
-	imap/http_proxy.h \
-	imap/http_rss.c \
-	imap/http_tzdist.c \
-	imap/http_webdav.c \
-	imap/httpd.c \
-	imap/httpd.h \
 	imap/ical_support.c \
 	imap/ical_support.h \
-	imap/jcal.c \
-	imap/jcal.h \
-	imap/proxy.c \
-	imap/proxy.h \
-	imap/smtpclient.c \
-	imap/smtpclient.h \
-	imap/spool.c \
-	imap/spool.h \
 	imap/webdav_db.c \
-	imap/webdav_db.h \
-	imap/xcal.c \
-	imap/xcal.h \
-	imap/xml_support.c \
-	imap/xml_support.h \
-	imap/zoneinfo_db.c \
-	imap/zoneinfo_db.h
-
-nodist_imap_libcyrus_imap_la_SOURCES += \
-	imap/http_caldav_js.h \
-	imap/http_err.c \
-	imap/tz_err.c
+	imap/webdav_db.h
 
 endif # HTTPD
 
@@ -1149,7 +1114,7 @@ SNMPGEN = $(abs_top_srcdir)/snmp/snmpgen
 imap/lmtpstats.c: imap/lmtpstats.snmp $(SNMPGEN)
 	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
-imap/pushstats.c: imap/pushstats.snmp snmp/snmpgen
+imap/pushstats.c: imap/pushstats.snmp $(SNMPGEN)
 	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
@@ -1195,36 +1160,40 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.h
 
 imap_httpd_SOURCES = \
-	imap/caldav_alarm.c \
 	imap/caldav_db.c \
-	imap/carddav_db.c \
-	imap/carddav_db.h \
-	imap/dav_db.c \
-	imap/dav_util.c \
+	imap/http_admin.c \
 	imap/http_caldav.c \
 	imap/http_caldav_sched.c \
+	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
 	imap/http_client.c \
+	imap/http_client.h \
 	imap/http_dav.c \
+	imap/http_dav.h \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
 	imap/http_jmap.c \
-	imap/http_jmap.h \
 	imap/http_proxy.c \
+	imap/http_proxy.h \
 	imap/http_rss.c \
 	imap/http_tzdist.c \
 	imap/http_webdav.c \
 	imap/httpd.c \
+	imap/httpd.h \
 	imap/ical_support.c \
 	imap/jcal.c \
+	imap/jcal.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
-	imap/webdav_db.c \
 	imap/xcal.c \
+	imap/xcal.h \
 	imap/xml_support.c \
+	imap/xml_support.h \
 	imap/zoneinfo_db.c \
+	imap/zoneinfo_db.h \
+	master/masterconf.c \
 	master/service.c
 
 imap_httpd_LDADD = $(LD_SERVER_ADD)
@@ -1403,6 +1372,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/imapopts.c \
 	lib/libconfig.c \
+	lib/lock_file.c \
 	lib/mpool.c \
 	lib/retry.c \
 	lib/strarray.c \

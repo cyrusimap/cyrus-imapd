@@ -180,6 +180,7 @@ static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
+static int imapd_tls_required = 0; /* is tls required? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
@@ -293,6 +294,9 @@ static struct capa_struct base_capabilities[] = {
     { "LITERAL+",              3 },
     { "ID",                    3 },
     { "ENABLE",                3 },
+#ifdef ENABLE_APPLEPUSHSERVICE
+    { "XAPPLEPUSHSERVICE",     3 }, /* apple push service for mail.app */
+#endif
 /* post-auth capabilities */
     { "ACL",                   2 },
     { "RIGHTS=kxten",          2 },
@@ -404,6 +408,10 @@ static int do_xconvfetch(struct dlist *cidlist,
 static void cmd_xsnippets(char *tag);
 static void cmd_xstats(char *tag, int c);
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *applepushserviceargs);
+#endif
+
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
 static void cmd_genurlauth(char *tag);
@@ -473,7 +481,7 @@ static void canonical_list_patterns(const char *reference,
                                     strarray_t *patterns);
 static int list_cb(const char *name, int matchlen, int maycreate,
                    void *rock);
-static int subscribed_cb(const const char *name, int matchlen, int maycreate,
+static int subscribed_cb(const char *name, int matchlen, int maycreate,
                          void *rock);
 static void list_data(struct listargs *listargs);
 static int list_data_remote(char *tag, struct listargs *listargs);
@@ -956,6 +964,8 @@ int service_main(int argc __attribute__((unused)),
         saslprops.iplocalport = xstrdup(localip);
     }
 
+    imapd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
+
     proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
@@ -1201,6 +1211,9 @@ static void cmdloop(void)
     double commandmintimerd = 0.0;
     struct sync_reserve_list *reserve_list =
         sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
+#ifdef ENABLE_APPLEPUSHSERVICE
+    struct applepushserviceargs applepushserviceargs;
+#endif
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -2305,6 +2318,62 @@ static void cmdloop(void)
                 cmd_xmeid(tag.s, arg1.s);
             }
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+            else if (!strcmp(cmd.s, "Xapplepushservice")) {
+                if (c != ' ') goto missingargs;
+
+                memset(&applepushserviceargs, 0, sizeof(struct applepushserviceargs));
+
+                do {
+                    c = getastring(imapd_in, imapd_out, &arg1);
+                    if (c == EOF) goto aps_missingargs;
+
+                    if (!strcmp(arg1.s, "mailboxes")) {
+                        c = prot_getc(imapd_in);
+                        if (c != '(')
+                            goto aps_missingargs;
+
+                        c = prot_getc(imapd_in);
+                        if (c != ')') {
+                            prot_ungetc(c, imapd_in);
+                            do {
+                                c = getastring(imapd_in, imapd_out, &arg2);
+                                if (c == EOF) break;
+                                strarray_push(&applepushserviceargs.mailboxes, arg2.s);
+                            } while (c == ' ');
+                        }
+
+                        if (c != ')')
+                            goto aps_missingargs;
+                        c = prot_getc(imapd_in);
+                    }
+
+                    else {
+                        c = getastring(imapd_in, imapd_out, &arg2);
+
+                        // regular key/value
+                        if (!strcmp(arg1.s, "aps-version")) {
+                            if (!imparse_isnumber(arg2.s)) goto aps_extraargs;
+                            applepushserviceargs.aps_version = atoi(arg2.s);
+                        }
+                        else if (!strcmp(arg1.s, "aps-account-id"))
+                            buf_copy(&applepushserviceargs.aps_account_id, &arg2);
+                        else if (!strcmp(arg1.s, "aps-device-token"))
+                            buf_copy(&applepushserviceargs.aps_device_token, &arg2);
+                        else if (!strcmp(arg1.s, "aps-subtopic"))
+                            buf_copy(&applepushserviceargs.aps_subtopic, &arg2);
+                        else
+                            goto aps_extraargs;
+                    }
+                } while (c == ' ');
+
+                if (c == '\r') c = prot_getc(imapd_in);
+                if (c != '\n') goto aps_extraargs;
+
+                cmd_xapplepushservice(tag.s, &applepushserviceargs);
+            }
+#endif
+
             else goto badcmd;
             break;
 
@@ -2338,11 +2407,25 @@ static void cmdloop(void)
         eatline(imapd_in, c);
         continue;
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+    aps_missingargs:
+        buf_free(&applepushserviceargs.aps_account_id);
+        buf_free(&applepushserviceargs.aps_device_token);
+        buf_free(&applepushserviceargs.aps_subtopic);
+        strarray_fini(&applepushserviceargs.mailboxes);
+#endif
     missingargs:
         prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
         continue;
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+    aps_extraargs:
+        buf_free(&applepushserviceargs.aps_account_id);
+        buf_free(&applepushserviceargs.aps_device_token);
+        buf_free(&applepushserviceargs.aps_subtopic);
+        strarray_fini(&applepushserviceargs.mailboxes);
+#endif
     extraargs:
         prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
@@ -2494,9 +2577,10 @@ static void cmd_login(char *tag, char *user)
     }
 
     /* possibly disallow login */
-    if (!imapd_starttls_done && (extprops_ssf < 2) &&
-        !config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
-        !is_userid_anonymous(canon_user)) {
+    if (imapd_tls_required ||
+        (!imapd_starttls_done && (extprops_ssf < 2) &&
+         !config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
+         !is_userid_anonymous(canon_user))) {
         eatline(imapd_in, ' ');
         prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
                     tag);
@@ -2643,6 +2727,12 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     int r;
     int failedloginpause;
+
+    if (imapd_tls_required) {
+        prot_printf(imapd_out,
+                    "%s NO Authenticate only available under a layer\r\n", tag);
+        return;
+    }
 
     r = saslserver(imapd_saslconn, authtype, resp, "", "+ ", "",
                    imapd_in, imapd_out, &sasl_result, NULL);
@@ -3136,14 +3226,14 @@ static void capa_response(int flags)
     if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
         prot_printf(imapd_out, " STARTTLS");
     }
-    if (imapd_authstate ||
+    if (imapd_tls_required || imapd_authstate ||
         (!imapd_starttls_done && (extprops_ssf < 2) &&
          !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
         prot_printf(imapd_out, " LOGINDISABLED");
     }
 
     /* add the SASL mechs */
-    if ((!imapd_authstate || saslprops.ssf) &&
+    if (!imapd_tls_required && (!imapd_authstate || saslprops.ssf) &&
         sasl_listmech(imapd_saslconn, NULL,
                       "AUTH=", " AUTH=",
                       !imapd_authstate ? " SASL-IR" : "", &sasllist,
@@ -6467,7 +6557,7 @@ localcreate:
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
-        if (strcasecmp(name, "INBOX")) {
+        if (!strcasecmp(name, "INBOX")) {
             int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
 
             if (autocreatequotastorage > 0) {
@@ -6522,9 +6612,7 @@ localcreate:
         goto done;
 
     } else { // (r == IMAP_PERMISSION_DENIED)
-        prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
-        goto done;
-
+        /* no error: carry on */
     } // (r == IMAP_PERMISSION_DENIED)
 
 #else // USE_AUTOCREATE
@@ -6783,8 +6871,6 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
 
         prot_printf(imapd_out, "* OK rename %s %s\r\n",
                     oldextname, newextname);
-
-        sync_log_mailbox_double(mbentry->name, text->newmailboxname);
     }
 
 done:
@@ -7163,7 +7249,6 @@ submboxes:
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
-        sync_log_mailbox_double(oldmailboxname2, newmailboxname2);
         if (rename_user) sync_log_user(newuser);
     }
 
@@ -8356,6 +8441,7 @@ static void cmd_starttls(char *tag, int imaps)
     prot_settls(imapd_out, tls_conn);
 
     imapd_starttls_done = 1;
+    imapd_tls_required = 0;
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
@@ -9551,7 +9637,7 @@ static int _metadata_to_annotate(const strarray_t *entries,
      * the old annotation system works. */
     for (i = 0 ; i < entries->count ; i++) {
         char *ent = entries->data[i];
-        char entry[MAX_MAILBOX_NAME];
+        char entry[MAX_MAILBOX_NAME+1];
 
         lcase(ent);
         /* there's no way to perfect this - unfortunately - the old style
@@ -12606,17 +12692,41 @@ static int list_data_remote(char *tag, struct listargs *listargs)
     if (listargs->cmd & LIST_CMD_LSUB) {
         prot_printf(backend_inbox->out, "%s Lsub ", tag);
     } else {
-        prot_printf(backend_inbox->out, "%s List (subscribed", tag);
-        if (listargs->sel & LIST_SEL_DAV) {
-            prot_printf(backend_inbox->out, " vendor.cmu-dav");
+        const char *select_opts[] = {
+            /* XXX  MUST be in same order as LIST_SEL_* bitmask */
+            "subscribed", "remote", "recursivematch",
+            "special-use", "vendor.cmu-dav", "metadata", NULL
+        };
+        char c = '(';
+        int i;
+
+        prot_printf(backend_inbox->out, "%s List ", tag);
+        for (i = 0; select_opts[i]; i++) {
+            unsigned opt = (1 << i);
+
+            if (!(listargs->sel & opt)) continue;
+
+            prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
+            c = ' ';
+
+            if (opt == LIST_SEL_METADATA) {
+                /* print metadata options */
+                prot_puts(backend_inbox->out, " (depth ");
+                if (listargs->metaopts.depth < 0) {
+                    prot_puts(backend_inbox->out, "infinity");
+                }
+                else {
+                    prot_printf(backend_inbox->out, "%d",
+                                listargs->metaopts.depth);
+                }
+                if (listargs->metaopts.maxsize) {
+                    prot_printf(backend_inbox->out, " maxsize %zu",
+                                listargs->metaopts.maxsize);
+                }
+                (void)prot_putc(')', backend_inbox->out);
+            }
         }
-        if (listargs->sel & LIST_SEL_REMOTE) {
-            prot_printf(backend_inbox->out, " remote");
-        }
-        if (listargs->sel & LIST_SEL_RECURSIVEMATCH) {
-            prot_printf(backend_inbox->out, " recursivematch");
-        }
-        prot_printf(backend_inbox->out, ") ");
+        prot_puts(backend_inbox->out, ") ");
     }
 
     /* print reference argument */
@@ -12641,16 +12751,54 @@ static int list_data_remote(char *tag, struct listargs *listargs)
 
     /* print list return options */
     if (listargs->ret) {
+        const char *return_opts[] = {
+            /* XXX  MUST be in same order as LIST_RET_* bitmask */
+            "subscribed", "children", "special-use",
+            "status ", "myrights", "metadata ", NULL
+        };
         char c = '(';
+        int i, j;
 
-        prot_printf(backend_inbox->out, " return ");
-        if (listargs->ret & LIST_RET_SUBSCRIBED) {
-            prot_printf(backend_inbox->out, "%csubscribed", c);
+        prot_puts(backend_inbox->out, " return ");
+        for (i = 0; return_opts[i]; i++) {
+            unsigned opt = (1 << i);
+
+            if (!(listargs->ret & opt)) continue;
+
+            prot_printf(backend_inbox->out, "%c%s", c, return_opts[i]);
             c = ' ';
-        }
-        if (listargs->ret & LIST_RET_CHILDREN) {
-            prot_printf(backend_inbox->out, "%cchildren", c);
-            c = ' ';
+
+            if (opt == LIST_RET_STATUS) {
+                /* print status items */
+                const char *status_items[] = {
+                    /* XXX  MUST be in same order as STATUS_* bitmask */
+                    "messages", "recent", "uidnext", "uidvalidity", "unseen",
+                    "highestmodseq", "xconvexists", "xconvunseen",
+                    "xconvmodseq", NULL
+                };
+
+                c = '(';
+                for (j = 0; status_items[j]; j++) {
+                    if (!(listargs->statusitems & (1 << j))) continue;
+
+                    prot_printf(backend_inbox->out, "%c%s", c,
+                                status_items[j]);
+                    c = ' ';
+                }
+                (void)prot_putc(')', backend_inbox->out);
+            }
+            else if (opt == LIST_RET_METADATA) {
+                /* print metadata items */
+                int n = strarray_size(&listargs->metaitems);
+
+                c = '(';
+                for (j = 0; j < n; j++) {
+                    prot_printf(backend_inbox->out, "%c\"%s\"", c,
+                                strarray_nth(&listargs->metaitems, j));
+                    c = ' ';
+                }
+                (void)prot_putc(')', backend_inbox->out);
+            }
         }
         (void)prot_putc(')', backend_inbox->out);
     }
@@ -13277,16 +13425,20 @@ static void cmd_enable(char *tag)
         return;
     }
 
-    prot_printf(imapd_out, "* ENABLED");
+    int started = 0;
     if (!(client_capa & CAPA_CONDSTORE) &&
          (new_capa & CAPA_CONDSTORE)) {
+        if (!started) prot_printf(imapd_out, "* ENABLED");
+        started = 1;
         prot_printf(imapd_out, " CONDSTORE");
     }
     if (!(client_capa & CAPA_QRESYNC) &&
          (new_capa & CAPA_QRESYNC)) {
+        if (!started) prot_printf(imapd_out, "* ENABLED");
+        started = 1;
         prot_printf(imapd_out, " QRESYNC");
     }
-    prot_printf(imapd_out, "\r\n");
+    if (started) prot_printf(imapd_out, "\r\n");
 
     /* track the new capabilities */
     client_capa |= new_capa;
@@ -13469,3 +13621,75 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
     else
         *reserve_listp = NULL;
 }
+
+#ifdef ENABLE_APPLEPUSHSERVICE
+static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *applepushserviceargs)
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_BUFFER];
+    strarray_t notif_mailboxes = STRARRAY_INITIALIZER;
+    int i;
+    mbentry_t *mbentry = NULL;
+
+    const char *aps_topic = config_getstring(IMAPOPT_APS_TOPIC);
+    if (!aps_topic) {
+        syslog(LOG_ERR, "aps_topic not configured, can't complete XAPPLEPUSHSERVICE response");
+        prot_printf(imapd_out, "%s NO Server configuration error\r\n", tag);
+        return;
+    }
+
+    if (!buf_len(&applepushserviceargs->aps_account_id)) {
+        prot_printf(imapd_out, "%s NO Missing APNS account ID\r\n", tag);
+        return;
+    }
+    if (!buf_len(&applepushserviceargs->aps_device_token)) {
+        prot_printf(imapd_out, "%s NO Missing APNS device token\r\n", tag);
+        return;
+    }
+    if (!buf_len(&applepushserviceargs->aps_subtopic)) {
+        prot_printf(imapd_out, "%s NO Missing APNS sub-topic\r\n", tag);
+        return;
+    }
+
+    // v1 is inbox-only, so override the mailbox list
+    if (applepushserviceargs->aps_version == 1) {
+        strarray_truncate(&applepushserviceargs->mailboxes, 0);
+        strarray_push(&applepushserviceargs->mailboxes, "INBOX");
+        applepushserviceargs->aps_version = 1;
+    }
+    else {
+        // 2 is the most we support
+        applepushserviceargs->aps_version = 2;
+    }
+
+    for (i = 0; i < strarray_size(&applepushserviceargs->mailboxes); i++) {
+        const char *name = strarray_nth(&applepushserviceargs->mailboxes, i);
+        r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name, imapd_userid, mailboxname);
+        if (!r)
+            r = mlookup(tag, name, mailboxname, &mbentry);
+        if (!r && mbentry->mbtype == 0) {
+            strarray_push(&notif_mailboxes, name);
+            if (applepushserviceargs->aps_version >= 2) {
+                prot_puts(imapd_out, "* XAPPLEPUSHSERVICE \"mailbox\" ");
+                prot_printstring(imapd_out, name);
+                prot_puts(imapd_out, "\r\n");
+            }
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+
+    prot_printf(imapd_out, "* XAPPLEPUSHSERVICE \"aps-version\" \"%d\" \"aps-topic\" \"%s\"\r\n", applepushserviceargs->aps_version, aps_topic);
+    prot_printf(imapd_out, "%s OK XAPPLEPUSHSERVICE completed.\r\n", tag);
+
+    struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE);
+    mboxevent_set_applepushservice(mboxevent, applepushserviceargs, &notif_mailboxes, imapd_userid);
+    mboxevent_notify(mboxevent);
+    mboxevent_free(&mboxevent);
+
+    buf_release(&applepushserviceargs->aps_account_id);
+    buf_release(&applepushserviceargs->aps_device_token);
+    buf_release(&applepushserviceargs->aps_subtopic);
+    strarray_fini(&applepushserviceargs->mailboxes);
+    strarray_fini(&notif_mailboxes);
+}
+#endif

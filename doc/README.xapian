@@ -1,0 +1,58 @@
+The version of Xapian used to build the search support into Cyrus was
+2.2, and the patches here are against that version.
+
+To build xapian support into Cyrus, you need to build your own xapian
+library as follows:
+
+# choose your own adventures here
+export XAPIAN_DIR=/opt/xapian
+export CYRUS_DIR=/opt/cyrus
+export SRC_DIR=/opt/src
+
+cd $SRC_DIR
+wget http://www.cyrusimap.org/releases/cyrus-imapd-3.0.0-beta1.tar.gz
+wget http://oligarchy.co.uk/xapian/1.2.21/xapian-core-1.2.21.tar.xz
+tar -xf xapian-core-1.2.21.tar.xz
+cd xapian-core-1.2.21
+tar -xf $cyrusdir/contrib/xapian_quilt.tar.gz
+QUILT_PATCHES=xapian_quilt quilt push -a
+autoreconf -v -i
+./configure --prefix=$XAPIAN_DIR
+make
+make install
+cd $SRC_DIR
+tar -xf cyrus-imapd-3.0.0-beta1.tar.gz
+cd cyrus-imapd-3.0.0-beta1
+XAPIAN_CONFIG=$XAPIAN_DIR/bin/xapian-config ./configure --enable-xapian --prefix=$CYRUS_DIR
+make
+make install
+
+And you have a Xapian-supporting Cyrus IMAPd!
+
+Configuration wise, you'll need to set up sync log to a channel
+called squatter, and at least one search tier.
+
+search_engine: xapian
+search_index_headers: no
+search_batchsize: 8192
+defaultpartition: default
+defaultsearchtier: t1
+partition-default: /var/cyrus/spool
+t1searchpartition-default: /var/cyrus/search
+
+And then you'll need to arrange for a rolling squatter to run on
+startup:
+
+cyrus.conf:
+
+START {
+  # run a rolling squatter
+  squatter cmd="squatter -R"
+}
+
+If you want to do more complex search tiers and repacking and stuff,
+you'll probably want to read:
+
+http://lists.tartarus.org/pipermail/xapian-discuss/2014-October/009112.html
+
+And see how we do it at FastMail.

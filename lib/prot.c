@@ -140,6 +140,38 @@ EXPORTED struct protstream *prot_readmap(const char *base, uint32_t len)
 }
 
 /*
+ * Create a protstream for reading whose data is supplied by a callback rather
+ * than a file descriptor.
+ *
+ * The callback interface is similar to read(2):
+ *
+ *      typedef ssize_t prot_fillcallback_t(unsigned char *buf, size_t len, void *rock)
+ *
+ *      Read up to len bytes into the buffer buf.  On success, return the
+ *      number of bytes read, or 0 if there is no more data.  On error, set
+ *      errno to an appropriate value and return -1.
+ */
+EXPORTED struct protstream *prot_readcb(prot_fillcallback_t *proc, void *rock)
+{
+    struct protstream *newstream;
+
+    newstream = (struct protstream *) xzmalloc(sizeof(struct protstream));
+    newstream->buf = (unsigned char *)
+        xmalloc(sizeof(char) * (PROT_BUFSIZE));
+    newstream->buf_size = PROT_BUFSIZE;
+    newstream->ptr = newstream->buf;
+    newstream->maxplain = PROT_BUFSIZE;
+    newstream->fd = PROT_NO_FD;
+    newstream->logfd = PROT_NO_FD;
+    newstream->big_buffer = PROT_NO_FD;
+
+    newstream->fillcallback_proc = proc;
+    newstream->fillcallback_rock = rock;
+
+    return newstream;
+}
+
+/*
  * Free a protection stream
  */
 EXPORTED int prot_free(struct protstream *s)
@@ -715,16 +747,18 @@ EXPORTED int prot_fill(struct protstream *s)
 
         do {
             cmdtime_netstart();
+            if (s->fillcallback_proc != NULL) {
+                n = (*s->fillcallback_proc)(s->buf, PROT_BUFSIZE, s->fillcallback_rock);
+            }
 #ifdef HAVE_SSL
             /* just do a SSL read instead if we're under a tls layer */
-            if (s->tls_conn != NULL) {
+            else if (s->tls_conn != NULL) {
                 n = SSL_read(s->tls_conn, (char *) s->buf, PROT_BUFSIZE);
-            } else {
+            }
+#endif /* HAVE_SSL */
+            else {
                 n = read(s->fd, s->buf, PROT_BUFSIZE);
             }
-#else  /* HAVE_SSL */
-            n = read(s->fd, s->buf, PROT_BUFSIZE);
-#endif /* HAVE_SSL */
             cmdtime_netend();
         } while (n == -1 && errno == EINTR && !signals_poll());
 

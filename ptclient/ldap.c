@@ -951,8 +951,15 @@ static int ptsmodule_get_dn(
             rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
 
             if (rc != LDAP_SUCCESS) {
-                syslog(LOG_ERR, "LDAP search for domain failed.");
-                return rc;
+                if (rc == LDAP_SERVER_DOWN) {
+                    ldap_unbind(ptsm->ld);
+                    ptsm->ld = NULL;
+                    syslog(LOG_ERR, "LDAP not available: %s", ldap_err2string(rc));
+                    return PTSM_RETRY;
+                }
+
+                syslog(LOG_ERR, "LDAP search for domain failed: %s", ldap_err2string(rc));
+                return PTSM_FAIL;
             }
 
             if (ldap_count_entries(ptsm->ld, res) < 1) {

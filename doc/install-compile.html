@@ -69,26 +69,6 @@ NAME="configure"><tt>configure</tt></A>".
 <dt><tt>--help</tt>
 <dd>Print a summary of the options to "<tt>configure</tt>", and exit. <P>
 
-<dt><tt>--with-auth=METHOD</tt>
-<dd>Specifies the authorization (group membership) module to use.
-Currently implemented authorization modules are:
-<dl compact>
-<DT><tt>unix</tt>
-<DD>Unix <tt>/etc/passwd</tt> and <tt>/etc/group</tt> file
-<DT><tt>krb</tt>
-<DD>Kerberos principals (requires Kerberos libraries).  Optionally,
-specify where to find Kerberos v4 with "<tt>--with-krb=DIR</tt>"
-<B>IMPORTANT:</B> The Kerberos v4 support requires the DES library.
-Some vendor distributions of Kerberos, including the one with Solaris,
-do not have this support and cannot be used.
-<DT><tt>krb_pts</tt>
-<DD>Kerberos principals with AFS PTserver groups (requires Kerberos
-and AFS libraries).  Optionally, specify where the AFS libraries are
-found with "<tt>--with-afs=PATH</tt>".  Also requires krb support as above.
-</dl>
-Any method of authenticating with SASL can be used with any
-authorization module.<P>
-
 <dt><tt>--with-krb=PATH</tt>
 <dd>Specifies where to find the Kerberos library.<P>
 

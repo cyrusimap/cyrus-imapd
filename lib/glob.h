@@ -49,12 +49,12 @@
 #ifndef INCLUDED_GLOB_H
 #define INCLUDED_GLOB_H
 
-#include <pcreposix.h>
+#include "util.h"
 
 /* "compiled" glob structure: may change
  */
 typedef struct glob {
-    regex_t regex;              /* separator character */
+    regex_t regex;
 } glob;
 
 /* initialize globbing structure

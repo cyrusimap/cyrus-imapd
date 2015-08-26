@@ -1,6 +1,6 @@
-/* http_jmap.h -- data structures for jmap
+/* lock_file.h -- module for use of dedicated lock files
  *
- * Copyright (c) 1994-2013 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,30 +38,58 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
+#ifndef LIB_LOCK_FILE_H
+#define LIB_LOCK_FILE_H
 
-#ifndef JMAP_H
-#define JMAP_H
+struct lockf;
 
-#include <config.h>
+/*
+ * Obtain a lock by exclusively creating named file.  If the named file
+ * already exists, retries for up to 15 seconds before timing out.
+ *
+ * Warns to syslog upon timeout, and upon detection of existing stale lock
+ * file.
+ *
+ * Returns a struct lockf handle, or NULL if the lock could not be obtained.
+ */
+struct lockf *lf_lock(const char *filename);
 
-#include <jansson.h>
+/*
+ * Verify if the struct lockf handle is still valid (i.e. that the underlying
+ * lock file has not been trampled on by some other process).
+ *
+ * Returns true (1) if so, false (0) otherwise.
+ */
+int lf_ismine(struct lockf *lf);
 
-#include "dav_db.h"
-#include "strarray.h"
-#include "util.h"
-#include "vparse.h"
+/*
+ * Refresh the timestamp on the provided handle.  Call this periodically
+ * during long operations.
+ *
+ * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
+ * check lf_ismine() before invocation.
+ */
+int lf_touch(struct lockf *lf);
 
-struct jmap_req {
-    const char *userid;
-    struct auth_state *authstate;
-    struct hash_table *idmap;
-    json_t *args;
-    json_t *response;
-    const char *state; // if changing things, this is pre-change state
-    const char *tag;
-    unsigned ignorequota; // ignore quota on mailbox appends
-};
+/*
+ * Returns the number of seconds since the provided handle was opened or last
+ * lf_touch()ed.
+ *
+ * If agep is non-NULL, also sets the value in the pointed-to struct timespec.
+ * (XXX This is currently only accurate to nearest whole second.)
+ *
+ * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
+ * check lf_ismine() before invocation.
+ */
+time_t lf_age(struct lockf *lf, struct timespec *agep);
 
-#endif // JMAP_H
+/*
+ * Release the provided handle and unlink its corresponding file.
+ *
+ * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
+ * check lf_ismine() before invocation.
+ */
+int lf_unlock(struct lockf **lf);
+
+#endif

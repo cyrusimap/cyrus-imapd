@@ -1142,6 +1142,13 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     return r;
 }
 
+static int addmbox_to_list(const mbentry_t *mbentry, void *rock)
+{
+    strarray_t *list = (strarray_t *)rock;
+    strarray_append(list, mbentry->name);
+    return 0;
+}
+
 /*
  * Delayed Delete a mailbox: translate delete into rename
  */
@@ -1155,6 +1162,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                int force)
 {
     mbentry_t *mbentry = NULL;
+    strarray_t existing = STRARRAY_INITIALIZER;
+    int i;
     char newname[MAX_MAILBOX_BUFFER];
     int r;
     long myrights;
@@ -1179,7 +1188,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     }
 
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) return r;
+    if (r) goto done;
 
     /* check if user has Delete right (we've already excluded non-admins
      * from deleting a user mailbox) */
@@ -1196,10 +1205,22 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
             r = (isadmin || (myrights & ACL_LOOKUP)) ?
                 IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 
-            mboxlist_entry_free(&mbentry);
-
-            return r;
+            goto done;
         }
+    }
+
+    /* check if there are already too many! */
+    mboxname_todeleted(name, newname, 0);
+    r = mboxlist_mboxtree(newname, addmbox_to_list, &existing, MBOXTREE_SKIP_ROOT);
+    if (r) goto done;
+
+    /* keep the last 19, so the new one is the 20th */
+    for (i = 0; i < (int)existing.count - 19; i++) {
+        const char *subname = strarray_nth(&existing, i);
+        syslog(LOG_NOTICE, "too many subfolders for %s, deleting %s (%d / %d)",
+               newname, subname, i+1, (int)existing.count);
+        r = mboxlist_deletemailbox(subname, 1, userid, auth_state, NULL, 0, 1, 1);
+        if (r) goto done;
     }
 
     /* get the deleted name */
@@ -1214,6 +1235,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                localonly /* local_only */,
                                force, 1);
 
+done:
+    strarray_fini(&existing);
     mboxlist_entry_free(&mbentry);
 
     return r;
@@ -1607,6 +1630,12 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
                 mboxevent_set_access(mboxevent, NULL, NULL, userid, newmailbox->name, 1);
             }
 
+            /* log the rename before we close either mailbox, so that
+             * we never nuke the mailbox from the replica before realising
+             * that it has been renamed.  This can be moved later again when
+             * we sync mailboxes by uniqueid rather than name... */
+            sync_log_mailbox_double(oldname, newname);
+
             mailbox_rename_cleanup(&oldmailbox, isusermbox);
 
 #ifdef WITH_DAV
@@ -1614,6 +1643,9 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 #endif
 
             mailbox_close(&newmailbox);
+
+            /* and log an append so that squatter indexes it */
+            sync_log_append(newname);
         }
         else if (partitionmove) {
             char *oldpartition = xstrdup(oldmailbox->part);
@@ -1624,6 +1656,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
                        session_id(),
                        oldmailbox->name, oldmailbox->uniqueid,
                        oldpartition, partition);
+            /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);
             mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);
             free(olduniqueid);
@@ -1631,11 +1664,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         }
         else
             abort(); /* impossible, in theory */
-
-        /* log the rename */
-        sync_log_mailbox_double(oldname, newname);
-        /* and log an append so that squatter indexes it */
-        sync_log_append(newname);
     }
 
     /* free memory */

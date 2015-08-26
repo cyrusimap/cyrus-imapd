@@ -923,6 +923,14 @@ EXPORTED struct vparse_entry *vparse_get_entry(struct vparse_card *card, const c
     return entry;
 }
 
+EXPORTED void vparse_replace_entry(struct vparse_card *card, const char *group, const char *name, const char *value)
+{
+    struct vparse_entry *res = vparse_get_entry(card, group, name);
+    if (!res) res = vparse_add_entry(card, group, name, NULL);
+    free(res->v.value);
+    res->v.value = xstrdupnull(value);
+}
+
 EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
 {
     struct vparse_entry **entryp = &card->properties;

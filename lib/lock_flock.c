@@ -84,11 +84,11 @@ EXPORTED int lock_reopen(int fd, const char *filename,
             return -1;
         }
 
-        fstat(fd, sbuf);
-        r = stat(filename, &sbuffile);
+        r = fstat(fd, sbuf);
+        if (!r) r = stat(filename, &sbuffile);
         if (r == -1) {
             if (failaction) *failaction = "stating";
-            flock(fd, LOCK_UN);
+            lock_unlock(fd, filename);
             return -1;
         }
 
@@ -97,7 +97,7 @@ EXPORTED int lock_reopen(int fd, const char *filename,
         newfd = open(filename, O_RDWR);
         if (newfd == -1) {
             if (failaction) *failaction = "opening";
-            flock(fd, LOCK_UN);
+            lock_unlock(fd, filename);
             return -1;
         }
         dup2(newfd, fd);

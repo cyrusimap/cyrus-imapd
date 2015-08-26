@@ -413,7 +413,7 @@ static int callout_receive_reply(const char *callout,
     prot_setisclient(p, 1);
 
     /* read and parse the reply as a dlist */
-    c = dlist_parse(results, /*parsekeys*/0, p);
+    c = dlist_parse(results, /*flags*/0, p);
     r = (c == EOF ? IMAP_SYS_ERROR : 0);
 
 out:
@@ -833,7 +833,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     struct mailbox *mailbox = as->mailbox;
     struct index_record record;
     const char *fname;
-    FILE *destfile;
     int i, r;
     int in_object_storage = 0;
     strarray_t *newflags = NULL;
@@ -845,6 +844,18 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     assert(stage != NULL && stage->parts.count);
 
+    /* parse the first file */
+    if (!*body) {
+        FILE *file = fopen(stage->parts.data[0], "r");
+        if (file) {
+            r = message_parse_file(file, NULL, NULL, body);
+            fclose(file);
+        }
+        else
+            r = IMAP_IOERROR;
+        if (r) goto out;
+    }
+
     zero_index(record);
 
     /* xxx check errors */
@@ -852,6 +863,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
     for (i = 0 ; i < stage->parts.count ; i++) {
+        /* ok, we've successfully created the file */
         if (!strcmp(stagefile, stage->parts.data[i])) {
             /* aha, this is us */
             break;
@@ -884,7 +896,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
             syslog(LOG_ERR, "IOERROR: creating message file %s: %m",
                    stagefile);
             unlink(stagefile);
-            return r;
+            goto out;
         }
 
         strarray_append(&stage->parts, stagefile);
@@ -903,30 +915,35 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
     }
 
+    /* we need to parse the record first */
+    r = message_create_record(&record, *body);
+    if (r) goto out;
+
+    /* should we archive it straight away? */
+    if (mailbox_should_archive(mailbox, &record, NULL)) {
+        record.system_flags |= FLAG_ARCHIVED;
+    }
+
     /* Create message file */
     as->nummsg++;
     fname = mailbox_record_fname(mailbox, &record);
 
     r = mailbox_copyfile(stagefile, fname, nolink);
-    destfile = fopen(fname, "r");
-    if (!r && destfile) {
-        /* ok, we've successfully created the file */
-        if (!*body || (as->nummsg - 1))
-            r = message_parse_file(destfile, NULL, NULL, body);
-        if (!r) r = message_create_record(&record, *body);
+    if (r) goto out;
 
-        /* messageContent may be included with MessageAppend and MessageNew */
-        if (!r)
-            mboxevent_extract_content(mboxevent, &record, destfile);
-    }
+    FILE *destfile = fopen(fname, "r");
     if (destfile) {
         /* this will hopefully ensure that the link() actually happened
            and makes sure that the file actually hits disk */
         fsync(fileno(destfile));
         fclose(destfile);
     }
+    else {
+        r = IMAP_IOERROR;
+        goto out;
+    }
 
-    if (!r && config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) {
+    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) {
         if (flags)
             newflags = strarray_dup(flags);
         else
@@ -1079,6 +1096,8 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     if (as->event_type) {
         mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
     }
+
+    /* XXX - also stream to stage directory and check out archive options */
 
     /* Copy and parse message */
     r = message_copy_strict(messagefile, destfile, size, 0);

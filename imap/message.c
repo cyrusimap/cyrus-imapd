@@ -2190,7 +2190,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             buf_appendbit32(buf, body->subpart->content_size);
-            buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+            buf_appendbit32(buf, 0x0000ffff);
             for (part = 0; part < body->subpart->numparts; part++) {
                 buf_appendbit32(buf, body->subpart->subpart[part].header_offset);
                 buf_appendbit32(buf, body->subpart->subpart[part].header_size);
@@ -2220,14 +2220,14 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             buf_appendbit32(buf, body->subpart->content_size);
-            buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+            buf_appendbit32(buf, 0x0000ffff);
             buf_appendbit32(buf, body->subpart->header_offset);
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             if (strcmp(body->subpart->type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
-                buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+                buf_appendbit32(buf, 0x0000ffff);
             }
             else {
                 buf_appendbit32(buf, body->subpart->content_size);
@@ -2246,7 +2246,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
         buf_appendbit32(buf, -1);
         buf_appendbit32(buf, 0);
         buf_appendbit32(buf, -1);
-        buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+        buf_appendbit32(buf, 0x0000ffff);
         for (part = 0; part < body->numparts; part++) {
             buf_appendbit32(buf, body->subpart[part].header_offset);
             buf_appendbit32(buf, body->subpart[part].header_size);
@@ -2255,7 +2255,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
                 strcmp(body->subpart[part].type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
-                buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+                buf_appendbit32(buf, 0x0000ffff);
             }
             else {
                 buf_appendbit32(buf, body->subpart[part].content_size);
@@ -2283,7 +2283,9 @@ static void message_write_charset(struct buf *buf, const struct body *body)
 
     message_parse_charset(body, &encoding, &charset);
 
-    buf_appendbit32(buf, (charset<<16)|encoding);
+    if (charset == -1) charset = 0xffff;
+
+    buf_appendbit32(buf, (encoding & 0xff)|((charset & 0xffff)>>16));
 }
 
 /*
@@ -3114,7 +3116,14 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     msubj = buf_cstring(&msubject);
 
     for (i = 0 ; i < 4 ; i++) {
+        int hcount = 0;
         while ((msgid = find_msgid(hdrs[i], &hdrs[i])) != NULL) {
+            hcount++;
+            if (hcount > 20) {
+                free(msgid);
+                syslog(LOG_NOTICE, "too many references, skipping the rest");
+                break;
+            }
             /*
              * The issue of case sensitivity of msgids is curious.
              * RFC2822 seems to imply they're case-insensitive,
@@ -3141,6 +3150,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
             for (j = 0; j < cids.count; j++) {
                 conversation_id_t cid = arrayu64_nth(&cids, j);
+                conversation_free(conv);
+                conv = NULL;
                 r = conversation_load(state, cid, &conv);
                 if (r) goto out;
                 if (!conv)

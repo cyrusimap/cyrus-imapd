@@ -70,6 +70,7 @@ struct protstream;
 struct prot_waitevent;
 
 typedef void prot_readcallback_t(struct protstream *s, void *rock);
+typedef ssize_t prot_fillcallback_t(unsigned char *buf, size_t len, void *rock);
 
 struct protstream {
     /* The Buffer */
@@ -108,6 +109,10 @@ struct protstream {
     size_t bigbuf_siz; /* Overall Size of Buffer */
     size_t bigbuf_len; /* Length of mapped file */
     size_t bigbuf_pos; /* Current Position */
+
+    /* Callback-fill information */
+    prot_fillcallback_t *fillcallback_proc;
+    void *fillcallback_rock;
 
     /* Status Flags */
     int eof;
@@ -186,6 +191,7 @@ extern int prot_putc(int c, struct protstream *s);
 extern struct protstream *prot_new(int fd, int write);
 extern struct protstream *prot_writebuf(struct buf *buf);
 extern struct protstream *prot_readmap(const char *base, uint32_t len);
+extern struct protstream *prot_readcb(prot_fillcallback_t *proc, void *rock);
 extern int prot_free(struct protstream *s);
 
 /* Set the telemetry logfile for a given protstream */

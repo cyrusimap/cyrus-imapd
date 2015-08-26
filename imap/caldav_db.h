@@ -114,6 +114,8 @@ struct caldav_data {
     const char *sched_tag;
 };
 
+typedef int caldav_cb_t(void *rock, struct caldav_data *cdata);
+
 /* prepare for caldav operations in this process */
 int caldav_init(void);
 
@@ -141,11 +143,12 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-                   int (*cb)(void *rock, void *data),
-                   void *rock);
+                   caldav_cb_t *cb, void *rock);
 
 /* write an entry to 'caldavdb' */
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
+int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,
+                      icalcomponent *ical);
 
 /* delete an entry from 'caldavdb' */
 int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
@@ -162,12 +165,13 @@ int caldav_commit(struct caldav_db *caldavdb);
 /* abort transaction */
 int caldav_abort(struct caldav_db *caldavdb);
 
-/* create caldav_data from icalcomponent */
-void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata);
-
 char *caldav_mboxname(const char *userid, const char *name);
 
 /* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
 void caldav_get_period(icalcomponent *comp, icalcomponent_kind kind, struct icalperiodtype *period);
+
+int caldav_get_events(struct caldav_db *caldavdb,
+                      const char *mailbox, const char *ical_uid,
+                      caldav_cb_t *cb, void *rock);
 
 #endif /* CALDAV_DB_H */

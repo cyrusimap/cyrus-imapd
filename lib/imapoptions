@@ -147,7 +147,13 @@ are listed with ``<none>''.
   enabled when absolutely necessary. */
 
 { "allowplaintext", 0, SWITCH }
-/* Allow the use of cleartext passwords on the wire. */
+/* If enabled, allows the use of cleartext passwords on the wire.
+.PP
+  By default, the use of cleartext passwords requires a TLS/SSL
+  encryption layer to be negotiated prior to any cleartext
+  authentication mechanisms being advertised or allowed.  To require a
+  TLS/SSL encryption layer to be negotiated prior to ANY
+  authentication, see the \fItls_required\fR option. */
 
 { "allowusermoves", 0, SWITCH }
 /* Allow moving user accounts (with associated meta-data) via RENAME
@@ -261,10 +267,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    be either an executable (including a script), or a UNIX domain
    socket.  */
 
+{ "aps_topic", NULL, STRING }
+/* Topic for Apple Push Service registration. */
+
 { "archive_enabled", 0, SWITCH }
 /* Is archiving enabled for this server.  You also need to have an
    archivepartition for the mailbox.  Archiving allows older email
-   to be stored on slower, cheaper disks - even within a the same
+   to be stored on slower, cheaper disks - even within the same
    mailbox, as distinct from partitions. */
 
 { "archive_days", 7, INT }
@@ -276,8 +285,19 @@ Blank lines and lines beginning with ``#'' are ignored.
    immediately.  Default is 1Mb */
 
 { "archive_keepflagged", 0, SWITCH }
-/* if set, keep messages with \Flagged system flag on the archive
-   partition forever, so long as they are smaller than maxsize */
+/* If set, messages with the \\Flagged system flag won't be archived,
+   provided they are smaller than \fBarchive_maxsize\fR. */
+
+# Commented out - there's no such thing as "archivepartition-name",
+# but we need this for the man page
+# { "archivepartition-name", NULL, STRING }
+/* The pathname of the archive partition \fIname\fR, corresponding to
+   spool partition \fBpartition-name\fR.  For any mailbox residing in
+   a directory on \fBpartition-name\fR, the archived messages will be
+   stored in a corresponding directory on \fBarchivepartition-name\fR.
+   Note that not every \fBpartition-name\fR option is strictly required
+   to have a corresponding \fBarchivepartition-name\fR option, but that
+   without one there's no benefit to enabling archiving. */
 
 { "auditlog", 0, SWITCH }
 /* Should cyrus output log entries for every action taken on a message
@@ -287,31 +307,31 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5")}
 /* The authorization mechanism to use. */
 
-{ "autocreateinboxfolders", NULL, STRING }
+{ "autocreateinboxfolders", NULL, STRING, "2.5.0", "autocreate_inbox_folders" }
 /* Deprecated in favor of \fIautocreate_inbox_folders\fR. */
 
-{ "autocreatequota", 0, INT }
+{ "autocreatequota", 0, INT, "2.5.0", "autocreate_quota" }
 /* Deprecated in favor of \fIautocreate_quota\fR. */
 
-{ "autocreatequotamsg", -1, INT }
+{ "autocreatequotamsg", -1, INT, "2.5.0", "autocreate_quota_messages" }
 /* Deprecated in favor of \fIautocreate_quota_messages\fR. */
 
-{ "autosievefolders", NULL, STRING }
+{ "autosievefolders", NULL, STRING, "2.5.0", "autocreate_sieve_folders" }
 /* Deprecated in favor of \fIautocreate_sieve_folders\fR. */
 
-{ "generate_compiled_sieve_script", NULL, SWITCH }
+{ "generate_compiled_sieve_script", 0, SWITCH, "2.5.0", "autocreate_sieve_script_compile" }
 /* Deprecated in favor of \fIautocreate_sieve_script_compile\fR. */
 
-{ "autocreate_sieve_compiled_script", NULL, STRING }
+{ "autocreate_sieve_compiled_script", NULL, STRING, "2.5.0", "autocreate_sieve_script_compiled" }
 /* Deprecated in favor of \fIautocreate_sieve_script_compiled\fR. */
 
-{ "autosubscribeinboxfolders", NULL, STRING }
+{ "autosubscribeinboxfolders", NULL, STRING, "2.5.0", "autocreate_subscribe_folders" }
 /* Deprecated in favor of \fIautocreate_subscribe_folders\fR. */
 
-{ "autosubscribesharedfolders", NULL, STRING }
+{ "autosubscribesharedfolders", NULL, STRING, "2.5.0", "autocreate_subscribe_sharedfolders" }
 /* Deprecated in favor of \fIautocreate_subscribe_sharedfolders\fR. */
 
-{ "autosubscribe_all_sharedfolders", 0, SWITCH }
+{ "autosubscribe_all_sharedfolders", 0, SWITCH, "2.5.0", "autocreate_subscribe_sharedfolders_all" }
 /* Deprecated in favor of \fIautocreate_subscribe_sharedfolders_all\fR. */
 
 { "autocreate_inbox_folders", NULL, STRING }
@@ -484,7 +504,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The pathname of the IMAP configuration directory.  This field is
    required. */
 
-{ "createonpost", 0, SWITCH }
+{ "createonpost", 0, SWITCH, "2.5.0", "autocreate_post" }
 /* Deprecated in favor of \fIautocreate_post\fR. */
 
 { "conversations", 0, SWITCH }
@@ -626,7 +646,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters") }
 /* Space-separated list of extra parameters to add to any appropriated event. */
 
-{ "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar") }
+{ "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar", "applepushservice" ) }
 /* Space-separated list of groups of related events to turn on notification */
 
 { "event_notifier", NULL, STRING }
@@ -652,7 +672,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "failedloginpause", 3, INT }
 /* Number of seconds to pause after a failed login. */
 
-{ "flushseenstate", 1, SWITCH }
+{ "flushseenstate", 1, SWITCH, "2.5.0" }
 /* Deprecated. No longer used */
 
 { "foolstupidclients", 0, SWITCH }
@@ -923,25 +943,25 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_sasl", 1, SWITCH }
 /* Use SASL for LDAP binds in the LDAP PTS module. */
 
-{ "ldap_sasl_authc", NULL, STRING }
+{ "ldap_sasl_authc", NULL, STRING, "2.5.0", "ldap_id" }
 /* Deprecated.  Use ldap_id */
 
-{ "ldap_sasl_authz", NULL, STRING }
+{ "ldap_sasl_authz", NULL, STRING, "2.5.0", "ldap_authz" }
 /* Deprecated.  Use ldap_authz */
 
-{ "ldap_sasl_mech", NULL, STRING }
+{ "ldap_sasl_mech", NULL, STRING, "2.5.0", "ldap_mech" }
 /* Deprecated.  Use ldap_mech */
 
-{ "ldap_sasl_password", NULL, STRING }
+{ "ldap_sasl_password", NULL, STRING, "2.5.0", "ldap_password" }
 /* Deprecated.  User ldap_password */
 
-{ "ldap_sasl_realm", NULL, STRING }
+{ "ldap_sasl_realm", NULL, STRING, "2.5.0", "ldap_realm" }
 /* Deprecated.  Use ldap_realm */
 
 { "ldap_scope", "sub", STRINGLIST("sub", "one", "base") }
 /* Specify search scope. */
 
-{ "ldap_servers", "ldap://localhost/", STRING }
+{ "ldap_servers", "ldap://localhost/", STRING, "2.5.0", "ldap_uri" }
 /* Deprecated.  Use ldap_uri */
 
 { "ldap_size_limit", 1, INT }
@@ -963,36 +983,36 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_ca_file", NULL, STRING }
 /* Patch to a file containing CA (Certificate Authority) certificate(s). */
 
+{ "ldap_ciphers", NULL, STRING }
+/* List of SSL/TLS ciphers to allow.  The format of the string is
+   described in ciphers(1). */
+
 { "ldap_client_cert", NULL, STRING }
 /* File containing the client certificate. */
+
+{ "ldap_client_key", NULL, STRING }
+/* File containing the private client key. */
 
 { "ldap_verify_peer", 0, SWITCH }
 /* Require and verify server certificate.  If this option is yes,
    you must specify ldap_ca_file or ldap_ca_dir. */
 
-{ "ldap_ciphers", NULL, STRING }
-/* List of SSL/TLS ciphers to allow.  The format of the string is
-   described in ciphers(1). */
-
-{ "ldap_client_key", NULL, STRING }
-/* File containing the private client key. */
-
-{ "ldap_tls_cacert_dir", NULL, STRING }
+{ "ldap_tls_cacert_dir", NULL, STRING, "2.5.0", "ldap_ca_dir" }
 /* Deprecated in favor of \fIldap_ca_dir\fR. */
 
-{ "ldap_tls_cacert_file", NULL, STRING }
+{ "ldap_tls_cacert_file", NULL, STRING, "2.5.0", "ldap_ca_file" }
 /* Deprecated in favor of \fIldap_ca_file\fR. */
 
-{ "ldap_tls_cert", NULL, STRING }
+{ "ldap_tls_cert", NULL, STRING, "2.5.0", "ldap_client_cert" }
 /* Deprecated in favor of \fIldap_client_cert\fR. */
 
-{ "ldap_tls_key", NULL, STRING }
+{ "ldap_tls_key", NULL, STRING, "2.5.0", "ldap_client_key" }
 /* Deprecated in favor of \fIldap_client_key\fR. */
 
-{ "ldap_tls_check_peer", NULL, STRING }
+{ "ldap_tls_check_peer", 0, SWITCH, "2.5.0", "ldap_verify_peer" }
 /* Deprecated in favor of \fIldap_verify_peer\fR. */
 
-{ "ldap_tls_ciphers", NULL, STRING }
+{ "ldap_tls_ciphers", NULL, STRING, "2.5.0", "ldap_ciphers" }
 /* Deprecated in favor of \fIldap_ciphers\fR. */
 
 { "ldap_uri", NULL, STRING }
@@ -1960,22 +1980,22 @@ product version in the capabilities */
 /* The length of the IMAP server's inactivity autologout timer,
    in minutes.  The minimum value is 30, the default. */
 
-{ "tls_ca_file", "DEFAULT", STRING }
+{ "tls_ca_file", NULL, STRING, "2.5.0", "tls_client_ca_file" }
 /* Deprecated in favor of \fItls_client_ca_file\fR. */
 
-{ "tls_ca_path", "DEFAULT", STRING }
+{ "tls_ca_path", NULL, STRING, "2.5.0", "tls_client_ca_dir" }
 /* Deprecated in favor of \fItls_client_ca_dir\fR. */
 
-{ "tlscache_db", "DEFAULT", STRING }
+{ "tlscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "2.5.0", "tls_sessions_db" }
 /* Deprecated in favor of \fItls_sessions_db\fR. */
 
-{ "tlscache_db_path", "DEFAULT", STRING }
+{ "tlscache_db_path", NULL, STRING, "2.5.0", "tls_sessions_db_path" }
 /* Deprecated in favor of \fItls_sessions_db_path\fR. */
 
-{ "tls_cert_file", "DEFAULT", STRING }
+{ "tls_cert_file", NULL, STRING, "2.5.0", "tls_server_cert" }
 /* Deprecated in favor of \fItls_server_cert\fR. */
 
-{ "tls_cipher_list", "DEFAULT", STRING }
+{ "tls_cipher_list", "DEFAULT", STRING, "2.5.0", "tls_ciphers" }
 /* Deprecated in favor of \fItls_ciphers\fR. */
 
 { "tls_ciphers", "DEFAULT", STRING }
@@ -2011,8 +2031,12 @@ product version in the capabilities */
 /* The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
    See 'openssl ecparam -list_curves' for possible values. */
 
-{ "tls_key_file", "DEFAULT", STRING }
+{ "tls_key_file", NULL, STRING, "2.5.0", "tls_server_key" }
 /* Deprecated in favor of \fItls_server_key\fR. */
+
+{ "tls_required", 0, SWITCH }
+/* If enabled, require a TLS/SSL encryption layer to be negotiated
+   prior to ANY authentication mechanisms being advertised or allowed. */
 
 { "tls_prefer_server_ciphers", 0, SWITCH }
 /* Prefer the ciphers on the server side instead of client side. */

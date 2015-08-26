@@ -187,6 +187,10 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       break;
 
   case AUTHENTICATE:
+    if (sieved_tls_required) {
+      error_msg = "AUTHENTICATE only available under a layer";
+      goto error;
+    }
     if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "SPACE must occur after AUTHENTICATE";
@@ -950,6 +954,7 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
     prot_settls(sieved_out, tls_conn);
 
     starttls_done = 1;
+    sieved_tls_required = 0;
 
     return capabilities(sieved_out, sieved_saslconn, starttls_done,
                         authenticated, sasl_ssf);

@@ -149,6 +149,7 @@ static struct io_count *io_count_stop;
 static sasl_ssf_t extprops_ssf = 0;
 static int pop3s = 0;
 static int popd_starttls_done = 0;
+static int popd_tls_required = 0;
 
 static int popd_myrights;
 
@@ -556,6 +557,8 @@ int service_main(int argc __attribute__((unused)),
         saslprops.ipremoteport = xstrdup(remoteip);
     }
 
+    popd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
+
     /* Set inactivity timer */
     popd_timeout = config_getint(IMAPOPT_POPTIMEOUT);
     if (popd_timeout < 10) popd_timeout = 10;
@@ -571,7 +574,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* Create APOP challenge for banner */
     *popd_apop_chal = 0;
-    if (config_getswitch(IMAPOPT_ALLOWAPOP) &&
+    if (!popd_tls_required && config_getswitch(IMAPOPT_ALLOWAPOP) &&
         (sasl_checkapop(popd_saslconn, NULL, 0, NULL, 0) == SASL_OK) &&
         !sasl_mkchal(popd_saslconn,
                      popd_apop_chal, sizeof(popd_apop_chal), 1)) {
@@ -1337,6 +1340,7 @@ static void cmd_starttls(int pop3s)
     prot_settls(popd_out, tls_conn);
 
     popd_starttls_done = 1;
+    popd_tls_required = 0;
 }
 #else
 static void cmd_starttls(int pop3s __attribute__((unused)))
@@ -1350,6 +1354,13 @@ static void cmd_apop(char *response)
     int sasl_result;
     const void *canon_user;
     int failedloginpause;
+
+    /* possibly disallow APOP */
+    if (popd_tls_required) {
+        prot_printf(popd_out,
+                    "-ERR [AUTH] APOP command only available under a layer\r\n");
+        return;
+    }
 
     assert(response != NULL);
 
@@ -1419,7 +1430,8 @@ static void cmd_user(char *user)
     unsigned userlen;
 
     /* possibly disallow USER */
-    if (!(kflag || popd_starttls_done || (extprops_ssf > 1) ||
+    if (popd_tls_required ||
+        !(kflag || popd_starttls_done || (extprops_ssf > 1) ||
           config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
         prot_printf(popd_out,
                     "-ERR [AUTH] USER command only available under a layer\r\n");
@@ -1571,7 +1583,7 @@ static void cmd_capa(void)
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
     /* SASL special case: print SASL, then a list of supported capabilities */
-    if ((!popd_authstate || saslprops.ssf) &&
+    if (!popd_tls_required && (!popd_authstate || saslprops.ssf) &&
         sasl_listmech(popd_saslconn,
                       NULL, /* should be id string */
                       "SASL ", " ", "\r\n",
@@ -1596,7 +1608,7 @@ static void cmd_capa(void)
     prot_printf(popd_out, "RESP-CODES\r\n");
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
-    if (!popd_authstate &&
+    if (!popd_tls_required && !popd_authstate &&
         (kflag || popd_starttls_done || (extprops_ssf > 1)
          || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
         prot_printf(popd_out, "USER\r\n");
@@ -1620,6 +1632,13 @@ static void cmd_auth(char *arg)
     const void *val;
     const char *canon_user;
     int failedloginpause;
+
+    /* possibly disallow AUTH */
+    if (popd_tls_required) {
+        prot_printf(popd_out,
+                    "-ERR [AUTH] AUTH command only available under a layer\r\n");
+        return;
+    }
 
     /* if client didn't specify an argument we give them the list
      *

@@ -46,9 +46,8 @@
 
 #include <config.h>
 
-#include "annotate.h"
+#include "auth.h"
 #include "dav_db.h"
-#include "http_jmap.h"
 #include "strarray.h"
 #include "util.h"
 #include "vparse.h"
@@ -65,9 +64,12 @@ struct carddav_data {
     const char *fullname;
     const char *name;
     const char *nickname;
-    strarray_t emails;
-    strarray_t member_uids;
+    strarray_t *emails;
+    strarray_t *member_uids;
 };
+
+typedef int carddav_cb_t(void *rock, struct carddav_data *cdata);
+
 
 /* prepare for carddav operations in this process */
 int carddav_init(void);
@@ -109,25 +111,27 @@ strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, 
 /* get a list of groups the given uid is a member of */
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
 
-/* get a list of groups the given uid is a member of */
-strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
+/* process each entry of type 'kind' for 'mailbox' in 'carddavdb' with cb() */
+int carddav_get_cards(struct carddav_db *carddavdb,
+                      const char *mailbox, const char *vcard_uid, int kind,
+                      carddav_cb_t *cb, void *rock);
 
-/* jmap contact APIs */
-int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_req *req);
-int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct jmap_req *req);
-int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req);
-
-int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req);
-int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap_req *req);
-int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *req);
+/* process each entry of type 'kind' and updated since 'oldmodseq'
+   in 'carddavdb' with cb() */
+int carddav_get_updates(struct carddav_db *carddavdb,
+                        modseq_t oldmodseq, const char *mboxname, int kind,
+                        carddav_cb_t *cb, void *rock);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
-                   int (*cb)(void *rock, void *data),
-                   void *rock);
+                    carddav_cb_t *cb, void *rock);
 
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
+
+/* write an entry form a vcard */
+int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data *cdata,
+                      struct vparse_card *vcard);
 
 /* delete an entry from 'carddavdb' */
 int carddav_delete(struct carddav_db *carddavdb, unsigned rowid);
@@ -144,14 +148,18 @@ int carddav_commit(struct carddav_db *carddavdb);
 /* abort transaction */
 int carddav_abort(struct carddav_db *carddavdb);
 
-/* create carddav_data from vparse_card */
-void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
-
-int carddav_store(struct mailbox *mailbox, struct vparse_card *card,
-                  const char *resource, unsigned ignorequota,
+/* store a vcard to mailbox/resource */
+int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+                  const char *resource,
                   strarray_t *flags, struct entryattlist *annots,
-                  const char *userid, struct auth_state *authstate);
-int carddav_remove(struct mailbox *mailbox, uint32_t olduid, int isreplace);
+                  const char *userid, struct auth_state *authstate,
+                  int ignorequota);
 
+/* delete a carddav entry */
+int carddav_remove(struct mailbox *mailbox,
+                   uint32_t olduid, int isreplace);
+
+/* calculate a mailbox name */
+char *carddav_mboxname(const char *userid, const char *name);
 
 #endif /* CARDDAV_DB_H */

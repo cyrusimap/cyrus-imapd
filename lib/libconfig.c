@@ -225,148 +225,51 @@ static void config_ispartition(const char *key,
     if (!strncmp("partition-", key, 10)) *found = 1;
 }
 
-static void config_option_deprecate(const int dopt, const int opt, char *since)
+static void config_option_deprecate(const int dopt)
 {
-    syslog(
-            LOG_WARNING,
-            "Option '%s' is deprecated in favor of '%s' since version %s.",
-            imapopts[dopt].optname,
-            imapopts[opt].optname,
-            since
-        );
+    const int opt = imapopts[dopt].preferred_opt;
+    const char *since = imapopts[dopt].deprecated_since;
+
+    if (opt == IMAPOPT_ZERO) {
+        syslog(LOG_WARNING, "Option '%s' is deprecated in version %s.",
+               imapopts[dopt].optname, since);
+        return;
+    }
+
+    syslog(LOG_WARNING,
+           "Option '%s' is deprecated in favor of '%s' since version %s.",
+           imapopts[dopt].optname, imapopts[opt].optname, since);
+
+    /* Don't override values if the preferred option has been seen */
+    if (imapopts[opt].seen) return;
+
+    imapopts[opt].seen = imapopts[dopt].seen;
 
     switch (imapopts[dopt].t) {
-            case OPT_BITFIELD: {
-                    imapopts[opt].val.x = imapopts[dopt].val.x;
-                    break;
-                }
-            case OPT_ENUM: {
-                    imapopts[opt].val.e = imapopts[dopt].val.e;
-                    break;
-                }
-            case OPT_SWITCH: {
-                    imapopts[opt].val.b = imapopts[dopt].val.b;
-                    break;
-                }
-            case OPT_INT: {
-                    imapopts[opt].val.i = imapopts[dopt].val.i;
-                    break;
-                }
-            case OPT_STRINGLIST:
-            case OPT_STRING: {
-                    imapopts[opt].val.s = xstrdup(imapopts[dopt].val.s);
-                    free((char *)imapopts[dopt].val.s);
-                    break;
-                }
-            default: {
-                    break;
-                }
-        }
-}
+    case OPT_BITFIELD:
+        imapopts[opt].val.x = imapopts[dopt].val.x;
+        break;
 
-static void config_option_deprecated(const int opt)
-{
-    switch (opt) {
-        case IMAPOPT_AUTOCREATEINBOXFOLDERS: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_INBOX_FOLDERS, "2.5.0");
-            break;
-        }
-        case IMAPOPT_AUTOCREATEQUOTA: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_QUOTA, "2.5.0");
-            break;
-        }
-        case IMAPOPT_AUTOCREATEQUOTAMSG: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_QUOTA_MESSAGES, "2.5.0");
-            break;
-        }
-        case IMAPOPT_AUTOSIEVEFOLDERS: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SIEVE_FOLDERS, "2.5.0");
-            break;
-        }
-        case IMAPOPT_AUTOCREATE_SIEVE_COMPILED_SCRIPT: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILED, "2.5.0");
-            break;
-        }
-        case IMAPOPT_AUTOSUBSCRIBEINBOXFOLDERS: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SUBSCRIBE_FOLDERS, "2.5.0");
-            break;
-        }
-        case IMAPOPT_AUTOSUBSCRIBESHAREDFOLDERS: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS, "2.5.0");
-            break;
-        }
-        case IMAPOPT_AUTOSUBSCRIBE_ALL_SHAREDFOLDERS: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS_ALL, "2.5.0");
-            break;
-        }
-        case IMAPOPT_CREATEONPOST: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_POST, "2.5.0");
-            break;
-        }
-        case IMAPOPT_FLUSHSEENSTATE: {
-            syslog(
-                    LOG_WARNING,
-                    "Option '%s' is deprecated in version 2.5.0.",
-                    imapopts[opt].optname
-                );
-            break;
-        }
-        case IMAPOPT_GENERATE_COMPILED_SIEVE_SCRIPT: {
-            config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILE, "2.5.0");
-            break;
-        }
-        case IMAPOPT_LDAP_TLS_CACERT_DIR: {
-            config_option_deprecate(opt, IMAPOPT_LDAP_CA_DIR, "2.5.0");
-            break;
-        }
-        case IMAPOPT_LDAP_TLS_CACERT_FILE: {
-            config_option_deprecate(opt, IMAPOPT_LDAP_CA_FILE, "2.5.0");
-            break;
-        }
-        case IMAPOPT_LDAP_TLS_CERT: {
-            config_option_deprecate(opt, IMAPOPT_LDAP_CLIENT_CERT, "2.5.0");
-            break;
-        }
-        case IMAPOPT_LDAP_TLS_CHECK_PEER: {
-            config_option_deprecate(opt, IMAPOPT_LDAP_VERIFY_PEER, "2.5.0");
-            break;
-        }
-        case IMAPOPT_LDAP_TLS_CIPHERS: {
-            config_option_deprecate(opt, IMAPOPT_LDAP_CIPHERS, "2.5.0");
-            break;
-        }
-        case IMAPOPT_LDAP_TLS_KEY: {
-            config_option_deprecate(opt, IMAPOPT_LDAP_CLIENT_KEY, "2.5.0");
-            break;
-        }
-        case IMAPOPT_TLS_CA_FILE: {
-            config_option_deprecate(opt, IMAPOPT_TLS_CLIENT_CA_FILE, "2.5.0");
-            break;
-        }
-        case IMAPOPT_TLS_CA_PATH: {
-            config_option_deprecate(opt, IMAPOPT_TLS_CLIENT_CA_DIR, "2.5.0");
-            break;
-        }
-        case IMAPOPT_TLS_CERT_FILE: {
-            config_option_deprecate(opt, IMAPOPT_TLS_SERVER_CERT, "2.5.0");
-            break;
-        }
-        case IMAPOPT_TLS_CIPHER_LIST: {
-            config_option_deprecate(opt, IMAPOPT_TLS_CIPHERS, "2.5.0");
-            break;
-        }
-        case IMAPOPT_TLS_KEY_FILE: {
-            config_option_deprecate(opt, IMAPOPT_TLS_SERVER_KEY, "2.5.0");
-            break;
-        }
-        case IMAPOPT_TLSCACHE_DB: {
-            config_option_deprecate(opt, IMAPOPT_TLS_SESSIONS_DB, "2.5.0");
-            break;
-        }
-        case IMAPOPT_TLSCACHE_DB_PATH: {
-            config_option_deprecate(opt, IMAPOPT_TLS_SESSIONS_DB_PATH, "2.5.0");
-            break;
-        }
+    case OPT_ENUM:
+        imapopts[opt].val.e = imapopts[dopt].val.e;
+        break;
+
+    case OPT_SWITCH:
+        imapopts[opt].val.b = imapopts[dopt].val.b;
+        break;
+
+    case OPT_INT:
+        imapopts[opt].val.i = imapopts[dopt].val.i;
+        break;
+
+    case OPT_STRINGLIST:
+    case OPT_STRING:
+        imapopts[opt].val.s = imapopts[dopt].val.s;
+        imapopts[dopt].val.s = NULL;
+        break;
+
+    default:
+        break;
     }
 }
 
@@ -498,10 +401,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     }
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        /* See if the option configured is a part of the deprecated hash.
-         */
-        if (imapopts[opt].seen) {
-            config_option_deprecated(opt);
+        /* See if the option configured is a part of the deprecated hash. */
+        if (imapopts[opt].seen && imapopts[opt].deprecated_since) {
+            config_option_deprecate(opt);
         }
     }
 

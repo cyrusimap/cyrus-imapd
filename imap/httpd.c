@@ -115,7 +115,7 @@
 static const char tls_message[] =
     HTML_DOCTYPE
     "<html>\n<head>\n<title>TLS Required</title>\n</head>\n" \
-    "<body>\n<h2>TLS is required to use Basic authentication</h2>\n" \
+    "<body>\n<h2>TLS is required prior to authentication</h2>\n" \
     "Use <a href=\"%s\">%s</a> instead.\n" \
     "</body>\n</html>\n";
 
@@ -156,7 +156,7 @@ int config_httpprettytelemetry;
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
 
-static int ignorequota = 0;
+int ignorequota = 0;
 
 static void digest_send_success(const char *name __attribute__((unused)),
                                 const char *data)
@@ -302,6 +302,7 @@ struct namespace_t *namespaces[] = {
 #endif /* WITH_JSON */
     &namespace_rss,
     &namespace_dblookup,
+    &namespace_admin,
     &namespace_default,         /* MUST be present and be last!! */
     NULL,
 };
@@ -625,9 +626,10 @@ int service_main(int argc __attribute__((unused)),
             }
         }
     }
-    httpd_tls_required = !avail_auth_schemes;
+    httpd_tls_required =
+        config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
-    proc_register("httpd", httpd_clienthost, NULL, NULL, NULL);
+    proc_register(config_ident, httpd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     httpd_timeout = config_getint(IMAPOPT_HTTPTIMEOUT);
@@ -960,7 +962,6 @@ static void cmdloop(void)
         memset(&txn.flags, 0, sizeof(struct txn_flags_t));
         txn.flags.conn = 0;
         txn.flags.vary = VARY_AE;
-        txn.flags.ignorequota = ignorequota;
         memset(req_line, 0, sizeof(struct request_line_t));
         memset(&txn.req_tgt, 0, sizeof(struct request_target_t));
         construct_hash_table(&txn.req_qparams, 10, 1);
@@ -982,6 +983,8 @@ static void cmdloop(void)
             txn.error.desc = "Unable to create header cache";
             ret = HTTP_SERVER_ERROR;
         }
+
+        proc_register(config_ident, httpd_clienthost, httpd_userid, NULL, NULL);
 
       req_line:
         do {
@@ -1248,14 +1251,20 @@ static void cmdloop(void)
                 txn.auth_chal.scheme = NULL;
             }
 
-            /* Check the auth credentials */
-            r = http_auth(hdr[0], &txn);
-            if ((r < 0) || !txn.auth_chal.scheme) {
-                /* Auth failed - reinitialize */
-                syslog(LOG_DEBUG, "auth failed - reinit");
-                reset_saslconn(&httpd_saslconn);
-                txn.auth_chal.scheme = NULL;
+            if (httpd_tls_required) {
+                /* TLS required - redirect handled below */
                 ret = HTTP_UNAUTHORIZED;
+            }
+            else {
+                /* Check the auth credentials */
+                r = http_auth(hdr[0], &txn);
+                if ((r < 0) || !txn.auth_chal.scheme) {
+                    /* Auth failed - reinitialize */
+                    syslog(LOG_DEBUG, "auth failed - reinit");
+                    reset_saslconn(&httpd_saslconn);
+                    txn.auth_chal.scheme = NULL;
+                    ret = HTTP_UNAUTHORIZED;
+                }
             }
         }
         else if (!httpd_userid && txn.auth_chal.scheme) {
@@ -1284,6 +1293,14 @@ static void cmdloop(void)
                 auth_success(&txn);
             }
         }
+
+        /* Register service/module and method */
+        buf_printf(&txn.buf, "%s%s", config_ident,
+                   namespace->well_known ? strrchr(namespace->well_known, '/') :
+                   namespace->prefix);
+        proc_register(buf_cstring(&txn.buf), httpd_clienthost, httpd_userid,
+                      txn.req_line.uri, txn.req_line.meth);
+        buf_reset(&txn.buf);
 
         /* Request authentication, if necessary */
         switch (txn.meth) {
@@ -2809,8 +2826,6 @@ static void auth_success(struct transaction_t *txn)
     int i;
 
     httpd_userisanonymous = is_userid_anonymous(httpd_userid);
-
-    proc_register("httpd", httpd_clienthost, httpd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",
            httpd_clienthost, httpd_userid, scheme->name,

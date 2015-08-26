@@ -317,6 +317,7 @@ enum {
     STATUS_XCONVEXISTS =        (1<<6),
     STATUS_XCONVUNSEEN =        (1<<7),
     STATUS_XCONVMODSEQ =        (1<<8)
+    /* New items MUST be handled in imapd.c:list_data_remote() */
 };
 
 #define STATUS_CONVITEMS (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ)
@@ -361,6 +362,7 @@ enum {
     LIST_SEL_SPECIALUSE =       (1<<3),
     LIST_SEL_DAV =              (1<<4),
     LIST_SEL_METADATA =         (1<<5)
+    /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
 /* Bitmask for List return options */
@@ -371,6 +373,7 @@ enum {
     LIST_RET_STATUS =           (1<<3),
     LIST_RET_MYRIGHTS =         (1<<4),
     LIST_RET_METADATA =         (1<<5)
+    /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
 /* Bitmask for List name attributes */

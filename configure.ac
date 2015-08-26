@@ -44,7 +44,7 @@ dnl configure.ac for the Cyrus imapd
 dnl
 
 
-AC_INIT([cyrus-imapd], [3.0], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
+AC_INIT([cyrus-imapd], [3.0.0-beta1], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
 AC_PREREQ([2.63])
 AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS(config.h)
@@ -928,7 +928,7 @@ AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "$have_ldap" = "yes"
 
 AC_ARG_WITH(
     clamav,
-    [  --with-clamav=DIR use ClamAV from PATH (yes)],
+    [AS_HELP_STRING([--with-clamav=DIR], [use ClamAV from PATH (no)])],
     with_clamav=$withval,
     with_clamav=no
 )
@@ -1009,7 +1009,7 @@ if test "$with_krbdes" = "yes"; then
       else
           KRB_LIBS="-ldes"
       fi,
-  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.  You might want --with-auth=unix.]))
+  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
 fi
 fi
 
@@ -1275,6 +1275,16 @@ if test "$enable_event_notification" != "no"; then
         [check_jansson=false]
           [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])]
           enable_event_notification="no")
+
+    dnl support for Apple Push Service registration
+    dnl disabled by default
+    AC_ARG_ENABLE(apple-push-service,
+            [AS_HELP_STRING([--enable-apple-push-service], [enable support for Apple Push Service (requires event notifications])],,
+            [enable_apple_push_service="no";])
+
+    if test "$enable_apple_push_service" != "no"; then
+        AC_DEFINE(ENABLE_APPLEPUSHSERVICE,[],[Build with support for Apple Push Service])
+    fi
 fi
 AM_CONDITIONAL(JANSSON, test x$check_jansson = xtrue)
 
@@ -1341,7 +1351,8 @@ if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
 dnl
-        PKG_CHECK_MODULES([XML2], [libxml-2.0],,
+        PKG_CHECK_MODULES([XML2], [libxml-2.0],
+                LIBS="$LIBS ${XML2_LIBS}",
                 AC_MSG_ERROR([Need libxml-2.0 for http]))
 
         AC_CHECK_LIB(xml2, xmlFirstElementChild, [
@@ -1357,8 +1368,10 @@ dnl
                 AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),
                 AC_MSG_ERROR([Need sqlite3 for http]))
 
-        PKG_CHECK_MODULES([ICAL], [libical],
-                AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?]),
+        PKG_CHECK_MODULES([ICAL], [libical], [
+                AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
+                LIBS="$LIBS ${ICAL_LIBS}"
+                ],
                 AC_MSG_ERROR([Need libical for http]))
 
         AC_CHECK_LIB(ical, icalparameter_new_iana, [
@@ -1399,7 +1412,7 @@ dnl
 
         PKG_CHECK_MODULES([JANSSON], [jansson],
                 AC_DEFINE(WITH_JSON,[],
-                        [Build jCal/jCard/TZdist support into httpd?]),
+                        [Build jCal/jCard/JMAP/TZdist support into httpd?]),
                 AC_MSG_ERROR([Need jansson for http]))
 
         PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
@@ -1927,6 +1940,7 @@ echo "
 Cyrus Server configured components
 
    event notification: $enable_event_notification
+   apple push service: $enable_apple_push_service
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled

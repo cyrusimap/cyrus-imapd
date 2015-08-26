@@ -77,10 +77,23 @@ int timeouts_flag = 1;
     fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2))
 #endif
 
-EXPORTED void fatal(const char *s, int code __attribute__((unused)))
+jmp_buf fatal_jbuf;
+int fatal_expected;
+const char *fatal_string;
+int fatal_code;
+
+EXPORTED void fatal(const char *s, int code)
 {
     log1("fatal(%s)", s);
-    exit(1);
+    if (fatal_expected) {
+        fatal_expected = 0;
+        fatal_string = s;
+        fatal_code = code;
+        longjmp(fatal_jbuf, code);
+    }
+    else {
+        exit(1);
+    }
 }
 
 /* Each test gets a maximum of 20 seconds. */

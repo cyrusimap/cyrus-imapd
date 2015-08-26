@@ -615,8 +615,9 @@ static void my_caldav_init(struct buf *serverinfo)
 
 static void my_caldav_auth(const char *userid)
 {
-    char *mailboxname;
     int r;
+    char *mailboxname, ident[MAX_MAILBOX_NAME], rights[100];
+    struct buf acl = BUF_INITIALIZER;
 
     if (httpd_userisadmin ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -635,6 +636,9 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Auto-provision calendars for 'userid' */
+
+    strlcpy(ident, userid, sizeof(ident));
+    mboxname_hiersep_toexternal(&httpd_namespace, ident, 0);
 
     /* calendar-home-set */
     mailboxname = caldav_mboxname(userid, NULL);
@@ -658,26 +662,42 @@ static void my_caldav_auth(const char *userid)
         }
 
         /* Create locally */
-        r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-                                   NULL, 0,
-                                   userid, httpd_authstate,
-                                   0, 0, 0, 0, NULL);
+        buf_reset(&acl);
+        cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+        buf_printf(&acl, "%s\t%s\t", ident, rights);
+        cyrus_acl_masktostr(DACL_READFB, rights);
+        buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+        r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
+                                NULL /* partition */,
+                                userid, httpd_authstate,
+                                0 /* options */, 0 /* uidvalidity */,
+                                0 /* highestmodseq */, buf_cstring(&acl),
+                                NULL /* uniqueid */, 0 /* local_only */,
+                                NULL /* mboxptr */);
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mailboxname, error_message(r));
     }
 
     free(mailboxname);
-    if (r) return;
+    if (r) goto done;
 
     if (config_getswitch(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
         /* Default calendar */
         mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
         r = mboxlist_lookup(mailboxname, NULL, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
-            r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-                                    NULL, 0,
+            buf_reset(&acl);
+            cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            cyrus_acl_masktostr(DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
+                                    NULL /* partition */,
                                     userid, httpd_authstate,
-                                    0, 0, 0, 0, NULL);
+                                    0 /* options */, 0 /* uidvalidity */,
+                                    0 /* highestmodseq */, buf_cstring(&acl),
+                                    NULL /* uniqueid */, 0 /* local_only */,
+                                    NULL /* mboxptr */);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                         mailboxname, error_message(r));
         }
@@ -690,10 +710,18 @@ static void my_caldav_auth(const char *userid)
         mailboxname = caldav_mboxname(userid, SCHED_INBOX);
         r = mboxlist_lookup(mailboxname, NULL, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
-            r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-                                       NULL, 0,
-                                       userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
+            buf_reset(&acl);
+            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
+            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            cyrus_acl_masktostr(DACL_SCHED, rights);
+            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
+                                    NULL /* partition */,
+                                    userid, httpd_authstate,
+                                    0 /* options */, 0 /* uidvalidity */,
+                                    0 /* highestmodseq */, buf_cstring(&acl),
+                                    NULL /* uniqueid */, 0 /* local_only */,
+                                    NULL /* mboxptr */);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                           mailboxname, error_message(r));
         }
@@ -703,10 +731,16 @@ static void my_caldav_auth(const char *userid)
         mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
         r = mboxlist_lookup(mailboxname, NULL, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
-            r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-                                       NULL, 0,
-                                       userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
+            buf_reset(&acl);
+            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
+            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
+                                    NULL /* partition */,
+                                    userid, httpd_authstate,
+                                    0 /* options */, 0 /* uidvalidity */,
+                                    0 /* highestmodseq */, buf_cstring(&acl),
+                                    NULL /* uniqueid */, 0 /* local_only */,
+                                    NULL /* mboxptr */);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                           mailboxname, error_message(r));
         }
@@ -719,15 +753,26 @@ static void my_caldav_auth(const char *userid)
         mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
         r = mboxlist_lookup(mailboxname, NULL, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
-            r = mboxlist_createmailbox(mailboxname, MBTYPE_COLLECTION,
-                                       NULL, 0,
-                                       userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
+            buf_reset(&acl);
+            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
+            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            cyrus_acl_masktostr(ACL_READ, rights);
+            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+            r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
+                                    NULL /* partition */,
+                                    userid, httpd_authstate,
+                                    0 /* options */, 0 /* uidvalidity */,
+                                    0 /* highestmodseq */, buf_cstring(&acl),
+                                    NULL /* uniqueid */, 0 /* local_only */,
+                                    NULL /* mboxptr */);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                           mailboxname, error_message(r));
         }
         free(mailboxname);
     }
+
+  done:
+    buf_free(&acl);
 }
 
 
@@ -1399,7 +1444,8 @@ enum {
     CAL_IS_DEFAULT =    (1<<0),
     CAL_CAN_DELETE =    (1<<1),
     CAL_CAN_ADMIN =     (1<<2),
-    CAL_IS_PUBLIC =     (1<<3)
+    CAL_IS_PUBLIC =     (1<<3),
+    CAL_IS_TRANSP =     (1<<4)
 };
 
 struct list_cal_rock {
@@ -1424,7 +1470,9 @@ static int list_cal_cb(const char *name,
     int r, rights, any_rights = 0;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    struct buf displayname = BUF_INITIALIZER;
+    static const char *schedtransp_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+    struct buf displayname = BUF_INITIALIZER, schedtransp = BUF_INITIALIZER;
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
@@ -1453,7 +1501,8 @@ static int list_cal_cb(const char *name,
         goto done;
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(name, displayname_annot, httpd_userid, &displayname);
+    r = annotatemore_lookupmask(name, displayname_annot,
+                                httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
@@ -1495,6 +1544,14 @@ static int list_cal_cb(const char *name,
     if ((any_rights & DACL_READ) == DACL_READ) {
         cal->flags |= CAL_IS_PUBLIC;
     }
+
+    /* Is this calendar transparent? */
+    r = annotatemore_lookupmask(name, schedtransp_annot,
+                                httpd_userid, &schedtransp);
+    if (!r && !strcmp(buf_cstring(&schedtransp), "transparent")) {
+        cal->flags |= CAL_IS_TRANSP;
+    }
+    buf_free(&schedtransp);
 
     lrock->len++;
 
@@ -1667,10 +1724,19 @@ static int list_calendars(struct transaction_t *txn, int rights)
                           base_path, cal->shortname, cal->displayname);
 
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share onclick=\""
-                          "shareCalendar('%s%s', this.checked)\">Public</td>",
+                          "<td><input type=checkbox%s%s name=share"
+                          " onclick=\"shareCalendar('%s%s', this.checked)\">"
+                          "Public</td>",
                           !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
                           (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
+                          base_path, cal->shortname);
+
+        buf_printf_markup(body, level,
+                          "<td><input type=checkbox%s%s name=transp"
+                          " onclick=\"transpCalendar('%s%s', this.checked)\">"
+                          "Transparent</td>",
+                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
+                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "",
                           base_path, cal->shortname);
 
         buf_printf_markup(body, --level, "</tr>");
@@ -4873,10 +4939,9 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
         }
         else {
             /* Get busytime for all contained calendar collections */
-            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
             char mboxpat[MAX_MAILBOX_BUFFER+1];
             snprintf(mboxpat, sizeof(mboxpat), "%s.%%", mailboxname);
-            mboxlist_findall(&httpd_namespace, mboxpat, isadmin, httpd_userid,
+            mboxlist_findall(NULL, mboxpat, 1 /*admin*/, httpd_userid,
                              httpd_authstate, busytime_by_collection, fctx);
         }
 

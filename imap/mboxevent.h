@@ -82,6 +82,11 @@ enum event_type {
     EVENT_ACL_CHANGE          = (1<<20),
     EVENT_CALENDAR            = (1<<21),
     EVENT_CALENDAR_ALARM      = (1<<22)
+    /* Other */
+#ifdef ENABLE_APPLEPUSHSERVICE
+    ,
+    EVENT_APPLEPUSHSERVICE    = (1<<23)
+#endif
 };
 
 /*
@@ -147,6 +152,13 @@ enum event_param {
     EVENT_CALENDAR_ATTENDEE_EMAILS,
     EVENT_CALENDAR_ATTENDEE_STATUS,
     EVENT_CALENDAR_ORGANIZER,
+#ifdef ENABLE_APPLEPUSHSERVICE
+    EVENT_APPLEPUSHSERVICE_VERSION,
+    EVENT_APPLEPUSHSERVICE_ACCOUNT_ID,
+    EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN,
+    EVENT_APPLEPUSHSERVICE_SUBTOPIC,
+    EVENT_APPLEPUSHSERVICE_MAILBOXES,
+#endif
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
@@ -332,5 +344,24 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
  * set the client tag used by vnd.fastmail.clientTagj
  */
 void mboxevent_set_client_id(const char *);
+
+#ifdef ENABLE_APPLEPUSHSERVICE
+/* Arguments to XAPPLEPUSHSERVICE */
+struct applepushserviceargs {
+    unsigned int aps_version;
+    struct buf   aps_account_id;
+    struct buf   aps_device_token;
+    struct buf   aps_subtopic;
+    strarray_t   mailboxes;
+};
+
+/*
+ * send event with APS channel data in it for the push service to sort out
+ */
+void mboxevent_set_applepushservice(struct mboxevent *event,
+                                    struct applepushserviceargs *applepushserviceargs,
+                                    strarray_t *mailboxes,
+                                    const char *userid);
+#endif
 
 #endif /* _MBOXEVENT_H */

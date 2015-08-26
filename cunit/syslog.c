@@ -112,7 +112,9 @@ static void vlog(int prio, const char *fmt, va_list args)
                 slmatches[i].count++;
                 break;
             } else {
-                fprintf(stderr, "\nSYSLOG didn't match '%s' against '%s'\n", line, slmatches[i].re);
+                /* don't naively report mismatches when we're looking for multiple patterns */
+                if (nslmatches == 1 || verbose >= 2)
+                    fprintf(stderr, "\nSYSLOG didn't match '%s' against '%s'\n", line, slmatches[i].re);
             }
 
             if (r != REG_NOMATCH) {

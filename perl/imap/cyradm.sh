@@ -53,6 +53,7 @@ cyradm - Cyrus administration shell, alter ego of Cyrus::IMAP::Shell
 
   $ cyradm [--user user] [--[no]rc] [--systemrc file] [--userrc file] \
   > [--port n] [--auth mechanism] [--tlskey keyfile] [--notls] \
+  > [--cafile cacertfile] [--cadir cacertdir] \
   > [--server] server
 
 but possibly
@@ -287,7 +288,7 @@ of the connected server.
 
 Set ACLs on a mailbox.  The ACL may be one of the special strings C<none>,
 C<read> (C<lrs>), C<post> (C<lrsp>), C<append> (C<lrsip>), C<write>
-(C<lrswipkxte>), C<delete> (C<lrxte>), or C<all> (C<lrswipkxte>), or
+(C<lrswipkxten>), C<delete> (C<lrxten>), or C<all> (C<lrswipkxten>), or
 any combinations of the ACL codes:
 
 =over 4
@@ -337,6 +338,10 @@ Perform EXPUNGE and expunge as part of CLOSE
 =item a
 
 Administer (SETACL/DELETEACL/GETACL/LISTRIGHTS)
+
+=item n
+
+Add, delete or modify annotations
 
 =back
 

@@ -67,21 +67,19 @@ EXPORTED int sqldb_init(void)
 {
     if (!sqldb_active++) {
         sqlite3_initialize();
+        assert(!open_sqldbs);
     }
-
-    assert(!open_sqldbs);
 
     return 0;
 }
 
 EXPORTED int sqldb_done(void)
 {
-    if (--sqldb_active) {
+    if (!--sqldb_active) {
         sqlite3_shutdown();
+        /* XXX - report the problems? */
+        assert(!open_sqldbs);
     }
-
-    /* XXX - report the problems? */
-    assert(!open_sqldbs);
 
     return 0;
 }
@@ -112,7 +110,7 @@ static int _version_cb(void *rock, int ncol, char **vals, char **names __attribu
 
 /* Open DAV DB corresponding in file */
 EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
-                             int version, struct sqldb_upgrade *upgradesql)
+                             int version, const struct sqldb_upgrade *upgradesql)
 {
     int rc = SQLITE_OK;
     struct stat sbuf;

@@ -408,30 +408,28 @@ static void my_carddav_auth(const char *userid)
                 proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
                                  &backend_cached, NULL, NULL, httpd_in);
                 mboxlist_entry_free(&mbentry);
-                free(mailboxname);
-                return;
+                goto done;
             }
             mboxlist_entry_free(&mbentry);
         }
         else r = 0;
 
-        /* XXX - set rights */
-        r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
+        r = mboxlist_createmailbox(mailboxname, MBTYPE_COLLECTION,
                                    NULL, 0,
                                    userid, httpd_authstate,
                                    0, 0, 0, 0, NULL);
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mailboxname, error_message(r));
     }
+    if (r) goto done;
+
     free(mailboxname);
-    if (r) return;
 
     /* Default addressbook */
     buf_printf(&boxbuf, ".%s", DEFAULT_ADDRBOOK);
     mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* XXX - set rights */
         r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
                                    NULL, 0,
                                    userid, httpd_authstate,
@@ -439,8 +437,9 @@ static void my_carddav_auth(const char *userid)
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mailboxname, error_message(r));
     }
-    free(mailboxname);
 
+ done:
+    free(mailboxname);
     buf_free(&boxbuf);
 }
 

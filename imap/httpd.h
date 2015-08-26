@@ -62,6 +62,12 @@
 #define MARKUP_INDENT   2     /* # spaces to indent each line of markup */
 #define GZIP_MIN_LEN    300   /* minimum length of data to gzip */
 
+#define DFLAG_UNBIND    "DAV:unbind"
+#define DFLAG_UNCHANGED "DAV:unchanged"
+
+/* XML namespace URIs */
+#define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
+
 /* Supported TLS version for Upgrade */
 #define TLS_VERSION      "TLS/1.0"
 
@@ -119,7 +125,8 @@ enum {
     URL_NS_TZDIST,
     URL_NS_RSS,
     URL_NS_DBLOOKUP,
-    URL_NS_JMAP
+    URL_NS_JMAP,
+    URL_NS_ADMIN
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -265,7 +272,6 @@ struct txn_flags_t {
     unsigned char ranges;               /* Accept range requests for resource */
     unsigned char vary;                 /* Headers on which response varied */
     unsigned char trailer;              /* Headers which will be in trailer */
-    unsigned char ignorequota;          /* Ignore quota on mailbox appends */
 };
 
 /* Transaction context */
@@ -394,6 +400,7 @@ extern struct namespace_t namespace_tzdist;
 extern struct namespace_t namespace_jmap;
 extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;
+extern struct namespace_t namespace_admin;
 
 
 /* XXX  These should be included in struct transaction_t */
@@ -414,6 +421,8 @@ extern struct namespace httpd_namespace;
 extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 extern unsigned long config_httpmodules;
 extern int config_httpprettytelemetry;
+
+extern int ignorequota;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
