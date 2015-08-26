@@ -157,6 +157,10 @@ int mboxname_isnotesmailbox(const char *name, int mbtype);
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
 
+void mboxname_hash(char *buf, size_t buf_len,
+                   const char *root,
+                   const char *name) ;
+
 /*
  * Translate (internal) inboxname into corresponding userid,
  * and vice-versa.

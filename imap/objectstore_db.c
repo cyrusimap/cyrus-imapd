@@ -204,28 +204,38 @@ static sqldb_t *open_db_userid (struct mailbox *mailbox) {
     sqldb_t *db = NULL;
     static char filename[MAX_MAILBOX_PATH+1];
     static char user_path[MAX_MAILBOX_PATH+1];
-
     char *path = NULL ;
 
-    snprintf(user_path, sizeof(user_path), "%s", mailbox->name);
-    const char *user = mboxname_to_userid(mailbox->name);
+    const char *root = config_partitiondir(mailbox->part);
+    const char *user = (char*) mboxname_to_userid(mailbox->name);
 
-    // now remove tail part part after user/<username>/
+    mboxname_hash(user_path, MAX_MAILBOX_PATH, root, mailbox->name);
+
+// remove domain from user string ;
+    path = strstr(user, "@");
+    if (path)
+        *path = '\0' ;
+
+// now remove tail part part after user/<username>/
     path = strstr(user_path, user);
     if (path){
         path [strlen (user)] = '\0' ;
     }
-    /* change all '.'s to '/' */
-    char *p ;
-    for (p = user_path; *p; p++) {
-    if (*p == '.') *p = '/';
-    }
 
-    path = strstr(user_path, "user");
+    // remove // DELETEDPREFIX if there...
+     const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
+     path = strstr(user_path, dp);
+     if (path)
+     {
+         int len = strlen (dp) + 1 ;
+         char *p ;
+         for (p = path; *p; p++, path++) {
+             *p = path [len];
+         }
+     }
 
-    snprintf(filename, sizeof(filename), "%s/%s/message.db", config_partitiondir(mailbox->part), path );
+    snprintf(filename, sizeof(filename), "%s/message.db", user_path );
     path = filename ;
-
 
     /* Create table SQL statement */
     char *sql_table = "CREATE TABLE user_msg("  \

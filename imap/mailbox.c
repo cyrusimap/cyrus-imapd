@@ -167,6 +167,9 @@ static struct mailboxlist *create_listitem(const char *name)
     /* ensure we never print insane times */
     gettimeofday(&item->m.starttime, 0);
 
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+        keep_user_message_db_open (1);
+
     return item;
 }
 
@@ -189,11 +192,16 @@ static void remove_listitem(struct mailboxlist *remitem)
 
     for (item = open_mailboxes; item; item = item->next) {
         if (item == remitem) {
+
             if (previtem)
                 previtem->next = item->next;
             else
                 open_mailboxes = item->next;
             free(item);
+
+            if (!open_mailboxes && config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))  // time to force clese the database
+                 keep_user_message_db_open (0);
+
             return;
         }
         previtem = item;
@@ -4923,13 +4931,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
 
     proc_killmbox(mailbox->name);
 
-    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
-        keep_user_message_db_open (1);  // will make all db changes to commit at once
-
     mailbox_close(mailboxptr);
-
-    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
-        keep_user_message_db_open (0);
 
     return 0;
 }
@@ -5148,7 +5150,8 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
         if (r) break;
 
         if (object_storage_enabled) {
-            struct mailbox new_mailbox;
+            static struct mailbox new_mailbox;
+            memset(&new_mailbox, 0, sizeof(struct mailbox));
             new_mailbox.name = (char*) newname;
             new_mailbox.part = (char*) config_defpartition ;
             r = objectstore_put(&new_mailbox, record, newbuf);   // put should just add to refcount.
