@@ -1205,9 +1205,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     /* get the deleted name */
     mboxname_todeleted(name, newname, 1);
 
-    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
-        keep_user_message_db_open (1);  // will make all db changes to commit at once
-
     /* Get mboxlist_renamemailbox to do the hard work. No ACL checks needed */
     r = mboxlist_renamemailbox((char *)name, newname, mbentry->partition,
                                0 /* uidvalidity */,
@@ -1218,9 +1215,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                force, 1);
 
     mboxlist_entry_free(&mbentry);
-
-    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
-        keep_user_message_db_open (0);
 
     return r;
 }

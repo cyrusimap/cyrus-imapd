@@ -205,6 +205,10 @@ int objectstore_put (struct mailbox *mailbox,
                 oio_error_code(err), oio_error_message(err));
         oio_error_pfree(&err);
         rc = EAGAIN;
+
+        //  could not upload to object storage...   update database.
+        int count = 0;
+        delete_message_guid (mailbox, record, &count) ;
     }
 
     hc_url_pclean (&url);

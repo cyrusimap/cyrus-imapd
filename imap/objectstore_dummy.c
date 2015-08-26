@@ -39,6 +39,9 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
+
+#include <stdio.h>
+#include <dirent.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <errno.h>
@@ -71,13 +74,25 @@ static const char *objectstore_get_object_filename(struct mailbox *mailbox,
 static struct object_def *objectstore_get_object_def (struct mailbox *mailbox, const struct index_record *record)
 {
     static struct object_def obj_def ;
-    const char *namespace = config_getstring(IMAPOPT_OBJECT_STORAGE_DUMMY_SPOOL) ; //   "/var/objectstore" ;
+    const char *namespace = config_getstring(IMAPOPT_OBJECT_STORAGE_DUMMY_SPOOL) ;
 
     obj_def.namespace = namespace ;
     obj_def.filename = objectstore_get_object_filename(mailbox, record) ;
     obj_def.user = mboxname_to_userid(mailbox->name) ;
 
     return &obj_def;
+}
+
+static const char *objectstore_container_path(struct mailbox *mailbox, const struct index_record *record)
+{
+    static char path[MAX_MAILBOX_PATH+1];
+    struct object_def *obj_def = NULL;
+
+    obj_def = objectstore_get_object_def (mailbox, record);
+
+    snprintf(path, sizeof(path), "%s/%s/%c%c", obj_def->namespace, obj_def->user, obj_def->filename[0], obj_def->filename[1]);
+    
+    return path ;
 }
 
 static const char *objectstore_filename_in_container_path(struct mailbox *mailbox, const struct index_record *record)
@@ -87,9 +102,29 @@ static const char *objectstore_filename_in_container_path(struct mailbox *mailbo
 
     obj_def = objectstore_get_object_def (mailbox, record);
 
-    snprintf(path, sizeof(path), "%s/%s/%s", obj_def->namespace, obj_def->user, obj_def->filename);
-
+    const char *container_path = objectstore_container_path(mailbox, record) ;
+    
+    snprintf(path, sizeof(path), "%s/%s", container_path, obj_def->filename);
+  
     return path ;
+}
+
+static int is_directory_empty(char *dir_path) 
+{
+    int n = 0;
+    struct dirent *d;
+    DIR *dir = opendir(dir_path);
+    if (dir == NULL)
+        return 0 ;
+    while ((d = readdir(dir)) != NULL) {
+        if(++n > 2)
+            break;
+    }
+    closedir(dir);
+    if (n <= 2) // The directory is empty
+        return 1;
+    else
+        return 0;
 }
 
 
@@ -101,19 +136,27 @@ int objectstore_put (struct mailbox *mailbox, const struct index_record *record,
 
     obj_def = objectstore_get_object_def (mailbox, record);
 
-    // create name space dir if not there
     struct stat fileStat;
     char path[MAX_MAILBOX_PATH+1] ;
 
-// TODO in real Implementation create container.
-
     // create user container if not there
-    snprintf(path, sizeof(path), "%s/%s/", obj_def->namespace, obj_def->user);
+    snprintf(path, sizeof(path), "%s/%s", obj_def->namespace, obj_def->user);
     if(stat(path, &fileStat) < 0) {
     	if (cyrus_mkdir (path, 755 ) == -1) {
     		syslog(LOG_ERR, "Dummy ObjectStore: Cannot create user %s",path);
     		rc = 1 ;
     	}
+    }
+
+    //create sub-container if not there
+    const char *container_path = objectstore_container_path(mailbox, record) ;
+    snprintf(path, sizeof(path), "%s/", container_path);
+    
+    if(stat(path, &fileStat) < 0) {
+        if (cyrus_mkdir (path, 755 ) == -1) {
+            syslog(LOG_ERR, "Dummy ObjectStore: Cannot create user sub container %s",path);
+            rc = 1 ;
+        }
     }
 
     add_message_guid (mailbox, record) ;
@@ -146,6 +189,7 @@ int objectstore_get (struct mailbox *mailbox,
 int objectstore_delete (struct mailbox *mailbox,
     const struct index_record *record)
 {
+    static char path[MAX_MAILBOX_PATH+1];
     int already, rc = 0;
 
     // check is file already exist
@@ -158,7 +202,14 @@ int objectstore_delete (struct mailbox *mailbox,
     	   // delete file
     	   const char *filename = objectstore_filename_in_container_path (mailbox, record) ;
     	   rc = remove ( filename ) ;
-        }
+    	   
+    	   // remove empty sub-container
+           const char *container_path = objectstore_container_path(mailbox, record) ;
+           snprintf(path, sizeof(path), "%s/", container_path);
+           
+           if(is_directory_empty (path))
+               remove (path) ;
+          }
     }
     return rc;
 }
