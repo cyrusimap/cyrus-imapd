@@ -2832,6 +2832,7 @@ int meth_acl(struct transaction_t *txn, void *params)
             xmlNodePtr child = NULL, prin = NULL, privs = NULL;
             const char *userid = NULL;
             int deny = 0, rights = 0;
+            char *freeme = NULL;
             char rightstr[100];
             struct request_target_t tgt;
 
@@ -2889,7 +2890,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                 userid = proxy_userid;
             }
             else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
-                userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+                userid = freeme = mboxname_to_userid(txn->req_tgt.mbentry->name);
             }
             else if (!xmlStrcmp(prin->name, BAD_CAST "all")) {
                 userid = "anyone";
@@ -2930,6 +2931,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                 /* DAV:recognized-principal */
                 txn->error.precond = DAV_RECOG_PRINC;
                 ret = HTTP_FORBIDDEN;
+                free(freeme);
                 goto done;
             }
 
@@ -2943,6 +2945,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                         /* Extension (CalDAV) privileges */
                         if (txn->error.precond) {
                             ret = HTTP_FORBIDDEN;
+                            free(freeme);
                             goto done;
                         }
                     }
@@ -2985,12 +2988,14 @@ int meth_acl(struct transaction_t *txn, void *params)
                             /* DAV:no-abstract */
                             txn->error.precond = DAV_NO_ABSTRACT;
                             ret = HTTP_FORBIDDEN;
+                            free(freeme);
                             goto done;
                         }
                         else {
                             /* DAV:not-supported-privilege */
                             txn->error.precond = DAV_SUPP_PRIV;
                             ret = HTTP_FORBIDDEN;
+                            free(freeme);
                             goto done;
                         }
                     }
@@ -3003,6 +3008,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                             /* DAV:not-supported-privilege */
                             txn->error.precond = DAV_SUPP_PRIV;
                             ret = HTTP_FORBIDDEN;
+                            free(freeme);
                             goto done;
                         }
                     }
@@ -3028,6 +3034,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                             /* DAV:not-supported-privilege */
                             txn->error.precond = DAV_SUPP_PRIV;
                             ret = HTTP_FORBIDDEN;
+                            free(freeme);
                             goto done;
                         }
                     }
@@ -3035,6 +3042,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                         /* DAV:not-supported-privilege */
                         txn->error.precond = DAV_SUPP_PRIV;
                         ret = HTTP_FORBIDDEN;
+                        free(freeme);
                         goto done;
                     }
                 }
@@ -3095,6 +3103,8 @@ int meth_acl(struct transaction_t *txn, void *params)
                                deny ? "-" : "", userid, rightstr);
                 }
             }
+
+            free(freeme);
         }
     }
 
@@ -4317,13 +4327,11 @@ int propfind_by_collection(const char *mboxname, int matchlen,
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     mbentry_t *mbentry = NULL;
     struct buf writebuf = BUF_INITIALIZER;
-    struct mboxname_parts parts;
+    mbname_t *mbname = NULL;
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
     int r = 0, rights, root = 1;
-
-    mboxname_init_parts(&parts);
 
     /* If this function is called outside of mboxlist_findall()
      * with matchlen == 0, this is the root resource of the PROPFIND,
@@ -4372,16 +4380,16 @@ int propfind_by_collection(const char *mboxname, int matchlen,
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
-        mboxname_to_parts(mboxname, &parts);
+        mbname = mbname_from_intname(mboxname);
 
         buf_setcstr(&writebuf, fctx->req_tgt->prefix);
 
-        if (parts.userid) {
+        if (mbname_localpart(mbname)) {
             const char *domain =
-                parts.domain ? parts.domain :
+                mbname_domain(mbname) ? mbname_domain(mbname) :
                 httpd_extradomain ? httpd_extradomain : config_defdomain;
 
-            buf_printf(&writebuf, "/user/%s", parts.userid);
+            buf_printf(&writebuf, "/user/%s", mbname_localpart(mbname));
             if (domain) buf_printf(&writebuf, "@%s", domain);
         }
         buf_putc(&writebuf, '/');
@@ -4389,12 +4397,12 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         len = writebuf.len;
 
         /* one day this will just be the final element of 'boxes' hopefully */
-        if (!parts.box) goto done;
-        p = strrchr(parts.box, '.');
-        if (!p) goto done;
+        const strarray_t *boxes = mbname_boxes(mbname);
+        if (!strarray_size(boxes)) goto done;
+        const char *last = strarray_nth(boxes, -1);
 
         /* OK, we're doing this mailbox */
-        buf_appendcstr(&writebuf, p+1);
+        buf_appendcstr(&writebuf, last);
 
         /* don't forget the trailing slash */
         buf_putc(&writebuf, '/');
@@ -4449,7 +4457,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
 
   done:
     buf_free(&writebuf);
-    mboxname_free_parts(&parts);
+    mbname_free(&mbname);
     mboxlist_entry_free(&mbentry);
     if (mailbox) mailbox_close(&mailbox);
 
@@ -5702,7 +5710,7 @@ static int principal_search(const char *mboxname,
                             void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    const char *userid = mboxname_to_userid(mboxname);
+    char *userid = mboxname_to_userid(mboxname);
     struct search_crit *search_crit;
     size_t len;
     char *p;
@@ -5714,7 +5722,7 @@ static int principal_search(const char *mboxname,
         for (prop = search_crit->props; prop; prop = prop->next) {
             if (!strcmp(prop->s, "displayname")) {
                 if (!xmlStrcasestr(BAD_CAST userid,
-                                   search_crit->match)) return 0;
+                                   search_crit->match)) goto bad;
             }
             else if (!strcmp(prop->s, "calendar-user-address-set")) {
                 char email[MAX_MAILBOX_NAME+1];
@@ -5722,11 +5730,11 @@ static int principal_search(const char *mboxname,
                 snprintf(email, MAX_MAILBOX_NAME, "%s@%s",
                          userid, config_servername);
                 if (!xmlStrcasestr(BAD_CAST email,
-                                   search_crit->match)) return 0;
+                                   search_crit->match)) goto bad;
             }
             else if (!strcmp(prop->s, "calendar-user-type")) {
                 if (!xmlStrcasestr(BAD_CAST "INDIVIDUAL",
-                                   search_crit->match)) return 0;
+                                   search_crit->match)) goto bad;
             }
         }
     }
@@ -5740,9 +5748,13 @@ static int principal_search(const char *mboxname,
     strlcpy(p, "/", MAX_MAILBOX_PATH - len);
 
     free(fctx->req_tgt->userid);
-    fctx->req_tgt->userid = xstrdup(userid);
+    fctx->req_tgt->userid = userid;
 
     return xml_add_response(fctx, 0, 0);
+
+bad:
+    free(userid);
+    return 0;
 }
 
 

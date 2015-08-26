@@ -2019,9 +2019,11 @@ out:
 
 static const char *indexing_lockpath(struct mailbox *mailbox)
 {
-    char *usermbox = mboxname_user_mbox(mboxname_to_userid(mailbox->name), NULL);
+    char *userid = mboxname_to_userid(mailbox->name);
+    char *usermbox = mboxname_user_mbox(userid, NULL);
     const char *lockpath = mboxname_lockpath_suffix(usermbox, INDEXING_LOCK_SUFFIX);
     free(usermbox);
+    free(userid);
     return lockpath;
 }
 

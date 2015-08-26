@@ -352,28 +352,17 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser,
                     const char *userid __attribute__((unused)),
                     struct auth_state *authstate)
 {
-    struct namespace namespace;
-    char oldinbox[MAX_MAILBOX_BUFFER], newinbox[MAX_MAILBOX_BUFFER];
     char *olddomain, *newdomain;
     struct rename_rock rrock;
     char pat[MAX_MAILBOX_BUFFER];
     int r;
 
-    /* set namespace */
-    r = mboxname_init_namespace(&namespace, 0);
+    /* get INBOXes */
+    char *oldinbox = mboxname_user_mbox(olduser, NULL);
+    char *newinbox = mboxname_user_mbox(newuser, NULL);
 
-    /* get olduser's INBOX */
-    if (!r) r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
-                                                 olduser, oldinbox);
-
-    /* get newuser's INBOX */
-    if (!r) r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
-                                                 newuser, newinbox);
-
-    if (!r) {
-        /* copy seen db */
-        seen_rename_user(olduser, newuser);
-    }
+    /* copy seen db */
+    seen_rename_user(olduser, newuser);
 
     /* setup rock for find operations */
     rrock.olduser = olduser;
@@ -391,17 +380,16 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser,
     else
         rrock.domainchange = 1;
 
-    if (!r) {
-        /* copy/rename subscriptions - we're using the internal names here */
-        strcpy(pat, "*");
-        mboxlist_findsub(NULL, pat, 1, olduser, authstate, user_renamesub,
+    /* copy/rename subscriptions - we're using the internal names here */
+    strcpy(pat, "*");
+    r = mboxlist_findsub(NULL, pat, 1, olduser, authstate, user_renamesub,
                          &rrock, 1);
-    }
 
-    if (!r) {
-        /* move sieve scripts */
-        user_renamesieve(olduser, newuser);
-    }
+    /* move sieve scripts */
+    user_renamesieve(olduser, newuser);
+
+    free(oldinbox);
+    free(newinbox);
 
     return r;
 }
@@ -488,51 +476,26 @@ static int find_cb(void *rockp __attribute__((unused)),
     return r;
 }
 
-int user_deletequotaroots(const char *user)
+int user_deletequotaroots(const char *userid)
 {
-    struct namespace namespace;
-    char buf[MAX_MAILBOX_BUFFER], *inboxname = buf;
-    int r;
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    int r = cyrusdb_foreach(qdb, inbox, strlen(inbox),
+                            &find_p, &find_cb, inbox, NULL);
 
-    /* set namespace */
-    r = mboxname_init_namespace(&namespace, 0);
-
-    /* get user's toplevel quotaroot (INBOX) */
-    if (!r) {
-        r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
-                                                 user, inboxname);
-    }
-
-    if (!r) {
-        r = cyrusdb_foreach(qdb, inboxname, strlen(inboxname),
-                                     &find_p, &find_cb, inboxname, NULL);
-    }
+    free(inbox);
 
     return r;
 }
 
 EXPORTED char *user_hash_meta(const char *userid, const char *suffix)
 {
-    struct mboxname_parts parts;
-    const char *domain;
+    mbname_t *mbname = NULL;
     char *result;
 
-    mboxname_init_parts(&parts);
+    mbname = mbname_from_userid(userid);
+    result = mboxname_conf_getpath(mbname, suffix);
 
-    if (config_virtdomains && (domain = strchr(userid, '@'))) {
-        char *bareuserid = xstrndup(userid, domain-userid);
-        parts.userid = bareuserid;
-        parts.domain = domain + 1;
-        result = mboxname_conf_getpath(&parts, suffix);
-        free(bareuserid);
-    }
-    else {
-        parts.userid = userid;
-        result = mboxname_conf_getpath(&parts, suffix);
-    }
-
-    /* doesn't do anything here, but included for completeness */
-    mboxname_free_parts(&parts);
+    mbname_free(&mbname);
 
     return result;
 }

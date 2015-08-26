@@ -398,7 +398,7 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
 {
     /* XXX - look up root path from namespace? */
     struct buf buf = BUF_INITIALIZER;
-    const char *userid = mboxname_to_userid(mboxname);
+    char *userid = mboxname_to_userid(mboxname);
 
     const char *prefix = NULL;
     if (mboxname_isaddressbookmailbox(mboxname, 0)) {
@@ -422,6 +422,7 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
         buf_printf(&buf, "/%s", resource);
 
     json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
+    free(userid);
     buf_free(&buf);
 }
 

@@ -481,6 +481,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     const char *fname;
     int first = 1;
     int i;
+    char *userid = NULL;
     struct quota q;
     struct data_file *df;
     struct seqset *expunged_seq = NULL;
@@ -612,7 +613,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
     /* Dump user files if this is an inbox */
     if (mboxname_isusermailbox(mailbox->name, 1)) {
-        const char *userid = mboxname_to_userid(mailbox->name);
+        userid = mboxname_to_userid(mailbox->name);
         int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
         char *fname = NULL, *ftag = NULL;
 
@@ -747,6 +748,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
     if (mbdir) closedir(mbdir);
     seqset_free(expunged_seq);
+    free(userid);
 
     return r;
 }

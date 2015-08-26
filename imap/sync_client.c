@@ -260,7 +260,6 @@ static int do_unuser(const char *userid)
 {
     const char *cmd = "UNUSER";
     struct mailbox *mailbox = NULL;
-    char buf[MAX_MAILBOX_BUFFER];
     struct dlist *kl;
     int r;
 
@@ -271,9 +270,8 @@ static int do_unuser(const char *userid)
     }
 
     /* check local mailbox first */
-    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
-                                          userid, buf);
-    r = mailbox_open_irl(buf, &mailbox);
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    r = mailbox_open_irl(inbox, &mailbox);
 
     /* only remove from server if there's no local mailbox */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -286,6 +284,7 @@ static int do_unuser(const char *userid)
     }
 
     mailbox_close(&mailbox);
+    free(inbox);
 
     return r;
 }
@@ -356,14 +355,13 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
             /* promote failed personal mailboxes to USER */
             int nonuser = 0;
             struct sync_name *mbox;
-            const char *userid;
 
             for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
                 /* done OK?  Good :) */
                 if (mbox->mark)
                     continue;
 
-                userid = mboxname_to_userid(mbox->name);
+                char *userid = mboxname_to_userid(mbox->name);
                 if (userid) {
                     mbox->mark = 1;
 
@@ -376,6 +374,7 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
                         syslog(LOG_INFO, "  Promoting: MAILBOX %s -> USER %s",
                                mbox->name, userid);
                     }
+                    free(userid);
                 }
                 else
                     nonuser = 1; /* there was a non-user mailbox */
@@ -1007,10 +1006,9 @@ static int do_mailbox(const char *mboxname, unsigned flags)
 
 static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
 {
-    const char *userid;
     int r = 0;
 
-    userid = mboxname_to_userid(mbentry->name);
+    char *userid = mboxname_to_userid(mbentry->name);
 
     if (userid) {
         /* skip deleted mailboxes only because the are out of order, and you would
@@ -1031,6 +1029,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
             free(prev_userid);
             prev_userid = xstrdup(userid);
         }
+        free(userid);
     }
     else {
         /* all shared mailboxes, including DELETED ones, sync alone */
@@ -1083,7 +1082,6 @@ int main(int argc, char **argv)
     int len;
     int config_virtdomains;
     struct sync_name_list *mboxname_list;
-    char mailboxname[MAX_MAILBOX_BUFFER];
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
@@ -1332,17 +1330,17 @@ int main(int argc, char **argv)
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
 
-                (*sync_namespace.mboxname_tointernal)(&sync_namespace, buf,
-                                                      NULL, mailboxname);
-                if (!sync_name_lookup(mboxname_list, mailboxname))
-                    sync_name_list_add(mboxname_list, mailboxname);
+                char *intname = mboxname_from_external(buf, &sync_namespace, NULL);
+                if (!sync_name_lookup(mboxname_list, intname))
+                    sync_name_list_add(mboxname_list, intname);
+                free(intname);
             }
             fclose(file);
         } else for (i = optind; i < argc; i++) {
-            (*sync_namespace.mboxname_tointernal)(&sync_namespace, argv[i],
-                                                   NULL, mailboxname);
-            if (!sync_name_lookup(mboxname_list, mailboxname))
-                sync_name_list_add(mboxname_list, mailboxname);
+            char *intname = mboxname_from_external(argv[i], &sync_namespace, NULL);
+            if (!sync_name_lookup(mboxname_list, intname))
+                sync_name_list_add(mboxname_list, intname);
+            free(intname);
         }
 
         if (sync_do_mailboxes(mboxname_list, sync_backend, flags)) {

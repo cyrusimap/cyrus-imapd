@@ -192,9 +192,11 @@ static strarray_t *activefile_filter(const strarray_t *active, const strarray_t 
 /* the activefile file is a per-user meta file */
 static char *activefile_fname(const char *mboxname)
 {
-    const char *userid = mboxname_to_userid(mboxname);
+    char *userid = mboxname_to_userid(mboxname);
     if (!userid) return NULL;
-    return user_hash_meta(userid, ACTIVEFILE_METANAME);
+    char *res = user_hash_meta(userid, ACTIVEFILE_METANAME);
+    free(userid);
+    return res;
 }
 
 /* file format is very simple */
@@ -1119,11 +1121,9 @@ static int xapian_basedir(const char *tier,
                           const char *root, char **basedirp)
 {
     char *basedir = NULL;
-    struct mboxname_parts parts;
+    mbname_t *mbname = NULL;
     char c[2], d[2];
     int r;
-
-    mboxname_init_parts(&parts);
 
     if (!root)
         root = xapian_rootdir(tier, partition);
@@ -1132,27 +1132,29 @@ static int xapian_basedir(const char *tier,
         goto out;
     }
 
-    r = mboxname_to_parts(mboxname, &parts);
-    if (r) goto out;
-    if (!parts.userid) {
+    mbname = mbname_from_intname(mboxname);
+    if (!mbname_userid(mbname)) {
         r = IMAP_PARTITION_UNKNOWN;
         goto out;
     }
 
-    if (parts.domain)
+    const char *domain = mbname_domain(mbname);
+    const char *localpart = mbname_localpart(mbname);
+
+    if (domain)
         basedir = strconcat(root,
                             FNAME_DOMAINDIR,
-                            dir_hash_b(parts.domain, config_fulldirhash, d),
-                            "/", parts.domain,
-                            "/", dir_hash_b(parts.userid, config_fulldirhash, c),
+                            dir_hash_b(domain, config_fulldirhash, d),
+                            "/", domain,
+                            "/", dir_hash_b(localpart, config_fulldirhash, c),
                             FNAME_USERDIR,
-                            parts.userid,
+                            localpart,
                             (char *)NULL);
     else
         basedir = strconcat(root,
-                            "/", dir_hash_b(parts.userid, config_fulldirhash, c),
+                            "/", dir_hash_b(localpart, config_fulldirhash, c),
                             FNAME_USERDIR,
-                            parts.userid,
+                            localpart,
                             (char *)NULL);
 
     r = 0;
@@ -1162,7 +1164,7 @@ out:
         *basedirp = basedir;
     else
         free(basedir);
-    mboxname_free_parts(&parts);
+    mbname_free(&mbname);
     return r;
 }
 

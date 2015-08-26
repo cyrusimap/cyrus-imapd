@@ -748,7 +748,6 @@ static int cmd_authenticate(struct protstream *sieved_out,
   if (!verify_only) {
       /* Check for a remote mailbox (should we setup a redirect?) */
       struct namespace sieved_namespace;
-      char inboxname[MAX_MAILBOX_BUFFER];
       int r;
 
       /* Set namespace */
@@ -762,10 +761,9 @@ static int cmd_authenticate(struct protstream *sieved_out,
                                   config_virtdomains ?
                                   strcspn(username, "@") : 0);
 
-      (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
-                                             username, inboxname);
-
-      r = mboxlist_lookup(inboxname, &mbentry, NULL);
+      char *inbox = mboxname_user_mbox(username, NULL);
+      r = mboxlist_lookup(inbox, &mbentry, NULL);
+      free(inbox);
 
       if(r && !sieved_userisadmin) {
           /* lookup error */

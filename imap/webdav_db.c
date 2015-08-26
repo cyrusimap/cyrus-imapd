@@ -119,10 +119,13 @@ EXPORTED struct webdav_db *webdav_open_userid(const char *userid)
 EXPORTED struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox)
 {
     struct webdav_db *webdavdb = NULL;
-    const char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
 
-    if (userid)
-        return webdav_open_userid(userid);
+    if (userid) {
+        webdavdb = webdav_open_userid(userid);
+        free(userid);
+        return webdavdb;
+    }
 
     sqldb_t *db = dav_open_mailbox(mailbox);
     if (!db) return NULL;

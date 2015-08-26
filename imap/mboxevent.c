@@ -244,6 +244,7 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
 static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 {
     struct buf attrib = BUF_INITIALIZER;
+    char *userid = NULL;
     strarray_t *specialuse = NULL;
     int enabled = 1;
     int i = 0;
@@ -256,7 +257,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
-        const char *userid = mboxname_to_userid(mailbox->name);
+        userid = mboxname_to_userid(mailbox->name);
 
         r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
         if (r) goto done; /* XXX - return -1?  Failure? */
@@ -276,6 +277,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 done:
     strarray_free(specialuse);
     buf_free(&attrib);
+    free(userid);
     return enabled;
 }
 
@@ -756,12 +758,9 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
 
-    if (mailboxname != NULL) {
-        struct mboxname_parts parts;
-        mboxname_to_parts(mailboxname, &parts);
-
-        imapurl.mailbox = parts.box;
-    }
+    mbname_t *mbname = mbname_from_intname(mailboxname);
+    imapurl.mailbox = xstrdupnull(mbname_extname(mbname, &namespace, NULL));
+    mbname_free(&mbname);
 
     imapurl_toURL(url, &imapurl);
 
@@ -1011,7 +1010,6 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
-    char extname[MAX_MAILBOX_NAME];
 
     if (!event)
         return;
@@ -1044,23 +1042,16 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
      * quota root specified in RFC 2087. Thus we fill uri with quota root
      */
     if (!event->params[EVENT_URI].filled && event->type & QUOTA_EVENTS) {
-        char *user = (char *)mboxname_to_userid(quota->root);
-
         memset(&imapurl, 0, sizeof(struct imapurl));
         imapurl.server = config_servername;
 
         /* translate internal mailbox name to external */
-        assert(namespace.mboxname_toexternal != NULL);
-        (*namespace.mboxname_toexternal)(&namespace, quota->root, NULL, extname);
+        char *extname = mboxname_to_external(quota->root, &namespace, NULL);
         imapurl.mailbox = extname;
 
-        if (user) {
-            /* translate any separators in user */
-            mboxname_hiersep_toexternal(&namespace, user,
-                                        config_virtdomains ? strcspn(user, "@") : 0);
-        }
-
         imapurl_toURL(url, &imapurl);
+
+        free(extname);
 
         if (!event->params[EVENT_URI].filled) {
             FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
@@ -1073,7 +1064,9 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
          */
 
         if (!event->params[EVENT_USER].filled) {
-            FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(user));
+            char *userid = mboxname_to_userid(quota->root);
+            FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
+            free(userid);
         }
     }
 }
@@ -1099,7 +1092,6 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
-    char extname[MAX_MAILBOX_NAME];
 
     if (!event)
         return;
@@ -1119,8 +1111,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     imapurl.server = config_servername;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
-    assert(namespace.mboxname_toexternal != NULL);
-    (*namespace.mboxname_toexternal)(&namespace, mailbox->name, NULL, extname);
+    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
     imapurl.mailbox = extname;
 
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
@@ -1133,6 +1124,8 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     /* all events needs uri parameter */
     imapurl_toURL(url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+
+    free(extname);
 
 #ifdef WITH_DAV
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
@@ -1200,7 +1193,6 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
-    char extname[MAX_MAILBOX_NAME];
 
     if (!event)
         return;
@@ -1210,12 +1202,13 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
     /* translate internal mailbox name to external */
-    assert(namespace.mboxname_toexternal != NULL);
-    (*namespace.mboxname_toexternal)(&namespace, mailbox->name, NULL, extname);
+    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
     imapurl.mailbox = extname;
 
     imapurl_toURL(url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, xstrdup(url));
+
+    free(extname);
 }
 
 EXPORTED void mboxevent_set_client_id(const char *id)

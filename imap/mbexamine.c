@@ -163,11 +163,11 @@ int main(int argc, char **argv)
 
     for (i = optind; i < argc; i++) {
         /* Handle virtdomains and separators in mailboxname */
-        (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
-                                               NULL, buf);
-        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
+        char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
+        mboxlist_findall(&recon_namespace, intname, 1, 0, 0,
                          quotachk ? do_quota : do_examine,
                          NULL);
+        free(intname);
     }
 
     mboxlist_close();
@@ -201,7 +201,6 @@ static int do_examine(const char *name,
     unsigned i, msgno;
     int r = 0;
     int flag = 0;
-    char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     const struct index_record *record;
     int j;
@@ -209,9 +208,9 @@ static int do_examine(const char *name,
     signals_poll();
 
     /* Convert internal name to external */
-    (*recon_namespace.mboxname_toexternal)(&recon_namespace, name,
-                                           "cyrus", ext_name_buf);
-    printf("Examining %s...\n", ext_name_buf);
+    char *extname = mboxname_to_external(name, &recon_namespace, "cyrus");
+    printf("Examining %s...\n", extname);
+    free(extname);
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
@@ -352,7 +351,6 @@ static int do_quota(const char *name,
                     void *rock __attribute__((unused)))
 {
     int r = 0;
-    char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     const struct index_record *record;
     quota_t total = 0;
@@ -362,9 +360,9 @@ static int do_quota(const char *name,
     signals_poll();
 
     /* Convert internal name to external */
-    (*recon_namespace.mboxname_toexternal)(&recon_namespace, name,
-                                           "cyrus", ext_name_buf);
-    printf("Examining %s...", ext_name_buf);
+    char *extname = mboxname_to_external(name, &recon_namespace, "cyrus");
+    printf("Examining %s...", extname);
+    free(extname);
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);

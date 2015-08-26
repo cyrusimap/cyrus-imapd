@@ -306,16 +306,19 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
     search_attr_init();
 
+    char *freeme = NULL;
+
     switch (mode) {
 
     case SEARCH:
         if (!userid) {
-            userid = mboxname_to_userid(mboxname);
+            userid = freeme = mboxname_to_userid(mboxname);
             if (!userid)
                 usage(argv[0]);
         }
 
         r = do_search(mboxname, multiple, userid, argv+optind, argc-optind);
+        free(freeme);
         break;
 
     case SERIALISE:

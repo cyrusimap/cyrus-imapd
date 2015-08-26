@@ -289,24 +289,29 @@ EXPORTED int caldav_alarm_delmbox(sqldb_t *alarmdb, const char *mboxname)
 EXPORTED int caldav_alarm_delete_user(sqldb_t *alarmdb, const char *userid)
 {
     assert(alarmdb);
-    char mailboxname[MAX_MAILBOX_NAME];
-    struct mboxname_parts parts;
+    const char *mboxname = NULL;
+    char *prefix;
+    mbname_t *mbname = NULL;
 
-    mboxname_userid_to_parts(userid, &parts);
+    mbname = mbname_from_userid(userid);
 
-    mboxname_parts_to_internal(&parts, mailboxname);
-    size_t len = strlen(mailboxname);
+    mboxname = mbname_intname(mbname);
+
+    size_t len = strlen(mboxname);
     if (len + 3 > MAX_MAILBOX_NAME) return IMAP_INTERNAL;
-    mailboxname[len] = '.';
-    mailboxname[len+1] = '%';
-    mailboxname[len+2] = '\0';
+    prefix = strconcat(mboxname, ".%", (char *)NULL);
 
     struct sqldb_bindval bval[] = {
-        { ":prefix",    SQLITE_TEXT, { .s = mailboxname  } },
-        { NULL,         SQLITE_NULL, { .s = NULL                } }
+        { ":prefix",    SQLITE_TEXT, { .s = prefix  } },
+        { NULL,         SQLITE_NULL, { .s = NULL    } }
     };
 
-    return sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
+    int r = sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
+
+    free(prefix);
+    mbname_free(&mbname);
+
+    return r;
 }
 
 enum trigger_type {
@@ -734,7 +739,7 @@ EXPORTED int caldav_alarm_process()
             continue;
         }
 
-        userid = xstrdup(mboxname_to_userid(mailbox->name));
+        userid = mboxname_to_userid(mailbox->name);
 
         caldavdb = caldav_open_mailbox(mailbox);
         if (!caldavdb) {

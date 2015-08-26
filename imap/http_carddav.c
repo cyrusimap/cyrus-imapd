@@ -372,8 +372,6 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 static void my_carddav_auth(const char *userid)
 {
     int r;
-    struct buf boxbuf = BUF_INITIALIZER;
-    char *mailboxname;
 
     if (httpd_userisadmin ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -393,9 +391,9 @@ static void my_carddav_auth(const char *userid)
     /* Auto-provision an addressbook for 'userid' */
 
     /* addressbook-home-set */
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    mbname_t *mbname = mbname_from_userid(userid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (config_mupdate_server) {
             /* Find location of INBOX */
@@ -414,33 +412,29 @@ static void my_carddav_auth(const char *userid)
         }
         else r = 0;
 
-        r = mboxlist_createmailbox(mailboxname, MBTYPE_COLLECTION,
+        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
                                    NULL, 0,
                                    userid, httpd_authstate,
                                    0, 0, 0, 0, NULL);
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      mailboxname, error_message(r));
+                      mbname_intname(mbname), error_message(r));
     }
     if (r) goto done;
 
-    free(mailboxname);
-
     /* Default addressbook */
-    buf_printf(&boxbuf, ".%s", DEFAULT_ADDRBOOK);
-    mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
+    r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
+        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_ADDRESSBOOK,
                                    NULL, 0,
                                    userid, httpd_authstate,
                                    0, 0, 0, 0, NULL);
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      mailboxname, error_message(r));
+                      mbname_intname(mbname), error_message(r));
     }
 
  done:
-    free(mailboxname);
-    buf_free(&boxbuf);
+    mbname_free(&mbname);
 }
 
 
@@ -462,10 +456,9 @@ static void my_carddav_shutdown(void)
 static int carddav_parse_path(const char *path,
                               struct request_target_t *tgt, const char **errstr)
 {
-    char *p, mboxname[MAX_MAILBOX_BUFFER+1] = "";
+    char *p;
     size_t len;
-    struct mboxname_parts parts;
-    struct buf boxbuf = BUF_INITIALIZER;
+    mbname_t *mbname = NULL;
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -548,31 +541,24 @@ static int carddav_parse_path(const char *path,
 
     /* Create mailbox name from the parsed path */
 
-    mboxname_init_parts(&parts);
+    mbname = mbname_from_userid(tgt->userid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
 
-    if (tgt->userid)
-        mboxname_userid_to_parts(tgt->userid, &parts);
-
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     if (tgt->collen) {
-        buf_putc(&boxbuf, '.');
-        buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
+        char *val = xstrndup(tgt->collection, tgt->collen);
+        mbname_push_boxes(mbname, val);
+        free(val);
     }
-    parts.box = buf_cstring(&boxbuf);
 
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
-        if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
+        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
             return HTTP_NOT_FOUND;
-        //free(parts.domain); - XXX fix when converting to real parts
-        parts.domain = NULL;
+        mbname_set_domain(mbname, NULL);
     }
 
-    mboxname_parts_to_internal(&parts, mboxname);
-
-    mboxname_free_parts(&parts);
-    buf_free(&boxbuf);
+    const char *mboxname = mbname_intname(mbname);
 
     if (tgt->mbentry) {
         /* Just return the mboxname */
@@ -585,6 +571,7 @@ static int carddav_parse_path(const char *path,
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
             *errstr = error_message(r);
+            mbname_free(&mbname);
 
             switch (r) {
             case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -593,6 +580,8 @@ static int carddav_parse_path(const char *path,
             }
         }
     }
+
+    mbname_free(&mbname);
 
     return 0;
 }
@@ -662,7 +651,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
             /* is it the same one? */
             if (strcmp(cdata->dav.mailbox, mailbox->name) || strcmp(cdata->dav.resource, resource)) {
                 /* CARDDAV:no-uid-conflict */
-                const char *owner = mboxname_to_userid(cdata->dav.mailbox);
+                char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
                 txn->error.precond = CARDDAV_UID_CONFLICT;
                 assert(!buf_len(&txn->buf));
@@ -670,6 +659,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
                            namespace_addressbook.prefix, owner,
                            strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
                 txn->error.resource = buf_cstring(&txn->buf);
+                free(owner);
                 return HTTP_FORBIDDEN;
             }
         }

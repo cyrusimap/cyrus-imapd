@@ -803,11 +803,10 @@ static void my_caldav_shutdown(void)
 static int caldav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr)
 {
-    char *p, mboxname[MAX_MAILBOX_BUFFER+1] = "";
+    char *p;
     size_t len;
     const char *nameprefix;
-    struct mboxname_parts parts;
-    struct buf boxbuf = BUF_INITIALIZER;
+    mbname_t *mbname = NULL;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -913,31 +912,24 @@ static int caldav_parse_path(const char *path,
 
     /* Create mailbox name from the parsed path */
 
-    mboxname_init_parts(&parts);
+    mbname = mbname_from_userid(tgt->userid);
 
-    if (tgt->userid)
-        mboxname_userid_to_parts(tgt->userid, &parts);
-
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
     if (tgt->collen) {
-        buf_putc(&boxbuf, '.');
-        buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
+        char *item = xstrndup(tgt->collection, tgt->collen);
+        mbname_push_boxes(mbname, item); /* be nice to use pushm, but meh */
+        free(item);
     }
-    parts.box = buf_cstring(&boxbuf);
 
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
-        if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
+        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
             return HTTP_NOT_FOUND;
-        //free(parts.domain); - XXX - fix when converting to real parts
-        parts.domain = NULL;
+        mbname_set_domain(mbname, NULL);
     }
 
-    mboxname_parts_to_internal(&parts, mboxname);
-
-    mboxname_free_parts(&parts);
-    buf_free(&boxbuf);
+    const char *mboxname = mbname_intname(mbname);
 
     if (tgt->mbentry) {
         /* Just return the mboxname */
@@ -950,6 +942,7 @@ static int caldav_parse_path(const char *path,
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
             *errstr = error_message(r);
+            mbname_free(&mbname);
 
             switch (r) {
             case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -958,6 +951,8 @@ static int caldav_parse_path(const char *path,
             }
         }
     }
+
+    mbname_free(&mbname);
 
     return 0;
 }
@@ -1139,6 +1134,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
     struct caldav_data *cdata = (struct caldav_data *) data;
     icalcomponent *ical = NULL, *comp;
     icalproperty *prop;
+    char *userid = NULL;
     int r = 0;
 
     /* Only process deletes on regular calendar collections */
@@ -1203,7 +1199,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
     if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && cdata->organizer) {
         /* Scheduling object resource */
-        const char *userid, *organizer, **hdr;
+        const char *organizer, **hdr;
         struct sched_param sparam;
 
         /* Load message containing the resource and parse iCal data */
@@ -1252,6 +1248,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
   done:
     if (ical) icalcomponent_free(ical);
+    free(userid);
 
     return r;
 }
@@ -2577,6 +2574,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent_kind kind;
     icalproperty *prop;
     const char *uid, *organizer = NULL;
+    char *userid = NULL;
     struct caldav_data *cdata;
     int flags = 0;
 
@@ -2662,7 +2660,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
                                 strcmp(cdata->dav.resource, resource))) {
         /* CALDAV:no-uid-conflict */
-        const char *owner = mboxname_to_userid(cdata->dav.mailbox);
+        char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
         txn->error.precond = CALDAV_UID_CONFLICT;
         buf_reset(&txn->buf);
@@ -2670,6 +2668,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                    namespace_calendar.prefix, owner,
                    strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
+        free(owner);
         return HTTP_FORBIDDEN;
     }
 
@@ -2681,7 +2680,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* XXX  Hack for Outlook */
             && icalcomponent_get_first_invitee(comp)) {
             /* Scheduling object resource */
-            const char *userid;
             struct sched_param sparam;
             int r;
 
@@ -2890,6 +2888,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
   done:
     if (oldical) icalcomponent_free(oldical);
+    free(userid);
 
     return ret;
 }
@@ -4955,12 +4954,13 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
         struct buf attrib = BUF_INITIALIZER;
         const char *prop_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
-        const char *userid = mboxname_to_userid(mailboxname);
+        char *userid = mboxname_to_userid(mailboxname);
         const char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
         if (!annotatemore_lookup(mboxname, prop_annot,
                                  /* shared */ "", &attrib) && attrib.len) {
             add_vavailability(vavail, icalparser_parse_string(buf_cstring(&attrib)));
         }
+        free(userid);
     }
 
     /* Combine VAVAILABILITY components into busytime */

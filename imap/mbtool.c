@@ -150,10 +150,10 @@ int main(int argc, char **argv)
 
     for (i = optind; i < argc; i++) {
         /* Handle virtdomains and separators in mailboxname */
-        (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
-                                               NULL, buf);
+        char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
         mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
                          do_cmd, &cmd);
+        free(intname);
     }
 
     mboxlist_close();
@@ -175,7 +175,6 @@ static void usage(void)
 static int do_timestamp(const char *name)
 {
     int r = 0;
-    char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     const struct index_record *record;
     char olddate[RFC822_DATETIME_MAX+1];
@@ -184,9 +183,9 @@ static int do_timestamp(const char *name)
     signals_poll();
 
     /* Convert internal name to external */
-    (*recon_namespace.mboxname_toexternal)(&recon_namespace, name,
-                                           "cyrus", ext_name_buf);
-    printf("Working on %s...\n", ext_name_buf);
+    char *extname = mboxname_to_external(name, &recon_namespace, "cyrus");
+    printf("Working on %s...\n", extname);
+    free(extname);
 
     /* Open/lock header */
     r = mailbox_open_iwl(name, &mailbox);

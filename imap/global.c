@@ -572,38 +572,19 @@ EXPORTED int is_userid_anonymous(const char *user)
  * right to 'authstate'. Returns 1 if so, 0 if not.
  */
 /* Note that we do not determine if the mailbox is remote or not */
-static int acl_ok(const char *user, struct auth_state *authstate)
+static int acl_ok(const char *userid, struct auth_state *authstate)
 {
-    struct namespace namespace;
     mbentry_t *mbentry = NULL;
-    char bufuser[MAX_MAILBOX_BUFFER], inboxname[MAX_MAILBOX_BUFFER];
-    int r;
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    int r = 0;
 
-    /* Set namespace */
-    if ((r = mboxname_init_namespace(&namespace, 0)) != 0) {
-        syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
-    }
-
-    strlcpy(bufuser, user, sizeof(bufuser));
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&namespace, bufuser,
-                                config_virtdomains ?
-                                strcspn(bufuser, "@") : 0);
-
-    if (!r)
-        r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
-                                             bufuser, inboxname);
-
-    if (r || !authstate ||
-        mboxlist_lookup(inboxname, &mbentry, NULL)) {
-        r = 0;  /* Failed so assume no proxy access */
-    }
-    else {
+    if (authstate && !mboxlist_lookup(inbox, &mbentry, NULL)) {
         r = (cyrus_acl_myrights(authstate, mbentry->acl) & ACL_ADMIN) != 0;
     }
+
     mboxlist_entry_free(&mbentry);
+    free(inbox);
+
     return r;
 }
 

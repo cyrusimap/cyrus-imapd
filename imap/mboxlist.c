@@ -772,7 +772,6 @@ done:
 static int mboxlist_create_acl(const char *mboxname, char **out)
 {
     mbentry_t *mbentry = NULL;
-    const char *owner;
     int r;
 
     char *defaultacl;
@@ -788,7 +787,7 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
     }
 
     *out = xstrdup("");
-    owner = mboxname_to_userid(mboxname);
+    char *owner = mboxname_to_userid(mboxname);
     if (owner) {
         /* owner gets full permission on own mailbox by default */
         if (config_getswitch(IMAPOPT_UNIXHIERARCHYSEP)) {
@@ -797,12 +796,13 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
              * so we we need to change DOTCHARs back to '.'
              * in the identifier in order to have the correct ACL.
              */
-            for (p = (char *)owner; *p; p++) {
+            for (p = owner; *p; p++) {
                 if (*p == DOTCHAR) *p = '.';
             }
         }
         cyrus_acl_set(out, owner, ACL_MODE_SET, ACL_ALL,
                       (cyrus_acl_canonproc_t *)0, (void *)0);
+        free(owner);
         return 0;
     }
 
@@ -2139,7 +2139,6 @@ static int find_p(void *rockp,
     mbentry_t *mbentry = NULL;
     int ret = 0;
     char intname[MAX_MAILBOX_PATH+1];
-    char extname[MAX_MAILBOX_PATH+1]; // bogus path length
     int i;
 
     memcpy(intname, key, keylen);
@@ -2167,7 +2166,11 @@ static int find_p(void *rockp,
         if (isuserspace) return 0;
     }
 
-    rock->namespace->mboxname_toexternal(rock->namespace, intname, rock->userid, extname);
+    /* NOTE: this will all be cleaned up to be much more efficient sooner or later, with
+     * a mbname_t being kept inside the mbentry, and the extname cached all the way to
+     * final use.  For now, we pay the cost of re-calculating for simplicity of the
+     * changes to mbname_t itself */
+    char *extname = mboxname_to_external(intname, rock->namespace, rock->userid);
 
     long matchlen = -1;
     for (i = 0; i < rock->globs.count; i++) {
@@ -2175,6 +2178,8 @@ static int find_p(void *rockp,
         long thismatch = glob_test(g, extname);
         if (thismatch > matchlen) matchlen = thismatch;
     }
+
+    free(extname);
 
     /* If its not a match, skip it -- partial matches are ok. */
     if (matchlen == -1) return 0;
@@ -2216,7 +2221,6 @@ static int find_cb(void *rockp,
 {
     struct find_rock *rock = (struct find_rock *) rockp;
     char intname[MAX_MAILBOX_PATH+1];
-    char extname[MAX_MAILBOX_PATH+1]; // bogus path length
     int i;
 
     /* we passed find_p, so we're a valid thing to output */
@@ -2231,9 +2235,9 @@ static int find_cb(void *rockp,
     }
 
     /* XXX - cache in the rock? */
-    rock->namespace->mboxname_toexternal(rock->namespace, intname, rock->userid, extname);
+    char *extname = mboxname_to_external(intname, rock->namespace, rock->userid);
+    if (!extname) return 0;
     int extlen = strlen(extname);
-    if (!extlen) return 0;
 
     /* re-check the match */
     long matchlen = -1;
@@ -2242,6 +2246,8 @@ static int find_cb(void *rockp,
         long thismatch = glob_test(g, extname);
         if (thismatch > matchlen) matchlen = thismatch;
     }
+
+    free(extname);
 
     if (matchlen == -1) return 0;
 
@@ -2276,7 +2282,7 @@ static int find_cb(void *rockp,
      * There are various possiblities, but simplest is just to assume the
      * same number of characters from the end is the same point */
 
-    long intmatchlen = matchlen - strlen(extname) + strlen(intname);
+    long intmatchlen = matchlen - extlen + strlen(intname);
 
     return (*rock->proc)(intname, intmatchlen, !rock->is_the_inbox, rock->procrock);
 }
@@ -2389,7 +2395,7 @@ struct alluser_rock {
 static int alluser_cb(const mbentry_t *mbentry, void *rock)
 {
     struct alluser_rock *urock = (struct alluser_rock *)rock;
-    const char *userid = mboxname_to_userid(mbentry->name);
+    char *userid = mboxname_to_userid(mbentry->name);
     int r = 0;
 
     if (userid) {
@@ -2398,6 +2404,7 @@ static int alluser_cb(const mbentry_t *mbentry, void *rock)
             free(urock->prev);
             urock->prev = xstrdup(userid);
         }
+        free(userid);
     }
 
     return r;

@@ -176,7 +176,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
     unsigned uidnum = 0;
     char oldfname[MAX_MAILBOX_PATH];
     const char *fname;
-    const char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
     int r = 0;
 
     *numrestored = 0;
@@ -263,6 +263,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
 done:
+    free(userid);
     return r;
 }
 
@@ -271,7 +272,6 @@ int main(int argc, char *argv[])
     extern char *optarg;
     int opt, r = 0;
     char *alt_config = NULL;
-    char buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     int mode = MODE_UNKNOWN;
     unsigned numrestored = 0;
@@ -377,18 +377,17 @@ int main(int argc, char *argv[])
     }
 
     /* Translate mailboxname */
-    (*unex_namespace.mboxname_tointernal)(&unex_namespace, argv[optind],
-                                          NULL, buf);
+    char *intname = mboxname_from_external(argv[optind], &unex_namespace, NULL);
 
     if (mode == MODE_LIST) {
-        list_expunged(buf);
+        list_expunged(intname);
         goto done;
     }
 
     /* Open/lock header */
-    r = mailbox_open_iwl(buf, &mailbox);
+    r = mailbox_open_iwl(intname, &mailbox);
     if (r) {
-        printf("Failed to open mailbox '%s'\n", buf);
+        printf("Failed to open mailbox '%s'\n", intname);
         goto done;
     }
 
@@ -424,6 +423,7 @@ int main(int argc, char *argv[])
     mailbox_close(&mailbox);
 
 done:
+    free(intname);
     sync_log_done();
 
     quotadb_close();

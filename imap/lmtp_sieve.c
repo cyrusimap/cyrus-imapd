@@ -508,16 +508,15 @@ static int sieve_fileinto(void *ac,
     char namebuf[MAX_MAILBOX_BUFFER];
     int ret;
 
-    ret = (*mdata->namespace->mboxname_tointernal)(mdata->namespace,
-                                                   fc->mailbox,
-                                                   sd->username, namebuf);
-    if (!ret) {
-        ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                              fc->imapflags,
-                              (char *) sd->username, sd->authstate, md->id,
-                              sd->username, mdata->notifyheader,
-                              namebuf, md->date, quotaoverride, 0);
-    }
+    char *intname = mboxname_from_external(fc->mailbox, mdata->namespace, sd->username);
+    strncpy(namebuf, intname, sizeof(namebuf));
+    free(intname);
+
+    ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
+                          fc->imapflags,
+                          (char *) sd->username, sd->authstate, md->id,
+                          sd->username, mdata->notifyheader,
+                          namebuf, md->date, quotaoverride, 0);
 
     if (ret == IMAP_MAILBOX_NONEXISTENT) {
         /* if "plus" folder under INBOX, then try to create it */

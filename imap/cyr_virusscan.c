@@ -334,7 +334,7 @@ int scan_me(const char *name,
     }
 
     if (notify) {
-        const char *owner = mboxname_to_userid(name);
+        char *owner = mboxname_to_userid(name);
         if (owner) {
             if (!strcmp(owner, user->owner)) {
                 i_mbox = user;
@@ -345,6 +345,7 @@ int scan_me(const char *name,
                 new->next = user;
                 i_mbox = user = new;
             }
+            free(owner);
         }
 #if 0  /* XXX what to do with public mailboxes (bboards)? */
         else {

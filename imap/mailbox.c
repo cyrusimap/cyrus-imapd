@@ -130,7 +130,7 @@ struct mailbox_repack {
     struct mailbox *mailbox;
     struct index_header i;
     struct seqset *seqset;
-    const char *userid;
+    char *userid;
     int old_version;
     int newindex_fd;
     ptrarray_t caches;
@@ -2864,7 +2864,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
                                   const struct index_record *old,
                                   struct index_record *new)
 {
-    const char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
     struct carddav_db *carddavdb = NULL;
     struct param *param;
     struct body *body = NULL;
@@ -2951,6 +2951,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 done:
     message_free_body(body);
     free(body);
+    free(userid);
 
     return r;
 }
@@ -2959,7 +2960,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
                                  const struct index_record *old,
                                  struct index_record *new)
 {
-    const char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
     struct caldav_db *caldavdb = NULL;
     struct param *param;
     struct body *body = NULL;
@@ -3080,6 +3081,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 done:
     message_free_body(body);
     free(body);
+    free(userid);
 
     return r;
 }
@@ -3088,7 +3090,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
                                  const struct index_record *old,
                                  struct index_record *new)
 {
-    const char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
     struct webdav_db *webdavdb = NULL;
     struct param *param;
     struct body *body = NULL;
@@ -3170,6 +3172,7 @@ done:
         message_free_body(body);
         free(body);
     }
+    free(userid);
 
     return r;
 }
@@ -3265,7 +3268,7 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
                                         struct index_record *new)
 {
     int r = 0;
-    struct mboxname_parts parts;
+    mbname_t *mbname;
     conversation_t *conv = NULL;
     int delta_num_records = 0;
     int delta_exists = 0;
@@ -3287,13 +3290,15 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
 
     /* IRIS-2534: check if it's the trash folder - XXX - should be separate
      * conversation root or similar more useful method in future */
-    if (mboxname_to_parts(mailbox->name, &parts))
+    mbname = mbname_from_intname(mailbox->name);
+    if (!mbname)
         return IMAP_MAILBOX_BADNAME;
 
-    if (!strcmpsafe(parts.box, "Trash"))
+    const strarray_t *boxes = mbname_boxes(mbname);
+    if (strarray_size(boxes) == 1 && !strcmpsafe(strarray_nth(boxes, 0), "Trash"))
         is_trash = 1;
 
-    mboxname_free_parts(&parts);
+    mbname_free(&mbname);
 
     /* handle unlinked items as if they didn't exist */
     if (old && (old->system_flags & FLAG_UNLINKED)) old = NULL;
@@ -3869,7 +3874,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         struct seendata sd = SEENDATA_INITIALIZER;
         int r = IMAP_MAILBOX_NONEXISTENT;
         if (mailbox->i.options & OPT_IMAP_SHAREDSEEN)
-            repack->userid = "anyone";
+            repack->userid = xstrdup("anyone");
         else
             repack->userid = mboxname_to_userid(mailbox->name);
 
@@ -3889,7 +3894,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     }
     else if (version < 12 && repack->old_version >= 12) {
         if (mailbox->i.options & OPT_IMAP_SHAREDSEEN)
-            repack->userid = "anyone";
+            repack->userid = xstrdup("anyone");
         else
             repack->userid = mboxname_to_userid(mailbox->name);
 
@@ -3985,6 +3990,7 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
     }
     ptrarray_fini(&repack->caches);
 
+    free(repack->userid);
     free(repack);
     *repackptr = NULL;
 
@@ -4079,6 +4085,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     strarray_fini(&cachefiles);
 
     seqset_free(repack->seqset);
+    free(repack->userid);
     free(repack);
     *repackptr = NULL;
     return 0;

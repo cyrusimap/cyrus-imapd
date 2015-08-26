@@ -5210,7 +5210,6 @@ int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve
 
 int sync_do_user(const char *userid, struct backend *sync_be, unsigned flags)
 {
-    char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
     struct sync_name_list *replica_subs = sync_name_list_create();
@@ -5219,7 +5218,6 @@ int sync_do_user(const char *userid, struct backend *sync_be, unsigned flags)
     struct sync_quota_list *replica_quota = sync_quota_list_create();
     struct dlist *kl = NULL;
     struct mailbox *mailbox = NULL;
-    static struct namespace sync_namespace = NAMESPACE_INITIALIZER;
 
     if (flags & SYNC_FLAG_VERBOSE)
         printf("USER %s\n", userid);
@@ -5237,14 +5235,9 @@ int sync_do_user(const char *userid, struct backend *sync_be, unsigned flags)
     if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
     if (r) goto done;
 
-    if (!sync_namespace.mboxname_tointernal &&
-        ( r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
-    }
-
-    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
-                                          userid, buf);
-    r = mailbox_open_irl(buf, &mailbox);
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    r = mailbox_open_irl(inbox, &mailbox);
+    free(inbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* user has been removed, RESET server */
         syslog(LOG_ERR, "Inbox missing on master for %s", userid);

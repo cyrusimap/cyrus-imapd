@@ -125,12 +125,13 @@ static int fixmbox(const mbentry_t *mbentry,
     int r;
 
     if (mbentry->legacy_specialuse) {
-        const char *userid = mboxname_to_userid(mbentry->name);
+        char *userid = mboxname_to_userid(mbentry->name);
         if (userid) {
             struct buf buf = BUF_INITIALIZER;
             buf_setcstr(&buf, mbentry->legacy_specialuse);
             annotatemore_rawwrite(mbentry->name, "/specialuse", userid, &buf);
             buf_free(&buf);
+            free(userid);
         }
         mbentry_t *copy = mboxlist_entry_copy(mbentry);
         /* XXX - const correctness */

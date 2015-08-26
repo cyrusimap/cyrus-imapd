@@ -166,15 +166,13 @@ static int index_one(const char *name, int blocking)
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     int r;
-    char extname[MAX_MAILBOX_BUFFER];
     int flags = 0;
 
     if (incremental_mode)
         flags |= SEARCH_UPDATE_INCREMENTAL;
 
     /* Convert internal name to external */
-    (*squat_namespace.mboxname_toexternal)(&squat_namespace, name,
-                                           NULL, extname);
+    char *extname = mboxname_to_external(name, &squat_namespace, NULL);
 
     /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
@@ -186,10 +184,12 @@ static int index_one(const char *name, int blocking)
         syslog(LOG_INFO, "error looking up %s: %s\n",
                extname, error_message(r));
 
+        free(extname);
         return r;
     }
     if (mbentry->mbtype & MBTYPE_REMOTE) {
         mboxlist_entry_free(&mbentry);
+        free(extname);
         return 0;
     }
 
@@ -231,6 +231,7 @@ static int index_one(const char *name, int blocking)
 
         if (r || !attrib.s || strcasecmp(attrib.s, "true")) {
             buf_free(&attrib);
+            free(extname);
             return 0;
         }
         buf_free(&attrib);
@@ -244,6 +245,7 @@ again:
 
     if (r == IMAP_MAILBOX_LOCKED) {
         if (verbose) syslog(LOG_INFO, "mailbox %s locked, retrying", extname);
+        free(extname);
         return r;
     }
     if (r) {
@@ -251,6 +253,7 @@ again:
             printf("error opening %s: %s\n", extname, error_message(r));
         }
         syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+        free(extname);
 
         return r;
     }
@@ -268,6 +271,7 @@ again:
      * a time for fairness [IRIS-2471].  The squatter will re-insert the
      * mailbox in the queue */
     if (blocking && r == IMAP_AGAIN) goto again;
+    free(extname);
 
     return r;
 }
@@ -289,7 +293,6 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
                              const char **mboxnames, int user_mode)
 {
     int i;
-    char buf[MAX_MAILBOX_PATH + 1];
 
     if (!nmboxnames) {
         assert(!recursive_flag);
@@ -302,10 +305,10 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
         }
         else {
             /* Translate any separators in mailboxname */
-            (*squat_namespace.mboxname_tointernal) (&squat_namespace,
-                                                    mboxnames[i], NULL, buf);
+            char *intname = mboxname_from_external(mboxnames[i], &squat_namespace, NULL);
             int flags = recursive_flag ? 0 : MBOXTREE_SKIP_CHILDREN;
-            mboxlist_mboxtree(buf, addmbox, sa, flags);
+            mboxlist_mboxtree(intname, addmbox, sa, flags);
+            free(intname);
         }
     }
 }
@@ -541,17 +544,19 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
     int r = 0;
 
     for (i = 0 ; i < mboxnames->count ; i++) {
-        const char *userid = mboxname_to_userid(mboxnames->data[i]);
+        char *userid = mboxname_to_userid(mboxnames->data[i]);
         if (!userid) continue;
 
-        if (!strcmpsafe(prev_userid, userid))
+        if (!strcmpsafe(prev_userid, userid)) {
+            free(userid);
             continue;
+        }
 
         r = compact_mbox(userid, srctiers, desttier, flags);
         if (r) break;
 
         free(prev_userid);
-        prev_userid = xstrdupnull(userid);
+        prev_userid = userid;
 
         if (sleepmicroseconds)
             usleep(sleepmicroseconds);

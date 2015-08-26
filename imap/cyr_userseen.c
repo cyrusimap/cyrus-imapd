@@ -73,16 +73,16 @@ static void usage(void)
 static int deluserseen(const mbentry_t *mbentry, void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
-    const char *userid;
     int r = 0;
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) goto done;
 
-    userid = mboxname_to_userid(mbentry->name);
+    char *userid = mboxname_to_userid(mbentry->name);
     if (userid) {
         printf("removing seen for %s on %s\n", userid, mailbox->name);
         if (do_remove) seen_delete_mailbox(userid, mailbox);
+        free(userid);
     }
 
     mailbox_close(&mailbox);

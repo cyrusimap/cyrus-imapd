@@ -139,10 +139,13 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
 EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
-    const char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
 
-    if (userid)
-        return caldav_open_userid(userid);
+    if (userid) {
+        caldavdb = caldav_open_userid(userid);
+        free(userid);
+        return caldavdb;
+    }
 
     sqldb_t *db = dav_open_mailbox(mailbox);
     if (!db) return NULL;
