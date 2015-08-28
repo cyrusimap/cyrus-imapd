@@ -2136,6 +2136,12 @@ static int do_unuser(struct dlist *kin)
     char buf[MAX_MAILBOX_NAME];
     int r = 0;
 
+    /* nothing to do if there's no userid */
+    if (!userid || !userid[0]) {
+	syslog(LOG_WARNING, "ignoring attempt to %s() without userid", __func__);
+	return 0;
+    }
+
     /* Nuke subscriptions */
     mboxlist_allsubs(userid, addmbox_sub, list);
 

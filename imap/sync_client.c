@@ -512,6 +512,12 @@ static int do_unuser(const char *userid)
     struct dlist *kl;
     int r;
 
+    /* nothing to do if there's no userid */
+    if (!userid || !userid[0]) {
+	syslog(LOG_WARNING, "ignoring attempt to %s() without userid", __func__);
+	return 0;
+    }
+
     /* check local mailbox first */
     (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
 					  userid, buf);
