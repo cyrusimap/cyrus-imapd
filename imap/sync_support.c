@@ -2943,6 +2943,12 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     int r = 0;
     int i;
 
+    /* nothing to do if there's no userid */
+    if (!userid || !userid[0]) {
+        syslog(LOG_WARNING, "ignoring attempt to %s() without userid", __func__);
+        return 0;
+    }
+
     /* Nuke subscriptions */
     /* ignore failures here - the subs file gets deleted soon anyway */
     strarray_t *list = mboxlist_sublist(userid);
