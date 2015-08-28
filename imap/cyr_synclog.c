@@ -56,11 +56,32 @@
 #include "util.h"
 #include "xmalloc.h"
 
+void usage(const char *name) {
+    fprintf(stderr, "Usage: %s [-C altconfig] [-{type}] value\n", name);
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "types:\n");
+    fprintf(stderr, "  -u   USER\n");
+    fprintf(stderr, "  -U   UNUSER\n");
+    fprintf(stderr, "  -v   SIEVE\n");
+    fprintf(stderr, "  -m   MAILBOX\n");
+    fprintf(stderr, "  -M   UNMAILBOX\n");
+    fprintf(stderr, "  -q   QUOTA\n");
+    fprintf(stderr, "  -n   ANNOTATION\n");
+    fprintf(stderr, "  -s   SEEN\n");
+    fprintf(stderr, "  -b   SUBSCRIPTION\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr,
+	    "You may omit the type flag and just specify a complete log line\n");
+    exit(-1);
+}
+
 int main(int argc, char *argv[])
 {
     char *alt_config = NULL;
     char cmd = '\0';
-    char opt;
+    int opt;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
@@ -107,25 +128,16 @@ int main(int argc, char *argv[])
         }
     }
 
-    if((argc - optind) < 1) {
-        fprintf(stderr, "Usage: %s [-C altconfig] [-{type}] value\n", argv[0]);
+    /* need at least one value */
+    if ((argc - optind) < 1) usage(argv[0]);
+    /* and not an empty string */
+    if (!argv[optind][0]) usage(argv[0]);
 
-        fprintf(stderr, "\n");
-        fprintf(stderr, "\n");
-        fprintf(stderr, "types:\n");
-        fprintf(stderr, "  -u   USER\n");
-        fprintf(stderr, "  -U   UNUSER\n");
-        fprintf(stderr, "  -v   SIEVE\n");
-        fprintf(stderr, "  -m   MAILBOX\n");
-        fprintf(stderr, "  -M   UNMAILBOX\n");
-        fprintf(stderr, "  -q   QUOTA\n");
-        fprintf(stderr, "  -n   ANNOTATION\n");
-        fprintf(stderr, "  -s   SEEN\n");
-        fprintf(stderr, "  -b   SUBSCRIPTION\n");
-        fprintf(stderr, "\n");
-        fprintf(stderr,
-                "You may omit the type flag and just specify a complete log line\n");
-        exit(-1);
+    if (cmd == 's' || cmd == 'b') {
+	/* need a second value */
+	if ((argc - optind) < 2) usage(argv[0]);
+	/* and not an empty string */
+	if (!argv[optind+1][0]) usage(argv[0]);
     }
 
     cyrus_init(alt_config, "cyr_synclog", 0, 0);
