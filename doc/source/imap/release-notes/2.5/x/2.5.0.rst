@@ -157,6 +157,10 @@ This has been a major effort by Carnegie Mellon University and FastMail,
 and continues to be, enriching the experience of Cyrus IMAP users
 globally.
 
+If upgrading to Cyrus IMAP 2.5 from one of the 2.4.17-caldav-beta
+releases, you MUST run the ``dav_reconstruct`` utility for each of
+your CalDAV users.
+
 Support for RFC 5464: IMAP METADATA
 -----------------------------------
 
