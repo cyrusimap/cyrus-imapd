@@ -48,32 +48,29 @@
 const int backup_index_version = 1;
 
 const char backup_index_initsql[] = QUOTE(
-    CREATE TABLE gzchunk(
-        id INTEGER PRIMARY KEY ASC,
-        offset INTEGER UNIQUE,
-        length INTEGER
-    );
-
     CREATE TABLE backup(
         id INTEGER PRIMARY KEY ASC,
         timestamp INTEGER,
-        gzchunk_id INTEGER REFERENCES gzchunk(id)
+        offset INTEGER unique,
+        length INTEGER
     );
 
     CREATE TABLE message(
         id INTEGER PRIMARY KEY ASC,
-        guid CHAR UNIQUE,
-        gzchunk_id INTEGER REFERENCES gzchunk(id),
+        guid CHAR UNIQUE NOT NULL,
+        partition CHAR,
+        backup_id INTEGER REFERENCES backup(id),
         offset INTEGER,
         length INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_msg_guid ON message(guid);
 
-    CREATE TABLE backup_mailbox(
+    CREATE TABLE mailbox(
         id INTEGER PRIMARY KEY ASC,
-        backup_id INTEGER NOT NULL REFERENCES backup(id),
-        uniqueid CHAR NOT NULL,
+        last_backup_id INTEGER NOT NULL REFERENCES backup(id),
+        uniqueid CHAR UNIQUE NOT NULL,
         mboxname CHAR NOT NULL,
+        mboxtype CHAR,
         last_uid INTEGER,
         highestmodseq INTEGER,
         recentuid INTEGER,
@@ -89,26 +86,163 @@ const char backup_index_initsql[] = QUOTE(
         sync_crc_annot INTEGER,
         quotaroot CHAR,
         xconvmodseq INTEGER,
-        /* [annotations] */
-        UNIQUE ( backup_id, uniqueid ) /* ??? */
+        annotations CHAR,
+        deleted INTEGER
     );
-    CREATE INDEX IF NOT EXISTS idx_bmb_uid ON backup_mailbox(uniqueid);
+    CREATE INDEX IF NOT EXISTS idx_bmb_uid ON mailbox(uniqueid);
 
-    CREATE TABLE mailbox_record(
+    CREATE TABLE mailbox_message(
         id INTEGER PRIMARY KEY ASC,
-        backup_mailbox_id INTEGER NOT NULL REFERENCES backup_mailbox(id),
+        mailbox_id INTEGER NOT NULL REFERENCES mailbox(id),
         message_id INTEGER NOT NULL REFERENCES message(id),
-        uid INTEGER,
+        last_backup_id INTEGER NOT NULL REFERENCES backup(id), /* maybe? */
+        uid INTEGER NOT NULL,
         modseq INTEGER,
         last_updated INTEGER,
-        /* [flags] ??? */
-        internaldate INTEGER
-        /* [annotations] */
-        /* expunged INTEGER, -- duplicated from [flags]? */
+        flags CHAR,
+        internaldate INTEGER,
+        annotations CHAR,
+        expunged INTEGER,
+        UNIQUE (mailbox_id, message_id)
     );
-    CREATE INDEX IF NOT EXISTS idx_mbr_uid ON mailbox_record(uid);
+    CREATE INDEX IF NOT EXISTS idx_mbr_uid ON mailbox_message(uid);
 );
 
 const struct sqldb_upgrade backup_index_upgrade[] = {
     { 0, NULL, NULL } /* leave me last */
 };
+
+const char backup_index_start_sql[] = QUOTE(
+    INSERT INTO backup ( timestamp, offset )
+        VALUES ( :timestamp, :offset );
+);
+
+const char backup_index_end_sql[] = QUOTE(
+    UPDATE backup SET
+        length = :length
+    WHERE id = :id;
+);
+
+const char backup_index_mailbox_update_sql[] = QUOTE(
+    UPDATE mailbox SET
+        last_backup_id = :last_backup_id,
+        mboxname = :mboxname,
+        mboxtype = :mboxtype,
+        last_uid = :last_uid,
+        highestmodseq = :highestmodseq,
+        recentuid = :recentuid,
+        recenttime = :recenttime,
+        last_appenddate = :last_appenddate,
+        pop3_last_login = :pop3_last_login,
+        pop3_show_after = :pop3_show_after,
+        uidvalidity = :uidvalidity,
+        partition = :partition,
+        acl = :acl,
+        options = :options,
+        sync_crc = :sync_crc,
+        sync_crc_annot = :sync_crc_annot,
+        quotaroot = :quotaroot,
+        xconvmodseq = :xconvmodseq,
+        annotations = :annotations,
+        deleted = :deleted
+    WHERE uniqueid = :uniqueid;
+);
+
+const char backup_index_mailbox_insert_sql[] = QUOTE(
+    INSERT INTO mailbox (
+        last_backup_id, uniqueid, mboxname, mboxtype, last_uid,
+        highestmodseq, recentuid, recenttime, last_appenddate,
+        pop3_last_login, pop3_show_after, uidvalidity, partition,
+        acl, options, sync_crc, sync_crc_annot, quotaroot,
+        xconvmodseq, annotations, deleted
+    )
+    VALUES (
+        :last_backup_id, :uniqueid, :mboxname, :mboxtype, :last_uid,
+        :highestmodseq, :recentuid, :recenttime, :last_appenddate,
+        :pop3_last_login, :pop3_show_after, :uidvalidity, :partition,
+        :acl, :options, :sync_crc, :sync_crc_annot, :quotaroot,
+        :xconvmodseq, :annotations, :deleted
+    );
+);
+
+const char backup_index_mailbox_select_all_sql[] = QUOTE(
+    SELECT
+        id, last_backup_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
+        recentuid, recenttime, last_appenddate, pop3_last_login, pop3_show_after,
+        uidvalidity, partition, acl, options, sync_crc, sync_crc_annot, quotaroot,
+        xconvmodseq, annotations, deleted
+    FROM mailbox;
+);
+
+const char backup_index_mailbox_select_mboxname_sql[] = QUOTE(
+    SELECT
+        id, last_backup_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
+        recentuid, recenttime, last_appenddate, pop3_last_login, pop3_show_after,
+        uidvalidity, partition, acl, options, sync_crc, sync_crc_annot, quotaroot,
+        xconvmodseq, annotations, deleted
+    FROM mailbox
+    WHERE mboxname = :mboxname;
+);
+
+const char backup_index_mailbox_select_uniqueid_sql[] = QUOTE(
+    SELECT
+        id, last_backup_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
+        recentuid, recenttime, last_appenddate, pop3_last_login, pop3_show_after,
+        uidvalidity, partition, acl, options, sync_crc, sync_crc_annot, quotaroot,
+        xconvmodseq, annotations, deleted
+    FROM mailbox
+    WHERE uniqueid = :uniqueid;
+);
+
+const char backup_index_mailbox_message_update_sql[] = QUOTE(
+    UPDATE mailbox_message SET
+        last_backup_id = :last_backup_id,
+        uid = :uid,
+        modseq = :modseq,
+        last_updated = :last_updated,
+        flags = :flags,
+        internaldate = :internaldate,
+        annotations = :annotations,
+        expunged = :expunged
+    WHERE mailbox_id = :mailbox_id and message_id = :message_id;
+);
+
+const char backup_index_mailbox_message_insert_sql[] = QUOTE(
+    INSERT INTO mailbox_message (
+        mailbox_id, message_id, last_backup_id, uid,
+        modseq, last_updated, flags, internaldate,
+        annotations, expunged
+    )
+    VALUES (
+        :mailbox_id, :message_id, :last_backup_id, :uid,
+        :modseq, :last_updated, :flags, :internaldate,
+        :annotations, :expunged
+    );
+);
+
+const char backup_index_mailbox_message_select_mailbox_sql[] = QUOTE(
+    SELECT
+        r.id as id, mailbox_id, message_id, last_backup_id, uid,
+        modseq, last_updated, flags, internaldate,
+        m.guid as guid, m.length as length, annotations,
+        expunged
+    FROM mailbox_message as r
+    JOIN message as m
+    ON r.message_id = m.id
+    WHERE mailbox_id = :mailbox_id;
+);
+
+const char backup_index_message_insert_sql[] = QUOTE(
+    INSERT INTO message (
+        guid, partition, backup_id, offset, length
+    )
+    VALUES (
+        :guid, :partition, :backup_id, :offset, :length
+    );
+);
+
+const char backup_index_message_select_guid_sql[] = QUOTE(
+    SELECT id, guid, partition, backup_id, offset, length
+    FROM message
+    WHERE guid = :guid;
+);
