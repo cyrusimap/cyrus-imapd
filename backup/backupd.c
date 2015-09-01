@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -63,6 +64,8 @@
 #include "imap/tls.h"
 #include "imap/version.h"
 
+#include "backup/api.h"
+
 const int config_need_data = 0;
 static sasl_ssf_t extprops_ssf = 0;
 
@@ -76,6 +79,18 @@ static sasl_conn_t *backupd_saslconn = NULL;
 static int backupd_starttls_done = 0;
 static int backupd_compress_done = 0;
 static int backupd_logfd = -1;
+
+struct open_backup {
+    char *name;
+    struct backup *backup;
+    time_t timestamp;
+    struct open_backup *next;
+};
+
+static struct open_backups_list {
+    struct open_backup *head;
+    size_t count;
+} backupd_open_backups = {0};
 
 static struct {
     char *ipremoteport;
@@ -107,8 +122,19 @@ static int reset_saslconn(sasl_conn_t **conn);
 static void shut_down(int code);
 static void usage(void);
 
+static struct open_backup *open_backups_list_add(struct open_backups_list *list,
+                                                 const char *name,
+                                                 struct backup *backup);
+static struct open_backup *open_backups_list_find(struct open_backups_list *list,
+                                                  const char *name);
+static void open_backups_list_close(struct open_backups_list *list, time_t age);
+
+static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
+                                 void *rock __attribute__((__unused__)));
+
 static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
+static void cmd_get(struct dlist *dl);
 
 /****************************************************************************/
 
@@ -122,6 +148,8 @@ EXPORTED void fatal(const char* s, int code)
         exit(recurse_code);
     }
     recurse_code = code;
+
+    open_backups_list_close(&backupd_open_backups, 0);
 
     if (backupd_out) {
         prot_printf(backupd_out, "* Fatal error: %s\r\n", s);
@@ -329,6 +357,7 @@ static void backupd_reset(void)
     }
     saslprops.ssf = 0;
 }
+
 static void dobanner(void)
 {
     const char *mechlist;
@@ -424,6 +453,114 @@ static void usage(void)
 
 /****************************************************************************/
 
+static struct open_backup *open_backups_list_add(struct open_backups_list *list,
+                                          const char *name, struct backup *backup)
+{
+    struct open_backup *open = xzmalloc(sizeof(struct open_backup));
+
+    open->next = list->head;
+    list->head = open;
+    list->count++;
+
+    open->name = xstrdup(name);
+    open->backup = backup;
+    open->timestamp = time(0);
+
+    return open;
+}
+
+static struct open_backup *open_backups_list_find(struct open_backups_list *list,
+                                           const char *name)
+{
+    struct open_backup *open;
+
+    for (open = list->head; open; open = open->next) {
+        if (strcmp(name, open->name) == 0)
+            return open;
+    }
+
+    return NULL;
+}
+
+static struct open_backup *backupd_open_backup(const mbname_t *mbname)
+{
+    const char *backup_name = mboxname_backuppath(/* FIXME partition */ "default", mbname);
+
+    struct open_backup *open = open_backups_list_find(&backupd_open_backups, backup_name);
+
+    if (!open) {
+        struct backup *backup = backup_open(backup_name);
+        if (!backup) return NULL;
+        open = open_backups_list_add(&backupd_open_backups, backup_name, backup);
+    }
+
+    open->timestamp = time(0);
+
+    return open;
+}
+
+
+// FIXME do i even need this
+#if 0
+static struct open_backup *open_backups_list_remove(struct open_backups_list *list,
+                                             const char *name)
+{
+    struct open_backup *open, *prev = NULL;
+
+    for (open = list->head; open; open = open->next) {
+        if (strcmp(name, open->name) == 0)
+            break;
+
+        prev = open;
+    }
+
+    if (!open) return NULL;
+
+    if (prev)
+        prev->next = open->next;
+    else
+        list->head = open->next;
+
+    list->count --;
+    open->next = NULL;
+    return open;
+}
+#endif
+
+static void open_backups_list_close(struct open_backups_list *list, time_t age)
+{
+    time_t now = time(0);
+
+    struct open_backup *current = list->head, *prev = NULL;
+
+    while (current) {
+        struct open_backup *next = current->next;
+
+        if (!age || current->timestamp < now - age) {
+            current->next = NULL;
+            backup_close(&current->backup);
+            free(current->name);
+            free(current);
+
+            if (prev) {
+                prev->next = next;
+            }
+            else {
+                list->head = next;
+            }
+
+            list->count --;
+        }
+        else {
+            prev = current;
+        }
+
+        current = next;
+    }
+}
+
+/****************************************************************************/
+
 static void cmdloop(void)
 {
     int c;
@@ -431,8 +568,13 @@ static void cmdloop(void)
     static struct buf cmd;
     static struct buf arg1, arg2;
 
+    /* we don't expect there to be backups open already */
+    assert(backupd_open_backups.head == NULL);
+    assert(backupd_open_backups.count == 0);
+
     for (;;) {
         prot_flush(backupd_out);
+        open_backups_list_close(&backupd_open_backups, 5 * 60); /* 5 mins FIXME */
 
         /* Parse command name */
         if ((c = getword(backupd_in, &cmd)) == EOF)
@@ -498,8 +640,13 @@ static void cmdloop(void)
         case 'G':
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
-                prot_printf(backupd_out, "NO command not implemented\r\n");
-                eatline(backupd_in, c);
+                struct dlist *dl = NULL;
+                c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, backupd_in);
+                if (c == EOF) goto missingargs;
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+                cmd_get(dl);
+                dlist_free(&dl);
                 continue;
             }
             break;
@@ -569,7 +716,7 @@ static void cmdloop(void)
     }
 
 exit:
-    c = c; // FIXME placeholder to allow exit label, remove when there's something to do here
+    open_backups_list_close(&backupd_open_backups, 0);
 }
 
 static void cmd_authenticate(char *mech, char *resp)
@@ -673,4 +820,59 @@ static void cmd_authenticate(char *mech, char *resp)
 
     /* Create telemetry log */
     backupd_logfd = telemetry_log(backupd_userid, backupd_in, backupd_out, 0);
+}
+
+static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
+                                 void *rock __attribute__((__unused__)))
+{
+    if (mailbox->dlist) {
+        prot_puts(backupd_out, "* ");
+        dlist_print(mailbox->dlist, /* printkeys */ 1, backupd_out);
+    }
+
+    return 0;
+}
+
+static void cmd_get(struct dlist *dl)
+{
+    int r = IMAP_PROTOCOL_ERROR;
+    mbname_t *mbname = NULL;
+
+    // FIXME silence some unused warnings for now
+    (void) r;
+
+    ucase(dl->name);
+
+    if (strcmp(dl->name, "USER") == 0) {
+        mbname = mbname_from_userid(dl->sval);
+        struct open_backup *open = backupd_open_backup(mbname);
+        // FIXME handle open failure
+        r = backup_mailbox_foreach(open->backup, 0, backupd_print_mailbox, NULL);
+    }
+    else if (strcmp(dl->name, "MAILBOXES") == 0) {
+        struct dlist *di;
+        for (di = dl->head; di; di = di->next) {
+            mbname = mbname_from_intname(di->sval);
+            struct open_backup *open = backupd_open_backup(mbname);
+            // FIXME handle open failure
+            struct backup_mailbox *mb = backup_get_mailbox_by_name(open->backup, mbname, 0);
+            r = backupd_print_mailbox(mb, NULL);
+            backup_mailbox_free(&mb);
+            mbname_free(&mbname);
+        }
+    }
+    else if (strcmp(dl->name, "FULLMAILBOX") == 0) {
+        mbname = mbname_from_intname(dl->sval);
+        struct open_backup *open = backupd_open_backup(mbname);
+        // FIXME handle open failure
+        struct backup_mailbox *mb = backup_get_mailbox_by_name(open->backup, mbname, 1);
+        r = backupd_print_mailbox(mb, NULL);
+        backup_mailbox_free(&mb);
+    }
+    else {
+
+    }
+
+    if (mbname) mbname_free(&mbname);
+    prot_printf(backupd_out, "%s\r\n", "NO FIXME");
 }

@@ -1241,7 +1241,18 @@ imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c
 imap_sync_server_LDADD = $(LD_SERVER_ADD)
 
-backup_backupd_SOURCES = imap/mutex_fake.c backup/backupd.c imap/sync_support.c imap/sync_support.h master/service.c
+backup_backupd_SOURCES = \
+    imap/mutex_fake.c \
+    imap/sync_support.c \
+    imap/sync_support.h \
+    master/service.c \
+    backup/api.c \
+    backup/api.h \
+    backup/gzuncat.c \
+    backup/gzuncat.h \
+    backup/sqlconsts.c \
+    backup/sqlconsts.h \
+    backup/backupd.c
 backup_backupd_LDADD = $(LD_SERVER_ADD)
 
 backup_reindex_SOURCES = \
