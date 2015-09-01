@@ -616,7 +616,7 @@ static void my_caldav_init(struct buf *serverinfo)
 static void my_caldav_auth(const char *userid)
 {
     int r;
-    char *mailboxname, ident[MAX_MAILBOX_NAME], rights[100];
+    char *mailboxname, rights[100];
     struct buf acl = BUF_INITIALIZER;
 
     if (httpd_userisadmin ||
@@ -637,9 +637,6 @@ static void my_caldav_auth(const char *userid)
 
     /* Auto-provision calendars for 'userid' */
 
-    strlcpy(ident, userid, sizeof(ident));
-    mboxname_hiersep_toexternal(&httpd_namespace, ident, 0);
-
     /* calendar-home-set */
     mailboxname = caldav_mboxname(userid, NULL);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
@@ -652,7 +649,7 @@ static void my_caldav_auth(const char *userid)
             r = http_mlookup(inboxname, &mbentry, NULL);
             free(inboxname);
             if (!r && mbentry->server) {
-                proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+                proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                                  &backend_cached, NULL, NULL, httpd_in);
                 mboxlist_entry_free(&mbentry);
                 free(mailboxname);
@@ -664,7 +661,7 @@ static void my_caldav_auth(const char *userid)
         /* Create locally */
         buf_reset(&acl);
         cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-        buf_printf(&acl, "%s\t%s\t", ident, rights);
+        buf_printf(&acl, "%s\t%s\t", userid, rights);
         cyrus_acl_masktostr(DACL_READFB, rights);
         buf_printf(&acl, "%s\t%s\t", "anyone", rights);
         r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
@@ -688,7 +685,7 @@ static void my_caldav_auth(const char *userid)
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             buf_reset(&acl);
             cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            buf_printf(&acl, "%s\t%s\t", userid, rights);
             cyrus_acl_masktostr(DACL_READFB, rights);
             buf_printf(&acl, "%s\t%s\t", "anyone", rights);
             r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
@@ -712,7 +709,7 @@ static void my_caldav_auth(const char *userid)
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             buf_reset(&acl);
             cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            buf_printf(&acl, "%s\t%s\t", userid, rights);
             cyrus_acl_masktostr(DACL_SCHED, rights);
             buf_printf(&acl, "%s\t%s\t", "anyone", rights);
             r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
@@ -733,7 +730,7 @@ static void my_caldav_auth(const char *userid)
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             buf_reset(&acl);
             cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            buf_printf(&acl, "%s\t%s\t", userid, rights);
             r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
                                     NULL /* partition */,
                                     userid, httpd_authstate,
@@ -755,7 +752,7 @@ static void my_caldav_auth(const char *userid)
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             buf_reset(&acl);
             cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
+            buf_printf(&acl, "%s\t%s\t", userid, rights);
             cyrus_acl_masktostr(ACL_READ, rights);
             buf_printf(&acl, "%s\t%s\t", "anyone", rights);
             r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
@@ -1940,7 +1937,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -2464,7 +2461,6 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
         if (!caladdress_lookup(organizer, &sparam) &&
             !(sparam.flags & SCHEDTYPE_REMOTE)) {
             strlcpy(orgid, sparam.userid, sizeof(orgid));
-            mboxname_hiersep_toexternal(&httpd_namespace, orgid, 0);
         }
     }
 
@@ -2521,7 +2517,7 @@ static int caldav_post(struct transaction_t *txn)
             struct backend *be;
 
             be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                  &http_protocol, proxy_userid,
+                                  &http_protocol, httpd_userid,
                                   &backend_cached, NULL, NULL, httpd_in);
             if (!be) ret = HTTP_UNAVAILABLE;
             else ret = http_pipe_req_resp(be, txn);
@@ -5393,7 +5389,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -5475,7 +5471,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
-    fctx.userid = proxy_userid;
+    fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */

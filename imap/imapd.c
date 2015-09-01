@@ -6750,11 +6750,11 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     /* localonly deletes are only per-mailbox */
     if (!r && !localonly && mboxname_isusermailbox(intname, 1)) {
         char *userid = mboxname_to_userid(intname);
-
-        r = mboxlist_usermboxtree(userid, delmbox, NULL, 0);
-        if (!r) r = user_deletedata(userid, 1);
-
-        free(userid);
+        if (userid) {
+            r = mboxlist_usermboxtree(userid, delmbox, NULL, 0);
+            if (!r) r = user_deletedata(userid, 1);
+            free(userid);
+        }
     }
 
     imapd_check(NULL, 0);
@@ -6774,14 +6774,13 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
 struct renrock
 {
-    struct namespace *namespace;
+    const struct namespace *namespace;
     int ol;
     int nl;
     int rename_user;
-    char *olduser, *newuser;
-    char *acl_olduser, *acl_newuser;
+    const char *olduser, *newuser;
     char *newmailboxname;
-    char *partition;
+    const char *partition;
     int found;
 };
 
@@ -6834,7 +6833,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
         if (text->rename_user) {
             user_copyquotaroot(mbentry->name, text->newmailboxname);
             user_renameacl(text->namespace, text->newmailboxname,
-                           text->acl_olduser, text->acl_newuser);
+                           text->olduser, text->newuser);
         }
 
 
@@ -6863,12 +6862,14 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     char newmailboxname2[MAX_MAILBOX_BUFFER];
     char *oldextname = NULL;
     char *newextname = NULL;
+    char *oldintname = NULL;
+    char *newintname = NULL;
+    char *olduser = NULL;
+    char *newuser = NULL;
     int omlen, nmlen;
     int subcount = 0; /* number of sub-folders found */
     int recursive_rename = 1;
     int rename_user = 0;
-    char olduser[128], newuser[128];
-    char acl_olduser[128], acl_newuser[128];
     mbentry_t *mbentry = NULL;
 
     if (location && !imapd_userisadmin) {
@@ -6876,13 +6877,16 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         return;
     }
 
-    char *oldintname = mboxname_from_external(oldname, &imapd_namespace, imapd_userid);
+    oldintname = mboxname_from_external(oldname, &imapd_namespace, imapd_userid);
     strncpy(oldmailboxname, oldintname, MAX_MAILBOX_NAME);
     free(oldintname);
 
-    char *newintname = mboxname_from_external(newname, &imapd_namespace, imapd_userid);
+    newintname = mboxname_from_external(newname, &imapd_namespace, imapd_userid);
     strncpy(newmailboxname, newintname, MAX_MAILBOX_NAME);
     free(newintname);
+
+    olduser = mboxname_to_userid(oldintname);
+    newuser = mboxname_to_userid(newintname);
 
     /* Keep temporary copy: master is trashed */
     strcpy(oldmailboxname2, oldmailboxname);
@@ -7070,8 +7074,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         rock.nl = nl;
         rock.olduser = olduser;
         rock.newuser = newuser;
-        rock.acl_olduser = acl_olduser;
-        rock.acl_newuser = acl_newuser;
         rock.partition = location;
         rock.rename_user = rename_user;
 
@@ -7112,36 +7114,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     /* If we're renaming a user, take care of changing quotaroot, ACL,
        seen state, subscriptions and sieve scripts */
     if (!r && rename_user) {
-        char *domain;
-
-        /* create canonified userids */
-
-        domain = strchr(oldmailboxname, '!');
-        strcpy(olduser, domain ? domain+6 : oldmailboxname+5);
-        if (domain)
-            sprintf(olduser+strlen(olduser), "@%.*s",
-                    (int) (domain - oldmailboxname), oldmailboxname);
-        strcpy(acl_olduser, olduser);
-
-        /* Translate any separators in source old userid (for ACLs) */
-        mboxname_hiersep_toexternal(&imapd_namespace, acl_olduser,
-                                    config_virtdomains ?
-                                    strcspn(acl_olduser, "@") : 0);
-
-        domain = strchr(newmailboxname, '!');
-        strcpy(newuser, domain ? domain+6 : newmailboxname+5);
-        if (domain)
-            sprintf(newuser+strlen(newuser), "@%.*s",
-                    (int) (domain - newmailboxname), newmailboxname);
-        strcpy(acl_newuser, newuser);
-
-        /* Translate any separators in destination new userid (for ACLs) */
-        mboxname_hiersep_toexternal(&imapd_namespace, acl_newuser,
-                                    config_virtdomains ?
-                                    strcspn(acl_newuser, "@") : 0);
+        char *olduser = mboxname_to_userid(oldmailboxname);
+        char *newuser = mboxname_to_userid(newmailboxname);
 
         user_copyquotaroot(oldmailboxname, newmailboxname);
-        user_renameacl(&imapd_namespace, newmailboxname, acl_olduser, acl_newuser);
+        user_renameacl(&imapd_namespace, newmailboxname, olduser, newuser);
         user_renamedata(olduser, newuser, imapd_userid, imapd_authstate);
 
         /* XXX report status/progress of meta-data */
@@ -7166,8 +7143,6 @@ submboxes:
         rock.nl = nmlen + 1;
         rock.olduser = olduser;
         rock.newuser = newuser;
-        rock.acl_olduser = acl_olduser;
-        rock.acl_newuser = acl_newuser;
         rock.partition = location;
         rock.rename_user = rename_user;
 
@@ -7203,6 +7178,8 @@ done:
     mboxlist_entry_free(&mbentry);
     free(oldextname);
     free(newextname);
+    free(olduser);
+    free(newuser);
 }
 
 /*

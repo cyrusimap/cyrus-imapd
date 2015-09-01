@@ -2785,7 +2785,7 @@ int meth_acl(struct transaction_t *txn, void *params)
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -2887,7 +2887,7 @@ int meth_acl(struct transaction_t *txn, void *params)
             }
 
             if (!xmlStrcmp(prin->name, BAD_CAST "self")) {
-                userid = proxy_userid;
+                userid = httpd_userid;
             }
             else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
                 userid = freeme = mboxname_to_userid(txn->req_tgt.mbentry->name);
@@ -3246,14 +3246,14 @@ int meth_copy_move(struct transaction_t *txn, void *params)
             ret = HTTP_NOT_ALLOWED;
         }
         else if (!(src_be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                             &http_protocol, proxy_userid,
+                                             &http_protocol, httpd_userid,
                                              &backend_cached, NULL, NULL,
                                              httpd_in))) {
             txn->error.desc = "Unable to connect to source backend";
             ret = HTTP_UNAVAILABLE;
         }
         else if (!(dest_be = proxy_findserver(dest_tgt.mbentry->server,
-                                              &http_protocol, proxy_userid,
+                                              &http_protocol, httpd_userid,
                                               &backend_cached, NULL, NULL,
                                               httpd_in))) {
             txn->error.desc = "Unable to connect to destination backend";
@@ -3513,7 +3513,7 @@ int meth_delete(struct transaction_t *txn, void *params)
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -3734,7 +3734,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -3909,7 +3909,7 @@ int meth_lock(struct transaction_t *txn, void *params)
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -4161,7 +4161,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
             goto done;
 	}
 
-        be = proxy_findserver(parent->server, &http_protocol, proxy_userid,
+        be = proxy_findserver(parent->server, &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
 
         if (!be) ret = HTTP_UNAVAILABLE;
@@ -4526,7 +4526,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             struct backend *be;
 
             be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                  &http_protocol, proxy_userid,
+                                  &http_protocol, httpd_userid,
                                   &backend_cached, NULL, NULL, httpd_in);
             if (!be) return HTTP_UNAVAILABLE;
 
@@ -4624,7 +4624,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
     fctx.req_hdrs = txn->req_hdrs;
-    fctx.userid = proxy_userid;
+    fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
@@ -4763,7 +4763,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -4985,7 +4985,7 @@ int meth_put(struct transaction_t *txn, void *params)
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -6022,7 +6022,7 @@ int meth_report(struct transaction_t *txn, void *params)
             struct backend *be;
 
             be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                  &http_protocol, proxy_userid,
+                                  &http_protocol, httpd_userid,
                                   &backend_cached, NULL, NULL, httpd_in);
             if (!be) ret = HTTP_UNAVAILABLE;
             else ret = http_pipe_req_resp(be, txn);
@@ -6078,7 +6078,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
     fctx.req_hdrs = txn->req_hdrs;
-    fctx.userid = proxy_userid;
+    fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
@@ -6182,7 +6182,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -6342,12 +6342,12 @@ int dav_store_resource(struct transaction_t *txn,
         char *mimehdr;
 
         assert(!buf_len(&txn->buf));
-        if (strchr(proxy_userid, '@')) {
+        if (strchr(httpd_userid, '@')) {
             /* XXX  This needs to be done via an LDAP/DB lookup */
-            buf_printf(&txn->buf, "<%s>", proxy_userid);
+            buf_printf(&txn->buf, "<%s>", httpd_userid);
         }
         else {
-            buf_printf(&txn->buf, "<%s@%s>", proxy_userid, config_servername);
+            buf_printf(&txn->buf, "<%s@%s>", httpd_userid, config_servername);
         }
 
         mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),

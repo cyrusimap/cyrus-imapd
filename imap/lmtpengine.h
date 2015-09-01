@@ -62,6 +62,7 @@ struct message_data {
 
     /* msg envelope */
     char *return_path;          /* where to return message */
+    const struct namespace *namespace; /* namespace for recipients */
     address_data_t **rcpt;      /* to recipients of this message */
     int rcpt_num;               /* number of recipients */
     char *date;                 /* date field of header */
@@ -85,8 +86,7 @@ int msg_getsize(message_data_t *m);
 int msg_getnumrcpt(message_data_t *m);
 
 /* return delivery destination of recipient 'rcpt_num' */
-void msg_getrcpt(message_data_t *m, int rcpt_num,
-                 const char **user, const char **domain, const char **mailbox);
+const mbname_t *msg_getrcpt(message_data_t *m, int rcpt_num);
 
 /* return entire recipient of 'rcpt_num' */
 const char *msg_getrcptall(message_data_t *m, int rcpt_num);
@@ -109,7 +109,7 @@ struct addheader {
 struct lmtp_func {
     int (*deliver)(message_data_t *m,
                    char *authuser, struct auth_state *authstate);
-    int (*verify_user)(const char *user, const char *domain, char *mailbox,
+    int (*verify_user)(const mbname_t *mbname,
                        quota_t quotastorage_check, /* user must have this much storage quota left
                                            (-1 means don't care about quota) */
                        quota_t quotamessage_check, /* user must have this much message quota left

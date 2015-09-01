@@ -394,7 +394,7 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser,
     return r;
 }
 
-EXPORTED int user_renameacl(struct namespace *namespace, const char *name,
+EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,
                             const char *olduser, const char *newuser)
 {
     int r = 0;

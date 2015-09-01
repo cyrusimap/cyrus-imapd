@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- *
+ 
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -89,11 +89,7 @@
 
 /* data per message */
 struct address_data {
-    char *all;          /* storage for entire RCPT TO addr -- MUST be freed */
-    char *rcpt;         /* storage for user[+mbox][@domain] -- MUST be freed */
-    char *user;         /* pointer to user part of rcpt -- DO NOT be free */
-    char *domain;       /* pointer to domain part of rcpt -- DO NOT be free */
-    char *mailbox;      /* pointer to mailbox part of rcpt -- DO NOT be free */
+    mbname_t *mbname;
     int ignorequota;
     int status;
 };
@@ -316,8 +312,7 @@ static void msg_free(message_data_t *m)
     }
     if (m->rcpt) {
         for (i = 0; i < m->rcpt_num; i++) {
-            if (m->rcpt[i]->all) free(m->rcpt[i]->all);
-            if (m->rcpt[i]->rcpt) free(m->rcpt[i]->rcpt);
+            mbname_free(&m->rcpt[i]->mbname);
             free(m->rcpt[i]);
         }
         free(m->rcpt);
@@ -353,19 +348,16 @@ int msg_getnumrcpt(message_data_t *m)
     return m->rcpt_num;
 }
 
-void msg_getrcpt(message_data_t *m, int rcpt_num,
-                 const char **user, const char **domain, const char **mailbox)
+const mbname_t *msg_getrcpt(message_data_t *m, int rcpt_num)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
-    if (user) *user =  m->rcpt[rcpt_num]->user;
-    if (domain) *domain =  m->rcpt[rcpt_num]->domain;
-    if (mailbox) *mailbox =  m->rcpt[rcpt_num]->mailbox;
+    return m->rcpt[rcpt_num]->mbname;
 }
 
 const char *msg_getrcptall(message_data_t *m, int rcpt_num)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
-    return m->rcpt[rcpt_num]->all;
+    return mbname_recipient(m->rcpt[rcpt_num]->mbname, m->namespace);
 }
 
 int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num)
@@ -811,110 +803,61 @@ static int savemsg(struct clientdata *cd,
 /* see if 'addr' exists. if so, fill in 'ad' appropriately.
    on success, return NULL.
    on failure, return the error. */
-static int process_recipient(char *addr, struct namespace *namespace,
+static int process_recipient(char *addr,
                              int ignorequota,
-                             int (*verify_user)(const char *, const char *,
-                                                char *, quota_t, quota_t,
+                             int (*verify_user)(const mbname_t *mbname,
+                                                quota_t, quota_t,
                                                 struct auth_state *),
                              message_data_t *msg)
 {
-    char *dest;
     char *rcpt;
-    int r, sl;
+    int r;
     address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
-    int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
-    int quoted, detail;
 
     assert(addr != NULL && msg != NULL);
 
     if (*addr == '<') addr++;
-    dest = rcpt = addr;
-
-    /* preserve the entire address */
-    ret->all = xstrdup(addr);
-    sl = strlen(ret->all);
-    if (ret->all[sl-1] == '>')
-        ret->all[sl-1] = '\0';
-
-    /* now find just the user */
 
     /* Skip at-domain-list */
     if (*addr == '@') {
         addr = strchr(addr, ':');
         if (!addr) {
-            free(ret->all);
             free(ret);
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         }
         addr++;
     }
 
-    quoted = detail = 0;
-    while (*addr &&
-           (quoted ||
-            ((config_virtdomains || *addr != '@') && *addr != '>'))) {
-        /* start/end of quoted localpart, skip the quote */
-        if (*addr == '\"') {
-            quoted = !quoted;
-            addr++;
-            continue;
-        }
+    size_t sl = strlen(addr);
+    if (addr[sl-1] == '>') sl--;
 
-        /* escaped char, pass it through */
-        if (*addr == '\\') {
-            addr++;
-            if (!*addr) break;
-        } else {
-            /* start of detail */
-            if (*addr == '+') detail = 1;
+    rcpt = xstrndup(addr, sl);
 
-            /* end of localpart (unless quoted) */
-            if (*addr == '@' && !quoted) detail = 0;
-        }
+    mbname_t *mbname = mbname_from_recipient(rcpt, msg->namespace);
 
-        /* downcase everything accept the detail */
-        if (forcedowncase && !detail)
-            *dest++ = TOLOWER(*addr++);
-        else
-            *dest++ = *addr++;
-    }
-    *dest = '\0';
+    int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
+    if (forcedowncase) mbname_downcaseuser(mbname);
 
-    /* make a working copy of rcpt */
-    ret->user = ret->rcpt = xstrdup(rcpt);
-
-    /* find domain */
-    ret->domain = NULL;
-    if (config_virtdomains && (ret->domain = strrchr(ret->rcpt, '@'))) {
-        *(ret->domain)++ = '\0';
-        /* ignore default domain */
-        if (config_defdomain && !strcasecmp(config_defdomain, ret->domain))
-            ret->domain = NULL;
+    /* strip username if postuser */
+    if (!strcmpsafe(mbname_userid(mbname), config_getstring(IMAPOPT_POSTUSER))) {
+        mbname_set_localpart(mbname, NULL);
+        mbname_set_domain(mbname, NULL);
     }
 
-    /* translate any separators in user & mailbox */
-    mboxname_hiersep_tointernal(namespace, ret->rcpt, 0);
-
-    /* find mailbox */
-    if ((ret->mailbox = strchr(ret->rcpt, '+'))) *(ret->mailbox)++ = '\0';
-
-    /* see if its a shared mailbox address */
-    if (!strcmp(ret->user, config_getstring(IMAPOPT_POSTUSER)))
-        ret->user = NULL;
-
-    r = verify_user(ret->user, ret->domain, ret->mailbox,
+    r = verify_user(mbname,
                     (quota_t) (ignorequota ? -1 : msg->size),
                     ignorequota ? -1 : 1, msg->authstate);
     if (r) {
         const char *catchall = NULL;
+        mbname_free(&mbname);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             catchall = config_getstring(IMAPOPT_LMTP_CATCHALL_MAILBOX);
             if (catchall) {
-                if (!verify_user(catchall, NULL, NULL,
+                mbname = mbname_from_userid(catchall);
+                if (verify_user(mbname,
                                 ignorequota ? -1 : msg->size,
                                 ignorequota ? -1 : 1, msg->authstate)) {
-                    ret->user = xstrdup(catchall);
-                } else {
+                    mbname_free(&mbname);
                     catchall = NULL;
                 }
             }
@@ -922,12 +865,11 @@ static int process_recipient(char *addr, struct namespace *namespace,
 
         if (catchall == NULL ) {
             /* we lost */
-            free(ret->all);
-            free(ret->rcpt);
             free(ret);
             return r;
         }
     }
+    ret->mbname = mbname;
     ret->ignorequota = ignorequota;
 
     msg->rcpt[msg->rcpt_num] = ret;
@@ -1098,6 +1040,8 @@ void lmtpmode(struct lmtp_func *func,
         prot_printf(pout, " Cyrus LMTP %s", cyrus_version());
     }
     prot_printf(pout, " server ready\r\n");
+
+    msg->namespace = func->namespace;
 
     for (;;) {
     nextcmd:
@@ -1492,7 +1436,6 @@ void lmtpmode(struct lmtp_func *func,
                 }
 
                 r = process_recipient(rcpt,
-                                      func->namespace,
                                       ignorequota,
                                       func->verify_user,
                                       msg);

@@ -131,7 +131,7 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
-char *httpd_userid = NULL, *proxy_userid = NULL;
+char *httpd_userid = NULL;
 char *httpd_extradomain = NULL;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
@@ -379,10 +379,6 @@ static void httpd_reset(void)
     if (httpd_extradomain != NULL) {
         free(httpd_extradomain);
         httpd_extradomain = NULL;
-    }
-    if (proxy_userid != NULL) {
-        free(proxy_userid);
-        proxy_userid = NULL;
     }
     if (httpd_authstate) {
         auth_freestate(httpd_authstate);
@@ -2223,7 +2219,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     buf_reset(&log);
     /* Add client data */
     buf_printf(&log, "%s", httpd_clienthost);
-    if (proxy_userid) buf_printf(&log, " as \"%s\"", proxy_userid);
+    if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
     if (txn->req_hdrs &&
         (hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
         buf_printf(&log, " with \"%s\"", hdr[0]);
@@ -2852,7 +2848,7 @@ static void auth_success(struct transaction_t *txn)
         ftruncate(httpd_logfd, end - buf_len(&txn->buf));
     }
 
-    if (!proxy_userid || strcmp(proxy_userid, httpd_userid)) {
+    if (!httpd_userid) {
         /* Close existing telemetry log */
         close(httpd_logfd);
 
@@ -2869,15 +2865,6 @@ static void auth_success(struct transaction_t *txn)
     }
 
     buf_reset(&txn->buf);
-
-    /* Make a copy of the external userid for use in proxying */
-    if (proxy_userid) free(proxy_userid);
-    proxy_userid = xstrdup(httpd_userid);
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&httpd_namespace, httpd_userid,
-                                config_virtdomains ?
-                                strcspn(httpd_userid, "@") : 0);
 
     /* Do any namespace specific post-auth processing */
     for (i = 0; namespaces[i]; i++) {
@@ -3489,7 +3476,7 @@ static int meth_get(struct transaction_t *txn,
         /* Remote content */
         struct backend *be;
 
-        be = proxy_findserver(prefix, &http_protocol, proxy_userid,
+        be = proxy_findserver(prefix, &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -3733,7 +3720,7 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
             struct backend *be;
 
             be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                  &http_protocol, proxy_userid,
+                                  &http_protocol, httpd_userid,
                                   &backend_cached, NULL, NULL, httpd_in);
             if (!be) return HTTP_UNAVAILABLE;
 

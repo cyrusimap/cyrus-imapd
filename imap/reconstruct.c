@@ -333,10 +333,6 @@ int main(int argc, char **argv)
         if (config_virtdomains) domain = strchr(argv[i], '@');
 
         strlcpy(buf, argv[i], sizeof(buf));
-        /* Translate any separators in mailboxname */
-        mboxname_hiersep_tointernal(&recon_namespace, buf,
-                                    config_virtdomains ?
-                                    strcspn(buf, "@") : 0);
 
         /* reconstruct the first mailbox/pattern */
         mboxlist_findall(&recon_namespace, buf, 1, 0,

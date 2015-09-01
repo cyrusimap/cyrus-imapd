@@ -523,8 +523,8 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
 
         if (sync_do_seen(action->user, action->name, sync_backend, flags)) {
-            char *userid = mboxname_isusermailbox(action->name, 1);
-            if (userid && !strcmp(userid, action->user)) {
+            char *userid = mboxname_to_userid(action->name);
+            if (userid && mboxname_isusermailbox(action->name, 1) && !strcmp(userid, action->user)) {
                 sync_action_list_add(user_list, NULL, action->user);
                 if (verbose) {
                     printf("  Promoting: SEEN %s %s -> USER %s\n",
@@ -545,6 +545,7 @@ static int do_sync(sync_log_reader_t *slr)
                            action->user, action->name, action->user);
                 }
             }
+            free(userid);
         }
     }
 
@@ -1080,7 +1081,6 @@ int main(int argc, char **argv)
     char buf[512];
     FILE *file;
     int len;
-    int config_virtdomains;
     struct sync_name_list *mboxname_list;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
@@ -1231,7 +1231,6 @@ int main(int argc, char **argv)
     }
 
     /* Set namespace -- force standard (internal) */
-    config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
         fatal(error_message(r), EC_CONFIG);
     }
@@ -1272,9 +1271,6 @@ int main(int argc, char **argv)
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
 
-                mboxname_hiersep_tointernal(&sync_namespace, buf,
-                                            config_virtdomains ?
-                                            strcspn(buf, "@") : 0);
                 if (sync_do_user(buf, sync_backend, flags)) {
                     if (verbose)
                         fprintf(stderr,
@@ -1287,9 +1283,6 @@ int main(int argc, char **argv)
             }
             fclose(file);
         } else for (i = optind; !r && i < argc; i++) {
-            mboxname_hiersep_tointernal(&sync_namespace, argv[i],
-                                        config_virtdomains ?
-                                        strcspn(argv[i], "@") : 0);
             if (sync_do_user(argv[i], sync_backend, flags)) {
                 if (verbose)
                     fprintf(stderr, "Error from sync_do_user(%s): bailing out!\n",
@@ -1361,9 +1354,6 @@ int main(int argc, char **argv)
         replica_connect(channel);
 
         for (i = optind; i < argc; i++) {
-            mboxname_hiersep_tointernal(&sync_namespace, argv[i],
-                                        config_virtdomains ?
-                                        strcspn(argv[i], "@") : 0);
             if (sync_do_meta(argv[i], sync_backend, flags)) {
                 if (verbose) {
                     fprintf(stderr,

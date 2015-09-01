@@ -619,7 +619,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
         /* Using DKIM rather than HTTP Auth */
         buf_appendcstr(&txn.buf, "/noauth");
     }
-    be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, proxy_userid,
+    be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, httpd_userid,
                           &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
 

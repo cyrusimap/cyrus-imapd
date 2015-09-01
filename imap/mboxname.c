@@ -70,8 +70,6 @@
 #include "mboxlist.h"
 #include "cyr_lock.h"
 
-static int mboxname_strip_deletedprefix(char *name, char **ptr);
-
 struct mboxlocklist {
     struct mboxlocklist *next;
     struct mboxlock l;
@@ -83,16 +81,21 @@ static struct mboxlocklist *open_mboxlocks = NULL;
 static struct namespace *admin_namespace;
 
 struct mbname_parts {
+    /* master data */
     strarray_t *boxes;
     time_t is_deleted;
     char *localpart;
     char *domain;
 
+    /* actual namespace */
+    const struct namespace *extns;
+    char *extuserid;
+
+    /* cache data */
     char *userid;
     char *intname;
     char *extname;
-    const struct namespace *extns;
-    char *extuserid;
+    char *recipient;
 };
 
 #define XX 127
@@ -261,11 +264,19 @@ static void _mbdirty(mbname_t *mbname)
     free(mbname->userid);
     free(mbname->intname);
     free(mbname->extname);
+    free(mbname->recipient);
 
     mbname->userid = NULL;
     mbname->intname = NULL;
     mbname->extname = NULL;
-    mbname->extns = NULL;
+    mbname->recipient = NULL;
+}
+
+EXPORTED void mbname_downcaseuser(mbname_t *mbname)
+{
+    _mbdirty(mbname);
+    if (mbname->localpart) lcase(mbname->localpart);
+    if (mbname->domain) lcase(mbname->domain);
 }
 
 EXPORTED void mbname_set_localpart(mbname_t *mbname, const char *localpart)
@@ -279,7 +290,17 @@ EXPORTED void mbname_set_domain(mbname_t *mbname, const char *domain)
 {
     _mbdirty(mbname);
     free(mbname->domain);
-    mbname->domain = xstrdupnull(domain);
+    mbname->domain = strcmpsafe(domain, config_defdomain) ? xstrdupnull(domain) : NULL;
+}
+
+EXPORTED void mbname_set_boxes(mbname_t *mbname, const strarray_t *boxes)
+{
+    _mbdirty(mbname);
+    strarray_free(mbname->boxes);
+    if (boxes)
+        mbname->boxes = strarray_dup(boxes);
+    else
+        mbname->boxes = NULL;
 }
 
 EXPORTED void mbname_push_boxes(mbname_t *mbname, const char *item)
@@ -322,11 +343,73 @@ EXPORTED mbname_t *mbname_from_userid(const char *userid)
     p = strchr(userid, '@');
     if (p) {
         mbname->localpart = xstrndup(userid, p - userid);
-        mbname->domain = xstrdup(p+1);
+        const char *domain = p+1;
+        mbname->domain = strcmpsafe(domain, config_defdomain) ? xstrdupnull(domain) : NULL;
     }
     else {
         mbname->localpart = xstrdup(userid);
     }
+
+    return mbname;
+}
+
+EXPORTED mbname_t *mbname_from_recipient(const char *recipient, const struct namespace *ns)
+{
+    mbname_t *mbname = xzmalloc(sizeof(mbname_t));
+
+    if (!recipient)
+        return mbname;
+
+    mbname->recipient = xstrdup(recipient); // may as well cache it
+    mbname->extns = ns;
+
+    const char *at = strchr(recipient, '@');
+    if (at) {
+        mbname->localpart = xstrndup(recipient, at - recipient);
+        const char *domain = at+1;
+        mbname->domain = strcmpsafe(domain, config_defdomain) ? xstrdupnull(domain) : NULL;
+    }
+    else {
+        mbname->localpart = xstrdup(recipient);
+    }
+
+    char *plus = strchr(mbname->localpart, '+');
+    if (plus) {
+        char sep[2];
+        sep[0] = ns->hier_sep;
+        sep[1] = '\0';
+        *plus = '\0';
+        mbname->boxes = strarray_split(plus+1, sep, /*flags*/0);
+    }
+
+    return mbname;
+}
+
+EXPORTED mbname_t *mbname_from_extsub(const char *subfolder, const struct namespace *ns, const char *userid)
+{
+    mbname_t *mbname = mbname_from_userid(userid);
+
+    if (!subfolder)
+        return mbname;
+
+    /* we know boxes isn't set already */
+    assert(!mbname->boxes);
+    char sep[2];
+    sep[0] = ns->hier_sep;
+    sep[1] = '\0';
+    mbname->boxes = strarray_split(subfolder, sep, /*flags*/0);
+
+    return mbname;
+}
+
+EXPORTED mbname_t *mbname_dup(const mbname_t *orig)
+{
+    mbname_t *mbname = xzmalloc(sizeof(mbname_t));
+
+    mbname->localpart = xstrdupnull(orig->localpart);
+    mbname->domain = xstrdupnull(orig->domain);
+    mbname->is_deleted = orig->is_deleted;
+    if (orig->boxes) mbname->boxes = strarray_dup(orig->boxes);
 
     return mbname;
 }
@@ -360,6 +443,10 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
     p = strchr(intname, '!');
     if (p) {
         mbname->domain = xstrndup(intname, p - intname);
+        if (!strcmpsafe(mbname->domain, config_defdomain)) {
+            free(mbname->domain);
+            mbname->domain = NULL;
+        }
         intname = p+1;
     }
 
@@ -406,6 +493,8 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     char *p = strchr(mbname->extname, '@');
     if (p) {
         domain = p+1;
+        if (!strcmpsafe(domain, config_defdomain))
+            domain = NULL;
         *p = '\0'; /* temporary */
     }
     mbname->boxes = strarray_split(mbname->extname, sepstr, 0);
@@ -423,7 +512,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
             /* XXX - cross domain support.  For now, it's always in the
              * userid's domain, if any */
             mbname->localpart = strarray_shift(mbname->boxes);
-            mbname->domain = xstrdupnull(userparts->domain);
+            mbname->domain = xstrdupnull(mbname_domain(userparts));
             goto done;
         }
 
@@ -435,7 +524,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
         /* everything else belongs to the userid */
         mbname->localpart = xstrdupnull(userparts->localpart);
-        mbname->domain = xstrdupnull(userparts->domain);
+        mbname->domain = xstrdupnull(mbname_domain(userparts));
         /* special case pure inbox with case, because horrible */
         if (strarray_size(mbname->boxes) == 1 && !strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX"))
             free(strarray_shift(mbname->boxes));
@@ -449,7 +538,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (strarray_size(mbname->boxes) == 1 && !strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = xstrdupnull(userparts->localpart);
-        mbname->domain = xstrdupnull(userparts->domain);
+        mbname->domain = xstrdupnull(mbname_domain(userparts));
         goto done;
     }
 
@@ -457,7 +546,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!strcmp(strarray_nth(mbname->boxes, 0), "INBOX")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = xstrdupnull(userparts->localpart);
-        mbname->domain = xstrdupnull(userparts->domain);
+        mbname->domain = xstrdupnull(mbname_domain(userparts));
         goto done;
     }
 
@@ -473,7 +562,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!strcmp(strarray_nth(mbname->boxes, 0), "user")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = strarray_shift(mbname->boxes);
-        mbname->domain = xstrdupnull(domain ? domain : userparts->domain);
+        mbname->domain = xstrdupnull(domain ? domain : mbname_domain(userparts));
     }
 
     /* the rest is just in boxes */
@@ -618,6 +707,37 @@ EXPORTED const char *mbname_userid(const mbname_t *mbname)
     return mbname->userid;
 }
 
+EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct namespace *ns)
+{
+    int i;
+
+    /* gotta match up! */
+    if (mbname->recipient && ns == mbname->extns)
+        return mbname->recipient;
+
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_appendcstr(&buf, mbname->localpart);
+
+    for (i = 0; i < strarray_size(mbname->boxes); i++) {
+        buf_putc(&buf, i ? ns->hier_sep : '+');
+        buf_appendcstr(&buf, strarray_nth(mbname->boxes, i));
+    }
+
+    if (mbname->domain) {
+        buf_putc(&buf, '@');
+        buf_appendcstr(&buf, mbname->domain);
+    }
+
+    mbname_t *backdoor = (mbname_t *)mbname;
+    free(backdoor->recipient);
+    backdoor->recipient = buf_release(&buf);
+
+    buf_free(&buf);
+
+    return mbname->recipient;
+}
+
 EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespace *ns, const char *userid)
 {
     /* gotta match up! */
@@ -723,6 +843,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     }
 
     mbname_t *backdoor = (mbname_t *)mbname;
+    free(backdoor->extname);
     backdoor->extname = buf_release(&buf);
     backdoor->extns = ns;
     free(backdoor->extuserid);
@@ -743,6 +864,11 @@ EXPORTED const char *mbname_domain(const mbname_t *mbname)
 EXPORTED const char *mbname_localpart(const mbname_t *mbname)
 {
     return mbname->localpart;
+}
+
+EXPORTED time_t mbname_isdeleted(const mbname_t *mbname)
+{
+    return mbname->is_deleted;
 }
 
 EXPORTED const strarray_t *mbname_boxes(const mbname_t *mbname)
@@ -821,124 +947,33 @@ EXPORTED struct namespace *mboxname_get_adminnamespace()
 }
 
 /*
- * Translate separator charactors in a mailboxname from its external
- * representation to its internal representation '.'.
- * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
- */
-EXPORTED char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
-                                  int length)
-{
-    char *p;
-
-    assert(namespace != NULL);
-    assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
-
-    if (!length) length = strlen(name);
-
-    if (namespace->hier_sep == '/') {
-        /* change all '/'s to '.' and all '.'s to DOTCHAR */
-        for (p = name; *p && length; p++, length--) {
-            if (*p == '/') *p = '.';
-            else if (*p == '.') *p = DOTCHAR;
-        }
-    }
-
-    return name;
-}
-
-/*
- * Translate separator charactors in a mailboxname from its internal
- * representation '.' to its external representation.
- * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
- */
-EXPORTED char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
-                                  int length)
-{
-    char *p;
-
-    if (name == NULL)
-        return NULL;
-
-    assert(namespace != NULL);
-    assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
-
-    if (!length) length=strlen(name);
-
-    if (namespace->hier_sep == '/') {
-        /* change all '.'s to '/' and all DOTCHARs to '.' */
-        for (p = name; *p && length; p++, length--) {
-            if (*p == '.') *p = '/';
-            else if (*p == DOTCHAR) *p = '.';
-        }
-    }
-
-    return name;
-}
-
-/*
  * Return nonzero if 'userid' owns the (internal) mailbox 'name'.
  */
 EXPORTED int mboxname_userownsmailbox(const char *userid, const char *name)
 {
-    char *inbox = mboxname_user_mbox(userid, NULL);
+    mbname_t *mbname = mbname_from_intname(name);
+    int res = !strcmpsafe(mbname_userid(mbname), userid);
+    mbname_free(&mbname);
 
-    if (!strncmp(name, inbox, strlen(inbox)) &&
-        (name[strlen(inbox)] == '\0' || name[strlen(inbox)] == '.')) {
-        free(inbox);
-        return 1;
-    }
-    free(inbox);
-    return 0;
+    return res;
 }
 
 /*
  * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
- * returns a pointer to the userid, otherwise returns NULL.
+ * returns the userid, otherwise returns NULL.
  */
-EXPORTED char *mboxname_isusermailbox(const char *name, int isinbox)
+EXPORTED int mboxname_isusermailbox(const char *name, int isinbox)
 {
-    const char *p;
-    const char *start = name;
+    mbname_t *mbname = mbname_from_intname(name);
+    int res = 0;
 
-    /* step past the domain part */
-    if (config_virtdomains && (p = strchr(start, '!')))
-        start = p + 1;
-
-    /* starts with "user." AND
-     * we don't care if it's an inbox OR
-     * there's no dots after the username
-     */
-    if (!strncmp(start, "user.", 5) && (!isinbox || !strchr(start+5, '.')))
-        return (char*) start+5;
-    else
-        return NULL;
-}
-
-/* NOTE - name must have had domain removed already */
-static int mboxname_strip_deletedprefix(char *name, char **ptr)
-{
-    static const char *deletedprefix = NULL;
-    static int deletedprefix_len = 0;
-
-    /* cache for efficiency, this code can get called
-     * in an inner loop */
-    if (!deletedprefix) {
-        deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-        deletedprefix_len = strlen(deletedprefix);
+    if (mbname_localpart(mbname) && !mbname_isdeleted(mbname)) {
+        if (!isinbox || !strarray_size(mbname_boxes(mbname)))
+            res = 1;
     }
 
-    /* if the prefix is blank, then nothing is deleted */
-    if (!deletedprefix_len) return 0;
-
-    if (strncmp(name, deletedprefix, deletedprefix_len))
-        return IMAP_MAILBOX_BADNAME;
-
-    if (name[deletedprefix_len] != '.')
-        return IMAP_MAILBOX_BADNAME;
-
-    *ptr = name + deletedprefix_len + 1;
-
-    return 0;
+    mbname_free(&mbname);
+    return res;
 }
 
 /*
@@ -947,34 +982,14 @@ static int mboxname_strip_deletedprefix(char *name, char **ptr)
  */
 EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 {
-    int domainlen = 0;
-    char *rest = NULL;
-    char *p;
-    int i;
-
-    if (config_virtdomains && (p = strchr(name, '!')))
-        domainlen = p - name + 1;
-
-    if (mboxname_strip_deletedprefix((char *)(name + domainlen), &rest))
-        return 0;
-
-    /* Sanity check for 8 hex digits only at the end */
-    p = strrchr(rest, '.');
-    if (!p)
-        return 0;
-    p++;
-
-    for (i = 0 ; i < 7; i++) {
-        if (!Uisxdigit(p[i]))
-            return 0;
-    }
-    if (p[8] != '\0')
-        return 0;
+    mbname_t *mbname = mbname_from_intname(name);
+    time_t res = mbname_isdeleted(mbname);
+    mbname_free(&mbname);
 
     if (timestampp)
-        *timestampp = (time_t)strtoul(p, NULL, 16);
+        *timestampp = res;
 
-    return 1;
+    return res ? 1 : 0;
 }
 
 /*
@@ -983,32 +998,17 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
  */
 EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
 {
-    static const char *calendarprefix = NULL;
-    static int calendarprefix_len = 0;
-    const char *p;
-    const char *start = name;
-
     if (mbtype & MBTYPE_CALENDAR) return 1;  /* Only works on backends */
+    int res = 0;
 
-    if (!calendarprefix) {
-        calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-        if (calendarprefix) calendarprefix_len = strlen(calendarprefix);
-    }
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
 
-    /* if the prefix is blank, then no calendars */
-    if (!calendarprefix_len) return 0;
-
-    /* step past the domain part */
-    if (config_virtdomains && (p = strchr(start, '!')))
-        start = p + 1;
-
-    /* step past the user part */
-    if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
-        start = p + 1;
-
-    return ((!strncmp(start, calendarprefix, calendarprefix_len) &&
-             (start[calendarprefix_len] == '\0' ||
-              start[calendarprefix_len] == '.')) ? 1 : 0);
+    mbname_free(&mbname);
+    return res;
 }
 
 /*
@@ -1017,32 +1017,17 @@ EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
 {
-    static const char *addressbookprefix = NULL;
-    static int addressbookprefix_len = 0;
-    const char *p;
-    const char *start = name;
-
     if (mbtype & MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
+    int res = 0;
 
-    if (!addressbookprefix) {
-        addressbookprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
-        if (addressbookprefix) addressbookprefix_len = strlen(addressbookprefix);
-    }
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
 
-    /* if the prefix is blank, then no addressbooks */
-    if (!addressbookprefix_len) return 0;
-
-    /* step past the domain part */
-    if (config_virtdomains && (p = strchr(start, '!')))
-        start = p + 1;
-
-    /* step past the user part */
-    if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
-        start = p + 1;
-
-    return ((!strncmp(start, addressbookprefix, addressbookprefix_len) &&
-             (start[addressbookprefix_len] == '\0' ||
-              start[addressbookprefix_len] == '.')) ? 1 : 0);
+    mbname_free(&mbname);
+    return res;
 }
 
 /*
@@ -1051,72 +1036,59 @@ EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__((unused)))
 {
-    const char *boxname = config_getstring(IMAPOPT_NOTESMAILBOX);
-    const char *p;
-    const char *start = name;
+    int res = 0;
 
-    if (!boxname) return 0;
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_NOTESMAILBOX);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
 
-    /* step past the domain part */
-    if (config_virtdomains && (p = strchr(start, '!')))
-        start = p + 1;
-
-    /* step past the user part */
-    if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
-        start = p + 1;
-    else return 0;
-
-    return (!strcmp(start, boxname));
+    mbname_free(&mbname);
+    return res;
 }
 
 EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
-    struct buf mbox = BUF_INITIALIZER;
-
     if (!userid) return NULL;
 
-    if (config_virtdomains) {
-        const char *atp;
-        atp = strchr(userid, '@');
-        if (atp) {
-            buf_printf(&mbox, "%s!user.%.*s", atp+1, (int)(atp-userid), userid);
-            goto userdone;
-        }
+    mbname_t *mbname = mbname_from_userid(userid);
+
+    if (subfolder) {
+        strarray_t *bits = strarray_split(subfolder, ".", 0);
+        mbname_set_boxes(mbname, bits);
+        strarray_free(bits);
     }
 
-    /* otherwise it's simple */
-    buf_printf(&mbox, "user.%s", userid);
+    char *res = xstrdup(mbname_intname(mbname));
+    mbname_free(&mbname);
 
- userdone:
-    if (subfolder)
-        buf_printf(&mbox, ".%s", subfolder);
-
-    return buf_release(&mbox);
+    return res;
 }
 
 EXPORTED char *mboxname_abook(const char *userid, const char *collection)
 {
-    struct buf name = BUF_INITIALIZER;
-    buf_setcstr(&name, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    if (collection) {
-        buf_putc(&name, '.');
-        buf_appendcstr(&name, collection);
-    }
-    char *res = mboxname_user_mbox(userid, buf_cstring(&name));
-    buf_free(&name);
+    mbname_t *mbname = mbname_from_userid(userid);
+
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    if (collection) mbname_push_boxes(mbname, collection);
+
+    char *res = xstrdup(mbname_intname(mbname));
+    mbname_free(&mbname);
+
     return res;
 }
 
 EXPORTED char *mboxname_cal(const char *userid, const char *collection)
 {
-    struct buf name = BUF_INITIALIZER;
-    buf_setcstr(&name, config_getstring(IMAPOPT_CALENDARPREFIX));
-    if (collection) {
-        buf_putc(&name, '.');
-        buf_appendcstr(&name, collection);
-    }
-    char *res = mboxname_user_mbox(userid, buf_cstring(&name));
-    buf_free(&name);
+    mbname_t *mbname = mbname_from_userid(userid);
+
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
+    if (collection) mbname_push_boxes(mbname, collection);
+
+    char *res = xstrdup(mbname_intname(mbname));
+    mbname_free(&mbname);
+
     return res;
 }
 
@@ -1318,51 +1290,57 @@ EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 }
 
 
-static void mboxname_hash(char *buf, size_t buf_len,
-                          const char *root,
-                          const char *name)
+static void mboxname_hash(char *dest, size_t destlen, const char *root, const char *name)
 {
-    const char *idx;
-    char c, *p;
+    mbname_t *mbname = mbname_from_intname(name);
+    struct buf buf = BUF_INITIALIZER;
 
-    snprintf(buf, buf_len, "%s", root);
-    buf_len -= strlen(buf);
-    buf += strlen(buf);
+    buf_setcstr(&buf, root);
 
-    if (config_virtdomains && (p = strchr(name, '!'))) {
-        *p = '\0';  /* split domain!user */
+    const char *domain = mbname_domain(mbname);
+    strarray_t *boxes = strarray_dup(mbname_boxes(mbname));
+
+    if (domain) {
         if (config_hashimapspool) {
-            c = (char) dir_hash_c(name, config_fulldirhash);
-            snprintf(buf, buf_len, "%s%c/%s", FNAME_DOMAINDIR, c, name);
+            char c = dir_hash_c(domain, config_fulldirhash);
+            buf_printf(&buf, "%s%c/%s", FNAME_DOMAINDIR, c, domain);
         }
         else {
-            snprintf(buf, buf_len, "%s%s", FNAME_DOMAINDIR, name);
+            buf_printf(&buf, "%s%s", FNAME_DOMAINDIR, domain);
         }
-        *p++ = '!';  /* reassemble domain!user */
-        name = p;
-        buf_len -= strlen(buf);
-        buf += strlen(buf);
     }
 
-    if (config_hashimapspool) {
-        idx = strchr(name, '.');
-        if (idx == NULL) {
-            idx = name;
-        } else {
-            idx++;
-        }
-        c = (char) dir_hash_c(idx, config_fulldirhash);
-
-        snprintf(buf, buf_len, "/%c/%s", c, name);
-    } else {
-        /* standard mailbox placement */
-        snprintf(buf, buf_len, "/%s", name);
+    if (mbname_localpart(mbname)) {
+        strarray_unshift(boxes, mbname_localpart(mbname));
+        strarray_unshift(boxes, "user");
+    }
+    if (mbname_isdeleted(mbname)) {
+        struct buf dbuf = BUF_INITIALIZER;
+        buf_printf(&dbuf, "%X", (unsigned)mbname_isdeleted(mbname));
+        strarray_unshift(boxes, config_getstring(IMAPOPT_DELETEDPREFIX));
+        strarray_push(boxes, buf_cstring(&dbuf));
+        buf_free(&dbuf);
     }
 
-    /* change all '.'s to '/' */
-    for (p = buf; *p; p++) {
-        if (*p == '.') *p = '/';
+    if (config_hashimapspool && strarray_size(boxes)) {
+        const char *idx = strarray_size(boxes) > 1 ? strarray_nth(boxes, 1) : strarray_nth(boxes, 0);
+        char c = dir_hash_c(idx, config_fulldirhash);
+        buf_printf(&buf, "/%c", c);
     }
+
+    int i;
+    for (i = 0; i < strarray_size(boxes); i++) {
+        char *item = xstrdup(strarray_nth(boxes, i));
+        _rm_dots(item);
+        buf_printf(&buf, "/%s", item);
+        free(item);
+    }
+
+    /* for now, keep API even though we're doing a buffer inside here */
+    strncpy(dest, buf_cstring(&buf), destlen);
+
+    buf_free(&buf);
+    strarray_free(boxes);
 }
 
 /* note: mboxname must be internal */

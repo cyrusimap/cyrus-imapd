@@ -2747,12 +2747,7 @@ int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     buf_init_ro(&value, mapval, maplen);
 
-    /* annotate_state_store() expects external mailbox names,
-       so translate the separator character */
-    name = xstrdup(mboxname);
-    mboxname_hiersep_toexternal(sstate->namespace, name, 0);
-
-    r = mailbox_open_iwl(name, &mailbox);
+    r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) goto done;
 
     appendattvalue(&attvalues,
@@ -2801,13 +2796,7 @@ int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
     if (!dlist_getatom(kin, "USERID", &userid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    /* (gnb)TODO: this is broken with unixhierarchysep */
-    /* annotatemore_store() expects external mailbox names,
-       so translate the separator character */
-    name = xstrdup(mboxname);
-    mboxname_hiersep_toexternal(sstate->namespace, name, 0);
-
-    r = mailbox_open_iwl(name, &mailbox);
+    r = mailbox_open_iwl(mboxname, &mailbox);
     if (r)
         goto done;
 

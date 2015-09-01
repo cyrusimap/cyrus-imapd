@@ -118,7 +118,7 @@ static sieve_interp_t *sieve_interp = NULL;
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
                    struct auth_state *authstate);
-static int verify_user(const char *user, const char *domain, char *mailbox,
+static int verify_user(const mbname_t *mbname,
                        quota_t quotastorage_check, quota_t quotamessage_check,
                        struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
@@ -129,7 +129,7 @@ static FILE *spoolfile(message_data_t *msgdata);
 static void removespool(message_data_t *msgdata);
 
 #ifdef USE_AUTOCREATE
-static int autocreate_inbox(const char *user, const char *domain);
+static int autocreate_inbox(const mbname_t *mbname);
 #endif
 
 /* current namespace */
@@ -391,11 +391,9 @@ static void usage(void)
 }
 
 struct fuzz_rock {
-    char *mboxname;
-    size_t prefixlen;
-    char *pat;
-    size_t patlen;
-    size_t matchlen;
+    const mbname_t *mbname;
+    mbname_t *result;
+    int depth;
 };
 
 #define WSP_CHARS "- _"
@@ -403,63 +401,76 @@ struct fuzz_rock {
 static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
 {
     struct fuzz_rock *frock = (struct fuzz_rock *) rock;
-    unsigned i;
+    int i;
+    mbname_t *thisname = mbname_from_intname(mbentry->name);
 
-    for (i = frock->prefixlen; mbentry->name[i] && frock->pat[i]; i++) {
-        if (tolower((int) mbentry->name[i]) != frock->pat[i] &&
-            !(strchr(WSP_CHARS, mbentry->name[i]) &&
-              strchr(WSP_CHARS, frock->pat[i]))) {
+    const strarray_t *wantboxes = mbname_boxes(frock->mbname);
+    const strarray_t *haveboxes = mbname_boxes(thisname);
+
+    int depth = 0;
+    /* XXX - WSP_CHARS */
+    for (i = 0; i < strarray_size(wantboxes); i++) {
+        if (strarray_size(haveboxes) <= i)
             break;
-        }
+        const char *want = strarray_nth(wantboxes, i);
+        const char *have = strarray_nth(haveboxes, i);
+        if (strcasecmp(want, have))
+            break;
+        depth = i+1;
     }
 
-    /* see if we have a [partial] match */
-    if (!mbentry->name[i] && (!frock->pat[i] || frock->pat[i] == '.') &&
-        i > frock->matchlen) {
-        frock->matchlen = i;
-        strlcpy(frock->mboxname, mbentry->name, i+1);
-        if (i == frock->patlen) return CYRUSDB_DONE;
+    /* in THEORY we should go for most closely accurate if
+       there are multiple matches due to case insensitivity,
+       but that way lies madness */
+    if (depth > frock->depth) {
+        mbname_free(&frock->result);
+        frock->result = thisname;
+        frock->depth = depth;
     }
+    else {
+        mbname_free(&thisname);
+    }
+
+    /* found it */
+    if (frock->depth == strarray_size(wantboxes))
+        return CYRUSDB_DONE;
 
     return 0;
 }
 
-static int fuzzy_match(char *mboxname)
+static int fuzzy_match(mbname_t *mbname)
 {
-    char name[MAX_MAILBOX_BUFFER], prefix[MAX_MAILBOX_BUFFER], *p = NULL;
-    size_t prefixlen;
     struct fuzz_rock frock;
+    char *prefix = NULL;
 
-    /* make a working copy */
-    strlcpy(name, mboxname, sizeof(name));
-
-    /* check to see if this is an personal mailbox */
-    if (!strncmp(name, "user.", 5) || (p = strstr(name, "!user."))) {
-        p = p ? p + 6 : name + 5;
-
-        /* check to see if this is an INBOX (no '.' after the userid) */
-        if (!(p = strchr(p, '.'))) return 0;
+    if (mbname_userid(mbname)) {
+        char *name = mboxname_user_mbox(mbname_userid(mbname), NULL);
+        prefix = strconcat(name, ".", (char *)NULL);
+        free(name);
+    }
+    else if (mbname_domain(mbname)) {
+        prefix = strconcat(mbname_domain(mbname), "!", (char *)NULL);
     }
 
-    if (p) p++;  /* skip the trailing '.' */
-    else p = name;
-
-    /* copy the prefix */
-    prefixlen = p - name;
-    strlcpy(prefix, name, prefixlen+1);
-
-    /* normalize the rest of the pattern to lowercase */
-    lcase(p);
-
-    frock.mboxname = mboxname;
-    frock.prefixlen = prefixlen;
-    frock.pat = name;
-    frock.patlen = strlen(name);
-    frock.matchlen = 0;
+    frock.mbname = mbname;
+    frock.result = NULL;
+    frock.depth = 0;
 
     mboxlist_allmbox(prefix, fuzzy_match_cb, &frock, 0);
 
-    return frock.matchlen;
+    free(prefix);
+
+    if (frock.result) {
+        int i;
+        const strarray_t *newboxes = mbname_boxes(frock.result);
+        mbname_truncate_boxes(mbname, 0);
+        for (i = 0; i < strarray_size(newboxes); i++)
+            mbname_push_boxes(mbname, strarray_nth(newboxes, i));
+        mbname_free(&frock.result);
+        return 1;
+    }
+
+    return 0;
 }
 
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
@@ -536,7 +547,7 @@ int deliver_mailbox(FILE *f,
                     struct stagemsg *stage,
                     unsigned size,
                     const strarray_t *flags,
-                    char *authuser,
+                    const char *authuser,
                     struct auth_state *authstate,
                     char *id,
                     const char *user,
@@ -624,25 +635,20 @@ int deliver_mailbox(FILE *f,
     mailbox_close(&mailbox);
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
-        const char *notify_mailbox = mailboxname;
-
-        /* translate user.foo to INBOX */
-        char *inbox = mboxname_user_mbox(user, NULL);
-        size_t inboxlen = strlen(inbox);
-        if (strlen(mailboxname) >= inboxlen &&
-            !strncmp(mailboxname, inbox, inboxlen) &&
-            (!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
-            strlcpy(inbox, "INBOX", sizeof(inbox));
-            strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
-            notify_mailbox = inbox;
+        char *extname = NULL;
+        if (mboxname_userownsmailbox(user, mailboxname)) {
+            char *inbox = mboxname_user_mbox(user, NULL);
+            extname = mboxname_to_external(inbox, &lmtpd_namespace, user);
+            free(inbox);
+        }
+        else {
+            extname = mboxname_to_external(mailboxname, &lmtpd_namespace, user);
         }
 
         /* translate mailboxname */
-        char *extname = mboxname_to_external(notify_mailbox, &lmtpd_namespace, user);
         notify(notifier, "MAIL", NULL, user, extname, 0, NULL,
                notifyheader ? notifyheader : "", /*fname*/NULL);
         free(extname);
-        free(inbox);
     }
 
     free(uuid);
@@ -738,77 +744,58 @@ static void deliver_remote(message_data_t *msgdata,
 }
 
 EXPORTED int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
-                  char *username, const char *mailboxname)
+                           const mbname_t *origmbname)
 {
-    char namebuf[MAX_MAILBOX_NAME];
-    char *tail;
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
-    int ret;
+    int ret = 1;
 
     /* case 1: shared mailbox request */
-    if (!*username || username[0] == '@') {
-        if (*username) snprintf(namebuf, sizeof(namebuf), "%s!", username+1);
-        strlcat(namebuf, mailboxname, sizeof(namebuf));
-
+    if (!mbname_userid(origmbname)) {
         return deliver_mailbox(md->f, mydata->content, mydata->stage,
                                md->size, flags,
                                mydata->authuser, mydata->authstate, md->id,
                                NULL, mydata->notifyheader,
-                               namebuf, md->date, quotaoverride, 0);
+                               mbname_intname(origmbname), md->date, quotaoverride, 0);
     }
 
-    /* case 2: ordinary user */
-    char *inbox = mboxname_user_mbox(username, NULL);
-    strlcpy(namebuf, inbox, sizeof(namebuf));
-    free(inbox);
+    mbname_t *mbname = mbname_dup(origmbname);
 
-    int ret2 = 1;
+    if (strarray_size(mbname_boxes(mbname))) {
+        ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
+                              md->size, flags,
+                              mydata->authuser, mydata->authstate, md->id,
+                              mbname_userid(mbname), mydata->notifyheader,
+                              mbname_intname(mbname), md->date, quotaoverride, 0);
 
-    tail = namebuf + strlen(namebuf);
-    if (mailboxname) {
-        strlcat(namebuf, ".", sizeof(namebuf));
-        strlcat(namebuf, mailboxname, sizeof(namebuf));
-
-        ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                               md->size, flags,
-                               mydata->authuser, mydata->authstate, md->id,
-                               username, mydata->notifyheader,
-                               namebuf, md->date, quotaoverride, 0);
-
+        if (ret == IMAP_MAILBOX_NONEXISTENT &&
+            config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)) {
+            if (fuzzy_match(mbname)) {
+                /* try delivery to a fuzzy matched mailbox */
+                ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
+                                      md->size, flags,
+                                      mydata->authuser, mydata->authstate, md->id,
+                                      mbname_userid(mbname), mydata->notifyheader,
+                                      mbname_intname(mbname), md->date, quotaoverride, 0);
+            }
+        }
     }
 
-    if (ret2 == IMAP_MAILBOX_NONEXISTENT && mailboxname &&
-        config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
-        fuzzy_match(namebuf)) {
-        /* try delivery to a fuzzy matched mailbox */
-        ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                               md->size, flags,
-                               mydata->authuser, mydata->authstate, md->id,
-                               username, mydata->notifyheader,
-                               namebuf, md->date, quotaoverride, 0);
-    }
-
-    if (ret2) {
-        // Authn/authz knows little about the internal naming.
-        mboxname_hiersep_toexternal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
-
+    if (ret) {
         /* normal delivery to INBOX */
-        struct auth_state *authstate = auth_newstate(username);
-
-        *tail = '\0';
-
-        // However, the rest of this stuff knows little about what authn/authz understands
-        mboxname_hiersep_tointernal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
+        mbname_truncate_boxes(mbname, 0);
+        struct auth_state *authstate = auth_newstate(mbname_userid(mbname));
 
         ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
                               md->size, flags,
-                              (char *) username, authstate, md->id,
-                              username, mydata->notifyheader,
-                              namebuf, md->date, quotaoverride, 1);
+                              mbname_userid(mbname), authstate, md->id,
+                              mbname_userid(mbname), mydata->notifyheader,
+                              mbname_intname(mbname), md->date, quotaoverride, 1);
 
         if (authstate) auth_freestate(authstate);
     }
+
+    mbname_free(&mbname);
 
     return ret;
 }
@@ -843,47 +830,22 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
-        char namebuf[MAX_MAILBOX_BUFFER] = "";
-        char userbuf[MAX_MAILBOX_BUFFER];
-        const char *rcpt, *user, *domain, *mailbox;
+        const mbname_t *mbname = msg_getrcpt(msgdata, n);
+
         mbentry_t *mbentry = NULL;
-        int r = 0;
+        int r = mlookup(mbname_intname(mbname), &mbentry);
 
-        rcpt = msg_getrcptall(msgdata, n);
-        msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
-
-        namebuf[0] = '\0';
-        userbuf[0] = '\0';
-
-        if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
-
-        /* case 1: shared mailbox request */
-        if (!user) {
-            strlcat(namebuf, mailbox, sizeof(namebuf));
-        }
-        /* case 2: ordinary user */
-        else {
-            strlcat(namebuf, "user.", sizeof(namebuf));
-            strlcat(namebuf, user, sizeof(namebuf));
-
-            strlcpy(userbuf, user, sizeof(userbuf));
-        }
-        if (domain) {
-            strlcat(userbuf, "@", sizeof(userbuf));
-            strlcat(userbuf, domain, sizeof(userbuf));
-        }
-
-        r = mlookup(namebuf, &mbentry);
         if (!r && mbentry->server) {
             /* remote mailbox */
-            proxy_adddest(&dlist, rcpt, n, mbentry->server, authuser);
+            const char *recip = mbname_recipient(mbname, &lmtpd_namespace);
+            proxy_adddest(&dlist, recip, n, mbentry->server, authuser);
             status[n] = nosieve;
         }
-        else if (!r) {
+        else {
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
-            r = run_sieve(user, domain, mailbox, sieve_interp, &mydata);
+            r = run_sieve(mbname, sieve_interp, &mydata);
             /* if there was no sieve script, or an error during execution,
                r is non-zero and we'll do normal delivery */
 #else
@@ -891,12 +853,11 @@ int deliver(message_data_t *msgdata, char *authuser,
 #endif
 
             if (r) {
-                r = deliver_local(&mydata, NULL, userbuf, mailbox);
+                r = deliver_local(&mydata, NULL, mbname);
             }
         }
 
-        mboxname_hiersep_toexternal(&lmtpd_namespace, userbuf, config_virtdomains ? strcspn(userbuf, "@") : 0);
-        telemetry_rusage(userbuf);
+        telemetry_rusage(mbname_userid(mbname));
 
         msg_setrcpt_status(msgdata, n, r);
 
@@ -1069,148 +1030,105 @@ void shut_down(int code)
 /*
  * Autocreate Inbox and subfolders upon login
  */
-int autocreate_inbox(const char *user, const char *domain)
+int autocreate_inbox(const mbname_t *mbname)
 {
-    char *username;
-    int r = 0;
+    const char *userid = mbname_userid(mbname);
 
-    if (!user)
+    if (!userid)
         return IMAP_MAILBOX_NONEXISTENT;
-
-    if (domain) {
-        username = strconcat(user, "@", domain, (char *)NULL);
-    } else {
-        username = xstrdup(user);
-    }
 
     /*
      * Exclude anonymous
      */
-    if (!strcmp(username, "anonymous")) {
-        free(username);
+    if (!strcmp(userid, "anonymous"))
         return IMAP_MAILBOX_NONEXISTENT;
-    }
 
     /*
      * Check for autocreatequota and createonpost
      */
-    if (config_getint(IMAPOPT_AUTOCREATE_QUOTA) < 0) {
-        free(username);
+    if (config_getint(IMAPOPT_AUTOCREATE_QUOTA) < 0)
         return IMAP_MAILBOX_NONEXISTENT;
-    }
-    if (!config_getswitch(IMAPOPT_AUTOCREATE_POST)) {
-        free(username);
+
+    if (!config_getswitch(IMAPOPT_AUTOCREATE_POST))
         return IMAP_MAILBOX_NONEXISTENT;
-    }
 
-    r = autocreate_user(&lmtpd_namespace, username);
-
-    free(username);
-
-    return r;
+    return autocreate_user(&lmtpd_namespace, userid);
 }
 #endif // USE_AUTOCREATE
 
-static int verify_user(const char *user, const char *domain, char *mailbox,
+static int verify_user(const mbname_t *origmbname,
                        quota_t quotastorage_check, quota_t quotamessage_check,
                        struct auth_state *authstate)
 {
-    char namebuf[MAX_MAILBOX_BUFFER] = "";
     int r = 0;
+    mbentry_t *mbentry = NULL;
+    mbname_t *mbname = mbname_dup(origmbname);
+    long aclcheck = !mbname_userid(mbname) ? ACL_POST : 0;
 
-    if ((!user && !mailbox) ||
-        (domain && (strlen(domain) + 1 > sizeof(namebuf)))) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-    } else {
-        /* construct the mailbox that we will verify */
-        if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
-
-        if (!user) {
-            /* shared folder */
-            if (strlen(namebuf) + strlen(mailbox) > sizeof(namebuf)) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            } else {
-                strlcat(namebuf, mailbox, sizeof(namebuf));
-            }
-        } else {
-            /* ordinary user -- check INBOX */
-            if (strlen(namebuf) + 5 + strlen(user) > sizeof(namebuf)) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            } else {
-                strlcat(namebuf, "user.", sizeof(namebuf));
-                strlcat(namebuf, user, sizeof(namebuf));
-            }
-        }
+    /* if it's the userid, we just check INBOX */
+    if (mbname_userid(mbname)) {
+        mbname_truncate_boxes(mbname, 0);
     }
 
-    if (!r) {
-        mbentry_t *mbentry = NULL;
-        long aclcheck = !user ? ACL_POST : 0;
-        /*
-         * check to see if mailbox exists and we can append to it:
-         *
-         * - must have posting privileges on shared folders
-         * - don't care about ACL on INBOX (always allow post)
-         * - don't care about message size (1 msg over quota allowed)
-         */
-        r = mlookup(namebuf, &mbentry);
+    /*
+     * check to see if mailbox exists and we can append to it:
+     *
+     * - must have posting privileges on shared folders
+     * - don't care about ACL on INBOX (always allow post)
+     * - don't care about message size (1 msg over quota allowed)
+     */
+    r = mlookup(mbname_intname(mbname), &mbentry);
 
 #ifdef USE_AUTOCREATE
-        /* If user mailbox does not exist, then invoke autocreate inbox function */
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            r = autocreate_inbox(user, domain);
-            if (!r) r = mlookup(namebuf, &mbentry);
-        }
+    /* If user mailbox does not exist, then invoke autocreate inbox function */
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = autocreate_inbox(mbname);
+        if (!r) r = mlookup(mbname_intname(mbname), &mbentry);
+    }
 #endif // USE_AUTOCREATE
 
-        if (r == IMAP_MAILBOX_NONEXISTENT && !user &&
-            config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
-            /* see if we have a mailbox whose name is close */
-            fuzzy_match(namebuf)) {
-            /* We are guaranteed that the mailbox returned by fuzzy_match()
-               will be no longer than the original, so we can copy over
-               the existing mailbox.  The keeps us from having to do the
-               fuzzy match multiple times. */
-            strcpy(mailbox, domain ? namebuf+strlen(domain)+1 : namebuf);
-
-            r = mlookup(namebuf, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT && !mbname_userid(mbname) &&
+        config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)) {
+        /* see if we have a mailbox whose name is close */
+        if (fuzzy_match(mbname)) {
+            r = mlookup(mbname_intname(mbname), &mbentry);
         }
-
-        if (!r && mbentry->server) {
-            int access = cyrus_acl_myrights(authstate, mbentry->acl);
-
-            if ((access & aclcheck) != aclcheck) {
-                r = (access & ACL_LOOKUP) ?
-                    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-            }
-        } else if (!r) {
-            int strict = config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA);
-            quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
-            if (quotastorage_check < 0 || strict)
-                qdiffs[QUOTA_STORAGE] = quotastorage_check;
-            if (quotamessage_check < 0 || strict)
-                qdiffs[QUOTA_MESSAGE] = quotamessage_check;
-
-            r = append_check(namebuf, authstate, aclcheck, qdiffs);
-        }
-
-        mboxlist_entry_free(&mbentry);
     }
 
-    if (!r && user) {
+    if (!r && mbentry->server) {
+        int access = cyrus_acl_myrights(authstate, mbentry->acl);
+
+        if ((access & aclcheck) != aclcheck) {
+            r = (access & ACL_LOOKUP) ?
+                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+        }
+    } else if (!r) {
+        int strict = config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA);
+        quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+        if (quotastorage_check < 0 || strict)
+            qdiffs[QUOTA_STORAGE] = quotastorage_check;
+        if (quotamessage_check < 0 || strict)
+            qdiffs[QUOTA_MESSAGE] = quotamessage_check;
+
+        r = append_check(mbentry->name, authstate, aclcheck, qdiffs);
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    if (!r && mbname_userid(mbname)) {
         char msg[MAX_MAILBOX_PATH+1];
 
-        if (domain) {
-            snprintf(namebuf, sizeof(namebuf), "%s@%s", user, domain);
-            user = namebuf;
+        if (userdeny(mbname_userid(mbname), config_ident, msg, sizeof(msg))) {
+            r = IMAP_MAILBOX_DISABLED;
+            goto done;
         }
-
-        if (userdeny(user, config_ident, msg, sizeof(msg)))
-            return IMAP_MAILBOX_DISABLED;
     }
 
-    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
+    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", mbname_userid(mbname),
                   error_message(r));
+
+done:
+    mbname_free(&mbname);
 
     return r;
 }
@@ -1265,34 +1183,25 @@ FILE *spoolfile(message_data_t *msgdata)
     n = mhandle ? 0 : msg_getnumrcpt(msgdata);
     for (i = 0; !f && (i < n); i++) {
         mbentry_t *mbentry = NULL;
-        char namebuf[MAX_MAILBOX_BUFFER] = "";
-        const char *user, *domain, *mailbox;
         int r;
 
         /* build the mailboxname from the recipient address */
-        msg_getrcpt(msgdata, i, &user, &domain, &mailbox);
+        const mbname_t *origmbname = msg_getrcpt(msgdata, i);
 
-        if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
-
-        /* case 1: shared mailbox request */
-        if (!user) {
-            strlcat(namebuf, mailbox, sizeof(namebuf));
+        /* do the userid */
+        mbname_t *mbname = mbname_dup(origmbname);
+        if (mbname_userid(mbname)) {
+            mbname_truncate_boxes(mbname, 0);
         }
 
-        /* case 2: ordinary user */
-        else {
-            /* assume delivery to INBOX for now */
-            strlcat(namebuf, "user.", sizeof(namebuf));
-            strlcat(namebuf, user, sizeof(namebuf));
-        }
-
-        r = mlookup(namebuf, &mbentry);
-        if (!r && !mbentry->server) {
+        r = mlookup(mbname_intname(mbname), &mbentry);
+        if (r || !mbentry->server) {
             /* local mailbox -- setup stage for later use by deliver() */
-            f = append_newstage(namebuf, now, 0, &stage);
+            f = append_newstage(mbname_intname(mbname), now, 0, &stage);
         }
 
         mboxlist_entry_free(&mbentry);
+        mbname_free(&mbname);
     }
 
     if (!f) {

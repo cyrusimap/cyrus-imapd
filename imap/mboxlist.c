@@ -620,26 +620,23 @@ EXPORTED int mboxlist_findparent(const char *mboxname,
                                mbentry_t **mbentryp)
 {
     mbentry_t *mbentry = NULL;
-    char *parent = xstrdup(mboxname);
-    int parentlen = 0;
-    char *p;
+    mbname_t *mbname = mbname_from_intname(mboxname);
     int r = IMAP_MAILBOX_NONEXISTENT;
 
-    while ((parentlen==0) && (p = strrchr(parent, '.')) && !strchr(p, '!')) {
-        *p = '\0';
-
+    while (strarray_size(mbname_boxes(mbname))) {
+        free(mbname_pop_boxes(mbname));
         mboxlist_entry_free(&mbentry);
-        r = mboxlist_lookup(parent, &mbentry, NULL);
+        r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
         if (r != IMAP_MAILBOX_NONEXISTENT)
             break;
     }
-
-    free(parent);
 
     if (r)
         mboxlist_entry_free(&mbentry);
     else
         *mbentryp = mbentry;
+
+    mbname_free(&mbname);
 
     return r;
 }
@@ -690,7 +687,6 @@ static int mboxlist_create_namecheck(const char *mboxname,
                                      int isadmin, int force_subdirs)
 {
     mbentry_t *mbentry = NULL;
-    const char *p;
     int r = 0;
 
     /* policy first */
@@ -749,14 +745,14 @@ static int mboxlist_create_namecheck(const char *mboxname,
             goto done;
         }
 
-        p = mboxname_isusermailbox(mboxname, 0);
-        if (p) {
-            char *firstdot = strchr(p, '.');
-            if (!force_subdirs && firstdot) {
+        if (!force_subdirs) {
+            mbname_t *mbname = mbname_from_intname(mboxname);
+            if (!mbname_isdeleted(mbname) && mbname_userid(mbname) && strarray_size(mbname_boxes(mbname))) {
                 /* Disallow creating user.X.* when no user.X */
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
             }
+            mbname_free(&mbname);
         }
 
         /* otherwise no parent is OK */
@@ -1166,22 +1162,18 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     char newname[MAX_MAILBOX_BUFFER];
     int r;
     long myrights;
-    char *p;
 
     if (!isadmin && force) return IMAP_PERMISSION_DENIED;
 
-    /* Check for request to delete a user:
-       user.<x> with no dots after it */
-    if ((p = mboxname_isusermailbox(name, 1))) {
+    /* delete of a user.X folder */
+    mbname_t *mbname = mbname_from_intname(name);
+    if (mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
         /* Can't DELETE INBOX (your own inbox) */
-        if (userid) {
-            size_t len = config_virtdomains ?
-                strcspn(userid, "@") : strlen(userid);
-            if ((len == strlen(p)) && !strncmp(p, userid, len)) {
-                return(IMAP_MAILBOX_NOTSUPPORTED);
-            }
+        if (!strcmpsafe(mbname_userid(mbname), userid)) {
+            mbname_free(&mbname);
+            return(IMAP_MAILBOX_NOTSUPPORTED);
         }
-
+        mbname_free(&mbname);
         /* Only admins may delete user */
         if (!isadmin) return(IMAP_PERMISSION_DENIED);
     }
@@ -1266,23 +1258,20 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     long myrights;
     struct mailbox *mailbox = NULL;
     int isremote = 0;
-    const char *p;
     mupdate_handle *mupdate_h = NULL;
 
     if (!isadmin && force) return IMAP_PERMISSION_DENIED;
 
-    /* Check for request to delete a user:
-       user.<x> with no dots after it */
-    if ((p = mboxname_isusermailbox(name, 1))) {
+    /* delete of a user.X folder */
+    mbname_t *mbname = mbname_from_intname(name);
+    if (mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
         /* Can't DELETE INBOX (your own inbox) */
-        if (userid) {
-            size_t len = config_virtdomains ? strcspn(userid, "@") : strlen(userid);
-            if ((len == strlen(p)) && !strncmp(p, userid, len)) {
-                r = IMAP_MAILBOX_NOTSUPPORTED;
-                goto done;
-            }
+        if (!strcmpsafe(mbname_userid(mbname), userid)) {
+            mbname_free(&mbname);
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+            goto done;
         }
-
+        mbname_free(&mbname);
         /* Only admins may delete user */
         if (!isadmin) { r = IMAP_PERMISSION_DENIED; goto done; }
     }
@@ -1673,43 +1662,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 }
 
 /*
- * Verify if the 'user' is the mailbox 'name' owner.
- */
-static int mboxlist_is_owner(struct namespace *namespace,
-                             const char *name, int domainlen,
-                             const char *user, int userlen)
-{
-    struct buf extname = BUF_INITIALIZER;
-    const char *username = NULL;
-    const char *dot_position = NULL;
-
-    /* is_user_mbox */
-    if (strncmp(name+domainlen, "user.", 5))
-        return 0;
-
-    /* get external representation of owner to check against given user */
-    username = name + domainlen + 5;
-    dot_position = strchr(username, '.');
-    buf_setmap(&extname, username, dot_position ?
-        dot_position - username : (int)strlen(username));
-    mboxname_hiersep_toexternal(namespace,
-        (char *)buf_cstring(&extname), buf_len(&extname));
-
-    /* starts_with_user */
-    if (strncmp(buf_cstring(&extname), user, userlen)) {
-        buf_free(&extname);
-        return 0;
-    }
-    buf_free(&extname);
-
-    /* is_exactly_user */
-    if (!(username[userlen] == '\0' || username[userlen] == '.'))
-        return 0;
-
-    return 1;
-}
-
-/*
  * Check if the admin rights are present in the 'rights'
  */
 static int mboxlist_have_admin_rights(const char* rights) {
@@ -1733,17 +1685,13 @@ static int mboxlist_have_admin_rights(const char* rights) {
  * 6. Change mupdate entry
  *
  */
-EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
+EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((unused)),
+                    const char *name,
                     const char *identifier, const char *rights,
                     int isadmin, const char *userid,
                     struct auth_state *auth_state)
 {
     mbentry_t *mbentry = NULL;
-    int useridlen = strlen(userid);
-    int domainlen = 0;
-    int identifierlen = strlen(identifier);
-    char *cp, ident[256];
-    const char *domain = NULL;
     int r;
     int myrights;
     int mode = ACL_MODE_SET;
@@ -1757,61 +1705,20 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
     char *mboxent = NULL;
     struct txn *tid = NULL;
 
-    if (config_virtdomains) {
-        if ((cp = strchr(userid, '@'))) {
-            useridlen = cp - userid;
-        }
-        if ((cp = strchr(name, '!'))) {
-            domain = name;
-            domainlen = cp - name + 1;
-        }
-
-        /* canonify identifier so it is fully qualified,
-           except for "anonymous", "anyone", the global admin
-           and users in the default domain */
-        if ((cp = strchr(identifier, '@'))) {
-            identifierlen = cp - identifier;
-            if (rights &&
-                ((domain && strncasecmp(cp+1, domain, strlen(cp+1))) ||
-                 (!domain && (!config_defdomain ||
-                              strcasecmp(config_defdomain, cp+1))))) {
-                /* can't set cross-domain ACLs */
-                return IMAP_INVALID_IDENTIFIER;
-            }
-            if ((config_defdomain && !strcasecmp(config_defdomain, cp+1)) ||
-                !strcmp(identifier, "anonymous") ||
-                !strcmp(identifier, "anyone")) {
-                snprintf(ident, sizeof(ident),
-                         "%.*s", (int) (cp - identifier), identifier);
-            } else {
-                strlcpy(ident, identifier, sizeof(ident));
-            }
-        } else {
-            strlcpy(ident, identifier, sizeof(ident));
-            if (domain && !isadmin &&
-                strcmp(ident, "anonymous") && strcmp(ident, "anyone")) {
-                snprintf(ident+strlen(ident), sizeof(ident)-strlen(ident),
-                         "@%.*s",
-                         domainlen ? domainlen-1 : (int) strlen(domain), domain);
-            }
-        }
-
-        identifier = ident;
-    }
+    /* round trip identifier to potentially strip domain */
+    mbname_t *mbname = mbname_from_userid(identifier);
+    /* XXX - enforce cross domain restrictions */
+    identifier = mbname_userid(mbname);
 
     /* checks if the mailbox belongs to the user who is trying to change the
        access rights */
-    if (mboxlist_is_owner(namespace, name, domainlen, userid, useridlen)) {
+    if (mboxname_userownsmailbox(userid, name))
         isusermbox = 1;
-    }
     anyoneuseracl = config_getswitch(IMAPOPT_ANYONEUSERACL);
 
     /* checks if the identifier is the mailbox owner */
-    if (mboxlist_is_owner(namespace, name, domainlen,
-        identifier, identifierlen))
-    {
+    if (mboxname_userownsmailbox(identifier, name))
         isidentifiermbox = 1;
-    }
 
     /* who is the mailbox owner? */
     if (isusermbox) {
@@ -2009,6 +1916,7 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
     free(mboxent);
     free(newacl);
     mboxlist_entry_free(&mbentry);
+    mbname_free(&mbname);
 
     return r;
 }

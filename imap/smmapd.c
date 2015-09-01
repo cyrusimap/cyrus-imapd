@@ -253,63 +253,18 @@ static int check_quotas(const char *name)
 
 static int verify_user(const char *key, struct auth_state *authstate)
 {
-    char rcpt[MAX_MAILBOX_BUFFER], namebuf[MAX_MAILBOX_BUFFER] = "";
-    char *user = rcpt, *domain = NULL, *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     int r = 0;
 
-    /* make a working copy of the key and split it into user/domain/mailbox */
-    strlcpy(rcpt, key, sizeof(rcpt));
+    mbname_t *mbname = mbname_from_recipient(key, &map_namespace);
 
-    /* find domain */
-    if (config_virtdomains && (domain = strrchr(rcpt, '@'))) {
-        *domain++ = '\0';
-        /* ignore default domain */
-        if (config_defdomain && !strcasecmp(config_defdomain, domain))
-            domain = NULL;
-    }
-
-    /* translate any separators in user & mailbox */
-    mboxname_hiersep_tointernal(&map_namespace, rcpt, 0);
-
-    /* find mailbox */
-    if ((mailbox = strchr(rcpt, '+'))) *mailbox++ = '\0';
-
-    /* downcase the rcpt, if necessary */
-    if (forcedowncase) {
-        lcase(user);
-        if (domain) lcase(domain);
-    }
+    if (forcedowncase) mbname_downcaseuser(mbname);
 
     /* see if its a shared mailbox address */
-    if (!strcmp(user, BB)) user = NULL;
-
-    /* XXX  the following is borrowed from lmtpd.c:verify_user() */
-    if ((!user && !mailbox) ||
-        (domain && (strlen(domain) + 1 > sizeof(namebuf)))) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-    } else {
-        /* construct the mailbox that we will verify */
-        if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
-
-        if (!user) {
-            /* shared folder */
-            if (strlen(namebuf) + strlen(mailbox) > sizeof(namebuf)) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            } else {
-                strlcat(namebuf, mailbox, sizeof(namebuf));
-            }
-        } else {
-            /* ordinary user -- check INBOX */
-            if (strlen(namebuf) + 5 + strlen(user) > sizeof(namebuf)) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            } else {
-                strlcat(namebuf, "user.", sizeof(namebuf));
-                strlcat(namebuf, user, sizeof(namebuf));
-            }
-        }
+    if (!strcmpsafe(mbname_userid(mbname), BB)) {
+        mbname_set_localpart(mbname, NULL);
+        mbname_set_domain(mbname, NULL);
     }
-    if (r) goto done;
 
     /*
      * check to see if mailbox exists and we can append to it:
@@ -318,15 +273,15 @@ static int verify_user(const char *key, struct auth_state *authstate)
      * - don't care about ACL on INBOX (always allow post)
      * - must not be overquota
      */
-    r = mboxlist_lookup(namebuf, &mbentry, NULL);
+    r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
         kick_mupdate();
         mboxlist_entry_free(&mbentry);
-        r = mboxlist_lookup(namebuf, &mbentry, NULL);
+        r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
     }
     if (r) goto done;
 
-    if (!user) {
+    if (!mbname_userid(mbname)) {
         long aclcheck = ACL_POST;
         int access = cyrus_acl_myrights(authstate, mbentry->acl);
 
@@ -354,22 +309,20 @@ static int verify_user(const char *key, struct auth_state *authstate)
          */
 
         syslog(LOG_ERR, "verify_user(%s) proxying to host %s",
-               namebuf, mbentry->server);
+               mbname_userid(mbname), mbentry->server);
 
         hp = gethostbyname(mbentry->server);
         if (hp == (struct hostent*) 0) {
             syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
-                   namebuf, mbentry->server);
-            mboxlist_entry_free(&mbentry);
-            return r;
+                   mbname_userid(mbname), mbentry->server);
+            goto done;
         }
 
         soc = socket(PF_INET, SOCK_STREAM, 0);
         if (soc < 0) {
             syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
-                   namebuf, mbentry->server);
-            mboxlist_entry_free(&mbentry);
-            return r;
+                   mbname_userid(mbname), mbentry->server);
+            goto done;
         }
         memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
         sin.sin_family = AF_INET;
@@ -379,10 +332,9 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
         if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) {
             syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
-                   namebuf, mbentry->server);
+                   mbname_userid(mbname), mbentry->server);
             close(soc);
-            mboxlist_entry_free(&mbentry);
-            return r;
+            goto done;
         }
 
         sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
@@ -399,16 +351,18 @@ static int verify_user(const char *key, struct auth_state *authstate)
         }
 
         mboxlist_entry_free(&mbentry);
+        mbname_free(&mbname);
 
         return -1;   /* tell calling function we already replied */
     }
 
-    r = check_quotas(namebuf);
+    r = check_quotas(mbname_intname(mbname));
 
 done:
     mboxlist_entry_free(&mbentry);
-    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
+    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", mbname_userid(mbname),
                   error_message(r));
+    mbname_free(&mbname);
 
     return r;
 }

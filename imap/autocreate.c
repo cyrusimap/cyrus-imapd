@@ -727,13 +727,6 @@ int autocreate_user(struct namespace *namespace,
     create = strarray_split(config_getstring(IMAPOPT_AUTOCREATE_INBOX_FOLDERS), SEP, STRARRAY_TRIM);
     subscribe = strarray_split(config_getstring(IMAPOPT_AUTOCREATE_SUBSCRIBE_FOLDERS), SEP, STRARRAY_TRIM);
 
-    /* need to convert all names to internal namespace first */
-    for (n = 0; n < create->count; n++)
-        mboxname_hiersep_tointernal(namespace, create->data[n], 0);
-
-    for (n = 0; n < subscribe->count; n++)
-        mboxname_hiersep_tointernal(namespace, subscribe->data[n], 0);
-
     for (n = 0; n < create->count; n++) {
         const char *name = strarray_nth(create, n);
         char *foldername = mboxname_user_mbox(userid, name);

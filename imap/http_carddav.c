@@ -403,7 +403,7 @@ static void my_carddav_auth(const char *userid)
             r = http_mlookup(inboxname, &mbentry, NULL);
             free(inboxname);
             if (!r && mbentry->server) {
-                proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+                proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                                  &backend_cached, NULL, NULL, httpd_in);
                 mboxlist_entry_free(&mbentry);
                 goto done;

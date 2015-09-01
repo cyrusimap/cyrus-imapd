@@ -87,17 +87,23 @@ const char *mbname_domain(const mbname_t *mbname);
 const char *mbname_localpart(const mbname_t *mbname);
 const strarray_t *mbname_boxes(const mbname_t *mbname);
 time_t mbname_isdeleted(const mbname_t *mbname);
+const char *mbname_recipient(const mbname_t *mbname, const struct namespace *ns);
 
 mbname_t *mbname_from_userid(const char *userid);
 mbname_t *mbname_from_localdom(const char *localpart, const char *domain);
 mbname_t *mbname_from_intname(const char *intname);
 mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid);
+mbname_t *mbname_from_extsub(const char *extsub, const struct namespace *ns, const char *userid);
+mbname_t *mbname_from_recipient(const char *recip, const struct namespace *ns);
+mbname_t *mbname_dup(const mbname_t *mbname);
 
+void mbname_downcaseuser(mbname_t *mbname);
 void mbname_set_localpart(mbname_t *mbname, const char *localpart);
 void mbname_set_domain(mbname_t *mbname, const char *domain);
 void mbname_set_isdeleted(mbname_t *mbname, time_t del);
+void mbname_set_boxes(mbname_t *mbname, const strarray_t *boxes);
 void mbname_push_boxes(mbname_t *mbname, const char *item);
-char *mbname_pop_box(mbname_t *mbname); /* free it yourself punk */
+char *mbname_pop_boxes(mbname_t *mbname); /* free it yourself punk */
 void mbname_truncate_boxes(mbname_t *mbname, size_t len);
 void mbname_free(mbname_t **mbnamep);
 
@@ -114,32 +120,14 @@ int mboxname_init_namespace(struct namespace *namespace, int isadmin);
 
 struct namespace *mboxname_get_adminnamespace();
 
-/*
- * Translate separator charactors in a mailboxname from its external
- * representation to its internal representation '.'.
- * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
- * length is the length of the string to translate (0 = strlen(name)).
- */
-char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
-                                  int length);
-
-/*
- * Translate separator charactors in a mailboxname from its internal
- * representation '.' to its external representation.
- * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
- * length is the length of the string to translate (0 = strlen(name)).
- */
-char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
-                                  int length);
-
 /* Return nonzero if 'userid' owns the (internal) mailbox 'name'. */
 int mboxname_userownsmailbox(const char *userid, const char *name);
 
 /*
  * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
- * returns a pointer to the userid, otherwise returns NULL.
+ * returns 1, otherwise returns 0.
  */
-char *mboxname_isusermailbox(const char *name, int isinbox);
+int mboxname_isusermailbox(const char *name, int isinbox);
 
 /*
  * If (internal) mailbox 'name' is in the DELETED namespace.
@@ -176,6 +164,7 @@ int mboxname_is_prefix(const char *longstr, const char *shortstr);
 /* returns a malloc'd mailbox */
 char *mboxname_to_userid(const char *mboxname);
 char *mboxname_user_mbox(const char *userid, const char *subfolder);
+char *mboxname_user_mbox_external(const char *userid, const char *extsubfolder);
 char *mboxname_abook(const char *userid, const char *collection);
 char *mboxname_cal(const char *userid, const char *collection);
 

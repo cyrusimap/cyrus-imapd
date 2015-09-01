@@ -957,7 +957,10 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     /* Handle flags the user wants to set in the message */
     if (flags) {
         r = append_apply_flags(as, mboxevent, &record, flags);
-        if (r) goto out;
+        if (r) {
+            syslog(LOG_ERR, "Annotation callout failed to apply flags %s", error_message(r));
+            goto out;
+        }
     }
 
     /* Write out index file entry */
@@ -974,14 +977,20 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
                                     as->userid, as->auth_state);
             r = annotate_state_store(astate, user_annots);
         }
-        if (r) goto out;
+        if (r) {
+            syslog(LOG_ERR, "Annotation callout failed to apply user annots %s", error_message(r));
+            goto out;
+        }
         if (system_annots) {
             /* pretend to be admin to avoid ACL checks */
             annotate_state_set_auth(astate, /*isadmin*/1,
                                     as->userid, as->auth_state);
             r = annotate_state_store(astate, system_annots);
         }
-        if (r) goto out;
+        if (r) {
+            syslog(LOG_ERR, "Annotation callout failed to apply system annots %s", error_message(r));
+            goto out;
+        }
     }
 
 out:
@@ -1157,7 +1166,12 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     record->system_flags &= (FLAG_SEEN | FLAGS_INTERNAL);
     memset(&record->user_flags, 0, sizeof(record->user_flags));
     r = append_apply_flags(as, NULL, record, flags);
-    if (r) goto out;
+    if (r) {
+        syslog(LOG_ERR, "Setting flags from annotator "
+                        "callout failed (%s)",
+                        error_message(r));
+        goto out;
+    }
 
     r = mailbox_get_annotate_state(as->mailbox, record->uid, &astate);
     if (r) goto out;
@@ -1165,7 +1179,12 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         annotate_state_set_auth(astate, as->isadmin,
                                 as->userid, as->auth_state);
         r = annotate_state_store(astate, user_annots);
-        if (r) goto out;
+        if (r) {
+            syslog(LOG_ERR, "Setting user annnotations from annotator "
+                            "callout failed (%s)",
+                            error_message(r));
+            goto out;
+        }
     }
     if (system_annots) {
         /* pretend to be admin to avoid ACL checks */
@@ -1173,7 +1192,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
                                 as->userid, as->auth_state);
         r = annotate_state_store(astate, system_annots);
         if (r) {
-            syslog(LOG_ERR, "Setting annnotations from annotator "
+            syslog(LOG_ERR, "Setting system annnotations from annotator "
                             "callout failed (%s)",
                             error_message(r));
             goto out;

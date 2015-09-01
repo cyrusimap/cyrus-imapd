@@ -196,7 +196,7 @@ static int meth_get(struct transaction_t *txn,
         struct backend *be;
 
         be = proxy_findserver(tgt->userid,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
