@@ -147,6 +147,9 @@ The quickest option for the rest is installing via CPAN, but you could build pac
     sudo cpan -i XML::Fast
     sudo cpan -i Data::ICal::TimeZone
     sudo cpan -i Text::VCardFast
+    sudo cpan -i Mail::IMAPTalk
+    sudo cpan -i List::Pairwise
+    sudo cpan -i Convert::Base64
 
 3. Install Cassandane
 
