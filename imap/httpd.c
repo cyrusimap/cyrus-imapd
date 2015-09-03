@@ -3035,6 +3035,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         *pass++ = '\0';
         extra = strchr(user, '%');
         if (extra) *extra++ = '\0';
+        else{
+            extra = strchr(user, '@');
+            if (extra) extra++ ;
+        }
+
         /* Verify the password */
         status = sasl_checkpass(httpd_saslconn, user, strlen(user),
                                 pass, strlen(pass));

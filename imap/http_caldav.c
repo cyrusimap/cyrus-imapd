@@ -638,7 +638,6 @@ static void my_caldav_auth(const char *userid)
     /* Auto-provision calendars for 'userid' */
 
     strlcpy(ident, userid, sizeof(ident));
-    mboxname_hiersep_toexternal(&httpd_namespace, ident, 0);
 
     /* calendar-home-set */
     mailboxname = caldav_mboxname(userid, NULL);
@@ -807,6 +806,7 @@ static int caldav_parse_path(const char *path,
     size_t len;
     const char *nameprefix;
     mbname_t *mbname = NULL;
+    const char *defaul_domain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
 
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -845,8 +845,15 @@ static int caldav_parse_path(const char *path,
         if (!*p || !*++p) return 0;
 
         /* Get user id */
-        len = strcspn(p, "/");
-        tgt->userid = xstrndup(p, len);
+        if (strstr(p, defaul_domain)){
+           len = strcspn(p, "@");
+           tgt->userid = xstrndup(p, len);
+           len = strcspn(p, "/");
+        }
+        else{
+            len = strcspn(p, "/");
+            tgt->userid = xstrndup(p, len);
+        }
 
         p += len;
         if (!*p || !*++p) {
@@ -926,7 +933,6 @@ static int caldav_parse_path(const char *path,
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
             return HTTP_NOT_FOUND;
-        mbname_set_domain(mbname, NULL);
     }
 
     const char *mboxname = mbname_intname(mbname);

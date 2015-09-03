@@ -367,6 +367,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 {
     char *p;
     size_t len;
+    const char *defaul_domain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -396,8 +397,15 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         if (!*p || !*++p) return 0;
 
         /* Get user id */
-        len = strcspn(p, "/");
-        tgt->userid = xstrndup(p, len);
+        if (strstr(p, defaul_domain)){
+           len = strcspn(p, "@");
+           tgt->userid = xstrndup(p, len);
+           len = strcspn(p, "/");
+        }
+        else{
+            len = strcspn(p, "/");
+            tgt->userid = xstrndup(p, len);
+        }
 
         p += len;
         if (!*p || !*++p) return 0;
