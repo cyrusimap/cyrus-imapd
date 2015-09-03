@@ -45,7 +45,7 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include <metautils/lib/hc_url.h>
+#include <core/oiourl.h>
 #include <oio_sds.h>
 
 #include "mailbox.h"
