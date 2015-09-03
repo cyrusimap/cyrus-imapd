@@ -324,18 +324,18 @@ if test "$use_openio" = "yes"; then
 
 	LDFLAGS="$LDFLAGS -L$with_openio_lib"
 	CFLAGS="$CFLAGS -I$with_openio_inc"
-	openio_headers="oio_sds.h metautils/lib/hc_url.h"
+	openio_headers="oio_sds.h core/oiourl.h"
 	for h in $openio_headers; do
 		AC_CHECK_HEADER($h,[],[
 			AC_MSG_ERROR([Header $h is missing.])
 		])
 	done
 	AC_CHECK_LIB([oiosds],[oio_error_free],[],[AC_MSG_ERROR([Library oiosds not found.])])
-	AC_CHECK_LIB([metautils],[hc_url_empty],[],[AC_MSG_ERROR([Library metautils not found.])])
+	AC_CHECK_LIB([oiocore],[oio_url_empty],[],[AC_MSG_ERROR([Library oiocore not found.])])
 	AC_CHECK_LIB([curl],[curl_version],[],[AC_MSG_ERROR([Library curl not found.])])
-	AC_CHECK_LIB([neon],[ne_move],[],[AC_MSG_ERROR([Library neon not found.])])
+	AC_CHECK_LIB([json-c],[json_tokener_parse_ex],[],[AC_MSG_ERROR([Library json-c not found.])])
 
-	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -lmetautils -lgridclient -lcurl -lneon"
+	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
 fi
 dnl End OpenIO Detection
 AM_CONDITIONAL([WITH_OPENIO], [test "$use_openio" = "yes"])
