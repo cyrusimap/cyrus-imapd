@@ -52,7 +52,7 @@ struct sqldb_bindval {
     const char *name;
     int type;
     union {
-        int i;
+        sqlite3_int64 i;
         const char *s;
     } val;
 };

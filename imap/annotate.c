@@ -3221,8 +3221,8 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
                             struct mailbox *newmailbox)
 {
     /* rename one mailbox */
-    char *olduserid = xstrdupnull(mboxname_to_userid(oldmailbox->name));
-    char *newuserid = xstrdupnull(mboxname_to_userid(newmailbox->name));
+    char *olduserid = mboxname_to_userid(oldmailbox->name);
+    char *newuserid = mboxname_to_userid(newmailbox->name);
     annotate_db_t *d = NULL;
     int r = 0;
 

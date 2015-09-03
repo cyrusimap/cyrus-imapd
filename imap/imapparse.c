@@ -743,7 +743,6 @@ static int get_search_criterion(struct protstream *pin,
     time_t start, end, now = time(0);
     uint32_t u;
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
-    char mboxname[MAX_MAILBOX_NAME];
 
     if (base->state & GETSEARCH_CHARSET_FIRST) {
         c = getcharset(pin, pout, &arg);
@@ -914,11 +913,9 @@ static int get_search_criterion(struct protstream *pin,
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c == EOF) goto missingarg;
-            base->namespace->mboxname_tointernal(base->namespace, arg.s,
-                                                 base->userid, mboxname);
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("folder");
-            e->value.s = xstrdup(mboxname);
+            e->value.s = mboxname_from_external(arg.s, base->namespace, base->userid);
         }
         else if (!strcmp(criteria.s, "from")) {         /* RFC 3501 */
             if (c != ' ') goto missingarg;

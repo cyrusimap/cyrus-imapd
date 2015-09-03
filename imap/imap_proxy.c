@@ -115,16 +115,13 @@ void proxy_gentag(char *tag, size_t len)
 
 struct backend *proxy_findinboxserver(const char *userid)
 {
-    char inbox[MAX_MAILBOX_BUFFER];
     mbentry_t *mbentry = NULL;
     struct backend *s = NULL;
-    int r;
 
-    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
-                                               userid, inbox);
-    if (r) return NULL;
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    int r = mboxlist_lookup(inbox, &mbentry, NULL);
+    free(inbox);
 
-    r = mboxlist_lookup(inbox, &mbentry, NULL);
     if (r) return NULL;
 
     if (mbentry->mbtype & MBTYPE_REMOTE) {
@@ -449,7 +446,6 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
     int c;
     int r = PROXY_OK;
     int exist_r;
-    char mailboxname[MAX_MAILBOX_BUFFER];
     static struct buf tagb, cmd, sep, name;
     struct buf flags = BUF_INITIALIZER;
 
@@ -591,22 +587,13 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             /* lookup name */
             exist_r = 1;
-            r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
-                                                        name.s,
-                                                        userid,
-                                                        mailboxname);
-            if (!r) {
-                mbentry_t *mbentry = NULL;
-                exist_r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-                if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
-                    exist_r = IMAP_MAILBOX_RESERVED;
-                mboxlist_entry_free(&mbentry);
-            } else {
-                /* skip this one */
-                syslog(LOG_ERR, "could not convert %s to internal form",
-                       name.s);
-                continue;
-            }
+            char *intname = mboxname_from_external(name.s, &imapd_namespace, userid);
+            mbentry_t *mbentry = NULL;
+            exist_r = mboxlist_lookup(intname, &mbentry, NULL);
+            free(intname);
+            if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
+                exist_r = IMAP_MAILBOX_RESERVED;
+            mboxlist_entry_free(&mbentry);
 
             /* send our response */
             /* we need to set \Noselect if it's not in our mailboxes.db */

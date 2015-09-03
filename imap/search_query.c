@@ -838,11 +838,14 @@ EXPORTED int search_query_run(search_query_t *query)
     if (query->global_sub.expr) {
         /* We have a scan expression which applies to all folders.
          * Walk over every folder, applying the scan expression. */
-        if (query->multiple)
-            r = mboxlist_usermboxtree(mboxname_to_userid(index_mboxname(query->state)),
-                                      subquery_run_global_cb, query, /*flags*/0);
-        else
+        if (query->multiple) {
+            char *userid = mboxname_to_userid(index_mboxname(query->state));
+            r = mboxlist_usermboxtree(userid, subquery_run_global_cb, query, /*flags*/0);
+            free(userid);
+        }
+        else {
             r = subquery_run_global(query, index_mboxname(query->state));
+        }
         if (r) goto out;
     }
     else if (query->folder_count) {

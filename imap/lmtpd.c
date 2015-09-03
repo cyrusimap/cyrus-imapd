@@ -624,38 +624,25 @@ int deliver_mailbox(FILE *f,
     mailbox_close(&mailbox);
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
-        char inbox[MAX_MAILBOX_BUFFER];
-        char namebuf[MAX_MAILBOX_BUFFER];
-        char userbuf[MAX_MAILBOX_BUFFER];
         const char *notify_mailbox = mailboxname;
-        int r2;
 
         /* translate user.foo to INBOX */
-        if (!(*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
-                                                    "INBOX", user, inbox)) {
-            size_t inboxlen = strlen(inbox);
-            if (strlen(mailboxname) >= inboxlen &&
-                !strncmp(mailboxname, inbox, inboxlen) &&
-                (!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
-                strlcpy(inbox, "INBOX", sizeof(inbox));
-                strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
-                notify_mailbox = inbox;
-            }
+        char *inbox = mboxname_user_mbox(user, NULL);
+        size_t inboxlen = strlen(inbox);
+        if (strlen(mailboxname) >= inboxlen &&
+            !strncmp(mailboxname, inbox, inboxlen) &&
+            (!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
+            strlcpy(inbox, "INBOX", sizeof(inbox));
+            strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
+            notify_mailbox = inbox;
         }
 
         /* translate mailboxname */
-        r2 = (*lmtpd_namespace.mboxname_toexternal)(&lmtpd_namespace,
-                                                    notify_mailbox,
-                                                    user, namebuf);
-        if (!r2) {
-            strlcpy(userbuf, user, sizeof(userbuf));
-            /* translate any separators in user */
-            mboxname_hiersep_toexternal(&lmtpd_namespace, userbuf,
-                                        config_virtdomains ?
-                                        strcspn(userbuf, "@") : 0);
-            notify(notifier, "MAIL", NULL, userbuf, namebuf, 0, NULL,
-                   notifyheader ? notifyheader : "", /*fname*/NULL);
-        }
+        char *extname = mboxname_to_external(notify_mailbox, &lmtpd_namespace, user);
+        notify(notifier, "MAIL", NULL, user, extname, 0, NULL,
+               notifyheader ? notifyheader : "", /*fname*/NULL);
+        free(extname);
+        free(inbox);
     }
 
     free(uuid);
@@ -753,7 +740,8 @@ static void deliver_remote(message_data_t *msgdata,
 EXPORTED int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
                   char *username, const char *mailboxname)
 {
-    char namebuf[MAX_MAILBOX_BUFFER] = "", *tail;
+    char namebuf[MAX_MAILBOX_NAME];
+    char *tail;
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
     int ret;
@@ -771,57 +759,55 @@ EXPORTED int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
     }
 
     /* case 2: ordinary user */
-    ret = (*mydata->namespace->mboxname_tointernal)(mydata->namespace,
-                                                    "INBOX",
-                                                    username, namebuf);
+    char *inbox = mboxname_user_mbox(username, NULL);
+    strlcpy(namebuf, inbox, sizeof(namebuf));
+    free(inbox);
 
-    if (!ret) {
-        int ret2 = 1;
+    int ret2 = 1;
 
-        tail = namebuf + strlen(namebuf);
-        if (mailboxname) {
-            strlcat(namebuf, ".", sizeof(namebuf));
-            strlcat(namebuf, mailboxname, sizeof(namebuf));
+    tail = namebuf + strlen(namebuf);
+    if (mailboxname) {
+        strlcat(namebuf, ".", sizeof(namebuf));
+        strlcat(namebuf, mailboxname, sizeof(namebuf));
 
-            ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                                   md->size, flags,
-                                   mydata->authuser, mydata->authstate, md->id,
-                                   username, mydata->notifyheader,
-                                   namebuf, md->date, quotaoverride, 0);
+        ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
+                               md->size, flags,
+                               mydata->authuser, mydata->authstate, md->id,
+                               username, mydata->notifyheader,
+                               namebuf, md->date, quotaoverride, 0);
 
-        }
+    }
 
-        if (ret2 == IMAP_MAILBOX_NONEXISTENT && mailboxname &&
-            config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
-            fuzzy_match(namebuf)) {
-            /* try delivery to a fuzzy matched mailbox */
-            ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                                   md->size, flags,
-                                   mydata->authuser, mydata->authstate, md->id,
-                                   username, mydata->notifyheader,
-                                   namebuf, md->date, quotaoverride, 0);
-        }
+    if (ret2 == IMAP_MAILBOX_NONEXISTENT && mailboxname &&
+        config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+        fuzzy_match(namebuf)) {
+        /* try delivery to a fuzzy matched mailbox */
+        ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
+                               md->size, flags,
+                               mydata->authuser, mydata->authstate, md->id,
+                               username, mydata->notifyheader,
+                               namebuf, md->date, quotaoverride, 0);
+    }
 
-        if (ret2) {
-            // Authn/authz knows little about the internal naming.
-            mboxname_hiersep_toexternal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
+    if (ret2) {
+        // Authn/authz knows little about the internal naming.
+        mboxname_hiersep_toexternal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
 
-            /* normal delivery to INBOX */
-            struct auth_state *authstate = auth_newstate(username);
+        /* normal delivery to INBOX */
+        struct auth_state *authstate = auth_newstate(username);
 
-            *tail = '\0';
+        *tail = '\0';
 
-            // However, the rest of this stuff knows little about what authn/authz understands
-            mboxname_hiersep_tointernal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
+        // However, the rest of this stuff knows little about what authn/authz understands
+        mboxname_hiersep_tointernal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
 
-            ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                                  md->size, flags,
-                                  (char *) username, authstate, md->id,
-                                  username, mydata->notifyheader,
-                                  namebuf, md->date, quotaoverride, 1);
+        ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
+                              md->size, flags,
+                              (char *) username, authstate, md->id,
+                              username, mydata->notifyheader,
+                              namebuf, md->date, quotaoverride, 1);
 
-            if (authstate) auth_freestate(authstate);
-        }
+        if (authstate) auth_freestate(authstate);
     }
 
     return ret;

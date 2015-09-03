@@ -342,7 +342,6 @@ static int handle_request(const char *who, const char *name,
     time_t lastarrived;
     unsigned recentuid;
     unsigned numrecent;
-    char mboxname[MAX_MAILBOX_BUFFER];
     mbentry_t *mbentry = NULL;
     struct auth_state *mystate;
     int internalseen;
@@ -351,13 +350,13 @@ static int handle_request(const char *who, const char *name,
     lastread = 0;
     lastarrived = 0;
 
-    r = (*fud_namespace.mboxname_tointernal)(&fud_namespace,name,who,mboxname);
-    if (r) return r;
+    char *intname = mboxname_from_external(name, &fud_namespace, who);
 
-    r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    r = mboxlist_lookup(intname, &mbentry, NULL);
     if (r || mbentry->mbtype & MBTYPE_RESERVE) {
         send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
         mboxlist_entry_free(&mbentry);
+        free(intname);
         return r;
     }
 
@@ -370,11 +369,13 @@ static int handle_request(const char *who, const char *name,
             auth_freestate(mystate);
             r = do_proxy_request(who, name, mbentry->server, sfrom, sfromsiz);
             mboxlist_entry_free(&mbentry);
+            free(intname);
             return r;
         } else {
             /* Permission Denied */
             auth_freestate(mystate);
             mboxlist_entry_free(&mbentry);
+            free(intname);
             send_reply(sfrom, sfromsiz, REQ_DENY, who, name, 0, 0, 0);
             return 0;
         }
@@ -385,17 +386,18 @@ static int handle_request(const char *who, const char *name,
     /*
      * Open/lock header
      */
-    r = mailbox_open_irl(mboxname, &mailbox);
+    r = mailbox_open_irl(intname, &mailbox);
     if (r) {
         send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
         return r;
     }
 
-    if (mboxname_isusermailbox(mboxname, 0)) {
+    if (mboxname_isusermailbox(intname, 0)) {
         int myrights = cyrus_acl_myrights(mystate, mailbox->acl);
         if (!(myrights & ACL_USER0)) {
             auth_freestate(mystate);
             mailbox_close(&mailbox);
+            free(intname);
             send_reply(sfrom, sfromsiz, REQ_DENY, who, name, 0, 0, 0);
             return 0;
         }
@@ -436,6 +438,7 @@ static int handle_request(const char *who, const char *name,
     }
 
     mailbox_close(&mailbox);
+    free(intname);
 
     send_reply(sfrom, sfromsiz, REQ_OK, who, name, numrecent,
                lastread, lastarrived);

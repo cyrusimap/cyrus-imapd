@@ -55,12 +55,12 @@
 /* Create filename corresponding to DAV DB for mailbox */
 EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
 {
-    const char *userid;
-
-    userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
 
     if (userid) dav_getpath_byuserid(fname, userid);
     else buf_setcstr(fname, mailbox_meta_fname(mailbox, META_DAV));
+
+    free(userid);
 }
 
 /* Create filename corresponding to DAV DB for userid */

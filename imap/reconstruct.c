@@ -277,12 +277,11 @@ int main(int argc, char **argv)
             }
 
             /* Translate mailboxname */
-            (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
-                                                   NULL, buf);
+            char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
 
             /* Does it exist */
             do {
-                r = mboxlist_lookup(buf, NULL, NULL);
+                r = mboxlist_lookup(intname, NULL, NULL);
             } while (r == IMAP_AGAIN);
 
             if (r != IMAP_MAILBOX_NONEXISTENT) {
@@ -291,20 +290,22 @@ int main(int argc, char **argv)
                         argv[i]);
                 exit(EC_USAGE);
             }
+            free(intname);
         }
 
         /* None of them exist.  Create them. */
         for (i = optind; i < argc; i++) {
             /* Translate mailboxname */
-            (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
-                                                   NULL, buf);
+            char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
 
             /* don't notify mailbox creation here */
-            r = mboxlist_createmailbox(buf, 0, start_part, 1,
+            r = mboxlist_createmailbox(intname, 0, start_part, 1,
                                        "cyrus", NULL, 0, 0, !xflag, 0, NULL);
             if (r) {
                 fprintf(stderr, "could not create %s\n", argv[i]);
             }
+
+            free(intname);
         }
     }
 
@@ -430,7 +431,6 @@ static int do_reconstruct(const char *name,
 {
     strarray_t *discovered = (strarray_t *)rock;
     int r;
-    char buf[MAX_MAILBOX_NAME];
     static char lastname[MAX_MAILBOX_NAME] = "";
     char *other;
     struct mailbox *mailbox = NULL;
@@ -472,10 +472,9 @@ static int do_reconstruct(const char *name,
     hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
 
     /* Convert internal name to external */
-    (*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
-                                           NULL, buf);
+    char *extname = mboxname_to_external(lastname, &recon_namespace, NULL);
     if (!(reconstruct_flags & RECONSTRUCT_QUIET))
-        printf("%s\n", buf);
+        printf("%s\n", extname);
 
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
 
@@ -483,13 +482,14 @@ static int do_reconstruct(const char *name,
         /* need to re-set the version! */
         int r = mailbox_setversion(mailbox, setversion);
         if (r) {
-            printf("FAILED TO REPACK %s with new version %s\n", buf, error_message(r));
+            printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
         }
         else {
-            printf("Repacked %s to version %d\n", buf, setversion);
+            printf("Repacked %s to version %d\n", extname, setversion);
         }
     }
     mailbox_close(&mailbox);
+    free(extname);
 
     if (discovered) {
         char fnamebuf[MAX_MAILBOX_PATH];
@@ -523,6 +523,7 @@ static int do_reconstruct(const char *name,
             if (stat(fnamebuf, &sbuf) < 0) continue;
 
             /* ok, we have a real mailbox directory */
+            char buf[MAX_MAILBOX_NAME];
             snprintf(buf, MAX_MAILBOX_NAME, "%s.%s",
                      name, dirent->d_name);
 

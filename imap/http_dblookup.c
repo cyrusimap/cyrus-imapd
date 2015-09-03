@@ -266,9 +266,7 @@ static int meth_get_db(struct transaction_t *txn,
     const char **keyhdrs;
     char path[MAX_MAILBOX_PATH+1];
     char *p;
-    struct mboxname_parts parts;
-    struct buf boxbuf = BUF_INITIALIZER;
-    char mboxname[MAX_MAILBOX_BUFFER+1];
+    mbname_t *mbname = NULL;
 
     userhdrs = spool_getheader(txn->req_hdrs, "User");
     keyhdrs = spool_getheader(txn->req_hdrs, "Key");
@@ -295,27 +293,28 @@ static int meth_get_db(struct transaction_t *txn,
         return HTTP_BAD_REQUEST;
     *p++ = '\0';
 
-    mboxname_init_parts(&parts);
-    mboxname_userid_to_parts(userhdrs[0], &parts);
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    buf_putc(&boxbuf, '.');
-    buf_appendmap(&boxbuf, path, strlen(path));
-    parts.box = buf_release(&boxbuf);
+    mbname = mbname_from_userid(userhdrs[0]);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    mbname_push_boxes(mbname, path);
 
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
-        if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
+        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
             return HTTP_NOT_FOUND;
         //free(parts.domain); - XXX fix when converting to real parts
-        parts.domain = NULL;
+        mbname_set_domain(mbname, NULL);
     }
 
-    mboxname_parts_to_internal(&parts, mboxname);
-    mboxname_free_parts(&parts);
+    const char *mboxname = mbname_intname(mbname);
 
+    int r;
     if (!strcmp(txn->req_uri->path, "/dblookup/group"))
-        return get_group(txn, userhdrs[0], mboxname, p);
+        r = get_group(txn, userhdrs[0], mboxname, p);
+    else
+        r = HTTP_NOT_FOUND;
 
-    return HTTP_NOT_FOUND;
+    mbname_free(&mbname);
+
+    return r;
 }

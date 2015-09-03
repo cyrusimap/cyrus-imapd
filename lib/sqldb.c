@@ -298,7 +298,7 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
 
         switch (bval->type) {
         case SQLITE_INTEGER:
-            sqlite3_bind_int(stmt, cidx, bval->val.i);
+            sqlite3_bind_int64(stmt, cidx, bval->val.i);
             break;
 
         case SQLITE_TEXT:

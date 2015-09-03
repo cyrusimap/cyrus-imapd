@@ -119,41 +119,35 @@ EXPORTED void conversations_set_suffix(const char *suff)
     suffix = xstrdupnull(suff);
 }
 
-static char *conversations_path(struct mboxname_parts *parts)
+static char *conversations_path(mbname_t *mbname)
 {
     const char *suff = (suffix ? suffix : FNAME_CONVERSATIONS_SUFFIX);
     /* only users have conversations.  Later we may introduce the idea of
      * "conversationroot" in the same way we have quotaroot, but for now
      * it's hard-coded as the user */
-    if (!parts->userid)
+    if (!mbname_userid(mbname))
         return NULL;
     if (convdir)
-        return strconcat(convdir, "/", parts->userid, ".", suff, (char *)NULL);
-    return mboxname_conf_getpath(parts, suff);
+        return strconcat(convdir, "/", mbname_userid(mbname), ".", suff, (char *)NULL);
+    return mboxname_conf_getpath(mbname, suff);
 }
 
 EXPORTED char *conversations_getuserpath(const char *username)
 {
-    struct mboxname_parts parts;
-    char *fname;
+    mbname_t *mbname = mbname_from_userid(username);
+    char *fname = conversations_path(mbname);
 
-    if (mboxname_userid_to_parts(username, &parts))
-        return NULL;
-    fname = conversations_path(&parts);
-    mboxname_free_parts(&parts);
+    mbname_free(&mbname);
 
     return fname;
 }
 
 EXPORTED char *conversations_getmboxpath(const char *mboxname)
 {
-    struct mboxname_parts parts;
-    char *fname;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = conversations_path(mbname);
 
-    if (mboxname_to_parts(mboxname, &parts))
-        return NULL;
-    fname = conversations_path(&parts);
-    mboxname_free_parts(&parts);
+    mbname_free(&mbname);
 
     return fname;
 }

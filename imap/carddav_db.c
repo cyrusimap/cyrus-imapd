@@ -95,10 +95,13 @@ EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
 EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
 {
     struct carddav_db *carddavdb = NULL;
-    const char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox->name);
 
-    if (userid)
-        return carddav_open_userid(userid);
+    if (userid) {
+        carddavdb = carddav_open_userid(userid);
+        free(userid);
+        return carddavdb;
+    }
 
     sqldb_t *db = dav_open_mailbox(mailbox);
     if (!db) return NULL;
@@ -819,7 +822,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
     struct buf buf = BUF_INITIALIZER;
     vparse_tobuf(vcard, &buf);
-    const char *mbuserid = mboxname_to_userid(mailbox->name);
+    char *mbuserid = mboxname_to_userid(mailbox->name);
 
     time_to_rfc822(now, datestr, sizeof(datestr));
 
@@ -890,6 +893,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 done:
     append_removestage(stage);
     free(freeme);
+    free(mbuserid);
     return r;
 }
 

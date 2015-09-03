@@ -1408,6 +1408,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
                           struct seqset *uids)
 {
     const char *fname = NULL;
+    char *userid = NULL;
     char *tofree1 = NULL;
     char *tofree2 = NULL;
     unsigned int uid;
@@ -1440,7 +1441,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
         }
     }
     if (warmup_flags & WARMUP_SEARCH) {
-        const char *userid = mboxname_to_userid(mbentry->name);
+        userid = mboxname_to_userid(mbentry->name);
         r = search_list_files(userid, &files);
         if (r) goto out;
         for (i = 0 ; i < files.count ; i++) {
@@ -1461,6 +1462,7 @@ out:
     if (r)
         syslog(LOG_ERR, "IOERROR: unable to warmup file %s: %s",
                 fname, error_message(r));
+    free(userid);
     free(tofree1);
     free(tofree2);
     strarray_fini(&files);
@@ -2206,7 +2208,6 @@ EXPORTED int index_convmultisort(struct index_state *state,
     ptrarray_t dummy_response;
     int total = UNPREDICTABLE;
     int r = 0;
-    char extname[MAX_MAILBOX_BUFFER];
     modseq_t hms;
     search_query_t *query = NULL;
     search_folder_t *folder = NULL;
@@ -2337,15 +2338,14 @@ EXPORTED int index_convmultisort(struct index_state *state,
         for (fi = 0 ; fi < query->folders_by_id.count ; fi++) {
             folder = ptrarray_nth(&query->folders_by_id, fi);
 
-            searchargs->namespace->mboxname_toexternal(searchargs->namespace,
-                                                       folder->mboxname,
-                                                       searchargs->userid,
-                                                       extname);
+            char *extname = mboxname_to_external(folder->mboxname, searchargs->namespace, searchargs->userid);
+
             if (fi)
                 prot_printf(state->out, " ");
             prot_printf(state->out, "(");
             prot_printstring(state->out, extname);
             prot_printf(state->out, " %u)", folder->uidvalidity);
+            free(extname);
         }
         prot_printf(state->out, ") (");
         for (i = 0 ; i < results.count ; i++) {
@@ -2402,20 +2402,19 @@ static int emit_snippet(struct mailbox *mailbox, uint32_t uid,
 {
     struct snippet_rock *sr = (struct snippet_rock *)rock;
     const char *partname = search_part_as_string(part);
-    int r;
-    char extname[MAX_MAILBOX_BUFFER];
 
     if (!partname) return 0;
 
-    r = sr->namespace->mboxname_toexternal(sr->namespace, mailbox->name,
-                                           sr->userid, extname);
-    if (r) return r;
+    char *extname = mboxname_to_external(mailbox->name, sr->namespace, sr->userid);
 
     prot_printf(sr->out, "* SNIPPET ");
     prot_printstring(sr->out, extname);
     prot_printf(sr->out, " %u %u %s ", mailbox->i.uidvalidity, uid, partname);
     prot_printstring(sr->out, snippet);
     prot_printf(sr->out, "\r\n");
+
+    free(extname);
+
     return 0;
 }
 
@@ -3930,16 +3929,12 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_FOLDER)) {
-        struct namespace *ns = fetchargs->namespace;
-        char mboxname[MAX_MAILBOX_PATH+1];
-        r = ns->mboxname_toexternal(ns, index_mboxname(state),
-                                    fetchargs->userid, mboxname);
-        if (!r) {
-            prot_printf(state->out, "%cFOLDER ", sepchar);
-            prot_printastring(state->out, mboxname);
-            sepchar = ' ';
-        }
-        r = 0;
+        char *extname = mboxname_to_external(index_mboxname(state),
+                                             fetchargs->namespace, fetchargs->userid);
+        prot_printf(state->out, "%cFOLDER ", sepchar);
+        prot_printastring(state->out, extname);
+        sepchar = ' ';
+        free(extname);
     }
     if ((fetchitems & FETCH_UIDVALIDITY)) {
         prot_printf(state->out, "%cUIDVALIDITY %u", sepchar,
