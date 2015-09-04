@@ -49,6 +49,7 @@
 #include "backend.h"
 #include "dlist.h"
 #include "prot.h"
+#include "seen.h"
 #include "mailbox.h"
 
 #define SYNC_MSGID_LIST_HASH_SIZE        (65536)
