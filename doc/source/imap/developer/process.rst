@@ -71,6 +71,11 @@ If you're not planning on regularly submitting changes, you can just send your p
 .. _Maniphest: https://git.cyrus.foundation/maniphest/
 .. _Phabricator: https://git.cyrus.foundation/
 
+Useful Developer Information
+============================
+
+Some combined :ref:`tips on developing with Cyrus <cyrus-hacking>` have been collected.
+
 Community Participation
 =======================
 

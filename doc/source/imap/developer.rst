@@ -15,6 +15,9 @@ Getting Started
     developer/process
     developer/architecture
     
+    :hidden:
+    developer/developer-tips
+    
 Resources
 =========
 

@@ -6,7 +6,6 @@ Standard Operating Procedures
     :maxdepth: 2
 
     sop/replication
-    sop/murder-concepts
     sop/murder
     
     sop/mailbox-operations
@@ -14,6 +13,7 @@ Standard Operating Procedures
     sop/altnamespace
     sop/databases
     sop/deleting
+    sop/virtual-domains
 
     sop/reconstructing
     sop/squatter

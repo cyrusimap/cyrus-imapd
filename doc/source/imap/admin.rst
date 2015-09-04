@@ -1,8 +1,8 @@
 .. _imap-admin:
 
-===================
-Administrator Guide
-===================
+==============================
+Cyrus IMAP Administrator Guide
+==============================
 
 
 
@@ -20,6 +20,9 @@ Configuration
 
     admin/sop
     admin/access-control 
+    admin/nntp
+    admin/protlayer
+    admin/sieve
     
 .. :todo:
     Event Source (we need a listener that just logs events to syslog)
@@ -41,6 +44,7 @@ Other
     admin/administration-running
     admin/packagers
     admin/config
+    faq
 
 References
 ==========
