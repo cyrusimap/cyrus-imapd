@@ -7,14 +7,16 @@ When reporting a bug, please prepare to provide the following information;
 * Your platform, and if applicable, your distribution and the distribution version.
 * The exact version of Cyrus IMAP or SASL you are using.
 * If a packaged version is used, the source of the packaged version.
-* If a custom version is used, any options that may have specified during the build process. 
+* If a custom version is used, any options that may have specified during the build process.
+* If relevant, are you using altnamespace, unixhierarchysep, or virtdomains?
+* If relevant, are you in a murder configuration? (In which case please provide information for all hosts) 
 
 .. note::
     **Cyrus IMAP Version**
 
     The Cyrus IMAP team would appreciate if you try your best to supply us with the exact version of Cyrus IMAP that you run. The Cyrus IMAP version from upstream, usually in the format x.y.z does not include important information on the *build* or *release*, nor the source for the package you may have used.
 
-    Most Linux distributions allow you do get the full version with rpm -qv cyrus-imapd or dpkg -l cyrus-imapd.
+    Most Linux distributions allow you do get the full version with ``rpm -qv cyrus-imapd`` or ``dpkg -l cyrus-imapd``.
     If package management, for whatever reason, cannot tell you what version of Cyrus IMAP you have, connecting to your Cyrus IMAP server (typically via telnet to port 110 or 143) could. 
 
 .. note::

@@ -1,3 +1,5 @@
+.. _cyrus-sieve:
+
 ===========
 Cyrus Sieve
 ===========

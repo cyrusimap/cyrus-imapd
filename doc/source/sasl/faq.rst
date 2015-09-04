@@ -1,11 +1,12 @@
+.. _sasl-faq:
+
 Frequently Asked Questions
 ==========================
 
-Build Questions
----------------
-
-Currently under migration. See http://www.cyrusimap.org/mediawiki/index.php/FAQ#Cyrus_SASL_Questions
-
-.. todo::
-   Content needed here
-
+.. toctree::
+    :maxdepth: 2  
+    :glob:
+    
+    faqs/*
+    
+Looking for the :ref:`Cyrus IMAP FAQ <imap-faq>`?

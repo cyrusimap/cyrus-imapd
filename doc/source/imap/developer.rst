@@ -14,8 +14,10 @@ Getting Started
     developer/basicserver
     developer/process
     developer/architecture
-    
+
+.. toctree::    
     :hidden:
+    
     developer/developer-tips
     
 Resources

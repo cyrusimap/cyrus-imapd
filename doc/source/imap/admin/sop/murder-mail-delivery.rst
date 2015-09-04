@@ -1,3 +1,5 @@
+.. _murder-mail-delivery:
+
 ==========================
 Cyrus Murder Mail Delivery
 ==========================

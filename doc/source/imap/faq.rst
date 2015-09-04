@@ -1,8 +1,56 @@
+.. _imap-faq:
+
+==========================
 Frequently Asked Questions
 ==========================
 
-Currently under migration. See http://www.cyrusimap.org/mediawiki/index.php/FAQ
+Features
+========
 
-.. todo::
-   Content needed here
+.. toctree::
+    :maxdepth: 2
+    :glob:
+    
+    faqs/feature-*
+
+Installation Problems
+=====================
+
+.. toctree::
+    :maxdepth: 2
+    :glob:
+    
+    faqs/install-*
+
+
+Common Feature Requests
+=======================
+
+.. toctree::
+    :maxdepth: 2
+    :glob:
+    
+    faqs/r-*
+
+
+Common Operational Questions
+============================
+
+.. toctree::
+    :maxdepth: 2
+    :glob:
+    
+    faqs/o-*
+
+Common Interoperability Problems
+================================
+
+.. toctree::
+    :maxdepth: 2
+    :glob:
+    
+    faqs/interop-*
+
+
+Looking for the :ref:`Cyrus SASL FAQ <sasl-faq>`?
 
