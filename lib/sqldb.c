@@ -395,6 +395,11 @@ EXPORTED int sqldb_lastid(sqldb_t *open)
     return sqlite3_last_insert_rowid(open->db);
 }
 
+EXPORTED int sqldb_changes(sqldb_t *open)
+{
+    return sqlite3_changes(open->db);
+}
+
 EXPORTED int sqldb_close(sqldb_t **dbp)
 {
     sqldb_t *open, *prev = NULL;
