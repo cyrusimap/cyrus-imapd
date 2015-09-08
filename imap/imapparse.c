@@ -1096,6 +1096,22 @@ static int get_search_criterion(struct protstream *pin,
             e->attr = search_attr_find("size");
             e->value.u = u;
         }
+        else if (!strcmp(criteria.s, "spamabove")) {  /* nonstandard */
+            if (c != ' ') goto missingarg;
+            c = getastring(pin, pout, &arg);
+            if (c == EOF) goto badnumber;
+            e = search_expr_new(parent, SEOP_GE);
+            e->attr = search_attr_find("spamscore");
+            e->value.u = (int)((atof(buf_cstring(&arg)) * 100) + 0.5);
+        }
+        else if (!strcmp(criteria.s, "spambelow")) {  /* nonstandard */
+            if (c != ' ') goto missingarg;
+            c = getastring(pin, pout, &arg);
+            if (c == EOF) goto badnumber;
+            e = search_expr_new(parent, SEOP_LT);
+            e->attr = search_attr_find("spamscore");
+            e->value.u = (int)((atof(buf_cstring(&arg)) * 100) + 0.5);
+        }
         else if (!strcmp(criteria.s, "subject")) {  /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);

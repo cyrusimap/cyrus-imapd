@@ -11465,6 +11465,8 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
             (*sortcrit)[n].key = SORT_FOLDER;
         else if (!strcmp(criteria.s, "relevancy"))
             (*sortcrit)[n].key = SORT_RELEVANCY;
+        else if (!strcmp(criteria.s, "spamscore"))
+            (*sortcrit)[n].key = SORT_SPAMSCORE;
         else {
             prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
                         tag, criteria.s);

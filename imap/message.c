@@ -4153,6 +4153,15 @@ static void extract_one(struct buf *buf,
     free(p);
 }
 
+EXPORTED int message_get_spamscore(message_t *m, uint32_t *valp)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int r = message_get_field(m, "X-Spam-score", MESSAGE_RAW, &buf);
+    *valp = r ? 0 : (int)((atof(buf_cstring(&buf)) * 100)  + 0.5);
+    buf_free(&buf);
+    return r;
+}
+
 EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct buf *buf)
 {
     strarray_t want = STRARRAY_INITIALIZER;

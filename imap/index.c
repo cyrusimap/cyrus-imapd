@@ -4803,7 +4803,8 @@ MsgData **index_msgdata_load(struct index_state *state,
             if ((label == SORT_CC || label == SORT_DATE ||
                  label == SORT_FROM || label == SORT_SUBJECT ||
                  label == SORT_TO || label == LOAD_IDS ||
-                 label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO) &&
+                 label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO ||
+                 label == SORT_SPAMSCORE) &&
                 !did_cache) {
 
                 /* fetch cached info */
@@ -4895,6 +4896,12 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->displayto = get_displayname(
                                  cacheitem_base(&record, CACHE_TO));
                 break;
+            case SORT_SPAMSCORE: {
+                const char *score = index_getheader(state, cur->msgno, "X-Spam-score");
+                /* multiply by 100 to give an integer score */
+                cur->spamscore = (int)((atof(score) * 100) + 0.5);
+                break;
+            }
             case SORT_HASFLAG: {
                 const char *name = sortcrit[j].args.flag.name;
                 if (mailbox_record_hasflag(mailbox, &record, name))
@@ -5280,6 +5287,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             break;
         case SORT_CONVSIZE:
             ret = numcmp(md1->convsize, md2->convsize);
+            break;
+        case SORT_SPAMSCORE:
+            ret = numcmp(md1->spamscore, md2->spamscore);
             break;
         case SORT_HASFLAG:
             if (i < 31)
