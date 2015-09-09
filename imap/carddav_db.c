@@ -770,6 +770,7 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
         else if (!strcmp(name, "x-fm-otheraccount-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
+            if (!param) continue;
             strarray_append(&member_uids, propval+9);
             strarray_append(&member_uids, param->value);
         }
