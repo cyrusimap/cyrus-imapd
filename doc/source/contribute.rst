@@ -20,10 +20,8 @@ If you wish to provide financial support to the Cyrus Project, send a check paya
 Website Content Contributions
 =============================
 
-Information coming soon...
+Keeping documentation current alongside the code is a task in and of itself. :ref:`Join us! <contribute-docs>`.
 
-.. todo::
-    Need to write
 
 Contribute Code
 ===============
