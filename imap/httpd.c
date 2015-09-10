@@ -132,6 +132,7 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
 char *httpd_userid = NULL;
+char *httpd_extrafolder = NULL;
 char *httpd_extradomain = NULL;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
@@ -376,6 +377,10 @@ static void httpd_reset(void)
         httpd_userid = NULL;
     }
     httpd_userisanonymous = 1;
+    if (httpd_extrafolder != NULL) {
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
+    }
     if (httpd_extradomain != NULL) {
         free(httpd_extradomain);
         httpd_extradomain = NULL;
@@ -2747,6 +2752,10 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
         free(httpd_userid);
         httpd_userid = NULL;
     }
+    if (httpd_extrafolder) {
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
+    }
     if (httpd_extradomain) {
         free(httpd_extradomain);
         httpd_extradomain = NULL;
@@ -2902,6 +2911,10 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         free(httpd_userid);
         httpd_userid = NULL;
     }
+    if (httpd_extrafolder) {
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
+    }
     if (httpd_extradomain) {
         free(httpd_extradomain);
         httpd_extradomain = NULL;
@@ -2997,6 +3010,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Basic (plaintext) authentication */
         char *pass;
         char *extra;
+        char *plus;
+        char *domain;
 
         if (!clientin) {
             /* Create initial challenge (base64 buffer is static) */
@@ -3016,23 +3031,31 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             return SASL_BADPARAM;
         }
         *pass++ = '\0';
+        domain = strchr(user, '@');
+        if (domain) *domain++ = '\0';
         extra = strchr(user, '%');
         if (extra) *extra++ = '\0';
+        plus = strchr(user, '+');
+        if (plus) *plus++ = '\0';
         /* Verify the password */
-        status = sasl_checkpass(httpd_saslconn, user, strlen(user),
+        char *realuser = domain ? strconcat(user, "@", domain, (char *)NULL) : xstrdup(user);
+        status = sasl_checkpass(httpd_saslconn, realuser, strlen(realuser),
                                 pass, strlen(pass));
         memset(pass, 0, strlen(pass));          /* erase plaintext password */
 
         if (status) {
             syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
-                   httpd_clienthost, user, sasl_errdetail(httpd_saslconn));
+                   httpd_clienthost, realuser, sasl_errdetail(httpd_saslconn));
+            free(realuser);
 
             /* Don't allow user probing */
             if (status == SASL_NOUSER) status = SASL_BADAUTH;
             return status;
         }
+        free(realuser);
 
         /* Successful authentication - fall through */
+        httpd_extrafolder = xstrdupnull(plus);
         httpd_extradomain = xstrdupnull(extra);
     }
     else {
