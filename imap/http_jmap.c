@@ -2550,18 +2550,37 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(crock->props, "colour")) {
+    if (_wantprop(crock->props, "color")) {
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         struct buf attrib = BUF_INITIALIZER;
         int r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
         if (!r && attrib.len)
-            json_object_set_new(obj, "colour", json_string(buf_cstring(&attrib)));
+            json_object_set_new(obj, "color", json_string(buf_cstring(&attrib)));
+        buf_free(&attrib);
+    }
+
+    if (_wantprop(crock->props, "sortOrder")) {
+        static const char *order_annot =
+            DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
+        struct buf attrib = BUF_INITIALIZER;
+        int r = annotatemore_lookupmask(mbentry->name, order_annot, httpd_userid, &attrib);
+        if (!r && attrib.len) {
+            char *ptr;
+            long val = strtol(buf_cstring(&attrib), &ptr, 10);
+            if (ptr && *ptr == '\0') {
+                json_object_set_new(obj, "sortOrder", json_integer(val));
+            } else {
+                /* Ignore, but report non-numeric calendar-order values */
+                syslog(LOG_WARNING, "calendar-order: strtol(%s) failed", buf_cstring(&attrib));
+            }
+        }
         buf_free(&attrib);
     }
 
     if (_wantprop(crock->props, "isVisible")) {
-        /* XXX - fill this */
+        int bool = rights & ACL_LOOKUP;
+        json_object_set_new(obj, "isVisible", bool ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayReadFreeBusy")) {
