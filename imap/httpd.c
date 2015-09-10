@@ -980,8 +980,6 @@ static void cmdloop(void)
             ret = HTTP_SERVER_ERROR;
         }
 
-        proc_register(config_ident, httpd_clienthost, httpd_userid, NULL, NULL);
-
       req_line:
         do {
             /* Flush any buffered output */
@@ -2848,16 +2846,14 @@ static void auth_success(struct transaction_t *txn)
         ftruncate(httpd_logfd, end - buf_len(&txn->buf));
     }
 
-    if (!httpd_userid) {
-        /* Close existing telemetry log */
-        close(httpd_logfd);
+    /* Close existing telemetry log */
+    close(httpd_logfd);
 
-        prot_setlog(httpd_in, PROT_NO_FD);
-        prot_setlog(httpd_out, PROT_NO_FD);
+    prot_setlog(httpd_in, PROT_NO_FD);
+    prot_setlog(httpd_out, PROT_NO_FD);
 
-        /* Create telemetry log based on new userid */
-        httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
-    }
+    /* Create telemetry log based on new userid */
+    httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
 
     if (httpd_logfd != -1) {
         /* Log credential-redacted request */
