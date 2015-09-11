@@ -2498,7 +2498,8 @@ struct calendars_rock {
 /*
     id: String The id of the calendar. This property is immutable.
     name: String The user-visible name of the calendar. This may be any UTF-8 string of at least 1 character in length and maximum 256 bytes in size.
-    colour: String Any valid CSS colour value. The colour to be used when displaying events associated with the calendar. The colour SHOULD have sufficient contrast to be used as text on a white background.
+    color: String Any valid CSS color value. The color to be used when displaying events associated with the calendar. The color SHOULD have sufficient contrast to be used as text on a white background.
+    sortOrder: Number Defines the sort order of calendars when presented in the UI, so it is consistent between devices. The number MUST be an integer in the range 0 <= sortOrder < 2^31.
     isVisible: Boolean Should the calendar’s events be displayed to the user at the moment?
     mayReadFreeBusy: Boolean The user may read the free-busy information for this calendar. In JMAP terms, this means the user may use this calendar as part of a filter in a getCalendarEventList call, however unless mayRead == true, the events returned for this calendar will only contain free-busy information, and be stripped of any other data. This property MUST be true if mayRead is true.
     mayReadItems: Boolean The user may fetch the events in this calendar. In JMAP terms, this means the user may use this calendar as part of a filter in a getCalendarEventList call
@@ -2513,12 +2514,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 {
     struct calendars_rock *crock = (struct calendars_rock *)rock;
 
-    /* only calendars */
+    /* only calendars... */
     if (!(mbentry->mbtype & MBTYPE_CALENDAR)) return 0;
 
-    /* only VISIBLE calendars */
+    /* ...which are at least readable or visible */
     int rights = cyrus_acl_myrights(crock->req->authstate, mbentry->acl);
-    if (!(rights & ACL_LOOKUP)) return 0;
+    if (!(rights & (DACL_READ|DACL_READFB))) {
+        return 0;
+    }
 
     /* OK, we want this one */
     const char *collection = strrchr(mbentry->name, '.') + 1;
@@ -2570,9 +2573,10 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
             long val = strtol(buf_cstring(&attrib), &ptr, 10);
             if (ptr && *ptr == '\0') {
                 json_object_set_new(obj, "sortOrder", json_integer(val));
-            } else {
+            }
+            else {
                 /* Ignore, but report non-numeric calendar-order values */
-                syslog(LOG_WARNING, "calendar-order: strtol(%s) failed", buf_cstring(&attrib));
+                syslog(LOG_WARNING, "sortOrder: strtol(%s) failed", buf_cstring(&attrib));
             }
         }
         buf_free(&attrib);
@@ -2735,6 +2739,11 @@ static int getCalendars(struct jmap_req *req)
     else {
         r = mboxlist_usermboxtree(req->userid, &getcalendars_cb, &rock, /*flags*/0);
         if (r) goto err;
+        if (rock.rows == 0) {
+            json_array_append(req->response, json_pack("[s {s:s} s]",
+                        "error", "type", "accountNoCalendars",req->tag));
+            goto done;
+        }
     }
 
     if (rock.props) free_hash_table(rock.props, NULL);
@@ -2762,6 +2771,7 @@ static int getCalendars(struct jmap_req *req)
 
 err:
     syslog(LOG_ERR, "caldav error %s", error_message(r));
+done:
     if (rock.props) free_hash_table(rock.props, NULL);
     json_decref(rock.array);
     /* XXX - free memory */
