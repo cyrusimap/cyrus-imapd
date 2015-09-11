@@ -18,16 +18,15 @@ Configuration
 .. toctree::
     :maxdepth: 2
 
-    admin/sop
+    admin/murder/murder
     admin/access-control 
     admin/nntp
     admin/protlayer
     admin/sieve
+    admin/sop
     
 .. :todo:
     Event Source (we need a listener that just logs events to syslog)
-    admin/sop/murder Murder
-    admin/sop/replication Replication
     admin/sop/search Search (squat, xapian, ...)
     Alt Namespace / UnixHS
     Split meta

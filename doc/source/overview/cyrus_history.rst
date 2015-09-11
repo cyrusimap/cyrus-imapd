@@ -11,7 +11,7 @@ The Cyrus Project was started at CMU in 1994 to attempt to meet these goals. The
 
 The first year that all of CMU's incoming freshmen were placed on the Cyrus server was 1998 (class of 2002). In December of 2001, bboard access (which had been being mirrored from AMS to Cyrus), was cut over to Cyrus completely. AMS was finally phased out in May of 2002.
 
-As development on the project progressed, it became clear that scalability was a concern, in addition some additional reliablilty was desired beyond that which would be provided from a single machine configuration. To meet these goals, the `Cyrus Murder`_ was developed, and after several revisions was deployed to CMU in the summer of 2002.
+As development on the project progressed, it became clear that scalability was a concern, in addition some additional reliablilty was desired beyond that which would be provided from a single machine configuration. To meet these goals, the :ref:`Cyrus Murder <murder>` was developed, and after several revisions was deployed to CMU in the summer of 2002.
 
 Project Cyrus was named in honor of the founder of the first modern, "packet-switching"-based mail system, the forerunner of every major communication system we have today.
 
@@ -21,4 +21,3 @@ Cyrus the Great (c. 585-529 BC) founded the ancient Persian Empire, and then nee
 	
 .. _Cyrus Project Goals: https://asg.andrew.cmu.edu/cyrus/1994-goals.html
 .. _Cyrus Technology Overview: https://asg.andrew.cmu.edu/cyrus/1994-techoverview.html  
-.. _Cyrus Murder: http://www.cyrusimap.org/mediawiki/index.php/Cyrus_Murder
