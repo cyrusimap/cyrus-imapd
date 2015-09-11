@@ -6871,6 +6871,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     int recursive_rename = 1;
     int rename_user = 0;
     mbentry_t *mbentry = NULL;
+    struct renrock rock;
 
     if (location && !imapd_userisadmin) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
@@ -6885,8 +6886,8 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     strncpy(newmailboxname, newintname, MAX_MAILBOX_NAME);
     free(newintname);
 
-    olduser = mboxname_to_userid(oldintname);
-    newuser = mboxname_to_userid(newintname);
+    olduser = mboxname_to_userid(oldmailboxname);
+    newuser = mboxname_to_userid(newmailboxname);
 
     /* Keep temporary copy: master is trashed */
     strcpy(oldmailboxname2, oldmailboxname);
@@ -7055,7 +7056,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
     /* rename all mailboxes matching this */
     if (recursive_rename && strcmp(oldmailboxname, newmailboxname)) {
-        struct renrock rock;
         int ol = omlen + 1;
         int nl = nmlen + 1;
         char ombn[MAX_MAILBOX_BUFFER];
@@ -7114,9 +7114,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     /* If we're renaming a user, take care of changing quotaroot, ACL,
        seen state, subscriptions and sieve scripts */
     if (!r && rename_user) {
-        char *olduser = mboxname_to_userid(oldmailboxname);
-        char *newuser = mboxname_to_userid(newmailboxname);
-
         user_copyquotaroot(oldmailboxname, newmailboxname);
         user_renameacl(&imapd_namespace, newmailboxname, olduser, newuser);
         user_renamedata(olduser, newuser, imapd_userid, imapd_authstate);
@@ -7126,8 +7123,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
-        struct renrock rock;
-
         prot_printf(imapd_out, "* OK rename %s %s\r\n",
                     oldextname, newextname);
         prot_flush(imapd_out);
