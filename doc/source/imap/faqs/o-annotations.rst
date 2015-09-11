@@ -1,3 +1,5 @@
+.. _faqs-o-annotations:
+
 What annotations are available?
 -------------------------------
 
