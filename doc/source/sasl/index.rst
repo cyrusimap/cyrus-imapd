@@ -28,6 +28,10 @@ Contents
    faq
    sasl_migration
    
+Still can't find what you're looking for? Try the old repository at http://www.cyrusimap.org/mediawiki/index.php/Cyrus_SASL which is under migration.
+
+.. todo::
+    Migrate http://www.cyrusimap.org/mediawiki/index.php/Cyrus_SASL
 
 .. toctree::
    :hidden:

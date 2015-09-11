@@ -19,7 +19,6 @@ Getting Started
     :hidden:
     
     developer/developer-tips
-    developer/documentation
     
 Resources
 =========
