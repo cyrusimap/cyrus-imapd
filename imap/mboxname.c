@@ -563,6 +563,8 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!strcmp(strarray_nth(mbname->boxes, 0), dp)) {
         free(strarray_shift(mbname->boxes));
         char *delval = strarray_pop(mbname->boxes);
+        if (!delval)
+            goto done;
         mbname->is_deleted = strtoul(delval, NULL, 16);
         free(delval);
     }
