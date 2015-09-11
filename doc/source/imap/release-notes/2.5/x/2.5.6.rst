@@ -30,7 +30,7 @@ New imapd.conf options
 -----------
 
 * tls_required (default: 0).  Set this to 1 to require a TLS session for ALL
-authentications, not just plain ones (thanks Carlos Velasco)
+  authentications, not just plain ones (thanks Carlos Velasco)
 
 New cyradm options
 ------------------
