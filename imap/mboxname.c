@@ -338,6 +338,9 @@ EXPORTED mbname_t *mbname_from_userid(const char *userid)
     if (!userid)
         return mbname;
 
+    if (!*userid)
+        return mbname; // empty string, *sigh*
+
     mbname->userid = xstrdup(userid); // may as well cache it
 
     p = strchr(userid, '@');
@@ -436,6 +439,9 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
     if (!intname)
         return mbname;
 
+    if (!*intname)
+        return mbname; // empty string, *sigh*
+
     const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
 
     mbname->intname = xstrdup(intname); // may as well cache it
@@ -482,6 +488,9 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
     if (!extname)
         return mbname;
+
+    if (!*extname)
+        return mbname; // empty string, *sigh*
 
     mbname_t *userparts = mbname_from_userid(userid);
 
