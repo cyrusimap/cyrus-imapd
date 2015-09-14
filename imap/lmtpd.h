@@ -62,10 +62,10 @@ typedef struct deliver_data {
     const char *temp[2];        /* used to avoid extra indirection in
                                    getenvelope() */
 
-    struct namespace *namespace;
+    const struct namespace *ns;
 
     char *authuser;             /* user who submitted message */
-    struct auth_state *authstate;
+    const struct auth_state *authstate;
 } deliver_data_t;
 
 /* forward declarations */
@@ -79,7 +79,7 @@ extern int deliver_mailbox(FILE *f,
                            unsigned size,
                            const strarray_t *flags,
                            const char *authuser,
-                           struct auth_state *authstate,
+                           const struct auth_state *authstate,
                            char *id,
                            const char *user,
                            char *notifyheader,

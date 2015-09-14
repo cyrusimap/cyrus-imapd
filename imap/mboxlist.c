@@ -683,7 +683,7 @@ err:
  */
 static int mboxlist_create_namecheck(const char *mboxname,
                                      const char *userid,
-                                     struct auth_state *auth_state,
+                                     const struct auth_state *auth_state,
                                      int isadmin, int force_subdirs)
 {
     mbentry_t *mbentry = NULL;
@@ -827,7 +827,7 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
 EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribute__((unused)),
                                 const char *partition,
                                 int isadmin, const char *userid,
-                                struct auth_state *auth_state,
+                                const struct auth_state *auth_state,
                                 char **newacl, char **newpartition,
                                 int forceuser)
 {
@@ -873,7 +873,7 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
 static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
                                 const char *partition,
                                 int isadmin, const char *userid,
-                                struct auth_state *auth_state,
+                                const struct auth_state *auth_state,
                                 int options, unsigned uidvalidity,
                                 modseq_t highestmodseq,
                                 const char *copyacl, const char *uniqueid,
@@ -977,7 +977,7 @@ done:
 EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                            const char *partition,
                            int isadmin, const char *userid,
-                           struct auth_state *auth_state,
+                           const struct auth_state *auth_state,
                            int localonly, int forceuser, int dbonly,
                            int notify, struct mailbox **mailboxptr)
 {
@@ -1009,7 +1009,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 
 EXPORTED int mboxlist_createsync(const char *name, int mbtype,
                         const char *partition,
-                        const char *userid, struct auth_state *auth_state,
+                        const char *userid, const struct auth_state *auth_state,
                         int options, unsigned uidvalidity,
                         modseq_t highestmodseq,
                         const char *acl, const char *uniqueid,
@@ -1150,7 +1150,7 @@ static int addmbox_to_list(const mbentry_t *mbentry, void *rock)
 EXPORTED int
 mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                const char *userid,
-                               struct auth_state *auth_state,
+                               const struct auth_state *auth_state,
                                struct mboxevent *mboxevent,
                                int checkacl,
                                int localonly,
@@ -1249,7 +1249,7 @@ done:
  */
 EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
                                     const char *userid,
-                                    struct auth_state *auth_state,
+                                    const struct auth_state *auth_state,
                                     struct mboxevent *mboxevent,
                                     int checkacl,
                                     int local_only, int force)
@@ -1379,7 +1379,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
                            const char *partition, unsigned uidvalidity,
                            int isadmin, const char *userid,
-                           struct auth_state *auth_state,
+                           const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int local_only, int forceuser, int ignorequota)
 {
@@ -1691,7 +1691,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
                     const char *name,
                     const char *identifier, const char *rights,
                     int isadmin, const char *userid,
-                    struct auth_state *auth_state)
+                    const struct auth_state *auth_state)
 {
     mbentry_t *mbentry = NULL;
     int r;
@@ -2035,7 +2035,7 @@ struct find_rock {
     int checkshared;
     struct db *db;
     int isadmin;
-    struct auth_state *auth_state;
+    const struct auth_state *auth_state;
     findall_cb *proc;
     void *procrock;
 };
@@ -2518,7 +2518,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 
 EXPORTED int mboxlist_findallmulti(struct namespace *namespace,
                                    const strarray_t *patterns, int isadmin,
-                                   const char *userid, struct auth_state *auth_state,
+                                   const char *userid, const struct auth_state *auth_state,
                                    findall_cb *proc, void *rock)
 {
     int r = 0;
@@ -2543,7 +2543,7 @@ EXPORTED int mboxlist_findallmulti(struct namespace *namespace,
 
 EXPORTED int mboxlist_findall(struct namespace *namespace,
                               const char *pattern, int isadmin,
-                              const char *userid, struct auth_state *auth_state,
+                              const char *userid, const struct auth_state *auth_state,
                               findall_cb *proc, void *rock)
 {
     strarray_t patterns = STRARRAY_INITIALIZER;
@@ -2968,7 +2968,7 @@ static void mboxlist_closesubs(struct db *sub)
  */
 EXPORTED int mboxlist_findsubmulti(struct namespace *namespace,
                                    const strarray_t *patterns, int isadmin,
-                                   const char *userid, struct auth_state *auth_state,
+                                   const char *userid, const struct auth_state *auth_state,
                                    findall_cb *proc, void *rock,
                                    int force)
 {
@@ -3004,7 +3004,7 @@ EXPORTED int mboxlist_findsubmulti(struct namespace *namespace,
 
 EXPORTED int mboxlist_findsub(struct namespace *namespace,
                               const char *pattern, int isadmin,
-                              const char *userid, struct auth_state *auth_state,
+                              const char *userid, const struct auth_state *auth_state,
                               findall_cb *proc, void *rock,
                               int force)
 {
@@ -3075,7 +3075,7 @@ EXPORTED int mboxlist_checksub(const char *name, const char *userid)
  * we don't know about 'name'.
  */
 EXPORTED int mboxlist_changesub(const char *name, const char *userid,
-                                struct auth_state *auth_state,
+                                const struct auth_state *auth_state,
                                 int add, int force, int notify)
 {
     mbentry_t *mbentry = NULL;

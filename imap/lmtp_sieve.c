@@ -85,10 +85,10 @@ static const char *sieve_dir = NULL;
 /* data per script */
 typedef struct script_data {
     const mbname_t *mbname;
-    struct auth_state *authstate;
+    const struct auth_state *authstate;
 } script_data_t;
 
-static int autosieve_createfolder(const char *userid, struct auth_state *auth_state,
+static int autosieve_createfolder(const char *userid, const struct auth_state *auth_state,
                                   const char *internalname);
 
 static char *make_sieve_db(const char *user)
@@ -498,7 +498,7 @@ static int sieve_fileinto(void *ac,
     char namebuf[MAX_MAILBOX_BUFFER];
     int ret;
 
-    char *intname = mboxname_from_external(fc->mailbox, mdata->namespace, mbname_userid(sd->mbname));
+    char *intname = mboxname_from_external(fc->mailbox, mdata->ns, mbname_userid(sd->mbname));
     strncpy(namebuf, intname, sizeof(namebuf));
     free(intname);
 
@@ -898,7 +898,7 @@ int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *ms
                                (void *) &sdata, (void *) msgdata);
 
     if ((r == SIEVE_OK) && (msgdata->m->id)) {
-        const char *sdb = make_sieve_db(mbname_recipient(mbname, msgdata->namespace));
+        const char *sdb = make_sieve_db(mbname_recipient(mbname, msgdata->ns));
 
         dkey.id = msgdata->m->id;
         dkey.to = sdb;
@@ -918,7 +918,7 @@ int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *ms
 
 #define SEP "|"
 
-static int autosieve_createfolder(const char *userid, struct auth_state *auth_state,
+static int autosieve_createfolder(const char *userid, const struct auth_state *auth_state,
                                   const char *internalname)
 {
     const char *subf ;

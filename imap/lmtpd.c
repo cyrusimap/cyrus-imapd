@@ -562,7 +562,7 @@ int deliver_mailbox(FILE *f,
                     unsigned size,
                     const strarray_t *flags,
                     const char *authuser,
-                    struct auth_state *authstate,
+                    const struct auth_state *authstate,
                     char *id,
                     const char *user,
                     char *notifyheader,
@@ -838,7 +838,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.content = &content;
     mydata.stage = stage;
     mydata.notifyheader = notifyheader;
-    mydata.namespace = &lmtpd_namespace;
+    mydata.ns = &lmtpd_namespace;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
 

@@ -128,7 +128,7 @@ struct annotate_state
     /* authentication state */
     const char *userid;
     int isadmin;
-    struct auth_state *auth_state;
+    const struct auth_state *auth_state;
 
     struct annotate_entry_list *entry_list;
     /* for proxies */
@@ -1108,7 +1108,7 @@ _annotate_state_add_entry(annotate_state_t *state,
 
 EXPORTED void annotate_state_set_auth(annotate_state_t *state,
                              int isadmin, const char *userid,
-                             struct auth_state *auth_state)
+                             const struct auth_state *auth_state)
 {
     /* Note: lmtpd sometimes calls through the append code with
      * auth_state=NULL, so we cannot rely on it being non-NULL */

@@ -89,7 +89,7 @@ int annotate_state_commit(annotate_state_t **statep);
 void annotate_state_begin(annotate_state_t *state);
 void annotate_state_set_auth(annotate_state_t *state,
                              int isadmin, const char *userid,
-                             struct auth_state *auth_state);
+                             const struct auth_state *auth_state);
 int annotate_state_set_server(annotate_state_t *state);
 int annotate_state_set_mailbox(annotate_state_t *state,
                                struct mailbox *mailbox);

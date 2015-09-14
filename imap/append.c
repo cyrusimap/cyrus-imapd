@@ -151,9 +151,9 @@ done:
  * when you commit or abort, the mailbox is closed
  */
 EXPORTED int append_setup(struct appendstate *as, const char *name,
-                 const char *userid, struct auth_state *auth_state,
+                 const char *userid, const struct auth_state *auth_state,
                  long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                 struct namespace *namespace, int isadmin, enum event_type  event_type)
+                 const struct namespace *namespace, int isadmin, enum event_type  event_type)
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -176,9 +176,9 @@ EXPORTED int append_setup(struct appendstate *as, const char *name,
  * Requires as write locked mailbox (of course)
  */
 EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
-                               const char *userid, struct auth_state *auth_state,
+                               const char *userid, const struct auth_state *auth_state,
                                long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                               struct namespace *namespace, int isadmin,
+                               const struct namespace *namespace, int isadmin,
                                enum event_type event_type)
 {
     int r;
