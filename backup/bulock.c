@@ -76,7 +76,7 @@ int main (int argc, char **argv)
 
     printf("* Trying to obtain lock on %s...\n", backup_name);
 
-    struct backup *backup = backup_open(backup_name);
+    struct backup *backup = backup_open(backup_name, NULL);
 
     if (!backup) {
         printf("NO failed\n");
