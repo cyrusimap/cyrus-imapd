@@ -398,6 +398,20 @@ struct fuzz_rock {
 
 #define WSP_CHARS "- _"
 
+static int fuzzyeq(const char *a, const char *b)
+{
+    while (*a) {
+        if (!*b) return 0;
+        if (tolower(*a) != tolower(*b) && !(strchr(WSP_CHARS, *a) && strchr(WSP_CHARS, *b)))
+            return 0;
+        a++;
+        b++;
+    }
+    if (*b) return 0;
+
+    return 1;
+}
+
 static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
 {
     struct fuzz_rock *frock = (struct fuzz_rock *) rock;
@@ -414,7 +428,7 @@ static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
             break;
         const char *want = strarray_nth(wantboxes, i);
         const char *have = strarray_nth(haveboxes, i);
-        if (strcasecmp(want, have))
+        if (!fuzzyeq(want, have))
             break;
         depth = i+1;
     }
