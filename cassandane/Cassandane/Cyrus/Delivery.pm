@@ -102,6 +102,32 @@ sub test_plus_address_exact
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
+sub test_plus_address_underscore
+    :FuzzyMatch
+{
+    my ($self) = @_;
+
+    xlog "Testing behaviour of plus addressing where case matches";
+
+    my $folder = "INBOX.- minusland";
+
+    xlog "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+-_minusland");
+
+    xlog "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
+
 sub test_plus_address_case
     :FuzzyMatch
 {
