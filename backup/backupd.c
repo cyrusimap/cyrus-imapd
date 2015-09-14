@@ -834,56 +834,66 @@ static void cmd_authenticate(char *mech, char *resp)
     backupd_logfd = telemetry_log(backupd_userid, backupd_in, backupd_out, 0);
 }
 
+static int cmd_apply_reserve(struct dlist *dl)
+{
+    const char *partition = NULL;
+    struct dlist *ml = NULL;
+    struct dlist *gl = NULL;
+    struct dlist *di;
+
+    if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
+    if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;
+    if (!dlist_getlist(dl, "GUID", &ml)) return IMAP_PROTOCOL_ERROR;
+
+    /*
+     * FIXME naively assuming MBOXNAMEs all belong to same user and
+     * therefore only caring about the first one
+     */
+    mbname_t *mbname = mbname_from_intname(ml->head->sval);
+    struct open_backup *open = backupd_open_backup(mbname);
+    mbname_free(&mbname);
+
+    if (!open) return IMAP_INTERNAL;
+
+    int r = backup_append(open->backup, dl, time(0));
+    if (r) {
+        syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
+        return IMAP_INTERNAL;
+    }
+
+    // FIXME should call backup_index here, but there's not actually anything
+    // to index in a RESERVE...
+
+    for (di = gl->head; di; di = di->next) {
+        struct message_guid *guid = NULL;
+        const char *guid_str;
+
+        if (!dlist_toguid(di, &guid)) continue;
+        guid_str = message_guid_encode(guid);
+
+        int message_id = backup_get_message_id(open->backup, guid_str);
+
+        if (message_id <= 0) {
+            // FIXME what's this supposed to actually look like
+            prot_printf(backupd_out, "* MISSING %s\r\n", guid_str);
+        }
+    }
+
+    return 0;
+}
+
 static void cmd_apply(struct dlist *dl)
 {
-    int r = IMAP_PROTOCOL_ERROR;
-    mbname_t *mbname = NULL;
+    int r;
 
     if (strcmp(dl->name, "RESERVE") == 0) {
-        // FIXME break this out, it's long
-        const char *partition = NULL;
-        struct dlist *ml = NULL;
-        struct dlist *gl = NULL;
-        struct dlist *di;
-
-        r = IMAP_INTERNAL;
-        if (!dlist_getatom(dl, "PARTITION", &partition)) goto done;
-        if (!dlist_getlist(dl, "MBOXNAME", &ml)) goto done;
-        if (!dlist_getlist(dl, "GUID", &ml)) goto done;
-
-        /*
-         * FIXME naively assuming MBOXNAMEs all belong to same user and
-         * therefore only caring about the first one
-         */
-        mbname_t *mbname = mbname_from_intname(ml->head->sval);
-        struct open_backup *open = backupd_open_backup(mbname);
-
-        r = backup_append(open->backup, dl, time(0)); // FIXME error checking
-        if (r) goto done;
-
-        for (di = gl->head; di; di = di->next) {
-            struct message_guid *guid = NULL;
-            const char *guid_str;
-
-            if (!dlist_toguid(di, &guid)) continue;
-            guid_str = message_guid_encode(guid);
-
-            int message_id = backup_get_message_id(open->backup, guid_str);
-
-            if (message_id <= 0) {
-                // FIXME what's this supposed to actually look like
-                prot_printf(backupd_out, "* MISSING %s\r\n", guid_str);
-            }
-        }
-
-        r = 0;
+        r = cmd_apply_reserve(dl);
     }
+    // FIXME support other commands
     else {
-
+        r = IMAP_PROTOCOL_ERROR;
     }
 
-done:
-    if (mbname) mbname_free(&mbname);
     prot_printf(backupd_out, "%s\r\n", backupd_response(r));
 }
 
@@ -910,13 +920,30 @@ static const char *backupd_response(int r)
     }
 }
 
+static int cmd_get_mailbox(struct dlist *dl, int want_records)
+{
+    mbname_t *mbname = mbname_from_intname(dl->sval);
+    if (!mbname) return IMAP_INTERNAL;
+
+    struct open_backup *open = backupd_open_backup(mbname);
+    mbname_free(&mbname);
+
+    if (!open) return IMAP_INTERNAL;
+
+    struct backup_mailbox *mb = backup_get_mailbox_by_name(open->backup, mbname,
+                                                           want_records);
+    if (!mb) return IMAP_MAILBOX_NONEXISTENT;
+
+    backupd_print_mailbox(mb, NULL);
+    backup_mailbox_free(&mb);
+
+    return 0;
+}
+
 static void cmd_get(struct dlist *dl)
 {
     int r = IMAP_PROTOCOL_ERROR;
     mbname_t *mbname = NULL;
-
-    // FIXME silence some unused warnings for now
-    (void) r;
 
     ucase(dl->name);
 
@@ -932,31 +959,16 @@ static void cmd_get(struct dlist *dl)
     else if (strcmp(dl->name, "MAILBOXES") == 0) {
         struct dlist *di;
         for (di = dl->head; di; di = di->next) {
-            mbname = mbname_from_intname(di->sval);
-            struct open_backup *open = backupd_open_backup(mbname);
-            if (!open) {
-                r = IMAP_INTERNAL;
-                goto done;
-            }
-            struct backup_mailbox *mb = backup_get_mailbox_by_name(open->backup, mbname, 0);
-            r = backupd_print_mailbox(mb, NULL);
-            backup_mailbox_free(&mb);
-            mbname_free(&mbname);
+            r = cmd_get_mailbox(di, 0);
+            if (r) goto done;
         }
     }
     else if (strcmp(dl->name, "FULLMAILBOX") == 0) {
-        mbname = mbname_from_intname(dl->sval);
-        struct open_backup *open = backupd_open_backup(mbname);
-        if (!open) {
-            r = IMAP_INTERNAL;
-            goto done;
-        }
-        struct backup_mailbox *mb = backup_get_mailbox_by_name(open->backup, mbname, 1);
-        r = backupd_print_mailbox(mb, NULL);
-        backup_mailbox_free(&mb);
+        r = cmd_get_mailbox(dl, 1);
     }
+    // FIXME implement other commands
     else {
-
+        r = IMAP_PROTOCOL_ERROR;
     }
 
 done:
