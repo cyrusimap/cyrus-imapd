@@ -243,6 +243,7 @@ endif # REPLICATION
 if BACKUP
 libexec_PROGRAMS += backup/backupd
 noinst_PROGRAMS += backup/reindex
+sbin_PROGRAMS += backup/bulock
 endif # BACKUP
 
 if HAVE_SSL
@@ -1265,6 +1266,17 @@ backup_reindex_SOURCES = \
     backup/sqlconsts.h \
     backup/reindex.c
 backup_reindex_LDADD = $(LD_UTILITY_ADD)
+
+backup_bulock_SOURCES = \
+    imap/mutex_fake.c \
+    backup/api.c \
+    backup/api.h \
+    backup/gzuncat.c \
+    backup/gzuncat.h \
+    backup/sqlconsts.c \
+    backup/sqlconsts.h \
+    backup/bulock.c
+backup_bulock_LDADD = $(LD_UTILITY_ADD)
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)

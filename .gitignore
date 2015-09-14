@@ -24,6 +24,7 @@ makedepend.log
 aclocal.m4
 autom4te.cache/
 backup/backupd
+backup/bulock
 backup/reindex
 cmulocal/
 compile
