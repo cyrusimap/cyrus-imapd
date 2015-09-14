@@ -62,7 +62,7 @@ struct message_data {
 
     /* msg envelope */
     char *return_path;          /* where to return message */
-    const struct namespace *namespace; /* namespace for recipients */
+    const struct namespace *ns; /* namespace for recipients */
     address_data_t **rcpt;      /* to recipients of this message */
     int rcpt_num;               /* number of recipients */
     char *date;                 /* date field of header */

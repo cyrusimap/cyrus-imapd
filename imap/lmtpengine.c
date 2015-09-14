@@ -269,7 +269,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
    ----- access functions and the like, etc. */
 
 /* returns non-zero on failure */
-static int msg_new(message_data_t **m)
+static int msg_new(message_data_t **m, const struct namespace *ns)
 {
     message_data_t *ret = (message_data_t *) xmalloc(sizeof(message_data_t));
 
@@ -288,6 +288,8 @@ static int msg_new(message_data_t **m)
     ret->rock = NULL;
 
     ret->hdrcache = spool_new_hdrcache();
+
+    ret->ns = ns;
 
     *m = ret;
     return 0;
@@ -357,7 +359,7 @@ const mbname_t *msg_getrcpt(message_data_t *m, int rcpt_num)
 const char *msg_getrcptall(message_data_t *m, int rcpt_num)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
-    return mbname_recipient(m->rcpt[rcpt_num]->mbname, m->namespace);
+    return mbname_recipient(m->rcpt[rcpt_num]->mbname, m->ns);
 }
 
 int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num)
@@ -829,7 +831,7 @@ static int process_recipient(char *addr,
 
     if (sl) {
         char *rcpt = xstrndup(addr, sl);
-        mbname = mbname_from_recipient(rcpt, msg->namespace);
+        mbname = mbname_from_recipient(rcpt, msg->ns);
         free(rcpt);
 
         int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
@@ -978,7 +980,7 @@ void lmtpmode(struct lmtp_func *func,
     /* If max_msgsize is 0, allow any size */
     if(!max_msgsize) max_msgsize = INT_MAX;
 
-    msg_new(&msg);
+    msg_new(&msg, func->namespace);
 
     /* don't leak old connections */
     if(saslprops.iplocalport) {
@@ -1036,8 +1038,6 @@ void lmtpmode(struct lmtp_func *func,
         prot_printf(pout, " Cyrus LMTP %s", cyrus_version());
     }
     prot_printf(pout, " server ready\r\n");
-
-    msg->namespace = func->namespace;
 
     for (;;) {
     nextcmd:
@@ -1451,7 +1451,7 @@ void lmtpmode(struct lmtp_func *func,
 
               rset:
                 if (msg) msg_free(msg);
-                msg_new(&msg);
+                msg_new(&msg, func->namespace);
 
                 continue;
             }
