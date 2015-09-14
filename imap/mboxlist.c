@@ -1229,6 +1229,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 done:
     strarray_fini(&existing);
     mboxlist_entry_free(&mbentry);
+    mbname_free(&mbname);
 
     return r;
 }
@@ -1365,6 +1366,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
  done:
     mailbox_close(&mailbox);
     mboxlist_entry_free(&mbentry);
+    mbname_free(&mbname);
 
     return r;
 }
@@ -2079,6 +2081,7 @@ static int find_p(void *rockp,
      * final use.  For now, we pay the cost of re-calculating for simplicity of the
      * changes to mbname_t itself */
     char *extname = mboxname_to_external(intname, rock->namespace, rock->userid);
+    if (!extname) return 0;
 
     long matchlen = -1;
     for (i = 0; i < rock->globs.count; i++) {
