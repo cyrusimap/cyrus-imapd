@@ -145,7 +145,7 @@ error:
 }
 
 // FIXME make this take an mbname_t?
-EXPORTED struct backup *backup_open(const char *name)
+EXPORTED struct backup *backup_open(const char *name, off_t *opened_at)
 {
     struct buf gzname = BUF_INITIALIZER;
     struct buf idxname = BUF_INITIALIZER;
@@ -153,8 +153,15 @@ EXPORTED struct backup *backup_open(const char *name)
     buf_printf(&gzname, "%s.gz", name);
     buf_printf(&idxname, "%s.index", name);
 
-    return backup_open_internal(buf_release(&gzname), buf_release(&idxname),
-                                BACKUP_OPEN_NORMAL);
+    struct backup *backup = backup_open_internal(buf_release(&gzname),
+                                                 buf_release(&idxname),
+                                                 BACKUP_OPEN_NORMAL);
+    if (!backup) return NULL;
+
+    if (opened_at)
+        *opened_at = lseek(backup->fd, 0, SEEK_END);
+
+    return backup;
 }
 
 static int _parse_line(struct protstream *in, time_t *ts,
@@ -530,6 +537,7 @@ EXPORTED int backup_get_message_id(struct backup *backup, const char *guid)
         { NULL,     SQLITE_NULL,    { .s = NULL } },
     };
 
+    // FIXME distinguish between error and not found
     int id = -1;
 
     int r = sqldb_exec(backup->db, backup_index_message_select_guid_sql, bval,
@@ -895,4 +903,28 @@ EXPORTED int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t d
     }
 
     return r;
+}
+
+EXPORTED int backup_append_start(struct backup *backup, time_t ts)
+{
+    // FIXME write this
+    (void) backup;
+    (void) ts;
+    return -1;
+}
+
+EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts)
+{
+    // FIXME write this
+    (void) backup;
+    (void) dlist;
+    (void) ts;
+    return -1;
+}
+
+int backup_append_done(struct backup *backup)
+{
+    // FIXME write this
+    (void) backup;
+    return -1;
 }

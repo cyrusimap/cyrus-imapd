@@ -49,7 +49,7 @@
 
 struct backup;
 
-struct backup *backup_open(const char *name);
+struct backup *backup_open(const char *name, off_t *opened_at);
 int backup_close(struct backup **backupp);
 
 int backup_reindex(const char *name);
