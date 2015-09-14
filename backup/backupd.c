@@ -134,6 +134,7 @@ static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
 
 static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
+static void cmd_apply(struct dlist *dl);
 static void cmd_get(struct dlist *dl);
 
 /****************************************************************************/
@@ -623,8 +624,13 @@ static void cmdloop(void)
             }
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
-                prot_printf(backupd_out, "NO command not implemented\r\n");
-                eatline(backupd_in, c);
+                struct dlist *dl = NULL;
+                c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, backupd_in);
+                if (c == EOF) goto missingargs;
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+                cmd_apply(dl);
+                dlist_free(&dl);
                 continue;
             }
             break;
@@ -831,6 +837,58 @@ static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
     }
 
     return 0;
+}
+
+static void cmd_apply(struct dlist *dl)
+{
+    int r = IMAP_PROTOCOL_ERROR;
+    mbname_t *mbname = NULL;
+
+    // FIXME silence some unused warnings for now
+    (void) r;
+
+    if (strcmp(dl->name, "RESERVE") == 0) {
+        // FIXME break this out, it's long
+        const char *partition = NULL;
+        struct dlist *ml = NULL;
+        struct dlist *gl = NULL;
+        struct dlist *di;
+
+        // FIXME error checking
+        dlist_getatom(dl, "PARTITION", &partition);
+        dlist_getlist(dl, "MBOXNAME", &ml);
+        dlist_getlist(dl, "GUID", &ml);
+
+        /*
+         * FIXME naively assuming MBOXNAMEs all belong to same user and
+         * therefore only caring about the first one
+         */
+        mbname_t *mbname = mbname_from_intname(ml->head->sval);
+        struct open_backup *open = backupd_open_backup(mbname);
+
+        for (di = gl->head; di; di = di->next) {
+            struct message_guid *guid;
+            const char *guid_str;
+
+            dlist_toguid(di, &guid); // FIXME error checking
+            guid_str = message_guid_encode(guid);
+            int message_id = backup_get_message_id(open->backup, guid_str);
+
+            if (message_id <= 0) {
+                // FIXME what's this supposed to actually look like
+                prot_printf(backupd_out, "* MISSING %s\r\n", guid_str);
+            }
+        }
+
+        dlist_free(&gl);
+        dlist_free(&ml);
+    }
+    else {
+
+    }
+
+    if (mbname) mbname_free(&mbname);
+    prot_printf(backupd_out, "%s\r\n", "NO FIXME");
 }
 
 static void cmd_get(struct dlist *dl)
