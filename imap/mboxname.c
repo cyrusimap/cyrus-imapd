@@ -509,6 +509,9 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     mbname->boxes = strarray_split(mbname->extname, sepstr, 0);
     if (p) *p = '@'; /* repair */
 
+    if (!strarray_size(mbname->boxes))
+        goto done;
+
     if (ns->isalt) {
         /* admin can't be in here, so we can ignore that :) - and hence also
          * the DELETED namespace */
@@ -532,7 +535,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
         }
 
         /* everything else belongs to the userid */
-        mbname->localpart = xstrdupnull(userparts->localpart);
+        mbname->localpart = xstrdupnull(mbname_localpart(userparts));
         mbname->domain = xstrdupnull(mbname_domain(userparts));
         /* special case pure inbox with case, because horrible */
         if (strarray_size(mbname->boxes) == 1 && !strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX"))
@@ -543,18 +546,10 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
     const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
 
-    /* special case pure inbox with case, because horrible */
-    if (strarray_size(mbname->boxes) == 1 && !strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX")) {
+    /* special inbox with insensitivity still, because horrible */
+    if (!strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX")) {
         free(strarray_shift(mbname->boxes));
-        mbname->localpart = xstrdupnull(userparts->localpart);
-        mbname->domain = xstrdupnull(mbname_domain(userparts));
-        goto done;
-    }
-
-    /* otherwise we can be exacting about case for subfolders */
-    if (!strcmp(strarray_nth(mbname->boxes, 0), "INBOX")) {
-        free(strarray_shift(mbname->boxes));
-        mbname->localpart = xstrdupnull(userparts->localpart);
+        mbname->localpart = xstrdupnull(mbname_localpart(userparts));
         mbname->domain = xstrdupnull(mbname_domain(userparts));
         goto done;
     }
@@ -568,6 +563,9 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
         mbname->is_deleted = strtoul(delval, NULL, 16);
         free(delval);
     }
+
+    if (!strarray_size(mbname->boxes))
+        goto done;
 
     /* now look for user */
     if (!strcmp(strarray_nth(mbname->boxes, 0), "user")) {
@@ -628,15 +626,9 @@ EXPORTED char *mboxname_to_external(const char *intname, const struct namespace 
     return res;
 }
 
-/*
- * Convert the external mailbox 'name' to an internal name.
- * If 'userid' is non-null, it is the name of the current user.
- * On success, results are placed in the buffer pointed to by
- * 'result', the buffer must be of size MAX_MAILBOX_BUFFER to
- * allow space for DELETED mailboxes and moving the domain from
- * one end to the other and such.  Yay flexibility.
+/* all mailboxes have an internal name representation, so this
+ * function should never return a NULL.
  */
-
 EXPORTED const char *mbname_intname(const mbname_t *mbname)
 {
     if (mbname->intname)
@@ -693,6 +685,10 @@ EXPORTED const char *mbname_intname(const mbname_t *mbname)
     return mbname->intname;
 }
 
+/* A userid may or may not have a domain - it's just localpart if the
+ * domain is unspecified or config_defdomain.  It totally ignores any parts.
+ * It's always NULL if there's no localpart
+ */
 EXPORTED const char *mbname_userid(const mbname_t *mbname)
 {
     if (!mbname->localpart)
@@ -718,9 +714,17 @@ EXPORTED const char *mbname_userid(const mbname_t *mbname)
     return mbname->userid;
 }
 
+/* A "recipient" is a full username in external form (including domain) with an optional
+ * +addressed mailbox in external form, no INBOX prefix (since they can only be mailboxes
+ * owned by the user.
+ *
+ * shared folders (no user) are prefixed with a +, i.e. +shared@domain.com
+ *
+ * DELETED folders have no recipient, ever.
+ */
 EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct namespace *ns)
 {
-    int i;
+    if (mbname->is_deleted) return NULL;
 
     /* gotta match up! */
     if (mbname->recipient && ns == mbname->extns)
@@ -728,17 +732,17 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
 
     struct buf buf = BUF_INITIALIZER;
 
-    buf_appendcstr(&buf, mbname->localpart);
+    if (mbname->localpart)
+        buf_appendcstr(&buf, mbname->localpart);
 
+    int i;
     for (i = 0; i < strarray_size(mbname->boxes); i++) {
         buf_putc(&buf, i ? ns->hier_sep : '+');
         buf_appendcstr(&buf, strarray_nth(mbname->boxes, i));
     }
 
-    if (mbname->domain) {
-        buf_putc(&buf, '@');
-        buf_appendcstr(&buf, mbname->domain);
-    }
+    buf_putc(&buf, '@');
+    buf_appendcstr(&buf, mbname->domain ? mbname->domain : config_defdomain);
 
     mbname_t *backdoor = (mbname_t *)mbname;
     free(backdoor->recipient);
@@ -749,6 +753,13 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
     return mbname->recipient;
 }
 
+/* This is one of the most complex parts of the code - generating an external
+ * name based on the namespace, the 'isadmin' status, and of course the current
+ * user.  There are some interesting things to look out for:
+ *
+ * Due to ambiguity, some names won't be representable in the external namespace,
+ * so this function can return a NULL in those cases.
+ */
 EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespace *ns, const char *userid)
 {
     /* gotta match up! */
@@ -761,13 +772,22 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     struct buf buf = BUF_INITIALIZER;
 
     if (ns->isalt) {
-        /* admin can't be in here, so we can ignore that :) - and hence also
-         * the DELETED namespace */
         const char *up = config_getstring(IMAPOPT_USERPREFIX);
         const char *sp = config_getstring(IMAPOPT_SHAREDPREFIX);
 
+        /* DELETED mailboxes have no extname in alt namespace.
+         * There's also no need to display domains, because admins
+         * are never in altnamespace, and only admins can see domains */
+        if (mbname->is_deleted)
+            goto done;
+
         /* shared */
         if (!mbname->localpart) {
+            if (strarray_size(boxes) == 1 && !strcmp(strarray_nth(boxes, 0), "user")) {
+                /* special case user all by itself */
+                buf_appendcstr(&buf, up);
+                goto end;
+            }
             buf_appendcstr(&buf, sp);
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
@@ -796,6 +816,18 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
             goto end;
         }
 
+        /* invalid names - anything exactly 'inbox' can't be displayed because
+         * select would be ambiguous */
+        if (strarray_size(boxes) == 1 && !strcasecmp(strarray_nth(boxes, 0), "INBOX"))
+            goto done;
+
+        /* likewise anything exactly matching the user or shared prefixes, both top level
+         * or with children */
+        if (!strcmp(strarray_nth(boxes, 0), up))
+            goto done;
+        if (!strcmp(strarray_nth(boxes, 0), sp))
+            goto done;
+
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             if (i) buf_putc(&buf, ns->hier_sep);
@@ -812,6 +844,13 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
 
     /* shared */
     if (!mbname->localpart) {
+        /* invalid names - not sure it's even possible, but hey */
+        if (!strarray_size(boxes))
+            goto done;
+        if (!strcasecmp(strarray_nth(boxes, 0), "INBOX"))
+            goto done;
+        /* note "user" precisely appears here, but no need to special case it
+         * since the output is the same */
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             if (i) buf_putc(&buf, ns->hier_sep);
@@ -859,6 +898,8 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     backdoor->extns = ns;
     free(backdoor->extuserid);
     backdoor->extuserid = xstrdupnull(userid);
+
+ done:
 
     buf_free(&buf);
     mbname_free(&userparts);
