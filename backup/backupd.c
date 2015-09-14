@@ -489,13 +489,18 @@ static struct open_backup *backupd_open_backup(const mbname_t *mbname)
 
     struct open_backup *open = open_backups_list_find(&backupd_open_backups, backup_name);
 
+    time_t now = time(0);
+
     if (!open) {
-        struct backup *backup = backup_open(backup_name);
+        off_t opened_at;
+        struct backup *backup = backup_open(backup_name, &opened_at);
         if (!backup) return NULL;
+        backup_append_start(backup, now); // FIXME error checking
+        backup_index_start(backup, now, opened_at); // FIXME error checking
         open = open_backups_list_add(&backupd_open_backups, backup_name, backup);
     }
 
-    open->timestamp = time(0);
+    open->timestamp = now;
 
     return open;
 }
@@ -865,6 +870,8 @@ static void cmd_apply(struct dlist *dl)
          */
         mbname_t *mbname = mbname_from_intname(ml->head->sval);
         struct open_backup *open = backupd_open_backup(mbname);
+
+        backup_append(open->backup, dl, time(0)); // FIXME error checking
 
         for (di = gl->head; di; di = di->next) {
             struct message_guid *guid;
