@@ -254,7 +254,7 @@ sub test_rename_deepuser
     my $res = $admintalk->rename('user.cassandane', 'user.newuser');
     $self->assert(not $admintalk->get_last_error());
 
-    my $res = $admintalk->select("user.newuser.bar.sub");
+    $res = $admintalk->select("user.newuser.bar.sub");
     $self->assert(not $admintalk->get_last_error());
 }
 
