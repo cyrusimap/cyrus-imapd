@@ -810,10 +810,6 @@ static int process_recipient(char *addr,
                                                 struct auth_state *),
                              message_data_t *msg)
 {
-    char *rcpt;
-    int r;
-    address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
-
     assert(addr != NULL && msg != NULL);
 
     if (*addr == '<') addr++;
@@ -821,57 +817,57 @@ static int process_recipient(char *addr,
     /* Skip at-domain-list */
     if (*addr == '@') {
         addr = strchr(addr, ':');
-        if (!addr) {
-            free(ret);
+        if (!addr)
             return IMAP_PROTOCOL_BAD_PARAMETERS;
-        }
         addr++;
     }
+
+    mbname_t *mbname = NULL;
 
     size_t sl = strlen(addr);
     if (addr[sl-1] == '>') sl--;
 
-    rcpt = xstrndup(addr, sl);
+    if (sl) {
+        char *rcpt = xstrndup(addr, sl);
+        mbname = mbname_from_recipient(rcpt, msg->namespace);
+        free(rcpt);
 
-    mbname_t *mbname = mbname_from_recipient(rcpt, msg->namespace);
+        int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
+        if (forcedowncase) mbname_downcaseuser(mbname);
 
-    int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
-    if (forcedowncase) mbname_downcaseuser(mbname);
+        /* strip username if postuser */
+        if (!strcmpsafe(mbname_userid(mbname), config_getstring(IMAPOPT_POSTUSER))) {
+            mbname_set_localpart(mbname, NULL);
+            mbname_set_domain(mbname, NULL);
+        }
 
-    /* strip username if postuser */
-    if (!strcmpsafe(mbname_userid(mbname), config_getstring(IMAPOPT_POSTUSER))) {
-        mbname_set_localpart(mbname, NULL);
-        mbname_set_domain(mbname, NULL);
+        if (verify_user(mbname,
+                        (quota_t) (ignorequota ? -1 : msg->size),
+                        ignorequota ? -1 : 1, msg->authstate)) {
+            mbname_free(&mbname);
+        }
     }
 
-    r = verify_user(mbname,
-                    (quota_t) (ignorequota ? -1 : msg->size),
-                    ignorequota ? -1 : 1, msg->authstate);
-    if (r) {
-        const char *catchall = NULL;
-        mbname_free(&mbname);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            catchall = config_getstring(IMAPOPT_LMTP_CATCHALL_MAILBOX);
-            if (catchall) {
-                mbname = mbname_from_userid(catchall);
-                if (verify_user(mbname,
-                                ignorequota ? -1 : msg->size,
-                                ignorequota ? -1 : 1, msg->authstate)) {
-                    mbname_free(&mbname);
-                    catchall = NULL;
-                }
+    if (!mbname) {
+        const char *catchall = config_getstring(IMAPOPT_LMTP_CATCHALL_MAILBOX);
+        if (catchall) {
+            mbname = mbname_from_userid(catchall);
+            if (verify_user(mbname,
+                            ignorequota ? -1 : msg->size,
+                            ignorequota ? -1 : 1, msg->authstate)) {
+                mbname_free(&mbname);
             }
         }
-
-        if (catchall == NULL ) {
-            /* we lost */
-            free(ret);
-            return r;
-        }
     }
+
+    if (!mbname) {
+        /* we lost */
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
     ret->mbname = mbname;
     ret->ignorequota = ignorequota;
-
     msg->rcpt[msg->rcpt_num] = ret;
 
     return 0;
