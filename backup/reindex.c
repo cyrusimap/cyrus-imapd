@@ -67,7 +67,12 @@ static void usage(const char *name) {
 int main (int argc, char **argv) {
     if (argc != 2) usage(argv[0]);
 
-    const char *backup_name = argv[1];
+    char *backup_name = argv[1];
+
+    /* be nice: accept (and discard) a tab-completed .gz suffix */
+    char *suffix = strrchr(backup_name, '.');
+    if (suffix && strcmp(suffix, ".gz") == 0 && suffix[strlen(".gz")] == '\0')
+        *suffix = '\0';
 
     fprintf(stderr, "reindexing %s...\n", backup_name);
 
