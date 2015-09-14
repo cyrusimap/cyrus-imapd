@@ -226,6 +226,8 @@ EXPORTED int backup_reindex(const char *name)
 
     struct gzuncat *gzuc = gzuc_open(backup->fd);
 
+    time_t prev_member_ts = -1;
+
     while (gzuc && !gzuc_eof(gzuc)) {
         gzuc_member_start(gzuc);
         off_t member_offset = gzuc_member_offset(gzuc);
@@ -249,11 +251,14 @@ EXPORTED int backup_reindex(const char *name)
             size_t dl_len = prot_bytes_in(member) - dl_offset;
 
             if (member_ts == -1) {
+                if (prev_member_ts != -1 && prev_member_ts > ts) {
+                    fatal("member timestamp older than previous", -1);
+                }
                 member_ts = ts;
                 backup_index_start(backup, member_ts, member_offset);
             }
             else if (member_ts > ts)
-                fatal("timestamp older than previous", -1);
+                fatal("line timestamp older than previous", -1);
 
             if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
                 continue;
@@ -269,6 +274,8 @@ EXPORTED int backup_reindex(const char *name)
         backup_index_end(backup, prot_bytes_in(member));
         prot_free(member);
         gzuc_member_end(gzuc, NULL);
+
+        prev_member_ts = member_ts;
     }
 
     fprintf(stderr, "reached end of file\n");
