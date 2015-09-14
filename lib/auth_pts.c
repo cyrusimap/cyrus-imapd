@@ -182,7 +182,7 @@ static void myfreestate(struct auth_state *auth_state);
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-static int mymemberof(struct auth_state *auth_state,
+static int mymemberof(const struct auth_state *auth_state,
                   const char *identifier)
 {
     int i;

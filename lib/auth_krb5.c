@@ -69,7 +69,7 @@ struct auth_state {
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-static int mymemberof(struct auth_state *auth_state, const char *identifier)
+static int mymemberof(const struct auth_state *auth_state, const char *identifier)
 {
     const char *ident;
     int ret=0;
@@ -199,7 +199,7 @@ static void myfreestate(struct auth_state *auth_state)
 #else /* HAVE_GSSAPI_H */
 
 static int mymemberof(
-    struct auth_state *auth_state __attribute__((unused)),
+    const struct auth_state *auth_state __attribute__((unused)),
     const char *identifier __attribute__((unused)))
 {
         fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
