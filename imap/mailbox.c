@@ -5399,6 +5399,8 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     /* make sure UIDs are sorted for comparison */
     qsort(files->found, files->nused, sizeof(unsigned long), sort_found);
 
+    strarray_fini(&paths);
+
     return 0;
 }
 
@@ -5570,6 +5572,8 @@ static int mailbox_reconstruct_uniqueid(struct mailbox *mailbox, int flags)
             }
         }
     }
+
+    mboxlist_entry_free(&mbentry);
 
     return r;
 }

@@ -1393,6 +1393,7 @@ static void mboxname_hash(char *dest, size_t destlen, const char *root, const ch
 
     buf_free(&buf);
     strarray_free(boxes);
+    mbname_free(&mbname);
 }
 
 /* note: mboxname must be internal */
