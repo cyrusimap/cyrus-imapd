@@ -45,6 +45,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <zlib.h>
 
 #include "lib/cyr_lock.h"
 #include "lib/sqldb.h"
@@ -65,6 +66,7 @@ struct backup {
     char *idxname;
     char *oldidxname;
     sqldb_t *db;
+    gzFile gzfile;
     int index_id;
 };
 
@@ -924,24 +926,48 @@ EXPORTED int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t d
 
 EXPORTED int backup_append_start(struct backup *backup, time_t ts)
 {
-    // FIXME write this
-    (void) backup;
+    if (backup->gzfile != NULL) fatal("already started", -1);
+
+    // FIXME do something with ts?
     (void) ts;
+
+    int dup_fd = dup(backup->fd);
+    backup->gzfile = gzdopen(dup_fd, "ab");
+    if (backup->gzfile) return 0;
+
+    fprintf(stderr, "%s: gzdopen fd %i failed: %s\n", __func__, dup_fd, strerror(errno));
+    close(dup_fd);
     return -1;
 }
+
 
 EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts)
 {
-    // FIXME write this
-    (void) backup;
-    (void) dlist;
-    (void) ts;
-    return -1;
+    if (!backup->gzfile) fatal("not started", -1);
+
+    struct buf buf = BUF_INITIALIZER;
+    dlist_printbuf(dlist, 1, &buf);
+
+    gzprintf(backup->gzfile, "%ld ", (int64_t) ts);
+
+    /* gzprintf's internal buffer is limited to about 8K, which
+     * dlist will exceed if there's a message in it, so don't use
+     * gzprintf for writing the dlist contents.
+     */
+    gzwrite(backup->gzfile, buf_cstring(&buf), buf_len(&buf));
+    // FIXME check return value is long enough
+
+    return 0;
 }
 
-int backup_append_done(struct backup *backup)
+EXPORTED int backup_append_done(struct backup *backup)
 {
-    // FIXME write this
-    (void) backup;
+    if (!backup->gzfile) fatal("not started", -1);
+
+    int r = gzclose_w(backup->gzfile);
+    backup->gzfile = NULL;
+    if (r == Z_OK) return 0;
+
+    fprintf(stderr, "%s: gzclose_w failed: %i\n", __func__, r);
     return -1;
 }
