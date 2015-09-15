@@ -853,10 +853,13 @@ int backup_index_start(struct backup *backup, time_t ts, off_t offset) {
         { NULL,         SQLITE_NULL,    { .s = NULL   } },
     };
 
+    sqldb_begin(backup->db, "backup_index"); // FIXME what if this fails
+
     int r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
     if (r) {
         // FIXME handle this sensibly
         fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
+        sqldb_rollback(backup->db, "backup_index");
         return -1;
     }
 
@@ -877,8 +880,22 @@ int backup_index_end(struct backup *backup, size_t length) {
     if (r) {
         // FIXME handle this sensibly
         fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
+        sqldb_rollback(backup->db, "backup_index");
+        backup->index_id = -1;
+        return -1;
     }
 
+    sqldb_commit(backup->db, "backup_index");
+
+    backup->index_id = -1;
+
+    return 0;
+}
+
+int backup_index_abort(struct backup *backup) {
+    if (backup->index_id == -1) fatal("not started", -1);
+
+    sqldb_rollback(backup->db, "backup_index");
     backup->index_id = -1;
 
     return 0;

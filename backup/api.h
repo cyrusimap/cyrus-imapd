@@ -97,6 +97,7 @@ int backup_append_done(struct backup *backup);
 int backup_index_start(struct backup *backup, time_t ts, off_t offset);
 int backup_index(struct backup *backup, struct dlist *dlist, time_t ts);
 int backup_index_done(struct backup *backup, size_t len);
+int backup_index_abort(struct backup *backup);
 
 int backup_close(struct backup **backupp); // also ends index/append ops
 
