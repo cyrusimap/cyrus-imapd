@@ -84,15 +84,7 @@ static void test_non_pathological_case(void)
 
     CU_ASSERT_EQUAL(lf_ismine(lf), 1);
 
-    const int delay = 2;
-    sleep(delay); // wait a bit so that a touch will bump the timestamp
-
-    struct timespec ts;
-    time_t age = lf_age(lf, &ts);
-    CU_ASSERT(age > delay - 1);
-    CU_ASSERT(age <= delay + 1);
-    CU_ASSERT_EQUAL(ts.tv_sec, age);
-    CU_ASSERT_EQUAL(ts.tv_nsec, 0);
+    sleep(2); // wait a bit so that a touch will bump the timestamp
 
     int r = lf_touch(lf);
     CU_ASSERT_EQUAL(r, 0);

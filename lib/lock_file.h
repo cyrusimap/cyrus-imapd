@@ -73,18 +73,6 @@ int lf_ismine(struct lockf *lf);
 int lf_touch(struct lockf *lf);
 
 /*
- * Returns the number of seconds since the provided handle was opened or last
- * lf_touch()ed.
- *
- * If agep is non-NULL, also sets the value in the pointed-to struct timespec.
- * (XXX This is currently only accurate to nearest whole second.)
- *
- * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
- * check lf_ismine() before invocation.
- */
-time_t lf_age(struct lockf *lf, struct timespec *agep);
-
-/*
  * Release the provided handle and unlink its corresponding file.
  *
  * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
