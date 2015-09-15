@@ -189,8 +189,6 @@ static int jmap_post(struct transaction_t *txn,
     int ret;
     char *buf;
 
-    construct_hash_table(&idmap, 1024, 0);
-
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
     ret = http_read_body(httpd_in, httpd_out,
@@ -208,6 +206,9 @@ static int jmap_post(struct transaction_t *txn,
         txn->error.desc = "This method requires a JSON request body\r\n";
         return HTTP_BAD_MEDIATYPE;
     }
+
+    /* Allocate map to store uids */
+    construct_hash_table(&idmap, 1024, 0);
 
     /* Parse the JSON request */
     req = json_loads(buf_cstring(&txn->req_body.payload), 0, &jerr);
