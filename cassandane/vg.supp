@@ -124,4 +124,14 @@
     fun:prot_flush_encode
     ...
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:_ZNSsC1EmcRKSaIcE
+   ...
+   obj:/usr/lib/libxapian.so.22.5.0
+   ...
+}
+
 
