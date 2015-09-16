@@ -125,7 +125,7 @@
     ...
 }
 {
-   <insert_a_suppression_name_here>
+   xapian_init
    Memcheck:Leak
    ...
    fun:_ZNSsC1EmcRKSaIcE
@@ -133,5 +133,16 @@
    obj:/usr/lib/libxapian.so.22.5.0
    ...
 }
+{
+   icu_timezone
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   ...
+   fun:_ZN6icu_558TimeZone18detectHostTimeZoneEv
+   fun:_ZN6icu_558TimeZone13createDefaultEv
+   ...
+}
+
 
 
