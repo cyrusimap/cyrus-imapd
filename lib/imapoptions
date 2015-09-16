@@ -541,7 +541,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The Access Control List (ACL) placed on a newly-created (non-user)
    mailbox that does not have a parent mailbox. */
 
-{ "defaultdomain", NULL, STRING }
+{ "defaultdomain", "internal", STRING }
 /* The default domain for virtual domain support */
 
 { "defaultpartition", NULL, STRING }
