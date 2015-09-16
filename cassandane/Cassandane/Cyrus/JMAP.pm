@@ -278,8 +278,6 @@ sub test_setcalendars_create
 
     xlog "get newly created calendar $id";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
-    my $x = $res->[0][1]{notFound}[0];
-    xlog "got response $x";
     $self->assert_not_null($res);
     $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
     $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
