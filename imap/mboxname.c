@@ -750,6 +750,7 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
     mbname_t *backdoor = (mbname_t *)mbname;
     free(backdoor->recipient);
     backdoor->recipient = buf_release(&buf);
+    backdoor->extns = ns;
 
     buf_free(&buf);
 
