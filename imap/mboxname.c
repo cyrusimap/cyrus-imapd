@@ -501,7 +501,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     sepstr[0] = ns->hier_sep;
     sepstr[1] = '\0';
 
-    char *p = strchr(mbname->extname, '@');
+    char *p = config_virtdomains ? strchr(mbname->extname, '@') : NULL;
     if (p) {
         domain = p+1;
         if (!strcmpsafe(domain, config_defdomain))
