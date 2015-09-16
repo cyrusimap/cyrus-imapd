@@ -370,7 +370,9 @@ EXPORTED mbname_t *mbname_from_recipient(const char *recipient, const struct nam
     if (at) {
         mbname->localpart = xstrndup(recipient, at - recipient);
         const char *domain = at+1;
-        mbname->domain = strcmpsafe(domain, config_defdomain) ? xstrdupnull(domain) : NULL;
+        if (config_virtdomains && strcmpsafe(domain, config_defdomain))
+            mbname->domain = xstrdupnull(domain);
+        /* otherwise we ignore domain entirely */
     }
     else {
         mbname->localpart = xstrdup(recipient);
