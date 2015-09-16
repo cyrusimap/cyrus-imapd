@@ -62,6 +62,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"
+#include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
@@ -102,6 +103,7 @@ static int getContactUpdates(struct jmap_req *req);
 static int setContacts(struct jmap_req *req);
 
 static int getCalendars(struct jmap_req *req);
+static int setCalendars(struct jmap_req *req);
 static int getCalendarEvents(struct jmap_req *req);
 
 static const struct message_t {
@@ -116,6 +118,7 @@ static const struct message_t {
     { "getContactUpdates",      &getContactUpdates },
     { "setContacts",            &setContacts },
     { "getCalendars",           &getCalendars },
+    { "setCalendars",           &setCalendars },
     { "getCalendarEvents",      &getCalendarEvents },
     { NULL,             NULL}
 };
@@ -2627,73 +2630,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
-                              const char *resname)
-{
-    struct caldav_db *db = caldav_open_userid(req->userid);
-    if (!db) return -1;
-
-    char *mboxname = NULL;
-    json_t *calid = json_object_get(req->args, "calendarId");
-    if (calid && json_string_value(calid)) {
-        /* XXX - invalid arguments */
-        const char *calendarId = json_string_value(calid);
-        mboxname = caldav_mboxname(req->userid, calendarId);
-    }
-
-    struct cards_rock rock;
-    int r = -1;
-
-    rock.array = json_pack("[]");
-    rock.props = NULL;
-    rock.mailbox = NULL;
-
-    json_t *want = json_object_get(req->args, "ids");
-    json_t *notFound = json_array();
-    if (want) {
-        int i;
-        int size = json_array_size(want);
-        for (i = 0; i < size; i++) {
-            rock.rows = 0;
-            const char *id = json_string_value(json_array_get(want, i));
-            if (!id) continue;
-            r = caldav_get_events(db, mboxname, id, cb, &rock);
-            if (r || !rock.rows) {
-                json_array_append_new(notFound, json_string(id));
-            }
-        }
-    }
-    else {
-        rock.rows = 0;
-        r = caldav_get_events(db, mboxname, NULL, cb, &rock);
-    }
-    if (r) goto done;
-
-    json_t *toplevel = json_pack("{}");
-    json_object_set_new(toplevel, "accountId", json_string(req->userid));
-    json_object_set_new(toplevel, "state", json_string(req->state));
-    json_object_set_new(toplevel, "list", rock.array);
-    if (json_array_size(notFound)) {
-        json_object_set_new(toplevel, "notFound", notFound);
-    }
-    else {
-        json_decref(notFound);
-        json_object_set_new(toplevel, "notFound", json_null());
-    }
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string(resname));
-    json_array_append_new(item, toplevel);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-  done:
-    mailbox_close(&rock.mailbox);
-    free(mboxname);
-    caldav_close(db);
-    return r;
-}
 
 /* jmap calendar APIs */
 static int getCalendars(struct jmap_req *req)
@@ -2775,6 +2711,330 @@ done:
     if (rock.props) free_hash_table(rock.props, NULL);
     json_decref(rock.array);
     /* XXX - free memory */
+    return r;
+}
+
+/* Check that ifInState matches the current mailbox state, if so return
+ * zero. Otherwise, append a stateMismatch error to the JMAP response. */
+static int _jmap_checkstate(struct jmap_req *req) {
+    json_t *jcheckState = json_object_get(req->args, "ifInState");
+    if (jcheckState) {
+        const char *checkState = json_string_value(jcheckState);
+        if (!checkState ||strcmp(req->state, checkState)) {
+            json_t *item = json_pack("[s, {s:s}, s]",
+                                     "error", "type", "stateMismatch",
+                                     req->tag);
+            json_array_append_new(req->response, item);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int setCalendars(struct jmap_req *req)
+{
+    int r = _jmap_checkstate(req);
+    if (r) return 0;
+
+    json_t *set = json_pack("{s:s,s:s}",
+                            "oldState", req->state,
+                            "accountId", req->userid);
+
+
+    json_t *create = json_object_get(req->args, "create");
+
+    if (create) {
+        json_t *created = json_pack("{}");
+        json_t *notCreated = json_pack("{}");
+        json_t *record;
+
+        /* XXX Should the first 'create' auto-provision the calendars,
+         * similar to how it is done for CalDAV? If so, might want to
+         * refactor the respective parts of http_caldav.c:my_caldav_auth
+         *
+         * For now, we assume that the account already has a #calendars
+         * mailbox provisioned.
+         */
+
+        /* XXX Check if the ACL 'k' (create) flag is set on the #calendars
+         * mailbox for the currently authenticated account. */
+
+        const char *key;
+        json_t *arg;
+        json_object_foreach(create, key, arg) {
+
+            /* Validate mandatory properties */
+            /* XXX - This should be refactored. */
+
+            /* name */
+            json_t *jname = json_object_get(arg, "name");
+            if (!jname) {
+                json_t *err = json_pack("{s:s}", "type", "missingParameters");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+            const char *name = json_string_value(jname);
+            if (!name) {
+                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+            /* color */
+            json_t *jcolor = json_object_get(arg, "color");
+            if (!jname) {
+                json_t *err = json_pack("{s:s}", "type", "missingParameters");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+            const char *color = json_string_value(jcolor);
+            if (!color) {
+                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+            /* sortOrder */
+            json_t *jsortOrder = json_object_get(arg, "sortOrder");
+            if (!jsortOrder) {
+                json_t *err = json_pack("{s:s}", "type", "missingParameters");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+            /* XXX - json_integer_value returns 0 for non-integers, but zero is
+             * a valid sortOrder. Need to use strtol to catch errors. Refactor
+             * validation with getCalendars. */
+            const int sortOrder = json_integer_value(jsortOrder);
+            if (!sortOrder) {
+                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+
+            /* Optional properties. If present, these MUST be set to true */
+            /* XXX 
+            int prop;
+            r = _json_bool_property(arg, "isVisible", 1, &isVisible);
+            if (r || !isVisible) {
+                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+            int mayReadFreeBusy;
+            r = _json_bool_property(arg, "mayReadFreeBusy", 1, &isVisible);
+            if (r || !mayReadFreeBusy) {
+                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            } */
+
+            /* Create a new mailbox with a unique uid */
+            /* Make a local copy of uuid to avoid races */
+            char *uid = xstrdup(makeuuid());
+            const char *mboxname = caldav_mboxname(req->userid, uid);
+
+            char rights[100];
+            struct buf acl = BUF_INITIALIZER;
+
+            r = mboxlist_lookup(mboxname, NULL, NULL);
+
+            if (r == IMAP_MAILBOX_NONEXISTENT) {
+                buf_reset(&acl);
+                cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+                buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
+                cyrus_acl_masktostr(DACL_READFB, rights);
+                buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+                r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
+                                    NULL /* partition */,
+                                    req->userid, req->authstate,
+                                    0 /* options */, 0 /* uidvalidity */,
+                                    0 /* highestmodseq */, buf_cstring(&acl),
+                                    NULL /* uniqueid */, 0 /* local_only */,
+                                    NULL /* mboxptr */);
+                if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                        mboxname, error_message(r));
+                buf_free(&acl);
+            }
+
+            struct mailbox *mbox = NULL;
+            r = mailbox_open_iwl(mboxname, &mbox);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_open_iwl: failed to open %s (%s)",
+                        mboxname, error_message(r));
+                /* XXX - bail out, but free all memory */
+            }
+            /* XXX free mboxname? */
+
+            /* Set the new calendar's properties */
+            if (mbox) {
+                annotate_state_t *astate = NULL;
+                struct buf val = BUF_INITIALIZER;
+
+                r = mailbox_get_annotate_state(mbox, 0, &astate);
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
+                            mbox->name, error_message(r));
+                    /* XXX - bail out, but free all memory */
+                }
+
+                /* name */
+                buf_printf(&val, "%s", name);
+                static const char *displayname_annot =
+                    DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            displayname_annot, error_message(r));
+                    /* XXX - bail out, but free all memory */
+                }
+                buf_reset(&val);
+
+                /* color */
+                buf_printf(&val, "%s", color);
+                static const char *color_annot =
+                    DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
+                r = annotate_state_writemask(astate, color_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            displayname_annot, error_message(r));
+                    /* XXX - bail out, but free all memory */
+                }
+                buf_reset(&val);
+
+                /* sortOrder */
+                buf_printf(&val, "%d", sortOrder);
+                static const char *sortOrder_annot =
+                    DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
+                r = annotate_state_writemask(astate, sortOrder_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            displayname_annot, error_message(r));
+                    /* XXX - bail out, but free all memory */
+                }
+                buf_reset(&val);
+
+                /* isVisible */
+                /* XXX - shouldn't isVisible be TRUE for all creates? */
+                /* XXX - set isVisible here so we can reuse the code for
+                 * calendar updates. Use mboxlist.c:mboxlist_setacl ? */
+
+                /* XXX - commit_state makes mailbox_close segfault. Why? */
+                /* annotate_state_commit(&astate); */
+
+                buf_free(&val);
+            }
+
+            /* XXX - Commit the mailbox, or rollback/delete in case of error */
+            mailbox_close(&mbox);
+
+            /* Append the newly created calendar's id to created 
+             * XXX  -or notCreated */
+            record = json_pack("{s:s}", "id", uid);
+            json_object_set_new(created, key, record);
+
+            /* hash_insert takes ownership of uid here */
+            hash_insert(key, uid, req->idmap);
+        }
+
+        if (json_object_size(created)) {
+            json_object_set(set, "created", created);
+        }
+        json_decref(created);
+
+        if (json_object_size(notCreated)) {
+            json_object_set(set, "notCreated", notCreated);
+        }
+        json_decref(notCreated);
+    }
+
+    /* XXX - Continue from here */
+
+    /* Success! */
+    /* r =  0; */
+
+    /* read the modseq again every time, just in case something changed it
+     * in our actions */
+    struct buf buf = BUF_INITIALIZER;
+    const char *inboxname = mboxname_user_mbox(req->userid, NULL);
+    modseq_t modseq = mboxname_readmodseq(inboxname);
+    buf_printf(&buf, "%llu", modseq);
+    json_object_set_new(set, "newState", json_string(buf_cstring(&buf)));
+    buf_free(&buf);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("calendarsSet"));
+    json_array_append_new(item, set);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+    return r;
+}
+
+/* XXX - Here start the stubs from brong */
+
+static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
+                              const char *resname)
+{
+    struct caldav_db *db = caldav_open_userid(req->userid);
+    if (!db) return -1;
+
+    char *mboxname = NULL;
+    json_t *calid = json_object_get(req->args, "calendarId");
+    if (calid && json_string_value(calid)) {
+        /* XXX - invalid arguments */
+        const char *calendarId = json_string_value(calid);
+        mboxname = caldav_mboxname(req->userid, calendarId);
+    }
+
+    struct cards_rock rock;
+    int r = -1;
+
+    rock.array = json_pack("[]");
+    rock.props = NULL;
+    rock.mailbox = NULL;
+
+    json_t *want = json_object_get(req->args, "ids");
+    json_t *notFound = json_array();
+    if (want) {
+        int i;
+        int size = json_array_size(want);
+        for (i = 0; i < size; i++) {
+            rock.rows = 0;
+            const char *id = json_string_value(json_array_get(want, i));
+            if (!id) continue;
+            r = caldav_get_events(db, mboxname, id, cb, &rock);
+            if (r || !rock.rows) {
+                json_array_append_new(notFound, json_string(id));
+            }
+        }
+    }
+    else {
+        rock.rows = 0;
+        r = caldav_get_events(db, mboxname, NULL, cb, &rock);
+    }
+    if (r) goto done;
+
+    json_t *toplevel = json_pack("{}");
+    json_object_set_new(toplevel, "accountId", json_string(req->userid));
+    json_object_set_new(toplevel, "state", json_string(req->state));
+    json_object_set_new(toplevel, "list", rock.array);
+    if (json_array_size(notFound)) {
+        json_object_set_new(toplevel, "notFound", notFound);
+    }
+    else {
+        json_decref(notFound);
+        json_object_set_new(toplevel, "notFound", json_null());
+    }
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string(resname));
+    json_array_append_new(item, toplevel);
+    json_array_append_new(item, json_string(req->tag));
+
+    json_array_append_new(req->response, item);
+
+  done:
+    mailbox_close(&rock.mailbox);
+    free(mboxname);
+    caldav_close(db);
     return r;
 }
 
