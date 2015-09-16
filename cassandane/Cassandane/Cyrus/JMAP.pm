@@ -227,11 +227,68 @@ sub test_getcalendars_nocalendars
     my $res = $jmap->Request([['getCalendars', {}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals(scalar(@{$res->[0][1]{type}}), accountNoCalendars');
+    $self->assert_str_equals($res->[0][1]{type}), 'accountNoCalendars');
     $self->assert_str_equals($res->[0][2], 'R1');
 }
 =end snip
 =cut
+
+
+sub test_setcalendars_create
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create with wrong state";
+    my $res = $jmap->Request([
+            ['setCalendars', {
+                    ifInState => "badstate",
+                    create => { "#1" => { name => "foo" }}
+                }, "R1"]
+        ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    xlog "create calendar with defaults";
+    $res = $jmap->Request([
+            ['setCalendars', {
+                    create => {
+                        "#1" => {
+                            # XXX - The JMAP spec only allows the mayFoo
+                            # properties not to be set during create. Would't
+                            # it make sense to relax this?
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => 1
+                        }
+                    }
+                }, "R1"]
+        ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendarsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get newly created calendar $id";
+    $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
+    my $x = $res->[0][1]{notFound}[0];
+    xlog "got response $x";
+    $self->assert_not_null($res);
+    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
+    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
+    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'foo');
+
+=pod
+    my $state = $res->[0][1]{newState};
+=cut
+}
 
 sub test_importance_later
 {
