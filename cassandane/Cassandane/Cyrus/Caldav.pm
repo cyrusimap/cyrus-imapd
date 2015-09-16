@@ -98,6 +98,24 @@ sub test_caldavcreate
     $self->assert_not_null($CalendarId);
 }
 
+sub test_caldavcolor
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    xlog "create colored calendar";
+    my $CalendarId = $CalDAV->NewCalendar({name => 'bar', color => 'aqua'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "fetch again";
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog "check color matches";
+    $self->assert_str_equals($Calendar->{color}, 'aqua');
+}
+
 sub test_rename
 {
     my ($self) = @_;

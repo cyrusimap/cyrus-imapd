@@ -174,22 +174,64 @@ sub test_jmap_create
     $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
 }
 
-sub test_calendars
+sub test_getcalendars
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    my $id = $caldav->NewCalendar({ name => "calname" });
+    my $id = $caldav->NewCalendar({ name => "calname", color => "aqua"});
+    my $unknownId = "foo";
 
+    xlog "get existing calendar";
     my $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'calendars');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
     $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
+    $self->assert_str_equals($res->[0][1]{list}[0]{color}, 'aqua');
+
+    xlog "get existing calendar with select properties";
+    $res = $jmap->Request([['getCalendars', { ids => [$id], properties => ["name"] }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendars');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
+    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
+    $self->assert_str_equals($res->[0][1]{list}[0]{name}, "calname");
+    $self->assert_null($res->[0][1]{list}[0]{color});
+
+    xlog "get unknown calendar";
+    $res = $jmap->Request([['getCalendars', {ids => [$unknownId]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendars');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 0);
+    $self->assert_num_equals(scalar(@{$res->[0][1]{notFound}}), 1);
+    $self->assert_str_equals($res->[0][1]{notFound}[0], $unknownId);
+
+    # XXX - test for shared calendars
 }
+
+=begin snip
+sub test_getcalendars_nocalendars
+{
+    # XXX - test for accountNoCalendars error
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get calendars of account with no calendars";
+    my $res = $jmap->Request([['getCalendars', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals(scalar(@{$res->[0][1]{type}}), accountNoCalendars');
+    $self->assert_str_equals($res->[0][2], 'R1');
+}
+=end snip
+=cut
 
 sub test_importance_later
 {
