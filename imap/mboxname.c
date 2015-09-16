@@ -599,6 +599,7 @@ EXPORTED void mbname_free(mbname_t **mbnamep)
     free(mbname->intname);
     free(mbname->extname);
     free(mbname->extuserid);
+    free(mbname->recipient);
 
     /* thing itself */
     free(mbname);
