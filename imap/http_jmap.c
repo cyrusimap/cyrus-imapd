@@ -2740,16 +2740,16 @@ static int _jmap_checkstate(struct jmap_req *req) {
 
 static int setCalendars(struct jmap_req *req)
 {
+    /* XXX - once the complete create, update, destroy flow is set up,
+     * this function deserves a good amount of cleaning of refactoring */
     int r = _jmap_checkstate(req);
     if (r) return 0;
 
     json_t *set = json_pack("{s:s,s:s}",
-                            "oldState", req->state,
-                            "accountId", req->userid);
-
+            "oldState", req->state,
+            "accountId", req->userid);
 
     json_t *create = json_object_get(req->args, "create");
-
     if (create) {
         json_t *created = json_pack("{}");
         json_t *notCreated = json_pack("{}");
@@ -2757,21 +2757,36 @@ static int setCalendars(struct jmap_req *req)
 
         /* XXX Should the first 'create' auto-provision the calendars,
          * similar to how it is done for CalDAV? If so, might want to
-         * refactor the respective parts of http_caldav.c:my_caldav_auth
-         *
+         * refactor the respective parts of http_caldav.c:my_caldav_auth.
          * For now, we assume that the account already has a #calendars
          * mailbox provisioned.
          */
 
-        /* XXX Check if the ACL 'k' (create) flag is set on the #calendars
-         * mailbox for the currently authenticated account. */
+        /* XXX - need to check if account is allowed to create a calendar? */
+        /* XXX - is this is redundant with mboxlist_create */
+        /* XXX = how about accountReadOnly errors? */
 
         const char *key;
         json_t *arg;
         json_object_foreach(create, key, arg) {
-
             /* Validate mandatory properties */
-            /* XXX - This should be refactored. */
+            /* XXX - This should be refactored with update. */
+            /* XXX - error handling seems wrong here (and possibly also in
+             * setContactGroups. According to the spec, this has to happen for
+             * invalid properties:
+             *
+             *    If any of the properties in a create or update are invalid
+             *    (immutable, wrong type, invalid value for the property – like a
+             *    zero-length name), the server MUST reject the create/update with a
+             *    SetError of type invalidProperties. The SetError object SHOULD
+             *    contain a property called properties of type String[] that lists all
+             *    the properties that were invalid. The object MAY also contain a
+             *    description property of type String with a user-friendly description
+             *    of the problems.
+             *
+             * But right now, a unspecified "missingParameters" set error is reported,
+             * or an invalidArguments error, which according to the spec may be
+             * returned for invalid arguments (as opposed to properties). */
 
             /* name */
             json_t *jname = json_object_get(arg, "name");
@@ -2806,11 +2821,8 @@ static int setCalendars(struct jmap_req *req)
                 json_object_set_new(notCreated, key, err);
                 continue;
             }
-            /* XXX - json_integer_value returns 0 for non-integers, but zero is
-             * a valid sortOrder. Need to use strtol to catch errors. Refactor
-             * validation with getCalendars. */
-            const int sortOrder = json_integer_value(jsortOrder);
-            if (!sortOrder) {
+            int sortOrder;
+            if (json_unpack(jsortOrder, "i", &sortOrder) || sortOrder < 0) {
                 json_t *err = json_pack("{s:s}", "type", "invalidArguments");
                 json_object_set_new(notCreated, key, err);
                 continue;
@@ -2818,24 +2830,25 @@ static int setCalendars(struct jmap_req *req)
 
             /* Optional properties. If present, these MUST be set to true */
             /* XXX 
-            int prop;
-            r = _json_bool_property(arg, "isVisible", 1, &isVisible);
-            if (r || !isVisible) {
-                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-            int mayReadFreeBusy;
-            r = _json_bool_property(arg, "mayReadFreeBusy", 1, &isVisible);
-            if (r || !mayReadFreeBusy) {
-                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            } */
+               int prop;
+               r = _json_bool_property(arg, "isVisible", 1, &isVisible);
+               if (r || !isVisible) {
+               json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+               json_object_set_new(notCreated, key, err);
+               continue;
+               }
+               int mayReadFreeBusy;
+               r = _json_bool_property(arg, "mayReadFreeBusy", 1, &isVisible);
+               if (r || !mayReadFreeBusy) {
+               json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+               json_object_set_new(notCreated, key, err);
+               continue;
+               } */
 
             /* Create a new mailbox with a unique uid */
             /* Make a local copy of uuid to avoid races */
             char *uid = xstrdup(makeuuid());
+            /* XXX - remove const qualifier and free mboxname */
             const char *mboxname = caldav_mboxname(req->userid, uid);
 
             char rights[100];
@@ -2850,12 +2863,12 @@ static int setCalendars(struct jmap_req *req)
                 cyrus_acl_masktostr(DACL_READFB, rights);
                 buf_printf(&acl, "%s\t%s\t", "anyone", rights);
                 r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
-                                    NULL /* partition */,
-                                    req->userid, req->authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
+                        NULL /* partition */,
+                        req->userid, req->authstate,
+                        0 /* options */, 0 /* uidvalidity */,
+                        0 /* highestmodseq */, buf_cstring(&acl),
+                        NULL /* uniqueid */, 0 /* local_only */,
+                        NULL /* mboxptr */);
                 if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                         mboxname, error_message(r));
                 buf_free(&acl);
@@ -2901,7 +2914,7 @@ static int setCalendars(struct jmap_req *req)
                 r = annotate_state_writemask(astate, color_annot, httpd_userid, &val);
                 if (r) {
                     syslog(LOG_ERR, "failed to write annotation %s: %s",
-                            displayname_annot, error_message(r));
+                            color_annot, error_message(r));
                     /* XXX - bail out, but free all memory */
                 }
                 buf_reset(&val);
@@ -2913,15 +2926,14 @@ static int setCalendars(struct jmap_req *req)
                 r = annotate_state_writemask(astate, sortOrder_annot, httpd_userid, &val);
                 if (r) {
                     syslog(LOG_ERR, "failed to write annotation %s: %s",
-                            displayname_annot, error_message(r));
+                            sortOrder_annot, error_message(r));
                     /* XXX - bail out, but free all memory */
                 }
                 buf_reset(&val);
 
                 /* isVisible */
                 /* XXX - shouldn't isVisible be TRUE for all creates? */
-                /* XXX - set isVisible here so we can reuse the code for
-                 * calendar updates. Use mboxlist.c:mboxlist_setacl ? */
+                /* XXX - set isVisible here. Use mboxlist.c:mboxlist_setacl ? */
 
                 /* XXX - commit_state makes mailbox_close segfault. Why? */
                 /* annotate_state_commit(&astate); */
@@ -2952,14 +2964,275 @@ static int setCalendars(struct jmap_req *req)
         json_decref(notCreated);
     }
 
-    /* XXX - Continue from here */
+    json_t *update = json_object_get(req->args, "update");
+    if (update) {
+        json_t *updated = json_pack("[]");
+        json_t *notUpdated = json_pack("{}");
 
-    /* Success! */
-    /* r =  0; */
+        const char *uid;
+        json_t *arg;
+        json_object_foreach(update, uid, arg) {
+
+            /* Validate uid */
+            if (!strlen(uid)) {
+                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notUpdated, uid, err);
+                continue;
+            }
+            if (*uid == '#') {
+                /* uid is a client defined placeholder reference. */
+                const char *t = hash_lookup(uid, req->idmap);
+                if (!t) {
+                    /* XXX - invalidArguments ain't right. Which error to use? */
+                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+                uid = t;
+            }
+
+            /* Validate properties */
+            /* XXX - refactor with create? */
+            json_t *prop;
+
+            /* name */
+            const char *name = NULL;
+            prop = json_object_get(arg, "name");
+            if (prop) {
+                name = json_string_value(prop);
+                if (!name) {
+                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+            }
+            /* color */
+            const char *color = NULL;
+            prop = json_object_get(arg, "color");
+            if (prop) {
+                color = json_string_value(prop);
+                if (!color) {
+                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+            }
+            /* sortOrder */
+            int sortOrder = -1;
+            prop = json_object_get(arg, "sortOrder");
+            if (prop) {
+                if (json_unpack(prop, "i", &sortOrder) || sortOrder < 0) {
+                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+            }
+            /* isVisible */
+            int isVisible = -1;
+            prop = json_object_get(arg, "isVisible");
+            if (prop) {
+                if (json_unpack(prop, "b", &isVisible)) {
+                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+            }
+            /* XXX - Check that the mayFoo properties are null or booleans */
+
+            /* Open the mailbox or report as not updated */
+            char *mboxname = caldav_mboxname(req->userid, uid);
+            struct mailbox *mbox = NULL;
+            int r = mailbox_open_iwl(mboxname, &mbox);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                        mboxname, error_message(r));
+                free(mboxname);
+                /* XXX - invalidArguments is wrong. Which error code for
+                 * unknown entities */
+                json_t *err = json_pack("{s:s, s:s}",
+                        "type", "invalidArguments",
+                        "description", "unknown calendar");
+                json_object_set_new(notUpdated, uid, err);
+
+                continue;
+            }
+            free(mboxname);
+
+            /* XXX - Check if account is authorized to update */
+
+            /* Update calendar */
+            /* XXX- use  a copy? */
+            /* XXX - refacotor all the property update/create code */
+            annotate_state_t *astate = NULL;
+            struct buf val = BUF_INITIALIZER;
+
+            r = mailbox_get_annotate_state(mbox, 0, &astate);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
+                        mbox->name, error_message(r));
+                mailbox_abort(mbox);
+            }
+
+            /* name */
+            if (!r && name) {
+                buf_printf(&val, "%s", name);
+                static const char *displayname_annot =
+                    DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            displayname_annot, error_message(r));
+                    mailbox_abort(mbox);
+                }
+                buf_reset(&val);
+            }
+
+            /* color */
+            if (!r && color) {
+                buf_printf(&val, "%s", color);
+                static const char *color_annot =
+                    DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
+                r = annotate_state_writemask(astate, color_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            color_annot, error_message(r));
+                    mailbox_abort(mbox);
+                }
+                buf_reset(&val);
+            }
+
+            /* sortOrder */
+            if (!r && sortOrder) {
+                buf_printf(&val, "%d", sortOrder);
+                static const char *sortOrder_annot =
+                    DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
+                r = annotate_state_writemask(astate, sortOrder_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            sortOrder_annot, error_message(r));
+                    mailbox_abort(mbox);
+                }
+                buf_reset(&val);
+            }
+
+            /* XXX - isVisible */
+            /* XXX - mayFoo */
+
+            buf_free(&val);
+
+            if (r) {
+                /* these are real "should never happen" errors */
+                goto done;
+            }
+
+            /* All done. */
+            json_array_append_new(updated, json_string(uid));
+
+            /* XXX - how to bump the modseq of the #calendars mailbox? */
+            mailbox_close(&mbox);
+        }
+
+        if (json_array_size(updated)) {
+            json_object_set(set, "updated", updated);
+        }
+        json_decref(updated);
+        if (json_array_size(notUpdated)) {
+            json_object_set(set, "notUpdated", notUpdated);
+        }
+        json_decref(notUpdated);
+    }
+
+    json_t *destroy = json_object_get(req->args, "destroy");
+    if (destroy) {
+        json_t *destroyed = json_pack("[]");
+        json_t *notDestroyed = json_pack("{}");
+
+        size_t index;
+        json_t *juid;
+
+        json_array_foreach(destroy, index, juid) {
+            /* Validate uid. JMAP destroy does not allow reference uids. */
+            const char *uid = json_string_value(juid);
+            if (!strlen(uid) || *uid == '#') {
+                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Open the mailbox or report as not destroyed. */
+            char *mboxname = caldav_mboxname(req->userid, uid);
+            struct mailbox *mbox = NULL;
+            r = mailbox_open_irl(mboxname, &mbox);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+                        mboxname, error_message(r));
+                free(mboxname);
+                /* XXX - need an error for nonexistent entities */
+                json_t *err = json_pack("{s:s, s:s}",
+                        "type", "invalidArguments",
+                        "description", "unknown calendar");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Check if account is allowed to destroy this calendar */
+            int rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
+            mailbox_close(&mbox);
+            if (!(rights & DACL_RMCOL)) {
+                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* XXX - check for remote mailbox like in http_dav:3511ff ? */
+            /* XXX - delete from caldav_db */
+            /* Destroy mailbox */
+            struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+            if (mboxlist_delayed_delete_isenabled()) {
+                r = mboxlist_delayed_deletemailbox(mboxname,
+                        httpd_userisadmin || httpd_userisproxyadmin,
+                        httpd_userid, req->authstate, mboxevent,
+                        1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+            } else {
+                r = mboxlist_deletemailbox(mboxname,
+                        httpd_userisadmin || httpd_userisproxyadmin,
+                        httpd_userid, req->authstate, mboxevent,
+                        1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+            }
+            free(mboxname);
+
+            if (r == IMAP_PERMISSION_DENIED) {
+                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            } else if (r == IMAP_MAILBOX_NONEXISTENT) {
+                /* XXX - need an error for nonexistent entities */
+                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            } else if (r) {
+                goto done;
+            }
+
+            /* All done. */
+            json_array_append_new(destroyed, json_string(uid));
+        }
+
+        if (json_array_size(destroyed)) {
+            json_object_set(set, "destroyed", destroyed);
+        }
+        json_decref(destroyed);
+        if (json_array_size(notDestroyed)) {
+            json_object_set(set, "notDestroyed", notDestroyed);
+        }
+        json_decref(notDestroyed);
+    }
 
     /* read the modseq again every time, just in case something changed it
      * in our actions */
     struct buf buf = BUF_INITIALIZER;
+    /* XXX - The JMAP spec says state is global within a type, so this should
+     * be the caldav_mboxname */
     const char *inboxname = mboxname_user_mbox(req->userid, NULL);
     modseq_t modseq = mboxname_readmodseq(inboxname);
     buf_printf(&buf, "%llu", modseq);
@@ -2972,6 +3245,7 @@ static int setCalendars(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
+done:
     return r;
 }
 
