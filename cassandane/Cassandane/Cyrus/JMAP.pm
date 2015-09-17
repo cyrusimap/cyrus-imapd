@@ -234,7 +234,80 @@ sub test_getcalendars_nocalendars
 =cut
 
 
-sub test_setcalendars_create
+sub test_setcalendars
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', {
+                    create => {
+                        "#1" => {
+                            # XXX - The JMAP spec only allows the mayFoo
+                            # properties not to be set during create. Would't
+                            # it make sense to relax this?
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => 1
+                        }
+                    }
+                }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendarsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
+    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
+    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'foo');
+
+    xlog "update calendar $id";
+    $res = $jmap->Request([
+            ['setCalendars', {update => {"$id" => {name => "bar"}}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendarsSet');
+    $self->assert_not_null($res->[0][1]{newState});
+    ### XXX - state isn't updated, yet
+    # $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    
+    $state = $res->[0][1]{newState};
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'bar');
+    $self->assert_str_equals($res->[0][1]{state}, $state);
+
+    xlog "destroy calendar $id";
+    $res = $jmap->Request([['setCalendars', {destroy => ["$id"]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendarsSet');
+    $self->assert_not_null($res->[0][1]{newState});
+    ### XXX - state isn't updated, yet
+    # $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
+}
+
+
+sub test_setcalendars_state
 {
     my ($self) = @_;
 
@@ -251,41 +324,6 @@ sub test_setcalendars_create
     $self->assert_str_equals($res->[0][0], 'error');
     $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
     $self->assert_str_equals($res->[0][2], 'R1');
-
-    xlog "create calendar with defaults";
-    $res = $jmap->Request([
-            ['setCalendars', {
-                    create => {
-                        "#1" => {
-                            # XXX - The JMAP spec only allows the mayFoo
-                            # properties not to be set during create. Would't
-                            # it make sense to relax this?
-                            name => "foo",
-                            color => "coral",
-                            sortOrder => 2,
-                            isVisible => 1
-                        }
-                    }
-                }, "R1"]
-        ]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'calendarsSet');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_not_null($res->[0][1]{newState});
-    $self->assert_not_null($res->[0][1]{created});
-
-    my $id = $res->[0][1]{created}{"#1"}{id};
-
-    xlog "get newly created calendar $id";
-    $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
-    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
-    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'foo');
-
-=pod
-    my $state = $res->[0][1]{newState};
-=cut
 }
 
 sub test_importance_later
