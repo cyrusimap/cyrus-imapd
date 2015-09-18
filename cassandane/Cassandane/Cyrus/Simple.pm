@@ -90,4 +90,31 @@ sub test_append
     $self->check_messages(\%exp);
 }
 
+sub test_select
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "SELECTing INBOX";
+    $imaptalk->select("INBOX");
+    $self->assert(!$imaptalk->get_last_error());
+
+    xlog "SELECTing inbox";
+    $imaptalk->select("inbox");
+    $self->assert(!$imaptalk->get_last_error());
+
+    xlog "CREATEing sub folders";
+    $imaptalk->create("INBOX.sub");
+    $self->assert(!$imaptalk->get_last_error());
+    $imaptalk->create("inbox.blub");
+    $self->assert(!$imaptalk->get_last_error());
+
+    xlog "SELECTing subfolders";
+    $imaptalk->select("inbox.sub");
+    $self->assert(!$imaptalk->get_last_error());
+    $imaptalk->select("INbOX.blub");
+    $self->assert(!$imaptalk->get_last_error());
+}
+
 1;

@@ -81,6 +81,8 @@ sub default
 	    # default changed, we want to be explicit about it
 	    unixhierarchysep => 'no',
             # let's hear all about it
+            auditlog => 'yes',
+            chatty => 'yes',
             debug => 'yes',
 	);
 	my $defs = Cassandane::Cassini->instance()->get_section('config');

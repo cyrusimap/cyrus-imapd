@@ -392,6 +392,7 @@ sub _binary
 	    $cassini->val('valgrind', 'binary', '/usr/bin/valgrind'),
 	    "--log-file=$valgrind_logdir/$name.%p",
 	    "--suppressions=$valgrind_suppressions",
+            "--gen-suppressions=all",
 	    split(/\s+/, $cassini->val('valgrind', 'arguments', $arguments))
 	);
 	$valground = 1;
@@ -471,6 +472,7 @@ sub _build_skeleton
 	'conf/log',
 	'conf/log/admin',
 	'conf/log/cassandane',
+	'conf/log/postman',
 	'conf/log/repluser',
 	'lock',
 	'data',

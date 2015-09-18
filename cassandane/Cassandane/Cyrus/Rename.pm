@@ -49,6 +49,9 @@ use Cassandane::Instance;
 Cassandane::Cyrus::TestCase::magic(Partition2 => sub {
     shift->config_set('partition-p2' => '@basedir@/data-p2');
 });
+Cassandane::Cyrus::TestCase::magic(AllowMoves => sub {
+    shift->config_set('allowusermoves' => 'yes');
+});
 Cassandane::Cyrus::TestCase::magic(MetaPartition => sub {
     shift->config_set(
 	'metapartition-default' => '@basedir@/meta',
@@ -234,6 +237,25 @@ sub test_rename_user
     $self->assert($admintalk->get_last_error());
 
     $admintalk->rename('user.cassandane', 'user.cassandane', 'p2') || die; # partition move
+}
+
+sub test_rename_deepuser
+    :AllowMoves
+{
+    my ($self) = @_;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Test user rename";
+
+    $admintalk->create("user.cassandane.foo") || die;
+    $admintalk->create("user.cassandane.bar") || die;
+    $admintalk->create("user.cassandane.bar.sub") || die;
+
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    $res = $admintalk->select("user.newuser.bar.sub");
+    $self->assert(not $admintalk->get_last_error());
 }
 
 sub test_rename_paths
