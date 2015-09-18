@@ -155,9 +155,11 @@ EXPORTED struct backup *backup_open(const char *name, off_t *opened_at)
     buf_printf(&gzname, "%s.gz", name);
     buf_printf(&idxname, "%s.index", name);
 
-    struct backup *backup = backup_open_internal(buf_release(&gzname),
-                                                 buf_release(&idxname),
+    struct backup *backup = backup_open_internal(buf_cstring(&gzname),
+                                                 buf_cstring(&idxname),
                                                  BACKUP_OPEN_NORMAL);
+    buf_free(&idxname);
+    buf_free(&gzname);
     if (!backup) return NULL;
 
     if (opened_at)
@@ -228,9 +230,11 @@ EXPORTED int backup_reindex(const char *name)
     buf_printf(&gzname, "%s.gz", name);
     buf_printf(&idxname, "%s.index", name);
 
-    struct backup *backup = backup_open_internal(buf_release(&gzname),
-                                                 buf_release(&idxname),
+    struct backup *backup = backup_open_internal(buf_cstring(&gzname),
+                                                 buf_cstring(&idxname),
                                                  BACKUP_OPEN_REINDEX);
+    buf_free(&idxname);
+    buf_free(&gzname);
     if (!backup) return -1;
 
     struct gzuncat *gzuc = gzuc_open(backup->fd);
@@ -694,10 +698,12 @@ int backup_index_apply_mailbox(struct backup *backup, struct dlist *dl, off_t dl
         { ":sync_crc_annot",    SQLITE_INTEGER, { .i = synccrcs.annot } },
         { ":quotaroot",         SQLITE_TEXT,    { .s = quotaroot } },
         { ":xconvmodseq",       SQLITE_INTEGER, { .i = xconvmodseq } },
-        { ":annotations",       SQLITE_TEXT,    { .s = buf_release(&annotations_buf) } },
+        { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations_buf) } },
         { ":deleted",           SQLITE_INTEGER, { .i = 0 } },
         { NULL,                 SQLITE_NULL,    { .s = NULL      } },
     };
+
+    buf_free(&annotations_buf);
 
     sqldb_begin(backup->db, __func__); // FIXME what if this fails
 
@@ -770,12 +776,15 @@ int backup_index_apply_mailbox(struct backup *backup, struct dlist *dl, off_t dl
             { ":uid",               SQLITE_INTEGER, { .i = uid } },
             { ":modseq",            SQLITE_INTEGER, { .i = modseq } },
             { ":last_updated",      SQLITE_INTEGER, { .i = last_updated } },
-            { ":flags",             SQLITE_TEXT,    { .s = buf_release(&flags_buf) } },
+            { ":flags",             SQLITE_TEXT,    { .s = buf_cstring(&flags_buf) } },
             { ":internaldate",      SQLITE_INTEGER, { .i = internaldate } },
-            { ":annotations",       SQLITE_TEXT,    { .s = buf_release(&annotations_buf) } },
+            { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations_buf) } },
             { ":expunged",          SQLITE_INTEGER, { .i = 0 /* FIXME */ } },
             { NULL,                 SQLITE_NULL,    { .s = NULL      } },
         };
+
+        buf_free(&annotations_buf);
+        buf_free(&flags_buf);
 
         r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql, record_bval, NULL, NULL);
         if (r) {
@@ -945,17 +954,17 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
 {
     if (!backup->gzfile) fatal("not started", -1);
 
-    struct buf buf = BUF_INITIALIZER;
-    dlist_printbuf(dlist, 1, &buf);
-
     gzprintf(backup->gzfile, "%ld ", (int64_t) ts);
 
     /* gzprintf's internal buffer is limited to about 8K, which
      * dlist will exceed if there's a message in it, so don't use
      * gzprintf for writing the dlist contents.
      */
+    struct buf buf = BUF_INITIALIZER;
+    dlist_printbuf(dlist, 1, &buf);
     gzwrite(backup->gzfile, buf_cstring(&buf), buf_len(&buf));
     // FIXME check return value is long enough
+    buf_free(&buf);
 
     return 0;
 }
