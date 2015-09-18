@@ -86,6 +86,37 @@ the gzip stream that we are producing.
 
 Compressing will need to consider this too...
 
+
+renames
+-------
+
+APPLY RENAME %(OLDMBOXNAME old NEWMBOXNAME new PARTITION p UIDVALIDITY 123)
+
+We identify mboxes by uniqueid, so when we start seeing sync data for the same
+uniqueid with a new mboxname we just transparently update it anyway, without
+needing to handle the APPLY RENAME.  Not sure if this is a problem...  Do we
+need to record an mbox's previous names somehow?
+
+I think it's possible to use this to rename a USER though, something like:
+
+APPLY RENAME %(OLDMBOXNAME example.com!user.smithj NEWMBOXNAME example.com!user.jsmith ...)
+
+-- in which case, without special handling of the RENAME command itself, there
+will be a backup for the old user that ends with the RENAME, and a backup of
+the new user that (probably) duplicates everything again (except for stuff
+that's been expunged).
+
+And if someone else gets given the original name, like
+
+APPLY RENAME %(OLDMBOXNAME example.com!user.samantha-mithj example.com!user.smithj ...)
+
+Then anything that was expunged from the original user but still available in
+backup disappears?  Or the two backups get conflated, and samantha can
+"restore" the original smithj's old mail?
+
+Uggh.
+
+
 locking
 -------
 
