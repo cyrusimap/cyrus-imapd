@@ -2853,6 +2853,55 @@ static int jmap_update_calendar(const char *mboxname,
     return r;
 }
 
+/* Delete the calendar mailbox named mboxname for the userid in req. */
+static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req) {
+    struct mailbox *mbox = NULL;
+    int r;
+
+    r = mailbox_open_irl(mboxname, &mbox);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+                mboxname, error_message(r));
+        return r;
+    }
+    int rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
+    mailbox_close(&mbox);
+    if (!(rights & DACL_READ)) {
+        return IMAP_NOTFOUND;
+    } else if (!(rights & DACL_RMCOL)) {
+        return IMAP_PERMISSION_DENIED;
+    }
+
+    struct caldav_db *db = caldav_open_userid(req->userid);
+    if (!db) {
+        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
+        return IMAP_INTERNAL;
+    }
+    r = caldav_delmbox(db, mboxname);
+    if (r) {
+        syslog(LOG_ERR, "failed to delete mailbox from caldav_db: %s",
+                error_message(r));
+        return r;
+    }
+
+    /* XXX - check for remote mailbox like in http_dav:3511ff ? */
+    /* XXX - delete from caldav_db */
+    struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+    if (mboxlist_delayed_delete_isenabled()) {
+        r = mboxlist_delayed_deletemailbox(mboxname,
+                httpd_userisadmin || httpd_userisproxyadmin,
+                httpd_userid, req->authstate, mboxevent,
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+    } else {
+        r = mboxlist_deletemailbox(mboxname,
+                httpd_userisadmin || httpd_userisproxyadmin,
+                httpd_userid, req->authstate, mboxevent,
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+    }
+
+    return r;
+}
+
 static int setCalendars(struct jmap_req *req)
 {
     int r = jmap_checkstate(req);
@@ -3151,28 +3200,15 @@ static int setCalendars(struct jmap_req *req)
 
             /* Destroy calendar. */
             char *mboxname = caldav_mboxname(req->userid, uid);
-            /* XXX - check for remote mailbox like in http_dav:3511ff ? */
-            /* XXX - delete from caldav_db */
-            struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
-            if (mboxlist_delayed_delete_isenabled()) {
-                r = mboxlist_delayed_deletemailbox(mboxname,
-                        httpd_userisadmin || httpd_userisproxyadmin,
-                        httpd_userid, req->authstate, mboxevent,
-                        1 /* checkacl */, 0 /* local_only */, 0 /* force */);
-            } else {
-                r = mboxlist_deletemailbox(mboxname,
-                        httpd_userisadmin || httpd_userisproxyadmin,
-                        httpd_userid, req->authstate, mboxevent,
-                        1 /* checkacl */, 0 /* local_only */, 0 /* force */);
-            }
+            r = jmap_delete_calendar(mboxname, req);
             free(mboxname);
-            if (r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+            if (r == IMAP_NOTFOUND) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
-            } else if (r == IMAP_MAILBOX_NONEXISTENT) {
+            } else if (r == IMAP_PERMISSION_DENIED) {
                 /* XXX - need an error for nonexistent entities */
-                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
             } else if (r) {
