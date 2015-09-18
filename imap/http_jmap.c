@@ -2739,10 +2739,11 @@ static int jmap_checkstate(struct jmap_req *req) {
 }
 
 /* Read the property named name into dst, formatted according to the json
- * unpack format fmt. Report name in missing, if it is mandatory and not
- * found in root, or in invalid if unpacking failed. Return a negative
- * value for a missing or invalid property. Return a positive value if a
- * property was read, otherwise zero. */
+ * unpack format fmt. Append name to missing, if it is mandatory and not
+ * found in root, or to invalid if unpacking failed.
+ *
+ * Return a negative value for a missing or invalid property.
+ * Return a positive value if a property was read, zero otherwise. */
 static int jmap_readprop(json_t *root,
                           const char *name,
                           int mandatory,
@@ -2885,7 +2886,6 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
     }
 
     /* XXX - check for remote mailbox like in http_dav:3511ff ? */
-    /* XXX - delete from caldav_db */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mboxname,
