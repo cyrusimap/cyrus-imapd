@@ -807,6 +807,9 @@ static int setContactGroups(struct jmap_req *req)
             const char *uid = makeuuid();
             json_t *jname = json_object_get(arg, "name");
             if (!jname) {
+                /* XXX - missingParameters should be an invalidProperties
+                 * error. Fix this when the contacts error handling code gets
+                 * merged with the calendar codebase. */
                 json_t *err = json_pack("{s:s}", "type", "missingParameters");
                 json_object_set_new(notCreated, key, err);
                 continue;
@@ -2528,6 +2531,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
     /* ...which are at least readable or visible */
     int rights = cyrus_acl_myrights(crock->req->authstate, mbentry->acl);
+    /* XXX - What if just READFB is set? */
     if (!(rights & (DACL_READ|DACL_READFB))) {
         return 0;
     }
