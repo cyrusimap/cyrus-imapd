@@ -229,23 +229,23 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
                     syslog(LOG_ERR, "mupdate_scarf: %d", r);
                     break;
                 }
-            }
 
-            /* If we were waiting on a noop, we no longer are.
-             * If we have been kicked, tell them we're done now */
-            if (waiting_for_noop) {
-                if (response != MUPDATE_OK) {
-                    syslog(LOG_ERR, "update/noop sync error %d", response);
-                    break;
-                }
-                waiting_for_noop = 0;
-
-                for (; num_kick_fds; num_kick_fds--) {
-                    if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
-                        syslog(LOG_WARNING,
-                               "can't write to IPC socket (ignoring)");
+                /* If we were waiting on a noop, we no longer are.
+                 * If we have been kicked, tell them we're done now */
+                if (waiting_for_noop) {
+                    if (response != MUPDATE_OK) {
+                        syslog(LOG_ERR, "update/noop sync error %d", response);
+                        break;
                     }
-                    (void)close(kick_fds[num_kick_fds-1]);
+                    waiting_for_noop = 0;
+
+                    for (; num_kick_fds; num_kick_fds--) {
+                        if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
+                            syslog(LOG_WARNING,
+                                   "can't write to IPC socket (ignoring)");
+                        }
+                        (void)close(kick_fds[num_kick_fds-1]);
+                    }
                 }
             }
 
