@@ -2197,7 +2197,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    limit_fds(RLIM_INFINITY);
+    limit_fds(1024);
 
     /* Write out the pidfile */
     pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
