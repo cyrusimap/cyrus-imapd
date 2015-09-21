@@ -399,7 +399,7 @@ sub test_setcalendars_error
 
     my $errType = $res->[0][1]{notCreated}{"#1"}{type};
     my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
-    $self->assert_str_equals($errType, "missingParameters");
+    $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [
             "name", "color", "sortOrder", "isVisible"
     ]);
