@@ -69,6 +69,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
+#include <inttypes.h>
 
 #ifndef INADDR_NONE
 #define INADDR_NONE 0xffffffff
@@ -1890,6 +1891,11 @@ static void limit_fds(rlim_t x)
 
 #ifdef HAVE_GETRLIMIT
     if (!getrlimit(RLIMIT_NUMFDS, &rl)) {
+        if (x != RLIM_INFINITY && rl.rlim_max != RLIM_INFINITY && x > rl.rlim_max) {
+            syslog(LOG_WARNING,
+                   "limit_fds: requested %" PRIu64 ", but capped to %" PRIu64,
+                   (uint64_t) x, (uint64_t) rl.rlim_max);
+        }
         rl.rlim_cur = (x == RLIM_INFINITY || x > rl.rlim_max) ? rl.rlim_max : x;
     }
     else
@@ -2206,7 +2212,7 @@ int main(int argc, char **argv)
         }
     }
 
-    limit_fds(RLIM_INFINITY);
+    limit_fds(1024);
 
     /* Write out the pidfile */
     pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
