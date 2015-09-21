@@ -215,24 +215,6 @@ sub test_getcalendars
     # XXX - test for shared calendars
 }
 
-=begin snip
-sub test_getcalendars_nocalendars
-{
-    # XXX - test for accountNoCalendars error
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    xlog "get calendars of account with no calendars";
-    my $res = $jmap->Request([['getCalendars', {}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][1]{type}), 'accountNoCalendars');
-    $self->assert_str_equals($res->[0][2], 'R1');
-}
-=end snip
-=cut
-
 sub test_setcalendars
 {
     my ($self) = @_;
@@ -242,9 +224,6 @@ sub test_setcalendars
     xlog "create calendar";
     my $res = $jmap->Request([
             ['setCalendars', { create => { "#1" => {
-                            # XXX - The JMAP spec only allows the mayFoo
-                            # properties not to be set during create. Would't
-                            # it make sense to relax this?
                             name => "foo",
                             color => "coral",
                             sortOrder => 2,
@@ -299,24 +278,32 @@ sub test_setcalendars
 }
 
 =begin snip
-XXX states are not yet updated on the calendar mailboxes
+# XXX - States are not yet supported
 sub test_setcalendars_state
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
 
-    xlog "create with wrong state";
+    xlog "create with invalid state token";
     my $res = $jmap->Request([
             ['setCalendars', {
                     ifInState => "badstate",
                     create => { "#1" => { name => "foo" }}
                 }, "R1"]
         ]);
-    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, 'invalidArguments');
+
+    xlog "create with wrong state token";
+    $res = $jmap->Request([
+            ['setCalendars', {
+                    ifInState => "987654321",
+                    create => { "#1" => { name => "foo" }}
+                }, "R1"]
+        ]);
     $self->assert_str_equals($res->[0][0], 'error');
     $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
-    $self->assert_str_equals($res->[0][2], 'R1');
 
     xlog "create calendar";
     $res = $jmap->Request([
@@ -339,9 +326,11 @@ sub test_setcalendars_state
                     update => {"$id" => {name => "bar"}}
             }, "R1"]
     ]);
+
+    my $x = Dumper($res);
+    xlog "wrong state: $state -- $x";
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
-    $self->assert_not_null($res->[0][1]{updated});
 
     my $oldState = $state;
     $state = $res->[0][1]{newState};
@@ -350,18 +339,17 @@ sub test_setcalendars_state
     $res = $jmap->Request([
             ['setCalendars', {
                     ifInState => $oldState,
-                    update => {"$id" => {name => "bar"}}
+                    update => {"$id" => {name => "baz"}}
             }, "R1"]
     ]);
-    $self->assert_not_null($res->[0][1]{newState});
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
-    $self->assert_not_null($res->[0][1]{notUpdated});
-    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "stateMismatch");
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, "stateMismatch");
+    $self->assert_str_equals($res->[0][2], 'R1');
 
-    xlog "get calendar $id to fetch current state";
+    xlog "get calendar $id to make sure state didn't change";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
-    $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][1]{state}, $state);
+    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'bar');
 
     xlog "destroy calendar $id with expired state";
     $res = $jmap->Request([
@@ -370,21 +358,18 @@ sub test_setcalendars_state
                     destroy => [$id]
             }, "R1"]
     ]);
-    $self->assert_not_null($res->[0][1]{newState});
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
-    $self->assert_not_null($res->[0][1]{notDestroyed});
-    $self->assert_str_equals($res->[0][1]{notDestroyed}{$id}{type}, "stateMismatch");
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, "stateMismatch");
+    $self->assert_str_equals($res->[0][2], 'R1');
 
     xlog "destroy calendar $id with current state";
     $res = $jmap->Request([
             ['setCalendars', {
-                    ifInState => $oldState,
+                    ifInState => $state,
                     destroy => [$id]
             }, "R1"]
     ]);
-    $self->assert_not_null($res->[0][1]{newState});
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
-    $self->assert_not_null($res->[0][1]{destroyed});
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
 }
 =end snip
@@ -401,7 +386,6 @@ sub test_setcalendars_error
             ['setCalendars', { create => { "#1" => {}}}, "R1"]
     ]);
     $self->assert_not_null($res);
-
     my $errType = $res->[0][1]{notCreated}{"#1"}{type};
     my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
@@ -429,8 +413,77 @@ sub test_setcalendars_error
             "mayDelete"
     ]);
 
-    # XXX Once error handling has been agreed upon, finish these
-    # tests for update and destroy
+    xlog "update unknown calendar";
+    $res = $jmap->Request([
+            ['setCalendars', { update => { "unknown" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notUpdated}{"unknown"}{type};
+    $self->assert_str_equals($errType, "notFound");
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "update calendar with immutable optional attributes";
+    $res = $jmap->Request([
+            ['setCalendars', { update => { $id => {
+                            mayReadFreeBusy => \0, mayReadItems => \0,
+                            mayAddItems => \0, mayModifyItems => \0,
+                            mayRemoveItems => \0, mayRename => \0,
+                            mayDelete => \0
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notUpdated}{$id}{type};
+    $errProp = $res->[0][1]{notUpdated}{$id}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, [
+            "mayReadFreeBusy", "mayReadItems", "mayAddItems",
+            "mayModifyItems", "mayRemoveItems", "mayRename",
+            "mayDelete"
+    ]);
+
+    xlog "destroy unknown calendar";
+    $res = $jmap->Request([
+            ['setCalendars', {destroy => ["unknown"]}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notDestroyed}{"unknown"}{type};
+    $self->assert_str_equals($errType, "notFound");
+
+    xlog "destroy calendar $id";
+    $res = $jmap->Request([['setCalendars', {destroy => ["$id"]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+}
+
+sub test_setcalendars_badname
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create calendar with excessively long name";
+    # Exceed the maximum allowed 256 byte length by 1.
+    my $badname = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum tincidunt risus quis urna aliquam sollicitudin. Pellentesque aliquet nisl ut neque viverra pellentesque. Donec tincidunt eros at ante malesuada porta. Nam sapien arcu, vehicula non posuere.";
+
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => $badname, color => "aqua",
+                            sortOrder => 1, isVisible => \1
+            }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    my $errType = $res->[0][1]{notCreated}{"#1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, ["name"]);
 }
 
 sub test_importance_later
