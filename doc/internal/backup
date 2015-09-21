@@ -338,24 +338,24 @@ algorithm:
 *   close (and unlock) backup.old and backup
 
 
-backup_lock
+bu_lock
 -----------
 
 command line utility to lock a backup (for e.g. safely poking around in the
 .index on a live system).
 
 example failure:
-$bulock /path/to/backup.gz
+$bu_lock /path/to/backup.gz
 * Trying to obtain lock on /path/to/backup.gz...
 NO some error
 <EOF>
 
 example success:
-$bulock /path/to/backup.gz
+$bu_lock /path/to/backup.gz
 * Trying to obtain lock on /path/to/backup.gz...
 [potentially a delay here if we need to wait for another process to release the lock]
 OK locked
-[bulock waits for its stdin to close, then unlocks and exits]
+[bu_lock waits for its stdin to close, then unlocks and exits]
 
 if you need to rummage around in backup.index, run this program in another
 shell, do your work, then ^D it when you're finished.
