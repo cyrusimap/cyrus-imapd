@@ -2592,8 +2592,24 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     }
 
     if (_wantprop(crock->props, "isVisible")) {
-        int bool = rights & ACL_LOOKUP;
-        json_object_set_new(obj, "isVisible", bool ? json_true() : json_false());
+        static const char *color_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
+        struct buf attrib = BUF_INITIALIZER;
+        int r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
+        if (!r && attrib.len) {
+            const char *val = buf_cstring(&attrib);
+            /* XXX - Ok to assume a xsd:boolean? */
+            if (!strncmp(val, "true", 4) || !strncmp(val, "1", 1)) {
+                json_object_set_new(obj, "isVisible", json_true());
+            } else if (!strncmp(val, "false", 5) || !strncmp(val, "0", 1)) {
+                json_object_set_new(obj, "isVisible", json_false());
+            } else {
+                /* Report invalid value and fall back to default. */
+                syslog(LOG_WARNING, "isVisible: invalid annotation value: %s", val);
+                json_object_set_new(obj, "isVisible", json_string("true"));
+            }
+        }
+        buf_free(&attrib);
     }
 
     if (_wantprop(crock->props, "mayReadFreeBusy")) {
@@ -2840,7 +2856,19 @@ static int jmap_update_calendar(const char *mboxname,
         }
         buf_reset(&val);
     }
-    /* XXX - should isVisible really be mutable? */
+    /* isVisible */
+    if (!r && isVisible >= 0) {
+        buf_printf(&val, "%s", isVisible ? "true" : "false");
+        static const char *sortOrder_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
+        r = annotate_state_writemask(astate, sortOrder_annot, httpd_userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    sortOrder_annot, error_message(r));
+        }
+        buf_reset(&val);
+    }
+
     buf_free(&val);
 
     if (r) {
