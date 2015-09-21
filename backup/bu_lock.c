@@ -1,4 +1,4 @@
-/* bulock.c -- tool for manual locking of replication-based backup files
+/* bu_lock.c -- tool for manual locking of replication-based backup files
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
