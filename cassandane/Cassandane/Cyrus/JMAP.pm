@@ -265,10 +265,14 @@ sub test_setcalendars
     $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
     $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
     $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'foo');
+    $self->assert_equals($res->[0][1]{list}[0]{isVisible}, JSON::true);
 
     xlog "update calendar $id";
     $res = $jmap->Request([
-            ['setCalendars', {update => {"$id" => {name => "bar"}}}, "R1"]
+            ['setCalendars', {update => {"$id" => {
+                            name => "bar",
+                            isVisible => \0
+            }}}, "R1"]
     ]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'calendarsSet');
@@ -279,6 +283,7 @@ sub test_setcalendars
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'bar');
+    $self->assert_equals($res->[0][1]{list}[0]{isVisible}, JSON::false);
 
     xlog "destroy calendar $id";
     $res = $jmap->Request([['setCalendars', {destroy => ["$id"]}, "R1"]]);
