@@ -2739,28 +2739,26 @@ static int jmap_checkstate(struct jmap_req *req) {
 }
 
 /* Read the property named name into dst, formatted according to the json
- * unpack format fmt. Append name to missing, if it is mandatory and not
- * found in root, or to invalid if unpacking failed.
+ * unpack format fmt. Append name to invalid, if it is mandatory and not
+ * found in root, or if unpacking failed.
  *
  * Return a negative value for a missing or invalid property.
  * Return a positive value if a property was read, zero otherwise. */
 static int jmap_readprop(json_t *root,
                           const char *name,
                           int mandatory,
-                          json_t *missing,
                           json_t *invalid,
                           const char *fmt,
                           void *dst)
 {
     json_t *jval = json_object_get(root, name);
     if (!jval && mandatory) {
-        json_array_append_new(missing, json_string(name));
+        json_array_append_new(invalid, json_string(name));
         return -1;
     }
     if (jval) {
         json_error_t err;
         if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
-            syslog(LOG_ERR, "json_unpack %s failed: (%s)", name, err.text);
             json_array_append_new(invalid, json_string(name));
             return -2;
         }
@@ -2931,7 +2929,6 @@ static int setCalendars(struct jmap_req *req)
             }
 
             /* Parse and validate properties. */
-            json_t *missing = json_pack("[]");
             json_t *invalid = json_pack("[]");
             const char *name;
             const char *color;
@@ -2940,65 +2937,56 @@ static int setCalendars(struct jmap_req *req)
             short flag;
 
             /* Mandatory properties. */
-            jmap_readprop(arg, "name", 1, missing, invalid, "s", &name);
+            jmap_readprop(arg, "name", 1,  invalid, "s", &name);
             /* XXX What is a valid name? */
-            jmap_readprop(arg, "color", 1, missing, invalid, "s", &color);
+            jmap_readprop(arg, "color", 1,  invalid, "s", &color);
             /* XXX What is a valid color? */
-            jmap_readprop(arg, "sortOrder", 1, missing, invalid, "i", &sortOrder);
+            jmap_readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
             if (sortOrder < 0) {
                 json_array_append(invalid, json_string("sortOrder"));
             }
-            jmap_readprop(arg, "isVisible", 1, missing, invalid, "b", &isVisible);
+            jmap_readprop(arg, "isVisible", 1,  invalid, "b", &isVisible);
             if (!isVisible) {
                 json_array_append(invalid, json_string("isVisible"));
             }
             /* Optional properties. If present, these MUST be set to true. */
-            flag = 1; jmap_readprop(arg, "mayReadFreeBusy", 0, missing, invalid, "b", &flag);
+            flag = 1; jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
             if (!flag) {
                 json_array_append(invalid, json_string("mayReadFreeBusy"));
             }
-            flag = 1; jmap_readprop(arg, "mayReadItems", 0, missing, invalid, "b", &flag);
+            flag = 1; jmap_readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
             if (!flag) {
                 json_array_append(invalid, json_string("mayReadItems"));
             }
-            flag = 1; jmap_readprop(arg, "mayAddItems", 0, missing, invalid, "b", &flag);
+            flag = 1; jmap_readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
             if (!flag) {
                 json_array_append(invalid, json_string("mayAddItems"));
             }
-            flag = 1; jmap_readprop(arg, "mayModifyItems", 0, missing, invalid, "b", &flag);
+            flag = 1; jmap_readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
             if (!flag) {
                 json_array_append(invalid, json_string("mayModifyItems"));
             }
-            flag = 1; jmap_readprop(arg, "mayRemoveItems", 0, missing, invalid, "b", &flag);
+            flag = 1; jmap_readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
             if (!flag) {
                 json_array_append(invalid, json_string("mayRemoveItems"));
             }
-            flag = 1; jmap_readprop(arg, "mayRename", 0, missing, invalid, "b", &flag);
+            flag = 1; jmap_readprop(arg, "mayRename", 0,  invalid, "b", &flag);
             if (!flag) {
                 json_array_append(invalid, json_string("mayRename"));
             }
-            flag = 1; jmap_readprop(arg, "mayDelete", 0, missing, invalid, "b", &flag);
+            flag = 1; jmap_readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
             if (!flag) {
                 json_array_append(invalid, json_string("mayDelete"));
             }
 
             /* Report any property errors and bail out. */
-            json_t *err = NULL;
-            if (json_array_size(missing)) {
-                /* XXX - the missingParameters error is not documented */
-                err = json_pack("{s:s, s:O}",
-                        "type", "missingParameters", "properties", missing);
-
-            } else if (json_array_size(invalid)) {
-                err = json_pack("{s:s, s:O}",
-                        "type","invalidProperties", "properties", invalid);
-            }
-            json_decref(missing);
-            json_decref(invalid);
-            if (err) {
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notCreated, key, err);
                 continue;
             }
+            json_decref(invalid);
 
             /* Create a calendar named uid. */
             char *uid = xstrdup(makeuuid());
@@ -3097,47 +3085,47 @@ static int setCalendars(struct jmap_req *req)
             int isVisible = -1;
             int flag;
             int pe = 0; /* parse error */
-            pe = jmap_readprop(arg, "name", 0, NULL, invalid, "s", &name);
+            pe = jmap_readprop(arg, "name", 0,  invalid, "s", &name);
             if (!pe) {
                 /* XXX What is a valid name? */
             }
-            pe = jmap_readprop(arg, "color", 0, NULL, invalid, "s", &color);
+            pe = jmap_readprop(arg, "color", 0,  invalid, "s", &color);
             if (!pe) {
                 /* XXX What is a valid color? */
             }
-            pe = jmap_readprop(arg, "sortOrder", 0, NULL, invalid, "i", &sortOrder);
+            pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
             if (pe > 0 && sortOrder < 0) {
                 json_array_append(invalid, json_string("sortOrder"));
             }
             /* XXX Should isVisible really be mutable? */
-            jmap_readprop(arg, "isVisible", 0, NULL, invalid, "b", &isVisible);
+            jmap_readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
 
             /* The mayFoo properties are immutable and MUST NOT set. */
-            pe = jmap_readprop(arg, "mayReadFreeBusy", 0, NULL, invalid, "b", &flag);
+            pe = jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
             if (pe > 0) {
                 json_array_append(invalid, json_string("mayReadFreeBusy"));
             }
-            pe = jmap_readprop(arg, "mayReadItems", 0, NULL, invalid, "b", &flag);
+            pe = jmap_readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
             if (pe > 0) {
                 json_array_append(invalid, json_string("mayReadItems"));
             }
-            pe = jmap_readprop(arg, "mayAddItems", 0, NULL, invalid, "b", &flag);
+            pe = jmap_readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
             if (pe > 0) {
                 json_array_append(invalid, json_string("mayAddItems"));
             }
-            pe = jmap_readprop(arg, "mayModifyItems", 0, NULL, invalid, "b", &flag);
+            pe = jmap_readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
             if (pe > 0) {
                 json_array_append(invalid, json_string("mayModifyItems"));
             }
-            pe = jmap_readprop(arg, "mayRemoveItems", 0, NULL, invalid, "b", &flag);
+            pe = jmap_readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
             if (pe > 0) {
                 json_array_append(invalid, json_string("mayRemoveItems"));
             }
-            pe = jmap_readprop(arg, "mayRename", 0, NULL, invalid, "b", &flag);
+            pe = jmap_readprop(arg, "mayRename", 0,  invalid, "b", &flag);
             if (pe > 0) {
                 json_array_append(invalid, json_string("mayRename"));
             }
-            pe = jmap_readprop(arg, "mayDelete", 0, NULL, invalid, "b", &flag);
+            pe = jmap_readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
             if (pe > 0) {
                 json_array_append(invalid, json_string("mayDelete"));
             }
