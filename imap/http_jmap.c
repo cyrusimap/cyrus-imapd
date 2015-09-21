@@ -2702,11 +2702,6 @@ static int getCalendars(struct jmap_req *req)
     else {
         r = mboxlist_usermboxtree(req->userid, &getcalendars_cb, &rock, /*flags*/0);
         if (r) goto err;
-        if (rock.rows == 0) {
-            json_array_append(req->response, json_pack("[s {s:s} s]",
-                        "error", "type", "accountNoCalendars",req->tag));
-            goto done;
-        }
     }
 
     if (rock.props) free_hash_table(rock.props, NULL);
@@ -2734,7 +2729,6 @@ static int getCalendars(struct jmap_req *req)
 
 err:
     syslog(LOG_ERR, "caldav error %s", error_message(r));
-done:
     if (rock.props) free_hash_table(rock.props, NULL);
     json_decref(rock.array);
     /* XXX - free memory */
