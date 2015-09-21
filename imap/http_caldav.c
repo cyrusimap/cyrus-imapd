@@ -71,6 +71,7 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
+#include "http_caldav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
@@ -612,30 +613,11 @@ static void my_caldav_init(struct buf *serverinfo)
     utc_zone = icaltimezone_get_utc_timezone();
 }
 
-
-static void my_caldav_auth(const char *userid)
+int caldav_create_defaultcalendars(const char *userid)
 {
     int r;
     char *mailboxname, rights[100];
     struct buf acl = BUF_INITIALIZER;
-
-    if (httpd_userisadmin ||
-        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
-        /* admin or proxy from frontend - won't have DAV database */
-        return;
-    }
-    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* proxy-only server - won't have DAV database */
-        return;
-    }
-    else {
-        /* Open CalDAV DB for 'userid' */
-        my_caldav_reset();
-        auth_caldavdb = caldav_open_userid(userid);
-        if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
-    }
-
-    /* Auto-provision calendars for 'userid' */
 
     /* calendar-home-set */
     mailboxname = caldav_mboxname(userid, NULL);
@@ -653,7 +635,7 @@ static void my_caldav_auth(const char *userid)
                                  &backend_cached, NULL, NULL, httpd_in);
                 mboxlist_entry_free(&mbentry);
                 free(mailboxname);
-                return;
+                return r;
             }
             mboxlist_entry_free(&mbentry);
         }
@@ -770,15 +752,42 @@ static void my_caldav_auth(const char *userid)
 
   done:
     buf_free(&acl);
+    return r;
 }
 
+static void my_caldav_auth(const char *userid)
+{
+    int r;
+
+    if (httpd_userisadmin ||
+        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
+        /* admin or proxy from frontend - won't have DAV database */
+        return;
+    }
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* proxy-only server - won't have DAV database */
+        return;
+    }
+    else {
+        /* Open CalDAV DB for 'userid' */
+        my_caldav_reset();
+        auth_caldavdb = caldav_open_userid(userid);
+        if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
+    }
+
+    /* Auto-provision calendars for 'userid' */
+    r = caldav_create_defaultcalendars(userid);
+    if (r) {
+        syslog(LOG_ERR, "could not autoprovision calendars for userid %s: %s",
+                userid, error_message(r));
+    }
+}
 
 static void my_caldav_reset(void)
 {
     if (auth_caldavdb) caldav_close(auth_caldavdb);
     auth_caldavdb = NULL;
 }
-
 
 static void my_caldav_shutdown(void)
 {
