@@ -2956,17 +2956,21 @@ static int setCalendars(struct jmap_req *req)
 
             /* Parse and validate properties. */
             json_t *invalid = json_pack("[]");
-            const char *name;
-            const char *color;
-            int32_t sortOrder;
-            int isVisible;
+            const char *name = NULL;
+            const char *color = NULL;
+            int32_t sortOrder = -1;
+            int isVisible = 0;
             short flag;
 
             /* Mandatory properties. */
             jmap_readprop(arg, "name", 1,  invalid, "s", &name);
-            /* XXX What is a valid name? */
+            if (name && strnlen(name, 256) == 256) {
+                json_array_append(invalid, json_string("name"));
+            }
+
+            /* XXX - wait for CalConnect/Neil feedback on how to validate */
             jmap_readprop(arg, "color", 1,  invalid, "s", &color);
-            /* XXX What is a valid color? */
+
             jmap_readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
             if (sortOrder < 0) {
                 json_array_append(invalid, json_string("sortOrder"));
@@ -3112,12 +3116,12 @@ static int setCalendars(struct jmap_req *req)
             int flag;
             int pe = 0; /* parse error */
             pe = jmap_readprop(arg, "name", 0,  invalid, "s", &name);
-            if (!pe) {
-                /* XXX What is a valid name? */
+            if (pe > 0 && strnlen(name, 256) == 256) {
+                json_array_append(invalid, json_string("name"));
             }
             pe = jmap_readprop(arg, "color", 0,  invalid, "s", &color);
-            if (!pe) {
-                /* XXX What is a valid color? */
+            if (pe > 0) {
+                /* XXX - wait for CalConnect/Neil feedback on how to validate */
             }
             pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
             if (pe > 0 && sortOrder < 0) {
