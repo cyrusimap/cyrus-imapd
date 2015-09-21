@@ -2075,7 +2075,7 @@ static void sched_cancel(const char *recurid __attribute__((unused)),
 
     /* Deleting the object -- set STATUS to CANCELLED for component */
     icalcomponent_set_status(old_data->comp, ICAL_STATUS_CANCELLED);
-//    icalcomponent_set_sequence(old_data->comp, old_data->sequence+1);
+    icalcomponent_set_sequence(old_data->comp, old_data->sequence+1);
 
     process_attendees(old_data->comp, 0, crock->organizer, NULL,
                       crock->att_table, crock->itip, 0);
