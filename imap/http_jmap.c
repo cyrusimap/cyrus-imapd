@@ -2960,23 +2960,24 @@ static int setCalendars(struct jmap_req *req)
             const char *color = NULL;
             int32_t sortOrder = -1;
             int isVisible = 0;
+            int pe; /* parse error */
             short flag;
 
             /* Mandatory properties. */
-            jmap_readprop(arg, "name", 1,  invalid, "s", &name);
-            if (name && strnlen(name, 256) == 256) {
+            pe = jmap_readprop(arg, "name", 1,  invalid, "s", &name);
+            if (pe > 0 && strnlen(name, 256) == 256) {
                 json_array_append(invalid, json_string("name"));
             }
 
             /* XXX - wait for CalConnect/Neil feedback on how to validate */
             jmap_readprop(arg, "color", 1,  invalid, "s", &color);
 
-            jmap_readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
-            if (sortOrder < 0) {
+            pe = jmap_readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
+            if (pe > 0 && sortOrder < 0) {
                 json_array_append(invalid, json_string("sortOrder"));
             }
-            jmap_readprop(arg, "isVisible", 1,  invalid, "b", &isVisible);
-            if (!isVisible) {
+            pe = jmap_readprop(arg, "isVisible", 1,  invalid, "b", &isVisible);
+            if (pe > 0 && !isVisible) {
                 json_array_append(invalid, json_string("isVisible"));
             }
             /* Optional properties. If present, these MUST be set to true. */
@@ -3098,7 +3099,6 @@ static int setCalendars(struct jmap_req *req)
             if (*uid == '#') {
                 const char *t = hash_lookup(uid, req->idmap);
                 if (!t) {
-                    /* XXX - invalidArguments ain't right. Which error to use? */
                     json_t *err = json_pack("{s:s}", "type", "invalidArguments");
                     json_object_set_new(notUpdated, uid, err);
                     continue;
@@ -3127,7 +3127,6 @@ static int setCalendars(struct jmap_req *req)
             if (pe > 0 && sortOrder < 0) {
                 json_array_append(invalid, json_string("sortOrder"));
             }
-            /* XXX Should isVisible really be mutable? */
             jmap_readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
 
             /* The mayFoo properties are immutable and MUST NOT set. */
@@ -3173,13 +3172,13 @@ static int setCalendars(struct jmap_req *req)
             char *mboxname = caldav_mboxname(req->userid, uid);
             r = jmap_update_calendar(mboxname, req, name, color, sortOrder, isVisible);
             free(mboxname);
-            if (r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+            if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
-            } else if (r == IMAP_MAILBOX_NONEXISTENT) {
-                /* XXX - need an error for nonexistent entities */
-                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+            }
+            else if (r == IMAP_PERMISSION_DENIED) {
+                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
             }
@@ -3220,12 +3219,11 @@ static int setCalendars(struct jmap_req *req)
             char *mboxname = caldav_mboxname(req->userid, uid);
             r = jmap_delete_calendar(mboxname, req);
             free(mboxname);
-            if (r == IMAP_NOTFOUND) {
+            if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
             } else if (r == IMAP_PERMISSION_DENIED) {
-                /* XXX - need an error for nonexistent entities */
                 json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
@@ -3247,14 +3245,16 @@ static int setCalendars(struct jmap_req *req)
         json_decref(notDestroyed);
     }
 
+    /* Success. Any fatal error should have gone to the label 'done'. */
+    r = 0;
+
     /* read the modseq again every time, just in case something changed it
      * in our actions */
     struct buf buf = BUF_INITIALIZER;
-    /* XXX - The JMAP spec says state is global within a type, so this should
-     * be the caldav_mboxname */
-    /* XXX - Also, doesn't this leak? */
-    const char *inboxname = mboxname_user_mbox(req->userid, NULL);
+    /* XXX - Use the mboxname counters API. */
+    char *inboxname = mboxname_user_mbox(req->userid, NULL);
     modseq_t modseq = mboxname_readmodseq(inboxname);
+    free(inboxname);
     buf_printf(&buf, "%llu", modseq);
     json_object_set_new(set, "newState", json_string(buf_cstring(&buf)));
     buf_free(&buf);
