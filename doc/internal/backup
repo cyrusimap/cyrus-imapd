@@ -116,6 +116,11 @@ backup disappears?  Or the two backups get conflated, and samantha can
 
 Uggh.
 
+if there's a mailboxes database pointing to the backup files, then the backup
+file names don't need to be based on the userid, they could e.g. be based on
+the user's inbox's uniqueid.  this would make it easier to deal with user
+renames because the backup filename wouldn't need to change.
+
 
 locking
 -------
