@@ -377,7 +377,7 @@ dnl
 dnl Search engines - Sphinx
 dnl
 
-enable_squat=no
+enable_sphinx=no
 AC_ARG_ENABLE(sphinx,
         [  --enable-sphinx         disable Sphinx support],[
             enable_sphinx=$enableval
