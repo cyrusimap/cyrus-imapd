@@ -696,5 +696,75 @@ sub test_importance_zero_byself
     $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, 0);
 }
 
-1;
+sub test_getcalendarevents
+{
+    my ($self) = @_;
 
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get x-href of calendar $calid";
+    $res = $jmap->Request([['getCalendars', {ids => [$calid]}, "R1"]]);
+    my $xhref = $res->[0][1]{list}[0]{"x-href"};
+
+    # Bootstrap getCalendarEvents via CalDAV
+    xlog "create event (via CalDAV)";
+    my $id = "574E2CD0-2D2A-4554-8B63-C7504481D3AA";
+    my $href = "$xhref/$id.ics";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$id
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:Foo
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+  $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+  xlog "get event $id";
+  $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+
+  my $x = Dumper($res);
+  xlog "x = $x";
+
+  my $event = $res->[0][1]{list}[0];
+  $self->assert_not_null($event);
+  $self->assert_str_equals($event->{calendarId}, $id);
+  $self->assert_str_equals($event->{name}, "Foo");
+}
+
+1;
