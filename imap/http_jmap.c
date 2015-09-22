@@ -60,6 +60,7 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
+#include "http_caldav.h"
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "imap_err.h"
@@ -2663,6 +2664,9 @@ static int getCalendars(struct jmap_req *req)
     struct calendars_rock rock;
     int r = 0;
 
+    r = caldav_create_defaultcalendars(req->userid);
+   if (r) return r;
+
     rock.array = json_pack("[]");
     rock.req = req;
     rock.props = NULL;
@@ -2935,14 +2939,14 @@ static int setCalendars(struct jmap_req *req)
             "oldState", req->state,
             "accountId", req->userid);
 
+    r = caldav_create_defaultcalendars(req->userid);
+    if (r) goto done;
+
     json_t *create = json_object_get(req->args, "create");
     if (create) {
         json_t *created = json_pack("{}");
         json_t *notCreated = json_pack("{}");
         json_t *record;
-
-        /* XXX Should the first 'create' auto-provision the calendars?
-         * If so, might want to refactor http_caldav.c:my_caldav_auth. */
 
         const char *key;
         json_t *arg;
@@ -3210,12 +3214,17 @@ static int setCalendars(struct jmap_req *req)
             /* Validate uid. JMAP destroy does not allow reference uids. */
             const char *uid = json_string_value(juid);
             if (!strlen(uid) || *uid == '#') {
+                /* XXX - An invalidArguments error is NOT a set error. */
                 json_t *err= json_pack("{s:s}", "type", "invalidArguments");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
             }
 
             /* Destroy calendar. */
+            /* XXX - We even allow to destroy the special calendar mailboxes
+             * "Inbox", "Outbox", "Default", "Attachments".
+             * They will be autoprovisioned on the next JMAP/CalDAV hit, anyways.
+             * This might, or might not be a good choice. */
             char *mboxname = caldav_mboxname(req->userid, uid);
             r = jmap_delete_calendar(mboxname, req);
             free(mboxname);
