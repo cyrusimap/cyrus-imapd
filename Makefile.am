@@ -288,7 +288,7 @@ if SIEVE
 
 if PERL
 SUBDIRS += perl/sieve/managesieve
-noinst_LIBRARIES = perl/sieve/lib/libisieve.a
+noinst_LTLIBRARIES += perl/sieve/lib/libisieve.la
 endif # PERL
 
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
@@ -1540,7 +1540,7 @@ perl_libcyrus_la_LIBADD = $(lib_libcyrus_la_LIBADD)
 perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
 perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 
-perl_sieve_lib_libisieve_a_SOURCES = \
+perl_sieve_lib_libisieve_la_SOURCES = \
 	perl/sieve/lib/codes.h \
 	perl/sieve/lib/isieve.c \
 	perl/sieve/lib/isieve.h \
