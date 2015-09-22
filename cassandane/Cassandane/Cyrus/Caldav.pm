@@ -98,6 +98,25 @@ sub test_caldavcreate
     $self->assert_not_null($CalendarId);
 }
 
+sub test_caldav_autoprovision_default
+{
+    my ($self) = @_;
+    my $CalDAV = $self->{caldav};
+
+    xlog "fetch autoprovisioned calendars";
+    my $calendars = $CalDAV->GetCalendars();
+
+    my $default = undef;
+    # I am sure there are nicer ways to do this in Perl.
+    foreach my $cal (@$calendars) {
+        if ($cal->{id} == "Default") {
+            $default = $cal;
+            last;
+        }
+    }
+    $self->assert_not_null($default);
+}
+
 sub test_caldavcolor
 {
     my ($self) = @_;
