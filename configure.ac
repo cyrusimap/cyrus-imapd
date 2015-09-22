@@ -537,16 +537,15 @@ if test "$spt_type" = ""; then
 fi
 if test "$spt_type" = ""; then
         AC_MSG_CHECKING(for PS_STRINGS)
-        AC_CACHE_VAL(cyrus_cv_sys_psstrings, AC_TRY_CPP([
+        AC_CACHE_VAL(cyrus_cv_sys_psstrings, AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 #include <machine/vmparam.h>
 #include <sys/exec.h>
-#ifndef PS_STRINGS
-#include </nonexistent>
-#endif],cyrus_cv_sys_psstrings=yes,cyrus_cv_sys_psstrings=no))
-        if test $cyrus_cv_sys_psstrings = yes; then
-                spt_type=SPT_PSSTRINGS
-        fi
-        AC_MSG_RESULT($cyrus_cv_sys_psstrings)
+void *p = PS_STRINGS;
+])],cyrus_cv_sys_psstrings=yes,cyrus_cv_sys_psstrings=no))
+         if test $cyrus_cv_sys_psstrings = yes; then
+                 spt_type=SPT_PSSTRINGS
+         fi
+         AC_MSG_RESULT($cyrus_cv_sys_psstrings)
 fi
 if test "$spt_type" = ""; then
         AC_MSG_CHECKING(for SCO)
