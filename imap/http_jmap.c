@@ -85,6 +85,7 @@ struct jmap_req {
     json_t *args;
     json_t *response;
     const char *state; // if changing things, this is pre-change state
+    struct mboxname_counters counters;
     const char *tag;
 };
 
@@ -261,20 +262,22 @@ static int jmap_post(struct transaction_t *txn,
             continue;
         }
 
-        /* read the modseq again every time, just in case something changed it
-         * in our actions */
-        struct buf buf = BUF_INITIALIZER;
-        modseq_t modseq = mboxname_readmodseq(inboxname);
-        buf_printf(&buf, "%llu", modseq);
-
         struct jmap_req req;
         req.userid = httpd_userid;
         req.authstate = httpd_authstate;
         req.args = args;
-        req.state = buf_cstring(&buf);
         req.response = resp;
         req.tag = tag;
         req.idmap = &idmap;
+
+        /* Read the modseq counters again, just in case something changed. */
+        r = mboxname_read_counters(inboxname, &req.counters);
+        if (r) goto done;
+
+        /* XXX - Make also contacts use counters. */
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%llu", req.counters.highestmodseq);
+        req.state = buf_cstring(&buf);
 
         r = mp->proc(&req);
 
@@ -2739,21 +2742,83 @@ err:
     return r;
 }
 
-/* Check that ifInState matches the current mailbox state, if so return
- * zero. Otherwise, append a stateMismatch error to the JMAP response. */
-static int jmap_checkstate(struct jmap_req *req) {
-    json_t *jcheckState = json_object_get(req->args, "ifInState");
-    if (jcheckState) {
-        const char *checkState = json_string_value(jcheckState);
-        if (!checkState ||strcmp(req->state, checkState)) {
+/* Check if ifInState matches the current mailbox state for mailbox type
+ * mbtype, if so return zero. Otherwise, append a stateMismatch error to the
+ * JMAP response. */
+static int jmap_checkstate(struct jmap_req *req, int mbtype) {
+    json_t *jIfInState = json_object_get(req->args, "ifInState");
+    if (jIfInState) {
+        const char *ifInState = json_string_value(jIfInState);
+        if (!ifInState) {
+            return -1;
+        }
+        char *ptr;
+        modseq_t clientState = strtoull(ifInState, &ptr, 10);
+        if (!ptr || *ptr != '\0') {
             json_t *item = json_pack("[s, {s:s}, s]",
                                      "error", "type", "stateMismatch",
                                      req->tag);
             json_array_append_new(req->response, item);
-            return -1;
+            return -2;
+        }
+        if (mbtype == MBTYPE_CALENDAR && clientState == req->counters.caldavmodseq) {
+            return 0;
+        } else if (mbtype == MBTYPE_ADDRESSBOOK && clientState == req->counters.carddavmodseq) {
+            return 0;
+        } else if (clientState == req->counters.mailmodseq) {
+            /* XXX - What about notesmodseq? */
+            return 0;
+        } else {
+            json_t *item = json_pack("[s, {s:s}, s]",
+                                     "error", "type", "stateMismatch",
+                                     req->tag);
+            json_array_append_new(req->response, item);
+            return -3;
         }
     }
     return 0;
+}
+
+/* Set the newState token for the JMAP type mbtype in response res. If bump
+ * is true, increase the state of this JMAP type before setting newState. */
+static int jmap_setnewstate(struct jmap_req *req, json_t *res, int mbtype, int bump) {
+    struct buf buf = BUF_INITIALIZER;
+    char *mboxname;
+    int r;
+    modseq_t modseq;
+
+    mboxname = mboxname_user_mbox(req->userid, NULL);
+
+    /* Read counters. */
+    r = mboxname_read_counters(mboxname, &req->counters);
+    if (r) goto done;
+
+    /* Determine current counter by mailbox type. */
+    switch (mbtype) {
+        case MBTYPE_CALENDAR:
+            modseq = req->counters.caldavmodseq;
+            break;
+        case MBTYPE_ADDRESSBOOK:
+            modseq = req->counters.carddavmodseq;
+            break;
+        default:
+            /* XXX - What about notesmodseq? */
+            modseq = req->counters.highestmodseq;
+    }
+
+    /* Bump current counter. */
+    if (bump) {
+        modseq = mboxname_nextmodseq(mboxname, modseq, mbtype);
+    }
+
+    /* Set newState field. */
+    buf_printf(&buf, "%llu", modseq);
+    json_object_set_new(res, "newState", json_string(buf_cstring(&buf)));
+    buf_free(&buf);
+
+done:
+    free(mboxname);
+    return r;
 }
 
 /* Read the property named name into dst, formatted according to the json
@@ -2932,7 +2997,7 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
 
 static int setCalendars(struct jmap_req *req)
 {
-    int r = jmap_checkstate(req);
+    int r = jmap_checkstate(req, MBTYPE_CALENDAR);
     if (r) return 0;
 
     json_t *set = json_pack("{s:s,s:s}",
@@ -3254,19 +3319,12 @@ static int setCalendars(struct jmap_req *req)
         json_decref(notDestroyed);
     }
 
-    /* Success. Any fatal error should have gone to the label 'done'. */
-    r = 0;
-
-    /* read the modseq again every time, just in case something changed it
-     * in our actions */
-    struct buf buf = BUF_INITIALIZER;
-    /* XXX - Use the mboxname counters API. */
-    char *inboxname = mboxname_user_mbox(req->userid, NULL);
-    modseq_t modseq = mboxname_readmodseq(inboxname);
-    free(inboxname);
-    buf_printf(&buf, "%llu", modseq);
-    json_object_set_new(set, "newState", json_string(buf_cstring(&buf)));
-    buf_free(&buf);
+    /* Set newState field in calendarsSet. */
+    r = jmap_setnewstate(req, set, MBTYPE_CALENDAR,
+            json_object_get(set, "created") ||
+            json_object_get(set, "updated") ||
+            json_object_get(set, "destroyed"));
+    if (r) goto done;
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("calendarsSet"));
