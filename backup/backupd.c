@@ -864,6 +864,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     // FIXME should call backup_index here, but there's not actually anything
     // to index in a RESERVE...
 
+    struct dlist *missing = dlist_newlist(NULL, "MISSING");
     for (di = gl->head; di; di = di->next) {
         struct message_guid *guid = NULL;
         const char *guid_str;
@@ -874,10 +875,21 @@ static int cmd_apply_reserve(struct dlist *dl)
         int message_id = backup_get_message_id(open->backup, guid_str);
 
         if (message_id <= 0) {
-            // FIXME what's this supposed to actually look like
-            prot_printf(backupd_out, "* MISSING %s\r\n", guid_str);
+            /* FIXME this looks like how sync_apply_reserve does it
+             * but something about this is irking me...
+             * but that might just be me getting confused by the dlist api
+             */
+            dlist_setguid(missing, "GUID", guid);
         }
     }
+
+    if (missing->head) {
+        prot_printf(backupd_out, "* ");
+        dlist_print(missing, 1, backupd_out);
+        prot_printf(backupd_out, "\r\n");
+    }
+
+    dlist_free(&missing);
 
     return 0;
 }
