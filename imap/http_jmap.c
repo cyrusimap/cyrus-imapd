@@ -2661,85 +2661,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
 
 /* jmap calendar APIs */
-static int getCalendars(struct jmap_req *req)
-{
-    struct calendars_rock rock;
-    int r = 0;
-
-    r = caldav_create_defaultcalendars(req->userid);
-   if (r) return r;
-
-    rock.array = json_pack("[]");
-    rock.req = req;
-    rock.props = NULL;
-    rock.rows = 0;
-
-    json_t *properties = json_object_get(req->args, "properties");
-    if (properties) {
-        rock.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.props, 1024, 0);
-        int i;
-        int size = json_array_size(properties);
-        for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) continue;
-            /* 1 == properties */
-            hash_insert(id, (void *)1, rock.props);
-        }
-    }
-
-    json_t *want = json_object_get(req->args, "ids");
-    json_t *notfound = json_array();
-    if (want) {
-        int i;
-        int size = json_array_size(want);
-        for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(want, i));
-            rock.rows = 0;
-            char *mboxname = caldav_mboxname(req->userid, id);
-            r = mboxlist_mboxtree(mboxname, &getcalendars_cb, &rock, MBOXTREE_SKIP_CHILDREN);
-            free(mboxname);
-            if (r) goto err;
-            if (!rock.rows) {
-                json_array_append_new(notfound, json_string(id));
-            }
-        }
-    }
-    else {
-        r = mboxlist_usermboxtree(req->userid, &getcalendars_cb, &rock, /*flags*/0);
-        if (r) goto err;
-    }
-
-    if (rock.props) free_hash_table(rock.props, NULL);
-
-    json_t *calendars = json_pack("{}");
-    json_object_set_new(calendars, "accountId", json_string(req->userid));
-    json_object_set_new(calendars, "state", json_string(req->state));
-    json_object_set_new(calendars, "list", rock.array);
-    if (json_array_size(notfound)) {
-        json_object_set_new(calendars, "notFound", notfound);
-    }
-    else {
-        json_decref(notfound);
-        json_object_set_new(calendars, "notFound", json_null());
-    }
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendars"));
-    json_array_append_new(item, calendars);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-    return 0;
-
-err:
-    syslog(LOG_ERR, "caldav error %s", error_message(r));
-    if (rock.props) free_hash_table(rock.props, NULL);
-    json_decref(rock.array);
-    /* XXX - free memory */
-    return r;
-}
 
 /* Check if ifInState matches the current mailbox state for mailbox type
  * mbtype, if so return zero. Otherwise, append a stateMismatch error to the
@@ -2778,9 +2699,13 @@ static int jmap_checkstate(struct jmap_req *req, int mbtype) {
     return 0;
 }
 
-/* Set the newState token for the JMAP type mbtype in response res. If bump
- * is true, increase the state of this JMAP type before setting newState. */
-static int jmap_setnewstate(struct jmap_req *req, json_t *res, int mbtype, int bump) {
+/* Set the state token named name for the JMAP type mbtype in response res.
+ * If bump is true, update the state of this JMAP type before setting name. */
+static int jmap_setstate(struct jmap_req *req,
+                            json_t *res,
+                            const char *name,
+                            int mbtype,
+                            int bump) {
     struct buf buf = BUF_INITIALIZER;
     char *mboxname;
     int r;
@@ -2812,7 +2737,7 @@ static int jmap_setnewstate(struct jmap_req *req, json_t *res, int mbtype, int b
 
     /* Set newState field. */
     buf_printf(&buf, "%llu", modseq);
-    json_object_set_new(res, "newState", json_string(buf_cstring(&buf)));
+    json_object_set_new(res, name, json_string(buf_cstring(&buf)));
     buf_free(&buf);
 
 done:
@@ -2989,6 +2914,90 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
 
     return r;
 }
+
+static int getCalendars(struct jmap_req *req)
+{
+    struct calendars_rock rock;
+    int r = 0;
+
+    r = caldav_create_defaultcalendars(req->userid);
+   if (r) return r;
+
+    rock.array = json_pack("[]");
+    rock.req = req;
+    rock.props = NULL;
+    rock.rows = 0;
+
+    json_t *properties = json_object_get(req->args, "properties");
+    if (properties) {
+        rock.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(rock.props, 1024, 0);
+        int i;
+        int size = json_array_size(properties);
+        for (i = 0; i < size; i++) {
+            const char *id = json_string_value(json_array_get(properties, i));
+            if (id == NULL) continue;
+            /* 1 == properties */
+            hash_insert(id, (void *)1, rock.props);
+        }
+    }
+
+    json_t *want = json_object_get(req->args, "ids");
+    json_t *notfound = json_array();
+    if (want) {
+        int i;
+        int size = json_array_size(want);
+        for (i = 0; i < size; i++) {
+            const char *id = json_string_value(json_array_get(want, i));
+            rock.rows = 0;
+            char *mboxname = caldav_mboxname(req->userid, id);
+            r = mboxlist_mboxtree(mboxname, &getcalendars_cb, &rock, MBOXTREE_SKIP_CHILDREN);
+            free(mboxname);
+            if (r) goto err;
+            if (!rock.rows) {
+                json_array_append_new(notfound, json_string(id));
+            }
+        }
+    }
+    else {
+        r = mboxlist_usermboxtree(req->userid, &getcalendars_cb, &rock, /*flags*/0);
+        if (r) goto err;
+    }
+
+    if (rock.props) free_hash_table(rock.props, NULL);
+
+    json_t *calendars = json_pack("{}");
+    r = jmap_setstate(req, calendars, "state", MBTYPE_CALENDAR, 0);
+    if (r) {
+        goto err;
+    }
+    json_object_set_new(calendars, "accountId", json_string(req->userid));
+    json_object_set_new(calendars, "list", rock.array);
+    if (json_array_size(notfound)) {
+        json_object_set_new(calendars, "notFound", notfound);
+    }
+    else {
+        json_decref(notfound);
+        json_object_set_new(calendars, "notFound", json_null());
+    }
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("calendars"));
+    json_array_append_new(item, calendars);
+    json_array_append_new(item, json_string(req->tag));
+
+    json_array_append_new(req->response, item);
+
+    return 0;
+
+err:
+    syslog(LOG_ERR, "caldav error %s", error_message(r));
+    if (rock.props) free_hash_table(rock.props, NULL);
+    json_decref(rock.array);
+    /* XXX - free memory */
+    return r;
+}
+
 
 static int setCalendars(struct jmap_req *req)
 {
@@ -3315,7 +3324,7 @@ static int setCalendars(struct jmap_req *req)
     }
 
     /* Set newState field in calendarsSet. */
-    r = jmap_setnewstate(req, set, MBTYPE_CALENDAR,
+    r = jmap_setstate(req, set, "newState", MBTYPE_CALENDAR,
             json_object_get(set, "created") ||
             json_object_get(set, "updated") ||
             json_object_get(set, "destroyed"));
