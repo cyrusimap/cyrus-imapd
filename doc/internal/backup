@@ -278,8 +278,7 @@ message to a folder but let the server determine the tasty bits.
 protocol flow looks something like:
 
 c: APPLY RESERVE ... # as usual
-s: MISSING GUID foo
-s: MISSING GUID bar
+s: * MISSING (foo bar)
 s: OK
 c: APPLY MESSAGE ... # as usual
 s: OK
@@ -291,7 +290,7 @@ usual APPLY MAILBOX.  i.e. instead of specifying the mailbox state plus a list o
 message records indexed by uid, we instead supply the message guid plus a list of
 mailbox-records describing the mailboxes it should be added to and the flags/annotations
 for each one.  the server adds it into the mailbox as per delivery of a new message
--- generating uid, modseq, etc itself, rather than receiving them from the sync client
+-- generating uid, modseq, etc itself, rather than receiving them from the restore client
 
 this will end up generating new events in the backup channel's sync log, and then the
 messages will be backed up again with their new uids, etc.  additional wire transfer
