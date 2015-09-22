@@ -136,8 +136,15 @@ restore:  needs to read
 
 
 
-mailboxes database ??
+mailboxes database
+------------------
 
+bron reckons use twoskip for this
+userid -> backup_filename
+
+lib/cyrusdb module implements this, look into that
+
+look at conversations db code to see how to use it
 
 
 reindex
@@ -183,6 +190,7 @@ need a "backup_index_abort" to complete the backup_index_start/end set.
 _start should create a transaction, _end should commit it, and _abort should roll it back.
 then, if backupd fails to write to the gzip file for some reason, the (now invalid) index
 info we added can be discarded too.
+
 
 sql snippets
 -----------
