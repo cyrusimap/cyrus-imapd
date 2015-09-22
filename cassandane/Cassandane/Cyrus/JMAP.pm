@@ -291,8 +291,6 @@ sub test_setcalendars
     $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
 }
 
-=begin snip
-# XXX - States are not yet supported
 sub test_setcalendars_state
 {
     my ($self) = @_;
@@ -307,7 +305,7 @@ sub test_setcalendars_state
                 }, "R1"]
         ]);
     $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][1]{type}, 'invalidArguments');
+    $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
 
     xlog "create with wrong state token";
     $res = $jmap->Request([
@@ -340,14 +338,20 @@ sub test_setcalendars_state
                     update => {"$id" => {name => "bar"}}
             }, "R1"]
     ]);
-
-    my $x = Dumper($res);
-    xlog "wrong state: $state -- $x";
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
 
     my $oldState = $state;
     $state = $res->[0][1]{newState};
+
+    xlog "setCalendar noops must keep state";
+    $res = $jmap->Request([
+            ['setCalendars', {}, "R1"],
+            ['setCalendars', {}, "R2"],
+            ['setCalendars', {}, "R3"]
+    ]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
 
     xlog "update calendar $id with expired state";
     $res = $jmap->Request([
@@ -386,8 +390,6 @@ sub test_setcalendars_state
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
 }
-=end snip
-=cut
 
 sub test_setcalendars_error
 {
@@ -437,7 +439,7 @@ sub test_setcalendars_error
     $self->assert_str_equals($errType, "notFound");
 
     xlog "create calendar";
-    my $res = $jmap->Request([
+    $res = $jmap->Request([
             ['setCalendars', { create => { "#1" => {
                             name => "foo",
                             color => "coral",
@@ -520,7 +522,7 @@ sub test_setcalendars_destroydefault
     $self->assert_deep_equals(@specialIds, $res->[0][1]{destroyed});
 
     xlog "get autoprovisioned default calendar";
-    my $res = $jmap->Request([['getCalendars', {ids => @specialIds}, "R1"]]);
+     $res = $jmap->Request([['getCalendars', {ids => @specialIds}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]{id}, "Default");
 }
 
