@@ -215,6 +215,20 @@ sub test_getcalendars
     # XXX - test for shared calendars
 }
 
+sub test_getcalendars_default
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # XXX - A previous CalDAV test might have created the default
+    # calendar already. To make this test self-sufficient, we need
+    # to create a test user just for this test. How?
+    xlog "get default calendar";
+    my $res = $jmap->Request([['getCalendars', {ids => ["Default"]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]{id}, "Default");
+}
+
 sub test_setcalendars
 {
     my ($self) = @_;
@@ -484,6 +498,30 @@ sub test_setcalendars_badname
     my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, ["name"]);
+}
+
+sub test_setcalendars_destroydefault
+{
+    # This test demonstrates that the destruction of the special
+    # calendar mailboxes is allowed. However, on the next
+    # JMAP hit, they are again autoprovisioned (we only check for
+    # calendar Default, since the other mailboxes are hidden.).
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my @specialIds = ["Inbox", "Outbox", "Default", "Attachments"];
+
+    xlog "destroy special calendars";
+    my $res = $jmap->Request([
+            ['setCalendars', { destroy => @specialIds }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(@specialIds, $res->[0][1]{destroyed});
+
+    xlog "get autoprovisioned default calendar";
+    my $res = $jmap->Request([['getCalendars', {ids => @specialIds}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]{id}, "Default");
 }
 
 sub test_importance_later
