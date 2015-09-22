@@ -120,17 +120,13 @@ Uggh.
 locking
 -------
 
-foo.gz:   only one process may write to it, but anyone can read it
-foo.idx:  only writer of foo.gz may write to it, but anyone can read it
-foo.lock: holder can write, everyone else can read or wait
-
-or, just use a normal flock/fcntl lock on the .gz file and only open the index
-if that lock succeeded??
+just use a normal flock/fcntl lock on the .gz file and only open the index
+if that lock succeeded
 
 backup:   needs to append foo.fz and update foo.idx
 reindex:  only needs to read foo.gz, but needs a write lock to prevent writes
-          while it does so. needs to write to (replace) foo.idx
-compress: needs to re-write foo.gz and foo.idx
+          while it does so. needs to write to (replace) foo.index
+compress: needs to re-write foo.gz and foo.index
 restore:  needs to read
 
 
