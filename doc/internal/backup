@@ -397,8 +397,8 @@ the job of looking it up in the mailboxes database to find the appropriate
 thing to open?
 
 can we use sqlite for such a database, or is the load on it going to be too
-heavy?  we have lots of database formats up our sleeves here, so even though
-we use sqlite for the backup index there isn't any particular reason we're
-beholden to it for the mailboxes db too
+heavy?  locking?  we have lots of database formats up our sleeves here, so
+even though we use sqlite for the backup index there isn't any particular
+reason we're beholden to it for the mailboxes db too
 
 if we have a mailboxes db then we need a reconstruct tool for that, too
