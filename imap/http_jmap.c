@@ -2606,7 +2606,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
         int r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
         if (!r && attrib.len) {
             const char *val = buf_cstring(&attrib);
-            /* XXX - Ok to assume a xsd:boolean? */
             if (!strncmp(val, "true", 4) || !strncmp(val, "1", 1)) {
                 json_object_set_new(obj, "isVisible", json_true());
             } else if (!strncmp(val, "false", 5) || !strncmp(val, "0", 1)) {
@@ -2865,7 +2864,6 @@ static int jmap_update_calendar(const char *mboxname,
     struct buf val = BUF_INITIALIZER;
     int r;
 
-    /* XXX- Make a copy of mailbox, or is abort sufficient? */
     r = mailbox_open_iwl(mboxname, &mbox);
     if (r) {
         syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
@@ -2939,10 +2937,8 @@ static int jmap_update_calendar(const char *mboxname,
     buf_free(&val);
 
     if (r) {
-        /* XXX - Does mailbox_close abort, if there was a previous error? */
         mailbox_abort(mbox);
     }
-    /* XXX - how to bump the modseq of the #calendars mailbox? */
     mailbox_close(&mbox);
     return r;
 }
@@ -2978,7 +2974,6 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
         return r;
     }
 
-    /* XXX - check for remote mailbox like in http_dav:3511ff ? */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mboxname,
