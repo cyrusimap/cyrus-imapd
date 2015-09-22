@@ -279,6 +279,19 @@ AC_ARG_ENABLE(dummy_objstore,
 AM_CONDITIONAL([DUMMY_OBJSTORE], [test "$enable_dummy_objstore" = "yes"])
 
 
+dnl
+dnl see if we're compiling with caringo_objstore support
+dnl
+AC_ARG_WITH(caringo,
+        [AS_HELP_STRING([--with-caringo], [use Caringo ("yes" or "no")])],,with_caringo="no")
+case "$with_caringo" in
+  yes)
+	LDFLAGS="$LDFLAGS -lCastorSDK"
+  ;;
+esac
+dnl End Caringo Detection
+AM_CONDITIONAL([WITH_CARINGO], [test "$with_caringo" = "yes"])
+
 dnl OpenIO Detection
 
 dnl deps: metautils gridclient oiosds curl 
@@ -1952,6 +1965,7 @@ Cyrus Server configured components
    calalarmd:          $enable_calalarmd
    openio:             $use_openio
    dummy_objstore:     $enable_dummy_objstore
+   caringo:            $with_caringo
 
 External dependencies:
    ldap:               $have_ldap

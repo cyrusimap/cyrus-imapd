@@ -2177,6 +2177,15 @@ product version in the capabilities */
    the cyrus to be set in debug mode. The special "quiet" value disables all
    kinds of logging at the GLib level. */
 
+{ "caringo_hostname", NULL, STRING }
+/* The Caringo hostname used to store archived email messages. A hostname
+   identifies the physical platform cyrus must contact. This directive is used
+   by the Caringo's SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP) 
+   on HTTP 1.1 using a RESTful architecture  */
+
+{ "caringo_port", 80, INT }
+/* The port of the caringo server (caringo_hostname); default is 80. */
+
 /*
 .SH SEE ALSO
 .PP

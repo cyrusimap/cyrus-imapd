@@ -1022,12 +1022,20 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/objectstore_openio.c \
         imap/objectstore.h 
 else
+if WITH_CARINGO
+imap_libcyrus_imap_la_SOURCES += \
+        imap/objectstore_db.c \
+        imap/objectstore_db.h \
+        imap/objectstore_caringo.c \
+        imap/objectstore.h 
+else
 if DUMMY_OBJSTORE
 imap_libcyrus_imap_la_SOURCES += \
         imap/objectstore_db.c \
         imap/objectstore_db.h \
         imap/objectstore_dummy.c \
         imap/objectstore.h 
+endif
 endif
 endif
 
