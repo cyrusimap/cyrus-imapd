@@ -365,6 +365,7 @@ default run mode as above
 -s to fork an sqlite of the index (and unlock when it exits)
 -x to fork a command of your choosing (and unlock when it exits)
 
+
 reconstruct
 -----------
 
@@ -374,3 +375,30 @@ reconstruct
   it shouldn't be able to get out of order if it's only being written to by
   backupd but if you've got funky home-grown stuff around the edges, or you're
   working on the backup system itself, ...
+
+
+partitions
+----------
+
+not enough information in sync protocol to handle partitions easily?
+
+we know what the partition is when we do an APPLY operation (mailbox, message,
+etc), but the initial GET operations don't include it.  so we need to already
+know where the appropriate backup is partitioned in order to find the backup
+file in order to look inside it to respond to the GET request
+
+if we have a mailboxes database (indexed by mboxname, uniqueid and userid) then
+maybe that would make it feasible?  if it's not in the mailboxes database then
+we don't have a backup for it yet, so we respond accordingly, and get sent
+enough information to create it.
+
+does that mean the backup api needs to take an mbname on open, and it handles
+the job of looking it up in the mailboxes database to find the appropriate
+thing to open?
+
+can we use sqlite for such a database, or is the load on it going to be too
+heavy?  we have lots of database formats up our sleeves here, so even though
+we use sqlite for the backup index there isn't any particular reason we're
+beholden to it for the mailboxes db too
+
+if we have a mailboxes db then we need a reconstruct tool for that, too
