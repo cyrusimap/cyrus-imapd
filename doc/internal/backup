@@ -339,19 +339,19 @@ algorithm:
 
 
 bu_lock
------------
+-------
 
 command line utility to lock a backup (for e.g. safely poking around in the
 .index on a live system).
 
 example failure:
-$bu_lock /path/to/backup.gz
+$bu_lock -f /path/to/backup.gz
 * Trying to obtain lock on /path/to/backup.gz...
 NO some error
 <EOF>
 
 example success:
-$bu_lock /path/to/backup.gz
+$bu_lock -f /path/to/backup.gz
 * Trying to obtain lock on /path/to/backup.gz...
 [potentially a delay here if we need to wait for another process to release the lock]
 OK locked
@@ -365,6 +365,10 @@ read "OK locked", then you've got your lock.  close the pipe to unlock when
 you're finished working.  if you don't read "OK locked" before the pipe closes
 then something went wrong and you didn't get the lock.
 
+specify backups by -f filename, -m mailbox, -u userid
+default run mode as above
+-s to fork an sqlite of the index (and unlock when it exits)
+-x to fork a command of your choosing (and unlock when it exits)
 
 reconstruct
 -----------
