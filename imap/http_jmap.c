@@ -2921,13 +2921,10 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
 static int getCalendars(struct jmap_req *req)
 {
     struct calendars_rock rock;
-    struct hash_table props;
     int r = 0;
 
     r = caldav_create_defaultcalendars(req->userid);
     if (r) return r;
-
-    construct_hash_table(&props, 1024, 0);
 
     rock.array = json_pack("[]");
     rock.req = req;
@@ -2936,7 +2933,8 @@ static int getCalendars(struct jmap_req *req)
 
     json_t *properties = json_object_get(req->args, "properties");
     if (properties) {
-        rock.props = &props;
+        rock.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(rock.props, 1024, 0);
         int i;
         int size = json_array_size(properties);
         for (i = 0; i < size; i++) {
@@ -2958,7 +2956,7 @@ static int getCalendars(struct jmap_req *req)
             char *mboxname = caldav_mboxname(req->userid, id);
             r = mboxlist_mboxtree(mboxname, &getcalendars_cb, &rock, MBOXTREE_SKIP_CHILDREN);
             free(mboxname);
-            if (r) goto err;
+            if (r) goto done;
             if (!rock.rows) {
                 json_array_append_new(notfound, json_string(id));
             }
@@ -2966,16 +2964,14 @@ static int getCalendars(struct jmap_req *req)
     }
     else {
         r = mboxlist_usermboxtree(req->userid, &getcalendars_cb, &rock, /*flags*/0);
-        if (r) goto err;
+        if (r) goto done;
     }
-
-    free_hash_table(&props, NULL);
 
     json_t *calendars = json_pack("{}");
     r = jmap_setstate(req, calendars, "state", MBTYPE_CALENDAR, 0);
-    if (r) {
-        goto err;
-    }
+    if (r) goto done;
+
+    json_incref(rock.array);
     json_object_set_new(calendars, "accountId", json_string(req->userid));
     json_object_set_new(calendars, "list", rock.array);
     if (json_array_size(notfound)) {
@@ -2993,15 +2989,14 @@ static int getCalendars(struct jmap_req *req)
 
     json_array_append_new(req->response, item);
 
-    return 0;
-
-err:
-    syslog(LOG_ERR, "caldav error %s", error_message(r));
-    free_hash_table(&props, NULL);
+done:
+    if (rock.props) {
+        free_hash_table(rock.props, NULL);
+        free(rock.props);
+    }
     json_decref(rock.array);
     return r;
 }
-
 
 static int setCalendars(struct jmap_req *req)
 {
@@ -3439,4 +3434,3 @@ static int getCalendarEvents(struct jmap_req *req)
 {
     return jmap_calendars_get(req, &getevents_cb, "calendarEvents");
 }
-
