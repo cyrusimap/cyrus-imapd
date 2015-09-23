@@ -68,7 +68,7 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-int caladdress_lookup(const char *addr, struct sched_param *param)
+int caladdress_lookup(const char *addr, struct sched_param *param, const char *myuserid)
 {
     const char *userid = addr, *p;
     int islocal = 1, found = 1;
@@ -79,6 +79,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
     if (!addr) return HTTP_NOT_FOUND;
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
+    if (myuserid && !strcasecmp(userid, myuserid)) return 0; // myself is always local
     len = strlen(userid);
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
@@ -688,7 +689,7 @@ int sched_busytime_query(struct transaction_t *txn,
     organizer = icalproperty_get_organizer(prop);
 
     /* XXX  Do we need to do more checks here? */
-    if (caladdress_lookup(organizer, &sparam) ||
+    if (caladdress_lookup(organizer, &sparam, httpd_userid) ||
         (sparam.flags & SCHEDTYPE_REMOTE))
         org_authstate = auth_newstate("anonymous");
     else
@@ -746,7 +747,7 @@ int sched_busytime_query(struct transaction_t *txn,
 
         /* Is attendee remote or local? */
         attendee = icalproperty_get_attendee(prop);
-        r = caladdress_lookup(attendee, &sparam);
+        r = caladdress_lookup(attendee, &sparam, httpd_userid);
 
         /* Don't allow scheduling of remote users via an iSchedule request */
         if ((sparam.flags & SCHEDTYPE_REMOTE) &&
@@ -1833,7 +1834,7 @@ void sched_deliver(const char *recipient, void *data, void *rock)
         return;
     }
 
-    if (caladdress_lookup(recipient, &sparam)) {
+    if (caladdress_lookup(recipient, &sparam, httpd_userid)) {
         sched_data->status =
             sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
         /* Unknown user */
@@ -2392,7 +2393,7 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
         nextprop = icalcomponent_get_next_invitee(copy);
 
         if (!myattendee &&
-            !caladdress_lookup(att, &sparam) &&
+            !caladdress_lookup(att, &sparam, httpd_userid) &&
             !(sparam.flags & SCHEDTYPE_REMOTE) &&
             !strcmpsafe(sparam.userid, userid)) {
             /* Found it */

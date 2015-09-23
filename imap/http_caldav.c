@@ -1217,7 +1217,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         organizer = icalproperty_get_organizer(prop);
 
-        r = caladdress_lookup(organizer, &sparam);
+        r = caladdress_lookup(organizer, &sparam, userid);
         if (r == HTTP_NOT_FOUND) {
             r = 0;
             goto done;
@@ -2458,7 +2458,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     /* Organizer MUST be local to use CalDAV Scheduling */
     organizer = icalproperty_get_organizer(prop);
     if (organizer) {
-        if (!caladdress_lookup(organizer, &sparam) &&
+        if (!caladdress_lookup(organizer, &sparam, txn->req_tgt.userid) &&
             !(sparam.flags & SCHEDTYPE_REMOTE)) {
             strlcpy(orgid, sparam.userid, sizeof(orgid));
         }
@@ -2683,7 +2683,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             userid = mboxname_to_userid(mailbox->name);
 
             /* Lookup the organizer */
-            r = caladdress_lookup(organizer, &sparam);
+            r = caladdress_lookup(organizer, &sparam, userid);
             if (r == HTTP_NOT_FOUND)
                 break;  /* not a local organiser?  Just skip it */
             if (r) {
