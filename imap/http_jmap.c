@@ -3346,16 +3346,28 @@ done:
     return r;
 }
 
-/* Translate an ical recurrence to JMAP. Return value is a new reference. */
 
+/* Compare int in ascending order. */
 static int _jmap_intcmp(const void *aa, const void *bb)
 {
     const int *a = aa, *b = bb;
     return (*a < *b) ? -1 : (*a > *b);
 }
 
-/* Convert at most nmemb entries in the ical byDay/Month/etc array named byX
- * to JMAP using conv. Return a new JSON array, sorted in ascending order. */
+/* Compare time_t in ascending order. */
+static int _jmap_timetcmp(const void *aa, const void *bb)
+{
+    const time_t *a = aa, *b = bb;
+    return (*a < *b) ? -1 : (*a > *b);
+}
+
+/* Return the identity of a short as int. This is a helper for recur_byX. */
+static int _jmap_intident(short i) {
+    return i;
+}
+
+/* Convert at most nmemb entries in the ical recurrence byDay/Month/etc array
+ * named byX using conv. Return a new JSON array, sorted in ascending order. */
 static json_t* jmap_recur_byX_from_ical(short byX[], size_t nmemb, int (*conv)(short)) {
     json_t *jbd = json_pack("[]");
 
@@ -3379,66 +3391,83 @@ static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
     json_t *jrecur = json_pack("{}");
     const char *v = NULL;
 
-    switch (recur.freq) {
-        case ICAL_SECONDLY_RECURRENCE:
-            v  = "secondly";
-            break;
-        case ICAL_MINUTELY_RECURRENCE:
-            v = "minutely";
-            break;
-        case ICAL_HOURLY_RECURRENCE:
-            v = "hourly";
-            break;
-        case ICAL_DAILY_RECURRENCE:
-            v = "daily";
-            break;
-        case ICAL_WEEKLY_RECURRENCE:
-            v = "weekly";
-            break;
-        case ICAL_MONTHLY_RECURRENCE:
-            v = "monthly";
-            break;
-        case ICAL_YEARLY_RECURRENCE:
-            v = "yearly";
-            break;
-        case ICAL_NO_RECURRENCE:
-            /* fallthrough */
-        default:
-            syslog(LOG_INFO, "jmap_recur_from_ical: unknown freq: %d", recur.freq);
-            return json_null();
+    if (0) {
+        /* XXX - Keep until libical either accepts or rejects our pull request */
+        switch (recur.freq) {
+            case ICAL_SECONDLY_RECURRENCE:
+                v  = "secondly";
+                break;
+            case ICAL_MINUTELY_RECURRENCE:
+                v = "minutely";
+                break;
+            case ICAL_HOURLY_RECURRENCE:
+                v = "hourly";
+                break;
+            case ICAL_DAILY_RECURRENCE:
+                v = "daily";
+                break;
+            case ICAL_WEEKLY_RECURRENCE:
+                v = "weekly";
+                break;
+            case ICAL_MONTHLY_RECURRENCE:
+                v = "monthly";
+                break;
+            case ICAL_YEARLY_RECURRENCE:
+                v = "yearly";
+                break;
+            case ICAL_NO_RECURRENCE:
+                /* fallthrough */
+            default:
+                syslog(LOG_INFO, "jmap_recur_from_ical: unknown freq: %d", recur.freq);
+                return json_null();
+        }
+        json_object_set_new(jrecur, "frequency", json_string(v));
     }
-    json_object_set_new(jrecur, "frequency", json_string(v));
+
+    /* frequency */
+    char *s = xstrdup(icalrecur_freq_to_string(recur.freq));
+    char *p = s; for ( ; *p; ++p) *p = tolower(*p);
+    json_object_set_new(jrecur, "frequency", json_string(s));
+    free(s);
 
     if (recur.interval > 1) {
         json_object_set_new(jrecur, "interval", json_pack("i", recur.interval));
     }
 
-    short day = 0;
-    switch (recur.week_start) {
-        case ICAL_SATURDAY_WEEKDAY:
-            day++;
-        case ICAL_FRIDAY_WEEKDAY:
-            day++;
-        case ICAL_THURSDAY_WEEKDAY:
-            day++;
-        case ICAL_WEDNESDAY_WEEKDAY:
-            day++;
-        case ICAL_TUESDAY_WEEKDAY:
-            day++;
-        case ICAL_MONDAY_WEEKDAY:
-            day++;
-            break;
-        case ICAL_SUNDAY_WEEKDAY:
-            /* do nothing */
-            break;
-        default:
-            syslog(LOG_ERR, "jmap_recur_from_ical: unknown week_start %d", recur.week_start);
-            /* fallthrough */
-        case ICAL_NO_WEEKDAY:
-            day = 1;
-            break;
+    /* XXX - Keep this for now  */
+    if (0) {
+        short day = 0;
+        switch (recur.week_start) {
+            case ICAL_SATURDAY_WEEKDAY:
+                day++;
+            case ICAL_FRIDAY_WEEKDAY:
+                day++;
+            case ICAL_THURSDAY_WEEKDAY:
+                day++;
+            case ICAL_WEDNESDAY_WEEKDAY:
+                day++;
+            case ICAL_TUESDAY_WEEKDAY:
+                day++;
+            case ICAL_MONDAY_WEEKDAY:
+                day++;
+                break;
+            case ICAL_SUNDAY_WEEKDAY:
+                /* do nothing */
+                break;
+            default:
+                syslog(LOG_ERR, "jmap_recur_from_ical: unknown week_start %d", recur.week_start);
+                /* fallthrough */
+            case ICAL_NO_WEEKDAY:
+                day = 1;
+                break;
+        }
+        if (day != 1) {
+            json_object_set_new(jrecur, "firstDayOfWeek", json_pack("i", day));
+        }
     }
-    if (day != 1) {
+
+    short day = recur.week_start - 1;
+    if (day >= 0 && day != 1) {
         json_object_set_new(jrecur, "firstDayOfWeek", json_pack("i", day));
     }
 
@@ -3448,9 +3477,110 @@ static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
                 jmap_recur_byX_from_ical(recur.by_day,
                     ICAL_BY_DAY_SIZE, &icalrecurrencetype_day_position));
     }
-    /* XXX - Continue from here. */
+    if (recur.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byDate",
+                jmap_recur_byX_from_ical(recur.by_month_day,
+                    ICAL_BY_MONTHDAY_SIZE, &_jmap_intident));
+    }
+    if (recur.by_month[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byMonth",
+                jmap_recur_byX_from_ical(recur.by_month,
+                    ICAL_BY_MONTH_SIZE, &_jmap_intident));
+    }
+    if (recur.by_year_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byYearDay",
+                jmap_recur_byX_from_ical(recur.by_year_day,
+                    ICAL_BY_YEARDAY_SIZE, &_jmap_intident));
+    }
+    if (recur.by_month[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byWeekNo",
+                jmap_recur_byX_from_ical(recur.by_month,
+                    ICAL_BY_MONTH_SIZE, &_jmap_intident));
+    }
+    if (recur.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byHour",
+                jmap_recur_byX_from_ical(recur.by_hour,
+                    ICAL_BY_HOUR_SIZE, &_jmap_intident));
+    }
+    if (recur.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byMinute",
+                jmap_recur_byX_from_ical(recur.by_minute,
+                    ICAL_BY_MINUTE_SIZE, &_jmap_intident));
+    }
+    if (recur.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "bySecond",
+                jmap_recur_byX_from_ical(recur.by_second,
+                    ICAL_BY_SECOND_SIZE, &_jmap_intident));
+    }
+    if (recur.by_set_pos[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "bySetPosition",
+                jmap_recur_byX_from_ical(recur.by_set_pos,
+                    ICAL_BY_SETPOS_SIZE, &_jmap_intident));
+    }
+
+    if (recur.count != 0) {
+        /* XXX - Recur count takes precedence over until. */
+        json_object_set_new(jrecur, "count", json_pack("i", recur.count));
+    } else if (!icaltime_is_null_time(recur.until)) {
+        /* XXX - libical does not check if until is local time */
+        json_object_set_new(jrecur, "until",
+                json_string(icaltime_as_ical_string(recur.until)));
+    }
 
     return jrecur;
+}
+
+static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
+    icalproperty* prop;
+    size_t sincl = 8;
+    size_t nincl = 0;
+    time_t *incl = xmalloc(sincl * sizeof(time_t));
+    json_t *ret;
+    size_t i;
+
+    /* Collect all RDATE occurrences as datetimes into incl. */
+    prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
+    while (prop) {
+        struct icaldatetimeperiodtype rdate;
+        time_t t;
+
+        rdate = icalproperty_get_rdate(prop);
+        if (!icalperiodtype_is_null_period(rdate.period)) {
+            continue;
+        }
+        if (icaltime_is_null_time(rdate.time)) {
+            continue;
+        }
+        t = icaltime_as_timet_with_zone(rdate.time, rdate.time.zone ?
+                rdate.time.zone : icaltimezone_get_utc_timezone());
+        if (nincl == sincl) {
+            sincl <<= 1;
+            incl = xrealloc(incl, sincl * sizeof(time_t));
+        }
+        incl[nincl++] = t;
+
+        prop = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY);
+    }
+
+    if (!nincl) {
+        ret = json_null();
+        goto done;
+    }
+
+    /* Sort ascending. */
+    qsort(incl, nincl, sizeof(time_t), &_jmap_timetcmp);
+
+    /* Convert incl to JMAP LocalDate. */
+    ret = json_pack("[]");
+    for (i = 0; i < nincl; ++i) {
+        /* XXX - Should we indicate the timezone again? */
+        struct icaltimetype it = icaltime_from_timet(incl[i], 0 /* isdate */);
+        json_array_append_new(ret, json_string(icaltime_as_ical_string(it)));
+    }
+
+done:
+    free(incl);
+    return ret;
 }
 
 static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
@@ -3517,8 +3647,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
             prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
     }
     if (_wantprop(crock->props, "showAsFree")) {
-        json_object_set_new(obj, "showAsFree",
-                cdata->comp_flags.transp ? json_true() : json_false());
+        json_object_set_new(obj, "showAsFree", json_boolean(cdata->comp_flags.transp));
     }
 
     /* Always determine isAllDay to set start, end and timezone fields. */
@@ -3592,7 +3721,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
                 prop ? jmap_recur_from_ical(icalproperty_get_rrule(prop)) : json_null());
     }
     if (_wantprop(crock->props, "inclusions")) {
-        /* XXX - Implement this */
+        json_object_set_new(obj, "inclusions", jmap_inclusions_from_ical(comp));
     }
     if (_wantprop(crock->props, "exceptions")) {
         /* XXX - Implement this */
