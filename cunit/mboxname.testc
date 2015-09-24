@@ -512,9 +512,10 @@ static void test_toexternal_domains(void)
     toexternal_helper("bloggs.com!user.fred.foo.barracuda", "INBOX.foo.barracuda");
     toexternal_helper("bloggs.com!user.jane", "user.jane");
     toexternal_helper("bloggs.com!user.jane.baz", "user.jane.baz");
-    toexternal_helper("boop.com!user.betty", "user.betty@boop.com");
     toexternal_helper("bloggs.com!shared.quux", "shared.quux");
-    toexternal_helper("boop.com!shared.quux", "shared.quux@boop.com");
+    /* disabled while cross domain sharing is not allowed */
+    //toexternal_helper("boop.com!user.betty", "user.betty@boop.com");
+    //toexternal_helper("boop.com!shared.quux", "shared.quux@boop.com");
 }
 
 static void test_toexternal_unixhier(void)
