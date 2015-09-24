@@ -503,11 +503,16 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
     char *p = config_virtdomains ? strchr(mbname->extname, '@') : NULL;
     if (p) {
+        if (!ns->isadmin) goto done; /* only admins can do domains */
+        if (ns->isalt) goto done; /* no domains in altnamespace */
         domain = p+1;
         if (!strcmpsafe(domain, config_defdomain))
             domain = NULL;
         *p = '\0'; /* temporary */
     }
+
+    mbname->domain = xstrdupnull(domain ? domain : mbname_domain(userparts));
+
     mbname->boxes = strarray_split(mbname->extname, sepstr, 0);
     if (p) *p = '@'; /* repair */
 
@@ -526,7 +531,6 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
             /* XXX - cross domain support.  For now, it's always in the
              * userid's domain, if any */
             mbname->localpart = strarray_shift(mbname->boxes);
-            mbname->domain = xstrdupnull(mbname_domain(userparts));
             goto done;
         }
 
@@ -538,7 +542,6 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
         /* everything else belongs to the userid */
         mbname->localpart = xstrdupnull(mbname_localpart(userparts));
-        mbname->domain = xstrdupnull(mbname_domain(userparts));
         /* special case pure inbox with case, because horrible */
         if (strarray_size(mbname->boxes) == 1 && !strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX"))
             free(strarray_shift(mbname->boxes));
@@ -552,7 +555,6 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = xstrdupnull(mbname_localpart(userparts));
-        mbname->domain = xstrdupnull(mbname_domain(userparts));
         goto done;
     }
 
@@ -573,7 +575,6 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!strcmp(strarray_nth(mbname->boxes, 0), "user")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = strarray_shift(mbname->boxes);
-        mbname->domain = xstrdupnull(domain ? domain : mbname_domain(userparts));
     }
 
     /* the rest is just in boxes */
