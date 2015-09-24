@@ -176,6 +176,7 @@ extern void sched_reply(const char *userid,
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
-extern int caladdress_lookup(const char *addr, struct sched_param *param);
+extern int caladdress_lookup(const char *addr, struct sched_param *param,
+                             const char *myuserid);
 
 #endif /* HTTP_CALDAV_SCHED_H */

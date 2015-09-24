@@ -151,7 +151,12 @@ int masterconf_getint(struct entry *e,
 
     if (!val) return def;
     if (!Uisdigit(*val) &&
-        (*val != '-' || !Uisdigit(val[1]))) return def;
+        (*val != '-' || !Uisdigit(val[1]))) {
+            syslog(LOG_DEBUG,
+                   "value '%s' for '%s' does not look like a number.",
+                   val, key);
+            return def;
+    }
     return atoi(val);
 }
 
@@ -169,6 +174,10 @@ int masterconf_getswitch(struct entry *e, const char *key, int def)
              (val[0] == 'o' && val[1] == 'n') || val[0] == 't') {
         return 1;
     }
+
+    syslog(LOG_DEBUG, "cannot interpret value '%s' for key '%s'. use y/n.",
+	       val, key);
+
     return def;
 }
 

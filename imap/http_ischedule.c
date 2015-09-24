@@ -546,7 +546,7 @@ static int meth_post_isched(struct transaction_t *txn,
                 while ((recipient = tok_next(&tok))) {
                     /* Is recipient remote or local? */
                     struct sched_param sparam;
-                    int r = caladdress_lookup(recipient, &sparam);
+                    int r = caladdress_lookup(recipient, &sparam, /*myuserid*/NULL);
 
                     /* Don't allow scheduling with remote users via iSchedule */
                     if (sparam.flags & SCHEDTYPE_REMOTE) r = HTTP_FORBIDDEN;

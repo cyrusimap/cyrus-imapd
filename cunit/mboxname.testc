@@ -311,6 +311,10 @@ static void toexternal_helper(const char *intname,
     char *extname = mboxname_to_external(intname, &ns, conf.userid);
     CU_ASSERT_STRING_EQUAL(extname, extname_expected);
     free(extname);
+
+    char *intname_reversed = mboxname_from_external(extname_expected, &ns, conf.userid);
+    CU_ASSERT_STRING_EQUAL(intname, intname_reversed);
+    free(intname_reversed);
 }
 
 static void test_toexternal_admin(void)
@@ -391,6 +395,12 @@ static void test_toexternal_admin(void)
     toexternal_helper("user.fred^bloggs", "user/fred.bloggs");
     toexternal_helper("user.fred^bloggs.sub", "user/fred.bloggs/sub");
     toexternal_helper("user.fred^bloggs.sub^folder.parts", "user/fred.bloggs/sub.folder/parts");
+
+    /* mailboxes with @ in them should be OK too */
+    toexternal_helper("user.fred^bloggs.with@at", "user/fred.bloggs/with@at");
+
+    /* and users with @ in them */
+    toexternal_helper("user.fred@bloggs^com.Trash", "user/fred@bloggs.com/Trash");
 }
 
 static void test_toexternal_admin_altns(void)
@@ -486,6 +496,9 @@ static void test_toexternal_simple(void)
     toexternal_helper("user.jane", "user.jane");
     toexternal_helper("user.jane.baz", "user.jane.baz");
     toexternal_helper("shared.quux", "shared.quux");
+
+    /* check that @ doesn't get polluted */
+    toexternal_helper("user.fred.folder@place", "INBOX.folder@place");
 }
 
 static void test_toexternal_domains(void)
@@ -499,9 +512,10 @@ static void test_toexternal_domains(void)
     toexternal_helper("bloggs.com!user.fred.foo.barracuda", "INBOX.foo.barracuda");
     toexternal_helper("bloggs.com!user.jane", "user.jane");
     toexternal_helper("bloggs.com!user.jane.baz", "user.jane.baz");
-    toexternal_helper("boop.com!user.betty", "user.betty@boop.com");
     toexternal_helper("bloggs.com!shared.quux", "shared.quux");
-    toexternal_helper("boop.com!shared.quux", "shared.quux@boop.com");
+    /* disabled while cross domain sharing is not allowed */
+    //toexternal_helper("boop.com!user.betty", "user.betty@boop.com");
+    //toexternal_helper("boop.com!shared.quux", "shared.quux@boop.com");
 }
 
 static void test_toexternal_unixhier(void)
@@ -515,7 +529,12 @@ static void test_toexternal_unixhier(void)
     toexternal_helper("user.fred.foo.barracuda", "INBOX/foo/barracuda");
     toexternal_helper("user.jane", "user/jane");
     toexternal_helper("user.jane.baz", "user/jane/baz");
+    toexternal_helper("user.joe^bloggs.mega", "user/joe.bloggs/mega");
     toexternal_helper("shared.quux", "shared/quux");
+
+    /* check that @ doesn't get polluted */
+    toexternal_helper("user.fred.folder@place", "INBOX/folder@place");
+    toexternal_helper("user.fred^smith@example^com.folder@place", "user/fred.smith@example.com/folder@place");
 }
 
 static void test_toexternal_alt(void)

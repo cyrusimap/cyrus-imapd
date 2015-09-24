@@ -242,7 +242,7 @@ EXPORTED int cyrusdb_forone(struct db *db,
     if (r == CYRUSDB_NOTFOUND) return 0;
     if (r) return r;
 
-    if (p(rock, key, keylen, data, datalen))
+    if (!p || p(rock, key, keylen, data, datalen))
         r = cb(rock, key, keylen, data, datalen);
     return r;
 }
