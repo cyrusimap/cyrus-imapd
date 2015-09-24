@@ -73,6 +73,7 @@ void signals_add_handlers(int alarm)
     struct sigaction action;
     int i;
 
+    memset(&action, 0, sizeof(action));
     sigemptyset(&action.sa_mask);
 
     action.sa_flags = 0;
