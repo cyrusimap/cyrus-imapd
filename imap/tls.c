@@ -674,19 +674,22 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         return -1;
     }
 
-    /* even if we want TLS only, we use SSLv23 server method so we can
-       deal with a client sending an SSLv2 greeting message */
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+    s_ctx = SSL_CTX_new(TLS_server_method());
+#else
     s_ctx = SSL_CTX_new(SSLv23_server_method());
+#endif
+
     if (s_ctx == NULL) {
         return (-1);
     };
 
-    off |= SSL_OP_ALL;          /* Work around all known bugs */
+    off |= SSL_OP_ALL;            /* Work around all known bugs */
+    off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
+    off |= SSL_OP_NO_SSLv3;       /* Disable insecure SSLv3 */
+    off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
 
     const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
-
-    off |= SSL_OP_NO_SSLv2;
-    off |= SSL_OP_NO_SSLv3;
 
     if (strstr(tls_versions, "tls1_2") == NULL) {
 #if (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
@@ -714,13 +717,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     server_cipher_order = config_getswitch(IMAPOPT_TLS_PREFER_SERVER_CIPHERS);
     if (server_cipher_order)
         off |= SSL_OP_CIPHER_SERVER_PREFERENCE;
-
-#if (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
-    if (!config_getswitch(IMAPOPT_TLS_COMPRESSION)) {
-        off |= SSL_OP_NO_COMPRESSION;
-        syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
-    }
-#endif // (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
 
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
@@ -840,7 +836,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     }
 
     if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
-        syslog(LOG_ERR, "TLS server engine: cannot load server cert/key data.");
+        syslog(LOG_ERR, "TLS server engine: cannot load cert/key data, may be a cert/key mismatch?");
         return (-1);
     }
 
@@ -1402,25 +1398,22 @@ HIDDEN int tls_init_clientengine(int verifydepth,
         return -1;
     }
 
-    /* XXX  May need to use only SSLv3 for iSchedule */
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+    c_ctx = SSL_CTX_new(TLS_client_method());
+#else
     c_ctx = SSL_CTX_new(SSLv23_client_method());
+#endif
     if (c_ctx == NULL) {
         return (-1);
     };
 
-    off |= SSL_OP_ALL;          /* Work around all known bugs */
-    off |= SSL_OP_NO_SSLv2;
-    off |= SSL_OP_NO_SSLv3;
+    off |= SSL_OP_ALL;            /* Work around all known bugs */
+    off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
+    off |= SSL_OP_NO_SSLv3;       /* Disable insecure SSLv3 */
+    off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
 
     SSL_CTX_set_options(c_ctx, off);
     SSL_CTX_set_info_callback(c_ctx, apps_ssl_info_callback);
-
-#if (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
-    if (!config_getswitch(IMAPOPT_TLS_COMPRESSION)) {
-        off |= SSL_OP_NO_COMPRESSION;
-        syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
-    }
-#endif // (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
 
     server_ca_dir = config_getstring(IMAPOPT_TLS_SERVER_CA_DIR);
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
@@ -1452,7 +1445,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 
     if (client_cert || client_key) {
         if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
-            syslog(LOG_ERR,"TLS client engine: cannot load client cert/key data");
+            syslog(LOG_ERR,"TLS client engine: cannot load cert/key data, may be a cert/key mismatch?");
             return (-1);
         }
     }
