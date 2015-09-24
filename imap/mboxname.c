@@ -1315,9 +1315,6 @@ HIDDEN int mboxname_policycheck(const char *name)
             if (!strchr(GOODCHARS, *name) &&
                 !(unixsep && *name == DOTCHAR))
                 return IMAP_MAILBOX_BADNAME;
-            /* If we're not using virtdomains, '@' is not permitted in the mboxname */
-            if (!config_virtdomains && *name == '@')
-                return IMAP_MAILBOX_BADNAME;
             name++;
             sawutf7 = 0;
         }
