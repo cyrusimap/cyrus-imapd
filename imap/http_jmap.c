@@ -3530,6 +3530,38 @@ static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
     return jrecur;
 }
 
+/* Convert time to a RFC3339 formatted localdate string. Return the number
+ * of bytes written to buf sized size, excluding the terminating null byte. */
+static int _jmap_timet_to_localdate(time_t t, char* buf, size_t size) {
+    int n = time_to_rfc3339(t, buf, size);
+    if (n && buf[n-1] == 'Z') {
+        buf[n-1] = '\0';
+        n--;
+    }
+    return n;
+}
+
+/* Convert icaltime to a RFC3339 formatted localdate string. The returned
+ * string is owned by the caller. Return NULL on error. */
+static char* _jmap_icaltime_to_localdate_r(icaltimetype icaltime) {
+    char *s;
+    time_t t;
+
+    s = xmalloc(RFC3339_DATETIME_MAX);
+    /* XXX - This doesn't work right. It seems to return UTC time
+     * for local ical datetimes. */
+    /*
+    t = icaltime_as_timet_with_zone(icaltime, icaltime.zone ?
+            icaltime.zone : icaltimezone_get_utc_timezone());
+    */
+    t = icaltime_as_timet(icaltime);
+    if (!_jmap_timet_to_localdate(t, s, RFC3339_DATETIME_MAX)) {
+        return NULL;
+    }
+    return s;
+}
+
+/* Convert a VEVENT ical component to CalendarEvent inclusions. */
 static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
     icalproperty* prop;
     size_t sincl = 8;
@@ -3537,10 +3569,13 @@ static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
     time_t *incl = xmalloc(sincl * sizeof(time_t));
     json_t *ret;
     size_t i;
+    char timebuf[RFC3339_DATETIME_MAX];
 
     /* Collect all RDATE occurrences as datetimes into incl. */
-    prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
-    while (prop) {
+    for(prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
+        prop;
+        prop = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY)) {
+
         struct icaldatetimeperiodtype rdate;
         time_t t;
 
@@ -3558,10 +3593,7 @@ static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
             incl = xrealloc(incl, sincl * sizeof(time_t));
         }
         incl[nincl++] = t;
-
-        prop = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY);
     }
-
     if (!nincl) {
         ret = json_null();
         goto done;
@@ -3573,14 +3605,122 @@ static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
     /* Convert incl to JMAP LocalDate. */
     ret = json_pack("[]");
     for (i = 0; i < nincl; ++i) {
-        /* XXX - Should we indicate the timezone again? */
-        struct icaltimetype it = icaltime_from_timet(incl[i], 0 /* isdate */);
-        json_array_append_new(ret, json_string(icaltime_as_ical_string(it)));
+        int n = _jmap_timet_to_localdate(incl[i], timebuf, RFC3339_DATETIME_MAX);
+        if (!n) continue;
+        json_array_append_new(ret, json_string(timebuf));
     }
 
 done:
     free(incl);
     return ret;
+}
+
+
+/* Convert a VEVENT ical component to CalendarEvent alerts. */
+static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
+    /* XXX - Continue from here. */
+    return json_null();
+}
+
+/* Convert the libical VEVENT comp to a CalendarEvent, excluding the
+ * exceptions property. If exc is true, only convert properties that are
+ * valid for exceptions.
+ * Only convert the properties named in props. */
+static json_t* jmap_vevent_to_calendarevent(icalcomponent *comp,
+                                            struct hash_table *props,
+                                            short exc) {
+    icalproperty* prop;
+    icalparameter* param;
+    json_t *obj;
+
+    obj = json_pack("{}");
+
+    /* Always determine isAllDay to set start, end and timezone fields. */
+    int isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
+    if (_wantprop(props, "isAllDay") && !exc) {
+        json_object_set_new(obj, "isAllDay", json_boolean(isAllDay));
+    }
+
+    /* Convert properties. */
+    if (_wantprop(props, "summary")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+        json_object_set_new(obj, "summary",
+                prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+    }
+    if (_wantprop(props, "description")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+        json_object_set_new(obj, "description",
+            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+    }
+    if (_wantprop(props, "location")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
+        json_object_set_new(obj, "location",
+            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+    }
+    if (_wantprop(props, "showAsFree")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+        json_object_set_new(obj, "showAsFree",
+                json_boolean(prop &&
+                    !strcmp(icalproperty_get_value_as_string(prop), "TRANSPARENT")));
+    }
+    if (_wantprop(props, "start")) {
+        struct icaltimetype dt = icalcomponent_get_dtstart(comp);
+        char *s = _jmap_icaltime_to_localdate_r(dt);
+        json_object_set_new(obj, "start", json_string(s));
+        free(s);
+    }
+    if (_wantprop(props, "end")) {
+        struct icaltimetype dt = icalcomponent_get_dtend(comp);
+        char *s = _jmap_icaltime_to_localdate_r(dt);
+        json_object_set_new(obj, "end", json_string(s));
+        free(s);
+    }
+    if (_wantprop(props, "startTimeZone")) {
+        const char *tzid = NULL;
+        prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+        if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
+         * the server SHOULD try to guess the correct time zone based on the
+         * VTIMEZONE information" */
+        if (param) tzid = icalparameter_get_tzid(param);
+        json_object_set_new(obj, "startTimeZone",
+                tzid && !isAllDay ? json_string(tzid) : json_null());
+    }
+    if (_wantprop(props, "endTimeZone")) {
+        const char *tzid = NULL;
+        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+        if (!prop) prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+        if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
+         * the server SHOULD try to guess the correct time zone based on the
+         * VTIMEZONE information" */
+        if (param) tzid = icalparameter_get_tzid(param);
+        json_object_set_new(obj, "endTimeZone",
+                tzid && !isAllDay ? json_string(tzid) : json_null());
+    }
+    if (_wantprop(props, "recurrence") && !exc) {
+        prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+        json_object_set_new(obj, "recurrence",
+                prop ? jmap_recur_from_ical(icalproperty_get_rrule(prop)) : json_null());
+    }
+    if (_wantprop(props, "inclusions") && !exc) {
+        json_object_set_new(obj, "inclusions", jmap_inclusions_from_ical(comp));
+    }
+    /* Do not convert exceptions. */
+    if (_wantprop(props, "alerts")) {
+        json_object_set_new(obj, "alerts", jmap_alerts_from_ical(comp));
+    }
+    if (_wantprop(props, "organizer")) {
+        /* XXX - Implement this */
+    }
+    if (_wantprop(props, "attendees")) {
+        /* XXX - Implement this */
+    }
+    if (_wantprop(props, "attachments") && !exc) {
+        /* XXX - Implement this */
+    }
+
+    return obj;
 }
 
 static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
@@ -3591,7 +3731,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
     icalcomponent* ical = NULL;
     icalcomponent* comp;
     icalproperty* prop;
-    icalparameter* param;
+    json_t *obj;
 
     /* Open calendar mailbox. */
     if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
@@ -3614,7 +3754,13 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
         r = IMAP_INTERNAL;
         goto done;
     }
-    comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+
+    /* Locate the main VEVENT. */
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+         comp && icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+        /* Skip VEVENTs with RECCURENCE-ID property. */
+    }
     if (!comp) {
         syslog(LOG_ERR, "no VEVENT in record %u:%s",
                 cdata->dav.imap_uid, crock->mailbox->name);
@@ -3622,124 +3768,60 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
         goto done;
     }
 
-    json_t *obj = json_pack("{}");
+    /* Convert main VEVENT to JMAP. */
+    obj = jmap_vevent_to_calendarevent(comp, crock->props, 0 /* exc */);
+    if (!obj) goto done;
     json_object_set_new(obj, "id", json_string(cdata->ical_uid));
 
+    /* Add optional exceptions. */
+    if (_wantprop(crock->props, "exceptions")) {
+        json_t* excobj = json_pack("{}");
+
+        /* Add all EXDATEs as null value. */
+        for (prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_EXDATE_PROPERTY)) {
+
+            struct icaltimetype exdate = icalproperty_get_exdate(prop);
+            if (icaltime_is_null_time(exdate)) {
+                continue;
+            }
+            char *s = _jmap_icaltime_to_localdate_r(exdate);
+            json_object_set_new(excobj, s, json_null());
+            free(s);
+        }
+
+        /* Add VEVENTs with RECURRENCE-ID. */
+        for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+
+            if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+                continue;
+            }
+
+            json_t *exc = jmap_vevent_to_calendarevent(comp, crock->props, 1 /* exc */);
+            if (!exc) {
+                continue;
+            }
+            struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+            char *s = _jmap_icaltime_to_localdate_r(dtstart);
+            json_object_set_new(excobj, s, exc);
+            free(s);
+        }
+        if (json_object_size(excobj)) {
+            json_object_set(obj, "exceptions", excobj);
+        }
+        json_decref(excobj);
+    }
+
+    /* Add JMAP-only fields. */
     if (_wantprop(crock->props, "x-href")) {
         _add_xhref(obj, cdata->dav.mailbox, cdata->dav.resource);
     }
     if (_wantprop(crock->props, "calendarId")) {
         json_object_set_new(obj, "calendarId", json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
-    if (_wantprop(crock->props, "summary")) {
-        prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
-        json_object_set_new(obj, "summary",
-                prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
-    }
-    if (_wantprop(crock->props, "description")) {
-        prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
-        json_object_set_new(obj, "description",
-            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
-    }
-    if (_wantprop(crock->props, "location")) {
-        prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
-        json_object_set_new(obj, "location",
-            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
-    }
-    if (_wantprop(crock->props, "showAsFree")) {
-        json_object_set_new(obj, "showAsFree", json_boolean(cdata->comp_flags.transp));
-    }
-
-    /* Always determine isAllDay to set start, end and timezone fields. */
-    int isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    if (_wantprop(crock->props, "isAllDay")) {
-        json_object_set_new(obj, "isAllDay", json_boolean(isAllDay));
-    }
-
-    /* XXX
-     * "if isAllDay is true, the start/end properties MUST have a time
-     * component of T00:00:00 and startTimeZone/endTimeZone properties MUST be
-     * null." */
-    if (_wantprop(crock->props, "start")) {
-        struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
-        const char *t = icaltime_as_ical_string(dtstart);
-        struct buf buf = BUF_INITIALIZER;
-        if (isAllDay && !strchr(t, 'T')) {
-            /* JMAP spec says that "if isAllDay is true, the start/end
-             * properties MUST have a time component of T00:00:00" */
-            buf_printf(&buf, "%sT00:00:00", t);
-            t = buf_cstring(&buf);
-        }
-        json_object_set_new(obj, "start", json_string(t));
-        buf_free(&buf);
-    }
-    if (_wantprop(crock->props, "end")) {
-        struct icaltimetype dtend = icalcomponent_get_dtend(comp);
-        const char *t = icaltime_as_ical_string(dtend);
-        struct buf buf = BUF_INITIALIZER;
-        if (isAllDay && !strchr(t, 'T')) {
-            /* JMAP spec says that "if isAllDay is true, the start/end
-             * properties MUST have a time component of T00:00:00" */
-            buf_printf(&buf, "%sT00:00:00", t);
-            t = buf_cstring(&buf);
-        }
-        json_object_set_new(obj, "end", json_string(t));
-        buf_free(&buf);
-    }
-    if (_wantprop(crock->props, "startTimeZone")) {
-        const char *tzid = NULL;
-        prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-        if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
-         * the server SHOULD try to guess the correct time zone based on the
-         * VTIMEZONE information" */
-        if (param) tzid = icalparameter_get_tzid(param);
-
-        /* JMAP spec says that "if isAllDay is true, the [...] startTimeZone/
-         * endTimeZone properties MUST be null." */
-        json_object_set_new(obj, "startTimeZone",
-                tzid && !isAllDay ? json_string(tzid) : json_null());
-    }
-    if (_wantprop(crock->props, "endTimeZone")) {
-        const char *tzid = NULL;
-        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        if (!prop) prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-        if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
-         * the server SHOULD try to guess the correct time zone based on the
-         * VTIMEZONE information" */
-        if (param) tzid = icalparameter_get_tzid(param);
-
-        /* JMAP spec says that "if isAllDay is true, the [...] startTimeZone/
-         * endTimeZone properties MUST be null." */
-        json_object_set_new(obj, "endTimeZone",
-                tzid && !isAllDay ? json_string(tzid) : json_null());
-    }
-    if (_wantprop(crock->props, "recurrence")) {
-        prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-        json_object_set_new(obj, "recurrence",
-                prop ? jmap_recur_from_ical(icalproperty_get_rrule(prop)) : json_null());
-    }
-    if (_wantprop(crock->props, "inclusions")) {
-        json_object_set_new(obj, "inclusions", jmap_inclusions_from_ical(comp));
-    }
-    if (_wantprop(crock->props, "exceptions")) {
-        /* XXX - Implement this */
-    }
-    if (_wantprop(crock->props, "alerts")) {
-        /* XXX - Implement this */
-    }
-    if (_wantprop(crock->props, "organizer")) {
-        /* XXX - Implement this */
-    }
-    if (_wantprop(crock->props, "attendees")) {
-        /* XXX - Implement this */
-    }
-    if (_wantprop(crock->props, "attachments")) {
-        /* XXX - Implement this */
-    }
-
-    /* XXX - other fields */
 
     json_array_append_new(crock->array, obj);
 
