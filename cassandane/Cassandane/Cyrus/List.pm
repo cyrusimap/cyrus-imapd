@@ -55,9 +55,6 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(virtdomains => 'userid');
-    $config->set(unixhierarchysep => 'on');
-    $config->set(altnamespace => 'yes');
 
     return $class->SUPER::new({ config => $config }, @args);
 }
@@ -154,6 +151,7 @@ sub _assert_list_data
 }
 
 sub test_empty_mailbox
+    :UnixHierarchySep
 {
     my ($self) = @_;
 
@@ -167,6 +165,7 @@ sub test_empty_mailbox
 }
 
 sub test_outlook_compatible_xlist_empty_mailbox
+    :UnixHierarchySep
 {
     my ($self) = @_;
 
@@ -185,6 +184,7 @@ sub test_outlook_compatible_xlist_empty_mailbox
 # https://tools.ietf.org/html/rfc5258#section-5
 
 sub test_rfc5258_ex01_list_all
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
@@ -214,6 +214,7 @@ sub test_rfc5258_ex01_list_all
 }
 
 sub test_rfc5258_ex02_list_subscribed
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
@@ -241,6 +242,7 @@ sub test_rfc5258_ex02_list_subscribed
 }
 
 sub test_rfc5258_ex03_children
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
@@ -312,6 +314,7 @@ sub test_rfc5258_ex03_children
 #}
 
 sub test_rfc5258_ex08_haschildren_childinfo
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
