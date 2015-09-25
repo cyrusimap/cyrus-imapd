@@ -61,6 +61,7 @@
 #include "hash.h"
 #include "httpd.h"
 #include "http_caldav.h"
+#include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
@@ -3665,7 +3666,6 @@ static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
             diff = difftime(dt, tg) / (json_int_t) 60;
         }
 
-
         json_array_append_new(ret, json_pack("{s:s, s:i}",
                     "type", type, "minutesBefore", diff));
     }
@@ -3677,13 +3677,170 @@ static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
     return ret;
 }
 
+/* Set isyou if userid matches the user looked up by caladdr. Return 0 on
+ * success or a Cyrus error on failure. */
+static int _jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
+    /* XXX - This doesn't really work. */
+    struct sched_param sparam;
+
+    if (userid) {
+        sparam.userid = NULL;
+        int r = caladdress_lookup(caladdr, &sparam, userid);
+        if (r && r != HTTP_NOT_FOUND) {
+            syslog(LOG_ERR, "caladdress_lookup: failed to lookup caladdr %s: %s",
+                    caladdr, error_message(r));
+            return r;
+        }
+        *isyou = r != HTTP_NOT_FOUND ? !strcmp(userid, sparam.userid) : 0;
+        if (sparam.userid) {
+            /* XXX - caladdress_lookup leaks */
+            free(sparam.userid);
+        }
+    }
+    return 0;
+}
+
+/* Convert the ical ORGANIZER/ATTENDEEs in comp to CalendarEvent
+ * participants, and store them in the pointers pointed to by
+ * organizer and attendees, or NULL. The participant isYou field
+ * is set, if this participant's caladdress belongs to userid. */
+static void jmap_participants_from_ical(icalcomponent *comp,
+                                        json_t **organizer,
+                                        json_t **attendees,
+                                        const char *userid) {
+    icalproperty *prop;
+    icalparameter *param;
+    json_t *org = NULL;
+    json_t *atts = NULL;
+    const char *email;
+    short isYou;
+    struct hash_table *hatts = NULL;
+    int r;
+
+    /* Lookup ORGANIZER. */
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (!prop) {
+        goto done;
+    }
+    org = json_pack("{}");
+
+    /* name */
+    param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+    json_object_set_new(org, "name",
+            param ? json_string(icalparameter_get_cn(param)) : json_null());
+
+    /* email */
+    email = icalproperty_get_value_as_string(prop);
+    if (!strncmp(email, "mailto:", 7)) email += 7;
+    json_object_set_new(org, "email", json_string(email));
+
+    /* isYou */
+    r = _jmap_isyou(email, userid, &isYou);
+    if (r) goto done;
+    json_object_set_new(org, "isYou", json_boolean(isYou));
+
+    /* Collect all attendees in a map so we can lookup delegates. */
+    hatts = xzmalloc(sizeof(struct hash_table));
+    construct_hash_table(hatts, 32, 0);
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+
+        hash_insert(icalproperty_get_value_as_string(prop), prop, hatts);
+    }
+    if (!hash_numrecords(hatts)) {
+        goto done;
+    }
+
+    /* Convert all ATTENDEES. */
+    atts = json_pack("[]");
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+
+        json_t *att = json_pack("{}");
+
+        /* name */
+        param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+        json_object_set_new(att, "name",
+                param ? json_string(icalparameter_get_cn(param)) : json_null());
+
+        /* email */
+        email = icalproperty_get_value_as_string(prop);
+        if (!strncmp(email, "mailto:", 7)) email += 7;
+        json_object_set_new(att, "email", json_string(email));
+
+        /* rsvp */
+        const char *rsvp = NULL;
+        while (!rsvp) {
+            param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+            icalparameter_partstat pst = icalparameter_get_partstat(param);
+            switch (pst) {
+                case ICAL_PARTSTAT_ACCEPTED:
+                    rsvp = "yes";
+                    break;
+                case ICAL_PARTSTAT_DECLINED:
+                    rsvp = "no";
+                    break;
+                case ICAL_PARTSTAT_TENTATIVE:
+                    rsvp = "maybe";
+                    break;
+                case ICAL_PARTSTAT_DELEGATED:
+                    param = icalproperty_get_first_parameter(prop, ICAL_DELEGATEDTO_PARAMETER);
+                    if (param) {
+                        const char *to = icalparameter_get_delegatedto(param);
+                        prop = hash_lookup(to, hatts);
+                        if (prop) {
+                            /* Determine PARTSTAT from delegate. */
+                            continue;
+                        }
+                    }
+                    /* fallthrough */
+                default:
+                    rsvp = "";
+            }
+        }
+        json_object_set_new(att, "rsvp", json_string(rsvp));
+
+        /* isYou */
+        r = _jmap_isyou(email, userid, &isYou);
+        if (r) goto done;
+        json_object_set_new(att, "isYou", json_boolean(isYou));
+
+        if (json_object_size(att)) {
+            json_array_append(atts, att);
+        }
+        json_decref(att);
+    }
+
+done:
+    if (hatts) {
+        free_hash_table(hatts, NULL);
+        free(hatts);
+    }
+    if (org && atts) {
+        *organizer = org;
+        *attendees = atts;
+        json_incref(org);
+        json_incref(atts);
+    } else {
+        *organizer = NULL;
+        *attendees = NULL;
+    }
+    if (org) json_decref(org);
+    if (atts) json_decref(atts);
+}
+
 /* Convert the libical VEVENT comp to a CalendarEvent, excluding the
  * exceptions property. If exc is true, only convert properties that are
- * valid for exceptions.
+ * valid for exceptions. If userid is not NULL it will be used to identify
+ * participants.
  * Only convert the properties named in props. */
 static json_t* jmap_vevent_to_calendarevent(icalcomponent *comp,
                                             struct hash_table *props,
-                                            short exc) {
+                                            short exc,
+                                            const char *userid) {
     icalproperty* prop;
     icalparameter* param;
     json_t *obj;
@@ -3765,11 +3922,15 @@ static json_t* jmap_vevent_to_calendarevent(icalcomponent *comp,
     if (_wantprop(props, "alerts")) {
         json_object_set_new(obj, "alerts", jmap_alerts_from_ical(comp));
     }
-    if (_wantprop(props, "organizer")) {
-        /* XXX - Implement this */
-    }
-    if (_wantprop(props, "attendees")) {
-        /* XXX - Implement this */
+    if (_wantprop(props, "organizer") || _wantprop(props, "attendees")) {
+        json_t *organizer, *attendees;
+        jmap_participants_from_ical(comp, &organizer, &attendees, userid);
+        if (organizer && _wantprop(props, "organizer")) {
+            json_object_set_new(obj, "organizer", organizer);
+        }
+        if (attendees && _wantprop(props, "attendees")) {
+            json_object_set_new(obj, "attendees", attendees);
+        }
     }
     if (_wantprop(props, "attachments") && !exc) {
         /* XXX - Implement this */
@@ -3786,6 +3947,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
     icalcomponent* ical = NULL;
     icalcomponent* comp;
     icalproperty* prop;
+    const char *userid = crock->req->userid;
     json_t *obj;
 
     /* Open calendar mailbox. */
@@ -3826,7 +3988,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
     }
 
     /* Convert main VEVENT to JMAP. */
-    obj = jmap_vevent_to_calendarevent(comp, crock->props, 0 /* exc */);
+    obj = jmap_vevent_to_calendarevent(comp, crock->props, 0 /* exc */, userid);
     if (!obj) goto done;
     json_object_set_new(obj, "id", json_string(cdata->ical_uid));
 
@@ -3857,7 +4019,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
                 continue;
             }
 
-            json_t *exc = jmap_vevent_to_calendarevent(comp, crock->props, 1 /* exc */);
+            json_t *exc = jmap_vevent_to_calendarevent(comp, crock->props, 1 /* exc */, userid);
             if (!exc) {
                 continue;
             }
