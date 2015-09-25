@@ -355,4 +355,23 @@ sub test_rfc5258_ex08_haschildren_childinfo
 #    $self->assert(0, 'FIXME test not implemented');
 #}
 
+sub test_folder_at_novirtdomains
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+        [ 'create' => [qw( foo@bar )] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
+
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\Noinferiors',
+        'foo@bar' => '\\HasNoChildren',
+    });
+}
+
 1;
