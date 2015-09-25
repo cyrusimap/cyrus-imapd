@@ -61,8 +61,10 @@
 #include "hash.h"
 #include "httpd.h"
 #include "http_caldav.h"
+#include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
+#include "ical_support.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -2508,6 +2510,7 @@ struct calendars_rock {
     struct jmap_req *req;
     json_t *array;
     struct hash_table *props;
+    struct mailbox *mailbox;
     int rows;
 };
 
@@ -3346,98 +3349,792 @@ done:
     return r;
 }
 
-/* XXX - Here start the stubs from brong */
 
-static int jmap_calendars_get(struct jmap_req *req, caldav_cb_t *cb,
-                              const char *resname)
+/* Compare int in ascending order. */
+static int _jmap_intcmp(const void *aa, const void *bb)
 {
-    struct caldav_db *db = caldav_open_userid(req->userid);
-    if (!db) return -1;
+    const int *a = aa, *b = bb;
+    return (*a < *b) ? -1 : (*a > *b);
+}
 
-    char *mboxname = NULL;
-    json_t *calid = json_object_get(req->args, "calendarId");
-    if (calid && json_string_value(calid)) {
-        /* XXX - invalid arguments */
-        const char *calendarId = json_string_value(calid);
-        mboxname = caldav_mboxname(req->userid, calendarId);
+/* Compare time_t in ascending order. */
+static int _jmap_timetcmp(const void *aa, const void *bb)
+{
+    const time_t *a = aa, *b = bb;
+    return (*a < *b) ? -1 : (*a > *b);
+}
+
+/* Return the identity of a short as int. This is a helper for recur_byX. */
+static int _jmap_intident(short i) {
+    return i;
+}
+
+/* Convert at most nmemb entries in the ical recurrence byDay/Month/etc array
+ * named byX using conv. Return a new JSON array, sorted in ascending order. */
+static json_t* jmap_recur_byX_from_ical(short byX[], size_t nmemb, int (*conv)(short)) {
+    json_t *jbd = json_pack("[]");
+
+    size_t i;
+    int tmp[nmemb];
+    for (i = 0; i < nmemb && byX[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
+        tmp[i] = conv(byX[i]);
     }
 
-    struct cards_rock rock;
-    int r = -1;
+    size_t n = i;
+    qsort(tmp, n, sizeof(int), _jmap_intcmp);
+    for (i = 0; i < n; i++) {
+        json_array_append_new(jbd, json_pack("i", tmp[i]));
+    }
+
+    return jbd;
+}
+
+/* Convert the ical recurrence recur to a JMAP structure encoded in JSON. */
+static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
+    json_t *jrecur = json_pack("{}");
+    const char *v = NULL;
+
+    if (0) {
+        /* XXX - Keep until libical either accepts or rejects our pull request */
+        switch (recur.freq) {
+            case ICAL_SECONDLY_RECURRENCE:
+                v  = "secondly";
+                break;
+            case ICAL_MINUTELY_RECURRENCE:
+                v = "minutely";
+                break;
+            case ICAL_HOURLY_RECURRENCE:
+                v = "hourly";
+                break;
+            case ICAL_DAILY_RECURRENCE:
+                v = "daily";
+                break;
+            case ICAL_WEEKLY_RECURRENCE:
+                v = "weekly";
+                break;
+            case ICAL_MONTHLY_RECURRENCE:
+                v = "monthly";
+                break;
+            case ICAL_YEARLY_RECURRENCE:
+                v = "yearly";
+                break;
+            case ICAL_NO_RECURRENCE:
+                /* fallthrough */
+            default:
+                syslog(LOG_INFO, "jmap_recur_from_ical: unknown freq: %d", recur.freq);
+                return json_null();
+        }
+        json_object_set_new(jrecur, "frequency", json_string(v));
+    }
+
+    /* frequency */
+    char *s = xstrdup(icalrecur_freq_to_string(recur.freq));
+    char *p = s; for ( ; *p; ++p) *p = tolower(*p);
+    json_object_set_new(jrecur, "frequency", json_string(s));
+    free(s);
+
+    if (recur.interval > 1) {
+        json_object_set_new(jrecur, "interval", json_pack("i", recur.interval));
+    }
+
+    /* XXX - Keep this for now  */
+    if (0) {
+        short day = 0;
+        switch (recur.week_start) {
+            case ICAL_SATURDAY_WEEKDAY:
+                day++;
+            case ICAL_FRIDAY_WEEKDAY:
+                day++;
+            case ICAL_THURSDAY_WEEKDAY:
+                day++;
+            case ICAL_WEDNESDAY_WEEKDAY:
+                day++;
+            case ICAL_TUESDAY_WEEKDAY:
+                day++;
+            case ICAL_MONDAY_WEEKDAY:
+                day++;
+                break;
+            case ICAL_SUNDAY_WEEKDAY:
+                /* do nothing */
+                break;
+            default:
+                syslog(LOG_ERR, "jmap_recur_from_ical: unknown week_start %d", recur.week_start);
+                /* fallthrough */
+            case ICAL_NO_WEEKDAY:
+                day = 1;
+                break;
+        }
+        if (day != 1) {
+            json_object_set_new(jrecur, "firstDayOfWeek", json_pack("i", day));
+        }
+    }
+
+    short day = recur.week_start - 1;
+    if (day >= 0 && day != 1) {
+        json_object_set_new(jrecur, "firstDayOfWeek", json_pack("i", day));
+    }
+
+    if (recur.by_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byDay",
+                /* XXX - return values differ from the JMAP spec examples. */
+                jmap_recur_byX_from_ical(recur.by_day,
+                    ICAL_BY_DAY_SIZE, &icalrecurrencetype_day_position));
+    }
+    if (recur.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byDate",
+                jmap_recur_byX_from_ical(recur.by_month_day,
+                    ICAL_BY_MONTHDAY_SIZE, &_jmap_intident));
+    }
+    if (recur.by_month[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byMonth",
+                jmap_recur_byX_from_ical(recur.by_month,
+                    ICAL_BY_MONTH_SIZE, &_jmap_intident));
+    }
+    if (recur.by_year_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byYearDay",
+                jmap_recur_byX_from_ical(recur.by_year_day,
+                    ICAL_BY_YEARDAY_SIZE, &_jmap_intident));
+    }
+    if (recur.by_month[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byWeekNo",
+                jmap_recur_byX_from_ical(recur.by_month,
+                    ICAL_BY_MONTH_SIZE, &_jmap_intident));
+    }
+    if (recur.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byHour",
+                jmap_recur_byX_from_ical(recur.by_hour,
+                    ICAL_BY_HOUR_SIZE, &_jmap_intident));
+    }
+    if (recur.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "byMinute",
+                jmap_recur_byX_from_ical(recur.by_minute,
+                    ICAL_BY_MINUTE_SIZE, &_jmap_intident));
+    }
+    if (recur.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "bySecond",
+                jmap_recur_byX_from_ical(recur.by_second,
+                    ICAL_BY_SECOND_SIZE, &_jmap_intident));
+    }
+    if (recur.by_set_pos[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+        json_object_set_new(jrecur, "bySetPosition",
+                jmap_recur_byX_from_ical(recur.by_set_pos,
+                    ICAL_BY_SETPOS_SIZE, &_jmap_intident));
+    }
+
+    if (recur.count != 0) {
+        /* XXX - Recur count takes precedence over until. */
+        json_object_set_new(jrecur, "count", json_pack("i", recur.count));
+    } else if (!icaltime_is_null_time(recur.until)) {
+        /* XXX - libical does not check if until is local time */
+        json_object_set_new(jrecur, "until",
+                json_string(icaltime_as_ical_string(recur.until)));
+    }
+
+    return jrecur;
+}
+
+/* Convert time to a RFC3339 formatted localdate string. Return the number
+ * of bytes written to buf sized size, excluding the terminating null byte. */
+static int _jmap_timet_to_localdate(time_t t, char* buf, size_t size) {
+    int n = time_to_rfc3339(t, buf, size);
+    if (n && buf[n-1] == 'Z') {
+        buf[n-1] = '\0';
+        n--;
+    }
+    return n;
+}
+
+/* Convert icaltime to a RFC3339 formatted localdate string. The returned
+ * string is owned by the caller. Return NULL on error. */
+static char* _jmap_icaltime_to_localdate_r(icaltimetype icaltime) {
+    char *s;
+    time_t t;
+
+    s = xmalloc(RFC3339_DATETIME_MAX);
+    /* XXX - This doesn't work right. It seems to return UTC time
+     * for local ical datetimes. */
+    /*
+    t = icaltime_as_timet_with_zone(icaltime, icaltime.zone ?
+            icaltime.zone : icaltimezone_get_utc_timezone());
+    */
+    t = icaltime_as_timet(icaltime);
+    if (!_jmap_timet_to_localdate(t, s, RFC3339_DATETIME_MAX)) {
+        return NULL;
+    }
+    return s;
+}
+
+/* Convert a VEVENT ical component to CalendarEvent inclusions. */
+static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
+    icalproperty* prop;
+    size_t sincl = 8;
+    size_t nincl = 0;
+    time_t *incl = xmalloc(sincl * sizeof(time_t));
+    json_t *ret;
+    size_t i;
+    char timebuf[RFC3339_DATETIME_MAX];
+
+    /* Collect all RDATE occurrences as datetimes into incl. */
+    for(prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
+        prop;
+        prop = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY)) {
+
+        struct icaldatetimeperiodtype rdate;
+        time_t t;
+
+        rdate = icalproperty_get_rdate(prop);
+        if (!icalperiodtype_is_null_period(rdate.period)) {
+            continue;
+        }
+        if (icaltime_is_null_time(rdate.time)) {
+            continue;
+        }
+        t = icaltime_as_timet_with_zone(rdate.time, rdate.time.zone ?
+                rdate.time.zone : icaltimezone_get_utc_timezone());
+        if (nincl == sincl) {
+            sincl <<= 1;
+            incl = xrealloc(incl, sincl * sizeof(time_t));
+        }
+        incl[nincl++] = t;
+    }
+    if (!nincl) {
+        ret = json_null();
+        goto done;
+    }
+
+    /* Sort ascending. */
+    qsort(incl, nincl, sizeof(time_t), &_jmap_timetcmp);
+
+    /* Convert incl to JMAP LocalDate. */
+    ret = json_pack("[]");
+    for (i = 0; i < nincl; ++i) {
+        int n = _jmap_timet_to_localdate(incl[i], timebuf, RFC3339_DATETIME_MAX);
+        if (!n) continue;
+        json_array_append_new(ret, json_string(timebuf));
+    }
+
+done:
+    free(incl);
+    return ret;
+}
+
+/* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts. */
+static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
+    json_t* ret = json_pack("[]");
+    icalcomponent* alarm;
+
+    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+         alarm;
+         alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
+
+        icalproperty* prop;
+        icalvalue* val;
+        const char *type;
+        struct icaltriggertype trigger;
+        json_int_t diff;
+
+        /* type */
+        prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+        if (!prop) {
+            continue;
+        }
+        val = icalproperty_get_value(prop);
+        if (!val) {
+            continue;
+        }
+        enum icalproperty_action action = icalvalue_get_action(val);
+        if (action == ICAL_ACTION_EMAIL) {
+            type = "email";
+        } else {
+            type = "alert";
+        }
+
+        /* minutesBefore */
+        prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
+        if (!prop) {
+            continue;
+        }
+        trigger = icalproperty_get_trigger(prop);
+        if (!icaldurationtype_is_null_duration(trigger.duration)) {
+            diff = icaldurationtype_as_int(trigger.duration) / -60;
+        } else {
+            icaltimetype tgtime = icaltime_convert_to_zone(trigger.time,
+                    icaltimezone_get_utc_timezone());
+            time_t tg = icaltime_as_timet(tgtime);
+            icaltimetype dtstart = icaltime_convert_to_zone(
+                    icalcomponent_get_dtstart(comp),
+                    icaltimezone_get_utc_timezone());
+            time_t dt = icaltime_as_timet(dtstart);
+            diff = difftime(dt, tg) / (json_int_t) 60;
+        }
+
+        json_array_append_new(ret, json_pack("{s:s, s:i}",
+                    "type", type, "minutesBefore", diff));
+    }
+
+    if (!json_array_size(ret)) {
+        json_decref(ret);
+        ret = json_null();
+    }
+    return ret;
+}
+
+/* Set isyou if userid matches the user looked up by caladdr. Return 0 on
+ * success or a Cyrus error on failure. */
+static int _jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
+    /* XXX - This doesn't really work. */
+    struct sched_param sparam;
+
+    if (userid) {
+        sparam.userid = NULL;
+        int r = caladdress_lookup(caladdr, &sparam, userid);
+        if (r && r != HTTP_NOT_FOUND) {
+            syslog(LOG_ERR, "caladdress_lookup: failed to lookup caladdr %s: %s",
+                    caladdr, error_message(r));
+            return r;
+        }
+        *isyou = r != HTTP_NOT_FOUND ? !strcmp(userid, sparam.userid) : 0;
+        if (sparam.userid) {
+            /* XXX - caladdress_lookup leaks */
+            free(sparam.userid);
+        }
+    }
+    return 0;
+}
+
+/* Convert the ical ORGANIZER/ATTENDEEs in comp to CalendarEvent
+ * participants, and store them in the pointers pointed to by
+ * organizer and attendees, or NULL. The participant isYou field
+ * is set, if this participant's caladdress belongs to userid. */
+static void jmap_participants_from_ical(icalcomponent *comp,
+                                        json_t **organizer,
+                                        json_t **attendees,
+                                        const char *userid) {
+    icalproperty *prop;
+    icalparameter *param;
+    json_t *org = NULL;
+    json_t *atts = NULL;
+    const char *email;
+    short isYou;
+    struct hash_table *hatts = NULL;
+    int r;
+
+    /* Lookup ORGANIZER. */
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (!prop) {
+        goto done;
+    }
+    org = json_pack("{}");
+
+    /* name */
+    param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+    json_object_set_new(org, "name",
+            param ? json_string(icalparameter_get_cn(param)) : json_null());
+
+    /* email */
+    email = icalproperty_get_value_as_string(prop);
+    if (!strncmp(email, "mailto:", 7)) email += 7;
+    json_object_set_new(org, "email", json_string(email));
+
+    /* isYou */
+    r = _jmap_isyou(email, userid, &isYou);
+    if (r) goto done;
+    json_object_set_new(org, "isYou", json_boolean(isYou));
+
+    /* Collect all attendees in a map so we can lookup delegates. */
+    hatts = xzmalloc(sizeof(struct hash_table));
+    construct_hash_table(hatts, 32, 0);
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+
+        hash_insert(icalproperty_get_value_as_string(prop), prop, hatts);
+    }
+    if (!hash_numrecords(hatts)) {
+        goto done;
+    }
+
+    /* Convert all ATTENDEES. */
+    atts = json_pack("[]");
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+
+        json_t *att = json_pack("{}");
+
+        /* name */
+        param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+        json_object_set_new(att, "name",
+                param ? json_string(icalparameter_get_cn(param)) : json_null());
+
+        /* email */
+        email = icalproperty_get_value_as_string(prop);
+        if (!strncmp(email, "mailto:", 7)) email += 7;
+        json_object_set_new(att, "email", json_string(email));
+
+        /* rsvp */
+        const char *rsvp = NULL;
+        while (!rsvp) {
+            param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+            icalparameter_partstat pst = icalparameter_get_partstat(param);
+            switch (pst) {
+                case ICAL_PARTSTAT_ACCEPTED:
+                    rsvp = "yes";
+                    break;
+                case ICAL_PARTSTAT_DECLINED:
+                    rsvp = "no";
+                    break;
+                case ICAL_PARTSTAT_TENTATIVE:
+                    rsvp = "maybe";
+                    break;
+                case ICAL_PARTSTAT_DELEGATED:
+                    param = icalproperty_get_first_parameter(prop, ICAL_DELEGATEDTO_PARAMETER);
+                    if (param) {
+                        const char *to = icalparameter_get_delegatedto(param);
+                        prop = hash_lookup(to, hatts);
+                        if (prop) {
+                            /* Determine PARTSTAT from delegate. */
+                            continue;
+                        }
+                    }
+                    /* fallthrough */
+                default:
+                    rsvp = "";
+            }
+        }
+        json_object_set_new(att, "rsvp", json_string(rsvp));
+
+        /* isYou */
+        r = _jmap_isyou(email, userid, &isYou);
+        if (r) goto done;
+        json_object_set_new(att, "isYou", json_boolean(isYou));
+
+        if (json_object_size(att)) {
+            json_array_append(atts, att);
+        }
+        json_decref(att);
+    }
+
+done:
+    if (hatts) {
+        free_hash_table(hatts, NULL);
+        free(hatts);
+    }
+    if (org && atts) {
+        *organizer = org;
+        *attendees = atts;
+        json_incref(org);
+        json_incref(atts);
+    } else {
+        *organizer = NULL;
+        *attendees = NULL;
+    }
+    if (org) json_decref(org);
+    if (atts) json_decref(atts);
+}
+
+/* Convert the libical VEVENT comp to a CalendarEvent, excluding the
+ * exceptions property. If exc is true, only convert properties that are
+ * valid for exceptions. If userid is not NULL it will be used to identify
+ * participants.
+ * Only convert the properties named in props. */
+static json_t* jmap_vevent_to_calendarevent(icalcomponent *comp,
+                                            struct hash_table *props,
+                                            short exc,
+                                            const char *userid) {
+    icalproperty* prop;
+    icalparameter* param;
+    json_t *obj;
+
+    obj = json_pack("{}");
+
+    /* Always determine isAllDay to set start, end and timezone fields. */
+    int isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
+    if (_wantprop(props, "isAllDay") && !exc) {
+        json_object_set_new(obj, "isAllDay", json_boolean(isAllDay));
+    }
+
+    /* Convert properties. */
+    if (_wantprop(props, "summary")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+        json_object_set_new(obj, "summary",
+                prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+    }
+    if (_wantprop(props, "description")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+        json_object_set_new(obj, "description",
+            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+    }
+    if (_wantprop(props, "location")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
+        json_object_set_new(obj, "location",
+            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+    }
+    if (_wantprop(props, "showAsFree")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+        json_object_set_new(obj, "showAsFree",
+                json_boolean(prop &&
+                    !strcmp(icalproperty_get_value_as_string(prop), "TRANSPARENT")));
+    }
+    if (_wantprop(props, "start")) {
+        struct icaltimetype dt = icalcomponent_get_dtstart(comp);
+        char *s = _jmap_icaltime_to_localdate_r(dt);
+        json_object_set_new(obj, "start", json_string(s));
+        free(s);
+    }
+    if (_wantprop(props, "end")) {
+        struct icaltimetype dt = icalcomponent_get_dtend(comp);
+        char *s = _jmap_icaltime_to_localdate_r(dt);
+        json_object_set_new(obj, "end", json_string(s));
+        free(s);
+    }
+    if (_wantprop(props, "startTimeZone")) {
+        const char *tzid = NULL;
+        prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+        if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
+         * the server SHOULD try to guess the correct time zone based on the
+         * VTIMEZONE information" */
+        if (param) tzid = icalparameter_get_tzid(param);
+        json_object_set_new(obj, "startTimeZone",
+                tzid && !isAllDay ? json_string(tzid) : json_null());
+    }
+    if (_wantprop(props, "endTimeZone")) {
+        const char *tzid = NULL;
+        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+        if (!prop) prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+        if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
+         * the server SHOULD try to guess the correct time zone based on the
+         * VTIMEZONE information" */
+        if (param) tzid = icalparameter_get_tzid(param);
+        json_object_set_new(obj, "endTimeZone",
+                tzid && !isAllDay ? json_string(tzid) : json_null());
+    }
+    if (_wantprop(props, "recurrence") && !exc) {
+        prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+        json_object_set_new(obj, "recurrence",
+                prop ? jmap_recur_from_ical(icalproperty_get_rrule(prop)) : json_null());
+    }
+    if (_wantprop(props, "inclusions") && !exc) {
+        json_object_set_new(obj, "inclusions", jmap_inclusions_from_ical(comp));
+    }
+    /* Do not convert exceptions. */
+    if (_wantprop(props, "alerts")) {
+        json_object_set_new(obj, "alerts", jmap_alerts_from_ical(comp));
+    }
+    if (_wantprop(props, "organizer") || _wantprop(props, "attendees")) {
+        json_t *organizer, *attendees;
+        jmap_participants_from_ical(comp, &organizer, &attendees, userid);
+        if (organizer && _wantprop(props, "organizer")) {
+            json_object_set_new(obj, "organizer", organizer);
+        }
+        if (attendees && _wantprop(props, "attendees")) {
+            json_object_set_new(obj, "attendees", attendees);
+        }
+    }
+    if (_wantprop(props, "attachments") && !exc) {
+        /* XXX - Implement this */
+    }
+
+    return obj;
+}
+
+static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
+{
+    struct calendars_rock *crock = (struct calendars_rock *)rock;
+    struct index_record record;
+    int r = 0;
+    icalcomponent* ical = NULL;
+    icalcomponent* comp;
+    icalproperty* prop;
+    const char *userid = crock->req->userid;
+    json_t *obj;
+
+    /* Open calendar mailbox. */
+    if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
+        mailbox_close(&crock->mailbox);
+        r = mailbox_open_irl(cdata->dav.mailbox, &crock->mailbox);
+        if (r) goto done;
+    }
+
+    /* Locate calendar event ical data in mailbox. */
+    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
+    if (r) goto done;
+
+    crock->rows++;
+
+    /* Load VEVENT from record. */
+    ical = record_to_ical(crock->mailbox, &record);
+    if (!ical) {
+        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
+                cdata->dav.imap_uid, crock->mailbox->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Locate the main VEVENT. */
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+            break;
+        }
+    }
+    if (!comp) {
+        syslog(LOG_ERR, "no VEVENT in record %u:%s",
+                cdata->dav.imap_uid, crock->mailbox->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Convert main VEVENT to JMAP. */
+    obj = jmap_vevent_to_calendarevent(comp, crock->props, 0 /* exc */, userid);
+    if (!obj) goto done;
+    json_object_set_new(obj, "id", json_string(cdata->ical_uid));
+
+    /* Add optional exceptions. */
+    if (_wantprop(crock->props, "exceptions")) {
+        json_t* excobj = json_pack("{}");
+
+        /* Add all EXDATEs as null value. */
+        for (prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_EXDATE_PROPERTY)) {
+
+            struct icaltimetype exdate = icalproperty_get_exdate(prop);
+            if (icaltime_is_null_time(exdate)) {
+                continue;
+            }
+            char *s = _jmap_icaltime_to_localdate_r(exdate);
+            json_object_set_new(excobj, s, json_null());
+            free(s);
+        }
+
+        /* Add VEVENTs with RECURRENCE-ID. */
+        for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+
+            if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+                continue;
+            }
+
+            json_t *exc = jmap_vevent_to_calendarevent(comp, crock->props, 1 /* exc */, userid);
+            if (!exc) {
+                continue;
+            }
+            struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+            char *s = _jmap_icaltime_to_localdate_r(dtstart);
+            json_object_set_new(excobj, s, exc);
+            free(s);
+        }
+        if (json_object_size(excobj)) {
+            json_object_set(obj, "exceptions", excobj);
+        }
+        json_decref(excobj);
+    }
+
+    /* Add JMAP-only fields. */
+    if (_wantprop(crock->props, "x-href")) {
+        _add_xhref(obj, cdata->dav.mailbox, cdata->dav.resource);
+    }
+    if (_wantprop(crock->props, "calendarId")) {
+        json_object_set_new(obj, "calendarId", json_string(strrchr(cdata->dav.mailbox, '.')+1));
+    }
+
+    json_array_append_new(crock->array, obj);
+
+done:
+    if (ical) icalcomponent_free(ical);
+    return r;
+}
+
+static int getCalendarEvents(struct jmap_req *req)
+{
+    struct calendars_rock rock;
+    int r = 0;
+
+    r = caldav_create_defaultcalendars(req->userid);
+    if (r) return r;
 
     rock.array = json_pack("[]");
+    rock.req = req;
     rock.props = NULL;
+    rock.rows = 0;
     rock.mailbox = NULL;
 
+    json_t *properties = json_object_get(req->args, "properties");
+    if (properties) {
+        rock.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(rock.props, 1024, 0);
+        int i;
+        int size = json_array_size(properties);
+        for (i = 0; i < size; i++) {
+            const char *id = json_string_value(json_array_get(properties, i));
+            if (id == NULL) continue;
+            /* 1 == properties */
+            hash_insert(id, (void *)1, rock.props);
+        }
+    }
+
+    struct caldav_db *db = caldav_open_userid(req->userid);
+    if (!db) {
+        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
     json_t *want = json_object_get(req->args, "ids");
-    json_t *notFound = json_array();
+    json_t *notfound = json_array();
     if (want) {
         int i;
         int size = json_array_size(want);
         for (i = 0; i < size; i++) {
             rock.rows = 0;
             const char *id = json_string_value(json_array_get(want, i));
-            if (!id) continue;
-            r = caldav_get_events(db, mboxname, id, cb, &rock);
+            if (!id) continue; /* XXX - handle NULL id */
+            r = caldav_get_events(db, NULL, id, &getcalendarevents_cb, &rock);
             if (r || !rock.rows) {
-                json_array_append_new(notFound, json_string(id));
+                json_array_append_new(notfound, json_string(id));
             }
         }
-    }
-    else {
+    } else {
         rock.rows = 0;
-        r = caldav_get_events(db, mboxname, NULL, cb, &rock);
+        r = caldav_get_events(db, NULL, NULL, &getcalendarevents_cb, &rock);
+        if (r) goto done;
     }
+
+    json_t *events = json_pack("{}");
+    r = jmap_setstate(req, events, "state", MBTYPE_CALENDAR, 1 /* refresh */, 0 /* bump */);
     if (r) goto done;
 
-    json_t *toplevel = json_pack("{}");
-    json_object_set_new(toplevel, "accountId", json_string(req->userid));
-    json_object_set_new(toplevel, "state", json_string(req->state));
-    json_object_set_new(toplevel, "list", rock.array);
-    if (json_array_size(notFound)) {
-        json_object_set_new(toplevel, "notFound", notFound);
+    json_incref(rock.array);
+    json_object_set_new(events, "accountId", json_string(req->userid));
+    json_object_set_new(events, "list", rock.array);
+    if (json_array_size(notfound)) {
+        json_object_set_new(events, "notFound", notfound);
     }
     else {
-        json_decref(notFound);
-        json_object_set_new(toplevel, "notFound", json_null());
+        json_decref(notfound);
+        json_object_set_new(events, "notFound", json_null());
     }
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string(resname));
-    json_array_append_new(item, toplevel);
+    json_array_append_new(item, json_string("calendarEvents"));
+    json_array_append_new(item, events);
     json_array_append_new(item, json_string(req->tag));
 
     json_array_append_new(req->response, item);
 
-  done:
-    mailbox_close(&rock.mailbox);
-    free(mboxname);
-    caldav_close(db);
-    return r;
-}
-
-static int getevents_cb(void *rock, struct caldav_data *cdata)
-{
-    struct calendars_rock *crock = (struct calendars_rock *)rock;
-
-    crock->rows++;
-
-    json_t *obj = json_pack("{}");
-
-    json_object_set_new(obj, "id", json_string(cdata->ical_uid));
-
-    if (_wantprop(crock->props, "x-href")) {
-        _add_xhref(obj, cdata->dav.mailbox, cdata->dav.resource);
+done:
+    if (rock.props) {
+        free_hash_table(rock.props, NULL);
+        free(rock.props);
     }
-
-    /* XXX - other fields */
-
-    json_array_append_new(crock->array, obj);
-
-    return 0;
-}
-
-static int getCalendarEvents(struct jmap_req *req)
-{
-    return jmap_calendars_get(req, &getevents_cb, "calendarEvents");
+    json_decref(rock.array);
+    if (db) caldav_close(db);
+    if (rock.mailbox) mailbox_close(&rock.mailbox);
+    return r;
 }

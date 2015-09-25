@@ -511,8 +511,10 @@ EXPORTED int caldav_alarm_prepare(
     }
 
     /* no next alarm, nothing more to do! */
-    if (!rdata.nextalarm)
+    if (!rdata.nextalarm) {
+        free(triggerdata);
         return 1;
+    }
 
     /* now fill out alarmdata with all the stuff from event/ocurrence/alarm */
     alarmdata->action = rdata.nextaction;
@@ -540,6 +542,7 @@ EXPORTED int caldav_alarm_prepare(
         attendee = icalcomponent_get_next_property(rdata.nextalarm, ICAL_ATTENDEE_PROPERTY);
     }
 
+    free(triggerdata);
     return 0;
 }
 
