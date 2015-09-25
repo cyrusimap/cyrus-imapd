@@ -426,3 +426,50 @@ even though we use sqlite for the backup index there isn't any particular
 reason we're beholden to it for the mailboxes db too
 
 if we have a mailboxes db then we need a reconstruct tool for that, too
+
+
+installation instructions
+-------------------------
+
+(obviously, most of this won't work at this point, because the code doesn't
+exist.  but this is, approximately, where things are heading.)
+
+on your backup server:
+    * compile with --enable-backup configure option and install
+    * imapd.conf:
+        backup_directory: /var/spool/backup
+    * cyrus.conf SERVICES:
+        backupd cmd="backupd" listen="csync" prefork=0
+        (remove other services, most likely)
+        (should i create a master/conf/backup.conf example file?)
+    * cyrus.conf EVENTS:
+        bu_compress cmd="bu_compress -A" at=0400
+    * start server as usual
+    * do i want a special port for backupd?
+
+on your imap server:
+    * imapd.conf:
+        sync_log_channels: backup
+        sync_log: 1
+        backup_sync_host: backup-server.example.com
+        backup_sync_port: csync
+        backup_sync_authname: ...
+        backup_sync_password: ...
+        backup_sync_repeat_interval: ... # seconds, smaller value = livelier backups but more i/o
+        backup_sync_shutdown_file: ....
+    * cyrus.conf STARTUP:
+        backup_sync cmd="sync_client -r -n backup"
+    * cyrus.conf SERVICES:
+        restored cmd="restored" [...]
+    * start/restart master
+
+files and such:
+    {configdirectory}/backups.db                - database mapping userids to backup locations
+    {backup_directory}/<hash>/<userid>.gz       - backup data stream for userid
+    {backup_directory}/<hash>/<userid>.index    - index into userid's backup data stream
+
+do i want rhost in the path?
+    * protects from issue if multiple servers are trying to back up their own version of same user
+      (though this is its own problem that the backup system shouldn't have to compensate for)
+    * but makes location of undifferentiated user unpredictable
+    * so probably not, actually
