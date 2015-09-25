@@ -12514,7 +12514,7 @@ static void list_data(struct listargs *listargs)
         if (listargs->sel & LIST_SEL_SUBSCRIBED) {
             mboxlist_findsubmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
                                   imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
-            perform_output(NULL, 0, &rock);
+            subscribed_cb("", 0, 0, &rock);
         } else {
             if (listargs->scan) {
                 construct_hash_table(&listargs->server_table, 10, 1);
@@ -12526,7 +12526,7 @@ static void list_data(struct listargs *listargs)
 
             mboxlist_findallmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
                                   imapd_userid, imapd_authstate, list_cb, &rock);
-            perform_output(NULL, 0, &rock);
+            list_cb("", 0, 0, &rock);
 
             if (listargs->scan)
                 free_hash_table(&listargs->server_table, NULL);
