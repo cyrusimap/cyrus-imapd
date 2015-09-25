@@ -119,7 +119,7 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 static void backupd_reset(void);
 static void dobanner(void);
 static int reset_saslconn(sasl_conn_t **conn);
-static void shut_down(int code);
+static void shut_down(int code) __attribute__((noreturn));
 static void usage(void);
 
 static struct open_backup *open_backups_list_add(struct open_backups_list *list,
