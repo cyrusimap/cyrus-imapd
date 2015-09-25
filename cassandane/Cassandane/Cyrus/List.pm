@@ -55,9 +55,6 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(virtdomains => 'userid');
-    $config->set(unixhierarchysep => 'on');
-    $config->set(altnamespace => 'yes');
 
     return $class->SUPER::new({ config => $config }, @args);
 }
@@ -154,6 +151,7 @@ sub _assert_list_data
 }
 
 sub test_empty_mailbox
+    :UnixHierarchySep
 {
     my ($self) = @_;
 
@@ -167,6 +165,7 @@ sub test_empty_mailbox
 }
 
 sub test_outlook_compatible_xlist_empty_mailbox
+    :UnixHierarchySep
 {
     my ($self) = @_;
 
@@ -185,6 +184,7 @@ sub test_outlook_compatible_xlist_empty_mailbox
 # https://tools.ietf.org/html/rfc5258#section-5
 
 sub test_rfc5258_ex01_list_all
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
@@ -214,6 +214,7 @@ sub test_rfc5258_ex01_list_all
 }
 
 sub test_rfc5258_ex02_list_subscribed
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
@@ -241,6 +242,7 @@ sub test_rfc5258_ex02_list_subscribed
 }
 
 sub test_rfc5258_ex03_children
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
@@ -286,32 +288,34 @@ sub test_rfc5258_ex03_children
 #    $self->assert(0, 'FIXME test not implemented');
 #}
 
-#sub test_rfc5258_ex07_multiple_mailbox_patterns
-#{
-#    my ($self) = @_;
+sub test_rfc5258_ex07_multiple_mailbox_patterns
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
 
-#    $self->_install_test_data([
-#	[ 'create' => 'Drafts' ],
-#	[ 'create' => [qw(
-#	    Sent Sent/March2004 Sent/December2003 Sent/August2004
-#	)] ],
-#	[ 'create' => [qw( Unlisted Unlisted/Foo )] ],
-#    ]);
+    $self->_install_test_data([
+	[ 'create' => 'Drafts' ],
+	[ 'create' => [qw(
+	    Sent Sent/March2004 Sent/December2003 Sent/August2004
+	)] ],
+	[ 'create' => [qw( Unlisted Unlisted/Foo )] ],
+    ]);
 
-#    my $imaptalk = $self->{store}->get_client();
+    my $imaptalk = $self->{store}->get_client();
 
-#    my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
+    my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
 
-#    $self->_assert_list_data($data, '/', {
-#        'INBOX' => [ '\\Noinferiors' ],
-#        'Drafts' => [],
-#        'Sent/August2004' => [ '\\HasNoChildren' ],
-#        'Sent/December2003' => [ '\\HasNoChildren' ],
-#        'Sent/March2004' => [ '\\HasNoChildren' ], # FIXME T142
-#    });
-#}
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [ '\\Noinferiors' ],
+        'Drafts' => [ '\\HasNoChildren' ],
+        'Sent/August2004' => [ '\\HasNoChildren' ],
+        'Sent/December2003' => [ '\\HasNoChildren' ],
+        'Sent/March2004' => [ '\\HasNoChildren' ],
+    });
+}
 
 sub test_rfc5258_ex08_haschildren_childinfo
+    :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
 
@@ -350,5 +354,24 @@ sub test_rfc5258_ex08_haschildren_childinfo
 #    my ($self) = @_;
 #    $self->assert(0, 'FIXME test not implemented');
 #}
+
+sub test_folder_at_novirtdomains
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+        [ 'create' => [qw( foo@bar )] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
+
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\Noinferiors',
+        'foo@bar' => '\\HasNoChildren',
+    });
+}
 
 1;

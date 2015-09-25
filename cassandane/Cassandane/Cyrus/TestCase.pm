@@ -181,6 +181,9 @@ magic(DelayedExpunge => sub {
 magic(VirtDomains => sub {
     shift->config_set(virtdomains => 'userid');
 });
+magic(AltNamespace => sub {
+    shift->config_set(altnamespace => 'yes');
+});
 magic(Conversations => sub {
     shift->config_set(conversations => 'yes');
 });
