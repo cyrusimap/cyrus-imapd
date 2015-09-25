@@ -1899,9 +1899,6 @@ product version in the capabilities */
    certificate. A value of "disabled" will disable this server's use
    of certificate-based authentication. */
 
-{ "tls_compression", 0, SWITCH }
-/* Deactivate TLS compression by default. */
-
 { "tls_eccurve", "prime256v1", STRING }
 /* The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
    See 'openssl ecparam -list_curves' for possible values. */
