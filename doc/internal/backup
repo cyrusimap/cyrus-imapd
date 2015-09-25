@@ -108,7 +108,7 @@ that's been expunged).
 
 And if someone else gets given the original name, like
 
-APPLY RENAME %(OLDMBOXNAME example.com!user.samantha-mithj example.com!user.smithj ...)
+APPLY RENAME %(OLDMBOXNAME example.com!user.samantha-mithj NEWMBOXNAME example.com!user.smithj ...)
 
 Then anything that was expunged from the original user but still available in
 backup disappears?  Or the two backups get conflated, and samantha can
@@ -119,7 +119,12 @@ Uggh.
 if there's a mailboxes database pointing to the backup files, then the backup
 file names don't need to be based on the userid, they could e.g. be based on
 the user's inbox's uniqueid.  this would make it easier to deal with user
-renames because the backup filename wouldn't need to change.
+renames because the backup filename wouldn't need to change.  but this depends
+on the uniqueid(s) in question being present on most areas of the sync
+protocol, otherwise when starting a backup of a brand new user we won't be
+able to tell where to store it.  workaround in the meantime could be to make
+some kind of backup id from the mailboxes database, and base the filename on
+this.
 
 
 locking
@@ -135,7 +140,6 @@ compress: needs to re-write foo.gz and foo.index
 restore:  needs to read
 
 
-
 mailboxes database
 ------------------
 
@@ -145,6 +149,13 @@ userid -> backup_filename
 lib/cyrusdb module implements this, look into that
 
 look at conversations db code to see how to use it
+
+need a tool:
+    * given a user, show their backup filename
+    * dump/undump
+    * rebuild based on files discovered in backup directory
+
+where does this fit into the locking scheme?
 
 
 reindex
