@@ -3615,11 +3615,66 @@ done:
     return ret;
 }
 
-
-/* Convert a VEVENT ical component to CalendarEvent alerts. */
+/* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts. */
 static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
-    /* XXX - Continue from here. */
-    return json_null();
+    json_t* ret = json_pack("[]");
+    icalcomponent* alarm;
+
+    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+         alarm;
+         alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
+
+        icalproperty* prop;
+        icalvalue* val;
+        const char *type;
+        struct icaltriggertype trigger;
+        json_int_t diff;
+
+        /* type */
+        prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+        if (!prop) {
+            continue;
+        }
+        val = icalproperty_get_value(prop);
+        if (!val) {
+            continue;
+        }
+        enum icalproperty_action action = icalvalue_get_action(val);
+        if (action == ICAL_ACTION_EMAIL) {
+            type = "email";
+        } else {
+            type = "alert";
+        }
+
+        /* minutesBefore */
+        prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
+        if (!prop) {
+            continue;
+        }
+        trigger = icalproperty_get_trigger(prop);
+        if (!icaldurationtype_is_null_duration(trigger.duration)) {
+            diff = icaldurationtype_as_int(trigger.duration) / -60;
+        } else {
+            icaltimetype tgtime = icaltime_convert_to_zone(trigger.time,
+                    icaltimezone_get_utc_timezone());
+            time_t tg = icaltime_as_timet(tgtime);
+            icaltimetype dtstart = icaltime_convert_to_zone(
+                    icalcomponent_get_dtstart(comp),
+                    icaltimezone_get_utc_timezone());
+            time_t dt = icaltime_as_timet(dtstart);
+            diff = difftime(dt, tg) / (json_int_t) 60;
+        }
+
+
+        json_array_append_new(ret, json_pack("{s:s, s:i}",
+                    "type", type, "minutesBefore", diff));
+    }
+
+    if (!json_array_size(ret)) {
+        json_decref(ret);
+        ret = json_null();
+    }
+    return ret;
 }
 
 /* Convert the libical VEVENT comp to a CalendarEvent, excluding the
@@ -3757,9 +3812,11 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
 
     /* Locate the main VEVENT. */
     for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-         comp && icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+         comp;
          comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-        /* Skip VEVENTs with RECCURENCE-ID property. */
+        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+            break;
+        }
     }
     if (!comp) {
         syslog(LOG_ERR, "no VEVENT in record %u:%s",
