@@ -61,6 +61,7 @@ sub new
     $config->set(sasl_mech_list => 'PLAIN LOGIN');
     return $class->SUPER::new({
 	config => $config,
+        adminstore => 1,
 	services => ['imap', 'http'],
     }, @_);
 }
@@ -86,7 +87,6 @@ sub tear_down
     my ($self) = @_;
     $self->SUPER::tear_down();
 }
-
 
 sub test_caldavcreate
 {
@@ -125,6 +125,48 @@ sub test_rename
 
     xlog "check new name stuck";
     $self->assert_str_equals($NewCalendar->{name}, 'bar');
+}
+
+sub test_user_rename
+    :AllowMoves
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "create calendar";
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "fetch again";
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog "check name matches";
+    $self->assert_str_equals($Calendar->{name}, 'foo');
+
+    xlog "rename user";
+    $admintalk->rename("user.cassandane", "user.newuser");
+
+    my $service = $self->{instance}->get_service("http");
+    my $newtalk = Net::CalDAVTalk->new(
+	user => 'newuser',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    xlog "fetch as new user $CalendarId";
+    my $NewCalendar = $newtalk->GetCalendar($CalendarId);
+    $self->assert_not_null($NewCalendar);
+
+    xlog "check new name stuck";
+    $self->assert_str_equals($NewCalendar->{name}, 'foo');
 }
 
 sub test_apple_location_notz
