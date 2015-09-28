@@ -504,10 +504,6 @@ sub test_setcalendars_badname
 
 sub test_setcalendars_destroydefault
 {
-    # This test demonstrates that the destruction of the special
-    # calendar mailboxes is allowed. However, on the next
-    # JMAP hit, they are again autoprovisioned (we only check for
-    # calendar Default, since the other mailboxes are hidden.).
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -519,11 +515,15 @@ sub test_setcalendars_destroydefault
             ['setCalendars', { destroy => @specialIds }, "R1"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_deep_equals(@specialIds, $res->[0][1]{destroyed});
 
-    xlog "get autoprovisioned default calendar";
-     $res = $jmap->Request([['getCalendars', {ids => @specialIds}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]{id}, "Default");
+    my $errType = $res->[0][1]{notDestroyed}{"Default"}{type};
+    $self->assert_str_equals($errType, "isDefault");
+    $errType = $res->[0][1]{notDestroyed}{"Inbox"}{type};
+    $self->assert_str_equals($errType, "notFound");
+    $errType = $res->[0][1]{notDestroyed}{"Outbox"}{type};
+    $self->assert_str_equals($errType, "notFound");
+    $errType = $res->[0][1]{notDestroyed}{"Attachments"}{type};
+    $self->assert_str_equals($errType, "notFound");
 }
 
 sub test_importance_later
