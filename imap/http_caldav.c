@@ -2684,8 +2684,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
             /* Lookup the organizer */
             r = caladdress_lookup(organizer, &sparam, userid);
-            if (r == HTTP_NOT_FOUND)
+            if (r == HTTP_NOT_FOUND) {
+                sched_param_free(&sparam);
                 break;  /* not a local organiser?  Just skip it */
+            }
             if (r) {
                 syslog(LOG_ERR,
                        "meth_put: failed to process scheduling message in %s"
@@ -2693,6 +2695,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                        txn->req_tgt.mbentry->name, organizer);
                 txn->error.desc = "Failed to lookup organizer address\r\n";
                 ret = HTTP_SERVER_ERROR;
+                sched_param_free(&sparam);
                 goto done;
             }
 
@@ -2705,6 +2708,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 if (r) {
                     txn->error.desc = "Failed to read record \r\n";
                     ret = HTTP_SERVER_ERROR;
+                    sched_param_free(&sparam);
                     goto done;
                 }
                 oldical = record_to_ical(mailbox, &record);
@@ -2733,6 +2737,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 /* Attendee scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ATT_CHANGE;
+                    sched_param_free(&sparam);
                     goto done;
                 }
 #if 0
@@ -2745,6 +2750,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
 #endif
                 sched_reply(userid, oldical, ical);
+                sched_param_free(&sparam);
             }
 
             flags |= NEW_STAG;
