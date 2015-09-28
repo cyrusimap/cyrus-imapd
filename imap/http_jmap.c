@@ -2506,6 +2506,20 @@ done:
 
 /*********************** CALENDARS **********************/
 
+/* Return a non-zero value if uid maps to a special-purpose calendar mailbox,
+ * that may not be read or modified by the user. */
+static int _jmap_calendar_ishidden(const char *uid) {
+    /* XXX - brong wrote to "check the specialuse magic on these instead" */
+    if (!strcmp(uid, "#calendars")) return 1;
+    /* XXX - could also check the schedule-inbox and outbox annotations,
+     * instead. But as long as these names  are hardcoded in http_dav... */
+    /* SCHED_INBOX  and SCHED_OUTBOX end in "/", so trim them */
+    if (!strncmp(uid, SCHED_INBOX, strlen(SCHED_INBOX)-1)) return 1;
+    if (!strncmp(uid, SCHED_OUTBOX, strlen(SCHED_OUTBOX)-1)) return 1;
+    if (!strncmp(uid, MANAGED_ATTACH, strlen(MANAGED_ATTACH)-1)) return 1;
+    return 0;
+}
+
 struct calendars_rock {
     struct jmap_req *req;
     json_t *array;
@@ -2548,6 +2562,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
     /* unless it's one of the special names... XXX - check
      * the specialuse magic on these instead */
+    if (_jmap_calendar_ishidden(collection)) return 0;
     if (!strcmp(collection, "#calendars")) return 0;
     if (!strcmp(collection, "Inbox")) return 0;
     if (!strcmp(collection, "Outbox")) return 0;
@@ -2703,22 +2718,26 @@ static int jmap_checkstate(struct jmap_req *req, int mbtype) {
 }
 
 /* Set the state token named name for the JMAP type mbtype in response res.
+ * If refresh is true, refresh the current mailbox counters in req
  * If bump is true, update the state of this JMAP type before setting name. */
 static int jmap_setstate(struct jmap_req *req,
-                            json_t *res,
-                            const char *name,
-                            int mbtype,
-                            int bump) {
+                         json_t *res,
+                         const char *name,
+                         int mbtype,
+                         int refresh,
+                         int bump) {
     struct buf buf = BUF_INITIALIZER;
     char *mboxname;
-    int r;
+    int r = 0;
     modseq_t modseq;
 
     mboxname = mboxname_user_mbox(req->userid, NULL);
 
     /* Read counters. */
-    r = mboxname_read_counters(mboxname, &req->counters);
-    if (r) goto done;
+    if (refresh) {
+        r = mboxname_read_counters(mboxname, &req->counters);
+        if (r) goto done;
+    }
 
     /* Determine current counter by mailbox type. */
     switch (mbtype) {
@@ -2883,6 +2902,7 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
         return r;
     }
     int rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
+
     mailbox_close(&mbox);
     if (!(rights & DACL_READ)) {
         return IMAP_NOTFOUND;
@@ -2924,13 +2944,10 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
 static int getCalendars(struct jmap_req *req)
 {
     struct calendars_rock rock;
-    struct hash_table props;
     int r = 0;
 
     r = caldav_create_defaultcalendars(req->userid);
     if (r) return r;
-
-    construct_hash_table(&props, 1024, 0);
 
     rock.array = json_pack("[]");
     rock.req = req;
@@ -2939,7 +2956,8 @@ static int getCalendars(struct jmap_req *req)
 
     json_t *properties = json_object_get(req->args, "properties");
     if (properties) {
-        rock.props = &props;
+        rock.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(rock.props, 1024, 0);
         int i;
         int size = json_array_size(properties);
         for (i = 0; i < size; i++) {
@@ -2961,7 +2979,7 @@ static int getCalendars(struct jmap_req *req)
             char *mboxname = caldav_mboxname(req->userid, id);
             r = mboxlist_mboxtree(mboxname, &getcalendars_cb, &rock, MBOXTREE_SKIP_CHILDREN);
             free(mboxname);
-            if (r) goto err;
+            if (r) goto done;
             if (!rock.rows) {
                 json_array_append_new(notfound, json_string(id));
             }
@@ -2969,16 +2987,14 @@ static int getCalendars(struct jmap_req *req)
     }
     else {
         r = mboxlist_usermboxtree(req->userid, &getcalendars_cb, &rock, /*flags*/0);
-        if (r) goto err;
+        if (r) goto done;
     }
-
-    free_hash_table(&props, NULL);
 
     json_t *calendars = json_pack("{}");
-    r = jmap_setstate(req, calendars, "state", MBTYPE_CALENDAR, 0);
-    if (r) {
-        goto err;
-    }
+    r = jmap_setstate(req, calendars, "state", MBTYPE_CALENDAR, 1 /*refresh*/, 0 /*bump*/);
+    if (r) goto done;
+
+    json_incref(rock.array);
     json_object_set_new(calendars, "accountId", json_string(req->userid));
     json_object_set_new(calendars, "list", rock.array);
     if (json_array_size(notfound)) {
@@ -2996,24 +3012,23 @@ static int getCalendars(struct jmap_req *req)
 
     json_array_append_new(req->response, item);
 
-    return 0;
-
-err:
-    syslog(LOG_ERR, "caldav error %s", error_message(r));
-    free_hash_table(&props, NULL);
+done:
+    if (rock.props) {
+        free_hash_table(rock.props, NULL);
+        free(rock.props);
+    }
     json_decref(rock.array);
     return r;
 }
-
 
 static int setCalendars(struct jmap_req *req)
 {
     int r = jmap_checkstate(req, MBTYPE_CALENDAR);
     if (r) return 0;
 
-    json_t *set = json_pack("{s:s,s:s}",
-            "oldState", req->state,
-            "accountId", req->userid);
+    json_t *set = json_pack("{s:s}", "accountId", req->userid);
+    r = jmap_setstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
+    if (r) goto done;
 
     r = caldav_create_defaultcalendars(req->userid);
     if (r) goto done;
@@ -3104,31 +3119,28 @@ static int setCalendars(struct jmap_req *req)
             char *mboxname = caldav_mboxname(req->userid, uid);
             char rights[100];
             struct buf acl = BUF_INITIALIZER;
-            r = mboxlist_lookup(mboxname, NULL, NULL);
-            if (r == IMAP_MAILBOX_NONEXISTENT) {
-                buf_reset(&acl);
-                cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-                buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
-                cyrus_acl_masktostr(DACL_READFB, rights);
-                buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-                r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
-                        NULL /* partition */,
-                        req->userid, req->authstate,
-                        0 /* options */, 0 /* uidvalidity */,
-                        0 /* highestmodseq */, buf_cstring(&acl),
-                        NULL /* uniqueid */, 0 /* local_only */,
-                        NULL /* mboxptr */);
-                buf_free(&acl);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                            mboxname, error_message(r));
-                    if (r == IMAP_PERMISSION_DENIED) {
-                        json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                        json_object_set_new(notCreated, key, err);
-                    }
-                    free(mboxname);
-                    goto done;
+            buf_reset(&acl);
+            cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
+            cyrus_acl_masktostr(DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+            r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
+                    NULL /* partition */,
+                    req->userid, req->authstate,
+                    0 /* options */, 0 /* uidvalidity */,
+                    0 /* highestmodseq */, buf_cstring(&acl),
+                    NULL /* uniqueid */, 0 /* local_only */,
+                    NULL /* mboxptr */);
+            buf_free(&acl);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                        mboxname, error_message(r));
+                if (r == IMAP_PERMISSION_DENIED) {
+                    json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                    json_object_set_new(notCreated, key, err);
                 }
+                free(mboxname);
+                goto done;
             }
             r = jmap_update_calendar(mboxname, req, name, color, sortOrder, isVisible);
             if (r) {
@@ -3184,6 +3196,11 @@ static int setCalendars(struct jmap_req *req)
                     continue;
                 }
                 uid = t;
+            }
+            if (_jmap_calendar_ishidden(uid)) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notUpdated, uid, err);
+                continue;
             }
 
             /* Parse and validate properties. */
@@ -3295,13 +3312,36 @@ static int setCalendars(struct jmap_req *req)
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
             }
+            if (_jmap_calendar_ishidden(uid)) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Do not allow to remove the default calendar. */
+            /* XXX - As it currently stands, this raises a conflict between
+             * JMAP and CalDAV. Maybe a "isDefault" flag is appropriate? */
+            char *mboxname = caldav_mboxname(req->userid, NULL);
+            static const char *defaultcal_annot =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+            struct buf attrib = BUF_INITIALIZER;
+            r = annotatemore_lookupmask(mboxname, defaultcal_annot, httpd_userid, &attrib);
+            free(mboxname);
+            const char *defaultcal = "Default";
+            if (!r && attrib.len) {
+                defaultcal = buf_cstring(&attrib);
+            }
+            if (!strcmp(uid, defaultcal)) {
+                /* XXX - The isDefault set error is not documented in the spec. */
+                json_t *err = json_pack("{s:s}", "type", "isDefault");
+                json_object_set_new(notDestroyed, uid, err);
+                buf_free(&attrib);
+                continue;
+            }
+            buf_free(&attrib);
 
             /* Destroy calendar. */
-            /* XXX - We even allow to destroy the special calendar mailboxes
-             * "Inbox", "Outbox", "Default", "Attachments".
-             * They will be autoprovisioned on the next JMAP/CalDAV hit, anyways.
-             * This might, or might not be a good choice. */
-            char *mboxname = caldav_mboxname(req->userid, uid);
+            mboxname = caldav_mboxname(req->userid, uid);
             r = jmap_delete_calendar(mboxname, req);
             free(mboxname);
             if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
@@ -3332,11 +3372,13 @@ static int setCalendars(struct jmap_req *req)
 
     /* Set newState field in calendarsSet. */
     r = jmap_setstate(req, set, "newState", MBTYPE_CALENDAR,
+            1 /*refresh*/,
             json_object_get(set, "created") ||
             json_object_get(set, "updated") ||
             json_object_get(set, "destroyed"));
     if (r) goto done;
 
+    json_incref(set);
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("calendarsSet"));
     json_array_append_new(item, set);
@@ -3344,6 +3386,7 @@ static int setCalendars(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
 done:
+    json_decref(set);
     return r;
 }
 
@@ -4105,7 +4148,7 @@ static int getCalendarEvents(struct jmap_req *req)
     }
 
     json_t *events = json_pack("{}");
-    r = jmap_setstate(req, events, "state", MBTYPE_CALENDAR, 0);
+    r = jmap_setstate(req, events, "state", MBTYPE_CALENDAR, 1 /* refresh */, 0 /* bump */);
     if (r) goto done;
 
     json_incref(rock.array);
