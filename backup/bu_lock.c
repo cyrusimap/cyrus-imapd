@@ -94,15 +94,15 @@ static struct backup *my_backup_open(enum bu_lock_open_type open_type,
         suffix = strrchr(backup_name, '.');
         if (suffix && strcmp(suffix, ".gz") == 0 && suffix[strlen(".gz")] == '\0')
             *suffix = '\0';
-        backup = backup_open(backup_name, NULL);
+        backup = backup_open(backup_name);
         break;
     case BU_LOCK_OPEN_MBOXNAME:
         mbname = mbname_from_intname(backup_name);
-        backup = backup_open(mboxname_backuppath(/*FIXME*/ "default", mbname), NULL);
+        backup = backup_open(mboxname_backuppath(/*FIXME*/ "default", mbname));
         break;
     case BU_LOCK_OPEN_USERNAME:
         mbname = mbname_from_userid(backup_name);
-        backup = backup_open(mboxname_backuppath(/*FIXME*/ "default", mbname), NULL);
+        backup = backup_open(mboxname_backuppath(/*FIXME*/ "default", mbname));
         break;
     default:
         break;
