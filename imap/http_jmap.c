@@ -3734,7 +3734,11 @@ static int _jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
                     caladdr, error_message(r));
             return r;
         }
-        *isyou = r != HTTP_NOT_FOUND ? !strcmp(userid, sparam.userid) : 0;
+        if (r != HTTP_NOT_FOUND && sparam.userid) {
+            *isyou = !strcmp(userid, sparam.userid) ;
+        } else {
+            *isyou = 0;
+        }
         if (sparam.userid) {
             /* XXX - caladdress_lookup leaks */
             free(sparam.userid);
