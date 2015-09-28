@@ -493,11 +493,10 @@ static struct open_backup *backupd_open_backup(const mbname_t *mbname)
     time_t now = time(0);
 
     if (!open) {
-        off_t opened_at;
-        struct backup *backup = backup_open(backup_name, &opened_at);
+        struct backup *backup = backup_open(backup_name);
         if (!backup) return NULL;
-        backup_append_start(backup, now); // FIXME error checking
-        backup_index_start(backup, now, opened_at); // FIXME error checking
+        backup_append_start(backup); // FIXME error checking
+        backup_index_start(backup); // FIXME error checking
         open = open_backups_list_add(&backupd_open_backups, backup_name, backup);
     }
 
