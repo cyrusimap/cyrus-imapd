@@ -49,9 +49,6 @@ use Cassandane::Instance;
 Cassandane::Cyrus::TestCase::magic(Partition2 => sub {
     shift->config_set('partition-p2' => '@basedir@/data-p2');
 });
-Cassandane::Cyrus::TestCase::magic(AllowMoves => sub {
-    shift->config_set('allowusermoves' => 'yes');
-});
 Cassandane::Cyrus::TestCase::magic(MetaPartition => sub {
     shift->config_set(
 	'metapartition-default' => '@basedir@/meta',
