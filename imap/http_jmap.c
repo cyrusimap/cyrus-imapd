@@ -2506,6 +2506,20 @@ done:
 
 /*********************** CALENDARS **********************/
 
+/* Return a non-zero value if uid maps to a special-purpose calendar mailbox,
+ * that may not be read or modified by the user. */
+static int _jmap_calendar_ishidden(const char *uid) {
+    /* XXX - brong wrote to "check the specialuse magic on these instead" */
+    if (!strcmp(uid, "#calendars")) return 1;
+    /* XXX - could also check the schedule-inbox and outbox annotations,
+     * instead. But as long as these names  are hardcoded in http_dav... */
+    /* SCHED_INBOX  and SCHED_OUTBOX end in "/", so trim them */
+    if (!strncmp(uid, SCHED_INBOX, strlen(SCHED_INBOX)-1)) return 1;
+    if (!strncmp(uid, SCHED_OUTBOX, strlen(SCHED_OUTBOX)-1)) return 1;
+    if (!strncmp(uid, MANAGED_ATTACH, strlen(MANAGED_ATTACH)-1)) return 1;
+    return 0;
+}
+
 struct calendars_rock {
     struct jmap_req *req;
     json_t *array;
@@ -2548,6 +2562,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
     /* unless it's one of the special names... XXX - check
      * the specialuse magic on these instead */
+    if (_jmap_calendar_ishidden(collection)) return 0;
     if (!strcmp(collection, "#calendars")) return 0;
     if (!strcmp(collection, "Inbox")) return 0;
     if (!strcmp(collection, "Outbox")) return 0;
@@ -2887,6 +2902,7 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
         return r;
     }
     int rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
+
     mailbox_close(&mbox);
     if (!(rights & DACL_READ)) {
         return IMAP_NOTFOUND;
@@ -3181,6 +3197,11 @@ static int setCalendars(struct jmap_req *req)
                 }
                 uid = t;
             }
+            if (_jmap_calendar_ishidden(uid)) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notUpdated, uid, err);
+                continue;
+            }
 
             /* Parse and validate properties. */
             json_t *invalid = json_pack("[]");
@@ -3291,13 +3312,36 @@ static int setCalendars(struct jmap_req *req)
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
             }
+            if (_jmap_calendar_ishidden(uid)) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Do not allow to remove the default calendar. */
+            /* XXX - As it currently stands, this raises a conflict between
+             * JMAP and CalDAV. Maybe a "isDefault" flag is appropriate? */
+            char *mboxname = caldav_mboxname(req->userid, NULL);
+            static const char *defaultcal_annot =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+            struct buf attrib = BUF_INITIALIZER;
+            r = annotatemore_lookupmask(mboxname, defaultcal_annot, httpd_userid, &attrib);
+            free(mboxname);
+            const char *defaultcal = "Default";
+            if (!r && attrib.len) {
+                defaultcal = buf_cstring(&attrib);
+            }
+            if (!strcmp(uid, defaultcal)) {
+                /* XXX - The isDefault set error is not documented in the spec. */
+                json_t *err = json_pack("{s:s}", "type", "isDefault");
+                json_object_set_new(notDestroyed, uid, err);
+                buf_free(&attrib);
+                continue;
+            }
+            buf_free(&attrib);
 
             /* Destroy calendar. */
-            /* XXX - We even allow to destroy the special calendar mailboxes
-             * "Inbox", "Outbox", "Default", "Attachments".
-             * They will be autoprovisioned on the next JMAP/CalDAV hit, anyways.
-             * This might, or might not be a good choice. */
-            char *mboxname = caldav_mboxname(req->userid, uid);
+            mboxname = caldav_mboxname(req->userid, uid);
             r = jmap_delete_calendar(mboxname, req);
             free(mboxname);
             if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
