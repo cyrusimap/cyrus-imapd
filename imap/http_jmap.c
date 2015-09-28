@@ -3103,31 +3103,28 @@ static int setCalendars(struct jmap_req *req)
             char *mboxname = caldav_mboxname(req->userid, uid);
             char rights[100];
             struct buf acl = BUF_INITIALIZER;
-            r = mboxlist_lookup(mboxname, NULL, NULL);
-            if (r == IMAP_MAILBOX_NONEXISTENT) {
-                buf_reset(&acl);
-                cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-                buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
-                cyrus_acl_masktostr(DACL_READFB, rights);
-                buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-                r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
-                        NULL /* partition */,
-                        req->userid, req->authstate,
-                        0 /* options */, 0 /* uidvalidity */,
-                        0 /* highestmodseq */, buf_cstring(&acl),
-                        NULL /* uniqueid */, 0 /* local_only */,
-                        NULL /* mboxptr */);
-                buf_free(&acl);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                            mboxname, error_message(r));
-                    if (r == IMAP_PERMISSION_DENIED) {
-                        json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                        json_object_set_new(notCreated, key, err);
-                    }
-                    free(mboxname);
-                    goto done;
+            buf_reset(&acl);
+            cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
+            cyrus_acl_masktostr(DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+            r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
+                    NULL /* partition */,
+                    req->userid, req->authstate,
+                    0 /* options */, 0 /* uidvalidity */,
+                    0 /* highestmodseq */, buf_cstring(&acl),
+                    NULL /* uniqueid */, 0 /* local_only */,
+                    NULL /* mboxptr */);
+            buf_free(&acl);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                        mboxname, error_message(r));
+                if (r == IMAP_PERMISSION_DENIED) {
+                    json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                    json_object_set_new(notCreated, key, err);
                 }
+                free(mboxname);
+                goto done;
             }
             r = jmap_update_calendar(mboxname, req, name, color, sortOrder, isVisible);
             if (r) {
