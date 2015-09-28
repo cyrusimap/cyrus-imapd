@@ -45,20 +45,26 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <syslog.h>
 #include <zlib.h>
 
+#include "lib/cyrusdb.h"
 #include "lib/cyr_lock.h"
 #include "lib/sqldb.h"
 #include "lib/xmalloc.h"
+#include "lib/xstrlcat.h"
+#include "lib/xstrlcpy.h"
 
 #include "imap/dlist.h"
+#include "imap/global.h"
 #include "imap/imap_err.h"
 #include "imap/imapparse.h"
-
 
 #include "backup/api.h"
 #include "backup/gzuncat.h"
 #include "backup/sqlconsts.h"
+
+#define DB config_backups_db
 
 struct backup {
     int fd;
@@ -146,23 +152,99 @@ error:
     return NULL;
 }
 
-// FIXME make this take an mbname_t?
-EXPORTED struct backup *backup_open(const char *name)
+EXPORTED struct backup *backup_open(const mbname_t *mbname)
 {
-    struct buf gzname = BUF_INITIALIZER;
-    struct buf idxname = BUF_INITIALIZER;
+    struct buf gzpath = BUF_INITIALIZER;
+    struct buf idxpath = BUF_INITIALIZER;
+    struct backup *backup = NULL;
 
-    buf_printf(&gzname, "%s.gz", name);
-    buf_printf(&idxname, "%s.index", name);
+    int r = backup_get_paths(mbname, &gzpath, &idxpath);
+    if (r) goto done;
 
-    struct backup *backup = backup_open_internal(buf_cstring(&gzname),
-                                                 buf_cstring(&idxname),
-                                                 BACKUP_OPEN_NORMAL);
-    buf_free(&idxname);
-    buf_free(&gzname);
-    if (!backup) return NULL;
+    backup = backup_open_internal(buf_cstring(&gzpath),
+                                  buf_cstring(&idxpath),
+                                  BACKUP_OPEN_NORMAL);
+
+done:
+    buf_free(&gzpath);
+    buf_free(&idxpath);
 
     return backup;
+}
+
+/*
+ * If idxpath is NULL, it will be automatically derived from gzpath
+ */
+EXPORTED struct backup *backup_open_paths(const char *gzpath, const char *idxpath)
+{
+    if (idxpath)
+        return backup_open_internal(gzpath, idxpath, BACKUP_OPEN_NORMAL);
+
+    char tmp[PATH_MAX] = {0};
+    strlcpy(tmp, gzpath, sizeof(tmp));
+
+    char *dot = strrchr(tmp, '.');
+    if (!dot || strcmp(dot, ".gz") != 0)
+        return NULL;
+
+    *dot = '\0';
+    strlcat(tmp, ".index", sizeof(tmp));
+    return backup_open_internal(gzpath, tmp, BACKUP_OPEN_NORMAL);
+}
+
+EXPORTED int backup_get_paths(const mbname_t *mbname,
+                              struct buf *gzpath, struct buf *idxpath)
+{
+    char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
+    if (!backups_db_fname)
+        backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
+
+    struct db *backups_db = NULL;
+    struct txn *tid = NULL;
+
+    int r = cyrusdb_open(DB, backups_db_fname, CYRUSDB_CREATE, &backups_db);
+    if (r) goto done;
+
+    const char *userid = mbname_userid(mbname);
+    const char *backup_path = NULL;
+    size_t path_len = 0;
+
+    r = cyrusdb_fetch(backups_db,
+                      userid, strlen(userid),
+                      &backup_path, &path_len,
+                      &tid);
+
+    if (r == CYRUSDB_NOTFOUND) {
+        backup_path = mboxname_backuppath(mbname);
+        path_len = strlen(backup_path);
+
+        r = cyrusdb_create(backups_db,
+                           userid, strlen(userid),
+                           backup_path, path_len,
+                           &tid);
+    }
+
+    if (r) goto done;
+
+    if (path_len == 0) {
+        syslog(LOG_DEBUG, "unexpectedly got zero length backup path for user %s", userid);
+        r = IMAP_INTERNAL; /* FIXME ?? */
+        goto done;
+    }
+
+    buf_setmap(gzpath, backup_path, path_len);
+    buf_appendcstr(gzpath, ".gz");
+
+    buf_setmap(idxpath, backup_path, path_len);
+    buf_appendcstr(idxpath, ".index");
+
+done:
+    if (tid)
+        cyrusdb_commit(backups_db, tid);
+    if (backups_db)
+        cyrusdb_close(backups_db);
+    free(backups_db_fname);
+    return r;
 }
 
 EXPORTED int backup_close(struct backup **backupp)
