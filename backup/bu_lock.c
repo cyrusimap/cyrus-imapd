@@ -81,43 +81,38 @@ enum bu_lock_run_mode {
 };
 
 static struct backup *my_backup_open(enum bu_lock_open_type open_type,
-                                     const char *backup_name)
+                                     const char *backup_spec)
 {
     struct backup *backup = NULL;
     mbname_t *mbname = NULL;
-    char *suffix;
 
     switch (open_type) {
     case BU_LOCK_OPEN_UNSPECIFIED:
         break;
     case BU_LOCK_OPEN_FILENAME:
-        suffix = strrchr(backup_name, '.');
-        if (suffix && strcmp(suffix, ".gz") == 0 && suffix[strlen(".gz")] == '\0')
-            *suffix = '\0';
-        backup = backup_open(backup_name);
+        backup = backup_open_paths(backup_spec, NULL);
         break;
     case BU_LOCK_OPEN_MBOXNAME:
-        mbname = mbname_from_intname(backup_name);
-        backup = backup_open(mboxname_backuppath(/*FIXME*/ "default", mbname));
+        mbname = mbname_from_intname(backup_spec);
+        backup = backup_open(mbname);
         break;
     case BU_LOCK_OPEN_USERNAME:
-        mbname = mbname_from_userid(backup_name);
-        backup = backup_open(mboxname_backuppath(/*FIXME*/ "default", mbname));
+        mbname = mbname_from_userid(backup_spec);
+        backup = backup_open(mbname);
         break;
     default:
         break;
     }
 
     if (mbname) mbname_free(&mbname);
-
     return backup;
 }
 
-static int run_pipe(enum bu_lock_open_type open_type, const char *backup_name)
+static int run_pipe(enum bu_lock_open_type open_type, const char *backup_spec)
 {
-    printf("* Trying to obtain lock on %s...\n", backup_name);
+    printf("* Trying to obtain lock on %s...\n", backup_spec);
 
-    struct backup *backup = my_backup_open(open_type, backup_name);
+    struct backup *backup = my_backup_open(open_type, backup_spec);
 
     if (!backup) {
         printf("NO failed\n");
@@ -142,13 +137,13 @@ static int run_sql(/* FIXME */)
     return -1; // FIXME
 }
 
-static int run_exec(enum bu_lock_open_type open_type, const char *backup_name,
+static int run_exec(enum bu_lock_open_type open_type, const char *backup_spec,
                     char **argv)
 {
-    struct backup *backup = my_backup_open(open_type, backup_name);
+    struct backup *backup = my_backup_open(open_type, backup_spec);
 
     if (!backup) {
-        fprintf(stderr, "unable to lock %s\n", backup_name);
+        fprintf(stderr, "unable to lock %s\n", backup_spec);
         return EC_SOFTWARE;
     }
 
@@ -187,24 +182,24 @@ int main (int argc, char **argv)
     int opt;
     enum bu_lock_open_type open_type = BU_LOCK_OPEN_UNSPECIFIED;
     enum bu_lock_run_mode run_mode = BU_LOCK_RUN_PIPE;
-    const char *backup_name = NULL;
+    const char *backup_spec = NULL;
 
     while ((opt = getopt(argc, argv, "f:m:u:sx")) != EOF) {
         switch (opt) {
         case 'f':
             if (open_type != BU_LOCK_OPEN_UNSPECIFIED) usage(argv[0]);
             open_type = BU_LOCK_OPEN_FILENAME;
-            backup_name = optarg;
+            backup_spec = optarg;
             break;
         case 'm':
             if (open_type != BU_LOCK_OPEN_UNSPECIFIED) usage(argv[0]);
             open_type = BU_LOCK_OPEN_MBOXNAME;
-            backup_name = optarg;
+            backup_spec = optarg;
             break;
         case 'u':
             if (open_type != BU_LOCK_OPEN_UNSPECIFIED) usage(argv[0]);
             open_type = BU_LOCK_OPEN_USERNAME;
-            backup_name = optarg;
+            backup_spec = optarg;
             break;
         case 's':
             if (run_mode != BU_LOCK_RUN_PIPE) usage(argv[0]);
@@ -218,18 +213,18 @@ int main (int argc, char **argv)
     }
 
     if (open_type == BU_LOCK_OPEN_UNSPECIFIED) usage(argv[0]);
-    if (backup_name == NULL) usage(argv[0]);
+    if (backup_spec == NULL) usage(argv[0]);
     if (run_mode == BU_LOCK_RUN_EXEC && optind == argc) usage(argv[0]);
 
     // FIXME which signals to ignore/accept?
 
     switch (run_mode) {
         case BU_LOCK_RUN_PIPE:
-            return run_pipe(open_type, backup_name);
+            return run_pipe(open_type, backup_spec);
         case BU_LOCK_RUN_SQL:
-            return run_sql(open_type, backup_name);
+            return run_sql(open_type, backup_spec);
         case BU_LOCK_RUN_EXEC:
-            return run_exec(open_type, backup_name, &argv[optind]);
+            return run_exec(open_type, backup_spec, &argv[optind]);
         default:
             fprintf(stderr, "invalid run mode, how did we get here?\n");
             return -1;
