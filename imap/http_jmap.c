@@ -3433,42 +3433,11 @@ static json_t* jmap_recur_byX_from_ical(short byX[], size_t nmemb, int (*conv)(s
 /* Convert the ical recurrence recur to a JMAP structure encoded in JSON. */
 static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
     json_t *jrecur = json_pack("{}");
-    const char *v = NULL;
-
-    if (0) {
-        /* XXX - Keep until libical either accepts or rejects our pull request */
-        switch (recur.freq) {
-            case ICAL_SECONDLY_RECURRENCE:
-                v  = "secondly";
-                break;
-            case ICAL_MINUTELY_RECURRENCE:
-                v = "minutely";
-                break;
-            case ICAL_HOURLY_RECURRENCE:
-                v = "hourly";
-                break;
-            case ICAL_DAILY_RECURRENCE:
-                v = "daily";
-                break;
-            case ICAL_WEEKLY_RECURRENCE:
-                v = "weekly";
-                break;
-            case ICAL_MONTHLY_RECURRENCE:
-                v = "monthly";
-                break;
-            case ICAL_YEARLY_RECURRENCE:
-                v = "yearly";
-                break;
-            case ICAL_NO_RECURRENCE:
-                /* fallthrough */
-            default:
-                syslog(LOG_INFO, "jmap_recur_from_ical: unknown freq: %d", recur.freq);
-                return json_null();
-        }
-        json_object_set_new(jrecur, "frequency", json_string(v));
-    }
 
     /* frequency */
+    /* XXX - icalrecur depends on a recent change to libical. Might need to
+     * add support for this to Cyrus imap/ical_support.h for backward
+     * compatibility. */
     char *s = xstrdup(icalrecur_freq_to_string(recur.freq));
     char *p = s; for ( ; *p; ++p) *p = tolower(*p);
     json_object_set_new(jrecur, "frequency", json_string(s));
@@ -3478,38 +3447,7 @@ static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
         json_object_set_new(jrecur, "interval", json_pack("i", recur.interval));
     }
 
-    /* XXX - Keep this for now  */
-    if (0) {
-        short day = 0;
-        switch (recur.week_start) {
-            case ICAL_SATURDAY_WEEKDAY:
-                day++;
-            case ICAL_FRIDAY_WEEKDAY:
-                day++;
-            case ICAL_THURSDAY_WEEKDAY:
-                day++;
-            case ICAL_WEDNESDAY_WEEKDAY:
-                day++;
-            case ICAL_TUESDAY_WEEKDAY:
-                day++;
-            case ICAL_MONDAY_WEEKDAY:
-                day++;
-                break;
-            case ICAL_SUNDAY_WEEKDAY:
-                /* do nothing */
-                break;
-            default:
-                syslog(LOG_ERR, "jmap_recur_from_ical: unknown week_start %d", recur.week_start);
-                /* fallthrough */
-            case ICAL_NO_WEEKDAY:
-                day = 1;
-                break;
-        }
-        if (day != 1) {
-            json_object_set_new(jrecur, "firstDayOfWeek", json_pack("i", day));
-        }
-    }
-
+    /* firstDayOfWeek */
     short day = recur.week_start - 1;
     if (day >= 0 && day != 1) {
         json_object_set_new(jrecur, "firstDayOfWeek", json_pack("i", day));
@@ -3563,10 +3501,9 @@ static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
     }
 
     if (recur.count != 0) {
-        /* XXX - Recur count takes precedence over until. */
+        /* Recur count takes precedence over until. */
         json_object_set_new(jrecur, "count", json_pack("i", recur.count));
     } else if (!icaltime_is_null_time(recur.until)) {
-        /* XXX - libical does not check if until is local time */
         json_object_set_new(jrecur, "until",
                 json_string(icaltime_as_ical_string(recur.until)));
     }
@@ -3592,12 +3529,6 @@ static char* _jmap_icaltime_to_localdate_r(icaltimetype icaltime) {
     time_t t;
 
     s = xmalloc(RFC3339_DATETIME_MAX);
-    /* XXX - This doesn't work right. It seems to return UTC time
-     * for local ical datetimes. */
-    /*
-    t = icaltime_as_timet_with_zone(icaltime, icaltime.zone ?
-            icaltime.zone : icaltimezone_get_utc_timezone());
-    */
     t = icaltime_as_timet(icaltime);
     if (!_jmap_timet_to_localdate(t, s, RFC3339_DATETIME_MAX)) {
         return NULL;
@@ -3723,7 +3654,6 @@ static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
 /* Set isyou if userid matches the user looked up by caladdr. Return 0 on
  * success or a Cyrus error on failure. */
 static int _jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
-    /* XXX - This doesn't really work. */
     struct sched_param sparam;
 
     if (userid) {
@@ -3740,7 +3670,9 @@ static int _jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
             *isyou = 0;
         }
         if (sparam.userid) {
-            /* XXX - caladdress_lookup leaks */
+            /* XXX - caladdress_lookup leaks. Once
+             * caldav_fix_schedparam_memleak is merged, call
+             * sched_param_free here. */
             free(sparam.userid);
         }
     }
@@ -4139,7 +4071,6 @@ static int getCalendarEvents(struct jmap_req *req)
         for (i = 0; i < size; i++) {
             rock.rows = 0;
             const char *id = json_string_value(json_array_get(want, i));
-            if (!id) continue; /* XXX - handle NULL id */
             r = caldav_get_events(db, NULL, id, &getcalendarevents_cb, &rock);
             if (r || !rock.rows) {
                 json_array_append_new(notfound, json_string(id));
