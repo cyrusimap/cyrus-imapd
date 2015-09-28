@@ -190,6 +190,10 @@ magic(Conversations => sub {
 magic(Admin => sub {
     shift->want('adminstore');
 });
+magic(AllowMoves => sub {
+    shift->config_set('allowusermoves' => 'yes');
+});
+
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
