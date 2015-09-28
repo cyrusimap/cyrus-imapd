@@ -339,6 +339,8 @@ int main(int argc, char **argv)
     for (;;) {
         int n;
 
+        signals_poll();
+
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {
             /* signal all processes to shutdown */
