@@ -96,6 +96,10 @@
 
 #include "iostat.h"
 
+#ifndef MAXHOSTNAMELEN
+#define MAXHOSTNAMELEN 256
+#endif
+
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
 #define DES_DEFS

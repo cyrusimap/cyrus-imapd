@@ -846,6 +846,11 @@ EXPORTED int undump_mailbox(const char *mbname,
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
 
+    /* Set a Quota (may be -1 for "unlimited") */
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+       newquotas[res] = QUOTA_UNLIMITED;
+    }
+
     if (mboxname_isusermailbox(mbname, 1)) {
         userid = mboxname_to_userid(mbname);
         if(!sieve_usehomedir) {
@@ -868,12 +873,8 @@ EXPORTED int undump_mailbox(const char *mbname,
         /* Remove any existing quotaroot */
         mboxlist_unsetquota(mbname);
     } else if (sscanf(data.s, QUOTA_T_FMT, &quotalimit) == 1) {
-        /* Set a Quota (may be -1 for "unlimited") */
-        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-            newquotas[res] = QUOTA_UNLIMITED;
-        }
-        newquotas[QUOTA_STORAGE] = quotalimit;
         /* quota will actually be applied later */
+        newquotas[QUOTA_STORAGE] = quotalimit;
     } else {
         /* Huh? */
         buf_free(&data);
@@ -997,10 +998,6 @@ EXPORTED int undump_mailbox(const char *mbname,
             if (prot_getc(pin) != '(') {
                 r = IMAP_PROTOCOL_ERROR;
                 goto done;
-            }
-
-            for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-                newquotas[res] = QUOTA_UNLIMITED;
             }
 
             for (;;) {
