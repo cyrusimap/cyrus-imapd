@@ -715,44 +715,63 @@ sub test_getcalendarevents
     $res = $jmap->Request([['getCalendars', {ids => [$calid]}, "R1"]]);
     my $xhref = $res->[0][1]{list}[0]{"x-href"};
 
-    # Bootstrap getCalendarEvents via CalDAV
+    # Create event via CalDAV to test CalDAV/JMAP interop.
     xlog "create event (via CalDAV)";
-    my $id = "574E2CD0-2D2A-4554-8B63-C7504481D3AA";
+    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
     my $href = "$xhref/$id.ics";
+
     my $ical = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
 CALSCALE:GREGORIAN
-BEGIN:VTIMEZONE
-TZID:Australia/Melbourne
-BEGIN:STANDARD
-TZOFFSETFROM:+1100
-RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
-DTSTART:20080406T030000
-TZNAME:AEST
-TZOFFSETTO:+1000
-END:STANDARD
-BEGIN:DAYLIGHT
-TZOFFSETFROM:+1000
-RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
-DTSTART:20081005T020000
-TZNAME:AEDT
-TZOFFSETTO:+1100
-END:DAYLIGHT
-END:VTIMEZONE
 BEGIN:VEVENT
-CREATED:20150806T234327Z
+TRANSP:TRANSPARENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+RRULE:FREQ=DAILY;COUNT=10
+DTEND;TZID=Europe/Vienna:20160928T170000
 UID:$id
-DTEND;TZID=Australia/Melbourne:20160831T183000
+DTSTAMP:20150928T132434Z
+RDATE;TZID=Europe/Vienna:20161107T160000
+RDATE;TZID=Europe/Vienna:20161106T160000
+EXDATE;TZID=Europe/Vienna:20161004T160000
+DESCRIPTION:Remember the yep.
+SEQUENCE:9
+SUMMARY:Yep
+LAST-MODIFIED:20150928T132434Z
+ATTENDEE;CN=Homer Simpson;PARTSTAT=ACCEPTED:mailto:homer\@example.com
+ATTENDEE;PARTSTAT=TENTATIVE;DELEGATED-FROM="mailto:lenny\@example.com";CN=Carl Carlson:mailto:carl\@example.com
+ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carl\@example.com";CN=Lenny Leonard:mailto:lenny\@example.com
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=DECLINED;CN=Larry Burns:mailto:larry\@example.com
+ORGANIZER;CN="Monty Burns":mailto:smithers\@example.com
+BEGIN:VALARM
+X-WR-ALARMUID:0CF835D0-CFEB-44AE-904A-C26AB62B73BB
+UID:0CF835D0-CFEB-44AE-904A-C26AB62B73BB
+TRIGGER:-PT5M
+ACTION:EMAIL
+ATTENDEE:mailto:foo\@example.com
+SUMMARY:Event alert: 'Yep' starts in 5 minutes
+DESCRIPTION:Your event 'Yep' starts in 5 minutes
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
 TRANSP:OPAQUE
-SUMMARY:Foo
-DTSTART;TZID=Australia/Melbourne:20160831T153000
-DTSTAMP:20150806T234327Z
-SEQUENCE:0
+DTEND;TZID=Europe/Vienna:20160930T180000
+UID:$id
+DTSTAMP:20150928T135221Z
+DESCRIPTION:Remember an exceptional yep.
+SEQUENCE:10
+X-APPLE-EWS-BUSYSTATUS:FREE
+RECURRENCE-ID;TZID=Europe/Vienna:20160930T160000
+SUMMARY:Exceptional Yep
+LAST-MODIFIED:20150928T132434Z
+DTSTART;TZID=Europe/Vienna:20160930T170000
+CREATED:20150928T135212Z
+ORGANIZER;CN="Monty Burns":mailto:smithers\@example.com
 END:VEVENT
 END:VCALENDAR
 EOF
+
   $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
   xlog "get event $id";
@@ -763,8 +782,37 @@ EOF
 
   my $event = $res->[0][1]{list}[0];
   $self->assert_not_null($event);
-  $self->assert_str_equals($event->{calendarId}, $id);
-  $self->assert_str_equals($event->{name}, "Foo");
+  $self->assert_str_equals($event->{calendarId}, $calid);
+  $self->assert_str_equals($event->{summary}, "Yep");
+  $self->assert_str_equals($event->{description}, "Remember the yep.");
+  $self->assert_equals($event->{showAsFree}, JSON::true);
+  $self->assert_equals($event->{isAllDay}, JSON::false);
+  $self->assert_str_equals($event->{start}, "2016-09-28T16:00:00");
+  $self->assert_str_equals($event->{end}, "2016-09-28T17:00:00");
+  $self->assert_str_equals($event->{startTimeZone}, "Europe/Vienna");
+  $self->assert_str_equals($event->{endTimeZone}, "Europe/Vienna");
+  $self->assert_not_null($event->{recurrence});
+  $self->assert_num_equals($event->{recurrence}{count}, 10);
+  $self->assert_str_equals($event->{recurrence}{frequency}, "daily");
+  $self->assert_not_null($event->{inclusions});
+  $self->assert_num_equals(scalar @{$event->{inclusions}}, 2);
+  $self->assert_str_equals($event->{inclusions}[0], "2016-11-06T16:00:00");
+  $self->assert_str_equals($event->{inclusions}[1], "2016-11-07T16:00:00");
+  $self->assert_not_null($event->{exceptions});
+  $self->assert(exists $event->{exceptions}{"2016-10-04T16:00:00"});
+  $self->assert_not_null($event->{exceptions}{"2016-09-30T17:00:00"});
+  $self->assert_str_equals($event->{exceptions}{"2016-09-30T17:00:00"}{"summary"}, "Exceptional Yep");
+  $self->assert_str_equals($event->{exceptions}{"2016-09-30T17:00:00"}{"showAsFree"}, JSON::false);
+  $self->assert_not_null($event->{alerts});
+  $self->assert_num_equals(scalar @{$event->{alerts}}, 1);
+  $self->assert_num_equals($event->{alerts}[0]{minutesBefore}, 5);
+  $self->assert_str_equals($event->{alerts}[0]{type}, "email");
+  $self->assert_not_null($event->{attendees});
+  $self->assert_num_equals(scalar @{$event->{attendees}}, 4);
+  $self->assert_not_null($event->{organizer});
+  $self->assert_str_equals($event->{organizer}{name}, "Monty Burns");
+  $self->assert_str_equals($event->{organizer}{email}, "smithers\@example.com");
+  $self->assert_equals($event->{organizer}{isYou}, JSON::false);
 }
 
 1;
