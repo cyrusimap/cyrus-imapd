@@ -49,7 +49,7 @@
 
 struct backup;
 
-struct backup *backup_open(const char *name, off_t *opened_at);
+struct backup *backup_open(const char *name);
 int backup_close(struct backup **backupp);
 
 int backup_reindex(const char *name);
@@ -57,7 +57,6 @@ int backup_reindex(const char *name);
 int backup_write_dlist(struct backup *backup, time_t ts, struct dlist *dl);
 int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len);
 
-int backup_index_start(struct backup *backup, time_t ts, off_t offset);
 int backup_index_end(struct backup *backup, size_t length);
 
 /* FIXME new api? */
@@ -90,11 +89,11 @@ struct backup_message *backup_get_message(struct backup *backup, const struct me
 char *backup_get_message_content(struct backup *backup, const struct backup_message *message);
 void backup_message_free(struct backup_message **message);
 
-int backup_append_start(struct backup *backup, time_t ts);
+int backup_append_start(struct backup *backup);
 int backup_append(struct backup *backup, struct dlist *dlist, time_t ts);
 int backup_append_done(struct backup *backup);
 
-int backup_index_start(struct backup *backup, time_t ts, off_t offset);
+int backup_index_start(struct backup *backup);
 int backup_index(struct backup *backup, struct dlist *dlist, time_t ts);
 int backup_index_done(struct backup *backup, size_t len);
 int backup_index_abort(struct backup *backup);

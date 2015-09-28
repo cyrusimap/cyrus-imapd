@@ -147,7 +147,7 @@ error:
 }
 
 // FIXME make this take an mbname_t?
-EXPORTED struct backup *backup_open(const char *name, off_t *opened_at)
+EXPORTED struct backup *backup_open(const char *name)
 {
     struct buf gzname = BUF_INITIALIZER;
     struct buf idxname = BUF_INITIALIZER;
@@ -162,141 +162,7 @@ EXPORTED struct backup *backup_open(const char *name, off_t *opened_at)
     buf_free(&gzname);
     if (!backup) return NULL;
 
-    if (opened_at)
-        *opened_at = lseek(backup->fd, 0, SEEK_END);
-
     return backup;
-}
-
-static int _parse_line(struct protstream *in, time_t *ts,
-                       struct buf *cmd, struct dlist **kin)
-{
-    struct dlist *dl = NULL;
-    struct buf buf = BUF_INITIALIZER;
-    int64_t t;
-    int c;
-
-    c = prot_getc(in);
-    if (c == '#')
-        eatline(in, c);
-    else
-        prot_ungetc(c, in);
-
-    c = getint64(in, &t);
-    if (c == EOF)
-        goto fail;
-
-    c = getword(in, &buf);
-    if (c == EOF)
-        goto fail;
-
-    c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, in);
-
-    if (!dl) {
-        fprintf(stderr, "\ndidn't parse dlist, error %i\n", c);
-        goto fail;
-    }
-
-    if (c == '\r') c = prot_getc(in);
-    if (c != '\n') {
-        fprintf(stderr, "expected newline, got '%c'\n", c);
-        eatline(in, c);
-        goto fail;
-    }
-
-    if (kin) *kin = dl;
-    if (cmd) buf_copy(cmd, &buf);
-    if (ts) *ts = (time_t) t;
-    buf_free(&buf);
-    return c;
-
-fail:
-    if (dl) dlist_free(&dl);
-    buf_free(&buf);
-    return c;
-}
-
-static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock) {
-    struct gzuncat *gzuc = (struct gzuncat *) rock;
-    return gzuc_read(gzuc, buf, len);
-}
-
-EXPORTED int backup_reindex(const char *name)
-{
-    struct buf gzname = BUF_INITIALIZER;
-    struct buf idxname = BUF_INITIALIZER;
-    int r;
-
-    buf_printf(&gzname, "%s.gz", name);
-    buf_printf(&idxname, "%s.index", name);
-
-    struct backup *backup = backup_open_internal(buf_cstring(&gzname),
-                                                 buf_cstring(&idxname),
-                                                 BACKUP_OPEN_REINDEX);
-    buf_free(&idxname);
-    buf_free(&gzname);
-    if (!backup) return -1;
-
-    struct gzuncat *gzuc = gzuc_open(backup->fd);
-
-    time_t prev_member_ts = -1;
-
-    while (gzuc && !gzuc_eof(gzuc)) {
-        gzuc_member_start(gzuc);
-        off_t member_offset = gzuc_member_offset(gzuc);
-
-        fprintf(stderr, "\nfound chunk at offset %jd\n\n", member_offset);
-
-        struct protstream *member = prot_readcb(_prot_fill_cb, gzuc);
-        prot_setisclient(member, 1); /* don't sync literals */
-
-        // FIXME stricter timestamp sequence checks
-        time_t member_ts = -1;
-
-        while (1) {
-            struct buf cmd = BUF_INITIALIZER;
-            time_t ts;
-            struct dlist *dl = NULL;
-            off_t dl_offset = prot_bytes_in(member);
-
-            int c = _parse_line(member, &ts, &cmd, &dl);
-            if (c == EOF) break;
-            size_t dl_len = prot_bytes_in(member) - dl_offset;
-
-            if (member_ts == -1) {
-                if (prev_member_ts != -1 && prev_member_ts > ts) {
-                    fatal("member timestamp older than previous", -1);
-                }
-                member_ts = ts;
-                backup_index_start(backup, member_ts, member_offset);
-            }
-            else if (member_ts > ts)
-                fatal("line timestamp older than previous", -1);
-
-            if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
-                continue;
-
-            ucase(dl->name);
-
-            r = backup_index_dlist(backup, dl, dl_offset, dl_len);
-            if (r) {
-                // FIXME do something
-            }
-        }
-
-        backup_index_end(backup, prot_bytes_in(member));
-        prot_free(member);
-        gzuc_member_end(gzuc, NULL);
-
-        prev_member_ts = member_ts;
-    }
-
-    fprintf(stderr, "reached end of file\n");
-
-    gzuc_close(&gzuc);
-    backup_close(&backup);
-
-    return r;
 }
 
 EXPORTED int backup_close(struct backup **backupp)
@@ -855,7 +721,7 @@ int backup_index_apply_message(sqldb_t *db, int backup_id, struct dlist *dl, off
     return 0;
 }
 
-int backup_index_start(struct backup *backup, time_t ts, off_t offset) {
+static int backup_index_start3(struct backup *backup, time_t ts, off_t offset) {
     if (backup->index_id != -1) fatal("already started", -1);
 
     struct sqldb_bindval bval[] = {
@@ -876,6 +742,12 @@ int backup_index_start(struct backup *backup, time_t ts, off_t offset) {
 
     backup->index_id = sqldb_lastid(backup->db);
     return 0;
+}
+
+int backup_index_start(struct backup *backup) {
+    off_t offset = lseek(backup->fd, 0, SEEK_END);
+
+    return backup_index_start3(backup, time(0), offset);
 }
 
 int backup_index_end(struct backup *backup, size_t length) {
@@ -933,12 +805,9 @@ EXPORTED int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t d
     return r;
 }
 
-EXPORTED int backup_append_start(struct backup *backup, time_t ts)
+EXPORTED int backup_append_start(struct backup *backup)
 {
     if (backup->gzfile != NULL) fatal("already started", -1);
-
-    // FIXME do something with ts?
-    (void) ts;
 
     int dup_fd = dup(backup->fd);
     backup->gzfile = gzdopen(dup_fd, "ab");
@@ -979,4 +848,135 @@ EXPORTED int backup_append_done(struct backup *backup)
 
     fprintf(stderr, "%s: gzclose_w failed: %i\n", __func__, r);
     return -1;
+}
+
+static int _parse_line(struct protstream *in, time_t *ts,
+                       struct buf *cmd, struct dlist **kin)
+{
+    struct dlist *dl = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int64_t t;
+    int c;
+
+    c = prot_getc(in);
+    if (c == '#')
+        eatline(in, c);
+    else
+        prot_ungetc(c, in);
+
+    c = getint64(in, &t);
+    if (c == EOF)
+        goto fail;
+
+    c = getword(in, &buf);
+    if (c == EOF)
+        goto fail;
+
+    c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, in);
+
+    if (!dl) {
+        fprintf(stderr, "\ndidn't parse dlist, error %i\n", c);
+        goto fail;
+    }
+
+    if (c == '\r') c = prot_getc(in);
+    if (c != '\n') {
+        fprintf(stderr, "expected newline, got '%c'\n", c);
+        eatline(in, c);
+        goto fail;
+    }
+
+    if (kin) *kin = dl;
+    if (cmd) buf_copy(cmd, &buf);
+    if (ts) *ts = (time_t) t;
+    buf_free(&buf);
+    return c;
+
+fail:
+    if (dl) dlist_free(&dl);
+    buf_free(&buf);
+    return c;
+}
+
+static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock) {
+    struct gzuncat *gzuc = (struct gzuncat *) rock;
+    return gzuc_read(gzuc, buf, len);
+}
+
+EXPORTED int backup_reindex(const char *name)
+{
+    struct buf gzname = BUF_INITIALIZER;
+    struct buf idxname = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&gzname, "%s.gz", name);
+    buf_printf(&idxname, "%s.index", name);
+
+    struct backup *backup = backup_open_internal(buf_cstring(&gzname),
+                                                 buf_cstring(&idxname),
+                                                 BACKUP_OPEN_REINDEX);
+    buf_free(&idxname);
+    buf_free(&gzname);
+    if (!backup) return -1;
+
+    struct gzuncat *gzuc = gzuc_open(backup->fd);
+
+    time_t prev_member_ts = -1;
+
+    while (gzuc && !gzuc_eof(gzuc)) {
+        gzuc_member_start(gzuc);
+        off_t member_offset = gzuc_member_offset(gzuc);
+
+        fprintf(stderr, "\nfound chunk at offset %jd\n\n", member_offset);
+
+        struct protstream *member = prot_readcb(_prot_fill_cb, gzuc);
+        prot_setisclient(member, 1); /* don't sync literals */
+
+        // FIXME stricter timestamp sequence checks
+        time_t member_ts = -1;
+
+        while (1) {
+            struct buf cmd = BUF_INITIALIZER;
+            time_t ts;
+            struct dlist *dl = NULL;
+            off_t dl_offset = prot_bytes_in(member);
+
+            int c = _parse_line(member, &ts, &cmd, &dl);
+            if (c == EOF) break;
+            size_t dl_len = prot_bytes_in(member) - dl_offset;
+
+            if (member_ts == -1) {
+                if (prev_member_ts != -1 && prev_member_ts > ts) {
+                    fatal("member timestamp older than previous", -1);
+                }
+                member_ts = ts;
+                backup_index_start3(backup, member_ts, member_offset);
+            }
+            else if (member_ts > ts)
+                fatal("line timestamp older than previous", -1);
+
+            if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
+                continue;
+
+            ucase(dl->name);
+
+            r = backup_index_dlist(backup, dl, dl_offset, dl_len);
+            if (r) {
+                // FIXME do something
+            }
+        }
+
+        backup_index_end(backup, prot_bytes_in(member));
+        prot_free(member);
+        gzuc_member_end(gzuc, NULL);
+
+        prev_member_ts = member_ts;
+    }
+
+    fprintf(stderr, "reached end of file\n");
+
+    gzuc_close(&gzuc);
+    backup_close(&backup);
+
+    return r;
 }
