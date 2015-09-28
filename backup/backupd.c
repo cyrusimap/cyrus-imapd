@@ -486,18 +486,18 @@ static struct open_backup *open_backups_list_find(struct open_backups_list *list
 
 static struct open_backup *backupd_open_backup(const mbname_t *mbname)
 {
-    const char *backup_name = mboxname_backuppath(/* FIXME partition */ "default", mbname);
+    const char *key = mbname_userid(mbname);
 
-    struct open_backup *open = open_backups_list_find(&backupd_open_backups, backup_name);
+    struct open_backup *open = open_backups_list_find(&backupd_open_backups, key);
 
     time_t now = time(0);
 
     if (!open) {
-        struct backup *backup = backup_open(backup_name);
+        struct backup *backup = backup_open(mbname);
         if (!backup) return NULL;
         backup_append_start(backup); // FIXME error checking
         backup_index_start(backup); // FIXME error checking
-        open = open_backups_list_add(&backupd_open_backups, backup_name, backup);
+        open = open_backups_list_add(&backupd_open_backups, key, backup);
     }
 
     open->timestamp = now;
@@ -506,7 +506,7 @@ static struct open_backup *backupd_open_backup(const mbname_t *mbname)
 }
 
 
-// FIXME do i even need this
+// FIXME do i even need this - yes if a user gets renamed, need to close the old handle
 #if 0
 static struct open_backup *open_backups_list_remove(struct open_backups_list *list,
                                              const char *name)
