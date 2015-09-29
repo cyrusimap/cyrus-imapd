@@ -64,8 +64,6 @@
 #include "backup/gzuncat.h"
 #include "backup/sqlconsts.h"
 
-#define DB config_backups_db
-
 struct backup {
     int fd;
     char *gzname;
@@ -192,6 +190,55 @@ EXPORTED struct backup *backup_open_paths(const char *gzpath, const char *idxpat
     return backup_open_internal(gzpath, tmp, BACKUP_OPEN_NORMAL);
 }
 
+/* Uses mkstemp() to create a new, unique, backup path for the given user.
+ *
+ * On success, the file is not unlinked, presuming that it will shortly be
+ * used for storing backup data.  This also ensures its uniqueness remains:
+ * this function won't generate the same value again as long as the previous
+ * file is intact, so there's no user-rename race.
+ *
+ * On error, returns NULL and logs to syslog.
+ */
+static const char *backup_make_path(const mbname_t *mbname)
+{
+    char pathresult[PATH_MAX];
+
+    const char *userid = mbname_userid(mbname);
+    const char *backup_data_path = config_getstring(IMAPOPT_BACKUP_DATA_PATH);
+    const char *ret = NULL;
+
+    if (!backup_data_path) {
+        syslog(LOG_ERR,
+               "unable to make backup path for %s: no backup_data_path defined in imapd.conf",
+               userid);
+        return NULL;
+    }
+
+    char hash_buf[2];
+    char *template = strconcat(backup_data_path,
+                               "/", dir_hash_b(userid, 1, hash_buf),
+                               "/", userid, "_XXXXXX",
+                               NULL);
+
+    int fd = mkstemp(template);
+    if (fd >= 0) {
+        if (strlcpy(pathresult, template, sizeof(pathresult)) < sizeof(pathresult)) {
+            ret = pathresult;
+        }
+        else {
+            syslog(LOG_ERR, "unable to make backup path for %s: path too long", userid);
+            unlink(template);
+        }
+        close(fd);
+    }
+    else {
+        syslog(LOG_ERR, "unable to make backup path for %s: %m", userid);
+    }
+
+    free(template);
+    return ret;
+}
+
 EXPORTED int backup_get_paths(const mbname_t *mbname,
                               struct buf *gzpath, struct buf *idxpath)
 {
@@ -202,7 +249,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
     struct db *backups_db = NULL;
     struct txn *tid = NULL;
 
-    int r = cyrusdb_open(DB, backups_db_fname, CYRUSDB_CREATE, &backups_db);
+    int r = cyrusdb_open(config_backups_db, backups_db_fname, CYRUSDB_CREATE, &backups_db);
     if (r) goto done;
 
     const char *userid = mbname_userid(mbname);
@@ -215,13 +262,20 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                       &tid);
 
     if (r == CYRUSDB_NOTFOUND) {
-        backup_path = mboxname_backuppath(mbname);
+        backup_path = backup_make_path(mbname);
+        if (!backup_path) {
+            r = IMAP_INTERNAL; /* FIXME ?? */
+            goto done;
+        }
         path_len = strlen(backup_path);
 
         r = cyrusdb_create(backups_db,
                            userid, strlen(userid),
                            backup_path, path_len,
                            &tid);
+
+        /* if we didn't store it in the database successfully, trash the file, it won't be used */
+        if (r) unlink(backup_path);
     }
 
     if (r) goto done;
@@ -233,7 +287,6 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
     }
 
     buf_setmap(gzpath, backup_path, path_len);
-    buf_appendcstr(gzpath, ".gz");
 
     buf_setmap(idxpath, backup_path, path_len);
     buf_appendcstr(idxpath, ".index");
