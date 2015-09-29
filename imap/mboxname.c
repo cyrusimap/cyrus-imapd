@@ -1591,40 +1591,6 @@ EXPORTED char *mboxname_archivepath(const char *partition,
     return pathresult;
 }
 
-EXPORTED char *mboxname_backuppath(const mbname_t *mbname)
-{
-    static char pathresult[MAX_MAILBOX_PATH+1];
-    char *root = NULL;
-
-    root = xstrdup(config_getstring(IMAPOPT_BACKUP_DATA_PATH));
-    if (!root) return NULL;
-
-    /* XXX - dedup with datapath above - but make sure to keep the results
-     * in separate buffers and/or audit the callers */
-    if (!mbname) {
-        xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
-        free(root);
-        return pathresult;
-    }
-
-    // trim off trailing mailboxes, we just want their inbox here
-    // use a clone so the input can be const
-    mbname_t *clone = mbname_dup(mbname);
-    mbname_truncate_boxes(clone, 0);
-
-    mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mbname_intname(clone));
-
-    pathresult[MAX_MAILBOX_PATH] = '\0';
-
-    mbname_free(&clone);
-    free(root);
-
-    if (strlen(pathresult) == MAX_MAILBOX_PATH)
-        return NULL;
-
-    return pathresult;
-}
-
 char *mboxname_lockpath(const char *mboxname)
 {
     return mboxname_lockpath_suffix(mboxname, ".lock");
