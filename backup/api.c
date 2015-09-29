@@ -66,9 +66,9 @@
 
 struct backup {
     int fd;
-    char *gzname;
-    char *idxname;
-    char *oldidxname;
+    char *data_fname;
+    char *index_fname;
+    char *oldindex_fname;
     sqldb_t *db;
     gzFile gzfile;
     int index_id;
@@ -76,11 +76,11 @@ struct backup {
 
 /*
  * use cases:
- *  - backupd needs to be able to append to gz and update index (exclusive)
+ *  - backupd needs to be able to append to data stream and update index (exclusive)
  *  - backupd maybe needs to create a new backup from scratch (exclusive)
- *  - reindex needs to gzuc gz and rewrite index (exclusive)
- *  - compress needs to rewrite gz and index (exclusive)
- *  - restore needs to read gz and index (shared)
+ *  - reindex needs to gzuc data stream and rewrite index (exclusive)
+ *  - compress needs to rewrite data stream and index (exclusive)
+ *  - restore needs to read data stream and index (shared)
  *
  * with only one shared case, might as well always lock exclusively...
  */
@@ -89,8 +89,8 @@ enum backup_open_mode {
     BACKUP_OPEN_REINDEX,
 };
 
-static struct backup *backup_open_internal(const char *gzname,
-                                           const char *idxname,
+static struct backup *backup_open_internal(const char *data_fname,
+                                           const char *index_fname,
                                            enum backup_open_mode mode)
 {
     int locked = 0;
@@ -100,31 +100,31 @@ static struct backup *backup_open_internal(const char *gzname,
     backup->fd = -1;
     backup->index_id = -1;
 
-    backup->gzname = xstrdup(gzname);
-    backup->idxname = xstrdup(idxname);
+    backup->data_fname = xstrdup(data_fname);
+    backup->index_fname = xstrdup(index_fname);
 
-    backup->fd = open(backup->gzname, O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    backup->fd = open(backup->data_fname, O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     if (backup->fd < 0) goto error;
 
-    int r = lock_setlock(backup->fd, /* exclusive */ 1, /*nb*/ 0, backup->gzname);
+    int r = lock_setlock(backup->fd, /* exclusive */ 1, /*nb*/ 0, backup->data_fname);
     if (r) goto error;
     locked = 1;
 
     if (mode == BACKUP_OPEN_REINDEX) {
         // when reindexing, we want to move the old index out of the way
         // and create a new, empty one -- while holding the lock
-        char *oldidxname = strconcat(backup->idxname, ".old", NULL);
+        char *oldindex_fname = strconcat(backup->index_fname, ".old", NULL);
 
-        r = rename(backup->idxname, oldidxname);
+        r = rename(backup->index_fname, oldindex_fname);
         if (r && errno != ENOENT) {
-            free(oldidxname);
+            free(oldindex_fname);
             goto error;
         }
 
-        backup->oldidxname = oldidxname;
+        backup->oldindex_fname = oldindex_fname;
     }
 
-    backup->db = sqldb_open(backup->idxname, backup_index_initsql,
+    backup->db = sqldb_open(backup->index_fname, backup_index_initsql,
                             backup_index_version, backup_index_upgrade);
     if (!backup->db) goto error;
 
@@ -135,16 +135,16 @@ error:
     // FIXME could this just call out to backup_close...?
     if (backup->db) sqldb_close(&backup->db);
 
-    if (backup->oldidxname) {
-        rename(backup->oldidxname, backup->idxname);
-        free(backup->oldidxname);
+    if (backup->oldindex_fname) {
+        rename(backup->oldindex_fname, backup->index_fname);
+        free(backup->oldindex_fname);
     }
 
-    if (locked) lock_unlock(backup->fd, backup->gzname);
+    if (locked) lock_unlock(backup->fd, backup->data_fname);
     if (backup->fd >= 0) close(backup->fd);
 
-    if (backup->idxname) free(backup->idxname);
-    if (backup->gzname) free(backup->gzname);
+    if (backup->index_fname) free(backup->index_fname);
+    if (backup->data_fname) free(backup->data_fname);
 
     free(backup);
     return NULL;
@@ -152,42 +152,37 @@ error:
 
 EXPORTED struct backup *backup_open(const mbname_t *mbname)
 {
-    struct buf gzpath = BUF_INITIALIZER;
-    struct buf idxpath = BUF_INITIALIZER;
+    struct buf data_fname = BUF_INITIALIZER;
+    struct buf index_fname = BUF_INITIALIZER;
     struct backup *backup = NULL;
 
-    int r = backup_get_paths(mbname, &gzpath, &idxpath);
+    int r = backup_get_paths(mbname, &data_fname, &index_fname);
     if (r) goto done;
 
-    backup = backup_open_internal(buf_cstring(&gzpath),
-                                  buf_cstring(&idxpath),
+    backup = backup_open_internal(buf_cstring(&data_fname),
+                                  buf_cstring(&index_fname),
                                   BACKUP_OPEN_NORMAL);
 
 done:
-    buf_free(&gzpath);
-    buf_free(&idxpath);
+    buf_free(&data_fname);
+    buf_free(&index_fname);
 
     return backup;
 }
 
 /*
- * If idxpath is NULL, it will be automatically derived from gzpath
+ * If index_fname is NULL, it will be automatically derived from data_fname
  */
-EXPORTED struct backup *backup_open_paths(const char *gzpath, const char *idxpath)
+EXPORTED struct backup *backup_open_paths(const char *data_fname, const char *index_fname)
 {
-    if (idxpath)
-        return backup_open_internal(gzpath, idxpath, BACKUP_OPEN_NORMAL);
+    if (index_fname)
+        return backup_open_internal(data_fname, index_fname, BACKUP_OPEN_NORMAL);
 
-    char tmp[PATH_MAX] = {0};
-    strlcpy(tmp, gzpath, sizeof(tmp));
+    char *tmp = strconcat(data_fname, ".index", NULL);
+    struct backup *backup = backup_open_internal(data_fname, tmp, BACKUP_OPEN_NORMAL);
+    free(tmp);
 
-    char *dot = strrchr(tmp, '.');
-    if (!dot || strcmp(dot, ".gz") != 0)
-        return NULL;
-
-    *dot = '\0';
-    strlcat(tmp, ".index", sizeof(tmp));
-    return backup_open_internal(gzpath, tmp, BACKUP_OPEN_NORMAL);
+    return backup;
 }
 
 /* Uses mkstemp() to create a new, unique, backup path for the given user.
@@ -240,7 +235,7 @@ static const char *backup_make_path(const mbname_t *mbname)
 }
 
 EXPORTED int backup_get_paths(const mbname_t *mbname,
-                              struct buf *gzpath, struct buf *idxpath)
+                              struct buf *data_fname, struct buf *index_fname)
 {
     char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
     if (!backups_db_fname)
@@ -286,10 +281,10 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
         goto done;
     }
 
-    buf_setmap(gzpath, backup_path, path_len);
+    buf_setmap(data_fname, backup_path, path_len);
 
-    buf_setmap(idxpath, backup_path, path_len);
-    buf_appendcstr(idxpath, ".index");
+    buf_setmap(index_fname, backup_path, path_len);
+    buf_appendcstr(index_fname, ".index");
 
 done:
     if (tid)
@@ -1040,18 +1035,18 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock) {
 
 EXPORTED int backup_reindex(const char *name)
 {
-    struct buf gzname = BUF_INITIALIZER;
-    struct buf idxname = BUF_INITIALIZER;
+    struct buf data_fname = BUF_INITIALIZER;
+    struct buf index_fname = BUF_INITIALIZER;
     int r;
 
-    buf_printf(&gzname, "%s.gz", name);
-    buf_printf(&idxname, "%s.index", name);
+    buf_printf(&data_fname, "%s", name);
+    buf_printf(&index_fname, "%s.index", name);
 
-    struct backup *backup = backup_open_internal(buf_cstring(&gzname),
-                                                 buf_cstring(&idxname),
+    struct backup *backup = backup_open_internal(buf_cstring(&data_fname),
+                                                 buf_cstring(&index_fname),
                                                  BACKUP_OPEN_REINDEX);
-    buf_free(&idxname);
-    buf_free(&gzname);
+    buf_free(&index_fname);
+    buf_free(&data_fname);
     if (!backup) return -1;
 
     struct gzuncat *gzuc = gzuc_open(backup->fd);

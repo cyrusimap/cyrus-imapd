@@ -50,11 +50,11 @@
 struct backup;
 
 struct backup *backup_open(const mbname_t *mbname);
-struct backup *backup_open_paths(const char *gzpath, const char *idxpath);
+struct backup *backup_open_paths(const char *data_fname, const char *index_fname);
 int backup_close(struct backup **backupp);
 
 int backup_get_paths(const mbname_t *mbname,
-                     struct buf *gzpath, struct buf *idxpath);
+                     struct buf *data_fname, struct buf *index_fname);
 
 int backup_reindex(const char *name);
 
