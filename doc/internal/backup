@@ -126,18 +126,37 @@ able to tell where to store it.  workaround in the meantime could be to make
 some kind of backup id from the mailboxes database, and base the filename on
 this.
 
+actually, using "some kind of backup id from the mailboxes database" is probably
+the best solution.  otherwise the lock complexity of renaming a user while making
+sure their new backup filename doesn't already exist is frightful.
+
+maybe do something with mkstemp()?
+
 
 locking
 -------
 
-just use a normal flock/fcntl lock on the .gz file and only open the index
+just use a normal flock/fcntl lock on the data file and only open the index
 if that lock succeeded
 
-backup:   needs to append foo.fz and update foo.idx
-reindex:  only needs to read foo.gz, but needs a write lock to prevent writes
+backup:   needs to append foo and update foo.index
+reindex:  only needs to read foo, but needs a write lock to prevent writes
           while it does so. needs to write to (replace) foo.index
-compress: needs to re-write foo.gz and foo.index
+compress: needs to re-write foo and foo.index
 restore:  needs to read
+
+
+verifying index
+---------------
+
+how to tell whether the .index file is the correct one for the backup data it
+ostensibly represents?
+
+one way to do this would be to have backup_index_end() store a checksum of
+the corresponding data contents in the index.
+
+when opening a backup, verify this checksum against the data, and refuse to
+load the index if it doesn't match.
 
 
 mailboxes database
@@ -163,17 +182,17 @@ reindex
 
 * convert user mailbox name to backup name
 * complain if there's no backup data file?
-* lock, rename .idx to .idx.old, init new .idx
+* lock, rename .index to .index.old, init new .index
 * foreach file chunk:
 *   timestamp is from first line in chunk
 *   complain if timestamp has gone backwards?
 *   index records from chunk
 * unlock
-* clean up .idx.old
+* clean up .index.old
 
 on error:
 * discard partial new index
-* restore .idx.old
+* restore .index.old
 * bail out
 
 
@@ -364,14 +383,14 @@ command line utility to lock a backup (for e.g. safely poking around in the
 .index on a live system).
 
 example failure:
-$bu_lock -f /path/to/backup.gz
-* Trying to obtain lock on /path/to/backup.gz...
+$bu_lock -f /path/to/backup
+* Trying to obtain lock on /path/to/backup...
 NO some error
 <EOF>
 
 example success:
-$bu_lock -f /path/to/backup.gz
-* Trying to obtain lock on /path/to/backup.gz...
+$bu_lock -f /path/to/backup
+* Trying to obtain lock on /path/to/backup...
 [potentially a delay here if we need to wait for another process to release the lock]
 OK locked
 [bu_lock waits for its stdin to close, then unlocks and exits]
@@ -395,7 +414,7 @@ reconstruct
 
 * compress/reindex are probably both invocations of a backup reconstruct tool
   rather than distinct tools
-* functionality for re-ordering a backup.gz whose data is in funky order?
+* functionality for re-ordering a backup whose data is in funky order?
   it shouldn't be able to get out of order if it's only being written to by
   backupd but if you've got funky home-grown stuff around the edges, or you're
   working on the backup system itself, ...
@@ -466,9 +485,9 @@ on your imap server:
     * start/restart master
 
 files and such:
-    {configdirectory}/backups.db                - database mapping userids to backup locations
-    {backup_directory}/<hash>/<userid>.gz       - backup data stream for userid
-    {backup_directory}/<hash>/<userid>.index    - index into userid's backup data stream
+    {configdirectory}/backups.db                    - database mapping userids to backup locations
+    {backup_data_path}/<hash>/<userid>_XXXXXX       - backup data stream for userid
+    {backup_data_path}/<hash>/<userid>_XXXXXX.index - index into userid's backup data stream
 
 do i want rhost in the path?
     * protects from issue if multiple servers are trying to back up their own version of same user
