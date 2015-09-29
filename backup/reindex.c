@@ -69,11 +69,6 @@ int main (int argc, char **argv) {
 
     char *backup_name = argv[1];
 
-    /* be nice: accept (and discard) a tab-completed .gz suffix */
-    char *suffix = strrchr(backup_name, '.');
-    if (suffix && strcmp(suffix, ".gz") == 0 && suffix[strlen(".gz")] == '\0')
-        *suffix = '\0';
-
     fprintf(stderr, "reindexing %s...\n", backup_name);
 
     return backup_reindex(backup_name);
