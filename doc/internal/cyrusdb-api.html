@@ -37,55 +37,50 @@ for example lib/cyrusdb_flat.c.  General functions are in
 <p>The name of the backend for each of the main internal databases can be
 configured in imapd.conf, for example: <tt>annotation_db: skiplist</tt>.
 This is then read in imap/global.h and imap/global.c during startup, so
-that the global variable <tt>config_annotation_db</tt> gets set to the actual
-database backend:</p>
+that the global variable <tt>config_annotation_db</tt> gets set to the
+configured backend name:</p>
 
 <pre>
-    config_annotation_db =
-            cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
+    config_annotation_db = config_getstring(IMAPOPT_ANNOTATION_DB);
 </pre>
 
-<p><tt>cyrusdb_fromname</tt> uses the database name to find the
-<tt>struct cyrusdb_backend *</tt> of the actual database.</p>
+<p>(Beware the misleading naming here: <tt>config_annotation_db</tt> is a
+string describing the <em>backend</em> used by the database, not, say, its
+location on disk.)</p>
 
-<p>The main module for each database then sets up a "short name" to
-refer to the struct containing the funtion pointers for each action
-on that database type, giving an "object oriented" API to the database,
-for example:</p>
+<p>Internally, the main module for each database sets up struct of pointers
+to the cyrusdb functions it implements, which is registered in
+<tt>lib/cyrusdb.c</tt></p>
 
-<pre>
-  #define DB config_annotation_db
-
-  r = DB-&gt;open(fname, dbflags, &amp;db);
-
-  r = DB-&gt;fetch(&amp;db, key, keylen, &amp;data, &amp;datalen, &amp;tid);
-</pre>
+<p><tt>lib/cyrus.c</tt> provides backend-agnostic wrapper functions for
+interacting with cyrusdb databases.</p>
 
 <h2>A full example</h2>
 
 <pre>
-  struct cyrusdb_backend *BE = NULL;
   struct db *db = NULL;
   struct txn *tid = NULL;
+  const char *filename = NULL;
+  int flags = CYRUSDB_CREATE;
 
   cyrus_init(alt_config, "toolname", 0);
 
-  BE = cyrusdb_fromname("skiplist");
+  filename = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
 
-  r = BE-&gt;open(filename, flags, &amp;db);
+  r = cyrusdb_open(config_annotation_db, filename, flags, &amp;db);
 
-  r = BE-&gt;fetch(db, key, keylen, &amp;data, &amp;datalen, &amp;tid);
+  r = cyrusdb_fetch(db, key, keylen, &amp;data, &amp;datalen, &amp;tid);
 
-  r = BE-&gt;commit(db, tid);
+  r = cyrusdb_commit(db, tid);
 
-  r = DB-&gt;close(db);
+  r = cyrusdb_close(db);
 
   cyrus_done();
 </pre>
 
 <p>Note that you always open a database first, and close it at the end.
 You must always call cyrus_init() and cyrus_done() to properly intialise
-and clean up the DB environments.</p>
+and clean up the <tt>cyrusdb</tt> environments.</p>
 
 <p>This example also uses a transaction, meaning that the database is locked
 in exclusive mode between the 'fetch' (the first use of the transaction)
@@ -119,29 +114,23 @@ do the read in the current transaction rather than returning an error</i></p>
 <p>All functions follow the normal C API of returning '0' on success,
 and an error code on failure</p>
 
-<h3>init(const char *dbdir, int flags)</h3>
+<h3>cyrusdb_init(void)</h3>
 
-<p>Is called once per process.  Don't call this yourself, use cyrus_init().
-No other calls will be made until this is called.  Dbdir is the directory
-where database log files and other "state information" is stored.</p>
+<p>Is called once per process.  Don't call this yourself, use
+<tt>cyrus_init()</tt>.  No other calls will be made until this is called.</p>
 
-<p>
-Flags:</p>
-<ul>
- <li>CYRUSDB_RECOVER - called by <tt>ctl_cyrusdb -r</tt> during startup to
-     do initial setup after a restart</li>
-</ul>
+<h3>cyrusdb_done(void)</h3>
 
-<h3>done()</h3>
+<p>The opposite of <tt>cyrusdb_init()</tt> - called once per process to do
+any cleaning up after all database usage is finished.  Don't call this
+yourself, use <tt>cyrus_done()</tt>.</p>
 
-<p>The opposite of <tt>init()</tt> - called once per process to do any cleaning
-up after all database usage is finished</p>
-
-<h3>sync()</h3>
+<h3>cyrusdb_sync(const char *backend)</h3>
 
 <p>Perform a checkpoint of the database environment.  Used by berkeley
 backend.  Is called by <tt>ctl_cyrusdb -c</tt> on a regular basis</p>
 
+<!-- XXX update this bit to document the cyrusdb_archiver api
 <h3>archive(const char **fnames, const char *dirname)</h3>
 
 <p>Archives the database environment and named database files into
@@ -152,8 +141,10 @@ backups of important databases.</p>
 <ul>
  <li>CYRUSDB_IOERROR - if an error occurs copying a file</li>
 </ul>
+-->
 
-<h3>open(const char *fname, int flags, struct db **retdb)</h3>
+<h3>cyrusdb_open(const char *backend, const char *fname, int flags,
+    struct db **retdb)</h3>
 
 <p>Opens the database with the specified 'file name' (or other descriptor,
 for example the sql backend is not a filename), and if successful returns
@@ -171,7 +162,7 @@ an opaque database structure</p>
      corruption detected while loading the file</li>
 </ul>
 
-<h3>close(struct db *db)</h3>
+<h3>cyrusdb_close(struct db *db)</h3>
 
 <p>Close the named database.  Will release any locks if they are still
 held, but it's bad practice to close without committing or aborting, so
@@ -182,9 +173,9 @@ the backend should log an error</p>
  <li>CYRUSDB_IOERROR - if there are any errors during close</li>
 </ul>
 
-<h3>fetch(struct db *db, const char *key, size_t keylen,
+<h3>cyrusdb_fetch(struct db *db, const char *key, size_t keylen,
     const char **data, size_t *datalen, struct txn **tidptr)</h3>
-<h3>fetchlock(struct db *db, const char *key, size_t keylen,
+<h3>cyrusdb_fetchlock(struct db *db, const char *key, size_t keylen,
     const char **data, size_t *datalen, struct txn **tidptr)</h3>
 
 <p>Fetch the value for the exact key given by key and keylen.  If data
@@ -211,16 +202,23 @@ if you are only interested in the length</p>
  <li>CYRUSDB_NOTFOUND - if there is no record that matches the key</li>
 </ul>
 
-<h3>foreach(struct db *db, const char *prefix, size_t prefixlen,
+<h3>cyrusdb_foreach(struct db *db, const char *prefix, size_t prefixlen,
+    foreach_p *goodp, foreach_p *procp, void *rock, struct txn **tidptr)</h3>
+<h3>cyrusdb_forone(struct db *db, const char *key, size_t keylen,
     foreach_p *goodp, foreach_p *procp, void *rock, struct txn **tidptr)</h3>
 
-<p>Iterate over all records matching the given prefix, in database
-order (which may be MBOXLIST sort, depending on the parameters given
-to open</p>
+<p><tt>cyrusdb_foreach()</tt> iterates over all records matching the given
+prefix, in database order (which may be MBOXLIST sort, depending on the
+parameters given to open</p>
 
 <p>It is legal to give a NULL pointer as prefix if prefixlen is zero, in
 which case it will return all records in the database.  It is an error
 to give a non-zero prefixlen with a NULL prefix.</p>
+
+<p><tt>cyrusdb_forone()</tt> "iterates" over the single record matched by
+the given key.  If you've already built callbacks for processing each
+record from a foreach, this lets you use the same interface to process a
+single record.</p>
 
 <p><tt>goodp</tt> - this function is only used for deciding if the record
 needs to be further processed.  It can be used for basic filtering, and
@@ -246,14 +244,14 @@ current record has changed or been removed.  procp MUST NOT be NULL.</p>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
 </ul>
 
-<h3>create(struct db *db, const char *key, size_t keylen, const char *data,
+<h3>cyrusdb_create(struct db *db, const char *key, size_t keylen, const char *data,
     size_t datalen, struct txn **tidptr)</h3>
-<h3>store(struct db *db, const char *key, size_t keylen, const char *data,
+<h3>cyrusdb_store(struct db *db, const char *key, size_t keylen, const char *data,
     size_t datalen, struct txn **tidptr)</h3>
 
 <p>Create a new record or replace an existing one.  The only difference
-between these two is that <tt>create</tt> will return an error if the record
-already exists, while <tt>store</tt> will replace it</p>
+between these two is that <tt>cyrusdb_create</tt> will return an error if
+the record already exists, while <tt>cyrusdb_store</tt> will replace it</p>
 
 <p>If tidptr is NULL, create/store will take a write lock for the duration
 of the action.</p>
@@ -268,12 +266,12 @@ is not legal to pass NULL for key or zero for keylen</p>
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
- <li>CYRUSDB_EXISTS - if <tt>create</tt> is called on an existing key</li>
+ <li>CYRUSDB_EXISTS - if <tt>cyrusdb_create</tt> is called on an existing key</li>
  <li>CYRUSDB_AGAIN - if a deadlock is created.  The current transaction has
      been aborted, but a retry may succeed</li>
 </ul>
 
-<h3>delete(struct db *db, const char *key, size_t keylen,
+<h3>cyrusdb_delete(struct db *db, const char *key, size_t keylen,
     struct txn **tidptr, int force)</h3>
 
 <p>Delete the given record from the database.  If force is true, then
@@ -291,7 +289,7 @@ succeed even if the record doesn't currently exist.</p>
 </ul>
 
 
-<h3>commit(struct db *db, struct txn *tid)</h3>
+<h3>cyrusdb_commit(struct db *db, struct txn *tid)</h3>
 
 <p>Commit the current transaction.  tid will not be valid after this call,
 regardless of success</p>
@@ -306,7 +304,7 @@ regardless of success</p>
      been aborted, but a retry may succeed</li>
 </ul>
 
-<h3>abort(struct db *db, struct txn *tid)</h3>
+<h3>cyrusdb_abort(struct db *db, struct txn *tid)</h3>
 
 <p>Abort the current transaction.  tid will not be valid after this call,
 regardless of success</p>
@@ -319,15 +317,16 @@ regardless of success</p>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
 </ul>
 
-<h3>dump(struct db *db, int detail)</h3>
+<h3>cyrusdb_dump(struct db *db, int detail)</h3>
 
 <p>Optional function to dump the internal structure of the database to stdout
 for debugging purposes.  Don't use.</p>
 
-<h3>consistent(struct db *db)</h3>
+<h3>cyrusdb_consistent(struct db *db)</h3>
 
 <p>Check if the DB is internally consistent.  Looks pretty bogus, and isn't
 used anywhere.  Don't use.</p>
+<!-- XXX does "looks pretty bogus" still apply? -->
 
 </body>
 </html>
