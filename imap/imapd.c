@@ -11280,7 +11280,7 @@ static void cmd_xfer(const char *tag, const char *name,
     if (!moving_user) {
 
         syslog(LOG_INFO, "XFER: mailbox '%s' -> %s!%s",
-               xfer->items->mbentry->name, toserver, topart);
+               mbentry->name, toserver, topart);
 
         /* is the selected mailbox the one we're moving? */
         if (!strcmpsafe(intname, index_mboxname(imapd_index))) {
