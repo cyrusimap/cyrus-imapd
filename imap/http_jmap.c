@@ -3306,13 +3306,7 @@ static int setCalendars(struct jmap_req *req)
 
             /* Validate uid. JMAP destroy does not allow reference uids. */
             const char *uid = json_string_value(juid);
-            if (!strlen(uid) || *uid == '#') {
-                /* XXX - An invalidArguments error is NOT a set error. */
-                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notDestroyed, uid, err);
-                continue;
-            }
-            if (_jmap_calendar_ishidden(uid)) {
+            if (!strlen(uid) || *uid == '#' || _jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
