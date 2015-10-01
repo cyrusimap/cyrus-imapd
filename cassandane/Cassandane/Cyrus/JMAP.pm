@@ -728,7 +728,7 @@ CALSCALE:GREGORIAN
 BEGIN:VEVENT
 TRANSP:TRANSPARENT
 DTSTART;TZID=Europe/Vienna:20160928T160000
-RRULE:FREQ=DAILY;COUNT=10
+RRULE:FREQ=MONTHLY;BYDAY=+2MO,TU,-3SU,+1MO,-2TH
 DTEND;TZID=Europe/Vienna:20160928T170000
 UID:$id
 DTSTAMP:20150928T132434Z
@@ -792,8 +792,8 @@ EOF
   $self->assert_str_equals($event->{startTimeZone}, "Europe/Vienna");
   $self->assert_str_equals($event->{endTimeZone}, "Europe/Vienna");
   $self->assert_not_null($event->{recurrence});
-  $self->assert_num_equals($event->{recurrence}{count}, 10);
-  $self->assert_str_equals($event->{recurrence}{frequency}, "daily");
+  $self->assert_str_equals($event->{recurrence}{frequency}, "monthly");
+  $self->assert_deep_equals($event->{recurrence}{byDay}, [-21, -10, 2, 8, 15]);
   $self->assert_not_null($event->{inclusions});
   $self->assert_num_equals(scalar @{$event->{inclusions}}, 2);
   $self->assert_str_equals($event->{inclusions}[0], "2016-11-06T16:00:00");
