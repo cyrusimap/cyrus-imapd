@@ -3404,6 +3404,17 @@ static int _jmap_intident(short i) {
     return i;
 }
 
+/*  Convert libicals internal by_day encoding to JMAP byday. */
+static int _jmap_icalbyday_to_byday(short i) {
+    int w = icalrecurrencetype_day_position(i);
+    int d = icalrecurrencetype_day_day_of_week(i);
+    if (d) {
+        /* XXX - for now, we treat libical's ANY day as SU. */
+        d--;
+    }
+    return d + 7*w;
+}
+
 /* Convert at most nmemb entries in the ical recurrence byDay/Month/etc array
  * named byX using conv. Return a new JSON array, sorted in ascending order. */
 static json_t* jmap_recur_byX_from_ical(short byX[], size_t nmemb, int (*conv)(short)) {
@@ -3449,9 +3460,8 @@ static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
 
     if (recur.by_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byDay",
-                /* XXX - return values differ from the JMAP spec examples. */
                 jmap_recur_byX_from_ical(recur.by_day,
-                    ICAL_BY_DAY_SIZE, &icalrecurrencetype_day_position));
+                    ICAL_BY_DAY_SIZE, &_jmap_icalbyday_to_byday));
     }
     if (recur.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byDate",
