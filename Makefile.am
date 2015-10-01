@@ -199,7 +199,7 @@ endif # NNTPD
 libexec_PROGRAMS += imap/fud
 
 if IDLED
-sbin_PROGRAMS += imap/idled
+libexec_PROGRAMS += imap/idled
 endif # IDLED
 
 if MURDER
