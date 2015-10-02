@@ -250,6 +250,18 @@ static void get_prog(char *path, size_t size, const strarray_t *cmd)
     path[size-1] = '\0';
 }
 
+static void get_executable(char *path, size_t size, const strarray_t *cmd)
+{
+    struct stat statbuf;
+
+    if (!size) return;
+    get_daemon(path, size, cmd);
+    if (!stat(path, &statbuf)) return;
+    get_prog(path, size, cmd);
+    if (!stat(path, &statbuf)) return;
+    /* XXX - abort? */
+}
+
 static void get_statsock(int filedes[2])
 {
     int r, fdflags;
@@ -420,7 +432,7 @@ static int verify_service_file(const strarray_t *filename)
     char path[PATH_MAX];
     struct stat statbuf;
 
-    get_daemon(path, sizeof(path), filename);
+    get_executable(path, sizeof(path), filename);
     if (stat(path, &statbuf)) return 0;
     if (! S_ISREG(statbuf.st_mode)) return 0;
     return statbuf.st_mode & S_IXUSR;
@@ -705,7 +717,7 @@ static void run_startup(const char *name, const strarray_t *cmd)
     struct centry *c;
     char path[PATH_MAX];
 
-    get_prog(path, sizeof(path), cmd);
+    get_executable(path, sizeof(path), cmd);
 
     switch (pid = fork()) {
     case -1:
@@ -818,7 +830,7 @@ static void spawn_service(int si)
     if (service_is_fork_limited(s))
         return;
 
-    get_daemon(path, sizeof(path), s->exec);
+    get_executable(path, sizeof(path), s->exec);
 
     switch (p = fork()) {
     case -1:
@@ -944,7 +956,7 @@ static void spawn_schedule(struct timeval now)
         /* if a->exec is NULL, we just used the event to wake up,
          * so we actually don't need to exec anything at the moment */
         if(a->exec) {
-            get_prog(path, sizeof(path), a->exec);
+            get_executable(path, sizeof(path), a->exec);
             switch (p = fork()) {
             case -1:
                 syslog(LOG_CRIT,
