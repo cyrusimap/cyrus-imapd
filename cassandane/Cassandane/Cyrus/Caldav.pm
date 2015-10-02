@@ -127,6 +127,112 @@ sub test_rename
     $self->assert_str_equals('bar', $NewCalendar->{name});
 }
 
+sub test_url_nodomains
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "create calendar";
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "fetch again";
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog "check that the href has no domain";
+    $self->assert_str_equals("/dav/calendars/user/cassandane/$CalendarId/", $Calendar->{href});
+}
+
+sub test_url_virtdom_nodomain
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "create calendar";
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "fetch again";
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog "check that the href has no domain";
+    $self->assert_str_equals("/dav/calendars/user/cassandane/$CalendarId/", $Calendar->{href});
+}
+
+sub test_url_virtdom_extradomain
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+    my $caltalk = Net::CalDAVTalk->new(
+	user => "cassandane%example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    xlog "create calendar";
+    my $CalendarId = $caltalk->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "fetch again";
+    my $Calendar = $caltalk->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog "check that the href has domain";
+    $self->assert_str_equals("/dav/calendars/user/cassandane\@example.com/$CalendarId/", $Calendar->{href});
+}
+
+sub test_url_virtdom_domain
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.test\@example.com");
+    $admintalk->setacl("user.test\@example.com", "test\@example.com" => "lrswipkxtecda");
+
+    my $service = $self->{instance}->get_service("http");
+    my $caltalk = Net::CalDAVTalk->new(
+	user => "test\@example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    xlog "create calendar";
+    my $CalendarId = $caltalk->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "fetch again";
+    my $Calendar = $caltalk->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog "check that the href has domain";
+    $self->assert_str_equals("/dav/calendars/user/test\@example.com/$CalendarId/", $Calendar->{href});
+}
+
+
+
 sub test_user_rename
     :AllowMoves
 {
