@@ -410,15 +410,13 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
         prefix = namespace_calendar.prefix;
     }
 
-    if (strchr(userid, '@')) {
+    if (strchr(userid, '@') || !httpd_extradomain) {
         buf_printf(&buf, "%s/user/%s/%s",
                    prefix, userid, strrchr(mboxname, '.')+1);
     }
     else {
-        const char *domain =
-            httpd_extradomain ? httpd_extradomain : config_defdomain;
         buf_printf(&buf, "%s/user/%s@%s/%s",
-                   prefix, userid, domain, strrchr(mboxname, '.')+1);
+                   prefix, userid, httpd_extradomain, strrchr(mboxname, '.')+1);
     }
     if (resource)
         buf_printf(&buf, "/%s", resource);
