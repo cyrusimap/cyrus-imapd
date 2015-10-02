@@ -113,18 +113,18 @@ sub test_rename
     $self->assert_not_null($Calendar);
 
     xlog "check name matches";
-    $self->assert_str_equals($Calendar->{name}, 'foo');
+    $self->assert_str_equals('foo', $Calendar->{name});
 
     xlog "change name";
     my $NewId = $CalDAV->UpdateCalendar({ id => $CalendarId, name => 'bar'});
-    $self->assert_str_equals($NewId, $CalendarId);
+    $self->assert_str_equals($CalendarId, $NewId);
 
     xlog "fetch again";
     my $NewCalendar = $CalDAV->GetCalendar($NewId);
     $self->assert_not_null($NewCalendar);
 
     xlog "check new name stuck";
-    $self->assert_str_equals($NewCalendar->{name}, 'bar');
+    $self->assert_str_equals('bar', $NewCalendar->{name});
 }
 
 sub test_user_rename
@@ -145,7 +145,7 @@ sub test_user_rename
     $self->assert_not_null($Calendar);
 
     xlog "check name matches";
-    $self->assert_str_equals($Calendar->{name}, 'foo');
+    $self->assert_str_equals('foo', $Calendar->{name});
 
     xlog "rename user";
     $admintalk->rename("user.cassandane", "user.newuser");
