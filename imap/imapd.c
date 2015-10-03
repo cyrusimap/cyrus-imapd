@@ -10905,7 +10905,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
     struct dlist *kl = NULL;
     struct xfer_item *item;
     struct mailbox *mailbox = NULL;
-    mbentry_t *newentry;
+    mbentry_t newentry;
     unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
     int r;
 
@@ -10959,14 +10959,14 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
         /* Step 3.5: Set mailbox as MOVING on local server */
         /* XXX - this code is awful... need a sane way to manage mbentries */
-        newentry = mboxlist_entry_create();
-        newentry->name = xstrdupnull(item->mbentry->name);
-        newentry->acl = xstrdupnull(item->mbentry->acl);
-        newentry->server = xstrdupnull(xfer->toserver);
-        newentry->partition = xstrdupnull(xfer->topart);
-        newentry->mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
-        r = mboxlist_update(newentry, 1);
-        mboxlist_entry_free(&newentry);
+        newentry.name = item->mbentry->name;
+        newentry.acl = item->mbentry->acl;
+        newentry.uniqueid = item->mbentry->uniqueid;
+        newentry.uidvalidity = item->mbentry->uidvalidity;
+        newentry.mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
+        newentry.server = xfer->toserver;
+        newentry.partition = xfer->topart;
+        r = mboxlist_update(&newentry, 1);
 
         if (r) {
             syslog(LOG_ERR,
@@ -11110,7 +11110,6 @@ static int xfer_delete(struct xfer_header *xfer)
 
 static void xfer_recover(struct xfer_header *xfer)
 {
-    mbentry_t *newentry = NULL;
     struct xfer_item *item;
     int r;
 
@@ -11122,15 +11121,7 @@ static void xfer_recover(struct xfer_header *xfer)
         case XFER_UNDUMPED:
         case XFER_LOCAL_MOVING:
             /* Unset mailbox as MOVING on local server */
-            /* XXX - this code is awful... need a sane way to manage mbentries */
-            newentry = mboxlist_entry_create();
-            newentry->name = xstrdupnull(item->mbentry->name);
-            newentry->acl = xstrdupnull(item->mbentry->acl);
-            newentry->server = xstrdupnull(item->mbentry->server);
-            newentry->partition = xstrdupnull(item->mbentry->partition);
-            newentry->mbtype = item->mbentry->mbtype;
-            r = mboxlist_update(newentry, 1);
-            mboxlist_entry_free(&newentry);
+            r = mboxlist_update(item->mbentry, 1);
 
             if (r) {
                 syslog(LOG_ERR,
