@@ -2909,7 +2909,7 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
     return 0;
 }
 
-EXPORTED int specialuse_validate(const char *src, struct buf *dest)
+EXPORTED int specialuse_validate(const char *userid, const char *src, struct buf *dest)
 {
     const char *specialuse_extra_opt = config_getstring(IMAPOPT_SPECIALUSE_EXTRA);
     char *strval = NULL;
@@ -2954,6 +2954,14 @@ EXPORTED int specialuse_validate(const char *src, struct buf *dest)
             goto done;
         }
 
+        /* don't allow names that are already in use */
+        char *mboxname = mboxlist_find_specialuse(strarray_nth(valid, j), userid);
+        if (mboxname) {
+            free(mboxname);
+            r = IMAP_MAILBOX_SPECIALUSE;
+            goto done;
+        }
+
         /* normalise the value */
         strarray_set(values, i, strarray_nth(valid, j));
     }
@@ -2982,7 +2990,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
         goto done;
     }
 
-    r = specialuse_validate(buf_cstring(&entry->priv), &res);
+    r = specialuse_validate(state->userid, buf_cstring(&entry->priv), &res);
     if (r) goto done;
 
     r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &res, 0);

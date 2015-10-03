@@ -107,6 +107,9 @@ ec IMAP_MAILBOX_LOCKED,
 ec IMAP_MAILBOX_DISABLED,
    "Delivery to mailbox is disabled"
 
+ec IMAP_MAILBOX_SPECIALUSE,
+   "SPECIAL-USE flag conflict"
+
 ec IMAP_PARTITION_UNKNOWN,
    "Unknown/invalid partition"
 
