@@ -287,6 +287,40 @@ EOF
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
+sub test_deliver_specialuse
+{
+    my ($self) = @_;
+
+    my $target = "INBOX.target";
+
+    xlog "create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($target, "(use (\\Trash))")
+	 or die "Cannot create $target: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Install a sieve script filing all mail into the Trash role";
+    $self->install_sieve_script(<<EOF
+require ["fileinto"];
+fileinto "\\\\Trash";
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+    $msg->set_attribute(uid => 1);
+
+    xlog "Check that no messages are in INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({}, check_guid => 0);
+
+    xlog "Check that the message made it into the target folder";
+    $self->{store}->set_folder($target);
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+}
+
 sub badscript_common
 {
     my ($self) = @_;
