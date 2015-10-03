@@ -10920,7 +10920,8 @@ static int xfer_finalsync(struct xfer_header *xfer)
         kl = dlist_setatom(NULL, cmd, xfer->userid);
     }
     else {
-        syslog(LOG_INFO, "XFER: final sync of mailbox %s", xfer->items->mbentry->name);
+        syslog(LOG_INFO, "XFER: final sync of mailbox %s",
+               xfer->items->mbentry->name);
 
         cmd = "MAILBOXES";
         kl = dlist_newlist(NULL, cmd);
@@ -10941,6 +10942,18 @@ static int xfer_finalsync(struct xfer_header *xfer)
             syslog(LOG_ERR,
                    "Failed to open mailbox %s for xfer_final_sync() %s",
                    item->mbentry->name, error_message(r));
+            goto done;
+        }
+
+        /* Open cyrus.annotations before we set mailbox to MOVING and
+           change its location to destination server and partition */
+        r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, NULL);
+        if (r) {
+            syslog(LOG_ERR,
+                   "Failed to get annotate state for mailbox %s"
+                   " for xfer_final_sync() %s",
+                   mailbox->name, error_message(r));
+            mailbox_close(&mailbox);
             goto done;
         }
 
