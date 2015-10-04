@@ -541,6 +541,41 @@ EXPORTED int mboxlist_lookup_allow_all(const char *name,
     return mboxlist_mylookup(name, entryptr, tid, 0);
 }
 
+struct _find_specialuse_data {
+    const char *use;
+    const char *userid;
+    char *mboxname;
+};
+
+static int _find_specialuse(const mbentry_t *mbentry, void *rock)
+{
+    struct _find_specialuse_data *d = (struct _find_specialuse_data *)rock;
+    struct buf attrib = BUF_INITIALIZER;
+
+    annotatemore_lookup(mbentry->name, "/specialuse", d->userid, &attrib);
+
+    if (!strcmpsafe(buf_cstring(&attrib), d->use)) {
+        d->mboxname = xstrdup(mbentry->name);
+    }
+
+    buf_free(&attrib);
+
+    if (d->mboxname) return CYRUSDB_DONE;
+    return 0;
+}
+
+
+EXPORTED char *mboxlist_find_specialuse(const char *use, const char *userid)
+{
+    /* \\Inbox is magical */
+    if (!strcasecmp(use, "\\Inbox"))
+        return mboxname_user_mbox(userid, NULL);
+
+    struct _find_specialuse_data rock = { use, userid, NULL };
+    mboxlist_usermboxtree(userid, _find_specialuse, &rock, MBOXTREE_SKIP_ROOT);
+    return rock.mboxname;
+}
+
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)

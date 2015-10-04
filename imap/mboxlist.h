@@ -123,6 +123,8 @@ int mboxlist_lookup_allow_all(const char *name,
                                    mbentry_t **mbentryptr,
                                    struct txn **tid);
 
+char *mboxlist_find_specialuse(const char *use, const char *userid);
+
 int mboxlist_parse_entry(mbentry_t **mbentryptr,
                          const char *name, size_t namelen,
                          const char *data, size_t datalen);
