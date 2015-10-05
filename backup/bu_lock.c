@@ -62,8 +62,15 @@ EXPORTED void fatal(const char *error, int code)
 
 static void usage(const char *name)
 {
-    // FIXME write this
-    fprintf(stderr, "Usage: %s backup_name\n", name);
+    fprintf(stderr, "Usage: %s backup\n", name);
+    fprintf(stderr, "Usage: %s backup -s\n", name);
+    fprintf(stderr, "Usage: %s backup -x command\n", name);
+
+    fprintf(stderr, "\nBackup specification:\n");
+    fprintf(stderr, "  -f filename\n");
+    fprintf(stderr, "  -m mailbox\n");
+    fprintf(stderr, "  -u userid\n");
+
     exit(EC_USAGE);
 }
 
