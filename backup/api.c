@@ -638,8 +638,7 @@ int backup_index_start(struct backup *backup) {
     return backup_index_start3(backup, time(0), offset);
 }
 
-// FIXME rename this
-int backup_index_apply_mailbox(struct backup *backup, struct dlist *dl, off_t dl_offset) {
+static int _index_mailbox(struct backup *backup, struct dlist *dl, off_t dl_offset) {
     fprintf(stderr, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
 
     const char *uniqueid = NULL;
@@ -839,9 +838,7 @@ error:
     return -1;
 }
 
-// FIXME this isn't really an apply, it's just the index part of an apply
-// backupd will have its own work to do (e.g. at v least reply "OK" or "NO")
-int backup_index_apply_message(sqldb_t *db, int backup_id, struct dlist *dl, off_t dl_offset, size_t dl_len) {
+static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl, off_t dl_offset, size_t dl_len) {
     fprintf(stderr, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
 
     struct dlist *ki;
@@ -881,8 +878,7 @@ int backup_index_apply_message(sqldb_t *db, int backup_id, struct dlist *dl, off
     return 0;
 }
 
-// FIXME rename this to backup_index
-EXPORTED int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len)
+EXPORTED int backup_index(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len)
 {
     if (backup->index_id == -1) fatal("not started", -1);
 
@@ -891,9 +887,9 @@ EXPORTED int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t d
     if (0) { }
 
     else if (strcmp(dl->name, "MAILBOX") == 0)
-        r = backup_index_apply_mailbox(backup, dl, dl_offset);
+        r = _index_mailbox(backup, dl, dl_offset);
     else if (strcmp(dl->name, "MESSAGE") == 0)
-        r = backup_index_apply_message(backup->db, backup->index_id, dl, dl_offset, dl_len);
+        r = _index_message(backup->db, backup->index_id, dl, dl_offset, dl_len);
 
     else {
         fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dl->name);
@@ -970,7 +966,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
     return 0;
 }
 
-EXPORTED int backup_append_done(struct backup *backup)
+EXPORTED int backup_append_end(struct backup *backup)
 {
     if (!backup->gzfile) fatal("not started", -1);
 
@@ -985,6 +981,10 @@ EXPORTED int backup_append_done(struct backup *backup)
 EXPORTED int backup_append_abort(struct backup *backup)
 {
     // FIXME
+    // can we truncate back to the length we started this append at?
+    // ftruncate(2) says nothing about behaviour on descriptors
+    // opened with O_APPEND...
+    // seems like it might work, but test it first.
     (void) backup;
     return -1;
 }
@@ -1099,7 +1099,7 @@ EXPORTED int backup_reindex(const char *name)
 
             ucase(dl->name);
 
-            r = backup_index_dlist(backup, dl, dl_offset, dl_len);
+            r = backup_index(backup, dl, dl_offset, dl_len);
             if (r) {
                 // FIXME do something
             }
