@@ -139,9 +139,45 @@ static int run_pipe(enum bu_lock_open_type open_type, const char *backup_spec)
     return 0;
 }
 
-static int run_sql(/* FIXME */)
+static int run_sql(enum bu_lock_open_type open_type, const char *backup_spec)
 {
-    return -1; // FIXME
+    struct backup *backup = my_backup_open(open_type, backup_spec);
+
+    if (!backup) {
+        fprintf(stderr, "unable to lock %s\n", backup_spec);
+        return EC_SOFTWARE;
+    }
+
+    const char *index_fname = backup_get_index_fname(backup);
+    int r = 0, status;
+    pid_t pid = fork();
+
+    switch (pid) {
+    case -1:
+        fprintf(stderr, "fork failed: %s\n", strerror(errno));
+        r = EC_SOFTWARE;
+        break;
+
+    case 0:
+        /* child */
+        fprintf(stderr, "execlp: %s %s\n", "sqlite3", index_fname);
+        execlp("sqlite3", "sqlite3", index_fname, NULL);
+        /* execlp never returns */
+        _exit(EC_SOFTWARE);
+        break;
+
+    default:
+        /* parent */
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status))
+            r = WEXITSTATUS(status);
+        else
+            r = EC_SOFTWARE;
+        break;
+    }
+
+    backup_close(&backup);
+    return r;
 }
 
 static int run_exec(enum bu_lock_open_type open_type, const char *backup_spec,
@@ -157,7 +193,7 @@ static int run_exec(enum bu_lock_open_type open_type, const char *backup_spec,
     int r = 0, status;
     pid_t pid = fork();
 
-    switch(pid) {
+    switch (pid) {
     case -1:
         fprintf(stderr, "fork failed: %s\n", strerror(errno));
         r = EC_SOFTWARE;
