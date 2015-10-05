@@ -224,13 +224,15 @@ static void event_free(struct event *a)
     free(a);
 }
 
-static void get_prog(char *path, unsigned size, const strarray_t *cmd)
+static void get_prog(char *path, size_t size, const strarray_t *cmd)
 {
+    if (!size) return;
     if (cmd->data[0][0] == '/') {
 	/* master lacks strlcpy, due to no libcyrus */
-	snprintf(path, size, "%s", cmd->data[0]);
+	strncpy(path, cmd->data[0], size - 1);
     }
     else snprintf(path, size, "%s/%s", SERVICE_DIR, cmd->data[0]);
+    path[size-1] = '\0';
 }
 
 static void get_statsock(int filedes[2])
