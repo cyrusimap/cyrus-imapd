@@ -484,6 +484,14 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
 
 EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid)
 {
+    /* specialuse magic */
+    if (extname && extname[0] == '\\') {
+        char *intname = mboxlist_find_specialuse(extname, userid);
+        mbname_t *mbname = mbname_from_intname(intname);
+        free(intname);
+        return mbname;
+    }
+
     mbname_t *mbname = xzmalloc(sizeof(mbname_t));
     char sepstr[2];
     const char *domain = NULL;
