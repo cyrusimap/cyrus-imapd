@@ -371,12 +371,6 @@ sub test_specialuse
 	    specialuse => '\Nonesuch',
 	    result => 'no'
 	},
-	# Cyrus supports multiple special-use tokens per folder
-	{
-	    folder => 'i',
-	    specialuse => '\Sent \Trash',
-	    result => 'ok'
-	},
     );
 
     xlog "First create all the folders";
