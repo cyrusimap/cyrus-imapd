@@ -75,20 +75,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-# Test that you can't rename a specialuse folder as a sub of something else
-sub test_rename_specialuse
-{
-    my ($self) = @_;
-
-    my $imaptalk = $self->{store}->get_client();
-
-    $imaptalk->create("INBOX.src", "(use (\\Junk))") || die;
-    $imaptalk->create("INBOX.level") || die;
-
-    $imaptalk->rename("INBOX.src", "INBOX.Junk") || die;
-    $imaptalk->rename("INBOX.Junk", "INBOX.level.Junk") && die;
-}
-
 #
 # Test LSUB behaviour
 #
