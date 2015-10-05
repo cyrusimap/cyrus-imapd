@@ -295,6 +295,16 @@ done:
     return r;
 }
 
+EXPORTED const char *backup_get_data_fname(const struct backup *backup)
+{
+    return backup->data_fname;
+}
+
+EXPORTED const char *backup_get_index_fname(const struct backup *backup)
+{
+    return backup->index_fname;
+}
+
 EXPORTED int backup_close(struct backup **backupp)
 {
     (void) backupp;

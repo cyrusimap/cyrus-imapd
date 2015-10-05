@@ -93,6 +93,9 @@ struct backup_message *backup_get_message(struct backup *backup, const struct me
 char *backup_get_message_content(struct backup *backup, const struct backup_message *message);
 void backup_message_free(struct backup_message **message);
 
+const char *backup_get_data_fname(const struct backup *backup);
+const char *backup_get_index_fname(const struct backup *backup);
+
 int backup_append_start(struct backup *backup);
 int backup_append(struct backup *backup, struct dlist *dlist, time_t ts);
 int backup_append_done(struct backup *backup);
