@@ -49,22 +49,44 @@
 
 struct backup;
 
+
+/* opening and closing backups */
 struct backup *backup_open(const mbname_t *mbname);
-struct backup *backup_open_paths(const char *data_fname, const char *index_fname);
-int backup_close(struct backup **backupp);
 
 int backup_get_paths(const mbname_t *mbname,
                      struct buf *data_fname, struct buf *index_fname);
+struct backup *backup_open_paths(const char *data_fname,
+                                 const char *index_fname);
 
-int backup_reindex(const char *name);
+int backup_close(struct backup **backupp); // also ends index/append ops
 
-int backup_write_dlist(struct backup *backup, time_t ts, struct dlist *dl);
-int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len);
 
-int backup_index_end(struct backup *backup, size_t length);
+/* accessing backup properties */
+const char *backup_get_data_fname(const struct backup *backup);
+const char *backup_get_index_fname(const struct backup *backup);
 
-/* FIXME new api? */
 
+/* reading backup mailbox data */
+struct backup_mailbox {
+    int id;
+    int last_backup_id;
+    int deleted;
+    struct dlist *dlist;
+};
+
+int backup_get_mailbox_id(struct backup *backup, const char *uniqueid);
+
+typedef int (*backup_mailbox_foreach_cb)(const struct backup_mailbox *mailbox,
+                                         void *rock);
+int backup_mailbox_foreach(struct backup *backup, int want_records,
+                           backup_mailbox_foreach_cb cb, void *rock);
+
+struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup, const mbname_t *mbname, int want_records);
+
+void backup_mailbox_free(struct backup_mailbox **mailbox);
+
+
+/* reading backup message data */
 struct backup_message {
     int id;
     struct message_guid *guid;
@@ -74,38 +96,25 @@ struct backup_message {
     size_t length;
 };
 
-struct backup_mailbox {
-    int id;
-    int last_backup_id;
-    int deleted;
-    struct dlist *dlist;
-};
-
-typedef int (*backup_mailbox_foreach_cb)(const struct backup_mailbox *mailbox,
-                                         void *rock);
-int backup_mailbox_foreach(struct backup *backup, int want_records,
-                           backup_mailbox_foreach_cb cb, void *rock);
-struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup, const mbname_t *mbname, int want_records);
-void backup_mailbox_free(struct backup_mailbox **mailbox);
-
 int backup_get_message_id(struct backup *backup, const char *guid);
 struct backup_message *backup_get_message(struct backup *backup, const struct message_guid *guid);
 char *backup_get_message_content(struct backup *backup, const struct backup_message *message);
 void backup_message_free(struct backup_message **message);
 
-const char *backup_get_data_fname(const struct backup *backup);
-const char *backup_get_index_fname(const struct backup *backup);
 
-int backup_append_start(struct backup *backup);
-int backup_append(struct backup *backup, struct dlist *dlist, time_t ts);
-int backup_append_done(struct backup *backup);
-
+/* writing backup data */
 int backup_index_start(struct backup *backup);
 int backup_index(struct backup *backup, struct dlist *dlist, time_t ts);
 int backup_index_done(struct backup *backup, size_t len);
 int backup_index_abort(struct backup *backup);
 
-int backup_close(struct backup **backupp); // also ends index/append ops
+int backup_append_start(struct backup *backup);
+int backup_append(struct backup *backup, struct dlist *dlist, time_t ts);
+int backup_append_done(struct backup *backup);
+int backup_append_abort(struct backup *backup);
 
-/******************/
+
+/* miscellaneous */
+int backup_reindex(const char *name);
+
 #endif

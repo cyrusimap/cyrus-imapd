@@ -170,21 +170,6 @@ done:
     return backup;
 }
 
-/*
- * If index_fname is NULL, it will be automatically derived from data_fname
- */
-EXPORTED struct backup *backup_open_paths(const char *data_fname, const char *index_fname)
-{
-    if (index_fname)
-        return backup_open_internal(data_fname, index_fname, BACKUP_OPEN_NORMAL);
-
-    char *tmp = strconcat(data_fname, ".index", NULL);
-    struct backup *backup = backup_open_internal(data_fname, tmp, BACKUP_OPEN_NORMAL);
-    free(tmp);
-
-    return backup;
-}
-
 /* Uses mkstemp() to create a new, unique, backup path for the given user.
  *
  * On success, the file is not unlinked, presuming that it will shortly be
@@ -295,14 +280,19 @@ done:
     return r;
 }
 
-EXPORTED const char *backup_get_data_fname(const struct backup *backup)
+/*
+ * If index_fname is NULL, it will be automatically derived from data_fname
+ */
+EXPORTED struct backup *backup_open_paths(const char *data_fname, const char *index_fname)
 {
-    return backup->data_fname;
-}
+    if (index_fname)
+        return backup_open_internal(data_fname, index_fname, BACKUP_OPEN_NORMAL);
 
-EXPORTED const char *backup_get_index_fname(const struct backup *backup)
-{
-    return backup->index_fname;
+    char *tmp = strconcat(data_fname, ".index", NULL);
+    struct backup *backup = backup_open_internal(data_fname, tmp, BACKUP_OPEN_NORMAL);
+    free(tmp);
+
+    return backup;
 }
 
 EXPORTED int backup_close(struct backup **backupp)
@@ -311,12 +301,14 @@ EXPORTED int backup_close(struct backup **backupp)
     return -1;
 }
 
-EXPORTED int backup_write_dlist(struct backup *backup, time_t ts, struct dlist *dl)
+EXPORTED const char *backup_get_data_fname(const struct backup *backup)
 {
-    (void) backup;
-    (void) ts;
-    (void) dl;
-    return -1;
+    return backup->data_fname;
+}
+
+EXPORTED const char *backup_get_index_fname(const struct backup *backup)
+{
+    return backup->index_fname;
 }
 
 static int _column_int(sqlite3_stmt *stmt, int column)
@@ -617,6 +609,34 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
     free(message);
 }
 
+static int backup_index_start3(struct backup *backup, time_t ts, off_t offset) {
+    if (backup->index_id != -1) fatal("already started", -1);
+
+    struct sqldb_bindval bval[] = {
+        { ":timestamp", SQLITE_INTEGER, { .i = ts     } },
+        { ":offset",    SQLITE_INTEGER, { .i = offset } },
+        { NULL,         SQLITE_NULL,    { .s = NULL   } },
+    };
+
+    sqldb_begin(backup->db, "backup_index"); // FIXME what if this fails
+
+    int r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
+    if (r) {
+        // FIXME handle this sensibly
+        fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
+        sqldb_rollback(backup->db, "backup_index");
+        return -1;
+    }
+
+    backup->index_id = sqldb_lastid(backup->db);
+    return 0;
+}
+
+int backup_index_start(struct backup *backup) {
+    off_t offset = lseek(backup->fd, 0, SEEK_END);
+
+    return backup_index_start3(backup, time(0), offset);
+}
 
 // FIXME rename this
 int backup_index_apply_mailbox(struct backup *backup, struct dlist *dl, off_t dl_offset) {
@@ -861,33 +881,26 @@ int backup_index_apply_message(sqldb_t *db, int backup_id, struct dlist *dl, off
     return 0;
 }
 
-static int backup_index_start3(struct backup *backup, time_t ts, off_t offset) {
-    if (backup->index_id != -1) fatal("already started", -1);
+// FIXME rename this to backup_index
+EXPORTED int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len)
+{
+    if (backup->index_id == -1) fatal("not started", -1);
 
-    struct sqldb_bindval bval[] = {
-        { ":timestamp", SQLITE_INTEGER, { .i = ts     } },
-        { ":offset",    SQLITE_INTEGER, { .i = offset } },
-        { NULL,         SQLITE_NULL,    { .s = NULL   } },
-    };
+    int r = 0;
 
-    sqldb_begin(backup->db, "backup_index"); // FIXME what if this fails
+    if (0) { }
 
-    int r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
-    if (r) {
-        // FIXME handle this sensibly
-        fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
-        sqldb_rollback(backup->db, "backup_index");
-        return -1;
+    else if (strcmp(dl->name, "MAILBOX") == 0)
+        r = backup_index_apply_mailbox(backup, dl, dl_offset);
+    else if (strcmp(dl->name, "MESSAGE") == 0)
+        r = backup_index_apply_message(backup->db, backup->index_id, dl, dl_offset, dl_len);
+
+    else {
+        fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dl->name);
+        r = -1; // FIXME
     }
 
-    backup->index_id = sqldb_lastid(backup->db);
-    return 0;
-}
-
-int backup_index_start(struct backup *backup) {
-    off_t offset = lseek(backup->fd, 0, SEEK_END);
-
-    return backup_index_start3(backup, time(0), offset);
+    return r;
 }
 
 int backup_index_end(struct backup *backup, size_t length) {
@@ -922,27 +935,6 @@ int backup_index_abort(struct backup *backup) {
     backup->index_id = -1;
 
     return 0;
-}
-
-EXPORTED int backup_index_dlist(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len)
-{
-    if (backup->index_id == -1) fatal("not started", -1);
-
-    int r = 0;
-
-    if (0) { }
-
-    else if (strcmp(dl->name, "MAILBOX") == 0)
-        r = backup_index_apply_mailbox(backup, dl, dl_offset);
-    else if (strcmp(dl->name, "MESSAGE") == 0)
-        r = backup_index_apply_message(backup->db, backup->index_id, dl, dl_offset, dl_len);
-
-    else {
-        fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dl->name);
-        r = -1; // FIXME
-    }
-
-    return r;
 }
 
 EXPORTED int backup_append_start(struct backup *backup)
@@ -987,6 +979,13 @@ EXPORTED int backup_append_done(struct backup *backup)
     if (r == Z_OK) return 0;
 
     fprintf(stderr, "%s: gzclose_w failed: %i\n", __func__, r);
+    return -1;
+}
+
+EXPORTED int backup_append_abort(struct backup *backup)
+{
+    // FIXME
+    (void) backup;
     return -1;
 }
 
