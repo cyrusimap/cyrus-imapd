@@ -777,9 +777,6 @@ EOF
   xlog "get event $id";
   $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
 
-  my $x = Dumper($res);
-  xlog "x = $x";
-
   my $event = $res->[0][1]{list}[0];
   $self->assert_not_null($event);
   $self->assert_str_equals($event->{calendarId}, $calid);
@@ -814,5 +811,62 @@ EOF
   $self->assert_str_equals($event->{organizer}{email}, "smithers\@example.com");
   $self->assert_equals($event->{organizer}{isYou}, JSON::false);
 }
+
+sub test_getcalendarevents_infinite_delegates
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get x-href of calendar $calid";
+    $res = $jmap->Request([['getCalendars', {ids => [$calid]}, "R1"]]);
+    my $xhref = $res->[0][1]{list}[0]{"x-href"};
+
+    # Create event via CalDAV to test CalDAV/JMAP interop.
+    xlog "create event (via CalDAV)";
+    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
+    my $href = "$xhref/$id.ics";
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:$id
+DTSTAMP:20150928T132434Z
+SEQUENCE:9
+SUMMARY:Moebian Delegates
+LAST-MODIFIED:20150928T132434Z
+ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-FROM="mailto:lenny\@example.com";DELEGATED-TO="mailto:lenny\@example.com";CN=Carl Carlson:mailto:carl\@example.com
+ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carl\@example.com";CN=Lenny Leonard:mailto:lenny\@example.com
+ORGANIZER;CN="Monty Burns":mailto:smithers\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+  xlog "get event $id";
+  $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+
+  my $attendees = $res->[0][1]{list}[0]{attendees};
+  $self->assert_num_equals(scalar @{$attendees}, 2);
+  $self->assert_str_equals($attendees->[0]{rsvp}, "");
+  $self->assert_str_equals($attendees->[1]{rsvp}, "");
+}
+
 
 1;
