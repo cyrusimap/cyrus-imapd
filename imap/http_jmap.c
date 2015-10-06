@@ -3304,21 +3304,13 @@ static int setCalendars(struct jmap_req *req)
 
             /* Validate uid. JMAP destroy does not allow reference uids. */
             const char *uid = json_string_value(juid);
-            if (!strlen(uid) || *uid == '#') {
-                /* XXX - An invalidArguments error is NOT a set error. */
-                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notDestroyed, uid, err);
-                continue;
-            }
-            if (_jmap_calendar_ishidden(uid)) {
+            if (!strlen(uid) || *uid == '#' || _jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
             }
 
             /* Do not allow to remove the default calendar. */
-            /* XXX - As it currently stands, this raises a conflict between
-             * JMAP and CalDAV. Maybe a "isDefault" flag is appropriate? */
             char *mboxname = caldav_mboxname(req->userid, NULL);
             static const char *defaultcal_annot =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
@@ -3408,6 +3400,17 @@ static int _jmap_intident(short i) {
     return i;
 }
 
+/*  Convert libicals internal by_day encoding to JMAP byday. */
+static int _jmap_icalbyday_to_byday(short i) {
+    int w = icalrecurrencetype_day_position(i);
+    int d = icalrecurrencetype_day_day_of_week(i);
+    if (d) {
+        /* XXX - for now, we treat libical's ANY day as SU. */
+        d--;
+    }
+    return d + 7*w;
+}
+
 /* Convert at most nmemb entries in the ical recurrence byDay/Month/etc array
  * named byX using conv. Return a new JSON array, sorted in ascending order. */
 static json_t* jmap_recur_byX_from_ical(short byX[], size_t nmemb, int (*conv)(short)) {
@@ -3453,9 +3456,8 @@ static json_t* jmap_recur_from_ical(struct icalrecurrencetype recur) {
 
     if (recur.by_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byDay",
-                /* XXX - return values differ from the JMAP spec examples. */
                 jmap_recur_byX_from_ical(recur.by_day,
-                    ICAL_BY_DAY_SIZE, &icalrecurrencetype_day_position));
+                    ICAL_BY_DAY_SIZE, &_jmap_icalbyday_to_byday));
     }
     if (recur.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byDate",
@@ -3750,6 +3752,7 @@ static void jmap_participants_from_ical(icalcomponent *comp,
 
         /* rsvp */
         const char *rsvp = NULL;
+        short depth = 0;
         while (!rsvp) {
             param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
             icalparameter_partstat pst = icalparameter_get_partstat(param);
@@ -3770,6 +3773,13 @@ static void jmap_participants_from_ical(icalcomponent *comp,
                         prop = hash_lookup(to, hatts);
                         if (prop) {
                             /* Determine PARTSTAT from delegate. */
+                            if (++depth > 64) {
+                                /* This is a pathological case: libical does
+                                 * not check for inifite DELEGATE chains, so we
+                                 * make sure not to fall in an endless loop. */
+                                syslog(LOG_ERR, "delegates exceed maximum recursion depth, ignoring rsvp");
+                                rsvp = "";
+                            }
                             continue;
                         }
                     }
