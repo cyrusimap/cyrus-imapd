@@ -64,15 +64,8 @@
 #include "backup/gzuncat.h"
 #include "backup/sqlconsts.h"
 
-struct backup {
-    int fd;
-    char *data_fname;
-    char *index_fname;
-    char *oldindex_fname;
-    sqldb_t *db;
-    gzFile gzfile;
-    int index_id;
-};
+#define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
+#include "backup/internal.h"
 
 /*
  * use cases:
