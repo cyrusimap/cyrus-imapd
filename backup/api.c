@@ -103,10 +103,12 @@ static struct backup *backup_open_internal(const char *data_fname,
     backup->data_fname = xstrdup(data_fname);
     backup->index_fname = xstrdup(index_fname);
 
-    backup->fd = open(backup->data_fname, O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    backup->fd = open(backup->data_fname,
+                      O_RDWR | O_CREAT | O_APPEND,
+                      S_IRUSR | S_IWUSR);
     if (backup->fd < 0) goto error;
 
-    int r = lock_setlock(backup->fd, /* exclusive */ 1, /*nb*/ 0, backup->data_fname);
+    int r = lock_setlock(backup->fd, /*excl*/ 1, /*nb*/ 0, backup->data_fname);
     if (r) goto error;
     locked = 1;
 
@@ -189,7 +191,8 @@ static const char *backup_make_path(const mbname_t *mbname)
 
     if (!backup_data_path) {
         syslog(LOG_ERR,
-               "unable to make backup path for %s: no backup_data_path defined in imapd.conf",
+               "unable to make backup path for %s: "
+               "no backup_data_path defined in imapd.conf",
                userid);
         return NULL;
     }
@@ -206,7 +209,9 @@ static const char *backup_make_path(const mbname_t *mbname)
             ret = pathresult;
         }
         else {
-            syslog(LOG_ERR, "unable to make backup path for %s: path too long", userid);
+            syslog(LOG_ERR,
+                   "unable to make backup path for %s: path too long",
+                   userid);
             unlink(template);
         }
         close(fd);
@@ -229,7 +234,8 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
     struct db *backups_db = NULL;
     struct txn *tid = NULL;
 
-    int r = cyrusdb_open(config_backups_db, backups_db_fname, CYRUSDB_CREATE, &backups_db);
+    int r = cyrusdb_open(config_backups_db, backups_db_fname, CYRUSDB_CREATE,
+                         &backups_db);
     if (r) goto done;
 
     const char *userid = mbname_userid(mbname);
@@ -254,14 +260,17 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                            backup_path, path_len,
                            &tid);
 
-        /* if we didn't store it in the database successfully, trash the file, it won't be used */
+        /* if we didn't store it in the database successfully, trash the file,
+         * it won't be used */
         if (r) unlink(backup_path);
     }
 
     if (r) goto done;
 
     if (path_len == 0) {
-        syslog(LOG_DEBUG, "unexpectedly got zero length backup path for user %s", userid);
+        syslog(LOG_DEBUG,
+               "unexpectedly got zero length backup path for user %s",
+               userid);
         r = IMAP_INTERNAL; /* FIXME ?? */
         goto done;
     }
@@ -283,13 +292,16 @@ done:
 /*
  * If index_fname is NULL, it will be automatically derived from data_fname
  */
-EXPORTED struct backup *backup_open_paths(const char *data_fname, const char *index_fname)
+EXPORTED struct backup *backup_open_paths(const char *data_fname,
+                                          const char *index_fname)
 {
     if (index_fname)
-        return backup_open_internal(data_fname, index_fname, BACKUP_OPEN_NORMAL);
+        return backup_open_internal(data_fname, index_fname,
+                                    BACKUP_OPEN_NORMAL);
 
     char *tmp = strconcat(data_fname, ".index", NULL);
-    struct backup *backup = backup_open_internal(data_fname, tmp, BACKUP_OPEN_NORMAL);
+    struct backup *backup = backup_open_internal(data_fname, tmp,
+                                                 BACKUP_OPEN_NORMAL);
     free(tmp);
 
     return backup;
@@ -346,8 +358,8 @@ EXPORTED int backup_get_mailbox_id(struct backup *backup, const char *uniqueid)
 
     int id = -1;
 
-    int r = sqldb_exec(backup->db, backup_index_mailbox_select_uniqueid_sql, bval,
-                       _get_mailbox_id_cb, &id);
+    int r = sqldb_exec(backup->db, backup_index_mailbox_select_uniqueid_sql,
+                       bval, _get_mailbox_id_cb, &id);
     if (r)
         fprintf(stderr, "%s: something went wrong: %i %s\n", __func__, r, uniqueid);
 
@@ -498,7 +510,8 @@ EXPORTED struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup
 {
     struct backup_mailbox *mailbox = NULL;
 
-    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL, &mailbox, want_records };
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL, &mailbox,
+                                        want_records };
 
     struct sqldb_bindval bval[] = {
         { ":mboxname",  SQLITE_TEXT,    { .s = mbname_intname(mbname) } },
@@ -609,7 +622,8 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
     free(message);
 }
 
-static int backup_index_start3(struct backup *backup, time_t ts, off_t offset) {
+static int backup_index_start3(struct backup *backup, time_t ts, off_t offset)
+{
     if (backup->index_id != -1) fatal("already started", -1);
 
     struct sqldb_bindval bval[] = {
@@ -632,13 +646,15 @@ static int backup_index_start3(struct backup *backup, time_t ts, off_t offset) {
     return 0;
 }
 
-int backup_index_start(struct backup *backup) {
+EXPORTED int backup_index_start(struct backup *backup) {
     off_t offset = lseek(backup->fd, 0, SEEK_END);
 
     return backup_index_start3(backup, time(0), offset);
 }
 
-static int _index_mailbox(struct backup *backup, struct dlist *dl, off_t dl_offset) {
+static int _index_mailbox(struct backup *backup, struct dlist *dl,
+                          off_t dl_offset)
+{
     fprintf(stderr, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
 
     const char *uniqueid = NULL;
@@ -732,14 +748,16 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl, off_t dl_offs
 
     sqldb_begin(backup->db, __func__); // FIXME what if this fails
 
-    int r = sqldb_exec(backup->db, backup_index_mailbox_update_sql, mbox_bval, NULL, NULL);
+    int r = sqldb_exec(backup->db, backup_index_mailbox_update_sql,
+                       mbox_bval, NULL, NULL);
     if (r) {
         // FIXME handle this sensibly
         fprintf(stderr, "%s: something went wrong: %i update %s\n", __func__, r, mboxname);
         goto error;
     }
     if (sqldb_changes(backup->db) == 0) {
-        r = sqldb_exec(backup->db, backup_index_mailbox_insert_sql, mbox_bval, NULL, NULL);
+        r = sqldb_exec(backup->db, backup_index_mailbox_insert_sql,
+                       mbox_bval, NULL, NULL);
         if (r) {
             // FIXME handle this sensibly
             fprintf(stderr, "%s: something went wrong: %i insert %s\n", __func__, r, mboxname);
@@ -811,14 +829,16 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl, off_t dl_offs
         buf_free(&annotations_buf);
         buf_free(&flags_buf);
 
-        r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql, record_bval, NULL, NULL);
+        r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
+                       record_bval, NULL, NULL);
         if (r) {
             // FIXME handle this sensibly
             fprintf(stderr, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
             goto error;
         }
         if (sqldb_changes(backup->db) == 0) {
-            r = sqldb_exec(backup->db, backup_index_mailbox_message_insert_sql, record_bval, NULL, NULL);
+            r = sqldb_exec(backup->db, backup_index_mailbox_message_insert_sql,
+                           record_bval, NULL, NULL);
             if (r) {
                 // FIXME handle this sensibly
                 fprintf(stderr, "%s: something went wrong: %i insert %s %s\n", __func__, r, mboxname, guid);
@@ -838,7 +858,9 @@ error:
     return -1;
 }
 
-static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl, off_t dl_offset, size_t dl_len) {
+static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
+                          off_t dl_offset, size_t dl_len)
+{
     fprintf(stderr, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
 
     struct dlist *ki;
@@ -866,7 +888,8 @@ static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl, off_t dl
             { NULL,         SQLITE_NULL,    { .s = NULL      } },
         };
 
-        int r = sqldb_exec(db, backup_index_message_insert_sql, bval, NULL, NULL);
+        int r = sqldb_exec(db, backup_index_message_insert_sql, bval, NULL,
+                           NULL);
         if (r) {
             // FIXME handle this sensibly
             fprintf(stderr, "%s: something went wrong: %i %s\n", __func__, r, guid);
@@ -878,7 +901,8 @@ static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl, off_t dl
     return 0;
 }
 
-EXPORTED int backup_index(struct backup *backup, struct dlist *dl, off_t dl_offset, size_t dl_len)
+EXPORTED int backup_index(struct backup *backup, struct dlist *dl,
+                          off_t dl_offset, size_t dl_len)
 {
     if (backup->index_id == -1) fatal("not started", -1);
 
@@ -947,7 +971,8 @@ EXPORTED int backup_append_start(struct backup *backup)
 }
 
 
-EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts)
+EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
+                           time_t ts)
 {
     if (!backup->gzfile) fatal("not started", -1);
 
@@ -1037,7 +1062,8 @@ fail:
     return c;
 }
 
-static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock) {
+static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
+{
     struct gzuncat *gzuc = (struct gzuncat *) rock;
     return gzuc_read(gzuc, buf, len);
 }

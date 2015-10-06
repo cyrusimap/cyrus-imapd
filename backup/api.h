@@ -81,7 +81,9 @@ typedef int (*backup_mailbox_foreach_cb)(const struct backup_mailbox *mailbox,
 int backup_mailbox_foreach(struct backup *backup, int want_records,
                            backup_mailbox_foreach_cb cb, void *rock);
 
-struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup, const mbname_t *mbname, int want_records);
+struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
+                                                  const mbname_t *mbname,
+                                                  int want_records);
 
 void backup_mailbox_free(struct backup_mailbox **mailbox);
 
@@ -97,14 +99,17 @@ struct backup_message {
 };
 
 int backup_get_message_id(struct backup *backup, const char *guid);
-struct backup_message *backup_get_message(struct backup *backup, const struct message_guid *guid);
-char *backup_get_message_content(struct backup *backup, const struct backup_message *message);
+struct backup_message *backup_get_message(struct backup *backup,
+                                          const struct message_guid *guid);
+char *backup_get_message_content(struct backup *backup,
+                                 const struct backup_message *message);
 void backup_message_free(struct backup_message **message);
 
 
 /* writing backup data */
 int backup_index_start(struct backup *backup);
-int backup_index(struct backup *backup, struct dlist *dlist, off_t dl_offset, size_t dl_len);
+int backup_index(struct backup *backup, struct dlist *dlist,
+                 off_t dl_offset, size_t dl_len);
 int backup_index_end(struct backup *backup, size_t len);
 int backup_index_abort(struct backup *backup);
 
