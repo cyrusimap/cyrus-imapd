@@ -3311,8 +3311,6 @@ static int setCalendars(struct jmap_req *req)
             }
 
             /* Do not allow to remove the default calendar. */
-            /* XXX - As it currently stands, this raises a conflict between
-             * JMAP and CalDAV. Maybe a "isDefault" flag is appropriate? */
             char *mboxname = caldav_mboxname(req->userid, NULL);
             static const char *defaultcal_annot =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
