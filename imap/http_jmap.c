@@ -3752,6 +3752,7 @@ static void jmap_participants_from_ical(icalcomponent *comp,
 
         /* rsvp */
         const char *rsvp = NULL;
+        short depth = 0;
         while (!rsvp) {
             param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
             icalparameter_partstat pst = icalparameter_get_partstat(param);
@@ -3772,6 +3773,13 @@ static void jmap_participants_from_ical(icalcomponent *comp,
                         prop = hash_lookup(to, hatts);
                         if (prop) {
                             /* Determine PARTSTAT from delegate. */
+                            if (++depth > 64) {
+                                /* This is a pathological case: libical does
+                                 * not check for inifite DELEGATE chains, so we
+                                 * make sure not to fall in an endless loop. */
+                                syslog(LOG_ERR, "delegates exceed maximum recursion depth, ignoring rsvp");
+                                rsvp = "";
+                            }
                             continue;
                         }
                     }
