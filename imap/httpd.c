@@ -457,8 +457,6 @@ int service_init(int argc __attribute__((unused)),
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EC_CONFIG);
     }
-    /* External names are in URIs (UNIX sep) */
-    httpd_namespace.hier_sep = '/';
 
     /* open the mboxevent system */
     mboxevent_init();
