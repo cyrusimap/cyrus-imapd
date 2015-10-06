@@ -1372,18 +1372,15 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
     const char *userid = rock ? (const char *) rock : fctx->req_tgt->userid;
 
     if (userid) {
-        const char *domain =
-            httpd_extradomain ? httpd_extradomain : config_defdomain;
-
         buf_reset(&fctx->buf);
 
-        if (strchr(userid, '@') || !domain) {
+        if (strchr(userid, '@') || !httpd_extradomain) {
             buf_printf(&fctx->buf, "%s/user/%s/",
                        namespace_principal.prefix, userid);
         }
         else {
             buf_printf(&fctx->buf, "%s/user/%s@%s/",
-                       namespace_principal.prefix, userid, domain);
+                       namespace_principal.prefix, userid, httpd_extradomain);
         }
 
         if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
@@ -4389,7 +4386,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         if (mbname_localpart(mbname)) {
             const char *domain =
                 mbname_domain(mbname) ? mbname_domain(mbname) :
-                httpd_extradomain ? httpd_extradomain : config_defdomain;
+                httpd_extradomain;
 
             buf_printf(&writebuf, "/user/%s", mbname_localpart(mbname));
             if (domain) buf_printf(&writebuf, "@%s", domain);

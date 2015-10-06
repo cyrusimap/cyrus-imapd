@@ -2240,7 +2240,9 @@ int sync_apply_mailbox(struct dlist *kin,
     part_list = sync_reserve_partlist(reserve_list, mailbox->part);
 
     /* hold the annotate state open */
-    mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    if (r) goto done;
+
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
@@ -2495,7 +2497,9 @@ static int mailbox_byname(const char *name, void *rock)
     if (r) goto out;
 
     /* hold the annotate state open */
-    mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    if (r) goto out;
+
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
@@ -4494,7 +4498,9 @@ static int update_mailbox_once(struct sync_folder *local,
         goto done;
 
     /* hold the annotate state open */
-    mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    if (r) goto done;
+
     /* and force it to hold a transaction while it does stuff */
     annotate_state_begin(astate);
 
