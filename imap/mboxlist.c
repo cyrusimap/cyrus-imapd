@@ -1078,6 +1078,10 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     case 0:
         break;
 
+    case IMAP_MAILBOX_NONEXISTENT:
+        r = 0;
+        break;
+
     case IMAP_AGAIN:
         goto retry;
         break;
