@@ -76,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -89,6 +90,7 @@ struct jmap_req {
     const char *state; // if changing things, this is pre-change state
     struct mboxname_counters counters;
     const char *tag;
+    struct transaction_t *txn;
 };
 
 struct namespace jmap_namespace;
@@ -109,6 +111,7 @@ static int setContacts(struct jmap_req *req);
 static int getCalendars(struct jmap_req *req);
 static int setCalendars(struct jmap_req *req);
 static int getCalendarEvents(struct jmap_req *req);
+static int setCalendarEvents(struct jmap_req *req);
 
 static const struct message_t {
     const char *name;
@@ -124,6 +127,7 @@ static const struct message_t {
     { "getCalendars",           &getCalendars },
     { "setCalendars",           &setCalendars },
     { "getCalendarEvents",      &getCalendarEvents },
+    { "setCalendarEvents",      &setCalendarEvents },
     { NULL,             NULL}
 };
 
@@ -154,7 +158,6 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
-
 
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 {
@@ -271,6 +274,7 @@ static int jmap_post(struct transaction_t *txn,
         req.response = resp;
         req.tag = tag;
         req.idmap = &idmap;
+        req.txn = txn;
 
         /* Read the modseq counters again, just in case something changed. */
         r = mboxname_read_counters(inboxname, &req.counters);
@@ -4120,5 +4124,213 @@ done:
     json_decref(rock.array);
     if (db) caldav_close(db);
     if (rock.mailbox) mailbox_close(&rock.mailbox);
+    return r;
+}
+
+/* Update the VEVENT in the VCALENDAR component ical with the properties of the
+ * JMAP calendar event. If create is true, assert that mandatory properties are
+ * defined in event, or report them as invalid. If uid is non-zero, set the
+ * VEVENT uid and any recurrence exceptions to this UID. Return a non-zero value
+ * for fatal server errors. */
+static int jmap_calendarevent_to_vevent(icalcomponent *ical,
+                              json_t *event,
+                              short create,
+                              const char *uid,
+                              json_t *invalid) {
+    int pe; /* parse error */
+    const char *val = NULL;
+    int showAsFree = 0;
+    int isAllDay = 0;
+    icalproperty *prop = NULL;
+
+    //icalparameter *param = NULL;
+    icalcomponent *comp = icalcomponent_new(ICAL_VEVENT_COMPONENT);
+
+    if (uid) {
+        icalcomponent_set_uid(comp, uid);
+    }
+    pe = jmap_readprop(event, "summary", create, invalid, "s", &val);
+    if (pe > 0) {
+        icalcomponent_set_summary(comp, val);
+    }
+    pe = jmap_readprop(event, "description", create, invalid, "s", &val);
+    if (pe > 0) {
+        icalcomponent_set_description(comp, val);
+    } 
+    pe = jmap_readprop(event, "location", create, invalid, "s", &val);
+    if (pe > 0) {
+        icalcomponent_set_location(comp, val);
+    } 
+    pe = jmap_readprop(event, "showAsFree", create, invalid, "b", &showAsFree);
+    if (pe > 0) {
+        enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
+        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+        if (prop) {
+            icalproperty_set_transp(prop, v);
+        } else {
+            icalcomponent_add_property(comp, icalproperty_new_transp(v));
+        }
+    }
+    pe = jmap_readprop(event, "isAllDay", create, invalid, "b", &isAllDay);
+    if (pe == 0 && !create) {
+        isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
+    }
+
+    /* XXX Continue from here. */
+    icalcomponent_set_dtstart(comp, icaltime_null_time());
+    icalcomponent_set_dtend(comp, icaltime_null_time());
+
+
+    /* XXX start and end don't work with timezones */
+
+    icalcomponent_add_component(ical, comp);
+
+    return 0;
+}
+
+static int setCalendarEvents(struct jmap_req *req)
+{
+
+    struct caldav_db *db = NULL;
+    int r;
+
+    r = jmap_checkstate(req, MBTYPE_CALENDAR);
+    if (r) return 0;
+
+    json_t *set = json_pack("{s:s}", "accountId", req->userid);
+    r = jmap_setstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
+    if (r) goto done;
+
+    r = caldav_create_defaultcalendars(req->userid);
+    if (r) goto done;
+
+    db = caldav_open_userid(req->userid);
+    if (!db) {
+        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    json_t *create = json_object_get(req->args, "create");
+    if (create) {
+        json_t *created = json_pack("{}");
+        json_t *notCreated = json_pack("{}");
+
+        const char *key;
+        json_t *arg;
+        json_object_foreach(create, key, arg) {
+            json_t *invalid = json_pack("[]");
+            const char *calId = NULL;
+            const char *id = NULL;
+            char *uid = NULL;
+
+            /* Validate calendar event id. */
+            if (!strlen(key)) {
+                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+
+            /* Convert the calendar event to ical. */
+            uid = xstrdup(makeuuid());
+            jmap_readprop(arg, "calendarId", 1,  invalid, "s", &calId);
+            if (calId && strlen(calId) == 0) {
+                json_array_append_new(invalid, json_string("calendarId"));
+            }
+            jmap_readprop(arg, "id", 0, invalid, "s", &id);
+            if (id != NULL) {
+                json_array_append_new(invalid, json_string("id"));
+            }
+            icalcomponent *ical = icalcomponent_new(ICAL_VCALENDAR_COMPONENT);
+            if (!ical) {
+                r = IMAP_INTERNAL;
+                json_decref(invalid);
+                free(uid);
+                goto done;
+            }
+            r = jmap_calendarevent_to_vevent(ical, arg, 1 /* create */, uid, invalid);
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notCreated, key, err);
+                icalcomponent_free(ical);
+                free(uid);
+                continue;
+            }
+            json_decref(invalid);
+
+            /* Store the ical component in the mailbox. */
+            struct mailbox *mbox = NULL;
+            char *mboxname;
+
+            if (_jmap_calendar_ishidden(calId)) {
+                /* XXX - calendarNotFound is not defined in the spec */
+                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                json_object_set_new(notCreated, key, err);
+                free(uid);
+                continue;
+            }
+            mboxname = caldav_mboxname(req->userid, calId);
+            r = mailbox_open_iwl(mboxname, &mbox);
+            if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_PERMISSION_DENIED) {
+                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                json_object_set_new(notCreated, key, err);
+                free(uid);
+                free(mboxname);
+                continue;
+            } else if (r) {
+                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s", mboxname, error_message(r));
+                free(uid);
+                free(mboxname);
+                goto done;
+            }
+            free(mboxname);
+            r = caldav_store_resource(req->txn, ical, mbox, uid, db, 0);
+            mailbox_close(&mbox);
+            if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
+                /* XXX - invalidProperties is probably not the right set error,
+                 * but what went wrong in caldav_store_resource? */
+                json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+                json_object_set_new(notCreated, key, json_pack("{s:o}", key, err));
+                free(uid);
+                continue;
+            }
+
+            /* Report calendar event as created. */
+            json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
+            hash_insert(key, uid, req->idmap);
+        }
+
+        if (json_object_size(created)) {
+            json_object_set(set, "created", created);
+        }
+        json_decref(created);
+
+        if (json_object_size(notCreated)) {
+            json_object_set(set, "notCreated", notCreated);
+        }
+        json_decref(notCreated);
+
+    }
+    /* XXX - implement this */
+
+    /* Set newState field in calendarsSet. */
+    r = jmap_setstate(req, set, "newState", MBTYPE_CALENDAR,
+            1 /*refresh*/,
+            json_object_get(set, "created") ||
+            json_object_get(set, "updated") ||
+            json_object_get(set, "destroyed"));
+    if (r) goto done;
+
+    json_incref(set);
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("calendarsEventsSet"));
+    json_array_append_new(item, set);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    if (db) caldav_close(db);
+    json_decref(set);
     return r;
 }
