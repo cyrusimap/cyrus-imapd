@@ -728,7 +728,7 @@ CALSCALE:GREGORIAN
 BEGIN:VEVENT
 TRANSP:TRANSPARENT
 DTSTART;TZID=Europe/Vienna:20160928T160000
-RRULE:FREQ=MONTHLY;BYDAY=+2MO,TU,-3SU,+1MO,-2TH
+RRULE:FREQ=MONTHLY;BYDAY=+2MO,TU,-3SU,+1MO,-2TH,-1SA
 DTEND;TZID=Europe/Vienna:20160928T170000
 UID:$id
 DTSTAMP:20150928T132434Z
@@ -790,7 +790,7 @@ EOF
   $self->assert_str_equals($event->{endTimeZone}, "Europe/Vienna");
   $self->assert_not_null($event->{recurrence});
   $self->assert_str_equals($event->{recurrence}{frequency}, "monthly");
-  $self->assert_deep_equals($event->{recurrence}{byDay}, [-21, -10, 2, 8, 15]);
+  $self->assert_deep_equals($event->{recurrence}{byDay}, [-21, -10, -1, 2, 8, 15]);
   $self->assert_not_null($event->{inclusions});
   $self->assert_num_equals(scalar @{$event->{inclusions}}, 2);
   $self->assert_str_equals($event->{inclusions}[0], "2016-11-06T16:00:00");
@@ -868,5 +868,72 @@ EOF
   $self->assert_str_equals($attendees->[1]{rsvp}, "");
 }
 
+sub test_setcalendarevents {
+    my ($self) = @_;
 
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "create event";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "summary" => "foo",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Europe/Vienna",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Europe/Vienna"
+                        }
+                    }}, "R1"]]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendarsEventsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id = $res->[0][1]{created}{"#1"}{id};
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
+
+    my $event = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals($event->{id}, $id);
+    $self->assert_str_equals($event->{summary}, 'foo');
+    $self->assert_str_equals($event->{description}, "foo's description");
+    $self->assert_str_equals($event->{location}, "foo's location");
+    $self->assert_equals($event->{showAsFree}, JSON::false);
+    $self->assert_equals($event->{isAllDay}, JSON::false);
+    $self->assert_str_equals($event->{start}, '2015-10-06T16:45:00');
+    $self->assert_str_equals($event->{startTimeZone}, 'Europe/Vienna');
+    $self->assert_str_equals($event->{end}, '2015-10-06T17:15:00');
+    $self->assert_str_equals($event->{endTimeZone}, 'Europe/Vienna');
+
+=pod
+    my $xhref = $event->{"x-href"};
+    my $caldavres = $caldav->Request('GET', $xhref);
+    my $icalevent = $caldavres->{content};
+
+    my $x = Dumper($icalevent);
+    xlog "$x";
+
+    # make it fail
+    $self->assert_null($res);
+=cut
+
+}
 1;
