@@ -140,7 +140,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     }
 
     /* Check if sievedir is defined in imapd.conf */
-    if(config_getstring(IMAPOPT_SIEVEDIR)) {
+    if(!config_getstring(IMAPOPT_SIEVEDIR)) {
         syslog(LOG_WARNING, "autocreate_sieve: sievedir option is not defined. Check imapd.conf");
         return 1;
     }
