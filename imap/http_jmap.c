@@ -4155,24 +4155,100 @@ done:
     return r;
 }
 
-/* Update the VEVENT in the VCALENDAR component ical with the properties of the
- * JMAP calendar event. If create is true, assert that mandatory properties are
- * defined in event, or report them as invalid. If uid is non-zero, set the
- * VEVENT uid and any recurrence exceptions to this UID. Return a non-zero value
- * for fatal server errors. */
-static int jmap_calendarevent_to_vevent(icalcomponent *ical,
-                              json_t *event,
-                              short create,
-                              const char *uid,
-                              json_t *invalid) {
+/* Create or update the VALARMs in the VEVENT component comp as defined by the
+ * JMAP alerts. If create is not set, purge any existing alarms. */
+static void jmap_alerts_to_ical(icalcomponent *comp,
+                                json_t *alerts,
+                                short create,
+                                json_t *invalid,
+                                struct jmap_req *req) {
+    if (!create) {
+        /* XXX - Purge existing alarms which do not match the new alerts. */
+    }
+
+    size_t i;
+    json_t *alert;
+    struct buf buf = BUF_INITIALIZER;
+
+    json_array_foreach(alerts, i, alert) {
+        enum icalproperty_action action = ICAL_ACTION_NONE;
+        const char *type = NULL;
+        int diff = 0;
+        int pe;
+        buf_reset(&buf);
+
+        /* type */
+        pe = jmap_readprop(alert, "type", create, invalid, "s", &type);
+        if (pe > 0) {
+            if (!strncmp(type, "email", 6)) {
+                action = ICAL_ACTION_EMAIL;
+            } else if (!strncmp(type, "alert", 6)) {
+                action = ICAL_ACTION_DISPLAY;
+            } else {
+                buf_printf(&buf, "alerts[%llu].type", (long long unsigned) i);
+                json_array_append(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
+
+        /* minutesBefore */
+        pe = jmap_readprop(alert, "minutesBefore", create, invalid, "i", &diff);
+
+        if (pe > 0 || action != ICAL_ACTION_NONE) {
+            struct icaltriggertype trigger = icaltriggertype_from_int(diff * -60);
+            icalcomponent *alarm = icalcomponent_new_valarm();
+            icalproperty *prop;
+
+            /* action */
+            prop = icalproperty_new_action(action);
+            icalcomponent_add_property(alarm, prop);
+
+            /* trigger */
+            prop = icalproperty_new_trigger(trigger);
+            icalcomponent_add_property(alarm, prop);
+
+            /* alert contents */
+            /* XXX - how to determine these properties? */
+            if (action == ICAL_ACTION_EMAIL) {
+                prop = icalproperty_new_description("the body of an email alert");
+                icalcomponent_add_property(alarm, prop);
+
+                prop = icalproperty_new_summary("the subject of an email alert");
+                icalcomponent_add_property(alarm, prop);
+
+                buf_printf(&buf, "MAILTO:%s", req->userid);
+                prop = icalproperty_new_attendee(buf_cstring(&buf));
+                buf_reset(&buf);
+                icalcomponent_add_property(alarm, prop);
+            } else {
+                prop = icalproperty_new_description("a display alert");
+                icalcomponent_add_property(alarm, prop);
+            }
+
+            /* Add VALARM to VEVENT. */
+            icalcomponent_add_component(comp, alarm);
+        }
+    }
+
+    buf_free(&buf);
+}
+
+/* Create or update the VEVENT in the VCALENDAR component ical with the properties
+ * of the JMAP calendar event. If uid is non-zero, set the VEVENT uid and any
+ * recurrence exceptions to this UID. */
+static void jmap_calendarevent_to_ical(icalcomponent *ical,
+                                       json_t *event,
+                                       short create,
+                                       const char *uid,
+                                       json_t *invalid,
+                                       struct jmap_req *req) {
     int pe; /* parse error */
     const char *val = NULL;
     int showAsFree = 0;
     int isAllDay = 0;
     icalproperty *prop = NULL;
 
-    //icalparameter *param = NULL;
-    icalcomponent *comp = icalcomponent_new(ICAL_VEVENT_COMPONENT);
+    icalcomponent *comp = icalcomponent_new_vevent();
 
     if (uid) {
         icalcomponent_set_uid(comp, uid);
@@ -4199,6 +4275,24 @@ static int jmap_calendarevent_to_vevent(icalcomponent *ical,
             icalcomponent_add_property(comp, icalproperty_new_transp(v));
         }
     }
+
+    /* XXX - attachments */
+
+    /* XXX - organizer */
+
+    /* XXX - attendees */
+
+    /* XXX - alerts */
+    json_t *alerts = json_object_get(event, "alerts");
+    if (alerts) {
+        jmap_alerts_to_ical(comp, alerts, create, invalid, req);
+    }
+
+    /* XXX - recurrence */
+
+    /* XXX - inclusions */
+
+    /* XXX - exceptions */
 
     /* XXX - most probably, all the time handling stuff below should go into
      * its own function. */
@@ -4288,8 +4382,6 @@ static int jmap_calendarevent_to_vevent(icalcomponent *ical,
     }
 
     icalcomponent_add_component(ical, comp);
-
-    return 0;
 }
 
 static int setCalendarEvents(struct jmap_req *req)
@@ -4335,6 +4427,8 @@ static int setCalendarEvents(struct jmap_req *req)
                 continue;
             }
 
+            /* XXX - Clean this up after update is implemented. */
+
             /* Convert the calendar event to ical. */
             uid = xstrdup(makeuuid());
             jmap_readprop(arg, "calendarId", 1,  invalid, "s", &calId);
@@ -4345,14 +4439,14 @@ static int setCalendarEvents(struct jmap_req *req)
             if (id != NULL) {
                 json_array_append_new(invalid, json_string("id"));
             }
-            icalcomponent *ical = icalcomponent_new(ICAL_VCALENDAR_COMPONENT);
+            icalcomponent *ical = icalcomponent_new_vcalendar();
             if (!ical) {
                 r = IMAP_INTERNAL;
                 json_decref(invalid);
                 free(uid);
                 goto done;
             }
-            r = jmap_calendarevent_to_vevent(ical, arg, 1 /* create */, uid, invalid);
+            jmap_calendarevent_to_ical(ical, arg, 1 /* create */, uid, invalid, req);
             if (json_array_size(invalid)) {
                 json_t *err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
