@@ -898,7 +898,16 @@ sub test_setcalendarevents {
                             "alerts" => [
                                 { "type" => "alert", "minutesBefore" => 15 },
                                 { "type" => "email", "minutesBefore" => -15 }
-                            ]
+                            ],
+                            "organizer" => {
+                                "name" => "Daffy Duck",
+                                "email" => "daffy\@example.com"
+                            },
+                            "attendees" => [{
+                                    "name" => "Bugs Bunny",
+                                    "email" => "bugs\@example.com",
+                                    "rsvp" => "maybe"
+                            }]
                         }
                     }}, "R1"]]);
 
@@ -926,10 +935,17 @@ sub test_setcalendarevents {
     $self->assert_str_equals($event->{startTimeZone}, 'Europe/Vienna');
     $self->assert_str_equals($event->{end}, '2015-10-06T17:15:00');
     $self->assert_str_equals($event->{endTimeZone}, 'Europe/Vienna');
+
     $self->assert_str_equals($event->{alerts}[0]{type}, "alert");
     $self->assert_num_equals($event->{alerts}[0]{minutesBefore}, 15);
     $self->assert_str_equals($event->{alerts}[1]{type}, "email");
     $self->assert_num_equals($event->{alerts}[1]{minutesBefore}, -15);
+
+    $self->assert_str_equals($event->{organizer}{email}, "daffy\@example.com");
+    $self->assert_str_equals($event->{organizer}{name}, "Daffy Duck");
+    $self->assert_str_equals($event->{attendees}[0]{email}, "bugs\@example.com");
+    $self->assert_str_equals($event->{attendees}[0]{name}, "Bugs Bunny");
+    $self->assert_str_equals($event->{attendees}[0]{rsvp}, "maybe");
 
 =pod
     my $xhref = $event->{"x-href"};
