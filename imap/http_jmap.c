@@ -2771,18 +2771,21 @@ done:
     return r;
 }
 
+
+
 /* Read the property named name into dst, formatted according to the json
- * unpack format fmt. Append name to invalid, if it is mandatory and not
- * found in root, or if unpacking failed.
+ * unpack format fmt. If unpacking failed, or name is mandatory and not found
+ * in root, append name (prefixed by any non-NULL prefix) to invalid.
  *
  * Return a negative value for a missing or invalid property.
  * Return a positive value if a property was read, zero otherwise. */
-static int jmap_readprop(json_t *root,
-                          const char *name,
-                          int mandatory,
-                          json_t *invalid,
-                          const char *fmt,
-                          void *dst)
+static int jmap_readprop_full(json_t *root,
+                              const char *prefix,
+                              const char *name,
+                              int mandatory,
+                              json_t *invalid,
+                              const char *fmt,
+                              void *dst)
 {
     json_t *jval = json_object_get(root, name);
     if (!jval && mandatory) {
@@ -2792,12 +2795,24 @@ static int jmap_readprop(json_t *root,
     if (jval) {
         json_error_t err;
         if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
-            json_array_append_new(invalid, json_string(name));
+            if (prefix) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "%s.%s", prefix, name);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_free(&buf);
+            } else {
+                json_array_append_new(invalid, json_string(name));
+            }
             return -2;
         }
         return 1;
     }
     return 0;
+}
+
+static int jmap_readprop(json_t *root, const char *name, int mandatory,
+                         json_t *invalid, const char *fmt, void *dst) {
+    return jmap_readprop_full(root, NULL, name, mandatory, invalid, fmt, dst);
 }
 
 /* Update the calendar properties in the calendar mailbox named mboxname.
@@ -4155,8 +4170,95 @@ done:
     return r;
 }
 
+
+/* Create or update the ORGANIZER/ATTENDEEs in the VEVENT component comp as
+ * defined by the JMAP organizer and attendees. If create is not set, purge
+ * any participants that are not updated. */
+static void jmap_participants_to_ical(icalcomponent *comp,
+                                      json_t *organizer,
+                                      json_t *attendees,
+                                      short create,
+                                      json_t *invalid,
+                                      struct jmap_req *req) {
+    if (!create) {
+        /* XXX - Purge existing participants. */
+    }
+
+    const char *name = NULL;
+    const char *email = NULL;
+    const char *rsvp = NULL;
+
+    jmap_readprop_full(organizer, "organizer", "name", create, invalid, "s", &name);
+    jmap_readprop_full(organizer, "organizer", "email", create, invalid, "s", &email);
+
+    if (name && email) {
+        icalproperty *prop = icalproperty_new_organizer(email);
+        icalparameter *param = icalparameter_new_cn(name);
+        icalproperty_add_parameter(prop, param);
+        icalcomponent_add_property(comp, prop);
+    }
+
+    size_t i;
+    json_t *att;
+    struct buf buf = BUF_INITIALIZER;
+
+    json_array_foreach(attendees, i, att) {
+        char *prefix;
+        icalparameter_partstat pst = ICAL_PARTSTAT_NONE;
+        name = NULL;
+        email = NULL;
+        rsvp = NULL;
+
+        buf_reset(&buf);
+        buf_printf(&buf, "attendees[%llu]", (long long unsigned) i);
+        prefix = buf_newcstring(&buf);
+        buf_reset(&buf);
+
+        jmap_readprop_full(att, prefix, "name", create, invalid, "s", &name);
+        jmap_readprop_full(att, prefix, "email", create, invalid, "s", &email);
+        jmap_readprop_full(att, prefix, "rsvp", create, invalid, "s", &rsvp);
+        if (rsvp) {
+            if (!strcmp(rsvp, "")) {
+                pst = ICAL_PARTSTAT_NEEDSACTION;
+            } else if (!strcmp(rsvp, "yes")) {
+                pst = ICAL_PARTSTAT_ACCEPTED;
+            } else if (!strcmp(rsvp, "maybe")) {
+                pst = ICAL_PARTSTAT_TENTATIVE;
+            } else if (!strcmp(rsvp, "no")) {
+                pst = ICAL_PARTSTAT_DECLINED;
+            } else {
+                buf_printf(&buf, "%s.%s", prefix, "rsvp");
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
+
+        /* XXX - Check attendee email for uniqueness. */
+
+        if (name && email && pst != ICAL_PARTSTAT_NONE) {
+            /* email */
+            icalproperty *prop = icalproperty_new_attendee(email);
+            icalparameter *param;
+
+            /* name */
+            param = icalparameter_new_cn(name);
+            icalproperty_add_parameter(prop, param);
+
+            /* partstat */
+            param = icalparameter_new_partstat(pst);
+            icalproperty_add_parameter(prop, param);
+
+            icalcomponent_add_property(comp, prop);
+        }
+
+        free(prefix);
+    }
+
+    buf_free(&buf);
+}
+
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
- * JMAP alerts. If create is not set, purge any existing alarms. */
+ * JMAP alerts. If create is not set, purge any alerts that are not updated. */
 static void jmap_alerts_to_ical(icalcomponent *comp,
                                 json_t *alerts,
                                 short create,
@@ -4174,27 +4276,31 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
         enum icalproperty_action action = ICAL_ACTION_NONE;
         const char *type = NULL;
         int diff = 0;
+        char *prefix;
         int pe;
+
+        buf_reset(&buf);
+        buf_printf(&buf, "alerts[%llu]", (long long unsigned) i);
+        prefix = buf_newcstring(&buf);
         buf_reset(&buf);
 
         /* type */
-        pe = jmap_readprop(alert, "type", create, invalid, "s", &type);
+        pe = jmap_readprop_full(alert, prefix, "type", create, invalid, "s", &type);
         if (pe > 0) {
             if (!strncmp(type, "email", 6)) {
                 action = ICAL_ACTION_EMAIL;
             } else if (!strncmp(type, "alert", 6)) {
                 action = ICAL_ACTION_DISPLAY;
             } else {
-                buf_printf(&buf, "alerts[%llu].type", (long long unsigned) i);
+                buf_printf(&buf, "%s.type", prefix);
                 json_array_append(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
         }
 
         /* minutesBefore */
-        pe = jmap_readprop(alert, "minutesBefore", create, invalid, "i", &diff);
-
-        if (pe > 0 || action != ICAL_ACTION_NONE) {
+        pe = jmap_readprop_full(alert, prefix, "minutesBefore", create, invalid, "i", &diff);
+        if (pe > 0 && action != ICAL_ACTION_NONE) {
             struct icaltriggertype trigger = icaltriggertype_from_int(diff * -60);
             icalcomponent *alarm = icalcomponent_new_valarm();
             icalproperty *prop;
@@ -4227,7 +4333,9 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
 
             /* Add VALARM to VEVENT. */
             icalcomponent_add_component(comp, alarm);
+
         }
+        free(prefix);
     }
 
     buf_free(&buf);
@@ -4276,17 +4384,28 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
         }
     }
 
-    /* XXX - attachments */
+    /* organizer and attendees */
+    json_t *organizer = NULL;
+    json_t *attendees = NULL;
 
-    /* XXX - organizer */
+    jmap_readprop(event, "organizer", create, invalid, "o", &organizer);
+    jmap_readprop(event, "attendees", create, invalid, "o", &attendees);
+    if (organizer && attendees && !json_array_size(attendees)) {
+        json_array_append_new(invalid, json_string("attendees"));
+        attendees = NULL;
+    }
+    if ((create && organizer && attendees) || (!create && (organizer || attendees))) {
+        jmap_participants_to_ical(comp, organizer, attendees, create, invalid, req);
+    }
 
-    /* XXX - attendees */
-
-    /* XXX - alerts */
-    json_t *alerts = json_object_get(event, "alerts");
-    if (alerts) {
+    /* alerts */
+    json_t *alerts = NULL;
+    pe = jmap_readprop(event, "alerts", create, invalid, "o", &alerts);
+    if (pe > 0) {
         jmap_alerts_to_ical(comp, alerts, create, invalid, req);
     }
+
+    /* XXX - attachments */
 
     /* XXX - recurrence */
 
