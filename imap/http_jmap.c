@@ -203,6 +203,7 @@ static int jmap_post(struct transaction_t *txn,
     txn->req_body.flags |= BODY_DECODE;
     ret = http_read_body(httpd_in, httpd_out,
                        txn->req_hdrs, &txn->req_body, &txn->error.desc);
+
     if (ret) {
         txn->flags.conn = CONN_CLOSE;
         return ret;
@@ -216,6 +217,7 @@ static int jmap_post(struct transaction_t *txn,
         txn->error.desc = "This method requires a JSON request body\r\n";
         return HTTP_BAD_MEDIATYPE;
     }
+
 
     /* Allocate map to store uids */
     construct_hash_table(&idmap, 1024, 0);
@@ -3526,6 +3528,17 @@ static int _jmap_timet_to_localdate(time_t t, char* buf, size_t size) {
     return n;
 }
 
+/* Convert the JMAP local datetime in buf to time_t t. Return 0 on success. */
+static int _jmap_localdate_to_timet(const char *buf, time_t *t) {
+    struct tm tm;
+    const char *p = strptime(buf, "%Y-%m-%dT%H:%M:%S", &tm);
+    if (*p) {
+        return -1;
+    }
+    *t = mktime(&tm);
+    return 0;
+}
+
 /* Convert icaltime to a RFC3339 formatted localdate string. The returned
  * string is owned by the caller. Return NULL on error. */
 static char* _jmap_icaltime_to_localdate_r(icaltimetype icaltime) {
@@ -3878,14 +3891,22 @@ static json_t* jmap_vevent_to_calendarevent(icalcomponent *comp,
         json_object_set_new(obj, "end", json_string(s));
         free(s);
     }
+    /* XXX - The timezone handling is complex enough to warrant a refactor. */
     if (_wantprop(props, "startTimeZone")) {
         const char *tzid = NULL;
         prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
         if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
-         * the server SHOULD try to guess the correct time zone based on the
-         * VTIMEZONE information" */
         if (param) tzid = icalparameter_get_tzid(param);
+        /* Check if the tzid already corresponds to an Olson name. */
+        if (tzid) {
+            icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
+            if (!tz) {
+                /* Try to guess the timezone. */
+                icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+                tzid = dtstart.zone ? icaltimezone_get_location((icaltimezone*) dtstart.zone) : NULL;
+                tzid = tzid && icaltimezone_get_builtin_timezone(tzid) ? tzid : NULL;
+            }
+        }
         json_object_set_new(obj, "startTimeZone",
                 tzid && !isAllDay ? json_string(tzid) : json_null());
     }
@@ -3894,10 +3915,17 @@ static json_t* jmap_vevent_to_calendarevent(icalcomponent *comp,
         prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
         if (!prop) prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
         if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-        /* XXX - "if the underlying iCalendar file does not use an Olsen name,
-         * the server SHOULD try to guess the correct time zone based on the
-         * VTIMEZONE information" */
         if (param) tzid = icalparameter_get_tzid(param);
+        /* Check if the tzid already corresponds to an Olson name. */
+        if (tzid) {
+            icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
+            if (!tz) {
+                /* Try to guess the timezone. */
+                icaltimetype dtend = icalcomponent_get_dtend(comp);
+                tzid = dtend.zone ? icaltimezone_get_location((icaltimezone*) dtend.zone) : NULL;
+                tzid = tzid && icaltimezone_get_builtin_timezone(tzid) ? tzid : NULL;
+            }
+        }
         json_object_set_new(obj, "endTimeZone",
                 tzid && !isAllDay ? json_string(tzid) : json_null());
     }
@@ -4171,17 +4199,93 @@ static int jmap_calendarevent_to_vevent(icalcomponent *ical,
             icalcomponent_add_property(comp, icalproperty_new_transp(v));
         }
     }
+
+    /* XXX - most probably, all the time handling stuff below should go into
+     * its own function. */
     pe = jmap_readprop(event, "isAllDay", create, invalid, "b", &isAllDay);
     if (pe == 0 && !create) {
         isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
     }
 
-    /* XXX Continue from here. */
-    icalcomponent_set_dtstart(comp, icaltime_null_time());
-    icalcomponent_set_dtend(comp, icaltime_null_time());
+    /* XXX - The time and timeZone handling now somewhat works for create but
+     * not at all for update. Also we need to handle this as the last step during
+     * conversion from JMAP to libical. E.g. We need to know the end time of
+     * the last recurrence to determine where to truncate the timezones.
+     *
+     * To make things short: Implement this as the last thing. */
+    struct icaltimetype dtstart = icaltime_null_time();
+    struct icaltimetype dtend = icaltime_null_time();
+    icaltimezone *tzdtstart = NULL;
+    icaltimezone *tzdtend = NULL;
 
+    pe = jmap_readprop(event, "startTimeZone", create, invalid, "s", &val);
+    if (pe > 0) {
+        tzdtstart = icaltimezone_get_builtin_timezone(val);
+        if (!tzdtstart) {
+            json_array_append_new(invalid, json_string("startTimeZone"));
+        }
+    }
+    pe = jmap_readprop(event, "endTimeZone", create, invalid, "s", &val);
+    if (pe > 0) {
+        tzdtend = icaltimezone_get_builtin_timezone(val);
+        if (!tzdtend) {
+            json_array_append_new(invalid, json_string("endTimeZone"));
+        }
+    }
+    pe = jmap_readprop(event, "start", create, invalid, "s", &val);
+    if (pe > 0) {
+        time_t t;
+        if (!_jmap_localdate_to_timet(val, &t)) {
+            dtstart = icaltime_from_timet_with_zone(t, 0, tzdtstart);
+        } else {
+            json_array_append_new(invalid, json_string("start"));
+        }
+    }
+    pe = jmap_readprop(event, "end", create, invalid, "s", &val);
+    if (pe > 0) {
+        time_t t;
+        if (!_jmap_localdate_to_timet(val, &t)) {
+            dtend = icaltime_from_timet_with_zone(t, 0, tzdtend);
+            syslog(LOG_ERR, "XXXXXXXX - dtend.zone: %d", dtend.zone ? 1 : 0);
+        } else {
+            json_array_append_new(invalid, json_string("end"));
+        }
+    }
 
-    /* XXX start and end don't work with timezones */
+    if (!icaltime_is_null_time(dtstart) && !icaltime_is_null_time(dtend)) {
+        icalparameter *param;
+
+        /* Set dtstart. */
+        prop = icalproperty_new_dtstart(dtstart);
+        icalcomponent_add_property(comp, prop);
+        if (tzdtstart) {
+            param = icalparameter_new_tzid(icaltimezone_get_location(tzdtstart));
+            icalproperty_add_parameter(prop, param);
+        }
+
+        /* Set dtend. */
+        prop = icalproperty_new_dtend(dtend);
+        icalcomponent_add_property(comp, prop);
+        if (tzdtend) {
+            param = icalparameter_new_tzid(icaltimezone_get_location(tzdtend));
+            icalproperty_add_parameter(prop, param);
+        }
+
+        /* Truncate and add timezone for dtstart and dtend. */
+        /* XXX - Purge any unnecessary timezones from comp. */
+        if (tzdtstart == tzdtend) {
+            icaltimezone *tz = tzdtstart;
+            if (tz) {
+                icalcomponent *tzcomp = icalcomponent_new_clone(icaltimezone_get_component(tz));
+                icalproperty *tzprop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
+                icalproperty_set_tzid(tzprop, icaltimezone_get_location(tz));
+                tzdist_truncate_vtimezone(tzcomp, &dtstart, &dtend);
+                icalcomponent_add_component(ical, tzcomp);
+            }
+        } else {
+            /* XXX - not yet implemented. */
+        }
+    }
 
     icalcomponent_add_component(ical, comp);
 
@@ -4257,6 +4361,12 @@ static int setCalendarEvents(struct jmap_req *req)
                 free(uid);
                 continue;
             }
+
+            if (r) {
+                icalcomponent_free(ical);
+                free(uid);
+                goto done;
+            }
             json_decref(invalid);
 
             /* Store the ical component in the mailbox. */
@@ -4272,6 +4382,7 @@ static int setCalendarEvents(struct jmap_req *req)
             }
             mboxname = caldav_mboxname(req->userid, calId);
             r = mailbox_open_iwl(mboxname, &mbox);
+
             if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_PERMISSION_DENIED) {
                 json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
                 json_object_set_new(notCreated, key, err);
@@ -4285,7 +4396,14 @@ static int setCalendarEvents(struct jmap_req *req)
                 goto done;
             }
             free(mboxname);
-            r = caldav_store_resource(req->txn, ical, mbox, uid, db, 0);
+
+            struct transaction_t txn;
+            memset(&txn, 0, sizeof(struct transaction_t));
+            txn.req_hdrs = spool_new_hdrcache();
+            r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
+            spool_free_hdrcache(txn.req_hdrs);
+            buf_free(&txn.buf);
+
             mailbox_close(&mbox);
             if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
                 /* XXX - invalidProperties is probably not the right set error,

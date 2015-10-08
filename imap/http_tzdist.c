@@ -664,6 +664,7 @@ static int observance_compare(const void *obs1, const void *obs2)
                             ((struct observance *) obs2)->onset);
 }
 
+
 static const struct observance *truncate_vtimezone(icalcomponent *vtz,
                                                    icaltimetype *startp,
                                                    icaltimetype *endp,
@@ -1112,6 +1113,14 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 
     return &tombstone;
 }
+
+/* Truncate the vtimezone vtz but do not care about observances. */
+void tzdist_truncate_vtimezone(icalcomponent *vtz,
+                               icaltimetype *startp,
+                               icaltimetype *endp) {
+    truncate_vtimezone(vtz, startp, endp, NULL);
+}
+
 
 /* Perform a get action */
 static int action_get(struct transaction_t *txn)
