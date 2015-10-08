@@ -894,7 +894,11 @@ sub test_setcalendarevents {
                             "start" => "2015-10-06T16:45:00",
                             "startTimeZone" => "Europe/Vienna",
                             "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Europe/Vienna"
+                            "endTimeZone" => "Europe/Vienna",
+                            "alerts" => [
+                                { "type" => "alert", "minutesBefore" => 15 },
+                                { "type" => "email", "minutesBefore" => -15 }
+                            ]
                         }
                     }}, "R1"]]);
 
@@ -922,6 +926,10 @@ sub test_setcalendarevents {
     $self->assert_str_equals($event->{startTimeZone}, 'Europe/Vienna');
     $self->assert_str_equals($event->{end}, '2015-10-06T17:15:00');
     $self->assert_str_equals($event->{endTimeZone}, 'Europe/Vienna');
+    $self->assert_str_equals($event->{alerts}[0]{type}, "alert");
+    $self->assert_num_equals($event->{alerts}[0]{minutesBefore}, 15);
+    $self->assert_str_equals($event->{alerts}[1]{type}, "email");
+    $self->assert_num_equals($event->{alerts}[1]{minutesBefore}, -15);
 
 =pod
     my $xhref = $event->{"x-href"};
