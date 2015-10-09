@@ -158,6 +158,13 @@ the corresponding data contents in the index.
 when opening a backup, verify this checksum against the data, and refuse to
 load the index if it doesn't match.
 
+- sha1sum of (compressed) contents of file prior to each chunk
+
+how to tell whether the chunk data is any good?  store a checksum of the chunk
+contents along with the rest of the chunk index
+
+- sha1sum of (uncompressed) contents of each chunk
+
 
 mailboxes database
 ------------------
@@ -203,7 +210,7 @@ cmdloop:
 * (periodic cleanup)
 * read command, determine backup name
 * already holding lock ? bump timestamp : obtain lock
-* write data to gzname
+* write data to gzname, flush immediately
 * index data
 
 periodic cleanup:
@@ -217,9 +224,13 @@ exit:
 * release each held lock
 
 need a "backup_index_abort" to complete the backup_index_start/end set.
-_start should create a transaction, _end should commit it, and _abort should roll it back.
-then, if backupd fails to write to the gzip file for some reason, the (now invalid) index
-info we added can be discarded too.
+_start should create a transaction, _end should commit it, and _abort should
+roll it back.  then, if backupd fails to write to the gzip file for some
+reason, the (now invalid) index info we added can be discarded too.
+
+flushing immediately on write results in poor gzip compression, but for
+incremental backups that's not a problem.  when the compress process hits the
+file it will recompress the data more efficiently.
 
 
 sql snippets
@@ -244,8 +255,6 @@ id|backup_id|substr(bm.uniqueid,1,6)|mboxname
 7|5|c9b238|fastmail.com!user.seleniumbetauser5
 
 
-
-
 redesigned index database
 -------------------------
 
@@ -256,6 +265,8 @@ backup:
     timestamp ts
     int offset
     int length
+    text file_sha1              -> sha1 of (compressed) data prior to this backup
+    text data_sha1              -> sha1 of (uncompressed) data contained in this backup
 
 mailbox:
     int id
@@ -301,6 +312,7 @@ mailbox_message:
     int size
     char annotations
     timestamp expunged          -> time that it was expunged, or 0 if still alive
+
 
 questions
 ---------
