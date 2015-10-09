@@ -570,8 +570,10 @@ EXPORTED void dlist_print(const struct dlist *dl, int printkeys,
 {
     struct dlist *di;
 
-    if (printkeys)
-	prot_printf(out, "%s ", dl->name);
+    if (printkeys) {
+        prot_printastring(out, dl->name);
+        prot_putc(' ', out);
+    }
 
     switch (dl->type) {
     case DL_NIL:
@@ -847,7 +849,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *i
 
     /* handle the key if wanted */
     if (parsekey) {
-	c = getword(in, &kbuf);
+	c = getastring(in, NULL, &kbuf);
 	c = next_nonspace(in, c);
     }
     else {
