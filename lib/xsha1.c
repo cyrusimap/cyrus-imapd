@@ -160,7 +160,7 @@ static void SHA1_Transform(sha1_quadbyte state[5], const sha1_byte buffer[64]) {
 
 
 /* SHA1_Init - Initialize new context */
-EXPORTED void SHA1_Init(SHA_CTX* context) {
+EXPORTED int SHA1_Init(SHA_CTX* context) {
     /* SHA1 initialization constants */
     context->state[0] = 0x67452301;
     context->state[1] = 0xEFCDAB89;
@@ -168,10 +168,12 @@ EXPORTED void SHA1_Init(SHA_CTX* context) {
     context->state[3] = 0x10325476;
     context->state[4] = 0xC3D2E1F0;
     context->count[0] = context->count[1] = 0;
+
+    return 1;
 }
 
 /* Run your data through this. */
-EXPORTED void SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len) {
+EXPORTED int SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len) {
     unsigned int    i, j;
 
     j = (context->count[0] >> 3) & 63;
@@ -187,11 +189,13 @@ EXPORTED void SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int 
     }
     else i = 0;
     memcpy(&context->buffer[j], &data[i], len - i);
+
+    return 1;
 }
 
 
 /* Add padding and return the message digest. */
-EXPORTED void SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) {
+EXPORTED int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) {
     sha1_quadbyte   i, j;
     sha1_byte   finalcount[8];
 
@@ -215,14 +219,16 @@ EXPORTED void SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context)
     memset(context->state, 0, SHA1_DIGEST_LENGTH);
     memset(context->count, 0, 8);
     memset(&finalcount, 0, 8);
+
+    return 1;
 }
 
 /*
  * End of sha1.c
  */
 
-EXPORTED void our_sha1(const unsigned char *buf, unsigned long len,
-                    sha1_byte dest[SHA1_DIGEST_LENGTH])
+EXPORTED unsigned char *our_sha1(const unsigned char *buf, unsigned long len,
+                              sha1_byte dest[SHA1_DIGEST_LENGTH])
 {
     SHA_CTX ctx;
 
@@ -231,6 +237,8 @@ EXPORTED void our_sha1(const unsigned char *buf, unsigned long len,
     SHA1_Init(&ctx);
     SHA1_Update(&ctx, buf, len);
     SHA1_Final(dest, &ctx);
+
+    return dest;
 }
 
 #endif

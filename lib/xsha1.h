@@ -61,11 +61,11 @@ typedef uint8_t sha1_byte;    /* single byte type */
 /* opaque type for the SHA1 structure: */
 typedef struct _SHA_CTX SHA_CTX;
 
-void SHA1_Init(SHA_CTX* context);
-void SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len);
-void SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context);
+int SHA1_Init(SHA_CTX* context);
+int SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len);
+int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context);
 
-void our_sha1(const unsigned char *buf, unsigned long len,
+unsigned char *our_sha1(const unsigned char *buf, unsigned long len,
               sha1_byte dest[SHA1_DIGEST_LENGTH]);
 
 #endif
