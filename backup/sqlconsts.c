@@ -52,7 +52,9 @@ const char backup_index_initsql[] = QUOTE(
         id INTEGER PRIMARY KEY ASC,
         timestamp INTEGER,
         offset INTEGER unique,
-        length INTEGER
+        length INTEGER,
+        file_sha1 TEXT,
+        data_sha1 TEXT
     );
 
     CREATE TABLE message(
@@ -113,13 +115,14 @@ const struct sqldb_upgrade backup_index_upgrade[] = {
 };
 
 const char backup_index_start_sql[] = QUOTE(
-    INSERT INTO backup ( timestamp, offset )
-        VALUES ( :timestamp, :offset );
+    INSERT INTO backup ( timestamp, offset, file_sha1 )
+        VALUES ( :timestamp, :offset, :file_sha1 );
 );
 
 const char backup_index_end_sql[] = QUOTE(
     UPDATE backup SET
-        length = :length
+        length = :length,
+        data_sha1 = :data_sha1
     WHERE id = :id;
 );
 
