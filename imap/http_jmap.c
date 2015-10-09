@@ -511,6 +511,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
         else if (!strcmp(name, "x-fm-otheraccount-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
+            if (!param) continue;
             json_t *object = json_object_get(otherids, param->value);
             if (!object) {
                 object = json_array();

@@ -786,16 +786,6 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
     char *owner = mboxname_to_userid(mboxname);
     if (owner) {
         /* owner gets full permission on own mailbox by default */
-        if (config_getswitch(IMAPOPT_UNIXHIERARCHYSEP)) {
-            /*
-             * The mailboxname is now in the internal format,
-             * so we we need to change DOTCHARs back to '.'
-             * in the identifier in order to have the correct ACL.
-             */
-            for (p = owner; *p; p++) {
-                if (*p == DOTCHAR) *p = '.';
-            }
-        }
         cyrus_acl_set(out, owner, ACL_MODE_SET, ACL_ALL,
                       (cyrus_acl_canonproc_t *)0, (void *)0);
         free(owner);
@@ -1086,6 +1076,10 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     r = mboxlist_mylookup(name, &mbentry, tid, 1);
     switch (r) {
     case 0:
+        break;
+
+    case IMAP_MAILBOX_NONEXISTENT:
+        r = 0;
         break;
 
     case IMAP_AGAIN:

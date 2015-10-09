@@ -161,6 +161,7 @@ static int reset_single(const char *userid)
         else if (r) goto fail;
         /* XXX - cheap and nasty hack around actually cleaning up the entry */
         r = mboxlist_deleteremote(name, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
         if (r) goto fail;
     }
 

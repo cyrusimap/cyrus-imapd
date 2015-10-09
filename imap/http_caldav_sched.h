@@ -101,6 +101,7 @@ struct sched_param {
     char *server;       /* Remote server user lives on */
     unsigned port;      /* Remote server port, default = 80 */
     unsigned flags;     /* Flags dictating protocol to use for scheduling */
+    unsigned isyou;     /* true if the user is the same as the authenticated user */
     struct proplist *props; /* List of attendee iCal properties */
 };
 

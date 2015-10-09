@@ -79,7 +79,10 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
     if (!addr) return HTTP_NOT_FOUND;
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
-    if (myuserid && !strcasecmp(userid, myuserid)) return 0; // myself is always local
+    if (myuserid && !strcasecmp(userid, myuserid)) {
+        param->isyou = 1;
+        return 0; // myself is always local
+    }
     len = strlen(userid);
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
@@ -1840,6 +1843,9 @@ void sched_deliver(const char *recipient, void *data, void *rock)
         /* Unknown user */
         return;
     }
+
+    /* don't schedule to yourself */
+    if (sparam.isyou) return;
 
     if (sparam.flags) {
         /* Remote recipient */

@@ -783,6 +783,7 @@ noinst_HEADERS = \
 	lib/prot.h \
 	lib/ptrarray.h \
 	lib/util.h \
+	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h
 
@@ -1363,6 +1364,9 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/xmalloc.c \
 	lib/xstrlcat.c \
 	lib/xstrlcpy.c
+if !HAVE_SSL
+lib_libcyrus_min_la_SOURCES += lib/xsha1.c
+endif
 if IPV6_noGETADDRINFO
 lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
