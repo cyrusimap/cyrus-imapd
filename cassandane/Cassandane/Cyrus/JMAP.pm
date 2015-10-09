@@ -914,6 +914,7 @@ sub test_setcalendarevents {
                                 "byMonth" => [2, 8],
                                 "until" => "2015-10-08T16:45:00"
                             },
+                            "inclusions" => [ "2015-10-07T15:15:00" ]
                         }
                     }}, "R1"]]);
 
@@ -960,6 +961,8 @@ sub test_setcalendarevents {
     $self->assert_deep_equals($event->{recurrence}{byDay}, [-21, -10, -1, 2, 8, 15]);
     $self->assert_deep_equals($event->{recurrence}{byMonth}, [2, 8]);
     # XXX this doesn't work yet due to timezones.. $self->assert_str_equals($event->{recurrence}{until}, "2015-10-08T16:45:00");
+   
+    $self->assert_str_equals($event->{inclusions}[0], "2015-10-07T15:15:00");
 
 =pod
     my $xhref = $event->{"x-href"};
