@@ -6,7 +6,6 @@ Standard Operating Procedures
     :maxdepth: 2
 
     sop/replication
-    sop/murder
     
     sop/mailbox-operations
     sop/reloading
@@ -17,7 +16,6 @@ Standard Operating Procedures
 
     sop/reconstructing
     sop/squatter
-    sop/replication
     sop/splitting-metadata
     sop/userdeny
 
