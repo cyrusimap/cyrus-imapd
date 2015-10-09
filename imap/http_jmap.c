@@ -4207,6 +4207,22 @@ done:
 }
 
 
+/* Update or create the datetime property kind in comp. If tz is not NULL, set
+ * the TZID parameter on the property. */
+static void jmap_update_dtprop(icalcomponent *comp,
+                               icaltimetype dt,
+                               icaltimezone *tz,
+                               enum icalproperty_kind kind) {
+    /* XXX - implement the update part */
+    icalproperty *prop = icalproperty_new(kind);
+    icalproperty_set_value(prop, icalvalue_new_datetime(dt));
+    if (tz) {
+        icalparameter *param = icalparameter_new_tzid(icaltimezone_get_location(tz));
+        icalproperty_add_parameter(prop, param);
+    }
+    icalcomponent_add_property(comp, prop);
+}
+
 /* Create or update the ORGANIZER/ATTENDEEs in the VEVENT component comp as
  * defined by the JMAP organizer and attendees. If create is not set, purge
  * any participants that are not updated. */
@@ -4365,8 +4381,44 @@ static void jmap_recurrence_byX_to_ical(json_t *byX,
     }
 }
 
+
+/* Create or overwrite the RDATEs in the VEVENT component comp as defined by the
+ * JMAP recurrence. Use tz as timezone for LocalDate conversions. */
+static void jmap_inclusions_to_ical(icalcomponent *comp,
+                                    json_t *inclusions,
+                                    short create,
+                                    json_t *invalid,
+                                    icaltimezone *tz) {
+
+    if (!create) {
+        /* XXX - Purge existing RDATEs. */
+    }
+
+    size_t i;
+    json_t *incl;
+    struct buf buf = BUF_INITIALIZER;
+
+    json_array_foreach(inclusions, i, incl) {
+        time_t t;
+
+        /* Parse incl as LocalDate. */
+        if (_jmap_localdate_to_timet(json_string_value(incl), &t)) {
+            buf_printf(&buf, "inclusions[%llu]", (long long unsigned) i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+            continue;
+        } 
+
+        /* Create and add RDATE property. */
+        icaltimetype dt = icaltime_from_timet_with_zone(t, 0, tz);
+        jmap_update_dtprop(comp, dt, tz, ICAL_RDATE_PROPERTY);
+    }
+
+    buf_free(&buf);
+}
+
 /* Create or overwrite the RRULE in the VEVENT component comp as defined by the
- * JMAP recurrence. */
+ * JMAP recurrence. Use tz as timezone for LocalDate conversions. */
 static void jmap_recurrence_to_ical(icalcomponent *comp,
                                     json_t *recur,
                                     short create,
@@ -4654,22 +4706,6 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
     buf_free(&buf);
 }
 
-/* Update or create the datetime property kind in comp. If tz is not NULL, set
- * the TZID parameter on the property. */
-static void jmap_update_dtprop(icalcomponent *comp,
-                               icaltimetype dt,
-                               icaltimezone *tz,
-                               enum icalproperty_kind kind) {
-    /* XXX - implement the update part */
-    icalproperty *prop = icalproperty_new(kind);
-    icalproperty_set_value(prop, icalvalue_new_datetime(dt));
-    if (tz) {
-        icalparameter *param = icalparameter_new_tzid(icaltimezone_get_location(tz));
-        icalproperty_add_parameter(prop, param);
-    }
-    icalcomponent_add_property(comp, prop);
-}
-
 /* Create or update the VEVENT in the VCALENDAR component ical with the properties
  * of the JMAP calendar event. If uid is non-zero, set the VEVENT uid and any
  * recurrence exceptions to this UID. */
@@ -4743,7 +4779,11 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
     json_t *alerts = NULL;
     pe = jmap_readprop(event, "alerts", 0, invalid, "o", &alerts);
     if (pe > 0) {
-        jmap_alerts_to_ical(comp, alerts, create, invalid, req);
+        if (json_array_size(alerts)) {
+            jmap_alerts_to_ical(comp, alerts, create, invalid, req);
+        } else {
+            json_array_append_new(invalid, json_string("alerts"));
+        }
     }
 
     /* isAllDay */
@@ -4801,7 +4841,16 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
         jmap_recurrence_to_ical(comp, recurrence, create, invalid, tzdtstart);
     }
 
-    /* XXX - inclusions */
+    /* inclusions */
+    json_t *inclusions = NULL;
+    pe = jmap_readprop(event, "inclusions", 0, invalid, "o", &inclusions);
+    if (pe > 0) {
+        if (json_array_size(inclusions)) {
+            jmap_inclusions_to_ical(comp, inclusions, create, invalid, tzdtstart);
+        } else {
+            json_array_append_new(invalid, json_string("inclusions"));
+        }
+    }
 
     /* XXX - exceptions */
 
