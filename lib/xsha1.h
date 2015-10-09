@@ -47,7 +47,7 @@
 
 #ifdef HAVE_SSL
 #include <openssl/sha.h>
-#define our_sha1 SHA1
+#define xsha1 SHA1
 #else
 
 #include <stdint.h>
@@ -65,7 +65,7 @@ int SHA1_Init(SHA_CTX* context);
 int SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len);
 int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context);
 
-unsigned char *our_sha1(const unsigned char *buf, unsigned long len,
+unsigned char *xsha1(const unsigned char *buf, unsigned long len,
               sha1_byte dest[SHA1_DIGEST_LENGTH]);
 
 #endif

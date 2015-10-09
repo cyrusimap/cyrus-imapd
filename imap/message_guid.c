@@ -86,7 +86,7 @@ EXPORTED void message_guid_generate(struct message_guid *guid,
     memset(guid->value, 0, MESSAGE_GUID_SIZE);
 
     guid->status = GUID_NONNULL;
-    our_sha1((const unsigned char *) msg_base, msg_len, guid->value);
+    xsha1((const unsigned char *) msg_base, msg_len, guid->value);
 }
 
 /* message_guid_copy() ***************************************************

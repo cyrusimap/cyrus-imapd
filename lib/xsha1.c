@@ -227,7 +227,7 @@ EXPORTED int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) 
  * End of sha1.c
  */
 
-EXPORTED unsigned char *our_sha1(const unsigned char *buf, unsigned long len,
+EXPORTED unsigned char *xsha1(const unsigned char *buf, unsigned long len,
                               sha1_byte dest[SHA1_DIGEST_LENGTH])
 {
     SHA_CTX ctx;
