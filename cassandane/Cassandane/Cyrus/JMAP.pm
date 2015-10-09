@@ -907,15 +907,24 @@ sub test_setcalendarevents {
                                     "name" => "Bugs Bunny",
                                     "email" => "bugs\@example.com",
                                     "rsvp" => "maybe"
-                            }]
+                            }],
+                            "recurrence" => {
+                                "frequency" => "daily",
+                                "byDay" => [-21, -10, -1, 2, 8, 15],
+                                "byMonth" => [2, 8],
+                                "until" => "2015-10-08T16:45:00"
+                            },
                         }
                     }}, "R1"]]);
 
+    my $x = Dumper($res);
+    xlog "$x";
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'calendarsEventsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{created});
+
 
     my $id = $res->[0][1]{created}{"#1"}{id};
     xlog "get calendar $id";
@@ -946,6 +955,11 @@ sub test_setcalendarevents {
     $self->assert_str_equals($event->{attendees}[0]{email}, "bugs\@example.com");
     $self->assert_str_equals($event->{attendees}[0]{name}, "Bugs Bunny");
     $self->assert_str_equals($event->{attendees}[0]{rsvp}, "maybe");
+
+    $self->assert_str_equals($event->{recurrence}{frequency}, "daily");
+    $self->assert_deep_equals($event->{recurrence}{byDay}, [-21, -10, -1, 2, 8, 15]);
+    $self->assert_deep_equals($event->{recurrence}{byMonth}, [2, 8]);
+    # XXX this doesn't work yet due to timezones.. $self->assert_str_equals($event->{recurrence}{until}, "2015-10-08T16:45:00");
 
 =pod
     my $xhref = $event->{"x-href"};
