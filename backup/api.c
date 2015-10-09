@@ -615,14 +615,16 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
     free(message);
 }
 
-static int backup_index_start3(struct backup *backup, time_t ts, off_t offset)
+static int backup_index_start4(struct backup *backup, time_t ts, off_t offset,
+                               const char *file_sha1)
 {
     if (backup->index_id != -1) fatal("already started", -1);
 
     struct sqldb_bindval bval[] = {
-        { ":timestamp", SQLITE_INTEGER, { .i = ts     } },
-        { ":offset",    SQLITE_INTEGER, { .i = offset } },
-        { NULL,         SQLITE_NULL,    { .s = NULL   } },
+        { ":timestamp", SQLITE_INTEGER, { .i = ts           } },
+        { ":offset",    SQLITE_INTEGER, { .i = offset       } },
+        { ":file_sha1", SQLITE_TEXT,    { .s = file_sha1    } },
+        { NULL,         SQLITE_NULL,    { .s = NULL         } },
     };
 
     sqldb_begin(backup->db, "backup_index"); // FIXME what if this fails
@@ -642,7 +644,8 @@ static int backup_index_start3(struct backup *backup, time_t ts, off_t offset)
 EXPORTED int backup_index_start(struct backup *backup) {
     off_t offset = lseek(backup->fd, 0, SEEK_END);
 
-    return backup_index_start3(backup, time(0), offset);
+    /* FIXME calculate sha1sum of file-so-far */
+    return backup_index_start4(backup, time(0), offset, NULL);
 }
 
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
@@ -919,9 +922,13 @@ EXPORTED int backup_index(struct backup *backup, struct dlist *dl,
 int backup_index_end(struct backup *backup, size_t length) {
     if (backup->index_id == -1) fatal("not started", -1);
 
+    /* FIXME sha1sum of chunk data */
+    const char *data_sha1 = NULL;
+
     struct sqldb_bindval bval[] = {
         { ":id",        SQLITE_INTEGER, { .i = backup->index_id } },
         { ":length",    SQLITE_INTEGER, { .i = length           } },
+        { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1        } },
         { NULL,         SQLITE_NULL,    { .s = NULL             } },
     };
 
@@ -1108,7 +1115,8 @@ EXPORTED int backup_reindex(const char *name)
                     fatal("member timestamp older than previous", -1);
                 }
                 member_ts = ts;
-                backup_index_start3(backup, member_ts, member_offset);
+                /* FIXME calculate sha1sum of file-so-far */
+                backup_index_start4(backup, member_ts, member_offset, NULL);
             }
             else if (member_ts > ts)
                 fatal("line timestamp older than previous", -1);
