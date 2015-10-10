@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
 {
     extern char *optarg;
     int opt, r = 0;
-    char *alt_config = NULL;
+    char *alt_config = NULL, *intname = NULL, *extname = NULL;
     struct mailbox *mailbox = NULL;
     int mode = MODE_UNKNOWN;
     unsigned numrestored = 0;
@@ -376,7 +376,7 @@ int main(int argc, char *argv[])
     }
 
     /* Translate mailboxname */
-    char *intname = mboxname_from_external(argv[optind], &unex_namespace, NULL);
+    intname = mboxname_from_external(argv[optind], &unex_namespace, NULL);
 
     if (mode == MODE_LIST) {
         list_expunged(intname);
@@ -403,7 +403,7 @@ int main(int argc, char *argv[])
         qsort(uids, nuids, sizeof(unsigned long), compare_uid);
     }
 
-    char *extname = mboxname_to_external(intname, &unex_namespace, NULL);
+    extname = mboxname_to_external(intname, &unex_namespace, NULL);
 
     printf("restoring %sexpunged messages in mailbox '%s'\n",
             mode == MODE_ALL ? "all " : "", extname);

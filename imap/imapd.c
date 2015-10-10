@@ -6808,6 +6808,7 @@ static int checkmboxname(const mbentry_t *mbentry, void *rock)
 static int renmbox(const mbentry_t *mbentry, void *rock)
 {
     struct renrock *text = (struct renrock *)rock;
+    char *oldextname = NULL, *newextname = NULL;
     int r = 0;
 
     if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_BUFFER)
@@ -6821,8 +6822,10 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user);
 
-    char *oldextname = mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
-    char *newextname = mboxname_to_external(text->newmailboxname, &imapd_namespace, imapd_userid);
+    oldextname =
+        mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
+    newextname =
+        mboxname_to_external(text->newmailboxname, &imapd_namespace, imapd_userid);
 
     if(r) {
         prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
@@ -8123,7 +8126,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     static struct buf arg;
     int r;
     mbentry_t *mbentry = NULL;
-    char *intname;
+    char *intname = NULL;
 
     if (!imapd_userisadmin && !imapd_userisproxyadmin) {
         /* need to allow proxies so that mailbox moves can set initial quota
