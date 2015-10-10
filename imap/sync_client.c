@@ -388,17 +388,8 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
 
 static int do_restart()
 {
-    static int restartcnt = 0;
+    sync_send_restart(sync_out);
 
-    if (sync_out->userdata) {
-        /* IMAP flavor (w/ tag) */
-        struct buf *tag = (struct buf *) sync_out->userdata;
-        buf_reset(tag);
-        buf_printf(tag, "R%d", restartcnt++);
-        prot_printf(sync_out, "%s SYNC", buf_cstring(tag));
-    }
-    prot_printf(sync_out, "RESTART\r\n");
-    prot_flush(sync_out);
     return sync_parse_response("RESTART", sync_in, NULL);
 }
 
