@@ -53,15 +53,19 @@ enum {
     BACKUP_APPEND_INDEXONLY = 0x0002,
 };
 
+struct backup_append_state {
+    unsigned mode;
+    gzFile gzfile;
+    int index_id;
+};
+
 struct backup {
     int fd;
     char *data_fname;
     char *index_fname;
     char *oldindex_fname;
     sqldb_t *db;
-    gzFile gzfile;
-    int index_id;
-    unsigned append_mode;
+    struct backup_append_state *append_state;
 };
 
 #endif

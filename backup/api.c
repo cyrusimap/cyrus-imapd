@@ -94,8 +94,6 @@ static struct backup *backup_open_internal(const char *data_fname,
     if (!backup) return NULL;
 
     backup->fd = -1;
-    backup->index_id = -1;
-    backup->append_mode = BACKUP_APPEND_NORMAL;
 
     backup->data_fname = xstrdup(data_fname);
     backup->index_fname = xstrdup(index_fname);
@@ -642,19 +640,20 @@ static const char *_sha1_file(int fd, const char *fname, size_t limit,
 static int backup_append_start5(struct backup *backup, time_t ts, off_t offset,
                                 const char *file_sha1, int index_only)
 {
-    if (backup->gzfile != NULL) fatal("already started", -1);
-    if (backup->index_id != -1) fatal("already started", -1);
+    if (backup->append_state != NULL) fatal("already started", -1);
+
+    struct backup_append_state *append_state = xzmalloc(sizeof(*append_state));
 
     if (!index_only) {
         int dup_fd = dup(backup->fd);
-        backup->gzfile = gzdopen(dup_fd, "ab");
-        if (!backup->gzfile) {
+        append_state->gzfile = gzdopen(dup_fd, "ab");
+        if (!append_state->gzfile) {
             fprintf(stderr, "%s: gzdopen fd %i failed: %s\n", __func__, dup_fd, strerror(errno));
             return -1;
         }
     }
     else {
-        backup->append_mode |= BACKUP_APPEND_INDEXONLY;
+        append_state->mode |= BACKUP_APPEND_INDEXONLY;
     }
 
     struct sqldb_bindval bval[] = {
@@ -674,13 +673,15 @@ static int backup_append_start5(struct backup *backup, time_t ts, off_t offset,
         goto error;
     }
 
-    backup->index_id = sqldb_lastid(backup->db);
+    append_state->index_id = sqldb_lastid(backup->db);
+    backup->append_state = append_state;
     return 0;
 
 error:
-    if (backup->gzfile) {
-        gzclose_w(backup->gzfile);
-        backup->gzfile = NULL;
+    if (append_state) {
+        if (append_state->gzfile)
+            gzclose_w(append_state->gzfile);
+        free(append_state);
     }
     return -1;
 }
@@ -763,7 +764,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
     }
 
     struct sqldb_bindval mbox_bval[] = {
-        { ":last_backup_id",    SQLITE_INTEGER, { .i = backup->index_id } },
+        { ":last_backup_id",    SQLITE_INTEGER, { .i = backup->append_state->index_id } },
         { ":uniqueid",          SQLITE_TEXT,    { .s = uniqueid } },
         { ":mboxname",          SQLITE_TEXT,    { .s = mboxname } },
         { ":mboxtype",          SQLITE_TEXT,    { .s = mboxtype } },
@@ -858,7 +859,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         struct sqldb_bindval record_bval[] = {
             { ":mailbox_id",        SQLITE_INTEGER, { .i = mailbox_id } },
             { ":message_id",        SQLITE_INTEGER, { .i = message_id } },
-            { ":last_backup_id",    SQLITE_INTEGER, { .i = backup->index_id } },
+            { ":last_backup_id",    SQLITE_INTEGER, { .i = backup->append_state->index_id } },
             { ":uid",               SQLITE_INTEGER, { .i = uid } },
             { ":modseq",            SQLITE_INTEGER, { .i = modseq } },
             { ":last_updated",      SQLITE_INTEGER, { .i = last_updated } },
@@ -947,14 +948,12 @@ static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
 EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
                            time_t ts, off_t dl_offset, size_t dl_len)
 {
-    if (backup->index_id == -1) fatal("not started", -1);
+    if (!backup->append_state) fatal("not started", -1);
 
     /* FIXME track dl_offset and dl_len ourselves */
 
-    if (!(backup->append_mode & BACKUP_APPEND_INDEXONLY)) {
-        if (!backup->gzfile) fatal("not started", -1);
-
-        gzprintf(backup->gzfile, "%ld ", (int64_t) ts);
+    if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
+        gzprintf(backup->append_state->gzfile, "%ld ", (int64_t) ts);
 
         /* gzprintf's internal buffer is limited to about 8K, which
          * dlist will exceed if there's a message in it, so don't use
@@ -962,7 +961,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
          */
         struct buf buf = BUF_INITIALIZER;
         dlist_printbuf(dlist, 1, &buf);
-        gzwrite(backup->gzfile, buf_cstring(&buf), buf_len(&buf));
+        gzwrite(backup->append_state->gzfile, buf_cstring(&buf), buf_len(&buf));
         // FIXME check return value is long enough
         buf_free(&buf);
 
@@ -976,7 +975,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
     else if (strcmp(dlist->name, "MAILBOX") == 0)
         r = _index_mailbox(backup, dlist, dl_offset);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
-        r = _index_message(backup->db, backup->index_id, dlist, dl_offset, dl_len);
+        r = _index_message(backup->db, backup->append_state->index_id, dlist, dl_offset, dl_len);
 
     else {
         fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dlist->name);
@@ -987,19 +986,20 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
 }
 
 int backup_append_end(struct backup *backup, size_t length) {
-    if (backup->index_id == -1) fatal("not started", -1);
+    int r;
+    struct backup_append_state *append_state = backup->append_state;
+
+    backup->append_state = NULL;
+
+    if (!append_state) fatal("not started", -1);
 
     /* FIXME calculate length ourselves */
 
-    if (!(backup->append_mode & BACKUP_APPEND_INDEXONLY)) {
-        if (!backup->gzfile) fatal("not started", -1);
-
-        int r = gzclose_w(backup->gzfile);
-        backup->gzfile = NULL;
+    if (!(append_state->mode & BACKUP_APPEND_INDEXONLY)) {
+        r = gzclose_w(append_state->gzfile);
         if (r != Z_OK) {
             fprintf(stderr, "%s: gzclose_w failed: %i\n", __func__, r);
             // FIXME handle this sensibly
-            return -1;
         }
     }
 
@@ -1007,42 +1007,46 @@ int backup_append_end(struct backup *backup, size_t length) {
     const char *data_sha1 = NULL;
 
     struct sqldb_bindval bval[] = {
-        { ":id",        SQLITE_INTEGER, { .i = backup->index_id } },
-        { ":length",    SQLITE_INTEGER, { .i = length           } },
-        { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1        } },
-        { NULL,         SQLITE_NULL,    { .s = NULL             } },
+        { ":id",        SQLITE_INTEGER, { .i = append_state->index_id   } },
+        { ":length",    SQLITE_INTEGER, { .i = length                   } },
+        { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1                } },
+        { NULL,         SQLITE_NULL,    { .s = NULL                     } },
     };
 
-    int r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
+    r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
     if (r) {
         // FIXME handle this sensibly
         fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
         sqldb_rollback(backup->db, "backup_index");
-        backup->index_id = -1;
-        return -1;
+    }
+    else {
+        sqldb_commit(backup->db, "backup_index");
     }
 
-    sqldb_commit(backup->db, "backup_index");
-
-    backup->index_id = -1;
-
-    return 0;
+    free(append_state);
+    return r;
 }
 
 EXPORTED int backup_append_abort(struct backup *backup)
 {
-    if (backup->index_id == -1) fatal("not started", -1);
+    struct backup_append_state *append_state = backup->append_state;
+
+    backup->append_state = NULL;
+
+    if (!append_state) fatal("not started", -1);
 
     sqldb_rollback(backup->db, "backup_index");
-    backup->index_id = -1;
 
     // FIXME
     // can we truncate back to the length we started this append at?
     // ftruncate(2) says nothing about behaviour on descriptors
     // opened with O_APPEND...
     // seems like it might work, but test it first.
-    (void) backup;
-    return -1;
+
+    // FIXME at least close the damn file...
+
+    free(append_state);
+    return 0;
 }
 
 static int _parse_line(struct protstream *in, time_t *ts,
