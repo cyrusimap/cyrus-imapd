@@ -64,14 +64,15 @@ const char *filename;   //  Name of blob
 };
 
 
-static const char *objectstore_get_object_filename(struct mailbox *mailbox,
-        const struct index_record *record)
+static const char *objectstore_get_object_filename(struct mailbox *mailbox __attribute__((unused)),
+                                                   const struct index_record *record)
 {
     return message_guid_encode(&record->guid);
 }
 
 
-static struct object_def *objectstore_get_object_def (struct mailbox *mailbox, const struct index_record *record)
+static struct object_def *objectstore_get_object_def(struct mailbox *mailbox,
+                                                     const struct index_record *record)
 {
     static struct object_def obj_def ;
     const char *namespace = config_getstring(IMAPOPT_OBJECT_STORAGE_DUMMY_SPOOL) ;
@@ -83,7 +84,8 @@ static struct object_def *objectstore_get_object_def (struct mailbox *mailbox, c
     return &obj_def;
 }
 
-static const char *objectstore_container_path(struct mailbox *mailbox, const struct index_record *record)
+static const char *objectstore_container_path(struct mailbox *mailbox,
+                                              const struct index_record *record)
 {
     static char path[MAX_MAILBOX_PATH+1];
     struct object_def *obj_def = NULL;
@@ -91,11 +93,12 @@ static const char *objectstore_container_path(struct mailbox *mailbox, const str
     obj_def = objectstore_get_object_def (mailbox, record);
 
     snprintf(path, sizeof(path), "%s/%s/%c%c", obj_def->namespace, obj_def->user, obj_def->filename[0], obj_def->filename[1]);
-    
+
     return path ;
 }
 
-static const char *objectstore_filename_in_container_path(struct mailbox *mailbox, const struct index_record *record)
+static const char *objectstore_filename_in_container_path(struct mailbox *mailbox,
+                                                          const struct index_record *record)
 {
     static char path[MAX_MAILBOX_PATH+1];
     struct object_def *obj_def = NULL;
@@ -103,13 +106,13 @@ static const char *objectstore_filename_in_container_path(struct mailbox *mailbo
     obj_def = objectstore_get_object_def (mailbox, record);
 
     const char *container_path = objectstore_container_path(mailbox, record) ;
-    
+
     snprintf(path, sizeof(path), "%s/%s", container_path, obj_def->filename);
-  
+
     return path ;
 }
 
-static int is_directory_empty(char *dir_path) 
+static int is_directory_empty(char *dir_path)
 {
     int n = 0;
     struct dirent *d;
@@ -142,16 +145,16 @@ int objectstore_put (struct mailbox *mailbox, const struct index_record *record,
     // create user container if not there
     snprintf(path, sizeof(path), "%s/%s", obj_def->namespace, obj_def->user);
     if(stat(path, &fileStat) < 0) {
-    	if (cyrus_mkdir (path, 755 ) == -1) {
-    		syslog(LOG_ERR, "Dummy ObjectStore: Cannot create user %s",path);
-    		rc = 1 ;
-    	}
+        if (cyrus_mkdir (path, 755 ) == -1) {
+            syslog(LOG_ERR, "Dummy ObjectStore: Cannot create user %s",path);
+            rc = 1 ;
+        }
     }
 
     //create sub-container if not there
     const char *container_path = objectstore_container_path(mailbox, record) ;
     snprintf(path, sizeof(path), "%s/", container_path);
-    
+
     if(stat(path, &fileStat) < 0) {
         if (cyrus_mkdir (path, 755 ) == -1) {
             syslog(LOG_ERR, "Dummy ObjectStore: Cannot create user sub container %s",path);
@@ -164,9 +167,9 @@ int objectstore_put (struct mailbox *mailbox, const struct index_record *record,
  // check is file already exist
     rc = objectstore_is_filename_in_container (mailbox, record, &already);
     if (!already) {
-    	// copy file
-    	const char *destfilename = objectstore_filename_in_container_path (mailbox, record) ;
-    	rc = cyrus_copyfile (fname, destfilename, COPYFILE_NOLINK) ;
+        // copy file
+        const char *destfilename = objectstore_filename_in_container_path (mailbox, record) ;
+        rc = cyrus_copyfile (fname, destfilename, COPYFILE_NOLINK) ;
     }
     return rc;
 }
@@ -179,9 +182,9 @@ int objectstore_get (struct mailbox *mailbox,
     // check is file already exist
     rc = objectstore_is_filename_in_container (mailbox, record, &already);
     if (already) {
-    	// copy file
-    	const char *srcfilename = objectstore_filename_in_container_path (mailbox, record) ;
-    	rc = cyrus_copyfile (srcfilename, fname, COPYFILE_NOLINK) ;
+        // copy file
+        const char *srcfilename = objectstore_filename_in_container_path (mailbox, record) ;
+        rc = cyrus_copyfile (srcfilename, fname, COPYFILE_NOLINK) ;
     }
     return rc;
 }
@@ -199,14 +202,14 @@ int objectstore_delete (struct mailbox *mailbox,
         int count = 0;
         delete_message_guid (mailbox, record, &count) ;
         if (!count){
-    	   // delete file
-    	   const char *filename = objectstore_filename_in_container_path (mailbox, record) ;
-    	   rc = remove ( filename ) ;
-    	   
-    	   // remove empty sub-container
+           // delete file
+           const char *filename = objectstore_filename_in_container_path (mailbox, record) ;
+           rc = remove ( filename ) ;
+
+           // remove empty sub-container
            const char *container_path = objectstore_container_path(mailbox, record) ;
            snprintf(path, sizeof(path), "%s/", container_path);
-           
+
            if(is_directory_empty (path))
                remove (path) ;
           }

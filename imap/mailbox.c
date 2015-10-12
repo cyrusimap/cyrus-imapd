@@ -800,7 +800,7 @@ EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
 }
 
 
-static int _map_local_record(struct mailbox *mailbox, const struct index_record *record, const char *fname, struct buf *buf)
+static int _map_local_record(const struct mailbox *mailbox, const char *fname, struct buf *buf)
 {
     struct stat sbuf;
     int msgfd;
@@ -821,23 +821,20 @@ static int _map_local_record(struct mailbox *mailbox, const struct index_record 
 
 EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf)
 {
-    const char *fname;
-    int rc;
-
     xstats_inc(MESSAGE_MAP);
 
-    fname = mailbox_record_fname(mailbox, record);
-    rc = _map_local_record(mailbox, record, fname, buf);
-    if (!rc) return 0;
+    const char *fname = mailbox_record_fname(mailbox, record);
+    int r = _map_local_record(mailbox, fname, buf);
+    if (!r) return 0;
 
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)){
-        rc = objectstore_get(mailbox, record, fname);
-        if (rc)
-            return rc;
-        rc = _map_local_record(mailbox, record, fname, buf);
-        remove ( fname ) ;
+        r = objectstore_get(mailbox, record, fname);
+        if (r) return r;
+        r = _map_local_record(mailbox, fname, buf);
+        remove(fname);
     }
-    return rc;
+
+    return r;
 }
 
 
@@ -4235,11 +4232,11 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
 }
 
 //  this is used to get message back from ObjectStore
-EXPORTED unsigned mailbox_should_unarchive(struct mailbox *mailbox,
-                                           const struct index_record *record,
-                                           void *rock)
+EXPORTED unsigned mailbox_should_unarchive(struct mailbox *mailbox __attribute__((unused)),
+                                           const struct index_record *record __attribute__((unused)),
+                                           void *rock __attribute__((unused)))
 {
-	return 0 ;
+    return 0;
 }
 
 

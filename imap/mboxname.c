@@ -1344,7 +1344,7 @@ EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 }
 
 
-EXPORTED void mboxname_hash(char *buf, size_t buf_len,
+EXPORTED void mboxname_hash(char *dest, size_t destlen,
                             const char *root,
                             const char *name)
 {
