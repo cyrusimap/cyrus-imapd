@@ -46,9 +46,16 @@
 #include <config.h>
 
 #ifdef HAVE_SSL
+
 #include <openssl/sha.h>
+
+#ifndef SHA1_DIGEST_LENGTH
+#define SHA1_DIGEST_LENGTH (SHA_DIGEST_LENGTH)
+#endif
+
 #define xsha1 SHA1
-#else
+
+#else /* HAVE_SSL */
 
 #include <stdint.h>
 
@@ -57,6 +64,7 @@ typedef uint8_t sha1_byte;    /* single byte type */
 
 #define SHA1_BLOCK_LENGTH   64
 #define SHA1_DIGEST_LENGTH  20
+#define SHA_DIGEST_LENGTH (SHA1_DIGEST_LENGTH)
 
 /* opaque type for the SHA1 structure: */
 typedef struct _SHA_CTX SHA_CTX;
@@ -68,6 +76,6 @@ int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context);
 unsigned char *xsha1(const unsigned char *buf, unsigned long len,
               sha1_byte dest[SHA1_DIGEST_LENGTH]);
 
-#endif
+#endif /* HAVE_SSL */
 
-#endif
+#endif /* LIB_XSHA1_H */

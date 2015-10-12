@@ -197,7 +197,7 @@ static int jmap_post(struct transaction_t *txn,
     struct hash_table idmap;
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
-    char *buf;
+    char *buf, *inboxname = NULL;
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
@@ -238,7 +238,7 @@ static int jmap_post(struct transaction_t *txn,
         goto done;
     }
 
-    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+    inboxname = mboxname_user_mbox(httpd_userid, NULL);
 
     /* we lock the user's INBOX before we start any operation, because that way we
      * guarantee (via conversations magic) that nothing changes the modseqs except

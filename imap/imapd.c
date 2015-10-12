@@ -6808,6 +6808,7 @@ static int checkmboxname(const mbentry_t *mbentry, void *rock)
 static int renmbox(const mbentry_t *mbentry, void *rock)
 {
     struct renrock *text = (struct renrock *)rock;
+    char *oldextname = NULL, *newextname = NULL;
     int r = 0;
 
     if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_BUFFER)
@@ -6821,8 +6822,10 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user);
 
-    char *oldextname = mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
-    char *newextname = mboxname_to_external(text->newmailboxname, &imapd_namespace, imapd_userid);
+    oldextname =
+        mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
+    newextname =
+        mboxname_to_external(text->newmailboxname, &imapd_namespace, imapd_userid);
 
     if(r) {
         prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
@@ -8123,7 +8126,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     static struct buf arg;
     int r;
     mbentry_t *mbentry = NULL;
-    char *intname;
+    char *intname = NULL;
 
     if (!imapd_userisadmin && !imapd_userisproxyadmin) {
         /* need to allow proxies so that mailbox moves can set initial quota
@@ -10325,6 +10328,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 }
 
 enum {
+    XFER_MOVING_USER = -1,
     XFER_DEACTIVATED = 1,
     XFER_REMOTE_CREATED,
     XFER_LOCAL_MOVING,
@@ -10386,12 +10390,9 @@ retry:
 }
 
 /* nothing you can do about failures, just try to clean up */
-static void xfer_done(struct xfer_header **xferptr)
+static void xfer_cleanup(struct xfer_header *xfer)
 {
-    struct xfer_header *xfer = *xferptr;
     struct xfer_item *item, *next;
-
-    syslog(LOG_INFO, "XFER: disconnecting from servers");
 
     /* remove items */
     item = xfer->items;
@@ -10401,17 +10402,30 @@ static void xfer_done(struct xfer_header **xferptr)
         free(item);
         item = next;
     }
+    xfer->items = NULL;
+
+    free(xfer->topart);
+    free(xfer->userid);
+    xfer->topart = xfer->userid = NULL;
+
+    seen_close(&xfer->seendb);
+    xfer->seendb = NULL;
+}
+
+static void xfer_done(struct xfer_header **xferptr)
+{
+    struct xfer_header *xfer = *xferptr;
+
+    syslog(LOG_INFO, "XFER: disconnecting from servers");
 
     /* disconnect */
     if (xfer->mupdate_h) mupdate_disconnect(&xfer->mupdate_h);
     if (xfer->be) backend_disconnect(xfer->be);
     free(xfer->toserver);
-    free(xfer->topart);
-    free(xfer->userid);
-
-    seen_close(&xfer->seendb);
 
     buf_free(&xfer->tagbuf);
+
+    xfer_cleanup(xfer);
 
     free(xfer);
 
@@ -10477,8 +10491,7 @@ static int backend_version(struct backend *be)
     return 6;
 }
 
-static int xfer_init(const char *toserver, const char *topart,
-                     struct xfer_header **xferptr)
+static int xfer_init(const char *toserver, struct xfer_header **xferptr)
 {
     struct xfer_header *xfer = xzmalloc(sizeof(struct xfer_header));
     int r;
@@ -10504,7 +10517,7 @@ static int xfer_init(const char *toserver, const char *topart,
     }
 
     xfer->toserver = xstrdup(toserver);
-    xfer->topart = xstrdup(topart);
+    xfer->topart = NULL;
     xfer->seendb = NULL;
 
     /* connect to mupdate server if configured */
@@ -10714,8 +10727,7 @@ static int xfer_undump(struct xfer_header *xfer)
     return 0;
 }
 
-static int xfer_addmbox(const mbentry_t *mbentry,
-                        void *rock)
+static int xfer_addusermbox(const mbentry_t *mbentry, void *rock)
 {
     struct xfer_header *xfer = (struct xfer_header *)rock;
 
@@ -10769,7 +10781,8 @@ static int xfer_initialsync(struct xfer_header *xfer)
         }
         xfer->items = NULL;
 
-        r = mboxlist_usermboxtree(xfer->userid, xfer_addmbox, xfer, MBOXTREE_DELETED);
+        r = mboxlist_usermboxtree(xfer->userid, xfer_addusermbox,
+				  xfer, MBOXTREE_DELETED);
     }
     else {
         struct sync_name_list *mboxname_list = sync_name_list_create();
@@ -11224,14 +11237,67 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     return r;
 }
 
-static void cmd_xfer(const char *tag, const char *name,
-              const char *toserver, const char *topart)
+struct xfer_list {
+    const struct namespace *ns;
+    const char *userid;
+    const char *part;
+    short allow_usersubs;
+    struct xfer_item *mboxes;
+};    
+
+static int xfer_addmbox(const char *name, int matchlen,
+			int maycreate __attribute__((unused)), void *rock)
 {
-    int r = 0;
-    int moving_user = 0;
-    char *p;
-    mbentry_t *mbentry = NULL;
+    struct xfer_list *list = (struct xfer_list *) rock;
+    mbentry_t *mbentry;
+    mbname_t *mbname;
+
+    if (name[matchlen]) {
+	/* No partial matches */
+	return 0;
+    }
+
+    if (mboxlist_lookup(name, &mbentry, NULL)) return 0;
+
+    if (list->part && strcmp(mbentry->partition, list->part)) {
+	/* Not on specified partition */
+	mboxlist_entry_free(&mbentry);
+	return 0;
+    }
+
+    mbname = mbname_from_intname(mbentry->name);
+
+    /* Only add shared mailboxes, targeted user submailboxes, or user INBOXes */
+    if (!mbname_localpart(mbname) || list->allow_usersubs ||
+	(!mbname_isdeleted(mbname) && !strarray_size(mbname_boxes(mbname)))) {
+	const char *extname = mbname_extname(mbname, list->ns, list->userid);
+	struct xfer_item *mbox = xzmalloc(sizeof(struct xfer_item));
+
+	mbox->mbentry = mbentry;
+	strncpy(mbox->extname, extname, sizeof(mbox->extname));
+	if (mbname_localpart(mbname) && !list->allow_usersubs) {
+	    /* User INBOX */
+	    mbox->state = XFER_MOVING_USER;
+	}
+
+	/* Add link on to the list (reverse order) */
+	mbox->next = list->mboxes;
+	list->mboxes = mbox;
+    }
+    else mboxlist_entry_free(&mbentry);
+
+    mbname_free(&mbname);
+
+    return 0;
+}
+
+static void cmd_xfer(const char *tag, const char *name,
+		     const char *toserver, const char *topart)
+{
+    int r = 0, partial_success = 0, mbox_count = 0;
     struct xfer_header *xfer = NULL;
+    struct xfer_list list = { &imapd_namespace, imapd_userid, NULL, 0, NULL };
+    struct xfer_item *item, *next;
     char *intname = NULL;
 
     /* administrators only please */
@@ -11246,94 +11312,142 @@ static void cmd_xfer(const char *tag, const char *name,
         goto done;
     }
 
-    intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    const char *mbox = intname;
-
-    /* NOTE: Since XFER can only be used by an admin, and we always connect
-     * to the destination backend as an admin, we take advantage of the fact
-     * that admins *always* use a consistent mailbox naming scheme.
-     * So, 'name' should be used in any command we send to a backend, and
-     * 'mailboxname' is the internal name to be used for mupdate and findall.
-     */
-
-    if (config_virtdomains && (p = strchr(intname, '!'))) {
-        /* pointer to mailbox w/o domain prefix */
-        mbox = p + 1;
-    }
-
-    if (!strncmp(mbox, "user.", 5) && !strchr(mbox+5, '.')) {
-        if ((strlen(mbox+5) == (strlen(imapd_userid) - (mbox - intname))) &&
-            !strncmp(mbox+5, imapd_userid, strlen(mbox+5))) {
-            /* don't move your own inbox, that could be troublesome */
-            r = IMAP_MAILBOX_NOTSUPPORTED;
-        } else if (!config_getswitch(IMAPOPT_ALLOWUSERMOVES)) {
-            /* not configured to allow user moves */
-            r = IMAP_MAILBOX_NOTSUPPORTED;
-        } else {
-            moving_user = 1;
-        }
-    }
-    if (r) goto done;
-
-    r = mboxlist_lookup(intname, &mbentry, NULL);
-    if (r) goto done;
-
-    if (!topart) topart = mbentry->partition;
-    r = xfer_init(toserver, topart, &xfer);
-    if (r) goto done;
-
-    /* if we are not moving a user, just move the one mailbox */
-    if (!moving_user) {
-
-        syslog(LOG_INFO, "XFER: mailbox '%s' -> %s!%s",
-               mbentry->name, toserver, topart);
-
-        /* is the selected mailbox the one we're moving? */
-        if (!strcmpsafe(intname, index_mboxname(imapd_index))) {
-            r = IMAP_MAILBOX_LOCKED;
-            goto done;
-        }
-
-        /* we're moving this mailbox */
-        xfer_addmbox(mbentry, xfer);
-
-        r = do_xfer(xfer);
+    /* Build list of users/mailboxes to transfer */
+    if (config_partitiondir(name)) {
+	/* entire partition */
+	list.part = name;
+	mboxlist_findall(NULL, "*", 1, NULL, NULL, xfer_addmbox, &list);
     } else {
-        xfer->userid = mboxname_to_userid(intname);
+	/* mailbox pattern */
+	mbname_t *mbname;
 
-        syslog(LOG_INFO, "XFER: user '%s' -> %s!%s",
-               xfer->userid, toserver, topart);
+	intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
-        /* is the selected mailbox in the namespace we're moving? */
-        if (!strncmpsafe(intname, index_mboxname(imapd_index),
-                         strlen(intname))) {
-            r = IMAP_MAILBOX_LOCKED;
-            goto done;
-        }
+	mbname = mbname_from_intname(intname);
+	if (mbname_localpart(mbname) &&
+	    (mbname_isdeleted(mbname) || strarray_size(mbname_boxes(mbname)))) {
+	    /* targeted a user submailbox */
+	    list.allow_usersubs = 1;
+	}
+	mbname_free(&mbname);
 
-        if (!xfer->use_replication) {
-            /* set the quotaroot if needed */
-            r = xfer_setquotaroot(xfer, intname);
-            if (r) goto done;
+	mboxlist_findall(NULL, intname, 1, NULL, NULL, xfer_addmbox, &list);
+	free(intname);
+    }
 
-            /* backport the seen file if needed */
-            if (xfer->remoteversion < 12) {
-                r = seen_open(xfer->userid, SEEN_CREATE, &xfer->seendb);
-                if (r) goto done;
-            }
-        }
+    r = xfer_init(toserver, &xfer);
+    if (r) goto done;
 
-        r = mboxlist_usermboxtree(xfer->userid, xfer_addmbox, xfer, MBOXTREE_DELETED);
+    for (item = list.mboxes; item; item = next) {
+	mbentry_t *mbentry = item->mbentry;
 
-        /* NOTE: mailboxes were added in reverse, so the inbox is
-         * done last */
-        r = do_xfer(xfer);
-        if (r) goto done;
+	/* NOTE: Since XFER can only be used by an admin, and we always connect
+	 * to the destination backend as an admin, we take advantage of the fact
+	 * that admins *always* use a consistent mailbox naming scheme.
+	 * So, 'name' should be used in any command we send to a backend, and
+	 * 'intname' is the internal name to be used for mupdate and findall.
+	 */
 
-        /* this was a successful user delete, and we need to delete
-           certain user meta-data (but not seen state!) */
-        syslog(LOG_INFO, "XFER: deleting user metadata");
-        user_deletedata(xfer->userid, 0);
+	r = 0;
+	intname = mbentry->name;
+	xfer->topart = xstrdup(topart ? topart : mbentry->partition);
+
+	/* if we are not moving a user, just move the one mailbox */
+	if (item->state != XFER_MOVING_USER) {
+
+	    syslog(LOG_INFO, "XFER: mailbox '%s' -> %s!%s",
+		   mbentry->name, xfer->toserver, xfer->topart);
+
+	    /* is the selected mailbox the one we're moving? */
+	    if (!strcmpsafe(intname, index_mboxname(imapd_index))) {
+		r = IMAP_MAILBOX_LOCKED;
+		goto next;
+	    }
+
+	    /* we're moving this mailbox */
+	    xfer_addusermbox(mbentry, xfer);
+	    mbox_count++;
+
+	    r = do_xfer(xfer);
+	} else {
+	    xfer->userid = mboxname_to_userid(intname);
+
+	    syslog(LOG_INFO, "XFER: user '%s' -> %s!%s",
+		   xfer->userid, xfer->toserver, xfer->topart);
+
+	    if (!config_getswitch(IMAPOPT_ALLOWUSERMOVES)) {
+		/* not configured to allow user moves */
+		r = IMAP_MAILBOX_NOTSUPPORTED;
+	    } else if (!strcmp(xfer->userid, imapd_userid)) {
+		/* don't move your own inbox, that could be troublesome */
+		r = IMAP_MAILBOX_NOTSUPPORTED;
+	    } else if (!strncmpsafe(intname, index_mboxname(imapd_index),
+			     strlen(intname))) {
+		/* selected mailbox is in the namespace we're moving */
+		r = IMAP_MAILBOX_LOCKED;
+	    }
+	    if (r) goto next;
+
+	    if (!xfer->use_replication) {
+		/* set the quotaroot if needed */
+		r = xfer_setquotaroot(xfer, intname);
+		if (r) goto next;
+
+		/* backport the seen file if needed */
+		if (xfer->remoteversion < 12) {
+		    r = seen_open(xfer->userid, SEEN_CREATE, &xfer->seendb);
+		    if (r) goto next;
+		}
+	    }
+
+	    r = mboxlist_usermboxtree(xfer->userid, xfer_addusermbox,
+				      xfer, MBOXTREE_DELETED);
+
+	    /* NOTE: mailboxes were added in reverse, so the inbox is
+	     * done last */
+	    r = do_xfer(xfer);
+	    if (r) goto next;
+
+	    /* this was a successful user move, and we need to delete
+	       certain user meta-data (but not seen state!) */
+	    syslog(LOG_INFO, "XFER: deleting user metadata");
+	    user_deletedata(xfer->userid, 0);
+	}
+
+      next:
+	if (r) {
+	    if (xfer->userid)
+		prot_printf(imapd_out, "* NO USER %s (%s)\r\n",
+			    xfer->userid, error_message(r));
+	    else
+		prot_printf(imapd_out, "* NO MAILBOX \"%s\" (%s)\r\n",
+			    item->extname, error_message(r));
+	} else {
+	    partial_success = 1;
+
+	    if (xfer->userid)
+		prot_printf(imapd_out, "* OK USER %s\r\n", xfer->userid);
+	    else
+		prot_printf(imapd_out, "* OK MAILBOX \"%s\"\r\n", item->extname);
+	}
+	prot_flush(imapd_out);
+
+	mboxlist_entry_free(&mbentry);
+	next = item->next;
+	free(item);
+
+	if (xfer->userid || mbox_count > 1000) {
+	    /* RESTART after each user or after every 1000 mailboxes */
+	    mbox_count = 0;
+
+	    sync_send_restart(xfer->be->out);
+	    r = sync_parse_response("RESTART", xfer->be->in, NULL);
+	    if (r) goto done;
+	}
+
+	xfer_cleanup(xfer);
+
+	if (partial_success) r = 0;
     }
 
 done:
@@ -11343,13 +11457,11 @@ done:
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
-                    error_message(r));
+		    error_message(r));
     } else {
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
-
-    free(intname);
 
     return;
 }
