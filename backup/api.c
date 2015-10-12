@@ -70,6 +70,12 @@
 #define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
 #include "backup/internal.h"
 
+static int _column_int(sqlite3_stmt *stmt, int column);
+static sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column);
+static char * _column_text(sqlite3_stmt *stmt, int column);
+static const char *_sha1_file(int fd, const char *fname, size_t limit,
+                              char buf[2 * SHA1_DIGEST_LENGTH + 1]);
+
 /*
  * use cases:
  *  - backupd needs to be able to append to data stream and update index (exclusive)
@@ -147,6 +153,91 @@ error:
     return NULL;
 }
 
+struct backup_meta {
+    int id;
+    time_t timestamp;
+    off_t offset;
+    size_t length;
+    char *file_sha1;
+    char *data_sha1;
+};
+
+static int _validate_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct backup_meta *backup_meta = (struct backup_meta *) rock;
+
+    int column = 0;
+    backup_meta->id = _column_int(stmt, column++);
+    backup_meta->timestamp = _column_int64(stmt, column++);
+    backup_meta->offset = _column_int64(stmt, column++);
+    backup_meta->length = _column_int64(stmt, column++);
+    backup_meta->file_sha1 = _column_text(stmt, column++);
+    backup_meta->data_sha1 = _column_text(stmt, column++);
+
+    return 0;
+}
+
+static int backup_validate_checksums(struct backup *backup)
+{
+    struct backup_meta backup_meta;
+
+    int r = sqldb_exec(backup->db, backup_index_backup_select_latest_sql,
+                       NULL, _validate_cb, &backup_meta);
+    if (r) goto done;
+
+    /* validate file-prior-to-this-backup checksum */
+    char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
+    _sha1_file(backup->fd, backup->data_fname, backup_meta.offset, file_sha1);
+    r = strncmp(backup_meta.file_sha1, file_sha1, sizeof(file_sha1));
+    if (r) {
+        fprintf(stderr, "%s: %s file checksum mismatch: %s on disk, %s in index\n",
+                __func__, backup->data_fname, file_sha1, backup_meta.file_sha1);
+        goto done;
+    }
+
+    /* validate data-within-this-backup checksum */
+    struct gzuncat *gzuc = gzuc_open(backup->fd);
+    if (!gzuc) {
+        r = -1;
+        goto done;
+    }
+
+    char buf[8192]; /* FIXME whatever */
+    size_t len = 0;
+    SHA_CTX sha_ctx;
+    SHA1_Init(&sha_ctx);
+    gzuc_member_start_from(gzuc, backup_meta.offset);
+    while (!gzuc_member_eof(gzuc)) {
+        ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
+        if (n >= 0) {
+            SHA1_Update(&sha_ctx, buf, n);
+            len += n;
+        }
+    }
+    if (len != backup_meta.length) {
+        r = -1;
+        goto done;
+    }
+    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
+    char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
+    SHA1_Final(sha1_raw, &sha_ctx);
+    r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
+    assert(r == 2 * SHA1_DIGEST_LENGTH);
+    r = strncmp(backup_meta.data_sha1, data_sha1, sizeof(data_sha1));
+    if (r) {
+        fprintf(stderr, "%s: %s data checksum mismatch: %s on disk, %s in index\n",
+                __func__, backup->data_fname, data_sha1, backup_meta.data_sha1);
+        goto done;
+    }
+
+done:
+    if (gzuc) gzuc_close(&gzuc);
+    free(backup_meta.file_sha1);
+    free(backup_meta.data_sha1);
+    fprintf(stderr, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
+    return r;
+}
+
 EXPORTED struct backup *backup_open(const mbname_t *mbname)
 {
     struct buf data_fname = BUF_INITIALIZER;
@@ -159,6 +250,8 @@ EXPORTED struct backup *backup_open(const mbname_t *mbname)
     backup = backup_open_internal(buf_cstring(&data_fname),
                                   buf_cstring(&index_fname),
                                   BACKUP_OPEN_NORMAL);
+    r = backup_validate_checksums(backup);
+    if (r) backup_close(&backup);
 
 done:
     buf_free(&data_fname);
@@ -298,6 +391,11 @@ EXPORTED struct backup *backup_open_paths(const char *data_fname,
     struct backup *backup = backup_open_internal(data_fname, tmp,
                                                  BACKUP_OPEN_NORMAL);
     free(tmp);
+
+    if (backup) {
+        int r = backup_validate_checksums(backup);
+        if (r) backup_close(&backup);
+    }
 
     return backup;
 }
