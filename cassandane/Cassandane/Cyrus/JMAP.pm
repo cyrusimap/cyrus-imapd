@@ -918,6 +918,10 @@ sub test_setcalendarevents {
                             "exceptions" => {
                                 "2015-10-11T11:30:15" => {
                                     "summary" => "bar",
+                                    "description" => "",
+                                    "location" => "",
+                                    "showAsFree" => JSON::false,
+                                    "isAllDay" => JSON::false,
                                     "start" => "2015-10-11T11:30:15",
                                     "startTimeZone" => "Europe/Vienna",
                                     "end" => "2015-10-11T12:15:00",
@@ -979,6 +983,10 @@ sub test_setcalendarevents {
     # exceptions
     my $exc = $event->{exceptions}{"2015-10-11T11:30:15"};
     $self->assert_str_equals($exc->{summary}, "bar");
+    $self->assert_str_equals($exc->{description}, "");
+    $self->assert_str_equals($exc->{location}, "");
+    $self->assert_equals($event->{showAsFree}, JSON::false);
+    $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($exc->{start}, "2015-10-11T11:30:15");
     $self->assert_str_equals($exc->{startTimeZone}, "Europe/Vienna");
     $self->assert_str_equals($exc->{end}, "2015-10-11T12:15:00");
