@@ -4515,7 +4515,6 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
         /* XXX - Purge existing RRULE. */
     }
 
-    /* XXX - Assume for now, that recurrence must be specified in full-set */
     const char *prefix = "recurrence";
     const char *freq = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -4932,7 +4931,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
         if (!(flags&JMAP_EXC)) {
             jmap_recurrence_to_ical(comp, recurrence, create, invalid, tzdtstart);
         } else {
-            /* XXX - need prefix */
             json_array_append_new(invalid, json_string("recurrence"));
         }
     }
@@ -4944,7 +4942,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
         if (!(flags&JMAP_EXC) && json_array_size(inclusions)) {
             jmap_inclusions_to_ical(comp, inclusions, create, invalid, tzdtstart);
         } else {
-            /* XXX - need prefix */
             json_array_append_new(invalid, json_string("inclusions"));
         }
     }
@@ -4956,7 +4953,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
         if (!(flags&JMAP_EXC) && json_object_size(exceptions)) {
             jmap_exceptions_to_ical(comp, exceptions, flags, invalid, uid, tzdtstart, req);
         } else {
-            /* XXX - need prefix */
             json_array_append_new(invalid, json_string("exceptions"));
         }
     }
@@ -4982,7 +4978,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
 
 static int setCalendarEvents(struct jmap_req *req)
 {
-
     struct caldav_db *db = NULL;
     int r;
 
@@ -5120,7 +5115,109 @@ static int setCalendarEvents(struct jmap_req *req)
         json_decref(notCreated);
 
     }
-    /* XXX - implement this */
+    /* XXX - implement update */
+
+    json_t *destroy = json_object_get(req->args, "destroy");
+    if (destroy) {
+        json_t *destroyed = json_pack("[]");
+        json_t *notDestroyed = json_pack("{}");
+
+        size_t index;
+        json_t *juid;
+
+        json_array_foreach(destroy, index, juid) {
+            struct mboxevent *mboxevent = NULL;
+            struct caldav_data *cddata = NULL;
+            struct mailbox *mbox = NULL;
+            struct index_record record;
+
+            /* Validate uid. JMAP destroy does not allow reference uids. */
+            const char *uid = json_string_value(juid);
+            if (!strlen(uid) || *uid == '#') {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Lookup calendar event uid in DB. */
+            /* XXX - Fix error handling. */
+            caldav_lookup_uid(db, uid, &cddata);
+            if (!cddata->dav.rowid || !cddata->dav.imap_uid) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Open mailbox for writing */
+            r = mailbox_open_iwl(cddata->dav.mailbox, &mbox);
+            /* XXX - not found vs fatal error */
+            if (r) {
+                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                        cddata->dav.mailbox, error_message(r));
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* XXX Check permissions. */
+
+            /* - Fetch index record for the resource */
+            memset(&record, 0, sizeof(struct index_record));
+            r = mailbox_find_index_record(mbox, cddata->dav.imap_uid, &record);
+            if (r) {
+                /* XXX - notFoudn vs fatal error */
+                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                        cddata->dav.mailbox, error_message(r));
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                mailbox_close(&mbox);
+                continue;
+            }
+            if (!record.uid) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                mailbox_close(&mbox);
+                continue;
+            }
+
+            /* Expunge the resource from mailbox. */
+            record.system_flags |= FLAG_EXPUNGED;
+            mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+            r = mailbox_rewrite_index_record(mbox, &record);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
+                        cddata->dav.mailbox, error_message(r));
+                mailbox_close(&mbox);
+                goto done;
+            }
+            mboxevent_extract_record(mboxevent, mbox, &record);
+            mboxevent_extract_mailbox(mboxevent, mbox);
+            mboxevent_set_numunseen(mboxevent, mbox, -1);
+            mboxevent_set_access(mboxevent, NULL, NULL, req->userid, cddata->dav.mailbox, 0);
+
+            mailbox_close(&mbox);
+
+            /* Remove from CalDAV DB. */
+            caldav_delete(db, cddata->dav.rowid);
+
+            if (!r) {
+                mboxevent_notify(mboxevent);
+            }
+            if (mboxevent) mboxevent_free(&mboxevent);
+
+            /* Report calendar event as destroyed. */
+            json_array_append_new(destroyed, json_string(uid));
+        }
+
+        if (json_array_size(destroyed)) {
+            json_object_set(set, "destroyed", destroyed);
+        }
+        json_decref(destroyed);
+        if (json_object_size(notDestroyed)) {
+            json_object_set(set, "notDestroyed", notDestroyed);
+        }
+        json_decref(notDestroyed);
+    }
 
     /* Set newState field in calendarsSet. */
     r = jmap_setstate(req, set, "newState", MBTYPE_CALENDAR,
