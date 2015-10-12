@@ -50,8 +50,11 @@
 
 #include "lib/cyrusdb.h"
 #include "lib/cyr_lock.h"
+#include "lib/map.h"
 #include "lib/sqldb.h"
+#include "lib/util.h"
 #include "lib/xmalloc.h"
+#include "lib/xsha1.h"
 #include "lib/xstrlcat.h"
 #include "lib/xstrlcpy.h"
 
@@ -615,6 +618,26 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
     free(message);
 }
 
+/* limit is how much of the file to calculate the sha1 of (in bytes),
+ * or zero for the whole file */
+static const char *_sha1_file(int fd, const char *fname, size_t limit,
+                              char buf[2 * SHA1_DIGEST_LENGTH + 1])
+{
+    const char *map = NULL;
+    size_t len = 0, calc_len;
+    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
+    int r;
+
+    map_refresh(fd, /*onceonly*/ 1, &map, &len, MAP_UNKNOWN_LEN, fname, NULL);
+    calc_len = limit ? MIN(limit, len) : len;
+    xsha1((const unsigned char *) map, calc_len, sha1_raw);
+    map_free(&map, &len);
+    r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, buf, BH_LOWER);
+    assert(r == 2 * SHA1_DIGEST_LENGTH);
+
+    return buf;
+}
+
 static int backup_index_start4(struct backup *backup, time_t ts, off_t offset,
                                const char *file_sha1)
 {
@@ -642,10 +665,12 @@ static int backup_index_start4(struct backup *backup, time_t ts, off_t offset,
 }
 
 EXPORTED int backup_index_start(struct backup *backup) {
+    char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     off_t offset = lseek(backup->fd, 0, SEEK_END);
 
-    /* FIXME calculate sha1sum of file-so-far */
-    return backup_index_start4(backup, time(0), offset, NULL);
+    _sha1_file(backup->fd, backup->data_fname, 0, file_sha1);
+
+    return backup_index_start4(backup, time(0), offset, file_sha1);
 }
 
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
@@ -1115,8 +1140,9 @@ EXPORTED int backup_reindex(const char *name)
                     fatal("member timestamp older than previous", -1);
                 }
                 member_ts = ts;
-                /* FIXME calculate sha1sum of file-so-far */
-                backup_index_start4(backup, member_ts, member_offset, NULL);
+                char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
+                _sha1_file(backup->fd, backup->data_fname, member_offset, file_sha1);
+                backup_index_start4(backup, member_ts, member_offset, file_sha1);
             }
             else if (member_ts > ts)
                 fatal("line timestamp older than previous", -1);
