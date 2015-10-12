@@ -496,7 +496,6 @@ static struct open_backup *backupd_open_backup(const mbname_t *mbname)
         struct backup *backup = backup_open(mbname);
         if (!backup) return NULL;
         backup_append_start(backup); // FIXME error checking
-        backup_index_start(backup); // FIXME error checking
         open = open_backups_list_add(&backupd_open_backups, key, backup);
     }
 
@@ -854,14 +853,11 @@ static int cmd_apply_reserve(struct dlist *dl)
 
     if (!open) return IMAP_INTERNAL;
 
-    int r = backup_append(open->backup, dl, time(0));
+    int r = backup_append(open->backup, dl, time(0), 0, 0);
     if (r) {
         syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
         return IMAP_INTERNAL;
     }
-
-    // FIXME should call backup_index here, but there's not actually anything
-    // to index in a RESERVE...
 
     struct dlist *missing = dlist_newlist(NULL, "MISSING");
     for (di = gl->head; di; di = di->next) {
