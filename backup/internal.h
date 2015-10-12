@@ -47,6 +47,12 @@
 #ifndef BACKUP_INTERNAL_H
 #define BACKUP_INTERNAL_H
 
+enum {
+    BACKUP_APPEND_NORMAL    = 0,
+    BACKUP_APPEND_NOFLUSH   = 0x0001,
+    BACKUP_APPEND_INDEXONLY = 0x0002,
+};
+
 struct backup {
     int fd;
     char *data_fname;
@@ -55,6 +61,7 @@ struct backup {
     sqldb_t *db;
     gzFile gzfile;
     int index_id;
+    unsigned append_mode;
 };
 
 #endif
