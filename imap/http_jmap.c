@@ -3909,21 +3909,21 @@ static json_t* jmap_vevent_to_calendarevent(icalcomponent *comp,
     if (_wantprop(props, "summary")) {
         prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
         json_object_set_new(obj, "summary",
-                prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+                prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
     }
 
     /* description */
     if (_wantprop(props, "description")) {
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
         json_object_set_new(obj, "description",
-            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
     }
 
     /* location */
     if (_wantprop(props, "location")) {
         prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
         json_object_set_new(obj, "location",
-            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_null());
+            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
     }
 
     /* showAsFree */
@@ -4435,8 +4435,18 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         icaltimetype dt = icaltime_from_timet_with_zone(t, 0, tz);
 
         if (exc != json_null()) {
+            json_t *invalidexc = json_pack("[]");
+            size_t i;
+            json_t *v;
             /* Add exceptional VEVENT component to the VCALENDAR. */
-            jmap_calendarevent_to_ical(ical, exc, JMAP_CREATE|JMAP_EXC, uid, invalid, req);
+            jmap_calendarevent_to_ical(ical, exc, JMAP_CREATE|JMAP_EXC, uid, invalidexc, req);
+
+            /* Prepend prefix to any invalid properties. */
+            json_array_foreach(invalidexc, i, v) {
+                buf_printf(&buf, "%s.%s", prefix, json_string_value(v));
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
         } else {
             /* Add EXDATE to the VEVENT. */
             /* iCalendar allows to set multiple EXDATEs. */
@@ -4806,19 +4816,19 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
     }
 
     /* description */
-    pe = jmap_readprop(event, "description", 0, invalid, "s", &val);
+    pe = jmap_readprop(event, "description", create, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_description(comp, val);
     } 
 
     /* location */
-    pe = jmap_readprop(event, "location", 0, invalid, "s", &val);
+    pe = jmap_readprop(event, "location", create, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_location(comp, val);
     } 
 
     /* showAsFree */
-    pe = jmap_readprop(event, "showAsFree", 0, invalid, "b", &showAsFree);
+    pe = jmap_readprop(event, "showAsFree", create, invalid, "b", &showAsFree);
     if (pe > 0) {
         enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
         prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
@@ -4855,7 +4865,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
     }
 
     /* isAllDay */
-    pe = jmap_readprop(event, "isAllDay", 0, invalid, "b", &isAllDay);
+    pe = jmap_readprop(event, "isAllDay", create, invalid, "b", &isAllDay);
     if (pe == 0 && !create) {
         isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
     }
