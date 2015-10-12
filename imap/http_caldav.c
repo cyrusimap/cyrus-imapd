@@ -619,9 +619,9 @@ static void my_caldav_auth(const char *userid)
     char *mailboxname, rights[100];
     struct buf acl = BUF_INITIALIZER;
 
-    if (httpd_userisadmin ||
+    if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
-        /* admin or proxy from frontend - won't have DAV database */
+        /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return;
     }
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
