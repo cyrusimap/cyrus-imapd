@@ -3416,6 +3416,12 @@ static int _jmap_timet_to_localdate(time_t t, char* buf, size_t size) {
 /* Convert the JMAP local datetime in buf to time_t t. Return 0 on success. */
 static int jmap_localdate_to_timet(const char *buf, time_t *t) {
     struct tm tm;
+
+    /* Initialize tm. We don't know about daylight savings time here. */
+    memset(&tm, 0, sizeof(struct tm));
+    tm.tm_isdst = -1;
+
+    /* Parse LocalDate. */
     const char *p = strptime(buf, "%Y-%m-%dT%H:%M:%S", &tm);
     if (!p || *p) {
         return -1;
@@ -4447,6 +4453,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
+            json_decref(invalidexc);
         } else {
             /* Add EXDATE to the VEVENT. */
             /* iCalendar allows to set multiple EXDATEs. */
@@ -4696,7 +4703,6 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
     icalcomponent_add_property(comp, icalproperty_new_rrule(rt));
 
     buf_free(&buf);
-
 }
 
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
@@ -4775,7 +4781,6 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
 
             /* Add VALARM to VEVENT. */
             icalcomponent_add_component(comp, alarm);
-
         }
         free(prefix);
     }
@@ -4968,7 +4973,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
             icalcomponent_add_component(ical, tzcomp);
         }
     }
-
 }
 
 static int setCalendarEvents(struct jmap_req *req)
@@ -5082,6 +5086,7 @@ static int setCalendarEvents(struct jmap_req *req)
             txn.req_hdrs = spool_new_hdrcache();
             r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
             spool_free_hdrcache(txn.req_hdrs);
+            icalcomponent_free(ical);
             buf_free(&txn.buf);
 
             mailbox_close(&mbox);
