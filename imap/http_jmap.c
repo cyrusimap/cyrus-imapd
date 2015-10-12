@@ -4439,6 +4439,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         }
 
         icaltimetype dt = icaltime_from_timet_with_zone(t, 0, tz);
+        dt.zone = tz;
 
         if (exc != json_null()) {
             json_t *invalidexc = json_pack("[]");
@@ -4495,6 +4496,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
 
         /* Create and add RDATE property. */
         icaltimetype dt = icaltime_from_timet_with_zone(t, 0, tz);
+        dt.zone = tz;
         jmap_update_dtprop(comp, dt, tz, ICAL_RDATE_PROPERTY);
     }
 
@@ -4675,6 +4677,7 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
         if (!jmap_localdate_to_timet(until, &t)) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             icaltimetype dtloc = icaltime_from_timet_with_zone(t, 0, tz);
+            dtloc.zone = tz;
             icaltimetype dt = icaltime_convert_to_zone(dtloc, utc);
             buf_printf(&buf, ";UNTIL=%s", icaltime_as_ical_string(dt));
         } else {
@@ -4899,6 +4902,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
         time_t t;
         if (!jmap_localdate_to_timet(val, &t)) {
             dtstart = icaltime_from_timet_with_zone(t, 0, tzdtstart);
+            dtstart.zone = tzdtstart;
             jmap_update_dtprop(comp, dtstart, tzdtstart, ICAL_DTSTART_PROPERTY);
             if (flags & JMAP_EXC) {
                 jmap_update_dtprop(comp, dtstart, tzdtstart, ICAL_RECURRENCEID_PROPERTY);
@@ -4914,6 +4918,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
         time_t t;
         if (!jmap_localdate_to_timet(val, &t)) {
             dtend = icaltime_from_timet_with_zone(t, 0, tzdtend);
+            dtend.zone = tzdtend;
             jmap_update_dtprop(comp, dtend, tzdtend, ICAL_DTEND_PROPERTY);
         } else {
             json_array_append_new(invalid, json_string("end"));
