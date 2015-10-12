@@ -744,6 +744,9 @@ static int backup_append_start5(struct backup *backup, time_t ts, off_t offset,
 
     SHA1_Init(&append_state->sha_ctx);
 
+    char header[80];
+    snprintf(header, sizeof(header), "# cyrus backup: chunk start %ld\r\n", (int64_t) ts);
+
     if (!index_only) {
         int dup_fd = dup(backup->fd);
         append_state->gzfile = gzdopen(dup_fd, "ab");
@@ -751,10 +754,17 @@ static int backup_append_start5(struct backup *backup, time_t ts, off_t offset,
             fprintf(stderr, "%s: gzdopen fd %i failed: %s\n", __func__, dup_fd, strerror(errno));
             return -1;
         }
+
+        // FIXME check for error return
+        gzwrite(append_state->gzfile, header, strlen(header));
+        gzflush(append_state->gzfile, Z_FULL_FLUSH);
     }
     else {
         append_state->mode |= BACKUP_APPEND_INDEXONLY;
     }
+
+    SHA1_Update(&append_state->sha_ctx, header, strlen(header));
+    append_state->wrote += strlen(header);
 
     struct sqldb_bindval bval[] = {
         { ":timestamp", SQLITE_INTEGER, { .i = ts           } },
@@ -1053,17 +1063,18 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
 
     /* FIXME track dl_offset and dl_len ourselves */
 
-    struct buf buf = BUF_INITIALIZER;
+    /* build a buffer containing the data to be written */
+    struct buf buf = BUF_INITIALIZER, ts_buf = BUF_INITIALIZER;
     dlist_printbuf(dlist, 1, &buf);
+    buf_printf(&ts_buf, "%ld APPLY ", (int64_t) ts);
+    buf_insert(&buf, 0, &ts_buf);
+    buf_appendcstr(&buf, "\r\n");
+
+    /* track the sha1sum */
     SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
 
-    if (backup->append_state->mode & BACKUP_APPEND_INDEXONLY) {
-        /* indexing only, but still need to track the length */
-        backup->append_state->wrote += buf_len(&buf);
-    }
-    else {
-        gzprintf(backup->append_state->gzfile, "%ld ", (int64_t) ts);
-
+    /* if we're not in index-only mode, write the data out */
+    if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         /* gzprintf's internal buffer is limited to about 8K, which
          * dlist will exceed if there's a message in it, so use gzwrite
          * rather than gzprintf for writing the dlist contents.
@@ -1096,9 +1107,10 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
             fprintf(stderr, "gzflush %s: %i %i\n", backup->data_fname, r, errno);
             goto error;
         }
-
-        backup->append_state->wrote += buf_len(&buf);
     }
+
+    /* count the written bytes */
+    backup->append_state->wrote += buf_len(&buf);
 
     buf_free(&buf);
 
@@ -1297,7 +1309,7 @@ EXPORTED int backup_reindex(const char *name)
 
             ucase(dl->name);
 
-            r = backup_append(backup, dl, time(NULL), dl_offset, dl_len);
+            r = backup_append(backup, dl, ts, dl_offset, dl_len);
             if (r) {
                 // FIXME do something
             }
