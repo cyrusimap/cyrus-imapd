@@ -914,27 +914,35 @@ sub test_setcalendarevents {
                                 "byMonth" => [2, 8],
                                 "until" => "2015-10-08T16:45:00"
                             },
-                            "inclusions" => [ "2015-10-07T15:15:00" ]
+                            "inclusions" => [ "2015-10-07T15:15:00" ],
+                            "exceptions" => {
+                                "2015-10-11T11:30:15" => {
+                                    "summary" => "bar",
+                                    "start" => "2015-10-11T11:30:15",
+                                    "startTimeZone" => "Europe/Vienna",
+                                    "end" => "2015-10-11T12:15:00",
+                                    "endTimeZone" => "Europe/Vienna"
+                                },
+                                "2015-10-12T11:30:15" => undef,
+                            }
                         }
                     }}, "R1"]]);
 
-    my $x = Dumper($res);
-    xlog "$x";
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'calendarsEventsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{created});
 
-
     my $id = $res->[0][1]{created}{"#1"}{id};
+
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
-
     my $event = $res->[0][1]{list}[0];
 
+    #basic properties
     $self->assert_str_equals($event->{id}, $id);
     $self->assert_str_equals($event->{summary}, 'foo');
     $self->assert_str_equals($event->{description}, "foo's description");
@@ -946,35 +954,35 @@ sub test_setcalendarevents {
     $self->assert_str_equals($event->{end}, '2015-10-06T17:15:00');
     $self->assert_str_equals($event->{endTimeZone}, 'Europe/Vienna');
 
+    # alerts
     $self->assert_str_equals($event->{alerts}[0]{type}, "alert");
     $self->assert_num_equals($event->{alerts}[0]{minutesBefore}, 15);
     $self->assert_str_equals($event->{alerts}[1]{type}, "email");
     $self->assert_num_equals($event->{alerts}[1]{minutesBefore}, -15);
 
+    # organizer and attendees
     $self->assert_str_equals($event->{organizer}{email}, "daffy\@example.com");
     $self->assert_str_equals($event->{organizer}{name}, "Daffy Duck");
     $self->assert_str_equals($event->{attendees}[0]{email}, "bugs\@example.com");
     $self->assert_str_equals($event->{attendees}[0]{name}, "Bugs Bunny");
     $self->assert_str_equals($event->{attendees}[0]{rsvp}, "maybe");
 
+    # recurrence
     $self->assert_str_equals($event->{recurrence}{frequency}, "daily");
     $self->assert_deep_equals($event->{recurrence}{byDay}, [-21, -10, -1, 2, 8, 15]);
     $self->assert_deep_equals($event->{recurrence}{byMonth}, [2, 8]);
     # XXX this doesn't work yet due to timezones.. $self->assert_str_equals($event->{recurrence}{until}, "2015-10-08T16:45:00");
-   
+    
+    # inclusions
     $self->assert_str_equals($event->{inclusions}[0], "2015-10-07T15:15:00");
 
-=pod
-    my $xhref = $event->{"x-href"};
-    my $caldavres = $caldav->Request('GET', $xhref);
-    my $icalevent = $caldavres->{content};
-
-    my $x = Dumper($icalevent);
-    xlog "$x";
-
-    # make it fail
-    $self->assert_null($res);
-=cut
-
+    # exceptions
+    my $exc = $event->{exceptions}{"2015-10-11T11:30:15"};
+    $self->assert_str_equals($exc->{summary}, "bar");
+    $self->assert_str_equals($exc->{start}, "2015-10-11T11:30:15");
+    $self->assert_str_equals($exc->{startTimeZone}, "Europe/Vienna");
+    $self->assert_str_equals($exc->{end}, "2015-10-11T12:15:00");
+    $self->assert_str_equals($exc->{endTimeZone}, "Europe/Vienna");
+    $self->assert(exists $event->{exceptions}{"2015-10-11T11:30:15"});
 }
 1;
