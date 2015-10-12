@@ -948,28 +948,60 @@ static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
 EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
                            time_t ts, off_t dl_offset, size_t dl_len)
 {
+    int r;
     if (!backup->append_state) fatal("not started", -1);
 
     /* FIXME track dl_offset and dl_len ourselves */
 
-    if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
+    struct buf buf = BUF_INITIALIZER;
+    dlist_printbuf(dlist, 1, &buf);
+
+    if (backup->append_state->mode & BACKUP_APPEND_INDEXONLY) {
+        /* indexing only, but still need to track the length */
+        backup->append_state->wrote += buf_len(&buf);
+    }
+    else {
         gzprintf(backup->append_state->gzfile, "%ld ", (int64_t) ts);
 
         /* gzprintf's internal buffer is limited to about 8K, which
-         * dlist will exceed if there's a message in it, so don't use
-         * gzprintf for writing the dlist contents.
+         * dlist will exceed if there's a message in it, so use gzwrite
+         * rather than gzprintf for writing the dlist contents.
          */
-        struct buf buf = BUF_INITIALIZER;
-        dlist_printbuf(dlist, 1, &buf);
-        gzwrite(backup->append_state->gzfile, buf_cstring(&buf), buf_len(&buf));
-        // FIXME check return value is long enough
-        buf_free(&buf);
+        const char *p = buf_cstring(&buf);
+        size_t left = buf_len(&buf);
 
-        // FIXME flush it!
+        while (left) {
+            int n = MIN(left, INT32_MAX);
+            int wrote = gzwrite(backup->append_state->gzfile, p, n);
+            if (wrote > 0) {
+                left -= wrote;
+                p += wrote;
+            }
+            else {
+                const char *err = gzerror(backup->append_state->gzfile, &r);
+                fprintf(stderr, "%s: gzwrite %s\n", __func__, err);
+
+                if (r == Z_STREAM_ERROR)
+                    fatal("gzwrite: invalid stream", -1); /* FIXME exit code */
+                else if (r == Z_MEM_ERROR)
+                    fatal("gzwrite: out of memory", -1);  /* FIXME exit code */
+
+                goto error;
+            }
+        }
+
+        r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
+        if (r != Z_OK) {
+            fprintf(stderr, "gzflush %s: %i %i\n", backup->data_fname, r, errno);
+            goto error;
+        }
+
+        backup->append_state->wrote += buf_len(&buf);
     }
 
-    int r = 0;
+    buf_free(&buf);
 
+    /* update the index */
     if (0) { }
 
     else if (strcmp(dlist->name, "MAILBOX") == 0)
@@ -982,18 +1014,17 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
         r = -1; // FIXME
     }
 
+error:
     return r;
 }
 
-int backup_append_end(struct backup *backup, size_t length) {
+int backup_append_end(struct backup *backup) {
     int r;
     struct backup_append_state *append_state = backup->append_state;
 
     backup->append_state = NULL;
 
     if (!append_state) fatal("not started", -1);
-
-    /* FIXME calculate length ourselves */
 
     if (!(append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         r = gzclose_w(append_state->gzfile);
@@ -1008,7 +1039,7 @@ int backup_append_end(struct backup *backup, size_t length) {
 
     struct sqldb_bindval bval[] = {
         { ":id",        SQLITE_INTEGER, { .i = append_state->index_id   } },
-        { ":length",    SQLITE_INTEGER, { .i = length                   } },
+        { ":length",    SQLITE_INTEGER, { .i = append_state->wrote      } },
         { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1                } },
         { NULL,         SQLITE_NULL,    { .s = NULL                     } },
     };
@@ -1168,7 +1199,7 @@ EXPORTED int backup_reindex(const char *name)
             }
         }
 
-        backup_append_end(backup, prot_bytes_in(member));
+        backup_append_end(backup);
         prot_free(member);
         gzuc_member_end(gzuc, NULL);
 

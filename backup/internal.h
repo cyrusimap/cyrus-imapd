@@ -57,6 +57,7 @@ struct backup_append_state {
     unsigned mode;
     gzFile gzfile;
     int index_id;
+    size_t wrote;
 };
 
 struct backup {
