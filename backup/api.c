@@ -644,6 +644,8 @@ static int backup_append_start5(struct backup *backup, time_t ts, off_t offset,
 
     struct backup_append_state *append_state = xzmalloc(sizeof(*append_state));
 
+    SHA1_Init(&append_state->sha_ctx);
+
     if (!index_only) {
         int dup_fd = dup(backup->fd);
         append_state->gzfile = gzdopen(dup_fd, "ab");
@@ -955,6 +957,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
 
     struct buf buf = BUF_INITIALIZER;
     dlist_printbuf(dlist, 1, &buf);
+    SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
 
     if (backup->append_state->mode & BACKUP_APPEND_INDEXONLY) {
         /* indexing only, but still need to track the length */
@@ -1034,8 +1037,11 @@ int backup_append_end(struct backup *backup) {
         }
     }
 
-    /* FIXME sha1sum of chunk data */
-    const char *data_sha1 = NULL;
+    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
+    char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
+    SHA1_Final(sha1_raw, &append_state->sha_ctx);
+    r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
+    assert(r == 2 * SHA1_DIGEST_LENGTH);
 
     struct sqldb_bindval bval[] = {
         { ":id",        SQLITE_INTEGER, { .i = append_state->index_id   } },
