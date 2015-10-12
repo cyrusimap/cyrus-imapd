@@ -126,6 +126,15 @@ const char backup_index_end_sql[] = QUOTE(
     WHERE id = :id;
 );
 
+const char backup_index_backup_select_latest_sql[] = QUOTE(
+    SELECT
+        id, timestamp, offset, length, file_sha1, data_sha1
+    FROM backup
+    WHERE id = (
+        SELECT MAX(id) FROM backup
+    );
+);
+
 const char backup_index_mailbox_update_sql[] = QUOTE(
     UPDATE mailbox SET
         last_backup_id = :last_backup_id,
