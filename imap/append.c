@@ -834,10 +834,10 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     struct index_record record;
     const char *fname;
     int i, r;
-    int in_object_storage = 0;
     strarray_t *newflags = NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -956,17 +956,18 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     }
 
     /* straight to archive? */
-    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) && (record.system_flags & FLAG_ARCHIVED)) {
+    int in_object_storage = 0;
+    if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
         if (!record.internaldate)
             record.internaldate = time(NULL);
-        r = objectstore_put(mailbox, &record, fname) ;
+        r = objectstore_put(mailbox, &record, fname);
         if (r) {
-            // file in object store now; must delete local copy
+            // didn't manage to store it, so remove the ARCHIVED flag
             record.system_flags &= ~FLAG_ARCHIVED;
+            r = 0;
         }
         else {
-            in_object_storage = 1 ;
-            r = 0;
+            in_object_storage = 1;
         }
     }
 
@@ -984,7 +985,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     if (in_object_storage) {  // must delete local file
-        if (unlink(fname) != 0) // unlink shoud do it.
+        if (unlink(fname) != 0) // unlink should do it.
             if (!remove (fname))  // we must insist
                 syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
     }
@@ -1326,15 +1327,19 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         srcfname = xstrdup(mailbox_record_fname(mailbox, &records[msg]));
         destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
 
-
-        if (!(object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED))   // if object storage do not move file
-           r = mailbox_copyfile(srcfname, destfname, nolink);
-
+        r = mailbox_copyfile(srcfname, destfname, nolink);
         if (r) goto out;
 
-        if (object_storage_enabled) {
+        int in_object_storage = 0;
+        if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
             r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
-            if (r) goto out;
+            if (r) {
+                record.system_flags &= ~FLAG_ARCHIVED;
+                r = 0;
+            }
+            else {
+                in_object_storage = 1;
+            }
         }
 
         /* Write out index file entry */
@@ -1351,6 +1356,12 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                               as->mailbox, record.uid,
                               as->userid);
         if (r) goto out;
+
+        if (in_object_storage) {  // must delete local file
+            if (unlink(destfname) != 0) // unlink should do it.
+                if (!remove (destfname))  // we must insist
+                    syslog(LOG_ERR, "Removing local file <%s> error \n", destfname);
+        }
 
         mboxevent_extract_record(mboxevent, as->mailbox, &record);
         mboxevent_extract_copied_record(mboxevent, mailbox, &records[msg]);
