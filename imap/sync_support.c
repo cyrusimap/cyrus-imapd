@@ -4573,12 +4573,6 @@ static int update_mailbox_once(struct sync_folder *local,
     struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
     annotate_state_t *astate = NULL;
 
-    if (flags & SYNC_FLAG_VERBOSE)
-        printf("%s %s\n", cmd, local->name);
-
-    if (flags & SYNC_FLAG_LOGGING)
-        syslog(LOG_INFO, "%s %s", cmd, local->name);
-
     if (local->mailbox) mailbox = local->mailbox;
     else r = mailbox_open_iwl(local->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -4641,6 +4635,12 @@ static int update_mailbox_once(struct sync_folder *local,
      * but don't close it, because we need to guarantee that message
      * files don't get deleted until we're finished with them... */
     if (!local->mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    if (flags & SYNC_FLAG_VERBOSE)
+        printf("%s %s\n", cmd, local->name);
+
+    if (flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "%s %s", cmd, local->name);
 
     /* upload in small(ish) blocks to avoid timeouts */
     while (kupload->head) {
