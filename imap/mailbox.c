@@ -3760,9 +3760,10 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
                        record->uid, record->system_flags);
         }
 
-        if (object_storage_enabled)
+        if (object_storage_enabled) {
             objectstore_delete(mailbox, record);
-        else{
+        }
+        else if (strcmp(spoolfname, archivefname)) {
             if (unlink(archivefname) == 0) {
                 if (config_auditlog)
                     syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
@@ -3787,21 +3788,20 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         }
     }
 
-    if (!object_storage_enabled){
-        /* nothing to cleanup if it's the same file! */
-        if (!strcmp(spoolfname, archivefname))
-            return;
-        /* otherwise check for archived/nonarchived */
-        else if (record->system_flags & FLAG_ARCHIVED) {
-            /* XXX - stat to make sure the other file exists first? - we mostly
-             *  trust that we didn't do stupid things everywhere else, so maybe not */
-            unlink(spoolfname);
-        }
-        else
-            unlink(archivefname);
-    }
-    else
+    if (record->system_flags & FLAG_ARCHIVED) {
+        /* XXX - stat to make sure the other file exists first? - we mostly
+         *  trust that we didn't do stupid things everywhere else, so maybe not */
         unlink(spoolfname);
+    }
+    else {
+        if (object_storage_enabled) {
+            objectstore_delete(mailbox, record);
+        }
+        else if (strcmp(spoolfname, archivefname)) {
+            unlink(archivefname);
+        }
+        /* else: nothing to cleanup if it's the same file! */
+    }
 }
 
 /* need a mailbox exclusive lock, we're removing files */
@@ -4307,7 +4307,6 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     struct index_record copyrecord;
     const char *srcname;
     const char *destname;
-    const char *spoolname;
     char *spoolcache = xstrdup(mailbox_meta_fname(mailbox, META_CACHE));
     char *archivecache = xstrdup(mailbox_meta_fname(mailbox, META_ARCHIVECACHE));
     int differentcache = strcmp(spoolcache, archivecache);
@@ -4338,17 +4337,12 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             }
             if (object_storage_enabled){
                 /* upload on the blob store */
-                spoolname = mailbox_spool_fname(mailbox, copyrecord.uid);
-                r = objectstore_put(mailbox, &copyrecord, spoolname);
+                r = objectstore_put(mailbox, &copyrecord, srcname);
                 if (r)
                     continue;
-                r = unlink (mailbox_spool_fname(mailbox, copyrecord.uid));
-                if (r < 0)
-                    syslog(LOG_ERR, "unlink(%s) failed: %m", spoolname);
-
-                copyrecord.system_flags |= FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
-                action = "archive";
             }
+            copyrecord.system_flags |= FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
+            action = "archive";
         }
         else {
             if (!(record->system_flags & FLAG_ARCHIVED))
@@ -4364,12 +4358,31 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                        mailbox->name, copyrecord.uid, error_message(r));
                 continue;
             }
-            if (object_storage_enabled){
-                objectstore_delete(mailbox, record);  // this should only lower ref count.
-            }
+            copyrecord.system_flags &= ~FLAG_ARCHIVED;
+            copyrecord.system_flags |= FLAG_NEEDS_CLEANUP;
+            action = "unarchive";
         }
 
-        if (!object_storage_enabled){
+        if (object_storage_enabled) {
+            /* get or fetch */
+            if (copyrecord.system_flags & FLAG_ARCHIVED) {
+                r = objectstore_put(mailbox, &copyrecord, srcname);
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR archive %s %u failed to objectstorage put file (%s): %s",
+                           mailbox->name, copyrecord.uid, srcname, error_message(r));
+                    continue;
+                }
+            }
+            else {
+                r = objectstore_get(mailbox, &copyrecord, destname);
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR archive %s %u failed to objectstorage get file (%s): %s",
+                           mailbox->name, copyrecord.uid, destname, error_message(r));
+                    continue;
+                }
+            }
+        }
+        else {
             /* got a file to copy! */
             if (strcmp(srcname, destname)) {
                 r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
