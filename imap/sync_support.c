@@ -3294,7 +3294,7 @@ static int mark_missing (struct dlist *kin,
 int sync_reserve_partition(char *partition,
                            struct sync_folder_list *replica_folders,
                            struct sync_msgid_list *part_list,
-                           struct backend *sync_be, unsigned flags)
+                           struct backend *sync_be)
 {
     const char *cmd = "RESERVE";
     struct sync_msgid *msgid = part_list->head;
@@ -3306,12 +3306,6 @@ int sync_reserve_partition(char *partition,
 
     if (!replica_folders->head)
         return 0; /* nowhere to reserve */
-
-    if (flags & SYNC_FLAG_VERBOSE)
-        printf("%s %s\n", cmd, partition);
-
-    if (flags & SYNC_FLAG_LOGGING)
-        syslog(LOG_INFO, "%s %s", cmd, partition);
 
     while (msgid) {
         int n = 0;
@@ -3360,7 +3354,7 @@ static int reserve_messages(struct sync_name_list *mboxname_list,
                             struct sync_folder_list *master_folders,
                             struct sync_folder_list *replica_folders,
                             struct sync_reserve_list *reserve_list,
-                            struct backend *sync_be, unsigned flags)
+                            struct backend *sync_be)
 {
     struct sync_reserve *reserve;
     int r;
@@ -3371,7 +3365,7 @@ static int reserve_messages(struct sync_name_list *mboxname_list,
 
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
         r = sync_reserve_partition(reserve->part, replica_folders,
-                                   reserve->list, sync_be, flags);
+                                   reserve->list, sync_be);
         if (r) return r;
     }
 
@@ -4901,7 +4895,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     reserve_list = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
 
     r = reserve_messages(mboxname_list, topart, master_folders,
-                         replica_folders, reserve_list, sync_be, flags);
+                         replica_folders, reserve_list, sync_be);
     if (r) {
         syslog(LOG_ERR, "reserve messages: failed: %s", error_message(r));
         goto bail;

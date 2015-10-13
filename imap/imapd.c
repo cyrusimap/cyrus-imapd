@@ -10887,7 +10887,7 @@ static int sync_mailbox(struct mailbox *mailbox,
 
     reserve = reserve_guids->head;
     r = sync_reserve_partition(reserve->part, replica_folders,
-                               reserve->list, be, flags);
+                               reserve->list, be);
     if (r) {
         syslog(LOG_ERR, "sync_mailbox(): reserve partition failed: %s '%s'",
                mfolder->name, error_message(r));

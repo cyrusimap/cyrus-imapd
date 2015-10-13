@@ -512,7 +512,7 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
 int sync_reserve_partition(char *partition,
                            struct sync_folder_list *replica_folders,
                            struct sync_msgid_list *part_list,
-                           struct backend *sync_be, unsigned flags);
+                           struct backend *sync_be);
 int sync_update_mailbox(struct sync_folder *local,
                         struct sync_folder *remote,
                         const char *topart,
