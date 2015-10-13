@@ -108,8 +108,7 @@ void backup_message_free(struct backup_message **message);
 
 /* writing backup data */
 int backup_append_start(struct backup *backup);
-int backup_append(struct backup *backup, struct dlist *dlist,
-                  time_t ts, off_t dl_offset, size_t dl_len);
+int backup_append(struct backup *backup, struct dlist *dlist, time_t ts);
 int backup_append_end(struct backup *backup);
 int backup_append_abort(struct backup *backup);
 

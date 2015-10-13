@@ -1055,13 +1055,13 @@ static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
     return 0;
 }
 
-EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
-                           time_t ts, off_t dl_offset, size_t dl_len)
+EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts)
 {
     int r;
     if (!backup->append_state) fatal("not started", -1);
 
-    /* FIXME track dl_offset and dl_len ourselves */
+    off_t start = backup->append_state->wrote;
+    size_t len;
 
     /* build a buffer containing the data to be written */
     struct buf buf = BUF_INITIALIZER, ts_buf = BUF_INITIALIZER;
@@ -1110,6 +1110,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
     }
 
     /* count the written bytes */
+    len = buf_len(&buf);
     backup->append_state->wrote += buf_len(&buf);
 
     buf_free(&buf);
@@ -1118,9 +1119,9 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist,
     if (0) { }
 
     else if (strcmp(dlist->name, "MAILBOX") == 0)
-        r = _index_mailbox(backup, dlist, dl_offset);
+        r = _index_mailbox(backup, dlist, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
-        r = _index_message(backup->db, backup->append_state->index_id, dlist, dl_offset, dl_len);
+        r = _index_message(backup->db, backup->append_state->index_id, dlist, start, len);
 
     else {
         fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dlist->name);
@@ -1286,11 +1287,9 @@ EXPORTED int backup_reindex(const char *name)
             struct buf cmd = BUF_INITIALIZER;
             time_t ts;
             struct dlist *dl = NULL;
-            off_t dl_offset = prot_bytes_in(member);
 
             int c = _parse_line(member, &ts, &cmd, &dl);
             if (c == EOF) break;
-            size_t dl_len = prot_bytes_in(member) - dl_offset;
 
             if (member_ts == -1) {
                 if (prev_member_ts != -1 && prev_member_ts > ts) {
@@ -1309,7 +1308,7 @@ EXPORTED int backup_reindex(const char *name)
 
             ucase(dl->name);
 
-            r = backup_append(backup, dl, ts, dl_offset, dl_len);
+            r = backup_append(backup, dl, ts);
             if (r) {
                 // FIXME do something
             }
