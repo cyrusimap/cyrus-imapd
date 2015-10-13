@@ -893,9 +893,9 @@ sub test_setcalendarevents {
                             "showAsFree" => JSON::false,
                             "isAllDay" => JSON::false,
                             "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Europe/Vienna",
+                            "startTimeZone" => "Australia/Melbourne",
                             "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Europe/Vienna",
+                            "endTimeZone" => "Australia/Melbourne",
                             "alerts" => [
                                 { "type" => "alert", "minutesBefore" => 15 },
                                 { "type" => "email", "minutesBefore" => -15 }
@@ -924,9 +924,9 @@ sub test_setcalendarevents {
                                     "showAsFree" => JSON::false,
                                     "isAllDay" => JSON::false,
                                     "start" => "2015-10-11T11:30:15",
-                                    "startTimeZone" => "Europe/Vienna",
+                                    "startTimeZone" => "Australia/Melbourne",
                                     "end" => "2015-10-11T12:15:00",
-                                    "endTimeZone" => "Europe/Vienna"
+                                    "endTimeZone" => "Australia/Melbourne"
                                 },
                                 "2015-10-12T11:30:15" => undef,
                             }
@@ -956,9 +956,9 @@ sub test_setcalendarevents {
     $self->assert_equals($event->{showAsFree}, JSON::false);
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($event->{start}, '2015-10-06T16:45:00');
-    $self->assert_str_equals($event->{startTimeZone}, 'Europe/Vienna');
+    $self->assert_str_equals($event->{startTimeZone}, 'Australia/Melbourne');
     $self->assert_str_equals($event->{end}, '2015-10-06T17:15:00');
-    $self->assert_str_equals($event->{endTimeZone}, 'Europe/Vienna');
+    $self->assert_str_equals($event->{endTimeZone}, 'Australia/Melbourne');
     # alerts
     $self->assert_str_equals($event->{alerts}[0]{type}, "alert");
     $self->assert_num_equals($event->{alerts}[0]{minutesBefore}, 15);
@@ -985,10 +985,52 @@ sub test_setcalendarevents {
     $self->assert_equals($event->{showAsFree}, JSON::false);
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($exc->{start}, "2015-10-11T11:30:15");
-    $self->assert_str_equals($exc->{startTimeZone}, "Europe/Vienna");
+    $self->assert_str_equals($exc->{startTimeZone}, "Australia/Melbourne");
     $self->assert_str_equals($exc->{end}, "2015-10-11T12:15:00");
-    $self->assert_str_equals($exc->{endTimeZone}, "Europe/Vienna");
+    $self->assert_str_equals($exc->{endTimeZone}, "Australia/Melbourne");
     $self->assert(exists $event->{exceptions}{"2015-10-11T11:30:15"});
+
+    xlog "update event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "summary" => "baz",
+                            "description" => "baz's description",
+                            "location" => "baz's location",
+                            "showAsFree" => JSON::true,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T18:45:00",
+                            "startTimeZone" => "America/New_York",
+                            "end" => "2015-10-06T19:15:00",
+                            "endTimeZone" => "America/New_York"
+                        }
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'calendarsEventsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $state = $res->[0][1]{newState};
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+    #basic properties
+    $self->assert_str_equals($event->{id}, $id);
+    $self->assert_str_equals($event->{summary}, 'baz');
+    $self->assert_str_equals($event->{description}, "baz's description");
+    $self->assert_str_equals($event->{location}, "baz's location");
+    $self->assert_equals($event->{showAsFree}, JSON::true);
+    $self->assert_equals($event->{isAllDay}, JSON::false);
+    $self->assert_str_equals($event->{start}, '2015-10-06T18:45:00');
+    $self->assert_str_equals($event->{startTimeZone}, 'America/New_York');
+    $self->assert_str_equals($event->{end}, '2015-10-06T19:15:00');
+    $self->assert_str_equals($event->{endTimeZone}, 'America/New_York');
+    # XXX assert that LocaDates have changed in all subproperties.
 
     xlog "destroy event $id";
     $res = $jmap->Request([['setCalendarEvents', { destroy => [ $id ]}, "R1"]]);
