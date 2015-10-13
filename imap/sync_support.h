@@ -512,22 +512,24 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
 int sync_reserve_partition(char *partition,
                            struct sync_folder_list *replica_folders,
                            struct sync_msgid_list *part_list,
-                           struct backend *sync_be);
+                           struct backend *sync_be, unsigned flags);
 int sync_update_mailbox(struct sync_folder *local,
                         struct sync_folder *remote,
                         const char *topart,
                         struct sync_reserve_list *reserve_guids,
                         struct backend *sync_be, unsigned flags);
-int sync_folder_delete(const char *mboxname, struct backend *sync_be, unsigned flags);
+int sync_folder_delete(const char *mboxname,
+                       struct backend *sync_be, unsigned flags);
 int sync_do_user_quota(struct sync_name_list *master_quotaroots,
                        struct sync_quota_list *replica_quota,
-                       struct backend *sync_be);
+                       struct backend *sync_be, unsigned flags);
 int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
                      struct backend *sync_be, unsigned flags);
 int sync_do_user_seen(const char *user, struct sync_seen_list *replica_seen,
-                      struct backend *sync_be);
-int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve,
-                       struct backend *sync_be);
+                      struct backend *sync_be, unsigned flags);
+int sync_do_user_sieve(const char *userid,
+                       struct sync_sieve_list *replica_sieve,
+                       struct backend *sync_be, unsigned flags);
 
 
 
