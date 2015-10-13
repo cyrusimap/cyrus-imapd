@@ -2556,7 +2556,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     if (!(mbentry->mbtype & MBTYPE_CALENDAR)) return 0;
 
     /* ...which are at least readable or visible */
-    int rights = cyrus_acl_myrights(crock->req->authstate, mbentry->acl);
+    int rights = httpd_myrights(crock->req->authstate, mbentry->acl);
     /* XXX - What if just READFB is set? */
     if (!(rights & (DACL_READ|DACL_READFB))) {
         return 0;
@@ -5130,6 +5130,7 @@ static int setCalendarEvents(struct jmap_req *req)
             struct caldav_data *cddata = NULL;
             struct mailbox *mbox = NULL;
             struct index_record record;
+            int rights;
 
             /* Validate uid. JMAP destroy does not allow reference uids. */
             const char *uid = json_string_value(juid);
@@ -5140,8 +5141,12 @@ static int setCalendarEvents(struct jmap_req *req)
             }
 
             /* Lookup calendar event uid in DB. */
-            /* XXX - Fix error handling. */
-            caldav_lookup_uid(db, uid, &cddata);
+            r = caldav_lookup_uid(db, uid, &cddata);
+            if (r) {
+                syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
+                        uid, error_message(r));
+                goto done;
+            }
             if (!cddata->dav.rowid || !cddata->dav.imap_uid) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
@@ -5150,34 +5155,44 @@ static int setCalendarEvents(struct jmap_req *req)
 
             /* Open mailbox for writing */
             r = mailbox_open_iwl(cddata->dav.mailbox, &mbox);
-            /* XXX - not found vs fatal error */
             if (r) {
-                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                        cddata->dav.mailbox, error_message(r));
+                if (r == IMAP_MAILBOX_NONEXISTENT) {
+                    /* XXX - calendarNotFound setError is not specified. */
+                    json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                    json_object_set_new(notDestroyed, uid, err);
+                    continue;
+                } else {
+                    syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                            cddata->dav.mailbox, error_message(r));
+                    goto done;
+                }
+            }
+
+            /* Check permissions. */
+            rights = httpd_myrights(req->authstate, mbox->acl);
+            if (!(rights & (DACL_RMRSRC))) {
+                /* Pretend this mailbox does not exist. jmap_post should have
+                 * checked already for an accountReadOnly error. */
+                /* XXX But jmap_post does not seem to take care of that yet. */
+                mailbox_close(&mbox);
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
             }
-
-            /* XXX Check permissions. */
-
             /* - Fetch index record for the resource */
             memset(&record, 0, sizeof(struct index_record));
             r = mailbox_find_index_record(mbox, cddata->dav.imap_uid, &record);
             if (r) {
-                /* XXX - notFoudn vs fatal error */
-                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                        cddata->dav.mailbox, error_message(r));
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
                 mailbox_close(&mbox);
-                continue;
-            }
-            if (!record.uid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
-                mailbox_close(&mbox);
-                continue;
+                if (r == IMAP_NOTFOUND) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notDestroyed, uid, err);
+                    continue;
+                } else {
+                    syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
+                            cddata->dav.imap_uid, error_message(r));
+                    goto done;
+                }
             }
 
             /* Expunge the resource from mailbox. */
@@ -5200,10 +5215,8 @@ static int setCalendarEvents(struct jmap_req *req)
             /* Remove from CalDAV DB. */
             caldav_delete(db, cddata->dav.rowid);
 
-            if (!r) {
-                mboxevent_notify(mboxevent);
-            }
-            if (mboxevent) mboxevent_free(&mboxevent);
+            mboxevent_notify(mboxevent);
+            mboxevent_free(&mboxevent);
 
             /* Report calendar event as destroyed. */
             json_array_append_new(destroyed, json_string(uid));
