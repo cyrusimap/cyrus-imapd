@@ -86,6 +86,13 @@ the gzip stream that we are producing.
 
 Compressing will need to consider this too...
 
+backup_append now tracks where it's up to, so i don't think DLIST_SFILE even
+needs to care about the offset anymore.  reindex never used it...
+
+we just index the offset and length of the dlist entry for the message, and
+we can parse the pure message data back out later from that, when we need to.
+slightly less efficient on reads, but works->good->fast
+
 
 renames
 -------
