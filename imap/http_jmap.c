@@ -5084,6 +5084,7 @@ static int setCalendarEvents(struct jmap_req *req)
             struct transaction_t txn;
             memset(&txn, 0, sizeof(struct transaction_t));
             txn.req_hdrs = spool_new_hdrcache();
+            /* XXX Can we trigger invitations by setting a flag here? */
             r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
             spool_free_hdrcache(txn.req_hdrs);
             icalcomponent_free(ical);
