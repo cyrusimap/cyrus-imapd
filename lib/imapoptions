@@ -2073,6 +2073,12 @@ product version in the capabilities */
    versions of SSL/TLS will need to be added here to allow them to get
    disabled. */
 
+{ "uidl_format", "cyrus", ENUM("uidonly", "cyrus", "dovecot", "courier") }
+/* Choose the format for UIDLs in pop3.  Possible values are "uidonly",
+   "cyrus", "dovecot" and "courier".  "uidonly" forces the old default
+   of UID, "cyrus" is UIDVALIDITY.UID.  Dovecot is 8 digits of leading
+   hex (lower case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID. */
+
 { "umask", "077", STRING }
 /* The umask value used by various Cyrus IMAP programs. */
 
