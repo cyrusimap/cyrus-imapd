@@ -84,7 +84,10 @@ EXPORTED int getword(struct protstream *in, struct buf *buf)
  * (astring, nstring or string based on type)
  */
 EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
-               struct buf *buf, enum getxstring_flags flags)
+                        struct buf *buf, enum getxstring_flags flags)
+    __attribute__((optimize("-O3")));
+EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
+                        struct buf *buf, enum getxstring_flags flags)
 {
     int c;
     int i;

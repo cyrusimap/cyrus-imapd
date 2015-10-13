@@ -832,7 +832,9 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 
 /* buffer handling functions */
 
-static size_t roundup(size_t size)
+static inline size_t roundup(size_t size)
+    __attribute__((pure, always_inline, optimize("-O3")));
+static inline size_t roundup(size_t size)
 {
     if (size < 32)
         return 32;
@@ -948,12 +950,16 @@ EXPORTED int buf_getline(struct buf *buf, FILE *fp)
     return (!(buf->len == 0 && c == EOF));
 }
 
-EXPORTED size_t buf_len(const struct buf *buf)
+EXPORTED inline size_t buf_len(const struct buf *buf)
+    __attribute__((always_inline, optimize("-O3")));
+EXPORTED inline size_t buf_len(const struct buf *buf)
 {
     return buf->len;
 }
 
-EXPORTED const char *buf_base(const struct buf *buf)
+EXPORTED inline const char *buf_base(const struct buf *buf)
+    __attribute__((always_inline, optimize("-O3")));
+EXPORTED inline const char *buf_base(const struct buf *buf)
 {
     return buf->s;
 }
