@@ -992,7 +992,6 @@ sub test_setcalendarevents {
 
     xlog "destroy event $id";
     $res = $jmap->Request([['setCalendarEvents', { destroy => [ $id ]}, "R1"]]);
-
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'calendarsEventsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
@@ -1002,9 +1001,11 @@ sub test_setcalendarevents {
     $state = $res->[0][1]{newState};
 
     xlog "get destroyed $id";
-    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id, "foo"]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_num_equals(scalar(@{$res->[0][1]{notFound}}), 1);
+    $self->assert_num_equals(scalar(@{$res->[0][1]{notFound}}), 2);
     $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
+    $self->assert_str_equals($res->[0][1]{notFound}[1], "foo");
 }
+
 1;
