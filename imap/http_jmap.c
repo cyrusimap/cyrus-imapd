@@ -4214,10 +4214,11 @@ done:
 
 /* XXX - sanitize forward declarations. */
 
-/* Create or update the VEVENT in the VCALENDAR component ical with the properties
- * of the JMAP calendar event. If uid is non-zero, set the VEVENT uid and any
- * recurrence exceptions to this UID. */
-static void jmap_calendarevent_to_ical(icalcomponent *ical,
+/* Create or update the VEVENT comp with the properties of the JMAP calendar
+ * event. The VEVENT must have a VCALENDAR as parent and its timezones might
+ * get rewritten. If uid is non-zero, set the VEVENT uid and any recurrence
+ * exceptions to this UID. */
+static void jmap_calendarevent_to_ical(icalcomponent *comp,
                                        json_t *event,
                                        int flags,
                                        const char *uid,
@@ -4445,8 +4446,11 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             json_t *invalidexc = json_pack("[]");
             size_t i;
             json_t *v;
+
             /* Add exceptional VEVENT component to the VCALENDAR. */
-            jmap_calendarevent_to_ical(ical, exc, JMAP_CREATE|JMAP_EXC, uid, invalidexc, req);
+            icalcomponent *excomp = icalcomponent_new_vevent();
+            icalcomponent_add_component(ical, excomp);
+            jmap_calendarevent_to_ical(excomp, exc, JMAP_CREATE|JMAP_EXC, uid, invalidexc, req);
 
             /* Prepend prefix to any invalid properties. */
             json_array_foreach(invalidexc, i, v) {
@@ -4790,7 +4794,7 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
     buf_free(&buf);
 }
 
-static void jmap_calendarevent_to_ical(icalcomponent *ical,
+static void jmap_calendarevent_to_ical(icalcomponent *comp,
                                        json_t *event,
                                        int flags,
                                        const char *uid,
@@ -4806,12 +4810,9 @@ static void jmap_calendarevent_to_ical(icalcomponent *ical,
     icaltimezone *tzdtend = NULL;
     icalproperty *prop = NULL;
     int create = flags & JMAP_CREATE;
+    icalcomponent *ical = icalcomponent_get_parent(comp);
 
-    icalcomponent *comp = icalcomponent_new_vevent();
-
-    /* Add main VEVENT to VCALENDAR (or main EVENT component). */
-    icalcomponent_add_component(ical, comp);
-
+    /* uid */
     if (uid) {
         icalcomponent_set_uid(comp, uid);
     }
@@ -5040,7 +5041,9 @@ static int setCalendarEvents(struct jmap_req *req)
             icalcomponent_add_property(ical, prop);
 
             /* Convert the calendar event to a VEVENT and add to ical. */
-            jmap_calendarevent_to_ical(ical, arg, 1 /* create */, uid, invalid, req);
+            icalcomponent *comp = icalcomponent_new_vevent();
+            icalcomponent_add_component(ical, comp);
+            jmap_calendarevent_to_ical(comp, arg, 1 /* create */, uid, invalid, req);
 
             /* Handle any property errors and bail out. */
             if (json_array_size(invalid)) {
