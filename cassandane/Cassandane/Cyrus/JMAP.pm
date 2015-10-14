@@ -1111,9 +1111,6 @@ sub test_setcalendarevents_update_recurrence {
     xlog "get calendar event $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
 
-    my $x = Dumper($res);
-    xlog "$x";
-
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($event->{id}, $id);
     $self->assert_str_equals($event->{recurrence}{frequency}, "weekly");
@@ -1166,6 +1163,104 @@ sub test_setcalendarevents_update_recurrence {
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($event->{id}, $id);
     $self->assert_null($event->{recurrence});
+}
+
+sub test_setcalendarevents_update_inclusions {
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "create event";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "summary" => "foo",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Australia/Melbourne",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Australia/Melbourne",
+                            "inclusions" => [ "2015-10-07T15:15:00" ]
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get calendar event $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    my $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+    $self->assert_str_equals($event->{inclusions}[0], "2015-10-07T15:15:00");
+
+    xlog "update inclusions of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "inclusions" => [
+                                "2015-11-08T13:00:00", "2016-01-01T14:00:00"
+                            ]
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get calendar event $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+    $self->assert_str_equals($event->{inclusions}[0], "2015-11-08T13:00:00");
+    $self->assert_str_equals($event->{inclusions}[1], "2016-01-01T14:00:00");
+
+    xlog "do not touch inclusions of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "summary" => "baz"
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{inclusions}[1], "2016-01-01T14:00:00");
+
+    xlog "update startTimeZone of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "startTimeZone" => "Asia/Bangkok"
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert_str_equals($event->{inclusions}[1], "2016-01-01T14:00:00");
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+
+    xlog "remove inclusions of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "inclusions" => undef
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+    $self->assert_null($event->{inclusions});
 }
 
 1;
