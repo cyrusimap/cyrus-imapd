@@ -4807,19 +4807,30 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
 }
 
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
- * JMAP alerts. If create is not set, purge any alerts that are not updated. */
+ * JMAP alerts. */
 static void jmap_alerts_to_ical(icalcomponent *comp,
                                 json_t *alerts,
-                                short create,
                                 json_t *invalid,
                                 struct jmap_req *req) {
-    if (!create) {
-        /* XXX - Purge existing alarms which do not match the new alerts. */
-    }
-
     size_t i;
     json_t *alert;
     struct buf buf = BUF_INITIALIZER;
+
+    /* Purge all VALARMs. */
+    /* XXX - We can't distinguish if the client wants to update an existing
+     * VALARM or create a new one. For now, we always create new VALARMs,
+     * throwing away any existing ones. This might not be intended. */
+    icalcomponent *alarm, *next;
+    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+         alarm;
+         alarm = next) {
+        next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
+        icalcomponent_remove_component(comp, alarm);
+    }
+
+    if (alerts == json_null()) {
+        return;
+    }
 
     json_array_foreach(alerts, i, alert) {
         enum icalproperty_action action = ICAL_ACTION_NONE;
@@ -4834,7 +4845,7 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
         buf_reset(&buf);
 
         /* type */
-        pe = jmap_readprop_full(alert, prefix, "type", create, invalid, "s", &type);
+        pe = jmap_readprop_full(alert, prefix, "type", 1, invalid, "s", &type);
         if (pe > 0) {
             if (!strncmp(type, "email", 6)) {
                 action = ICAL_ACTION_EMAIL;
@@ -4848,7 +4859,7 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
         }
 
         /* minutesBefore */
-        pe = jmap_readprop_full(alert, prefix, "minutesBefore", create, invalid, "i", &diff);
+        pe = jmap_readprop_full(alert, prefix, "minutesBefore", 1, invalid, "i", &diff);
         if (pe > 0 && action != ICAL_ACTION_NONE) {
             struct icaltriggertype trigger = icaltriggertype_from_int(diff * -60);
             icalcomponent *alarm = icalcomponent_new_valarm();
@@ -5188,13 +5199,20 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *alerts = NULL;
     pe = jmap_readprop(event, "alerts", 0, invalid, "o", &alerts);
     if (pe > 0) {
-        if (json_array_size(alerts)) {
-            jmap_alerts_to_ical(comp, alerts, create, invalid, req);
+        if (alerts == json_null() || json_array_size(alerts)) {
+            jmap_alerts_to_ical(comp, alerts, invalid, req);
         } else {
             json_array_append_new(invalid, json_string("alerts"));
         }
+    } else if (!pe && !create && tzcurr != tzstart) {
+        /* The start timezone has changed but none of the alerts. */
+        /* This is where we would like to update the timezones of any VALARMs
+         * that have a TRIGGER value type of DATETIME (instead of the usual
+         * DURATION type). Unfortunately, these DATETIMEs are stored in UTC.
+         * Hence we can't tell, if the event owner really wants to wake up
+         * at e.g. 1am UTC or if it just was close to a local datetime during
+         * creation of the iCalendar file. For now, do nothing about that. */
     }
-
     /* recurrence */
     json_t *recurrence = NULL;
     pe = jmap_readprop(event, "recurrence", 0, invalid, "o", &recurrence);
@@ -5205,6 +5223,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
             json_array_append_new(invalid, json_string("recurrence"));
         }
     } else if (!pe && !create && tzcurr != tzstart) {
+        /* The start timezone has changed but none of the recurrences. */
         jmap_recurrence_update_tz(comp, tzcurr, tzstart);
     }
 
