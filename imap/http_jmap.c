@@ -4252,8 +4252,8 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
                                        struct jmap_req *req);
 
 /* Helper flags for setCalendarEvents */
-#define JMAP_CREATE (1<<0)
-#define JMAP_EXC    (1<<1)
+#define JMAP_CREATE     (1<<0) /* Current request is a create. */
+#define JMAP_EXC        (1<<1) /* Calendar component is a VEVENT exception .*/
 
 /* Replace the datetime property kind in comp. If tz is not NULL, set
  * the TZID parameter on the property. */
@@ -4541,17 +4541,27 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
  * JMAP recurrence. Use tz as timezone for LocalDate conversions. */
 static void jmap_recurrence_to_ical(icalcomponent *comp,
                                     json_t *recur,
-                                    short create,
+                                    int flags,
                                     json_t *invalid,
                                     icaltimezone *tz) {
 
-    if (!create) {
-        /* XXX - Purge existing RRULE. */
-    }
     const char *prefix = "recurrence";
     const char *freq = NULL;
     struct buf buf = BUF_INITIALIZER;
     int pe;
+    icalproperty *prop, *next;
+
+    /* Purge existing RRULE. */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+            prop;
+            prop = next) {
+        next = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
+        icalcomponent_remove_property(comp, prop);
+    }
+
+    if (!recur || recur == json_null()) {
+        return;
+    }
 
     /* frequency */
     pe = jmap_readprop_full(recur, prefix, "frequency", 1, invalid, "s", &freq);
@@ -5015,25 +5025,25 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* summary */
-    pe = jmap_readprop(event, "summary", 1, invalid, "s", &val);
+    pe = jmap_readprop(event, "summary", create, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
     }
 
     /* description */
-    pe = jmap_readprop(event, "description", 1, invalid, "s", &val);
+    pe = jmap_readprop(event, "description", create, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_description(comp, val);
     } 
 
     /* location */
-    pe = jmap_readprop(event, "location", 1, invalid, "s", &val);
+    pe = jmap_readprop(event, "location", create, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_location(comp, val);
     } 
 
     /* showAsFree */
-    pe = jmap_readprop(event, "showAsFree", 1, invalid, "b", &showAsFree);
+    pe = jmap_readprop(event, "showAsFree", create, invalid, "b", &showAsFree);
     if (pe > 0) {
         enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
         prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
@@ -5051,6 +5061,10 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         if (!tzstart) {
             json_array_append_new(invalid, json_string("startTimeZone"));
         }
+    } else if (!pe) {
+        /* Always determine the start timezone to resolve LocalDates. */
+        const char *tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+        if (tzid) tzstart = icaltimezone_get_builtin_timezone(tzid);
     }
 
     /* endTimeZone */
@@ -5063,7 +5077,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* start */
-    pe = jmap_readprop(event, "start", 1, invalid, "s", &val);
+    pe = jmap_readprop(event, "start", create, invalid, "s", &val);
     if (pe > 0) {
         if (!jmap_localdate_to_icaltime_with_zone(val, &dtstart, tzstart)) {
             jmap_update_ical_dtprop(comp, dtstart, tzstart, ICAL_DTSTART_PROPERTY);
@@ -5076,7 +5090,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* end */
-    pe = jmap_readprop(event, "end", 1, invalid, "s", &val);
+    pe = jmap_readprop(event, "end", create, invalid, "s", &val);
     if (pe > 0) {
         if (!jmap_localdate_to_icaltime_with_zone(val, &dtend, tzend)) {
             jmap_update_ical_dtprop(comp, dtend, tzend, ICAL_DTEND_PROPERTY);
@@ -5086,7 +5100,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* isAllDay */
-    jmap_readprop(event, "isAllDay", 1, invalid, "b", &isAllDay);
+    jmap_readprop(event, "isAllDay", create, invalid, "b", &isAllDay);
     if (pe > 0 && !create) {
         /* XXX Validate that start/end meet the criteria of isAllDay. */
     }
