@@ -1617,6 +1617,7 @@ static void sched_deliver_local(const char *recipient,
         /* Can't find object belonging to attendee - use default calendar */
         mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
         buf_reset(&resource);
+        /* XXX - sanitize the uid? */
         buf_printf(&resource, "%s.ics",
                    icalcomponent_get_uid(sched_data->itip));
 
