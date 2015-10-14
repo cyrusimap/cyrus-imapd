@@ -4537,6 +4537,26 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
     buf_free(&buf);
 }
 
+/* Rewrite the UTC-formatted UNTIL dates in the RRULE of VEVENT comp. */
+static void jmap_recurrence_update_tz(icalcomponent *comp,
+                                      icaltimezone *tzold,
+                                      icaltimezone *tznew) {
+
+    icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+    if (!prop) {
+        return;
+    }
+    struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
+    if (icaltime_is_null_time(rrule.until)) {
+        return;
+    }
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    icaltimetype dt = icaltime_convert_to_zone(rrule.until, tzold);
+    dt.zone = tznew;
+    rrule.until = icaltime_convert_to_zone(dt, utc);
+    icalproperty_set_rrule(prop, rrule);
+}
+
 /* Create or overwrite the RRULE in the VEVENT component comp as defined by the
  * JMAP recurrence. Use tz as timezone for LocalDate conversions. */
 static void jmap_recurrence_to_ical(icalcomponent *comp,
@@ -5014,10 +5034,12 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     int isAllDay = 0;
     struct icaltimetype dtstart = icaltime_null_time();
     struct icaltimetype dtend = icaltime_null_time();
+    icaltimezone *tzcurr = NULL;
     icaltimezone *tzstart = NULL;
     icaltimezone *tzend = NULL;
     icalproperty *prop = NULL;
     int create = flags & JMAP_CREATE;
+    const char *tzid = NULL;
 
     /* uid */
     if (uid) {
@@ -5055,6 +5077,8 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* startTimeZone */
+    tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    if (tzid) tzcurr = icaltimezone_get_builtin_timezone(tzid);
     pe = jmap_readprop(event, "startTimeZone", 0, invalid, "s", &val);
     if (pe > 0) {
         tzstart = icaltimezone_get_builtin_timezone(val);
@@ -5062,9 +5086,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
             json_array_append_new(invalid, json_string("startTimeZone"));
         }
     } else if (!pe) {
-        /* Always determine the start timezone to resolve LocalDates. */
-        const char *tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
-        if (tzid) tzstart = icaltimezone_get_builtin_timezone(tzid);
+        tzstart = tzcurr;
     }
 
     /* endTimeZone */
@@ -5075,6 +5097,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
             json_array_append_new(invalid, json_string("endTimeZone"));
         }
     }
+    /* XXX - The client may only change the end time zone. */
 
     /* start */
     pe = jmap_readprop(event, "start", create, invalid, "s", &val);
@@ -5087,6 +5110,11 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("start"));
         }
+    } else if (!pe && !create && tzcurr != tzstart) {
+        /* The client changed the startTimeZone but not the start time. */
+        icaltimetype dt = icalcomponent_get_dtstart(comp);
+        dt.zone = tzstart;
+        jmap_update_ical_dtprop(comp, dt, tzstart, ICAL_DTSTART_PROPERTY);
     }
 
     /* end */
@@ -5139,6 +5167,8 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("recurrence"));
         }
+    } else if (!pe && !create && tzcurr != tzstart) {
+        jmap_recurrence_update_tz(comp, tzcurr, tzstart);
     }
 
     /* inclusions */
