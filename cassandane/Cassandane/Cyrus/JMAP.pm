@@ -999,7 +999,7 @@ sub test_setcalendarevents {
                             "showAsFree" => JSON::true,
                             "isAllDay" => JSON::false,
                             "start" => "2015-10-06T18:45:00",
-                            "startTimeZone" => "America/New_York",
+                            "startTimeZone" => "Australia/Melbourne",
                             "end" => "2015-10-06T19:15:00",
                             "endTimeZone" => "America/New_York"
                         }
@@ -1027,7 +1027,7 @@ sub test_setcalendarevents {
     $self->assert_equals($event->{showAsFree}, JSON::true);
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($event->{start}, '2015-10-06T18:45:00');
-    $self->assert_str_equals($event->{startTimeZone}, 'America/New_York');
+    $self->assert_str_equals($event->{startTimeZone}, 'Australia/Melbourne');
     $self->assert_str_equals($event->{end}, '2015-10-06T19:15:00');
     $self->assert_str_equals($event->{endTimeZone}, 'America/New_York');
     # XXX assert that LocaDates have changed in all subproperties.
