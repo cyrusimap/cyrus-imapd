@@ -4548,7 +4548,6 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
     if (!create) {
         /* XXX - Purge existing RRULE. */
     }
-
     const char *prefix = "recurrence";
     const char *freq = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -4943,14 +4942,12 @@ static void jmap_timezones_to_ical(icalcomponent *comp,
      * a bit hairy: we could expunge a timezone which is in use by an ical
      * property that is unknown to us. But since we don't know what to
      * look for, we can't make sure to preserve these timezones. */
-    for (tzcomp = icalcomponent_get_first_component(ical,
-                ICAL_VTIMEZONE_COMPONENT);
-            tzcomp; tzcomp = next) {
+    for (tzcomp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+         tzcomp;
+         tzcomp = next) {
 
         next = icalcomponent_get_next_component(ical,
                 ICAL_VTIMEZONE_COMPONENT);
-
-        icalcomponent_remove_component(ical, tzcomp);
 
         prop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
         if (prop) {
