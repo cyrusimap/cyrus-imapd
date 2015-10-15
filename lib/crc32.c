@@ -680,7 +680,8 @@ static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
     const size_t bytes_at_once = 16 * unroll;
 
     while (length >= bytes_at_once) {
-        for (size_t unrolling = 0; unrolling < unroll; unrolling++) {
+        size_t unrolling;
+        for (unrolling = 0; unrolling < unroll; unrolling++) {
 #ifdef LITTLE_ENDIAN
         uint32_t one   = *current++ ^ crc;
         uint32_t two   = *current++;
