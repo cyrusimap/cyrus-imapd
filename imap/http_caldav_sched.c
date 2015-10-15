@@ -81,6 +81,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
     if (myuserid && !strcasecmp(userid, myuserid)) {
         param->isyou = 1;
+        param->userid = xstrdupnull(userid); /* XXX - memleak */
         return 0; // myself is always local
     }
     len = strlen(userid);
