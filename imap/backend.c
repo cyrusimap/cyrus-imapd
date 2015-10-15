@@ -1126,11 +1126,11 @@ EXPORTED void backend_disconnect(struct backend *s)
                 }
             }
         }
-    }
 
-    /* Flush the incoming buffer */
-    prot_NONBLOCK(s->in);
-    prot_fill(s->in);
+        /* Flush the incoming buffer */
+        prot_NONBLOCK(s->in);
+        prot_fill(s->in);
+    }
 
 #ifdef HAVE_SSL
     /* Free tlsconn */
