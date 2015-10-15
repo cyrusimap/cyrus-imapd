@@ -4251,6 +4251,17 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
                                        json_t *invalid,
                                        struct jmap_req *req);
 
+struct jmap_timezone_rock {
+    icaltimezone *start_old; /* The former startTimeZone. */
+    icaltimezone *start;     /* The updated startTimeZone. */
+    icaltimezone *end_old;   /* The former endTimeZone. */
+    icaltimezone *end;       /* The updated endTimeZone. */
+
+    icaltimezone **excs;     /* Timezones required by exceptions. */
+    size_t n_excs;           /* The number of exceptional exceptions. */
+    size_t s_excs;           /* The size of the exceptional timezone array. */
+};
+
 /* Helper flags for setCalendarEvents */
 #define JMAP_CREATE     (1<<0) /* Current request is a create. */
 #define JMAP_EXC        (1<<1) /* Calendar component is a VEVENT exception .*/
@@ -4442,6 +4453,10 @@ static void jmap_recurrence_byX_to_ical(json_t *byX,
     }
 }
 
+static void jmap_exceptions_update_tz(icalcomponent *comp,
+                                      struct jmap_timezone_rock *tz) {
+    /* XXX - Implement this. */
+}
 
 /* Create or overwrite the VEVENT exceptions for VEVENT component comp as
  * defined by the JMAP exceptions. Use tz as timezone for LocalDate
@@ -4451,7 +4466,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
                                     int flags,
                                     json_t *invalid,
                                     const char *uid,
-                                    icaltimezone *tz,
+                                    struct jmap_timezone_rock *tz,
                                     struct jmap_req *req) {
     if (!(flags&JMAP_CREATE)) {
         /* XXX - Purge existing exceptions (that are not updated). */
@@ -4472,7 +4487,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
 
         /* Parse key as LocalDate. */
         icaltimetype dt;
-        if (jmap_localdate_to_icaltime_with_zone(key, &dt, tz)) {
+        if (jmap_localdate_to_icaltime_with_zone(key, &dt, tz->start)) {
             json_array_append_new(invalid, json_string(prefix));
             free(prefix);
             continue;
@@ -4498,7 +4513,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         } else {
             /* Add EXDATE to the VEVENT. */
             /* iCalendar allows to set multiple EXDATEs. */
-            jmap_update_ical_dtprop(comp, dt, tz, 0 /*purge*/, ICAL_EXDATE_PROPERTY);
+            jmap_update_ical_dtprop(comp, dt, tz->start, 0 /*purge*/, ICAL_EXDATE_PROPERTY);
         }
 
         free(prefix);
@@ -4509,8 +4524,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
 
 /* Update the TZID parameters for all RDATE properties to tznew. */
 static void jmap_inclusions_update_tz(icalcomponent *comp,
-                                      icaltimezone *tzold,
-                                      icaltimezone *tznew) {
+                                      struct jmap_timezone_rock *tz) {
     icalproperty *prop;
 
     for (prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
@@ -4518,9 +4532,11 @@ static void jmap_inclusions_update_tz(icalcomponent *comp,
          prop = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY)) {
         icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
         if (param) {
-            const char *tzid = icaltimezone_get_location(tznew);
-            if (tznew && tzid) {
-                icalparameter_set_tzid(param, tzid);
+            if (tz->start) {
+                const char *tzid = icaltimezone_get_location(tz->start);
+                if (tzid) {
+                    icalparameter_set_tzid(param, tzid);
+                }
             } else {
                 icalproperty_remove_parameter(prop, ICAL_TZID_PARAMETER);
                 icalparameter_free(param);
@@ -4535,7 +4551,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
                                     json_t *inclusions,
                                     short create,
                                     json_t *invalid,
-                                    icaltimezone *tz) {
+                                    struct jmap_timezone_rock *tz) {
 
     size_t i;
     json_t *incl;
@@ -4560,7 +4576,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
         icaltimetype dt;
 
         /* Parse incl as LocalDate. */
-        if (jmap_localdate_to_icaltime_with_zone(json_string_value(incl), &dt, tz)) {
+        if (jmap_localdate_to_icaltime_with_zone(json_string_value(incl), &dt, tz->start)) {
             buf_printf(&buf, "inclusions[%llu]", (long long unsigned) i);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
             buf_reset(&buf);
@@ -4568,7 +4584,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
         } 
 
         /* Create and add RDATE property. */
-        jmap_update_ical_dtprop(comp, dt, tz, 0 /*purge*/, ICAL_RDATE_PROPERTY);
+        jmap_update_ical_dtprop(comp, dt, tz->start, 0 /*purge*/, ICAL_RDATE_PROPERTY);
     }
 
     buf_free(&buf);
@@ -4576,8 +4592,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
 
 /* Rewrite the UTC-formatted UNTIL dates in the RRULE of VEVENT comp. */
 static void jmap_recurrence_update_tz(icalcomponent *comp,
-                                      icaltimezone *tzold,
-                                      icaltimezone *tznew) {
+                                      struct jmap_timezone_rock *tz) {
 
     icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     if (!prop) {
@@ -4588,8 +4603,8 @@ static void jmap_recurrence_update_tz(icalcomponent *comp,
         return;
     }
     icaltimezone *utc = icaltimezone_get_utc_timezone();
-    icaltimetype dt = icaltime_convert_to_zone(rrule.until, tzold);
-    dt.zone = tznew;
+    icaltimetype dt = icaltime_convert_to_zone(rrule.until, tz->start_old);
+    dt.zone = tz->start;
     rrule.until = icaltime_convert_to_zone(dt, utc);
     icalproperty_set_rrule(prop, rrule);
 }
@@ -4600,7 +4615,7 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
                                     json_t *recur,
                                     int flags,
                                     json_t *invalid,
-                                    icaltimezone *tz) {
+                                    struct jmap_timezone_rock *tz) {
 
     const char *prefix = "recurrence";
     const char *freq = NULL;
@@ -4774,7 +4789,7 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
     if (pe > 0) {
         icaltimetype dtloc;
 
-        if (!jmap_localdate_to_icaltime_with_zone(until, &dtloc, tz)) {
+        if (!jmap_localdate_to_icaltime_with_zone(until, &dtloc, tz->start)) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             icaltimetype dt = icaltime_convert_to_zone(dtloc, utc);
             buf_printf(&buf, ";UNTIL=%s", icaltime_as_ical_string(dt));
@@ -5004,8 +5019,7 @@ static struct icalperiodtype jmap_get_utc_timespan(icalcomponent *ical,
 }
 
 static void jmap_timezones_to_ical(icalcomponent *comp,
-                                   icaltimezone* tzstart,
-                                   icaltimezone* tzend) {
+                                   struct jmap_timezone_rock *tzrock) {
 
     icaltimezone *tz;
     icalcomponent *tzcomp, *next;
@@ -5038,7 +5052,7 @@ static void jmap_timezones_to_ical(icalcomponent *comp,
     }
 
     /* Add current start and end timezones, truncated by span. */
-    tz = tzstart;
+    tz = tzrock->start;
     if (tz) {
         /* Clone tz to overwrite its TZID property. */
         icalcomponent *tzcomp = icalcomponent_new_clone(icaltimezone_get_component(tz));
@@ -5053,8 +5067,8 @@ static void jmap_timezones_to_ical(icalcomponent *comp,
         /* Add the truncated timezone. */
         icalcomponent_add_component(ical, tzcomp);
     }
-    tz = tzend;
-    if (tz && tz != tzstart) {
+    tz = tzrock->end;
+    if (tz && tz != tzrock->start) {
         /* Clone tz to overwrite its TZID property. */
         icalcomponent *tzcomp = icalcomponent_new_clone(icaltimezone_get_component(tz));
         icalproperty *tzprop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
@@ -5068,6 +5082,7 @@ static void jmap_timezones_to_ical(icalcomponent *comp,
         /* Add the truncated timezone. */
         icalcomponent_add_component(ical, tzcomp);
     }
+    /* XXX - Add any exceptional timezones. */
 }
 
 static void jmap_calendarevent_to_ical(icalcomponent *comp,
@@ -5082,12 +5097,11 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     int isAllDay = 0;
     struct icaltimetype dtstart = icaltime_null_time();
     struct icaltimetype dtend = icaltime_null_time();
-    icaltimezone *tzcurr = NULL;
-    icaltimezone *tzstart = NULL;
-    icaltimezone *tzend = NULL;
     icalproperty *prop = NULL;
     int create = flags & JMAP_CREATE;
     const char *tzid = NULL;
+    struct jmap_timezone_rock tz;
+    memset(&tz, 0, sizeof(struct jmap_timezone_rock));
 
     /* uid */
     if (uid) {
@@ -5126,52 +5140,63 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
 
     /* startTimeZone */
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
-    if (tzid) tzcurr = icaltimezone_get_builtin_timezone(tzid);
+    if (tzid) tz.start_old = icaltimezone_get_builtin_timezone(tzid);
     pe = jmap_readprop(event, "startTimeZone", 0, invalid, "s", &val);
     if (pe > 0) {
-        tzstart = icaltimezone_get_builtin_timezone(val);
-        if (!tzstart) {
+        tz.start = icaltimezone_get_builtin_timezone(val);
+        if (!tz.start) {
             json_array_append_new(invalid, json_string("startTimeZone"));
         }
     } else if (!pe) {
-        tzstart = tzcurr;
+        tz.start = tz.start_old;
     }
 
     /* endTimeZone */
+    tzid = jmap_tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
+    if (!tzid) tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    if (tzid) tz.end_old = icaltimezone_get_builtin_timezone(tzid);
     pe = jmap_readprop(event, "endTimeZone", 0, invalid, "s", &val);
     if (pe > 0) {
-        tzend = icaltimezone_get_builtin_timezone(val);
-        if (!tzend) {
+        tz.end = icaltimezone_get_builtin_timezone(val);
+        if (!tz.end) {
             json_array_append_new(invalid, json_string("endTimeZone"));
         }
+    } else if (!pe) {
+        tz.end = tz.end_old;
     }
-    /* XXX - The client may only change the end time zone. */
 
     /* start */
     pe = jmap_readprop(event, "start", create, invalid, "s", &val);
     if (pe > 0) {
-        if (!jmap_localdate_to_icaltime_with_zone(val, &dtstart, tzstart)) {
-            jmap_update_ical_dtprop(comp, dtstart, tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
+        if (!jmap_localdate_to_icaltime_with_zone(val, &dtstart, tz.start)) {
+            jmap_update_ical_dtprop(comp, dtstart, tz.start, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
             if (flags & JMAP_EXC) {
-                jmap_update_ical_dtprop(comp, dtstart, tzstart, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
+                jmap_update_ical_dtprop(comp, dtstart, tz.start, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
             }
         } else {
             json_array_append_new(invalid, json_string("start"));
         }
-    } else if (!pe && !create && tzcurr != tzstart) {
+    } else if (!pe && !create && tz.start_old != tz.start) {
         /* The client changed the startTimeZone but not the start time. */
         icaltimetype dt = icalcomponent_get_dtstart(comp);
-        dt.zone = tzstart;
-        jmap_update_ical_dtprop(comp, dt, tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
+        dt.zone = tz.start;
+        jmap_update_ical_dtprop(comp, dt, tz.start, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
     }
 
     /* end */
     pe = jmap_readprop(event, "end", create, invalid, "s", &val);
     if (pe > 0) {
-        if (!jmap_localdate_to_icaltime_with_zone(val, &dtend, tzend)) {
-            jmap_update_ical_dtprop(comp, dtend, tzend, 1 /*purge*/, ICAL_DTEND_PROPERTY);
+        if (!jmap_localdate_to_icaltime_with_zone(val, &dtend, tz.end)) {
+            jmap_update_ical_dtprop(comp, dtend, tz.end, 1 /*purge*/, ICAL_DTEND_PROPERTY);
         } else {
             json_array_append_new(invalid, json_string("end"));
+        }
+    } else if (!pe && !create && tz.end_old != tz.end) {
+        /* The client changed the endTimeZone but not the end time. */
+        icaltimetype dt = icalcomponent_get_dtend(comp);
+        if (!icaltime_is_null_time(dt)) {
+            dt.zone = tz.end;
+            jmap_update_ical_dtprop(comp, dt, tz.end, 1 /*purge*/, ICAL_DTEND_PROPERTY);
         }
     }
 
@@ -5204,7 +5229,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("alerts"));
         }
-    } else if (!pe && !create && tzcurr != tzstart) {
+    } else if (!pe && !create && tz.start_old != tz.start) {
         /* The start timezone has changed but none of the alerts. */
         /* This is where we would like to update the timezones of any VALARMs
          * that have a TRIGGER value type of DATETIME (instead of the usual
@@ -5218,13 +5243,13 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     pe = jmap_readprop(event, "recurrence", 0, invalid, "o", &recurrence);
     if (pe > 0) {
         if (!(flags&JMAP_EXC)) {
-            jmap_recurrence_to_ical(comp, recurrence, create, invalid, tzstart);
+            jmap_recurrence_to_ical(comp, recurrence, create, invalid, &tz);
         } else {
             json_array_append_new(invalid, json_string("recurrence"));
         }
-    } else if (!pe && !create && tzcurr != tzstart) {
+    } else if (!pe && !create && tz.start_old != tz.start) {
         /* The start timezone has changed but none of the recurrences. */
-        jmap_recurrence_update_tz(comp, tzcurr, tzstart);
+        jmap_recurrence_update_tz(comp, &tz);
     }
 
     /* inclusions */
@@ -5232,12 +5257,13 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     pe = jmap_readprop(event, "inclusions", 0, invalid, "o", &inclusions);
     if (pe > 0) {
         if (!(flags&JMAP_EXC) && (inclusions == json_null() || json_array_size(inclusions))) {
-            jmap_inclusions_to_ical(comp, inclusions, create, invalid, tzstart);
+            jmap_inclusions_to_ical(comp, inclusions, create, invalid, &tz);
         } else {
             json_array_append_new(invalid, json_string("inclusions"));
         }
-    } else if (!pe && !create && tzcurr != tzstart) {
-        jmap_inclusions_update_tz(comp, tzcurr, tzstart);
+    } else if (!pe && !create && tz.start_old != tz.start) {
+        /* The start timezone has changed but none of the inclusions. */
+        jmap_inclusions_update_tz(comp, &tz);
     }
 
     /* exceptions */
@@ -5245,10 +5271,13 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     pe = jmap_readprop(event, "exceptions", 0, invalid, "o", &exceptions);
     if (pe > 0) {
         if (!(flags&JMAP_EXC) && json_object_size(exceptions)) {
-            jmap_exceptions_to_ical(comp, exceptions, flags, invalid, uid, tzstart, req);
+            jmap_exceptions_to_ical(comp, exceptions, flags, invalid, uid, &tz, req);
         } else {
             json_array_append_new(invalid, json_string("exceptions"));
         }
+    } else if (!pe && !create && (tz.start_old != tz.start || tz.end_old != tz.end)) {
+        /* The start or end timezone has changed but none of the exceptions. */
+        jmap_exceptions_update_tz(comp, &tz);
     }
 
     /* XXX - attachments */
@@ -5259,7 +5288,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
 
     /* Update timezones. */
     if (!(flags & JMAP_EXC)) {
-        jmap_timezones_to_ical(comp, tzstart, tzend);
+        jmap_timezones_to_ical(comp, &tz);
     }
 }
 
