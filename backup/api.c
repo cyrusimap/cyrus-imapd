@@ -735,12 +735,15 @@ static const char *_sha1_file(int fd, const char *fname, size_t limit,
     return buf;
 }
 
-static int backup_append_start5(struct backup *backup, time_t ts, off_t offset,
-                                const char *file_sha1, int index_only)
+static int backup_append_start6(struct backup *backup, time_t ts, off_t offset,
+                                const char *file_sha1, int index_only, int noflush)
 {
     if (backup->append_state != NULL) fatal("already started", -1);
 
     struct backup_append_state *append_state = xzmalloc(sizeof(*append_state));
+
+    if (index_only) append_state->mode |= BACKUP_APPEND_INDEXONLY;
+    if (noflush) append_state->mode |= BACKUP_APPEND_NOFLUSH;
 
     SHA1_Init(&append_state->sha_ctx);
 
@@ -757,10 +760,8 @@ static int backup_append_start5(struct backup *backup, time_t ts, off_t offset,
 
         // FIXME check for error return
         gzwrite(append_state->gzfile, header, strlen(header));
-        gzflush(append_state->gzfile, Z_FULL_FLUSH);
-    }
-    else {
-        append_state->mode |= BACKUP_APPEND_INDEXONLY;
+        if (!noflush)
+            gzflush(append_state->gzfile, Z_FULL_FLUSH);
     }
 
     SHA1_Update(&append_state->sha_ctx, header, strlen(header));
@@ -803,7 +804,7 @@ EXPORTED int backup_append_start(struct backup *backup)
 
     _sha1_file(backup->fd, backup->data_fname, 0, file_sha1);
 
-    return backup_append_start5(backup, time(0), offset, file_sha1, 0);
+    return backup_append_start6(backup, time(0), offset, file_sha1, 0, 0);
 }
 
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
@@ -1102,10 +1103,12 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
             }
         }
 
-        r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
-        if (r != Z_OK) {
-            fprintf(stderr, "gzflush %s: %i %i\n", backup->data_fname, r, errno);
-            goto error;
+        if (!(backup->append_state->mode & BACKUP_APPEND_NOFLUSH)) {
+            r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
+            if (r != Z_OK) {
+                fprintf(stderr, "gzflush %s: %i %i\n", backup->data_fname, r, errno);
+                goto error;
+            }
         }
     }
 
@@ -1141,7 +1144,8 @@ int backup_append_end(struct backup *backup) {
     if (!append_state) fatal("not started", -1);
 
     if (!(append_state->mode & BACKUP_APPEND_INDEXONLY)) {
-        r = gzclose_w(append_state->gzfile);
+        r = gzflush(append_state->gzfile, Z_FULL_FLUSH);
+        if (!r) r = gzclose_w(append_state->gzfile);
         if (r != Z_OK) {
             fprintf(stderr, "%s: gzclose_w failed: %i\n", __func__, r);
             // FIXME handle this sensibly
@@ -1298,7 +1302,7 @@ EXPORTED int backup_reindex(const char *name)
                 member_ts = ts;
                 char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
                 _sha1_file(backup->fd, backup->data_fname, member_offset, file_sha1);
-                backup_append_start5(backup, member_ts, member_offset, file_sha1, 1);
+                backup_append_start6(backup, member_ts, member_offset, file_sha1, 1, 0);
             }
             else if (member_ts > ts)
                 fatal("line timestamp older than previous", -1);
