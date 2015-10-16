@@ -3429,9 +3429,10 @@ static int jmap_localdate_to_tm(const char *buf, struct tm *tm) {
 
 /* Convert the JMAP local datetime formatted buf into ical datetime dt
  * using timezone tz. Return 0 on success. */
-static int jmap_localdate_to_icaltime_with_zone(const char *buf,
-                                                icaltimetype *dt,
-                                                icaltimezone *tz) {
+static int jmap_localdate_to_icaltime(const char *buf,
+                                      icaltimetype *dt,
+                                      icaltimezone *tz,
+                                      int isAllDay) {
     struct tm tm;
     int r;
     char *s = NULL;
@@ -3439,6 +3440,10 @@ static int jmap_localdate_to_icaltime_with_zone(const char *buf,
 
     r = jmap_localdate_to_tm(buf, &tm);
     if (r) return r;
+
+    if (isAllDay && (tm.tm_sec || tm.tm_min || tm.tm_hour)) {
+        return 1;
+    }
 
     /* Can't use icaltime_from_timet_with_zone since it tries to convert
      * t from UTC into tz. Let's feed ical a DATETIME string, instead. */
@@ -4271,6 +4276,7 @@ typedef struct calevent_rock {
     int flags;               /* Flags indicating the request context. */
     const char *uid;         /* The iCalendar UID of this event. */
     const char *recurid;     /* The LocalDate recurrence id of this event. */
+    int isAllDay;            /* This event is a whole-day event. */
 
     json_t *invalid;         /* A JSON array of any invalid properties. */
 
@@ -4729,7 +4735,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
 
         /* Parse key as LocalDate. */
         icaltimetype dt;
-        if (jmap_localdate_to_icaltime_with_zone(key, &dt, rock->start)) {
+        if (jmap_localdate_to_icaltime(key, &dt, rock->start, rock->isAllDay)) {
             json_array_append_new(invalid, json_string(prefix));
             free(prefix);
             continue;
@@ -4834,7 +4840,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
         icaltimetype dt;
 
         /* Parse incl as LocalDate. */
-        if (jmap_localdate_to_icaltime_with_zone(json_string_value(incl), &dt, rock->start)) {
+        if (jmap_localdate_to_icaltime(json_string_value(incl), &dt, rock->start, rock->isAllDay)) {
             buf_printf(&buf, "inclusions[%llu]", (long long unsigned) i);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
             buf_reset(&buf);
@@ -5046,7 +5052,7 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
     if (pe > 0) {
         icaltimetype dtloc;
 
-        if (!jmap_localdate_to_icaltime_with_zone(until, &dtloc, rock->start)) {
+        if (!jmap_localdate_to_icaltime(until, &dtloc, rock->start, rock->isAllDay)) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             icaltimetype dt = icaltime_convert_to_zone(dtloc, utc);
             buf_printf(&buf, ";UNTIL=%s", icaltime_as_ical_string(dt));
@@ -5343,7 +5349,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     int pe; /* parse error */
     const char *val = NULL;
     int showAsFree = 0;
-    int isAllDay = 0;
     struct icaltimetype dtstart = icaltime_null_time();
     struct icaltimetype dtend = icaltime_null_time();
     icalproperty *prop = NULL;
@@ -5384,6 +5389,10 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
             icalcomponent_add_property(comp, icalproperty_new_transp(v));
         }
     }
+
+    /* isAllDay */
+    rock->isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
+    jmap_readprop(event, "isAllDay", create, invalid, "b", &rock->isAllDay);
 
     /* XXX Once all the hairy edge cases are covered, this function needs some
      * cleanup and addtional comments. */
@@ -5441,7 +5450,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         }
     }
     if (pe > 0) {
-        if (!jmap_localdate_to_icaltime_with_zone(val, &dtstart, rock->start)) {
+        if (!jmap_localdate_to_icaltime(val, &dtstart, rock->start, rock->isAllDay)) {
             jmap_update_dtprop_bykind(comp, dtstart, rock->start, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
             if (exc) {
                 jmap_update_dtprop_bykind(comp, dtstart, rock->start, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
@@ -5462,7 +5471,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     /* end */
     pe = jmap_readprop(event, "end", create, invalid, "s", &val);
     if (pe > 0) {
-        if (!jmap_localdate_to_icaltime_with_zone(val, &dtend, rock->end)) {
+        if (!jmap_localdate_to_icaltime(val, &dtend, rock->end, rock->isAllDay)) {
             jmap_update_dtprop_bykind(comp, dtend, rock->end, 1 /*purge*/, ICAL_DTEND_PROPERTY);
         } else {
             json_array_append_new(invalid, json_string("end"));
@@ -5474,12 +5483,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
             dt.zone = rock->end;
             jmap_update_dtprop_bykind(comp, dt, rock->end, 1 /*purge*/, ICAL_DTEND_PROPERTY);
         }
-    }
-
-    /* isAllDay */
-    jmap_readprop(event, "isAllDay", create, invalid, "b", &isAllDay);
-    if (pe > 0 && !create) {
-        /* XXX Validate that start/end meet the criteria of isAllDay. */
     }
 
     /* organizer and attendees */
@@ -5565,6 +5568,51 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     if (json_array_size(invalid)) {
         return;
     }
+
+    /* Check JMAP specification conditions on the generated iCalendar file, so 
+     * this also doubles as a sanity check. Note that we *could* report a
+     * property here as invalid, which had only been set by the client in a
+     * previous request. */
+
+    /* The end date MUST be equal to or after the start date when both are
+     * converted to UTC time. */
+    dtstart = icalcomponent_get_dtstart(comp);
+    dtend = icalcomponent_get_dtend(comp);
+    if (icaltime_is_null_time(dtend)) dtend = dtstart;
+    if (icaltime_compare(dtstart, dtend) > 0) {
+        json_array_append_new(invalid, json_string("end"));
+    }
+
+    /* If recurrence is null, inclusions and exceptions MUST also be null. */
+    if (!exc && !icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY)) {
+        if (icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY)) {
+            json_array_append_new(invalid, json_string("inclusions"));
+        }
+        if (icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) {
+            json_array_append_new(invalid, json_string("exceptions"));
+        }
+        if (!json_array_size(invalid)) {
+            icalcomponent *ical = icalcomponent_get_parent(comp);
+            icalcomponent *iter;
+            for (iter = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+                 iter;
+                 iter = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+                if (icalcomponent_get_first_property(iter, ICAL_RECURRENCEID_PROPERTY)) {
+                    json_array_append_new(invalid, json_string("exceptions"));
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Either both organizer and attendees are null, or neither are. */
+    if ((icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY) == NULL) !=
+        (icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY) == NULL)) {
+        json_array_append_new(invalid, json_string("organizer"));
+        json_array_append_new(invalid, json_string("attendees"));
+    }
+
+
 }
 
 static int setCalendarEvents(struct jmap_req *req)
