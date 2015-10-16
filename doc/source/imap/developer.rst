@@ -12,6 +12,7 @@ Getting Started
     developer/overview
     developer/installguide
     developer/basicserver
+    developer/developer-testing
     developer/process
     developer/architecture
 

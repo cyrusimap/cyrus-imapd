@@ -57,9 +57,11 @@ Compile Cyrus
     
     autoreconf -i -s   # generates a configure script, and its various dependencies
     
-    ./configure CFLAGS="-Wno-unused-parameter -g -O0 -Wall -Wextra -Werror" --enable-coverage \
-    --enable-http --enable-unit-tests --enable-replication --with-openssl=yes --enable-nntp \
-    --enable-murder --enable-idled --enable-event-notification --enable-sieve --prefix=/usr/cyrus
+    ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC" \
+    --enable-coverage --enable-calalarmd --enable-apple-push-service --enable-autocreate \
+    --enable-nntp --enable-xapian --enable-http --enable-unit-tests \
+    --enable-replication --with-openssl=yes --enable-nntp --enable-murder \
+    --enable-idled --enable-event-notification --enable-sieve --prefix=/usr/cyrus
 
     make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
 
@@ -68,136 +70,14 @@ Compile Cyrus
     make check
     
     make install  # optional if you're just developing on this machine
+    
+    make install-binsymlinks    # Useful if you're testing older Cyrus versions
 
 The ``--prefix`` option sets where Cyrus is installed to. Adjust to suit.
+
+It may be of use to also add ``--std=gnu99`` to the ``CFLAGS``.  That generates TONS of warnings.
     
 You may see warnings regarding libical v2.0 being recommended to support certain functionality. Currently libical v1.0.1 is sufficient, unless you need/want RSCALE (non-gregorian recurrences), VPOLL (consensus scheduling), or VAVAILABILITY (specifying availability over time) functionality. If v2 is required, it will need to be installed from `github <https://github.com/libical/libical>`_.  
-    
-.. _imapinstallguide_cassandane:
-
-Cassandane
-==========
-
-Cassandane is a Perl-based integration test suite for Cyrus.
-
-Why "Cassandane"? Wikipedia indicates that Cassandane_ was the name of
-the consort of King Cyrus the Great of Persia, founder of the Achaemenid
-Persian Empire.  So that's kinda cool.
-
-.. _Cassandane: http://en.wikipedia.org/wiki/Cassandane
-
-Install and configure Cassandane
---------------------------------
-
-1. Clone the Cassandane repository (you can get the URL from the Diffusion app within Phabricator)
-    * If you are a member of `IMAP Committers`_, use: ``git clone ssh://git@git.cyrus.foundation/diffusion/C/cassandane.git``
-    * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/C/cassandane.git``
-
-2. Install dependencies
-
-.. code-block:: bash
-
-    sudo apt-get install libtest-unit-perl libconfig-inifiles-perl \
-        libdatetime-perl libbsd-resource-perl libxml-generator-perl \
-        libencode-imaputf7-perl libio-stringy-perl libnews-nntpclient-perl \
-        libfile-chdir-perl libnet-server-perl libunix-syslog-perl \
-        libdata-uuid-perl libjson-xs-perl libdata-ical-perl libjson-perl \
-        libdatetime-format-ical-perl libtext-levenshteinxs-perl \
-        libmime-types-perl libdatetime-format-iso8601-perl libcal-dav-perl \
-        libclone-perl
-
-There are a number of Perl modules required that aren't already packages in the standard repository. A few aren't in CPAN yet and should be installed from github.
-
-.. code-block:: bash
-
-    git clone https://github.com/brong/Net-DAVTalk/
-    cd Net-DAVTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
-    git clone https://github.com/brong/Net-CardDAVTalk/
-    cd Net-CardDAVTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
-    git clone https://github.com/brong/Net-CalDAVTalk/
-    cd Net-CalDAVTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
-    git clone https://github.com/brong/Mail-JMAPTalk/
-    cd Mail-JMAPTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
-The quickest option for the rest is installing via CPAN, but you could build packages using dh-make-perl if that is preferred.
-
-.. code-block:: bash
-
-    sudo cpan -i Tie::DataUUID
-    sudo cpan -i XML::Spice
-    sudo cpan -i XML::Fast
-    sudo cpan -i Data::ICal::TimeZone
-    sudo cpan -i Text::VCardFast
-    sudo cpan -i Mail::IMAPTalk
-    sudo cpan -i List::Pairwise
-    sudo cpan -i Convert::Base64
-
-3. Install Cassandane
-
-.. code-block:: bash
-
-    cd /path/to/cassandane
-    make
-
-4. Copy ``cassandane.ini.example`` to ``cassandane.ini``
-
-5. Edit ``cassandane.ini`` to set up your cassandane environment.
-    * Assuming you configure cyrus with ``--prefix=/usr/cyrus`` (as above), then the defaults are mostly fine
-    * Set ``destdir`` to ``/var/tmp/cyrus``
-    
-6. Create a ``cyrus`` user and matching group and also add ``cyrus`` to group ``mail``
-
-.. code-block:: bash
-
-    sudo adduser --system --group cyrus
-    sudo adduser cyrus mail
-    
-7. Give your user account access to sudo as ``cyrus``
-
-    * ``sudo visudo``
-    * add a line like:``username ALL = (cyrus) NOPASSWD: ALL``, where "username" is your own username
-
-8. Make the ``destdir`` directory, as the ``cyrus`` user
-
-    * ``sudo -u cyrus mkdir /var/tmp/cass``
-
-Building cyrus-imapd for Cassandane
------------------------------------
-
-    * ``cd /path/to/cyrus-imapd``
-    * `Compile Cyrus`_ (as above)
-    * ``make -e DESTDIR=/var/tmp/cyrus install``
-
-Running cassandane tests:
--------------------------
-    
-    * As user ``cyrus``, run the tests.
-    
-.. code-block:: bash
-
-    cd /path/to/cassandane
-    sudo -u cyrus ./testrunner.pl -f pretty -j 8
-
-Read the script to see other options. If you're having problems, add more ``-v`` options to the testrunner to get more info out.
 
 Arcanist
 =========
