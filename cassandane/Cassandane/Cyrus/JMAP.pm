@@ -919,8 +919,6 @@ sub test_setcalendarevents {
                             "exceptions" => {
                                 "2015-10-11T11:30:15" => {
                                     "summary" => "bar",
-                                    "description" => "",
-                                    "location" => "",
                                     "showAsFree" => JSON::false,
                                     "isAllDay" => JSON::false,
                                     "start" => "2015-10-11T11:30:15",
@@ -980,8 +978,6 @@ sub test_setcalendarevents {
     # exceptions
     my $exc = $event->{exceptions}{"2015-10-11T11:30:15"};
     $self->assert_str_equals($exc->{summary}, "bar");
-    $self->assert_str_equals($exc->{description}, "");
-    $self->assert_str_equals($exc->{location}, "");
     $self->assert_equals($event->{showAsFree}, JSON::false);
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($exc->{start}, "2015-10-11T11:30:15");
@@ -1164,7 +1160,7 @@ sub test_setcalendarevents_update_recurrence {
                             "start" => "2015-10-06T16:45:00",
                             "startTimeZone" => "Asia/Bangkok",
                             "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne"
+                            "endTimeZone" => "Europe/Vienna"
                         }
                     }}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{updated}[0], $id);
@@ -1186,7 +1182,7 @@ sub test_setcalendarevents_update_recurrence {
                             "start" => "2015-10-06T16:45:00",
                             "startTimeZone" => "Asia/Bangkok",
                             "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
+                            "endTimeZone" => "Europe/Vienna",
                             "recurrence" => undef
                         }
                     }}, "R1"]]);
@@ -1300,8 +1296,7 @@ sub test_setcalendarevents_update_inclusions {
                             "isAllDay" => JSON::false,
                             "start" => "2015-10-06T16:45:00",
                             "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
-
+                            "endTimeZone" => "Europe/Vienna",
                             "startTimeZone" => "Asia/Bangkok"
                         }
                     }}, "R1"]]);
@@ -1324,7 +1319,7 @@ sub test_setcalendarevents_update_inclusions {
                             "start" => "2015-10-06T16:45:00",
                             "startTimeZone" => "Asia/Bangkok",
                             "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
+                            "endTimeZone" => "Europe/Vienna",
                             "inclusions" => undef
                         }
                     }}, "R1"]]);
