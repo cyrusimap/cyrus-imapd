@@ -1505,6 +1505,10 @@ sub test_setcalendarevents_update_exceptions {
     $self->assert_str_equals($event->{id}, $id);
     my $exc = $event->{exceptions}{"2015-10-07T17:45:00"};
     $self->assert_str_equals($exc->{summary}, "one hour later");
+    $self->assert_null($exc->{description});
+    $self->assert_null($exc->{location});
+    $self->assert_null($exc->{showAsFree});
+    $self->assert_null($exc->{isAllDay});
     $self->assert_str_equals($exc->{start}, "2015-10-07T17:45:00");
     $self->assert_str_equals($exc->{end}, "2015-10-07T18:15:00");
     $self->assert(exists $event->{exceptions}{"2015-10-08T16:45:00"});
@@ -1515,7 +1519,8 @@ sub test_setcalendarevents_update_exceptions {
                             "exceptions" => {
                                 "2015-10-07T17:45:00" => {
                                     "startTimeZone" => "Australia/Melbourne",
-                                    "endTimeZone" => "Australia/Melbourne"
+                                    "endTimeZone" => "Australia/Melbourne",
+                                    "showAsFree" => JSON::true
                                 },
                             }
                         }
@@ -1525,12 +1530,13 @@ sub test_setcalendarevents_update_exceptions {
     xlog "get calendar event $id";
 
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-
-
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($event->{id}, $id);
     $exc = $event->{exceptions}{"2015-10-07T17:45:00"};
     $self->assert_str_equals($exc->{summary}, "one hour later");
+    $self->assert_null($exc->{description});
+    $self->assert_equals($exc->{showAsFree}, JSON::true);
+    $self->assert_null($exc->{isAllDay});
     $self->assert_str_equals($exc->{start}, "2015-10-07T17:45:00");
     $self->assert_str_equals($exc->{startTimeZone}, "Australia/Melbourne");
     $self->assert_str_equals($exc->{end}, "2015-10-07T18:15:00");
