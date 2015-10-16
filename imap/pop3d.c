@@ -1575,7 +1575,8 @@ static void cmd_pass(char *pass)
                popd_userid, popd_subfolder ? popd_subfolder : "",
                popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
-        if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
+        if ((!popd_starttls_done) &&
+            (plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
              != 0) {
             sleep(plaintextloginpause);
         }
