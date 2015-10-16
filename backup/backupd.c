@@ -853,7 +853,7 @@ static int cmd_apply_reserve(struct dlist *dl)
 
     if (!open) return IMAP_INTERNAL;
 
-    int r = backup_append(open->backup, dl, time(0), 0, 0);
+    int r = backup_append(open->backup, dl, time(0));
     if (r) {
         syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
         return IMAP_INTERNAL;
