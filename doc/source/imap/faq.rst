@@ -37,7 +37,7 @@ Common Operational Questions
 ============================
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
     :glob:
     
     faqs/o-*
