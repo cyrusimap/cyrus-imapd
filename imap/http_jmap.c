@@ -4388,36 +4388,90 @@ static void jmap_participants_to_ical(icalcomponent *comp,
                                       json_t *organizer,
                                       json_t *attendees,
                                       calevent_rock *rock) {
-    /* XXX - Purge existing participants. */
-
     int create = rock->flags & JMAP_CREATE;
     json_t *invalid = rock->invalid;
     const char *name = NULL;
     const char *email = NULL;
     const char *rsvp = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    size_t i;
+    icalproperty *prop, *next;
+    json_t *att;
+    hash_table cache;
 
+    /* XXX - Integrate iTIP, once all the semantics JMAP<->iTIP are agreed. */
+
+    /* Purge existing ORGANIZER and ATTENDEEs only if instructed to do so. */
+    if (organizer == json_null() && attendees == json_null()) {
+        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        icalcomponent_remove_property(comp, prop);
+        for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+             prop;
+             prop = next) {
+            next = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
+            icalcomponent_remove_property(comp, prop);
+        }
+        return;
+    }
+
+    /* organizer */
     jmap_readprop_full(organizer, "organizer", "name", create, invalid, "s", &name);
     jmap_readprop_full(organizer, "organizer", "email", create, invalid, "s", &email);
 
     if (name && email) {
-        icalproperty *prop = icalproperty_new_organizer(email);
-        icalparameter *param = icalparameter_new_cn(name);
+        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        if (prop) {
+            /* Remove but keep property to preserve ical parameters. */
+            icalproperty *tmp = icalproperty_new_clone(prop);
+            icalcomponent_remove_property(comp, prop);
+            prop = tmp;
+            buf_printf(&buf, "mailto:%s", email);
+            icalproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
+            buf_reset(&buf);
+        } else {
+            prop = icalproperty_new_organizer(email);
+        }
+        icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+        if (param) icalproperty_remove_parameter_by_ref(prop, param);
+        param = icalparameter_new_cn(name);
         icalproperty_add_parameter(prop, param);
         icalcomponent_add_property(comp, prop);
     }
 
-    size_t i;
-    json_t *att;
-    struct buf buf = BUF_INITIALIZER;
+    if (!json_array_size(attendees)) {
+        return;
+    }
 
+    /* Move all current ATTENDEEs with a mailto caladdr to the cache. */
+    construct_hash_table(&cache, json_array_size(attendees), 0);
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
+
+        const char *val = icalproperty_get_value_as_string(prop);
+        if (!val) {
+            continue;
+        }
+        if (strncasecmp(val, "mailto:", 7)) {
+            continue;
+        }
+        val += 7;
+        if (!*val) {
+            continue;
+        }
+        hash_insert(val, icalproperty_new_clone(prop), &cache);
+        icalcomponent_remove_property(comp, prop);
+    }
+
+    /* Iterate the JMAP attendees to create or update the iCalendar ATTENDEES. */
     json_array_foreach(attendees, i, att) {
         char *prefix;
         icalparameter_partstat pst = ICAL_PARTSTAT_NONE;
-        name = NULL;
-        email = NULL;
+        name = NULL; email = NULL;
         rsvp = NULL;
 
-        buf_reset(&buf);
         buf_printf(&buf, "attendees[%llu]", (long long unsigned) i);
         prefix = buf_newcstring(&buf);
         buf_reset(&buf);
@@ -4441,18 +4495,27 @@ static void jmap_participants_to_ical(icalcomponent *comp,
             }
         }
 
-        /* XXX - Check attendee email for uniqueness. */
-
         if (name && email && pst != ICAL_PARTSTAT_NONE) {
-            /* email */
-            icalproperty *prop = icalproperty_new_attendee(email);
+            /* Move the attendee either from the cache or create a new one. */
+            prop = (icalproperty*) hash_lookup(email, &cache);
+            if (prop) hash_del(email, &cache);
+            if (!prop) {
+                buf_printf(&buf, "mailto:%s", email);
+                prop = icalproperty_new_attendee(buf_cstring(&buf));
+                buf_reset(&buf);
+            }
+
             icalparameter *param;
 
             /* name */
+            param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+            if (param) icalproperty_remove_parameter_by_ref(prop, param);
             param = icalparameter_new_cn(name);
             icalproperty_add_parameter(prop, param);
 
             /* partstat */
+            param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+            if (param) icalproperty_remove_parameter_by_ref(prop, param);
             param = icalparameter_new_partstat(pst);
             icalproperty_add_parameter(prop, param);
 
@@ -4462,6 +4525,7 @@ static void jmap_participants_to_ical(icalcomponent *comp,
         free(prefix);
     }
 
+    free_hash_table(&cache, (void(*)(void*)) icalproperty_free);
     buf_free(&buf);
 }
 
@@ -4642,7 +4706,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
          * in two different timezones. */
         const char *val = icalproperty_get_value_as_string(prop);
         if (val) {
-            hash_insert(val, excomp, &excs);
+            hash_insert(val, icalcomponent_new_clone(excomp), &excs);
         }
         icalcomponent_remove_component(ical, excomp);
     }
@@ -4705,8 +4769,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
     }
 
     /* Purge any remaining VEVENTs from the cache. */
-    //free_hash_table(&excs, (void(*)(void*)) icalcomponent_free);
-    free_hash_table(&excs, NULL);
+    free_hash_table(&excs, (void(*)(void*)) icalcomponent_free);
 
     buf_free(&buf);
 }
@@ -4728,7 +4791,6 @@ static void jmap_inclusions_update_tz(icalcomponent *comp,
                 }
             } else {
                 icalproperty_remove_parameter(prop, ICAL_TZID_PARAMETER);
-                icalparameter_free(param);
             }
         }
     }
@@ -4816,7 +4878,6 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
          prop = next) {
         next = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
         icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
     }
 
     if (!recur || recur == json_null()) {
@@ -5168,8 +5229,8 @@ static struct icalperiodtype jmap_get_utc_timespan(icalcomponent *ical,
                     /* Do RDATE expansion only */
                     /* Temporarily remove RRULE to allow for expansion of
                      * remaining recurrences. */
+                    purged_rrule = icalproperty_new_clone(rrule);
                     icalcomponent_remove_property(comp, rrule);
-                    purged_rrule = rrule;
                 }
                 else if (!recur.count) {
                     /* Recurrence never ends - set end of span to eternity */
@@ -5236,7 +5297,6 @@ static void jmap_timezones_to_ical(icalcomponent *ical,
             const char *tzid = icalproperty_get_tzid(prop);
             if (icaltimezone_get_builtin_timezone(tzid)) {
                 icalcomponent_remove_component(ical, tzcomp);
-                icalcomponent_free(tzcomp);
             }
         }
     }
@@ -5420,12 +5480,15 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
 
     jmap_readprop(event, "organizer", 0, invalid, "o", &organizer);
     jmap_readprop(event, "attendees", 0, invalid, "o", &attendees);
-    if (organizer && attendees && !json_array_size(attendees)) {
-        json_array_append_new(invalid, json_string("attendees"));
-        attendees = NULL;
-    }
-    if ((create && organizer && attendees) || (!create && (organizer || attendees))) {
+    if (organizer == json_null() && attendees == json_null()) {
+        /* Remove both organizer and attendees from event. */
         jmap_participants_to_ical(comp, organizer, attendees, rock);
+    } else if (organizer && attendees && json_array_size(attendees)) {
+        /* Add or update both organizer and attendees. */
+        jmap_participants_to_ical(comp, organizer, attendees, rock);
+    } else if (organizer || attendees) {
+        /* Any other combination is an error. */
+        json_array_append_new(invalid, json_string("attendees"));
     }
 
     /* alerts */
