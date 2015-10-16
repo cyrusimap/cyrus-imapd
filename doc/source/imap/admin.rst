@@ -34,15 +34,11 @@ Configuration
     Conversations
     DAV / HTTP 
     
-Other
-=====    
+FAQ
+====
 .. toctree::
     :maxdepth: 2
     
-    admin/deleted-expired-expunged-purged
-    admin/administration-running
-    admin/packagers
-    admin/config
     faq
 
 References
@@ -61,3 +57,15 @@ References
 
     howtos/nginx-proxy
     howtos/shared-folder-mail-delivery
+
+Other
+=====    
+.. toctree::
+    :maxdepth: 2
+    
+    admin/deleted-expired-expunged-purged
+    admin/administration-running
+    admin/packagers
+    admin/config
+    
+    
