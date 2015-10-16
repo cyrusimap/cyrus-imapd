@@ -1569,4 +1569,173 @@ sub test_setcalendarevents_update_exceptions {
     $self->assert(not exists $event->{exceptions}{"2015-10-08T16:45:00"});
 }
 
+sub test_setcalendarevents_update_participants {
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "create event";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "summary" => "foo",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Australia/Melbourne",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Australia/Melbourne",
+                            "organizer" => {
+                                "name" => "Cassandane",
+                                "email" => "cassandane\@localhost",
+                            },
+                            "attendees" => [{
+                                "name" => "Bugs Bunny",
+                                "email" => "bugs\@example.com",
+                                "rsvp" => "maybe"
+                            }, {
+                                "name" => "Yosemite Sam",
+                                "email" => "sam\@example.com",
+                                "rsvp" => "no"
+                            }]
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get calendar event $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    my $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+    $self->assert_str_equals($event->{organizer}{name}, "Cassandane");
+    $self->assert_str_equals($event->{organizer}{email}, "cassandane\@localhost");
+    $self->assert_str_equals($event->{organizer}{isYou}, JSON::false);
+    # XXX rsvp for organizer? $self->assert_str_equals($event->{organizer}{rsvp}, "");
+    $self->assert_num_equals(scalar @{$event->{attendees}}, 2);
+    $self->assert_str_equals($event->{attendees}[0]{name}, "Bugs Bunny");
+    $self->assert_str_equals($event->{attendees}[0]{email}, "bugs\@example.com");
+    $self->assert_str_equals($event->{attendees}[0]{isYou}, JSON::false);
+    $self->assert_str_equals($event->{attendees}[0]{rsvp}, "maybe");
+    $self->assert_str_equals($event->{attendees}[1]{name}, "Yosemite Sam");
+    $self->assert_str_equals($event->{attendees}[1]{email}, "sam\@example.com");
+    $self->assert_str_equals($event->{attendees}[1]{isYou}, JSON::false);
+    $self->assert_str_equals($event->{attendees}[1]{rsvp}, "no");
+
+    xlog "update attendees of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "organizer" => {
+                                "name" => "Cassandane",
+                                "email" => "cassandane\@localhost",
+                            },
+                            "attendees" => [{
+                                "name" => "Bugs Bunny",
+                                "email" => "bugs\@example.com",
+                                "rsvp" => "maybe"
+                            }, {
+                                "name" => "Yosemite Sam",
+                                "email" => "sam\@example.com",
+                                "rsvp" => "yes"
+                            }]
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get calendar event $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_num_equals(scalar @{$event->{attendees}}, 2);
+    $self->assert_str_equals($event->{attendees}[0]{name}, "Bugs Bunny");
+    $self->assert_str_equals($event->{attendees}[0]{email}, "bugs\@example.com");
+    $self->assert_str_equals($event->{attendees}[0]{isYou}, JSON::false);
+    $self->assert_str_equals($event->{attendees}[0]{rsvp}, "maybe");
+    $self->assert_str_equals($event->{attendees}[1]{name}, "Yosemite Sam");
+    $self->assert_str_equals($event->{attendees}[1]{email}, "sam\@example.com");
+    $self->assert_str_equals($event->{attendees}[1]{isYou}, JSON::false);
+    $self->assert_str_equals($event->{attendees}[1]{rsvp}, "yes");
+
+    xlog "update attendees of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "organizer" => {
+                                "name" => "Cassandane",
+                                "email" => "cassandane\@localhost",
+                            },
+                            "attendees" => [{
+                                "name" => "Bugs Bunny",
+                                "email" => "bugs\@example.com",
+                                "rsvp" => "yes"
+                            }]
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get calendar event $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event->{organizer});
+    $self->assert_num_equals(scalar @{$event->{attendees}}, 1);
+    $self->assert_str_equals($event->{attendees}[0]{name}, "Bugs Bunny");
+    $self->assert_str_equals($event->{attendees}[0]{email}, "bugs\@example.com");
+    $self->assert_str_equals($event->{attendees}[0]{isYou}, JSON::false);
+    $self->assert_str_equals($event->{attendees}[0]{rsvp}, "yes");
+
+    xlog "do not touch participants of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "summary" => "baz",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Australia/Melbourne",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Australia/Melbourne",
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event->{organizer});
+    $self->assert_num_equals(scalar @{$event->{attendees}}, 1);
+
+    xlog "remove participants of event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id => {
+                            "summary" => "baz",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Australia/Melbourne",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Australia/Melbourne",
+                            "organizer" => undef,
+                            "attendees" => undef
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get calendar $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+    $self->assert_null($event->{organizer});
+    $self->assert_null($event->{attendees});
+}
+
 1;
