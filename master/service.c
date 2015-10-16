@@ -306,7 +306,7 @@ int main(int argc, char **argv, char **envp)
     opterr = 0; /* disable error reporting,
                    since we don't know about service-specific options */
 
-    strarray_append(&newargv, argv[0]);
+    strarray_appendm(&newargv, argv[0]);
 
     while ((opt = getopt(argc, argv, "C:U:T:D")) != EOF) {
         if (argv[optind-1][0] == '-' && strlen(argv[optind-1]) > 2) {
@@ -332,18 +332,18 @@ int main(int argc, char **argv, char **envp)
             call_debugger = 1;
             break;
         default:
-            strarray_append(&newargv, argv[optind-1]);
+            strarray_appendm(&newargv, argv[optind-1]);
 
             /* option has an argument */
             if (optind < argc && argv[optind][0] != '-')
-                strarray_append(&newargv, argv[optind++]);
+                strarray_appendm(&newargv, argv[optind++]);
 
             break;
         }
     }
     /* grab the remaining arguments */
     for (; optind < argc; optind++)
-        strarray_append(&newargv, argv[optind]);
+        strarray_appendm(&newargv, argv[optind]);
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
