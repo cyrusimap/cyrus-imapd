@@ -1512,15 +1512,6 @@ sub test_setcalendarevents_update_exceptions {
     xlog "update exception startTimeZone of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
-                            "summary" => "foo",
-                            "description" => "foo",
-                            "location" => "foo",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Europe/Vienna",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Europe/Vienna",
                             "exceptions" => {
                                 "2015-10-07T17:45:00" => {
                                     "startTimeZone" => "Australia/Melbourne",
@@ -1544,6 +1535,37 @@ sub test_setcalendarevents_update_exceptions {
     $self->assert_str_equals($exc->{startTimeZone}, "Australia/Melbourne");
     $self->assert_str_equals($exc->{end}, "2015-10-07T18:15:00");
     $self->assert_str_equals($exc->{endTimeZone}, "Australia/Melbourne");
+    $self->assert(not exists $event->{exceptions}{"2015-10-08T16:45:00"});
+
+    xlog "update start time of exception event $id";
+    # This destroys the previous exception and creates a new one, starting a
+    # new one at the LocalDate key. But beware, in iCalendar this translates
+    # to an event that ends immediately. We can't infer if the client wanted to
+    # use the LocalDate end of the parent (which could be *before* the
+    # start of this exception, as in this example). TLDR: Always specify
+    # start and end date for new exceptions. XXX
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        "$id" => {
+                            "exceptions" => {
+                                "2015-10-07T18:15:00" => {
+                                    "startTimeZone" => "Australia/Sydney",
+                                    "endTimeZone" => "Australia/Sydney"
+                                },
+                            }
+                        }
+                    }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "get calendar event $id";
+
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($event->{id}, $id);
+    $exc = $event->{exceptions}{"2015-10-07T18:15:00"};
+    $self->assert_str_equals($exc->{start}, "2015-10-07T18:15:00");
+    $self->assert_str_equals($exc->{startTimeZone}, "Australia/Sydney");
+    $self->assert_null($exc->{end});
     $self->assert(not exists $event->{exceptions}{"2015-10-08T16:45:00"});
 }
 
