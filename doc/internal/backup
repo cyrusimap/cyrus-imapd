@@ -91,7 +91,13 @@ needs to care about the offset anymore.  reindex never used it...
 
 we just index the offset and length of the dlist entry for the message, and
 we can parse the pure message data back out later from that, when we need to.
-slightly less efficient on reads, but works->good->fast
+slightly less efficient on reads, but works->good->fast.  but this is
+forgetting that a MESSAGE dlist has many messages, not just one...
+
+what if a DL_SFILE's offset was the byte offset within the entire dlist
+structure?  not the offset within the stream that produced it, but just within
+the dlist it's part of?  then the message offset in the data stream would be the
+dlist's offset in the stream plus the DL_SFILE's offset within the dlist
 
 
 renames
