@@ -3947,30 +3947,38 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     /* summary */
     if (_wantprop(props, "summary")) {
         prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
-        json_object_set_new(obj, "summary",
-                prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
+        if (prop || !exc) {
+            json_object_set_new(obj, "summary",
+                    prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
+        }
     }
 
     /* description */
     if (_wantprop(props, "description")) {
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
-        json_object_set_new(obj, "description",
-            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
+        if (prop || !exc) {
+            json_object_set_new(obj, "description",
+                    prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
+        }
     }
 
     /* location */
     if (_wantprop(props, "location")) {
         prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
-        json_object_set_new(obj, "location",
-            prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
+        if (prop || !exc) {
+            json_object_set_new(obj, "location",
+                    prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
+        }
     }
 
     /* showAsFree */
     if (_wantprop(props, "showAsFree")) {
         prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-        json_object_set_new(obj, "showAsFree",
-                json_boolean(prop &&
-                    !strcmp(icalproperty_get_value_as_string(prop), "TRANSPARENT")));
+        if (prop || !exc) {
+            json_object_set_new(obj, "showAsFree",
+                    json_boolean(prop &&
+                        !strcmp(icalproperty_get_value_as_string(prop), "TRANSPARENT")));
+        }
     }
 
     /* start */
