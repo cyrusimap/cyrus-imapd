@@ -445,6 +445,45 @@ reconstruct
   working on the backup system itself, ...
 
 
+ctl_backupsdb
+-------------
+
+sbin tool for dealing with backups, their indexes, and the main database
+
+needs:
+    * rebuild backups.db from disk contents
+    * list backups
+    * rename a backup
+
+not sure if these should be included, or separate tools:
+    * reindex a backup (or more)
+    * compress a backup (or more)
+    * lock a backup
+
+usage:
+    ctl_backupsdb [options] -R                              # reconstruct backups.db from disk files
+    ctl_backupsdb [options] -l [[mode] backup...]           # list backup locations for given/all users
+    ctl_backupsdb [options] -r new_fname [mode] backup      # rename a backup (think about this more)
+    ctl_backupsdb [options] -i [mode] backup...             # reindex specified backups
+    ctl_backupsdb [options] -z [mode] backup...             # compress specified backups
+    ctl_backupsdb [options] -L [lock_opts] [mode] backup    # lock specified backup
+
+options:
+    -C alt_config       # alternate config file
+    -v                  # verbose
+
+mode:
+    -A                  # all known backups (not valid for single backup commands)
+    -f                  # specified backups interpreted as filenames
+    -m                  # specified backups interpreted as mboxnames
+    -u                  # specified backups interpteted as userids (default)
+
+lock_opts:
+    -s                  # lock backup and open index in sqlite
+    -x cmd              # lock backup and execute cmd
+    -p                  # lock backup and wait for eof on stdin (default)
+
+
 partitions
 ----------
 
