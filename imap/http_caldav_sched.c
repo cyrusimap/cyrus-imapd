@@ -161,7 +161,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
 }
 
 /* Send an iMIP request for attendees in 'ical' */
-static int imip_send(icalcomponent *ical, const char *recipient)
+static int imip_send(icalcomponent *ical, const char *recipient, unsigned is_update)
 {
     const char *notifier = config_getstring(IMAPOPT_IMIPNOTIFIER);
 
@@ -169,7 +169,10 @@ static int imip_send(icalcomponent *ical, const char *recipient)
     if (!notifier) return -1;
 
     const char *ical_str = icalcomponent_as_ical_string(ical);
-    json_t *val = json_pack("{s:s s:s}", "recipient", recipient, "ical", ical_str);
+    json_t *val = json_pack("{s:s s:s s:b}",
+                            "recipient", recipient,
+                            "ical", ical_str,
+                            "is_update", is_update);
     char *serial = json_dumps(val, JSON_COMPACT);
     notify(notifier, "IMIP", NULL, httpd_userid, NULL, 0, NULL, serial, NULL);
     free(serial);
@@ -638,7 +641,7 @@ static void sched_deliver_remote(const char *recipient,
     }
     else {
         if (!strncasecmp(recipient, "mailto:", 7))
-            r = imip_send(sched_data->itip, recipient + 7);
+            r = imip_send(sched_data->itip, recipient + 7, sched_data->is_update);
         else
             r = 1; /* code doesn't matter */
         if (!r) {
@@ -1631,13 +1634,36 @@ static void sched_exclude(const char *attendee __attribute__((unused)),
  * properly modified component to the attendee's iTIP request if necessary
  */
 static void process_attendees(icalcomponent *comp, unsigned ncomp,
-                              const char *organizer, const char *att_update,
+                              const char *organizer, const char *att_update __attribute__((unused)), // XXX: att_update logic
                               struct hash_table *att_table,
-                              icalcomponent *itip, unsigned needs_action)
+                              icalcomponent *itip, unsigned needs_action,
+                              unsigned is_changed, icalcomponent *oldcomp)
 {
     icalcomponent *copy;
     icalproperty *prop;
     icalparameter *param;
+
+    int dummy = 1;
+    struct hash_table oldatt_table;
+    construct_hash_table(&oldatt_table, 10, 1);
+
+    if (oldcomp) {
+        for (prop = icalcomponent_get_first_invitee(oldcomp);
+            prop;
+            prop = icalcomponent_get_next_invitee(oldcomp)) {
+
+            const char *attendee = icalproperty_get_invitee(prop);
+
+            /* Don't modify attendee == organizer */
+            if (!strcasecmp(attendee, organizer)) continue;
+
+            /* seen this one before, so we send them updates */
+            char *lat = xstrdup(attendee);
+            lcase(lat);
+            hash_insert(lat, &dummy, &oldatt_table);
+            free(lat);
+        }
+    }
 
     /* Strip SCHEDULE-STATUS from each attendee
        and optionally set PARTSTAT=NEEDS-ACTION */
@@ -1648,7 +1674,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
         const char *attendee = icalproperty_get_invitee(prop);
 
         /* Don't modify attendee == organizer */
-        if (!strcmp(attendee, organizer)) continue;
+        if (!strcasecmp(attendee, organizer)) continue;
 
         icalproperty_remove_parameter_by_name(prop, "SCHEDULE-STATUS");
 
@@ -1672,12 +1698,16 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
         icalparameter_scheduleforcesend force_send =
             ICAL_SCHEDULEFORCESEND_NONE;
         const char *attendee = icalproperty_get_invitee(prop);
+        char *lat = xstrdup(attendee);
+        lcase(lat);
+        int is_new = !hash_lookup(lat, &oldatt_table);
+        free(lat);
 
         /* Don't schedule attendee == organizer */
-        if (!strcmp(attendee, organizer)) continue;
+        if (!strcasecmp(attendee, organizer)) continue;
 
-        /* Don't send an update to the attendee that just sent a reply */
-        if (att_update && !strcmp(attendee, att_update)) continue;
+        /* don't send an update if there's no change */
+        if (!is_new && !is_changed) continue;
 
         /* Check CalDAV Scheduling parameters */
         param = icalproperty_get_scheduleagent_parameter(prop);
@@ -1706,6 +1736,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
                 sched_data = xzmalloc(sizeof(struct sched_data));
                 sched_data->itip = icalcomponent_new_clone(itip);
                 sched_data->force_send = force_send;
+                sched_data->is_update = !is_new;
                 hash_insert(attendee, sched_data, att_table);
             }
             new_comp = icalcomponent_new_clone(copy);
@@ -1716,6 +1747,8 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
             if (!ncomp) sched_data->master = new_comp;
         }
     }
+
+    free_hash_table(&oldatt_table, NULL);
 
     /* XXX  We assume that the master component is always first */
     if (ncomp) {
@@ -1751,7 +1784,7 @@ static void sched_cancel(const char *recurid __attribute__((unused)),
     icalcomponent_set_sequence(old_data->comp, old_data->sequence+1);
 
     process_attendees(old_data->comp, 0, crock->organizer, NULL,
-                      crock->att_table, crock->itip, 0);
+                      crock->att_table, crock->itip, 0, 0, NULL);
 }
 
 
@@ -1921,7 +1954,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
 
         comp = icalcomponent_get_first_real_component(newical);
         do {
-            unsigned changed = 1, needs_action = 0;
+            unsigned is_changed = 1, needs_action = 0;
 
             prop = icalcomponent_get_first_property(comp,
                                                     ICAL_RECURRENCEID_PROPERTY);
@@ -1931,6 +1964,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
             old_data = hash_del(recurid, &comp_table);
 
             if (old_data) {
+                is_changed = 0;
                 /* Per RFC 6638, Section 3.2.8: We need to compare
                    DTSTART, DTEND, DURATION, DUE, RRULE, RDATE, EXDATE */
                 if (propcmp(old_data->comp, comp, ICAL_DTSTART_PROPERTY))
@@ -1957,15 +1991,22 @@ void sched_request(const char *organizer, struct sched_param *sparam,
                                                old_data->sequence + 1);
                 }
 
-                free(old_data);
+                if (needs_action)
+                    is_changed = 1;
+                else if (propcmp(old_data->comp, comp, ICAL_SUMMARY_PROPERTY))
+                    is_changed = 1;
+                else if (propcmp(old_data->comp, comp, ICAL_LOCATION_PROPERTY))
+                    is_changed = 1;
+                else if (propcmp(old_data->comp, comp, ICAL_DESCRIPTION_PROPERTY))
+                    is_changed = 1;
             }
 
-            if (changed) {
-                /* Process all attendees in created/modified components */
-                process_attendees(comp, ncomp++, organizer, att_update,
-                                  &att_table, req, needs_action);
-            }
+            /* Process all attendees in created/modified components */
+            process_attendees(comp, ncomp++, organizer, att_update,
+                              &att_table, req, needs_action, is_changed,
+                              old_data ? old_data->comp : NULL);
 
+            free(old_data);
         } while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
 
