@@ -52,11 +52,14 @@
 #include "lib/exitcodes.h"
 #include "lib/prot.h"
 
+#include "imap/global.h"
+
 #include "backup/api.h"
 
 EXPORTED void fatal(const char *error, int code)
 {
     fprintf(stderr, "fatal error: %s\n", error);
+    cyrus_done();
     exit(code);
 }
 
@@ -222,13 +225,17 @@ static int run_exec(enum bu_lock_open_type open_type, const char *backup_spec,
 
 int main (int argc, char **argv)
 {
-    int opt;
+    int opt, r;
     enum bu_lock_open_type open_type = BU_LOCK_OPEN_UNSPECIFIED;
     enum bu_lock_run_mode run_mode = BU_LOCK_RUN_PIPE;
+    const char *alt_config = NULL;
     const char *backup_spec = NULL;
 
-    while ((opt = getopt(argc, argv, "f:m:u:sx")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:f:m:u:sx")) != EOF) {
         switch (opt) {
+        case 'C':
+            alt_config = optarg;
+            break;
         case 'f':
             if (open_type != BU_LOCK_OPEN_UNSPECIFIED) usage(argv[0]);
             open_type = BU_LOCK_OPEN_FILENAME;
@@ -259,17 +266,25 @@ int main (int argc, char **argv)
     if (backup_spec == NULL) usage(argv[0]);
     if (run_mode == BU_LOCK_RUN_EXEC && optind == argc) usage(argv[0]);
 
-    // FIXME which signals to ignore/accept?
+    cyrus_init(alt_config, "bu_lock", 0, 0);
 
+    // FIXME which signals to ignore/accept?
     switch (run_mode) {
         case BU_LOCK_RUN_PIPE:
-            return run_pipe(open_type, backup_spec);
+            r = run_pipe(open_type, backup_spec);
+            break;
         case BU_LOCK_RUN_SQL:
-            return run_sql(open_type, backup_spec);
+            r = run_sql(open_type, backup_spec);
+            break;
         case BU_LOCK_RUN_EXEC:
-            return run_exec(open_type, backup_spec, &argv[optind]);
+            r = run_exec(open_type, backup_spec, &argv[optind]);
+            break;
         default:
             fprintf(stderr, "invalid run mode, how did we get here?\n");
-            return -1;
+            r = EC_SOFTWARE;
+            break;
     }
+
+    cyrus_done();
+    exit(r);
 }
