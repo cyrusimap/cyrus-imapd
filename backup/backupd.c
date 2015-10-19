@@ -851,6 +851,49 @@ static int cmd_apply_mailbox(struct dlist *dl)
     return backup_append(open->backup, dl, time(0));
 }
 
+static int cmd_apply_message(struct dlist *dl)
+{
+    strarray_t guids = STRARRAY_INITIALIZER;
+    strarray_t userids = STRARRAY_INITIALIZER;
+    struct dlist *ki;
+    int i, r;
+
+    /* dig out each guid */
+    for (ki = dl->head; ki; ki = ki->next) {
+        if (ki->type != DL_SFILE)
+            continue;
+
+        const char *guid = message_guid_encode(ki->gval);
+        strarray_append(&guids, guid);
+    }
+
+    /* find each backup that wants a copy of any of these guids */
+    /* FIXME horrible algorithm, make this smarter */
+    struct open_backup *open;
+    for (open = backupd_open_backups.head; open; open = open->next) {
+        for (i = 0; i < strarray_size(&guids); i++) {
+            if (strarray_find(&open->reserved_guids, strarray_nth(&guids, i), 0) >= 0) {
+                strarray_append(&userids, open->name);
+                break;
+            }
+        }
+    }
+
+    /* append to each backup */
+    for (i = 0; i < strarray_size(&userids); i++) {
+        mbname_t *mbname = mbname_from_userid(strarray_nth(&userids, i));
+        open = backupd_open_backup(mbname);
+        mbname_free(&mbname);
+
+        r = backup_append(open->backup, dl, time(0));
+        if (r) break;
+    }
+
+    strarray_fini(&userids);
+    strarray_fini(&guids);
+    return r;
+}
+
 static int cmd_apply_reserve(struct dlist *dl)
 {
     const char *partition = NULL;
@@ -971,6 +1014,9 @@ static void cmd_apply(struct dlist *dl)
 
     if (strcmp(dl->name, "MAILBOX") == 0) {
         r = cmd_apply_mailbox(dl);
+    }
+    else if (strcmp(dl->name, "MESSAGE") == 0) {
+        r = cmd_apply_message(dl);
     }
     else if (strcmp(dl->name, "RENAME") == 0) {
         r = cmd_apply_rename(dl);
