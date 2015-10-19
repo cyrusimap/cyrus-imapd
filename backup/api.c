@@ -179,11 +179,18 @@ static int _validate_cb(sqlite3_stmt *stmt, void *rock)
 
 static int backup_validate_checksums(struct backup *backup)
 {
-    struct backup_meta backup_meta;
+    struct backup_meta backup_meta = {0};
+    struct gzuncat *gzuc = NULL;
 
     int r = sqldb_exec(backup->db, backup_index_backup_select_latest_sql,
                        NULL, _validate_cb, &backup_meta);
     if (r) goto done;
+    if (!backup_meta.id) {
+        fprintf(stderr, "%s: %s file checksum mismatch: not in index\n",
+                __func__, backup->data_fname);
+        r = -1;
+        goto done;
+    }
 
     /* validate file-prior-to-this-backup checksum */
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
@@ -196,7 +203,7 @@ static int backup_validate_checksums(struct backup *backup)
     }
 
     /* validate data-within-this-backup checksum */
-    struct gzuncat *gzuc = gzuc_open(backup->fd);
+    gzuc = gzuc_open(backup->fd);
     if (!gzuc) {
         r = -1;
         goto done;
@@ -290,6 +297,9 @@ static const char *backup_make_path(const mbname_t *mbname)
                                "/", dir_hash_b(userid, 1, hash_buf),
                                "/", userid, "_XXXXXX",
                                NULL);
+
+    /* make sure the destination directory exists */
+    cyrus_mkdir(template, 0755);
 
     int fd = mkstemp(template);
     if (fd >= 0) {
