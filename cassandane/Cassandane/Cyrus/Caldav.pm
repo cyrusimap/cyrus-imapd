@@ -468,6 +468,55 @@ EOF
   $self->assert_matches(qr/geo:-37.810551,144.962840/, $newcard);
 }
 
+sub test_empty_summary
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => ''});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "2b82ea51-50b0-4c6b-a9b4-e8ff0f931ba2";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+}
+
 sub test_alarm_memleak
 {
     # This calendar data caused caldav_alarm to leak memory. The test

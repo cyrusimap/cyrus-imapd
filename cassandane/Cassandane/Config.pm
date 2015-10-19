@@ -68,6 +68,7 @@ sub default
 	    syslog_prefix => '@name@',
 	    sievedir => '@basedir@/conf/sieve',
 	    defaultpartition => 'default',
+            defaultdomain => 'defdomain',
 	    'partition-default' => '@basedir@/data',
 	    sasl_mech_list => 'PLAIN LOGIN DIGEST-MD5',
 	    allowplaintext => 'yes',
