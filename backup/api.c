@@ -917,10 +917,11 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
     buf_free(&buf);
 
     /* update the index */
-    r = backup_index(backup, dlist, start, len);
+    return backup_index(backup, dlist, start, len);
 
 error:
-    return r;
+    buf_free(&buf);
+    return IMAP_INTERNAL;
 }
 
 int backup_append_end(struct backup *backup) {
