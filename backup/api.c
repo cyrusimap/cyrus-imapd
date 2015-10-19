@@ -91,31 +91,6 @@ enum backup_open_mode {
     BACKUP_OPEN_REINDEX,
 };
 
-static int _close_internal(struct backup *backup)
-{
-    int r1 = 0, r2 = 0;
-
-    if (backup->append_state)
-        r1 = backup_append_end(backup);
-
-    if (backup->db) r2 = sqldb_close(&backup->db);
-
-    if (backup->oldindex_fname) {
-        rename(backup->oldindex_fname, backup->index_fname);
-        free(backup->oldindex_fname);
-    }
-
-    if (backup->fd >= 0) {
-        lock_unlock(backup->fd, backup->data_fname);
-        close(backup->fd);
-    }
-
-    if (backup->index_fname) free(backup->index_fname);
-    if (backup->data_fname) free(backup->data_fname);
-
-    return r1 ? r1 : r2;
-}
-
 static struct backup *_open_internal(const char *data_fname,
                                      const char *index_fname,
                                      enum backup_open_mode mode)
@@ -187,8 +162,7 @@ static struct backup *_open_internal(const char *data_fname,
     return backup;
 
 error:
-    _close_internal(backup);
-    free(backup);
+    backup_close(&backup);
     return NULL;
 }
 
@@ -452,9 +426,28 @@ EXPORTED int backup_close(struct backup **backupp)
     struct backup *backup = *backupp;
     *backupp = NULL;
 
-    int r = _close_internal(backup);
+    int r1 = 0, r2 = 0;
+
+    if (backup->append_state)
+        r1 = backup_append_end(backup);
+
+    if (backup->db) r2 = sqldb_close(&backup->db);
+
+    if (backup->oldindex_fname) {
+        rename(backup->oldindex_fname, backup->index_fname);
+        free(backup->oldindex_fname);
+    }
+
+    if (backup->fd >= 0) {
+        lock_unlock(backup->fd, backup->data_fname);
+        close(backup->fd);
+    }
+
+    if (backup->index_fname) free(backup->index_fname);
+    if (backup->data_fname) free(backup->data_fname);
+
     free(backup);
-    return r;
+    return r1 ? r1 : r2;
 }
 
 EXPORTED const char *backup_get_data_fname(const struct backup *backup)
