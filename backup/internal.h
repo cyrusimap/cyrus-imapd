@@ -70,5 +70,7 @@ struct backup {
     struct backup_append_state *append_state;
 };
 
+HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
+                        off_t start, size_t len);
 #endif
 #endif

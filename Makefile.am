@@ -1251,6 +1251,7 @@ backup_backupd_SOURCES = \
     backup/api.h \
     backup/gzuncat.c \
     backup/gzuncat.h \
+    backup/index.c \
     backup/internal.h \
     backup/sqlconsts.c \
     backup/sqlconsts.h \
@@ -1263,6 +1264,7 @@ backup_reindex_SOURCES = \
     backup/api.h \
     backup/gzuncat.c \
     backup/gzuncat.h \
+    backup/index.c \
     backup/internal.h \
     backup/sqlconsts.c \
     backup/sqlconsts.h \
@@ -1275,6 +1277,7 @@ backup_bu_lock_SOURCES = \
     backup/api.h \
     backup/gzuncat.c \
     backup/gzuncat.h \
+    backup/index.c \
     backup/internal.h \
     backup/sqlconsts.c \
     backup/sqlconsts.h \
