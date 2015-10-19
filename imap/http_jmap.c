@@ -2695,15 +2695,9 @@ static int jmap_checkstate(struct jmap_req *req, int mbtype) {
         if (!ifInState) {
             return -1;
         }
-        char *ptr;
-        modseq_t clientState = strtoull(ifInState, &ptr, 10);
-        if (!ptr || *ptr != '\0') {
-            json_t *item = json_pack("[s, {s:s}, s]",
-                                     "error", "type", "stateMismatch",
-                                     req->tag);
-            json_array_append_new(req->response, item);
-            return -2;
-        }
+
+        modseq_t clientState = str2uint64(ifInState);
+
         if (mbtype == MBTYPE_CALENDAR && clientState == req->counters.caldavmodseq) {
             return 0;
         } else if (mbtype == MBTYPE_ADDRESSBOOK && clientState == req->counters.carddavmodseq) {
