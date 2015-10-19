@@ -423,13 +423,12 @@ void dlist_makefile(struct dlist *dl,
 
 EXPORTED void dlist_makesfile(struct dlist *dl,
                               const char *part, const struct message_guid *guid,
-                              const char *contents, unsigned long size, off_t offset)
+                              const char *contents, unsigned long size)
 {
     if (!dl) return;
     _dlist_clean(dl);
     if (part && guid && contents) {
         dl->type = DL_SFILE;
-        dl->oval = offset;
         dl->gval = xzmalloc(sizeof(struct message_guid));
         message_guid_copy(dl->gval, guid);
         dl->sval = xstrndup(contents, size);
@@ -550,10 +549,10 @@ EXPORTED struct dlist *dlist_setfile(struct dlist *parent, const char *name,
 
 EXPORTED struct dlist *dlist_setsfile(struct dlist *parent, const char *name,
                                       const char *part, const struct message_guid *guid,
-                                      const char *contents, size_t size, off_t offset)
+                                      const char *contents, size_t size)
 {
     struct dlist *dl = dlist_child(parent, name);
-    dlist_makesfile(dl, part, guid, contents, size, offset);
+    dlist_makesfile(dl, part, guid, contents, size);
     return dl;
 }
 
@@ -974,14 +973,13 @@ EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstr
             if (c != '\n') goto fail;
             if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
             if ((flags & DLIST_SFILE)) {
-                off_t offset = prot_bytes_in(in);
                 buf_reset(&sbuf);
                 while (size) {
                     int n = prot_readbuf(in, &sbuf, size > 8192 ? 8192 : size);
                     if (n <= 0) goto fail;
                     size -= n;
                 }
-                dl = dlist_setsfile(NULL, kbuf.s, pbuf.s, &tmp_guid, sbuf.s, sbuf.len, offset);
+                dl = dlist_setsfile(NULL, kbuf.s, pbuf.s, &tmp_guid, sbuf.s, sbuf.len);
             }
             else {
                 if (reservefile(in, pbuf.s, &tmp_guid, size, &fname)) goto fail;

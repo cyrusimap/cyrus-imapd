@@ -79,6 +79,7 @@
 #include "message_guid.h"
 #include "strarray.h"
 #include "conversations.h"
+#include "objectstore.h"
 
 struct stagemsg {
     char fname[1024];
@@ -836,6 +837,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     strarray_t *newflags = NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -918,9 +920,8 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     /* should we archive it straight away? */
-    if (mailbox_should_archive(mailbox, &record, NULL)) {
+    if (mailbox_should_archive(mailbox, &record, NULL))
         record.system_flags |= FLAG_ARCHIVED;
-    }
 
     /* Create message file */
     as->nummsg++;
@@ -954,6 +955,22 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         flags = newflags;
     }
 
+    /* straight to archive? */
+    int in_object_storage = 0;
+    if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
+        if (!record.internaldate)
+            record.internaldate = time(NULL);
+        r = objectstore_put(mailbox, &record, fname);
+        if (r) {
+            // didn't manage to store it, so remove the ARCHIVED flag
+            record.system_flags &= ~FLAG_ARCHIVED;
+            r = 0;
+        }
+        else {
+            in_object_storage = 1;
+        }
+    }
+
     /* Handle flags the user wants to set in the message */
     if (flags) {
         r = append_apply_flags(as, mboxevent, &record, flags);
@@ -966,6 +983,12 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     /* Write out index file entry */
     r = mailbox_append_index_record(mailbox, &record);
     if (r) goto out;
+
+    if (in_object_storage) {  // must delete local file
+        if (unlink(fname) != 0) // unlink should do it.
+            if (!remove (fname))  // we must insist
+                syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
+    }
 
     /* Apply the annotations afterwards, so that the record already exists */
     if (user_annots || system_annots) {
@@ -1226,6 +1249,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     struct index_record record;
     char *srcfname = NULL;
     char *destfname = NULL;
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
     int r = 0;
     int userflag;
     int i;
@@ -1302,8 +1326,21 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         free(destfname);
         srcfname = xstrdup(mailbox_record_fname(mailbox, &records[msg]));
         destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
+
         r = mailbox_copyfile(srcfname, destfname, nolink);
         if (r) goto out;
+
+        int in_object_storage = 0;
+        if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
+            r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
+            if (r) {
+                record.system_flags &= ~FLAG_ARCHIVED;
+                r = 0;
+            }
+            else {
+                in_object_storage = 1;
+            }
+        }
 
         /* Write out index file entry */
         r = mailbox_append_index_record(as->mailbox, &record);
@@ -1319,6 +1356,12 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                               as->mailbox, record.uid,
                               as->userid);
         if (r) goto out;
+
+        if (in_object_storage) {  // must delete local file
+            if (unlink(destfname) != 0) // unlink should do it.
+                if (!remove (destfname))  // we must insist
+                    syslog(LOG_ERR, "Removing local file <%s> error \n", destfname);
+        }
 
         mboxevent_extract_record(mboxevent, as->mailbox, &record);
         mboxevent_extract_copied_record(mboxevent, mailbox, &records[msg]);

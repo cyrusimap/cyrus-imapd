@@ -1242,10 +1242,31 @@ int msg_exists_or_err(uint32_t msgno)
 void uidl_msg(uint32_t msgno)
 {
     if (popd_mailbox->i.options & OPT_POP3_NEW_UIDL) {
-        prot_printf(popd_out, "%u %u.%u\r\n", msgno,
-                    popd_mailbox->i.uidvalidity,
-                    popd_map[msgno-1].uid);
-    } else {
+        switch (config_getenum(IMAPOPT_UIDL_FORMAT)) {
+        case IMAP_ENUM_UIDL_FORMAT_UIDONLY:
+            prot_printf(popd_out, "%u %u\r\n", msgno,
+                        popd_map[msgno-1].uid);
+            break;
+        case IMAP_ENUM_UIDL_FORMAT_CYRUS:
+            prot_printf(popd_out, "%u %u.%u\r\n", msgno,
+                        popd_mailbox->i.uidvalidity,
+                        popd_map[msgno-1].uid);
+            break;
+        case IMAP_ENUM_UIDL_FORMAT_DOVECOT:
+            prot_printf(popd_out, "%u %08x%08x\r\n", msgno,
+                        popd_map[msgno-1].uid,
+                        popd_mailbox->i.uidvalidity);
+            break;
+        case IMAP_ENUM_UIDL_FORMAT_COURIER:
+            prot_printf(popd_out, "%u %u-%u\r\n", msgno,
+                        popd_mailbox->i.uidvalidity,
+                        popd_map[msgno-1].uid);
+            break;
+        default:
+            abort();
+        }
+    }
+    else {
         prot_printf(popd_out, "%u %u\r\n", msgno,
                     popd_map[msgno-1].uid);
     }
@@ -1554,7 +1575,8 @@ static void cmd_pass(char *pass)
                popd_userid, popd_subfolder ? popd_subfolder : "",
                popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
-        if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
+        if ((!popd_starttls_done) &&
+            (plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
              != 0) {
             sleep(plaintextloginpause);
         }

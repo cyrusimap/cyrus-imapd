@@ -240,7 +240,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
     if (verbose)
         fprintf(stderr, "archiving mailbox %s\n", mbentry->name);
 
-    mailbox_archive(mailbox, NULL, rock);
+    mailbox_archive(mailbox, NULL, rock, ITER_SKIP_EXPUNGED);
 
 done:
     mailbox_close(&mailbox);

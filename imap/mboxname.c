@@ -1344,7 +1344,9 @@ EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 }
 
 
-static void mboxname_hash(char *dest, size_t destlen, const char *root, const char *name)
+EXPORTED void mboxname_hash(char *dest, size_t destlen,
+                            const char *root,
+                            const char *name)
 {
     mbname_t *mbname = mbname_from_intname(name);
     struct buf buf = BUF_INITIALIZER;

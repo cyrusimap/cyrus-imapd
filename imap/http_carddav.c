@@ -373,9 +373,9 @@ static void my_carddav_auth(const char *userid)
 {
     int r;
 
-    if (httpd_userisadmin ||
+    if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
-        /* admin or proxy from frontend - won't have DAV database */
+        /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return;
     }
     else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {

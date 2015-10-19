@@ -565,7 +565,7 @@ extern int mailbox_expunge(struct mailbox *mailbox,
                            mailbox_decideproc_t *decideproc, void *deciderock,
                            unsigned *nexpunged, int event_type);
 extern void mailbox_archive(struct mailbox *mailbox,
-                            mailbox_decideproc_t *decideproc, void *deciderock);
+                            mailbox_decideproc_t *decideproc, void *deciderock, unsigned flags);
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
                            mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
@@ -579,7 +579,7 @@ extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, c
 
 extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
                               const char *newname, const char *newuniqueid);
-extern int mailbox_delete_cleanup(const char *part, const char *name, const char *uniqueid);
+extern int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, const char *name, const char *uniqueid);
 
 extern int mailbox_rename_copy(struct mailbox *oldmailbox,
                                const char *newname, const char *newpart,

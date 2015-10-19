@@ -178,8 +178,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     switch (d->op) {
     case DUMP:
         if (!d->partition || !strcmpsafe(d->partition, mbentry->partition)) {
-            printf("%s\t%d %s %s\n", mbentry->name, mbentry->mbtype,
-                                     mbentry->partition, mbentry->acl);
+            printf("%s\t%d ", mbentry->name, mbentry->mbtype);
+            if (mbentry->server) printf("%s!", mbentry->server);
+            printf("%s %s\n", mbentry->partition, mbentry->acl);
             if (d->purge) {
                 mboxlist_delete(mbentry->name, 0);
             }
@@ -547,6 +548,7 @@ static void do_undump(void)
 
     while (fgets(buf, sizeof(buf), stdin)) {
         mbentry_t *newmbentry = NULL;
+        const char *server = NULL;
 
         line++;
 
@@ -566,7 +568,13 @@ static void do_undump(void)
         else mbtype = 0;
 
         partition = p;
-        for (; *p && (*p != ' ') && (*p != '\t'); p++) ;
+        for (; *p && (*p != ' ') && (*p != '\t'); p++) {
+            if (*p == '!') {
+                *p++ = '\0';
+                server = partition;
+                partition = p;
+            }
+        }
         if (!*p) {
             fprintf(stderr, "line %d: no acl found\n", line);
             continue;
@@ -590,6 +598,7 @@ static void do_undump(void)
         newmbentry = mboxlist_entry_create();
         newmbentry->name = xstrdup(name);
         newmbentry->mbtype = mbtype;
+        newmbentry->server = xstrdupnull(server);
         newmbentry->partition = xstrdupnull(partition);
         newmbentry->acl = xstrdupnull(acl);
         /* XXX - still missing all the new fields */

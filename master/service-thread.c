@@ -157,13 +157,27 @@ int main(int argc, char **argv, char **envp)
     int opt;
     char *alt_config = NULL;
     int call_debugger = 0;
-    strarray_t newargv = STRARRAY_INITIALIZER;
+
+    /*
+     * service_init and service_main need argv and argc, so they can process
+     * service-specific options.  They need argv[0] to point into the real argv
+     * memory space, so that setproctitle can work its magic.  But they also
+     * need the generic options handled here to be removed, because they don't
+     * know how to handle them.
+     *
+     * So, we create a strarray_t "service_argv", and populate it with the
+     * options that we aren't handling here, using strarray_appendm (which
+     * simply ptr-copies its argument), and pass that through, and everything
+     * is happy.
+     *
+     * Note that we don't need to strarray_free service_argv, because it
+     * doesn't contain any malloced memory.
+     */
+    strarray_t service_argv = STRARRAY_INITIALIZER;
+    strarray_appendm(&service_argv, argv[0]);
 
     opterr = 0; /* disable error reporting,
                    since we don't know about service-specific options */
-
-    strarray_append(&newargv, argv[0]);
-
     while ((opt = getopt(argc, argv, "C:D")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
@@ -173,18 +187,18 @@ int main(int argc, char **argv, char **envp)
             call_debugger = 1;
             break;
         default:
-            strarray_append(&newargv, argv[optind-1]);
+            strarray_appendm(&service_argv, argv[optind-1]);
 
             /* option has an argument */
             if (optind < argc && argv[optind][0] != '-')
-                strarray_append(&newargv, argv[optind++]);
+                strarray_appendm(&service_argv, argv[optind++]);
 
             break;
         }
     }
     /* grab the remaining arguments */
     for (; optind < argc; optind++)
-        strarray_append(&newargv, argv[optind]);
+        strarray_appendm(&service_argv, argv[optind]);
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
@@ -241,7 +255,7 @@ int main(int argc, char **argv, char **envp)
         return 1;
     }
 
-    if (service_init(newargv.count, newargv.data, envp) != 0) {
+    if (service_init(service_argv.count, service_argv.data, envp) != 0) {
         if (MESSAGE_MASTER_ON_EXIT)
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
         return 1;
@@ -293,7 +307,7 @@ int main(int argc, char **argv, char **envp)
 
         use_count++;
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION_MULTI);
-        if (service_main_fd(fd, newargv.count, newargv.data, envp) < 0) {
+        if (service_main_fd(fd, service_argv.count, service_argv.data, envp) < 0) {
             break;
         }
     }

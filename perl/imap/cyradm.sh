@@ -76,11 +76,11 @@ forms and GNU-style long option forms.
 
 =over 4
 
-=item C<authenticate> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [I<user>]
+=item C<authenticate> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [C<--service> I<name>] [C<--tlskey> I<keyfile>] [C<--notls>] [C<--cafile> I<cacertfile>] [C<--capath> I<cacertdir>] [I<user>]
 
-=item C<auth> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [I<user>]
+=item C<auth> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [C<--service> I<name>] [C<--tlskey> I<keyfile>] [C<--notls>] [C<--cafile> I<cacertfile>] [C<--capath> I<cacertdir>] [I<user>]
 
-=item C<login> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [I<user>]
+=item C<login> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [C<--service> I<name>] [C<--tlskey> I<keyfile>] [C<--notls>] [C<--cafile> I<cacertfile>] [C<--capath> I<cacertdir>] [I<user>]
 
 Authenticate to server.  You must already be connected to a server and
 Cyrus imapd will refuse to allow you to re-authenticate once you have

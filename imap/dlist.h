@@ -100,7 +100,6 @@ struct dlist {
     char *sval;
     bit64 nval;
     struct message_guid *gval; /* guid if any */
-    off_t oval; /* offset value if any */
     char *part; /* so what if we're big! */
 };
 
@@ -120,7 +119,7 @@ void dlist_makefile(struct dlist *dl,
                     unsigned long size, const char *fname);
 void dlist_makesfile(struct dlist *dl,
                      const char *part, const struct message_guid *guid,
-                     const char *contents, unsigned long size, off_t offset);
+                     const char *contents, unsigned long size);
 
 /* parse fields */
 int dlist_toatom(struct dlist *dl, const char **valp);
@@ -178,7 +177,7 @@ struct dlist *dlist_setfile(struct dlist *parent, const char *name,
                             size_t size, const char *fname);
 struct dlist *dlist_setsfile(struct dlist *parent, const char *name,
                              const char *part, const struct message_guid *guid,
-                             const char *contents, size_t size, off_t offset);
+                             const char *contents, size_t size);
 
 struct dlist *dlist_updateatom(struct dlist *parent, const char *name,
                                const char *val);

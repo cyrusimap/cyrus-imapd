@@ -1010,7 +1010,6 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
 
         /* only sync if we haven't just done the user */
         if (strcmpsafe(userid, prev_userid)) {
-            printf("USER: %s\n", userid);
             r = sync_do_user(userid, NULL, sync_backend, flags);
             if (r) {
                 if (verbose)

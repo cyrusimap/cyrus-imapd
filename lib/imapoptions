@@ -2073,6 +2073,12 @@ product version in the capabilities */
    versions of SSL/TLS will need to be added here to allow them to get
    disabled. */
 
+{ "uidl_format", "cyrus", ENUM("uidonly", "cyrus", "dovecot", "courier") }
+/* Choose the format for UIDLs in pop3.  Possible values are "uidonly",
+   "cyrus", "dovecot" and "courier".  "uidonly" forces the old default
+   of UID, "cyrus" is UIDVALIDITY.UID.  Dovecot is 8 digits of leading
+   hex (lower case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID. */
+
 { "umask", "077", STRING }
 /* The umask value used by various Cyrus IMAP programs. */
 
@@ -2128,6 +2134,57 @@ product version in the capabilities */
 { "zoneinfo_db_path", NULL, STRING }
 /* The absolute path to the zoneinfo db file.  If not specified,
    will be confdir/zoneinfo.db */
+
+{ "object_storage_enabled", 0, SWITCH }
+/* Is Object storage enabled for this server.  You also need to have
+   archiving enabled and archivepartition for the mailbox.
+   Only email files will be stored on object Storage archive partition will be
+   used to store any other files */
+
+{ "object_storage_dummy_spool", NULL, STRING }
+/* Dummy object storage spool; this is for test only.
+   Spool where user directory (container) will be created to store all emails 
+   in a flat structure  */
+
+{ "openio_namespace", NULL, STRING }
+/* The OpenIO namespace used to store archived email messages. A namespace
+   identifies the physical platform cyrus must contact. This directive is used
+   by the OpenIO's SDK to locate its platform entry point. */
+
+{ "openio_account", NULL, STRING }
+/* The OpenIO account used to account for stored emails. Accounts are unique
+   in their namespace. They provides virtual partitions, with quotas and QoS
+   features. */
+
+{ "openio_rawx_timeout", 30, INT }
+/* The OpenIO timeout to query to the RAWX services (default 30 sec). */
+
+{ "openio_proxy_timeout", 5, INT }
+/* The OpenIO timeout to query to the PROXY services (default 5 sec). */
+
+{ "openio_autocreate", 0, SWITCH }
+/* Allow the OpenIO SDK to autocreate containers. Mainly destined to be turned
+   on development environments. In production, the container should have been
+   provisioned with the mailboxes. */
+
+{ "openio_verbosity", NULL, STRING }
+/* Sets the logging verbosity of the OpenIO's internal behavior. Admissible
+   values are: "warning", "notice", "info", "debug", "trace", "quiet".
+   The default verbosity is "warning". Set to "notice" for a few lines on a
+   per-client basis. Set to "info" for a few lines on a per-request basis. Set
+   to "debug" Set to "trace" to activate the underlying libcurl debug
+   output. Enabling a verbosity higher to equal than "debug" requires
+   the cyrus to be set in debug mode. The special "quiet" value disables all
+   kinds of logging at the GLib level. */
+
+{ "caringo_hostname", NULL, STRING }
+/* The Caringo hostname used to store archived email messages. A hostname
+   identifies the physical platform cyrus must contact. This directive is used
+   by the Caringo's SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP) 
+   on HTTP 1.1 using a RESTful architecture  */
+
+{ "caringo_port", 80, INT }
+/* The port of the caringo server (caringo_hostname); default is 80. */
 
 /*
 .SH SEE ALSO

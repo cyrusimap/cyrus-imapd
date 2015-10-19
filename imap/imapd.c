@@ -121,6 +121,7 @@
 #include "imap/pushstats.h"             /* SNMP interface */
 
 #include "iostat.h"
+#include "objectstore_db.h"
 
 extern int optind;
 extern char *optarg;
@@ -7098,6 +7099,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
                                    0, 0, rename_user);
+
         /* it's OK to not exist if there are subfolders */
         if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
            mboxname_userownsmailbox(imapd_userid, oldmailboxname) &&
@@ -7178,6 +7180,7 @@ done:
     free(newextname);
     free(olduser);
     free(newuser);
+
 }
 
 /*
@@ -10816,6 +10819,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     struct sync_folder *mfolder, *rfolder;
     struct sync_annot_list *annots = NULL;
     modseq_t xconvmodseq = 0;
+    unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
 
     if (!topart) topart = mailbox->part;
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
@@ -10890,8 +10894,7 @@ static int sync_mailbox(struct mailbox *mailbox,
         goto cleanup;
     }
 
-    r = sync_update_mailbox(mfolder, rfolder, topart, reserve_guids, be,
-			    SYNC_FLAG_LOCALONLY);
+    r = sync_update_mailbox(mfolder, rfolder, topart, reserve_guids, be, flags);
     if (r) {
         syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'",
                 mfolder->name, error_message(r));
@@ -11031,11 +11034,13 @@ static int xfer_finalsync(struct xfer_header *xfer)
     }
 
     /* Handle any mailbox/user metadata */
-    r = sync_do_user_quota(master_quotaroots, replica_quota, xfer->be);
+    r = sync_do_user_quota(master_quotaroots, replica_quota, xfer->be, flags);
     if (!r && xfer->userid) {
-        r = sync_do_user_seen(xfer->userid, replica_seen, xfer->be);
-        if (!r) r = sync_do_user_sub(xfer->userid, replica_subs, xfer->be, flags);
-        if (!r) r = sync_do_user_sieve(xfer->userid, replica_sieve, xfer->be);
+        r = sync_do_user_seen(xfer->userid, replica_seen, xfer->be, flags);
+        if (!r) r = sync_do_user_sub(xfer->userid, replica_subs,
+                                     xfer->be, flags);
+        if (!r) r = sync_do_user_sieve(xfer->userid, replica_sieve,
+                                       xfer->be, flags);
     }
 
   done:

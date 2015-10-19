@@ -200,10 +200,9 @@ static int autocreate_sieve(const char *userid, const char *source_script)
      */
 
     /* Create the directory where the sieve scripts will reside */
-    r = cyrus_mkdir(sieve_script_dir, 0755);
+    r = cyrus_mkdir(sieve_bctmpname, 0755);
     if(r == -1) {
         /* If this fails we just leave */
-        syslog(LOG_WARNING,"autocreate_sieve: Unable to create directory %s. Check permissions",sieve_script_name);
         fclose(in_stream);
         return 1;
     }

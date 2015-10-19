@@ -295,7 +295,6 @@ int main(int argc, char **argv, char **envp)
     socklen_t typelen = sizeof(soctype);
     struct sockaddr socname;
     socklen_t addrlen = sizeof(struct sockaddr);
-    strarray_t newargv = STRARRAY_INITIALIZER;
     int id;
     char path[PATH_MAX];
     struct stat sbuf;
@@ -303,11 +302,26 @@ int main(int argc, char **argv, char **envp)
     off_t start_size;
     time_t start_mtime;
 
+    /*
+     * service_init and service_main need argv and argc, so they can process
+     * service-specific options.  They need argv[0] to point into the real argv
+     * memory space, so that setproctitle can work its magic.  But they also
+     * need the generic options handled here to be removed, because they don't
+     * know how to handle them.
+     *
+     * So, we create a strarray_t "service_argv", and populate it with the
+     * options that we aren't handling here, using strarray_appendm (which
+     * simply ptr-copies its argument), and pass that through, and everything
+     * is happy.
+     *
+     * Note that we don't need to strarray_free service_argv, because it
+     * doesn't contain any malloced memory.
+     */
+    strarray_t service_argv = STRARRAY_INITIALIZER;
+    strarray_appendm(&service_argv, argv[0]);
+
     opterr = 0; /* disable error reporting,
                    since we don't know about service-specific options */
-
-    strarray_append(&newargv, argv[0]);
-
     while ((opt = getopt(argc, argv, "C:U:T:D")) != EOF) {
         if (argv[optind-1][0] == '-' && strlen(argv[optind-1]) > 2) {
             /* we have merged options */
@@ -332,18 +346,18 @@ int main(int argc, char **argv, char **envp)
             call_debugger = 1;
             break;
         default:
-            strarray_append(&newargv, argv[optind-1]);
+            strarray_appendm(&service_argv, argv[optind-1]);
 
             /* option has an argument */
             if (optind < argc && argv[optind][0] != '-')
-                strarray_append(&newargv, argv[optind++]);
+                strarray_appendm(&service_argv, argv[optind++]);
 
             break;
         }
     }
     /* grab the remaining arguments */
     for (; optind < argc; optind++)
-        strarray_append(&newargv, argv[optind]);
+        strarray_appendm(&service_argv, argv[optind]);
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
@@ -427,17 +441,17 @@ int main(int argc, char **argv, char **envp)
         return 1;
     }
 
-    if (service_init(newargv.count, newargv.data, envp) != 0) {
+    if (service_init(service_argv.count, service_argv.data, envp) != 0) {
         if (MESSAGE_MASTER_ON_EXIT)
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
         return 1;
     }
 
     /* determine initial process file inode, size and mtime */
-    if (newargv.data[0][0] == '/')
-        strlcpy(path, newargv.data[0], sizeof(path));
+    if (service_argv.data[0][0] == '/')
+        strlcpy(path, service_argv.data[0], sizeof(path));
     else
-        snprintf(path, sizeof(path), "%s/%s", LIBEXEC_DIR, newargv.data[0]);
+        snprintf(path, sizeof(path), "%s/%s", LIBEXEC_DIR, service_argv.data[0]);
 
     stat(path, &sbuf);
     start_ino= sbuf.st_ino;
@@ -631,7 +645,7 @@ int main(int argc, char **argv, char **envp)
 
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
         use_count++;
-        service_main(newargv.count, newargv.data, envp);
+        service_main(service_argv.count, service_argv.data, envp);
         /* if we returned, we can service another client with this process */
 
         if (signals_poll() || use_count >= max_use) {
