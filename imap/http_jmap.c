@@ -3455,6 +3455,7 @@ static int jmap_localdate_to_icaltime(const char *buf,
         return -1;
     }
     tmp.zone = tz;
+    tmp.is_date = isAllDay;
     *dt = tmp;
     return 0;
 }
@@ -5361,25 +5362,25 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     icalcomponent_set_uid(comp, rock->uid);
 
     /* summary */
-    pe = jmap_readprop(event, "summary", create, invalid, "s", &val);
+    pe = jmap_readprop(event, "summary", !exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
     }
 
     /* description */
-    pe = jmap_readprop(event, "description", create, invalid, "s", &val);
+    pe = jmap_readprop(event, "description", !exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_description(comp, val);
     } 
 
     /* location */
-    pe = jmap_readprop(event, "location", create, invalid, "s", &val);
+    pe = jmap_readprop(event, "location", !exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_location(comp, val);
     } 
 
     /* showAsFree */
-    pe = jmap_readprop(event, "showAsFree", create, invalid, "b", &showAsFree);
+    pe = jmap_readprop(event, "showAsFree", !exc, invalid, "b", &showAsFree);
     if (pe > 0) {
         enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
         prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
@@ -5391,55 +5392,71 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* isAllDay */
-    rock->isAllDay = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    jmap_readprop(event, "isAllDay", create, invalid, "b", &rock->isAllDay);
+    jmap_readprop(event, "isAllDay", !exc, invalid, "b", &rock->isAllDay);
 
     /* XXX Once all the hairy edge cases are covered, this function needs some
      * cleanup and addtional comments. */
 
     /* startTimeZone */
+    /* Determine the current timezone, if any. */
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->start_old = icaltimezone_get_builtin_timezone(tzid);
-    pe = jmap_readprop(event, "startTimeZone", 0, invalid, "s", &val);
-    if (pe > 0) {
-        if (val) {
+    /* Read the new timezone, if any. */
+    if (json_object_get(event, "startTimeZone") != json_null()) {
+        pe = jmap_readprop(event, "startTimeZone", !exc, invalid, "s", &val);
+        if (pe > 0) {
+            /* Lookup the new timezone. */
             rock->start = icaltimezone_get_builtin_timezone(val);
             if (!rock->start) {
                 json_array_append_new(invalid, json_string("startTimeZone"));
             }
-        } else {
-            rock->start = NULL;
+        } else if (!pe && !exc && !rock->start) {
+            /* If this is not a create and no startTimezone was read,
+             * keep the current timezone. */
+            /* XXX This is more lax than the spec, which requires clients to
+             * always send a timezones. */
+            rock->start = rock->start_old;
         }
-    } else if (!pe && !exc && !rock->start) {
-        rock->start = rock->start_old;
+    } else {
+        /* The startTimeZone is explicitly set to null. */
+        rock->start = NULL;
     }
     if (create) {
+        /* If this is a create, then initialize also the old timezone to this
+         * new event's timezone. Some conversion routines will look at it. */
         rock->start_old = rock->start;
+    }
+    if (rock->isAllDay && rock->start) {
+        /* Validate that if isAllDay is set, no timezone must be set. */
+        json_array_append_new(invalid, json_string("startTimeZone"));
     }
 
     /* endTimeZone */
     tzid = jmap_tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
     if (!tzid) tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->end_old = icaltimezone_get_builtin_timezone(tzid);
-    pe = jmap_readprop(event, "endTimeZone", 0, invalid, "s", &val);
-    if (pe > 0) {
-        if (val) {
+    if (json_object_get(event, "endTimeZone") != json_null()) {
+        pe = jmap_readprop(event, "endTimeZone", !exc, invalid, "s", &val);
+        if (pe > 0) {
             rock->end = icaltimezone_get_builtin_timezone(val);
             if (!rock->end) {
                 json_array_append_new(invalid, json_string("endTimeZone"));
             }
-        } else {
-            rock->end = NULL;
+        } else if (!pe && !exc && !rock->end) {
+            rock->end = rock->end_old;
         }
-    } else if (!pe && !exc && !rock->end) {
-        rock->end = rock->end_old;
+    } else {
+        rock->end = NULL;
     }
     if (create) {
         rock->end_old = rock->end;
     }
+    if (rock->isAllDay && rock->end) {
+        json_array_append_new(invalid, json_string("endTimeZone"));
+    }
 
     /* start */
-    pe = jmap_readprop(event, "start", create, invalid, "s", &val);
+    pe = jmap_readprop(event, "start", !exc, invalid, "s", &val);
     if (!pe && exc) {
         if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
             /* Its OK for an exception to not define the start field. But in
@@ -5469,7 +5486,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* end */
-    pe = jmap_readprop(event, "end", create, invalid, "s", &val);
+    pe = jmap_readprop(event, "end", !exc, invalid, "s", &val);
     if (pe > 0) {
         if (!jmap_localdate_to_icaltime(val, &dtend, rock->end, rock->isAllDay)) {
             jmap_update_dtprop_bykind(comp, dtend, rock->end, 1 /*purge*/, ICAL_DTEND_PROPERTY);
@@ -5611,8 +5628,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         json_array_append_new(invalid, json_string("organizer"));
         json_array_append_new(invalid, json_string("attendees"));
     }
-
-
 }
 
 static int setCalendarEvents(struct jmap_req *req)
