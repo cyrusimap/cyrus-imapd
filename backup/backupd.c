@@ -856,7 +856,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     int r = backup_append(open->backup, dl, time(0));
     if (r) {
         syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
-        return IMAP_INTERNAL;
+        return r;
     }
 
     struct dlist *missing = dlist_newlist(NULL, "MISSING");
@@ -912,7 +912,7 @@ static int cmd_apply_rename(struct dlist *dl)
         r = backup_append(open->backup, dl, time(0));
         if (r) {
             syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
-            return IMAP_INTERNAL;
+            return r;
         }
     }
     else {
