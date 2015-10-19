@@ -133,6 +133,29 @@ static struct backup *backup_open_internal(const char *data_fname,
 
         backup->oldindex_fname = oldindex_fname;
     }
+    else {
+        // if there's data in the data file but the index file is empty
+        // or doesn't exist, insist on a reindex before opening
+        struct stat data_statbuf;
+        r = fstat(backup->fd, &data_statbuf);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: fstat %s: %m", backup->data_fname);
+            goto error;
+        }
+        if (data_statbuf.st_size > 0) {
+            struct stat index_statbuf;
+            r = stat(backup->index_fname, &index_statbuf);
+            if (r && errno != ENOENT) {
+                syslog(LOG_ERR, "IOERROR: stat %s: %m", backup->index_fname);
+                goto error;
+            }
+
+            if (errno == ENOENT || index_statbuf.st_size == 0) {
+                syslog(LOG_ERR, "reindex needed: %s", backup->index_fname);
+                goto error;
+            }
+        }
+    }
 
     backup->db = sqldb_open(backup->index_fname, backup_index_initsql,
                             backup_index_version, backup_index_upgrade);
