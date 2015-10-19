@@ -454,6 +454,8 @@ needs:
     * rebuild backups.db from disk contents
     * list backups
     * rename a backup
+    * delete a backup
+    * verify a backup (check all sha1's, not just most recent)
 
 not sure if these should be included, or separate tools:
     * reindex a backup (or more)
@@ -464,6 +466,8 @@ usage:
     ctl_backupsdb [options] -R                              # reconstruct backups.db from disk files
     ctl_backupsdb [options] -l [[mode] backup...]           # list backup locations for given/all users
     ctl_backupsdb [options] -r new_fname [mode] backup      # rename a backup (think about this more)
+    ctl_backupsdb [options] -d [mode] backup                # delete a backup
+    ctl_backupsdb [options] -V [mode] backup...             # verify specified backups
     ctl_backupsdb [options] -i [mode] backup...             # reindex specified backups
     ctl_backupsdb [options] -z [mode] backup...             # compress specified backups
     ctl_backupsdb [options] -L [lock_opts] [mode] backup    # lock specified backup
