@@ -5792,6 +5792,7 @@ static int setCalendarEvents(struct jmap_req *req)
         json_t *arg;
 
         json_object_foreach(update, uid, arg) {
+            struct mboxevent *mboxevent = NULL;
             struct caldav_data *cdata = NULL;
             struct mailbox *mbox = NULL;
             struct index_record record;
@@ -5897,14 +5898,14 @@ static int setCalendarEvents(struct jmap_req *req)
             if (pe > 0) {
                 if (strlen(calId) == 0) {
                     json_array_append_new(invalid, json_string("calendarId"));
-                    /* XXX error */
-                }
-                if (*calId == '#') {
+                } else if (*calId == '#') {
                     const char *id = (const char *) hash_lookup(calId, req->idmap);
                     if (id != NULL) {
                         calId = id;
                     }
                 }
+            } else {
+                calId = mbox->name;
             }
 
             /* Update the VEVENT. */
@@ -5928,12 +5929,70 @@ static int setCalendarEvents(struct jmap_req *req)
             }
             json_decref(invalid);
 
+            /* Check if we need to move the event. */
+            if (strcmp(mbox->name, calId)) {
+                struct mailbox *src = mbox;
+                struct mailbox *dst = NULL;
+                char *mboxname = caldav_mboxname(req->userid, calId);
+
+                /* Open destination mailbox for writing. */
+                r = mailbox_open_iwl(mboxname, &dst);
+                if (r) {
+                    if (r == IMAP_MAILBOX_NONEXISTENT) {
+                        /* XXX - calendarNotFound setError is not specified. */
+                        json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                        json_object_set_new(notUpdated, uid, err);
+                        free(mboxname);
+                        mailbox_close(&src);
+                        continue;
+                    } else {
+                        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                                cdata->dav.mailbox, error_message(r));
+                        mailbox_close(&src);
+                        free(mboxname);
+                        goto done;
+                    }
+                }
+                free(mboxname);
+
+                /* Check permissions. */
+                rights = httpd_myrights(req->authstate, dst->acl);
+                if (!(rights & (DACL_WRITE))) {
+                    /* Pretend this mailbox does not exist. jmap_post should have
+                     * checked already for an accountReadOnly error. */
+                    /* XXX But jmap_post does not seem to take care of that yet. */
+                    mailbox_close(&src);
+                    mailbox_close(&dst);
+                    json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+
+                /* Expunge event from the source mailbox. */
+                record.system_flags |= FLAG_EXPUNGED;
+                mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+                r = mailbox_rewrite_index_record(src, &record);
+                if (r) {
+                    syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
+                            cdata->dav.mailbox, error_message(r));
+                    mailbox_close(&src);
+                    goto done;
+                }
+                mboxevent_extract_record(mboxevent, src, &record);
+                mboxevent_extract_mailbox(mboxevent, src);
+                mboxevent_set_numunseen(mboxevent, src, -1);
+                mboxevent_set_access(mboxevent, NULL, NULL, req->userid, src->name, 0);
+
+                mailbox_close(&src);
+
+                /* Continue like a regular update. */
+                mbox = dst;
+            }
+
             /* Store the updated VEVENT. */
-            /* XXX - Handle move here. */
             struct transaction_t txn;
             memset(&txn, 0, sizeof(struct transaction_t));
             txn.req_hdrs = spool_new_hdrcache();
-            /* XXX Can we trigger invitations by setting a flag here? */
             r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
             spool_free_hdrcache(txn.req_hdrs);
             icalcomponent_free(ical);
