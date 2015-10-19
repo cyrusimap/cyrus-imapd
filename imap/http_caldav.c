@@ -1034,6 +1034,22 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
     return 0;
 }
 
+static int _scheduling_enabled(const struct mailbox *mailbox)
+{
+    if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
+
+    const char *entry = DAV_ANNOT_NS "<" XML_NS_CYRUS ">scheduling-enabled";
+    struct buf buf = BUF_INITIALIZER;
+    int is_enabled = 1;
+
+    annotatemore_lookupmask(mailbox->name, entry, httpd_userid, &buf);
+    if (!strcasecmp(buf_cstring(&buf), "no"))
+        is_enabled = 0;
+
+    buf_free(&buf);
+    return is_enabled;
+}
+
 /* Perform a COPY/MOVE request
  *
  * preconditions:
@@ -1066,7 +1082,7 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
         return HTTP_FORBIDDEN;
     }
 
-    if (namespace_calendar.allow & ALLOW_CAL_SCHED) {
+    if (_scheduling_enabled(dest_mbox)) {
         comp = icalcomponent_get_first_real_component(ical);
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (prop) organizer = icalproperty_get_organizer(prop);
@@ -1155,7 +1171,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         mailbox_close(&attachments);
     }
 
-    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && cdata->organizer) {
+    if (cdata->organizer && _scheduling_enabled(mailbox)) {
         /* Scheduling object resource */
         const char *organizer, **hdr;
         struct sched_param sparam;
@@ -2488,8 +2504,7 @@ static int caldav_post(struct transaction_t *txn)
             ret = caldav_post_attach(txn, rights);
         }
     }
-    else if ((namespace_calendar.allow & ALLOW_CAL_SCHED) &&
-             txn->req_tgt.flags == TGT_SCHED_OUTBOX) {
+    else if (txn->req_tgt.flags == TGT_SCHED_OUTBOX) {
         /* POST to schedule-outbox */
         ret = caldav_post_outbox(txn, rights);
     }
@@ -2633,9 +2648,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
     case ICAL_VPOLL_COMPONENT:
-        if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer
+        if (organizer && _scheduling_enabled(mailbox) &&
             /* XXX  Hack for Outlook */
-            && icalcomponent_get_first_invitee(comp)) {
+            icalcomponent_get_first_invitee(comp)) {
             /* Scheduling object resource */
             struct sched_param sparam;
             int r;
