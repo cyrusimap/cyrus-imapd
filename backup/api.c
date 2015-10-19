@@ -107,10 +107,16 @@ static struct backup *backup_open_internal(const char *data_fname,
     backup->fd = open(backup->data_fname,
                       O_RDWR | O_CREAT | O_APPEND,
                       S_IRUSR | S_IWUSR);
-    if (backup->fd < 0) goto error;
+    if (backup->fd < 0) {
+        syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
+        goto error;
+    }
 
     int r = lock_setlock(backup->fd, /*excl*/ 1, /*nb*/ 0, backup->data_fname);
-    if (r) goto error;
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
+        goto error;
+    }
     locked = 1;
 
     if (mode == BACKUP_OPEN_REINDEX) {
@@ -120,6 +126,7 @@ static struct backup *backup_open_internal(const char *data_fname,
 
         r = rename(backup->index_fname, oldindex_fname);
         if (r && errno != ENOENT) {
+            syslog(LOG_ERR, "IOERROR: rename %s %s: %m", backup->index_fname, oldindex_fname);
             free(oldindex_fname);
             goto error;
         }
