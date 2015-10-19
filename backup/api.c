@@ -159,6 +159,9 @@ static struct backup *_open_internal(const char *data_fname,
                             backup_index_version, backup_index_upgrade);
     if (!backup->db) goto error;
 
+    // FIXME detect when last append didn't end correctly (no length/data_sha1)
+    // and insist on reindex (can this happen with txns?)
+
     return backup;
 
 error:
@@ -1163,6 +1166,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
     buf_free(&buf);
 
     /* update the index */
+    // FIXME could probably move these functions into an index.c behind a single wrapper
     if (0) { }
 
     else if (strcmp(dlist->name, "MAILBOX") == 0)
