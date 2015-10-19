@@ -116,9 +116,9 @@ static int _close_internal(struct backup *backup)
     return r1 ? r1 : r2;
 }
 
-static struct backup *backup_open_internal(const char *data_fname,
-                                           const char *index_fname,
-                                           enum backup_open_mode mode)
+static struct backup *_open_internal(const char *data_fname,
+                                     const char *index_fname,
+                                     enum backup_open_mode mode)
 {
     struct backup *backup = xzmalloc(sizeof *backup);
     if (!backup) return NULL;
@@ -216,7 +216,7 @@ static int _validate_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-static int backup_validate_checksums(struct backup *backup)
+static int _validate_checksums(struct backup *backup)
 {
     struct backup_meta backup_meta = {0};
     struct gzuncat *gzuc = NULL;
@@ -293,10 +293,10 @@ EXPORTED struct backup *backup_open(const mbname_t *mbname)
     int r = backup_get_paths(mbname, &data_fname, &index_fname);
     if (r) goto done;
 
-    backup = backup_open_internal(buf_cstring(&data_fname),
-                                  buf_cstring(&index_fname),
-                                  BACKUP_OPEN_NORMAL);
-    r = backup_validate_checksums(backup);
+    backup = _open_internal(buf_cstring(&data_fname),
+                            buf_cstring(&index_fname),
+                            BACKUP_OPEN_NORMAL);
+    r = _validate_checksums(backup);
     if (r) backup_close(&backup);
 
 done:
@@ -433,16 +433,14 @@ EXPORTED struct backup *backup_open_paths(const char *data_fname,
                                           const char *index_fname)
 {
     if (index_fname)
-        return backup_open_internal(data_fname, index_fname,
-                                    BACKUP_OPEN_NORMAL);
+        return _open_internal(data_fname, index_fname, BACKUP_OPEN_NORMAL);
 
     char *tmp = strconcat(data_fname, ".index", NULL);
-    struct backup *backup = backup_open_internal(data_fname, tmp,
-                                                 BACKUP_OPEN_NORMAL);
+    struct backup *backup = _open_internal(data_fname, tmp, BACKUP_OPEN_NORMAL);
     free(tmp);
 
     if (backup) {
-        int r = backup_validate_checksums(backup);
+        int r = _validate_checksums(backup);
         if (r) backup_close(&backup);
     }
 
@@ -788,8 +786,8 @@ static const char *_sha1_file(int fd, const char *fname, size_t limit,
     return buf;
 }
 
-static int backup_append_start6(struct backup *backup, time_t ts, off_t offset,
-                                const char *file_sha1, int index_only, int noflush)
+static int _append_start(struct backup *backup, time_t ts, off_t offset,
+                         const char *file_sha1, int index_only, int noflush)
 {
     if (backup->append_state != NULL) fatal("already started", -1);
 
@@ -857,7 +855,7 @@ EXPORTED int backup_append_start(struct backup *backup)
 
     _sha1_file(backup->fd, backup->data_fname, 0, file_sha1);
 
-    return backup_append_start6(backup, time(0), offset, file_sha1, 0, 0);
+    return _append_start(backup, time(0), offset, file_sha1, 0, 0);
 }
 
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
@@ -1317,9 +1315,9 @@ EXPORTED int backup_reindex(const char *name)
     buf_printf(&data_fname, "%s", name);
     buf_printf(&index_fname, "%s.index", name);
 
-    struct backup *backup = backup_open_internal(buf_cstring(&data_fname),
-                                                 buf_cstring(&index_fname),
-                                                 BACKUP_OPEN_REINDEX);
+    struct backup *backup = _open_internal(buf_cstring(&data_fname),
+                                           buf_cstring(&index_fname),
+                                           BACKUP_OPEN_REINDEX);
     buf_free(&index_fname);
     buf_free(&data_fname);
     if (!backup) return -1;
@@ -1355,7 +1353,7 @@ EXPORTED int backup_reindex(const char *name)
                 member_ts = ts;
                 char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
                 _sha1_file(backup->fd, backup->data_fname, member_offset, file_sha1);
-                backup_append_start6(backup, member_ts, member_offset, file_sha1, 1, 0);
+                _append_start(backup, member_ts, member_offset, file_sha1, 1, 0);
             }
             else if (member_ts > ts)
                 fatal("line timestamp older than previous", -1);
