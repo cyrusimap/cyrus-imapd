@@ -91,11 +91,35 @@ enum backup_open_mode {
     BACKUP_OPEN_REINDEX,
 };
 
+static int _close_internal(struct backup *backup)
+{
+    int r1 = 0, r2 = 0;
+
+    if (backup->append_state)
+        r1 = backup_append_end(backup);
+
+    if (backup->db) r2 = sqldb_close(&backup->db);
+
+    if (backup->oldindex_fname) {
+        rename(backup->oldindex_fname, backup->index_fname);
+        free(backup->oldindex_fname);
+    }
+
+    if (backup->fd >= 0) {
+        lock_unlock(backup->fd, backup->data_fname);
+        close(backup->fd);
+    }
+
+    if (backup->index_fname) free(backup->index_fname);
+    if (backup->data_fname) free(backup->data_fname);
+
+    return r1 ? r1 : r2;
+}
+
 static struct backup *backup_open_internal(const char *data_fname,
                                            const char *index_fname,
                                            enum backup_open_mode mode)
 {
-    int locked = 0;
     struct backup *backup = xzmalloc(sizeof *backup);
     if (!backup) return NULL;
 
@@ -117,7 +141,6 @@ static struct backup *backup_open_internal(const char *data_fname,
         syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
         goto error;
     }
-    locked = 1;
 
     if (mode == BACKUP_OPEN_REINDEX) {
         // when reindexing, we want to move the old index out of the way
@@ -164,21 +187,7 @@ static struct backup *backup_open_internal(const char *data_fname,
     return backup;
 
 error:
-    // unwind creation in reverse order
-    // FIXME could this just call out to backup_close...?
-    if (backup->db) sqldb_close(&backup->db);
-
-    if (backup->oldindex_fname) {
-        rename(backup->oldindex_fname, backup->index_fname);
-        free(backup->oldindex_fname);
-    }
-
-    if (locked) lock_unlock(backup->fd, backup->data_fname);
-    if (backup->fd >= 0) close(backup->fd);
-
-    if (backup->index_fname) free(backup->index_fname);
-    if (backup->data_fname) free(backup->data_fname);
-
+    _close_internal(backup);
     free(backup);
     return NULL;
 }
@@ -442,8 +451,12 @@ EXPORTED struct backup *backup_open_paths(const char *data_fname,
 
 EXPORTED int backup_close(struct backup **backupp)
 {
-    (void) backupp;
-    return -1;
+    struct backup *backup = *backupp;
+    *backupp = NULL;
+
+    int r = _close_internal(backup);
+    free(backup);
+    return r;
 }
 
 EXPORTED const char *backup_get_data_fname(const struct backup *backup)
