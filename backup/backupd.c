@@ -55,6 +55,7 @@
 #include "lib/exitcodes.h"
 #include "lib/imparse.h"
 #include "lib/signals.h"
+#include "lib/strarray.h"
 #include "lib/xmalloc.h"
 
 #include "imap/global.h"
@@ -85,6 +86,7 @@ struct open_backup {
     struct backup *backup;
     time_t timestamp;
     struct open_backup *next;
+    strarray_t reserved_guids;
 };
 
 static struct open_backups_list {
@@ -467,6 +469,7 @@ static struct open_backup *open_backups_list_add(struct open_backups_list *list,
     open->name = xstrdup(name);
     open->backup = backup;
     open->timestamp = time(0);
+    strarray_init(&open->reserved_guids);
 
     return open;
 }
@@ -890,6 +893,9 @@ static int cmd_apply_reserve(struct dlist *dl)
              * but that might just be me getting confused by the dlist api
              */
             dlist_setguid(missing, "GUID", guid);
+
+            /* add it to the reserved guids list */
+            strarray_append(&open->reserved_guids, guid_str);
         }
     }
 
