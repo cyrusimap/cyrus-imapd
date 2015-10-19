@@ -101,6 +101,7 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
                     if (!strcasecmp(propname, "LOCATION")) continue;
                     if (!strcasecmp(propname, "COMMENT")) continue;
                     if (!strcasecmp(propname, "DESCRIPTION")) continue;
+                    if (!strcasecmp(propname, "SUMMARY")) continue;
                 }
                 else {
                     /* Ignore unknown property errors */
