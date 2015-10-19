@@ -832,6 +832,21 @@ static void cmd_authenticate(char *mech, char *resp)
     backupd_logfd = telemetry_log(backupd_userid, backupd_in, backupd_out, 0);
 }
 
+static int cmd_apply_mailbox(struct dlist *dl)
+{
+    const char *mboxname = NULL;
+
+    if (!dlist_getatom(dl, "MBOXNAME", &mboxname)) return IMAP_PROTOCOL_ERROR;
+
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    struct open_backup *open = backupd_open_backup(mbname);
+    mbname_free(&mbname);
+
+    if (!open) return IMAP_INTERNAL;
+
+    return backup_append(open->backup, dl, time(0));
+}
+
 static int cmd_apply_reserve(struct dlist *dl)
 {
     const char *partition = NULL;
@@ -934,7 +949,10 @@ static void cmd_apply(struct dlist *dl)
 {
     int r;
 
-    if (strcmp(dl->name, "RENAME") == 0) {
+    if (strcmp(dl->name, "MAILBOX") == 0) {
+        r = cmd_apply_mailbox(dl);
+    }
+    else if (strcmp(dl->name, "RENAME") == 0) {
         r = cmd_apply_rename(dl);
     }
     else if (strcmp(dl->name, "RESERVE") == 0) {
