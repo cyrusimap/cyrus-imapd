@@ -52,10 +52,10 @@
 #include <netinet/tcp.h>
 #include <sys/types.h>
 
-#include "exitcodes.h"
-#include "imparse.h"
-#include "signals.h"
-#include "xmalloc.h"
+#include "lib/exitcodes.h"
+#include "lib/imparse.h"
+#include "lib/signals.h"
+#include "lib/xmalloc.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
