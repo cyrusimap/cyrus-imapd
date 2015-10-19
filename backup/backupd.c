@@ -889,11 +889,55 @@ static int cmd_apply_reserve(struct dlist *dl)
     return 0;
 }
 
+static int cmd_apply_rename(struct dlist *dl)
+{
+    int r = 0;
+    const char *old_mboxname = NULL;
+    const char *new_mboxname = NULL;
+
+    if (!dlist_getatom(dl, "OLDMBOXNAME", &old_mboxname)) return IMAP_PROTOCOL_ERROR;
+    if (!dlist_getatom(dl, "NEWMBOXNAME", &new_mboxname)) return IMAP_PROTOCOL_ERROR;
+
+    mbname_t *old = mbname_from_intname(old_mboxname);
+    mbname_t *new = mbname_from_intname(old_mboxname);
+
+    if (strcmp(mbname_userid(old), mbname_userid(new)) == 0) {
+        // same user, unremarkable folder rename *whew*
+        struct open_backup *open = backupd_open_backup(old);
+        if (!open) {
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+
+        r = backup_append(open->backup, dl, time(0));
+        if (r) {
+            syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
+            return IMAP_INTERNAL;
+        }
+    }
+    else {
+        // user name has changed!
+        // FIXME implement this
+        syslog(LOG_ERR, "rename of user not yet supported: %s -> %s",
+            old_mboxname, new_mboxname);
+        r = IMAP_INTERNAL;
+    }
+
+done:
+    mbname_free(&old);
+    mbname_free(&new);
+
+    return r;
+}
+
 static void cmd_apply(struct dlist *dl)
 {
     int r;
 
-    if (strcmp(dl->name, "RESERVE") == 0) {
+    if (strcmp(dl->name, "RENAME") == 0) {
+        r = cmd_apply_rename(dl);
+    }
+    else if (strcmp(dl->name, "RESERVE") == 0) {
         r = cmd_apply_reserve(dl);
     }
     // FIXME support other commands
