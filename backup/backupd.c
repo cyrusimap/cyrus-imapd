@@ -62,6 +62,7 @@
 #include "imap/global.h"
 #include "imap/imap_err.h"
 #include "imap/proc.h"
+#include "imap/sync_support.h"
 #include "imap/telemetry.h"
 #include "imap/tls.h"
 #include "imap/version.h"
@@ -87,7 +88,7 @@ struct open_backup {
     struct backup *backup;
     time_t timestamp;
     struct open_backup *next;
-    strarray_t reserved_guids;
+    struct sync_msgid_list *reserved_guids;
 };
 
 static struct open_backups_list {
@@ -470,7 +471,7 @@ static struct open_backup *open_backups_list_add(struct open_backups_list *list,
     open->name = xstrdup(name);
     open->backup = backup;
     open->timestamp = time(0);
-    strarray_init(&open->reserved_guids);
+    open->reserved_guids = sync_msgid_list_create(0);  // FIXME non-default hash size? meh
 
     return open;
 }
@@ -548,6 +549,7 @@ static void open_backups_list_close(struct open_backups_list *list, time_t age)
         if (!age || current->timestamp < now - age) {
             current->next = NULL;
             backup_close(&current->backup);
+            sync_msgid_list_free(&current->reserved_guids);
             free(current->name);
             free(current);
 
@@ -853,44 +855,45 @@ static int cmd_apply_mailbox(struct dlist *dl)
 
 static int cmd_apply_message(struct dlist *dl)
 {
-    strarray_t guids = STRARRAY_INITIALIZER;
-    strarray_t userids = STRARRAY_INITIALIZER;
+    struct sync_msgid_list *guids = sync_msgid_list_create(0);
     struct dlist *ki;
-    int i, r;
+    int r = IMAP_PROTOCOL_ERROR;
 
     /* dig out each guid */
     for (ki = dl->head; ki; ki = ki->next) {
         if (ki->type != DL_SFILE)
             continue;
 
-        const char *guid = message_guid_encode(ki->gval);
-        strarray_append(&guids, guid);
+        sync_msgid_insert(guids, ki->gval);
     }
 
-    /* find each backup that wants a copy of any of these guids */
-    /* FIXME horrible algorithm, make this smarter */
+    /* bail out if there's no messages */
+    if (!guids->head)
+        goto done;
+
+    /* find each open backup that wants a copy of any of these guids,
+     * and append the entire MESSAGE line to it
+     */
     struct open_backup *open;
     for (open = backupd_open_backups.head; open; open = open->next) {
-        for (i = 0; i < strarray_size(&guids); i++) {
-            if (strarray_find(&open->reserved_guids, strarray_nth(&guids, i), 0) >= 0) {
-                strarray_append(&userids, open->name);
-                break;
+        struct sync_msgid *msgid;
+        int want_append = 0;
+
+        for (msgid = guids->head; msgid; msgid = msgid->next) {
+            if (sync_msgid_lookup(open->reserved_guids, &msgid->guid)) {
+                want_append++;
+                sync_msgid_remove(open->reserved_guids, &msgid->guid);
             }
+        }
+
+        if (want_append) {
+            r = backup_append(open->backup, dl, time(0));
+            if (r) break;
         }
     }
 
-    /* append to each backup */
-    for (i = 0; i < strarray_size(&userids); i++) {
-        mbname_t *mbname = mbname_from_userid(strarray_nth(&userids, i));
-        open = backupd_open_backup(mbname);
-        mbname_free(&mbname);
-
-        r = backup_append(open->backup, dl, time(0));
-        if (r) break;
-    }
-
-    strarray_fini(&userids);
-    strarray_fini(&guids);
+done:
+    sync_msgid_list_free(&guids);
     return r;
 }
 
@@ -916,8 +919,8 @@ static int cmd_apply_reserve(struct dlist *dl)
     strarray_sort(&userids, cmpstringp_raw);
     strarray_uniq(&userids);
 
-    /* XXX track allll the missings */
-    struct dlist *missing = dlist_newlist(NULL, "MISSING");
+    /* track the missing guids */
+    struct sync_msgid_list *missing = sync_msgid_list_create(0);
 
     /* log the entire reserve to all relevant backups, and accumulate missing list */
     for (i = 0; i < strarray_size(&userids); i++) {
@@ -943,26 +946,34 @@ static int cmd_apply_reserve(struct dlist *dl)
             int message_id = backup_get_message_id(open->backup, guid_str);
 
             if (message_id <= 0) {
-                /* FIXME this looks like how sync_apply_reserve does it
-                 * but something about this is irking me...
-                 * but that might just be me getting confused by the dlist api
-                 */
-                dlist_setguid(missing, "GUID", guid);
-
                 /* add it to the reserved guids list */
-                strarray_append(&open->reserved_guids, guid_str);
+                sync_msgid_insert(open->reserved_guids, guid);
+
+                /* add it to the missing list */
+                sync_msgid_insert(missing, guid);
             }
         }
     }
 
     if (missing->head) {
+        struct dlist *kout = dlist_newlist(NULL, "MISSING");
+        struct sync_msgid *msgid;
+
+        for (msgid = missing->head; msgid; msgid = msgid->next) {
+            /* FIXME this looks like how sync_apply_reserve does it
+             * but something about this is irking me...
+             * but that might just be me getting confused by the dlist api
+             */
+            dlist_setguid(kout, "GUID", &msgid->guid);
+        }
+
         prot_printf(backupd_out, "* ");
-        dlist_print(missing, 1, backupd_out);
+        dlist_print(kout, 1, backupd_out);
         prot_printf(backupd_out, "\r\n");
+        dlist_free(&kout);
     }
 
-    dlist_free(&missing);
-    strarray_fini(&userids);
+    sync_msgid_list_free(&missing);
 
     return 0;
 }
