@@ -736,8 +736,14 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
 
     struct buf buf = BUF_INITIALIZER;
 
-    if (mbname->localpart)
+    if (mbname->localpart) {
+        /* user mailbox */
         buf_appendcstr(&buf, mbname->localpart);
+    }
+    else {
+        /* shared mailbox */
+        buf_appendcstr(&buf, config_getstring(IMAPOPT_POSTUSER));
+    }
 
     int i;
     for (i = 0; i < strarray_size(mbname->boxes); i++) {
