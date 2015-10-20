@@ -890,7 +890,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
             }
             else {
                 const char *err = gzerror(backup->append_state->gzfile, &r);
-                fprintf(stderr, "%s: gzwrite %s\n", __func__, err);
+                syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, backup->data_fname, err);
 
                 if (r == Z_STREAM_ERROR)
                     fatal("gzwrite: invalid stream", -1); /* FIXME exit code */
@@ -904,7 +904,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
         if (!(backup->append_state->mode & BACKUP_APPEND_NOFLUSH)) {
             r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
             if (r != Z_OK) {
-                fprintf(stderr, "gzflush %s: %i %i\n", backup->data_fname, r, errno);
+                syslog(LOG_ERR, "IOERROR: %s gzflush %s: %i %i", __func__, backup->data_fname, r, errno);
                 goto error;
             }
         }
