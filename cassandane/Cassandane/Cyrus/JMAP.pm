@@ -989,6 +989,7 @@ sub test_setcalendarevents {
     xlog "update event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "baz's description",
                             "location" => "baz's location",
@@ -1095,6 +1096,7 @@ sub test_setcalendarevents_update_recurrence {
     xlog "update recurrence of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "foo",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1126,6 +1128,7 @@ sub test_setcalendarevents_update_recurrence {
     xlog "do not touch recurrence of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1152,6 +1155,7 @@ sub test_setcalendarevents_update_recurrence {
     xlog "update startTimeZone of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1174,6 +1178,7 @@ sub test_setcalendarevents_update_recurrence {
     xlog "remove recurrence of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1186,7 +1191,6 @@ sub test_setcalendarevents_update_recurrence {
                             "recurrence" => undef
                         }
                     }}, "R1"]]);
-
     $self->assert_str_equals($res->[0][1]{updated}[0], $id);
 
     xlog "get calendar $id";
@@ -1241,6 +1245,7 @@ sub test_setcalendarevents_update_inclusions {
     xlog "update inclusions of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "foo",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1268,6 +1273,7 @@ sub test_setcalendarevents_update_inclusions {
     xlog "do not touch inclusions of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1289,6 +1295,7 @@ sub test_setcalendarevents_update_inclusions {
     xlog "update startTimeZone of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1311,6 +1318,7 @@ sub test_setcalendarevents_update_inclusions {
     xlog "remove inclusions of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1380,6 +1388,7 @@ sub test_setcalendarevents_update_alerts {
     xlog "update alerts of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "foo",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1404,6 +1413,7 @@ sub test_setcalendarevents_update_alerts {
     xlog "do not touch alerts of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1427,6 +1437,7 @@ sub test_setcalendarevents_update_alerts {
     xlog "remove alerts of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => { 
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1511,6 +1522,7 @@ sub test_setcalendarevents_update_exceptions {
     xlog "update exception startTimeZone of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
+                            "calendarId" => $calid,
                             "summary" => "foo",
                             "description" => "foo",
                             "location" => "foo",
@@ -1562,6 +1574,7 @@ sub test_setcalendarevents_update_exceptions {
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => 
                         {
+                            "calendarId" => $calid,
                             "summary" => "foo",
                             "description" => "foo",
                             "location" => "foo",
@@ -1659,6 +1672,7 @@ sub test_setcalendarevents_update_participants {
     xlog "update attendees of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "foo",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1701,6 +1715,7 @@ sub test_setcalendarevents_update_participants {
     xlog "update attendees of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "foo",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1736,6 +1751,7 @@ sub test_setcalendarevents_update_participants {
     xlog "do not touch participants of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1758,6 +1774,7 @@ sub test_setcalendarevents_update_participants {
     xlog "remove participants of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
+                            "calendarId" => $calid,
                             "summary" => "baz",
                             "description" => "foo's description",
                             "location" => "foo's location",
@@ -1917,6 +1934,223 @@ sub test_setcalendarevents_move {
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($event->{id}, $id);
     $self->assert_str_equals($event->{calendarId}, $calidB);
+}
+
+sub test_getcalendareventupdates {
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendars A and B";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => {
+                        "#1" => {
+                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
+                        },
+                        "#2" => {
+                            name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
+                        }
+             }}, "R1"]
+    ]);
+    my $calidA = $res->[0][1]{created}{"#1"}{id};
+    my $calidB = $res->[0][1]{created}{"#2"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calidA,
+                            "summary" => "1",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        },
+                        "#2" => {
+                            "calendarId" => $calidB,
+                            "summary" => "2",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        }
+                    }}, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
+
+    xlog "get calendar event updates";
+    $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 2);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $state = $res->[0][1]{newState};
+
+    xlog "get zero calendar event updates";
+    $res = $jmap->Request([['getCalendarEventUpdates', {sinceState => $state}, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $state = $res->[0][1]{newState};
+
+    xlog "update event #1 and #2";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        $id1 => {
+                            "calendarId" => $calidA,
+                            "summary" => "1(updated)",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        },
+                        $id2 => {
+                            "calendarId" => $calidB,
+                            "summary" => "2(updated)",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        }
+                    }}, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{updated}}, 2);
+
+    xlog "get exactly one update";
+    $res = $jmap->Request([['getCalendarEventUpdates', {
+                    sinceState => $state,
+                    maxChanges => 1
+                }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $state = $res->[0][1]{newState};
+
+    xlog "get the final update";
+    $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $state = $res->[0][1]{newState};
+
+    xlog "update event #1 and destroy #2";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    update => {
+                        $id1 => {
+                            "calendarId" => $calidA,
+                            "summary" => "1(updated)",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        },
+                    },
+                    destroy => [ $id2 ]
+                }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{updated}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{destroyed}}, 1);
+
+    xlog "get calendar event updates";
+    $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
+    $self->assert_str_equals($res->[0][1]{removed}[0], $id2);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $state = $res->[0][1]{newState};
+
+    xlog "get zero calendar event updates";
+    $res = $jmap->Request([['getCalendarEventUpdates', {sinceState => $state}, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $state = $res->[0][1]{newState};
+
+    xlog "move event #1 from calendar $calidA to $calidB";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    update => {
+                        $id1 => {
+                            "calendarId" => $calidB,
+                            "summary" => "1(moved)",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        },
+                    }
+                }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{updated}}, 1);
+
+    xlog "get calendar event updates";
+    $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $state = $res->[0][1]{newState};
+
+    xlog "update and remove event #1";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    update => {
+                        $id1 => {
+                            "calendarId" => $calidB,
+                            "summary" => "1(goodbye)",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        },
+                    },
+                    destroy => [ $id1 ]
+                }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{destroyed}}, 1);
+
+    xlog "get calendar event updates";
+    $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
+    $self->assert_str_equals($res->[0][1]{removed}[0], $id1);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $state = $res->[0][1]{newState};
 }
 
 1;
