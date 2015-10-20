@@ -70,6 +70,8 @@ messages
 
 APPLY MESSAGE is a list of messages, not necessarily only one message.
 
+>>> hmm. it might be a list of messages for -multiple users-...
+
 Cheap first implementation is to index the start/end of the entire APPLY
 MESSAGE command identically for each message within it, and at restore time
 we grab that chunk and loop over it looking for the correct guid.
@@ -562,3 +564,87 @@ do i want rhost in the path?
       (though this is its own problem that the backup system shouldn't have to compensate for)
     * but makes location of undifferentiated user unpredictable
     * so probably not, actually
+
+
+chatting about implementation 20/10
+-----------------------------------
+09:54 elliefm_
+here's a fun sync question
+APPLY MESSAGE provides a list of messages
+can a single APPLY MESSAGE contain messages for multiple mailboxes and/or users?
+my first hunch is that it doesn't cross users, since the broadest granularity for a single sync run is USER
+10:06 kmurchison
+We'd have to check with Bron, but I *think* messages can cross mailboxes for a single user
+10:06 brong_
+yes
+APPLY MESSAGE just adds it to the reserve list
+10:07 elliefm_
+nah apply message uploads the message, APPLY RESERVE adds it to the reserve list :P
+10:07 brong_
+same same
+APPLY RESERVE copies it from a local mailbox
+APPLY MESSAGE uploads it
+10:07 elliefm_
+yep
+10:07 brong_
+they both wind up in the reserve list
+10:07 elliefm_
+ahh i see what you mean, gotcha
+10:07 brong_
+until you send a RESTART
+ideally you want it reserve in the same partition, but it will copy the message over if it's not on the same partition
+there's no restriction on which mailbox it came from/went to
+good for user renames, and good for an append to a bunch of mailboxes in different users / shared space all at once
+(which LMTP can do)
+10:10 elliefm_
+i can handle the case where a single APPLY MESSAGE contains messages for multiple mailboxes belonging to the same user
+but i'm in trouble if a single APPLY MESSAGE can contain messages belonging to different users
+10:14 brong_
+elliefm_: why?
+10:14 brong_
+you don't have to keep them if they aren't used
+10:15 elliefm_
+for backups - when i see the apply, i need to know which user's backup to add it to.  that's easy enough if it doesn't cross users but gets mega fiddly if it does
+i'm poking around in sync client to see if it's likely to be an issue or not
+11:00 brong__
+elliefm_: I would stage it, and add it to users as it gets refcounted in by an index file
+11:07 elliefm_
+that's pretty much what we do for ordinary sync and delivery stuff yeah?
+11:08 brong__
+yep
+and it's what the backup thing does
+11:09 elliefm_
+i'm pretty sure that APPLY RESERVE and APPLY MESSAGE don't give a damn about users, they're just "here's every message you might not have already had since last time we spoke" and it lets the APPLY MAILBOX work out where to attach them later
+11:09 brong__
+yep
+11:09 elliefm_
+so yeah, i'll need to do something here
+i've been working so far on the idea that a single user's backup consists of 1) an append-only gzip stream of the sync protocol chat that built it, and 2) an index that tracks current state of mailboxes, and offsets within (1) of message data
+that gets us good compression (file per user, not file per message), and if the index gets corrupted or lost, it's rebuildable purely from (1), it doesn't need a live copy of the original mailbox
+11:12 brong_
+yep, that all works
+11:12 elliefm_
+(so if you lose your imap server, you're not unable to rebuild a broken index on the backup)
+11:13 brong_
+it's easy enough to require the sync protocol stream to only contain messages per user
+though "apply reserve" is messy
+because you need to return "yes, I have that message"
+11:13 elliefm_
+with that implementation i can't (easily) keep user.a's messages from not existing in user.b's data stream (though they won't be indexed)
+11:14 brong_
+I'm not too adverse to the idea of just unpacking each message as it comes off the wire into a temporary directory
+11:14 elliefm_
+(because at the time i'm receiving the sync data i don't know which it needs to go in, so if they come in in the same reserve i'd need to append them to both data streams)
+which isn't a huge problem, just… irks me a bit
+11:14 brong_
+and then reading the indexes as they come in, checking against the state DB to see if we already have them, and streaming them into the gzip if they aren't there yet
+what we can do is something like the current format, where files go into a tar
+11:16 elliefm_
+i guess the fiddly bit there is that there's one more moving part to keep synchronised across failure states
+a backup for a single user becomes 1) data stream + 2) any messages that were uploaded but not yet added to a mailbox + 3) index (which doesn't know what to do with (2))
+which in the general case is fine, the next sync will update the mailboxes, which will push (2) into (1) and index it nicely, and on we go
+but it's just a little bit more mess if there's a failure that you need to recover from between those states — it's no longer a simple case of "it's in the backup and we know everything about it" or "it doesn't exist", there's a third case of "well we might have the data but don't really know what to do with it"
+the other fiddly bit is that the process of appending to the data stream is suddenly in the business of crafting output rather than simply dumping what it gets, which isn't really burdensome, but it is one more little crack for bugs to crawl into
+i guess in terms of sync protocol, one thing i could do on my end is identify apply operations that seem to contain multiple users' data, and just return an error on those.  the sync client on the other end will promote them until they're eventually user syncs, which i think are always user granularity
+11:50 elliefm_
+i think for now, first stage implementation will be to stream the reserve/message commands in full to every user backup they might apply to.  and optimising that down so that each stream only contains messages belonging to that user can be a future optimisation
