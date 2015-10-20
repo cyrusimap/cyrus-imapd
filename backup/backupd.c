@@ -52,6 +52,7 @@
 #include <netinet/tcp.h>
 #include <sys/types.h>
 
+#include "lib/bsearch.h"
 #include "lib/exitcodes.h"
 #include "lib/imparse.h"
 #include "lib/signals.h"
@@ -856,46 +857,58 @@ static int cmd_apply_reserve(struct dlist *dl)
     struct dlist *ml = NULL;
     struct dlist *gl = NULL;
     struct dlist *di;
+    int i;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "GUID", &ml)) return IMAP_PROTOCOL_ERROR;
 
-    /*
-     * FIXME naively assuming MBOXNAMEs all belong to same user and
-     * therefore only caring about the first one
-     */
-    mbname_t *mbname = mbname_from_intname(ml->head->sval);
-    struct open_backup *open = backupd_open_backup(mbname);
-    mbname_free(&mbname);
-
-    if (!open) return IMAP_INTERNAL;
-
-    int r = backup_append(open->backup, dl, time(0));
-    if (r) {
-        syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
-        return r;
+    /* find the list of users this reserve applies to */
+    strarray_t userids = STRARRAY_INITIALIZER;
+    for (di = ml->head; di; di = di->next) {
+        mbname_t *mbname = mbname_from_intname(di->sval);
+        strarray_append(&userids, mbname_userid(mbname));
+        mbname_free(&mbname);
     }
+    strarray_sort(&userids, cmpstringp_raw);
+    strarray_uniq(&userids);
 
+    /* XXX track allll the missings */
     struct dlist *missing = dlist_newlist(NULL, "MISSING");
-    for (di = gl->head; di; di = di->next) {
-        struct message_guid *guid = NULL;
-        const char *guid_str;
 
-        if (!dlist_toguid(di, &guid)) continue;
-        guid_str = message_guid_encode(guid);
+    /* log the entire reserve to all relevant backups, and accumulate missing list */
+    for (i = 0; i < strarray_size(&userids); i++) {
+        mbname_t *mbname = mbname_from_userid(strarray_nth(&userids, i));
+        struct open_backup *open = backupd_open_backup(mbname);
+        mbname_free(&mbname);
 
-        int message_id = backup_get_message_id(open->backup, guid_str);
+        if (!open) return IMAP_INTERNAL;  // FIXME continue?
 
-        if (message_id <= 0) {
-            /* FIXME this looks like how sync_apply_reserve does it
-             * but something about this is irking me...
-             * but that might just be me getting confused by the dlist api
-             */
-            dlist_setguid(missing, "GUID", guid);
+        int r = backup_append(open->backup, dl, time(0));
+        if (r) {
+            syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
+            return r;
+        }
 
-            /* add it to the reserved guids list */
-            strarray_append(&open->reserved_guids, guid_str);
+        for (di = gl->head; di; di = di->next) {
+            struct message_guid *guid = NULL;
+            const char *guid_str;
+
+            if (!dlist_toguid(di, &guid)) continue;
+            guid_str = message_guid_encode(guid);
+
+            int message_id = backup_get_message_id(open->backup, guid_str);
+
+            if (message_id <= 0) {
+                /* FIXME this looks like how sync_apply_reserve does it
+                 * but something about this is irking me...
+                 * but that might just be me getting confused by the dlist api
+                 */
+                dlist_setguid(missing, "GUID", guid);
+
+                /* add it to the reserved guids list */
+                strarray_append(&open->reserved_guids, guid_str);
+            }
         }
     }
 
@@ -906,6 +919,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     }
 
     dlist_free(&missing);
+    strarray_fini(&userids);
 
     return 0;
 }
