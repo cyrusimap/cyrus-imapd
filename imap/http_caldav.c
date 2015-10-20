@@ -612,11 +612,40 @@ static void my_caldav_init(struct buf *serverinfo)
     utc_zone = icaltimezone_get_utc_timezone();
 }
 
+static int _create_mailbox(const char *userid, const char *mailboxname, int type, int useracl, int anyoneacl)
+{
+    int r = 0;
+    char rights[100];
+
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    if (!r) return 0;
+    if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+
+    /* Create locally */
+    r = mboxlist_createmailbox(mailboxname, type,
+                               NULL, 0,
+                               userid, httpd_authstate,
+                               0, 0, 0, 0, NULL);
+    if (!r && useracl) {
+        cyrus_acl_masktostr(useracl, rights);
+        r = mboxlist_setacl(&httpd_namespace, mailboxname, userid, rights,
+                            1, httpd_userid, httpd_authstate);
+    }
+    if (!r && anyoneacl) {
+        cyrus_acl_masktostr(anyoneacl, rights);
+        r = mboxlist_setacl(&httpd_namespace, mailboxname, "anyone", rights,
+                            1, httpd_userid, httpd_authstate);
+    }
+
+    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                  mailboxname, error_message(r));
+    return r;
+}
 
 static void my_caldav_auth(const char *userid)
 {
     int r;
-    char *mailboxname, rights[100];
+    char *mailboxname;
     struct buf acl = BUF_INITIALIZER;
 
     if (httpd_userisadmin || httpd_userisanonymous ||
@@ -657,22 +686,8 @@ static void my_caldav_auth(const char *userid)
             }
             mboxlist_entry_free(&mbentry);
         }
-
-        /* Create locally */
-        buf_reset(&acl);
-        cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-        buf_printf(&acl, "%s\t%s\t", userid, rights);
-        cyrus_acl_masktostr(DACL_READFB, rights);
-        buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-        r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
-                                NULL /* partition */,
-                                userid, httpd_authstate,
-                                0 /* options */, 0 /* uidvalidity */,
-                                0 /* highestmodseq */, buf_cstring(&acl),
-                                NULL /* uniqueid */, 0 /* local_only */,
-                                NULL /* mboxptr */);
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      mailboxname, error_message(r));
+        r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION,
+                            ACL_ALL | DACL_READFB, DACL_READFB);
     }
 
     free(mailboxname);
@@ -681,91 +696,37 @@ static void my_caldav_auth(const char *userid)
     if (config_getswitch(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
         /* Default calendar */
         mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-            buf_printf(&acl, "%s\t%s\t", userid, rights);
-            cyrus_acl_masktostr(DACL_READFB, rights);
-            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                        mailboxname, error_message(r));
-        }
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                            ACL_ALL | DACL_READFB, DACL_READFB);
         free(mailboxname);
+        if (r) goto done;
     }
 
     if (config_getswitch(IMAPOPT_CALDAV_CREATE_SCHED) &&
         namespace_calendar.allow & ALLOW_CAL_SCHED) {
         /* Scheduling Inbox */
         mailboxname = caldav_mboxname(userid, SCHED_INBOX);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", userid, rights);
-            cyrus_acl_masktostr(DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mailboxname, error_message(r));
-        }
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                            ACL_ALL | DACL_SCHED, DACL_SCHED);
         free(mailboxname);
+        if (r) goto done;
 
         /* Scheduling Outbox */
         mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", userid, rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mailboxname, error_message(r));
-        }
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                            ACL_ALL | DACL_SCHED, 0);
         free(mailboxname);
+        if (r) goto done;
     }
 
     if (config_getswitch(IMAPOPT_CALDAV_CREATE_ATTACH) &&
         namespace_calendar.allow & ALLOW_CAL_ATTACH) {
         /* Managed Attachment Collection */
         mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", userid, rights);
-            cyrus_acl_masktostr(ACL_READ, rights);
-            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mailboxname, error_message(r));
-        }
+        r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION,
+                            ACL_ALL | DACL_SCHED, ACL_READ);
         free(mailboxname);
+        if (r) goto done;
     }
 
   done:
