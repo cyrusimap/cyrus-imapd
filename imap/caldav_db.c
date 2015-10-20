@@ -238,7 +238,7 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  comp_type, ical_uid, organizer, dtstart, dtend,"                 \
-    "  comp_flags, sched_tag, alive"                                    \
+    "  comp_flags, sched_tag, alive, modseq"                            \
     " FROM ical_objs"                                                   \
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
@@ -251,6 +251,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     memset(cdata, 0, sizeof(struct caldav_data));
 
     cdata->dav.alive = sqlite3_column_int(stmt, 16);
+    cdata->dav.modseq = sqlite3_column_int(stmt, 17);
     if (!(rrock->flags && RROCK_FLAG_TOMBSTONES) && !cdata->dav.alive)
         return 0;
 
@@ -672,6 +673,42 @@ static void recur_cb(icalcomponent *comp, struct icaltime_span *span,
 
     if (icaltime_compare(end, period->end) > 0)
         memcpy(&period->end, &end, sizeof(struct icaltimetype));
+}
+
+#define CMD_GETUPDATES CMD_READFIELDS \
+      " WHERE comp_type = :comp_type AND modseq > :modseq" \
+      " ORDER BY modseq LIMIT :limit;"
+
+#define CMD_GETUPDATES_MBOX CMD_READFIELDS \
+      " WHERE mailbox = :mailbox AND comp_type = :comp_type AND modseq > :modseq" \
+      " ORDER BY modseq LIMIT :limit;"
+
+EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
+                                modseq_t oldmodseq, const char *mboxname, int kind, int limit,
+                                int (*cb)(void *rock, struct caldav_data *cdata),
+                                void *rock)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",      SQLITE_TEXT,    { .s = mboxname  } },
+        { ":modseq",       SQLITE_INTEGER, { .i = oldmodseq } },
+        { ":comp_type",    SQLITE_INTEGER, { .i = kind      } },
+        { ":limit",        SQLITE_INTEGER, { .i = limit > 0 ? limit : -1 } },
+        { NULL,            SQLITE_NULL,    { .s = NULL      } }
+    };
+    static struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, RROCK_FLAG_TOMBSTONES, cb, rock };
+    int r;
+
+    /* SQLite interprets a negative limit as unbounded. */
+    if (mboxname) {
+        r = sqldb_exec(caldavdb->db, CMD_GETUPDATES_MBOX, bval, &read_cb, &rrock);
+    } else {
+        r = sqldb_exec(caldavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
+    }
+    if (r) {
+        syslog(LOG_ERR, "caldav error %s", error_message(r));
+    }
+    return r;
 }
 
 

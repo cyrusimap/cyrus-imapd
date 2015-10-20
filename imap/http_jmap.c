@@ -111,6 +111,7 @@ static int setContacts(struct jmap_req *req);
 static int getCalendars(struct jmap_req *req);
 static int setCalendars(struct jmap_req *req);
 static int getCalendarEvents(struct jmap_req *req);
+static int getCalendarEventUpdates(struct jmap_req *req);
 static int setCalendarEvents(struct jmap_req *req);
 
 static const struct message_t {
@@ -127,6 +128,7 @@ static const struct message_t {
     { "getCalendars",           &getCalendars },
     { "setCalendars",           &setCalendars },
     { "getCalendarEvents",      &getCalendarEvents },
+    { "getCalendarEventUpdates",&getCalendarEventUpdates },
     { "setCalendarEvents",      &setCalendarEvents },
     { NULL,             NULL}
 };
@@ -626,6 +628,13 @@ static const char *_json_array_get_string(const json_t *obj, size_t index)
 struct updates_rock {
     json_t *changed;
     json_t *removed;
+
+    size_t seen_records;
+    size_t max_records;
+
+    struct mailbox *mailbox;
+    short fetchmodseq;
+    modseq_t highestmodseq;
 };
 
 static void strip_spurious_deletes(struct updates_rock *urock)
@@ -649,17 +658,61 @@ static void strip_spurious_deletes(struct updates_rock *urock)
     }
 }
 
-static int getupdates_cb(void *rock, struct carddav_data *cdata)
-{
-    struct updates_rock *urock = (struct updates_rock *) rock;
+static void updates_rock_update(struct updates_rock *rock,
+                                struct dav_data dav,
+                                const char *uid) {
 
-    if (cdata->dav.alive) {
-        json_array_append_new(urock->changed, json_string(cdata->vcard_uid));
+    /* Count, but don't process items that exceed the maximum record count. */
+    if (rock->max_records && ++(rock->seen_records) > rock->max_records) {
+        return;
+    }
+
+    /* Report item as updated or removed. */
+    if (dav.alive) {
+        json_array_append_new(rock->changed, json_string(uid));
     }
     else {
-        json_array_append_new(urock->removed, json_string(cdata->vcard_uid));
+        json_array_append_new(rock->removed, json_string(uid));
     }
 
+    /* Fetch record to determine modseq. */
+    if (rock->fetchmodseq) {
+        struct index_record record;
+        int r;
+
+        if (!rock->mailbox || strcmp(rock->mailbox->name, dav.mailbox)) {
+            mailbox_close(&rock->mailbox);
+            r = mailbox_open_irl(dav.mailbox, &rock->mailbox);
+            if (r) {
+                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                        dav.mailbox, error_message(r));
+                return;
+            }
+        }
+        r = mailbox_find_index_record(rock->mailbox, dav.imap_uid, &record);
+        if (r) {
+            syslog(LOG_INFO, "mailbox_find_index_record(%s,%d) failed: %s",
+                    rock->mailbox->name, dav.imap_uid, error_message(r));
+            mailbox_close(&rock->mailbox);
+            return;
+        }
+        if (record.modseq > rock->highestmodseq) {
+            rock->highestmodseq = record.modseq;
+        }
+    }
+}
+
+static int getcontactupdates_cb(void *rock, struct carddav_data *cdata)
+{
+    struct updates_rock *urock = (struct updates_rock *) rock;
+    updates_rock_update(urock, cdata->dav, cdata->vcard_uid);
+    return 0;
+}
+
+static int geteventupdates_cb(void *rock, struct caldav_data *cdata)
+{
+    struct updates_rock *urock = (struct updates_rock *) rock;
+    updates_rock_update(urock, cdata->dav, cdata->ical_uid);
     return 0;
 }
 
@@ -686,7 +739,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     rock.removed = json_array();
 
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
-                            &getupdates_cb, &rock);
+                            &getcontactupdates_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -1677,7 +1730,7 @@ static int getContactUpdates(struct jmap_req *req)
     rock.removed = json_array();
 
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
-                            &getupdates_cb, &rock);
+                            &getcontactupdates_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -5790,6 +5843,7 @@ static int setCalendarEvents(struct jmap_req *req)
             struct caldav_data *cdata = NULL;
             struct mailbox *mbox = NULL;
             struct index_record record;
+            char *mboxname = NULL;
             icalcomponent *ical = NULL;
             icalcomponent *comp = NULL;
             json_t *invalid = NULL;
@@ -5806,12 +5860,12 @@ static int setCalendarEvents(struct jmap_req *req)
 
             /* Lookup calendar event uid in DB. */
             r = caldav_lookup_uid(db, uid, &cdata);
-            if (r) {
+            if (r && r != CYRUSDB_NOTFOUND) {
                 syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
                         uid, error_message(r));
                 goto done;
             }
-            if (!cdata->dav.rowid || !cdata->dav.imap_uid) {
+            if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
@@ -5884,11 +5938,11 @@ static int setCalendarEvents(struct jmap_req *req)
                 goto done;
             }
 
-            /* Look up the calendarId property. If it is set and differs from
-             * the calendar mailbox name, we need to move the event. */
+            /* Look up the calendarId property. If differs from the current
+             * calendar event's mailbox, we need to move the event. */
             invalid = json_pack("[]");
 
-            pe = jmap_readprop(arg, "calendarId", 0,  invalid, "s", &calId);
+            pe = jmap_readprop(arg, "calendarId", 1 /*mandatory*/,  invalid, "s", &calId);
             if (pe > 0) {
                 if (strlen(calId) == 0) {
                     json_array_append_new(invalid, json_string("calendarId"));
@@ -5896,10 +5950,10 @@ static int setCalendarEvents(struct jmap_req *req)
                     const char *id = (const char *) hash_lookup(calId, req->idmap);
                     if (id != NULL) {
                         calId = id;
+                    } else {
+                        json_array_append_new(invalid, json_string("calendarId"));
                     }
                 }
-            } else {
-                calId = mbox->name;
             }
 
             /* Update the VEVENT. */
@@ -5924,10 +5978,10 @@ static int setCalendarEvents(struct jmap_req *req)
             json_decref(invalid);
 
             /* Check if we need to move the event. */
-            if (strcmp(mbox->name, calId)) {
+            mboxname = caldav_mboxname(req->userid, calId);
+            if (strcmp(mbox->name, mboxname)) {
                 struct mailbox *src = mbox;
                 struct mailbox *dst = NULL;
-                char *mboxname = caldav_mboxname(req->userid, calId);
 
                 /* Open destination mailbox for writing. */
                 r = mailbox_open_iwl(mboxname, &dst);
@@ -5936,8 +5990,8 @@ static int setCalendarEvents(struct jmap_req *req)
                         /* XXX - calendarNotFound setError is not specified. */
                         json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
                         json_object_set_new(notUpdated, uid, err);
-                        free(mboxname);
                         mailbox_close(&src);
+                        free(mboxname);
                         continue;
                     } else {
                         syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
@@ -5947,7 +6001,6 @@ static int setCalendarEvents(struct jmap_req *req)
                         goto done;
                     }
                 }
-                free(mboxname);
 
                 /* Check permissions. */
                 rights = httpd_myrights(req->authstate, dst->acl);
@@ -5957,6 +6010,7 @@ static int setCalendarEvents(struct jmap_req *req)
                     /* XXX But jmap_post does not seem to take care of that yet. */
                     mailbox_close(&src);
                     mailbox_close(&dst);
+                    free(mboxname);
                     json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
                     json_object_set_new(notUpdated, uid, err);
                     continue;
@@ -5970,6 +6024,7 @@ static int setCalendarEvents(struct jmap_req *req)
                     syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
                             cdata->dav.mailbox, error_message(r));
                     mailbox_close(&src);
+                    free(mboxname);
                     goto done;
                 }
                 mboxevent_extract_record(mboxevent, src, &record);
@@ -5982,6 +6037,7 @@ static int setCalendarEvents(struct jmap_req *req)
                 /* Continue like a regular update. */
                 mbox = dst;
             }
+            free(mboxname);
 
             /* Store the updated VEVENT. */
             struct transaction_t txn;
@@ -6039,12 +6095,12 @@ static int setCalendarEvents(struct jmap_req *req)
 
             /* Lookup calendar event uid in DB. */
             r = caldav_lookup_uid(db, uid, &cdata);
-            if (r) {
+            if (r && r != CYRUSDB_NOTFOUND) {
                 syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
                         uid, error_message(r));
                 goto done;
             }
-            if (!cdata->dav.rowid || !cdata->dav.imap_uid) {
+            if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
@@ -6106,14 +6162,17 @@ static int setCalendarEvents(struct jmap_req *req)
             mboxevent_extract_mailbox(mboxevent, mbox);
             mboxevent_set_numunseen(mboxevent, mbox, -1);
             mboxevent_set_access(mboxevent, NULL, NULL, req->userid, cdata->dav.mailbox, 0);
-
             mailbox_close(&mbox);
-
-            /* Remove from CalDAV DB. */
-            caldav_delete(db, cdata->dav.rowid);
-
             mboxevent_notify(mboxevent);
             mboxevent_free(&mboxevent);
+
+            /* Keep the VEVENT in the database but set alive to 0. This allows
+             * to report it during getCalendarEventUpdates. */
+            cdata->dav.alive = 0;
+            cdata->dav.modseq = record.modseq;
+            cdata->dav.imap_uid = record.uid;
+            r = caldav_write(db, cdata);
+            if (r) goto done;
 
             /* Report calendar event as destroyed. */
             json_array_append_new(destroyed, json_string(uid));
@@ -6147,5 +6206,107 @@ static int setCalendarEvents(struct jmap_req *req)
 done:
     if (db) caldav_close(db);
     json_decref(set);
+    return r;
+}
+
+static int getCalendarEventUpdates(struct jmap_req *req)
+{
+    int r, pe;
+    json_t *invalid;
+    struct caldav_db *db;
+    const char *since;
+    modseq_t oldmodseq;
+    json_int_t maxChanges = 0;
+    int dofetch = 0;
+    struct updates_rock rock;
+    struct buf buf = BUF_INITIALIZER;
+
+    db = caldav_open_userid(req->userid);
+    if (!db) {
+        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Parse and validate arguments. */
+    invalid = json_pack("[]");
+    pe = jmap_readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
+    if (pe > 0) {
+        oldmodseq = str2uint64(since);
+        if (!oldmodseq) {
+            json_array_append_new(invalid, json_string("sinceState"));
+        }
+    }
+    pe = jmap_readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &maxChanges);
+    if (pe > 0) {
+        if (maxChanges <= 0) {
+            json_array_append_new(invalid, json_string("maxChanges"));
+        }
+    }
+    jmap_readprop(req->args, "fetchRecords", 0 /*mandatory*/, invalid, "b", &dofetch);
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* Lookup updates. */
+    memset(&rock, 0, sizeof(struct updates_rock));
+    rock.fetchmodseq = 1;
+    rock.changed = json_array();
+    rock.removed = json_array();
+    rock.max_records = maxChanges;
+    r = caldav_get_updates(db, oldmodseq, NULL /*mboxname*/, CAL_COMP_VEVENT, 
+            maxChanges ? maxChanges + 1 : -1, &geteventupdates_cb, &rock);
+    mailbox_close(&rock.mailbox);
+    if (r) goto done;
+    strip_spurious_deletes(&rock);
+
+    /* Determine new state. */
+    modseq_t newstate;
+    int more = rock.max_records ? rock.seen_records > rock.max_records : 0;
+    if (more) {
+        newstate = rock.highestmodseq;
+    } else {
+        newstate = req->counters.caldavmodseq;
+    }
+
+    /* Create response. */
+    json_t *eventUpdates = json_pack("{}");
+    json_object_set_new(eventUpdates, "accountId", json_string(req->userid));
+    json_object_set_new(eventUpdates, "oldState", json_string(since));
+
+    buf_printf(&buf, "%llu", newstate);
+    json_object_set_new(eventUpdates, "newState", json_string(buf_cstring(&buf)));
+    buf_reset(&buf);
+
+    json_object_set_new(eventUpdates, "hasMoreUpdates", json_boolean(more));
+    json_object_set(eventUpdates, "changed", rock.changed);
+    json_object_set(eventUpdates, "removed", rock.removed);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("calendarEventUpdates"));
+    json_array_append_new(item, eventUpdates);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+    /* Fetch updated records, if requested. */
+    if (dofetch && json_array_size(rock.changed)) {
+        json_t *props = json_object_get(req->args, "fetchRecordProperties");
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        json_object_set(subreq.args, "ids", rock.changed);
+        if (props) json_object_set(subreq.args, "properties", props);
+        r = getCalendarEvents(&subreq);
+        json_decref(subreq.args);
+    }
+
+  done:
+    buf_free(&buf);
+    json_decref(rock.changed);
+    json_decref(rock.removed);
+    if (db) caldav_close(db);
     return r;
 }
