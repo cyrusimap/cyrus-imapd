@@ -763,7 +763,8 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
 }
 
 /* limit is how much of the file to calculate the sha1 of (in bytes),
- * or zero for the whole file */
+ * or SHA1_LIMIT_WHOLE_FILE for the whole file */
+#define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)
 static const char *_sha1_file(int fd, const char *fname, size_t limit,
                               char buf[2 * SHA1_DIGEST_LENGTH + 1])
 {
@@ -773,7 +774,7 @@ static const char *_sha1_file(int fd, const char *fname, size_t limit,
     int r;
 
     map_refresh(fd, /*onceonly*/ 1, &map, &len, MAP_UNKNOWN_LEN, fname, NULL);
-    calc_len = limit ? MIN(limit, len) : len;
+    calc_len = limit == SHA1_LIMIT_WHOLE_FILE ? len : MIN(limit, len);
     xsha1((const unsigned char *) map, calc_len, sha1_raw);
     map_free(&map, &len);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, buf, BH_LOWER);
@@ -849,7 +850,7 @@ EXPORTED int backup_append_start(struct backup *backup)
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     off_t offset = lseek(backup->fd, 0, SEEK_END);
 
-    _sha1_file(backup->fd, backup->data_fname, 0, file_sha1);
+    _sha1_file(backup->fd, backup->data_fname, SHA1_LIMIT_WHOLE_FILE, file_sha1);
 
     return _append_start(backup, time(0), offset, file_sha1, 0, 0);
 }
