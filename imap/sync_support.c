@@ -326,6 +326,22 @@ struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *l,
     return msgid;
 }
 
+void sync_msgid_remove(struct sync_msgid_list *l,
+                       const struct message_guid *guid)
+{
+    int offset = message_guid_hash(guid, l->hash_size);
+    struct sync_msgid *msgid;
+
+    if (message_guid_isnull(guid)) return;
+
+    for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
+        if (message_guid_equal(&msgid->guid, guid)) {
+            message_guid_set_null(&msgid->guid);
+            return;
+        }
+    }
+}
+
 void sync_msgid_list_free(struct sync_msgid_list **lp)
 {
     struct sync_msgid_list *l = *lp;
