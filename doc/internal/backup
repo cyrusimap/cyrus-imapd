@@ -101,6 +101,11 @@ structure?  not the offset within the stream that produced it, but just within
 the dlist it's part of?  then the message offset in the data stream would be the
 dlist's offset in the stream plus the DL_SFILE's offset within the dlist
 
+... nah, short of changing the data format i think it's best to index the
+APPLY MESSAGE command, and search it by GUID for the message in question if/when
+the message content is needed.  this cooperates nicely with reserve/message's
+multiplicity and makes compress easier to implement.
+
 
 renames
 -------
@@ -370,16 +375,19 @@ of message data should be avoided by keeping the same guid.
 compress
 --------
 
+remember: a single APPLY MESSAGE line can contain many messages!
+
 settings:
 
 * backup retention period
 * chunk combination size (byte length or elapsed time)
 
-three kinds of compression (probably at least two simultaneously):
+four kinds of compression (probably at least two simultaneously):
 
 * removing unused chunks
 * combining adjacent chunks into a single chunk (for better gz compression)
-* removing unused messages from within a chunk (important after combining)
+* removing unused message lines from within a chunk (important after combining)
+* removing unused messages from within a message line
 
 "unused messages"
     messages for which all records have been expunged for longer
@@ -394,8 +402,11 @@ algorithm:
 *   create a chunk in backup.new
 *   foreach chunk we still need:
 *       foreach line in the chunk:
-*           if we still need the line, or if we're not doing message granularity
-*               write and index it to backup.new
+*           create new line
+*           foreach message in line:
+*               if we still need the message, or if we're not doing message granularity
+*                   add the message to the new line
+*           write and index tmp line to backup.new
 *       if the new chunk is big enough, or if we're not combining
 *           end chunk and start a new one
 *   end the new chunk
