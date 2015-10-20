@@ -903,7 +903,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     struct dlist *ml = NULL;
     struct dlist *gl = NULL;
     struct dlist *di;
-    int i;
+    int i, r;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;
@@ -930,11 +930,8 @@ static int cmd_apply_reserve(struct dlist *dl)
 
         if (!open) return IMAP_INTERNAL;  // FIXME continue?
 
-        int r = backup_append(open->backup, dl, time(0));
-        if (r) {
-            syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
-            return r;
-        }
+        r = backup_append(open->backup, dl, time(0));
+        if (r) goto done;
 
         for (di = gl->head; di; di = di->next) {
             struct message_guid *guid = NULL;
@@ -973,14 +970,14 @@ static int cmd_apply_reserve(struct dlist *dl)
         dlist_free(&kout);
     }
 
+done:
     sync_msgid_list_free(&missing);
-
-    return 0;
+    return r;
 }
 
 static int cmd_apply_rename(struct dlist *dl)
 {
-    int r = 0;
+    int r;
     const char *old_mboxname = NULL;
     const char *new_mboxname = NULL;
 
@@ -999,10 +996,6 @@ static int cmd_apply_rename(struct dlist *dl)
         }
 
         r = backup_append(open->backup, dl, time(0));
-        if (r) {
-            syslog(LOG_ERR, "%s: backup_append failed: %i", __func__, r);
-            return r;
-        }
     }
     else {
         // user name has changed!
