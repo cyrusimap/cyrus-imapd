@@ -374,6 +374,12 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 #define CMD_SELMBOX CMD_READFIELDS \
     " WHERE mailbox = :mailbox AND alive = 1;"
 
+/* XXX  ORDER BY is due to provide a consistent order as required by the
+ * JMAP spec. Might also implement an advanced foreach to allow user-defined
+ * order and filters, such as tombstones. */
+#define CMD_SELALIVE CMD_READFIELDS \
+    " WHERE alive = 1 ORDER BY modseq DESC;"
+
 EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
                             caldav_cb_t *cb, void *rock)
 {
@@ -385,7 +391,11 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
     /* XXX - tombstones */
 
-    return sqldb_exec(caldavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
+    if (mailbox) {
+        return sqldb_exec(caldavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
+    } else {
+        return sqldb_exec(caldavdb->db, CMD_SELALIVE, bval, &read_cb, &rrock);
+    }
 }
 
 
