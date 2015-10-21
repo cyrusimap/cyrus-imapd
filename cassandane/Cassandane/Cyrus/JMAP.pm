@@ -2153,4 +2153,81 @@ sub test_getcalendareventupdates {
     $state = $res->[0][1]{newState};
 }
 
+sub test_getcalendareventlist {
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendars A and B";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => {
+                        "#1" => {
+                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
+                        },
+                        "#2" => {
+                            name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
+                        }
+             }}, "R1"]
+    ]);
+    my $calidA = $res->[0][1]{created}{"#1"}{id};
+    my $calidB = $res->[0][1]{created}{"#2"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calidA,
+                            "summary" => "foo",
+                            "description" => "",
+                            "location" => "bar",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        },
+                        "#2" => {
+                            "calendarId" => $calidB,
+                            "summary" => "foo",
+                            "description" => "",
+                            "location" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "startTimeZone" => undef,
+                            "end" => "2015-10-07T00:00:00",
+                            "endTimeZone" => undef
+                        }
+                    }}, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
+
+    xlog "get unfiltered calendar event list";
+    $res = $jmap->Request([ ['getCalendarEventList', { }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 2);
+
+    xlog "get filtered calendar event list";
+    $res = $jmap->Request([ ['getCalendarEventList', {
+                    "filter" => {
+                        "operator" => "AND",
+                        "conditions" => [
+                            {
+                                "after" => "2015-01-01T00:00:00Z",
+                                "before" => "2015-12-31T23:59:59Z"
+                            },
+                            {
+                                "text" => "foo",
+                                "location" => "bar"
+                            }
+                        ]
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+    $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+}
+
 1;
