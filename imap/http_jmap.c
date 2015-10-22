@@ -2589,21 +2589,6 @@ struct calendars_rock {
     int rows;
 };
 
-/*
-    id: String The id of the calendar. This property is immutable.
-    name: String The user-visible name of the calendar. This may be any UTF-8 string of at least 1 character in length and maximum 256 bytes in size.
-    color: String Any valid CSS color value. The color to be used when displaying events associated with the calendar. The color SHOULD have sufficient contrast to be used as text on a white background.
-    sortOrder: Number Defines the sort order of calendars when presented in the UI, so it is consistent between devices. The number MUST be an integer in the range 0 <= sortOrder < 2^31.
-    isVisible: Boolean Should the calendar’s events be displayed to the user at the moment?
-    mayReadFreeBusy: Boolean The user may read the free-busy information for this calendar. In JMAP terms, this means the user may use this calendar as part of a filter in a getCalendarEventList call, however unless mayRead == true, the events returned for this calendar will only contain free-busy information, and be stripped of any other data. This property MUST be true if mayRead is true.
-    mayReadItems: Boolean The user may fetch the events in this calendar. In JMAP terms, this means the user may use this calendar as part of a filter in a getCalendarEventList call
-    mayAddItems: Boolean The user may add events to this calendar. In JMAP terms, this means the user may call setCalendarEvents to create new events in this calendar or move existing events into this calendar from another calenadr. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
-    mayModifyItems: Boolean The user may edit events in this calendar by calling setCalendarEvents with the update argument referencing events in this collection. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
-    mayRemoveItems: Boolean The user may remove events from this calendar by calling setCalendarEvents with the destroy argument referencing events in this collection, or by updating their calendarId property to a different calendar. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
-    mayRename: Boolean The user may rename the calendar. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
-    mayDelete: Boolean The user may delete the calendar itself. This property MUST be false if the account to which this calendar belongs has the isReadOnly property set to true.
-*/
-
 static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 {
     struct calendars_rock *crock = (struct calendars_rock *)rock;
@@ -3584,7 +3569,9 @@ static int _jmap_icalbyday_to_byday(int i) {
     int w = icalrecurrencetype_day_position(i);
     int d = icalrecurrencetype_day_day_of_week(i);
     if (d) {
-        /* XXX - for now, we treat libical's ANY day as SU. */
+        /* We could encounter libical's special ANY day here. But they don't
+         * care about it in the pos*7+dow computation. See more in the inline
+         * doc for icalrecurrencetype_day_day_of_week in icalrecur.c */
         d--;
     }
     return d + 7*w;
@@ -5182,9 +5169,6 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
     json_t *invalid = rock->invalid;
 
     /* Purge all VALARMs. */
-    /* XXX - We can't distinguish if the client wants to update an existing
-     * VALARM or create a new one. For now, we always create new VALARMs,
-     * throwing away any existing ones. This might not be intended. */
     icalcomponent *alarm, *next;
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
@@ -5284,10 +5268,12 @@ static void jmap_timezones_to_ical_cb(icalcomponent *comp,
 }
 
 /* Determine the UTC time span of all components within ical of type kind. */
-/* XXX - When this function turns out to be useful, then refactor it
- * with write_entry in caldav_db.c. */
 static struct icalperiodtype jmap_get_utc_timespan(icalcomponent *ical,
                                                    icalcomponent_kind kind) {
+
+    /* XXX This is almost identical to what's done in caldav_db's writeentry
+     * function. But here, we want to collect also the timezone IDs in our
+     * custom timezone rock. This might warrant some recfactoring. */
 
     struct icalperiodtype span;
     icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
@@ -5480,10 +5466,8 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     /* isAllDay */
     jmap_readprop(event, "isAllDay", !exc, invalid, "b", &rock->isAllDay);
 
-    /* XXX Once all the hairy edge cases are covered, this function needs some
-     * cleanup and addtional comments. */
-
     /* startTimeZone */
+    /* XXX This would warrant a refactor. */
     /* Determine the current timezone, if any. */
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzstart_old = icaltimezone_get_builtin_timezone(tzid);
@@ -5499,8 +5483,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else if (!pe && !exc && !rock->tzstart) {
             /* If this is not a create and no startTimezone was read,
              * keep the current timezone. */
-            /* XXX This is more lax than the spec, which requires clients to
-             * always send a timezones. */
             rock->tzstart = rock->tzstart_old;
         }
     } else {
@@ -5834,7 +5816,6 @@ static int setCalendarEvents(struct jmap_req *req)
             struct transaction_t txn;
             memset(&txn, 0, sizeof(struct transaction_t));
             txn.req_hdrs = spool_new_hdrcache();
-            /* XXX Can we trigger invitations by setting a flag here? */
             r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
             spool_free_hdrcache(txn.req_hdrs);
             icalcomponent_free(ical);
@@ -5842,9 +5823,10 @@ static int setCalendarEvents(struct jmap_req *req)
 
             mailbox_close(&mbox);
             if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-                /* XXX - invalidProperties is probably not the right set error,
-                 * but what went wrong in caldav_store_resource? */
-                json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+                 /* Huh? What went wrong in caldav_store_resource? */
+                syslog(LOG_ERR, "unexpected caldav_store_resource error (%s): %s",
+                        mbox->name, error_message(r));
+                json_t *err = json_pack("{s:s}", "type", "unknownError");
                 json_object_set_new(notCreated, key, err);
                 free(uid);
                 continue;
@@ -6027,7 +6009,6 @@ static int setCalendarEvents(struct jmap_req *req)
                 r = mailbox_open_iwl(mboxname, &dst);
                 if (r) {
                     if (r == IMAP_MAILBOX_NONEXISTENT) {
-                        /* XXX - calendarNotFound setError is not specified. */
                         json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
                         json_object_set_new(notUpdated, uid, err);
                         mailbox_close(&src);
@@ -6089,9 +6070,10 @@ static int setCalendarEvents(struct jmap_req *req)
             buf_free(&txn.buf);
             mailbox_close(&mbox);
             if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-                /* XXX - invalidProperties is probably not the right set error,
-                 * but what went wrong in caldav_store_resource? */
-                json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+                 /* Huh? What went wrong in caldav_store_resource? */
+                syslog(LOG_ERR, "unexpected caldav_store_resource error (%s): %s",
+                        mbox->name, error_message(r));
+                json_t *err = json_pack("{s:s}", "type", "unknownError");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
             }
@@ -6151,7 +6133,6 @@ static int setCalendarEvents(struct jmap_req *req)
             r = mailbox_open_iwl(cdata->dav.mailbox, &mbox);
             if (r) {
                 if (r == IMAP_MAILBOX_NONEXISTENT) {
-                    /* XXX - calendarNotFound setError is not specified. */
                     json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
                     json_object_set_new(notDestroyed, uid, err);
                     continue;
