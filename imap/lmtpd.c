@@ -855,7 +855,7 @@ int deliver(message_data_t *msgdata, char *authuser,
             proxy_adddest(&dlist, recip, n, mbentry->server, authuser);
             status[n] = nosieve;
         }
-        else {
+        else if (!r) {
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
