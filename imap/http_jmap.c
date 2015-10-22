@@ -4508,10 +4508,7 @@ static void jmap_participants_to_ical(icalcomponent *comp,
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (prop) {
             /* Remove but keep property to preserve ical parameters. */
-            icalproperty *tmp = icalproperty_new_clone(prop);
             icalcomponent_remove_property(comp, prop);
-            icalproperty_free(prop);
-            prop = tmp;
             buf_printf(&buf, "mailto:%s", email);
             icalproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
             buf_reset(&buf);
@@ -4519,7 +4516,9 @@ static void jmap_participants_to_ical(icalcomponent *comp,
             prop = icalproperty_new_organizer(email);
         }
         icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
-        if (param) icalproperty_remove_parameter_by_ref(prop, param);
+        if (param) {
+            icalproperty_remove_parameter_by_ref(prop, param);
+        }
         param = icalparameter_new_cn(name);
         icalproperty_add_parameter(prop, param);
         icalcomponent_add_property(comp, prop);
@@ -4548,9 +4547,8 @@ static void jmap_participants_to_ical(icalcomponent *comp,
         if (!*val) {
             continue;
         }
-        hash_insert(val, icalproperty_new_clone(prop), &cache);
         icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
+        hash_insert(val, prop, &cache);
     }
 
     /* Iterate the JMAP attendees to create or update the iCalendar ATTENDEES. */
@@ -4597,13 +4595,17 @@ static void jmap_participants_to_ical(icalcomponent *comp,
 
             /* name */
             param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
-            if (param) icalproperty_remove_parameter_by_ref(prop, param);
+            if (param) {
+                icalproperty_remove_parameter_by_ref(prop, param);
+            }
             param = icalparameter_new_cn(name);
             icalproperty_add_parameter(prop, param);
 
             /* partstat */
             param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-            if (param) icalproperty_remove_parameter_by_ref(prop, param);
+            if (param) {
+                icalproperty_remove_parameter_by_ref(prop, param);
+            }
             param = icalparameter_new_partstat(pst);
             icalproperty_add_parameter(prop, param);
 
@@ -4795,10 +4797,9 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
          * in two different timezones. */
         const char *val = icalproperty_get_value_as_string(prop);
         if (val) {
-            hash_insert(val, icalcomponent_new_clone(excomp), &excs);
+            hash_insert(val, excomp, &excs);
         }
         icalcomponent_remove_component(ical, excomp);
-        icalcomponent_free(excomp);
     }
 
     /* Add updated or new exceptions back to the VCALENDAR component. */
@@ -5149,8 +5150,6 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
         return;
     }
 
-
-
     /* Parse buf to make sure is valid. */
     struct icalrecurrencetype rt = icalrecurrencetype_from_string(buf_cstring(&buf));
     if (rt.freq == ICAL_NO_RECURRENCE) {
@@ -5328,8 +5327,8 @@ static struct icalperiodtype jmap_get_utc_timespan(icalcomponent *ical,
                     /* Do RDATE expansion only */
                     /* Temporarily remove RRULE to allow for expansion of
                      * remaining recurrences. */
-                    purged_rrule = icalproperty_new_clone(rrule);
                     icalcomponent_remove_property(comp, rrule);
+                    purged_rrule = rrule;
                 }
                 else if (!recur.count) {
                     /* Recurrence never ends - set end of span to eternity */
@@ -5848,8 +5847,8 @@ static int setCalendarEvents(struct jmap_req *req)
             txn.req_hdrs = spool_new_hdrcache();
             r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
             spool_free_hdrcache(txn.req_hdrs);
-            icalcomponent_free(ical);
             buf_free(&txn.buf);
+            icalcomponent_free(ical);
 
             mailbox_close(&mbox);
             if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
