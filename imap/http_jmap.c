@@ -3820,12 +3820,7 @@ static int jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
         } else {
             *isyou = 0;
         }
-        if (sparam.userid) {
-            /* XXX - caladdress_lookup leaks. Once
-             * caldav_fix_schedparam_memleak is merged, call
-             * sched_param_free here. */
-            free(sparam.userid);
-        }
+        sched_param_free(&sparam);
     }
     return 0;
 }
@@ -4386,7 +4381,7 @@ static void calevent_rock_add_tz(calevent_rock *rock, icaltimezone *tz) {
     }
     if (rock->n_tzs == rock->s_tzs) {
         rock->s_tzs = rock->s_tzs ? rock->s_tzs * 2 : 1;
-        rock->tzs = xrealloc(rock->tzs, sizeof(icaltimezone*) * rock->s_tzs * 2);
+        rock->tzs = xrealloc(rock->tzs, sizeof(icaltimezone*) * rock->s_tzs);
     }
     rock->tzs[rock->n_tzs++] = tz;
 }
@@ -4409,6 +4404,7 @@ static void jmap_update_dtprop_bykind(icalcomponent *comp,
         /* Purge the existing property. */
         prop = icalcomponent_get_first_property(comp, kind);
         if (prop) icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
     }
 
     /* Set the new property. */
@@ -4493,11 +4489,13 @@ static void jmap_participants_to_ical(icalcomponent *comp,
     if (organizer == json_null() && attendees == json_null()) {
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
         for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
              prop;
              prop = next) {
             next = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
             icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
         }
         return;
     }
@@ -4512,6 +4510,7 @@ static void jmap_participants_to_ical(icalcomponent *comp,
             /* Remove but keep property to preserve ical parameters. */
             icalproperty *tmp = icalproperty_new_clone(prop);
             icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
             prop = tmp;
             buf_printf(&buf, "mailto:%s", email);
             icalproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
@@ -4551,6 +4550,7 @@ static void jmap_participants_to_ical(icalcomponent *comp,
         }
         hash_insert(val, icalproperty_new_clone(prop), &cache);
         icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
     }
 
     /* Iterate the JMAP attendees to create or update the iCalendar ATTENDEES. */
@@ -4768,6 +4768,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
          prop = next) {
         next = icalcomponent_get_next_property(comp, ICAL_EXDATE_PROPERTY);
         icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
     }
 
     const char *key;
@@ -4797,6 +4798,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             hash_insert(val, icalcomponent_new_clone(excomp), &excs);
         }
         icalcomponent_remove_component(ical, excomp);
+        icalcomponent_free(excomp);
     }
 
     /* Add updated or new exceptions back to the VCALENDAR component. */
@@ -4839,6 +4841,11 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             myrock.flags = JMAP_EXC;
             myrock.recurid = key;
             jmap_calendarevent_to_ical(excomp, exc, &myrock);
+            /* XXX - that's ugly. Need to make sure that the rocks timezone
+             * array still points to latest realloced memory block. */
+            rock->tzs = myrock.tzs;
+            rock->n_tzs = myrock.n_tzs;
+            rock->s_tzs = myrock.s_tzs;
 
             /* Prepend prefix to any invalid properties. */
             json_array_foreach(invalidexc, i, v) {
@@ -4903,6 +4910,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
 
         next = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY);
         icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
     }
 
     if (!inclusions || inclusions == json_null()) {
@@ -4966,6 +4974,7 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
          prop = next) {
         next = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
         icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
     }
 
     if (!recur || recur == json_null()) {
@@ -5140,6 +5149,8 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
         return;
     }
 
+
+
     /* Parse buf to make sure is valid. */
     struct icalrecurrencetype rt = icalrecurrencetype_from_string(buf_cstring(&buf));
     if (rt.freq == ICAL_NO_RECURRENCE) {
@@ -5175,6 +5186,7 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
          alarm = next) {
         next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
         icalcomponent_remove_component(comp, alarm);
+        icalcomponent_free(alarm);
     }
 
     if (alerts == json_null()) {
@@ -5552,6 +5564,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
             jmap_update_dtprop_bykind(comp, dt, rock->tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
         }
     }
+
 
     /* end */
     pe = jmap_readprop(event, "end", !exc, invalid, "s", &val);
@@ -6011,12 +6024,14 @@ static int setCalendarEvents(struct jmap_req *req)
                     if (r == IMAP_MAILBOX_NONEXISTENT) {
                         json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
                         json_object_set_new(notUpdated, uid, err);
+                        icalcomponent_free(ical);
                         mailbox_close(&src);
                         free(mboxname);
                         continue;
                     } else {
                         syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
                                 cdata->dav.mailbox, error_message(r));
+                        icalcomponent_free(ical);
                         mailbox_close(&src);
                         free(mboxname);
                         goto done;
@@ -6029,6 +6044,7 @@ static int setCalendarEvents(struct jmap_req *req)
                     /* Pretend this mailbox does not exist. jmap_post should have
                      * checked already for an accountReadOnly error. */
                     /* XXX But jmap_post does not seem to take care of that yet. */
+                    icalcomponent_free(ical);
                     mailbox_close(&src);
                     mailbox_close(&dst);
                     free(mboxname);
@@ -6044,6 +6060,7 @@ static int setCalendarEvents(struct jmap_req *req)
                 if (r) {
                     syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
                             cdata->dav.mailbox, error_message(r));
+                    icalcomponent_free(ical);
                     mailbox_close(&src);
                     free(mboxname);
                     goto done;
