@@ -1139,7 +1139,8 @@ static int action_get(struct transaction_t *txn)
         mime = get_accept_type(hdr, tz_mime_types);
     else mime = tz_mime_types;
 
-    if (!mime) return json_error_response(txn, TZ_INVALID_FORMAT, NULL, NULL);
+    if (!mime || !mime->content_type)
+        return json_error_response(txn, TZ_INVALID_FORMAT, NULL, NULL);
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("start", &txn->req_qparams))) {
