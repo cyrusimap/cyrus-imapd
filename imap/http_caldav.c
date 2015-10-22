@@ -1034,7 +1034,7 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
     return 0;
 }
 
-static int _scheduling_enabled(const struct mailbox *mailbox)
+static int _scheduling_enabled(struct transaction_t *txn, const struct mailbox *mailbox)
 {
     if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
 
@@ -1044,6 +1044,10 @@ static int _scheduling_enabled(const struct mailbox *mailbox)
 
     annotatemore_lookupmask(mailbox->name, entry, httpd_userid, &buf);
     if (!strcasecmp(buf_cstring(&buf), "no"))
+        is_enabled = 0;
+
+    const char **hdr = spool_getheader(txn->req_hdrs, "Scheduling-Enabled");
+    if (hdr && !strcmp(hdr[0], "F"))
         is_enabled = 0;
 
     buf_free(&buf);
@@ -1082,7 +1086,7 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
         return HTTP_FORBIDDEN;
     }
 
-    if (_scheduling_enabled(dest_mbox)) {
+    if (_scheduling_enabled(txn, dest_mbox)) {
         comp = icalcomponent_get_first_real_component(ical);
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (prop) organizer = icalproperty_get_organizer(prop);
@@ -1171,7 +1175,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         mailbox_close(&attachments);
     }
 
-    if (cdata->organizer && _scheduling_enabled(mailbox)) {
+    if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
         /* Scheduling object resource */
         const char *organizer, **hdr;
         struct sched_param sparam;
@@ -2648,7 +2652,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
     case ICAL_VPOLL_COMPONENT:
-        if (organizer && _scheduling_enabled(mailbox) &&
+        if (organizer && _scheduling_enabled(txn, mailbox) &&
             /* XXX  Hack for Outlook */
             icalcomponent_get_first_invitee(comp)) {
             /* Scheduling object resource */
