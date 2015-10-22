@@ -824,7 +824,7 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
                     /* Do RDATE expansion only */
                     /* XXX  This is destructive but currently doesn't matter */
                     icalcomponent_remove_property(comp, rrule);
-                    free(rrule);
+                    icalproperty_free(rrule);
                 }
                 else if (!recur.count) {
                     /* Recurrence never ends - set end of span to eternity */
