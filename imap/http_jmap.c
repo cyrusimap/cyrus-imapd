@@ -6503,14 +6503,20 @@ static int calevent_filter_matches(calevent_filter *f,
 }
 
 /* Free the memory allocated by this calendar event filter. */
-static void calevent_filter_free(calevent_filter *f)
+static void calevent_filter_free(calevent_filter **ff)
 {
+    size_t i;
+    calevent_filter *f = *ff;
+    for (i = 0; i < f->n_conditions; i++) {
+        calevent_filter_free(&f->conditions[i]);
+    }
     if (f->conditions) free(f->conditions);
     if (f->calendars) {
         free_hash_table(f->calendars, NULL);
         free(f->calendars);
     }
-    memset(f, 0, sizeof(struct calevent_filter));
+    free(f);
+    *ff = NULL;
 }
 
 /* Parse the JMAP calendar event FilterOperator or FilterCondition in arg.
@@ -6670,8 +6676,7 @@ static calevent_filter *calevent_filter_parse(json_t *arg,
     }
 
     if (json_array_size(invalid)) {
-        calevent_filter_free(f);
-        f = NULL;
+        calevent_filter_free(&f);
     }
 
     buf_free(&buf);
@@ -6831,7 +6836,7 @@ static int getCalendarEventList(struct jmap_req *req)
     }
 
 done:
-    if (rock.filter) calevent_filter_free(rock.filter);
+    if (rock.filter) calevent_filter_free(&rock.filter);
     if (rock.events) json_decref(rock.events);
     if (db) caldav_close(db);
     return r;
