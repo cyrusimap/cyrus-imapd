@@ -67,6 +67,7 @@
 
 #include <sys/socket.h>
 
+#include "byteorder64.h"
 #include "exitcodes.h"
 #include "map.h"
 #include "retry.h"
@@ -1014,6 +1015,12 @@ EXPORTED void buf_appendbit32(struct buf *buf, bit32 num)
 {
     bit32 item = htonl(num);
     buf_appendmap(buf, (char *)&item, 4);
+}
+
+EXPORTED void buf_appendbit64(struct buf *buf, bit64 num)
+{
+    bit64 item = htonll(num);
+    buf_appendmap(buf, (char *)&item, 8);
 }
 
 EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)
