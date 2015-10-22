@@ -1130,7 +1130,12 @@ static int action_get(struct transaction_t *txn)
 
     /* Check/find requested MIME type:
        1st entry in gparams->mime_types array MUST be default MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+    if ((param = hash_lookup("format", &txn->req_qparams))) {
+        for (mime = tz_mime_types;
+             mime->content_type && !is_mediatype(mime->content_type, param->s);
+             mime++);
+    }
+    else if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
         mime = get_accept_type(hdr, tz_mime_types);
     else mime = tz_mime_types;
 
