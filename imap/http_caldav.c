@@ -243,18 +243,18 @@ static void end_icalendar(struct buf *buf);
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
-      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
+      (char* (*)(void *, unsigned long *)) &my_icalcomponent_as_ical_string,
       (void * (*)(const char*)) &icalparser_parse_string,
       (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (char* (*)(void *, unsigned long *)) &icalcomponent_as_xcal_string,
       (void * (*)(const char*)) &xcal_string_as_icalcomponent,
       NULL, &begin_xcal, &end_xcal
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
-      (char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (char* (*)(void *, unsigned long *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
@@ -1396,7 +1396,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
                     buf_printf_markup(buf, 0, sep);
                     write_body(0, txn, buf_cstring(buf), buf_len(buf));
                 }
-                cal_str = mime->to_string(comp);
+                cal_str = mime->to_string(comp, NULL);
                 write_body(0, txn, cal_str, strlen(cal_str));
                 free(cal_str);
             }
@@ -2359,7 +2359,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
       return_rep:
         /* Convert into requested MIME type */
-        data = mime->to_string(ical);
+        data = mime->to_string(ical, NULL);
 
         /* Fill in Content-Type, Content-Length */
         resp_body->type = mime->content_type;
@@ -5128,7 +5128,7 @@ static int report_fb_query(struct transaction_t *txn,
 
     if (cal) {
         /* Output the iCalendar object as text/calendar */
-        char *cal_str = mime->to_string(cal);
+        char *cal_str = mime->to_string(cal, NULL);
         icalcomponent_free(cal);
 
         txn->resp_body.type = mime->content_type;
@@ -5330,16 +5330,16 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 static struct mime_type_t freebusy_mime_types[] = {
     /* First item MUST be the default type */
     { "text/calendar; charset=utf-8", "2.0", "ifb",
-      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
+      (char* (*)(void *, unsigned long *)) &my_icalcomponent_as_ical_string,
       NULL, NULL, NULL, NULL
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xfb",
-      (char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (char* (*)(void *, unsigned long *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jfb",
-      (char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (char* (*)(void *, unsigned long *)) &icalcomponent_as_jcal_string,
       NULL, NULL, NULL, NULL
     },
 #endif
@@ -5517,7 +5517,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
         txn->flags.cc |= CC_NOTRANSFORM;
 
         /* Output the iCalendar object */
-        cal_str = mime->to_string(cal);
+        cal_str = mime->to_string(cal, NULL);
         icalcomponent_free(cal);
 
         write_body(HTTP_OK, txn, cal_str, strlen(cal_str));

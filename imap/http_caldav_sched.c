@@ -834,7 +834,7 @@ int sched_busytime_query(struct transaction_t *txn,
 
             if (busy) {
                 xmlNodePtr cdata;
-                char *fb_str = mime->to_string(busy);
+                char *fb_str = mime->to_string(busy, NULL);
                 icalcomponent_free(busy);
 
                 xmlNewChild(resp, NULL, BAD_CAST "request-status",

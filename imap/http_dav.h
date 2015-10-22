@@ -422,7 +422,7 @@ struct mime_type_t {
     const char *content_type;
     const char *version;
     const char *file_ext;
-    char* (*to_string)(void *);
+    char* (*to_string)(void *, unsigned long *len);
     void* (*from_string)(const char *);
     void (*free)(void *);
     const char* (*begin_stream)(struct buf *);

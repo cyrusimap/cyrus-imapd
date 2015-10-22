@@ -1050,8 +1050,7 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
             /* Not the storage format - convert into requested MIME type */
             void *obj = mime_types->from_string(data);
 
-            data = freeme = mime->to_string(obj);
-            datalen = strlen(data);
+            data = freeme = mime->to_string(obj, &datalen);
             mime_types->free(obj);
         }
 
@@ -3831,8 +3830,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
                 /* Not the storage format - convert into requested MIME type */
                 void *obj = gparams->mime_types[0].from_string(data);
 
-                data = freeme = mime->to_string(obj);
-                datalen = strlen(data);
+                data = freeme = mime->to_string(obj, &datalen);
                 gparams->mime_types[0].free(obj);
             }
         }
@@ -5122,8 +5120,7 @@ int meth_put(struct transaction_t *txn, void *params)
         case HTTP_CREATED:
         case HTTP_PRECOND_FAILED:
             /* Convert into requested MIME type */
-            data = mime->to_string(obj);
-            datalen = strlen(data);
+            data = mime->to_string(obj, &datalen);
 
             /* Fill in Content-Type, Content-Length */
             resp_body->type = mime->content_type;

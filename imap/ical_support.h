@@ -52,6 +52,9 @@
 
 #include "mailbox.h"
 
+extern char *my_icalcomponent_as_ical_string(icalcomponent* comp,
+                                             unsigned long *len);
+
 extern icalcomponent *record_to_ical(struct mailbox *mailbox,
                                      const struct index_record *record);
 
