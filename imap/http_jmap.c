@@ -5428,58 +5428,19 @@ static void jmap_timezones_to_ical(icalcomponent *ical,
     }
 }
 
-static void jmap_calendarevent_to_ical(icalcomponent *comp,
-                                       json_t *event,
-                                       calevent_rock *rock) {
-    int pe; /* parse error */
+static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
+                                          json_t *event,
+                                          calevent_rock *rock) {
+    const char *tzid;
+    int pe;
     const char *val = NULL;
-    int showAsFree = 0;
     struct icaltimetype dtstart = icaltime_null_time();
     struct icaltimetype dtend = icaltime_null_time();
-    icalproperty *prop = NULL;
     int create = rock->flags & JMAP_CREATE;
     int exc = rock->flags & JMAP_EXC;
-    const char *tzid = NULL;
     json_t *invalid = rock->invalid;
 
-    /* uid */
-    icalcomponent_set_uid(comp, rock->uid);
-
-    /* summary */
-    pe = jmap_readprop(event, "summary", !exc, invalid, "s", &val);
-    if (pe > 0) {
-        icalcomponent_set_summary(comp, val);
-    }
-
-    /* description */
-    pe = jmap_readprop(event, "description", !exc, invalid, "s", &val);
-    if (pe > 0) {
-        icalcomponent_set_description(comp, val);
-    } 
-
-    /* location */
-    pe = jmap_readprop(event, "location", !exc, invalid, "s", &val);
-    if (pe > 0) {
-        icalcomponent_set_location(comp, val);
-    } 
-
-    /* showAsFree */
-    pe = jmap_readprop(event, "showAsFree", !exc, invalid, "b", &showAsFree);
-    if (pe > 0) {
-        enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
-        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-        if (prop) {
-            icalproperty_set_transp(prop, v);
-        } else {
-            icalcomponent_add_property(comp, icalproperty_new_transp(v));
-        }
-    }
-
-    /* isAllDay */
-    jmap_readprop(event, "isAllDay", !exc, invalid, "b", &rock->isAllDay);
-
     /* startTimeZone */
-    /* XXX This would warrant a refactor. */
     /* Determine the current timezone, if any. */
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzstart_old = icaltimezone_get_builtin_timezone(tzid);
@@ -5583,6 +5544,71 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         }
     }
 
+    /* The end date MUST be equal to or after the start date when both are
+     * converted to UTC time. */
+    dtstart = icalcomponent_get_dtstart(comp);
+    dtend = icalcomponent_get_dtend(comp);
+    if (icaltime_is_null_time(dtend)) dtend = dtstart;
+    if (icaltime_compare(dtstart, dtend) > 0) {
+        json_array_append_new(invalid, json_string("end"));
+    }
+
+}
+
+static void jmap_calendarevent_to_ical(icalcomponent *comp,
+                                       json_t *event,
+                                       calevent_rock *rock) {
+    int pe; /* parse error */
+    const char *val = NULL;
+    int showAsFree = 0;
+    icalproperty *prop = NULL;
+    int create = rock->flags & JMAP_CREATE;
+    int exc = rock->flags & JMAP_EXC;
+    json_t *invalid = rock->invalid;
+
+    /* uid */
+    icalcomponent_set_uid(comp, rock->uid);
+
+    /* summary */
+    pe = jmap_readprop(event, "summary", !exc, invalid, "s", &val);
+    if (pe > 0) {
+        icalcomponent_set_summary(comp, val);
+    }
+
+    /* description */
+    pe = jmap_readprop(event, "description", !exc, invalid, "s", &val);
+    if (pe > 0) {
+        icalcomponent_set_description(comp, val);
+    }
+
+    /* location */
+    pe = jmap_readprop(event, "location", !exc, invalid, "s", &val);
+    if (pe > 0) {
+        icalcomponent_set_location(comp, val);
+    }
+
+    /* showAsFree */
+    pe = jmap_readprop(event, "showAsFree", !exc, invalid, "b", &showAsFree);
+    if (pe > 0) {
+        enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
+        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+        if (prop) {
+            icalproperty_set_transp(prop, v);
+        } else {
+            icalcomponent_add_property(comp, icalproperty_new_transp(v));
+        }
+    }
+
+    /* isAllDay */
+    jmap_readprop(event, "isAllDay", !exc, invalid, "b", &rock->isAllDay);
+
+    /* start */
+    /* end */
+    /* startTimeZone */
+    /* endTimeZone */
+    jmap_calendarevent_dt_to_ical(comp, event, rock);
+
+
     /* organizer and attendees */
     json_t *organizer = NULL;
     json_t *attendees = NULL;
@@ -5671,15 +5697,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
      * this also doubles as a sanity check. Note that we *could* report a
      * property here as invalid, which had only been set by the client in a
      * previous request. */
-
-    /* The end date MUST be equal to or after the start date when both are
-     * converted to UTC time. */
-    dtstart = icalcomponent_get_dtstart(comp);
-    dtend = icalcomponent_get_dtend(comp);
-    if (icaltime_is_null_time(dtend)) dtend = dtstart;
-    if (icaltime_compare(dtstart, dtend) > 0) {
-        json_array_append_new(invalid, json_string("end"));
-    }
 
     /* If recurrence is null, inclusions and exceptions MUST also be null. */
     if (!exc && !icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY)) {
