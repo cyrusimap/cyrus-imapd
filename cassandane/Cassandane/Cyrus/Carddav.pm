@@ -155,4 +155,34 @@ EOF
     $self->assert_num_equals($valid1, $valid2);
 }
 
+sub test_many_emails
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+
+    my $Phones = join("\r\n", map { sprintf("TEL;TYPE=HOME:(101) 555-%04d", $_) } (1..1000));
+    my $Emails = join("\r\n", map { sprintf("EMAIL;TYPE=INTERNET:user%04d\@example.com", $_) } (1..1000));
+
+    my $Str = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+$Phones
+$Emails
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($Str);
+
+    $CardDAV->NewContact($Id, $VCard);
+}
+
 1;
