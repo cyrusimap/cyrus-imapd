@@ -436,7 +436,7 @@ EXPORTED int backup_close(struct backup **backupp)
 
     if (backup->db) r2 = sqldb_close(&backup->db);
 
-    if (backup->oldindex_fname) {
+    if (r2 && backup->oldindex_fname) {
         rename(backup->oldindex_fname, backup->index_fname);
         free(backup->oldindex_fname);
     }
