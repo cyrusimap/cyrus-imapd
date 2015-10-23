@@ -297,7 +297,7 @@ done:
  *
  * On error, returns NULL and logs to syslog, without touching out_fd.
  */
-static const char *backup_make_path(const mbname_t *mbname, int *out_fd)
+static const char *_make_path(const mbname_t *mbname, int *out_fd)
 {
     char pathresult[PATH_MAX];
 
@@ -323,41 +323,44 @@ static const char *backup_make_path(const mbname_t *mbname, int *out_fd)
     cyrus_mkdir(template, 0755);
 
     int fd = mkstemp(template);
-    if (fd >= 0) {
-        if (strlcpy(pathresult, template, sizeof(pathresult)) < sizeof(pathresult)) {
-            ret = pathresult;
-        }
-        else {
-            syslog(LOG_ERR,
-                   "unable to make backup path for %s: path too long",
-                   userid);
-            unlink(template);
-        }
-
-        /* if we're holding the fd open, lock it */
-        if (out_fd) {
-            int r = lock_setlock(fd, /*excl*/ 1, /*nb*/ 0, template);
-            if (r) {
-                syslog(LOG_ERR,
-                       "unable to obtain exclusive lock on just-created file %s: %m",
-                       template);
-                /* don't unlink it, we don't know what's in it anymore, just return failure */
-                ret = NULL;
-            }
-            else {
-                *out_fd = fd;
-            }
-        }
-        else {
-            close(fd);
-        }
-    }
-    else {
+    if (fd < 0) {
         syslog(LOG_ERR, "unable to make backup path for %s: %m", userid);
+        goto error;
     }
+
+    /* lock it -- even if we're just going to immediately unlock it */
+    int r = lock_setlock(fd, /*excl*/ 1, /*nb*/ 0, template);
+    if (r) {
+        syslog(LOG_ERR,
+               "unable to obtain exclusive lock on just-created file %s: %m",
+               template);
+        /* don't unlink it, we don't know what's in it */
+        goto error;
+    }
+
+    /* save the path */
+    if (strlcpy(pathresult, template, sizeof(pathresult)) >= sizeof(pathresult)) {
+        syslog(LOG_ERR,
+               "unable to make backup path for %s: path too long",
+               userid);
+        unlink(template);
+        goto error;
+    }
+    ret = pathresult;
+
+    /* save or close the fd */
+    if (out_fd)
+        *out_fd = fd;
+    else
+        close(fd);
 
     free(template);
     return ret;
+
+error:
+    if (fd >= 0) close(fd);
+    free(template);
+    return NULL;
 }
 
 EXPORTED int backup_get_paths(const mbname_t *mbname,
@@ -384,7 +387,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                       &tid);
 
     if (r == CYRUSDB_NOTFOUND) {
-        backup_path = backup_make_path(mbname, NULL);
+        backup_path = _make_path(mbname, NULL);
         if (!backup_path) {
             r = IMAP_INTERNAL; /* FIXME ?? */
             goto done;
