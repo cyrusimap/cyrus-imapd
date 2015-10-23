@@ -2569,7 +2569,7 @@ done:
 
 /* Return a non-zero value if uid maps to a special-purpose calendar mailbox,
  * that may not be read or modified by the user. */
-static int _jmap_calendar_ishidden(const char *uid) {
+static int jmap_calendar_ishidden(const char *uid) {
     /* XXX - brong wrote to "check the specialuse magic on these instead" */
     if (!strcmp(uid, "#calendars")) return 1;
     /* XXX - could also check the schedule-inbox and outbox annotations,
@@ -2608,7 +2608,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
     /* unless it's one of the special names... XXX - check
      * the specialuse magic on these instead */
-    if (_jmap_calendar_ishidden(collection)) return 0;
+    if (jmap_calendar_ishidden(collection)) return 0;
     if (!strcmp(collection, "#calendars")) return 0;
     if (!strcmp(collection, "Inbox")) return 0;
     if (!strcmp(collection, "Outbox")) return 0;
@@ -3252,7 +3252,7 @@ static int setCalendars(struct jmap_req *req)
                 }
                 uid = t;
             }
-            if (_jmap_calendar_ishidden(uid)) {
+            if (jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
@@ -3361,7 +3361,7 @@ static int setCalendars(struct jmap_req *req)
 
             /* Validate uid. JMAP destroy does not allow reference uids. */
             const char *uid = json_string_value(juid);
-            if (!strlen(uid) || *uid == '#' || _jmap_calendar_ishidden(uid)) {
+            if (!strlen(uid) || *uid == '#' || jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
@@ -4338,7 +4338,9 @@ done:
 
 /* Helper flags for setCalendarEvents */
 #define JMAP_CREATE     (1<<0) /* Current request is a create. */
-#define JMAP_EXC        (1<<1) /* Current component is a VEVENT exception .*/
+#define JMAP_UPDATE     (1<<1) /* Current request is an update. */
+#define JMAP_DESTROY    (1<<2) /* Current request is a destroy. */
+#define JMAP_EXC        (1<<8) /* Current component is a VEVENT exception .*/
 
 typedef struct calevent_rock {
     struct jmap_req *req;    /* The current JMAP request. */
@@ -5727,6 +5729,253 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 }
 
+/* Create, update or destroy the JMAP calendar event. Mode must be one of
+ * JMAP_CREATE, JMAP_UPDATE or JMAP_DESTROY. Return 0 for success and non-
+ * fatal errors. */
+static int jmap_write_calendarevent(json_t *event,
+                                    struct caldav_db *db,
+                                    const char *uid,
+                                    int mode,
+                                    json_t *notWritten,
+                                    struct jmap_req *req)
+{
+    int create = mode & JMAP_CREATE;
+    int update = mode & JMAP_UPDATE;
+    int destroy = mode & JMAP_DESTROY;
+    int r, rights, pe;
+    int needrights = DACL_RMRSRC|DACL_WRITE;
+
+    struct caldav_data *cdata = NULL;
+    struct mailbox *mbox = NULL;
+    char *mboxname = NULL;
+    struct mailbox *dstmbox = NULL;
+    char *dstmboxname = NULL;
+    struct mboxevent *mboxevent = NULL;
+
+    icalcomponent *ical = NULL;
+    icalcomponent *comp;
+    struct index_record record;
+    struct calevent_rock rock;
+    json_t *invalid = json_pack("[]");
+    const char *calendarId;
+
+    if (!destroy) {
+        /* Look up the calendarId property. */
+        pe = jmap_readprop(event, "calendarId", 1 /*mandatory*/,  invalid, "s", &calendarId);
+        if (pe > 0 && !strlen(calendarId)) {
+            json_array_append_new(invalid, json_string("calendarId"));
+        } else if (pe > 0 && *calendarId == '#') {
+            const char *id = (const char *) hash_lookup(calendarId, req->idmap);
+            if (id != NULL) {
+                calendarId = id;
+            } else {
+                json_array_append_new(invalid, json_string("calendarId"));
+            }
+        }
+        if (calendarId && jmap_calendar_ishidden(calendarId)) {
+            json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+            json_object_set_new(notWritten, uid, err);
+            r = 0; goto done;
+        }
+
+    }
+
+    /* Determine mailbox name of calendar event. */
+    if (!create) {
+        r = caldav_lookup_uid(db, uid, &cdata);
+        if (r && r != CYRUSDB_NOTFOUND) {
+            syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
+                    uid, error_message(r));
+            goto done;
+        }
+        if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
+                !cdata->dav.rowid || !cdata->dav.imap_uid) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(notWritten, uid, err);
+            r = 0; goto done;
+        }
+        mboxname = xstrdup(cdata->dav.mailbox);
+    } else {
+        mboxname = caldav_mboxname(req->userid, calendarId);
+    }
+
+    /* Open mailbox for writing */
+    r = mailbox_open_iwl(mboxname, &mbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+        json_object_set_new(notWritten, uid, err);
+        r = 0; goto done;
+    } else if (r) {
+        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                mboxname, error_message(r));
+        goto done;
+    }
+
+    /* Check permissions. */
+    rights = httpd_myrights(req->authstate, mbox->acl);
+    if (!(rights & needrights)) {
+        /* Pretend this mailbox does not exist. */
+        json_t *err = json_pack("{s:s}", "type", "notFound");
+        json_object_set_new(notWritten, uid, err);
+        r = 0; goto done;
+    }
+
+    if (!create) {
+        /* Fetch index record for the resource */
+        memset(&record, 0, sizeof(struct index_record));
+        r = mailbox_find_index_record(mbox, cdata->dav.imap_uid, &record);
+        if (r == IMAP_NOTFOUND) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(notWritten, uid, err);
+            r = 0; goto done;
+        } else if (r) {
+            syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
+                    cdata->dav.imap_uid, error_message(r));
+            goto done;
+        }
+    }
+
+    if (update) {
+        /* Load VEVENT from record. */
+        ical = record_to_ical(mbox, &record);
+        if (!ical) {
+            syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
+                    cdata->dav.imap_uid, mbox->name);
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+        /* Locate the main VEVENT. */
+        for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+                comp;
+                comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+            if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+                break;
+            }
+        }
+        if (!comp) {
+            syslog(LOG_ERR, "no VEVENT in record %u:%s",
+                    cdata->dav.imap_uid, mbox->name);
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+    } else if (create) {
+        /* Create a new VCALENDAR and its VEVENT. */
+        ical = icalcomponent_new_vcalendar();
+        icalcomponent_add_property(ical, icalproperty_new_version("2.0"));
+        icalcomponent_add_property(ical, icalproperty_new_calscale("GREGORIAN"));
+        comp = icalcomponent_new_vevent();
+        icalcomponent_add_component(ical, comp);
+    }
+
+    if (!destroy) {
+        /* Convert the JMAP calendar event to ical. */
+        memset(&rock, 0, sizeof(struct calevent_rock));
+        rock.flags = create ? JMAP_CREATE : JMAP_UPDATE;
+        rock.req = req;
+        rock.invalid = invalid;
+        rock.uid = uid;
+        jmap_calendarevent_to_ical(comp, event, &rock);
+        jmap_timezones_to_ical(ical, &rock);
+        calevent_rock_free(&rock);
+
+        /* Handle any property errors and bail out. */
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s, s:O}",
+                    "type", "invalidProperties", "properties", invalid);
+            json_object_set_new(notWritten, uid, err);
+            r = 0; goto done;
+        }
+    }
+
+    if (update && calendarId) {
+        /* Check, if we need to move the event. */
+        dstmboxname = caldav_mboxname(req->userid, calendarId);
+        if (strcmp(mbox->name, dstmboxname)) {
+            /* Open destination mailbox for writing. */
+            r = mailbox_open_iwl(dstmboxname, &dstmbox);
+            if (r == IMAP_MAILBOX_NONEXISTENT) {
+                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                json_object_set_new(notWritten, uid, err);
+                r = 0; goto done;
+            } else if (r) {
+                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                        dstmboxname, error_message(r));
+                goto done;
+            }
+            /* Check permissions. */
+            rights = httpd_myrights(req->authstate, dstmbox->acl);
+            if (!(rights & (DACL_WRITE))) {
+                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                json_object_set_new(notWritten, uid, err);
+                r = 0; goto done;
+            }
+        }
+    }
+
+    if (destroy || (update && dstmbox)) {
+        /* Expunge the resource from mailbox. */
+        record.system_flags |= FLAG_EXPUNGED;
+        mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+        r = mailbox_rewrite_index_record(mbox, &record);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
+                    cdata->dav.mailbox, error_message(r));
+            mailbox_close(&mbox);
+            goto done;
+        }
+        mboxevent_extract_record(mboxevent, mbox, &record);
+        mboxevent_extract_mailbox(mboxevent, mbox);
+        mboxevent_set_numunseen(mboxevent, mbox, -1);
+        mboxevent_set_access(mboxevent, NULL, NULL, req->userid, cdata->dav.mailbox, 0);
+        mailbox_close(&mbox);
+        mboxevent_notify(mboxevent);
+        mboxevent_free(&mboxevent);
+
+        if (destroy) {
+            /* Keep the VEVENT in the database but set alive to 0, to report
+             * with getCalendarEventUpdates. */
+            cdata->dav.alive = 0;
+            cdata->dav.modseq = record.modseq;
+            cdata->dav.imap_uid = record.uid;
+            r = caldav_write(db, cdata);
+            goto done;
+        } else {
+            /* Close the mailbox we moved the event from. */
+            mailbox_close(&mbox);
+            mbox = dstmbox;
+            dstmbox = NULL;
+            free(mboxname);
+            mboxname = dstmboxname;
+            dstmboxname = NULL;
+        }
+    }
+
+    if (!destroy) {
+        /* Store the updated VEVENT. */
+        struct transaction_t txn;
+        memset(&txn, 0, sizeof(struct transaction_t));
+        txn.req_hdrs = spool_new_hdrcache();
+        r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
+        spool_free_hdrcache(txn.req_hdrs);
+        buf_free(&txn.buf);
+        if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
+            json_t *err = json_pack("{s:s}", "type", "unknownError");
+            json_object_set_new(notWritten, uid, err);
+            goto done;
+        }
+        r = 0;
+    }
+
+done:
+    if (mbox) mailbox_close(&mbox);
+    if (mboxname) free(mboxname);
+    if (dstmbox) mailbox_close(&dstmbox);
+    if (dstmboxname) free(dstmboxname);
+    if (ical) icalcomponent_free(ical);
+    json_decref(invalid);
+    return r;
+}
+
 static int setCalendarEvents(struct jmap_req *req)
 {
     struct caldav_db *db = NULL;
@@ -5757,9 +6006,6 @@ static int setCalendarEvents(struct jmap_req *req)
         const char *key;
         json_t *arg;
         json_object_foreach(create, key, arg) {
-            json_t *invalid = json_pack("[]");
-            const char *calId = NULL;
-            const char *id = NULL;
             char *uid = NULL;
 
             /* Validate calendar event id. */
@@ -5768,96 +6014,17 @@ static int setCalendarEvents(struct jmap_req *req)
                 json_object_set_new(notCreated, key, err);
                 continue;
             }
-
-            /* XXX - Clean this up after update is implemented. */
-
-            /* Convert the calendar event to ical. */
             uid = xstrdup(makeuuid());
-            jmap_readprop(arg, "calendarId", 1,  invalid, "s", &calId);
-            if (calId && strlen(calId) == 0) {
-                json_array_append_new(invalid, json_string("calendarId"));
-            }
-            jmap_readprop(arg, "id", 0, invalid, "s", &id);
-            if (id != NULL) {
-                json_array_append_new(invalid, json_string("id"));
-            }
 
-            /* Create the VCALENDAR component. */
-            icalcomponent *ical = icalcomponent_new_vcalendar();
-            icalproperty *prop;
-            prop = icalproperty_new_version("2.0");
-            icalcomponent_add_property(ical, prop);
-            prop = icalproperty_new_calscale("GREGORIAN");
-            icalcomponent_add_property(ical, prop);
-
-            /* Convert the calendar event to a VEVENT and add to ical. */
-            icalcomponent *comp = icalcomponent_new_vevent();
-            icalcomponent_add_component(ical, comp);
-            struct calevent_rock rock;
-            memset(&rock, 0, sizeof(struct calevent_rock));
-            rock.flags = JMAP_CREATE;
-            rock.req = req;
-            rock.invalid = invalid;
-            rock.uid = uid;
-            jmap_calendarevent_to_ical(comp, arg, &rock);
-            jmap_timezones_to_ical(ical, &rock);
-            calevent_rock_free(&rock);
-
-            /* Handle any property errors and bail out. */
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notCreated, key, err);
-                icalcomponent_free(ical);
+            /* Create the calendar event. */
+            size_t error_count = json_object_size(notCreated);
+            r = jmap_write_calendarevent(arg, db, uid, JMAP_CREATE, notCreated, req);
+            if (r) {
                 free(uid);
-                continue;
-            }
-            json_decref(invalid);
-
-            /* Store the ical component in the mailbox. */
-            struct mailbox *mbox = NULL;
-            char *mboxname;
-
-            if (_jmap_calendar_ishidden(calId)) {
-                /* XXX - calendarNotFound is not defined in the spec */
-                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
-                json_object_set_new(notCreated, key, err);
-                free(uid);
-                continue;
-            }
-            mboxname = caldav_mboxname(req->userid, calId);
-            r = mailbox_open_iwl(mboxname, &mbox);
-
-            if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
-                json_object_set_new(notCreated, key, err);
-                free(uid);
-                free(mboxname);
-                continue;
-            } else if (r) {
-                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s", mboxname, error_message(r));
-                free(uid);
-                free(mboxname);
                 goto done;
             }
-            free(mboxname);
-
-            struct transaction_t txn;
-            memset(&txn, 0, sizeof(struct transaction_t));
-            txn.req_hdrs = spool_new_hdrcache();
-            r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
-            spool_free_hdrcache(txn.req_hdrs);
-            buf_free(&txn.buf);
-            icalcomponent_free(ical);
-
-            mailbox_close(&mbox);
-            if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-                 /* Huh? What went wrong in caldav_store_resource? */
-                syslog(LOG_ERR, "unexpected caldav_store_resource error (%s): %s",
-                        mbox->name, error_message(r));
-                json_t *err = json_pack("{s:s}", "type", "unknownError");
-                json_object_set_new(notCreated, key, err);
-                free(uid);
+            if (error_count != json_object_size(notCreated)) {
+                /* Bail out for any setErrors. */
                 continue;
             }
 
@@ -5883,24 +6050,10 @@ static int setCalendarEvents(struct jmap_req *req)
         json_t *updated = json_pack("[]");
         json_t *notUpdated = json_pack("{}");
 
-        /* XXX - This could be refactored with create and destroy. */
-
         const char *uid;
         json_t *arg;
 
         json_object_foreach(update, uid, arg) {
-            struct mboxevent *mboxevent = NULL;
-            struct caldav_data *cdata = NULL;
-            struct mailbox *mbox = NULL;
-            struct index_record record;
-            char *mboxname = NULL;
-            icalcomponent *ical = NULL;
-            icalcomponent *comp = NULL;
-            json_t *invalid = NULL;
-            const char *calId = NULL;
-            int pe;
-            int rights;
-
             /* Validate uid. JMAP update does not allow creation uids here. */
             if (!strlen(uid) || *uid == '#') {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
@@ -5908,206 +6061,12 @@ static int setCalendarEvents(struct jmap_req *req)
                 continue;
             }
 
-            /* Lookup calendar event uid in DB. */
-            r = caldav_lookup_uid(db, uid, &cdata);
-            if (r && r != CYRUSDB_NOTFOUND) {
-                syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
-                        uid, error_message(r));
-                goto done;
-            }
-            if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
-                    !cdata->dav.rowid || !cdata->dav.imap_uid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
-                continue;
-            }
-
-            /* Open mailbox for writing */
-            r = mailbox_open_iwl(cdata->dav.mailbox, &mbox);
-            if (r) {
-                if (r == IMAP_MAILBOX_NONEXISTENT) {
-                    /* XXX - calendarNotFound setError is not specified. */
-                    json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                } else {
-                    syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                            cdata->dav.mailbox, error_message(r));
-                    goto done;
-                }
-            }
-
-            /* Check permissions. */
-            rights = httpd_myrights(req->authstate, mbox->acl);
-            if (!(rights & (DACL_WRITE))) {
-                /* Pretend this mailbox does not exist. jmap_post should have
-                 * checked already for an accountReadOnly error. */
-                /* XXX But jmap_post does not seem to take care of that yet. */
-                mailbox_close(&mbox);
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
-                continue;
-            }
-
-            /* - Fetch index record for the resource */
-            memset(&record, 0, sizeof(struct index_record));
-            r = mailbox_find_index_record(mbox, cdata->dav.imap_uid, &record);
-            if (r) {
-                mailbox_close(&mbox);
-                if (r == IMAP_NOTFOUND) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                } else {
-                    syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
-                            cdata->dav.imap_uid, error_message(r));
-                    goto done;
-                }
-            }
-
-            /* Load VEVENT from record. */
-            ical = record_to_ical(mbox, &record);
-            if (!ical) {
-                syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
-                        cdata->dav.imap_uid, mbox->name);
-                r = IMAP_INTERNAL;
-                goto done;
-            }
-
-            /* Locate the main VEVENT. */
-            for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-                    comp;
-                    comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-                if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
-                    break;
-                }
-            }
-            if (!comp) {
-                syslog(LOG_ERR, "no VEVENT in record %u:%s",
-                        cdata->dav.imap_uid, mbox->name);
-                r = IMAP_INTERNAL;
-                goto done;
-            }
-
-            /* Look up the calendarId property. If differs from the current
-             * calendar event's mailbox, we need to move the event. */
-            invalid = json_pack("[]");
-
-            pe = jmap_readprop(arg, "calendarId", 1 /*mandatory*/,  invalid, "s", &calId);
-            if (pe > 0) {
-                if (strlen(calId) == 0) {
-                    json_array_append_new(invalid, json_string("calendarId"));
-                } else if (*calId == '#') {
-                    const char *id = (const char *) hash_lookup(calId, req->idmap);
-                    if (id != NULL) {
-                        calId = id;
-                    } else {
-                        json_array_append_new(invalid, json_string("calendarId"));
-                    }
-                }
-            }
-
-            /* Update the VEVENT. */
-            struct calevent_rock rock;
-            memset(&rock, 0, sizeof(struct calevent_rock));
-            rock.req = req;
-            rock.invalid = invalid;
-            rock.uid = uid;
-            jmap_calendarevent_to_ical(comp, arg, &rock);
-            jmap_timezones_to_ical(ical, &rock);
-            calevent_rock_free(&rock);
-
-            /* Handle any property errors and bail out. */
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notUpdated, uid, err);
-                icalcomponent_free(ical);
-                mailbox_close(&mbox);
-                continue;
-            }
-            json_decref(invalid);
-
-            /* Check if we need to move the event. */
-            mboxname = caldav_mboxname(req->userid, calId);
-            if (strcmp(mbox->name, mboxname)) {
-                struct mailbox *src = mbox;
-                struct mailbox *dst = NULL;
-
-                /* Open destination mailbox for writing. */
-                r = mailbox_open_iwl(mboxname, &dst);
-                if (r) {
-                    if (r == IMAP_MAILBOX_NONEXISTENT) {
-                        json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
-                        json_object_set_new(notUpdated, uid, err);
-                        icalcomponent_free(ical);
-                        mailbox_close(&src);
-                        free(mboxname);
-                        continue;
-                    } else {
-                        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                                cdata->dav.mailbox, error_message(r));
-                        icalcomponent_free(ical);
-                        mailbox_close(&src);
-                        free(mboxname);
-                        goto done;
-                    }
-                }
-
-                /* Check permissions. */
-                rights = httpd_myrights(req->authstate, dst->acl);
-                if (!(rights & (DACL_WRITE))) {
-                    /* Pretend this mailbox does not exist. jmap_post should have
-                     * checked already for an accountReadOnly error. */
-                    /* XXX But jmap_post does not seem to take care of that yet. */
-                    icalcomponent_free(ical);
-                    mailbox_close(&src);
-                    mailbox_close(&dst);
-                    free(mboxname);
-                    json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                }
-
-                /* Expunge event from the source mailbox. */
-                record.system_flags |= FLAG_EXPUNGED;
-                mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-                r = mailbox_rewrite_index_record(src, &record);
-                if (r) {
-                    syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
-                            cdata->dav.mailbox, error_message(r));
-                    icalcomponent_free(ical);
-                    mailbox_close(&src);
-                    free(mboxname);
-                    goto done;
-                }
-                mboxevent_extract_record(mboxevent, src, &record);
-                mboxevent_extract_mailbox(mboxevent, src);
-                mboxevent_set_numunseen(mboxevent, src, -1);
-                mboxevent_set_access(mboxevent, NULL, NULL, req->userid, src->name, 0);
-
-                mailbox_close(&src);
-
-                /* Continue like a regular update. */
-                mbox = dst;
-            }
-            free(mboxname);
-
-            /* Store the updated VEVENT. */
-            struct transaction_t txn;
-            memset(&txn, 0, sizeof(struct transaction_t));
-            txn.req_hdrs = spool_new_hdrcache();
-            r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
-            spool_free_hdrcache(txn.req_hdrs);
-            icalcomponent_free(ical);
-            buf_free(&txn.buf);
-            mailbox_close(&mbox);
-            if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-                 /* Huh? What went wrong in caldav_store_resource? */
-                syslog(LOG_ERR, "unexpected caldav_store_resource error (%s): %s",
-                        mbox->name, error_message(r));
-                json_t *err = json_pack("{s:s}", "type", "unknownError");
-                json_object_set_new(notUpdated, uid, err);
+            /* Update the calendar event. */
+            size_t error_count = json_object_size(notUpdated);
+            r = jmap_write_calendarevent(arg, db, uid, JMAP_UPDATE, notUpdated, req);
+            if (r) goto done;
+            if (error_count != json_object_size(notUpdated)) {
+                /* Bail out for any setErrors. */
                 continue;
             }
 
@@ -6134,12 +6093,7 @@ static int setCalendarEvents(struct jmap_req *req)
         json_t *juid;
 
         json_array_foreach(destroy, index, juid) {
-            struct mboxevent *mboxevent = NULL;
-            struct caldav_data *cdata = NULL;
-            struct mailbox *mbox = NULL;
-            struct index_record record;
-            int rights;
-
+            size_t error_count;
             /* Validate uid. JMAP destroy does not allow reference uids. */
             const char *uid = json_string_value(juid);
             if (!strlen(uid) || *uid == '#') {
@@ -6148,86 +6102,14 @@ static int setCalendarEvents(struct jmap_req *req)
                 continue;
             }
 
-            /* Lookup calendar event uid in DB. */
-            r = caldav_lookup_uid(db, uid, &cdata);
-            if (r && r != CYRUSDB_NOTFOUND) {
-                syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
-                        uid, error_message(r));
-                goto done;
-            }
-            if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
-                    !cdata->dav.rowid || !cdata->dav.imap_uid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
-                continue;
-            }
-
-            /* Open mailbox for writing */
-            r = mailbox_open_iwl(cdata->dav.mailbox, &mbox);
-            if (r) {
-                if (r == IMAP_MAILBOX_NONEXISTENT) {
-                    json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
-                    json_object_set_new(notDestroyed, uid, err);
-                    continue;
-                } else {
-                    syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                            cdata->dav.mailbox, error_message(r));
-                    goto done;
-                }
-            }
-
-            /* Check permissions. */
-            rights = httpd_myrights(req->authstate, mbox->acl);
-            if (!(rights & (DACL_RMRSRC))) {
-                /* Pretend this mailbox does not exist. jmap_post should have
-                 * checked already for an accountReadOnly error. */
-                /* XXX But jmap_post does not seem to take care of that yet. */
-                mailbox_close(&mbox);
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
-                continue;
-            }
-            /* - Fetch index record for the resource */
-            memset(&record, 0, sizeof(struct index_record));
-            r = mailbox_find_index_record(mbox, cdata->dav.imap_uid, &record);
-            if (r) {
-                mailbox_close(&mbox);
-                if (r == IMAP_NOTFOUND) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notDestroyed, uid, err);
-                    continue;
-                } else {
-                    syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
-                            cdata->dav.imap_uid, error_message(r));
-                    goto done;
-                }
-            }
-
-            /* Expunge the resource from mailbox. */
-            record.system_flags |= FLAG_EXPUNGED;
-            mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-            r = mailbox_rewrite_index_record(mbox, &record);
-            if (r) {
-                syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
-                        cdata->dav.mailbox, error_message(r));
-                mailbox_close(&mbox);
-                goto done;
-            }
-            mboxevent_extract_record(mboxevent, mbox, &record);
-            mboxevent_extract_mailbox(mboxevent, mbox);
-            mboxevent_set_numunseen(mboxevent, mbox, -1);
-            mboxevent_set_access(mboxevent, NULL, NULL, req->userid, cdata->dav.mailbox, 0);
-            mailbox_close(&mbox);
-            mboxevent_notify(mboxevent);
-            mboxevent_free(&mboxevent);
-
-            /* Keep the VEVENT in the database but set alive to 0. This allows
-             * to report it during getCalendarEventUpdates. */
-            cdata->dav.alive = 0;
-            cdata->dav.modseq = record.modseq;
-            cdata->dav.imap_uid = record.uid;
-            r = caldav_write(db, cdata);
+            /* Destroy the calendar event. */
+            error_count = json_object_size(notDestroyed);
+            r = jmap_write_calendarevent(NULL, db, uid, JMAP_DESTROY, notDestroyed, req);
             if (r) goto done;
+            if (error_count != json_object_size(notDestroyed)) {
+                /* Bail out for any setErrors. */
+                continue;
+            }
 
             /* Report calendar event as destroyed. */
             json_array_append_new(destroyed, json_string(uid));
