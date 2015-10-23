@@ -446,8 +446,7 @@ static void shut_down(int code)
 
     backupd_reset();
 
-// FIXME is this needed? i don't see init being called
-//    cyrus_done();
+    cyrus_done();
 
     exit(code);
 }
