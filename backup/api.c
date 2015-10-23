@@ -1147,3 +1147,158 @@ EXPORTED int backup_reindex(const char *name)
 
     return r;
 }
+
+struct _rename_meta {
+    const char *userid;
+    char *fname;
+    char *ext_ptr;
+    int fd;
+};
+#define RENAME_META_INITIALIZER { NULL, NULL, NULL, -1 }
+
+static void _rename_meta_set_fname(struct _rename_meta *meta, const char *data_fname)
+{
+    size_t len = strlen(data_fname) + strlen(".index") + 1;
+    meta->fname = xmalloc(len);
+    snprintf(meta->fname, len, "%s.index", data_fname);
+    meta->ext_ptr = strrchr(meta->fname, '.');
+    *meta->ext_ptr = '\0';
+}
+
+static void _rename_meta_fini(struct _rename_meta *meta)
+{
+    if (meta->fname) free(meta->fname);
+    memset(meta, 0, sizeof(*meta));
+    meta->fd = -1;
+}
+
+EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbname)
+{
+    struct _rename_meta old = RENAME_META_INITIALIZER;
+    struct _rename_meta new = RENAME_META_INITIALIZER;
+    old.userid = mbname_userid(old_mbname);
+    new.userid = mbname_userid(new_mbname);
+    const char *path;
+    size_t path_len;
+    int r;
+
+    /* bail out if the names are the same */
+    if (strcmp(old.userid, new.userid) == 0)
+        return 0;
+
+    /* exclusively open backups database */
+    char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
+    if (!backups_db_fname)
+        backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
+
+    struct db *backups_db = NULL;
+    struct txn *tid = NULL;
+
+    r = cyrusdb_lockopen(config_backups_db, backups_db_fname, 0,
+                         &backups_db, &tid);
+    if (r) goto error; // FIXME log
+
+    /* make sure new_mbname isn't already in use */
+    r = cyrusdb_fetch(backups_db,
+                      new.userid, strlen(new.userid),
+                      &path, &path_len,
+                      &tid);
+    if (!r) r = CYRUSDB_EXISTS;
+    if (r) goto error;  // FIXME log
+
+    /* locate (but not create) backup for old_mbname, open and lock it */
+    r = cyrusdb_fetch(backups_db,
+                      old.userid, strlen(old.userid),
+                      &path, &path_len,
+                      &tid);
+    if (r) goto error;  // FIXME log
+
+    _rename_meta_set_fname(&old, path);
+
+    old.fd = open(old.fname,
+                  O_RDWR | O_APPEND, /* no O_CREAT */
+                  S_IRUSR | S_IWUSR);
+    if (old.fd < 0) {
+        syslog(LOG_ERR, "IOERROR: open %s: %m", old.fname);
+        r = -1;
+        goto error;
+    }
+
+    /* non-blocking, to avoid deadlock */
+    r = lock_setlock(old.fd, /*excl*/ 1, /*nb*/ 1, old.fname);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", old.fname);
+        goto error;
+    }
+
+    /* make a path for new_mbname, open and lock it */
+    path = _make_path(new_mbname, &new.fd);
+    if (!path) goto error; // FIXME log
+    _rename_meta_set_fname(&new, path);
+
+    /* copy old data and index files to new paths */
+    r = cyrus_copyfile(old.fname, new.fname, 0);
+    if (r) goto error; // FIXME log
+    *old.ext_ptr = *new.ext_ptr = '.';
+    r = cyrus_copyfile(old.fname, new.fname, 0);
+    *old.ext_ptr = *new.ext_ptr = '\0';
+    if (r) goto error; // FIXME log
+
+    /* files exist under both names now. try to update the database */
+    r = cyrusdb_create(backups_db,
+                       new.userid, strlen(new.userid),
+                       new.fname, strlen(new.fname),
+                       &tid);
+    if (r) goto error; // FIXME log
+
+    r = cyrusdb_delete(backups_db,
+                       old.userid, strlen(old.userid),
+                       &tid, 0);
+    if (r) goto error; // FIXME log
+
+    r = cyrusdb_commit(backups_db, tid);
+    tid = NULL;
+    if (r) goto error; // FIXME log
+
+    /* database update succeeded. unlink old names */
+    unlink(old.fname);
+    *old.ext_ptr = '.';
+    unlink(old.fname);
+    *old.ext_ptr = '\0';
+
+    /* unlock and close backup files */
+    lock_unlock(old.fd, old.fname);
+    close(old.fd);
+    lock_unlock(new.fd, new.fname);
+    close(new.fd);
+
+    /* close backups database */
+    cyrusdb_close(backups_db);
+
+    /* clean up and exit */
+    _rename_meta_fini(&old);
+    _rename_meta_fini(&new);
+    free(backups_db_fname);
+    return 0;
+
+error:
+    /* we didn't finish, so unlink the new filenames if we got that far */
+    if (new.fname) {
+        unlink(new.fname);
+        *new.ext_ptr = '.';
+        unlink(new.fname);
+        *new.ext_ptr = '\0';
+    }
+
+    /* abort any transaction and close the database */
+    if (backups_db) {
+        if (tid) cyrusdb_abort(backups_db, tid);
+        cyrusdb_close(backups_db);
+    }
+
+    /* clean up and exit */
+    _rename_meta_fini(&old);
+    _rename_meta_fini(&new);
+    if (backups_db_fname) free(backups_db_fname);
+    return r;
+}

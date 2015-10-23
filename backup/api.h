@@ -115,5 +115,6 @@ int backup_append_abort(struct backup *backup);
 
 /* miscellaneous */
 int backup_reindex(const char *name);
+int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbname);
 
 #endif
