@@ -3490,14 +3490,25 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
-    if (!(rights & needrights)) {
-        /* special case delete mailbox where not the owner */
-        if (!txn->req_tgt.resource &&
-            !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name) &&
-            !remove_user_acl(httpd_userid, txn->req_tgt.mbentry->name)) {
-            return HTTP_OK;
-        }
 
+    if (!(rights & ACL_LOOKUP)) {
+        return HTTP_NOT_FOUND;
+    }
+
+    /* special case delete mailbox where not the owner */
+    if (!txn->req_tgt.resource &&
+        !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
+        r = remove_user_acl(httpd_userid, txn->req_tgt.mbentry->name);
+        if (r) {
+            syslog(LOG_ERR, "meth_delete(%s) failed to remove acl: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
+            txn->error.desc = error_message(r);
+            return HTTP_SERVER_ERROR;
+        }
+        return HTTP_OK;
+    }
+
+    if (!(rights & needrights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
