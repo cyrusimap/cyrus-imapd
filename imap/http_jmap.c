@@ -2567,6 +2567,39 @@ done:
 
 /*********************** CALENDARS **********************/
 
+/* Helper flags for setCalendarEvents */
+#define JMAP_CREATE     (1<<0) /* Current request is a create. */
+#define JMAP_UPDATE     (1<<1) /* Current request is an update. */
+#define JMAP_DESTROY    (1<<2) /* Current request is a destroy. */
+#define JMAP_EXC        (1<<8) /* Current component is a VEVENT exception .*/
+
+typedef struct calevent_rock {
+    struct jmap_req *req;    /* The current JMAP request. */
+    int flags;               /* Flags indicating the request context. */
+    const char *uid;         /* The iCalendar UID of this event. */
+    const char *recurid;     /* The LocalDate recurrence id of this event. */
+    int isAllDay;            /* This event is a whole-day event. */
+
+    json_t *invalid;         /* A JSON array of any invalid properties. */
+
+    icaltimezone *tzstart_old; /* The former startTimeZone. */
+    icaltimezone *tzstart;     /* The current startTimeZone. */
+    icaltimezone *tzend_old;   /* The former endTimeZone. */
+    icaltimezone *tzend;       /* The current endTimeZone. */
+
+    icaltimezone **tzs;      /* Timezones required as VTIMEZONEs. */
+    size_t n_tzs;            /* The count of timezones. */
+    size_t s_tzs;            /* The size of the timezone array. */
+} calevent_rock;
+
+/* Update the VEVENT comp with the properties of the JMAP calendar event.
+ * The VEVENT must have a VCALENDAR as parent and its timezones might get
+ * rewritten. If uid is non-zero, set the VEVENT uid and any recurrence
+ * exceptions to this UID. */
+static void jmap_calendarevent_to_ical(icalcomponent *comp,
+                                       json_t *event,
+                                       calevent_rock *rock);
+
 /* Return a non-zero value if uid maps to a special-purpose calendar mailbox,
  * that may not be read or modified by the user. */
 static int jmap_calendar_ishidden(const char *uid) {
@@ -3439,7 +3472,7 @@ done:
 
 /* Convert time to a RFC3339 formatted localdate string. Return the number
  * of bytes written to buf sized size, excluding the terminating null byte. */
-static int _jmap_timet_to_localdate(time_t t, char* buf, size_t size) {
+static int jmap_timet_to_localdate(time_t t, char* buf, size_t size) {
     int n = time_to_rfc3339(t, buf, size);
     if (n && buf[n-1] == 'Z') {
         buf[n-1] = '\0';
@@ -3539,33 +3572,33 @@ static char* jmap_icaltime_to_localdate_r(icaltimetype icaltime) {
 
     s = xmalloc(RFC3339_DATETIME_MAX);
     t = icaltime_as_timet(icaltime);
-    if (!_jmap_timet_to_localdate(t, s, RFC3339_DATETIME_MAX)) {
+    if (!jmap_timet_to_localdate(t, s, RFC3339_DATETIME_MAX)) {
         return NULL;
     }
     return s;
 }
 
 /* Compare int in ascending order. */
-static int _jmap_intcmp(const void *aa, const void *bb)
+static int jmap_intcmp(const void *aa, const void *bb)
 {
     const int *a = aa, *b = bb;
     return (*a < *b) ? -1 : (*a > *b);
 }
 
 /* Compare time_t in ascending order. */
-static int _jmap_timetcmp(const void *aa, const void *bb)
+static int jmap_timetcmp(const void *aa, const void *bb)
 {
     const time_t *a = aa, *b = bb;
     return (*a < *b) ? -1 : (*a > *b);
 }
 
 /* Return the identity of i. This is a helper for recur_byX. */
-static int _jmap_intident(int i) {
+static int jmap_intident(int i) {
     return i;
 }
 
 /*  Convert libicals internal by_day encoding to JMAP byday. */
-static int _jmap_icalbyday_to_byday(int i) {
+static int jmap_icalbyday_to_byday(int i) {
     int w = icalrecurrencetype_day_position(i);
     int d = icalrecurrencetype_day_day_of_week(i);
     if (d) {
@@ -3578,7 +3611,7 @@ static int _jmap_icalbyday_to_byday(int i) {
 }
 
 /*  Convert libicals internal by_month encoding to JMAP byday. */
-static int _jmap_icalbymonth_to_bymonth(int i) {
+static int jmap_icalbymonth_to_bymonth(int i) {
     return i-1;
 }
 
@@ -3594,7 +3627,7 @@ static json_t* jmap_recurrence_byX_from_ical(short byX[], size_t nmemb, int (*co
     }
 
     size_t n = i;
-    qsort(tmp, n, sizeof(int), _jmap_intcmp);
+    qsort(tmp, n, sizeof(int), jmap_intcmp);
     for (i = 0; i < n; i++) {
         json_array_append_new(jbd, json_pack("i", tmp[i]));
     }
@@ -3629,47 +3662,47 @@ static json_t* jmap_recurrence_from_ical(struct icalrecurrencetype recur, const 
     if (recur.by_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byDay",
                 jmap_recurrence_byX_from_ical(recur.by_day,
-                    ICAL_BY_DAY_SIZE, &_jmap_icalbyday_to_byday));
+                    ICAL_BY_DAY_SIZE, &jmap_icalbyday_to_byday));
     }
     if (recur.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byDate",
                 jmap_recurrence_byX_from_ical(recur.by_month_day,
-                    ICAL_BY_MONTHDAY_SIZE, &_jmap_intident));
+                    ICAL_BY_MONTHDAY_SIZE, &jmap_intident));
     }
     if (recur.by_month[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byMonth",
                 jmap_recurrence_byX_from_ical(recur.by_month,
-                    ICAL_BY_MONTH_SIZE, &_jmap_icalbymonth_to_bymonth));
+                    ICAL_BY_MONTH_SIZE, &jmap_icalbymonth_to_bymonth));
     }
     if (recur.by_year_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byYearDay",
                 jmap_recurrence_byX_from_ical(recur.by_year_day,
-                    ICAL_BY_YEARDAY_SIZE, &_jmap_intident));
+                    ICAL_BY_YEARDAY_SIZE, &jmap_intident));
     }
     if (recur.by_month[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byWeekNo",
                 jmap_recurrence_byX_from_ical(recur.by_month,
-                    ICAL_BY_MONTH_SIZE, &_jmap_intident));
+                    ICAL_BY_MONTH_SIZE, &jmap_intident));
     }
     if (recur.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byHour",
                 jmap_recurrence_byX_from_ical(recur.by_hour,
-                    ICAL_BY_HOUR_SIZE, &_jmap_intident));
+                    ICAL_BY_HOUR_SIZE, &jmap_intident));
     }
     if (recur.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "byMinute",
                 jmap_recurrence_byX_from_ical(recur.by_minute,
-                    ICAL_BY_MINUTE_SIZE, &_jmap_intident));
+                    ICAL_BY_MINUTE_SIZE, &jmap_intident));
     }
     if (recur.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "bySecond",
                 jmap_recurrence_byX_from_ical(recur.by_second,
-                    ICAL_BY_SECOND_SIZE, &_jmap_intident));
+                    ICAL_BY_SECOND_SIZE, &jmap_intident));
     }
     if (recur.by_set_pos[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(jrecur, "bySetPosition",
                 jmap_recurrence_byX_from_ical(recur.by_set_pos,
-                    ICAL_BY_SETPOS_SIZE, &_jmap_intident));
+                    ICAL_BY_SETPOS_SIZE, &jmap_intident));
     }
 
     if (recur.count != 0) {
@@ -3726,12 +3759,12 @@ static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
     }
 
     /* Sort ascending. */
-    qsort(incl, nincl, sizeof(time_t), &_jmap_timetcmp);
+    qsort(incl, nincl, sizeof(time_t), &jmap_timetcmp);
 
     /* Convert incl to JMAP LocalDate. */
     ret = json_pack("[]");
     for (i = 0; i < nincl; ++i) {
-        int n = _jmap_timet_to_localdate(incl[i], timebuf, RFC3339_DATETIME_MAX);
+        int n = jmap_timet_to_localdate(incl[i], timebuf, RFC3339_DATETIME_MAX);
         if (!n) continue;
         json_array_append_new(ret, json_string(timebuf));
     }
@@ -4334,42 +4367,6 @@ done:
     return r;
 }
 
-/* XXX - sanitize forward declarations. */
-
-/* Helper flags for setCalendarEvents */
-#define JMAP_CREATE     (1<<0) /* Current request is a create. */
-#define JMAP_UPDATE     (1<<1) /* Current request is an update. */
-#define JMAP_DESTROY    (1<<2) /* Current request is a destroy. */
-#define JMAP_EXC        (1<<8) /* Current component is a VEVENT exception .*/
-
-typedef struct calevent_rock {
-    struct jmap_req *req;    /* The current JMAP request. */
-    int flags;               /* Flags indicating the request context. */
-    const char *uid;         /* The iCalendar UID of this event. */
-    const char *recurid;     /* The LocalDate recurrence id of this event. */
-    int isAllDay;            /* This event is a whole-day event. */
-
-    json_t *invalid;         /* A JSON array of any invalid properties. */
-
-    icaltimezone *tzstart_old; /* The former startTimeZone. */
-    icaltimezone *tzstart;     /* The current startTimeZone. */
-    icaltimezone *tzend_old;   /* The former endTimeZone. */
-    icaltimezone *tzend;       /* The current endTimeZone. */
-
-    icaltimezone **tzs;      /* Timezones required as VTIMEZONEs. */
-    size_t n_tzs;            /* The count of timezones. */
-    size_t s_tzs;            /* The size of the timezone array. */
-} calevent_rock;
-
-/* Update the VEVENT comp with the properties of the JMAP calendar event.
- * The VEVENT must have a VCALENDAR as parent and its timezones might get
- * rewritten. If uid is non-zero, set the VEVENT uid and any recurrence
- * exceptions to this UID. */
-static void jmap_calendarevent_to_ical(icalcomponent *comp,
-                                       json_t *event,
-                                       calevent_rock *rock);
-
-
 /* Add tz to the rocks timezone cache, only if it doesn't point to a previously
  * cached timezone. Compare by pointers, which works for builtin timezones. */
 static void calevent_rock_add_tz(calevent_rock *rock, icaltimezone *tz) {
@@ -4693,6 +4690,8 @@ static void jmap_recurrence_byX_to_ical(json_t *byX,
     }
 }
 
+/* Update the TZID parameters of VEVENT comp's EXDATEs and any ot its
+ * exceptions. */
 static void jmap_exceptions_update_tz(icalcomponent *comp,
                                       calevent_rock *rock) {
 
@@ -4872,7 +4871,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
     buf_free(&buf);
 }
 
-/* Set the TZID parameters for all RDATE properties to the location of tz. */
+/* Set the TZID parameters for all RDATE properties. */
 static void jmap_inclusions_update_tz(icalcomponent *comp,
                                       calevent_rock *rock) {
     icalproperty *prop;
@@ -4959,7 +4958,7 @@ static void jmap_recurrence_update_tz(icalcomponent *comp,
 }
 
 /* Create or overwrite the RRULE in the VEVENT component comp as defined by the
- * JMAP recurrence. Use tz as timezone for LocalDate conversions. */
+ * JMAP recurrence. */
 static void jmap_recurrence_to_ical(icalcomponent *comp,
                                     json_t *recur,
                                     calevent_rock *rock) {
@@ -5286,7 +5285,8 @@ static struct icalperiodtype jmap_get_utc_timespan(icalcomponent *ical,
 
     /* XXX This is almost identical to what's done in caldav_db's writeentry
      * function. But here, we want to collect also the timezone IDs in our
-     * custom timezone rock. This might warrant some recfactoring. */
+     * custom timezone rock. This might warrant some recfactoring, but let's
+     * keep them separated for now. */
 
     struct icalperiodtype span;
     icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
@@ -5369,11 +5369,10 @@ static struct icalperiodtype jmap_get_utc_timespan(icalcomponent *ical,
     return span;
 }
 
+/* Convert the calendar event rocks timezones to VTIMEZONEs in the
+ * VCALENDAR component ical. */
 static void jmap_timezones_to_ical(icalcomponent *ical,
                                    calevent_rock *tzrock) {
-
-    return;
-
     icalcomponent *tzcomp, *next;
     icalproperty *prop;
     struct icalperiodtype span;
@@ -5397,6 +5396,7 @@ static void jmap_timezones_to_ical(icalcomponent *ical,
             const char *tzid = icalproperty_get_tzid(prop);
             if (icaltimezone_get_builtin_timezone(tzid)) {
                 icalcomponent_remove_component(ical, tzcomp);
+                icalcomponent_free(tzcomp);
             }
         }
     }
@@ -5556,6 +5556,9 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
 
 }
 
+/* Create or overwrite the iCalendar properties in VEVENT comp based on the
+ * properties the JMAP calendar event. Collect all required timezone ids in
+ * rock. */
 static void jmap_calendarevent_to_ical(icalcomponent *comp,
                                        json_t *event,
                                        calevent_rock *rock) {
@@ -6391,24 +6394,11 @@ static int calevent_filter_matches(calevent_filter *f,
                 return 0;
             }
         }
-        /* summary  */
-        if (f->summary && !calevent_filter_matchprop(comp, f->summary, ICAL_SUMMARY_PROPERTY)) {
-            return 0;
-        }
-        /* description  */
-        if (f->description && !calevent_filter_matchprop(comp, f->description, ICAL_DESCRIPTION_PROPERTY)) {
-            return 0;
-        }
-        /* location  */
-        if (f->location && !calevent_filter_matchprop(comp, f->location, ICAL_LOCATION_PROPERTY)) {
-            return 0;
-        }
-        /* organizer  */
-        if (f->organizer && !calevent_filter_matchprop(comp, f->organizer, ICAL_ORGANIZER_PROPERTY)) {
-            return 0;
-        }
-        /* attendee  */
-        if (f->attendee && !calevent_filter_matchprop(comp, f->attendee, ICAL_ATTENDEE_PROPERTY)) {
+        if ((f->summary && !calevent_filter_matchprop(comp, f->summary, ICAL_SUMMARY_PROPERTY)) ||
+            (f->description && !calevent_filter_matchprop(comp, f->description, ICAL_DESCRIPTION_PROPERTY)) ||
+            (f->location && !calevent_filter_matchprop(comp, f->location, ICAL_LOCATION_PROPERTY)) ||
+            (f->organizer && !calevent_filter_matchprop(comp, f->organizer, ICAL_ORGANIZER_PROPERTY)) ||
+            (f->attendee && !calevent_filter_matchprop(comp, f->attendee, ICAL_ATTENDEE_PROPERTY))) {
             return 0;
         }
 
