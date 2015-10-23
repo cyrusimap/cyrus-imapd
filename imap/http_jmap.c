@@ -4181,6 +4181,10 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
     const char *userid = crock->req->userid;
     json_t *obj;
 
+    if (!cdata->dav.alive) {
+        return 0;
+    }
+
     /* Open calendar mailbox. */
     if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
         mailbox_close(&crock->mailbox);
@@ -5754,6 +5758,7 @@ static int jmap_write_calendarevent(json_t *event,
     struct mailbox *dstmbox = NULL;
     char *dstmboxname = NULL;
     struct mboxevent *mboxevent = NULL;
+    char *resource = NULL;
 
     icalcomponent *ical = NULL;
     icalcomponent *comp;
@@ -5783,7 +5788,7 @@ static int jmap_write_calendarevent(json_t *event,
 
     }
 
-    /* Determine mailbox name of calendar event. */
+    /* Determine mailbox and resource name of calendar event. */
     if (!create) {
         r = caldav_lookup_uid(db, uid, &cdata);
         if (r && r != CYRUSDB_NOTFOUND) {
@@ -5798,8 +5803,13 @@ static int jmap_write_calendarevent(json_t *event,
             r = 0; goto done;
         }
         mboxname = xstrdup(cdata->dav.mailbox);
+        resource = xstrdup(cdata->dav.resource);
     } else {
+        struct buf buf = BUF_INITIALIZER;
         mboxname = caldav_mboxname(req->userid, calendarId);
+        buf_printf(&buf, "%s.ics", uid);
+        resource = buf_newcstring(&buf);
+        buf_free(&buf);
     }
 
     /* Open mailbox for writing */
@@ -5958,7 +5968,7 @@ static int jmap_write_calendarevent(json_t *event,
         struct transaction_t txn;
         memset(&txn, 0, sizeof(struct transaction_t));
         txn.req_hdrs = spool_new_hdrcache();
-        r = caldav_store_resource(&txn, ical, mbox, uid, db, 0);
+        r = caldav_store_resource(&txn, ical, mbox, resource, db, 0);
         spool_free_hdrcache(txn.req_hdrs);
         buf_free(&txn.buf);
         if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -5974,6 +5984,7 @@ done:
     if (mboxname) free(mboxname);
     if (dstmbox) mailbox_close(&dstmbox);
     if (dstmboxname) free(dstmboxname);
+    if (resource) free(resource);
     if (ical) icalcomponent_free(ical);
     json_decref(invalid);
     return r;
