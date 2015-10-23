@@ -50,6 +50,7 @@
 
 #include "lib/cyrusdb.h"
 #include "lib/cyr_lock.h"
+#include "lib/exitcodes.h"
 #include "lib/map.h"
 #include "lib/sqldb.h"
 #include "lib/util.h"
@@ -786,7 +787,7 @@ static const char *_sha1_file(int fd, const char *fname, size_t limit,
 static int _append_start(struct backup *backup, time_t ts, off_t offset,
                          const char *file_sha1, int index_only, int noflush)
 {
-    if (backup->append_state != NULL) fatal("already started", -1);
+    if (backup->append_state != NULL) fatal("backup append already started", EC_SOFTWARE);
 
     struct backup_append_state *append_state = xzmalloc(sizeof(*append_state));
 
@@ -858,7 +859,7 @@ EXPORTED int backup_append_start(struct backup *backup)
 EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts)
 {
     int r;
-    if (!backup->append_state) fatal("not started", -1);
+    if (!backup->append_state) fatal("backup append not started", EC_SOFTWARE);
 
     off_t start = backup->append_state->wrote;
     size_t len;
@@ -894,9 +895,9 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
                 syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, backup->data_fname, err);
 
                 if (r == Z_STREAM_ERROR)
-                    fatal("gzwrite: invalid stream", -1); /* FIXME exit code */
+                    fatal("gzwrite: invalid stream", EC_IOERR);
                 else if (r == Z_MEM_ERROR)
-                    fatal("gzwrite: out of memory", -1);  /* FIXME exit code */
+                    fatal("gzwrite: out of memory", EC_TEMPFAIL);
 
                 goto error;
             }
@@ -931,7 +932,7 @@ int backup_append_end(struct backup *backup) {
 
     backup->append_state = NULL;
 
-    if (!append_state) fatal("not started", -1);
+    if (!append_state) fatal("backup append not started", EC_SOFTWARE);
 
     if (!(append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         r = gzflush(append_state->gzfile, Z_FULL_FLUSH);
@@ -975,7 +976,7 @@ EXPORTED int backup_append_abort(struct backup *backup)
 
     backup->append_state = NULL;
 
-    if (!append_state) fatal("not started", -1);
+    if (!append_state) fatal("backup append not started", EC_SOFTWARE);
 
     sqldb_rollback(backup->db, "backup_index");
 
@@ -1087,7 +1088,7 @@ EXPORTED int backup_reindex(const char *name)
 
             if (member_ts == -1) {
                 if (prev_member_ts != -1 && prev_member_ts > ts) {
-                    fatal("member timestamp older than previous", -1);
+                    fatal("member timestamp older than previous", EC_DATAERR);
                 }
                 member_ts = ts;
                 char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
@@ -1095,7 +1096,7 @@ EXPORTED int backup_reindex(const char *name)
                 _append_start(backup, member_ts, member_offset, file_sha1, 1, 0);
             }
             else if (member_ts > ts)
-                fatal("line timestamp older than previous", -1);
+                fatal("line timestamp older than previous", EC_DATAERR);
 
             if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
                 continue;
