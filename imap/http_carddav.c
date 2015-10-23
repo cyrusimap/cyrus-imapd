@@ -129,10 +129,12 @@ static int report_card_query(struct transaction_t *txn,
                              struct meth_params *rparams,
                              xmlNodePtr inroot, struct propfind_ctx *fctx);
 
-static char *vparser_as_vcard_string_r(struct vparse_state *vparser)
+static char *vparser_as_vcard_string_r(struct vparse_state *vparser,
+                                       unsigned long *len)
 {
     struct buf buf = BUF_INITIALIZER;
     vparse_tobuf(vparser->card, &buf);
+    if (len) *len = buf_len(&buf);
     return buf_release(&buf);
 }
 
@@ -160,7 +162,7 @@ static void free_vparser(void *vparser) {
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
-      (char* (*)(void *)) &vparser_as_vcard_string_r,
+      (char* (*)(void *, unsigned long *)) &vparser_as_vcard_string_r,
       (void * (*)(const char*)) &vcard_string_as_vparser,
       (void (*)(void *)) &free_vparser, NULL, NULL
     },
