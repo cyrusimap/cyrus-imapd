@@ -96,6 +96,7 @@ struct proplist {
 };
 
 /* Each calendar user address has the following scheduling protocol params */
+/* All memory must be freed with sched_param_free. */
 struct sched_param {
     char *userid;       /* Userid corresponding to calendar address */
     char *server;       /* Remote server user lives on */
@@ -104,6 +105,8 @@ struct sched_param {
     unsigned isyou;     /* true if the user is the same as the authenticated user */
     struct proplist *props; /* List of attendee iCal properties */
 };
+
+extern void sched_param_free(struct sched_param *sparam);
 
 struct freebusy {
     struct icalperiodtype per;
@@ -179,5 +182,6 @@ extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct sched_param *param,
                              const char *myuserid);
+
 
 #endif /* HTTP_CALDAV_SCHED_H */
