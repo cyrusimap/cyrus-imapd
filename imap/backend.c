@@ -1043,23 +1043,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     return ret;
 
 error:
-    forget_capabilities(ret);
-    if (ret->in) {
-        prot_free(ret->in);
-        ret->in = NULL;
-    }
-    if (ret->out) {
-        prot_free(ret->out);
-        ret->out = NULL;
-    }
-    if (sock >= 0)
-        close(sock);
-    if (ret->saslconn) {
-        sasl_dispose(&ret->saslconn);
-        ret->saslconn = NULL;
-    }
-    if (!ret_backend)
-        free(ret);
+    if (sock >= 0) backend_disconnect(ret);
+    ret->sock = -1;
+    if (!ret_backend) free(ret);
     return NULL;
 }
 
