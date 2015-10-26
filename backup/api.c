@@ -398,6 +398,10 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                            userid, strlen(userid),
                            backup_path, path_len,
                            &tid);
+        if (r) cyrusdb_abort(backups_db, tid);
+        else r = cyrusdb_commit(backups_db, tid);
+
+        tid = NULL;
 
         /* if we didn't store it in the database successfully, trash the file,
          * it won't be used */
@@ -420,10 +424,10 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
     buf_appendcstr(index_fname, ".index");
 
 done:
-    if (tid)
-        cyrusdb_commit(backups_db, tid);
-    if (backups_db)
+    if (backups_db) {
+        if (tid) cyrusdb_abort(backups_db, tid);
         cyrusdb_close(backups_db);
+    }
     free(backups_db_fname);
     return r;
 }
