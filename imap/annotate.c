@@ -968,6 +968,8 @@ static int find_cb(void *rock, const char *key, size_t keylen,
 
     if (!r) r = frock->proc(mboxname, uid, entry, userid, &value, frock->rock);
 
+    buf_free(&value);
+
     return r;
 }
 
