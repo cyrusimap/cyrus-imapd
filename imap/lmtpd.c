@@ -845,17 +845,22 @@ int deliver(message_data_t *msgdata, char *authuser,
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
         const mbname_t *mbname = msg_getrcpt(msgdata, n);
+        char *mboxname = mbname_userid(mbname) ?
+                mboxname_user_mbox(mbname_userid(mbname), NULL) :
+                xstrdup(mbname_intname(mbname));
 
         mbentry_t *mbentry = NULL;
-        int r = mlookup(mbname_intname(mbname), &mbentry);
+        int r = mlookup(mboxname, &mbentry);
+        free(mboxname);
+        if (r) goto setstatus;
 
-        if (!r && mbentry->server) {
+        if (mbentry->server) {
             /* remote mailbox */
             const char *recip = mbname_recipient(mbname, &lmtpd_namespace);
             proxy_adddest(&dlist, recip, n, mbentry->server, authuser);
             status[n] = nosieve;
         }
-        else if (!r) {
+        else {
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
@@ -872,6 +877,8 @@ int deliver(message_data_t *msgdata, char *authuser,
         }
 
         telemetry_rusage(mbname_userid(mbname));
+
+        setstatus:
 
         msg_setrcpt_status(msgdata, n, r);
 
