@@ -2150,7 +2150,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
-    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), "", &value);
+    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf), httpd_userid, &value);
     /* we need to rewrite the record to update the modseq because the layering
      * of annotations and mailboxes is broken */
     if (!r) r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
@@ -2333,7 +2333,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
     xmlNodePtr node;
 
     /* Make sure its a shared entry or the user's private one */
-    if (*userid && strcmp(userid, arock->fctx->userid)) return 0;
+    if (userid && *userid && strcmp(userid, arock->fctx->userid)) return 0;
 
     /* Split entry into namespace href and name ( <href>name ) */
     buf_setcstr(&arock->fctx->buf, entry + strlen(DAV_ANNOT_NS) + 1);
@@ -2361,6 +2361,8 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
         ns = xmlNewNs(arock->fctx->root, BAD_CAST href, BAD_CAST prefix);
         hash_insert(href, ns, arock->fctx->ns_table);
     }
+
+    /* XXX - can return the same property multiple times with annotate masks! */
 
     /* Add the dead property to the response */
     node = xml_add_prop(HTTP_OK, arock->fctx->ns[NS_DAV],

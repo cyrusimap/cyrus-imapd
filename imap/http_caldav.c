@@ -4941,8 +4941,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
         char *userid = mboxname_to_userid(mailboxname);
         const char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
-        if (!annotatemore_lookup(mboxname, prop_annot,
-                                 /* shared */ "", &attrib) && attrib.len) {
+        if (!annotatemore_lookupmask(mboxname, prop_annot,
+                                     httpd_userid, &attrib) && attrib.len) {
             add_vavailability(vavail, icalparser_parse_string(buf_cstring(&attrib)));
         }
         free(userid);
