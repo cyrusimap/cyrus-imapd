@@ -386,6 +386,8 @@ EXPORTED mbname_t *mbname_from_recipient(const char *recipient, const struct nam
         *plus = '\0';
         mbname->boxes = strarray_split(plus+1, sep, /*flags*/0);
     }
+    else
+        mbname->boxes = strarray_new();
 
     return mbname;
 }
