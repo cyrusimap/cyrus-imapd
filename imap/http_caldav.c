@@ -1043,11 +1043,14 @@ static int _scheduling_enabled(struct transaction_t *txn, const struct mailbox *
     int is_enabled = 1;
 
     annotatemore_lookupmask(mailbox->name, entry, httpd_userid, &buf);
+    /* legacy */
     if (!strcasecmp(buf_cstring(&buf), "no"))
+        is_enabled = 0;
+    if (!strcasecmp(buf_cstring(&buf), "F"))
         is_enabled = 0;
 
     const char **hdr = spool_getheader(txn->req_hdrs, "Scheduling-Enabled");
-    if (hdr && !strcmp(hdr[0], "F"))
+    if (hdr && !strcasecmp(hdr[0], "F"))
         is_enabled = 0;
 
     buf_free(&buf);
@@ -1218,7 +1221,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
             sched_request(organizer, &sparam, ical, NULL, 0);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
-                 strcmp(hdr[0], "F")) {
+                 strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             sched_reply(userid, ical, NULL);
         }
