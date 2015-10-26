@@ -166,6 +166,9 @@ in the latter case, we need to append each of those RENAMEs to the old backup
 so they can take effect correctly, and THEN rename the backup file itself. but
 how to tell when the appends are finished?
 
+how can we tell the difference between folder(s) moved to a different user vs
+user has been renamed?
+
 
 locking
 -------
