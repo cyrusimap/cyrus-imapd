@@ -2774,7 +2774,8 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
     const char *cachestr;
     int fetchmime = 0;
     unsigned size, offset = 0, skip = 0;
-    int n, r = 0;
+    unsigned long n;
+    int r = 0;
 
     if (outsize) *outsize = 0;
 
@@ -2874,7 +2875,7 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
 	start_octet = size;
 	n = 0;
     }
-    else if (start_octet + n > size) {
+    else if (start_octet + n < start_octet || start_octet + n > size) {
 	n = size - start_octet;
     }
 
