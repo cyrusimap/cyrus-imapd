@@ -4139,7 +4139,8 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     const char *data;
     size_t size;
     int32_t skip = 0;
-    int n, r = 0;
+    unsigned long n;
+    int r = 0;
     char *decbuf = NULL;
     struct index_record record;
 
@@ -4286,7 +4287,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         start_octet = size;
         n = 0;
     }
-    else if (start_octet + n > size) {
+    else if (start_octet + n < start_octet || start_octet + n > size) {
         n = size - start_octet;
     }
 
@@ -4298,10 +4299,10 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
         if (domain == DOMAIN_BINARY) {
             /* Write size of literal8 */
-            prot_printf(pout, " ~{%u}\r\n", n);
+            prot_printf(pout, " ~{%lu}\r\n", n);
         } else {
             /* Write size of literal */
-            prot_printf(pout, " {%u}\r\n", n);
+            prot_printf(pout, " {%lu}\r\n", n);
         }
     }
 
