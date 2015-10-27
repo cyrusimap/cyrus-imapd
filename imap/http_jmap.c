@@ -5736,6 +5736,78 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 }
 
+static int jmap_schedule_ical(const char *userid,
+                              icalcomponent *oldical,
+                              icalcomponent *ical,
+                              int mode)
+{
+    struct sched_param sparam;
+    int r;
+    const char *organizer = NULL;
+    icalcomponent *comp = NULL;
+
+    /* Determine if any scheduling is required. */
+    icalcomponent *src = mode&JMAP_DESTROY ? oldical : ical;
+    comp = icalcomponent_get_first_component(src, ICAL_VEVENT_COMPONENT);
+    icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) organizer = icalproperty_get_organizer(prop);
+    if (!organizer) {
+        r = 0;
+        goto done;
+    }
+
+    /* Lookup the organizer. */
+    memset(&sparam, 0, sizeof(struct sched_param));
+    r = caladdress_lookup(organizer, &sparam, userid);
+    if (r == HTTP_NOT_FOUND) {
+        r = 0; /* Skip non-local organizer. */ /* XXX need to handle non-local organizers? */
+        goto done;
+    } else if (r) {
+        syslog(LOG_ERR, "failed to process scheduling message (org=%s)",
+                organizer);
+        goto done;
+    }
+
+    /* Validate create/update. */
+    if (mode & (JMAP_CREATE|JMAP_UPDATE)) {
+        /* Don't allow ORGANIZER to be changed */
+        const char *oldorganizer = NULL;
+
+        if (oldical) {
+            icalcomponent *oldcomp = NULL;
+            icalproperty *prop = NULL;
+            oldcomp = icalcomponent_get_first_component(oldical, ICAL_VEVENT_COMPONENT);
+            if (oldcomp) prop = icalcomponent_get_first_property(oldcomp, ICAL_ORGANIZER_PROPERTY);
+            if (prop) oldorganizer = icalproperty_get_organizer(prop);
+        }
+        if (oldorganizer) {
+            const char *p = organizer;
+            if (!strncasecmp(p, "mailto:", 7)) p += 7;
+            if (strcmp(oldorganizer, p)) {
+                /* XXX This should become a set error. */
+                r = IMAP_INTERNAL;
+                goto done;
+            }
+        }
+    }
+
+    if (organizer && /* XXX Hack for Outlook */
+            icalcomponent_get_first_invitee(comp)) {
+        /* Send scheduling message. */
+        if (!strcmpsafe(sparam.userid, userid)) {
+            /* Organizer scheduling object resource */
+            sched_request(organizer, &sparam, oldical, ical, 0);
+        } else {
+            /* Attendee scheduling object resource */
+            sched_reply(userid, oldical, ical);
+        }
+    }
+
+done:
+    sched_param_free(&sparam);
+    return r;
+}
+
 /* Create, update or destroy the JMAP calendar event. Mode must be one of
  * JMAP_CREATE, JMAP_UPDATE or JMAP_DESTROY. Return 0 for success and non-
  * fatal errors. */
@@ -5760,6 +5832,7 @@ static int jmap_write_calendarevent(json_t *event,
     struct mboxevent *mboxevent = NULL;
     char *resource = NULL;
 
+    icalcomponent *oldical = NULL;
     icalcomponent *ical = NULL;
     icalcomponent *comp;
     struct index_record record;
@@ -5848,7 +5921,7 @@ static int jmap_write_calendarevent(json_t *event,
         }
     }
 
-    if (update) {
+    if (!create) {
         /* Load VEVENT from record. */
         ical = record_to_ical(mbox, &record);
         if (!ical) {
@@ -5871,7 +5944,13 @@ static int jmap_write_calendarevent(json_t *event,
             r = IMAP_INTERNAL;
             goto done;
         }
-    } else if (create) {
+        if (update) {
+            oldical = icalcomponent_new_clone(ical);
+        } else if (destroy) {
+            oldical = ical;
+            ical = NULL;
+        }
+    } else {
         /* Create a new VCALENDAR and its VEVENT. */
         ical = icalcomponent_new_vcalendar();
         icalcomponent_add_property(ical, icalproperty_new_version("2.0"));
@@ -5923,6 +6002,14 @@ static int jmap_write_calendarevent(json_t *event,
                 r = 0; goto done;
             }
         }
+    }
+
+    /* Handle scheduling. */
+    if (0) {
+        /* XXX This currently segfaults in Cassandane tests when trying to call
+         * sendmail. */
+        r = jmap_schedule_ical(req->userid, oldical, ical, mode);
+        if (r) goto done;
     }
 
     if (destroy || (update && dstmbox)) {
