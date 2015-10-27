@@ -3508,23 +3508,20 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 {
     const char *cal = (const char *) rock;
     xmlNodePtr node;
+    /* NOTE: calbuf needs to stay in scope until 'cal' is finished with */
     struct buf calbuf = BUF_INITIALIZER;
     int ret = HTTP_NOT_FOUND; /* error condition if we bail early */
 
-    if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
+    if (!(namespace_calendar.enabled && httpd_userid))
         goto done;
 
     if (cal) {
-        const char *annotname = NULL;
-        char *mailboxname;
-        int r;
-
         /* named calendars are only used for scheduling */
         if (!(namespace_calendar.allow & ALLOW_CAL_SCHED))
             goto done;
 
         /* check for renamed calendars - property on the homeset */
-        mailboxname = caldav_mboxname(httpd_userid, NULL);
+        const char *annotname = NULL;
         if (!strcmp(cal, SCHED_DEFAULT))
             annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
         else if (!strcmp(cal, SCHED_INBOX))
@@ -3533,38 +3530,29 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
             annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
 
         if (annotname) {
-            r = annotatemore_lookupmask(mailboxname, annotname,
-                                        fctx->req_tgt->userid, &calbuf);
+            char *mailboxname = caldav_mboxname(httpd_userid, NULL);
+            int r = annotatemore_lookupmask(mailboxname, annotname,
+                                            httpd_userid, &calbuf);
+            free(mailboxname);
             if (!r && calbuf.len) {
                 buf_putc(&calbuf, '/');
                 cal = buf_cstring(&calbuf);
             }
         }
-        free(mailboxname);
-
-        /* make sure the mailbox exists */
-        mailboxname = caldav_mboxname(fctx->req_tgt->userid, cal);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-                                       NULL, 0,
-                                       fctx->req_tgt->userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                       mailboxname, error_message(r));
-                goto done;
-            }
-        }
-        free(mailboxname);
     }
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                         name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/", namespace_calendar.prefix,
-               fctx->req_tgt->userid);
+    if (strchr(httpd_userid, '@') || !httpd_extradomain) {
+        buf_printf(&fctx->buf, "%s/user/%s/",
+                   namespace_calendar.prefix, httpd_userid);
+    }
+    else {
+        buf_printf(&fctx->buf, "%s/user/%s@%s/",
+                   namespace_calendar.prefix, httpd_userid, httpd_extradomain);
+    }
     if (cal) buf_appendcstr(&fctx->buf, cal);
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
