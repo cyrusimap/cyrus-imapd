@@ -13,6 +13,7 @@ Standard Operating Procedures
     sop/databases
     sop/deleting
     sop/virtual-domains
+    sop/administration-running
 
     sop/reconstructing
     sop/squatter

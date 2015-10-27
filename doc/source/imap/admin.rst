@@ -24,6 +24,7 @@ Configuration
     admin/protlayer
     admin/sieve
     admin/sop
+    admin/config-mailboxdistribution
     
 .. :todo:
     Event Source (we need a listener that just logs events to syslog)
@@ -63,9 +64,7 @@ Other
 .. toctree::
     :maxdepth: 2
     
-    admin/deleted-expired-expunged-purged
-    admin/administration-running
     admin/packagers
-    admin/config
+
     
     
