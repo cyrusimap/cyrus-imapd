@@ -5123,9 +5123,6 @@ static void jmap_attachments_to_ical(icalcomponent *comp,
         buf_free(&buf);
     }
 
-    syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXXXXXX %s", icalcomponent_as_ical_string(comp));
-
-
     /* Purge any remaining URL attachments from the cache. */
     free_hash_table(&atts, (void(*)(void*)) icalproperty_free);
 
