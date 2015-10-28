@@ -144,6 +144,8 @@ EXPORTED strarray_t *strarray_dup(const strarray_t *sa)
     strarray_t *new = strarray_new();
     int i;
 
+    if (!sa) return new;
+
     strarray_truncate(new, sa->count);
     for (i = 0 ; i < sa->count ; i++)
         new->data[i] = xstrdup(sa->data[i]);

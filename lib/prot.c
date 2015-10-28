@@ -1878,7 +1878,9 @@ EXPORTED struct protstream *protgroup_getelement(struct protgroup *group,
     return group->group[element];
 }
 
-EXPORTED int prot_getc(struct protstream *s)
+EXPORTED inline int prot_getc(struct protstream *s)
+    __attribute__((always_inline,optimize("-O3")));
+EXPORTED inline int prot_getc(struct protstream *s)
 {
     assert(!s->write);
 

@@ -1325,7 +1325,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/byteorder64.c \
 	lib/charset.c \
 	lib/command.c \
-	lib/crc32.c \
 	lib/cyrusdb.c \
 	lib/cyrusdb_flat.c \
 	lib/cyrusdb_quotalegacy.c \
@@ -1368,8 +1367,12 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
+lib_libcyrus_la_LIBADD = libcrc32.a $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+
+noinst_LIBRARIES = libcrc32.a
+libcrc32_a_SOURCES = lib/crc32.c
+libcrc32_a_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib_libcyrus_min_la_SOURCES = \
 	lib/arrayu64.c \

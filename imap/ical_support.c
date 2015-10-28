@@ -51,6 +51,15 @@
 
 #ifdef HAVE_ICAL
 
+char *my_icalcomponent_as_ical_string(icalcomponent* comp, unsigned long *len)
+{
+    char *str = icalcomponent_as_ical_string_r(comp);
+
+    if (len) *len = strlen(str);
+
+    return str;
+}
+
 icalcomponent *record_to_ical(struct mailbox *mailbox,
                               const struct index_record *record)
 {
@@ -92,6 +101,7 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
                     if (!strcasecmp(propname, "LOCATION")) continue;
                     if (!strcasecmp(propname, "COMMENT")) continue;
                     if (!strcasecmp(propname, "DESCRIPTION")) continue;
+                    if (!strcasecmp(propname, "SUMMARY")) continue;
                 }
                 else {
                     /* Ignore unknown property errors */

@@ -98,18 +98,18 @@ static time_t compile_time;
 static struct mime_type_t isched_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
-      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
+      (char* (*)(void *, unsigned long *)) &my_icalcomponent_as_ical_string,
       (void * (*)(const char*)) &icalparser_parse_string,
       (void (*)(void *)) &icalcomponent_free, NULL, NULL
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (char* (*)(void *, unsigned long *)) &icalcomponent_as_xcal_string,
       (void * (*)(const char*)) &xcal_string_as_icalcomponent,
       NULL, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
-      (char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (char* (*)(void *, unsigned long *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent,
       NULL, NULL, NULL,
     },
@@ -520,7 +520,7 @@ static int meth_post_isched(struct transaction_t *txn,
         case ICAL_METHOD_REPLY:
         case ICAL_METHOD_CANCEL: {
             struct sched_data sched_data =
-                { 1, meth == ICAL_METHOD_REPLY,
+                { 1, meth == ICAL_METHOD_REPLY, 0,
                   ical, NULL, 0, ICAL_SCHEDULEFORCESEND_NONE, NULL };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];

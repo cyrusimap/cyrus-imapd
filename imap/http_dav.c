@@ -1050,8 +1050,7 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
             /* Not the storage format - convert into requested MIME type */
             void *obj = mime_types->from_string(data);
 
-            data = freeme = mime->to_string(obj);
-            datalen = strlen(data);
+            data = freeme = mime->to_string(obj, &datalen);
             mime_types->free(obj);
         }
 
@@ -2151,7 +2150,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
-    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), "", &value);
+    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf), httpd_userid, &value);
     /* we need to rewrite the record to update the modseq because the layering
      * of annotations and mailboxes is broken */
     if (!r) r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
@@ -2334,7 +2333,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
     xmlNodePtr node;
 
     /* Make sure its a shared entry or the user's private one */
-    if (*userid && strcmp(userid, arock->fctx->userid)) return 0;
+    if (userid && *userid && strcmp(userid, arock->fctx->userid)) return 0;
 
     /* Split entry into namespace href and name ( <href>name ) */
     buf_setcstr(&arock->fctx->buf, entry + strlen(DAV_ANNOT_NS) + 1);
@@ -2362,6 +2361,8 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
         ns = xmlNewNs(arock->fctx->root, BAD_CAST href, BAD_CAST prefix);
         hash_insert(href, ns, arock->fctx->ns_table);
     }
+
+    /* XXX - can return the same property multiple times with annotate masks! */
 
     /* Add the dead property to the response */
     node = xml_add_prop(HTTP_OK, arock->fctx->ns[NS_DAV],
@@ -3491,14 +3492,25 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
-    if (!(rights & needrights)) {
-        /* special case delete mailbox where not the owner */
-        if (!txn->req_tgt.resource &&
-            !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name) &&
-            !remove_user_acl(httpd_userid, txn->req_tgt.mbentry->name)) {
-            return HTTP_OK;
-        }
 
+    if (!(rights & ACL_LOOKUP)) {
+        return HTTP_NOT_FOUND;
+    }
+
+    /* special case delete mailbox where not the owner */
+    if (!txn->req_tgt.resource &&
+        !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
+        r = remove_user_acl(httpd_userid, txn->req_tgt.mbentry->name);
+        if (r) {
+            syslog(LOG_ERR, "meth_delete(%s) failed to remove acl: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
+            txn->error.desc = error_message(r);
+            return HTTP_SERVER_ERROR;
+        }
+        return HTTP_OK;
+    }
+
+    if (!(rights & needrights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
@@ -3831,8 +3843,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
                 /* Not the storage format - convert into requested MIME type */
                 void *obj = gparams->mime_types[0].from_string(data);
 
-                data = freeme = mime->to_string(obj);
-                datalen = strlen(data);
+                data = freeme = mime->to_string(obj, &datalen);
                 gparams->mime_types[0].free(obj);
             }
         }
@@ -5122,8 +5133,7 @@ int meth_put(struct transaction_t *txn, void *params)
         case HTTP_CREATED:
         case HTTP_PRECOND_FAILED:
             /* Convert into requested MIME type */
-            data = mime->to_string(obj);
-            datalen = strlen(data);
+            data = mime->to_string(obj, &datalen);
 
             /* Fill in Content-Type, Content-Length */
             resp_body->type = mime->content_type;

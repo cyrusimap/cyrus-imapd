@@ -4619,7 +4619,12 @@ EXPORTED int mailbox_create(const char *name,
 
     /* if we can't get an exclusive lock first try, there's something
      * racy going on! */
-    r = mboxname_lock(name, &listitem->l, LOCK_NONBLOCKING);
+    /* an exclusive lock around the non-execlusive lock to avoid create
+     * races on fixed names like calendar Inbox and Outbox */
+    struct mboxlock *mblock = NULL;
+    r = mboxname_lock("$CREATE", &mblock, LOCK_EXCLUSIVE);
+    if (!r) r = mboxname_lock(name, &listitem->l, LOCK_NONBLOCKING);
+    mboxname_release(&mblock);
     if (r) goto done;
 
     mailbox->part = xstrdup(part);

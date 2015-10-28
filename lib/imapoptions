@@ -815,6 +815,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    Using userid+ (with an empty namespace) will list only subscribed
    mailboxes. */
 
+{ "imipnotifier", NULL, STRING }
+/* Notifyd(8) method to use for "IMIP" notifications which are based on
+   the RFC 6047.  If not set, "IMIP" notifications are disabled. */
+
 { "implicit_owner_rights", "lkxa", STRING }
 /* The implicit Access Control List (ACL) for the owner of a mailbox. */
 

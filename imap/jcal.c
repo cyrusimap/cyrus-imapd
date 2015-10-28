@@ -447,7 +447,7 @@ static json_t *icalcomponent_as_json_array(icalcomponent *comp)
 /*
  * Construct a jCal string for an iCalendar component.
  */
-char *icalcomponent_as_jcal_string(icalcomponent *ical)
+char *icalcomponent_as_jcal_string(icalcomponent *ical, unsigned long *len)
 {
     json_t *jcal;
     size_t flags = JSON_PRESERVE_ORDER;
@@ -461,6 +461,8 @@ char *icalcomponent_as_jcal_string(icalcomponent *ical)
     buf = json_dumps(jcal, flags);
 
     json_decref(jcal);
+
+    if (len) *len = strlen(buf);
 
     return buf;
 }

@@ -78,6 +78,7 @@
 struct sched_data {
     unsigned ischedule;
     unsigned is_reply;
+    unsigned is_update;
     icalcomponent *itip;
     icalcomponent *master;
     unsigned comp_mask;

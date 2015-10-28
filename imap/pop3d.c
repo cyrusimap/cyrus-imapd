@@ -1252,10 +1252,13 @@ void uidl_msg(uint32_t msgno)
                         popd_mailbox->i.uidvalidity,
                         popd_map[msgno-1].uid);
             break;
-        case IMAP_ENUM_UIDL_FORMAT_DOVECOT:
-            prot_printf(popd_out, "%u %08x%08x\r\n", msgno,
-                        popd_map[msgno-1].uid,
-                        popd_mailbox->i.uidvalidity);
+        case IMAP_ENUM_UIDL_FORMAT_DOVECOT: {
+            char uidl[100];
+            snprintf(uidl, 100, "%08x%08x",
+                     popd_map[msgno-1].uid,
+                     popd_mailbox->i.uidvalidity);
+            prot_printf(popd_out, "%u %s\r\n", msgno, uidl);
+            }
             break;
         case IMAP_ENUM_UIDL_FORMAT_COURIER:
             prot_printf(popd_out, "%u %u-%u\r\n", msgno,

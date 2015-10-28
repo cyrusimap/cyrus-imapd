@@ -452,6 +452,7 @@ extern int check_precond(struct transaction_t *txn,
                          const char *etag, time_t lastmod);
 
 extern int httpd_myrights(struct auth_state *authstate, const char *acl);
+
 extern void tzdist_truncate_vtimezone(icalcomponent *vtz,
                                       icaltimetype *startp, icaltimetype *endp);
 

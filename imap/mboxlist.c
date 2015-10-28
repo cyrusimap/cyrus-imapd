@@ -541,6 +541,44 @@ EXPORTED int mboxlist_lookup_allow_all(const char *name,
     return mboxlist_mylookup(name, entryptr, tid, 0);
 }
 
+struct _find_specialuse_data {
+    const char *use;
+    const char *userid;
+    char *mboxname;
+};
+
+static int _find_specialuse(const mbentry_t *mbentry, void *rock)
+{
+    struct _find_specialuse_data *d = (struct _find_specialuse_data *)rock;
+    struct buf attrib = BUF_INITIALIZER;
+
+    annotatemore_lookup(mbentry->name, "/specialuse", d->userid, &attrib);
+
+    if (attrib.len) {
+        strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", 0);
+        if (strarray_find_case(uses, d->use, 0) >= 0)
+            d->mboxname = xstrdup(mbentry->name);
+        strarray_free(uses);
+    }
+
+    buf_free(&attrib);
+
+    if (d->mboxname) return CYRUSDB_DONE;
+    return 0;
+}
+
+
+EXPORTED char *mboxlist_find_specialuse(const char *use, const char *userid)
+{
+    /* \\Inbox is magical */
+    if (!strcasecmp(use, "\\Inbox"))
+        return mboxname_user_mbox(userid, NULL);
+
+    struct _find_specialuse_data rock = { use, userid, NULL };
+    mboxlist_usermboxtree(userid, _find_specialuse, &rock, MBOXTREE_SKIP_ROOT);
+    return rock.mboxname;
+}
+
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
@@ -1155,7 +1193,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     strarray_t existing = STRARRAY_INITIALIZER;
     int i;
     char newname[MAX_MAILBOX_BUFFER];
-    int r;
+    int r = 0;
     long myrights;
 
     if (!isadmin && force) return IMAP_PERMISSION_DENIED;
@@ -1165,12 +1203,23 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     if (mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
         /* Can't DELETE INBOX (your own inbox) */
         if (!strcmpsafe(mbname_userid(mbname), userid)) {
-            mbname_free(&mbname);
-            return(IMAP_MAILBOX_NOTSUPPORTED);
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+            goto done;
         }
-        mbname_free(&mbname);
         /* Only admins may delete user */
-        if (!isadmin) return(IMAP_PERMISSION_DENIED);
+        if (!isadmin) {
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
+    }
+
+    if (!isadmin && mbname_userid(mbname)) {
+        struct buf attrib = BUF_INITIALIZER;
+        annotatemore_lookup(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &attrib);
+        if (attrib.len)
+            r = IMAP_MAILBOX_SPECIALUSE;
+        buf_free(&attrib);
+        if (r) goto done;
     }
 
     r = mboxlist_lookup(name, &mbentry, NULL);
@@ -1250,7 +1299,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
                                     int local_only, int force)
 {
     mbentry_t *mbentry = NULL;
-    int r;
+    int r = 0;
     long myrights;
     struct mailbox *mailbox = NULL;
     int isremote = 0;
@@ -1263,13 +1312,23 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     if (mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
         /* Can't DELETE INBOX (your own inbox) */
         if (!strcmpsafe(mbname_userid(mbname), userid)) {
-            mbname_free(&mbname);
             r = IMAP_MAILBOX_NOTSUPPORTED;
             goto done;
         }
-        mbname_free(&mbname);
         /* Only admins may delete user */
-        if (!isadmin) { r = IMAP_PERMISSION_DENIED; goto done; }
+        if (!isadmin) {
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
+    }
+
+    if (!isadmin && mbname_userid(mbname)) {
+        struct buf attrib = BUF_INITIALIZER;
+        annotatemore_lookup(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &attrib);
+        if (attrib.len)
+            r = IMAP_MAILBOX_SPECIALUSE;
+        buf_free(&attrib);
+        if (r) goto done;
     }
 
     r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
@@ -1363,6 +1422,32 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     mboxlist_entry_free(&mbentry);
     mbname_free(&mbname);
 
+    return r;
+}
+
+static int _rename_check_specialuse(const char *oldname, const char *newname)
+{
+    mbname_t *old = mbname_from_intname(oldname);
+    mbname_t *new = mbname_from_intname(newname);
+    struct buf attrib = BUF_INITIALIZER;
+    int r = 0;
+    if (mbname_userid(old))
+        annotatemore_lookup(oldname, "/specialuse", mbname_userid(old), &attrib);
+    /* we have specialuse? */
+    if (attrib.len) {
+        /* then target must be a single-depth mailbox too */
+        if (strarray_size(mbname_boxes(new)) != 1)
+            r = IMAP_MAILBOX_SPECIALUSE;
+        /* and have a userid as well */
+        if (!mbname_userid(new))
+            r = IMAP_MAILBOX_SPECIALUSE;
+        /* and not be deleted */
+        if (mbname_isdeleted(new))
+            r = IMAP_MAILBOX_SPECIALUSE;
+    }
+    mbname_free(&new);
+    mbname_free(&old);
+    buf_free(&attrib);
     return r;
 }
 
@@ -1462,6 +1547,11 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
         /* skip ahead to the commit */
         goto dbdone;
+    }
+
+    if (!isadmin) {
+        r = _rename_check_specialuse(oldname, newname);
+        if (r) goto done;
     }
 
     /* RENAME of some user's INBOX */

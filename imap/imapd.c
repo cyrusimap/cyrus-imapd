@@ -6285,7 +6285,13 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     const char *server = NULL;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
-    char *intname = NULL;
+
+    /* We don't care about trailing hierarchy delimiters. */
+    if (name[0] && name[strlen(name)-1] == imapd_namespace.hier_sep) {
+        name[strlen(name)-1] = '\0';
+    }
+
+    mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
     dlist_getatom(extargs, "PARTITION", &partition);
     dlist_getatom(extargs, "SERVER", &server);
@@ -6305,19 +6311,24 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
     use = dlist_getchild(extargs, "USE");
     if (use) {
-        struct dlist *item;
-        char *raw;
+        /* only user mailboxes can have specialuse, and they must be user toplevel folders */
+        if (!mbname_userid(mbname) || strarray_size(mbname_boxes(mbname)) != 1) {
+            r = IMAP_MAILBOX_SPECIALUSE;
+            goto err;
+        }
         /* I would much prefer to create the specialuse annotation FIRST
          * and do the sanity check on the values, so we can return the
          * correct error.  Sadly, that's a pain - so we compromise by
          * "normalising" first */
+        struct dlist *item;
+        char *raw;
         strarray_t *su = strarray_new();
         for (item = use->head; item; item = item->next) {
             strarray_append(su, dlist_cstring(item));
         }
         raw = strarray_join(su, " ");
         strarray_free(su);
-        r = specialuse_validate(raw, &specialuse);
+        r = specialuse_validate(imapd_userid, raw, &specialuse);
         free(raw);
         if (r) {
             prot_printf(imapd_out, "%s NO [USEATTR] %s\r\n", tag, error_message(r));
@@ -6341,15 +6352,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         }
     }
 
-    /* We don't care about trailing hierarchy delimiters. */
-    if (name[0] && name[strlen(name)-1] == imapd_namespace.hier_sep) {
-        name[strlen(name)-1] = '\0';
-    }
-
-    intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-
     /* check for INBOX.INBOX creation by broken Apple clients */
-    char *copy = xstrdup(intname);
+    char *copy = xstrdup(mbname_intname(mbname));
     lcase(copy);
 
     if (strstr(copy, "inbox.inbox."))
@@ -6388,7 +6392,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
                     // mboxlist_findparent either supplies the parent
                     // or has a return code of IMAP_MAILBOX_NONEXISTENT.
-                    r = mboxlist_findparent(intname, &parent);
+                    r = mboxlist_findparent(mbname_intname(mbname), &parent);
 
                     if (r) {
                         if (r != IMAP_MAILBOX_NONEXISTENT) {
@@ -6516,7 +6520,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
 localcreate:
     r = mboxlist_createmailbox(
-            intname,                                            // const char name
+            mbname_intname(mbname),                             // const char name
             mbtype,                                             // int mbtype
             partition,                                          // const char partition
             imapd_userisadmin || imapd_userisproxyadmin,        // int isadmin
@@ -6537,7 +6541,7 @@ localcreate:
 
             if (autocreatequotastorage > 0) {
                 r = mboxlist_createmailbox(
-                        intname,
+                        mbname_intname(mbname),
                         0,
                         partition,
                         1,
@@ -6568,7 +6572,7 @@ localcreate:
                     newquotas[QUOTA_STORAGE] = autocreatequotastorage;
                     newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
-                    (void) mboxlist_setquotas(intname, newquotas, 0);
+                    (void) mboxlist_setquotas(mbname_intname(mbname), newquotas, 0);
                 } // (autocreatequotastorage > 0) || (autocreatequotamessage > 0)
 
             } else { // (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))
@@ -6599,17 +6603,14 @@ localcreate:
 #endif // USE_AUTOCREATE
 
     if (specialuse.len) {
-        char *userid = mboxname_to_userid(intname);
-        if (!userid) userid = xstrdup(imapd_userid);
-        r = annotatemore_write(intname, "/specialuse", userid, &specialuse);
-        free(userid);
+        r = annotatemore_write(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &specialuse);
         if (r) {
             /* XXX - failure here SHOULD cause a cleanup of the created mailbox */
             syslog(
                     LOG_ERR,
                     "IOERROR: failed to write specialuse for %s on %s (%s) (%s:%d)",
                     imapd_userid,
-                    intname,
+                    mbname_intname(mbname),
                     buf_cstring(&specialuse),
                     __FILE__,
                     __LINE__
@@ -6626,7 +6627,7 @@ localcreate:
 
 done:
     buf_free(&specialuse);
-    free(intname);
+    mbname_free(&mbname);
 }
 
 /* Callback for use by cmd_delete */
