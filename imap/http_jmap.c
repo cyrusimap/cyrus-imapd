@@ -3719,6 +3719,69 @@ static json_t* jmap_recurrence_from_ical(struct icalrecurrencetype recur, const 
     return jrecur;
 }
 
+/* Convert a VEVENT ical component to CalendarEvent attachments. */
+static json_t* jmap_attachments_from_ical(icalcomponent *comp) {
+    icalproperty* prop;
+    json_t *ret = json_pack("[]");
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
+
+        icalattach *attach = icalproperty_get_attach(prop);
+        icalparameter *param = NULL;
+        json_t *file = NULL;
+
+        /* Ignore ATTACH properties with value BINARY. */
+        if (!attach || !icalattach_get_is_url(attach)) {
+            continue;
+        }
+
+        /* blobId */
+        /* XXX Bron: for now the blobId is the attachment URL. */
+        const char *url = icalattach_get_url(attach);
+        if (!url || !strlen(url)) {
+            continue;
+        }
+
+        file = json_pack("{s:s}", "blobId", url);
+
+        /* type */
+        param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
+        if (param) {
+            const char *type = icalparameter_get_fmttype(param);
+            json_object_set_new(file, "type",
+                    type && strlen(type) ? json_string(type) : json_null());
+        }
+
+        /* name */
+        /* XXX ALways null. */
+        json_object_set_new(file, "name", json_null());
+
+        /* size */
+        json_int_t size = -1;
+        param = icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER);
+        if (param) {
+            const char *s = icalparameter_get_size(param);
+            if (s) {
+                char *ptr;
+                size = strtol(s, &ptr, 10);
+                json_object_set_new(file, "size",
+                        ptr && *ptr == '\0' ? json_integer(size) : json_null());
+            }
+        }
+
+        json_array_append_new(ret, file);
+    }
+
+    if (!json_array_size(ret)) {
+        json_decref(ret);
+        ret = json_null();
+    }
+
+    return ret;
+}
+
 
 /* Convert a VEVENT ical component to CalendarEvent inclusions. */
 static json_t* jmap_inclusions_from_ical(icalcomponent *comp) {
@@ -4164,7 +4227,7 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
 
     /* attachments */
     if (_wantprop(props, "attachments") && !exc) {
-        /* XXX - Implement this */
+        json_object_set_new(obj, "attachments", jmap_attachments_from_ical(comp));
     }
 
     return obj;
@@ -4942,6 +5005,132 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
     buf_free(&buf);
 }
 
+
+/* Create or overwrite the VEVENT attachments for VEVENT component comp as
+ * defined by the JMAP exceptions. */
+static void jmap_attachments_to_ical(icalcomponent *comp,
+                                     json_t *attachments,
+                                     calevent_rock *rock) {
+
+    hash_table atts;
+    icalproperty *prop, *next;
+    struct buf buf = BUF_INITIALIZER;
+    json_t *invalid = rock->invalid;
+
+    /* Move existing URL attachments to a temporary cache. */
+    construct_hash_table(&atts, json_array_size(attachments) + 1, 0);
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+         prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY);
+        icalattach *attach = icalproperty_get_attach(prop);
+
+        /* Ignore binary attachments. */
+        if (!attach || !icalattach_get_is_url(attach)) {
+            continue;
+        }
+
+        /* Ignore malformed URLs. */
+        const char *url = icalattach_get_url(attach);
+        if (!url || !strlen(url)) {
+            continue;
+        }
+
+        icalcomponent_remove_property(comp, prop);
+        hash_insert(url, prop, &atts);
+    }
+
+
+    /* Create or update attachments. */
+    size_t i;
+    json_t *attachment;
+    json_array_foreach(attachments, i, attachment) {
+
+        int pe;
+        const char *blobId = NULL;
+        const char *type = NULL;
+        const char *name = NULL;
+        json_int_t size = -1;
+        char *prefix;
+
+        buf_printf(&buf, "attachments[%llu]", (long long unsigned) i);
+        prefix = buf_newcstring(&buf);
+        buf_reset(&buf);
+
+        /* Parse and validate JMAP File object. */
+        pe = jmap_readprop_full(attachment, prefix, "blobId", 1, invalid, "s", &blobId);
+        if (pe > 0) {
+            if (!strlen(blobId)) {
+                buf_printf(&buf, "%s.%s", prefix, "blobId");
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+                blobId = NULL;
+            }
+        }
+        if (json_object_get(attachment, "type") != json_null()) {
+            jmap_readprop_full(attachment, prefix, "type", 0, invalid, "s", &type);
+        }
+        if (json_object_get(attachment, "name") != json_null()) {
+            jmap_readprop_full(attachment, prefix, "name", 0, invalid, "s", &name);
+        }
+        if (json_object_get(attachment, "size") != json_null()) {
+            pe = jmap_readprop_full(attachment, prefix, "size", 0, invalid, "I", &size);
+            if (pe > 0 && size < 0) {
+                buf_printf(&buf, "%s.%s", prefix, "size");
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
+
+        if (blobId && !json_array_size(invalid)) {
+
+            /* blobId */
+            prop = (icalproperty*) hash_lookup(blobId, &atts);
+            if (prop) {
+                hash_del(blobId, &atts);
+            } else {
+                icalattach *icalatt = icalattach_new_from_url(blobId);
+                prop = icalproperty_new_attach(icalatt);
+                icalattach_unref(icalatt);
+            }
+
+            /* type */
+            icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
+            if (param) icalproperty_remove_parameter_by_ref(prop, param);
+            if (type) {
+                icalproperty_add_parameter(prop, icalparameter_new_fmttype(type));
+            }
+
+            /* name */
+            /* XXX Could use Microsoft's X-FILENAME parameter to store name,
+             * but that's only for binary attachments. For now, ignore name. */
+
+            /* size */
+            param = icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER);
+            if (param) icalproperty_remove_parameter_by_ref(prop, param);
+            if (size >= 0) {
+                buf_printf(&buf, "%lld", (long long) size);
+                icalproperty_add_parameter(prop, icalparameter_new_size(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+
+            /* Add ATTACH property. */
+            icalcomponent_add_property(comp, prop);
+        }
+
+        free(prefix);
+        buf_free(&buf);
+    }
+
+    syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXXXXXX %s", icalcomponent_as_ical_string(comp));
+
+
+    /* Purge any remaining URL attachments from the cache. */
+    free_hash_table(&atts, (void(*)(void*)) icalproperty_free);
+
+}
+
 /* Rewrite the UTC-formatted UNTIL dates in the RRULE of VEVENT comp. */
 static void jmap_recurrence_update_tz(icalcomponent *comp,
                                       calevent_rock *rock) {
@@ -5685,7 +5874,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *exceptions = NULL;
     pe = jmap_readprop(event, "exceptions", 0, invalid, "o", &exceptions);
     if (pe > 0) {
-        if (!exc && json_object_size(exceptions)) {
+        if (!exc && (exceptions == json_null() || json_object_size(exceptions))) {
             jmap_exceptions_to_ical(comp, exceptions, rock);
         } else {
             json_array_append_new(invalid, json_string("exceptions"));
@@ -5695,7 +5884,16 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         jmap_exceptions_update_tz(comp, rock);
     }
 
-    /* XXX - attachments */
+    /* attachments */
+    json_t *attachments = NULL;
+    pe = jmap_readprop(event, "attachments", 0, invalid, "o", &attachments);
+    if (pe > 0) {
+        if (!exc && (attachments == json_null() || json_array_size(attachments))) {
+            jmap_attachments_to_ical(comp, attachments, rock);
+        } else {
+            json_array_append_new(invalid, json_string("attachments"));
+        }
+    }
 
     if (json_array_size(invalid)) {
         return;
@@ -6073,6 +6271,7 @@ done:
     if (dstmboxname) free(dstmboxname);
     if (resource) free(resource);
     if (ical) icalcomponent_free(ical);
+    if (oldical) icalcomponent_free(oldical);
     json_decref(invalid);
     return r;
 }
@@ -6126,6 +6325,7 @@ static int setCalendarEvents(struct jmap_req *req)
             }
             if (error_count != json_object_size(notCreated)) {
                 /* Bail out for any setErrors. */
+                free(uid);
                 continue;
             }
 
