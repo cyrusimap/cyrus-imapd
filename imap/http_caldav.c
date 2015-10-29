@@ -1216,9 +1216,9 @@ static int caldav_delete_cal(struct transaction_t *txn,
             goto done;
         }
 
-        if (!strcmpsafe(sparam.userid, userid)) {
+        if (sparam.isyou) {
             /* Organizer scheduling object resource */
-            sched_request(organizer, &sparam, ical, NULL, 0);
+            sched_request(userid, organizer, &sparam, ical, NULL, 0);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
@@ -2668,7 +2668,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* Lookup the organizer */
             r = caladdress_lookup(organizer, &sparam, userid);
             if (r == HTTP_NOT_FOUND) {
-                sched_param_free(&sparam);
                 break;  /* not a local organiser?  Just skip it */
             }
             if (r) {
@@ -2678,7 +2677,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                        txn->req_tgt.mbentry->name, organizer);
                 txn->error.desc = "Failed to lookup organizer address\r\n";
                 ret = HTTP_SERVER_ERROR;
-                sched_param_free(&sparam);
                 goto done;
             }
 
@@ -2708,13 +2706,14 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
             }
 
-            if (!strcmpsafe(sparam.userid, userid)) {
+            if (sparam.isyou) {
                 /* Organizer scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
+                    sched_param_free(&sparam);
                     goto done;
                 }
-                sched_request(organizer, &sparam, oldical, ical, 0);
+                sched_request(userid, organizer, &sparam, oldical, ical, 0);
             }
             else {
                 /* Attendee scheduling object resource */
@@ -2733,8 +2732,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
 #endif
                 sched_reply(userid, oldical, ical);
-                sched_param_free(&sparam);
             }
+            sched_param_free(&sparam);
 
             flags |= NEW_STAG;
         }

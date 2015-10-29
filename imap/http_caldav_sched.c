@@ -1470,7 +1470,7 @@ static void sched_deliver_local(const char *recipient,
         if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
             sched_pollstatus(recipient, sparam, ical, attendee);
         else
-            sched_request(recipient, sparam, NULL, ical, attendee);
+            sched_request(userid, recipient, sparam, NULL, ical, attendee);
     }
 
   done:
@@ -1846,7 +1846,8 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
 
 /* Create and deliver an organizer scheduling request */
-void sched_request(const char *organizer, struct sched_param *sparam,
+void sched_request(const char *userid, const char *organizer,
+                   struct sched_param *sparam,
                    icalcomponent *oldical, icalcomponent *newical,
                    const char *att_update)
 {
@@ -1876,7 +1877,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
         int rights = 0;
         mbentry_t *mbentry = NULL;
         /* Check ACL of auth'd user on userid's Scheduling Outbox */
-        char *outboxname = caldav_mboxname(sparam->userid, SCHED_OUTBOX);
+        char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
         r = mboxlist_lookup(outboxname, &mbentry, NULL);
         if (r) {
@@ -1893,7 +1894,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
             /* DAV:need-privileges */
             sched_stat = SCHEDSTAT_NOPRIVS;
             syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
-                   httpd_userid, sparam->userid);
+                   httpd_userid, userid);
 
             goto done;
         }
@@ -2034,7 +2035,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
     if (sparam->flags & SCHEDTYPE_REMOTE)
         authstate = auth_newstate("anonymous");
     else
-        authstate = auth_newstate(sparam->userid);
+        authstate = auth_newstate(userid);
 
     hash_enumerate(&att_table, sched_deliver, authstate);
     auth_freestate(authstate);
