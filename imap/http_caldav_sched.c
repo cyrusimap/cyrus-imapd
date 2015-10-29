@@ -73,17 +73,26 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
     const char *userid = addr, *p;
     int islocal = 1, found = 1;
     size_t len;
+    char *testuser = NULL;
+
+    if (myuserid) {
+        if (strchr(myuserid, '@') || !httpd_extradomain)
+            testuser = xstrdup(myuserid);
+        else
+            testuser = strconcat(myuserid, "@", httpd_extradomain, (char *)NULL);
+    }
 
     memset(param, 0, sizeof(struct sched_param));
 
     if (!addr) return HTTP_NOT_FOUND;
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
-    if (myuserid && !strcasecmp(userid, myuserid)) {
+    if (testuser && !strcasecmp(userid, testuser)) {
         param->isyou = 1;
-        param->userid = xstrdupnull(userid); /* XXX - memleak */
+        param->userid = testuser;
         return 0; // myself is always local
     }
+    free(testuser);
     len = strlen(userid);
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
