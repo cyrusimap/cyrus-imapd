@@ -1271,10 +1271,10 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     *old.ext_ptr = '\0';
 
     /* unlock and close backup files */
-    lock_unlock(old.fd, old.fname);
-    close(old.fd);
     lock_unlock(new.fd, new.fname);
     close(new.fd);
+    lock_unlock(old.fd, old.fname);
+    close(old.fd);
 
     /* close backups database */
     cyrusdb_close(backups_db);
@@ -1293,6 +1293,12 @@ error:
         unlink(new.fname);
         *new.ext_ptr = '\0';
     }
+
+    /* close the files if we got that far (also unlocks) */
+    if (new.fd != -1)
+        close(new.fd);
+    if (old.fd != -1)
+        close(old.fd);
 
     /* abort any transaction and close the database */
     if (backups_db) {
