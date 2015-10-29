@@ -2380,7 +2380,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 static int caldav_post_outbox(struct transaction_t *txn, int rights)
 {
     int ret = 0, r;
-    char orgid[MAX_MAILBOX_NAME+1] = "";
     const char **hdr;
     struct mime_type_t *mime = NULL;
     icalcomponent *ical = NULL, *comp;
@@ -2441,18 +2440,24 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 
     /* Organizer MUST be local to use CalDAV Scheduling */
     organizer = icalproperty_get_organizer(prop);
-    if (organizer) {
-        if (!caladdress_lookup(organizer, &sparam, txn->req_tgt.userid) &&
-            !(sparam.flags & SCHEDTYPE_REMOTE)) {
-            strlcpy(orgid, sparam.userid, sizeof(orgid));
-        }
-    }
-
-    if (strcasecmp(orgid, txn->req_tgt.userid)) {
+    if (!organizer) {
         txn->error.precond = CALDAV_VALID_ORGANIZER;
         ret = HTTP_FORBIDDEN;
         goto done;
     }
+    r = caladdress_lookup(organizer, &sparam, txn->req_tgt.userid);
+    if (r) {
+        txn->error.precond = CALDAV_VALID_ORGANIZER;
+        ret = HTTP_FORBIDDEN;
+        goto done;
+    }
+    if (!sparam.isyou) {
+        sched_param_free(&sparam);
+        txn->error.precond = CALDAV_VALID_ORGANIZER;
+        ret = HTTP_FORBIDDEN;
+        goto done;
+    }
+    sched_param_free(&sparam);
 
     switch (kind) {
     case ICAL_VFREEBUSY_COMPONENT:
