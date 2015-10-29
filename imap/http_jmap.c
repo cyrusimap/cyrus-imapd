@@ -115,6 +115,7 @@ static int getCalendarEvents(struct jmap_req *req);
 static int getCalendarEventUpdates(struct jmap_req *req);
 static int getCalendarEventList(struct jmap_req *req);
 static int setCalendarEvents(struct jmap_req *req);
+static int getCalendarPreferences(struct jmap_req *req);
 
 static const struct message_t {
     const char *name;
@@ -133,6 +134,7 @@ static const struct message_t {
     { "getCalendarEventUpdates",&getCalendarEventUpdates },
     { "getCalendarEventList",   &getCalendarEventList },
     { "setCalendarEvents",      &setCalendarEvents },
+    { "getCalendarPreferences", &getCalendarPreferences },
     { NULL,             NULL}
 };
 
@@ -7040,4 +7042,16 @@ done:
     if (rock.events) json_decref(rock.events);
     if (db) caldav_close(db);
     return r;
+}
+
+static int getCalendarPreferences(struct jmap_req *req)
+{
+    /* XXX Just a dummy implementation to make the JMAP web client happy while
+     * testing. */
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("calendarPreferences"));
+    json_array_append_new(item, json_pack("{}"));
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+    return 0;
 }
