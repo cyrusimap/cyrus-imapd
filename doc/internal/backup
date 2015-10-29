@@ -169,6 +169,20 @@ how to tell when the appends are finished?
 how can we tell the difference between folder(s) moved to a different user vs
 user has been renamed?
 
+there is a setting: 'allowusermoves: 0' which, when enabled, allows users to
+be renamed via IMAP rename/xfer commands.  but the default is that this is
+disabled.  we could initially require this to be disabled while using backups...
+
+not sure what the workflow looks like for renaming a user if this is not enabled.
+
+not sure what the sync flow looks like in either case.
+
+looking at sync_apply_rename and mboxlist_renamemailbox, it seems like we'll
+see an APPLY RENAME for each affected mbox when a recursive rename is occurring.
+
+there doesn't seem to be anything preventing user/a/foo -> user/b/foo in the
+general (non-INBOX) case.
+
 
 locking
 -------
