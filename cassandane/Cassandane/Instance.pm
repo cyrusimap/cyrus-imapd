@@ -63,6 +63,11 @@ use Cassandane::Daemon;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
 use Cassandane::Cassini;
+use AnyEvent;
+use AnyEvent::Handle;
+use AnyEvent::Socket;
+use AnyEvent::Util;
+use JSON;
 
 my $__cached_rootdir;
 my $stamp;
@@ -500,6 +505,11 @@ sub _generate_imapd_conf
     $self->{config}->set(
 		sasl_pwcheck_method => 'saslauthd',
 		sasl_saslauthd_path => "$self->{basedir}/run/mux",
+                notifysocket => "dlist:$self->{basedir}/run/notify",
+                imipnotifier => 'imip',
+                event_notifier => 'pusher',
+                event_groups => 'mailbox message flags calendar',
+
     );
     $self->{config}->generate($self->_imapd_conf());
 }
@@ -770,6 +780,33 @@ sub _start_authdaemon
     };
 }
 
+sub _start_notifyd
+{
+    my ($self) = @_;
+
+    my $basedir = $self->{basedir};
+
+    my $notifypid = fork();
+    unless ($notifypid) {
+	$SIG{TERM} = sub { die "killed" };
+
+	POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+
+	# child;
+	$0 = "cassandane notifyd: $basedir";
+	notifyd("$basedir/run");
+	exit 0;
+    }
+
+    xlog "started notifyd for $basedir as $notifypid";
+    push @{$self->{_shutdowncallbacks}}, sub {
+	my $self = shift;
+	xlog "killing notifyd $notifypid";
+	kill(15, $notifypid);
+	waitpid($notifypid, 0);
+    };
+}
+
 #
 # Create a user, with a home folder
 #
@@ -840,6 +877,7 @@ sub start
 	$self->_add_services_from_cyrus_conf();
     }
     $self->_start_authdaemon();
+    $self->_start_notifyd();
     $self->_uncompress_berkeley_crud();
     $self->_start_master();
     $self->{_stopped} = 0;
@@ -1611,6 +1649,65 @@ sub get_counted_string
     my $size = unpack('n', $data);
     $sock->read($data, $size);
     return unpack("A$size", $data);
+}
+
+sub notifyd
+{
+    my $dir = shift;
+
+    $0 = "cassandane notifyd $dir";
+
+    my @EVENTS;
+    tcp_server("unix/", "$dir/notify", sub {
+        my $fh = shift;
+        my $Handle = AnyEvent::Handle->new(
+            fh => $fh,
+        );
+        $Handle->push_read('Cyrus::DList' => 1, sub {
+            my $dlist = $_[1];
+            my $event = $dlist->as_perl();
+            #xlog "GOT EVENT: " . encode_json($event);
+            push @EVENTS, $event;
+            $Handle->push_write('Cyrus::DList' => scalar(Cyrus::DList->new_kvlist("OK")), 1);
+            $Handle->push_shutdown();
+        });
+    });
+
+    tcp_server("unix/", "$dir/getnotify", sub {
+        my $fh = shift;
+        my $Handle = AnyEvent::Handle->new(
+            fh => $fh,
+        );
+        #xlog "REPLYING EVENTS: " . scalar(@EVENTS);
+        $Handle->push_write(json => \@EVENTS);
+        $Handle->push_shutdown();
+        @EVENTS = ();
+    });
+
+    AnyEvent->condvar()->recv();
+}
+
+sub getnotify
+{
+    my ($self) = @_;
+
+    my $basedir = $self->{basedir};
+    my $path = "$basedir/run/getnotify";
+
+    my $data = eval {
+        my $sock = IO::Socket::UNIX->new(
+            Type => SOCK_STREAM(),
+            Peer => $path,
+        ) || die "Connection failed $!";
+        my $line = $sock->getline();
+        return decode_json($line);
+    };
+    if ($@) {
+        my $data = `ls -la $basedir/run; whoami; lsof -n | grep notify`;
+        xlog "Failed $@ ($data)";
+    }
+
+    return $data;
 }
 
 1;
