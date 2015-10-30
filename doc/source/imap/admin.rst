@@ -10,22 +10,23 @@ Overview
 ========
 .. toctree::
     :maxdepth: 2
-    
+
     developer/architecture
-    
+
 Configuration
 =============
 .. toctree::
     :maxdepth: 2
 
     admin/murder/murder
-    admin/access-control 
+    admin/access-control
     admin/nntp
     admin/protlayer
     admin/sieve
     admin/sop
     admin/config-mailboxdistribution
-    
+    admin/nginx-proxy
+
 .. :todo:
     Event Source (we need a listener that just logs events to syslog)
     admin/sop/search Search (squat, xapian, ...)
@@ -33,13 +34,13 @@ Configuration
     Split meta
     Archive partition
     Conversations
-    DAV / HTTP 
-    
+    DAV / HTTP
+
 FAQ
 ====
 .. toctree::
     :maxdepth: 2
-    
+
     faq
 
 References
@@ -47,24 +48,22 @@ References
 
 .. toctree::
     :maxdepth: 1
-    
+
     admin/commands
     admin/pycommands
-    admin/administration-tools    
+    admin/administration-tools
     admin/access-control/rights-reference
 
-.. toctree::
-    :maxdepth: 2
+.. :todo:
 
-    howtos/nginx-proxy
+    This was listed here, but there's no file. Hmm!
     howtos/shared-folder-mail-delivery
 
 Other
-=====    
+=====
 .. toctree::
     :maxdepth: 2
-    
+
     admin/packagers
 
-    
-    
+
