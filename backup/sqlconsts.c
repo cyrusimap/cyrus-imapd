@@ -215,8 +215,13 @@ const char backup_index_mailbox_message_update_sql[] = QUOTE(
         flags = :flags,
         internaldate = :internaldate,
         annotations = :annotations,
-        expunged = :expunged
-    WHERE mailbox_id = :mailbox_id and message_id = :message_id;
+        expunged = COALESCE(
+            (SELECT expunged FROM mailbox_message
+                WHERE mailbox_id = :mailbox_id
+                AND message_id = :message_id),
+            :expunged
+        )
+    WHERE mailbox_id = :mailbox_id AND message_id = :message_id;
 );
 
 const char backup_index_mailbox_message_insert_sql[] = QUOTE(
