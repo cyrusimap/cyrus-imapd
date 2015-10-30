@@ -947,7 +947,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
     buf_free(&buf);
 
     /* update the index */
-    return backup_index(backup, dlist, start, len);
+    return backup_index(backup, dlist, ts, start, len);
 
 error:
     buf_free(&buf);

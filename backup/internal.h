@@ -71,6 +71,6 @@ struct backup {
 };
 
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
-                        off_t start, size_t len);
+                        time_t ts, off_t start, size_t len);
 #endif
 #endif

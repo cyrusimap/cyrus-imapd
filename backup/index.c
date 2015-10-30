@@ -58,7 +58,7 @@ static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
                           off_t dl_offset, size_t dl_len);
 
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
-                        off_t start, size_t len)
+                        time_t ts, off_t start, size_t len)
 {
     int r;
 
