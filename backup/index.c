@@ -40,6 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+#include <assert.h>
 
 #include "lib/xmalloc.h"
 
@@ -53,7 +54,7 @@
 #include "backup/internal.h"
 
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
-                          off_t dl_offset);
+                          time_t ts, off_t dl_offset);
 static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
                           off_t dl_offset, size_t dl_len);
 
@@ -65,7 +66,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
     if (0) { }
 
     else if (strcmp(dlist->name, "MAILBOX") == 0)
-        r = _index_mailbox(backup, dlist, start);
+        r = _index_mailbox(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
         r = _index_message(backup->db, backup->append_state->index_id, dlist, start, len);
 
@@ -77,8 +78,32 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
     return r;
 }
 
+static int _get_magic_flags(struct dlist *flags, int *is_expunged)
+{
+    struct dlist *found_expunged = NULL;
+    struct dlist *di;
+    int found = 0;
+
+    assert(strcmp(flags->name, "FLAGS") == 0);
+
+    for (di = flags->head; di; di = di->next) {
+        if (strcmp(di->sval, "\\Expunged") == 0) {
+            if (is_expunged) *is_expunged = 1;
+            found_expunged = di;
+            found++;
+        }
+    }
+
+    if (found_expunged) {
+        dlist_unstitch(flags, found_expunged);
+        dlist_free(&found_expunged);
+    }
+
+    return found;
+}
+
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
-                          off_t dl_offset)
+                          time_t ts, off_t dl_offset)
 {
     fprintf(stderr, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
 
@@ -206,6 +231,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         struct dlist *annotations = NULL;
         struct buf annotations_buf = BUF_INITIALIZER;
         int message_id = -1;
+        time_t expunged = 0;
 
         if (!dlist_getnum32(ki, "UID", &uid))
             goto error;
@@ -222,7 +248,17 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
 
         dlist_getlist(ki, "FLAGS", &flags);
         if (flags) {
+            int is_expunged = 0;
+
+            _get_magic_flags(flags, &is_expunged);
+
+            if (is_expunged) {
+                fprintf(stderr, "%s: found expunge flag for message %s\n", __func__, guid);
+                expunged = ts;
+            }
+
             dlist_printbuf(flags, 0, &flags_buf);
+            fprintf(stderr, "%s: found flags for message %s: %s\n", __func__, guid, buf_cstring(&flags_buf));
         }
 
         dlist_getlist(ki, "ANNOTATIONS", &annotations);
@@ -247,9 +283,17 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             { ":flags",             SQLITE_TEXT,    { .s = buf_cstring(&flags_buf) } },
             { ":internaldate",      SQLITE_INTEGER, { .i = internaldate } },
             { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations_buf) } },
-            { ":expunged",          SQLITE_INTEGER, { .i = 0 /* FIXME */ } },
+            { ":expunged",          SQLITE_NULL,    { .s = NULL      } },
             { NULL,                 SQLITE_NULL,    { .s = NULL      } },
         };
+
+        /* provide an expunged value if we have one */
+        if (expunged) {
+            struct sqldb_bindval *expunged_bval = &record_bval[9];
+            assert(strcmp(expunged_bval->name, ":expunged") == 0);
+            expunged_bval->type = SQLITE_INTEGER;
+            expunged_bval->val.i = expunged;
+        }
 
         r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
                        record_bval, NULL, NULL);

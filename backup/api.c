@@ -550,6 +550,7 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
     struct dlist *record = dlist_newkvlist(parent, NULL);
     const char *flag_str = NULL;
     const char *annot_str = NULL;
+    time_t expunged = 0;
     int r = 0;
 
     int column = 4;  // skip unused columns
@@ -561,6 +562,7 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
     dlist_setatom(record, "GUID", _column_text(stmt, column++)); // FIXME dlist_setguid?
     dlist_setnum32(record, "SIZE", _column_int(stmt, column++));
     annot_str = _column_text(stmt, column++);
+    expunged = _column_int(stmt, column++);
 
     if (flag_str && flag_str[0]) {
         struct dlist *flags = NULL;
@@ -568,6 +570,8 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
         if (r) return r; // FIXME handle this sanely
         if (flags) {
             flags->name = xstrdup("FLAGS");
+            if (expunged)
+                dlist_setflag(flags, "FLAG", "\\Expunged");
             dlist_stitch(record, flags);
         }
     }
