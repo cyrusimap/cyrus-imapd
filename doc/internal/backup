@@ -406,6 +406,15 @@ of message data should be avoided by keeping the same guid.
 compress
 --------
 
+# finding messages that are to be kept (either exist as unexpunged somewhere,
+# or exist as expunged but more recently than threshold)
+# need to work out how to get unique rows here -- "distinct"?
+sqlite> select m.*, mm.expunged from message as m left join mailbox_message as mm on m.id = mm.message_id and (mm.expunged is null or mm.expunged > 1437709300);
+id|guid|partition|backup_id|offset|length|expunged
+1|1c7cca361502dfed2d918da97e506f1c1e97dfbe|default|1|458|2159|
+1|1c7cca361502dfed2d918da97e506f1c1e97dfbe|default|1|458|2159|1446179047
+1|1c7cca361502dfed2d918da97e506f1c1e97dfbe|default|1|458|2159|1446179047
+
 remember: a single APPLY MESSAGE line can contain many messages!
 
 settings:
