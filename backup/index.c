@@ -251,11 +251,12 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             { NULL,                 SQLITE_NULL,    { .s = NULL      } },
         };
 
+        r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
+                       record_bval, NULL, NULL);
+
         buf_free(&annotations_buf);
         buf_free(&flags_buf);
 
-        r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
-                       record_bval, NULL, NULL);
         if (r) {
             // FIXME handle this sensibly
             fprintf(stderr, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
