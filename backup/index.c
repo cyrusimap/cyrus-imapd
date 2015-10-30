@@ -53,6 +53,8 @@
 #define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
 #include "backup/internal.h"
 
+static int _index_expunge(struct backup *backup, struct dlist *dl,
+                          time_t ts, off_t dl_offset);
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
 static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
@@ -65,6 +67,8 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
 
     if (0) { }
 
+    else if (strcmp(dlist->name, "EXPUNGE") == 0)
+        r = _index_expunge(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MAILBOX") == 0)
         r = _index_mailbox(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
@@ -76,6 +80,47 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
     }
 
     return r;
+}
+
+static int _index_expunge(struct backup *backup, struct dlist *dl,
+                          time_t ts, off_t dl_offset)
+{
+    fprintf(stderr, "indexing EXPUNGE at " OFF_T_FMT "...\n", dl_offset);
+
+    const char *mboxname;
+    const char *uniqueid;
+    struct dlist *uidl;
+    struct dlist *di;
+    struct backup_mailbox *mailbox = NULL;
+
+    if (!dlist_getatom(dl, "MBOXNAME", &mboxname))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(dl, "UNIQUEID", &uniqueid))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getlist(dl, "UID", &uidl))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    mailbox = backup_get_mailbox_by_name(backup, mbname, 0);
+    mbname_free(&mbname);
+    // FIXME verify uniqueid
+
+    // FIXME transaction ??
+
+    for (di = uidl->head; di; di = di->next) {
+        struct sqldb_bindval uid_bval[] = {
+            { ":mailbox_id",    SQLITE_INTEGER, { .i = mailbox->id } },
+            { ":uid",           SQLITE_INTEGER, { .i = dlist_num(di) } },
+            { ":expunged",      SQLITE_INTEGER, { .i = ts } },
+        };
+
+        sqldb_exec(backup->db, backup_index_mailbox_message_expunge_sql,
+                   uid_bval, NULL, NULL);
+
+        // FIXME handle failure?
+    }
+
+    return 0;
 }
 
 static int _get_magic_flags(struct dlist *flags, int *is_expunged)
