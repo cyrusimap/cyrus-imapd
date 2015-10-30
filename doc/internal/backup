@@ -435,6 +435,10 @@ four kinds of compression (probably at least two simultaneously):
 "unused chunks"
     chunks which contain only unused messages
 
+FIXME what about all the other noise in the chunks -- MAILBOX etc
+we know the last backup id for each mailbox, so maybe the "chunks we still need"
+is "anything containing a valid message or ref'd in a mailbox"
+
 algorithm:
 
 *   open (and lock) backup and backup.new (or bail out)
