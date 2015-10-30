@@ -272,7 +272,7 @@ EXPORTED void dlist_stitch(struct dlist *parent, struct dlist *child)
     }
 }
 
-void dlist_unstitch(struct dlist *parent, struct dlist *child)
+EXPORTED void dlist_unstitch(struct dlist *parent, struct dlist *child)
 {
     struct dlist *prev = NULL;
     struct dlist *replace = NULL;
