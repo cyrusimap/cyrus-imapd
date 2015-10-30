@@ -66,6 +66,7 @@ extern const char backup_index_mailbox_select_uniqueid_sql[];
 extern const char backup_index_mailbox_message_update_sql[];
 extern const char backup_index_mailbox_message_insert_sql[];
 extern const char backup_index_mailbox_message_select_mailbox_sql[];
+extern const char backup_index_mailbox_message_expunge_sql[];
 
 extern const char backup_index_message_insert_sql[];
 extern const char backup_index_message_select_guid_sql[];

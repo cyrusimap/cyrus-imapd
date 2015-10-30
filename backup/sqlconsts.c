@@ -249,6 +249,12 @@ const char backup_index_mailbox_message_select_mailbox_sql[] = QUOTE(
     WHERE mailbox_id = :mailbox_id;
 );
 
+const char backup_index_mailbox_message_expunge_sql[] = QUOTE(
+    UPDATE mailbox_message
+    SET expunged = :expunged
+    WHERE mailbox_id = :mailbox_id AND uid = :uid;
+);
+
 const char backup_index_message_insert_sql[] = QUOTE(
     INSERT INTO message (
         guid, partition, backup_id, offset, length
