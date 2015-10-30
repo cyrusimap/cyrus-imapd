@@ -437,6 +437,12 @@ data we absolutely need to keep:
 * the most recent APPLY MAILBOX containing a RECORD for each message we're keeping (record state)
 * the APPLY MESSAGE for each message we're keeping (message data)
 
+data that we should practically keep:
+
+* all APPLY MAILBOXes for a given mailbox from the backup identified as its last
+* all APPLY MAILBOXes containing a RECORD for a given message from the backup identified as its last
+* the APPLY MESSAGE for each message we're keeping
+
 four kinds of compression (probably at least two simultaneously):
 
 * removing unused chunks
@@ -457,6 +463,7 @@ algorithm:
 *   create a chunk in backup.new
 *   foreach chunk we still need:
 *       foreach line in the chunk:
+*           next line if we don't need to keep it
 *           create new line
 *           foreach message in line:
 *               if we still need the message, or if we're not doing message granularity
