@@ -415,12 +415,27 @@ id|guid|partition|backup_id|offset|length|expunged
 1|1c7cca361502dfed2d918da97e506f1c1e97dfbe|default|1|458|2159|1446179047
 1|1c7cca361502dfed2d918da97e506f1c1e97dfbe|default|1|458|2159|1446179047
 
+# finding backups that are still needed (due to containing last state
+# of mailbox or mailbox_message, or containing a message)
+sqlite> select * from backup where id in (select last_backup_id from mailbox union select last_backup_id from mailbox_message union select backup_id from message as m left join mailbox_message as mm on m.id = mm.message_id and mm.expunged > 1437709300);
+id|timestamp|offset|length|file_sha1|data_sha1
+1|1437709276|0|3397|da39a3ee5e6b4b0d3255bfef95601890afd80709|6836d0110252d08a0656c14c2d2d314124755491
+3|1437709355|1977|2129|fee183c329c011ead7757f59182116500776eaaf|a5677cfa1f5f7b627763652f4bb9b99f5970748c
+4|1437709425|2746|1719|3d9f02135bf964ff0b6a917921b862c3420e48f0|7b64ec321457715ee61fe238f178f5d72adaef64
+5|1437709508|3589|2890|0cee599b1573110fee428f8323690cbcb9589661|90d104346ef3cba9e419461dd26045035f4cba02
+
 remember: a single APPLY MESSAGE line can contain many messages!
 
 settings:
 
 * backup retention period
 * chunk combination size (byte length or elapsed time)
+
+data we absolutely need to keep:
+
+* the most recent APPLY MAILBOX for each mailbox we're keeping (mailbox state)
+* the most recent APPLY MAILBOX containing a RECORD for each message we're keeping (record state)
+* the APPLY MESSAGE for each message we're keeping (message data)
 
 four kinds of compression (probably at least two simultaneously):
 
@@ -434,10 +449,6 @@ four kinds of compression (probably at least two simultaneously):
     than the retention period
 "unused chunks"
     chunks which contain only unused messages
-
-FIXME what about all the other noise in the chunks -- MAILBOX etc
-we know the last backup id for each mailbox, so maybe the "chunks we still need"
-is "anything containing a valid message or ref'd in a mailbox"
 
 algorithm:
 
