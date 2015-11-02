@@ -6817,15 +6817,32 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
     struct renrock *text = (struct renrock *)rock;
     char *oldextname = NULL, *newextname = NULL;
     int r = 0;
+    uint32_t uidvalidity = mbentry->uidvalidity;
 
     if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_BUFFER)
         goto done;
 
     strcpy(text->newmailboxname + text->nl, mbentry->name + text->ol);
 
+    /* check if a previous deleted mailbox existed */
+    mbentry_t *newmbentry = NULL;
+    r = mboxlist_lookup_allow_all(text->newmailboxname, &newmbentry, NULL);
+    /* XXX - otherwise we should probably reject now, but meh, save it for
+     * a real cleanup */
+    if (!r && newmbentry->mbtype == MBTYPE_DELETED) {
+        /* changing the unique id since last time? */
+        if (strcmpsafe(mbentry->uniqueid, newmbentry->uniqueid)) {
+            /* then the UIDVALIDITY must be higher than before */
+            if (uidvalidity <= newmbentry->uidvalidity)
+                uidvalidity = newmbentry->uidvalidity+1;
+        }
+    }
+    mboxlist_entry_free(&newmbentry);
+
+
     /* don't notify implied rename in mailbox hierarchy */
     r = mboxlist_renamemailbox(mbentry->name, text->newmailboxname,
-                               text->partition, 0 /* uidvalidity */,
+                               text->partition, uidvalidity,
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user);
 
@@ -6995,8 +7012,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         goto done;
     }
 
-    mboxlist_entry_free(&mbentry);
-
     /* local mailbox */
 
     if (location && !config_partitiondir(location)) {
@@ -7096,10 +7111,26 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     /* attempt to rename the base mailbox */
     if (!r) {
         struct mboxevent *mboxevent = NULL;
+        uint32_t uidvalidity = mbentry ? mbentry->uidvalidity : 0;
 
         /* don't send rename notification if we only change the partition */
         if (strcmp(oldmailboxname, newmailboxname))
             mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
+
+        /* check if a previous deleted mailbox existed */
+        mbentry_t *newmbentry = NULL;
+        r = mboxlist_lookup_allow_all(newmailboxname, &newmbentry, NULL);
+        /* XXX - otherwise we should probably reject now, but meh, save it for
+         * a real cleanup */
+        if (!r && newmbentry->mbtype == MBTYPE_DELETED) {
+            /* changing the unique id since last time? */
+            if (!mbentry || strcmpsafe(mbentry->uniqueid, newmbentry->uniqueid)) {
+                /* then the UIDVALIDITY must be higher than before */
+                if (uidvalidity <= newmbentry->uidvalidity)
+                    uidvalidity = newmbentry->uidvalidity+1;
+            }
+        }
+        mboxlist_entry_free(&newmbentry);
 
         r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, location,
                                    0 /* uidvalidity */, imapd_userisadmin,
@@ -7186,7 +7217,6 @@ done:
     free(newextname);
     free(olduser);
     free(newuser);
-
 }
 
 /*

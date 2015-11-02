@@ -1041,22 +1041,10 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *newmbentry = NULL;
-    mbentry_t *mbentry = NULL;
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
                                   isadmin, forceuser);
     if (r) goto done;
-
-    /* check if a previous deleted mailbox existed */
-    r = mboxlist_mylookup(mboxname, &mbentry, NULL, 0);
-    if (!r && mbentry->mbtype == MBTYPE_DELETED) {
-        /* changing the unique id since last time? */
-        if (strcmpsafe(uniqueid, mbentry->uniqueid)) {
-            /* then the UIDVALIDITY must be higher than before */
-            if (uidvalidity <= mbentry->uidvalidity)
-                uidvalidity = mbentry->uidvalidity+1;
-        }
-    }
 
     if (copyacl) {
         acl = xstrdup(copyacl);
@@ -1120,7 +1108,6 @@ done:
 
     free(acl);
     free(newpartition);
-    mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&newmbentry);
 
     return r;
@@ -1137,10 +1124,21 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                   | OPT_POP3_NEW_UIDL;
     int r;
     struct mailbox *mailbox = NULL;
+    int uidvalidity = 0;
+
+    /* check if a previous deleted mailbox existed */
+    mbentry_t *oldmbentry = NULL;
+    r = mboxlist_lookup_allow_all(name, &oldmbentry, NULL);
+    if (!r && oldmbentry->mbtype == MBTYPE_DELETED) {
+        /* then the UIDVALIDITY must be higher than before */
+        if (uidvalidity <= oldmbentry->uidvalidity)
+            uidvalidity = oldmbentry->uidvalidity+1;
+    }
+    mboxlist_entry_free(&oldmbentry);
 
     r = mboxlist_createmailbox_full(name, mbtype, partition,
                                     isadmin, userid, auth_state,
-                                    options, 0, 0, NULL, NULL, localonly,
+                                    options, uidvalidity, 0, NULL, NULL, localonly,
                                     forceuser, dbonly, &mailbox);
 
     if (notify && !r) {
@@ -1697,6 +1695,10 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     if (r) goto done;
 
     if (!newpartition) newpartition = xstrdup(config_defpartition);
+
+    /* keep uidvalidity on rename unless specified */
+    if (!uidvalidity)
+        uidvalidity = oldmailbox->i.uidvalidity;
 
     /* Rename the actual mailbox */
     r = mailbox_rename_copy(oldmailbox, newname, newpartition, uidvalidity,
