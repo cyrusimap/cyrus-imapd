@@ -72,6 +72,34 @@ struct chunk {
     char *data_sha1;
 };
 
+static int verify_last_checksum(struct backup *backup);
+static int verify_all_checksums(struct backup *backup);
+static int verify_message_links(struct backup *backup);
+static int verify_mailbox_links(struct backup *backup);
+static int verify_message_guids(struct backup *backup);
+
+EXPORTED int backup_verify(struct backup *backup, unsigned level)
+{
+    int r = 0;
+
+    if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
+        r = verify_last_checksum(backup);
+
+    if (!r && (level & BACKUP_VERIFY_ALL_CHECKSUMS))
+        r = verify_all_checksums(backup);
+
+    if (!r && (level & BACKUP_VERIFY_MESSAGE_LINKS))
+        r = verify_message_links(backup);
+
+    if (!r && (level & BACKUP_VERIFY_MAILBOX_LINKS))
+        r = verify_mailbox_links(backup);
+
+    if (!r && (level & BACKUP_VERIFY_MESSAGE_GUIDS))
+        r = verify_message_guids(backup);
+
+    return r;
+}
+
 static int _validate_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct chunk *chunk = (struct chunk *) rock;
@@ -87,9 +115,8 @@ static int _validate_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED int backup_verify(struct backup *backup, int level)
+static int verify_last_checksum(struct backup *backup)
 {
-    (void) level;
     struct chunk chunk = {0};
     struct gzuncat *gzuc = NULL;
 
@@ -156,3 +183,81 @@ done:
     return r;
 }
 
+/* verify checksum of each chunk */
+static int verify_all_checksums(struct backup *backup)
+{
+    /* FIXME write this */
+    /* this will be a generalisation of the above but in a loop rather than
+     * just doing most recent... so internals of above will probably need
+     * de-duping... */
+    (void) backup;
+    return -1;
+}
+
+/* verify that each message exists within the chunk the index claims */
+static int verify_message_links(struct backup *backup)
+{
+    /*
+     * get list of chunks
+     * foreach chunk
+     *   get list of messages in chunk
+     *   open chunk
+     *   foreach message
+     *     seek to message offset
+     *     read dlist
+     *     look for matching guid in dlist
+     */
+
+    /* FIXME write this */
+    (void) backup;
+    return -1;
+}
+
+/* verify that the matching MAILBOX exists within the claimed chunk
+ * for each mailbox or mailbox_message in the index
+ */
+static int verify_mailbox_links(struct backup *backup)
+{
+    /*
+     * get list of chunks
+     * foreach chunk
+     *   get list of mailboxes in chunk
+     *   get list of mailbox_messages in chunk
+     *   open chunk
+     *   foreach line in chunk
+     *     read dlist
+     *     if it's a mailbox with records and it matches
+     *       remove from mailbox_message list
+     *       remove from mailbox_list
+     *     if it's a mailbox and it matches
+     *       remove from mailbox list
+     *   failed if either list of mailboxes or list of mailbox_messages is not empty
+     */
+
+    /* FIXME write this */
+    (void) backup;
+    return -1;
+}
+
+/* verify that each message's on-disk data matches its recorded guid */
+static int verify_message_guids(struct backup *backup)
+{
+    /*
+     * get list of chunks
+     * foreach chunk
+     *   get list of messages in chunk
+     *   open chunk
+     *   foreach message
+     *     seek to message offset
+     *     read dlist
+     *     look for matching guid in dlist
+     *     re-calculate guid from content
+     *       failed if doesn't match
+     *
+     * (probably dedup with verify_message_links...)
+     */
+
+    /* FIXME write this */
+    (void) backup;
+    return -1;
+}

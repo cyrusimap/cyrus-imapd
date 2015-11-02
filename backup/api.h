@@ -70,8 +70,8 @@ enum {
     BACKUP_VERIFY_MESSAGE_GUIDS = (1 << 4),
 };
 #define BACKUP_VERIFY_QUICK BACKUP_VERIFY_LAST_CHECKSUM
-#define BACKUP_VERIFY_FULL  ((BACKUP_VERIFY_MESSAGE_GUIDS << 1) - 1)
-int backup_verify(struct backup *backup, int level);
+#define BACKUP_VERIFY_FULL  ((unsigned) -1)
+int backup_verify(struct backup *backup, unsigned level);
 
 /* accessing backup properties */
 const char *backup_get_data_fname(const struct backup *backup);
