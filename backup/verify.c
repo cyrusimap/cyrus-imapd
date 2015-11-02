@@ -111,6 +111,10 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level)
 {
     int r = 0;
 
+    /* don't double-verify last checksum when verifying all */
+    if ((level & BACKUP_VERIFY_ALL_CHECKSUMS))
+        level &= ~BACKUP_VERIFY_LAST_CHECKSUM;
+
     if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
         r = verify_last_checksum(backup);
 
@@ -148,17 +152,11 @@ static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-static int verify_last_checksum(struct backup *backup)
-{
-    struct chunk_list chunk_list = {0};
-    struct chunk *chunk = NULL;
+static int _verify_one_checksum(struct backup *backup, struct chunk *chunk) {
     struct gzuncat *gzuc = NULL;
+    int r;
 
-    int r = sqldb_exec(backup->db, backup_index_chunk_select_latest_sql,
-                       NULL, chunk_select_cb, &chunk_list);
-    if (r) goto done;
-
-    chunk = chunk_list.head;
+    /* FIXME put chunk id into the error messages.... */
 
     if (!chunk->id) {
         fprintf(stderr, "%s: %s file checksum mismatch: not in index\n",
@@ -214,20 +212,41 @@ static int verify_last_checksum(struct backup *backup)
 
 done:
     if (gzuc) gzuc_close(&gzuc);
-    chunk_list_empty(&chunk_list);
     fprintf(stderr, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
+    return r;
+}
+
+static int verify_last_checksum(struct backup *backup)
+{
+    struct chunk_list chunk_list = {0};
+
+    int r = sqldb_exec(backup->db, backup_index_chunk_select_latest_sql,
+                       NULL, chunk_select_cb, &chunk_list);
+    if (!r)
+        r = _verify_one_checksum(backup, chunk_list.head);
+
+    chunk_list_empty(&chunk_list);
     return r;
 }
 
 /* verify checksum of each chunk */
 static int verify_all_checksums(struct backup *backup)
 {
-    /* FIXME write this */
-    /* this will be a generalisation of the above but in a loop rather than
-     * just doing most recent... so internals of above will probably need
-     * de-duping... */
-    (void) backup;
-    return -1;
+    struct chunk_list chunk_list = {0};
+    struct chunk *chunk;
+    int r;
+
+    r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
+                       NULL, chunk_select_cb, &chunk_list);
+    chunk = chunk_list.head;
+
+    while (!r && chunk) {
+        r = _verify_one_checksum(backup, chunk);
+        chunk = chunk->next;
+    }
+
+    chunk_list_empty(&chunk_list);
+    return r;
 }
 
 /* verify that each message exists within the chunk the index claims */
