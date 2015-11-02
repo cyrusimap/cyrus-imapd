@@ -270,6 +270,12 @@ const char backup_index_message_insert_sql[] = QUOTE(
     );
 );
 
+const char backup_index_message_select_all_sql[] = QUOTE(
+    SELECT id, guid, partition, chunk_id, offset, length
+    FROM message
+    ORDER BY id;
+);
+
 const char backup_index_message_select_guid_sql[] = QUOTE(
     SELECT id, guid, partition, chunk_id, offset, length
     FROM message
