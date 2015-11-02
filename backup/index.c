@@ -57,8 +57,8 @@ static int _index_expunge(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
-static int _index_message(sqldb_t *db, int chunk_id, struct dlist *dl,
-                          off_t dl_offset, size_t dl_len);
+static int _index_message(struct backup *backup, struct dlist *dl,
+                          time_t ts, off_t dl_offset, size_t dl_len);
 
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len)
@@ -72,7 +72,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
     else if (strcmp(dlist->name, "MAILBOX") == 0)
         r = _index_mailbox(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
-        r = _index_message(backup->db, backup->append_state->chunk_id, dlist, start, len);
+        r = _index_message(backup, dlist, ts, start, len);
 
     else {
         fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dlist->name);
@@ -373,10 +373,11 @@ error:
     return -1;
 }
 
-static int _index_message(sqldb_t *db, int chunk_id, struct dlist *dl,
-                          off_t dl_offset, size_t dl_len)
+static int _index_message(struct backup *backup, struct dlist *dl,
+                          time_t ts, off_t dl_offset, size_t dl_len)
 {
     fprintf(stderr, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
+    (void) ts;
 
     struct dlist *ki;
 
@@ -397,13 +398,13 @@ static int _index_message(sqldb_t *db, int chunk_id, struct dlist *dl,
         struct sqldb_bindval bval[] = {
             { ":guid",      SQLITE_TEXT,    { .s = guid      } },
             { ":partition", SQLITE_TEXT,    { .s = partition } },
-            { ":chunk_id",  SQLITE_INTEGER, { .i = chunk_id } },
+            { ":chunk_id",  SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
             { ":offset",    SQLITE_INTEGER, { .i = dl_offset } },
             { ":length",    SQLITE_INTEGER, { .i = dl_len    } },
             { NULL,         SQLITE_NULL,    { .s = NULL      } },
         };
 
-        int r = sqldb_exec(db, backup_index_message_insert_sql, bval, NULL,
+        int r = sqldb_exec(backup->db, backup_index_message_insert_sql, bval, NULL,
                            NULL);
         if (r) {
             // FIXME handle this sensibly
