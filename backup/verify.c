@@ -156,8 +156,6 @@ static int _verify_one_checksum(struct backup *backup, struct chunk *chunk) {
     struct gzuncat *gzuc = NULL;
     int r;
 
-    /* FIXME put chunk id into the error messages.... */
-
     if (!chunk->id) {
         fprintf(stderr, "%s: %s file checksum mismatch: not in index\n",
                 __func__, backup->data_fname);
@@ -170,8 +168,8 @@ static int _verify_one_checksum(struct backup *backup, struct chunk *chunk) {
     _sha1_file(backup->fd, backup->data_fname, chunk->offset, file_sha1);
     r = strncmp(chunk->file_sha1, file_sha1, sizeof(file_sha1));
     if (r) {
-        fprintf(stderr, "%s: %s file checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, file_sha1, chunk->file_sha1);
+        fprintf(stderr, "%s: %s (chunk %d) file checksum mismatch: %s on disk, %s in index\n",
+                __func__, backup->data_fname, chunk->id, file_sha1, chunk->file_sha1);
         goto done;
     }
 
@@ -195,6 +193,10 @@ static int _verify_one_checksum(struct backup *backup, struct chunk *chunk) {
         }
     }
     if (len != chunk->length) {
+        fprintf(stderr, "%s: %s (chunk %d) data length mismatch: "
+                        SIZE_T_FMT " on disk,"
+                        SIZE_T_FMT " in index\n",
+                __func__, backup->data_fname, chunk->id, len, chunk->length);
         r = -1;
         goto done;
     }
@@ -205,8 +207,8 @@ static int _verify_one_checksum(struct backup *backup, struct chunk *chunk) {
     assert(r == 2 * SHA1_DIGEST_LENGTH);
     r = strncmp(chunk->data_sha1, data_sha1, sizeof(data_sha1));
     if (r) {
-        fprintf(stderr, "%s: %s data checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, data_sha1, chunk->data_sha1);
+        fprintf(stderr, "%s: %s (chunk %d) data checksum mismatch: %s on disk, %s in index\n",
+                __func__, backup->data_fname, chunk->id, data_sha1, chunk->data_sha1);
         goto done;
     }
 
@@ -216,6 +218,7 @@ done:
     return r;
 }
 
+/* verify checksums of latest chunk */
 static int verify_last_checksum(struct backup *backup)
 {
     struct chunk_list chunk_list = {0};
@@ -229,7 +232,7 @@ static int verify_last_checksum(struct backup *backup)
     return r;
 }
 
-/* verify checksum of each chunk */
+/* verify checksums of each chunk */
 static int verify_all_checksums(struct backup *backup)
 {
     struct chunk_list chunk_list = {0};
@@ -264,6 +267,7 @@ static int verify_message_links(struct backup *backup)
      */
 
     /* FIXME write this */
+    fprintf(stderr, "%s: not implemented\n", __func__);
     (void) backup;
     return -1;
 }
@@ -290,6 +294,7 @@ static int verify_mailbox_links(struct backup *backup)
      */
 
     /* FIXME write this */
+    fprintf(stderr, "%s: not implemented\n", __func__);
     (void) backup;
     return -1;
 }
@@ -313,6 +318,7 @@ static int verify_message_guids(struct backup *backup)
      */
 
     /* FIXME write this */
+    fprintf(stderr, "%s: not implemented\n", __func__);
     (void) backup;
     return -1;
 }
