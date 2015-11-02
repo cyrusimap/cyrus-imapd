@@ -48,7 +48,7 @@
 const int backup_index_version = 1;
 
 const char backup_index_initsql[] = QUOTE(
-    CREATE TABLE backup(
+    CREATE TABLE chunk(
         id INTEGER PRIMARY KEY ASC,
         timestamp INTEGER,
         offset INTEGER unique,
@@ -61,7 +61,7 @@ const char backup_index_initsql[] = QUOTE(
         id INTEGER PRIMARY KEY ASC,
         guid CHAR UNIQUE NOT NULL,
         partition CHAR,
-        backup_id INTEGER REFERENCES backup(id),
+        chunk_id INTEGER REFERENCES chunk(id),
         offset INTEGER,
         length INTEGER
     );
@@ -69,7 +69,7 @@ const char backup_index_initsql[] = QUOTE(
 
     CREATE TABLE mailbox(
         id INTEGER PRIMARY KEY ASC,
-        last_backup_id INTEGER NOT NULL REFERENCES backup(id),
+        last_chunk_id INTEGER NOT NULL REFERENCES chunk(id),
         uniqueid CHAR UNIQUE NOT NULL,
         mboxname CHAR NOT NULL,
         mboxtype CHAR,
@@ -97,7 +97,7 @@ const char backup_index_initsql[] = QUOTE(
         id INTEGER PRIMARY KEY ASC,
         mailbox_id INTEGER NOT NULL REFERENCES mailbox(id),
         message_id INTEGER NOT NULL REFERENCES message(id),
-        last_backup_id INTEGER NOT NULL REFERENCES backup(id), /* maybe? */
+        last_chunk_id INTEGER NOT NULL REFERENCES chunk(id),
         uid INTEGER NOT NULL,
         modseq INTEGER,
         last_updated INTEGER,
@@ -115,29 +115,29 @@ const struct sqldb_upgrade backup_index_upgrade[] = {
 };
 
 const char backup_index_start_sql[] = QUOTE(
-    INSERT INTO backup ( timestamp, offset, file_sha1 )
+    INSERT INTO chunk ( timestamp, offset, file_sha1 )
         VALUES ( :timestamp, :offset, :file_sha1 );
 );
 
 const char backup_index_end_sql[] = QUOTE(
-    UPDATE backup SET
+    UPDATE chunk SET
         length = :length,
         data_sha1 = :data_sha1
     WHERE id = :id;
 );
 
-const char backup_index_backup_select_latest_sql[] = QUOTE(
+const char backup_index_chunk_select_latest_sql[] = QUOTE(
     SELECT
         id, timestamp, offset, length, file_sha1, data_sha1
-    FROM backup
+    FROM chunk
     WHERE id = (
-        SELECT MAX(id) FROM backup
+        SELECT MAX(id) FROM chunk
     );
 );
 
 const char backup_index_mailbox_update_sql[] = QUOTE(
     UPDATE mailbox SET
-        last_backup_id = :last_backup_id,
+        last_chunk_id = :last_chunk_id,
         mboxname = :mboxname,
         mboxtype = :mboxtype,
         last_uid = :last_uid,
@@ -162,14 +162,14 @@ const char backup_index_mailbox_update_sql[] = QUOTE(
 
 const char backup_index_mailbox_insert_sql[] = QUOTE(
     INSERT INTO mailbox (
-        last_backup_id, uniqueid, mboxname, mboxtype, last_uid,
+        last_chunk_id, uniqueid, mboxname, mboxtype, last_uid,
         highestmodseq, recentuid, recenttime, last_appenddate,
         pop3_last_login, pop3_show_after, uidvalidity, partition,
         acl, options, sync_crc, sync_crc_annot, quotaroot,
         xconvmodseq, annotations, deleted
     )
     VALUES (
-        :last_backup_id, :uniqueid, :mboxname, :mboxtype, :last_uid,
+        :last_chunk_id, :uniqueid, :mboxname, :mboxtype, :last_uid,
         :highestmodseq, :recentuid, :recenttime, :last_appenddate,
         :pop3_last_login, :pop3_show_after, :uidvalidity, :partition,
         :acl, :options, :sync_crc, :sync_crc_annot, :quotaroot,
@@ -179,7 +179,7 @@ const char backup_index_mailbox_insert_sql[] = QUOTE(
 
 const char backup_index_mailbox_select_all_sql[] = QUOTE(
     SELECT
-        id, last_backup_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
+        id, last_chunk_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
         recentuid, recenttime, last_appenddate, pop3_last_login, pop3_show_after,
         uidvalidity, partition, acl, options, sync_crc, sync_crc_annot, quotaroot,
         xconvmodseq, annotations, deleted
@@ -188,7 +188,7 @@ const char backup_index_mailbox_select_all_sql[] = QUOTE(
 
 const char backup_index_mailbox_select_mboxname_sql[] = QUOTE(
     SELECT
-        id, last_backup_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
+        id, last_chunk_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
         recentuid, recenttime, last_appenddate, pop3_last_login, pop3_show_after,
         uidvalidity, partition, acl, options, sync_crc, sync_crc_annot, quotaroot,
         xconvmodseq, annotations, deleted
@@ -198,7 +198,7 @@ const char backup_index_mailbox_select_mboxname_sql[] = QUOTE(
 
 const char backup_index_mailbox_select_uniqueid_sql[] = QUOTE(
     SELECT
-        id, last_backup_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
+        id, last_chunk_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
         recentuid, recenttime, last_appenddate, pop3_last_login, pop3_show_after,
         uidvalidity, partition, acl, options, sync_crc, sync_crc_annot, quotaroot,
         xconvmodseq, annotations, deleted
@@ -208,7 +208,7 @@ const char backup_index_mailbox_select_uniqueid_sql[] = QUOTE(
 
 const char backup_index_mailbox_message_update_sql[] = QUOTE(
     UPDATE mailbox_message SET
-        last_backup_id = :last_backup_id,
+        last_chunk_id = :last_chunk_id,
         uid = :uid,
         modseq = :modseq,
         last_updated = :last_updated,
@@ -226,12 +226,12 @@ const char backup_index_mailbox_message_update_sql[] = QUOTE(
 
 const char backup_index_mailbox_message_insert_sql[] = QUOTE(
     INSERT INTO mailbox_message (
-        mailbox_id, message_id, last_backup_id, uid,
+        mailbox_id, message_id, last_chunk_id, uid,
         modseq, last_updated, flags, internaldate,
         annotations, expunged
     )
     VALUES (
-        :mailbox_id, :message_id, :last_backup_id, :uid,
+        :mailbox_id, :message_id, :last_chunk_id, :uid,
         :modseq, :last_updated, :flags, :internaldate,
         :annotations, :expunged
     );
@@ -239,7 +239,7 @@ const char backup_index_mailbox_message_insert_sql[] = QUOTE(
 
 const char backup_index_mailbox_message_select_mailbox_sql[] = QUOTE(
     SELECT
-        r.id as id, mailbox_id, message_id, last_backup_id, uid,
+        r.id as id, mailbox_id, message_id, last_chunk_id, uid,
         modseq, last_updated, flags, internaldate,
         m.guid as guid, m.length as length, annotations,
         expunged
@@ -257,15 +257,15 @@ const char backup_index_mailbox_message_expunge_sql[] = QUOTE(
 
 const char backup_index_message_insert_sql[] = QUOTE(
     INSERT INTO message (
-        guid, partition, backup_id, offset, length
+        guid, partition, chunk_id, offset, length
     )
     VALUES (
-        :guid, :partition, :backup_id, :offset, :length
+        :guid, :partition, :chunk_id, :offset, :length
     );
 );
 
 const char backup_index_message_select_guid_sql[] = QUOTE(
-    SELECT id, guid, partition, backup_id, offset, length
+    SELECT id, guid, partition, chunk_id, offset, length
     FROM message
     WHERE guid = :guid;
 );
