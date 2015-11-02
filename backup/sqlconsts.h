@@ -55,6 +55,7 @@ extern const int backup_index_version;
 extern const char backup_index_start_sql[];
 extern const char backup_index_end_sql[];
 
+extern const char backup_index_chunk_select_all_sql[];
 extern const char backup_index_chunk_select_latest_sql[];
 
 extern const char backup_index_mailbox_update_sql[];

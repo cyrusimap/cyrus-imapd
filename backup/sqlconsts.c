@@ -126,6 +126,12 @@ const char backup_index_end_sql[] = QUOTE(
     WHERE id = :id;
 );
 
+const char backup_index_chunk_select_all_sql[] = QUOTE(
+    SELECT
+        id, timestamp, offset, length, file_sha1, data_sha1
+    FROM chunk;
+);
+
 const char backup_index_chunk_select_latest_sql[] = QUOTE(
     SELECT
         id, timestamp, offset, length, file_sha1, data_sha1
