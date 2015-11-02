@@ -855,13 +855,13 @@ static int _append_start(struct backup *backup, time_t ts, off_t offset,
         { NULL,         SQLITE_NULL,    { .s = NULL         } },
     };
 
-    sqldb_begin(backup->db, "backup_index"); // FIXME what if this fails
+    sqldb_begin(backup->db, "backup_append"); // FIXME what if this fails
 
     int r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
     if (r) {
         // FIXME handle this sensibly
         fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
-        sqldb_rollback(backup->db, "backup_index");
+        sqldb_rollback(backup->db, "backup_append");
         goto error;
     }
 
@@ -992,10 +992,10 @@ int backup_append_end(struct backup *backup) {
     if (r) {
         // FIXME handle this sensibly
         fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
-        sqldb_rollback(backup->db, "backup_index");
+        sqldb_rollback(backup->db, "backup_append");
     }
     else {
-        sqldb_commit(backup->db, "backup_index");
+        sqldb_commit(backup->db, "backup_append");
     }
 
     free(append_state);
@@ -1010,7 +1010,7 @@ EXPORTED int backup_append_abort(struct backup *backup)
 
     if (!append_state) fatal("backup append not started", EC_SOFTWARE);
 
-    sqldb_rollback(backup->db, "backup_index");
+    sqldb_rollback(backup->db, "backup_append");
 
     // FIXME
     // can we truncate back to the length we started this append at?
