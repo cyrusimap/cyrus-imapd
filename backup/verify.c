@@ -42,6 +42,7 @@
  */
 #include <assert.h>
 
+#include "lib/xmalloc.h"
 #include "lib/xsha1.h"
 
 #include "backup/api.h"
@@ -64,6 +65,7 @@ char * _column_text(sqlite3_stmt *stmt, int column);
 /***********************************************/
 
 struct chunk {
+    struct chunk *next;
     int id;
     time_t timestamp;
     off_t offset;
@@ -71,6 +73,33 @@ struct chunk {
     char *file_sha1;
     char *data_sha1;
 };
+
+struct chunk_list {
+    struct chunk *head;
+    struct chunk *tail;
+};
+
+static void chunk_list_add(struct chunk_list *list, struct chunk *chunk) {
+    /* n.b. always inserts at head */
+    chunk->next = list->head;
+    list->head = chunk;
+    if (!list->tail)
+        list->tail = chunk;
+}
+
+static void chunk_list_empty(struct chunk_list *list) {
+    struct chunk *curr, *next;
+    curr = list->head;
+    while (curr) {
+        next = curr->next;
+        if (curr->file_sha1) free(curr->file_sha1);
+        if (curr->data_sha1) free(curr->data_sha1);
+        free(curr);
+        curr = next;
+    }
+
+    list->head = list->tail = NULL;
+}
 
 static int verify_last_checksum(struct backup *backup);
 static int verify_all_checksums(struct backup *backup);
@@ -100,9 +129,11 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level)
     return r;
 }
 
-static int _validate_cb(sqlite3_stmt *stmt, void *rock)
+static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
 {
-    struct chunk *chunk = (struct chunk *) rock;
+    struct chunk_list *list = (struct chunk_list *) rock;
+
+    struct chunk *chunk = xzmalloc(sizeof(*chunk));
 
     int column = 0;
     chunk->id = _column_int(stmt, column++);
@@ -112,18 +143,24 @@ static int _validate_cb(sqlite3_stmt *stmt, void *rock)
     chunk->file_sha1 = _column_text(stmt, column++);
     chunk->data_sha1 = _column_text(stmt, column++);
 
+    chunk_list_add(list, chunk);
+
     return 0;
 }
 
 static int verify_last_checksum(struct backup *backup)
 {
-    struct chunk chunk = {0};
+    struct chunk_list chunk_list = {0};
+    struct chunk *chunk = NULL;
     struct gzuncat *gzuc = NULL;
 
     int r = sqldb_exec(backup->db, backup_index_chunk_select_latest_sql,
-                       NULL, _validate_cb, &chunk);
+                       NULL, chunk_select_cb, &chunk_list);
     if (r) goto done;
-    if (!chunk.id) {
+
+    chunk = chunk_list.head;
+
+    if (!chunk->id) {
         fprintf(stderr, "%s: %s file checksum mismatch: not in index\n",
                 __func__, backup->data_fname);
         r = -1;
@@ -132,11 +169,11 @@ static int verify_last_checksum(struct backup *backup)
 
     /* validate file-prior-to-this-chunk checksum */
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    _sha1_file(backup->fd, backup->data_fname, chunk.offset, file_sha1);
-    r = strncmp(chunk.file_sha1, file_sha1, sizeof(file_sha1));
+    _sha1_file(backup->fd, backup->data_fname, chunk->offset, file_sha1);
+    r = strncmp(chunk->file_sha1, file_sha1, sizeof(file_sha1));
     if (r) {
         fprintf(stderr, "%s: %s file checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, file_sha1, chunk.file_sha1);
+                __func__, backup->data_fname, file_sha1, chunk->file_sha1);
         goto done;
     }
 
@@ -151,7 +188,7 @@ static int verify_last_checksum(struct backup *backup)
     size_t len = 0;
     SHA_CTX sha_ctx;
     SHA1_Init(&sha_ctx);
-    gzuc_member_start_from(gzuc, chunk.offset);
+    gzuc_member_start_from(gzuc, chunk->offset);
     while (!gzuc_member_eof(gzuc)) {
         ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
         if (n >= 0) {
@@ -159,7 +196,7 @@ static int verify_last_checksum(struct backup *backup)
             len += n;
         }
     }
-    if (len != chunk.length) {
+    if (len != chunk->length) {
         r = -1;
         goto done;
     }
@@ -168,17 +205,16 @@ static int verify_last_checksum(struct backup *backup)
     SHA1_Final(sha1_raw, &sha_ctx);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
     assert(r == 2 * SHA1_DIGEST_LENGTH);
-    r = strncmp(chunk.data_sha1, data_sha1, sizeof(data_sha1));
+    r = strncmp(chunk->data_sha1, data_sha1, sizeof(data_sha1));
     if (r) {
         fprintf(stderr, "%s: %s data checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, data_sha1, chunk.data_sha1);
+                __func__, backup->data_fname, data_sha1, chunk->data_sha1);
         goto done;
     }
 
 done:
     if (gzuc) gzuc_close(&gzuc);
-    free(chunk.file_sha1);
-    free(chunk.data_sha1);
+    chunk_list_empty(&chunk_list);
     fprintf(stderr, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
     return r;
 }
