@@ -57,7 +57,7 @@ static int _index_expunge(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
-static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
+static int _index_message(sqldb_t *db, int chunk_id, struct dlist *dl,
                           off_t dl_offset, size_t dl_len);
 
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
@@ -72,7 +72,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
     else if (strcmp(dlist->name, "MAILBOX") == 0)
         r = _index_mailbox(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
-        r = _index_message(backup->db, backup->append_state->index_id, dlist, start, len);
+        r = _index_message(backup->db, backup->append_state->chunk_id, dlist, start, len);
 
     else {
         fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dlist->name);
@@ -215,7 +215,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
     }
 
     struct sqldb_bindval mbox_bval[] = {
-        { ":last_backup_id",    SQLITE_INTEGER, { .i = backup->append_state->index_id } },
+        { ":last_chunk_id",     SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
         { ":uniqueid",          SQLITE_TEXT,    { .s = uniqueid } },
         { ":mboxname",          SQLITE_TEXT,    { .s = mboxname } },
         { ":mboxtype",          SQLITE_TEXT,    { .s = mboxtype } },
@@ -321,7 +321,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         struct sqldb_bindval record_bval[] = {
             { ":mailbox_id",        SQLITE_INTEGER, { .i = mailbox_id } },
             { ":message_id",        SQLITE_INTEGER, { .i = message_id } },
-            { ":last_backup_id",    SQLITE_INTEGER, { .i = backup->append_state->index_id } },
+            { ":last_chunk_id",     SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
             { ":uid",               SQLITE_INTEGER, { .i = uid } },
             { ":modseq",            SQLITE_INTEGER, { .i = modseq } },
             { ":last_updated",      SQLITE_INTEGER, { .i = last_updated } },
@@ -373,7 +373,7 @@ error:
     return -1;
 }
 
-static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
+static int _index_message(sqldb_t *db, int chunk_id, struct dlist *dl,
                           off_t dl_offset, size_t dl_len)
 {
     fprintf(stderr, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
@@ -397,7 +397,7 @@ static int _index_message(sqldb_t *db, int backup_id, struct dlist *dl,
         struct sqldb_bindval bval[] = {
             { ":guid",      SQLITE_TEXT,    { .s = guid      } },
             { ":partition", SQLITE_TEXT,    { .s = partition } },
-            { ":backup_id", SQLITE_INTEGER, { .i = backup_id } },
+            { ":chunk_id",  SQLITE_INTEGER, { .i = chunk_id } },
             { ":offset",    SQLITE_INTEGER, { .i = dl_offset } },
             { ":length",    SQLITE_INTEGER, { .i = dl_len    } },
             { NULL,         SQLITE_NULL,    { .s = NULL      } },

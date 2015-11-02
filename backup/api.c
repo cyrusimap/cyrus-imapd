@@ -170,7 +170,7 @@ error:
     return NULL;
 }
 
-struct backup_meta {
+struct chunk {
     int id;
     time_t timestamp;
     off_t offset;
@@ -181,45 +181,45 @@ struct backup_meta {
 
 static int _validate_cb(sqlite3_stmt *stmt, void *rock)
 {
-    struct backup_meta *backup_meta = (struct backup_meta *) rock;
+    struct chunk *chunk = (struct chunk *) rock;
 
     int column = 0;
-    backup_meta->id = _column_int(stmt, column++);
-    backup_meta->timestamp = _column_int64(stmt, column++);
-    backup_meta->offset = _column_int64(stmt, column++);
-    backup_meta->length = _column_int64(stmt, column++);
-    backup_meta->file_sha1 = _column_text(stmt, column++);
-    backup_meta->data_sha1 = _column_text(stmt, column++);
+    chunk->id = _column_int(stmt, column++);
+    chunk->timestamp = _column_int64(stmt, column++);
+    chunk->offset = _column_int64(stmt, column++);
+    chunk->length = _column_int64(stmt, column++);
+    chunk->file_sha1 = _column_text(stmt, column++);
+    chunk->data_sha1 = _column_text(stmt, column++);
 
     return 0;
 }
 
 static int _validate_checksums(struct backup *backup)
 {
-    struct backup_meta backup_meta = {0};
+    struct chunk chunk = {0};
     struct gzuncat *gzuc = NULL;
 
-    int r = sqldb_exec(backup->db, backup_index_backup_select_latest_sql,
-                       NULL, _validate_cb, &backup_meta);
+    int r = sqldb_exec(backup->db, backup_index_chunk_select_latest_sql,
+                       NULL, _validate_cb, &chunk);
     if (r) goto done;
-    if (!backup_meta.id) {
+    if (!chunk.id) {
         fprintf(stderr, "%s: %s file checksum mismatch: not in index\n",
                 __func__, backup->data_fname);
         r = -1;
         goto done;
     }
 
-    /* validate file-prior-to-this-backup checksum */
+    /* validate file-prior-to-this-chunk checksum */
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    _sha1_file(backup->fd, backup->data_fname, backup_meta.offset, file_sha1);
-    r = strncmp(backup_meta.file_sha1, file_sha1, sizeof(file_sha1));
+    _sha1_file(backup->fd, backup->data_fname, chunk.offset, file_sha1);
+    r = strncmp(chunk.file_sha1, file_sha1, sizeof(file_sha1));
     if (r) {
         fprintf(stderr, "%s: %s file checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, file_sha1, backup_meta.file_sha1);
+                __func__, backup->data_fname, file_sha1, chunk.file_sha1);
         goto done;
     }
 
-    /* validate data-within-this-backup checksum */
+    /* validate data-within-this-chunk checksum */
     gzuc = gzuc_open(backup->fd);
     if (!gzuc) {
         r = -1;
@@ -230,7 +230,7 @@ static int _validate_checksums(struct backup *backup)
     size_t len = 0;
     SHA_CTX sha_ctx;
     SHA1_Init(&sha_ctx);
-    gzuc_member_start_from(gzuc, backup_meta.offset);
+    gzuc_member_start_from(gzuc, chunk.offset);
     while (!gzuc_member_eof(gzuc)) {
         ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
         if (n >= 0) {
@@ -238,7 +238,7 @@ static int _validate_checksums(struct backup *backup)
             len += n;
         }
     }
-    if (len != backup_meta.length) {
+    if (len != chunk.length) {
         r = -1;
         goto done;
     }
@@ -247,17 +247,17 @@ static int _validate_checksums(struct backup *backup)
     SHA1_Final(sha1_raw, &sha_ctx);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
     assert(r == 2 * SHA1_DIGEST_LENGTH);
-    r = strncmp(backup_meta.data_sha1, data_sha1, sizeof(data_sha1));
+    r = strncmp(chunk.data_sha1, data_sha1, sizeof(data_sha1));
     if (r) {
         fprintf(stderr, "%s: %s data checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, data_sha1, backup_meta.data_sha1);
+                __func__, backup->data_fname, data_sha1, chunk.data_sha1);
         goto done;
     }
 
 done:
     if (gzuc) gzuc_close(&gzuc);
-    free(backup_meta.file_sha1);
-    free(backup_meta.data_sha1);
+    free(chunk.file_sha1);
+    free(chunk.data_sha1);
     fprintf(stderr, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
     return r;
 }
@@ -600,7 +600,7 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
 
     int column = 0;
     mailbox->id = _column_int(stmt, column++);
-    mailbox->last_backup_id = _column_int(stmt, column++);
+    mailbox->last_chunk_id = _column_int(stmt, column++);
     dlist_setatom(dl, "UNIQUEID", _column_text(stmt, column++));
     dlist_setatom(dl, "MBOXNAME", _column_text(stmt, column++));
     dlist_setatom(dl, "MBOXTYPE", _column_text(stmt, column++));
@@ -745,7 +745,7 @@ static int _get_message_cb(sqlite3_stmt *stmt, void *rock) {
     message->id = _column_int(stmt, column++);
     char *guid_str = _column_text(stmt, column++);
     message->partition = _column_text(stmt, column++);
-    message->backup_id = _column_int(stmt, column++);
+    message->chunk_id = _column_int(stmt, column++);
     message->offset = _column_int64(stmt, column++);
     message->length = _column_int64(stmt, column++);
 
@@ -865,7 +865,7 @@ static int _append_start(struct backup *backup, time_t ts, off_t offset,
         goto error;
     }
 
-    append_state->index_id = sqldb_lastid(backup->db);
+    append_state->chunk_id = sqldb_lastid(backup->db);
     backup->append_state = append_state;
     return 0;
 
@@ -982,7 +982,7 @@ int backup_append_end(struct backup *backup) {
     assert(r == 2 * SHA1_DIGEST_LENGTH);
 
     struct sqldb_bindval bval[] = {
-        { ":id",        SQLITE_INTEGER, { .i = append_state->index_id   } },
+        { ":id",        SQLITE_INTEGER, { .i = append_state->chunk_id   } },
         { ":length",    SQLITE_INTEGER, { .i = append_state->wrote      } },
         { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1                } },
         { NULL,         SQLITE_NULL,    { .s = NULL                     } },

@@ -69,7 +69,7 @@ const char *backup_get_index_fname(const struct backup *backup);
 /* reading backup mailbox data */
 struct backup_mailbox {
     int id;
-    int last_backup_id;
+    int last_chunk_id;
     int deleted;
     struct dlist *dlist;
 };
@@ -93,7 +93,7 @@ struct backup_message {
     int id;
     struct message_guid *guid;
     char *partition;
-    int backup_id;
+    int chunk_id;
     off_t offset;
     size_t length;
 };

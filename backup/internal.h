@@ -56,7 +56,7 @@ enum {
 struct backup_append_state {
     unsigned mode;
     gzFile gzfile;
-    int index_id;
+    int chunk_id;
     size_t wrote;
     SHA_CTX sha_ctx;
 };
