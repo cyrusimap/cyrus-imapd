@@ -1255,6 +1255,7 @@ backup_backupd_SOURCES = \
     backup/internal.h \
     backup/sqlconsts.c \
     backup/sqlconsts.h \
+    backup/verify.c \
     backup/backupd.c
 backup_backupd_LDADD = $(LD_SERVER_ADD)
 
@@ -1268,6 +1269,7 @@ backup_reindex_SOURCES = \
     backup/internal.h \
     backup/sqlconsts.c \
     backup/sqlconsts.h \
+    backup/verify.c \
     backup/reindex.c
 backup_reindex_LDADD = $(LD_UTILITY_ADD)
 
@@ -1281,6 +1283,7 @@ backup_bu_lock_SOURCES = \
     backup/internal.h \
     backup/sqlconsts.c \
     backup/sqlconsts.h \
+    backup/verify.c \
     backup/bu_lock.c
 backup_bu_lock_LDADD = $(LD_UTILITY_ADD)
 

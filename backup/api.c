@@ -71,10 +71,10 @@
 #define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
 #include "backup/internal.h"
 
-static int _column_int(sqlite3_stmt *stmt, int column);
-static sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column);
-static char * _column_text(sqlite3_stmt *stmt, int column);
-static const char *_sha1_file(int fd, const char *fname, size_t limit,
+int _column_int(sqlite3_stmt *stmt, int column);
+sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column);
+char * _column_text(sqlite3_stmt *stmt, int column);
+const char *_sha1_file(int fd, const char *fname, size_t limit,
                               char buf[2 * SHA1_DIGEST_LENGTH + 1]);
 
 /*
@@ -170,98 +170,6 @@ error:
     return NULL;
 }
 
-struct chunk {
-    int id;
-    time_t timestamp;
-    off_t offset;
-    size_t length;
-    char *file_sha1;
-    char *data_sha1;
-};
-
-static int _validate_cb(sqlite3_stmt *stmt, void *rock)
-{
-    struct chunk *chunk = (struct chunk *) rock;
-
-    int column = 0;
-    chunk->id = _column_int(stmt, column++);
-    chunk->timestamp = _column_int64(stmt, column++);
-    chunk->offset = _column_int64(stmt, column++);
-    chunk->length = _column_int64(stmt, column++);
-    chunk->file_sha1 = _column_text(stmt, column++);
-    chunk->data_sha1 = _column_text(stmt, column++);
-
-    return 0;
-}
-
-static int _validate_checksums(struct backup *backup)
-{
-    struct chunk chunk = {0};
-    struct gzuncat *gzuc = NULL;
-
-    int r = sqldb_exec(backup->db, backup_index_chunk_select_latest_sql,
-                       NULL, _validate_cb, &chunk);
-    if (r) goto done;
-    if (!chunk.id) {
-        fprintf(stderr, "%s: %s file checksum mismatch: not in index\n",
-                __func__, backup->data_fname);
-        r = -1;
-        goto done;
-    }
-
-    /* validate file-prior-to-this-chunk checksum */
-    char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    _sha1_file(backup->fd, backup->data_fname, chunk.offset, file_sha1);
-    r = strncmp(chunk.file_sha1, file_sha1, sizeof(file_sha1));
-    if (r) {
-        fprintf(stderr, "%s: %s file checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, file_sha1, chunk.file_sha1);
-        goto done;
-    }
-
-    /* validate data-within-this-chunk checksum */
-    gzuc = gzuc_open(backup->fd);
-    if (!gzuc) {
-        r = -1;
-        goto done;
-    }
-
-    char buf[8192]; /* FIXME whatever */
-    size_t len = 0;
-    SHA_CTX sha_ctx;
-    SHA1_Init(&sha_ctx);
-    gzuc_member_start_from(gzuc, chunk.offset);
-    while (!gzuc_member_eof(gzuc)) {
-        ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
-        if (n >= 0) {
-            SHA1_Update(&sha_ctx, buf, n);
-            len += n;
-        }
-    }
-    if (len != chunk.length) {
-        r = -1;
-        goto done;
-    }
-    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
-    char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    SHA1_Final(sha1_raw, &sha_ctx);
-    r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
-    assert(r == 2 * SHA1_DIGEST_LENGTH);
-    r = strncmp(chunk.data_sha1, data_sha1, sizeof(data_sha1));
-    if (r) {
-        fprintf(stderr, "%s: %s data checksum mismatch: %s on disk, %s in index\n",
-                __func__, backup->data_fname, data_sha1, chunk.data_sha1);
-        goto done;
-    }
-
-done:
-    if (gzuc) gzuc_close(&gzuc);
-    free(chunk.file_sha1);
-    free(chunk.data_sha1);
-    fprintf(stderr, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
-    return r;
-}
-
 EXPORTED struct backup *backup_open(const mbname_t *mbname)
 {
     struct buf data_fname = BUF_INITIALIZER;
@@ -274,7 +182,7 @@ EXPORTED struct backup *backup_open(const mbname_t *mbname)
     backup = _open_internal(buf_cstring(&data_fname),
                             buf_cstring(&index_fname),
                             BACKUP_OPEN_NORMAL);
-    r = _validate_checksums(backup);
+    r = backup_verify(backup, BACKUP_VERIFY_QUICK);
     if (r) backup_close(&backup);
 
 done:
@@ -440,13 +348,14 @@ EXPORTED struct backup *backup_open_paths(const char *data_fname,
 {
     if (index_fname)
         return _open_internal(data_fname, index_fname, BACKUP_OPEN_NORMAL);
+        /* FIXME verify */
 
     char *tmp = strconcat(data_fname, ".index", NULL);
     struct backup *backup = _open_internal(data_fname, tmp, BACKUP_OPEN_NORMAL);
     free(tmp);
 
     if (backup) {
-        int r = _validate_checksums(backup);
+        int r = backup_verify(backup, BACKUP_VERIFY_QUICK);
         if (r) backup_close(&backup);
     }
 
@@ -492,19 +401,19 @@ EXPORTED const char *backup_get_index_fname(const struct backup *backup)
     return backup->index_fname;
 }
 
-static int _column_int(sqlite3_stmt *stmt, int column)
+HIDDEN int _column_int(sqlite3_stmt *stmt, int column)
 {
     assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER);
     return sqlite3_column_int(stmt, column);
 }
 
-static sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column)
+HIDDEN sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column)
 {
     assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER);
     return sqlite3_column_int64(stmt, column);
 }
 
-static char * _column_text(sqlite3_stmt *stmt, int column)
+HIDDEN char * _column_text(sqlite3_stmt *stmt, int column)
 {
     assert(sqlite3_column_type(stmt, column) == SQLITE_TEXT);
     return xstrdup((const char *) sqlite3_column_text(stmt, column));
@@ -798,7 +707,7 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
 /* limit is how much of the file to calculate the sha1 of (in bytes),
  * or SHA1_LIMIT_WHOLE_FILE for the whole file */
 #define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)
-static const char *_sha1_file(int fd, const char *fname, size_t limit,
+HIDDEN const char *_sha1_file(int fd, const char *fname, size_t limit,
                               char buf[2 * SHA1_DIGEST_LENGTH + 1])
 {
     const char *map = NULL;

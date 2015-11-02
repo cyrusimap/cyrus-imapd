@@ -61,6 +61,18 @@ struct backup *backup_open_paths(const char *data_fname,
 int backup_close(struct backup **backupp); // also ends index/append ops
 
 
+/* verifying backups */
+enum {
+    BACKUP_VERIFY_LAST_CHECKSUM = (1 << 0),
+    BACKUP_VERIFY_ALL_CHECKSUMS = (1 << 1),
+    BACKUP_VERIFY_MESSAGE_LINKS = (1 << 2),
+    BACKUP_VERIFY_MAILBOX_LINKS = (1 << 3),
+    BACKUP_VERIFY_MESSAGE_GUIDS = (1 << 4),
+};
+#define BACKUP_VERIFY_QUICK BACKUP_VERIFY_LAST_CHECKSUM
+#define BACKUP_VERIFY_FULL  ((BACKUP_VERIFY_MESSAGE_GUIDS << 1) - 1)
+int backup_verify(struct backup *backup, int level);
+
 /* accessing backup properties */
 const char *backup_get_data_fname(const struct backup *backup);
 const char *backup_get_index_fname(const struct backup *backup);
