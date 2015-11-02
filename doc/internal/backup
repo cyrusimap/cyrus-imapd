@@ -267,6 +267,7 @@ cmdloop:
 periodic cleanup:
 * check timestamp of each held lock
 * if stale (define: stale?), release
+* FIXME if we've appended more than the chunk size we would compress to, release
 
 sync restart:
 * release each held lock
