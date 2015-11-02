@@ -242,7 +242,7 @@ endif # REPLICATION
 
 if BACKUP
 libexec_PROGRAMS += backup/backupd
-noinst_PROGRAMS += backup/reindex
+noinst_PROGRAMS += backup/reindex backup/verify
 sbin_PROGRAMS += backup/bu_lock
 endif # BACKUP
 
@@ -1272,6 +1272,20 @@ backup_reindex_SOURCES = \
     backup/verify.c \
     backup/reindex.c
 backup_reindex_LDADD = $(LD_UTILITY_ADD)
+
+backup_verify_SOURCES = \
+    imap/mutex_fake.c \
+    backup/api.c \
+    backup/api.h \
+    backup/gzuncat.c \
+    backup/gzuncat.h \
+    backup/index.c \
+    backup/internal.h \
+    backup/sqlconsts.c \
+    backup/sqlconsts.h \
+    backup/verify.c \
+    backup/verify_main.c
+backup_verify_LDADD = $(LD_UTILITY_ADD)
 
 backup_bu_lock_SOURCES = \
     imap/mutex_fake.c \

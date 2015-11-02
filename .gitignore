@@ -26,6 +26,7 @@ autom4te.cache/
 backup/backupd
 backup/bu_lock
 backup/reindex
+backup/verify
 cmulocal/
 compile
 config.guess
