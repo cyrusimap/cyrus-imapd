@@ -2625,18 +2625,49 @@ struct calendars_rock {
     int rows;
 };
 
+/* Set is_cal, if the userid's calendar mailbox named mboxname is able to store
+ * VEVENTs. Return non-zero on error. */
+/* XXX Also make sure to check for this in getCalendarUpdates. Might want to
+ * check this also in the other calendar and calendar event methods. */
+static int jmap_mboxname_is_calendar(const char *mboxname, const char *userid, int *is_cal)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    static const char *calcompset_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+    unsigned long types = -1; /* ALL component types by default. */
+
+    int r = annotatemore_lookupmask(mboxname, calcompset_annot, userid, &attrib);
+    if (r) goto done;
+    if (attrib.len) {
+        types = strtoul(buf_cstring(&attrib), NULL, 10);
+    }
+    *is_cal = types & CAL_COMP_VEVENT;
+done:
+    buf_free(&attrib);
+    return r;
+}
+
 static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 {
     struct calendars_rock *crock = (struct calendars_rock *)rock;
+    struct buf attrib = BUF_INITIALIZER;
+    int r;
 
-    /* only calendars... */
+    /* Only calendars... */
     if (!(mbentry->mbtype & MBTYPE_CALENDAR)) return 0;
 
-    /* ...which are at least readable or visible */
+    /* ...which are at least readable or visible... */
     int rights = httpd_myrights(crock->req->authstate, mbentry->acl);
     /* XXX - What if just READFB is set? */
     if (!(rights & (DACL_READ|DACL_READFB))) {
         return 0;
+    }
+
+    /* ...and contain VEVENTs. */
+    int is_cal = 0;
+    r = jmap_mboxname_is_calendar(mbentry->name, httpd_userid, &is_cal);
+    if (r || !is_cal) {
+        goto done;
     }
 
     /* OK, we want this one */
@@ -2662,29 +2693,26 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     if (_wantprop(crock->props, "name")) {
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-        struct buf attrib = BUF_INITIALIZER;
-        int r = annotatemore_lookupmask(mbentry->name, displayname_annot, httpd_userid, &attrib);
+        r = annotatemore_lookupmask(mbentry->name, displayname_annot, httpd_userid, &attrib);
         /* fall back to last part of mailbox name */
         if (r || !attrib.len) buf_setcstr(&attrib, collection);
         json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
-        buf_free(&attrib);
+        buf_reset(&attrib);
     }
 
     if (_wantprop(crock->props, "color")) {
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
-        struct buf attrib = BUF_INITIALIZER;
-        int r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
+        r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
         if (!r && attrib.len)
             json_object_set_new(obj, "color", json_string(buf_cstring(&attrib)));
-        buf_free(&attrib);
+        buf_reset(&attrib);
     }
 
     if (_wantprop(crock->props, "sortOrder")) {
         static const char *order_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
-        struct buf attrib = BUF_INITIALIZER;
-        int r = annotatemore_lookupmask(mbentry->name, order_annot, httpd_userid, &attrib);
+        r = annotatemore_lookupmask(mbentry->name, order_annot, httpd_userid, &attrib);
         if (!r && attrib.len) {
             char *ptr;
             long val = strtol(buf_cstring(&attrib), &ptr, 10);
@@ -2696,14 +2724,13 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
                 syslog(LOG_WARNING, "sortOrder: strtol(%s) failed", buf_cstring(&attrib));
             }
         }
-        buf_free(&attrib);
+        buf_reset(&attrib);
     }
 
     if (_wantprop(crock->props, "isVisible")) {
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
-        struct buf attrib = BUF_INITIALIZER;
-        int r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
+        r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
         if (!r && attrib.len) {
             const char *val = buf_cstring(&attrib);
             if (!strncmp(val, "true", 4) || !strncmp(val, "1", 1)) {
@@ -2716,7 +2743,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
                 json_object_set_new(obj, "isVisible", json_string("true"));
             }
         }
-        buf_free(&attrib);
+        buf_reset(&attrib);
     }
 
     if (_wantprop(crock->props, "mayReadFreeBusy")) {
@@ -2756,7 +2783,9 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
     json_array_append_new(crock->array, obj);
 
-    return 0;
+done:
+    buf_free(&attrib);
+    return r;
 }
 
 
