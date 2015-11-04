@@ -1117,16 +1117,6 @@ sub test_setcalendarevents_update_recurrence {
     xlog "update recurrence of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "recurrence" => {
                                 "frequency" => "weekly",
                                 "until" => "2016-10-08T16:45:00"
@@ -1149,16 +1139,7 @@ sub test_setcalendarevents_update_recurrence {
     xlog "do not touch recurrence of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
                             "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne"
                         }
                     }}, "R1"]]);
 
@@ -1176,12 +1157,6 @@ sub test_setcalendarevents_update_recurrence {
     xlog "update startTimeZone of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
                             "start" => "2015-10-06T16:45:00",
                             "startTimeZone" => "Asia/Bangkok",
                             "end" => "2015-10-06T17:15:00",
@@ -1266,16 +1241,6 @@ sub test_setcalendarevents_update_inclusions {
     xlog "update inclusions of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "inclusions" => [
                                 "2015-11-21T13:00:00", "2016-01-01T14:00:00"
                             ]
@@ -1294,16 +1259,7 @@ sub test_setcalendarevents_update_inclusions {
     xlog "do not touch inclusions of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
                             "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                         }
                     }}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{updated}[0], $id);
@@ -1316,12 +1272,6 @@ sub test_setcalendarevents_update_inclusions {
     xlog "update startTimeZone of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
                             "start" => "2015-10-06T16:45:00",
                             "end" => "2015-10-06T17:15:00",
                             "endTimeZone" => "Europe/Vienna",
@@ -1339,16 +1289,6 @@ sub test_setcalendarevents_update_inclusions {
     xlog "remove inclusions of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Asia/Bangkok",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Europe/Vienna",
                             "inclusions" => undef
                         }
                     }}, "R1"]]);
@@ -1409,16 +1349,6 @@ sub test_setcalendarevents_update_alerts {
     xlog "update alerts of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "alerts" => [{ "type" => "alert", "minutesBefore" => 30 }]
                         }
                     }}, "R1"]]);
@@ -1434,16 +1364,7 @@ sub test_setcalendarevents_update_alerts {
     xlog "do not touch alerts of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "baz",
-                            "description" => "foo's description",
                             "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                         }
                     }}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{updated}[0], $id);
@@ -1458,16 +1379,6 @@ sub test_setcalendarevents_update_alerts {
     xlog "remove alerts of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => { 
-                            "calendarId" => $calid,
-                            "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "alerts" => undef
                         }
                     }}, "R1"]]);
@@ -1543,21 +1454,6 @@ sub test_setcalendarevents_update_exceptions {
     xlog "update exception startTimeZone of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo",
-                            "location" => "foo",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Europe/Vienna",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Europe/Vienna",
-                            "recurrence" => {
-                                "frequency" => "daily",
-                                "count" => 3
-                            },
-
                             "exceptions" => {
                                 "2015-10-07T17:45:00" => {
                                     "startTimeZone" => "Australia/Melbourne",
@@ -1595,16 +1491,6 @@ sub test_setcalendarevents_update_exceptions {
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => 
                         {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo",
-                            "location" => "foo",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Europe/Vienna",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Europe/Vienna",
                             "exceptions" => {
                                 "2015-10-07T18:15:00" => {
                                     "startTimeZone" => "Australia/Sydney",
@@ -1692,16 +1578,6 @@ sub test_setcalendarevents_update_participants {
     xlog "update attendees of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "organizer" => {
                                 "name" => "Cassandane",
                                 "email" => "cassandane\@localhost",
@@ -1735,16 +1611,6 @@ sub test_setcalendarevents_update_participants {
     xlog "update attendees of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "organizer" => {
                                 "name" => "Cassandane",
                                 "email" => "cassandane\@localhost",
@@ -1771,16 +1637,7 @@ sub test_setcalendarevents_update_participants {
     xlog "do not touch participants of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
                             "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                         }
                     }}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{updated}[0], $id);
@@ -1794,16 +1651,6 @@ sub test_setcalendarevents_update_participants {
     xlog "remove participants of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
-                            "calendarId" => $calid,
-                            "summary" => "baz",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "organizer" => undef,
                             "attendees" => undef
                         }
@@ -1915,16 +1762,6 @@ sub test_setcalendarevents_update_attachments {
     xlog "update attachments of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "attachments" => [{
                                     "blobId" => "https://www.user.fm/files/v1-123456789abcde",
                                     "type" => undef,
@@ -1956,16 +1793,6 @@ sub test_setcalendarevents_update_attachments {
     xlog "update attachments of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "attachments" => [{
                                     "blobId" => "https://www.user.fm/files/v1-123456789abcde",
                                     "type" => "application/octet-stream",
@@ -1987,16 +1814,7 @@ sub test_setcalendarevents_update_attachments {
     xlog "do not touch attachments of event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
                             "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne"
                         }
                     }}, "R1"]]);
     xlog "get event $id";
@@ -2007,16 +1825,6 @@ sub test_setcalendarevents_update_attachments {
     xlog "remove attachments from event $id";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
-                            "calendarId" => $calid,
-                            "summary" => "foo",
-                            "description" => "foo's description",
-                            "location" => "foo's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "startTimeZone" => "Australia/Melbourne",
-                            "end" => "2015-10-06T17:15:00",
-                            "endTimeZone" => "Australia/Melbourne",
                             "attachments" => undef
                         }
                     }}, "R1"]]);
@@ -2075,15 +1883,6 @@ sub test_setcalendarevents_move {
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
                             "calendarId" => "nope",
-                            "summary" => "baz",
-                            "description" => "baz's description",
-                            "location" => "baz's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
                         }
                     }}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "calendarNotFound");
@@ -2099,15 +1898,6 @@ sub test_setcalendarevents_move {
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         $id => {
                             "calendarId" => $calidB,
-                            "summary" => "baz",
-                            "description" => "baz's description",
-                            "location" => "baz's location",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
                         }
                     }}, "R1"]]);
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
@@ -2193,26 +1983,10 @@ sub test_getcalendareventupdates {
                         $id1 => {
                             "calendarId" => $calidA,
                             "summary" => "1(updated)",
-                            "description" => "",
-                            "location" => "",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
                         },
                         $id2 => {
                             "calendarId" => $calidB,
                             "summary" => "2(updated)",
-                            "description" => "",
-                            "location" => "",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
                         }
                     }}, "R1"]]);
     $self->assert_num_equals(scalar @{$res->[0][1]{updated}}, 2);
@@ -2243,13 +2017,6 @@ sub test_getcalendareventupdates {
                             "calendarId" => $calidA,
                             "summary" => "1(updated)",
                             "description" => "",
-                            "location" => "",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
                         },
                     },
                     destroy => [ $id2 ]
@@ -2282,15 +2049,6 @@ sub test_getcalendareventupdates {
                     update => {
                         $id1 => {
                             "calendarId" => $calidB,
-                            "summary" => "1(moved)",
-                            "description" => "",
-                            "location" => "",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
                         },
                     }
                 }, "R1"]]);
@@ -2312,14 +2070,6 @@ sub test_getcalendareventupdates {
                         $id1 => {
                             "calendarId" => $calidB,
                             "summary" => "1(goodbye)",
-                            "description" => "",
-                            "location" => "",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
                         },
                     },
                     destroy => [ $id1 ]
@@ -2392,6 +2142,19 @@ sub test_getcalendareventlist {
     $res = $jmap->Request([ ['getCalendarEventList', { }, "R1"] ]);
     $self->assert_num_equals($res->[0][1]{total}, 2);
     $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 2);
+
+    xlog "get filtered calendar event list with flat filter";
+    $res = $jmap->Request([ ['getCalendarEventList', {
+                    "filter" => {
+                        "after" => "2015-01-01T00:00:00Z",
+                        "before" => "2015-12-31T23:59:59Z",
+                        "text" => "foo",
+                        "location" => "bar"
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+    $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
 
     xlog "get filtered calendar event list";
     $res = $jmap->Request([ ['getCalendarEventList', {
@@ -2544,6 +2307,5 @@ EOF
     );
     $self->assert($res !~ "$id");
 }
-
 
 1;
