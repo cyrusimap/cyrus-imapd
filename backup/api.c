@@ -704,6 +704,58 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
     free(message);
 }
 
+struct message_row_rock {
+    backup_message_foreach_cb proc;
+    void *rock;
+};
+
+static int _message_row_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct message_row_rock *mrock = (struct message_row_rock *) rock;
+    struct backup_message message = {0};
+    int column = 0;
+    int r = 0;
+
+    message.id = _column_int(stmt, column++);
+    char *guid_str = _column_text(stmt, column++);
+    message.partition = _column_text(stmt, column++);
+    message.chunk_id = _column_int(stmt, column++);
+    message.offset = _column_int64(stmt, column++);
+    message.length = _column_int64(stmt, column++);
+
+    message.guid = xzmalloc(sizeof *message.guid);
+    if (!message_guid_decode(message.guid, guid_str))
+        r = -1;
+    free(guid_str);
+
+    if (!r)
+        r = mrock->proc(&message, mrock->rock);
+
+    if (message.guid) free(message.guid);
+    if (message.partition) free(message.partition);
+    memset(&message, 0, sizeof message);
+
+    return r;
+}
+
+EXPORTED int backup_message_foreach(struct backup *backup, int chunk_id,
+                                    backup_message_foreach_cb cb, void *rock)
+{
+    struct sqldb_bindval bval[] = {
+        { ":chunk_id",  SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,         SQLITE_NULL,    { .s = NULL } },
+    };
+
+    struct message_row_rock mrock = { cb, rock };
+
+    const char *sql = chunk_id ?
+        backup_index_message_select_chunkid_sql :
+        backup_index_message_select_all_sql;
+
+    return sqldb_exec(backup->db, sql, bval, _message_row_cb, &mrock);
+}
+
+
 /* limit is how much of the file to calculate the sha1 of (in bytes),
  * or SHA1_LIMIT_WHOLE_FILE for the whole file */
 #define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)

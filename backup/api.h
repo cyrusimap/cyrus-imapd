@@ -111,11 +111,17 @@ struct backup_message {
 };
 
 int backup_get_message_id(struct backup *backup, const char *guid);
+// FIXME do i even need these?
 struct backup_message *backup_get_message(struct backup *backup,
                                           const struct message_guid *guid);
 char *backup_get_message_content(struct backup *backup,
                                  const struct backup_message *message);
 void backup_message_free(struct backup_message **message);
+
+typedef int (*backup_message_foreach_cb)(const struct backup_message *message,
+                                         void *rock);
+int backup_message_foreach(struct backup *backup, int chunk_id,
+                           backup_message_foreach_cb cb, void *rock);
 
 
 /* writing backup data */
