@@ -281,3 +281,9 @@ const char backup_index_message_select_guid_sql[] = QUOTE(
     FROM message
     WHERE guid = :guid;
 );
+
+const char backup_index_message_select_chunkid_sql[] = QUOTE(
+    SELECT id, guid, partition, chunk_id, offset, length
+    FROM message
+    WHERE chunk_id = :chunk_id;
+);
