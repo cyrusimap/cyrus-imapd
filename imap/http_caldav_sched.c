@@ -73,17 +73,26 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
     const char *userid = addr, *p;
     int islocal = 1, found = 1;
     size_t len;
+    char *testuser = NULL;
+
+    if (myuserid) {
+        if (strchr(myuserid, '@') || !httpd_extradomain)
+            testuser = xstrdup(myuserid);
+        else
+            testuser = strconcat(myuserid, "@", httpd_extradomain, (char *)NULL);
+    }
 
     memset(param, 0, sizeof(struct sched_param));
 
     if (!addr) return HTTP_NOT_FOUND;
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
-    if (myuserid && !strcasecmp(userid, myuserid)) {
+    if (testuser && !strcasecmp(userid, testuser)) {
         param->isyou = 1;
-        param->userid = xstrdupnull(userid); /* XXX - memleak */
+        param->userid = testuser;
         return 0; // myself is always local
     }
+    free(testuser);
     len = strlen(userid);
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
@@ -1461,7 +1470,7 @@ static void sched_deliver_local(const char *recipient,
         if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
             sched_pollstatus(recipient, sparam, ical, attendee);
         else
-            sched_request(recipient, sparam, NULL, ical, attendee);
+            sched_request(userid, recipient, sparam, NULL, ical, attendee);
     }
 
   done:
@@ -1837,7 +1846,8 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
 
 /* Create and deliver an organizer scheduling request */
-void sched_request(const char *organizer, struct sched_param *sparam,
+void sched_request(const char *userid, const char *organizer,
+                   struct sched_param *sparam,
                    icalcomponent *oldical, icalcomponent *newical,
                    const char *att_update)
 {
@@ -1867,7 +1877,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
         int rights = 0;
         mbentry_t *mbentry = NULL;
         /* Check ACL of auth'd user on userid's Scheduling Outbox */
-        char *outboxname = caldav_mboxname(sparam->userid, SCHED_OUTBOX);
+        char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
         r = mboxlist_lookup(outboxname, &mbentry, NULL);
         if (r) {
@@ -1884,7 +1894,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
             /* DAV:need-privileges */
             sched_stat = SCHEDSTAT_NOPRIVS;
             syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
-                   httpd_userid, sparam->userid);
+                   httpd_userid, userid);
 
             goto done;
         }
@@ -2025,7 +2035,7 @@ void sched_request(const char *organizer, struct sched_param *sparam,
     if (sparam->flags & SCHEDTYPE_REMOTE)
         authstate = auth_newstate("anonymous");
     else
-        authstate = auth_newstate(sparam->userid);
+        authstate = auth_newstate(userid);
 
     hash_enumerate(&att_table, sched_deliver, authstate);
     auth_freestate(authstate);

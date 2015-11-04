@@ -173,7 +173,7 @@ extern int isched_send(struct sched_param *sparam, const char *recipient,
 
 extern int sched_busytime_query(struct transaction_t *txn,
                                 struct mime_type_t *mime, icalcomponent *comp);
-extern void sched_request(const char *organizer, struct sched_param *sparam,
+extern void sched_request(const char *userid, const char *organizer, struct sched_param *sparam,
                           icalcomponent *oldical, icalcomponent *newical,
                           const char *att_update);
 extern void sched_reply(const char *userid,

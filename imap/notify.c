@@ -109,12 +109,12 @@ static void notify_dlist(const char *sockpath, const char *method,
 
     soc = socket(PF_UNIX, SOCK_STREAM, 0);
     if (soc < 0) {
-        syslog(LOG_ERR, "unable to create notify socket(): %m");
+        syslog(LOG_ERR, "NOTIFY: unable to create notify socket(): %m");
         goto out;
     }
 
     if (connect(soc, (struct sockaddr *)&sun_data, sizeof(sun_data)) < 0) {
-        syslog(LOG_ERR, "failed to connect to %s: %m", sockpath);
+        syslog(LOG_ERR, "NOTIFY: failed to connect to %s: %m", sockpath);
         goto out;
     }
 
