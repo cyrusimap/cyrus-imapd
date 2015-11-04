@@ -6467,6 +6467,9 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     struct updates_rock rock;
     struct buf buf = BUF_INITIALIZER;
 
+    /* Initialize rock. */
+    memset(&rock, 0, sizeof(struct updates_rock));
+
     db = caldav_open_userid(req->userid);
     if (!db) {
         syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
@@ -6499,7 +6502,6 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     json_decref(invalid);
 
     /* Lookup updates. */
-    memset(&rock, 0, sizeof(struct updates_rock));
     rock.fetchmodseq = 1;
     rock.changed = json_array();
     rock.removed = json_array();
@@ -6551,8 +6553,8 @@ static int getCalendarEventUpdates(struct jmap_req *req)
 
   done:
     buf_free(&buf);
-    json_decref(rock.changed);
-    json_decref(rock.removed);
+    if (rock.changed) json_decref(rock.changed);
+    if (rock.removed) json_decref(rock.removed);
     if (db) caldav_close(db);
     return r;
 }
