@@ -5641,7 +5641,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     if (tzid) rock->tzstart_old = icaltimezone_get_builtin_timezone(tzid);
     /* Read the new timezone, if any. */
     if (json_object_get(event, "startTimeZone") != json_null()) {
-        pe = jmap_readprop(event, "startTimeZone", !exc, invalid, "s", &val);
+        pe = jmap_readprop(event, "startTimeZone", create&&!exc, invalid, "s", &val);
         if (pe > 0) {
             /* Lookup the new timezone. */
             rock->tzstart = icaltimezone_get_builtin_timezone(val);
@@ -5672,7 +5672,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     if (!tzid) tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzend_old = icaltimezone_get_builtin_timezone(tzid);
     if (json_object_get(event, "endTimeZone") != json_null()) {
-        pe = jmap_readprop(event, "endTimeZone", !exc, invalid, "s", &val);
+        pe = jmap_readprop(event, "endTimeZone", create&&!exc, invalid, "s", &val);
         if (pe > 0) {
             rock->tzend = icaltimezone_get_builtin_timezone(val);
             if (!rock->tzend) {
@@ -5692,7 +5692,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     }
 
     /* start */
-    pe = jmap_readprop(event, "start", !exc, invalid, "s", &val);
+    pe = jmap_readprop(event, "start", create&&!exc, invalid, "s", &val);
     if (!pe && exc) {
         if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
             /* Its OK for an exception to not define the start field. But in
@@ -5723,7 +5723,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
 
 
     /* end */
-    pe = jmap_readprop(event, "end", !exc, invalid, "s", &val);
+    pe = jmap_readprop(event, "end", create&&!exc, invalid, "s", &val);
     if (pe > 0) {
         if (!jmap_localdate_to_icaltime(val, &dtend, rock->tzend, rock->isAllDay)) {
             jmap_update_dtprop_bykind(comp, dtend, rock->tzend, 1 /*purge*/, ICAL_DTEND_PROPERTY);
@@ -5768,25 +5768,25 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     icalcomponent_set_uid(comp, rock->uid);
 
     /* summary */
-    pe = jmap_readprop(event, "summary", !exc, invalid, "s", &val);
+    pe = jmap_readprop(event, "summary", create&&!exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
     }
 
     /* description */
-    pe = jmap_readprop(event, "description", !exc, invalid, "s", &val);
+    pe = jmap_readprop(event, "description", create&&!exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_description(comp, val);
     }
 
     /* location */
-    pe = jmap_readprop(event, "location", !exc, invalid, "s", &val);
+    pe = jmap_readprop(event, "location", create&&!exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_location(comp, val);
     }
 
     /* showAsFree */
-    pe = jmap_readprop(event, "showAsFree", !exc, invalid, "b", &showAsFree);
+    pe = jmap_readprop(event, "showAsFree", create&&!exc, invalid, "b", &showAsFree);
     if (pe > 0) {
         enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
         prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
@@ -5798,7 +5798,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 
     /* isAllDay */
-    jmap_readprop(event, "isAllDay", !exc, invalid, "b", &rock->isAllDay);
+    jmap_readprop(event, "isAllDay", create&&!exc, invalid, "b", &rock->isAllDay);
 
     /* start */
     /* end */
@@ -6036,11 +6036,11 @@ static int jmap_write_calendarevent(json_t *event,
     struct index_record record;
     struct calevent_rock rock;
     json_t *invalid = json_pack("[]");
-    const char *calendarId;
+    const char *calendarId = NULL;
 
     if (!destroy) {
         /* Look up the calendarId property. */
-        pe = jmap_readprop(event, "calendarId", 1 /*mandatory*/,  invalid, "s", &calendarId);
+        pe = jmap_readprop(event, "calendarId", create /*mandatory*/,  invalid, "s", &calendarId);
         if (pe > 0 && !strlen(calendarId)) {
             json_array_append_new(invalid, json_string("calendarId"));
         } else if (pe > 0 && *calendarId == '#') {
@@ -6059,8 +6059,16 @@ static int jmap_write_calendarevent(json_t *event,
 
     }
 
+    /* Handle any calendarId property errors and bail out. */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:O}",
+                "type", "invalidProperties", "properties", invalid);
+        json_object_set_new(notWritten, uid, err);
+        r = 0; goto done;
+    }
+
     /* Determine mailbox and resource name of calendar event. */
-    if (!create) {
+    if (update || destroy) {
         r = caldav_lookup_uid(db, uid, &cdata);
         if (r && r != CYRUSDB_NOTFOUND) {
             syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
@@ -6075,7 +6083,7 @@ static int jmap_write_calendarevent(json_t *event,
         }
         mboxname = xstrdup(cdata->dav.mailbox);
         resource = xstrdup(cdata->dav.resource);
-    } else {
+    } else if (create) {
         struct buf buf = BUF_INITIALIZER;
         mboxname = caldav_mboxname(req->userid, calendarId);
         buf_printf(&buf, "%s.ics", uid);
