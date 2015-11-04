@@ -110,6 +110,7 @@ static int getContactUpdates(struct jmap_req *req);
 static int setContacts(struct jmap_req *req);
 
 static int getCalendars(struct jmap_req *req);
+static int getCalendarUpdates(struct jmap_req *req);
 static int setCalendars(struct jmap_req *req);
 static int getCalendarEvents(struct jmap_req *req);
 static int getCalendarEventUpdates(struct jmap_req *req);
@@ -129,6 +130,7 @@ static const struct message_t {
     { "getContactUpdates",      &getContactUpdates },
     { "setContacts",            &setContacts },
     { "getCalendars",           &getCalendars },
+    { "getCalendarUpdates",     &getCalendarUpdates },
     { "setCalendars",           &setCalendars },
     { "getCalendarEvents",      &getCalendarEvents },
     { "getCalendarEventUpdates",&getCalendarEventUpdates },
@@ -3107,6 +3109,75 @@ done:
         free(rock.props);
     }
     json_decref(rock.array);
+    return r;
+}
+
+static int getCalendarUpdates(struct jmap_req *req)
+{
+    int r, pe;
+    json_t *invalid;
+    struct caldav_db *db;
+    const char *since = NULL;
+    int dofetch = 0;
+    struct buf buf = BUF_INITIALIZER;
+    modseq_t oldmodseq;
+
+    r = caldav_create_defaultcalendars(req->userid);
+    if (r) goto done;
+
+
+    db = caldav_open_userid(req->userid);
+    if (!db) {
+        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Parse and validate arguments. */
+    invalid = json_pack("[]");
+    pe = jmap_readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
+    if (pe > 0) {
+        oldmodseq = str2uint64(since);
+        if (!oldmodseq) {
+            json_array_append_new(invalid, json_string("sinceState"));
+        }
+    }
+    jmap_readprop(req->args, "fetchRecords", 0 /*mandatory*/, invalid, "b", &dofetch);
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    if (oldmodseq != req->counters.caldavmodseq) {
+        /* XXX - This is where we would report calendar changes. But since it's
+         * not clear yet, how to report purged mailboxes as removed, let's force
+         * the client to flush its cache. */
+        json_t *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+    } else {
+        /* Create response without any updates. */
+        json_t *eventUpdates = json_pack("{}");
+        json_object_set_new(eventUpdates, "accountId", json_string(req->userid));
+        json_object_set_new(eventUpdates, "oldState", json_string(since));
+        json_object_set_new(eventUpdates, "newState", json_string(since));
+
+        json_object_set_new(eventUpdates, "hasMoreUpdates", json_false());
+        json_object_set_new(eventUpdates, "changed", json_pack("[]"));
+        json_object_set_new(eventUpdates, "removed", json_pack("[]"));
+
+        json_t *item = json_pack("[]");
+        json_array_append_new(item, json_string("calendarUpdates"));
+        json_array_append_new(item, eventUpdates);
+        json_array_append_new(item, json_string(req->tag));
+        json_array_append_new(req->response, item);
+    }
+
+  done:
+    buf_free(&buf);
+    if (db) caldav_close(db);
     return r;
 }
 
