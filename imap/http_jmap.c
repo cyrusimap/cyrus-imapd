@@ -225,7 +225,6 @@ static int jmap_post(struct transaction_t *txn,
         return HTTP_BAD_MEDIATYPE;
     }
 
-
     /* Allocate map to store uids */
     construct_hash_table(&idmap, 1024, 0);
 
@@ -4842,6 +4841,9 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         icalcomponent_remove_property(comp, prop);
         icalproperty_free(prop);
     }
+    if (exceptions == json_null()) {
+        return;
+    }
 
     const char *key;
     json_t *exc;
@@ -5804,7 +5806,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     /* endTimeZone */
     jmap_calendarevent_dt_to_ical(comp, event, rock);
 
-
     /* organizer and attendees */
     json_t *organizer = NULL;
     json_t *attendees = NULL;
@@ -5993,7 +5994,7 @@ static int jmap_schedule_ical(const char *userid,
         /* Send scheduling message. */
         if (!strcmpsafe(sparam.userid, userid)) {
             /* Organizer scheduling object resource */
-            sched_request(organizer, &sparam, oldical, ical, 0);
+            sched_request(userid, organizer, &sparam, oldical, ical, 0);
         } else {
             /* Attendee scheduling object resource */
             sched_reply(userid, oldical, ical);
