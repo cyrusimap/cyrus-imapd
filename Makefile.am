@@ -800,6 +800,39 @@ noinst_HEADERS += \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h
 
+backup_libcyrus_backup_la_SOURCES = \
+    backup/api.c \
+    backup/gzuncat.c \
+    backup/gzuncat.h \
+    backup/index.c \
+    backup/internal.h \
+    backup/sqlconsts.c \
+    backup/sqlconsts.h \
+    backup/verify.c
+
+backup_backupd_SOURCES = \
+    imap/mutex_fake.c \
+    imap/sync_support.c \
+    imap/sync_support.h \
+    master/service.c \
+    backup/backupd.c
+backup_backupd_LDADD = $(LD_SERVER_ADD) backup/libcyrus_backup.la
+
+backup_reindex_SOURCES = \
+    imap/mutex_fake.c \
+    backup/reindex.c
+backup_reindex_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+
+backup_verify_SOURCES = \
+    imap/mutex_fake.c \
+    backup/verify_main.c
+backup_verify_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+
+backup_bu_lock_SOURCES = \
+    imap/mutex_fake.c \
+    backup/bu_lock.c
+backup_bu_lock_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
 
@@ -1243,39 +1276,6 @@ imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c
 imap_sync_server_LDADD = $(LD_SERVER_ADD)
-
-backup_libcyrus_backup_la_SOURCES = \
-    backup/api.c \
-    backup/gzuncat.c \
-    backup/gzuncat.h \
-    backup/index.c \
-    backup/internal.h \
-    backup/sqlconsts.c \
-    backup/sqlconsts.h \
-    backup/verify.c
-
-backup_backupd_SOURCES = \
-    imap/mutex_fake.c \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    master/service.c \
-    backup/backupd.c
-backup_backupd_LDADD = $(LD_SERVER_ADD) backup/libcyrus_backup.la
-
-backup_reindex_SOURCES = \
-    imap/mutex_fake.c \
-    backup/reindex.c
-backup_reindex_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
-
-backup_verify_SOURCES = \
-    imap/mutex_fake.c \
-    backup/verify_main.c
-backup_verify_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
-
-backup_bu_lock_SOURCES = \
-    imap/mutex_fake.c \
-    backup/bu_lock.c
-backup_bu_lock_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
