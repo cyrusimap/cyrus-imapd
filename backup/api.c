@@ -985,7 +985,8 @@ EXPORTED int backup_append_abort(struct backup *backup)
     return 0;
 }
 
-static int _parse_line(struct protstream *in, time_t *ts,
+/* FIXME do this properly */
+HIDDEN int _parse_line(struct protstream *in, time_t *ts,
                        struct buf *cmd, struct dlist **kin)
 {
     struct dlist *dl = NULL;

@@ -72,5 +72,9 @@ struct backup {
 
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len);
+
+/* FIXME do this properly */
+HIDDEN int _parse_line(struct protstream *in, time_t *ts,
+                       struct buf *cmd, struct dlist **kin);
 #endif
 #endif
