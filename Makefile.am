@@ -116,6 +116,7 @@ EXTRA_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
+noinst_HEADERS =
 noinst_LTLIBRARIES =
 CLEANFILES =
 EXTRA_DIST = \
@@ -776,7 +777,7 @@ include_HEADERS = \
 nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
-noinst_HEADERS = \
+noinst_HEADERS += \
 	lib/byteorder64.h \
 	lib/gai.h \
 	lib/libconfig.h \
