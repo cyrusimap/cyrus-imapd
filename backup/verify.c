@@ -254,33 +254,43 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 struct verify_message_rock {
     struct gzuncat *gzuc;
     int verify_guid;
+    struct dlist *cached_dlist;
+    off_t cached_offset;
 };
 
 static int _verify_message_cb(const struct backup_message *message, void *rock)
 {
     struct verify_message_rock *vmrock = (struct verify_message_rock *) rock;
-    int r;
-
-    /* FIXME - this algorithm is nasty
-     * each MESSAGE line in the data stream that contains multiple
-     * messages within it is going to result in the data preceding
-     * it being decompressed n times, due to the repeated
-     * gzuc_seekto's to read the same dlist over and over again
-     */
-    r = gzuc_seekto(vmrock->gzuc, message->offset);
-    if (r) goto done;
-
-    struct protstream *ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
-    prot_setisclient(ps, 1); /* don't sync literals */
-
     struct dlist *dl = NULL;
     struct dlist *di = NULL;
+    int r;
 
-    r = _parse_line(ps, NULL, NULL, &dl);
-    if (r == EOF) goto done;
+    /* cache the dlist so that multiple reads from the same offset don't
+     * cause expensive reverse seeks in decompression stream
+     */
+    if (!vmrock->cached_dlist || vmrock->cached_offset != message->offset) {
+        if (vmrock->cached_dlist)
+            dlist_free(&vmrock->cached_dlist);
+
+        r = gzuc_seekto(vmrock->gzuc, message->offset);
+        if (r) return r;
+
+        struct protstream *ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
+        prot_setisclient(ps, 1); /* don't sync literals */
+        r = _parse_line(ps, NULL, NULL, &dl);
+        prot_free(ps);
+
+        if (r == EOF) return r;
+
+        vmrock->cached_dlist = dl;
+        vmrock->cached_offset = message->offset;
+    }
+    else {
+        dl = vmrock->cached_dlist;
+    }
 
     r = strcmp(dl->name, "MESSAGE");
-    if (r) goto done;
+    if (r) return r;
 
     r = -1;
     for (di = dl->head; di; di = di->next) {
@@ -298,10 +308,6 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
         }
     }
 
-done:
-    if (dl) dlist_free(&dl);
-    if (ps) prot_free(ps);
-
     return r;
 }
 
@@ -312,10 +318,15 @@ static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
     struct verify_message_rock vmrock = {
         gzuc,
         (level & BACKUP_VERIFY_MESSAGE_GUIDS),
+        NULL,
+        0,
     };
 
     int r = backup_message_foreach(backup, chunk->id, _verify_message_cb,
                                    &vmrock);
+
+    if (vmrock.cached_dlist)
+        dlist_free(&vmrock.cached_dlist);
 
     fprintf(stderr, "%s: chunk %d %s!\n", __func__, chunk->id,
             r ? "failed" : "passed");
