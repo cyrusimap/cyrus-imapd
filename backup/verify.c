@@ -105,7 +105,6 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk);
 static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
                                  struct gzuncat *gzuc, unsigned level);
 static int verify_mailbox_links(struct backup *backup);
-static int verify_message_guids(struct backup *backup);
 
 static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -172,9 +171,6 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level)
 
     if (!r && (level & BACKUP_VERIFY_MAILBOX_LINKS))
         r = verify_mailbox_links(backup);
-
-    if (!r && (level & BACKUP_VERIFY_MESSAGE_GUIDS))
-        r = verify_message_guids(backup);
 
 done:
     if (gzuc) gzuc_close(&gzuc);
@@ -260,8 +256,7 @@ struct verify_message_rock {
     int verify_guid;
 };
 
-static int _verify_message_links_cb(const struct backup_message *message,
-                                    void *rock)
+static int _verify_message_cb(const struct backup_message *message, void *rock)
 {
     struct verify_message_rock *vmrock = (struct verify_message_rock *) rock;
     int r;
@@ -293,8 +288,14 @@ static int _verify_message_links_cb(const struct backup_message *message,
             continue;
 
         r = message_guid_cmp(di->gval, message->guid);
-        if (!r)
+        if (!r) {
+            if (vmrock->verify_guid) {
+                struct message_guid guid;
+                message_guid_generate(&guid, di->sval, di->nval);
+                r = message_guid_cmp(&guid, message->guid);
+            }
             break;
+        }
     }
 
 done:
@@ -313,7 +314,7 @@ static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
         (level & BACKUP_VERIFY_MESSAGE_GUIDS),
     };
 
-    int r = backup_message_foreach(backup, chunk->id, _verify_message_links_cb,
+    int r = backup_message_foreach(backup, chunk->id, _verify_message_cb,
                                    &vmrock);
 
     fprintf(stderr, "%s: chunk %d %s!\n", __func__, chunk->id,
@@ -340,30 +341,6 @@ static int verify_mailbox_links(struct backup *backup)
      *     if it's a mailbox and it matches
      *       remove from mailbox list
      *   failed if either list of mailboxes or list of mailbox_messages is not empty
-     */
-
-    /* FIXME write this */
-    fprintf(stderr, "%s: not implemented\n", __func__);
-    (void) backup;
-    return 0;
-}
-
-/* verify that each message's on-disk data matches its recorded guid */
-static int verify_message_guids(struct backup *backup)
-{
-    /*
-     * get list of chunks
-     * foreach chunk
-     *   get list of messages in chunk
-     *   open chunk
-     *   foreach message
-     *     seek to message offset
-     *     read dlist
-     *     look for matching guid in dlist
-     *     re-calculate guid from content
-     *       failed if doesn't match
-     *
-     * (probably dedup with verify_message_links...)
      */
 
     /* FIXME write this */
