@@ -55,5 +55,6 @@ int gzuc_eof(struct gzuncat *gz);
 ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count);
 int gzuc_skip(struct gzuncat *gz, size_t len);
 off_t gzuc_member_offset(struct gzuncat *gz);
+size_t gzuc_member_bytes_read(struct gzuncat *gz);
 
 #endif

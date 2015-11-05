@@ -77,6 +77,7 @@ struct gzuncat {
     z_stream strm;
     unsigned char *in_buf;
     size_t in_buf_size;
+    size_t bytes_read;
 };
 
 EXPORTED struct gzuncat *gzuc_open(int fd)
@@ -89,8 +90,9 @@ EXPORTED struct gzuncat *gzuc_open(int fd)
 
     gz->current_offset = -1;
     gz->next_offset = 0;
-    gz->in_buf_size = default_in_buf_size;
     gz->in_buf = NULL;
+    gz->in_buf_size = default_in_buf_size;
+    gz->bytes_read = 0;
 
     return gz;
 
@@ -139,6 +141,7 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
 
     gz->current_offset = offset;
     gz->next_offset = -1;
+    gz->bytes_read = 0;
 
     return 0;
 }
@@ -168,6 +171,7 @@ EXPORTED int gzuc_member_end(struct gzuncat *gz, off_t *offset)
 done:
     inflateEnd(&gz->strm);
     gz->current_offset = -1;
+    gz->bytes_read = 0;
     if (!r && offset) *offset = gz->next_offset;
     return r;
 }
@@ -256,6 +260,7 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
         }
     } while (gz->strm.avail_out); // keep going while we haven't filled the buffer
 
+    gz->bytes_read += uncompressed;
     return uncompressed;
 }
 
@@ -282,4 +287,9 @@ EXPORTED int gzuc_skip(struct gzuncat *gz, size_t len)
 EXPORTED off_t gzuc_member_offset(struct gzuncat *gz)
 {
     return gz->current_offset;
+}
+
+EXPORTED size_t gzuc_member_bytes_read(struct gzuncat *gz)
+{
+    return gz->bytes_read;
 }
