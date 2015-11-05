@@ -4428,8 +4428,8 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
             if (!exc) {
                 continue;
             }
-            struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
-            char *s = jmap_icaltime_to_localdate_r(dtstart);
+            struct icaltimetype recurid = icalcomponent_get_recurrenceid(comp);
+            char *s = jmap_icaltime_to_localdate_r(recurid);
             json_object_set_new(excobj, s, exc);
             free(s);
         }
@@ -4969,10 +4969,8 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         if (!prop) {
             continue;
         }
-        /* We only key by LocalDate (instead of LocalDate+TZID) to identify
-         * changes to existing exceptions that have their timezone changed.
-         * This means that there can't be two exceptions at the same LocalDate
-         * in two different timezones. */
+        /* Key by LocalDate (instead of LocalDate+TZID), since this
+         * RECURRENCEID must be denoted in the original timezone. */
         const char *val = icalproperty_get_value_as_string(prop);
         if (val) {
             hash_insert(val, excomp, &excs);
@@ -5010,6 +5008,9 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             /* If not found, create a new one. */
             if (!excomp) excomp = icalcomponent_new_vevent();
 
+            /* Add RECURRENCEID property. */
+            jmap_update_dtprop_bykind(excomp, dt, rock->tzstart, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
+
             /* Add exceptional VEVENT component to the VCALENDAR. */
             icalcomponent_add_component(ical, excomp);
 
@@ -5046,6 +5047,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
     free_hash_table(&excs, (void(*)(void*)) icalcomponent_free);
 
     buf_free(&buf);
+
 }
 
 /* Set the TZID parameters for all RDATE properties. */
@@ -5729,6 +5731,8 @@ static void jmap_timezones_to_ical(icalcomponent *ical,
     }
 }
 
+/* Update the start and end properties of VEVENT comp, as defined by
+ * the JMAP calendarevent event. */
 static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
                                           json_t *event,
                                           calevent_rock *rock) {
@@ -5754,9 +5758,8 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
             if (!rock->tzstart) {
                 json_array_append_new(invalid, json_string("startTimeZone"));
             }
-        } else if (!pe && !exc && !rock->tzstart) {
-            /* If this is not a create and no startTimezone was read,
-             * keep the current timezone. */
+        } else if (!pe) {
+             /* Keep the current timezone. */
             rock->tzstart = rock->tzstart_old;
         }
     } else {
@@ -5784,7 +5787,8 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
             if (!rock->tzend) {
                 json_array_append_new(invalid, json_string("endTimeZone"));
             }
-        } else if (!pe && !exc && !rock->tzend) {
+        } else if (!pe) {
+            /* Keep the current timezone. */
             rock->tzend = rock->tzend_old;
         }
     } else {
@@ -5799,21 +5803,9 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
 
     /* start */
     pe = jmap_readprop(event, "start", create&&!exc, invalid, "s", &val);
-    if (!pe && exc) {
-        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
-            /* Its OK for an exception to not define the start field. But in
-             * this case we need to infer DTSTART and RECURRENCEID from the
-             * JMAP LocalDate recurrence id of this exception. */
-            val = rock->recurid;
-            pe = 1;
-        }
-    }
     if (pe > 0) {
         if (!jmap_localdate_to_icaltime(val, &dtstart, rock->tzstart, rock->isAllDay)) {
             jmap_update_dtprop_bykind(comp, dtstart, rock->tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
-            if (exc) {
-                jmap_update_dtprop_bykind(comp, dtstart, rock->tzstart, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
-            }
         } else {
             json_array_append_new(invalid, json_string("start"));
         }
@@ -5826,7 +5818,6 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
             jmap_update_dtprop_bykind(comp, dt, rock->tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
         }
     }
-
 
     /* end */
     pe = jmap_readprop(event, "end", create&&!exc, invalid, "s", &val);
@@ -5848,7 +5839,9 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     /* The end date MUST be equal to or after the start date when both are
      * converted to UTC time. */
     dtstart = icalcomponent_get_dtstart(comp);
+    dtstart.zone = rock->tzstart;
     dtend = icalcomponent_get_dtend(comp);
+    dtend.zone = rock->tzend;
     if (icaltime_is_null_time(dtend)) dtend = dtstart;
     if (icaltime_compare(dtstart, dtend) > 0) {
         json_array_append_new(invalid, json_string("end"));
@@ -5957,7 +5950,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("recurrence"));
         }
-    } else if (!pe && !create && rock->tzstart_old != rock->tzstart) {
+    } else if (!pe && !exc && !create && rock->tzstart_old != rock->tzstart) {
         /* The start timezone has changed but none of the recurrences. */
         jmap_recurrence_update_tz(comp, rock);
     }
@@ -5971,7 +5964,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("inclusions"));
         }
-    } else if (!pe && !create && rock->tzstart_old != rock->tzstart) {
+    } else if (!pe && !exc && !create && rock->tzstart_old != rock->tzstart) {
         /* The start timezone has changed but none of the inclusions. */
         jmap_inclusions_update_tz(comp, rock);
     }
@@ -5985,7 +5978,8 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("exceptions"));
         }
-    } else if (!pe && !create && (rock->tzstart_old != rock->tzstart || rock->tzend_old != rock->tzend)) {
+    } else if (!pe && !exc && !create &&
+            (rock->tzstart_old != rock->tzstart || rock->tzend_old != rock->tzend)) {
         /* The start or end timezone has changed but none of the exceptions. */
         jmap_exceptions_update_tz(comp, rock);
     }
