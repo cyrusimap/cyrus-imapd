@@ -229,6 +229,7 @@ static int verify_last_checksum(struct backup *backup)
         r = _verify_one_checksum(backup, chunk_list.head);
 
     chunk_list_empty(&chunk_list);
+    fprintf(stderr, "%s: %s!\n", __func__, r ? "failed" : "passed");
     return r;
 }
 
@@ -249,27 +250,91 @@ static int verify_all_checksums(struct backup *backup)
     }
 
     chunk_list_empty(&chunk_list);
+    fprintf(stderr, "%s: %s!\n", __func__, r ? "failed" : "passed");
+    return r;
+}
+
+static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
+{
+    struct gzuncat *gzuc = (struct gzuncat *) rock;
+    return gzuc_read(gzuc, buf, len);
+}
+
+static int _verify_message_links_cb(const struct backup_message *message,
+                                    void *rock)
+{
+    struct gzuncat *gzuc = (struct gzuncat *) rock;
+    int r;
+
+    /* FIXME - this algorithm is nasty
+     * each MESSAGE line in the data stream that contains multiple
+     * messages within it is going to result in the data preceding
+     * it being decompressed n times, due to the repeated
+     * gzuc_seekto's to read the same dlist over and over again
+     */
+    r = gzuc_seekto(gzuc, message->offset);
+    if (r) goto done;
+
+    struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
+    prot_setisclient(ps, 1); /* don't sync literals */
+
+    struct dlist *dl = NULL;
+    struct dlist *di = NULL;
+
+    r = _parse_line(ps, NULL, NULL, &dl);
+    if (r == EOF) goto done;
+
+    r = strcmp(dl->name, "MESSAGE");
+    if (r) goto done;
+
+    r = -1;
+    for (di = dl->head; di; di = di->next) {
+        if (di->type != DL_SFILE)
+            continue;
+
+        r = message_guid_cmp(di->gval, message->guid);
+        if (!r)
+            break;
+    }
+
+done:
+    if (dl) dlist_free(&dl);
+    if (ps) prot_free(ps);
+
     return r;
 }
 
 /* verify that each message exists within the chunk the index claims */
 static int verify_message_links(struct backup *backup)
 {
-    /*
-     * get list of chunks
-     * foreach chunk
-     *   get list of messages in chunk
-     *   open chunk
-     *   foreach message
-     *     seek to message offset
-     *     read dlist
-     *     look for matching guid in dlist
-     */
+    struct chunk_list chunk_list = {0};
+    struct chunk *chunk;
+    struct gzuncat *gzuc = NULL;
+    int r;
 
-    /* FIXME write this */
-    fprintf(stderr, "%s: not implemented\n", __func__);
-    (void) backup;
-    return -1;
+    gzuc = gzuc_open(backup->fd);
+    if (!gzuc) return -1;
+
+    r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
+                   NULL, chunk_select_cb, &chunk_list);
+
+    chunk = chunk_list.head;
+
+    while (!r && chunk) {
+        r = gzuc_member_start_from(gzuc, chunk->offset);
+
+        if (!r) r = backup_message_foreach(backup, chunk->id,
+                                           _verify_message_links_cb, gzuc);
+
+        if (!r) r = gzuc_member_end(gzuc, NULL);
+        chunk = chunk->next;
+    }
+
+    chunk_list_empty(&chunk_list);
+    gzuc_close(&gzuc);
+
+    fprintf(stderr, "%s: %s!\n", __func__, r ? "failed" : "passed");
+    return r;
 }
 
 /* verify that the matching MAILBOX exists within the claimed chunk
