@@ -101,37 +101,11 @@ static void chunk_list_empty(struct chunk_list *list) {
     list->head = list->tail = NULL;
 }
 
-static int verify_last_checksum(struct backup *backup);
-static int verify_all_checksums(struct backup *backup);
-static int verify_message_links(struct backup *backup);
+static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk);
+static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
+                                 struct gzuncat *gzuc, unsigned level);
 static int verify_mailbox_links(struct backup *backup);
 static int verify_message_guids(struct backup *backup);
-
-EXPORTED int backup_verify(struct backup *backup, unsigned level)
-{
-    int r = 0;
-
-    /* don't double-verify last checksum when verifying all */
-    if ((level & BACKUP_VERIFY_ALL_CHECKSUMS))
-        level &= ~BACKUP_VERIFY_LAST_CHECKSUM;
-
-    if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
-        r = verify_last_checksum(backup);
-
-    if (!r && (level & BACKUP_VERIFY_ALL_CHECKSUMS))
-        r = verify_all_checksums(backup);
-
-    if (!r && (level & BACKUP_VERIFY_MESSAGE_LINKS))
-        r = verify_message_links(backup);
-
-    if (!r && (level & BACKUP_VERIFY_MAILBOX_LINKS))
-        r = verify_mailbox_links(backup);
-
-    if (!r && (level & BACKUP_VERIFY_MESSAGE_GUIDS))
-        r = verify_message_guids(backup);
-
-    return r;
-}
 
 static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -152,7 +126,64 @@ static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-static int _verify_one_checksum(struct backup *backup, struct chunk *chunk) {
+EXPORTED int backup_verify(struct backup *backup, unsigned level)
+{
+    struct chunk_list chunk_list = {0};
+    struct gzuncat *gzuc = NULL;
+    int r = 0;
+
+    /* don't double-verify last checksum when verifying all */
+    if ((level & BACKUP_VERIFY_ALL_CHECKSUMS))
+        level &= ~BACKUP_VERIFY_LAST_CHECKSUM;
+
+    /* don't double-verify message links when verifying message guids */
+    if ((level & BACKUP_VERIFY_MESSAGE_GUIDS))
+        level &= ~BACKUP_VERIFY_MESSAGE_LINKS;
+
+    r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
+                       NULL, chunk_select_cb, &chunk_list);
+
+    if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
+        r = verify_chunk_checksums(backup, chunk_list.head);
+
+    if (level > BACKUP_VERIFY_LAST_CHECKSUM) {
+        gzuc = gzuc_open(backup->fd);
+        if (!gzuc) {
+            r = -1;
+            goto done;
+        }
+
+        struct chunk *chunk = chunk_list.head;
+        while (!r && chunk) {
+            r = gzuc_member_start_from(gzuc, chunk->offset);
+
+            if (!r && (level & BACKUP_VERIFY_ALL_CHECKSUMS))
+                r = verify_chunk_checksums(backup, chunk);
+
+            if (!r && (level & BACKUP_VERIFY_MESSAGES))
+                r = verify_chunk_messages(backup, chunk, gzuc, level);
+
+            if (!r)
+                r = gzuc_member_end(gzuc, NULL);
+
+            chunk = chunk->next;
+        }
+    }
+
+    if (!r && (level & BACKUP_VERIFY_MAILBOX_LINKS))
+        r = verify_mailbox_links(backup);
+
+    if (!r && (level & BACKUP_VERIFY_MESSAGE_GUIDS))
+        r = verify_message_guids(backup);
+
+done:
+    if (gzuc) gzuc_close(&gzuc);
+    chunk_list_empty(&chunk_list);
+    return r;
+}
+
+static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk)
+{
     struct gzuncat *gzuc = NULL;
     int r;
 
@@ -218,42 +249,6 @@ done:
     return r;
 }
 
-/* verify checksums of latest chunk */
-static int verify_last_checksum(struct backup *backup)
-{
-    struct chunk_list chunk_list = {0};
-
-    int r = sqldb_exec(backup->db, backup_index_chunk_select_latest_sql,
-                       NULL, chunk_select_cb, &chunk_list);
-    if (!r)
-        r = _verify_one_checksum(backup, chunk_list.head);
-
-    chunk_list_empty(&chunk_list);
-    fprintf(stderr, "%s: %s!\n", __func__, r ? "failed" : "passed");
-    return r;
-}
-
-/* verify checksums of each chunk */
-static int verify_all_checksums(struct backup *backup)
-{
-    struct chunk_list chunk_list = {0};
-    struct chunk *chunk;
-    int r;
-
-    r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
-                       NULL, chunk_select_cb, &chunk_list);
-    chunk = chunk_list.head;
-
-    while (!r && chunk) {
-        r = _verify_one_checksum(backup, chunk);
-        chunk = chunk->next;
-    }
-
-    chunk_list_empty(&chunk_list);
-    fprintf(stderr, "%s: %s!\n", __func__, r ? "failed" : "passed");
-    return r;
-}
-
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
@@ -310,37 +305,19 @@ done:
 }
 
 /* verify that each message exists within the chunk the index claims */
-static int verify_message_links(struct backup *backup)
+static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
+                                 struct gzuncat *gzuc, unsigned level)
 {
-    struct chunk_list chunk_list = {0};
-    struct chunk *chunk;
-    struct gzuncat *gzuc = NULL;
-    int r;
+    struct verify_message_rock vmrock = {
+        gzuc,
+        (level & BACKUP_VERIFY_MESSAGE_GUIDS),
+    };
 
-    gzuc = gzuc_open(backup->fd);
-    if (!gzuc) return -1;
+    int r = backup_message_foreach(backup, chunk->id, _verify_message_links_cb,
+                                   &vmrock);
 
-    r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
-                   NULL, chunk_select_cb, &chunk_list);
-
-    chunk = chunk_list.head;
-
-    while (!r && chunk) {
-        r = gzuc_member_start_from(gzuc, chunk->offset);
-
-        struct verify_message_rock vmrock = { gzuc, 0 };
-
-        if (!r) r = backup_message_foreach(backup, chunk->id,
-                                           _verify_message_links_cb, &vmrock);
-
-        if (!r) r = gzuc_member_end(gzuc, NULL);
-        chunk = chunk->next;
-    }
-
-    chunk_list_empty(&chunk_list);
-    gzuc_close(&gzuc);
-
-    fprintf(stderr, "%s: %s!\n", __func__, r ? "failed" : "passed");
+    fprintf(stderr, "%s: chunk %d %s!\n", __func__, chunk->id,
+            r ? "failed" : "passed");
     return r;
 }
 

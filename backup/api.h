@@ -70,6 +70,7 @@ enum {
     BACKUP_VERIFY_MESSAGE_GUIDS = (1 << 4),
 };
 #define BACKUP_VERIFY_QUICK BACKUP_VERIFY_LAST_CHECKSUM
+#define BACKUP_VERIFY_MESSAGES (BACKUP_VERIFY_MESSAGE_LINKS | BACKUP_VERIFY_MESSAGE_GUIDS)
 #define BACKUP_VERIFY_FULL  ((unsigned) -1)
 int backup_verify(struct backup *backup, unsigned level);
 
