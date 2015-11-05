@@ -284,6 +284,27 @@ EXPORTED int gzuc_skip(struct gzuncat *gz, size_t len)
     return 0;
 }
 
+/* n.b. not a conventional seek function - only seeks to absolute position
+ * it's also pretty expensive if the position is earlier than the
+ * current position, so try to keep your reads in order
+ */
+EXPORTED int gzuc_seekto(struct gzuncat *gz, size_t pos)
+{
+    if (gz->current_offset < 0) return -1;
+
+    if (pos == gz->bytes_read) return 0;
+
+    if (pos < gz->bytes_read) {
+        int r = fseeko(gz->file, gz->current_offset, SEEK_SET);
+        if (r) return r;
+        gz->strm.avail_in = 0;
+        gz->strm.next_in = gz->in_buf;
+        gz->bytes_read = 0;
+    }
+
+    return gzuc_skip(gz, pos - gz->bytes_read);
+}
+
 EXPORTED off_t gzuc_member_offset(struct gzuncat *gz)
 {
     return gz->current_offset;
