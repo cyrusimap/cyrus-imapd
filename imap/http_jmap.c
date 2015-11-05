@@ -116,7 +116,11 @@ static int getCalendarEvents(struct jmap_req *req);
 static int getCalendarEventUpdates(struct jmap_req *req);
 static int getCalendarEventList(struct jmap_req *req);
 static int setCalendarEvents(struct jmap_req *req);
+
+/* JMAP methods not defined in the spec. */
 static int getCalendarPreferences(struct jmap_req *req);
+static int getPersonalities(struct jmap_req *req);
+static int getPreferences(struct jmap_req *req);
 
 static const struct message_t {
     const char *name;
@@ -137,6 +141,8 @@ static const struct message_t {
     { "getCalendarEventList",   &getCalendarEventList },
     { "setCalendarEvents",      &setCalendarEvents },
     { "getCalendarPreferences", &getCalendarPreferences },
+    { "getPersonalities",       &getPersonalities },
+    { "getPreferences",         &getPreferences },
     { NULL,             NULL}
 };
 
@@ -7155,6 +7161,8 @@ done:
     return r;
 }
 
+/* XXX The following JMAP methods are not defined in the spec. */
+
 static int getCalendarPreferences(struct jmap_req *req)
 {
     /* XXX Just a dummy implementation to make the JMAP web client happy while
@@ -7162,6 +7170,41 @@ static int getCalendarPreferences(struct jmap_req *req)
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("calendarPreferences"));
     json_array_append_new(item, json_pack("{}"));
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+    return 0;
+}
+
+static int getPersonalities(struct jmap_req *req)
+{
+    /* XXX Just a dummy implementation to make the JMAP web client happy while
+     * testing. */
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("personalities"));
+
+    json_t *obj = json_pack("{}");
+    json_object_set_new(obj, "id", json_string("1"));
+    json_array_append_new(item, json_pack("{s:o}", "list", json_pack("[o]", obj)));
+
+    /* Echo back the currently authenticated user's personality. */
+    char *id = xstrdup(req->userid);
+    char *p = strchr(id, '@'); if (p) { *p = 0; }
+    json_object_set_new(obj, "name", json_string(id));
+    free(id);
+    json_object_set_new(obj, "email", json_string(req->userid));
+
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+    return 0;
+}
+
+static int getPreferences(struct jmap_req *req)
+{
+    /* XXX Just a dummy implementation to make the JMAP web client happy while
+     * testing. */
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("preferences"));
+    json_array_append_new(item, json_pack("{s:s}", "defaultPersonalityId", "1"));
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
     return 0;
