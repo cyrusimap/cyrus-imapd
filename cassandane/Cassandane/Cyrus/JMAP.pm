@@ -849,9 +849,9 @@ EOF
   $self->assert_str_equals($event->{inclusions}[1], "2016-11-07T16:00:00");
   $self->assert_not_null($event->{exceptions});
   $self->assert(exists $event->{exceptions}{"2016-10-04T16:00:00"});
-  $self->assert_not_null($event->{exceptions}{"2016-09-30T17:00:00"});
-  $self->assert_str_equals($event->{exceptions}{"2016-09-30T17:00:00"}{"summary"}, "Exceptional Yep");
-  $self->assert_str_equals($event->{exceptions}{"2016-09-30T17:00:00"}{"showAsFree"}, JSON::false);
+  $self->assert_not_null($event->{exceptions}{"2016-09-30T16:00:00"});
+  $self->assert_str_equals($event->{exceptions}{"2016-09-30T16:00:00"}{"summary"}, "Exceptional Yep");
+  $self->assert_str_equals($event->{exceptions}{"2016-09-30T16:00:00"}{"showAsFree"}, JSON::false);
   $self->assert_not_null($event->{alerts});
   $self->assert_num_equals(scalar @{$event->{alerts}}, 1);
   $self->assert_num_equals($event->{alerts}[0]{minutesBefore}, 5);
@@ -1474,7 +1474,7 @@ sub test_setcalendarevents_update_exceptions {
                                 "count" => 3
                             },
                             "exceptions" => {
-                                "2015-10-07T17:45:00" => {
+                                "2015-10-07T16:45:00" => {
                                     "summary" => "one hour later",
                                     "start" => "2015-10-07T17:45:00",
                                     "end" => "2015-10-07T18:15:00"
@@ -1491,7 +1491,7 @@ sub test_setcalendarevents_update_exceptions {
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     my $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($event->{id}, $id);
-    my $exc = $event->{exceptions}{"2015-10-07T17:45:00"};
+    my $exc = $event->{exceptions}{"2015-10-07T16:45:00"};
     $self->assert_str_equals($exc->{summary}, "one hour later");
     $self->assert_null($exc->{description});
     $self->assert_null($exc->{location});
@@ -1505,7 +1505,7 @@ sub test_setcalendarevents_update_exceptions {
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
                             "exceptions" => {
-                                "2015-10-07T17:45:00" => {
+                                "2015-10-07T16:45:00" => {
                                     "startTimeZone" => "Australia/Melbourne",
                                     "endTimeZone" => "Australia/Melbourne",
                                     "showAsFree" => JSON::true
@@ -1516,11 +1516,11 @@ sub test_setcalendarevents_update_exceptions {
     $self->assert_not_null($res->[0][1]{updated});
 
     xlog "get calendar event $id";
-
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($event->{id}, $id);
-    $exc = $event->{exceptions}{"2015-10-07T17:45:00"};
+    $self->assert_str_equals($event->{startTimeZone}, "Europe/Vienna");
+    $exc = $event->{exceptions}{"2015-10-07T16:45:00"};
     $self->assert_str_equals($exc->{summary}, "one hour later");
     $self->assert_null($exc->{description});
     $self->assert_equals($exc->{showAsFree}, JSON::true);
@@ -1531,20 +1531,29 @@ sub test_setcalendarevents_update_exceptions {
     $self->assert_str_equals($exc->{endTimeZone}, "Australia/Melbourne");
     $self->assert(not exists $event->{exceptions}{"2015-10-08T16:45:00"});
 
-    xlog "update start time of exception event $id";
-    # This destroys the previous exception and creates a new one, starting a
-    # new one at the LocalDate key. But beware, in iCalendar this translates
-    # to an event that ends immediately. We can't infer if the client wanted to
-    # use the LocalDate end of the parent (which could be *before* the
-    # start of this exception, as in this example). TLDR: Always specify
-    # start and end date for new exceptions. XXX
+    xlog "update start time of exception event $id with error";
+    # This is an illegal event! start occurs after end. 
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => 
                         {
                             "exceptions" => {
-                                "2015-10-07T18:15:00" => {
+                                "2015-10-07T16:45:00" => {
+                                    "start" => "2015-10-07T17:45:00",
+                                    "startTimeZone" => "Asia/Bangkok",
+                                },
+                            }
+                        }
+                    }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+
+    xlog "update start time of exception event $id";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        "$id" => 
+                        {
+                            "exceptions" => {
+                                "2015-10-07T16:45:00" => {
+                                    "start" => "2015-10-07T17:45:00",
                                     "startTimeZone" => "Australia/Sydney",
-                                    "endTimeZone" => "Australia/Sydney"
                                 },
                             }
                         }
@@ -1552,16 +1561,14 @@ sub test_setcalendarevents_update_exceptions {
     $self->assert_not_null($res->[0][1]{updated});
 
     xlog "get calendar event $id";
-
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($event->{id}, $id);
-    $exc = $event->{exceptions}{"2015-10-07T18:15:00"};
-    $self->assert_str_equals($exc->{start}, "2015-10-07T18:15:00");
+    $exc = $event->{exceptions}{"2015-10-07T16:45:00"};
+    $self->assert_str_equals($exc->{start}, "2015-10-07T17:45:00");
     $self->assert_str_equals($exc->{startTimeZone}, "Australia/Sydney");
-    $self->assert_null($exc->{end});
-    $self->assert(not exists $event->{exceptions}{"2015-10-08T16:45:00"});
+    $self->assert_str_equals($exc->{end}, "2015-10-07T18:15:00");
+    $self->assert_str_equals($exc->{endTimeZone}, "Australia/Melbourne");
 }
 
 sub test_setcalendarevents_update_participants {
