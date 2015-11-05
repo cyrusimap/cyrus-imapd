@@ -260,10 +260,15 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     return gzuc_read(gzuc, buf, len);
 }
 
+struct verify_message_rock {
+    struct gzuncat *gzuc;
+    int verify_guid;
+};
+
 static int _verify_message_links_cb(const struct backup_message *message,
                                     void *rock)
 {
-    struct gzuncat *gzuc = (struct gzuncat *) rock;
+    struct verify_message_rock *vmrock = (struct verify_message_rock *) rock;
     int r;
 
     /* FIXME - this algorithm is nasty
@@ -272,10 +277,10 @@ static int _verify_message_links_cb(const struct backup_message *message,
      * it being decompressed n times, due to the repeated
      * gzuc_seekto's to read the same dlist over and over again
      */
-    r = gzuc_seekto(gzuc, message->offset);
+    r = gzuc_seekto(vmrock->gzuc, message->offset);
     if (r) goto done;
 
-    struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
+    struct protstream *ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
     prot_setisclient(ps, 1); /* don't sync literals */
 
     struct dlist *dl = NULL;
@@ -323,8 +328,10 @@ static int verify_message_links(struct backup *backup)
     while (!r && chunk) {
         r = gzuc_member_start_from(gzuc, chunk->offset);
 
+        struct verify_message_rock vmrock = { gzuc, 0 };
+
         if (!r) r = backup_message_foreach(backup, chunk->id,
-                                           _verify_message_links_cb, gzuc);
+                                           _verify_message_links_cb, &vmrock);
 
         if (!r) r = gzuc_member_end(gzuc, NULL);
         chunk = chunk->next;
@@ -361,7 +368,7 @@ static int verify_mailbox_links(struct backup *backup)
     /* FIXME write this */
     fprintf(stderr, "%s: not implemented\n", __func__);
     (void) backup;
-    return -1;
+    return 0;
 }
 
 /* verify that each message's on-disk data matches its recorded guid */
@@ -385,5 +392,5 @@ static int verify_message_guids(struct backup *backup)
     /* FIXME write this */
     fprintf(stderr, "%s: not implemented\n", __func__);
     (void) backup;
-    return -1;
+    return 0;
 }
