@@ -111,6 +111,7 @@ EXTRA_PROGRAMS = tools/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
 user_PROGRAMS =
+noinst_LTLIBRARIES =
 CLEANFILES =
 EXTRA_DIST = \
 	$(wildcard tools/vzic/*)
@@ -249,7 +250,7 @@ endif # PTCLIENT
 
 if PERL
 SUBDIRS += perl/annotator perl/imap
-noinst_LTLIBRARIES = perl/libcyrus.la perl/libcyrus_min.la
+noinst_LTLIBRARIES += perl/libcyrus.la perl/libcyrus_min.la
 endif # PERL
 
 if SIEVE
