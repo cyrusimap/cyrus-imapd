@@ -271,88 +271,6 @@ AC_MSG_RESULT($with_mysql)
 dnl End MySQL Detection
 
 
-dnl
-dnl see if we're compiling with dummy_objstore support
-dnl
-AC_ARG_ENABLE(dummy_objstore,
-        [AS_HELP_STRING([--enable-dummy_objstore], [enable IMAP dummy_objstore support])],,enable_dummy_objstore="yes")
-AM_CONDITIONAL([DUMMY_OBJSTORE], [test "$enable_dummy_objstore" = "yes"])
-
-
-dnl
-dnl see if we're compiling with caringo_objstore support
-dnl
-AC_ARG_WITH(caringo,
-        [AS_HELP_STRING([--with-caringo], [use Caringo ("yes" or "no")])],,with_caringo="no")
-case "$with_caringo" in
-  yes)
-	LDFLAGS="$LDFLAGS -lCastorSDK"
-  ;;
-esac
-dnl End Caringo Detection
-AM_CONDITIONAL([WITH_CARINGO], [test "$with_caringo" = "yes"])
-
-dnl OpenIO Detection
-
-dnl deps: metautils gridclient oiosds curl 
-
-AC_ARG_WITH(openio,
-        [AS_HELP_STRING([--with-openio=yes|no], [use OpenIO ("yes" or "no")])],
-        with_openio=$withval, with_openio="no")
-
-case "$with_openio" in
-  no)
-	use_openio="no"
-	;;
-  yes)
-	use_openio="yes"
-	with_openio_lib=none
-	with_openio_inc=none
-	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
-	;;
-  *)
-	use_openio="yes"
-	with_openio_lib="$with_openio/lib64"
-	with_openio_inc="$with_openio/include"
-	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
-	;;
-esac
-
-AC_ARG_WITH(openio-libdir,
-        [AS_HELP_STRING([--with-openio-libdir=DIR], [OpenIO lib files are in DIR])],
-        with_openio_lib=$withval,
-        [ test "${with_openio_lib+set}" = set || with_openio_lib=none])
-AC_ARG_WITH(openio-incdir,
-        [AS_HELP_STRING([--with-openio-incdir=DIR], [OpenIO include files are in DIR])],
-        with_openio_inc=$withval,
-        [ test "${with_openio_inc+set}" = set || with_openio_inc=none ])
-
-if test "$use_openio" = "yes"; then
-	if test ! -d "$with_openio_lib"; then
-		AC_MSG_ERROR([OpenIO library directory '$with_openio_lib' does not exist.])
-	fi
-	if test ! -d "$with_openio_inc"; then
-		AC_MSG_ERROR([OpenIO include directory '$with_openio_inc' does not exist.])
-	fi
-
-	LDFLAGS="$LDFLAGS -L$with_openio_lib"
-	CFLAGS="$CFLAGS -I$with_openio_inc"
-	openio_headers="oio_sds.h core/oiourl.h"
-	for h in $openio_headers; do
-		AC_CHECK_HEADER($h,[],[
-			AC_MSG_ERROR([Header $h is missing.])
-		])
-	done
-	AC_CHECK_LIB([oiosds],[oio_error_free],[],[AC_MSG_ERROR([Library oiosds not found.])])
-	AC_CHECK_LIB([oiocore],[oio_url_empty],[],[AC_MSG_ERROR([Library oiocore not found.])])
-	AC_CHECK_LIB([curl],[curl_version],[],[AC_MSG_ERROR([Library curl not found.])])
-	AC_CHECK_LIB([json-c],[json_tokener_parse_ex],[],[AC_MSG_ERROR([Library json-c not found.])])
-
-	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
-fi
-dnl End OpenIO Detection
-AM_CONDITIONAL([WITH_OPENIO], [test "$use_openio" = "yes"])
-
 dnl PgSQL Detection
 AC_ARG_WITH(pgsql,
         [AS_HELP_STRING([--with-pgsql=DIR], [use PostgreSQL (in DIR) [no]])],
@@ -442,6 +360,89 @@ dnl End SQLite Detection
 
 AM_CONDITIONAL([USE_SQL], [test $HAVE_SQL = 1])
 dnl End SQL DB Detection
+
+
+dnl
+dnl see if we're compiling with dummy_objstore support
+dnl
+AC_ARG_ENABLE(dummy_objstore,
+        [AS_HELP_STRING([--enable-dummy_objstore], [enable IMAP dummy_objstore support])],,enable_dummy_objstore="yes")
+AM_CONDITIONAL([DUMMY_OBJSTORE], [test "$enable_dummy_objstore" = "yes"])
+
+
+dnl
+dnl see if we're compiling with caringo_objstore support
+dnl
+AC_ARG_WITH(caringo,
+        [AS_HELP_STRING([--with-caringo], [use Caringo ("yes" or "no")])],,with_caringo="no")
+case "$with_caringo" in
+  yes)
+	LDFLAGS="$LDFLAGS -lCastorSDK"
+  ;;
+esac
+dnl End Caringo Detection
+AM_CONDITIONAL([WITH_CARINGO], [test "$with_caringo" = "yes"])
+
+dnl OpenIO Detection
+
+dnl deps: metautils gridclient oiosds curl
+
+AC_ARG_WITH(openio,
+        [AS_HELP_STRING([--with-openio=yes|no], [use OpenIO ("yes" or "no")])],
+        with_openio=$withval, with_openio="no")
+
+case "$with_openio" in
+  no)
+	use_openio="no"
+	;;
+  yes)
+	use_openio="yes"
+	with_openio_lib=none
+	with_openio_inc=none
+	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+	;;
+  *)
+	use_openio="yes"
+	with_openio_lib="$with_openio/lib64"
+	with_openio_inc="$with_openio/include"
+	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+	;;
+esac
+
+AC_ARG_WITH(openio-libdir,
+        [AS_HELP_STRING([--with-openio-libdir=DIR], [OpenIO lib files are in DIR])],
+        with_openio_lib=$withval,
+        [ test "${with_openio_lib+set}" = set || with_openio_lib=none])
+AC_ARG_WITH(openio-incdir,
+        [AS_HELP_STRING([--with-openio-incdir=DIR], [OpenIO include files are in DIR])],
+        with_openio_inc=$withval,
+        [ test "${with_openio_inc+set}" = set || with_openio_inc=none ])
+
+if test "$use_openio" = "yes"; then
+	if test ! -d "$with_openio_lib"; then
+		AC_MSG_ERROR([OpenIO library directory '$with_openio_lib' does not exist.])
+	fi
+	if test ! -d "$with_openio_inc"; then
+		AC_MSG_ERROR([OpenIO include directory '$with_openio_inc' does not exist.])
+	fi
+
+	LDFLAGS="$LDFLAGS -L$with_openio_lib"
+	CFLAGS="$CFLAGS -I$with_openio_inc"
+	openio_headers="oio_sds.h core/oiourl.h"
+	for h in $openio_headers; do
+		AC_CHECK_HEADER($h,[],[
+			AC_MSG_ERROR([Header $h is missing.])
+		])
+	done
+	AC_CHECK_LIB([oiosds],[oio_error_free],[],[AC_MSG_ERROR([Library oiosds not found.])])
+	AC_CHECK_LIB([oiocore],[oio_url_empty],[],[AC_MSG_ERROR([Library oiocore not found.])])
+	AC_CHECK_LIB([curl],[curl_version],[],[AC_MSG_ERROR([Library curl not found.])])
+	AC_CHECK_LIB([json-c],[json_tokener_parse_ex],[],[AC_MSG_ERROR([Library json-c not found.])])
+
+	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
+fi
+dnl End OpenIO Detection
+AM_CONDITIONAL([WITH_OPENIO], [test "$use_openio" = "yes"])
 
 dnl
 dnl Search engines - SQUAT
