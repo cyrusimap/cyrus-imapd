@@ -3073,7 +3073,13 @@ static int getCalendars(struct jmap_req *req)
     int r = 0;
 
     r = caldav_create_defaultcalendars(req->userid);
-    if (r) return r;
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* The account exists but does not have a root mailbox. */
+        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
+        json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "error", err, req->tag));
+        return 0;
+    } else if (r) return r;
 
     rock.array = json_pack("[]");
     rock.req = req;
@@ -3158,7 +3164,13 @@ static int getCalendarUpdates(struct jmap_req *req)
     modseq_t oldmodseq;
 
     r = caldav_create_defaultcalendars(req->userid);
-    if (r) goto done;
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* The account exists but does not have a root mailbox. */
+        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
+        json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "error", err, req->tag));
+        return 0;
+    } else if (r) return r;
 
 
     db = caldav_open_userid(req->userid);
@@ -3226,7 +3238,13 @@ static int setCalendars(struct jmap_req *req)
     if (r) goto done;
 
     r = caldav_create_defaultcalendars(req->userid);
-    if (r) goto done;
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* The account exists but does not have a root mailbox. */
+        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
+        json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "error", err, req->tag));
+        return 0;
+    } else if (r) return r;
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
@@ -4460,7 +4478,13 @@ static int getCalendarEvents(struct jmap_req *req)
     int r = 0;
 
     r = caldav_create_defaultcalendars(req->userid);
-    if (r) return r;
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* The account exists but does not have a root mailbox. */
+        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
+        json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "error", err, req->tag));
+        return 0;
+    } else if (r) return r;
 
     rock.array = json_pack("[]");
     rock.req = req;
@@ -6397,7 +6421,13 @@ static int setCalendarEvents(struct jmap_req *req)
     if (r) goto done;
 
     r = caldav_create_defaultcalendars(req->userid);
-    if (r) goto done;
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* The account exists but does not have a root mailbox. */
+        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
+        json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "error", err, req->tag));
+        return 0;
+    } else if (r) return r;
 
     db = caldav_open_userid(req->userid);
     if (!db) {
