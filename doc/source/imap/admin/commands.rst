@@ -19,6 +19,7 @@ List of Command-line Utilities
     :maxdepth: 1
 
     commands/arbitron
+    commands/arbitronsort.pl    
     commands/chk_cyrus
     commands/ctl_cyrusdb
     commands/ctl_conversationsdb
@@ -27,6 +28,7 @@ List of Command-line Utilities
     commands/ctl_zoneinfo
     commands/cvt_cyrusdb
     commands/cyradm
+    commands/cyrdump    
     commands/cyrfetchnews
     commands/cyrus-master
     commands/cyr_dbtool
@@ -34,6 +36,7 @@ List of Command-line Utilities
     commands/cyr_df
     commands/cyr_expire
     commands/cyr_info
+    commands/cyr_sequence    
     commands/cyr_synclog
     commands/deliver
     commands/fud
@@ -45,7 +48,8 @@ List of Command-line Utilities
     commands/ipurge
     commands/lmtpd
     commands/lmtptest
-    commands/master
+    commands/masssievec    
+    commands/master 
     commands/mbexamine
     commands/mbpath
     commands/mbtool
@@ -60,6 +64,8 @@ List of Command-line Utilities
     commands/quota
     commands/reconstruct
     commands/rmnews
+    commands/sievec
+    commands/sieved    
     commands/sivtest
     commands/smmapd
     commands/smtptest
@@ -89,26 +95,18 @@ the form of actual man-pages.
     :maxdepth: 1
     :hidden:
 
-    commands/arbitronsort.pl
-    commands/compile_st.pl
-    commands/convert-sieve.pl
-    commands/cvt_cyrusdb_all
-    commands/cyr_sequence
+    commands/compile_st.pl: ?
+
     commands/cyr_systemd_helper
-    commands/cyr_userseen
-    commands/cyrdump
-    commands/dohash
+
     commands/fixsearchpath.pl
-    commands/imapd
-    commands/masssievec
-    commands/migrate-metadata
-    commands/mknewsgroups
-    commands/mupdate-loadgen.pl
+    commands/migrate-metadata: useful
+    commands/mknewsgroups: useful
+    commands/mupdate-loadgen.pl: ??
     commands/proxyd
-    commands/rehash
-    commands/sievec
-    commands/sieved
-    commands/translatesieve
-    commands/undohash
-    commands/upgradesieve
-    commands/template
+    commands/rehash: useful
+
+    commands/translatesieve:useful more better version of convert-sieve (does this make convert-sieve obsolete?)
+    commands/convert-sieve.pl : probably bogus    
+    
+    commands/template: this is just the template for new command files so it obeys man and html formatting.
