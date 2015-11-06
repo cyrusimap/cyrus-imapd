@@ -2591,6 +2591,8 @@ typedef struct calevent_rock {
 
     json_t *invalid;         /* A JSON array of any invalid properties. */
 
+    icaltimetype dtstart;        /* The start of this or the main event. */
+    icaltimetype dtend;          /* The end of this or the main event. */
     icaltimezone *tzstart_old; /* The former startTimeZone. */
     icaltimezone *tzstart;     /* The current startTimeZone. */
     icaltimezone *tzend_old;   /* The former endTimeZone. */
@@ -4454,9 +4456,8 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
             json_object_set_new(excobj, s, exc);
             free(s);
         }
-        if (json_object_size(excobj)) {
-            json_object_set(obj, "exceptions", excobj);
-        }
+        json_object_set(obj, "exceptions",
+                json_object_size(excobj) ? excobj : json_null());
         json_decref(excobj);
     }
 
@@ -4974,9 +4975,6 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         icalcomponent_remove_property(comp, prop);
         icalproperty_free(prop);
     }
-    if (exceptions == json_null()) {
-        return;
-    }
 
     const char *key;
     json_t *exc;
@@ -4986,7 +4984,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
     hash_table excs;
 
     /* Move VEVENT exceptions to a temporary cache, keyed by recurrence id. */
-    construct_hash_table(&excs, json_object_size(exceptions), 0);
+    construct_hash_table(&excs, json_object_size(exceptions) + 1, 0);
     for (excomp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
          excomp;
          excomp = excomp_next) {
@@ -5774,6 +5772,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
 
     /* startTimeZone */
     /* Determine the current timezone, if any. */
+
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzstart_old = icaltimezone_get_builtin_timezone(tzid);
     /* Read the new timezone, if any. */
@@ -5836,14 +5835,18 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("start"));
         }
-    } 
-    if (!pe && !create && rock->tzstart_old != rock->tzstart) {
+    } else if (!pe && !create && rock->tzstart_old != rock->tzstart) {
         /* The client changed the startTimeZone but not the start time. */
         icaltimetype dt = icalcomponent_get_dtstart(comp);
         if (!icaltime_is_null_time(dt)) {
             dt.zone = rock->tzstart;
             jmap_update_dtprop_bykind(comp, dt, rock->tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
         }
+    }
+    if (!pe && exc) {
+        /* If this is an exception, make sure it gets its own DTSTART. */
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+        if (!prop) jmap_update_dtprop_bykind(comp, rock->dtstart, rock->tzstart, 1, ICAL_DTSTART_PROPERTY);
     }
 
     /* end */
@@ -5862,13 +5865,34 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
             jmap_update_dtprop_bykind(comp, dt, rock->tzend, 1 /*purge*/, ICAL_DTEND_PROPERTY);
         }
     }
+    if (!pe && exc) {
+        /* If this is an exception, make sure it gets its own DTEND or DURATION. */
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+        if (!prop) prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
+        if (!prop) {
+            icalcomponent *parent = icalcomponent_get_parent(comp);
+            if (parent) {
+                prop = icalcomponent_get_first_property(parent, ICAL_DURATION_PROPERTY);
+            }
+            if (prop) {
+                icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+            } else {
+                jmap_update_dtprop_bykind(comp, rock->dtend, rock->tzend, 1, ICAL_DTEND_PROPERTY);
+            }
+        }
+    }
 
     /* The end date MUST be equal to or after the start date when both are
      * converted to UTC time. */
     dtstart = icalcomponent_get_dtstart(comp);
     dtstart.zone = rock->tzstart;
+    if (!icaltime_is_null_time(dtstart)) rock->dtstart = dtstart;
+
     dtend = icalcomponent_get_dtend(comp);
     dtend.zone = rock->tzend;
+    if (!icaltime_is_null_time(dtend)) rock->dtend = dtend;
+
+    /* Make sure dtend follows dtstart. */
     if (icaltime_is_null_time(dtend)) dtend = dtstart;
     if (icaltime_compare(dtstart, dtend) > 0) {
         json_array_append_new(invalid, json_string("end"));
