@@ -2658,7 +2658,6 @@ done:
 static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 {
     struct calendars_rock *crock = (struct calendars_rock *)rock;
-    struct buf attrib = BUF_INITIALIZER;
     int r;
 
     /* Only calendars... */
@@ -2699,25 +2698,28 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     }
 
     if (_wantprop(crock->props, "name")) {
+        struct buf attrib = BUF_INITIALIZER;
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotatemore_lookupmask(mbentry->name, displayname_annot, httpd_userid, &attrib);
         /* fall back to last part of mailbox name */
         if (r || !attrib.len) buf_setcstr(&attrib, collection);
         json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
-        buf_reset(&attrib);
+        buf_free(&attrib);
     }
 
     if (_wantprop(crock->props, "color")) {
+        struct buf attrib = BUF_INITIALIZER;
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
         if (!r && attrib.len)
             json_object_set_new(obj, "color", json_string(buf_cstring(&attrib)));
-        buf_reset(&attrib);
+        buf_free(&attrib);
     }
 
     if (_wantprop(crock->props, "sortOrder")) {
+        struct buf attrib = BUF_INITIALIZER;
         static const char *order_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
         r = annotatemore_lookupmask(mbentry->name, order_annot, httpd_userid, &attrib);
@@ -2732,10 +2734,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
                 syslog(LOG_WARNING, "sortOrder: strtol(%s) failed", buf_cstring(&attrib));
             }
         }
-        buf_reset(&attrib);
+        buf_free(&attrib);
     }
 
     if (_wantprop(crock->props, "isVisible")) {
+        struct buf attrib = BUF_INITIALIZER;
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
         r = annotatemore_lookupmask(mbentry->name, color_annot, httpd_userid, &attrib);
@@ -2751,7 +2754,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
                 json_object_set_new(obj, "isVisible", json_string("true"));
             }
         }
-        buf_reset(&attrib);
+        buf_free(&attrib);
     }
 
     if (_wantprop(crock->props, "mayReadFreeBusy")) {
@@ -2792,7 +2795,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     json_array_append_new(crock->array, obj);
 
 done:
-    buf_free(&attrib);
     return r;
 }
 
