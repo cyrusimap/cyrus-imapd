@@ -82,7 +82,6 @@
 #include "mboxlist.h"
 #include "quota.h"
 #include "sync_log.h"
-#include "objectstore_db.h"
 
 #define DB config_mboxlist_db
 #define SUBDB config_subscription_db
