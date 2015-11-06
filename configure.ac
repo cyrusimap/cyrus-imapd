@@ -363,16 +363,11 @@ dnl End SQL DB Detection
 
 
 dnl
-dnl see if we're compiling with dummy_objstore support
+dnl Object Store support
 dnl
-AC_ARG_ENABLE(dummy_objstore,
-        [AS_HELP_STRING([--enable-dummy_objstore], [enable IMAP dummy_objstore support])],,enable_dummy_objstore="yes")
-AM_CONDITIONAL([DUMMY_OBJSTORE], [test "$enable_dummy_objstore" = "yes"])
 
-
-dnl
-dnl see if we're compiling with caringo_objstore support
-dnl
+dnl Caringo object store backend
+AC_MSG_CHECKING([whether to use Caringo])
 AC_ARG_WITH(caringo,
         [AS_HELP_STRING([--with-caringo], [use Caringo ("yes" or "no")])],,with_caringo="no")
 case "$with_caringo" in
@@ -380,13 +375,11 @@ case "$with_caringo" in
 	LDFLAGS="$LDFLAGS -lCastorSDK"
   ;;
 esac
-dnl End Caringo Detection
-AM_CONDITIONAL([WITH_CARINGO], [test "$with_caringo" = "yes"])
+AC_MSG_RESULT([$with_caringo])
 
-dnl OpenIO Detection
-
+dnl OpenIO object store backend
 dnl deps: metautils gridclient oiosds curl
-
+AC_MSG_CHECKING([whether to use OpenIO])
 AC_ARG_WITH(openio,
         [AS_HELP_STRING([--with-openio=yes|no], [use OpenIO ("yes" or "no")])],
         with_openio=$withval, with_openio="no")
@@ -441,8 +434,38 @@ if test "$use_openio" = "yes"; then
 
 	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
 fi
-dnl End OpenIO Detection
-AM_CONDITIONAL([WITH_OPENIO], [test "$use_openio" = "yes"])
+AC_MSG_RESULT([$use_openio])
+
+dnl enable object store
+AC_MSG_CHECKING([whether to enable object store])
+AC_ARG_ENABLE(objectstore,
+    [AS_HELP_STRING([--enable-objectstore],
+        [enable IMAP objectstore support. Use --with-caringo or --with-openio to choose a backend])],
+    [],
+    [enable_objectstore=no])
+
+with_objectstore_dummy=no
+if test "x$enable_objectstore" != xno ; then
+    dnl arbitrarily prioritise OpenIO over Caringo if both are requested
+    AS_IF(
+        [test "x$with_openio" != xno -a "x$with_caringo" != xno],
+            [AC_MSG_WARN([both --with-openio and --with-caringo requested: using OpenIO])
+             enable_objectstore="openio"
+             with_caringo = "no"],
+        [test "x$with_openio" != xno],
+            [enable_objectstore="openio"],
+        [test "x$with_caringo" != xno],
+            [enable_objectstore="caringo"],
+        [enable_objectstore="dummy"
+         with_objectstore_dummy="yes"])
+    AC_DEFINE([ENABLE_OBJECTSTORE],[],[Build with Object Store support])
+fi
+AC_MSG_RESULT([$enable_objectstore])
+AM_CONDITIONAL([OBJECTSTORE], [test "x$enable_objectstore" != xno])
+AM_CONDITIONAL([WITH_CARINGO], [test "x$with_caringo" != xno])
+AM_CONDITIONAL([WITH_OPENIO], [test "x$use_openio" != xno])
+AM_CONDITIONAL([WITH_OBJSTR_DUMMY], [test "x$with_objectstore_dummy" != xno])
+
 
 dnl
 dnl Search engines - SQUAT
@@ -1964,9 +1987,7 @@ Cyrus Server configured components
    replication:        $enable_replication
    sieve:              $enable_sieve
    calalarmd:          $enable_calalarmd
-   openio:             $use_openio
-   dummy_objstore:     $enable_dummy_objstore
-   caringo:            $with_caringo
+   objectstore:        $enable_objectstore
 
 External dependencies:
    ldap:               $have_ldap

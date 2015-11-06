@@ -999,26 +999,20 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/xstats.h \
 	imap/xstats_metrics.h
 
-if WITH_OPENIO
+if OBJECTSTORE
 imap_libcyrus_imap_la_SOURCES += \
-        imap/objectstore_db.c \
-        imap/objectstore_db.h \
-	imap/objectstore_openio.c \
-        imap/objectstore.h 
+    imap/objectstore_db.c \
+    imap/objectstore_db.h \
+    imap/objectstore.h
+if WITH_OPENIO
+imap_libcyrus_imap_la_SOURCES += imap/objectstore_openio.c
 else
 if WITH_CARINGO
-imap_libcyrus_imap_la_SOURCES += \
-        imap/objectstore_db.c \
-        imap/objectstore_db.h \
-        imap/objectstore_caringo.c \
-        imap/objectstore.h 
+imap_libcyrus_imap_la_SOURCES += imap/objectstore_caringo.c
 else
-if DUMMY_OBJSTORE
-imap_libcyrus_imap_la_SOURCES += \
-        imap/objectstore_db.c \
-        imap/objectstore_db.h \
-        imap/objectstore_dummy.c \
-        imap/objectstore.h 
+if WITH_OBJSTR_DUMMY
+imap_libcyrus_imap_la_SOURCES += imap/objectstore_dummy.c
+endif
 endif
 endif
 endif

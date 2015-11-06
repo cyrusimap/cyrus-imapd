@@ -79,7 +79,10 @@
 #include "message_guid.h"
 #include "strarray.h"
 #include "conversations.h"
+
+#if defined ENABLE_OBJECTSTORE
 #include "objectstore.h"
+#endif
 
 struct stagemsg {
     char fname[1024];
@@ -837,7 +840,9 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     strarray_t *newflags = NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
+#if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -957,6 +962,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     /* straight to archive? */
     int in_object_storage = 0;
+#if defined ENABLE_OBJECTSTORE
     if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
         if (!record.internaldate)
             record.internaldate = time(NULL);
@@ -970,6 +976,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
             in_object_storage = 1;
         }
     }
+#endif
 
     /* Handle flags the user wants to set in the message */
     if (flags) {
@@ -1249,7 +1256,9 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     struct index_record record;
     char *srcfname = NULL;
     char *destfname = NULL;
+#if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
     int r = 0;
     int userflag;
     int i;
@@ -1331,6 +1340,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
 
         int in_object_storage = 0;
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
             r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
             if (r) {
@@ -1341,6 +1351,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                 in_object_storage = 1;
             }
         }
+#endif
 
         /* Write out index file entry */
         r = mailbox_append_index_record(as->mailbox, &record);

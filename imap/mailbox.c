@@ -109,8 +109,10 @@
 #include "xstrlcat.h"
 #include "xstats.h"
 
+#if defined ENABLE_OBJECTSTORE
 #include "objectstore.h"
 #include "objectstore_db.h"
+#endif
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -167,8 +169,10 @@ static struct mailboxlist *create_listitem(const char *name)
     /* ensure we never print insane times */
     gettimeofday(&item->m.starttime, 0);
 
+#if defined ENABLE_OBJECTSTORE
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
         keep_user_message_db_open (1);
+#endif
 
     return item;
 }
@@ -199,8 +203,10 @@ static void remove_listitem(struct mailboxlist *remitem)
                 open_mailboxes = item->next;
             free(item);
 
+#if defined ENABLE_OBJECTSTORE
             if (!open_mailboxes && config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))  // time to force clese the database
                  keep_user_message_db_open (0);
+#endif
 
             return;
         }
@@ -827,12 +833,14 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_reco
     int r = _map_local_record(mailbox, fname, buf);
     if (!r) return 0;
 
+#if defined ENABLE_OBJECTSTORE
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)){
         r = objectstore_get(mailbox, record, fname);
         if (r) return r;
         r = _map_local_record(mailbox, fname, buf);
         remove(fname);
     }
+#endif
 
     return r;
 }
@@ -3749,7 +3757,9 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 {
     const char *spoolfname = mailbox_spool_fname(mailbox, record->uid);
     const char *archivefname = mailbox_archive_fname(mailbox, record->uid);
+#if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
     int r;
 
     if (record->system_flags & FLAG_UNLINKED) {
@@ -3763,10 +3773,13 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
                        record->uid, record->system_flags);
         }
 
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             objectstore_delete(mailbox, record);
         }
-        else if (strcmp(spoolfname, archivefname)) {
+        else
+#endif
+        if (strcmp(spoolfname, archivefname)) {
             if (unlink(archivefname) == 0) {
                 if (config_auditlog)
                     syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
@@ -3797,10 +3810,13 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         unlink(spoolfname);
     }
     else {
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             objectstore_delete(mailbox, record);
         }
-        else if (strcmp(spoolfname, archivefname)) {
+        else
+#endif
+        if (strcmp(spoolfname, archivefname)) {
             unlink(archivefname);
         }
         /* else: nothing to cleanup if it's the same file! */
@@ -4313,7 +4329,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     char *spoolcache = xstrdup(mailbox_meta_fname(mailbox, META_CACHE));
     char *archivecache = xstrdup(mailbox_meta_fname(mailbox, META_ARCHIVECACHE));
     int differentcache = strcmp(spoolcache, archivecache);
+#if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
     free(spoolcache);
     free(archivecache);
 
@@ -4338,12 +4356,14 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                        mailbox->name, copyrecord.uid, error_message(r));
                 continue;
             }
+#if defined ENABLE_OBJECTSTORE
             if (object_storage_enabled){
                 /* upload on the blob store */
                 r = objectstore_put(mailbox, &copyrecord, srcname);
                 if (r)
                     continue;
             }
+#endif
             copyrecord.system_flags |= FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
             action = "archive";
         }
@@ -4366,6 +4386,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             action = "unarchive";
         }
 
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             /* get or fetch */
             if (copyrecord.system_flags & FLAG_ARCHIVED) {
@@ -4385,15 +4406,15 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 }
             }
         }
-        else {
+        else
+#endif
+        if (strcmp(srcname, destname)) {
             /* got a file to copy! */
-            if (strcmp(srcname, destname)) {
-                r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
-                            mailbox->name, copyrecord.uid, srcname, destname, error_message(r));
-                    continue;
-                }
+            r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
+                        mailbox->name, copyrecord.uid, srcname, destname, error_message(r));
+                continue;
             }
         }
 
@@ -5167,6 +5188,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 
         if (r) break;
 
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             static struct mailbox new_mailbox;
             memset(&new_mailbox, 0, sizeof(struct mailbox));
@@ -5175,6 +5197,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
             r = objectstore_put(&new_mailbox, record, newbuf);   // put should just add to refcount.
             if (r) break;
         }
+#endif
     }
     mailbox_iter_done(&iter);
 
