@@ -4179,8 +4179,8 @@ done:
         json_incref(org);
         json_incref(atts);
     } else {
-        *organizer = NULL;
-        *attendees = NULL;
+        *organizer = json_null();
+        *attendees = json_null();
     }
     if (org) json_decref(org);
     if (atts) json_decref(atts);
@@ -4335,17 +4335,20 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
 
     /* alerts */
     if (_wantprop(props, "alerts")) {
-        json_object_set_new(obj, "alerts", jmap_alerts_from_ical(comp));
+        json_t *alerts = jmap_alerts_from_ical(comp);
+        if (alerts != json_null() || !exc) {
+            json_object_set_new(obj, "alerts", alerts);
+        }
     }
 
     /* organizer and attendees */
     if (_wantprop(props, "organizer") || _wantprop(props, "attendees")) {
         json_t *organizer, *attendees;
         jmap_participants_from_ical(comp, &organizer, &attendees, userid);
-        if (organizer && _wantprop(props, "organizer")) {
+        if (organizer && _wantprop(props, "organizer") && (organizer != json_null() || !exc)) {
             json_object_set_new(obj, "organizer", organizer);
         }
-        if (attendees && _wantprop(props, "attendees")) {
+        if (attendees && _wantprop(props, "attendees") && (attendees != json_null() || !exc)) {
             json_object_set_new(obj, "attendees", attendees);
         }
     }
