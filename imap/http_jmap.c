@@ -2591,6 +2591,7 @@ typedef struct calevent_rock {
 
     json_t *invalid;         /* A JSON array of any invalid properties. */
 
+    icalcomponent *comp;    /* The main event of an exception. */
     icaltimetype dtstart;        /* The start of this or the main event. */
     icaltimetype dtend;          /* The end of this or the main event. */
     icaltimezone *tzstart_old; /* The former startTimeZone. */
@@ -5047,6 +5048,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             calevent_rock myrock = *rock;
             myrock.flags = JMAP_EXC;
             myrock.recurid = key;
+            myrock.comp = comp;
             jmap_calendarevent_to_ical(excomp, exc, &myrock);
             /* XXX - that's ugly. Need to make sure that the rocks timezone
              * array still points to latest realloced memory block. */
@@ -5872,10 +5874,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
         icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
         if (!prop) prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
         if (!prop) {
-            icalcomponent *parent = icalcomponent_get_parent(comp);
-            if (parent) {
-                prop = icalcomponent_get_first_property(parent, ICAL_DURATION_PROPERTY);
-            }
+            prop = icalcomponent_get_first_property(rock->comp, ICAL_DURATION_PROPERTY);
             if (prop) {
                 icalcomponent_add_property(comp, icalproperty_new_clone(prop));
             } else {
@@ -5923,6 +5922,13 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     pe = jmap_readprop(event, "summary", create&&!exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
+    }
+    if (!pe && exc) {
+        /* If this is an exception, make sure it got its own SUMMARY.
+         * OS X Calendar.app seems to be fond of this. */
+        if (!icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY)) {
+            icalcomponent_set_summary(comp, icalcomponent_get_summary(rock->comp));
+        }
     }
 
     /* description */
