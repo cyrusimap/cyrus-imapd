@@ -620,6 +620,7 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 EXPORTED int backup_mailbox_foreach(struct backup *backup,
+                                    int chunk_id,
                                     int want_records,
                                     backup_mailbox_foreach_cb cb,
                                     void *rock)
@@ -627,8 +628,16 @@ EXPORTED int backup_mailbox_foreach(struct backup *backup,
     struct _mailbox_row_rock mbrock = { backup->db, cb, rock,
                                         NULL, NULL, want_records};
 
-    int r = sqldb_exec(backup->db, backup_index_mailbox_select_all_sql, NULL,
-                       _mailbox_row_cb, &mbrock);
+    struct sqldb_bindval bval[] = {
+        { ":last_chunk_id", SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    const char *sql = chunk_id ?
+        backup_index_mailbox_select_chunkid_sql :
+        backup_index_mailbox_select_all_sql;
+
+    int r = sqldb_exec(backup->db, sql, bval, _mailbox_row_cb, &mbrock);
 
     return r;
 }

@@ -140,7 +140,8 @@ int backup_get_mailbox_id(struct backup *backup, const char *uniqueid);
 
 typedef int (*backup_mailbox_foreach_cb)(const struct backup_mailbox *mailbox,
                                          void *rock);
-int backup_mailbox_foreach(struct backup *backup, int want_records,
+int backup_mailbox_foreach(struct backup *backup, int chunk_id,
+                           int want_records,
                            backup_mailbox_foreach_cb cb, void *rock);
 
 struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
