@@ -1094,7 +1094,8 @@ static void cmd_get(struct dlist *dl)
             r = IMAP_INTERNAL;
             goto done;
         }
-        r = backup_mailbox_foreach(open->backup, 0, backupd_print_mailbox, NULL);
+        r = backup_mailbox_foreach(open->backup, 0, 0,
+                                   backupd_print_mailbox, NULL);
     }
     else if (strcmp(dl->name, "MAILBOXES") == 0) {
         struct dlist *di;
