@@ -2951,8 +2951,9 @@ static int jmap_compare_icalprop(icalcomponent *a, icalcomponent *b,
 }
 
 /* Compare the VALARM components in VEVENTs a and b. Return 0 if they both
- * contain the same number of VALARMs with TRIGGERS of type duration. Return
- * 0 if all alarms match or both do not define alarms. */
+ * contain the same number of VALARMs with the same TRIGGERS of type duration.
+ * Ignore any VALARMs of type DATETIME.
+ * Return 0 if all alarms match or both do not define alarms. */
 static int jmap_compare_alerts(icalcomponent *a, icalcomponent *b) {
     icalcomponent *a_alarm, *b_alarm;
     icalproperty *prop;
@@ -3018,13 +3019,6 @@ static int jmap_compare_alerts(icalcomponent *a, icalcomponent *b) {
         icalcomponent *a_alarm = hash_lookup(buf_cstring(&buf), &ha);
         buf_reset(&buf);
         if (!a_alarm) {
-            continue;
-        }
-
-        if (jmap_compare_icalprop(a_alarm, b_alarm, ICAL_SUMMARY_PROPERTY)) {
-            continue;
-        }
-        if (jmap_compare_icalprop(a_alarm, b_alarm, ICAL_DESCRIPTION_PROPERTY)) {
             continue;
         }
 
