@@ -1038,10 +1038,12 @@ static void cmd_apply(struct dlist *dl)
 static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
                                  void *rock __attribute__((__unused__)))
 {
-    if (mailbox->dlist) {
-        prot_puts(backupd_out, "* ");
-        dlist_print(mailbox->dlist, /* printkeys */ 1, backupd_out);
-    }
+    struct dlist *dlist = backup_mailbox_to_dlist(mailbox);
+    if (!dlist) return IMAP_INTERNAL;
+
+    prot_puts(backupd_out, "* ");
+    dlist_print(dlist, /* printkeys */ 1, backupd_out);
+    dlist_free(&dlist);
 
     return 0;
 }
