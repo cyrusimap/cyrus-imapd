@@ -6609,7 +6609,7 @@ static int setCalendarEvents(struct jmap_req *req)
 
     json_incref(set);
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarsEventsSet"));
+    json_array_append_new(item, json_string("calendarEventsSet"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
