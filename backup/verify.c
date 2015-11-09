@@ -42,6 +42,7 @@
  */
 #include <assert.h>
 
+#include "lib/hash.h"
 #include "lib/xmalloc.h"
 #include "lib/xsha1.h"
 
@@ -105,7 +106,8 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
                                   struct gzuncat *gzuc);
 static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
                                  struct gzuncat *gzuc, unsigned level);
-static int verify_mailbox_links(struct backup *backup);
+static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk,
+                                      struct gzuncat *gzuc);
 
 static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -162,12 +164,12 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level)
             if (!r && (level & BACKUP_VERIFY_MESSAGES))
                 r = verify_chunk_messages(backup, chunk, gzuc, level);
 
+            if (!r && (level & BACKUP_VERIFY_MAILBOX_LINKS))
+                r = verify_chunk_mailbox_links(backup, chunk, gzuc);
+
             chunk = chunk->next;
         }
     }
-
-    if (!r && (level & BACKUP_VERIFY_MAILBOX_LINKS))
-        r = verify_mailbox_links(backup);
 
 done:
     if (gzuc) gzuc_close(&gzuc);
@@ -329,29 +331,281 @@ static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
     return r;
 }
 
+static int mailbox_matches(const struct backup_mailbox *mailbox,
+                           struct dlist *dlist)
+{
+    const char *mboxname = NULL;
+    uint32_t last_uid = 0;
+    modseq_t highestmodseq = 0;
+    uint32_t recentuid = 0;
+    time_t recenttime = 0;
+    time_t last_appenddate = 0;
+    uint32_t uidvalidity = 0;
+    const char *partition = NULL;
+    const char *acl = NULL;
+    const char *options = NULL;
+    modseq_t xconvmodseq = 0;
+    struct synccrcs synccrcs = { 0, 0 };
+
+    if (!dlist_getatom(dlist, "MBOXNAME", &mboxname)
+        || strcmp(mboxname, mailbox->mboxname) != 0)
+        return 0;
+
+    if (!dlist_getnum32(dlist, "LAST_UID", &last_uid)
+        || last_uid != mailbox->last_uid)
+        return 0;
+
+    if (!dlist_getnum64(dlist, "HIGHESTMODSEQ", &highestmodseq)
+        || highestmodseq != mailbox->highestmodseq)
+        return 0;
+
+    if (!dlist_getnum32(dlist, "RECENTUID", &recentuid)
+        || recentuid != mailbox->recentuid)
+        return 0;
+
+    if (!dlist_getdate(dlist, "RECENTTIME", &recenttime)
+        || recenttime != mailbox->recenttime)
+        return 0;
+
+    if (!dlist_getdate(dlist, "LAST_APPENDDATE", &last_appenddate)
+        || last_appenddate != mailbox->last_appenddate)
+        return 0;
+
+    if (!dlist_getnum32(dlist, "UIDVALIDITY", &uidvalidity)
+        || uidvalidity != mailbox->uidvalidity)
+        return 0;
+
+    if (!dlist_getatom(dlist, "PARTITION", &partition)
+        || strcmp(partition, mailbox->partition) != 0)
+        return 0;
+
+    if (!dlist_getatom(dlist, "ACL", &acl)
+        || strcmp(acl, mailbox->acl) != 0)
+        return 0;
+
+    if (!dlist_getatom(dlist, "OPTIONS", &options)
+        || strcmp(options, mailbox->options) != 0)
+        return 0;
+
+    /* optional */
+    dlist_getnum64(dlist, "XCONVMODSEQ", &xconvmodseq);
+    if (xconvmodseq != mailbox->xconvmodseq)
+        return 0;
+
+    /* CRCs */
+    dlist_getnum32(dlist, "SYNC_CRC", &synccrcs.basic);
+    dlist_getnum32(dlist, "SYNC_CRC_ANNOT", &synccrcs.annot);
+    if (synccrcs.basic != mailbox->sync_crc)
+        return 0;
+    if (synccrcs.annot != mailbox->sync_crc_annot)
+        return 0;
+
+    fprintf(stderr, "%s: %s matches!\n", __func__, mailbox->uniqueid);
+    return 1;
+}
+
+static int mailbox_message_matches(const struct backup_mailbox_message *mailbox_message,
+                                   struct dlist *dlist)
+{
+    modseq_t modseq;
+    uint32_t last_updated;
+    uint32_t internaldate;
+    uint32_t size;
+    struct message_guid *guid;
+
+    if (!dlist_getnum64(dlist, "MODSEQ", &modseq)
+        || modseq != mailbox_message->modseq)
+        return 0;
+
+    if (!dlist_getnum32(dlist, "LAST_UPDATED", &last_updated)
+        || last_updated != mailbox_message->last_updated)
+        return 0;
+
+    if (!dlist_getnum32(dlist, "INTERNALDATE", &internaldate)
+        || internaldate != mailbox_message->internaldate)
+        return 0;
+
+    if (!dlist_getnum32(dlist, "SIZE", &size)
+        || size != mailbox_message->size)
+        return 0;
+
+    if (!dlist_getguid(dlist, "GUID", &guid)
+        || !message_guid_equal(guid, &mailbox_message->guid))
+        return 0;
+
+    fprintf(stderr, "%s: %s:%u matches!\n", __func__,
+            mailbox_message->mailbox_uniqueid, mailbox_message->uid);
+    return 1;
+}
+
 /* verify that the matching MAILBOX exists within the claimed chunk
  * for each mailbox or mailbox_message in the index
  */
-static int verify_mailbox_links(struct backup *backup)
+static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk,
+                                      struct gzuncat *gzuc)
 {
     /*
-     * get list of chunks
-     * foreach chunk
      *   get list of mailboxes in chunk
      *   get list of mailbox_messages in chunk
+     *   index mailboxes list by uniqueid
+     *   index mailbox_messages list by uniqueid:uid
      *   open chunk
      *   foreach line in chunk
      *     read dlist
-     *     if it's a mailbox with records and it matches
-     *       remove from mailbox_message list
-     *       remove from mailbox_list
-     *     if it's a mailbox and it matches
-     *       remove from mailbox list
+     *     skip if it's not a mailbox
+     *     if details in dlist match details in mailbox
+     *       remove from mailbox list/index
+     *     foreach record in dlist
+     *       if details in dlist match details in mailbox_message
+     *       remove from mailbox_message list/index
      *   failed if either list of mailboxes or list of mailbox_messages is not empty
      */
 
-    /* FIXME write this */
-    fprintf(stderr, "%s: not implemented\n", __func__);
-    (void) backup;
-    return 0;
+    struct backup_mailbox_list *mailbox_list = NULL;
+    struct backup_mailbox_message_list *mailbox_message_list = NULL;
+    hash_table mailbox_list_index = HASH_TABLE_INITIALIZER;
+    hash_table mailbox_message_list_index = HASH_TABLE_INITIALIZER;
+    struct backup_mailbox *mailbox = NULL;
+    struct backup_mailbox_message *mailbox_message = NULL;
+    int r;
+
+    mailbox_list = backup_get_mailboxes(backup, chunk->id, 0);
+    mailbox_message_list = backup_get_mailbox_messages(backup, chunk->id);
+
+    if (mailbox_list->count == 0 && mailbox_message_list->count == 0) {
+        /* nothing we care about in this chunk */
+        free(mailbox_list);
+        free(mailbox_message_list);
+        return 0;
+    }
+
+    if (mailbox_list->count) {
+        /* build an index of the mailbox list */
+        construct_hash_table(&mailbox_list_index, mailbox_list->count, 0); // FIXME pool?
+        mailbox = mailbox_list->head;
+        while (mailbox) {
+            hash_insert(mailbox->uniqueid, mailbox, &mailbox_list_index);
+            mailbox = mailbox->next;
+        }
+    }
+
+    if (mailbox_message_list->count) {
+        /* build an index of the mailbox message list */
+        construct_hash_table(&mailbox_message_list_index,
+                             mailbox_message_list->count, 0); // FIXME pool?
+        mailbox_message = mailbox_message_list->head;
+        while (mailbox_message) {
+            char keybuf[1024]; // FIXME whatever
+            snprintf(keybuf, sizeof(keybuf), "%s:%d",
+                     mailbox_message->mailbox_uniqueid, mailbox_message->uid);
+            hash_insert(keybuf, mailbox_message, &mailbox_message_list_index);
+            mailbox_message = mailbox_message->next;
+        }
+    }
+
+    r = gzuc_member_start_from(gzuc, chunk->offset); // FIXME error handling
+    struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
+    prot_setisclient(ps, 1); /* don't sync literals */
+
+    while (1) {
+        struct buf cmd = BUF_INITIALIZER;
+        struct dlist *dl = NULL;
+        struct dlist *record = NULL;
+        struct dlist *di = NULL;
+        const char *uniqueid = NULL;
+        int mailbox_removed = 0;
+
+        int c = _parse_line(ps, NULL, &cmd, &dl);
+        if (c == EOF) break;
+
+        if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
+            goto next_line;
+
+        if (strcmp(dl->name, "MAILBOX") != 0)
+            goto next_line;
+
+        if (!dlist_getatom(dl, "UNIQUEID", &uniqueid))
+            goto next_line;
+
+        if (mailbox_list->count) {
+            mailbox = (struct backup_mailbox *) hash_lookup(uniqueid, &mailbox_list_index);
+            if (!mailbox)
+                goto next_line;
+
+            if (!mailbox_matches(mailbox, dl))
+                goto next_line;
+
+            backup_mailbox_list_remove(mailbox_list, mailbox);
+            hash_del(uniqueid, &mailbox_list_index);
+            mailbox_removed = 1; /* don't free it yet, need it for record processing */
+        }
+
+        if (mailbox_message_list->count) {
+            if (!dlist_getlist(dl, "RECORD", &record))
+                goto next_line;
+
+            for (di = record->head; di; di = di->next) {
+                char keybuf[1024]; // FIXME whatever
+                uint32_t uid;
+
+                if (!dlist_getnum32(di, "UID", &uid))
+                    continue;
+
+                snprintf(keybuf, sizeof(keybuf), "%s:%d", uniqueid, uid);
+                mailbox_message = (struct backup_mailbox_message *) hash_lookup(
+                    keybuf, &mailbox_message_list_index);
+
+                if (!mailbox_message)
+                    continue;
+
+                if (!mailbox_message_matches(mailbox_message, di))
+                    continue;
+
+                backup_mailbox_message_list_remove(mailbox_message_list, mailbox_message);
+                hash_del(keybuf, &mailbox_message_list_index);
+                backup_mailbox_message_free(&mailbox_message);
+            }
+        }
+
+next_line:
+        if (mailbox && mailbox_removed)
+            backup_mailbox_free(&mailbox);
+        if (dl)
+            dlist_free(&dl);
+    }
+
+    prot_free(ps);
+    gzuc_member_end(gzuc, NULL);
+
+    /* anything left in either of the lists is missing from the chunk data. bad! */
+    mailbox = mailbox_list->head;
+    while (mailbox) {
+        fprintf(stderr, "%s: chunk %d missing mailbox data for %s (%s)\n",
+                __func__, chunk->id, mailbox->uniqueid, mailbox->mboxname);
+        mailbox = mailbox->next;
+    }
+
+    mailbox_message = mailbox_message_list->head;
+    while (mailbox_message) {
+        fprintf(stderr, "%s: chunk %d missing mailbox_message data for %s uid %u\n",
+                __func__, chunk->id, mailbox_message->mailbox_uniqueid,
+                mailbox_message->uid);
+        mailbox_message = mailbox_message->next;
+    }
+
+    if (!r) r = mailbox_list->count || mailbox_message_list->count ? -1 : 0;
+
+    free_hash_table(&mailbox_list_index, NULL);
+    free_hash_table(&mailbox_message_list_index, NULL);
+
+    backup_mailbox_list_empty(mailbox_list);
+    free(mailbox_list);
+
+    backup_mailbox_message_list_empty(mailbox_message_list);
+    free(mailbox_message_list);
+
+    fprintf(stderr, "%s: chunk %d %s!\n", __func__, chunk->id,
+            r ? "failed" : "passed");
+
+    return r;
 }
