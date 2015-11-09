@@ -642,6 +642,35 @@ EXPORTED int backup_mailbox_foreach(struct backup *backup,
     return r;
 }
 
+EXPORTED struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
+                                                          int chunk_id,
+                                                          int want_records)
+{
+    struct backup_mailbox_list *mailbox_list = xzmalloc(sizeof *mailbox_list);
+
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+                                        mailbox_list, NULL, want_records};
+
+    struct sqldb_bindval bval[] = {
+        { ":last_chunk_id", SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    const char *sql = chunk_id ?
+        backup_index_mailbox_select_chunkid_sql :
+        backup_index_mailbox_select_all_sql;
+
+    int r = sqldb_exec(backup->db, sql, bval, _mailbox_row_cb, &mbrock);
+
+    if (r) {
+        backup_mailbox_list_empty(mailbox_list);
+        free(mailbox_list);
+        return NULL;
+    }
+
+    return mailbox_list;
+}
+
 EXPORTED struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
                                                   const mbname_t *mbname,
                                                   int want_records)
