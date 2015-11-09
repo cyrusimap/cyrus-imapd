@@ -2591,9 +2591,11 @@ typedef struct calevent_rock {
 
     json_t *invalid;         /* A JSON array of any invalid properties. */
 
-    icalcomponent *comp;    /* The main event of an exception. */
-    icaltimetype dtstart;        /* The start of this or the main event. */
-    icaltimetype dtend;          /* The end of this or the main event. */
+    icalcomponent *comp;     /* The current main event of an exception. */
+    icalcomponent *oldcomp;  /* The former main event of an exception */
+
+    icaltimetype dtstart;      /* The start of this or the main event. */
+    icaltimetype dtend;        /* The end of this or the main event. */
     icaltimezone *tzstart_old; /* The former startTimeZone. */
     icaltimezone *tzstart;     /* The current startTimeZone. */
     icaltimezone *tzend_old;   /* The former endTimeZone. */
@@ -2925,6 +2927,114 @@ static int jmap_readprop_full(json_t *root,
 static int jmap_readprop(json_t *root, const char *name, int mandatory,
                          json_t *invalid, const char *fmt, void *dst) {
     return jmap_readprop_full(root, NULL, name, mandatory, invalid, fmt, dst);
+}
+
+/* Compare the value of the first occurences of property kind in components
+ * a and b. Return 0 if they match or if both do not contain kind. Note that
+ * this function does not define an order on property values, so it can't be
+ * used for sorting. */
+static int jmap_compare_icalprop(icalcomponent *a, icalcomponent *b,
+                                 icalproperty_kind kind) {
+    icalproperty *pa, *pb;
+    icalvalue *va, *vb;
+
+    pa = icalcomponent_get_first_property(a, kind);
+    pb = icalcomponent_get_first_property(b, kind);
+    if (!pa && !pb) {
+        return 0;
+    }
+
+    va = icalproperty_get_value(pa);
+    vb = icalproperty_get_value(pb);
+    enum icalparameter_xliccomparetype cmp = icalvalue_compare(va, vb);
+    return cmp != ICAL_XLICCOMPARETYPE_EQUAL;
+}
+
+/* Compare the VALARM components in VEVENTs a and b. Return 0 if they both
+ * contain the same number of VALARMs with TRIGGERS of type duration. Return
+ * 0 if all alarms match or both do not define alarms. */
+static int jmap_compare_alerts(icalcomponent *a, icalcomponent *b) {
+    icalcomponent *a_alarm, *b_alarm;
+    icalproperty *prop;
+    struct buf buf = BUF_INITIALIZER;
+    int a_total = 0;
+    int b_total = 0;
+    int matches = 0;
+    hash_table ha;
+    construct_hash_table(&ha, 8, 0);
+
+    /* Collect VALARMs from event a. */
+    for (a_alarm = icalcomponent_get_first_component(a, ICAL_VALARM_COMPONENT);
+         a_alarm;
+         a_alarm = icalcomponent_get_next_component(a, ICAL_VALARM_COMPONENT)) {
+
+        const char *action, *trigger;
+
+        prop = icalcomponent_get_first_property(a_alarm, ICAL_ACTION_PROPERTY);
+        if (!prop) continue;
+        action = icalvalue_as_ical_string(icalproperty_get_value(prop));
+
+        prop = icalcomponent_get_first_property(a_alarm, ICAL_TRIGGER_PROPERTY);
+        if (!prop) continue;
+        trigger = icalvalue_as_ical_string(icalproperty_get_value(prop));
+
+        /* Ignore TIME triggers. */
+        struct icaltriggertype t = icalproperty_get_trigger(prop);
+        if (!icaltime_is_null_time(t.time)) {
+            continue;
+        }
+
+        buf_printf(&buf, "%s:%s", action, trigger);
+        hash_insert(buf_cstring(&buf), a_alarm, &ha);
+        buf_reset(&buf);
+
+        a_total++;
+    }
+
+    /* Check if the alarms in b match the ones a. */
+    for (b_alarm = icalcomponent_get_first_component(b, ICAL_VALARM_COMPONENT);
+         b_alarm;
+         b_alarm = icalcomponent_get_next_component(b, ICAL_VALARM_COMPONENT)) {
+
+        b_total++;
+
+        const char *action, *trigger;
+
+        prop = icalcomponent_get_first_property(b_alarm, ICAL_ACTION_PROPERTY);
+        if (!prop) continue;
+        action = icalvalue_as_ical_string(icalproperty_get_value(prop));
+
+        prop = icalcomponent_get_first_property(b_alarm, ICAL_TRIGGER_PROPERTY);
+        if (!prop) continue;
+        trigger = icalvalue_as_ical_string(icalproperty_get_value(prop));
+
+        /* Ignore TIME triggers. */
+        struct icaltriggertype t = icalproperty_get_trigger(prop);
+        if (!icaltime_is_null_time(t.time)) {
+            continue;
+        }
+
+        buf_printf(&buf, "%s:%s", action, trigger);
+        icalcomponent *a_alarm = hash_lookup(buf_cstring(&buf), &ha);
+        buf_reset(&buf);
+        if (!a_alarm) {
+            continue;
+        }
+
+        if (jmap_compare_icalprop(a_alarm, b_alarm, ICAL_SUMMARY_PROPERTY)) {
+            continue;
+        }
+        if (jmap_compare_icalprop(a_alarm, b_alarm, ICAL_DESCRIPTION_PROPERTY)) {
+            continue;
+        }
+
+        matches++;
+    }
+
+    buf_free(&buf);
+    free_hash_table(&ha, NULL);
+
+    return a_total != b_total || b_total != matches;
 }
 
 /* Update the calendar properties in the calendar mailbox named mboxname.
@@ -4223,16 +4333,17 @@ static const char *jmap_tzid_from_ical(icalcomponent *comp,
 }
 
 /* Convert the libical VEVENT comp to a CalendarEvent, excluding the
- * exceptions property. If exc is true, only convert properties that are
- * valid for exceptions. If userid is not NULL it will be used to identify
- * participants.
- * Only convert the properties named in props. */
+ * exceptions property. If parent is not NULL, treat comp as a VEVENT
+ * exception and only convert properties that are valid for exceptions.
+ * If userid is not NULL it will be used to identify participants.
+ * In any case, only convert the properties named in props. */
 static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
+                                            icalcomponent *parent,
                                             struct hash_table *props,
-                                            short exc,
                                             const char *userid) {
     icalproperty* prop;
     json_t *obj;
+    short exc = parent != NULL;
 
     obj = json_pack("{}");
 
@@ -4247,6 +4358,10 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     /* summary */
     if (_wantprop(props, "summary")) {
         prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+        if (prop && exc && !jmap_compare_icalprop(comp, parent, ICAL_SUMMARY_PROPERTY)) {
+            /* Don't return the exception SUMMARY if it matches the main event. */
+            prop = NULL;
+        }
         if (prop || !exc) {
             json_object_set_new(obj, "summary",
                     prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
@@ -4256,6 +4371,10 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     /* description */
     if (_wantprop(props, "description")) {
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+        if (prop && exc && !jmap_compare_icalprop(comp, parent, ICAL_DESCRIPTION_PROPERTY)) {
+            /* Don't return the exception DESCRIPTION if it matches the main event. */
+            prop = NULL;
+        }
         if (prop || !exc) {
             json_object_set_new(obj, "description",
                     prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
@@ -4265,6 +4384,10 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     /* location */
     if (_wantprop(props, "location")) {
         prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
+        if (prop && exc && !jmap_compare_icalprop(comp, parent, ICAL_LOCATION_PROPERTY)) {
+            /* Don't return the exception LOCATION if it matches the main event. */
+            prop = NULL;
+        }
         if (prop || !exc) {
             json_object_set_new(obj, "location",
                     prop ? json_string(icalproperty_get_value_as_string(prop)) : json_string(""));
@@ -4274,6 +4397,10 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     /* showAsFree */
     if (_wantprop(props, "showAsFree")) {
         prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+        if (prop && exc && !jmap_compare_icalprop(comp, parent, ICAL_TRANSP_PROPERTY)) {
+            /* Don't return the exception TRANSP if it matches the main event. */
+            prop = NULL;
+        }
         if (prop || !exc) {
             json_object_set_new(obj, "showAsFree",
                     json_boolean(prop &&
@@ -4339,7 +4466,7 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     /* Do not convert exceptions. */
 
     /* alerts */
-    if (_wantprop(props, "alerts")) {
+    if (_wantprop(props, "alerts") && (!exc || jmap_compare_alerts(comp, parent))) {
         json_t *alerts = jmap_alerts_from_ical(comp);
         if (alerts != json_null() || !exc) {
             json_object_set_new(obj, "alerts", alerts);
@@ -4419,13 +4546,14 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
     }
 
     /* Convert main VEVENT to JMAP. */
-    obj = jmap_calendarevent_from_ical(comp, crock->props, 0 /* exc */, userid);
+    obj = jmap_calendarevent_from_ical(comp, NULL, crock->props, userid);
     if (!obj) goto done;
     json_object_set_new(obj, "id", json_string(cdata->ical_uid));
 
     /* Add optional exceptions. */
     if (_wantprop(crock->props, "exceptions")) {
         json_t* excobj = json_pack("{}");
+        icalcomponent *excomp;
 
         /* Add all EXDATEs as null value. */
         for (prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY);
@@ -4442,19 +4570,19 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
         }
 
         /* Add VEVENTs with RECURRENCE-ID. */
-        for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-             comp;
-             comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+        for (excomp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+             excomp;
+             excomp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
 
-            if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+            if (!icalcomponent_get_first_property(excomp, ICAL_RECURRENCEID_PROPERTY)) {
                 continue;
             }
 
-            json_t *exc = jmap_calendarevent_from_ical(comp, crock->props, 1 /* exc */, userid);
+            json_t *exc = jmap_calendarevent_from_ical(excomp, comp, crock->props, userid);
             if (!exc) {
                 continue;
             }
-            struct icaltimetype recurid = icalcomponent_get_recurrenceid(comp);
+            struct icaltimetype recurid = icalcomponent_get_recurrenceid(excomp);
             char *s = jmap_icaltime_to_localdate_r(recurid);
             json_object_set_new(excobj, s, exc);
             free(s);
@@ -4595,6 +4723,19 @@ static void calevent_rock_free(struct calevent_rock *rock) {
     free(rock->tzs);
 }
 
+/* Remove and deallocate any properties of kind in VEVENT comp. */
+static void jmap_remove_icalproperty(icalcomponent *comp, icalproperty_kind kind) {
+    icalproperty *prop, *next;
+
+    for (prop = icalcomponent_get_first_property(comp, kind);
+         prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, kind);
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+}
 
 /* Add or overwrite the datetime property kind in comp. If tz is not NULL, set
  * the TZID parameter on the property. */
@@ -4961,6 +5102,7 @@ static void jmap_exceptions_update_tz(icalcomponent *comp,
     }
 }
 
+
 /* Create or overwrite the VEVENT exceptions for VEVENT component comp as
  * defined by the JMAP exceptions. */
 static void jmap_exceptions_to_ical(icalcomponent *comp,
@@ -4970,14 +5112,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
     json_t *invalid = rock->invalid;
 
     /* Purge existing EXDATEs. */
-    icalproperty *prop, *next;
-    for (prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY);
-         prop;
-         prop = next) {
-        next = icalcomponent_get_next_property(comp, ICAL_EXDATE_PROPERTY);
-        icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
-    }
+    jmap_remove_icalproperty(comp, ICAL_EXDATE_PROPERTY);
 
     const char *key;
     json_t *exc;
@@ -4985,6 +5120,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
     icalcomponent *ical = icalcomponent_get_parent(comp);
     icalcomponent *excomp, *excomp_next;
     hash_table excs;
+    icalproperty *prop;
 
     /* Move VEVENT exceptions to a temporary cache, keyed by recurrence id. */
     construct_hash_table(&excs, json_object_size(exceptions) + 1, 0);
@@ -5001,7 +5137,9 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
          * RECURRENCEID must be denoted in the original timezone. */
         const char *val = icalproperty_get_value_as_string(prop);
         if (val) {
+#if 0
             hash_insert(val, excomp, &excs);
+#endif
         }
         icalcomponent_remove_component(ical, excomp);
     }
@@ -5033,8 +5171,17 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             excomp = (icalcomponent*) hash_lookup(val, &excs);
             if (excomp) hash_del(val, &excs);
 
-            /* If not found, create a new one. */
-            if (!excomp) excomp = icalcomponent_new_vevent();
+            /* If not found, create a new clone of the main event. */
+            if (!excomp) {
+                excomp = icalcomponent_new_clone(comp);
+                /* Remove any properties that we do not allow in exceptions. */
+                jmap_remove_icalproperty(excomp, ICAL_RDATE_PROPERTY);
+                jmap_remove_icalproperty(excomp, ICAL_EXDATE_PROPERTY);
+                jmap_remove_icalproperty(excomp, ICAL_RRULE_PROPERTY);
+                jmap_remove_icalproperty(excomp, ICAL_ORGANIZER_PROPERTY);
+                jmap_remove_icalproperty(excomp, ICAL_ATTENDEE_PROPERTY);
+                /* XXX ATTACH? */
+            }
 
             /* Add RECURRENCEID property. */
             jmap_update_dtprop_bykind(excomp, dt, rock->tzstart, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
@@ -5110,18 +5257,10 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
     size_t i;
     json_t *incl;
     struct buf buf = BUF_INITIALIZER;
-    icalproperty *prop, *next;
     json_t *invalid = rock->invalid;
 
     /* Purge existing RDATEs. */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY);
-         prop;
-         prop = next) {
-
-        next = icalcomponent_get_next_property(comp, ICAL_RDATE_PROPERTY);
-        icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
-    }
+    jmap_remove_icalproperty(comp, ICAL_RDATE_PROPERTY);
 
     if (!inclusions || inclusions == json_null()) {
         return;
@@ -5566,12 +5705,13 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
             icalcomponent_add_property(alarm, prop);
 
             /* alert contents */
-            /* XXX - how to determine these properties? */
             if (action == ICAL_ACTION_EMAIL) {
-                prop = icalproperty_new_description("the body of an email alert");
+                const char *s = icalcomponent_get_description(comp);
+                prop = icalproperty_new_description(s ? s : "");
                 icalcomponent_add_property(alarm, prop);
 
-                prop = icalproperty_new_summary("the subject of an email alert");
+                s = icalcomponent_get_summary(comp);
+                prop = icalproperty_new_summary(s ? s : "");
                 icalcomponent_add_property(alarm, prop);
 
                 buf_printf(&buf, "MAILTO:%s", rock->req->userid);
@@ -5579,7 +5719,8 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
                 buf_reset(&buf);
                 icalcomponent_add_property(alarm, prop);
             } else {
-                prop = icalproperty_new_description("a display alert");
+                const char *s = icalcomponent_get_summary(comp);
+                prop = icalproperty_new_description(s ? s : "");
                 icalcomponent_add_property(alarm, prop);
             }
 
@@ -5590,6 +5731,81 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
     }
 
     buf_free(&buf);
+}
+
+/* Merge any changes of the basic properties of JMAP main event into
+ * any exception VEVENTs of comp. */
+static void jmap_exceptions_merge(icalcomponent *comp,
+                                          json_t *event,
+                                          calevent_rock *rock) {
+
+    icalcomponent *excomp, *ical;
+    icalcomponent *oldcomp = rock->oldcomp;
+    icalproperty *prop;
+    const char *val;
+    json_t *invalid = json_pack("[]");
+
+    ical = icalcomponent_get_parent(comp);
+
+    for (excomp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+         excomp;
+         excomp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+
+        prop = icalcomponent_get_first_property(excomp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) {
+            continue;
+        }
+
+        /* summary */
+        if (jmap_readprop(event, "summary", 0, invalid, "s", &val) > 0) {
+            if (!jmap_compare_icalprop(excomp, oldcomp, ICAL_SUMMARY_PROPERTY)) {
+                icalcomponent_set_summary(excomp, val);
+            }
+        }
+
+        /* description */
+        if (jmap_readprop(event, "description", 0, invalid, "s", &val) > 0) {
+            if (!jmap_compare_icalprop(excomp, oldcomp, ICAL_DESCRIPTION_PROPERTY)) {
+                icalcomponent_set_description(excomp, val);
+            }
+        }
+
+        /* location */
+        if (jmap_readprop(event, "location", 0, invalid, "s", &val) > 0) {
+            if (!jmap_compare_icalprop(excomp, oldcomp, ICAL_LOCATION_PROPERTY)) {
+                icalcomponent_set_location(excomp, val);
+            }
+        }
+
+        /* showAsFree */
+        int showAsFree;
+        if (jmap_readprop(event, "showAsFree", 0, invalid, "s", &showAsFree) > 0) {
+            if (!jmap_compare_icalprop(excomp, oldcomp, ICAL_TRANSP_PROPERTY)) {
+                enum icalproperty_transp v = showAsFree ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
+                prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+                if (prop) {
+                    icalproperty_set_transp(prop, v);
+                } else {
+                    icalcomponent_add_property(comp, icalproperty_new_transp(v));
+                }
+            }
+        }
+
+        /* alerts */
+        json_t *alerts;
+        if (jmap_readprop(event, "alerts", 0, invalid, "o", &alerts) > 0 &&
+                !jmap_compare_alerts(oldcomp, excomp)) {
+
+                /* Don't care about any parse errors hre. */
+                json_t *oldinvalid = rock->invalid;
+                rock->invalid = invalid;
+                jmap_alerts_to_ical(excomp, alerts, rock);
+                rock->invalid = oldinvalid;
+            }
+    }
+
+    /* Don't care about any parse errors here. */
+    json_decref(invalid);
 }
 
 static void jmap_timezones_to_ical_cb(icalcomponent *comp,
@@ -5776,7 +5992,6 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
 
     /* startTimeZone */
     /* Determine the current timezone, if any. */
-
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzstart_old = icaltimezone_get_builtin_timezone(tzid);
     /* Read the new timezone, if any. */
@@ -5847,11 +6062,6 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
             jmap_update_dtprop_bykind(comp, dt, rock->tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
         }
     }
-    if (!pe && exc) {
-        /* If this is an exception, make sure it gets its own DTSTART. */
-        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-        if (!prop) jmap_update_dtprop_bykind(comp, rock->dtstart, rock->tzstart, 1, ICAL_DTSTART_PROPERTY);
-    }
 
     /* end */
     pe = jmap_readprop(event, "end", create&&!exc, invalid, "s", &val);
@@ -5867,19 +6077,6 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
         if (!icaltime_is_null_time(dt)) {
             dt.zone = rock->tzend;
             jmap_update_dtprop_bykind(comp, dt, rock->tzend, 1 /*purge*/, ICAL_DTEND_PROPERTY);
-        }
-    }
-    if (!pe && exc) {
-        /* If this is an exception, make sure it gets its own DTEND or DURATION. */
-        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        if (!prop) prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
-        if (!prop) {
-            prop = icalcomponent_get_first_property(rock->comp, ICAL_DURATION_PROPERTY);
-            if (prop) {
-                icalcomponent_add_property(comp, icalproperty_new_clone(prop));
-            } else {
-                jmap_update_dtprop_bykind(comp, rock->dtend, rock->tzend, 1, ICAL_DTEND_PROPERTY);
-            }
         }
     }
 
@@ -5922,13 +6119,6 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     pe = jmap_readprop(event, "summary", create&&!exc, invalid, "s", &val);
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
-    }
-    if (!pe && exc) {
-        /* If this is an exception, make sure it got its own SUMMARY.
-         * OS X Calendar.app seems to be fond of this. */
-        if (!icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY)) {
-            icalcomponent_set_summary(comp, icalcomponent_get_summary(rock->comp));
-        }
     }
 
     /* description */
@@ -6037,10 +6227,13 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
         } else {
             json_array_append_new(invalid, json_string("exceptions"));
         }
-    } else if (!pe && !exc && !create &&
-            (rock->tzstart_old != rock->tzstart || rock->tzend_old != rock->tzend)) {
-        /* The start or end timezone has changed but none of the exceptions. */
-        jmap_exceptions_update_tz(comp, rock);
+    } else if (!pe && !exc && !create) {
+        if (rock->tzstart_old != rock->tzstart || rock->tzend_old != rock->tzend) {
+            /* The start or end timezone has changed but none of the exceptions. */
+            jmap_exceptions_update_tz(comp, rock);
+        }
+        /* Merge any other changes in the main event into the exceptions. */
+        jmap_exceptions_merge(comp, event, rock);
     }
 
     /* attachments */
@@ -6331,6 +6524,10 @@ static int jmap_write_calendarevent(json_t *event,
         rock.req = req;
         rock.invalid = invalid;
         rock.uid = uid;
+        rock.comp = comp;
+        if (update) {
+            rock.oldcomp = icalcomponent_new_clone(comp);
+        }
         jmap_calendarevent_to_ical(comp, event, &rock);
         jmap_timezones_to_ical(ical, &rock);
         calevent_rock_free(&rock);
