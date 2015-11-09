@@ -2961,8 +2961,16 @@ static int jmap_compare_alerts(icalcomponent *a, icalcomponent *b) {
     int a_total = 0;
     int b_total = 0;
     int matches = 0;
+    size_t size = 0;
     hash_table ha;
-    construct_hash_table(&ha, 8, 0);
+
+    /* Determine size of hash table and initalize. */
+    for (a_alarm = icalcomponent_get_first_component(a, ICAL_VALARM_COMPONENT);
+         a_alarm;
+         a_alarm = icalcomponent_get_next_component(a, ICAL_VALARM_COMPONENT)) {
+        size++;
+    }
+    construct_hash_table(&ha, size+1, 0);
 
     /* Collect VALARMs from event a. */
     for (a_alarm = icalcomponent_get_first_component(a, ICAL_VALARM_COMPONENT);
@@ -5104,20 +5112,14 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
                                     calevent_rock *rock) {
 
     json_t *invalid = rock->invalid;
-
-    /* Purge existing EXDATEs. */
-    jmap_remove_icalproperty(comp, ICAL_EXDATE_PROPERTY);
-
     const char *key;
     json_t *exc;
     struct buf buf = BUF_INITIALIZER;
     icalcomponent *ical = icalcomponent_get_parent(comp);
     icalcomponent *excomp, *excomp_next;
-    hash_table excs;
     icalproperty *prop;
 
-    /* Move VEVENT exceptions to a temporary cache, keyed by recurrence id. */
-    construct_hash_table(&excs, json_object_size(exceptions) + 1, 0);
+    /* Purge existing EXDATEs and exceptions. */
     for (excomp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
          excomp;
          excomp = excomp_next) {
@@ -5127,16 +5129,9 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         if (!prop) {
             continue;
         }
-        /* Key by LocalDate (instead of LocalDate+TZID), since this
-         * RECURRENCEID must be denoted in the original timezone. */
-        const char *val = icalproperty_get_value_as_string(prop);
-        if (val) {
-#if 0
-            hash_insert(val, excomp, &excs);
-#endif
-        }
         icalcomponent_remove_component(ical, excomp);
     }
+    jmap_remove_icalproperty(comp, ICAL_EXDATE_PROPERTY);
 
     /* Add updated or new exceptions back to the VCALENDAR component. */
     json_object_foreach(exceptions, key, exc) {
@@ -5158,23 +5153,36 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             json_t *invalidexc = json_pack("[]");
             size_t i;
             json_t *v;
-            excomp = NULL;
 
-            /* Check if the cache already contains this recurrence id. */
-            const char *val = icaltime_as_ical_string(dt);
-            excomp = (icalcomponent*) hash_lookup(val, &excs);
-            if (excomp) hash_del(val, &excs);
+            /* Create a clone from main event. */
+            excomp = icalcomponent_new_clone(comp);
 
-            /* If not found, create a new clone of the main event. */
-            if (!excomp) {
-                excomp = icalcomponent_new_clone(comp);
-                /* Remove any properties that we do not allow in exceptions. */
-                jmap_remove_icalproperty(excomp, ICAL_RDATE_PROPERTY);
-                jmap_remove_icalproperty(excomp, ICAL_EXDATE_PROPERTY);
-                jmap_remove_icalproperty(excomp, ICAL_RRULE_PROPERTY);
-                jmap_remove_icalproperty(excomp, ICAL_ORGANIZER_PROPERTY);
-                jmap_remove_icalproperty(excomp, ICAL_ATTENDEE_PROPERTY);
-                /* XXX ATTACH? */
+            /* Remove any properties that we do not allow in exceptions. */
+            jmap_remove_icalproperty(excomp, ICAL_RDATE_PROPERTY);
+            jmap_remove_icalproperty(excomp, ICAL_EXDATE_PROPERTY);
+            jmap_remove_icalproperty(excomp, ICAL_RRULE_PROPERTY);
+            jmap_remove_icalproperty(excomp, ICAL_ORGANIZER_PROPERTY);
+            jmap_remove_icalproperty(excomp, ICAL_ATTENDEE_PROPERTY);
+            /* XXX ATTACH? */
+
+            /* Purge any VALARMs that are of type DATETIME. They can't be right
+             * for this exception. */
+            icalcomponent *alarm, *alarm_next;
+            for (alarm = icalcomponent_get_first_component(excomp, ICAL_VALARM_COMPONENT);
+                 alarm;
+                 alarm = alarm_next) {
+
+                alarm_next = icalcomponent_get_next_component(excomp, ICAL_VALARM_COMPONENT);
+
+                prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
+                if (!prop) {
+                    continue;
+                }
+
+                struct icaltriggertype t = icalproperty_get_trigger(prop);
+                if (!icaltime_is_null_time(t.time)) {
+                    icalcomponent_remove_component(excomp, alarm);
+                }
             }
 
             /* Add RECURRENCEID property. */
@@ -5213,11 +5221,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         free(prefix);
     }
 
-    /* Purge any remaining VEVENTs from the cache. */
-    free_hash_table(&excs, (void(*)(void*)) icalcomponent_free);
-
     buf_free(&buf);
-
 }
 
 /* Set the TZID parameters for all RDATE properties. */
