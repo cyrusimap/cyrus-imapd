@@ -1506,9 +1506,12 @@ sub test_setcalendarevents_update_exceptions_basic {
                         "$id" => {
                             "exceptions" => {
                                 "2015-10-07T16:45:00" => {
+                                    "start" => "2015-10-07T17:45:00",
+                                    "end" => "2015-10-07T18:15:00",
                                     "startTimeZone" => "Australia/Melbourne",
                                     "endTimeZone" => "Australia/Melbourne",
-                                    "showAsFree" => JSON::true
+                                    "showAsFree" => JSON::true,
+                                    "summary" => "one hour later"
                                 },
                             }
                         }
@@ -1553,11 +1556,15 @@ sub test_setcalendarevents_update_exceptions_basic {
                             "exceptions" => {
                                 "2015-10-07T16:45:00" => {
                                     "start" => "2015-10-07T17:45:00",
-                                    "startTimeZone" => "Australia/Sydney",
+                                    "startTimeZone" => "Australia/Melbourne",
+                                    "end" => "2015-10-07T18:45:00",
+                                    "endTimeZone" => "Australia/Melbourne",
                                 },
                             }
                         }
                     }}, "R1"]]);
+    my $x = Dumper($res);
+    xlog "$x";
     $self->assert_not_null($res->[0][1]{updated});
 
     xlog "get calendar event $id";
@@ -1566,8 +1573,8 @@ sub test_setcalendarevents_update_exceptions_basic {
     $self->assert_str_equals($event->{id}, $id);
     $exc = $event->{exceptions}{"2015-10-07T16:45:00"};
     $self->assert_str_equals($exc->{start}, "2015-10-07T17:45:00");
-    $self->assert_str_equals($exc->{startTimeZone}, "Australia/Sydney");
-    $self->assert_str_equals($exc->{end}, "2015-10-07T18:15:00");
+    $self->assert_str_equals($exc->{startTimeZone}, "Australia/Melbourne");
+    $self->assert_str_equals($exc->{end}, "2015-10-07T18:45:00");
     $self->assert_str_equals($exc->{endTimeZone}, "Australia/Melbourne");
 }
 
@@ -1640,7 +1647,6 @@ sub test_setcalendarevents_update_exceptions_edge {
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     $event->{exceptions}{"2015-11-14T09:00:00"}{start} = $event->{start};
     $event->{exceptions}{"2015-11-14T09:00:00"}{end} = $event->{end};
-    $event->{exceptions}{"2015-11-14T09:00:00"}{summary} = $event->{summary};
     $self->assert_str_equals($res->[0][1]{list}[0]{id}, $event->{id});
     $self->assert_deep_equals($res->[0][1]{list}[0], $event);
 
@@ -1670,7 +1676,6 @@ sub test_setcalendarevents_update_exceptions_edge {
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     $event->{exceptions}{"2015-11-21T09:00:00"}{"startTimeZone"} = undef;
     $event->{exceptions}{"2015-11-21T09:00:00"}{"endTimeZone"} = undef;
-    $event->{exceptions}{"2015-11-21T09:00:00"}{summary} = $event->{summary};
     $self->assert_deep_equals($res->[0][1]{list}[0], $event);
 
     xlog "update event $id";
@@ -1693,7 +1698,6 @@ sub test_setcalendarevents_update_exceptions_edge {
         "endTimeZone" => "Europe/Berlin"
     };
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    $event->{exceptions}{"2015-11-21T09:00:00"}{summary} = $event->{summary};
     $self->assert_deep_equals($res->[0][1]{list}[0], $event);
 
     xlog "update event $id";
