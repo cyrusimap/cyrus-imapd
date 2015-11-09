@@ -722,3 +722,14 @@ the other fiddly bit is that the process of appending to the data stream is sudd
 i guess in terms of sync protocol, one thing i could do on my end is identify apply operations that seem to contain multiple users' data, and just return an error on those.  the sync client on the other end will promote them until they're eventually user syncs, which i think are always user granularity
 11:50 elliefm_
 i think for now, first stage implementation will be to stream the reserve/message commands in full to every user backup they might apply to.  and optimising that down so that each stream only contains messages belonging to that user can be a future optimisation
+
+
+todo list
+---------
+
+* break the index getters into own module
+* finish verify_chunk_mailbox_links
+* clean up error handling
+* move _column_int etc into lib/sqldb, don't automatically xstrdup
+* probably need a non-blocking interface to backup_open...
+* clean up xsha1_file
