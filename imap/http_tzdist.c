@@ -101,6 +101,8 @@ struct observance {
     int offset_from;
     int offset_to;
     int is_daylight;
+    int is_std;
+    int is_gmt;
 };
 
 static struct mime_type_t tz_mime_types[] = {
@@ -669,12 +671,38 @@ static int observance_compare(const void *obs1, const void *obs2)
                             ((struct observance *) obs2)->onset);
 }
 
+static void icalproperty_get_isstd_isgmt(icalproperty *prop,
+                                         struct observance *obs)
+{
+    const char *time_type =
+        icalproperty_get_parameter_as_string(prop, "X-OBSERVED-AT");
+
+    if (!time_type) time_type = "W";
+
+    switch (time_type[0]) {
+    case 'G': case 'g':
+    case 'U': case 'u':
+    case 'Z': case 'z':
+        obs->is_gmt = obs->is_std = 1;
+        break;
+    case 'S': case 's':
+        obs->is_gmt = 0;
+        obs->is_std = 1;
+        break;
+    case 'W': case 'w':
+    default:
+        obs->is_gmt = obs->is_std = 0;
+        break;
+    }
+}
+
 static void truncate_vtimezone(icalcomponent *vtz,
                                icaltimetype *startp, icaltimetype *endp,
                                icalarray *obsarray,
                                struct observance **proleptic,
                                icalcomponent **eternal_std,
-                               icalcomponent **eternal_dst)
+                               icalcomponent **eternal_dst,
+                               icaltimetype *last_dtstart)
 {
     icaltimetype start = *startp, end = *endp;
     icalcomponent *comp, *nextc, *tomb_std = NULL, *tomb_day = NULL;
@@ -683,6 +711,8 @@ static void truncate_vtimezone(icalcomponent *vtz,
     unsigned need_tomb = !icaltime_is_null_time(start);
     unsigned adjust_start = !icaltime_is_null_time(start);
     unsigned adjust_end = !icaltime_is_null_time(end);
+
+    if (last_dtstart) *last_dtstart = icaltime_null_time();
 
     /* See if we have a proleptic tzname in VTIMEZONE */
     for (prop = icalcomponent_get_first_property(vtz, ICAL_X_PROPERTY);
@@ -698,6 +728,9 @@ static void truncate_vtimezone(icalcomponent *vtz,
     tombstone.name = icalmemory_tmp_copy(proleptic_prop ?
                                          icalproperty_get_x(proleptic_prop) :
                                          "LMT");
+    if (!proleptic_prop ||
+        !icalproperty_get_parameter_as_string(prop, "X-NO-BIG-BANG"))
+      tombstone.onset.year = -1;
 
     /* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
     for (comp = icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
@@ -728,6 +761,9 @@ static void truncate_vtimezone(icalcomponent *vtz,
             case ICAL_DTSTART_PROPERTY:
                 dtstart_prop = prop;
                 obs.onset = dtstart = icalproperty_get_dtstart(prop);
+                icalproperty_get_isstd_isgmt(prop, &obs);
+                if (last_dtstart && icaltime_compare(dtstart, *last_dtstart))
+                    *last_dtstart = dtstart;
                 break;
 
             case ICAL_TZOFFSETFROM_PROPERTY:
@@ -964,6 +1000,7 @@ static void truncate_vtimezone(icalcomponent *vtz,
             }
 
             obs.onset = rdate->date.time;
+            icalproperty_get_isstd_isgmt(rdate->prop, &obs);
 
             /* Adjust observance to UTC */
             icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
@@ -1112,9 +1149,12 @@ static void truncate_vtimezone(icalcomponent *vtz,
         /* Sort the observances by onset */
         icalarray_sort(obsarray, &observance_compare);
 
+        /* Set offset_to for tombstone, if necessary */
+        obs = icalarray_element_at(obsarray, 0);
+        if (!tombstone.offset_to) tombstone.offset_to = obs->offset_from;
+
         /* Adjust actual range if necessary */
         if (adjust_start) {
-            obs = icalarray_element_at(obsarray, 0);
             *startp = obs->onset;
         }
         if (adjust_end) {
@@ -1278,7 +1318,7 @@ static int action_get(struct transaction_t *txn)
             buf_printf(&pathbuf, "?%s", URI_QUERY(txn->req_uri));
 
             /* Truncate the VTIMEZONE */
-            truncate_vtimezone(vtz, &start, &end, NULL, NULL, NULL, NULL);
+            truncate_vtimezone(vtz, &start, &end, NULL, NULL, NULL, NULL, NULL);
         }
 
         /* Set TZURL property */
@@ -1430,7 +1470,8 @@ static int action_expand(struct transaction_t *txn)
         /* Create an array of observances */
         obsarray = icalarray_new(sizeof(struct observance), 20);
         vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-        truncate_vtimezone(vtz, &start, &end, obsarray, &proleptic, NULL, NULL);
+        truncate_vtimezone(vtz, &start, &end, obsarray, &proleptic,
+                           NULL, NULL, NULL);
 
         if (zdump) {
             struct buf *body = &txn->resp_body.payload;
@@ -1671,8 +1712,9 @@ static void set_ttinfo(struct ttinfo *ttinfo,
 {
     ttinfo->offset = obs->offset_to;
     ttinfo->isdst = obs->is_daylight;
+    ttinfo->isstd = obs->is_std;
+    ttinfo->isgmt = obs->is_gmt;
     ttinfo->idx = idx;
-    ttinfo->isstd = ttinfo->isgmt = 0;  /* XXX  need a way to get these */
 }
 
 static void buf_append_utcoffset_as_iso_string(struct buf *buf, int off)
@@ -1777,7 +1819,8 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
     icalarray *obsarray;
     struct observance *proleptic;
     icaltimetype start = icaltime_null_time();
-    icaltimetype end = icaltime_from_day_of_year(1, 2500);
+    icaltimetype end = icaltime_from_day_of_year(1, 2100);
+    icaltimetype last_dtstart = icaltime_null_time();
     char header[] =  {
         'T', 'Z', 'i', 'f',   /* magic */
         '2',                  /* version */
@@ -1796,7 +1839,7 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
     struct ttinfo types[256]; /* only indexed by unsigned char */
     struct buf tzfile = BUF_INITIALIZER;
     struct buf posix = BUF_INITIALIZER, abbrev = BUF_INITIALIZER;
-    bit32 typecnt, leapcnt = 0;
+    bit32 leapcnt = 0;
     struct observance *obs;
     unsigned do_bit64;
 
@@ -1809,8 +1852,9 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
     /* Create an array of observances */
     obsarray = icalarray_new(sizeof(struct observance), 100);
     truncate_vtimezone(vtz, &start, &end, obsarray,
-                       &proleptic, &eternal_std, &eternal_dst);
+                       &proleptic, &eternal_std, &eternal_dst, &last_dtstart);
 
+    /* Create an array of transitions */
     times = xmalloc((obsarray->num_elements+1) * sizeof(struct transition));
 
     /* Try to create POSIX tz rule */
@@ -1828,58 +1872,66 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
         }
     }
 
-    /* Set the proleptic type and abbreviation (including the NUL) */
-    obs = icalarray_element_at(obsarray, 0);
-    proleptic->offset_to = obs->offset_from;
-    set_ttinfo(&types[0], proleptic, 0);
-    buf_setmap(&abbrev, proleptic->name, strlen(proleptic->name) + 1);
-    typecnt = 1;
-
     /* Add two tzfile datasets:
        The first using 32-bit times and the second using 64-bit times. */
     for (do_bit64 = 0; do_bit64 <= 1; do_bit64++) {
+        long long int epoch = do_bit64 ? BIG_BANG : INT32_MIN;
         struct observance *prev_obs = proleptic;
-        bit32 timecnt = 0;
+        bit32 timecnt = 0, typecnt = 0;
         size_t n;
 
-        if (do_bit64) {
-            /* Add initial transition at approx big bang time */
-            times[0].t = BIG_BANG;
-            times[0].idx = 0;
-            timecnt = 1;
-        }
+        buf_reset(&abbrev);
 
-        /* Generate array of transitions & types */
+        /* Populate array of transitions & types */
         for (n = 0; n < obsarray->num_elements; n++) {
             long long int t;
             unsigned typeidx;
+            icaltimetype tt_1601 = { 1601, 1, 1, 0, 0, 0, 1, 0, 0, NULL };
 
             obs = icalarray_element_at(obsarray, n);
             t = icaltime_to_gmtime64(obs->onset);
+            icaltime_adjust(&tt_1601, 0, 0, 0, -obs->offset_to);
 
-            if (t > INT32_MAX) {
+            if (obs->onset.year > 2037 &&
+                (!do_bit64 || obs->onset.year > last_dtstart.year)) {
                 /* tzdata doesn't seem to go any further */
                 break;
             }
-            else if (!do_bit64 && (t < INT32_MIN)) {
-                /* Outside 32-bit range */
-                prev_obs = obs;
+            else if (!timecnt) {
+                if (t > epoch && proleptic->onset.year < 0) {
+                    /* Insert a tombstone prior to first real transition */
+                    t = epoch;
+                    obs = prev_obs;
+                    
+                    /* Need to reprocess current observance */
+                    n--;
+                }
+                else {
+                    /* Reset types and abbreviations */
+                    typecnt = 0;
+                    buf_reset(&abbrev);
+                }
+            }
+            else if (!icaltime_compare(obs->onset, tt_1601)) {
+                /* Skip vzic tombstone for YEAR_MINIMUM */
                 continue;
             }
-
-            if (!timecnt && !do_bit64 && (t > INT32_MIN)) {
-                /* Set a tombstone transition at INT_MIN */
-                t = INT32_MIN;
-                obs = prev_obs;
-                    
-                /* Need to reprocess current observance */
-                n--;
+            else if (obs->offset_from == obs->offset_to
+                && prev_obs->is_daylight == obs->is_daylight
+                && prev_obs->is_std == obs->is_std
+                && prev_obs->is_gmt == obs->is_gmt
+                && !strcmp(prev_obs->name, obs->name)) {
+                /* Skip any no-ops */
+                continue;
             }
+            prev_obs = obs;
 
             /* Check for existing type */
             for (typeidx = 0; typeidx < typecnt; typeidx++) {
                 if ((obs->offset_to == types[typeidx].offset) &&
                     (obs->is_daylight == types[typeidx].isdst) &&
+                    (obs->is_std == types[typeidx].isstd) &&
+                    (obs->is_gmt == types[typeidx].isgmt) &&
                     !strcmp(obs->name, buf_base(&abbrev) + types[typeidx].idx))
                     break;
             }
@@ -1900,8 +1952,13 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
 
                 if (p == endp) {
                     /* Add new abbreviation (including the NUL) */
-                    buf_appendmap(&abbrev, obs->name, strlen(obs->name) +1);
+                    buf_appendmap(&abbrev, obs->name, strlen(obs->name) + 1);
                 }
+            }
+
+            if (t < epoch) {
+                /* Skip transitions earlier than our epoch */
+                continue;
             }
 
             /* Add transition */
@@ -1909,6 +1966,9 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
             times[timecnt].idx = typeidx;
             timecnt++;
         }
+
+
+        /* Output dataset */
 
         /* Header */
         buf_appendmap(&tzfile, header, sizeof(header));
@@ -1952,10 +2012,14 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
         for (n = 0; n < typecnt; n++) buf_putc(&tzfile, types[n].isgmt);
     }
 
+    free(times);
+    buf_free(&abbrev);
+
+
     /* POSIX timezone string */
     buf_putc(&tzfile, '\n');
 
-    /* stdoffset[dst[offset][,rule]] */
+    /* std offset [dst [offset] [,rule] ] */
     if (buf_len(&posix)) {
         /* Use POSIX rule */
         icalproperty *prop;
@@ -1990,18 +2054,21 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
     }
     else if (!eternal_dst) {
         /* Use last observance as fixed offset */
+        obs = icalarray_element_at(obsarray, obsarray->num_elements - 1);
 
         /* std name */
-        buf_appendcstr(&tzfile, obs->name);
+        if (obs->name[0] == ':' ||
+            strcspn(obs->name, ",+-0123456789") < strlen(obs->name)) {
+            buf_printf(&tzfile, "<%s>", obs->name);
+        }
+        else buf_appendcstr(&tzfile, obs->name);
 
         /* std offset */
         buf_append_utcoffset_as_iso_string(&tzfile, obs->offset_to);
     }
     buf_putc(&tzfile, '\n');
 
-    free(times);
     buf_free(&posix);
-    buf_free(&abbrev);
     icalarray_free(obsarray);
 
     if (len) *len = buf_len(&tzfile);
