@@ -212,6 +212,16 @@ const char backup_index_mailbox_select_uniqueid_sql[] = QUOTE(
     WHERE uniqueid = :uniqueid;
 );
 
+const char backup_index_mailbox_select_chunkid_sql[] = QUOTE(
+    SELECT
+        id, last_chunk_id, uniqueid, mboxname, mboxtype, last_uid, highestmodseq,
+        recentuid, recenttime, last_appenddate, pop3_last_login, pop3_show_after,
+        uidvalidity, partition, acl, options, sync_crc, sync_crc_annot, quotaroot,
+        xconvmodseq, annotations, deleted
+    FROM mailbox
+    WHERE last_chunk_id = :last_chunk_id;
+);
+
 const char backup_index_mailbox_message_update_sql[] = QUOTE(
     UPDATE mailbox_message SET
         last_chunk_id = :last_chunk_id,
@@ -253,6 +263,18 @@ const char backup_index_mailbox_message_select_mailbox_sql[] = QUOTE(
     JOIN message as m
     ON r.message_id = m.id
     WHERE mailbox_id = :mailbox_id;
+);
+
+const char backup_index_mailbox_message_select_chunkid_sql[] = QUOTE(
+    SELECT
+        r.id as id, mailbox_id, message_id, last_chunk_id, uid,
+        modseq, last_updated, flags, internaldate,
+        m.guid as guid, m.length as length, annotations,
+        expunged
+    FROM mailbox_message as r
+    JOIN message as m
+    ON r.message_id = m.id
+    WHERE last_chunk_id = :last_chunk_id;
 );
 
 const char backup_index_mailbox_message_expunge_sql[] = QUOTE(
