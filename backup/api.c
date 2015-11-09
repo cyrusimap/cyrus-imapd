@@ -444,105 +444,146 @@ EXPORTED int backup_get_mailbox_id(struct backup *backup, const char *uniqueid)
     return id;
 }
 
-struct _mailbox_row_rock {
-    sqldb_t *db;
-    backup_mailbox_foreach_cb proc;
-    void *rock;
-    struct backup_mailbox **save;
-    int want_records;
-};
+static void backup_mailbox_message_list_add(
+    struct backup_mailbox_message_list *list,
+    struct backup_mailbox_message *mailbox_message)
+{
+    mailbox_message->next = NULL;
+
+    if (!list->head)
+        list->head = mailbox_message;
+
+    if (list->tail)
+        list->tail->next = mailbox_message;
+
+    list->tail = mailbox_message;
+
+    list->count++;
+}
+
+static void backup_mailbox_message_list_empty(
+    struct backup_mailbox_message_list *list)
+{
+    struct backup_mailbox_message *mailbox_message, *next;
+
+    mailbox_message = list->head;
+    while (mailbox_message) {
+        next = mailbox_message->next;
+        backup_mailbox_message_free(&mailbox_message);
+        mailbox_message = next;
+    }
+
+    memset(list, 0, sizeof(*list));
+}
+
+static void backup_mailbox_list_add(struct backup_mailbox_list *list,
+                                    struct backup_mailbox *mailbox)
+{
+    mailbox->next = NULL;
+
+    if (!list->head)
+        list->head = mailbox;
+
+    if (list->tail)
+        list->tail->next = mailbox;
+
+    list->tail = mailbox;
+
+    list->count++;
+}
+
+static void backup_mailbox_list_empty(struct backup_mailbox_list *list)
+{
+    struct backup_mailbox *mailbox, *next;
+
+    mailbox = list->head;
+    while (mailbox) {
+        next = mailbox->next;
+        backup_mailbox_free(&mailbox);
+        mailbox = next;
+    }
+
+    memset(list, 0, sizeof(*list));
+}
 
 static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
 {
-    struct dlist *parent = (struct dlist *) rock;
-
-    struct dlist *record = dlist_newkvlist(parent, NULL);
-    const char *flag_str = NULL;
-    const char *annot_str = NULL;
-    time_t expunged = 0;
+    struct backup_mailbox_message_list *save_list;
+    struct backup_mailbox_message *mailbox_message;
+    char *guid_str = NULL;
     int r = 0;
 
-    int column = 4;  // skip unused columns
-    dlist_setnum32(record, "UID", _column_int(stmt, column++));
-    dlist_setnum64(record, "MODSEQ", _column_int64(stmt, column++));
-    dlist_setdate(record, "LAST_UPDATE", _column_int64(stmt, column++));
-    flag_str = _column_text(stmt, column++);
-    dlist_setdate(record, "INTERNALDATE", _column_int64(stmt, column++));
-    dlist_setatom(record, "GUID", _column_text(stmt, column++)); // FIXME dlist_setguid?
-    dlist_setnum32(record, "SIZE", _column_int(stmt, column++));
-    annot_str = _column_text(stmt, column++);
-    expunged = _column_int(stmt, column++);
+    save_list = (struct backup_mailbox_message_list *) rock;
+    mailbox_message = xzmalloc(sizeof *mailbox_message);
 
-    if (flag_str && flag_str[0]) {
-        struct dlist *flags = NULL;
-        r = dlist_parsemap(&flags, 0, flag_str, strlen(flag_str));
-        if (r) return r; // FIXME handle this sanely
-        if (flags) {
-            flags->name = xstrdup("FLAGS");
-            if (expunged)
-                dlist_setflag(flags, "FLAG", "\\Expunged");
-            dlist_stitch(record, flags);
-        }
-    }
+    int column = 0;
+    mailbox_message->id = _column_int(stmt, column++);
+    mailbox_message->mailbox_id = _column_int(stmt, column++);
+    mailbox_message->message_id = _column_int(stmt, column++);
+    mailbox_message->last_chunk_id = _column_int(stmt, column++);
+    mailbox_message->uid = _column_int(stmt, column++);
+    mailbox_message->modseq = _column_int64(stmt, column++);
+    mailbox_message->last_update = _column_int64(stmt, column++);
+    mailbox_message->flags = _column_text(stmt, column++);
+    mailbox_message->internaldate = _column_int64(stmt, column++);
+    guid_str = _column_text(stmt, column++);
+    mailbox_message->size = _column_int(stmt, column++);
+    mailbox_message->annotations = _column_text(stmt, column++);
+    mailbox_message->expunged = _column_int(stmt, column++);
 
-    if (annot_str && annot_str[0]) {
-        struct dlist *annots = NULL;
-        r = dlist_parsemap(&annots, 0, annot_str, strlen(annot_str));
-        if (r) return r; // FIXME handle this sanely
-        if (annots) {
-            annots->name = xstrdup("ANNOTATIONS");
-            dlist_stitch(record, annots);
-        }
-    }
+    message_guid_decode(&mailbox_message->guid, guid_str);
+    free(guid_str);
+
+    if (save_list)
+        backup_mailbox_message_list_add(save_list, mailbox_message);
+    else
+        backup_mailbox_message_free(&mailbox_message);
 
     return r;
 }
 
+struct _mailbox_row_rock {
+    sqldb_t *db;
+    backup_mailbox_foreach_cb proc;
+    void *rock;
+    struct backup_mailbox_list *save_list;
+    struct backup_mailbox **save_one;
+    int want_records;
+};
+
 static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct _mailbox_row_rock *mbrock = (struct _mailbox_row_rock *) rock;
-
     struct backup_mailbox *mailbox = xzmalloc(sizeof *mailbox);
-    struct dlist *dl = dlist_newkvlist(NULL, "MAILBOX");
     int r = 0;
-    const char *annot_str = NULL;
 
     int column = 0;
     mailbox->id = _column_int(stmt, column++);
     mailbox->last_chunk_id = _column_int(stmt, column++);
-    dlist_setatom(dl, "UNIQUEID", _column_text(stmt, column++));
-    dlist_setatom(dl, "MBOXNAME", _column_text(stmt, column++));
-    dlist_setatom(dl, "MBOXTYPE", _column_text(stmt, column++));
-    dlist_setnum32(dl, "LAST_UID", _column_int(stmt, column++));
-    dlist_setnum64(dl, "HIGHESTMODSEQ", _column_int64(stmt, column++));
-    dlist_setnum32(dl, "RECENTUID", _column_int(stmt, column++));
-    dlist_setdate(dl, "RECENTTIME", _column_int64(stmt, column++));
-    dlist_setdate(dl, "LAST_APPENDDATE", _column_int64(stmt, column++));
-    dlist_setdate(dl, "POP3_LAST_LOGIN", _column_int64(stmt, column++));
-    dlist_setdate(dl, "POP3_SHOW_AFTER", _column_int64(stmt, column++));
-    dlist_setnum32(dl, "UIDVALIDITY", _column_int(stmt, column++));
-    dlist_setatom(dl, "PARTITION", _column_text(stmt, column++));
-    dlist_setatom(dl, "ACL", _column_text(stmt, column++));
-    dlist_setatom(dl, "OPTIONS", _column_text(stmt, column++));
-    dlist_setnum32(dl, "SYNC_CRC", _column_int(stmt, column++));
-    dlist_setnum32(dl, "SYNC_CRC_ANNOT", _column_int(stmt, column++));
-    dlist_setatom(dl, "QUOTAROOT", _column_text(stmt, column++));
-    dlist_setnum64(dl, "XCONVMODSEQ", _column_int64(stmt, column++));
-    annot_str = _column_text(stmt, column++);
+    mailbox->uniqueid = _column_text(stmt, column++);
+    mailbox->mboxname = _column_text(stmt, column++);
+    mailbox->mboxtype = _column_text(stmt, column++);
+    mailbox->last_uid = _column_int(stmt, column++);
+    mailbox->highestmodseq = _column_int64(stmt, column++);
+    mailbox->recentuid = _column_int(stmt, column++);
+    mailbox->recenttime = _column_int64(stmt, column++);
+    mailbox->last_appenddate = _column_int64(stmt, column++);
+    mailbox->pop3_last_login = _column_int64(stmt, column++);
+    mailbox->pop3_show_after = _column_int64(stmt, column++);
+    mailbox->uidvalidity = _column_int(stmt, column++);
+    mailbox->partition = _column_text(stmt, column++);
+    mailbox->acl = _column_text(stmt, column++);
+    mailbox->options = _column_text(stmt, column++);
+    mailbox->sync_crc = _column_int(stmt, column++);
+    mailbox->sync_crc_annot = _column_int(stmt, column++);
+    mailbox->quotaroot = _column_text(stmt, column++);
+    mailbox->xconvmodseq = _column_int64(stmt, column++);
+    mailbox->annotations = _column_text(stmt, column++);
     mailbox->deleted = _column_int(stmt, column++);
 
-    if (annot_str && annot_str[0]) {
-        struct dlist *annots = NULL;
-        r = dlist_parsemap(&annots, 0, annot_str, strlen(annot_str));
-        if (r) return r; // FIXME handle this sanely
-        if (annots) {
-            annots->name = xstrdup("ANNOTATIONS");
-            dlist_stitch(dl, annots);
-        }
-    }
-
     if (mbrock->want_records) {
-        struct dlist *records = dlist_newlist(NULL, "RECORD");
+        struct backup_mailbox_message_list *records =
+            xzmalloc(sizeof *mailbox->records);
 
         struct sqldb_bindval bval[] = {
             { ":mailbox_id",    SQLITE_INTEGER, { .i = mailbox->id } },
@@ -552,23 +593,28 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
         r = sqldb_exec(mbrock->db,
                        backup_index_mailbox_message_select_mailbox_sql,
                        bval,
-                       _mailbox_message_row_cb, records);
+                       _mailbox_message_row_cb, mailbox->records);
 
-        if (!r)
-            dlist_stitch(dl, records);
+        if (r) {
+            backup_mailbox_message_list_empty(records);
+            free(records);
+        }
+        else {
+            mailbox->records = records;
+        }
 
         // FIXME sensible error handling
     }
 
-    mailbox->dlist = dl;
-
     if (mbrock->proc)
         r = mbrock->proc(mailbox, mbrock->rock);
 
-    if (mbrock->save)
-        *mbrock->save = mailbox;
+    if (mbrock->save_list)
+        backup_mailbox_list_add(mbrock->save_list, mailbox);
+    else if (mbrock->save_one)
+        *mbrock->save_one = mailbox;
     else
-    backup_mailbox_free(&mailbox);
+        backup_mailbox_free(&mailbox);
 
     return r;
 }
@@ -578,7 +624,8 @@ EXPORTED int backup_mailbox_foreach(struct backup *backup,
                                     backup_mailbox_foreach_cb cb,
                                     void *rock)
 {
-    struct _mailbox_row_rock mbrock = { backup->db, cb, rock, NULL, want_records};
+    struct _mailbox_row_rock mbrock = { backup->db, cb, rock,
+                                        NULL, NULL, want_records};
 
     int r = sqldb_exec(backup->db, backup_index_mailbox_select_all_sql, NULL,
                        _mailbox_row_cb, &mbrock);
@@ -592,8 +639,8 @@ EXPORTED struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup
 {
     struct backup_mailbox *mailbox = NULL;
 
-    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL, &mailbox,
-                                        want_records };
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+                                        NULL, &mailbox, want_records };
 
     struct sqldb_bindval bval[] = {
         { ":mboxname",  SQLITE_TEXT,    { .s = mbname_intname(mbname) } },
@@ -611,12 +658,122 @@ EXPORTED struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup
     return mailbox;
 }
 
+EXPORTED struct dlist *backup_mailbox_to_dlist(
+    const struct backup_mailbox *mailbox)
+{
+    struct dlist *dl = dlist_newkvlist(NULL, "MAILBOX");
+    int r;
+
+    dlist_setatom(dl, "UNIQUEID", mailbox->uniqueid);
+    dlist_setatom(dl, "MBOXNAME", mailbox->mboxname);
+    dlist_setatom(dl, "MBOXTYPE", mailbox->mboxtype);
+    dlist_setnum32(dl, "LAST_UID", mailbox->last_uid);
+    dlist_setnum64(dl, "HIGHESTMODSEQ", mailbox->highestmodseq);
+    dlist_setnum32(dl, "RECENTUID", mailbox->recentuid);
+    dlist_setdate(dl, "RECENTTIME", mailbox->recenttime);
+    dlist_setdate(dl, "LAST_APPENDDATE", mailbox->last_appenddate);
+    dlist_setdate(dl, "POP3_LAST_LOGIN", mailbox->pop3_last_login);
+    dlist_setdate(dl, "POP3_SHOW_AFTER", mailbox->pop3_show_after);
+    dlist_setnum32(dl, "UIDVALIDITY", mailbox->uidvalidity);
+    dlist_setatom(dl, "PARTITION", mailbox->partition);
+    dlist_setatom(dl, "ACL", mailbox->acl);
+    dlist_setatom(dl, "OPTIONS", mailbox->options);
+    dlist_setnum32(dl, "SYNC_CRC", mailbox->sync_crc);
+    dlist_setnum32(dl, "SYNC_CRC_ANNOT", mailbox->sync_crc_annot);
+    dlist_setatom(dl, "QUOTAROOT", mailbox->quotaroot);
+    dlist_setnum64(dl, "XCONVMODSEQ", mailbox->xconvmodseq);
+
+    if (mailbox->annotations) {
+        struct dlist *annots = NULL;
+        r = dlist_parsemap(&annots, 0, mailbox->annotations,
+                           strlen(mailbox->annotations));
+        // FIXME handle error sanely
+        if (annots) {
+            annots->name = xstrdup("ANNOTATIONS");
+            dlist_stitch(dl, annots);
+        }
+    }
+
+    if (mailbox->records && mailbox->records->count) {
+        struct dlist *records = dlist_newlist(NULL, "RECORD");
+        struct backup_mailbox_message *mailbox_message = mailbox->records->head;
+
+        while (mailbox_message) {
+            struct dlist *record = dlist_newkvlist(records, NULL);
+
+            dlist_setnum32(record, "UID", mailbox_message->uid);
+            dlist_setnum64(record, "MODSEQ", mailbox_message->modseq);
+            dlist_setdate(record, "LAST_UPDATE", mailbox_message->last_update);
+            dlist_setdate(record, "INTERNALDATE", mailbox_message->internaldate);
+            dlist_setguid(record, "GUID", &mailbox_message->guid);
+            dlist_setnum32(record, "SIZE", mailbox_message->size);
+
+            if (mailbox_message->flags) {
+                struct dlist *flags = NULL;
+                r = dlist_parsemap(&flags, 0, mailbox_message->flags,
+                                   strlen(mailbox_message->flags));
+                // FIXME handle error sanely
+                if (flags) {
+                    flags->name = xstrdup("FLAGS");
+                    if (mailbox_message->expunged)
+                        dlist_setflag(flags, "FLAG", "\\Expunged");
+                    dlist_stitch(record, flags);
+                }
+            }
+
+            if (mailbox_message->annotations) {
+                struct dlist *annots = NULL;
+                r = dlist_parsemap(&annots, 0, mailbox_message->annotations,
+                                   strlen(mailbox_message->annotations));
+                // FIXME handle error sanely
+                if (annots)  {
+                    annots->name = xstrdup("ANNOTATIONS");
+                    dlist_stitch(record, annots);
+                }
+            }
+
+            mailbox_message = mailbox_message->next;
+        }
+
+        dlist_stitch(dl, records);
+    }
+
+    // FIXME check for error
+    (void) r;
+
+    return dl;
+}
+
+EXPORTED void backup_mailbox_message_free(
+    struct backup_mailbox_message **mailbox_messagep)
+{
+    struct backup_mailbox_message *mailbox_message = *mailbox_messagep;
+    *mailbox_messagep = NULL;
+
+    if (mailbox_message->flags) free(mailbox_message->flags);
+    if (mailbox_message->annotations) free(mailbox_message->annotations);
+
+    free(mailbox_message);
+}
+
 EXPORTED void backup_mailbox_free(struct backup_mailbox **mailboxp)
 {
     struct backup_mailbox *mailbox = *mailboxp;
     *mailboxp = NULL;
 
-    if (mailbox->dlist) dlist_free(&mailbox->dlist);
+    if (mailbox->uniqueid) free(mailbox->uniqueid);
+    if (mailbox->mboxname) free(mailbox->mboxname);
+    if (mailbox->mboxtype) free(mailbox->mboxtype);
+    if (mailbox->partition) free(mailbox->partition);
+    if (mailbox->acl) free(mailbox->acl);
+    if (mailbox->options) free(mailbox->options);
+    if (mailbox->quotaroot) free(mailbox->quotaroot);
+    if (mailbox->annotations) free(mailbox->annotations);
+
+    if (mailbox->records) {
+        backup_mailbox_message_list_empty(mailbox->records);
+        free(mailbox->records);
+    }
 
     free(mailbox);
 }

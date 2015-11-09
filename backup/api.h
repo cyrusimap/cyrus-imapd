@@ -80,11 +80,60 @@ const char *backup_get_index_fname(const struct backup *backup);
 
 
 /* reading backup mailbox data */
+struct backup_mailbox_message {
+    struct backup_mailbox_message *next;
+    int id;
+    int mailbox_id;
+    int message_id;
+    int last_chunk_id;
+    int uid;
+    modseq_t modseq;
+    time_t last_update;
+    char *flags;
+    time_t internaldate;
+    struct message_guid guid;
+    size_t size;
+    char *annotations;
+    time_t expunged;
+};
+
+struct backup_mailbox_message_list {
+    struct backup_mailbox_message *head;
+    struct backup_mailbox_message *tail;
+    size_t count;
+};
+
 struct backup_mailbox {
+    struct backup_mailbox *next;
     int id;
     int last_chunk_id;
+    char *uniqueid;
+    char *mboxname;
+    char *mboxtype;
+    uint32_t last_uid;
+    modseq_t highestmodseq;
+    uint32_t recentuid;
+    time_t recenttime;
+    time_t last_appenddate;
+    time_t pop3_last_login;
+    time_t pop3_show_after;
+    uint32_t uidvalidity;
+    char *partition;
+    char *acl;
+    char *options;
+    uint32_t sync_crc;
+    uint32_t sync_crc_annot;
+    char *quotaroot;
+    modseq_t xconvmodseq;
+    char *annotations;
     int deleted;
-    struct dlist *dlist;
+    struct backup_mailbox_message_list *records;
+};
+
+struct backup_mailbox_list {
+    struct backup_mailbox *head;
+    struct backup_mailbox *tail;
+    size_t count;
 };
 
 int backup_get_mailbox_id(struct backup *backup, const char *uniqueid);
@@ -98,8 +147,10 @@ struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
                                                   const mbname_t *mbname,
                                                   int want_records);
 
-void backup_mailbox_free(struct backup_mailbox **mailbox);
+struct dlist *backup_mailbox_to_dlist(const struct backup_mailbox *mailbox);
 
+void backup_mailbox_message_free(struct backup_mailbox_message **mailbox_messagep);
+void backup_mailbox_free(struct backup_mailbox **mailboxp);
 
 /* reading backup message data */
 struct backup_message {
