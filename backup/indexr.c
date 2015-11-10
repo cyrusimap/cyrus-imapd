@@ -180,6 +180,34 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
     return r;
 }
 
+EXPORTED struct backup_mailbox_message_list *backup_get_mailbox_messages(
+    struct backup *backup,
+    int chunk_id)
+{
+    struct backup_mailbox_message_list *mailbox_message_list =
+        xzmalloc(sizeof *mailbox_message_list);
+
+    struct sqldb_bindval bval[] = {
+        { ":last_chunk_id", SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    const char *sql = chunk_id ?
+        backup_index_mailbox_message_select_chunkid_sql :
+        backup_index_mailbox_message_select_all_sql;
+
+    int r = sqldb_exec(backup->db, sql, bval, _mailbox_message_row_cb,
+                       mailbox_message_list);
+
+    if (r) {
+        backup_mailbox_message_list_empty(mailbox_message_list);
+        free(mailbox_message_list);
+        return NULL;
+    }
+
+    return mailbox_message_list;
+}
+
 struct _mailbox_row_rock {
     sqldb_t *db;
     backup_mailbox_foreach_cb proc;
