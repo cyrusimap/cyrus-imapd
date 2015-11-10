@@ -81,7 +81,7 @@ char TZIDPrefixExpanded[1024];
    since otherwise RDATEs are more efficient. Actually, I've set this high
    so we only use RRULEs for infinite recurrences. Since expanding RRULEs is
    very time-consuming, this seems sensible. */
-#define MIN_RRULE_OCCURRENCES   3
+#define MIN_RRULE_OCCURRENCES   2
 
 
 /* The year we go up to when dumping the list of timezone changes (used
@@ -920,6 +920,13 @@ add_rule_changes                        (ZoneLineData   *zone_line,
     walloff = vzictime.walloff;
   }
 
+  /* If last Rule is terminating, flag it */
+  if (end->year == YEAR_MAXIMUM &&
+      rule->to_year >= 2037 && rule->to_year < YEAR_MAXIMUM) {
+    VzicTime *v = &g_array_index (changes, VzicTime, changes->len - 1);
+    v->until = v;
+  }
+
   return found_start_letter_s;
 }
 
@@ -1143,6 +1150,20 @@ output_zone_components                  (FILE           *fp,
   struct tm *tm = gmtime(&now);
 
   fprintf (fp, "BEGIN:VTIMEZONE\r\nTZID:%s%s\r\n", TZIDPrefixExpanded, name);
+
+  vzictime = &g_array_index (changes, VzicTime, changes->len - 1);
+  if (vzictime->until) {
+    /* Add TZUNTIL */
+    VzicTime until = *vzictime->until;
+
+    until.time_seconds++;  /* TZUNTIL is exclusive */
+    calculate_actual_time(&until, TIME_UNIVERSAL,
+                          until.prev_stdoff, until.prev_walloff);
+    fprintf (fp, "TZUNTIL:%sZ\r\n", format_time(until.year, until.month,
+                                                until.day_number,
+                                                until.time_seconds));
+    vzictime->until = NULL;
+  }
 
   if (zone_desc) {
     /* Add COMMENT */
