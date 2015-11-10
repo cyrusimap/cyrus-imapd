@@ -76,5 +76,10 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
 /* FIXME do this properly */
 HIDDEN int _parse_line(struct protstream *in, time_t *ts,
                        struct buf *cmd, struct dlist **kin);
+
+struct backup_mailbox *backup_mailbox_list_remove(
+    struct backup_mailbox_list *list,
+    struct backup_mailbox *node);
+
 #endif
 #endif

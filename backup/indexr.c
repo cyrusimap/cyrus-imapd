@@ -40,6 +40,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+#include <config.h>
+
+#include <assert.h>
 
 #include "lib/xmalloc.h"
 
@@ -128,6 +131,43 @@ static void backup_mailbox_list_add(struct backup_mailbox_list *list,
     list->tail = mailbox;
 
     list->count++;
+}
+
+HIDDEN struct backup_mailbox *backup_mailbox_list_remove(
+    struct backup_mailbox_list *list,
+    struct backup_mailbox *mailbox)
+{
+    struct backup_mailbox *node, *prev;
+
+    assert(list != NULL);
+    assert(mailbox != NULL);
+
+    prev = NULL;
+    node = list->head;
+    while (node && node != mailbox) {
+        prev = node;
+        node = node->next;
+    }
+
+    if (!node) return NULL;
+    assert(node == mailbox);
+
+    if (prev) {
+        prev->next = node->next;
+    }
+    else {
+        assert(node == list->head);
+        list->head = node->next;
+    }
+
+    if (!node->next) {
+        assert(node == list->tail);
+        list->tail = prev;
+    }
+
+    node->next = NULL;
+    list->count--;
+    return node;
 }
 
 static void backup_mailbox_list_empty(struct backup_mailbox_list *list)
