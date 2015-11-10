@@ -1388,7 +1388,8 @@ static int action_expand(struct transaction_t *txn)
     }
 
     /* Check requested format (debugging only) */
-    if ((param = hash_lookup("zdump", &txn->req_qparams))) {
+    if ((param = hash_lookup("format", &txn->req_qparams)) &&
+        !strcmp(param->s, "application/zdump")) {
         /* Mimic zdump(8) -V output for comparision:
 
            For each zonename, print the times both one  second  before  and
