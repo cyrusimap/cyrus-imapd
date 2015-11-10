@@ -1542,7 +1542,7 @@ sub test_setcalendarevents_update_exceptions_basic {
                             "exceptions" => {
                                 "2015-10-07T16:45:00" => {
                                     "start" => "2015-10-07T17:45:00",
-                                    "startTimeZone" => "Asia/Bangkok",
+                                    "startTimeZone" => "America/NewYork",
                                 },
                             }
                         }
@@ -1563,8 +1563,6 @@ sub test_setcalendarevents_update_exceptions_basic {
                             }
                         }
                     }}, "R1"]]);
-    my $x = Dumper($res);
-    xlog "$x";
     $self->assert_not_null($res->[0][1]{updated});
 
     xlog "get calendar event $id";
@@ -1645,8 +1643,8 @@ sub test_setcalendarevents_update_exceptions_edge {
 
     xlog "get calendar event $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    $event->{exceptions}{"2015-11-14T09:00:00"}{start} = $event->{start};
-    $event->{exceptions}{"2015-11-14T09:00:00"}{end} = $event->{end};
+    $event->{exceptions}{"2015-11-14T09:00:00"}{start} = "2015-11-14T09:00:00";
+    $event->{exceptions}{"2015-11-14T09:00:00"}{end} = "2015-11-14T10:00:00";
     $self->assert_str_equals($res->[0][1]{list}[0]{id}, $event->{id});
     $self->assert_deep_equals($res->[0][1]{list}[0], $event);
 
@@ -1709,8 +1707,68 @@ sub test_setcalendarevents_update_exceptions_edge {
 
     xlog "get calendar event $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    my $x = Dumper($res);
-    xlog "$x";
+    $self->assert_deep_equals($res->[0][1]{list}[0], $event);
+}
+
+
+sub test_setcalendarevents_update_exceptions_dtstartend {
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+    my $state = $res->[0][1]{newState};
+
+    my $event =  {
+        "calendarId" => $calid,
+        "start"=> "2015-11-07T09:00:00",
+        "end"=> "2015-11-07T10:00:00",
+        "startTimeZone"=> undef,
+        "endTimeZone"=> undef,
+        "isAllDay"=> JSON::false,
+        "alerts"=> undef,
+        "summary"=> "foo",
+        "description"=> "",
+        "location"=> "",
+        "showAsFree"=> JSON::false,
+        "recurrence"=> {
+            "frequency"=> "weekly",
+            "count"=> 4
+        },
+        "attachments"=> undef,
+        "attendees" => undef,
+        "organizer"=> undef,
+        "inclusions" => undef,
+        "exceptions" => {
+            "2015-11-14T09:00:00" => {
+                "summary" => "foo (exc)"
+            }
+        }
+    };
+
+    xlog "create event";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => $event
+                    }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $id = $res->[0][1]{created}{"#1"}{id};
+    $event->{id} = $id;
+
+    xlog "get calendar event $id";
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $event->{exceptions}{"2015-11-14T09:00:00"}{start} = "2015-11-14T09:00:00";
+    $event->{exceptions}{"2015-11-14T09:00:00"}{end} = "2015-11-14T10:00:00";
+    $event->{exceptions}{"2015-11-14T09:00:00"}{startTimeZone} = undef;
+    $event->{exceptions}{"2015-11-14T09:00:00"}{endTimeZone} = undef;
+    $event->{"x-href"} = $res->[0][1]{list}[0]{"x-href"};
+    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $event->{id});
     $self->assert_deep_equals($res->[0][1]{list}[0], $event);
 }
 
