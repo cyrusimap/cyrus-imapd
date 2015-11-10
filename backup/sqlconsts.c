@@ -277,6 +277,17 @@ const char backup_index_mailbox_message_select_chunkid_sql[] = QUOTE(
     WHERE last_chunk_id = :last_chunk_id;
 );
 
+const char backup_index_mailbox_message_select_all_sql[] = QUOTE(
+    SELECT
+        r.id as id, mailbox_id, message_id, last_chunk_id, uid,
+        modseq, last_updated, flags, internaldate,
+        m.guid as guid, m.length as length, annotations,
+        expunged
+    FROM mailbox_message as r
+    JOIN message as m
+    ON r.message_id = m.id;
+);
+
 const char backup_index_mailbox_message_expunge_sql[] = QUOTE(
     UPDATE mailbox_message
     SET expunged = :expunged
