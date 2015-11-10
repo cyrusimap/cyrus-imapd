@@ -116,6 +116,8 @@ EXTRA_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
+noinst_HEADERS =
+noinst_LTLIBRARIES =
 CLEANFILES =
 EXTRA_DIST = \
 	$(wildcard tools/vzic/*)
@@ -281,7 +283,7 @@ endif # PTCLIENT
 
 if PERL
 SUBDIRS += perl/annotator perl/imap
-noinst_LTLIBRARIES = perl/libcyrus.la perl/libcyrus_min.la
+noinst_LTLIBRARIES += perl/libcyrus.la perl/libcyrus_min.la
 endif # PERL
 
 if SIEVE
@@ -775,7 +777,7 @@ include_HEADERS = \
 nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
-noinst_HEADERS = \
+noinst_HEADERS += \
 	lib/byteorder64.h \
 	lib/gai.h \
 	lib/libconfig.h \
@@ -835,28 +837,14 @@ imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
-if USE_SPHINX
 imap_cyr_sphinxmgr_SOURCES = imap/cli_fatal.c imap/cyr_sphinxmgr.c imap/mutex_fake.c
 imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
-endif
 
-if HAVE_CLAMAV
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
-else # HAVE_CLAMAV
-EXTRA_DIST += \
-	imap/cyr_virusscan.c
 
-endif # HAVE_CLAMAV
-
-if HTTPD
 imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
 imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
-else # HTTPD
-EXTRA_DIST += \
-	imap/ctl_zoneinfo.c
-
-endif # HTTPD
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
@@ -877,12 +865,8 @@ imap_fud_LDADD = $(LD_SERVER_ADD)
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
-if CALALARMD
 imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
 imap_calalarmd_LDADD = $(LD_SERVER_ADD) -lm
-else
-EXTRA_DIST += imap/calalarmd.c
-endif # CALALARMD
 
 imap_imapd_SOURCES = \
 	imap/imap_proxy.c \
@@ -1246,7 +1230,6 @@ imap_squatter_LDADD = $(LD_UTILITY_ADD)
 imap_squat_dump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squat_dump.c
 imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
 
-if REPLICATION
 imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c imap/sync_support.h
 imap_sync_client_LDADD = $(LD_UTILITY_ADD)
 
@@ -1255,15 +1238,6 @@ imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c
 imap_sync_server_LDADD = $(LD_SERVER_ADD)
-else
-EXTRA_DIST += \
-	imap/sync_client.c \
-	imap/sync_reset.c \
-	imap/sync_server.c \
-	imap/sync_support.c \
-	imap/sync_support.h
-
-endif # REPLICATION
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)

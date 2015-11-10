@@ -2051,11 +2051,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         goto authorized;
 
     case HTTP_BAD_CE:
-        /* Construct Allow-Encoding header for 415 response */
+        /* Construct Accept-Encoding header for 415 response */
 #ifdef HAVE_ZLIB
-        prot_puts(httpd_out, "Allow-Encoding: gzip, deflate\r\n");
+        prot_puts(httpd_out, "Accept-Encoding: gzip, deflate\r\n");
 #else
-        prot_puts(httpd_out, "Allow-Encoding: identity\r\n");
+        prot_puts(httpd_out, "Accept-Encoding: identity\r\n");
 #endif
         goto authorized;
 
