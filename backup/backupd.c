@@ -141,6 +141,7 @@ static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
 static void cmd_apply(struct dlist *dl);
 static void cmd_get(struct dlist *dl);
+static void cmd_restart(void);
 
 /****************************************************************************/
 
@@ -652,6 +653,16 @@ static void cmdloop(void)
             }
             break;
 
+        case 'E':
+            if (!strcmp(cmd.s, "Exit")) {
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+                prot_printf(backupd_out, "OK Finished\r\n");
+                prot_flush(backupd_out);
+                goto exit;
+            }
+            break;
+
         case 'G':
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
@@ -666,16 +677,6 @@ static void cmdloop(void)
             }
             break;
 
-        case 'E':
-            if (!strcmp(cmd.s, "Exit")) {
-                if (c == '\r') c = prot_getc(backupd_in);
-                if (c != '\n') goto extraargs;
-                prot_printf(backupd_out, "OK Finished\r\n");
-                prot_flush(backupd_out);
-                goto exit;
-            }
-            break;
-
         case 'N':
             if (!strcmp(cmd.s, "Noop")) {
                 if (c == '\r') c = prot_getc(backupd_in);
@@ -687,8 +688,10 @@ static void cmdloop(void)
 
         case 'R':
             if (!strcmp(cmd.s, "Restart")) {
-                prot_printf(backupd_out, "NO command not implemented\r\n");
-                eatline(backupd_in, c);
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+                cmd_restart();
+                prot_printf(backupd_out, "OK Restarting\r\n");
                 continue;
             }
             break;
@@ -731,7 +734,7 @@ static void cmdloop(void)
     }
 
 exit:
-    open_backups_list_close(&backupd_open_backups, 0);
+    cmd_restart();
 }
 
 static void cmd_authenticate(char *mech, char *resp)
@@ -1116,4 +1119,9 @@ done:
     if (mbname) mbname_free(&mbname);
 
     prot_printf(backupd_out, "%s\r\n", backupd_response(r));
+}
+
+static void cmd_restart(void)
+{
+    open_backups_list_close(&backupd_open_backups, 0);
 }
