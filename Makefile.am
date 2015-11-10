@@ -804,7 +804,7 @@ backup_libcyrus_backup_la_SOURCES = \
     backup/api.c \
     backup/gzuncat.c \
     backup/gzuncat.h \
-    backup/index.c \
+    backup/indexw.c \
     backup/internal.h \
     backup/sqlconsts.c \
     backup/sqlconsts.h \

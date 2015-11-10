@@ -1,4 +1,4 @@
-/* index.c -- replication-based backup api - index functions
+/* indexw.c -- replication-based backup api - index writing functions
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
