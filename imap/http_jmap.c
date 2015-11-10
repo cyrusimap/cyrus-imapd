@@ -4740,18 +4740,25 @@ static void jmap_remove_icalproperty(icalcomponent *comp, icalproperty_kind kind
 }
 
 /* Add or overwrite the datetime property kind in comp. If tz is not NULL, set
- * the TZID parameter on the property. */
+ * the TZID parameter on the property. Also take care to purge conflicting
+ * datetime properties such as DTEND and DURATION. */
 static void jmap_update_dtprop_bykind(icalcomponent *comp,
                                icaltimetype dt,
                                icaltimezone *tz,
                                int purge,
                                enum icalproperty_kind kind) {
     icalproperty *prop;
+
+    /* Purge existing property. */
     if (purge) {
-        /* Purge the existing property. */
-        prop = icalcomponent_get_first_property(comp, kind);
-        if (prop) icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
+        jmap_remove_icalproperty(comp, kind);
+    }
+
+    /* Resolve DTEND/DURATION conflicts. */
+    if (kind == ICAL_DTEND_PROPERTY) {
+        jmap_remove_icalproperty(comp, ICAL_DURATION_PROPERTY);
+    } else if (kind == ICAL_DURATION_PROPERTY) {
+        jmap_remove_icalproperty(comp, ICAL_DTEND_PROPERTY);
     }
 
     /* Set the new property. */
