@@ -2586,7 +2586,6 @@ typedef struct calevent_rock {
     struct jmap_req *req;    /* The current JMAP request. */
     int flags;               /* Flags indicating the request context. */
     const char *uid;         /* The iCalendar UID of this event. */
-    const char *recurid;     /* The LocalDate recurrence id of this event. */
     int isAllDay;            /* This event is a whole-day event. */
 
     json_t *invalid;         /* A JSON array of any invalid properties. */
@@ -5211,7 +5210,6 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
              * be any timezones added (and hence realloced) to the rock. */
             calevent_rock myrock = *rock;
             myrock.flags = JMAP_EXC;
-            myrock.recurid = key;
             myrock.comp = comp;
             jmap_calendarevent_to_ical(excomp, exc, &myrock);
             /* XXX - that's ugly. Need to make sure that the rocks timezone
