@@ -5142,8 +5142,8 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         buf_reset(&buf);
 
         /* Parse key as LocalDate. */
-        icaltimetype dt;
-        if (jmap_localdate_to_icaltime(key, &dt, rock->tzstart, rock->isAllDay)) {
+        icaltimetype dtstart;
+        if (jmap_localdate_to_icaltime(key, &dtstart, rock->tzstart, rock->isAllDay)) {
             json_array_append_new(invalid, json_string(prefix));
             free(prefix);
             continue;
@@ -5186,7 +5186,15 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             }
 
             /* Add RECURRENCEID property. */
-            jmap_update_dtprop_bykind(excomp, dt, rock->tzstart, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
+            jmap_update_dtprop_bykind(excomp, dtstart, rock->tzstart, 1 /*purge*/, ICAL_RECURRENCEID_PROPERTY);
+
+            /* Initialize DTSTART to the RECURRENCEID and set DTEND/DURATION. */
+            jmap_update_dtprop_bykind(excomp, dtstart, rock->tzstart, 1 /*purge*/, ICAL_DTSTART_PROPERTY);
+            if (!icalcomponent_get_first_property(excomp, ICAL_DURATION_PROPERTY)) {
+                struct icaldurationtype dur = icaltime_subtract(rock->dtend, rock->dtstart);
+                icaltimetype dtend = icaltime_add(dtstart, dur);
+                jmap_update_dtprop_bykind(excomp, dtend, rock->tzend, 1, ICAL_DTEND_PROPERTY);
+            }
 
             /* Add exceptional VEVENT component to the VCALENDAR. */
             icalcomponent_add_component(ical, excomp);
@@ -5215,7 +5223,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
         } else {
             /* Add EXDATE to the VEVENT. */
             /* iCalendar allows to set multiple EXDATEs. */
-            jmap_update_dtprop_bykind(comp, dt, rock->tzstart, 0 /*purge*/, ICAL_EXDATE_PROPERTY);
+            jmap_update_dtprop_bykind(comp, dtstart, rock->tzstart, 0 /*purge*/, ICAL_EXDATE_PROPERTY);
         }
 
         free(prefix);
