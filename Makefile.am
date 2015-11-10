@@ -1319,10 +1319,10 @@ lib_libcyrus_la_SOURCES = \
 	lib/times.c \
 	lib/tok.c \
 	lib/wildmat.c
-if USE_SQL
+if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif
-if HTTPD
+if USE_SQLITE
 lib_libcyrus_la_SOURCES += lib/sqldb.c
 endif
 if GMTOFF_TM
