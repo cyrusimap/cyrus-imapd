@@ -102,6 +102,43 @@ static void backup_mailbox_message_list_add(
     list->count++;
 }
 
+HIDDEN struct backup_mailbox_message *backup_mailbox_message_list_remove(
+    struct backup_mailbox_message_list *list,
+    struct backup_mailbox_message *mailbox_message)
+{
+    struct backup_mailbox_message *node, *prev;
+
+    assert(list != NULL);
+    assert(mailbox_message != NULL);
+
+    prev = NULL;
+    node = list->head;
+    while (node && node != mailbox_message) {
+        prev = node;
+        node = node->next;
+    }
+
+    if (!node) return NULL;
+    assert(node == mailbox_message);
+
+    if (prev) {
+        prev->next = node->next;
+    }
+    else {
+        assert(node == list->head);
+        list->head = node->next;
+    }
+
+    if (!node->next) {
+        assert(node == list->tail);
+        list->tail = prev;
+    }
+
+    node->next = NULL;
+    list->count--;
+    return node;
+}
+
 static void backup_mailbox_message_list_empty(
     struct backup_mailbox_message_list *list)
 {

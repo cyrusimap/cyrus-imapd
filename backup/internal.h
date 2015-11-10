@@ -81,5 +81,8 @@ struct backup_mailbox *backup_mailbox_list_remove(
     struct backup_mailbox_list *list,
     struct backup_mailbox *node);
 
+struct backup_mailbox_message *backup_mailbox_message_list_remove(
+    struct backup_mailbox_message_list *list,
+    struct backup_mailbox_message *mailbox_message);
 #endif
 #endif
