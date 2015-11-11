@@ -2803,50 +2803,41 @@ done:
 
 /* jmap calendar APIs */
 
-/* Check if ifInState matches the current mailbox state for mailbox type
- * mbtype, if so return zero. Otherwise, append a stateMismatch error to the
- * JMAP response. */
-static int jmap_checkstate(struct jmap_req *req, int mbtype) {
-    json_t *jIfInState = json_object_get(req->args, "ifInState");
-    if (jIfInState) {
-        const char *ifInState = json_string_value(jIfInState);
-        if (!ifInState) {
+/* Check if state matches the current mailbox state for mailbox type
+ * mbtype. Return zero if states match. */
+static int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req) {
+    if (state && state != json_null()) {
+        const char *s = json_string_value(state);
+        if (!s) {
             return -1;
         }
-
-        modseq_t clientState = str2uint64(ifInState);
-
-        if (mbtype == MBTYPE_CALENDAR && clientState == req->counters.caldavmodseq) {
-            return 0;
-        } else if (mbtype == MBTYPE_ADDRESSBOOK && clientState == req->counters.carddavmodseq) {
-            return 0;
-        } else if (clientState == req->counters.mailmodseq) {
-            /* XXX - What about notesmodseq? */
-            return 0;
-        } else {
-            json_t *item = json_pack("[s, {s:s}, s]",
-                                     "error", "type", "stateMismatch",
-                                     req->tag);
-            json_array_append_new(req->response, item);
-            return -3;
+        modseq_t clientState = str2uint64(s);
+        switch (mbtype) {
+         case MBTYPE_CALENDAR:
+             return clientState != req->counters.caldavmodseq;
+         case MBTYPE_ADDRESSBOOK:
+             return clientState != req->counters.carddavmodseq;
+         default:
+             return clientState != req->counters.mailmodseq;
         }
     }
     return 0;
 }
 
-/* Set the state token named name for the JMAP type mbtype in response res.
- * If refresh is true, refresh the current mailbox counters in req
- * If bump is true, update the state of this JMAP type before setting name. */
-static int jmap_set_jsonstate(struct jmap_req *req,
-                         json_t *res,
-                         const char *name,
-                         int mbtype,
-                         int refresh,
-                         int bump) {
+/* Create a state token for the JMAP type mbtype in response res.
+ * If refresh is true, refresh the current mailbox counters in req before
+ * reading state.
+ * If bump is true, update the state and return the new value.
+ * Return NULL on error. */
+static json_t* jmap_getstate(int mbtype,
+                             int refresh,
+                             int bump,
+                             struct jmap_req *req) {
     struct buf buf = BUF_INITIALIZER;
     char *mboxname;
     int r = 0;
     modseq_t modseq;
+    json_t *state = NULL;
 
     mboxname = mboxname_user_mbox(req->userid, NULL);
 
@@ -2865,7 +2856,6 @@ static int jmap_set_jsonstate(struct jmap_req *req,
             modseq = req->counters.carddavmodseq;
             break;
         default:
-            /* XXX - What about notesmodseq? */
             modseq = req->counters.highestmodseq;
     }
 
@@ -2876,12 +2866,12 @@ static int jmap_set_jsonstate(struct jmap_req *req,
 
     /* Set newState field. */
     buf_printf(&buf, "%llu", modseq);
-    json_object_set_new(res, name, json_string(buf_cstring(&buf)));
+    state = json_string(buf_cstring(&buf));
     buf_free(&buf);
 
 done:
     free(mboxname);
-    return r;
+    return state;
 }
 
 
@@ -3238,12 +3228,13 @@ static int getCalendars(struct jmap_req *req)
         if (r) goto done;
     }
 
-    json_t *calendars = json_pack("{}");
-    r = jmap_set_jsonstate(req, calendars, "state", MBTYPE_CALENDAR, 1 /*refresh*/, 0 /*bump*/);
-    if (r) goto done;
+    json_t *state = jmap_getstate(MBTYPE_CALENDAR, 1 /*refresh*/, 0 /*bump*/, req);
+    if (!state) goto done;
 
+    json_t *calendars = json_pack("{}");
     json_incref(rock.array);
     json_object_set_new(calendars, "accountId", json_string(req->userid));
+    json_object_set_new(calendars, "state", state);
     json_object_set_new(calendars, "list", rock.array);
     if (json_array_size(notfound)) {
         json_object_set_new(calendars, "notFound", notfound);
@@ -3346,12 +3337,23 @@ static int getCalendarUpdates(struct jmap_req *req)
 
 static int setCalendars(struct jmap_req *req)
 {
-    int r = jmap_checkstate(req, MBTYPE_CALENDAR);
-    if (r) return 0;
+    int r = 0;
+    json_t *set = NULL;
 
-    json_t *set = json_pack("{s:s}", "accountId", req->userid);
-    r = jmap_set_jsonstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
-    if (r) goto done;
+    json_t *state = json_object_get(req->args, "ifInState");
+    if (state && jmap_checkstate(state, MBTYPE_CALENDAR, req)) {
+        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
+                    "error", "type", "stateMismatch", req->tag));
+        goto done;
+    }
+    json_t *oldState = jmap_getstate(MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/, req);
+    if (!oldState) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    set = json_pack("{s:s}", "accountId", req->userid);
+    json_object_set_new(set, "oldState", oldState);
 
     r = caldav_create_defaultcalendars(req->userid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -3601,11 +3603,13 @@ static int setCalendars(struct jmap_req *req)
             if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notUpdated, uid, err);
+                r = 0;
                 continue;
             }
             else if (r == IMAP_PERMISSION_DENIED) {
                 json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(notUpdated, uid, err);
+                r = 0;
                 continue;
             }
 
@@ -3668,10 +3672,12 @@ static int setCalendars(struct jmap_req *req)
             if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
+                r = 0;
                 continue;
             } else if (r == IMAP_PERMISSION_DENIED) {
                 json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(notDestroyed, uid, err);
+                r = 0;
                 continue;
             } else if (r) {
                 goto done;
@@ -3692,12 +3698,17 @@ static int setCalendars(struct jmap_req *req)
     }
 
     /* Set newState field in calendarsSet. */
-    r = jmap_set_jsonstate(req, set, "newState", MBTYPE_CALENDAR,
+    json_t *newState = jmap_getstate(MBTYPE_CALENDAR,
             1 /*refresh*/,
             json_object_get(set, "created") ||
             json_object_get(set, "updated") ||
-            json_object_get(set, "destroyed"));
-    if (r) goto done;
+            json_object_get(set, "destroyed"),
+            req);
+    if (!newState) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    json_object_set_new(set, "newState", newState);
 
     json_incref(set);
     json_t *item = json_pack("[]");
@@ -3707,7 +3718,7 @@ static int setCalendars(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
 done:
-    json_decref(set);
+    if (set) json_decref(set);
     return r;
 }
 
@@ -4669,8 +4680,12 @@ static int getCalendarEvents(struct jmap_req *req)
     }
 
     json_t *events = json_pack("{}");
-    r = jmap_set_jsonstate(req, events, "state", MBTYPE_CALENDAR, 1 /* refresh */, 0 /* bump */);
-    if (r) goto done;
+    json_t *state = jmap_getstate(MBTYPE_CALENDAR, 1 /* refresh */, 0 /* bump */, req);
+    if (!state) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    json_object_set_new(events, "state", state);
 
     json_incref(rock.array);
     json_object_set_new(events, "accountId", json_string(req->userid));
@@ -6658,14 +6673,23 @@ done:
 static int setCalendarEvents(struct jmap_req *req)
 {
     struct caldav_db *db = NULL;
-    int r;
+    json_t *set = NULL;
+    int r = 0;
 
-    r = jmap_checkstate(req, MBTYPE_CALENDAR);
-    if (r) return 0;
+    json_t *state = json_object_get(req->args, "ifInState");
+    if (state && jmap_checkstate(state, MBTYPE_CALENDAR, req)) {
+        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
+                    "error", "type", "stateMismatch", req->tag));
+        goto done;
+    }
 
-    json_t *set = json_pack("{s:s}", "accountId", req->userid);
-    r = jmap_set_jsonstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
-    if (r) goto done;
+    set = json_pack("{s:s}", "accountId", req->userid);
+    json_t *oldState  = jmap_getstate(MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/, req);
+    if (!oldState) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    json_object_set_new(set, "oldState", oldState);
 
     r = caldav_create_defaultcalendars(req->userid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -6812,12 +6836,17 @@ static int setCalendarEvents(struct jmap_req *req)
     }
 
     /* Set newState field in calendarsSet. */
-    r = jmap_set_jsonstate(req, set, "newState", MBTYPE_CALENDAR,
+    json_t *newState =  jmap_getstate(MBTYPE_CALENDAR,
             1 /*refresh*/,
             json_object_get(set, "created") ||
             json_object_get(set, "updated") ||
-            json_object_get(set, "destroyed"));
-    if (r) goto done;
+            json_object_get(set, "destroyed"),
+            req);
+    if (!newState) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    json_object_set_new(set, "newState", newState);
 
     json_incref(set);
     json_t *item = json_pack("[]");
@@ -6828,7 +6857,7 @@ static int setCalendarEvents(struct jmap_req *req)
 
 done:
     if (db) caldav_close(db);
-    json_decref(set);
+    if (set) json_decref(set);
     return r;
 }
 
