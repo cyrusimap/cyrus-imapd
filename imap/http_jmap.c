@@ -6541,6 +6541,9 @@ static int jmap_write_calendarevent(json_t *event,
         }
         jmap_calendarevent_to_ical(comp, event, &rock);
         jmap_timezones_to_ical(ical, &rock);
+        if (rock.oldcomp) {
+            icalcomponent_free(rock.oldcomp);
+        }
         calevent_rock_free(&rock);
 
         /* Handle any property errors and bail out. */
