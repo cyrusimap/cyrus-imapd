@@ -66,7 +66,7 @@ const char backup_index_initsql[] = QUOTE(
         partition CHAR,
         chunk_id INTEGER REFERENCES chunk(id),
         offset INTEGER,
-        length INTEGER
+        size INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_msg_guid ON message(guid);
 
@@ -257,7 +257,7 @@ const char backup_index_mailbox_message_insert_sql[] = QUOTE(
 #define MAILBOX_MESSAGE_SELECT_FIELDS QUOTE(                                \
     r.id as id, mailbox_id, mb.uniqueid as mailbox_uniqueid, message_id,    \
     r.last_chunk_id, uid, modseq, last_updated, flags, internaldate,        \
-    m.guid as guid, m.length as length, r.annotations,                      \
+    m.guid as guid, m.size as size, r.annotations,                          \
     expunged                                                                \
 )
 
@@ -297,15 +297,15 @@ const char backup_index_mailbox_message_expunge_sql[] = QUOTE(
 
 const char backup_index_message_insert_sql[] = QUOTE(
     INSERT INTO message (
-        guid, partition, chunk_id, offset, length
+        guid, partition, chunk_id, offset, size
     )
     VALUES (
-        :guid, :partition, :chunk_id, :offset, :length
+        :guid, :partition, :chunk_id, :offset, :size
     );
 );
 
 #define MESSAGE_SELECT_FIELDS QUOTE(                    \
-    id, guid, partition, chunk_id, offset, length       \
+    id, guid, partition, chunk_id, offset, size         \
 )
 
 const char backup_index_message_select_all_sql[] =

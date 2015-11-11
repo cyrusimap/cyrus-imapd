@@ -272,7 +272,6 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         struct dlist *flags = NULL;
         struct buf flags_buf = BUF_INITIALIZER;
         uint32_t internaldate;
-        uint32_t size;
         const char *guid;
         struct dlist *annotations = NULL;
         struct buf annotations_buf = BUF_INITIALIZER;
@@ -286,8 +285,6 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         if (!dlist_getnum32(ki, "LAST_UPDATED", &last_updated))
             goto error;
         if (!dlist_getnum32(ki, "INTERNALDATE", &internaldate))
-            goto error;
-        if (!dlist_getnum32(ki, "SIZE", &size))
             goto error;
         if (!dlist_getatom(ki, "GUID", &guid))
             goto error;
@@ -312,6 +309,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             dlist_printbuf(annotations, 0, &annotations_buf);
         }
 
+        // FIXME should this search for guid+size rather than just guid?
         message_id = backup_get_message_id(backup, guid);
         if (message_id == -1) {
             // FIXME handle this sensibly
@@ -387,21 +385,16 @@ static int _index_message(struct backup *backup, struct dlist *dl,
         if (ki->type != DL_SFILE)
             continue;
 
-        // FIXME DL_SFILEs have the offset and size already recorded
-        // so we could use that...
-        // but, it's the offset in the input stream which is fine
-        // for reindex (input stream = gz data), but useless for
-        // backupd (input stream = remote sync_client).
-
         char *guid = xstrdup(message_guid_encode(ki->gval));
         char *partition = ki->part;
+        size_t size = ki->nval;
 
         struct sqldb_bindval bval[] = {
             { ":guid",      SQLITE_TEXT,    { .s = guid      } },
             { ":partition", SQLITE_TEXT,    { .s = partition } },
             { ":chunk_id",  SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
             { ":offset",    SQLITE_INTEGER, { .i = dl_offset } },
-            { ":length",    SQLITE_INTEGER, { .i = dl_len    } },
+            { ":size",      SQLITE_INTEGER, { .i = size      } },
             { NULL,         SQLITE_NULL,    { .s = NULL      } },
         };
 
