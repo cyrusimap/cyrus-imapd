@@ -234,6 +234,7 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
     int column = 0;
     mailbox_message->id = _column_int(stmt, column++);
     mailbox_message->mailbox_id = _column_int(stmt, column++);
+    mailbox_message->mailbox_uniqueid = _column_text(stmt, column++);
     mailbox_message->message_id = _column_int(stmt, column++);
     mailbox_message->last_chunk_id = _column_int(stmt, column++);
     mailbox_message->uid = _column_int(stmt, column++);
@@ -533,6 +534,7 @@ EXPORTED void backup_mailbox_message_free(
 
     if (mailbox_message->flags) free(mailbox_message->flags);
     if (mailbox_message->annotations) free(mailbox_message->annotations);
+    if (mailbox_message->mailbox_uniqueid) free(mailbox_message->mailbox_uniqueid);
 
     free(mailbox_message);
 }

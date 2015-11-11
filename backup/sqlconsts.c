@@ -254,17 +254,19 @@ const char backup_index_mailbox_message_insert_sql[] = QUOTE(
     );
 );
 
-#define MAILBOX_MESSAGE_SELECT_FIELDS QUOTE(                \
-    r.id as id, mailbox_id, message_id, last_chunk_id, uid, \
-    modseq, last_updated, flags, internaldate,              \
-    m.guid as guid, m.length as length, annotations,        \
-    expunged                                                \
+#define MAILBOX_MESSAGE_SELECT_FIELDS QUOTE(                                \
+    r.id as id, mailbox_id, mb.uniqueid as mailbox_uniqueid, message_id,    \
+    r.last_chunk_id, uid, modseq, last_updated, flags, internaldate,        \
+    m.guid as guid, m.length as length, r.annotations,                      \
+    expunged                                                                \
 )
 
 #define MAILBOX_MESSAGE_SELECT_JOIN QUOTE(                  \
     mailbox_message as r                                    \
     JOIN message as m                                       \
     ON r.message_id = m.id                                  \
+    JOIN mailbox as mb                                      \
+    on r.mailbox_id = mb.id                                 \
 )
 
 const char backup_index_mailbox_message_select_mailbox_sql[] =
@@ -277,7 +279,7 @@ const char backup_index_mailbox_message_select_mailbox_sql[] =
 const char backup_index_mailbox_message_select_chunkid_sql[] =
     "SELECT " MAILBOX_MESSAGE_SELECT_FIELDS
     " FROM " MAILBOX_MESSAGE_SELECT_JOIN
-    " WHERE last_chunk_id = :last_chunk_id"
+    " WHERE r.last_chunk_id = :last_chunk_id"
     ";"
 ;
 

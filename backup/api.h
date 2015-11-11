@@ -84,6 +84,7 @@ struct backup_mailbox_message {
     struct backup_mailbox_message *next;
     int id;
     int mailbox_id;
+    char *mailbox_uniqueid;
     int message_id;
     int last_chunk_id;
     int uid;
