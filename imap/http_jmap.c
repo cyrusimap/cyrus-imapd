@@ -2837,7 +2837,7 @@ static int jmap_checkstate(struct jmap_req *req, int mbtype) {
 /* Set the state token named name for the JMAP type mbtype in response res.
  * If refresh is true, refresh the current mailbox counters in req
  * If bump is true, update the state of this JMAP type before setting name. */
-static int jmap_setstate(struct jmap_req *req,
+static int jmap_set_jsonstate(struct jmap_req *req,
                          json_t *res,
                          const char *name,
                          int mbtype,
@@ -3239,7 +3239,7 @@ static int getCalendars(struct jmap_req *req)
     }
 
     json_t *calendars = json_pack("{}");
-    r = jmap_setstate(req, calendars, "state", MBTYPE_CALENDAR, 1 /*refresh*/, 0 /*bump*/);
+    r = jmap_set_jsonstate(req, calendars, "state", MBTYPE_CALENDAR, 1 /*refresh*/, 0 /*bump*/);
     if (r) goto done;
 
     json_incref(rock.array);
@@ -3350,7 +3350,7 @@ static int setCalendars(struct jmap_req *req)
     if (r) return 0;
 
     json_t *set = json_pack("{s:s}", "accountId", req->userid);
-    r = jmap_setstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
+    r = jmap_set_jsonstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
     if (r) goto done;
 
     r = caldav_create_defaultcalendars(req->userid);
@@ -3692,7 +3692,7 @@ static int setCalendars(struct jmap_req *req)
     }
 
     /* Set newState field in calendarsSet. */
-    r = jmap_setstate(req, set, "newState", MBTYPE_CALENDAR,
+    r = jmap_set_jsonstate(req, set, "newState", MBTYPE_CALENDAR,
             1 /*refresh*/,
             json_object_get(set, "created") ||
             json_object_get(set, "updated") ||
@@ -4669,7 +4669,7 @@ static int getCalendarEvents(struct jmap_req *req)
     }
 
     json_t *events = json_pack("{}");
-    r = jmap_setstate(req, events, "state", MBTYPE_CALENDAR, 1 /* refresh */, 0 /* bump */);
+    r = jmap_set_jsonstate(req, events, "state", MBTYPE_CALENDAR, 1 /* refresh */, 0 /* bump */);
     if (r) goto done;
 
     json_incref(rock.array);
@@ -6664,7 +6664,7 @@ static int setCalendarEvents(struct jmap_req *req)
     if (r) return 0;
 
     json_t *set = json_pack("{s:s}", "accountId", req->userid);
-    r = jmap_setstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
+    r = jmap_set_jsonstate(req, set, "oldState", MBTYPE_CALENDAR, 0 /*refresh*/, 0 /*bump*/);
     if (r) goto done;
 
     r = caldav_create_defaultcalendars(req->userid);
@@ -6812,7 +6812,7 @@ static int setCalendarEvents(struct jmap_req *req)
     }
 
     /* Set newState field in calendarsSet. */
-    r = jmap_setstate(req, set, "newState", MBTYPE_CALENDAR,
+    r = jmap_set_jsonstate(req, set, "newState", MBTYPE_CALENDAR,
             1 /*refresh*/,
             json_object_get(set, "created") ||
             json_object_get(set, "updated") ||
