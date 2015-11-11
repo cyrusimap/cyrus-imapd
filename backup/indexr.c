@@ -139,7 +139,7 @@ HIDDEN struct backup_mailbox_message *backup_mailbox_message_list_remove(
     return node;
 }
 
-static void backup_mailbox_message_list_empty(
+EXPORTED void backup_mailbox_message_list_empty(
     struct backup_mailbox_message_list *list)
 {
     struct backup_mailbox_message *mailbox_message, *next;
@@ -207,7 +207,7 @@ HIDDEN struct backup_mailbox *backup_mailbox_list_remove(
     return node;
 }
 
-static void backup_mailbox_list_empty(struct backup_mailbox_list *list)
+EXPORTED void backup_mailbox_list_empty(struct backup_mailbox_list *list)
 {
     struct backup_mailbox *mailbox, *next;
 
