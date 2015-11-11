@@ -89,7 +89,7 @@ struct backup_mailbox_message {
     int last_chunk_id;
     int uid;
     modseq_t modseq;
-    time_t last_update;
+    time_t last_updated;
     char *flags;
     time_t internaldate;
     struct message_guid guid;

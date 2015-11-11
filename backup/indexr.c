@@ -239,7 +239,7 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
     mailbox_message->last_chunk_id = _column_int(stmt, column++);
     mailbox_message->uid = _column_int(stmt, column++);
     mailbox_message->modseq = _column_int64(stmt, column++);
-    mailbox_message->last_update = _column_int64(stmt, column++);
+    mailbox_message->last_updated = _column_int64(stmt, column++);
     mailbox_message->flags = _column_text(stmt, column++);
     mailbox_message->internaldate = _column_int64(stmt, column++);
     guid_str = _column_text(stmt, column++);
@@ -485,7 +485,7 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
             dlist_setnum32(record, "UID", mailbox_message->uid);
             dlist_setnum64(record, "MODSEQ", mailbox_message->modseq);
-            dlist_setdate(record, "LAST_UPDATE", mailbox_message->last_update);
+            dlist_setdate(record, "LAST_UPDATED", mailbox_message->last_updated);
             dlist_setdate(record, "INTERNALDATE", mailbox_message->internaldate);
             dlist_setguid(record, "GUID", &mailbox_message->guid);
             dlist_setnum32(record, "SIZE", mailbox_message->size);
