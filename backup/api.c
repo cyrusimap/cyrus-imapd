@@ -403,20 +403,23 @@ EXPORTED const char *backup_get_index_fname(const struct backup *backup)
 
 HIDDEN int _column_int(sqlite3_stmt *stmt, int column)
 {
-    assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER);
+    assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER ||
+           sqlite3_column_type(stmt, column) == SQLITE_NULL);
     return sqlite3_column_int(stmt, column);
 }
 
 HIDDEN sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column)
 {
-    assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER);
+    assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER ||
+           sqlite3_column_type(stmt, column) == SQLITE_NULL);
     return sqlite3_column_int64(stmt, column);
 }
 
 HIDDEN char * _column_text(sqlite3_stmt *stmt, int column)
 {
-    assert(sqlite3_column_type(stmt, column) == SQLITE_TEXT);
-    return xstrdup((const char *) sqlite3_column_text(stmt, column));
+    assert(sqlite3_column_type(stmt, column) == SQLITE_TEXT ||
+           sqlite3_column_type(stmt, column) == SQLITE_NULL);
+    return xstrdupnull((const char *) sqlite3_column_text(stmt, column));
 }
 
 /* limit is how much of the file to calculate the sha1 of (in bytes),
