@@ -272,6 +272,7 @@ dnl End MySQL Detection
 
 
 dnl PgSQL Detection
+AC_MSG_CHECKING([whether to use PostgreSQL])
 AC_ARG_WITH(pgsql,
         [AS_HELP_STRING([--with-pgsql=DIR], [use PostgreSQL (in DIR) [no]])],
         with_pgsql=$withval, with_pgsql="no")
@@ -311,11 +312,13 @@ if test "$use_pgsql" != "no"; then
 
   AC_DEFINE(HAVE_PGSQL,[],[Build in PgSQL support?])
 fi
+AC_MSG_RESULT([$use_pgsql])
 
 dnl End PgSQL Detection
 
 
 dnl SQLite Detection
+AC_MSG_CHECKING([whether to use SQLite])
 AC_ARG_WITH(sqlite,
         [AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
         with_sqlite=$withval, with_sqlite=no)
@@ -355,6 +358,7 @@ if test "$use_sqlite" != "no"; then
 
   AC_DEFINE(HAVE_SQLITE,[],[Build in SQLite support?])
 fi
+AC_MSG_RESULT([$use_sqlite])
 
 dnl End SQLite Detection
 
