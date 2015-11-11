@@ -349,8 +349,8 @@ message:
     char guid
     char partition              -> this is used to set the spool directory for the temp file - we might not need it
     int chunk_id
-    int offset
-    int length
+    int offset                  -> offset within chunk of dlist containing this message
+    int size                    -> size of this message (n.b. not length of dlist)
 
 mailbox_message:
     int mailbox_id
