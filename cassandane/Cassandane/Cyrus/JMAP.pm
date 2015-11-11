@@ -174,6 +174,72 @@ sub test_jmap_create
     $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
 }
 
+sub test_setcontacts_state
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contact";
+    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog "get contact $id";
+    $res = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contacts');
+    $self->assert_str_equals($res->[0][2], 'R2');
+    $self->assert_str_equals($res->[0][1]{list}[0]{firstName}, 'first');
+    $self->assert_str_equals($res->[0][1]{state}, $state);
+
+    xlog "update $id with state token $state";
+    $res = $jmap->Request([['setContacts', {
+                    ifInState => $state,
+                    update => {$id =>
+                        {firstName => "first", lastName => "last"}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    my $oldState = $state;
+    $state = $res->[0][1]{newState};
+
+    xlog "update $id with expired state token $oldState";
+    $res = $jmap->Request([['setContacts', {
+                    ifInState => $oldState,
+                    update => {$id =>
+                        {firstName => "first", lastName => "last"}
+                    }}, "R1"]]);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
+
+    xlog "get contact $id to make sure state didn't change";
+    $res = $jmap->Request([['getContacts', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{state}, $state);
+
+    xlog "destroy $id with expired state token $oldState";
+    $res = $jmap->Request([['setContacts', {
+                    ifInState => $oldState,
+                    destroy => [$id]
+                }, "R1"]]);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
+
+    xlog "destroy contact $id with current state";
+    $res = $jmap->Request([
+            ['setContacts', {
+                    ifInState => $state,
+                    destroy => [$id]
+            }, "R1"]
+    ]);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+}
+
 sub test_getcalendars
 {
     my ($self) = @_;
