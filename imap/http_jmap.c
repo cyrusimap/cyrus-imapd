@@ -362,6 +362,15 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         goto done;
     }
 
+    /* Don't list special-purpose mailboxes. */
+    if ((mbentry->mbtype & MBTYPE_DELETED) ||
+        (mbentry->mbtype & MBTYPE_NETNEWS) ||
+        (mbentry->mbtype & MBTYPE_CALENDAR) ||
+        (mbentry->mbtype & MBTYPE_COLLECTION) ||
+        (mbentry->mbtype & MBTYPE_ADDRESSBOOK)) {
+        goto done;
+    }
+
     /* Open mailbox to get uniqueid */
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
         syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
