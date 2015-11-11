@@ -116,6 +116,7 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
     copy->mtime = src->mtime;
     copy->uidvalidity = src->uidvalidity;
     copy->mbtype = src->mbtype;
+    copy->foldermodseq = src->foldermodseq;
 
     copy->partition = xstrdupnull(src->partition);
     copy->server = xstrdupnull(src->server);
@@ -228,6 +229,9 @@ EXPORTED char *mboxlist_entry_cstring(mbentry_t *mbentry)
 
     if (mbentry->uidvalidity)
         dlist_setnum32(dl, "V", mbentry->uidvalidity);
+
+    if (mbentry->foldermodseq)
+        dlist_setnum64(dl, "F", mbentry->foldermodseq);
 
     dlist_setdate(dl, "M", time(NULL));
 
@@ -363,7 +367,10 @@ int parseentry_cb(int type, struct dlistsax_data *d)
         }
         else {
             const char *key = buf_cstring(&d->kbuf);
-            if (!strcmp(key, "I")) {
+            if (!strcmp(key, "F")) {
+                rock->mbentry->foldermodseq = atoll(buf_cstring(&d->buf));
+            }
+            else if (!strcmp(key, "I")) {
                 rock->mbentry->uniqueid = buf_newcstring(&d->buf);
             }
             else if (!strcmp(key, "M")) {
@@ -379,7 +386,7 @@ int parseentry_cb(int type, struct dlistsax_data *d)
                 rock->mbentry->mbtype = mboxlist_string_to_mbtype(buf_cstring(&d->buf));
             }
             else if (!strcmp(key, "V")) {
-                rock->mbentry->uidvalidity = atoi(buf_cstring(&d->buf));
+                rock->mbentry->uidvalidity = atol(buf_cstring(&d->buf));
             }
         }
     }

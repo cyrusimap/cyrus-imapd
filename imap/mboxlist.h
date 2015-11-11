@@ -83,6 +83,7 @@ struct mboxlist_entry {
     char *ext_name;
     time_t mtime;
     uint32_t uidvalidity;
+    modseq_t foldermodseq;
     int mbtype;
     char *partition;
     char *server; /* holds remote machine for REMOTE mailboxes */
