@@ -5136,6 +5136,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             continue;
         }
         icalcomponent_remove_component(ical, excomp);
+        icalcomponent_free(excomp);
     }
     jmap_remove_icalproperty(comp, ICAL_EXDATE_PROPERTY);
 
