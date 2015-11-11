@@ -239,12 +239,13 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         { NULL,                 SQLITE_NULL,    { .s = NULL      } },
     };
 
-    buf_free(&annotations_buf);
-
     sqldb_begin(backup->db, __func__); // FIXME what if this fails
 
     int r = sqldb_exec(backup->db, backup_index_mailbox_update_sql,
                        mbox_bval, NULL, NULL);
+
+    buf_free(&annotations_buf);
+
     if (r) {
         // FIXME handle this sensibly
         fprintf(stderr, "%s: something went wrong: %i update %s\n", __func__, r, mboxname);
