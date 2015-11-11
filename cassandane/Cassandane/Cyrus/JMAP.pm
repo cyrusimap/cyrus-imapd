@@ -240,6 +240,38 @@ sub test_setcontacts_state
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
 }
 
+
+sub test_getmailboxes_nocalendars
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "get existing mailboxes";
+    my $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'mailboxes');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $mboxes = $res->[0][1]{list};
+
+    xlog "create calendar";
+    $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+
+    xlog "get updated mailboxes";
+    $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(scalar @{$res->[0][1]{list}}, scalar @{$mboxes});
+}
+
 sub test_getcalendars
 {
     my ($self) = @_;
