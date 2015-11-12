@@ -154,6 +154,261 @@ sub test_jmap_multicontact
     $self->assert_null($fetch->[0][1]{notFound});
 }
 
+sub test_getcontactupdates
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get contacts";
+    my $res = $jmap->Request([['getContacts', {}, "R2"]]);
+    my $state = $res->[0][1]{state};
+
+    xlog "get contact updates";
+    $res = $jmap->Request([['getContactUpdates', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+
+    xlog "create contact #1";
+    $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get contact updates";
+    $res = $jmap->Request([['getContactUpdates', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+
+    my $oldState = $state;
+    $state = $res->[0][1]{newState};
+
+    xlog "create contact #2";
+    $res = $jmap->Request([['setContacts', {create => {"#2" => {firstName => "second", lastName => "prev"}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
+
+    xlog "get contact updates (since last change)";
+    $res = $jmap->Request([['getContactUpdates', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
+    $state = $res->[0][1]{newState};
+
+    xlog "get contact updates (in bulk)";
+    $res = $jmap->Request([['getContactUpdates', {
+                    sinceState => $oldState
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $oldState);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+
+    xlog "get contact updates from initial state (maxChanges=1)";
+    $res = $jmap->Request([['getContactUpdates', {
+                    sinceState => $oldState,
+                    maxChanges => 1
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $oldState);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    my $interimState = $res->[0][1]{newState};
+
+    xlog "get contact updates from interim state (maxChanges=10)";
+    $res = $jmap->Request([['getContactUpdates', {
+                    sinceState => $interimState,
+                    maxChanges => 10
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $interimState);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
+    $state = $res->[0][1]{newState};
+
+    xlog "destroy contact #1, update contact #2";
+    $res = $jmap->Request([['setContacts', {
+                    destroy => [$id1],
+                    update => {$id2 => {firstName => "foo"}}
+                }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    xlog "get contact updates";
+    $res = $jmap->Request([['getContactUpdates', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
+    $self->assert_str_equals($res->[0][1]{removed}[0], $id1);
+
+    xlog "destroy contact #2";
+    $res = $jmap->Request([['setContacts', {destroy => [$id2]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+}
+
+
+sub test_getcontactgroupupdates
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contacts";
+    my $res = $jmap->Request([['setContacts', {create => {
+                        "#a" => {firstName => "a", lastName => "a"},
+                        "#b" => {firstName => "b", lastName => "b"},
+                        "#c" => {firstName => "c", lastName => "c"},
+                        "#d" => {firstName => "d", lastName => "d"}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $contactA = $res->[0][1]{created}{"#a"}{id};
+    my $contactB = $res->[0][1]{created}{"#b"}{id};
+    my $contactC = $res->[0][1]{created}{"#c"}{id};
+    my $contactD = $res->[0][1]{created}{"#d"}{id};
+
+    xlog "get contact groups state";
+    $res = $jmap->Request([['getContactGroups', {}, "R2"]]);
+    my $state = $res->[0][1]{state};
+
+    xlog "create contact group #1";
+    $res = $jmap->Request([['setContactGroups', {create => {
+                        "#1" => {name => "first", contactIds => [$contactA, $contactB]}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+
+
+    xlog "get contact group updates";
+    $res = $jmap->Request([['getContactGroupUpdates', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+
+    my $oldState = $state;
+    $state = $res->[0][1]{newState};
+
+    xlog "create contact group #2";
+    $res = $jmap->Request([['setContactGroups', {create => {
+                        "#2" => {name => "second", contactIds => [$contactC, $contactD]}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
+
+    xlog "get contact group updates (since last change)";
+    $res = $jmap->Request([['getContactGroupUpdates', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
+    $state = $res->[0][1]{newState};
+
+    xlog "get contact group updates (in bulk)";
+    $res = $jmap->Request([['getContactGroupUpdates', {
+                    sinceState => $oldState
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $oldState);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+
+    xlog "get contact group updates from initial state (maxChanges=1)";
+    $res = $jmap->Request([['getContactGroupUpdates', {
+                    sinceState => $oldState,
+                    maxChanges => 1
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $oldState);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    my $interimState = $res->[0][1]{newState};
+
+    xlog "get contact group updates from interim state (maxChanges=10)";
+    $res = $jmap->Request([['getContactGroupUpdates', {
+                    sinceState => $interimState,
+                    maxChanges => 10
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $interimState);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
+    $state = $res->[0][1]{newState};
+
+    xlog "destroy contact group #1, update contact group #2";
+    $res = $jmap->Request([['setContactGroups', {
+                    destroy => [$id1],
+                    update => {$id2 => {name => "second (updated)"}}
+                }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    xlog "get contact group updates";
+    $res = $jmap->Request([['getContactGroupUpdates', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
+    $self->assert_str_equals($res->[0][1]{removed}[0], $id1);
+
+    xlog "destroy contact group #2";
+    $res = $jmap->Request([['setContactGroups', {destroy => [$id2]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+}
+
 
 sub test_jmap_create
 {
