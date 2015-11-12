@@ -966,6 +966,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     if (newmailbox) {
         newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
+        newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
     mboxent = mboxlist_entry_cstring(newmbentry);
     r = cyrusdb_store(mbdb, mboxname, strlen(mboxname),
@@ -1392,8 +1393,9 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         newmbentry->name = xstrdupnull(name);
         newmbentry->mbtype = MBTYPE_DELETED;
         if (mailbox) {
-            newmbentry->uidvalidity = mailbox->i.uidvalidity;
             newmbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
+            newmbentry->uidvalidity = mailbox->i.uidvalidity;
+            newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
         }
         r = mboxlist_update(newmbentry, /*localonly*/1);
         mboxlist_entry_free(&newmbentry);
@@ -1547,6 +1549,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         newmbentry->acl = xstrdupnull(oldmailbox->acl);
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
+        newmbentry->foldermodseq = oldmailbox->i.highestmodseq; /* bump regardless, it's rare */
         mboxent = mboxlist_entry_cstring(newmbentry);
         r = cyrusdb_store(mbdb, newname, strlen(newname),
                           mboxent, strlen(mboxent), &tid);
@@ -1611,6 +1614,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     newmbentry->acl = xstrdupnull(newmailbox->acl);
     newmbentry->uidvalidity = newmailbox->i.uidvalidity;
     newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
+    newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     mboxent = mboxlist_entry_cstring(newmbentry);
 
     do {
@@ -1625,6 +1629,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
             oldmbentry->mbtype = MBTYPE_DELETED;
             oldmbentry->uidvalidity = oldmailbox->i.uidvalidity;
             oldmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
+            oldmbentry->foldermodseq = mailbox_modseq_dirty(oldmailbox);
             oldmboxent = mboxlist_entry_cstring(oldmbentry);
 
             r = cyrusdb_store(mbdb, oldname, strlen(oldname),
@@ -2848,6 +2853,23 @@ EXPORTED int mboxlist_unsetquota(const char *root)
  done:
     quota_free(&q);
     return r;
+}
+
+EXPORTED modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox)
+{
+    mbentry_t *mbentry = NULL;
+    modseq_t ret = 0;
+
+    if (mboxlist_mylookup(mailbox->name, &mbentry, NULL, 0))
+        return 0;
+
+    ret = mbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
+
+    mboxlist_update(mbentry, 0);
+
+    mboxlist_entry_free(&mbentry);
+
+    return ret;
 }
 
 /*

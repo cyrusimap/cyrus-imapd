@@ -2879,6 +2879,7 @@ static int annotation_set_mailboxopt(annotate_state_t *state,
     if (mailbox->i.options != newopts) {
         mailbox_index_dirty(mailbox);
         mailbox->i.options = newopts;
+        mboxlist_foldermodseq_dirty(mailbox);
     }
 
     return 0;

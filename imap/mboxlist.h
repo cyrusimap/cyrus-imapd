@@ -208,6 +208,8 @@ int mboxlist_setacl(const struct namespace *namespace, const char *name,
 /* Change all ACLs on mailbox */
 int mboxlist_sync_setacls(const char *name, const char *acl);
 
+modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox);
+
 typedef int findall_cb(const char *name, int matchlen, int maycreate, void *rock);
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,

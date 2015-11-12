@@ -2736,6 +2736,7 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
     /* we are dirtying both index and quota */
     mailbox_index_dirty(mailbox);
     mailbox_quota_dirty(mailbox);
+    mboxlist_foldermodseq_dirty(mailbox);
 
     /* corruption prevention - check we don't go negative */
     if (mailbox->i.quota_annot_used > (quota_t)oldval->len)
