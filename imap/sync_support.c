@@ -2390,8 +2390,7 @@ int sync_apply_mailbox(struct dlist *kin,
 
     /* this happens all the time! */
     if (mailbox->i.highestmodseq != highestmodseq) {
-        mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype);
-        mailbox->i.highestmodseq = highestmodseq;
+        mailbox->i.highestmodseq = mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype, /*dofolder*/0);
     }
 
     /* this happens rarely, so let us know */

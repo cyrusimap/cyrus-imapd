@@ -1047,7 +1047,7 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
 
     mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name,
                                mailbox->i.highestmodseq,
-                               mailbox->mbtype);
+                               mailbox->mbtype, /*dofolder*/0);
     mailbox->last_updated = time(0);
     mailbox->modseq_dirty = 1;
     mailbox_index_dirty(mailbox);
@@ -4707,9 +4707,9 @@ EXPORTED int mailbox_create(const char *name,
 
     /* and highest modseq */
     if (!highestmodseq)
-        highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mbtype);
+        highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mbtype, /*dofolder*/1);
     else
-        mboxname_setmodseq(mailbox->name, highestmodseq, mbtype);
+        mboxname_setmodseq(mailbox->name, highestmodseq, mbtype, /*dofolder*/1);
 
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
@@ -5945,7 +5945,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         mailbox_index_dirty(mailbox);
         mailbox->i.highestmodseq = mboxname_setmodseq(mailbox->name,
                                                       record->modseq,
-                                                      mailbox->mbtype);
+                                                      mailbox->mbtype, /*dofolder*/0);
     }
 
     if (record->uid > mailbox->i.last_uid) {
@@ -6448,7 +6448,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     if (!mailbox->i.highestmodseq) {
         if (make_changes) {
             mailbox_index_dirty(mailbox);
-            mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mailbox->mbtype);
+            mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mailbox->mbtype, /*dofolder*/1);
         }
         syslog(LOG_ERR, "%s:  zero highestmodseq", mailbox->name);
     }

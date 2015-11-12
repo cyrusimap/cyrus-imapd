@@ -623,7 +623,7 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     mboxent = NULL;
 
     if (!r)
-        mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, /*type*/-1);
+        mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype, /*dofolder*/1);
 
     /* commit the change to mupdate */
     if (!r && !localonly && config_mupdate_server) {
