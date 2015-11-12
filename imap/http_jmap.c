@@ -7037,24 +7037,39 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     return r;
 }
 
-enum calevent_filter_kind {
-    JMAP_CALFILTER_KIND_COND = 0,
-    JMAP_CALFILTER_KIND_OPER
+enum jmap_filter_kind {
+    JMAP_FILTER_KIND_COND = 0,
+    JMAP_FILTER_KIND_OPER
 };
-enum calevent_filter_op   {
-    JMAP_CALFILTER_OP_NONE = 0,
-    JMAP_CALFILTER_OP_AND,
-    JMAP_CALFILTER_OP_OR,
-    JMAP_CALFILTER_OP_NOT
+enum jmap_filter_op   {
+    JMAP_FILTER_OP_NONE = 0,
+    JMAP_FILTER_OP_AND,
+    JMAP_FILTER_OP_OR,
+    JMAP_FILTER_OP_NOT
 };
+
+typedef struct jmap_filter {
+    enum jmap_filter_kind kind; /* Either an operator or a condition. */
+    enum jmap_filter_op op;     /* The logical operator. */
+
+    struct jmap_filter **conditions; /* Any sub-conditions.*/
+    size_t n_conditions;             /* The count of sub-conditions. */
+
+    void *cond; /* The data-type specific filter condition. */
+} jmap_filter;
+
+/* Callback to parse the filter condition arg. Append invalid arguments
+ * by name into invalid, prefixed by prefix. Return the filter condition. */
+typedef void* jmap_filterparse_cb(json_t* arg, const char* prefix, json_t*invalid);
+
+/* Callback to match the condition cond to argument rock. Return true if
+ * it matches. */
+typedef int   jmap_filtermatch_cb(void* cond, void* rock);
+
+/* Callback to free the memory of condition cond. */
+typedef void  jmap_filterfree_cb(void* cond);
 
 typedef struct calevent_filter {
-    enum calevent_filter_kind kind;
-    enum calevent_filter_op op;
-
-    struct calevent_filter **conditions;
-    size_t n_conditions;
-
     hash_table *calendars;
     icaltimetype after;
     icaltimetype before;
@@ -7067,9 +7082,9 @@ typedef struct calevent_filter {
 } calevent_filter;
 
 /* Match text with icalproperty kind in VEVENT comp and its recurrences. */
-static int calevent_filter_matchprop(icalcomponent *comp,
-                                     const char *text,
-                                     icalproperty_kind kind) {
+static int calevent_filter_match_textprop(icalcomponent *comp,
+                                          const char *text,
+                                          icalproperty_kind kind) {
     icalproperty *prop;
     icalcomponent *ical;
 
@@ -7116,108 +7131,50 @@ static int calevent_filter_matchprop(icalcomponent *comp,
     return 0;
 }
 
-/* Match the VEVENTs contained in VCALENDAR component ical against filter. */
-static int calevent_filter_matches(calevent_filter *f,
-                                   struct caldav_data *cdata,
-                                   icalcomponent *ical)
+/* Match the JMAP filter f according to the data-typer specific match. */
+static int jmap_filter_match(jmap_filter *f, jmap_filtermatch_cb *match, void *rock)
 {
-    if (f->kind == JMAP_CALFILTER_KIND_OPER) {
+    if (f->kind == JMAP_FILTER_KIND_OPER) {
         size_t i;
         for (i = 0; i < f->n_conditions; i++) {
-            int m = calevent_filter_matches(f->conditions[i], cdata, ical);
-            if (m && f->op == JMAP_CALFILTER_OP_OR) {
+            int m = jmap_filter_match(f->conditions[i], match, rock);
+            if (m && f->op == JMAP_FILTER_OP_OR) {
                 return 1;
-            } else if (m && f->op == JMAP_CALFILTER_OP_NOT) {
+            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
                 return 0;
-            } else if (!m && f->op == JMAP_CALFILTER_OP_AND) {
+            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
                 return 0;
             }
         }
-        return f->op == JMAP_CALFILTER_OP_AND || f->op == JMAP_CALFILTER_OP_NOT;
+        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
     } else {
-        /* Locate main VEVENT. */
-        /* XXX Might save comp and dtend, dtstart in the rock to avoid
-         * recalculating them. First wait for the decision if we want to
-         * optimize here or move filtering to the SQL layer. */
-        icalcomponent *comp;
-        for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-             comp;
-             comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-            if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
-                break;
-            }
-        }
-        if (!comp) {
-            return 0;
-        }
-
-        /* calendars */
-        if (f->calendars && !hash_lookup(cdata->dav.mailbox, f->calendars)) {
-            return 0;
-        }
-        /* after */
-        if (!icaltime_is_null_time(f->after)) {
-            icaltimetype dtend = icaltime_from_string(cdata->dtend);
-            if (icaltime_compare(dtend, f->after) <= 0) {
-                return 0;
-            }
-        }
-        /* before */
-        if (!icaltime_is_null_time(f->before)) {
-            icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
-            if (icaltime_compare(dtstart, f->before) >= 0) {
-                return 0;
-            }
-        }
-        /* text */
-        if (f->text) {
-            int m = calevent_filter_matchprop(comp, f->text, ICAL_SUMMARY_PROPERTY);
-            if (!m) calevent_filter_matchprop(comp, f->text, ICAL_DESCRIPTION_PROPERTY);
-            if (!m) calevent_filter_matchprop(comp, f->text, ICAL_LOCATION_PROPERTY);
-            if (!m) calevent_filter_matchprop(comp, f->text, ICAL_ORGANIZER_PROPERTY);
-            if (!m) calevent_filter_matchprop(comp, f->text, ICAL_ATTENDEE_PROPERTY);
-            if (!m) {
-                return 0;
-            }
-        }
-        if ((f->summary && !calevent_filter_matchprop(comp, f->summary, ICAL_SUMMARY_PROPERTY)) ||
-            (f->description && !calevent_filter_matchprop(comp, f->description, ICAL_DESCRIPTION_PROPERTY)) ||
-            (f->location && !calevent_filter_matchprop(comp, f->location, ICAL_LOCATION_PROPERTY)) ||
-            (f->organizer && !calevent_filter_matchprop(comp, f->organizer, ICAL_ORGANIZER_PROPERTY)) ||
-            (f->attendee && !calevent_filter_matchprop(comp, f->attendee, ICAL_ATTENDEE_PROPERTY))) {
-            return 0;
-        }
-
-        /* All matched. */
-        return 1;
+        return match(f->cond, rock);
     }
 }
 
-/* Free the memory allocated by this calendar event filter. */
-static void calevent_filter_free(calevent_filter **ff)
+/* Free the JMAP filter f. Call freecond to deallocate conditions. */
+static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
 {
     size_t i;
-    calevent_filter *f = *ff;
     for (i = 0; i < f->n_conditions; i++) {
-        calevent_filter_free(&f->conditions[i]);
+        jmap_filter_free(f->conditions[i], freecond);
+        free(f->conditions[i]);
     }
     if (f->conditions) free(f->conditions);
-    if (f->calendars) {
-        free_hash_table(f->calendars, NULL);
-        free(f->calendars);
+    if (f->cond && freecond) {
+        freecond(f->cond);
+        free(f->cond);
     }
-    free(f);
-    *ff = NULL;
 }
 
-/* Parse the JMAP calendar event FilterOperator or FilterCondition in arg.
- * Report any invalid properties in invalid, prefixed by prefix.
- * Return NULL on error. */
-static calevent_filter *calevent_filter_parse(json_t *arg,
-                                              const char *prefix,
-                                              json_t *invalid)
+/* Parse the JMAP filter arg. Report any invalid filter arguments in invalid,
+ * prefixed by prefix. */
+static jmap_filter *jmap_filter_parse(json_t *arg,
+                                      const char *prefix,
+                                      json_t *invalid,
+                                      jmap_filterparse_cb *parse)
 {
-    calevent_filter *f = (calevent_filter *) xzmalloc(sizeof(struct calevent_filter));
+    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
     int pe;
     const char *val;
     struct buf buf = BUF_INITIALIZER;
@@ -7226,31 +7183,31 @@ static calevent_filter *calevent_filter_parse(json_t *arg,
     /* operator */
     pe = jmap_readprop_full(arg, prefix, "operator", 0 /*mandatory*/, invalid, "s", &val);
     if (pe > 0) {
-        f->kind = JMAP_CALFILTER_KIND_OPER;
+        f->kind = JMAP_FILTER_KIND_OPER;
         if (!strncmp("AND", val, 3)) {
-            f->op = JMAP_CALFILTER_OP_AND;
+            f->op = JMAP_FILTER_OP_AND;
         } else if (!strncmp("OR", val, 2)) {
-            f->op = JMAP_CALFILTER_OP_OR;
+            f->op = JMAP_FILTER_OP_OR;
         } else if (!strncmp("NOT", val, 3)) {
-            f->op = JMAP_CALFILTER_OP_NOT;
+            f->op = JMAP_FILTER_OP_NOT;
         } else {
             buf_printf(&buf, "%s.%s", prefix, "operator");
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
             buf_reset(&buf);
         }
     }
-    iscond = f->kind == JMAP_CALFILTER_KIND_COND;
+    iscond = f->kind == JMAP_FILTER_KIND_COND;
 
     /* conditions */
     json_t *conds = json_object_get(arg, "conditions");
     if (conds && !iscond && json_array_size(conds)) {
         f->n_conditions = json_array_size(conds);
-        f->conditions = xmalloc(sizeof(struct calevent_filter*) * f->n_conditions);
+        f->conditions = xmalloc(sizeof(struct jmap_filter) * f->n_conditions);
         size_t i;
         for (i = 0; i < f->n_conditions; i++) {
             json_t *cond = json_array_get(conds, i);
             buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            f->conditions[i] = calevent_filter_parse(cond, buf_cstring(&buf), invalid);
+            f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf), invalid, parse);
             buf_reset(&buf);
         }
     } else if (conds && conds != json_null()) {
@@ -7259,9 +7216,112 @@ static calevent_filter *calevent_filter_parse(json_t *arg,
         buf_reset(&buf);
     }
 
+    /* Only parse the remainer of arg if it is known not to be an operator. */
+    if (iscond) {
+        f->cond = parse(arg, prefix, invalid);
+    }
+
+    buf_free(&buf);
+    return f;
+}
+
+typedef struct calevent_filter_rock {
+    icalcomponent *ical;
+    struct caldav_data *cdata;
+} calevent_filter_rock;
+
+/* Match the VEVENTs contained in VCALENDAR component ical against filter. */
+static int calevent_filter_match(void *vf, void *rock)
+{
+    calevent_filter *f = (calevent_filter *) vf;
+    calevent_filter_rock *cfrock = (calevent_filter_rock*) rock;
+
+    icalcomponent *ical = cfrock->ical;
+    struct caldav_data *cdata = cfrock->cdata;
+
+    /* Locate main VEVENT. */
+    /* XXX Might save comp and dtend, dtstart in the rock to avoid
+     * recalculating them. First wait for the decision if we want to
+     * optimize here or move filtering to the SQL layer. */
+    icalcomponent *comp;
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+            break;
+        }
+    }
+    if (!comp) {
+        return 0;
+    }
+
+    /* calendars */
+    if (f->calendars && !hash_lookup(cdata->dav.mailbox, f->calendars)) {
+        return 0;
+    }
+    /* after */
+    if (!icaltime_is_null_time(f->after)) {
+        icaltimetype dtend = icaltime_from_string(cdata->dtend);
+        if (icaltime_compare(dtend, f->after) <= 0) {
+            return 0;
+        }
+    }
+    /* before */
+    if (!icaltime_is_null_time(f->before)) {
+        icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
+        if (icaltime_compare(dtstart, f->before) >= 0) {
+            return 0;
+        }
+    }
+    /* text */
+    if (f->text) {
+        int m = calevent_filter_match_textprop(comp, f->text, ICAL_SUMMARY_PROPERTY);
+        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_DESCRIPTION_PROPERTY);
+        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_LOCATION_PROPERTY);
+        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_ORGANIZER_PROPERTY);
+        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_ATTENDEE_PROPERTY);
+        if (!m) {
+            return 0;
+        }
+    }
+    if ((f->summary && !calevent_filter_match_textprop(comp, f->summary, ICAL_SUMMARY_PROPERTY)) ||
+        (f->description && !calevent_filter_match_textprop(comp, f->description, ICAL_DESCRIPTION_PROPERTY)) ||
+        (f->location && !calevent_filter_match_textprop(comp, f->location, ICAL_LOCATION_PROPERTY)) ||
+        (f->organizer && !calevent_filter_match_textprop(comp, f->organizer, ICAL_ORGANIZER_PROPERTY)) ||
+        (f->attendee && !calevent_filter_match_textprop(comp, f->attendee, ICAL_ATTENDEE_PROPERTY))) {
+        return 0;
+    }
+
+    /* All matched. */
+    return 1;
+}
+
+
+/* Free the memory allocated by this calendar event filter. */
+static void calevent_filter_free(void *vf)
+{
+    calevent_filter *f = (calevent_filter*) vf;
+    if (f->calendars) {
+        free_hash_table(f->calendars, NULL);
+        free(f->calendars);
+    }
+}
+
+/* Parse the JMAP calendar event FilterOperator or FilterCondition in arg.
+ * Report any invalid properties in invalid, prefixed by prefix.
+ * Return NULL on error. */
+static void *calevent_filter_parse(json_t *arg,
+                                   const char *prefix,
+                                   json_t *invalid)
+{
+    calevent_filter *f = (calevent_filter *) xzmalloc(sizeof(struct calevent_filter));
+    int pe;
+    const char *val;
+    struct buf buf = BUF_INITIALIZER;
+
     /* inCalendars */
     json_t *cals = json_object_get(arg, "inCalendars");
-    if (cals && iscond && json_array_size(cals)) {
+    if (cals && json_array_size(cals)) {
         f->calendars = xmalloc(sizeof(hash_table));
         construct_hash_table(f->calendars, json_array_size(cals), 0);
         size_t i;
@@ -7286,7 +7346,7 @@ static calevent_filter *calevent_filter_parse(json_t *arg,
     if (json_object_get(arg, "after") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "after", 0 /*mandatory*/, invalid, "s", &val);
         if (pe > 0) {
-            if (jmap_date_to_icaltime(val, &f->after, 0 /*isAllDay*/) || !iscond) {
+            if (jmap_date_to_icaltime(val, &f->after, 0 /*isAllDay*/)) {
                 buf_printf(&buf, "%s.%s", prefix, "after");
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
@@ -7298,7 +7358,7 @@ static calevent_filter *calevent_filter_parse(json_t *arg,
     if (json_object_get(arg, "before") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "before", 0 /*mandatory*/, invalid, "s", &val);
         if (pe > 0) {
-            if (jmap_date_to_icaltime(val, &f->before, 0 /*isAllDay*/) || !iscond) {
+            if (jmap_date_to_icaltime(val, &f->before, 0 /*isAllDay*/)) {
                 buf_printf(&buf, "%s.%s", prefix, "before");
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
@@ -7309,65 +7369,31 @@ static calevent_filter *calevent_filter_parse(json_t *arg,
     /* text */
     if (json_object_get(arg, "text") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "text", 0 /*mandatory */, invalid, "s", &f->text);
-        if (pe > 0 && !iscond) {
-            buf_printf(&buf, "%s.%s", prefix, "text");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
     }
 
     /* summary */
     if (json_object_get(arg, "summary") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "summary", 0 /*mandatory */, invalid, "s", &f->summary);
-        if (pe > 0 && !iscond) {
-            buf_printf(&buf, "%s.%s", prefix, "summary");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
     }
 
     /* description */
     if (json_object_get(arg, "description") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "description", 0 /*mandatory */, invalid, "s", &f->description);
-        if (pe > 0 && !iscond) {
-            buf_printf(&buf, "%s.%s", prefix, "description");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
     }
 
     /* location */
     if (json_object_get(arg, "location") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "location", 0 /*mandatory */, invalid, "s", &f->location);
-        if (pe > 0 && !iscond) {
-            buf_printf(&buf, "%s.%s", prefix, "location");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
     }
 
     /* organizer */
     if (json_object_get(arg, "organizer") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "organizer", 0 /*mandatory */, invalid, "s", &f->organizer);
-        if (pe > 0 && !iscond) {
-            buf_printf(&buf, "%s.%s", prefix, "organizer");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
     }
 
     /* attendee */
     if (json_object_get(arg, "attendee") != json_null()) {
         pe = jmap_readprop_full(arg, prefix, "attendee", 0 /*mandatory */, invalid, "s", &f->attendee);
-        if (pe > 0 && !iscond) {
-            buf_printf(&buf, "%s.%s", prefix, "attendee");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-    }
-
-    if (json_array_size(invalid)) {
-        calevent_filter_free(&f);
     }
 
     buf_free(&buf);
@@ -7375,8 +7401,9 @@ static calevent_filter *calevent_filter_parse(json_t *arg,
     return f;
 }
 
+
 struct caleventlist_rock {
-    calevent_filter *filter;
+    jmap_filter *filter;
     size_t position;
     size_t limit;
     size_t total;
@@ -7417,7 +7444,12 @@ static int getcalendareventlist_cb(void *rock, struct caldav_data *cdata) {
     }
 
     /* Match the event against the filter and update statistics. */
-    if (crock->filter && !calevent_filter_matches(crock->filter, cdata, ical)) {
+    struct calevent_filter_rock cfrock;
+    cfrock.cdata = cdata;
+    cfrock.ical = ical;
+    if (crock->filter && !jmap_filter_match(crock->filter,
+                                            &calevent_filter_match,
+                                            &cfrock)) {
         goto done;
     }
     crock->total++;
@@ -7461,7 +7493,7 @@ static int getCalendarEventList(struct jmap_req *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (filter && filter != json_null()) {
-        rock.filter = calevent_filter_parse(filter, "filter", invalid);
+        rock.filter = jmap_filter_parse(filter, "filter", invalid, calevent_filter_parse);
     }
 
     /* position */
@@ -7527,7 +7559,10 @@ static int getCalendarEventList(struct jmap_req *req)
     }
 
 done:
-    if (rock.filter) calevent_filter_free(&rock.filter);
+    if (rock.filter) {
+        jmap_filter_free(rock.filter, calevent_filter_free);
+        free(rock.filter);
+    }
     if (rock.events) json_decref(rock.events);
     if (db) caldav_close(db);
     return r;
