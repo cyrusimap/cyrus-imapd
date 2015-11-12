@@ -1388,7 +1388,8 @@ static int action_expand(struct transaction_t *txn)
     }
 
     /* Check requested format (debugging only) */
-    if ((param = hash_lookup("zdump", &txn->req_qparams))) {
+    if ((param = hash_lookup("format", &txn->req_qparams)) &&
+        !strcmp(param->s, "application/zdump")) {
         /* Mimic zdump(8) -V output for comparision:
 
            For each zonename, print the times both one  second  before  and
@@ -2052,7 +2053,8 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
         /* rule */
         buf_append(&tzfile, &posix);
     }
-    else if (!eternal_dst) {
+    else if (!eternal_dst &&
+             !icalcomponent_get_first_property(vtz, ICAL_TZUNTIL_PROPERTY)) {
         /* Use last observance as fixed offset */
         obs = icalarray_element_at(obsarray, obsarray->num_elements - 1);
 
