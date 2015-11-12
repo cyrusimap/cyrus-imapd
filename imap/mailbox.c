@@ -4701,9 +4701,9 @@ EXPORTED int mailbox_create(const char *name,
 
     /* ensure a UIDVALIDITY is set */
     if (!uidvalidity)
-        uidvalidity = mboxname_nextuidvalidity(name, time(0), mbtype);
+        uidvalidity = mboxname_nextuidvalidity(name, time(0));
     else
-        mboxname_setuidvalidity(mailbox->name, uidvalidity, mbtype);
+        mboxname_setuidvalidity(mailbox->name, uidvalidity);
 
     /* and highest modseq */
     if (!highestmodseq)
@@ -5211,7 +5211,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* create uidvalidity if not explicitly requested */
     if (!uidvalidity)
-        uidvalidity = mboxname_nextuidvalidity(newname, oldmailbox->i.uidvalidity, oldmailbox->mbtype);
+        uidvalidity = mboxname_nextuidvalidity(newname, oldmailbox->i.uidvalidity);
 
     /* Create new mailbox */
     r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
@@ -6440,7 +6440,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     /* fix up 2.4.0 bug breakage */
     if (!mailbox->i.uidvalidity) {
         if (make_changes) {
-            mailbox->i.uidvalidity = mboxname_nextuidvalidity(mailbox->name, time(0), mailbox->mbtype);
+            mailbox->i.uidvalidity = mboxname_nextuidvalidity(mailbox->name, time(0));
             mailbox_index_dirty(mailbox);
         }
         syslog(LOG_ERR, "%s: zero uidvalidity", mailbox->name);

@@ -239,7 +239,7 @@ modseq_t mboxname_readmodseq(const char *mboxname);
 modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype);
 modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype);
 uint32_t mboxname_readuidvalidity(const char *mboxname);
-uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, int mbtype);
-uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val, int mbtype);
+uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last);
+uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val);
 
 #endif

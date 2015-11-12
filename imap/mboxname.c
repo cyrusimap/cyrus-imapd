@@ -2162,7 +2162,7 @@ EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
     return counters.uidvalidity;
 }
 
-EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, int mbtype __attribute__((unused)))
+EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
 {
     struct mboxname_counters counters;
     int fd = -1;
@@ -2185,7 +2185,7 @@ EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, 
     return counters.uidvalidity;
 }
 
-EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val, int mbtype __attribute__((unused)))
+EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
 {
     struct mboxname_counters counters;
     int fd = -1;
