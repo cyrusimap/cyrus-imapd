@@ -990,7 +990,7 @@ static int setContactGroups(struct jmap_req *req)
                 /* XXX - invalid arguments */
                 addressbookId = json_string_value(abookid);
             }
-            const char *mboxname = mboxname_abook(req->userid, addressbookId);
+            char *mboxname = mboxname_abook(req->userid, addressbookId);
             json_object_del(arg, "addressbookId");
             addressbookId = NULL;
 
@@ -1002,6 +1002,7 @@ static int setContactGroups(struct jmap_req *req)
 
             syslog(LOG_NOTICE, "jmap: create group %s/%s/%s (%s)",
                    req->userid, mboxname, uid, name);
+            free(mboxname);
 
             if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL,
                                       req->userid, req->authstate, ignorequota);
