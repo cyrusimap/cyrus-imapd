@@ -230,6 +230,7 @@ struct mboxname_counters {
     modseq_t caldavmodseq;
     modseq_t carddavmodseq;
     modseq_t notesmodseq;
+    modseq_t foldersmodseq;
     uint32_t uidvalidity;
 };
 
