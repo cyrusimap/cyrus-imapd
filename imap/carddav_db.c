@@ -709,7 +709,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
         { NULL,       SQLITE_NULL,    { .s = NULL      } }
     };
     static struct carddav_data cdata;
-    struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
+    struct read_rock rrock = { carddavdb, &cdata, 1 /* tombstones */, cb, rock };
     int r;
 
     if (mboxname)
