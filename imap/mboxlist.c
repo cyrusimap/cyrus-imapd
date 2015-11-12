@@ -622,6 +622,9 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     free(mboxent);
     mboxent = NULL;
 
+    if (!r)
+        mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, /*type*/-1);
+
     /* commit the change to mupdate */
     if (!r && !localonly && config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
