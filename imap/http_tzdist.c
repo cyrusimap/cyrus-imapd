@@ -1745,7 +1745,7 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     rrule = icalproperty_get_rrule(prop);
 
-    if (rrule.rscale) return;
+    if (rrule.rscale) return 0;
 
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
     at = icalproperty_get_dtstart(prop);
