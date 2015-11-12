@@ -1742,11 +1742,13 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     int hour, week, wday, mday, yday;
     unsigned month, ver = '2';
 
-    prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-    at = icalproperty_get_dtstart(prop);
-
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     rrule = icalproperty_get_rrule(prop);
+
+    if (rrule.rscale) return;
+
+    prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+    at = icalproperty_get_dtstart(prop);
 
     hour = at.hour;
     month = rrule.by_month[0];
