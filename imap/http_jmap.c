@@ -121,10 +121,14 @@ static int getCalendarPreferences(struct jmap_req *req);
 static int getPersonalities(struct jmap_req *req);
 static int getPreferences(struct jmap_req *req);
 
-/* Helper methods for state management. */
+/* Helper functions for state management. */
 static json_t* jmap_getstate(int mbtype, struct jmap_req *req);
 static int jmap_bumpstate(int mbtype, struct jmap_req *req);
 static int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req);
+
+/* Helper functions for property parsing. */
+static int jmap_readprop(json_t *root, const char *name, int mandatory,
+                         json_t *invalid, const char *fmt, void *dst);
 
 static const struct message_t {
     const char *name;
@@ -691,8 +695,7 @@ static void updates_rock_update(struct updates_rock *rock,
     /* Report item as updated or removed. */
     if (dav.alive) {
         json_array_append_new(rock->changed, json_string(uid));
-    }
-    else {
+    } else {
         json_array_append_new(rock->removed, json_string(uid));
     }
 
@@ -742,8 +745,29 @@ static int getContactGroupUpdates(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     struct buf buf = BUF_INITIALIZER;
-
     int r = -1;
+    int pe; /* property parse error */
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+
+    /* XXX Might want to use jmap_readprop for all properties. */
+    json_int_t max_records = 0;
+    pe = jmap_readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &max_records);
+    if (pe > 0) {
+        if (max_records <= 0) {
+            json_array_append_new(invalid, json_string("maxChanges"));
+        }
+    }
+
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
     const char *since = _json_object_get_string(req->args, "sinceState");
     if (!since) goto done;
     modseq_t oldmodseq = str2uint64(since);
@@ -758,9 +782,10 @@ static int getContactGroupUpdates(struct jmap_req *req)
 
     /* Lookup updates. */
     struct updates_rock rock;
+    memset(&rock, 0, sizeof(struct updates_rock));
     rock.changed = json_array();
     rock.removed = json_array();
-    /* XXX maxChanges */
+    rock.max_records = max_records;
     rock.fetchmodseq = 1;
 
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
@@ -784,10 +809,9 @@ static int getContactGroupUpdates(struct jmap_req *req)
     json_object_set_new(contactGroupUpdates, "newState", json_string(buf_cstring(&buf)));
     buf_reset(&buf);
 
-    json_object_set_new(contactGroupUpdates, "accountId",
-                        json_string(req->userid));
-    json_object_set_new(contactGroupUpdates, "oldState",
-                        json_string(since)); // XXX - just use refcounted
+    json_object_set_new(contactGroupUpdates, "accountId", json_string(req->userid));
+    json_object_set_new(contactGroupUpdates, "oldState", json_string(since));
+    json_object_set_new(contactGroupUpdates, "hasMoreUpdates", json_boolean(more));
     json_object_set(contactGroupUpdates, "changed", rock.changed);
     json_object_set(contactGroupUpdates, "removed", rock.removed);
 
@@ -1748,8 +1772,30 @@ static int getContactUpdates(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     struct buf buf = BUF_INITIALIZER;
-
     int r = -1;
+    json_t *invalid = NULL; /* invalid property array */
+    int pe; /* property parse error */
+
+    /* Parse and validate arguments. */
+    invalid = json_pack("[]");
+
+    /* XXX Might want to use jmap_readprop for all properties. */
+    json_int_t max_records = 0;
+    pe = jmap_readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &max_records);
+    if (pe > 0) {
+        if (max_records <= 0) {
+            json_array_append_new(invalid, json_string("maxChanges"));
+        }
+    }
+
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
     const char *since = _json_object_get_string(req->args, "sinceState");
     if (!since) goto done;
     modseq_t oldmodseq = str2uint64(since);
@@ -1764,10 +1810,11 @@ static int getContactUpdates(struct jmap_req *req)
 
     /* Lookup updates. */
     struct updates_rock rock;
+    memset(&rock, 0, sizeof(struct updates_rock));
     rock.changed = json_array();
     rock.removed = json_array();
     rock.fetchmodseq = 1;
-    /* XXX maxChanges */
+    rock.max_records = max_records;
 
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
                             &getcontactupdates_cb, &rock);
@@ -1791,6 +1838,7 @@ static int getContactUpdates(struct jmap_req *req)
     buf_reset(&buf);
     json_object_set_new(contactUpdates, "accountId", json_string(req->userid));
     json_object_set_new(contactUpdates, "oldState", json_string(since));
+    json_object_set_new(contactUpdates, "hasMoreUpdates", json_boolean(more));
     json_object_set(contactUpdates, "changed", rock.changed);
     json_object_set(contactUpdates, "removed", rock.removed);
 
