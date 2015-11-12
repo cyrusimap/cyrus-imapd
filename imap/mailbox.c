@@ -1038,12 +1038,12 @@ EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
     mailbox->i.dirty = 1;
 }
 
-EXPORTED void mailbox_modseq_dirty(struct mailbox *mailbox)
+EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
 
     if (mailbox->modseq_dirty)
-        return;
+        return mailbox->i.highestmodseq;
 
     mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name,
                                mailbox->i.highestmodseq,
@@ -1051,6 +1051,8 @@ EXPORTED void mailbox_modseq_dirty(struct mailbox *mailbox)
     mailbox->last_updated = time(0);
     mailbox->modseq_dirty = 1;
     mailbox_index_dirty(mailbox);
+
+    return mailbox->i.highestmodseq;
 }
 
 EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
