@@ -402,6 +402,7 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
     mailbox_close(&mailbox);
 
   done:
+    if (mbentry) mboxlist_entry_free(&mbentry);
     return 0;
 }
 
