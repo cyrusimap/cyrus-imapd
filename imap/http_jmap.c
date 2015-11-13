@@ -129,6 +129,9 @@ static int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req);
 /* Helper functions for property parsing. */
 static int jmap_readprop(json_t *root, const char *name, int mandatory,
                          json_t *invalid, const char *fmt, void *dst);
+static int jmap_readprop_full(json_t *root, const char *prefix,
+                              const char *name, int mandatory,
+                              json_t *invalid, const char *fmt, void *dst);
 
 static const struct message_t {
     const char *name;
@@ -2889,8 +2892,132 @@ done:
     return r;
 }
 
+/* JMAP filters */
+enum jmap_filter_kind {
+    JMAP_FILTER_KIND_COND = 0,
+    JMAP_FILTER_KIND_OPER
+};
+enum jmap_filter_op   {
+    JMAP_FILTER_OP_NONE = 0,
+    JMAP_FILTER_OP_AND,
+    JMAP_FILTER_OP_OR,
+    JMAP_FILTER_OP_NOT
+};
 
-/* jmap calendar APIs */
+typedef struct jmap_filter {
+    enum jmap_filter_kind kind;
+    enum jmap_filter_op op;
+
+    struct jmap_filter **conditions;
+    size_t n_conditions;
+
+    void *cond;
+} jmap_filter;
+
+/* Callback to parse the filter condition arg. Append invalid arguments
+ * by name into invalid, prefixed by prefix. Return the filter condition. */
+typedef void* jmap_filterparse_cb(json_t* arg, const char* prefix, json_t*invalid);
+
+/* Callback to match the condition cond to argument rock. Return true if
+ * it matches. */
+typedef int   jmap_filtermatch_cb(void* cond, void* rock);
+
+/* Callback to free the memory of condition cond. */
+typedef void  jmap_filterfree_cb(void* cond);
+
+/* Match the JMAP filter f against rock according to the data-type specific
+ * matcher match. Return true if it matches. */
+static int jmap_filter_match(jmap_filter *f, jmap_filtermatch_cb *match, void *rock)
+{
+    if (f->kind == JMAP_FILTER_KIND_OPER) {
+        size_t i;
+        for (i = 0; i < f->n_conditions; i++) {
+            int m = jmap_filter_match(f->conditions[i], match, rock);
+            if (m && f->op == JMAP_FILTER_OP_OR) {
+                return 1;
+            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
+                return 0;
+            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
+                return 0;
+            }
+        }
+        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
+    } else {
+        return match(f->cond, rock);
+    }
+}
+
+/* Free the JMAP filter f. Call freecond to deallocate conditions. */
+static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
+{
+    size_t i;
+    for (i = 0; i < f->n_conditions; i++) {
+        jmap_filter_free(f->conditions[i], freecond);
+    }
+    if (f->conditions) free(f->conditions);
+    if (f->cond && freecond) {
+        freecond(f->cond);
+    }
+    free(f);
+}
+
+/* Parse the JMAP filter arg. Report any invalid filter arguments in invalid,
+ * prefixed by prefix. */
+static jmap_filter *jmap_filter_parse(json_t *arg,
+                                      const char *prefix,
+                                      json_t *invalid,
+                                      jmap_filterparse_cb *parse)
+{
+    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
+    int pe;
+    const char *val;
+    struct buf buf = BUF_INITIALIZER;
+    int iscond = 1;
+
+    /* operator */
+    pe = jmap_readprop_full(arg, prefix, "operator", 0 /*mandatory*/, invalid, "s", &val);
+    if (pe > 0) {
+        f->kind = JMAP_FILTER_KIND_OPER;
+        if (!strncmp("AND", val, 3)) {
+            f->op = JMAP_FILTER_OP_AND;
+        } else if (!strncmp("OR", val, 2)) {
+            f->op = JMAP_FILTER_OP_OR;
+        } else if (!strncmp("NOT", val, 3)) {
+            f->op = JMAP_FILTER_OP_NOT;
+        } else {
+            buf_printf(&buf, "%s.%s", prefix, "operator");
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    iscond = f->kind == JMAP_FILTER_KIND_COND;
+
+    /* conditions */
+    json_t *conds = json_object_get(arg, "conditions");
+    if (conds && !iscond && json_array_size(conds)) {
+        f->n_conditions = json_array_size(conds);
+        f->conditions = xmalloc(sizeof(struct jmap_filter) * f->n_conditions);
+        size_t i;
+        for (i = 0; i < f->n_conditions; i++) {
+            json_t *cond = json_array_get(conds, i);
+            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
+            f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf), invalid, parse);
+            buf_reset(&buf);
+        }
+    } else if (conds && conds != json_null()) {
+        buf_printf(&buf, "%s.%s", prefix, "conditions");
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    /* Only parse the remainer of arg if it is known not to be an operator. */
+    if (iscond) {
+        f->cond = parse(arg, prefix, invalid);
+    }
+
+    buf_free(&buf);
+    return f;
+}
 
 /* Check if state matches the current mailbox state for mailbox type
  * mbtype. Return zero if states match. */
@@ -3014,6 +3141,9 @@ static int jmap_readprop(json_t *root, const char *name, int mandatory,
                          json_t *invalid, const char *fmt, void *dst) {
     return jmap_readprop_full(root, NULL, name, mandatory, invalid, fmt, dst);
 }
+
+
+/* jmap calendar APIs */
 
 /* Compare the value of the first occurences of property kind in components
  * a and b. Return 0 if they match or if both do not contain kind. Note that
@@ -7037,38 +7167,6 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     return r;
 }
 
-enum jmap_filter_kind {
-    JMAP_FILTER_KIND_COND = 0,
-    JMAP_FILTER_KIND_OPER
-};
-enum jmap_filter_op   {
-    JMAP_FILTER_OP_NONE = 0,
-    JMAP_FILTER_OP_AND,
-    JMAP_FILTER_OP_OR,
-    JMAP_FILTER_OP_NOT
-};
-
-typedef struct jmap_filter {
-    enum jmap_filter_kind kind; /* Either an operator or a condition. */
-    enum jmap_filter_op op;     /* The logical operator. */
-
-    struct jmap_filter **conditions; /* Any sub-conditions.*/
-    size_t n_conditions;             /* The count of sub-conditions. */
-
-    void *cond; /* The data-type specific filter condition. */
-} jmap_filter;
-
-/* Callback to parse the filter condition arg. Append invalid arguments
- * by name into invalid, prefixed by prefix. Return the filter condition. */
-typedef void* jmap_filterparse_cb(json_t* arg, const char* prefix, json_t*invalid);
-
-/* Callback to match the condition cond to argument rock. Return true if
- * it matches. */
-typedef int   jmap_filtermatch_cb(void* cond, void* rock);
-
-/* Callback to free the memory of condition cond. */
-typedef void  jmap_filterfree_cb(void* cond);
-
 typedef struct calevent_filter {
     hash_table *calendars;
     icaltimetype after;
@@ -7129,100 +7227,6 @@ static int calevent_filter_match_textprop(icalcomponent *comp,
     }
 
     return 0;
-}
-
-/* Match the JMAP filter f according to the data-typer specific match. */
-static int jmap_filter_match(jmap_filter *f, jmap_filtermatch_cb *match, void *rock)
-{
-    if (f->kind == JMAP_FILTER_KIND_OPER) {
-        size_t i;
-        for (i = 0; i < f->n_conditions; i++) {
-            int m = jmap_filter_match(f->conditions[i], match, rock);
-            if (m && f->op == JMAP_FILTER_OP_OR) {
-                return 1;
-            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
-                return 0;
-            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
-                return 0;
-            }
-        }
-        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
-    } else {
-        return match(f->cond, rock);
-    }
-}
-
-/* Free the JMAP filter f. Call freecond to deallocate conditions. */
-static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
-{
-    size_t i;
-    for (i = 0; i < f->n_conditions; i++) {
-        jmap_filter_free(f->conditions[i], freecond);
-        free(f->conditions[i]);
-    }
-    if (f->conditions) free(f->conditions);
-    if (f->cond && freecond) {
-        freecond(f->cond);
-        free(f->cond);
-    }
-}
-
-/* Parse the JMAP filter arg. Report any invalid filter arguments in invalid,
- * prefixed by prefix. */
-static jmap_filter *jmap_filter_parse(json_t *arg,
-                                      const char *prefix,
-                                      json_t *invalid,
-                                      jmap_filterparse_cb *parse)
-{
-    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
-    int pe;
-    const char *val;
-    struct buf buf = BUF_INITIALIZER;
-    int iscond = 1;
-
-    /* operator */
-    pe = jmap_readprop_full(arg, prefix, "operator", 0 /*mandatory*/, invalid, "s", &val);
-    if (pe > 0) {
-        f->kind = JMAP_FILTER_KIND_OPER;
-        if (!strncmp("AND", val, 3)) {
-            f->op = JMAP_FILTER_OP_AND;
-        } else if (!strncmp("OR", val, 2)) {
-            f->op = JMAP_FILTER_OP_OR;
-        } else if (!strncmp("NOT", val, 3)) {
-            f->op = JMAP_FILTER_OP_NOT;
-        } else {
-            buf_printf(&buf, "%s.%s", prefix, "operator");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-    }
-    iscond = f->kind == JMAP_FILTER_KIND_COND;
-
-    /* conditions */
-    json_t *conds = json_object_get(arg, "conditions");
-    if (conds && !iscond && json_array_size(conds)) {
-        f->n_conditions = json_array_size(conds);
-        f->conditions = xmalloc(sizeof(struct jmap_filter) * f->n_conditions);
-        size_t i;
-        for (i = 0; i < f->n_conditions; i++) {
-            json_t *cond = json_array_get(conds, i);
-            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf), invalid, parse);
-            buf_reset(&buf);
-        }
-    } else if (conds && conds != json_null()) {
-        buf_printf(&buf, "%s.%s", prefix, "conditions");
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-    }
-
-    /* Only parse the remainer of arg if it is known not to be an operator. */
-    if (iscond) {
-        f->cond = parse(arg, prefix, invalid);
-    }
-
-    buf_free(&buf);
-    return f;
 }
 
 typedef struct calevent_filter_rock {
@@ -7305,6 +7309,7 @@ static void calevent_filter_free(void *vf)
         free_hash_table(f->calendars, NULL);
         free(f->calendars);
     }
+    free(f);
 }
 
 /* Parse the JMAP calendar event FilterOperator or FilterCondition in arg.
@@ -7559,10 +7564,7 @@ static int getCalendarEventList(struct jmap_req *req)
     }
 
 done:
-    if (rock.filter) {
-        jmap_filter_free(rock.filter, calevent_filter_free);
-        free(rock.filter);
-    }
+    if (rock.filter) jmap_filter_free(rock.filter, calevent_filter_free);
     if (rock.events) json_decref(rock.events);
     if (db) caldav_close(db);
     return r;
