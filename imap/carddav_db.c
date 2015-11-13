@@ -293,7 +293,10 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 
 
 #define CMD_SELMBOX CMD_GETFIELDS \
-    " WHERE mailbox = :mailbox AND alive = 1;"
+    " WHERE mailbox = :mailbox AND alive = 1 ORDER BY modseq DESC;"
+
+#define CMD_SELALIVE CMD_GETFIELDS \
+    " WHERE alive = 1 ORDER BY modseq DESC;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
                    int (*cb)(void *rock, struct carddav_data *data),
@@ -305,7 +308,11 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
     struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
 
-    return sqldb_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
+    if (mailbox) {
+        return sqldb_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
+    } else {
+        return sqldb_exec(carddavdb->db, CMD_SELALIVE, bval, &read_cb, &rrock);
+    }
 }
 
 #define CMD_GETUID_GROUPS \
