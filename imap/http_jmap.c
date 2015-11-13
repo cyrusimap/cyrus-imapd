@@ -100,12 +100,15 @@ static void jmap_init(struct buf *serverinfo);
 static void jmap_auth(const char *userid);
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
+
+/* JMAP methods. */
 static int getMailboxes(struct jmap_req *req);
 static int getContactGroups(struct jmap_req *req);
 static int getContactGroupUpdates(struct jmap_req *req);
 static int setContactGroups(struct jmap_req *req);
 static int getContacts(struct jmap_req *req);
 static int getContactUpdates(struct jmap_req *req);
+static int getContactList(struct jmap_req *req);
 static int setContacts(struct jmap_req *req);
 
 static int getCalendars(struct jmap_req *req);
@@ -143,6 +146,7 @@ static const struct message_t {
     { "setContactGroups",       &setContactGroups },
     { "getContacts",            &getContacts },
     { "getContactUpdates",      &getContactUpdates },
+    { "getContactList",         &getContactList },
     { "setContacts",            &setContacts },
     { "getCalendars",           &getCalendars },
     { "getCalendarUpdates",     &getCalendarUpdates },
@@ -345,6 +349,278 @@ static int jmap_post(struct transaction_t *txn,
     return ret;
 }
 
+/* JMAP filters */
+enum jmap_filter_kind {
+    JMAP_FILTER_KIND_COND = 0,
+    JMAP_FILTER_KIND_OPER
+};
+enum jmap_filter_op   {
+    JMAP_FILTER_OP_NONE = 0,
+    JMAP_FILTER_OP_AND,
+    JMAP_FILTER_OP_OR,
+    JMAP_FILTER_OP_NOT
+};
+
+typedef struct jmap_filter {
+    enum jmap_filter_kind kind;
+    enum jmap_filter_op op;
+
+    struct jmap_filter **conditions;
+    size_t n_conditions;
+
+    void *cond;
+} jmap_filter;
+
+/* Callback to parse the filter condition arg. Append invalid arguments
+ * by name into invalid, prefixed by prefix. Return the filter condition. */
+typedef void* jmap_filterparse_cb(json_t* arg, const char* prefix, json_t*invalid);
+
+/* Callback to match the condition cond to argument rock. Return true if
+ * it matches. */
+typedef int   jmap_filtermatch_cb(void* cond, void* rock);
+
+/* Callback to free the memory of condition cond. */
+typedef void  jmap_filterfree_cb(void* cond);
+
+/* Match the JMAP filter f against rock according to the data-type specific
+ * matcher match. Return true if it matches. */
+static int jmap_filter_match(jmap_filter *f, jmap_filtermatch_cb *match, void *rock)
+{
+    if (f->kind == JMAP_FILTER_KIND_OPER) {
+        size_t i;
+        for (i = 0; i < f->n_conditions; i++) {
+            int m = jmap_filter_match(f->conditions[i], match, rock);
+            if (m && f->op == JMAP_FILTER_OP_OR) {
+                return 1;
+            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
+                return 0;
+            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
+                return 0;
+            }
+        }
+        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
+    } else {
+        return match(f->cond, rock);
+    }
+}
+
+/* Free the JMAP filter f. Call freecond to deallocate conditions. */
+static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
+{
+    size_t i;
+    for (i = 0; i < f->n_conditions; i++) {
+        jmap_filter_free(f->conditions[i], freecond);
+    }
+    if (f->conditions) free(f->conditions);
+    if (f->cond && freecond) {
+        freecond(f->cond);
+    }
+    free(f);
+}
+
+/* Parse the JMAP filter arg. Report any invalid filter arguments in invalid,
+ * prefixed by prefix. */
+static jmap_filter *jmap_filter_parse(json_t *arg,
+                                      const char *prefix,
+                                      json_t *invalid,
+                                      jmap_filterparse_cb *parse)
+{
+    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
+    int pe;
+    const char *val;
+    struct buf buf = BUF_INITIALIZER;
+    int iscond = 1;
+
+    /* operator */
+    pe = jmap_readprop_full(arg, prefix, "operator", 0 /*mandatory*/, invalid, "s", &val);
+    if (pe > 0) {
+        f->kind = JMAP_FILTER_KIND_OPER;
+        if (!strncmp("AND", val, 3)) {
+            f->op = JMAP_FILTER_OP_AND;
+        } else if (!strncmp("OR", val, 2)) {
+            f->op = JMAP_FILTER_OP_OR;
+        } else if (!strncmp("NOT", val, 3)) {
+            f->op = JMAP_FILTER_OP_NOT;
+        } else {
+            buf_printf(&buf, "%s.%s", prefix, "operator");
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    iscond = f->kind == JMAP_FILTER_KIND_COND;
+
+    /* conditions */
+    json_t *conds = json_object_get(arg, "conditions");
+    if (conds && !iscond && json_array_size(conds)) {
+        f->n_conditions = json_array_size(conds);
+        f->conditions = xmalloc(sizeof(struct jmap_filter) * f->n_conditions);
+        size_t i;
+        for (i = 0; i < f->n_conditions; i++) {
+            json_t *cond = json_array_get(conds, i);
+            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
+            f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf), invalid, parse);
+            buf_reset(&buf);
+        }
+    } else if (conds && conds != json_null()) {
+        buf_printf(&buf, "%s.%s", prefix, "conditions");
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    /* Only parse the remainer of arg if it is known not to be an operator. */
+    if (iscond) {
+        f->cond = parse(arg, prefix, invalid);
+    }
+
+    buf_free(&buf);
+    return f;
+}
+
+/* Return true if needle is found in haystack */
+static int jmap_match_text(const char *haystack, const char *needle) {
+    /* XXX This is just a very crude text matcher. */
+    return stristr(haystack, needle) != NULL;
+}
+
+/* Return true if text matches the value of arg's property named name. If 
+ * name is NULL, match text to any JSON string property of arg. */
+static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) {
+    if (name) {
+        json_t *val = json_object_get(arg, name);
+        if (val && val != json_null() && json_typeof(val) == JSON_STRING) {
+            return jmap_match_text(json_string_value(val), text);
+        }
+    }
+    /* XXX support NULL name */
+    return 0;
+}
+
+/* Check if state matches the current mailbox state for mailbox type
+ * mbtype. Return zero if states match. */
+static int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req) {
+    if (state && state != json_null()) {
+        const char *s = json_string_value(state);
+        if (!s) {
+            return -1;
+        }
+        modseq_t clientState = str2uint64(s);
+        switch (mbtype) {
+         case MBTYPE_CALENDAR:
+             return clientState != req->counters.caldavmodseq;
+         case MBTYPE_ADDRESSBOOK:
+             return clientState != req->counters.carddavmodseq;
+         default:
+             return clientState != req->counters.mailmodseq;
+        }
+    }
+    return 0;
+}
+
+/* Create a state token for the JMAP type mbtype in response res. */
+static json_t* jmap_getstate(int mbtype, struct jmap_req *req) {
+    struct buf buf = BUF_INITIALIZER;
+    json_t *state = NULL;
+    modseq_t modseq;
+
+    /* Determine current counter by mailbox type. */
+    switch (mbtype) {
+        case MBTYPE_CALENDAR:
+            modseq = req->counters.caldavmodseq;
+            break;
+        case MBTYPE_ADDRESSBOOK:
+            modseq = req->counters.carddavmodseq;
+            break;
+        default:
+            modseq = req->counters.highestmodseq;
+    }
+
+    buf_printf(&buf, "%llu", modseq);
+    state = json_string(buf_cstring(&buf));
+    buf_free(&buf);
+
+    return state;
+}
+
+/* Bump the state for mailboxes of type mbtype. Return 0 on success. */
+static int jmap_bumpstate(int mbtype, struct jmap_req *req) {
+    int r = 0;
+    modseq_t modseq;
+    char *mboxname = mboxname_user_mbox(req->userid, NULL);
+
+    /* Read counters. */
+    r = mboxname_read_counters(mboxname, &req->counters);
+    if (r) goto done;
+
+    /* Determine current counter by mailbox type. */
+    switch (mbtype) {
+        case MBTYPE_CALENDAR:
+            modseq = req->counters.caldavmodseq;
+            break;
+        case MBTYPE_ADDRESSBOOK:
+            modseq = req->counters.carddavmodseq;
+            break;
+        default:
+            modseq = req->counters.highestmodseq;
+    }
+
+    /* Bump current counter... */
+    modseq = mboxname_nextmodseq(mboxname, modseq, mbtype);
+
+    /* ...and update counters. */
+    r = mboxname_read_counters(mboxname, &req->counters);
+    if (r) goto done;
+
+done:
+    free(mboxname);
+    return r;
+}
+
+
+/* Read the property named name into dst, formatted according to the json
+ * unpack format fmt. If unpacking failed, or name is mandatory and not found
+ * in root, append name (prefixed by any non-NULL prefix) to invalid.
+ *
+ * Return a negative value for a missing or invalid property.
+ * Return a positive value if a property was read, zero otherwise. */
+static int jmap_readprop_full(json_t *root,
+                              const char *prefix,
+                              const char *name,
+                              int mandatory,
+                              json_t *invalid,
+                              const char *fmt,
+                              void *dst)
+{
+    json_t *jval = json_object_get(root, name);
+    if (!jval && mandatory) {
+        json_array_append_new(invalid, json_string(name));
+        return -1;
+    }
+    if (jval) {
+        json_error_t err;
+        if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
+            if (prefix) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "%s.%s", prefix, name);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_free(&buf);
+            } else {
+                json_array_append_new(invalid, json_string(name));
+            }
+            return -2;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int jmap_readprop(json_t *root, const char *name, int mandatory,
+                         json_t *invalid, const char *fmt, void *dst) {
+    return jmap_readprop_full(root, NULL, name, mandatory, invalid, fmt, dst);
+}
+
+/*****************************************************************************
+ * JMAP Mailboxes API
+ ****************************************************************************/
 
 /* mboxlist_findall() callback to list mailboxes */
 int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
@@ -471,6 +747,10 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
     free(userid);
     buf_free(&buf);
 }
+
+/*****************************************************************************
+ * JMAP Contacts API
+ ****************************************************************************/
 
 struct cards_rock {
     struct jmap_req *req;
@@ -1376,70 +1656,39 @@ static const char *_servicetype(const char *type)
     return type;
 }
 
-static int getcontacts_cb(void *rock, struct carddav_data *cdata)
+/* Convert the VCARD card, contained in record and cdata and mailbox 
+ * mboxname. If props is not NULL, only convert properties in props. */
+static json_t *jmap_contact_from_vcard(struct vparse_card *card,
+                                       struct carddav_data *cdata,
+                                       struct index_record *record,
+                                       hash_table *props,
+                                       const char *mboxname)
 {
-    struct cards_rock *crock = (struct cards_rock *) rock;
-    struct index_record record;
     strarray_t *empty = NULL;
-    int r = 0;
-
-    if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
-        mailbox_close(&crock->mailbox);
-        r = mailbox_open_irl(cdata->dav.mailbox, &crock->mailbox);
-        if (r) return r;
-    }
-
-    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) return r;
-
-    crock->rows++;
-
-    /* XXX - this could definitely be refactored from here and mailbox.c */
-    struct buf msg_buf = BUF_INITIALIZER;
-    struct vparse_state vparser;
-
-    /* Load message containing the resource and parse vcard data */
-    r = mailbox_map_record(crock->mailbox, &record, &msg_buf);
-    if (r) return r;
-
-    memset(&vparser, 0, sizeof(struct vparse_state));
-    vparser.base = buf_cstring(&msg_buf) + record.header_size;
-    vparse_set_multival(&vparser, "adr");
-    vparse_set_multival(&vparser, "org");
-    vparse_set_multival(&vparser, "n");
-    r = vparse_parse(&vparser, 0);
-    buf_free(&msg_buf);
-    if (r || !vparser.card || !vparser.card->objects) {
-        vparse_free(&vparser);
-        return r;
-    }
-    struct vparse_card *card = vparser.card->objects;
-
     json_t *obj = json_pack("{}");
+    struct buf buf = BUF_INITIALIZER;
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
 
     json_object_set_new(obj, "addressbookId",
                         json_string(strrchr(cdata->dav.mailbox, '.')+1));
 
-    if (_wantprop(crock->props, "isFlagged")) {
+    if (_wantprop(props, "isFlagged")) {
         json_object_set_new(obj, "isFlagged",
-                            record.system_flags & FLAG_FLAGGED ? json_true() :
+                            record->system_flags & FLAG_FLAGGED ? json_true() :
                             json_false());
     }
 
-    struct buf buf = BUF_INITIALIZER;
-
-    if (_wantprop(crock->props, "x-href")) {
+    if (_wantprop(props, "x-href")) {
         _add_xhref(obj, cdata->dav.mailbox, cdata->dav.resource);
     }
 
-    if (_wantprop(crock->props, "x-importance")) {
+    if (_wantprop(props, "x-importance")) {
         double val = 0;
         const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
         buf_reset(&buf);
-        annotatemore_msg_lookup(crock->mailbox->name, record.uid,
+        annotatemore_msg_lookup(mboxname, record->uid,
                                 ns, "", &buf);
         if (buf.len)
             val = strtod(buf_cstring(&buf), NULL);
@@ -1454,7 +1703,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
     /* name fields: Family; Given; Middle; Prefix; Suffix. */
 
-    if (_wantprop(crock->props, "lastName")) {
+    if (_wantprop(props, "lastName")) {
         const char *family = strarray_safenth(n, 0);
         const char *suffix = strarray_safenth(n, 4);
         buf_setcstr(&buf, family);
@@ -1465,7 +1714,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
         json_object_set_new(obj, "lastName", json_string(buf_cstring(&buf)));
     }
 
-    if (_wantprop(crock->props, "firstName")) {
+    if (_wantprop(props, "firstName")) {
         const char *given = strarray_safenth(n, 1);
         const char *middle = strarray_safenth(n, 2);
         buf_setcstr(&buf, given);
@@ -1475,26 +1724,26 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
         }
         json_object_set_new(obj, "firstName", json_string(buf_cstring(&buf)));
     }
-    if (_wantprop(crock->props, "prefix")) {
+    if (_wantprop(props, "prefix")) {
         const char *prefix = strarray_safenth(n, 3);
         json_object_set_new(obj, "prefix",
                             json_string(prefix)); /* just prefix */
     }
 
     /* org fields */
-    if (_wantprop(crock->props, "company"))
+    if (_wantprop(props, "company"))
         json_object_set_new(obj, "company",
                             json_string(strarray_safenth(org, 0)));
-    if (_wantprop(crock->props, "department"))
+    if (_wantprop(props, "department"))
         json_object_set_new(obj, "department",
                             json_string(strarray_safenth(org, 1)));
-    if (_wantprop(crock->props, "jobTitle"))
+    if (_wantprop(props, "jobTitle"))
         json_object_set_new(obj, "jobTitle",
                             json_string(strarray_safenth(org, 2)));
     /* XXX - position? */
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(crock->props, "addresses")) {
+    if (_wantprop(props, "addresses")) {
         json_t *adr = json_array();
 
         struct vparse_entry *entry;
@@ -1564,7 +1813,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(crock->props, "emails")) {
+    if (_wantprop(props, "emails")) {
         json_t *emails = json_array();
 
         struct vparse_entry *entry;
@@ -1615,7 +1864,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(crock->props, "phones")) {
+    if (_wantprop(props, "phones")) {
         json_t *phones = json_array();
 
         struct vparse_entry *entry;
@@ -1662,7 +1911,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(crock->props, "online")) {
+    if (_wantprop(props, "online")) {
         json_t *online = json_array();
 
         struct vparse_entry *entry;
@@ -1733,23 +1982,23 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
         json_object_set_new(obj, "online", online);
     }
 
-    if (_wantprop(crock->props, "nickname")) {
+    if (_wantprop(props, "nickname")) {
         const char *item = vparse_stringval(card, "nickname");
         json_object_set_new(obj, "nickname", json_string(item ? item : ""));
     }
 
-    if (_wantprop(crock->props, "birthday")) {
+    if (_wantprop(props, "birthday")) {
         struct vparse_entry *entry = vparse_get_entry(card, NULL, "bday");
         _date_to_jmap(entry, &buf);
         json_object_set_new(obj, "birthday", json_string(buf_cstring(&buf)));
     }
 
-    if (_wantprop(crock->props, "notes")) {
+    if (_wantprop(props, "notes")) {
         const char *item = vparse_stringval(card, "note");
         json_object_set_new(obj, "notes", json_string(item ? item : ""));
     }
 
-    if (_wantprop(crock->props, "x-hasPhoto")) {
+    if (_wantprop(props, "x-hasPhoto")) {
         const char *item = vparse_stringval(card, "photo");
         json_object_set_new(obj, "x-hasPhoto",
                             item ? json_true() : json_false());
@@ -1757,12 +2006,55 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
     /* XXX - other fields */
 
+    buf_free(&buf);
+    if (empty) strarray_free(empty);
+    return obj;
+}
+
+static int getcontacts_cb(void *rock, struct carddav_data *cdata)
+{
+    struct cards_rock *crock = (struct cards_rock *) rock;
+    struct index_record record;
+    int r = 0;
+
+    if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
+        mailbox_close(&crock->mailbox);
+        r = mailbox_open_irl(cdata->dav.mailbox, &crock->mailbox);
+        if (r) return r;
+    }
+
+    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
+    if (r) return r;
+
+    crock->rows++;
+
+    /* XXX - this could definitely be refactored from here and mailbox.c */
+    struct buf msg_buf = BUF_INITIALIZER;
+    struct vparse_state vparser;
+
+    /* Load message containing the resource and parse vcard data */
+    r = mailbox_map_record(crock->mailbox, &record, &msg_buf);
+    if (r) return r;
+
+    memset(&vparser, 0, sizeof(struct vparse_state));
+    vparser.base = buf_cstring(&msg_buf) + record.header_size;
+    vparse_set_multival(&vparser, "adr");
+    vparse_set_multival(&vparser, "org");
+    vparse_set_multival(&vparser, "n");
+    r = vparse_parse(&vparser, 0);
+    buf_free(&msg_buf);
+    if (r || !vparser.card || !vparser.card->objects) {
+        vparse_free(&vparser);
+        return r;
+    }
+    struct vparse_card *card = vparser.card->objects;
+
+    /* Convert the VCARD to a JMAP contact. */
+    json_t *obj = jmap_contact_from_vcard(card, cdata, &record,
+                                          crock->props, crock->mailbox->name);
     json_array_append_new(crock->array, obj);
 
-    if (empty) strarray_free(empty);
-
     vparse_free(&vparser);
-    buf_free(&buf);
 
     return 0;
 }
@@ -1874,6 +2166,365 @@ static int getContactUpdates(struct jmap_req *req)
   done:
     carddav_close(db);
     buf_free(&buf);
+    return r;
+}
+
+typedef struct contact_filter {
+    json_t *inContactGroup;
+    int isFlagged;
+    const char *text;
+    const char *prefix;
+    const char *firstName;
+    const char *lastName;
+    const char *suffix;
+    const char *nickname;
+    const char *company;
+    const char *department;
+    const char *jobTitle;
+    const char *email;
+    const char *phone;
+    const char *online;
+    const char *address;
+    const char *notes;
+} contact_filter;
+
+typedef struct contact_filter_rock {
+    struct carddav_data *cdata;
+    json_t *contact;
+} contact_filter_rock;
+
+/* Match the contact in rock against filter. */
+static int contact_filter_match(void *vf, void *rock)
+{
+    contact_filter *f = (contact_filter *) vf;
+    contact_filter_rock *cfrock = (contact_filter_rock*) rock;
+    json_t *contact = cfrock->contact;
+
+    /* XXX inContactGroup */
+    /* XXX isFlagged */
+    /* XXX text */
+    /*  prefix */
+    if (f->prefix && !jmap_match_jsonprop(contact, "prefix", f->prefix)) {
+        return 0;
+    }
+    /* firstName */
+    if (f->firstName && !jmap_match_jsonprop(contact, "firstName", f->firstName)) {
+        return 0;
+    }
+    /* lastName */
+    if (f->lastName && !jmap_match_jsonprop(contact, "lastName", f->lastName)) {
+        return 0;
+    }
+    /*  suffix */
+    if (f->suffix && !jmap_match_jsonprop(contact, "suffix", f->suffix)) {
+        return 0;
+    }
+    /*  nickname */
+    if (f->nickname && !jmap_match_jsonprop(contact, "nickname", f->nickname)) {
+        return 0;
+    }
+    /*  company */
+    if (f->company && !jmap_match_jsonprop(contact, "company", f->company)) {
+        return 0;
+    }
+    /*  department */
+    if (f->department && !jmap_match_jsonprop(contact, "department", f->department)) {
+        return 0;
+    }
+    /*  jobTitle */
+    if (f->jobTitle && !jmap_match_jsonprop(contact, "jobTitle", f->jobTitle)) {
+        return 0;
+    }
+    /* XXX email */
+    if (f->email) {
+    }
+    /*  XXX phone */
+    if (f->phone) {
+    }
+    /*  XXX online */
+    if (f->online) {
+    }
+    /* XXX address */
+    if (f->address) {
+    }
+    /*  notes */
+    if (f->notes && !jmap_match_jsonprop(contact, "notes", f->notes)) {
+        return 0;
+    }
+
+    /* All matched. */
+    return 1;
+}
+
+/* Free the memory allocated by this contact filter. */
+static void contact_filter_free(void *vf)
+{
+    contact_filter *f = (contact_filter*) vf;
+    free(f);
+}
+
+/* Parse the JMAP Contact FilterCondition in arg.
+ * Report any invalid properties in invalid, prefixed by prefix.
+ * Return NULL on error. */
+static void *contact_filter_parse(json_t *arg,
+                                   const char *prefix,
+                                   json_t *invalid)
+{
+    contact_filter *f = (contact_filter *) xzmalloc(sizeof(struct contact_filter));
+    struct buf buf = BUF_INITIALIZER;
+
+    /* inContactGroup */
+    f->inContactGroup = json_object_get(arg, "inContactGroup");
+    if (f->inContactGroup == json_null()) {
+        f->inContactGroup = NULL;
+    } else if (f->inContactGroup && json_typeof(f->inContactGroup) != JSON_ARRAY) {
+        buf_printf(&buf, "%s.inContactGroup", prefix);
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    /* isFlagged */
+    if (json_object_get(arg, "isFlagged") != json_null()) {
+        jmap_readprop_full(arg, prefix, "isFlagged", 0, invalid, "b", &f->isFlagged);
+    }
+
+    /* text */
+    if (json_object_get(arg, "text") != json_null()) {
+        jmap_readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
+    }
+    /* prefix */
+    if (json_object_get(arg, "prefix") != json_null()) {
+        jmap_readprop_full(arg, prefix, "prefix", 0, invalid, "s", &f->prefix);
+    }
+    /* firstName */
+    if (json_object_get(arg, "firstName") != json_null()) {
+        jmap_readprop_full(arg, prefix, "firstName", 0, invalid, "s", &f->firstName);
+    }
+    /* lastName */
+    if (json_object_get(arg, "lastName") != json_null()) {
+        jmap_readprop_full(arg, prefix, "lastName", 0, invalid, "s", &f->lastName);
+    }
+    /* suffix */
+    if (json_object_get(arg, "suffix") != json_null()) {
+        jmap_readprop_full(arg, prefix, "suffix", 0, invalid, "s", &f->suffix);
+    }
+    /* nickname */
+    if (json_object_get(arg, "nickname") != json_null()) {
+        jmap_readprop_full(arg, prefix, "nickname", 0, invalid, "s", &f->nickname);
+    }
+    /* company */
+    if (json_object_get(arg, "company") != json_null()) {
+        jmap_readprop_full(arg, prefix, "company", 0, invalid, "s", &f->company);
+    }
+    /* department */
+    if (json_object_get(arg, "department") != json_null()) {
+        jmap_readprop_full(arg, prefix, "department", 0, invalid, "s", &f->department);
+    }
+    /* jobTitle */
+    if (json_object_get(arg, "jobTitle") != json_null()) {
+        jmap_readprop_full(arg, prefix, "jobTitle", 0, invalid, "s", &f->jobTitle);
+    }
+    /* email */
+    if (json_object_get(arg, "email") != json_null()) {
+        jmap_readprop_full(arg, prefix, "email", 0, invalid, "s", &f->email);
+    }
+    /* phone */
+    if (json_object_get(arg, "phone") != json_null()) {
+        jmap_readprop_full(arg, prefix, "phone", 0, invalid, "s", &f->phone);
+    }
+    /* online */
+    if (json_object_get(arg, "online") != json_null()) {
+        jmap_readprop_full(arg, prefix, "online", 0, invalid, "s", &f->online);
+    }
+    /* address */
+    if (json_object_get(arg, "address") != json_null()) {
+        jmap_readprop_full(arg, prefix, "address", 0, invalid, "s", &f->address);
+    }
+    /* notes */
+    if (json_object_get(arg, "notes") != json_null()) {
+        jmap_readprop_full(arg, prefix, "notes", 0, invalid, "s", &f->notes);
+    }
+
+    buf_free(&buf);
+
+    return f;
+}
+
+struct contactlist_rock {
+    jmap_filter *filter;
+    size_t position;
+    size_t limit;
+    size_t total;
+    json_t *contacts;
+
+    struct mailbox *mailbox;
+};
+
+static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
+    struct contactlist_rock *crock = (struct contactlist_rock*) rock;
+    struct index_record record;
+    int r = 0;
+
+    if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
+        return 0;
+    }
+
+    /* Ignore anything but contacts. */
+    if (cdata->kind != CARDDAV_KIND_CONTACT) {
+        return 0;
+    }
+
+
+    /* Open mailbox. */
+    if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
+        mailbox_close(&crock->mailbox);
+        r = mailbox_open_irl(cdata->dav.mailbox, &crock->mailbox);
+        if (r) goto done;
+    }
+
+    /* Load record. */
+    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
+    if (r) goto done;
+
+    /* Load contact from record. */
+    struct vparse_state vparser;
+    struct buf buf = BUF_INITIALIZER;
+
+    r = mailbox_map_record(crock->mailbox, &record, &buf);
+    if (r) goto done;
+    memset(&vparser, 0, sizeof(struct vparse_state));
+    vparser.base = buf_cstring(&buf) + record.header_size;
+    vparse_set_multival(&vparser, "adr");
+    vparse_set_multival(&vparser, "org");
+    vparse_set_multival(&vparser, "n");
+    r = vparse_parse(&vparser, 0);
+    buf_free(&buf);
+    if (r || !vparser.card || !vparser.card->objects) {
+        vparse_free(&vparser);
+        goto done;
+    }
+
+    /* Convert the VCARD to a JMAP contact. */
+    /* XXX If this conversion turns out to be wasteful, then first initialize
+     * props with any non-NULL field in filter f or its subconditions. */
+    json_t *contact = jmap_contact_from_vcard(vparser.card->objects, cdata, &record,
+                                              NULL /* props */, crock->mailbox->name);
+
+    /* Match the contact against the filter and update statistics. */
+    struct contact_filter_rock cfrock;
+    cfrock.cdata = cdata;
+    cfrock.contact = contact;
+    if (crock->filter && !jmap_filter_match(crock->filter, &contact_filter_match, &cfrock)) {
+        goto done;
+    }
+    crock->total++;
+    if (crock->position > crock->total) {
+        goto done;
+    }
+    if (crock->limit && crock->limit >= json_array_size(crock->contacts)) {
+        goto done;
+    }
+
+    /* All done. Add the contact identifier. */
+    json_array_append_new(crock->contacts, json_string(cdata->vcard_uid));
+
+done:
+    return r;
+}
+
+static int getContactList(struct jmap_req *req)
+{
+    int r = 0, pe;
+    json_t *invalid;
+    int dofetch = 0;
+    json_t *filter;
+    struct contactlist_rock rock;
+    struct carddav_db *db;
+
+    memset(&rock, 0, sizeof(struct contactlist_rock));
+
+    db = carddav_open_userid(req->userid);
+    if (!db) {
+        syslog(LOG_ERR, "carddav_open_userid failed for user %s", req->userid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Parse and validate arguments. */
+    invalid = json_pack("[]");
+
+    /* filter */
+    filter = json_object_get(req->args, "filter");
+    if (filter && filter != json_null()) {
+        rock.filter = jmap_filter_parse(filter, "filter", invalid, contact_filter_parse);
+    }
+
+    /* position */
+    json_int_t pos = 0;
+    if (json_object_get(req->args, "position") != json_null()) {
+        pe = jmap_readprop(req->args, "position", 0 /*mandatory*/, invalid, "i", &pos);
+        if (pe > 0 && pos < 0) {
+            json_array_append_new(invalid, json_string("position"));
+        }
+    }
+    rock.position = pos;
+
+    /* limit */
+    json_int_t limit = 0;
+    if (json_object_get(req->args, "limit") != json_null()) {
+        pe = jmap_readprop(req->args, "limit", 0 /*mandatory*/, invalid, "i", &limit);
+        if (pe > 0 && limit < 0) {
+            json_array_append_new(invalid, json_string("limit"));
+        }
+    }
+    rock.limit = limit;
+
+    /* fetchContacts */
+    if (json_object_get(req->args, "fetchContacts") != json_null()) {
+        jmap_readprop(req->args, "fetchContacts", 0 /*mandatory*/, invalid, "b", &dofetch);
+    }
+
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* Inspect every entry in this accounts addressbok mailboxes. */
+    rock.contacts = json_pack("[]");
+    r = carddav_foreach(db, NULL, getcontactlist_cb, &rock);
+    if (rock.mailbox) mailbox_close(&rock.mailbox);
+    if (r) goto done;
+
+    /* Prepare response. */
+    json_t *contactList = json_pack("{}");
+    json_object_set_new(contactList, "accountId", json_string(req->userid));
+    json_object_set_new(contactList, "state", jmap_getstate(MBTYPE_CALENDAR, req));
+    json_object_set_new(contactList, "position", json_integer(rock.position));
+    json_object_set_new(contactList, "total", json_integer(rock.total));
+    json_object_set(contactList, "contactIds", rock.contacts);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("contactList"));
+    json_array_append_new(item, contactList);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+    /* Fetch updated records, if requested. */
+    if (dofetch && json_array_size(rock.contacts)) {
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        json_object_set(subreq.args, "ids", rock.contacts);
+        r = getContacts(&subreq);
+        json_decref(subreq.args);
+    }
+
+done:
+    if (rock.filter) jmap_filter_free(rock.filter, contact_filter_free);
+    if (rock.contacts) json_decref(rock.contacts);
+    if (db) carddav_close(db);
     return r;
 }
 
@@ -2666,7 +3317,10 @@ done:
     return r;
 }
 
-/*********************** CALENDARS **********************/
+
+/*****************************************************************************
+ * JMAP Calendars API
+ ****************************************************************************/
 
 /* Helper flags for setCalendarEvents */
 #define JMAP_CREATE     (1<<0) /* Current request is a create. */
@@ -2890,256 +3544,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
 done:
     return r;
-}
-
-/* JMAP filters */
-enum jmap_filter_kind {
-    JMAP_FILTER_KIND_COND = 0,
-    JMAP_FILTER_KIND_OPER
-};
-enum jmap_filter_op   {
-    JMAP_FILTER_OP_NONE = 0,
-    JMAP_FILTER_OP_AND,
-    JMAP_FILTER_OP_OR,
-    JMAP_FILTER_OP_NOT
-};
-
-typedef struct jmap_filter {
-    enum jmap_filter_kind kind;
-    enum jmap_filter_op op;
-
-    struct jmap_filter **conditions;
-    size_t n_conditions;
-
-    void *cond;
-} jmap_filter;
-
-/* Callback to parse the filter condition arg. Append invalid arguments
- * by name into invalid, prefixed by prefix. Return the filter condition. */
-typedef void* jmap_filterparse_cb(json_t* arg, const char* prefix, json_t*invalid);
-
-/* Callback to match the condition cond to argument rock. Return true if
- * it matches. */
-typedef int   jmap_filtermatch_cb(void* cond, void* rock);
-
-/* Callback to free the memory of condition cond. */
-typedef void  jmap_filterfree_cb(void* cond);
-
-/* Match the JMAP filter f against rock according to the data-type specific
- * matcher match. Return true if it matches. */
-static int jmap_filter_match(jmap_filter *f, jmap_filtermatch_cb *match, void *rock)
-{
-    if (f->kind == JMAP_FILTER_KIND_OPER) {
-        size_t i;
-        for (i = 0; i < f->n_conditions; i++) {
-            int m = jmap_filter_match(f->conditions[i], match, rock);
-            if (m && f->op == JMAP_FILTER_OP_OR) {
-                return 1;
-            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
-                return 0;
-            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
-                return 0;
-            }
-        }
-        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
-    } else {
-        return match(f->cond, rock);
-    }
-}
-
-/* Free the JMAP filter f. Call freecond to deallocate conditions. */
-static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
-{
-    size_t i;
-    for (i = 0; i < f->n_conditions; i++) {
-        jmap_filter_free(f->conditions[i], freecond);
-    }
-    if (f->conditions) free(f->conditions);
-    if (f->cond && freecond) {
-        freecond(f->cond);
-    }
-    free(f);
-}
-
-/* Parse the JMAP filter arg. Report any invalid filter arguments in invalid,
- * prefixed by prefix. */
-static jmap_filter *jmap_filter_parse(json_t *arg,
-                                      const char *prefix,
-                                      json_t *invalid,
-                                      jmap_filterparse_cb *parse)
-{
-    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
-    int pe;
-    const char *val;
-    struct buf buf = BUF_INITIALIZER;
-    int iscond = 1;
-
-    /* operator */
-    pe = jmap_readprop_full(arg, prefix, "operator", 0 /*mandatory*/, invalid, "s", &val);
-    if (pe > 0) {
-        f->kind = JMAP_FILTER_KIND_OPER;
-        if (!strncmp("AND", val, 3)) {
-            f->op = JMAP_FILTER_OP_AND;
-        } else if (!strncmp("OR", val, 2)) {
-            f->op = JMAP_FILTER_OP_OR;
-        } else if (!strncmp("NOT", val, 3)) {
-            f->op = JMAP_FILTER_OP_NOT;
-        } else {
-            buf_printf(&buf, "%s.%s", prefix, "operator");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-    }
-    iscond = f->kind == JMAP_FILTER_KIND_COND;
-
-    /* conditions */
-    json_t *conds = json_object_get(arg, "conditions");
-    if (conds && !iscond && json_array_size(conds)) {
-        f->n_conditions = json_array_size(conds);
-        f->conditions = xmalloc(sizeof(struct jmap_filter) * f->n_conditions);
-        size_t i;
-        for (i = 0; i < f->n_conditions; i++) {
-            json_t *cond = json_array_get(conds, i);
-            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf), invalid, parse);
-            buf_reset(&buf);
-        }
-    } else if (conds && conds != json_null()) {
-        buf_printf(&buf, "%s.%s", prefix, "conditions");
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-    }
-
-    /* Only parse the remainer of arg if it is known not to be an operator. */
-    if (iscond) {
-        f->cond = parse(arg, prefix, invalid);
-    }
-
-    buf_free(&buf);
-    return f;
-}
-
-/* Check if state matches the current mailbox state for mailbox type
- * mbtype. Return zero if states match. */
-static int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req) {
-    if (state && state != json_null()) {
-        const char *s = json_string_value(state);
-        if (!s) {
-            return -1;
-        }
-        modseq_t clientState = str2uint64(s);
-        switch (mbtype) {
-         case MBTYPE_CALENDAR:
-             return clientState != req->counters.caldavmodseq;
-         case MBTYPE_ADDRESSBOOK:
-             return clientState != req->counters.carddavmodseq;
-         default:
-             return clientState != req->counters.mailmodseq;
-        }
-    }
-    return 0;
-}
-
-/* Create a state token for the JMAP type mbtype in response res. */
-static json_t* jmap_getstate(int mbtype, struct jmap_req *req) {
-    struct buf buf = BUF_INITIALIZER;
-    json_t *state = NULL;
-    modseq_t modseq;
-
-    /* Determine current counter by mailbox type. */
-    switch (mbtype) {
-        case MBTYPE_CALENDAR:
-            modseq = req->counters.caldavmodseq;
-            break;
-        case MBTYPE_ADDRESSBOOK:
-            modseq = req->counters.carddavmodseq;
-            break;
-        default:
-            modseq = req->counters.highestmodseq;
-    }
-
-    buf_printf(&buf, "%llu", modseq);
-    state = json_string(buf_cstring(&buf));
-    buf_free(&buf);
-
-    return state;
-}
-
-/* Bump the state for mailboxes of type mbtype. Return 0 on success. */
-static int jmap_bumpstate(int mbtype, struct jmap_req *req) {
-    int r = 0;
-    modseq_t modseq;
-    char *mboxname = mboxname_user_mbox(req->userid, NULL);
-
-    /* Read counters. */
-    r = mboxname_read_counters(mboxname, &req->counters);
-    if (r) goto done;
-
-    /* Determine current counter by mailbox type. */
-    switch (mbtype) {
-        case MBTYPE_CALENDAR:
-            modseq = req->counters.caldavmodseq;
-            break;
-        case MBTYPE_ADDRESSBOOK:
-            modseq = req->counters.carddavmodseq;
-            break;
-        default:
-            modseq = req->counters.highestmodseq;
-    }
-
-    /* Bump current counter... */
-    modseq = mboxname_nextmodseq(mboxname, modseq, mbtype);
-
-    /* ...and update counters. */
-    r = mboxname_read_counters(mboxname, &req->counters);
-    if (r) goto done;
-
-done:
-    free(mboxname);
-    return r;
-}
-
-
-/* Read the property named name into dst, formatted according to the json
- * unpack format fmt. If unpacking failed, or name is mandatory and not found
- * in root, append name (prefixed by any non-NULL prefix) to invalid.
- *
- * Return a negative value for a missing or invalid property.
- * Return a positive value if a property was read, zero otherwise. */
-static int jmap_readprop_full(json_t *root,
-                              const char *prefix,
-                              const char *name,
-                              int mandatory,
-                              json_t *invalid,
-                              const char *fmt,
-                              void *dst)
-{
-    json_t *jval = json_object_get(root, name);
-    if (!jval && mandatory) {
-        json_array_append_new(invalid, json_string(name));
-        return -1;
-    }
-    if (jval) {
-        json_error_t err;
-        if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
-            if (prefix) {
-                struct buf buf = BUF_INITIALIZER;
-                buf_printf(&buf, "%s.%s", prefix, name);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_free(&buf);
-            } else {
-                json_array_append_new(invalid, json_string(name));
-            }
-            return -2;
-        }
-        return 1;
-    }
-    return 0;
-}
-
-static int jmap_readprop(json_t *root, const char *name, int mandatory,
-                         json_t *invalid, const char *fmt, void *dst) {
-    return jmap_readprop_full(root, NULL, name, mandatory, invalid, fmt, dst);
 }
 
 
@@ -7219,8 +7623,7 @@ static int calevent_filter_match_textprop(icalcomponent *comp,
                 prop;
                 prop = icalcomponent_get_next_property(comp, kind)) {
             const char *val = icalproperty_get_value_as_string(prop);
-            /* XXX string matching */
-            if (val && stristr(val, text)) {
+            if (val && jmap_match_text(val, text)) {
                 return 1;
             }
         }
@@ -7299,7 +7702,6 @@ static int calevent_filter_match(void *vf, void *rock)
     /* All matched. */
     return 1;
 }
-
 
 /* Free the memory allocated by this calendar event filter. */
 static void calevent_filter_free(void *vf)
@@ -7406,7 +7808,6 @@ static void *calevent_filter_parse(json_t *arg,
     return f;
 }
 
-
 struct caleventlist_rock {
     jmap_filter *filter;
     size_t position;
@@ -7416,7 +7817,6 @@ struct caleventlist_rock {
 
     struct mailbox *mailbox;
 };
-
 
 static int getcalendareventlist_cb(void *rock, struct caldav_data *cdata) {
     struct caleventlist_rock *crock = (struct caleventlist_rock*) rock;
@@ -7472,7 +7872,6 @@ done:
     if (ical) icalcomponent_free(ical);
     return r;
 }
-
 
 static int getCalendarEventList(struct jmap_req *req)
 {
