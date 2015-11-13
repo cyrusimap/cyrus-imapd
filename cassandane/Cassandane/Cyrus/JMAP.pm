@@ -276,6 +276,50 @@ sub test_getcontactupdates
     $self->assert_str_equals($res->[0][2], 'R1');
 }
 
+sub test_getcontactlist {
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contacts";
+    my $res = $jmap->Request([['setContacts', {create => {
+                        "#1" => {firstName => "foo", lastName => "last1"},
+                        "#2" => {firstName => "bar", lastName => "last2"},
+                        "#3" => {firstName => "baz", lastName => "last3"},
+                        "#4" => {firstName => "bam", lastName => "last4"}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id3 = $res->[0][1]{created}{"#3"}{id};
+    my $id4 = $res->[0][1]{created}{"#4"}{id};
+
+    xlog "create contact groups";
+    $res = $jmap->Request([['setContactGroups', {create => {
+                        "#1" => {name => "group1", contactIds => [$id1, $id2]},
+                        "#2" => {name => "group2", contactIds => [$id3, $id4]}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $group1 = $res->[0][1]{created}{"#1"}{id};
+    my $group2 = $res->[0][1]{created}{"#2"}{id};
+
+    xlog "get unfiltered contact list";
+    $res = $jmap->Request([ ['getContactList', { }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 4);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 4);
+
+    xlog "filter by firstName";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { firstName => "foo" }
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 1);
+    $self->assert_str_equals($res->[0][1]{contactIds}[0], $id1);
+}
 
 sub test_getcontactgroupupdates
 {
