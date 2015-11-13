@@ -526,6 +526,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    information needed for receiving new messages in existing
    conversations, in days. */
 
+{ "crossdomains", 0, SWITCH }
+/* Enable cross domain sharing.  This works best with alt namespace and
+   unix hierarchy separators on, so you get Other Users/foo@example.com/... */
+
 { "dav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of generic DAV
    resources (principals).  If not set (the default), the value of the

@@ -2127,8 +2127,8 @@ struct find_rock {
     ptrarray_t globs;
     struct namespace *namespace;
     const char *userid;
+    const char *domain;
     int find_namespace;
-    int domainlen;
     int is_the_inbox;
     int checkmboxlist;
     int issubs;
@@ -2137,6 +2137,9 @@ struct find_rock {
     struct db *db;
     int isadmin;
     const struct auth_state *auth_state;
+    mbname_t *mbname;
+    mbentry_t *mbentry;
+    long intmatchlen;
     findall_cb *proc;
     void *procrock;
 };
@@ -2147,42 +2150,43 @@ static int find_p(void *rockp,
                   const char *data, size_t datalen)
 {
     struct find_rock *rock = (struct find_rock *) rockp;
-    mbentry_t *mbentry = NULL;
-    int ret = 0;
     char intname[MAX_MAILBOX_PATH+1];
     int i;
 
     memcpy(intname, key, keylen);
     intname[keylen] = 0;
 
-    /* don't list mailboxes outside of the default domain */
-    if (!rock->domainlen && !rock->isadmin && strchr(intname, '!')) return 0;
+    assert(!rock->mbname);
+    rock->mbname = mbname_from_intname(intname);
 
-    /* don't list "user" by itself */
-    if (!strcmp(intname+rock->domainlen, "user")) return 0;
+    if (!rock->isadmin && !config_getswitch(IMAPOPT_CROSSDOMAINS)) {
+        /* don't list mailboxes outside of the default domain */
+        if (strcmpsafe(rock->domain, mbname_domain(rock->mbname)))
+            goto nomatch;
+    }
 
-    int isuserspace = !strncmp(intname+rock->domainlen, "user.", 5);
+    /* XXX - skip 'user' by itself - is that even a thing? */
 
     if (rock->find_namespace == NAMESPACE_INBOX) {
-        if (!isuserspace) return 0;
-        if (rock->isadmin) return 0;
+        if (rock->isadmin) goto nomatch;
+        if (!mbname_localpart(rock->mbname)) goto nomatch;
     }
     else if (rock->find_namespace == NAMESPACE_USER) {
         /* this would've been output with the inbox stuff, so skip it */
-        if (!isuserspace) return 0;
-        if (!rock->isadmin && mboxname_userownsmailbox(rock->userid, intname)) return 0;
+        if (!mbname_localpart(rock->mbname)) goto nomatch;
+        if (!rock->isadmin && !strcmp(rock->userid, mbname_userid(rock->mbname))) goto nomatch;
     }
     else {
         /* this would've been output with the user stuff, so skip it */
-        if (isuserspace) return 0;
+        if (!mbname_isdeleted(rock->mbname) && mbname_localpart(rock->mbname)) goto nomatch;
     }
 
     /* NOTE: this will all be cleaned up to be much more efficient sooner or later, with
      * a mbname_t being kept inside the mbentry, and the extname cached all the way to
      * final use.  For now, we pay the cost of re-calculating for simplicity of the
      * changes to mbname_t itself */
-    char *extname = mboxname_to_external(intname, rock->namespace, rock->userid);
-    if (!extname) return 0;
+    const char *extname = mbname_extname(rock->mbname, rock->namespace, rock->userid);
+    if (!extname) goto nomatch;
 
     long matchlen = -1;
     for (i = 0; i < rock->globs.count; i++) {
@@ -2191,87 +2195,74 @@ static int find_p(void *rockp,
         if (thismatch > matchlen) matchlen = thismatch;
     }
 
-    free(extname);
-
     /* If its not a match, skip it -- partial matches are ok. */
-    if (matchlen == -1) return 0;
+    if (matchlen == -1) goto nomatch;
+
+    /* we need to recalculate matchlen against the internal mailbox name.
+     * There are various possiblities, but simplest is just to assume the
+     * same number of characters from the end is the same point */
+    rock->intmatchlen = matchlen - strlen(extname) + keylen;
 
     /* subs DB has empty keys */
     if (rock->issubs)
         return 1;
 
     /* ignore entirely deleted records */
-    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
-        return 0;
+    if (mboxlist_parse_entry(&rock->mbentry, key, keylen, data, datalen))
+        goto nomatch;
 
     /* nobody sees tombstones */
-    if (mbentry->mbtype & MBTYPE_DELETED)
-        goto done;
+    if (rock->mbentry->mbtype & MBTYPE_DELETED)
+        goto nomatch;
 
     /* check acl */
     if (!rock->isadmin) {
         /* always suppress deleted for non-admin */
-        if (mboxname_isdeletedmailbox(mbentry->name, NULL)) goto done;
+        if (mbname_isdeleted(rock->mbname)) goto nomatch;
 
         /* check the acls */
-        if (!(cyrus_acl_myrights(rock->auth_state, mbentry->acl) & ACL_LOOKUP)) goto done;
+        if (!(cyrus_acl_myrights(rock->auth_state, rock->mbentry->acl) & ACL_LOOKUP)) goto nomatch;
     }
 
     /* if we get here, close enough for us to spend the time
        acting interested */
-    ret = 1;
 
-done:
-    mboxlist_entry_free(&mbentry);
-    return ret;
+    return 1;
+
+nomatch:
+    mboxlist_entry_free(&rock->mbentry);
+    mbname_free(&rock->mbname);
+    return 0;
 }
 
 static int find_cb(void *rockp,
-                   const char *key, size_t keylen,
+                   /* XXX - confirm these are the same?  - nah */
+                   const char *key __attribute__((unused)),
+                   size_t keylen __attribute__((unused)),
                    const char *data __attribute__((unused)),
                    size_t datalen __attribute__((unused)))
 {
     struct find_rock *rock = (struct find_rock *) rockp;
-    char intname[MAX_MAILBOX_PATH+1];
-    int i;
-
-    /* we passed find_p, so we're a valid thing to output */
-
-    memcpy(intname, key, keylen);
-    intname[keylen] = 0;
+    int r = 0;
 
     if (rock->checkmboxlist) {
-        int r = mboxlist_lookup(intname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
-        if (r) return r;
+        r = mboxlist_lookup(mbname_intname(rock->mbname), NULL, NULL);
+        if (r) {
+            if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+            goto done;
+        }
     }
-
-    /* XXX - cache in the rock? */
-    char *extname = mboxname_to_external(intname, rock->namespace, rock->userid);
-    if (!extname) return 0;
-    int extlen = strlen(extname);
-
-    /* re-check the match */
-    long matchlen = -1;
-    for (i = 0; i < rock->globs.count; i++) {
-        glob *g = ptrarray_nth(&rock->globs, i);
-        long thismatch = glob_test(g, extname);
-        if (thismatch > matchlen) matchlen = thismatch;
-    }
-
-    free(extname);
-
-    if (matchlen == -1) return 0;
 
     if (rock->find_namespace == NAMESPACE_USER && rock->checkuser) {
         /* special case:  LIST "" *% -- output prefix */
-        int r = (*rock->proc)("user", 4, 1, rock->procrock);
-        if (r) return r;
+        r = (*rock->proc)("user", 4, 1, rock->procrock);
+        if (r) goto done;
 
         if (rock->checkuser > 1) {
             /* special case:  LIST "" % -- output prefix only */
             /* short-circuit the foreach - one mailbox is sufficient */
-            return CYRUSDB_DONE;
+            r = CYRUSDB_DONE;
+            goto done;
         }
         rock->checkuser = 0;
     }
@@ -2279,24 +2270,24 @@ static int find_cb(void *rockp,
     /* found an entry; output it */
     if (rock->find_namespace == NAMESPACE_SHARED && rock->checkshared) {
         /* special case:  LIST "" *% -- output shared prefix */
-        int r = (*rock->proc)("", 0, 1, rock->procrock);
-        if (r) return r;
+        r = (*rock->proc)("", 0, 1, rock->procrock);
+        if (r) goto done;
 
         if (rock->checkshared > 1) {
             /* special case:  LIST "" % -- output prefix only */
             /* short-circuit the foreach - one mailbox is sufficient */
-            return CYRUSDB_DONE;
+            r = CYRUSDB_DONE;
+            goto done;
         }
         rock->checkshared = 0;
     }
 
-    /* we need to recalculate matchlen against the internal mailbox name.
-     * There are various possiblities, but simplest is just to assume the
-     * same number of characters from the end is the same point */
+    r = (*rock->proc)(mbname_intname(rock->mbname), rock->intmatchlen, !rock->is_the_inbox, rock->procrock);
 
-    long intmatchlen = matchlen - extlen + strlen(intname);
-
-    return (*rock->proc)(intname, intmatchlen, !rock->is_the_inbox, rock->procrock);
+ done:
+    mboxlist_entry_free(&rock->mbentry);
+    mbname_free(&rock->mbname);
+    return r;
 }
 
 struct allmb_rock {
@@ -2459,9 +2450,11 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     const char *userid = rock->userid;
     int isadmin = rock->isadmin;
 
+    int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS);
     char inbox[MAX_MAILBOX_BUFFER];
     size_t inboxlen = 0;
     size_t prefixlen, len;
+    size_t domainlen = 0;
     size_t userlen = userid ? strlen(userid) : 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char commonpat[MAX_MAILBOX_BUFFER];
@@ -2476,7 +2469,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
         userlen = p - userid;
-        rock->domainlen = strlen(p); /* includes separator */
+        domainlen = strlen(p); /* includes separator */
         snprintf(domainpat, sizeof(domainpat), "%s!", p+1);
     }
     else
@@ -2485,9 +2478,9 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     /* calculate the inbox */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
         strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
-        if (rock->domainlen)
+        if (domainlen)
             snprintf(inbox, sizeof(inbox), "%s!", userid+userlen+1);
-        snprintf(inbox+rock->domainlen, sizeof(inbox)-rock->domainlen,
+        snprintf(inbox+domainlen, sizeof(inbox)-domainlen,
                  "user.%.*s", (int)userlen, userid);
         inboxlen = strlen(inbox);
     }
@@ -2549,18 +2542,21 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         if (!strncmp(rock->namespace->prefix[NAMESPACE_USER], commonpat, MIN(len, prefixlen))) {
             if (prefixlen < len) {
                 /* we match all users */
-                strlcpy(domainpat+rock->domainlen, "user.", sizeof(domainpat)-rock->domainlen);
+                strlcpy(domainpat+domainlen, "user.", sizeof(domainpat)-domainlen);
             }
             else {
                 /* just those in this prefix */
-                strlcpy(domainpat+rock->domainlen, "user.", sizeof(domainpat)-rock->domainlen);
-                strlcpy(domainpat+rock->domainlen+5, commonpat+len+1, sizeof(domainpat)-rock->domainlen-5);
+                strlcpy(domainpat+domainlen, "user.", sizeof(domainpat)-domainlen);
+                strlcpy(domainpat+domainlen+5, commonpat+len+1, sizeof(domainpat)-domainlen-5);
             }
 
             rock->find_namespace = NAMESPACE_USER;
 
+            /* because of how domains work, with crossdomains or admin you can't prefix at all :( */
+            size_t thislen = (isadmin || crossdomains) ? 0 : strlen(domainpat);
+
             /* iterate through all the other user folders on the server */
-            r = cyrusdb_foreach(rock->db, domainpat, strlen(domainpat), &find_p, &find_cb, rock, NULL);
+            r = cyrusdb_foreach(rock->db, domainpat, thislen, &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
         }
@@ -2601,7 +2597,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             }
 
             /* iterate through all the non-user folders on the server */
-            r = cyrusdb_foreach(rock->db, domainpat, rock->domainlen, &find_p, &find_cb, rock, NULL);
+            r = cyrusdb_foreach(rock->db, domainpat, domainlen, &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
         }
@@ -2636,6 +2632,10 @@ EXPORTED int mboxlist_findallmulti(struct namespace *namespace,
     cbrock.proc = proc;
     cbrock.procrock = rock;
     cbrock.userid = userid;
+    if (userid) {
+        const char *domp = strchr(userid, '@');
+        if (domp) cbrock.domain = domp + 1;
+    }
 
     r = mboxlist_do_find(&cbrock, patterns);
 
@@ -3112,6 +3112,10 @@ EXPORTED int mboxlist_findsubmulti(struct namespace *namespace,
     cbrock.proc = proc;
     cbrock.procrock = rock;
     cbrock.userid = userid;
+    if (userid) {
+        const char *domp = strchr(userid, '@');
+        if (domp) cbrock.domain = domp + 1;
+    }
 
     r = mboxlist_do_find(&cbrock, patterns);
 

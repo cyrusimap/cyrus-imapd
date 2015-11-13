@@ -469,14 +469,14 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
     if (!strarray_size(mbname->boxes))
         return mbname;
 
-    if (strarray_size(mbname->boxes) > 2 && !strcmp(strarray_nth(mbname->boxes, 0), dp)) {
+    if (strarray_size(mbname->boxes) > 2 && !strcmpsafe(strarray_nth(mbname->boxes, 0), dp)) {
         free(strarray_shift(mbname->boxes));
         char *delval = strarray_pop(mbname->boxes);
         mbname->is_deleted = strtoul(delval, NULL, 16);
         free(delval);
     }
 
-    if (strarray_size(mbname->boxes) > 1 && !strcmp(strarray_nth(mbname->boxes, 0), "user")) {
+    if (strarray_size(mbname->boxes) > 1 && !strcmpsafe(strarray_nth(mbname->boxes, 0), "user")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = strarray_shift(mbname->boxes);
     }
@@ -486,6 +486,10 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
 
 EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid)
 {
+    int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS) && !ns->isadmin;
+    /* old-school virtdomains requires admin to be a different domain than the userid */
+    int admindomains = config_virtdomains && ns->isadmin;
+
     /* specialuse magic */
     if (extname && extname[0] == '\\') {
         char *intname = mboxlist_find_specialuse(extname, userid);
@@ -496,7 +500,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
     mbname_t *mbname = xzmalloc(sizeof(mbname_t));
     char sepstr[2];
-    const char *domain = NULL;
+    char *p = NULL;
 
     if (!extname)
         return mbname;
@@ -508,23 +512,28 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
     mbname->extname = xstrdup(extname); // may as well cache it
 
+    if (admindomains) {
+        p = strchr(mbname->extname, '@');
+        if (p) {
+            *p = '\0';
+            if (strcmpsafe(p+1, config_defdomain))
+                mbname->domain = xstrdup(p+1);
+        }
+        else {
+            // domain admin?
+            mbname->domain = xstrdupnull(mbname_domain(userparts));
+        }
+    }
+    else if (!crossdomains) {
+        // non-crossdomains, we're always in the user's domain
+        mbname->domain = xstrdupnull(mbname_domain(userparts));
+    }
+
     sepstr[0] = ns->hier_sep;
     sepstr[1] = '\0';
 
-    char *p = config_virtdomains ? strchr(mbname->extname, '@') : NULL;
-    if (p) {
-        if (!ns->isadmin) goto done; /* only admins can do domains */
-        if (ns->isalt) goto done; /* no domains in altnamespace */
-        domain = p+1;
-        if (!strcmpsafe(domain, config_defdomain))
-            domain = NULL;
-        *p = '\0'; /* temporary */
-    }
-
-    mbname->domain = xstrdupnull(domain ? domain : mbname_domain(userparts));
-
     mbname->boxes = strarray_split(mbname->extname, sepstr, 0);
-    if (p) *p = '@'; /* repair */
+    if (p) *p = '@'; // rebuild extname for later use
 
     if (!strarray_size(mbname->boxes))
         goto done;
@@ -535,25 +544,38 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
         const char *up = config_getstring(IMAPOPT_USERPREFIX);
         const char *sp = config_getstring(IMAPOPT_SHAREDPREFIX);
 
-        if (!strcmp(strarray_nth(mbname->boxes, 0), up)) {
+        if (!strcmpsafe(strarray_nth(mbname->boxes, 0), up)) {
             /* other user namespace */
             free(strarray_shift(mbname->boxes));
-            /* XXX - cross domain support.  For now, it's always in the
-             * userid's domain, if any */
             mbname->localpart = strarray_shift(mbname->boxes);
+            if (crossdomains) {
+                char *p = strchr(mbname->localpart, '@');
+                if (p) {
+                    *p = '\0';
+                    if (strcmpsafe(p+1, config_defdomain))
+                        mbname->domain = xstrdup(p+1);
+                }
+                /* otherwise it must be in defdomain.  Domains are
+                 * always specified in crossdomains */
+            }
             goto done;
         }
 
-        if (!strcmp(strarray_nth(mbname->boxes, 0), sp)) {
+        if (!strcmpsafe(strarray_nth(mbname->boxes, 0), sp)) {
             /* shared namespace, no user */
             free(strarray_shift(mbname->boxes));
+            /* unless it's admindomains, we need to copy the user's domain */
+            if ((config_virtdomains && !ns->isadmin) || crossdomains)
+                mbname->domain = xstrdupnull(mbname_domain(userparts));
             goto done;
         }
 
         /* everything else belongs to the userid */
         mbname->localpart = xstrdupnull(mbname_localpart(userparts));
+        /* otherwise it was done above */
+        if (crossdomains) mbname->domain = xstrdupnull(mbname_domain(userparts));
         /* special case pure inbox with case, because horrible */
-        if (strarray_size(mbname->boxes) == 1 && !strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX"))
+        if (strarray_size(mbname->boxes) == 1 && !strcasecmpsafe(strarray_nth(mbname->boxes, 0), "INBOX"))
             free(strarray_shift(mbname->boxes));
 
         goto done;
@@ -562,14 +584,16 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
 
     /* special inbox with insensitivity still, because horrible */
-    if (!strcasecmp(strarray_nth(mbname->boxes, 0), "INBOX")) {
+    if (!strcasecmpsafe(strarray_nth(mbname->boxes, 0), "INBOX")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = xstrdupnull(mbname_localpart(userparts));
+        /* otherwise it was done above */
+        if (crossdomains) mbname->domain = xstrdupnull(mbname_domain(userparts));
         goto done;
     }
 
     /* deleted prefix first */
-    if (!strcmp(strarray_nth(mbname->boxes, 0), dp)) {
+    if (ns->isadmin && !strcmpsafe(strarray_nth(mbname->boxes, 0), dp)) {
         free(strarray_shift(mbname->boxes));
         char *delval = strarray_pop(mbname->boxes);
         if (!delval)
@@ -582,12 +606,24 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
         goto done;
 
     /* now look for user */
-    if (!strcmp(strarray_nth(mbname->boxes, 0), "user")) {
+    if (!strcmpsafe(strarray_nth(mbname->boxes, 0), "user")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = strarray_shift(mbname->boxes);
+        if (crossdomains) {
+            char *p = strchr(mbname->localpart, '@');
+            if (p) {
+                *p = '\0';
+                if (strcmpsafe(p+1, config_defdomain))
+                    mbname->domain = xstrdup(p+1);
+            }
+        }
+        goto done;
     }
 
-    /* the rest is just in boxes */
+    /* shared folders: are in user's domain unless admin */
+    if ((config_virtdomains && !ns->isadmin) || crossdomains)
+        mbname->domain = xstrdupnull(mbname_domain(userparts));
+
  done:
     mbname_free(&userparts);
 
@@ -677,7 +713,7 @@ EXPORTED const char *mbname_intname(const mbname_t *mbname)
 
     for (i = 0; i < strarray_size(boxes); i++) {
         if (sep) buf_putc(&buf, '.');
-        char *lp = xstrdup(strarray_nth(boxes, i));
+        char *lp = xstrdupnull(strarray_nth(boxes, i));
         _rm_dots(lp);
         buf_appendcstr(&buf, lp);
         free(lp);
@@ -783,32 +819,50 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
  */
 EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespace *ns, const char *userid)
 {
+    int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS) && !ns->isadmin;
+    /* old-school virtdomains requires admin to be a different domain than the userid */
+    int admindomains = config_virtdomains && ns->isadmin;
+
     /* gotta match up! */
     if (mbname->extname && ns == mbname->extns && !strcmpsafe(userid, mbname->extuserid))
         return mbname->extname;
 
+    struct buf buf = BUF_INITIALIZER;
+
+    /* have to zero out any existing value just in case we drop through */
+    mbname_t *backdoor = (mbname_t *)mbname;
+    if (backdoor->extname) {
+        free(backdoor->extname);
+        backdoor->extname = NULL;
+        backdoor->extns = ns;
+        free(backdoor->extuserid);
+        backdoor->extuserid = xstrdupnull(userid);
+    }
+
     mbname_t *userparts = mbname_from_userid(userid);
     strarray_t *boxes = strarray_dup(mbname_boxes(mbname));
-
-    struct buf buf = BUF_INITIALIZER;
 
     if (ns->isalt) {
         const char *up = config_getstring(IMAPOPT_USERPREFIX);
         const char *sp = config_getstring(IMAPOPT_SHAREDPREFIX);
 
         /* DELETED mailboxes have no extname in alt namespace.
-         * There's also no need to display domains, because admins
-         * are never in altnamespace, and only admins can see domains */
+         * There's also no need to display domains unless in crossdomains,
+         * because admins are never in altnamespace, and only admins can
+         * see domains in the admindomains space */
         if (mbname->is_deleted)
             goto done;
 
         /* shared */
-        if (!mbname->localpart) {
-            if (strarray_size(boxes) == 1 && !strcmp(strarray_nth(boxes, 0), "user")) {
+        if (!mbname_localpart(mbname)) {
+            if (strarray_size(boxes) == 1 && !strcmpsafe(strarray_nth(boxes, 0), "user")) {
                 /* special case user all by itself */
                 buf_appendcstr(&buf, up);
                 goto end;
             }
+            /* shared folders can ONLY be in the same domain in alt namespace */
+            if (strcmpsafe(mbname_domain(mbname), mbname_domain(userparts)))
+                goto done;
             buf_appendcstr(&buf, sp);
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
@@ -822,7 +876,13 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         if (strcmpsafe(mbname_userid(mbname), userid)) {
             buf_appendcstr(&buf, up);
             buf_putc(&buf, ns->hier_sep);
-            buf_appendcstr(&buf, mbname->localpart);
+            buf_appendcstr(&buf, mbname_localpart(mbname));
+            if (crossdomains) {
+                const char *domain = mbname_domain(mbname);
+                if (!domain) domain = config_defdomain;
+                buf_putc(&buf, '@');
+                buf_appendcstr(&buf, domain);
+            }
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
                 buf_putc(&buf, ns->hier_sep);
@@ -839,14 +899,14 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
 
         /* invalid names - anything exactly 'inbox' can't be displayed because
          * select would be ambiguous */
-        if (strarray_size(boxes) == 1 && !strcasecmp(strarray_nth(boxes, 0), "INBOX"))
+        if (strarray_size(boxes) == 1 && !strcasecmpsafe(strarray_nth(boxes, 0), "INBOX"))
             goto done;
 
         /* likewise anything exactly matching the user or shared prefixes, both top level
          * or with children */
-        if (!strcmp(strarray_nth(boxes, 0), up))
+        if (!strcmpsafe(strarray_nth(boxes, 0), up))
             goto done;
-        if (!strcmp(strarray_nth(boxes, 0), sp))
+        if (!strcmpsafe(strarray_nth(boxes, 0), sp))
             goto done;
 
         int i;
@@ -864,12 +924,17 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     }
 
     /* shared */
-    if (!mbname->localpart) {
+    if (!mbname_localpart(mbname)) {
         /* invalid names - not sure it's even possible, but hey */
         if (!strarray_size(boxes))
             goto done;
-        if (!strcasecmp(strarray_nth(boxes, 0), "INBOX"))
+        if (!strcasecmpsafe(strarray_nth(boxes, 0), "INBOX"))
             goto done;
+
+        /* shared folders can ONLY be in the same domain except for admin */
+        if (!admindomains && strcmpsafe(mbname_domain(mbname), mbname_domain(userparts)))
+            goto done;
+
         /* note "user" precisely appears here, but no need to special case it
          * since the output is the same */
         int i;
@@ -877,6 +942,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
             if (i) buf_putc(&buf, ns->hier_sep);
             buf_appendcstr(&buf, strarray_nth(boxes, i));
         }
+
         goto end;
     }
 
@@ -884,7 +950,16 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     if (strcmpsafe(mbname_userid(mbname), userid)) {
         buf_appendcstr(&buf, "user");
         buf_putc(&buf, ns->hier_sep);
-        buf_appendcstr(&buf, mbname->localpart);
+        buf_appendcstr(&buf, mbname_localpart(mbname));
+        if (crossdomains) {
+            const char *domain = mbname_domain(mbname);
+            if (!domain) domain = config_defdomain;
+            buf_putc(&buf, '@');
+            buf_appendcstr(&buf, domain);
+        }
+        /* shared folders can ONLY be in the same domain except for admin */
+        else if (!admindomains && strcmpsafe(mbname_domain(mbname), mbname_domain(userparts)))
+            goto done;
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             buf_putc(&buf, ns->hier_sep);
@@ -908,17 +983,12 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         buf_printf(&buf, "%X", (unsigned)mbname->is_deleted);
     }
 
-    if (mbname->domain && strcmpsafe(mbname->domain, userparts->domain)) {
+    if (admindomains && mbname_domain(mbname)) {
         buf_putc(&buf, '@');
-        buf_appendcstr(&buf, mbname->domain);
+        buf_appendcstr(&buf, mbname_domain(mbname));
     }
 
-    mbname_t *backdoor = (mbname_t *)mbname;
-    free(backdoor->extname);
     backdoor->extname = buf_release(&buf);
-    backdoor->extns = ns;
-    free(backdoor->extuserid);
-    backdoor->extuserid = xstrdupnull(userid);
 
  done:
 
