@@ -7,13 +7,13 @@ Cyrus IMAP supports the following platforms;
 
 * All reasonably recent versions of Linux, including but not limited to the following distributions, in no particular order other than alphabetic;
 
-    * `CentOS <http://centos.org>`__
-    * `Debian <http://debian.org>`__
-    * `Fedora <http://fedoraproject.org>`__
-    * `Gentoo <http://gentoo.org>`__
-    * `openSUSE <http://opensuse.org>`__
-    * `Red Hat Enterprise Linux <http://redhat.com>`__
-    * `SUSE Linux <http://www.suse.com>`__
+    * `CentOS <https://www.centos.org>`__
+    * `Debian <https://www.debian.org>`__
+    * `Fedora <https://www.fedoraproject.org>`__
+    * `Gentoo <https://www.gentoo.org>`__
+    * `openSUSE <https://www.opensuse.org>`__
+    * `Red Hat Enterprise Linux <https://www.redhat.com/en>`__
+    * `SUSE Linux <https://www.suse.com>`__
 
     Should your Linux distribution not be listed here, please refer to :ref:`feedback` for ways of contacting the Cyrus IMAP team.
 

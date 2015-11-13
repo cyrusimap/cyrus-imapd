@@ -12,7 +12,7 @@ Saslauthd
 
 **What is saslauthd?** saslauthd is a daemon which validates
 
-``ldap_servers`` - ldap://localhost
+``ldap_servers`` - ``ldap://localhost``
 
     Specify a space separated list of LDAP server URIs of the form **ldap[si]://[name[:port]]**. See the ``ldap.conf`` *URI* option for formatting details.
 

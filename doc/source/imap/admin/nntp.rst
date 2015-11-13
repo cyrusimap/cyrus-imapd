@@ -155,5 +155,5 @@ Note that the ``/vendor/cmu/cyrus-imapd/expire`` mailbox :ref:`annotation <faqs-
 Further information
 ===================
 
-This thread from the info-cyrus `mailing list <feedback>`_ may be of use: `Cyrus and Usenet <http://www.mail-archive.com/info-cyrus%40lists.andrew.cmu.edu/msg22725.html>`_
+This thread from the info-cyrus :ref:`mailing list <feedback>` may be of use: `Cyrus and Usenet <http://www.mail-archive.com/info-cyrus%40lists.andrew.cmu.edu/msg22725.html>`_
 

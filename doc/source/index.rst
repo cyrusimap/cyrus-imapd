@@ -81,7 +81,7 @@ Cyrus SASL provides a number of authentication plugins out of the box.
 
 Cyrus IMAP uses Cyrus SASL to provide authentication support to the mail server, however it is just one project using Cyrus SASL.
 
-.. _SASL: http://en.wikipedia.org/wiki/Simple_Authentication_and_Security_Layer
+.. _SASL: https://en.wikipedia.org/wiki/Simple_Authentication_and_Security_Layer
 
 
 .. toctree::

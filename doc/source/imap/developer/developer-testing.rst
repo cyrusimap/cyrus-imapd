@@ -16,7 +16,7 @@ Why "Cassandane"? Wikipedia indicates that Cassandane_ was the name of
 the consort of King Cyrus the Great of Persia, founder of the Achaemenid
 Persian Empire.  So that's kinda cool.
 
-.. _Cassandane: http://en.wikipedia.org/wiki/Cassandane
+.. _Cassandane: https://en.wikipedia.org/wiki/Cassandane
 
 
 Install and configure Cassandane

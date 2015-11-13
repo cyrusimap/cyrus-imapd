@@ -60,5 +60,5 @@ For a reference on supported features in the IMAP protocol, please check
 out :ref:`imap-rfc-support`.
 
 .. _Carnegie Mellon University: http://www.cmu.edu
-.. _Wikipedia on IMAP: http://en.wikipedia.org/wiki/Internet_Message_Access_Protocol
-.. _Wikipedia on POP: http://en.wikipedia.org/wiki/Post_Office_Protocol#Comparison_with_IMAP
+.. _Wikipedia on IMAP: https://en.wikipedia.org/wiki/Internet_Message_Access_Protocol
+.. _Wikipedia on POP: https://en.wikipedia.org/wiki/Post_Office_Protocol#Comparison_with_IMAP

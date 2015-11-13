@@ -104,7 +104,7 @@ As you can see, the mailbox has been created succesfully using the shorthand qua
 Top-level or Nested Personal Folders
 """"""""""""""""""""""""""""""""""""
 
-Cyrus IMAP allows the use of an alternative namespace for the presentation of personal mailboxes to the client (see the ``altnamespace`` configuration option), and the use of a different hierarchy seperator in its presentation of personal mailboxes to the client (see ``unixhierarchysep``). A couple of examples are listed in our `Administrator Guide <../../../git-guide/build/html/>`_
+Cyrus IMAP allows the use of an alternative namespace for the presentation of personal mailboxes to the client (see the ``altnamespace`` configuration option), and the use of a different hierarchy separator in its presentation of personal mailboxes to the client (see ``unixhierarchysep``). 
 
 When implemented using the default ``netnews`` namespace convention, non-ASCII characters and shell meta-characters are not permitted in mailbox names. Optionally, the server can present mailboxes using the UNIX hierarchy convention - see :ref:`Alternate Namespace <alternate_namespace>` for more information.
 
