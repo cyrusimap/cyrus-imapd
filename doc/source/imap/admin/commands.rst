@@ -94,19 +94,23 @@ the form of actual man-pages.
 .. toctree::
     :maxdepth: 1
     :hidden:
-
-    commands/compile_st.pl: ?
+    
+    commands/compile_st.pl
 
     commands/cyr_systemd_helper
 
     commands/fixsearchpath.pl
-    commands/migrate-metadata: useful
-    commands/mknewsgroups: useful
-    commands/mupdate-loadgen.pl: ??
+    commands/migrate-metadata
+    commands/mknewsgroups
+    commands/mupdate-loadgen.pl
     commands/proxyd
-    commands/rehash: useful
+    commands/rehash
 
-    commands/translatesieve:useful more better version of convert-sieve (does this make convert-sieve obsolete?)
-    commands/convert-sieve.pl : probably bogus    
-    
-    commands/template: this is just the template for new command files so it obeys man and html formatting.
+.. translatesieve better version of convert-sieve (does this make convert-sieve obsolete?)]
+
+    commands/translatesieve
+    commands/convert-sieve.pl   
+   
+..  this is just the template for new command files so it obeys man and html formatting.   
+
+    commands/template
