@@ -1739,8 +1739,8 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     icalproperty *prop;
     icaltimetype at;
     struct icalrecurrencetype rrule;
-    int hour, week, wday, mday, yday;
-    unsigned month, ver = '2';
+    unsigned ver = '2';
+    int hour;
 
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     rrule = icalproperty_get_rrule(prop);
@@ -1752,61 +1752,73 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
 
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
     at = icalproperty_get_dtstart(prop);
-
     hour = at.hour;
-    month = rrule.by_month[0];
-    week = icalrecurrencetype_day_position(rrule.by_day[0]);
-    wday = icalrecurrencetype_day_day_of_week(rrule.by_day[0]);
 
-    if ((yday = rrule.by_year_day[0]) != ICAL_RECURRENCE_ARRAY_MAX) {
-        /* BYYEARDAY + BYDAY */
-
-        if (yday >= 0 || hour) {
-            /* Bogus?  Either way, we can't handle this */
-            return 0;
-        }
-
-        /* Rewrite as last (wday-1) @ 24:00 */
-        week = -1;
-        wday--;
-        hour = 24;
-
-        /* Find month that contains this yday */
-        yday += 365;
-        for (month = 0; month < 12; month++) {
-            if (yday <= month_doy_offsets[0][month]) break;
-        }
-    }
-    else if ((mday = rrule.by_month_day[0]) != ICAL_RECURRENCE_ARRAY_MAX) {
-        /* BYMONTH + MONTHDAY + BYDAY:  wday >= mday */
-
-        /* Need to use an extension to POSIX: -167 <= hour <= 167 */
-        ver = '3';
-
-        if (mday + 7 == icaltime_days_in_month(month, 0)) {
-            /* Rewrite as last (wday+1) @ hour < 0 */
-            week = -1;
-            wday++;
-            hour -= 24;
-        }
-        else {
-            /* Rewrite as nth (wday-offset) @ hour > 24 */
-            unsigned mday_offset;
-
-            week = (mday - 1) / 7 + 1;
-            mday_offset = mday - ((week - 1) * 7 + 1);
-            wday -= mday_offset;
-            hour += 24 * mday_offset;
-        }
+    if (rrule.by_day[0] == ICAL_RECURRENCE_ARRAY_MAX) {
+        /* date - Julian yday */
+        buf_printf(buf, ",J%u", month_doy_offsets[0][at.month - 1] + at.day);
     }
     else {
-        /* BYMONTH + BYDAY */
-    }
+        /* BYDAY */
+        unsigned month;
+        int week = icalrecurrencetype_day_position(rrule.by_day[0]);
+        int wday = icalrecurrencetype_day_day_of_week(rrule.by_day[0]);
+        int yday = rrule.by_year_day[0];
 
-    /* date */
-    buf_printf(buf, ",M%u.%u.%u", month,
-               (week + 6) % 6,   /* normalize; POSIX uses 5 for last (-1) */
-               (wday + 6) % 7);  /* normalize; POSIX is 0-based */
+        if (yday != ICAL_RECURRENCE_ARRAY_MAX) {
+            /* BYYEARDAY */
+
+            if (yday >= 0 || hour) {
+                /* Bogus?  Either way, we can't handle this */
+                return 0;
+            }
+
+            /* Rewrite as last (wday-1) @ 24:00 */
+            week = -1;
+            wday--;
+            hour = 24;
+
+            /* Find month that contains this yday */
+            yday += 365;
+            for (month = 0; month < 12; month++) {
+                if (yday <= month_doy_offsets[0][month]) break;
+            }
+        }
+        else {
+            /* BYMONTH */
+            int mday = rrule.by_month_day[0];
+
+            month = rrule.by_month[0];
+
+            if (mday != ICAL_RECURRENCE_ARRAY_MAX) {
+                /* MONTHDAY:  wday >= mday */
+
+                /* Need to use an extension to POSIX: -167 <= hour <= 167 */
+                ver = '3';
+
+                if (mday + 7 == icaltime_days_in_month(month, 0)) {
+                    /* Rewrite as last (wday+1) @ hour < 0 */
+                    week = -1;
+                    wday++;
+                    hour -= 24;
+                }
+                else {
+                    /* Rewrite as nth (wday-offset) @ hour > 24 */
+                    unsigned mday_offset;
+
+                    week = (mday - 1) / 7 + 1;
+                    mday_offset = mday - ((week - 1) * 7 + 1);
+                    wday -= mday_offset;
+                    hour += 24 * mday_offset;
+                }
+            }
+        }
+
+        /* date - month, week, wday */
+        buf_printf(buf, ",M%u.%u.%u", month,
+                   (week + 6) % 6,   /* normalize; POSIX uses 5 for last (-1) */
+                   (wday + 6) % 7);  /* normalize; POSIX is 0-based */
+    }
 
     /* time - default is 02:00:00 */
     if (hour != 2 || at.minute || at.second) {
