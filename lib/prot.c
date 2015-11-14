@@ -633,6 +633,7 @@ EXPORTED int prot_fill(struct protstream *s)
         if (s->zstrm && s->zstrm->avail_in) {
             /* Decompress the data */
             int zr = Z_OK;
+            unsigned in = s->zstrm->avail_in;
 
             s->zstrm->next_out = s->zbuf;
             s->zstrm->avail_out = s->zbuf_size;
@@ -648,6 +649,8 @@ EXPORTED int prot_fill(struct protstream *s)
                 /* inflated some data */
                 s->ptr = s->zbuf;
                 s->cnt = s->zbuf_size - s->zstrm->avail_out;
+
+                syslog(LOG_DEBUG, "decompressed %u -> %u bytes", in, s->cnt);
 
                 /* drop straight to logging and returning the first char */
                 break;
@@ -888,6 +891,7 @@ static int prot_flush_encode(struct protstream *s,
     if (s->zstrm) {
         /* Compress the data */
         int zr = Z_OK;
+        unsigned in = left;
 
         s->zstrm->next_in = ptr;
         s->zstrm->avail_in = left;
@@ -925,6 +929,8 @@ static int prot_flush_encode(struct protstream *s,
 
         ptr = s->zbuf;
         left = s->zbuf_size - s->zstrm->avail_out;
+
+        syslog(LOG_DEBUG, "compressed %u -> %u bytes", in, left);
     }
 #endif /* HAVE_ZLIB */
 
