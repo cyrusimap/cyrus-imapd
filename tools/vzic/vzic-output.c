@@ -1782,7 +1782,12 @@ calculate_actual_time           (VzicTime       *vzictime,
 
     vzictime->day_code = DAY_SIMPLE;
 
-    if (vzictime->day_number <= 0 || vzictime->day_number > days_in_month) {
+    if (vzictime->day_number > days_in_month) {
+      vzictime->month++;
+      vzictime->day_number -= days_in_month;
+    }
+
+    if (vzictime->day_number <= 0) {
       fprintf (stderr, "Day overflow: %i\n", vzictime->day_number);
       exit (1);
     }
