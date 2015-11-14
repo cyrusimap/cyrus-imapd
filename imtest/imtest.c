@@ -2255,10 +2255,10 @@ static void usage(char *prog, char *prot)
                "             (specify \"\" to not use TLS for authentication)\n");
 #endif /* HAVE_SSL */
 #ifdef HAVE_ZLIB
-    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "mupdate") ||
-        !strcasecmp(prot, "csync")) {
-        printf("  -q       : Enable %s COMPRESSion"
-               " (before last authentication attempt)\n", prot);
+    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "nntp") ||
+        !strcasecmp(prot, "mupdate") || !strcasecmp(prot, "csync")) {
+        printf("  -q       : Enable %s COMPRESSion (after authentication)\n",
+               prot);
     }
 #endif /* HAVE_ZLIB */
     printf("  -c       : enable challenge prompt callbacks\n"
@@ -2294,11 +2294,12 @@ static struct protocol_t protocols[] = {
     },
     { "nntp", "nntps", "nntp", 0,  /* AUTHINFO USER unavail until advertised */
       { 0, "20", NULL },
-      { "CAPABILITIES", ".", "STARTTLS", "AUTHINFO USER", "SASL ", NULL, NULL },
+      { "CAPABILITIES", ".", "STARTTLS", "AUTHINFO USER", "SASL ",
+        "COMPRESS DEFLATE", NULL },
       { "STARTTLS", "382", "580", 0 },
       { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*",
         &nntp_parse_success, 0 },
-      { NULL, NULL, NULL, },
+      { "COMPRESS DEFLATE", "206", "403", },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp", 0,
@@ -2688,24 +2689,6 @@ int main(int argc, char **argv)
         }
 #endif /* HAVE_SSL */
 
-#ifdef HAVE_ZLIB
-        if ((reauth == 1) && (docompress==1) && (capabilities & CAPA_COMPRESS)) {
-        char *resp;
-
-        printf("C: %s\r\n", protocol->compress_cmd.cmd);
-        prot_printf(pout, "%s\r\n", protocol->compress_cmd.cmd);
-        prot_flush(pout);
-
-        resp = waitfor(protocol->compress_cmd.ok, protocol->compress_cmd.fail, 1);
-
-        if (!strncasecmp(resp, protocol->compress_cmd.ok,
-                         strlen(protocol->compress_cmd.ok))) {
-            prot_setcompress(pin);
-            prot_setcompress(pout);
-        }
-    }
-#endif /* HAVE_ZLIB */
-
         if (noinitresp) {
             /* don't use an initial response, even if its supported */
             protocol->sasl_cmd.maxlen = 0;
@@ -2783,6 +2766,24 @@ int main(int argc, char **argv)
         if (mechlist) free(mechlist);
 
     } while (--reauth);
+
+#ifdef HAVE_ZLIB
+    if ((docompress==1) && (capabilities & CAPA_COMPRESS)) {
+        char *resp;
+
+        printf("C: %s\r\n", protocol->compress_cmd.cmd);
+        prot_printf(pout, "%s\r\n", protocol->compress_cmd.cmd);
+        prot_flush(pout);
+
+        resp = waitfor(protocol->compress_cmd.ok, protocol->compress_cmd.fail, 1);
+
+        if (!strncasecmp(resp, protocol->compress_cmd.ok,
+                         strlen(protocol->compress_cmd.ok))) {
+            prot_setcompress(pin);
+            prot_setcompress(pout);
+        }
+    }
+#endif /* HAVE_ZLIB */
 
     if (run_stress_test == 1) {
         send_recv_test();

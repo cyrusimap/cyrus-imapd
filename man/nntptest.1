@@ -89,6 +89,9 @@ nntptest \- interactive NNTP test program
 .B \-s
 ]
 [
+.B \-q
+]
+[
 .B \-c
 ]
 .br
@@ -165,6 +168,9 @@ attempt to do SSL/TLS session reuse and/or fast reauth
 .TP
 .B -s
 Enable NNTP over SSL (nntps).
+.TP
+.B -q
+Enable NNTP COMPRESSion (after authentication).
 .TP
 .B -c
 Enable challenge prompt callbacks.  This will cause the OTP mechanism
