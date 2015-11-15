@@ -109,14 +109,10 @@ mbentry_t *mboxlist_entry_copy(const mbentry_t *src);
 
 void mboxlist_entry_free(mbentry_t **mbentryptr);
 
-/* formats a cstring from a mboxlist_entry.  Caller must free
- * after use */
-char *mboxlist_entry_cstring(mbentry_t *mbentry);
-
 const char *mboxlist_mbtype_to_string(uint32_t mbtype);
 uint32_t mboxlist_string_to_mbtype(const char *string);
 
-int mboxlist_delete(const char *name, int force);
+int mboxlist_delete(const char *name);
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, mbentry_t **mbentryptr,
                     struct txn **tid);

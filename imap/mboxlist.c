@@ -207,7 +207,7 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
     return buf_cstring(&buf);
 }
 
-EXPORTED char *mboxlist_entry_cstring(mbentry_t *mbentry)
+static char *mboxlist_entry_cstring(const mbentry_t *mbentry)
 {
     struct buf buf = BUF_INITIALIZER;
     struct dlist *dl = dlist_newkvlist(NULL, mbentry->name);
@@ -505,11 +505,6 @@ static int mboxlist_mylookup(const char *name,
     return mboxlist_parse_entry(mbentryptr, name, 0, data, datalen);
 }
 
-EXPORTED int mboxlist_delete(const char *name, int force)
-{
-    return cyrusdb_delete(mbdb, name, strlen(name), NULL, force);
-}
-
 /*
  * Lookup 'name' in the mailbox list, ignoring reserved records
  */
@@ -610,17 +605,32 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
+static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, struct txn **txn)
+{
+    int r = 0;
+
+    if (mbentry) {
+        char *mboxent = mboxlist_entry_cstring(mbentry);
+        r = cyrusdb_store(mbdb, name, strlen(name), mboxent, strlen(mboxent), txn);
+        free(mboxent);
+    }
+    else {
+        r = cyrusdb_delete(mbdb, name, strlen(name), NULL, /*force*/1);
+    }
+    return r;
+}
+
+EXPORTED int mboxlist_delete(const char *name)
+{
+    return mboxlist_update_entry(name, NULL, NULL);
+}
+
 EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
 {
     int r = 0, r2 = 0;
-    char *mboxent = NULL;
     struct txn *tid = NULL;
 
-    mboxent = mboxlist_entry_cstring(mbentry);
-    r = cyrusdb_store(mbdb, mbentry->name, strlen(mbentry->name),
-                      mboxent, strlen(mboxent), &tid);
-    free(mboxent);
-    mboxent = NULL;
+    r = mboxlist_update_entry(mbentry->name, mbentry, &tid);
 
     if (!r)
         mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype, /*dofolder*/1);
@@ -921,7 +931,6 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
 {
     int r;
     char *newpartition = NULL;
-    char *mboxent = NULL;
     char *acl = NULL;
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
@@ -971,9 +980,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
-    mboxent = mboxlist_entry_cstring(newmbentry);
-    r = cyrusdb_store(mbdb, mboxname, strlen(mboxname),
-                      mboxent, strlen(mboxent), NULL);
+    r = mboxlist_update_entry(mboxname, newmbentry, NULL);
 
     if (r) {
         syslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list %s: %s",
@@ -1007,7 +1014,6 @@ done:
 
     free(acl);
     free(newpartition);
-    free(mboxent);
     mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&newmbentry);
 
@@ -1064,9 +1070,8 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
 
 /* insert an entry for the proxy */
 EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
-                          struct txn **tid)
+                          struct txn **txn)
 {
-    char *mboxent;
     int r = 0;
 
     if (mbentry->server) {
@@ -1083,11 +1088,9 @@ EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
         }
     }
 
-    mboxent = mboxlist_entry_cstring(mbentry);
-
     /* database put */
-    r = cyrusdb_store(mbdb, mbentry->name, strlen(mbentry->name),
-                      mboxent, strlen(mboxent), tid);
+    r = mboxlist_update_entry(mbentry->name, mbentry, txn);
+
     switch (r) {
     case CYRUSDB_OK:
         break;
@@ -1100,8 +1103,6 @@ EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
         r = IMAP_IOERROR;
         break;
     }
-
-    free(mboxent);
 
     return r;
 }
@@ -1484,7 +1485,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     struct txn *tid = NULL;
     const char *root = NULL;
     char *newpartition = NULL;
-    char *mboxent = NULL;
     mupdate_handle *mupdate_h = NULL;
     mbentry_t *newmbentry = NULL;
 
@@ -1553,10 +1553,8 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq; /* bump regardless, it's rare */
-        mboxent = mboxlist_entry_cstring(newmbentry);
-        r = cyrusdb_store(mbdb, newname, strlen(newname),
-                          mboxent, strlen(mboxent), &tid);
-        if (r) goto done;
+
+        r = mboxlist_update_entry(newname, newmbentry, &tid);
 
         /* skip ahead to the commit */
         goto dbdone;
@@ -1618,7 +1616,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     newmbentry->uidvalidity = newmailbox->i.uidvalidity;
     newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
     newmbentry->foldermodseq = newmailbox->i.highestmodseq;
-    mboxent = mboxlist_entry_cstring(newmbentry);
 
     do {
         r = 0;
@@ -1626,26 +1623,22 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         /* delete the old entry */
         if (!isusermbox) {
             /* store a DELETED marker */
-            char *oldmboxent = NULL;
             mbentry_t *oldmbentry = mboxlist_entry_create();
             oldmbentry->name = xstrdupnull(oldmailbox->name);
             oldmbentry->mbtype = MBTYPE_DELETED;
             oldmbentry->uidvalidity = oldmailbox->i.uidvalidity;
             oldmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
             oldmbentry->foldermodseq = mailbox_modseq_dirty(oldmailbox);
-            oldmboxent = mboxlist_entry_cstring(oldmbentry);
 
-            r = cyrusdb_store(mbdb, oldname, strlen(oldname),
-                              oldmboxent, strlen(oldmboxent), &tid);
+            r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
             mboxlist_entry_free(&oldmbentry);
-            free(oldmboxent);
         }
 
         /* create a new entry */
-        if (!r)
-            r = cyrusdb_store(mbdb, newname, strlen(newname),
-                              mboxent, strlen(mboxent), &tid);
+        if (!r) {
+            r = mboxlist_update_entry(newname, newmbentry, &tid);
+        }
 
         switch (r) {
         case 0: /* success */
@@ -1758,7 +1751,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
     /* free memory */
     free(newpartition);
-    free(mboxent);
     mboxlist_entry_free(&newmbentry);
 
     return r;
@@ -1805,7 +1797,6 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     const char *mailbox_owner = NULL;
     struct mailbox *mailbox = NULL;
     char *newacl = NULL;
-    char *mboxent = NULL;
     struct txn *tid = NULL;
 
     /* round trip identifier to potentially strip domain */
@@ -1935,18 +1926,14 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         }
     }
 
-    if(!r) {
+    if (!r) {
         /* ok, change the database */
         free(mbentry->acl);
         mbentry->acl = xstrdupnull(newacl);
-        mboxent = mboxlist_entry_cstring(mbentry);
 
-        do {
-            r = cyrusdb_store(mbdb, name, strlen(name),
-                              mboxent, strlen(mboxent), &tid);
-        } while(r == CYRUSDB_AGAIN);
+        r = mboxlist_update_entry(name, mbentry, &tid);
 
-        if(r) {
+        if (r) {
             syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
                    name, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
@@ -2016,7 +2003,6 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         }
     }
     mailbox_close(&mailbox);
-    free(mboxent);
     free(newacl);
     mboxlist_entry_free(&mbentry);
     mbname_free(&mbname);
@@ -2058,20 +2044,14 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
         /* ok, change the database */
         free(mbentry->acl);
         mbentry->acl = xstrdupnull(newacl);
-        char *mboxent = mboxlist_entry_cstring(mbentry);
 
-        do {
-            r = cyrusdb_store(mbdb, name, strlen(name),
-                              mboxent, strlen(mboxent), &tid);
-        } while (r == CYRUSDB_AGAIN);
+        r = mboxlist_update_entry(name, mbentry, &tid);
 
         if (r) {
             syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
                    name, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
         }
-
-        free(mboxent);
     }
 
     /* 3. Commit transaction */
