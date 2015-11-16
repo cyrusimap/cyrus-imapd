@@ -2480,6 +2480,7 @@ struct contactlist_rock {
 static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
     struct contactlist_rock *crock = (struct contactlist_rock*) rock;
     struct index_record record;
+    struct json_t *contact = NULL;
     int r = 0;
 
     if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
@@ -2522,10 +2523,11 @@ static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
     }
 
     /* Convert the VCARD to a JMAP contact. */
-    /* XXX If this conversion turns out to be wasteful, then first initialize
-     * props with any non-NULL field in filter f or its subconditions. */
-    json_t *contact = jmap_contact_from_vcard(vparser.card->objects, cdata, &record,
+    /* XXX If this conversion turns out to waste too many cycles, then first
+     * initialize props with any non-NULL field in filter f or its subconditions. */
+    contact = jmap_contact_from_vcard(vparser.card->objects, cdata, &record,
                                               NULL /* props */, crock->mailbox->name);
+    vparse_free(&vparser);
 
     /* Match the contact against the filter and update statistics. */
     struct contact_filter_rock cfrock;
@@ -2547,6 +2549,7 @@ static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
     json_array_append_new(crock->contacts, json_string(cdata->vcard_uid));
 
 done:
+    if (contact) json_decref(contact);
     return r;
 }
 
