@@ -484,7 +484,7 @@ static int jmap_match_text(const char *haystack, const char *needle) {
 
 /* Return true if text matches the value of arg's property named name. If 
  * name is NULL, match text to any JSON string property of arg or those of
- * its enclosed JSON objects. */
+ * its enclosed JSON objects and arrays. */
 static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) {
     if (name) {
         json_t *val = json_object_get(arg, name);
@@ -496,6 +496,9 @@ static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) 
         const char *key;
         json_t *val;
         int m = 0;
+        size_t i;
+        json_t *entry;
+
         json_object_foreach(arg, key, val) {
             switch json_typeof(val) {
                 case JSON_STRING:
@@ -504,6 +507,21 @@ static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) 
                 case JSON_OBJECT:
                     m = jmap_match_jsonprop(val, NULL, text);
                     break;
+                case JSON_ARRAY:
+                    json_array_foreach(val, i, entry) {
+                        switch json_typeof(entry) {
+                            case JSON_STRING:
+                                m = jmap_match_text(json_string_value(entry), text);
+                                break;
+                            case JSON_OBJECT:
+                                m = jmap_match_jsonprop(entry, NULL, text);
+                                break;
+                            default:
+                                /* do nothing */
+                                ;
+                        }
+                        if (m) break;
+                    }
                 default:
                     /* do nothing */
                     ;
