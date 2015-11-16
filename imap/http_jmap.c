@@ -2207,8 +2207,8 @@ static int getContactUpdates(struct jmap_req *req)
 }
 
 typedef struct contact_filter {
-    json_t *inContactGroup;
-    int isFlagged;
+    hash_table *inContactGroup;
+    json_t *isFlagged;
     const char *text;
     const char *prefix;
     const char *firstName;
@@ -2226,6 +2226,7 @@ typedef struct contact_filter {
 } contact_filter;
 
 typedef struct contact_filter_rock {
+    struct carddav_db *carddavdb;
     struct carddav_data *cdata;
     json_t *contact;
 } contact_filter_rock;
@@ -2236,9 +2237,16 @@ static int contact_filter_match(void *vf, void *rock)
     contact_filter *f = (contact_filter *) vf;
     contact_filter_rock *cfrock = (contact_filter_rock*) rock;
     json_t *contact = cfrock->contact;
+    struct carddav_data *cdata = cfrock->cdata;
+    struct carddav_db *db = cfrock->carddavdb;
 
-    /* XXX inContactGroup */
-    /* XXX isFlagged */
+    /* isFlagged */
+    if (f->isFlagged && f->isFlagged != json_null()) {
+        json_t *isFlagged = json_object_get(contact, "isFlagged");
+        if (f->isFlagged != isFlagged) {
+            return 0;
+        }
+    }
     /* text */
     if (f->text && !jmap_match_jsonprop(contact, NULL, f->text)) {
         return 0;
@@ -2323,6 +2331,27 @@ static int contact_filter_match(void *vf, void *rock)
     if (f->notes && !jmap_match_jsonprop(contact, "notes", f->notes)) {
         return 0;
     }
+    /* inContactGroup */
+    if (f->inContactGroup) {
+        /* XXX Calling carddav_db for every contact isn't really efficient. If
+         * this turns out to be a performance issue, the carddav_db API might
+         * support contacts by group ids. */
+        strarray_t *gids = carddav_getuid_groups(db, cdata->vcard_uid);
+        if (!gids) {
+            syslog(LOG_INFO, "carddav_getuid_groups(%s) returned NULL group array",
+                    cdata->vcard_uid);
+            return 0;
+        }
+        int i, m = 0;
+        for (i = 0; i < gids->count; i++) {
+            if (hash_lookup(strarray_nth(gids, i), f->inContactGroup)) {
+                m = 1;
+                break;
+            }
+        }
+        strarray_free(gids);
+        if (!m) return 0;
+    }
 
     /* All matched. */
     return 1;
@@ -2332,6 +2361,10 @@ static int contact_filter_match(void *vf, void *rock)
 static void contact_filter_free(void *vf)
 {
     contact_filter *f = (contact_filter*) vf;
+    if (f->inContactGroup) {
+        free_hash_table(f->inContactGroup, NULL);
+        free(f->inContactGroup);
+    }
     free(f);
 }
 
@@ -2346,19 +2379,30 @@ static void *contact_filter_parse(json_t *arg,
     struct buf buf = BUF_INITIALIZER;
 
     /* inContactGroup */
-    f->inContactGroup = json_object_get(arg, "inContactGroup");
-    if (f->inContactGroup == json_null()) {
-        f->inContactGroup = NULL;
-    } else if (f->inContactGroup && json_typeof(f->inContactGroup) != JSON_ARRAY) {
+    json_t *inContactGroup = json_object_get(arg, "inContactGroup");
+    if (inContactGroup && json_typeof(inContactGroup) != JSON_ARRAY) {
         buf_printf(&buf, "%s.inContactGroup", prefix);
         json_array_append_new(invalid, json_string(buf_cstring(&buf)));
         buf_reset(&buf);
+    } else if (inContactGroup) {
+        f->inContactGroup = xmalloc(sizeof(struct hash_table));
+        construct_hash_table(f->inContactGroup, json_array_size(inContactGroup)+1, 0);
+        size_t i;
+        json_t *val;
+        json_array_foreach(inContactGroup, i, val) {
+            buf_printf(&buf, "%s.inContactGroup[%zu]", prefix, i);
+            const char *id;
+            if (json_unpack(val, "s", &id) != -1) {
+                hash_insert(id, (void*)1, f->inContactGroup);
+            } else {
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            }
+            buf_reset(&buf);
+        }
     }
 
     /* isFlagged */
-    if (json_object_get(arg, "isFlagged") != json_null()) {
-        jmap_readprop_full(arg, prefix, "isFlagged", 0, invalid, "b", &f->isFlagged);
-    }
+    f->isFlagged = json_object_get(arg, "isFlagged");
 
     /* text */
     if (json_object_get(arg, "text") != json_null()) {
@@ -2430,6 +2474,7 @@ struct contactlist_rock {
     json_t *contacts;
 
     struct mailbox *mailbox;
+    struct carddav_db *carddavdb;
 };
 
 static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
@@ -2484,6 +2529,7 @@ static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
 
     /* Match the contact against the filter and update statistics. */
     struct contact_filter_rock cfrock;
+    cfrock.carddavdb = crock->carddavdb;
     cfrock.cdata = cdata;
     cfrock.contact = contact;
     if (crock->filter && !jmap_filter_match(crock->filter, &contact_filter_match, &cfrock)) {
@@ -2566,6 +2612,7 @@ static int getContactList(struct jmap_req *req)
 
     /* Inspect every entry in this accounts addressbok mailboxes. */
     rock.contacts = json_pack("[]");
+    rock.carddavdb = db;
     r = carddav_foreach(db, NULL, getcontactlist_cb, &rock);
     if (rock.mailbox) mailbox_close(&rock.mailbox);
     if (r) goto done;
