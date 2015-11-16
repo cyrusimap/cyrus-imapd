@@ -483,15 +483,34 @@ static int jmap_match_text(const char *haystack, const char *needle) {
 }
 
 /* Return true if text matches the value of arg's property named name. If 
- * name is NULL, match text to any JSON string property of arg. */
+ * name is NULL, match text to any JSON string property of arg or those of
+ * its enclosed JSON objects. */
 static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) {
     if (name) {
         json_t *val = json_object_get(arg, name);
-        if (val && val != json_null() && json_typeof(val) == JSON_STRING) {
-            return jmap_match_text(json_string_value(val), text);
+        if (json_typeof(val) != JSON_STRING) {
+            return 0;
+        }
+        return jmap_match_text(json_string_value(val), text);
+    } else {
+        const char *key;
+        json_t *val;
+        int m = 0;
+        json_object_foreach(arg, key, val) {
+            switch json_typeof(val) {
+                case JSON_STRING:
+                    m = jmap_match_text(json_string_value(val), text);
+                    break;
+                case JSON_OBJECT:
+                    m = jmap_match_jsonprop(val, NULL, text);
+                    break;
+                default:
+                    /* do nothing */
+                    ;
+            }
+            if (m) return m;
         }
     }
-    /* XXX support NULL name */
     return 0;
 }
 
@@ -2202,7 +2221,10 @@ static int contact_filter_match(void *vf, void *rock)
 
     /* XXX inContactGroup */
     /* XXX isFlagged */
-    /* XXX text */
+    /* text */
+    if (f->text && !jmap_match_jsonprop(contact, NULL, f->text)) {
+        return 0;
+    }
     /*  prefix */
     if (f->prefix && !jmap_match_jsonprop(contact, "prefix", f->prefix)) {
         return 0;
@@ -2235,17 +2257,49 @@ static int contact_filter_match(void *vf, void *rock)
     if (f->jobTitle && !jmap_match_jsonprop(contact, "jobTitle", f->jobTitle)) {
         return 0;
     }
-    /* XXX email */
-    if (f->email) {
+    /* email */
+    if (f->email && json_object_get(contact, "emails")) {
+        size_t i;
+        json_t *email;
+        int m = 0;
+        json_array_foreach(json_object_get(contact, "emails"), i, email) {
+            m = jmap_match_jsonprop(email, NULL, f->email);
+            if (m) break;
+        }
+        if (!m) return 0;
     }
-    /*  XXX phone */
-    if (f->phone) {
+    /*  phone */
+    if (f->phone && json_object_get(contact, "phones")) {
+        size_t i;
+        json_t *phone;
+        int m = 0;
+        json_array_foreach(json_object_get(contact, "phones"), i, phone) {
+            m = jmap_match_jsonprop(phone, NULL, f->phone);
+            if (m) break;
+        }
+        if (!m) return 0;
     }
-    /*  XXX online */
-    if (f->online) {
+    /*  online */
+    if (f->online && json_object_get(contact, "online")) {
+        size_t i;
+        json_t *online;
+        int m = 0;
+        json_array_foreach(json_object_get(contact, "online"), i, online) {
+            m = jmap_match_jsonprop(online, NULL, f->online);
+            if (m) break;
+        }
+        if (!m) return 0;
     }
-    /* XXX address */
-    if (f->address) {
+    /* address */
+    if (f->address && json_object_get(contact, "addresses")) {
+        size_t i;
+        json_t *address;
+        int m = 0;
+        json_array_foreach(json_object_get(contact, "addresses"), i, address) {
+            m = jmap_match_jsonprop(address, NULL, f->address);
+            if (m) break;
+        }
+        if (!m) return 0;
     }
     /*  notes */
     if (f->notes && !jmap_match_jsonprop(contact, "notes", f->notes)) {
