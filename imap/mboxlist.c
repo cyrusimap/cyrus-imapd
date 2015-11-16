@@ -2302,6 +2302,9 @@ static int allmbox_p(void *rock,
     struct allmb_rock *mbrock = (struct allmb_rock *)rock;
     int r;
 
+    /* skip any dollar keys */
+    if (keylen && key[0] == '$') return 0;
+
     /* free previous record */
     mboxlist_entry_free(&mbrock->mbentry);
 
