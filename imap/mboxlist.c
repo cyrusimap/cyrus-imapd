@@ -2414,6 +2414,13 @@ EXPORTED int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc,
     return r;
 }
 
+static int mboxlist_find_namespace(struct find_rock *rock, const char *prefix, size_t len)
+{
+    int r = cyrusdb_foreach(rock->db, prefix, len, &find_p, &find_cb, rock, NULL);
+    if (r == CYRUSDB_DONE) r = 0;
+    return r;
+}
+
 /*
  * Find all mailboxes that match 'pattern'.
  * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
@@ -2535,9 +2542,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             /* because of how domains work, with crossdomains or admin you can't prefix at all :( */
             size_t thislen = (isadmin || crossdomains) ? 0 : strlen(domainpat);
 
-            /* iterate through all the other user folders on the server */
-            r = cyrusdb_foreach(rock->db, domainpat, thislen, &find_p, &find_cb, rock, NULL);
-            if (r == CYRUSDB_DONE) r = 0;
+            r = mboxlist_find_namespace(rock, domainpat, thislen);
             if (r) goto done;
         }
     }
@@ -2577,8 +2582,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             }
 
             /* iterate through all the non-user folders on the server */
-            r = cyrusdb_foreach(rock->db, domainpat, domainlen, &find_p, &find_cb, rock, NULL);
-            if (r == CYRUSDB_DONE) r = 0;
+            r = mboxlist_find_namespace(rock, domainpat, domainlen);
             if (r) goto done;
         }
     }
