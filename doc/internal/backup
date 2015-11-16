@@ -727,8 +727,6 @@ i think for now, first stage implementation will be to stream the reserve/messag
 todo list
 ---------
 
-* break the index getters into own module
-* finish verify_chunk_mailbox_links
 * clean up error handling
 * move _column_int etc into lib/sqldb, don't automatically xstrdup
 * probably need a non-blocking interface to backup_open...
