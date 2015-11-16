@@ -1550,6 +1550,10 @@ If all partitions are over that limit, this feature is not used anymore.
 /* If enabled, lmtpd rejects messages with 8-bit characters in the
    headers. */
 
+{ "reverseacls", 0, SWITCH }
+/* At startup time, ctl_cyrusdb -r will check this value and it
+   will either add or remove reverse ACL pointers from mailboxes.db */
+
 { "rfc2046_strict", 0, SWITCH }
 /* If enabled, imapd will be strict (per RFC 2046) when matching MIME
    boundary strings.  This means that boundaries containing other

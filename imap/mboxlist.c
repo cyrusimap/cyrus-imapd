@@ -605,9 +605,94 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
+static void mboxlist_racl_key(int isuser, const char *keyuser, const char *mbname, struct buf *buf)
+{
+    buf_setcstr(buf, "$RACL$");
+    buf_putc(buf, isuser ? 'U' : 'S');
+    buf_putc(buf, '$');
+    if (keyuser) {
+        buf_appendcstr(buf, keyuser);
+        buf_putc(buf, '$');
+    }
+    if (mbname) {
+        buf_appendcstr(buf, mbname);
+    }
+}
+
+static int user_is_in(const strarray_t *aclbits, const char *user)
+{
+    int i;
+    if (!aclbits) return 0;
+    for (i = 0; i+1 < strarray_size(aclbits); i+=2) {
+        if (!strcmp(strarray_nth(aclbits, i), user)) return 1;
+    }
+    return 0;
+}
+
+static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, const mbentry_t *newmbentry, struct txn **txn)
+{
+    static strarray_t *admins = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    char *userid = mboxname_to_userid(name);
+    strarray_t *oldusers = NULL;
+    strarray_t *newusers = NULL;
+    int i;
+    int r = 0;
+
+    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, 0);
+
+    if (oldmbentry && oldmbentry->mbtype != MBTYPE_DELETED)
+        oldusers = strarray_split(oldmbentry->acl, "\t", 0);
+
+    if (newmbentry && newmbentry->mbtype != MBTYPE_DELETED)
+        newusers = strarray_split(newmbentry->acl, "\t", 0);
+
+    if (oldusers) {
+        for (i = 0; i+1 < strarray_size(oldusers); i+=2) {
+            const char *acluser = strarray_nth(oldusers, i);
+            const char *aclval = strarray_nth(oldusers, i+1);
+            if (!strchr(aclval, 'l')) continue; /* non-lookup ACLs can be skipped */
+            if (!strcmpsafe(userid, acluser)) continue;
+            if (strarray_find(admins, acluser, 0) >= 0) continue;
+            if (user_is_in(newusers, acluser)) continue;
+            mboxlist_racl_key(!!userid, acluser, name, &buf);
+            r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
+            if (r) goto done;
+        }
+    }
+
+    if (newusers) {
+        for (i = 0; i+1 < strarray_size(newusers); i+=2) {
+            const char *acluser = strarray_nth(newusers, i);
+            const char *aclval = strarray_nth(newusers, i+1);
+            if (!strchr(aclval, 'l')) continue; /* non-lookup ACLs can be skipped */
+            if (!strcmpsafe(userid, acluser)) continue;
+            if (strarray_find(admins, acluser, 0) >= 0) continue;
+            if (user_is_in(oldusers, acluser)) continue;
+            mboxlist_racl_key(!!userid, acluser, name, &buf);
+            r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
+            if (r) goto done;
+        }
+    }
+
+ done:
+    strarray_free(oldusers);
+    strarray_free(newusers);
+    free(userid);
+    buf_free(&buf);
+    return r;
+}
+
 static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, struct txn **txn)
 {
     int r = 0;
+
+    if (!cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, txn)) {
+        mbentry_t *old = NULL;
+        mboxlist_mylookup(name, &old, txn, 0); // ignore errors, it will be NULL
+        r = mboxlist_update_racl(name, old, mbentry, txn);
+        mboxlist_entry_free(&old);
+    }
 
     if (mbentry) {
         char *mboxent = mboxlist_entry_cstring(mbentry);
@@ -2133,6 +2218,9 @@ static int find_p(void *rockp,
     char intname[MAX_MAILBOX_PATH+1];
     int i;
 
+    /* skip any $RACL or future $ space keys */
+    if (key[0] == '$') return 0;
+
     memcpy(intname, key, keylen);
     intname[keylen] = 0;
 
@@ -2371,6 +2459,53 @@ EXPORTED int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *ro
     return r;
 }
 
+static int racls_del_cb(void *rock,
+                  const char *key, size_t keylen,
+                  const char *data __attribute__((unused)),
+                  size_t datalen __attribute__((unused)))
+{
+    struct txn **txn = (struct txn **)rock;
+    return cyrusdb_delete(mbdb, key, keylen, txn, /*force*/0);
+}
+
+static int racls_add_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct txn **txn = (struct txn **)rock;
+    return mboxlist_update_racl(mbentry->name, NULL, mbentry, txn);
+}
+
+EXPORTED int mboxlist_set_racls(int enabled)
+{
+    struct txn *tid = NULL;
+    int r = 0;
+    int now = !cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, &tid);
+
+    if (now && !enabled) {
+        syslog(LOG_NOTICE, "removing reverse acl support");
+        /* remove */
+        r = cyrusdb_foreach(mbdb, "$RACL", 5, NULL, racls_del_cb, &tid, &tid);
+    }
+    else if (enabled && !now) {
+        /* add */
+        struct allmb_rock mbrock = { NULL, 0, racls_add_cb, &tid };
+        /* we can't use mboxlist_allmbox because it doesn't do transactions */
+        syslog(LOG_NOTICE, "adding reverse acl support");
+        r = cyrusdb_foreach(mbdb, "", 0, allmbox_p, allmbox_cb, &mbrock, &tid);
+        if (r) {
+            syslog(LOG_ERR, "ERROR: failed to add reverse acl support %s", error_message(r));
+        }
+        mboxlist_entry_free(&mbrock.mbentry);
+        if (!r) r = cyrusdb_store(mbdb, "$RACL", 5, "", 0, &tid);
+    }
+
+    if (r)
+        cyrusdb_abort(mbdb, tid);
+    else
+        cyrusdb_commit(mbdb, tid);
+
+    return r;
+}
+
 
 struct alluser_rock {
     char *prev;
@@ -2417,9 +2552,48 @@ EXPORTED int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc,
     return r;
 }
 
+struct raclrock {
+    int prefixlen;
+    strarray_t *list;
+};
+
+static int racl_cb(void *rock,
+                   const char *key, size_t keylen,
+                   const char *data __attribute__((unused)),
+                   size_t datalen __attribute__((unused)))
+{
+    struct raclrock *raclrock = (struct raclrock *)rock;
+    strarray_appendm(raclrock->list, xstrndup(key + raclrock->prefixlen, keylen - raclrock->prefixlen));
+    return 0;
+}
+
 static int mboxlist_find_namespace(struct find_rock *rock, const char *prefix, size_t len)
 {
-    int r = cyrusdb_foreach(rock->db, prefix, len, &find_p, &find_cb, rock, NULL);
+    int r = 0;
+    if (!rock->issubs && !rock->isadmin && !cyrusdb_fetch(rock->db, "$RACL", 5, NULL, NULL, NULL)) {
+        /* we're using reverse ACLs */
+        struct buf buf = BUF_INITIALIZER;
+        strarray_t matches = STRARRAY_INITIALIZER;
+        mboxlist_racl_key(rock->find_namespace == NAMESPACE_USER, rock->userid, NULL, &buf);
+        /* this is the prefix */
+        struct raclrock raclrock = { buf.len, &matches };
+        /* we only need to look inside the prefix still, but we keep the length
+         * in raclrock pointing to the start of the mboxname part of the key so
+         * we get correct names in matches */
+        if (len) buf_appendmap(&buf, prefix, len);
+        r = cyrusdb_foreach(rock->db, buf.s, buf.len, NULL, racl_cb, &raclrock, NULL);
+        /* XXX - later we need to sort the array when we've added groups */
+        int i;
+        for (i = 0; !r && i < strarray_size(&matches); i++) {
+            const char *key = strarray_nth(&matches, i);
+            r = cyrusdb_forone(rock->db, key, strlen(key), &find_p, &find_cb, rock, NULL);
+        }
+        strarray_fini(&matches);
+    }
+    else {
+        r = cyrusdb_foreach(rock->db, prefix, len, &find_p, &find_cb, rock, NULL);
+    }
+
     if (r == CYRUSDB_DONE) r = 0;
     return r;
 }
