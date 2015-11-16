@@ -107,7 +107,7 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub test_jmap_multicontact
+sub test_setcontacts_multicontact
 {
     my ($self) = @_;
 
@@ -578,7 +578,7 @@ sub test_getcontactgroupupdates
 }
 
 
-sub test_jmap_create
+sub test_setcontacts
 {
     my ($self) = @_;
 
@@ -1097,7 +1097,7 @@ sub test_setcalendars_destroydefault
     $self->assert_str_equals($errType, "notFound");
 }
 
-sub test_importance_later
+sub test_setcontacts_importance_later
 {
     my ($self) = @_;
 
@@ -1131,7 +1131,7 @@ sub test_importance_later
     $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -0.1);
 }
 
-sub test_importance_upfront
+sub test_setcontacts_importance_upfront
 {
     my ($self) = @_;
 
@@ -1165,7 +1165,7 @@ sub test_importance_upfront
     $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -5.2);
 }
 
-sub test_importance_multiedit
+sub test_setcontacts_importance_multiedit
 {
     my ($self) = @_;
 
@@ -1199,7 +1199,7 @@ sub test_importance_multiedit
     $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, -0.2);
 }
 
-sub test_importance_zero_multi
+sub test_setcontacts_importance_zero_multi
 {
     my ($self) = @_;
 
@@ -1233,7 +1233,7 @@ sub test_importance_zero_multi
     $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, 0);
 }
 
-sub test_importance_zero_byself
+sub test_setcontacts_importance_zero_byself
 {
     my ($self) = @_;
 
