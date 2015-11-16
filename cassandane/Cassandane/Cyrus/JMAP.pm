@@ -283,11 +283,52 @@ sub test_getcontactlist {
 
     xlog "create contacts";
     my $res = $jmap->Request([['setContacts', {create => {
-                        "#1" => {firstName => "foo", lastName => "last1"},
-                        "#2" => {firstName => "bar", lastName => "last2"},
-                        "#3" => {firstName => "baz", lastName => "last3"},
+                        "#1" =>
+                        {
+                            firstName => "foo", lastName => "last1",
+                            emails => [{
+                                    type => "personal",
+                                    value => "foo\@example.com"
+                                }]
+                        },
+                        "#2" =>
+                        {
+                            firstName => "bar", lastName => "last2",
+                            emails => [{
+                                    type => "work",
+                                    value => "bar\@bar.org"
+                                }, {
+                                    type => "other",
+                                    value => "me\@example.com"
+                                }],
+                            addresses => [{
+                                    type => "home",
+                                    label => undef,
+                                    street => "Some Lane 24",
+                                    locality => "SomeWhere City",
+                                    region => "",
+                                    postcode => "1234",
+                                    country => "Someinistan",
+                                    isDefault => JSON::false
+                                }]
+                        },
+                        "#3" =>
+                        {
+                            firstName => "baz", lastName => "last3",
+                            addresses => [{
+                                    type => "home",
+                                    label => undef,
+                                    street => "Some Lane 12",
+                                    locality => "SomeWhere City",
+                                    region => "",
+                                    postcode => "1234",
+                                    country => "Someinistan",
+                                    isDefault => JSON::false
+                                }]
+                        },
                         "#4" => {firstName => "bam", lastName => "last4"}
                     }}, "R1"]]);
+
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
@@ -309,6 +350,7 @@ sub test_getcontactlist {
 
     xlog "get unfiltered contact list";
     $res = $jmap->Request([ ['getContactList', { }, "R1"] ]);
+
     $self->assert_num_equals($res->[0][1]{total}, 4);
     $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 4);
 
@@ -319,6 +361,58 @@ sub test_getcontactlist {
     $self->assert_num_equals($res->[0][1]{total}, 1);
     $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 1);
     $self->assert_str_equals($res->[0][1]{contactIds}[0], $id1);
+
+    xlog "filter by lastName";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { lastName => "last" }
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 4);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 4);
+
+    xlog "filter by firstName and lastName (one filter)";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { firstName => "bam", lastName => "last" }
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 1);
+    $self->assert_str_equals($res->[0][1]{contactIds}[0], $id4);
+
+    xlog "filter by firstName and lastName (AND filter)";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { operator => "AND", conditions => [{
+                                lastName => "last"
+                            }, {
+                                firstName => "baz"
+                    }]}
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 1);
+    $self->assert_str_equals($res->[0][1]{contactIds}[0], $id3);
+
+    xlog "filter by firstName (OR filter)";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { operator => "OR", conditions => [{
+                                firstName => "bar"
+                            }, {
+                                firstName => "baz"
+                    }]}
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 2);
+
+    xlog "filter by text";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { text => "some" }
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 2);
+
+    xlog "filter by email";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { email => "example.com" }
+                }, "R1"] ]);
+    $self->assert_num_equals($res->[0][1]{total}, 2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 2);
 }
 
 sub test_getcontactgroupupdates
