@@ -81,6 +81,7 @@
 
 static time_t compile_time;
 static unsigned synctoken_prefix;
+static ptrarray_t *leap_seconds = NULL;
 static void tzdist_init(struct buf *serverinfo);
 static void tzdist_shutdown(void);
 static int meth_get(struct transaction_t *txn, void *params);
@@ -93,7 +94,10 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
                          char **resp);
 static int json_error_response(struct transaction_t *txn, long tz_code,
                                struct strlist *param, icaltimetype *time);
-static char *icaltimezone_as_tzfile(icalcomponent* comp, unsigned long *len);
+static char *icaltimezone_as_tzfile(icalcomponent* comp,
+                                    unsigned long *len);
+static char *icaltimezone_as_tzfile_leap(icalcomponent* comp,
+                                         unsigned long *len);
 
 struct observance {
     const char *name;
@@ -121,6 +125,10 @@ static struct mime_type_t tz_mime_types[] = {
     },
     { "application/tzfile", NULL, "tz",
       (char* (*)(void *, unsigned long *)) &icaltimezone_as_tzfile,
+      NULL, NULL, NULL, NULL
+    },
+    { "application/tzfile+leap", NULL, "tz",
+      (char* (*)(void *, unsigned long *)) &icaltimezone_as_tzfile_leap,
       NULL, NULL, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
@@ -155,6 +163,52 @@ struct namespace_t namespace_tzdist = {
 };
 
 
+struct leapsec {
+    long long int t;      /* transition time */
+    long int sec;         /* leap seconds */
+};
+
+void read_leap_seconds()
+{
+    FILE *fp;
+    char buf[1024];
+    struct leapsec *leap;
+
+    snprintf(buf, sizeof(buf), "%s%s%s",
+             config_dir, FNAME_ZONEINFODIR, FNAME_LEAPSECFILE);
+    if (!(fp = fopen(buf, "r"))) {
+        syslog(LOG_ERR, "Failed to open file %s", buf);
+        return;
+    }
+
+    /* expires record is always at idx=0, if exists */
+    leap_seconds = ptrarray_new();
+    leap = xzmalloc(sizeof(struct leapsec));
+    ptrarray_append(leap_seconds, leap);
+
+    while (fgets(buf, sizeof(buf), fp)) {
+        if (buf[0] == '#') {
+            /* comment line */
+
+            if (buf[1] == '@') {
+                /* expires */
+                leap = ptrarray_nth(leap_seconds, 0);
+                sscanf(buf+2, "\t%lld", &leap->t);
+                leap->t -= NIST_EPOCH_OFFSET;
+            }
+        }
+        else if (isdigit(buf[0])) {
+            /* leap second */
+            leap = xmalloc(sizeof(struct leapsec));
+            ptrarray_append(leap_seconds, leap);
+            sscanf(buf, "%lld\t%ld", &leap->t, &leap->sec);
+            leap->t -= NIST_EPOCH_OFFSET;
+        }
+    }
+    fclose(fp);
+}
+
+
 static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
 {
     struct buf buf = BUF_INITIALIZER;
@@ -177,12 +231,27 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
     buf_free(&buf);
 
     initialize_tz_error_table();
+
+    read_leap_seconds();
+    if (!leap_seconds || leap_seconds->count < 2) {
+        /* Disable application/tzfile+leap */
+        struct mime_type_t *mime;
+
+        for (mime = tz_mime_types; mime->content_type; mime++) {
+            if (!strcmp(mime->content_type, "application/tzfile+leap")) {
+                mime->content_type = NULL;
+                break;
+            }
+        }
+    }
 }
 
 
 static void tzdist_shutdown(void)
 {
     zoneinfo_close(NULL);
+
+    ptrarray_free(leap_seconds);
 }
 
 
@@ -389,7 +458,6 @@ static int action_capa(struct transaction_t *txn)
     return json_response(precond, txn, root, &resp);
 }
 
-
 /* Perform a leapseconds action */
 static int action_leap(struct transaction_t *txn)
 {
@@ -433,13 +501,11 @@ static int action_leap(struct transaction_t *txn)
 
     if (txn->meth != METH_HEAD) {
         json_t *root, *expires, *leapseconds;
+        struct leapsec *leapsec;
         char buf[1024];
-        FILE *fp;
+        int n;
 
-        snprintf(buf, sizeof(buf), "%s%s%s",
-                 config_dir, FNAME_ZONEINFODIR, FNAME_LEAPSECFILE);
-        if (!(fp = fopen(buf, "r"))) {
-            syslog(LOG_ERR, "Failed to open file %s", buf);
+        if (!leap_seconds) {
             ret = HTTP_NOT_FOUND;
             goto done;
         }
@@ -451,41 +517,27 @@ static int action_leap(struct transaction_t *txn)
         if (!root) {
             txn->error.desc = "Unable to create JSON response";
             ret = HTTP_SERVER_ERROR;
-            fclose(fp);
             goto done;
         }
 
         expires = json_object_get(root, "expires");
         leapseconds = json_object_get(root, "leapseconds");
 
-        while (fgets(buf, sizeof(buf), fp)) {
-            unsigned long epoch;
-
-            if (buf[0] == '#') {
-                /* comment line */
-
-                if (buf[1] == '@') {
-                    /* expires */
-                    sscanf(buf+2, "\t%lu", &epoch);
-                    time_to_rfc3339(epoch - NIST_EPOCH_OFFSET,
-                                    buf, 11 /* clip time */);
-                    json_string_set(expires, buf);
-                }
-            }
-            else if (isdigit(buf[0])) {
-                /* leap second */
-                int utcoff;
-                json_t *leap;
-
-                sscanf(buf, "%lu\t%d", &epoch, &utcoff);
-                time_to_rfc3339(epoch - NIST_EPOCH_OFFSET,
-                                buf, 11 /* clip time */);
-                leap = json_pack("{s:i s:s}",
-                                 "utc-offset", utcoff, "onset", buf);
-                json_array_append_new(leapseconds, leap);
-            }
+        leapsec = ptrarray_nth(leap_seconds, 0);
+        if (leapsec->t) {
+            time_to_rfc3339(leapsec->t, buf, 11 /* clip time */);
+            json_string_set(expires, buf);
         }
-        fclose(fp);
+
+        for (n = 1; n < leap_seconds->count; n++) {
+            json_t *leap;
+
+            leapsec = ptrarray_nth(leap_seconds, n);
+            time_to_rfc3339(leapsec->t, buf, 11 /* clip time */);
+            leap = json_pack("{s:i s:s}",
+                             "utc-offset", leapsec->sec, "onset", buf);
+            json_array_append_new(leapseconds, leap);
+        }
 
         /* Output the JSON object */
         ret = json_response(precond, txn, root, NULL);
@@ -1831,7 +1883,8 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
 }
 
 /* Convert VTIMEZONE into tzfile(5) format */
-static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
+static char *_icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len,
+                                     bit32 leapcnt)
 {
     icalcomponent *vtz, *eternal_std = NULL, *eternal_dst = NULL;
     icalarray *obsarray;
@@ -1850,21 +1903,23 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
         long long int t;      /* transition time */
         unsigned char idx;    /* index into 'types' array */
     } *times = NULL;
-    struct leap {
-        long long int t;      /* transition time */
-        long int sec;         /* leap seconds */
-    } *leaps = NULL;
     struct ttinfo types[256]; /* only indexed by unsigned char */
     struct buf tzfile = BUF_INITIALIZER;
     struct buf posix = BUF_INITIALIZER, abbrev = BUF_INITIALIZER;
-    bit32 leapcnt = 0;
     struct observance *obs;
     unsigned do_bit64;
+    struct leapsec *leap = NULL;
+    bit32 leap_init = 0, leap_sec = 0;
 
     vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
     if (!vtz) {
         if (len) *len = 0;
         return NULL;
+    }
+
+    if (leapcnt) {
+        leap = ptrarray_nth(leap_seconds, 1);
+        leap_init = leap->sec;
     }
 
     /* Create an array of observances */
@@ -1896,9 +1951,13 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
         long long int epoch = do_bit64 ? BIG_BANG : INT32_MIN;
         struct observance *prev_obs = proleptic;
         bit32 timecnt = 0, typecnt = 0;
+        int leapidx = 2;
         size_t n;
 
         buf_reset(&abbrev);
+
+        leap_sec = 0;
+        if (leapcnt) leap = ptrarray_nth(leap_seconds, leapidx);
 
         /* Populate array of transitions & types */
         for (n = 0; n < obsarray->num_elements; n++) {
@@ -1980,6 +2039,14 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
             }
 
             /* Add transition */
+            if (leapcnt) {
+                while (t >= leap->t && leapidx < leap_seconds->count) {
+                    leap_sec = leap->sec - leap_init;
+                    if (++leapidx < leap_seconds->count)
+                        leap = ptrarray_nth(leap_seconds, leapidx);
+                }
+                t += leap_sec;
+            }
             times[timecnt].t = t;
             times[timecnt].idx = typeidx;
             timecnt++;
@@ -2017,10 +2084,20 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
         buf_append(&tzfile, &abbrev);
 
         /* Leap second records */
-        for (n = 0; n < leapcnt; n++) {
-            if (do_bit64) buf_appendbit64(&tzfile, leaps[n].t);
-            else buf_appendbit32(&tzfile, leaps[n].t);
-            buf_appendbit32(&tzfile, leaps[n].sec);
+        if (leapcnt) {
+            leap_sec = 0;
+
+            for (leapidx = 2; leapidx < leap_seconds->count; leapidx++) {
+                long long int t;
+
+                leap = ptrarray_nth(leap_seconds, leapidx);
+                t = leap->t + leap_sec;
+                if (do_bit64) buf_appendbit64(&tzfile, t);
+                else buf_appendbit32(&tzfile, t);
+
+                leap_sec = leap->sec - leap_init;
+                buf_appendbit32(&tzfile, leap_sec);
+            }
         }
 
         /* Standard/wall indicators */
@@ -2093,4 +2170,16 @@ static char *icaltimezone_as_tzfile(icalcomponent* ical, unsigned long *len)
     if (len) *len = buf_len(&tzfile);
 
     return buf_release(&tzfile);
+}
+
+static char *icaltimezone_as_tzfile(icalcomponent* ical,
+                                    unsigned long *len)
+{
+    return _icaltimezone_as_tzfile(ical, len, 0);
+}
+
+static char *icaltimezone_as_tzfile_leap(icalcomponent* ical,
+                                         unsigned long *len)
+{
+    return _icaltimezone_as_tzfile(ical, len, leap_seconds->count - 2);
 }
