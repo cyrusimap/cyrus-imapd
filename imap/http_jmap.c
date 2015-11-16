@@ -3547,15 +3547,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
         goto done;
     }
 
-    /* OK, we want this one */
+    /* OK, we want this one... */
     const char *collection = strrchr(mbentry->name, '.') + 1;
 
-    /* unless it's one of the special names... XXX - check
-     * the specialuse magic on these instead */
+    /* ...unless it's one of the special names. */
     if (jmap_calendar_ishidden(collection)) return 0;
-    if (!strcmp(collection, "#calendars")) return 0;
-    if (!strcmp(collection, "Inbox")) return 0;
-    if (!strcmp(collection, "Outbox")) return 0;
 
     crock->rows++;
 
@@ -4463,7 +4459,7 @@ done:
     return r;
 }
 
-/* Convert time to a RFC3339 formatted localdate string. Return the number
+/* Convert time t to a RFC3339 formatted localdate string. Return the number
  * of bytes written to buf sized size, excluding the terminating null byte. */
 static int jmap_timet_to_localdate(time_t t, char* buf, size_t size) {
     int n = time_to_rfc3339(t, buf, size);
