@@ -132,9 +132,10 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern int optind;
 extern char *optarg;
-static int dupelim = 1;		/* eliminate duplicate messages with
-				   same message-id */
-static int singleinstance = 1;	/* attempt single instance store */
+static int dupelim = 1;         /* eliminate duplicate messages with
+                                   same message-id */
+static int singleinstance = 1;  /* attempt single instance store */
+static int isproxy = 0;
 
 struct stagemsg *stage = NULL;
 
@@ -143,7 +144,6 @@ static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* our cached connections */
-mupdate_handle *mhandle = NULL;
 struct backend **backend_cached = NULL;
 
 static struct protocol_t lmtp_protocol =
@@ -185,16 +185,15 @@ int service_init(int argc __attribute__((unused)),
 
     global_sasl_init(1, 1, mysasl_cb);
 
+    /* so we can do mboxlist operations */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
     if (config_mupdate_server &&
-	(config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
-	!config_getstring(IMAPOPT_PROXYSERVERS)) {
-	/* proxy only -- talk directly to mupdate master */
-	r = mupdate_connect(config_mupdate_server, NULL, &mhandle, NULL);
-	if (r) {
-	    syslog(LOG_ERR, "couldn't connect to MUPDATE server %s: %s",
-		   config_mupdate_server, error_message(r));
-	    fatal("error connecting with MUPDATE server", EC_TEMPFAIL);
-	}
+        (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
+        !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* proxy only */
+        isproxy = 1;
     }
     else {
 	dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
@@ -216,10 +215,6 @@ int service_init(int argc __attribute__((unused)),
 		      EC_SOFTWARE);
 	    }
 	}
-
-	/* so we can do mboxlist operations */
-	mboxlist_init(0);
-	mboxlist_open(NULL);
 
 	/* so we can do quota operations */
 	quotadb_init(0);
@@ -253,22 +248,13 @@ int service_init(int argc __attribute__((unused)),
     return 0;
 }
 
-static int mupdate_ignore_cb(struct mupdate_mailboxdata *mdata __attribute__((unused)),
-			     const char *cmd __attribute__((unused)),
-			     void *context __attribute__((unused))) 
-{
-    /* If we get called, we've recieved something other than an OK in
-     * response to the NOOP, so we want to hang up this connection anyway */
-    return MUPDATE_FAIL;
-}
-
 /*
  * run for each accepted connection
  */
 int service_main(int argc, char **argv, 
 		 char **envp __attribute__((unused)))
 {
-    int opt, r;
+    int opt;
 
     sync_log_init();
 
@@ -291,32 +277,7 @@ int service_main(int argc, char **argv,
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
-    /* get a connection to the mupdate server */
-    r = 0;
-    if (mhandle) {
-	/* we have one already, test it */
-	r = mupdate_noop(mhandle, mupdate_ignore_cb, NULL);
-	if (r) {
-	    /* will NULL mhandle for us */
-	    mupdate_disconnect(&mhandle);
-
-	    /* connect to the mupdate server */
-	    r = mupdate_connect(config_mupdate_server, NULL, &mhandle, NULL);
-	}
-    }
-    if (!r) {
-	lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
-    } else {
-	syslog(LOG_ERR, "couldn't connect to %s: %s", config_mupdate_server,
-	       error_message(r));
-	prot_printf(deliver_out, "451");
-	if (config_serverinfo) prot_printf(deliver_out, " %s", config_servername);
-	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	    prot_printf(deliver_out, " Cyrus LMTP%s %s",
-			config_mupdate_server ? " Murder" : "", cyrus_version());
-	}
-	prot_printf(deliver_out, " %s\r\n", error_message(r));
-    }
+    lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
 
     /* free session state */
     if (deliver_in) prot_free(deliver_in);
@@ -429,53 +390,26 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 {
     int r;
     char *c;
+    struct mboxlist_entry mbentry;
 
-    if (server) *server = NULL;
-
-    if (mhandle) {
-	/* proxy only, so check the mupdate master */
-	struct mupdate_mailboxdata *mailboxdata;
-
-	/* find what server we're sending this to */
-	r = mupdate_find(mhandle, name, &mailboxdata);
-
-	if (r == MUPDATE_MAILBOX_UNKNOWN) {
-	    return IMAP_MAILBOX_NONEXISTENT;
-	} else if (r) {
-	    /* xxx -- yuck: our error handling for now will be to exit;
-	       this txn will be retried later -- to do otherwise means
-	       that we may have to restart this transaction from scratch */
-	    fatal("error communicating with MUPDATE server", EC_TEMPFAIL);
-	}
-
-	if (mailboxdata->t == RESERVE) return IMAP_MAILBOX_RESERVED;
-
-	if (aclp) *aclp = (char *) mailboxdata->acl;
-	if (server) *server = (char *) mailboxdata->server;
-	c = strchr(*server, '!');
-	if (c) *c = '\0';
+    /* do a local lookup and kick the slave if necessary */
+    r = mboxlist_lookup(name, &mbentry, tid);
+    if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
+        kick_mupdate();
+        r = mboxlist_lookup(name, &mbentry, tid);
     }
-    else {
-	struct mboxlist_entry mbentry;
-	/* do a local lookup and kick the slave if necessary */
-	r = mboxlist_lookup(name, &mbentry, tid);
-	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
-	    kick_mupdate();
-	    r = mboxlist_lookup(name, &mbentry, tid);
-	}
-	if (r) return r;
-	if (mbentry.mbtype & MBTYPE_MOVING)  return IMAP_MAILBOX_MOVED;
-	if (mbentry.mbtype & MBTYPE_DELETED) return IMAP_MAILBOX_NONEXISTENT;
+    if (r) return r;
+    if (mbentry.mbtype & MBTYPE_MOVING)  return IMAP_MAILBOX_MOVED;
+    if (mbentry.mbtype & MBTYPE_DELETED) return IMAP_MAILBOX_NONEXISTENT;
 
-	if (aclp) *aclp = mbentry.acl;
-	if (server) {
-	    if (mbentry.mbtype & MBTYPE_REMOTE) {
-		/* xxx hide the fact that we are storing partitions */
-		*server = mbentry.partition;
-		c = strchr(*server, '!');
-		if (c) *c = '\0';
-	    }
-	}
+    if (aclp) *aclp = mbentry.acl;
+    if (server) {
+        if (mbentry.mbtype & MBTYPE_REMOTE) {
+            /* xxx hide the fact that we are storing partitions */
+            *server = mbentry.partition;
+            c = strchr(*server, '!');
+            if (c) *c = '\0';
+        }
     }
 
     return r;
@@ -945,9 +879,10 @@ void shut_down(int code)
     }
     if (backend_cached) free(backend_cached);
 
-    if (mhandle) {
-	mupdate_disconnect(&mhandle);
-    } else {
+    mboxlist_close();
+    mboxlist_done();
+
+    if (!isproxy) {
 #ifdef USE_SIEVE
 	sieve_interp_free(&sieve_interp);
 #else
@@ -955,11 +890,8 @@ void shut_down(int code)
 #endif
 	    duplicate_done();
 
-	mboxlist_close();
-	mboxlist_done();
-
-	quotadb_close();
-	quotadb_done();
+        quotadb_close();
+        quotadb_done();
 
 	denydb_close();
 	denydb_done();
@@ -1127,7 +1059,7 @@ FILE *spoolfile(message_data_t *msgdata)
 
     /* spool to the stage of one of the recipients
        (don't bother if we're only a proxy) */
-    n = mhandle ? 0 : msg_getnumrcpt(msgdata);
+    n = isproxy ? 0 : msg_getnumrcpt(msgdata);
     for (i = 0; !f && (i < n); i++) {
 	char namebuf[MAX_MAILBOX_BUFFER] = "", *server;
 	const char *user, *domain, *mailbox;
