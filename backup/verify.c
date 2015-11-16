@@ -101,7 +101,8 @@ static void chunk_list_empty(struct chunk_list *list) {
     list->head = list->tail = NULL;
 }
 
-static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk);
+static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
+                                  struct gzuncat *gzuc);
 static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
                                  struct gzuncat *gzuc, unsigned level);
 static int verify_mailbox_links(struct backup *backup);
@@ -141,29 +142,25 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level)
 
     r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
                        NULL, chunk_select_cb, &chunk_list);
+    if (r) goto done;
+
+    gzuc = gzuc_open(backup->fd);
+    if (!gzuc) {
+        r = -1;
+        goto done;
+    }
 
     if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
-        r = verify_chunk_checksums(backup, chunk_list.head);
+        r = verify_chunk_checksums(backup, chunk_list.head, gzuc);
 
-    if (level > BACKUP_VERIFY_LAST_CHECKSUM) {
-        gzuc = gzuc_open(backup->fd);
-        if (!gzuc) {
-            r = -1;
-            goto done;
-        }
-
+    if (!r && level > BACKUP_VERIFY_LAST_CHECKSUM) {
         struct chunk *chunk = chunk_list.head;
         while (!r && chunk) {
-            r = gzuc_member_start_from(gzuc, chunk->offset);
-
             if (!r && (level & BACKUP_VERIFY_ALL_CHECKSUMS))
-                r = verify_chunk_checksums(backup, chunk);
+                r = verify_chunk_checksums(backup, chunk, gzuc);
 
             if (!r && (level & BACKUP_VERIFY_MESSAGES))
                 r = verify_chunk_messages(backup, chunk, gzuc, level);
-
-            if (!r)
-                r = gzuc_member_end(gzuc, NULL);
 
             chunk = chunk->next;
         }
@@ -178,9 +175,9 @@ done:
     return r;
 }
 
-static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk)
+static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
+                                  struct gzuncat *gzuc)
 {
-    struct gzuncat *gzuc = NULL;
     int r;
 
     if (!chunk->id) {
@@ -201,12 +198,6 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk)
     }
 
     /* validate data-within-this-chunk checksum */
-    gzuc = gzuc_open(backup->fd);
-    if (!gzuc) {
-        r = -1;
-        goto done;
-    }
-
     char buf[8192]; /* FIXME whatever */
     size_t len = 0;
     SHA_CTX sha_ctx;
@@ -219,6 +210,7 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk)
             len += n;
         }
     }
+    gzuc_member_end(gzuc, NULL);
     if (len != chunk->length) {
         fprintf(stderr, "%s: %s (chunk %d) data length mismatch: "
                         SIZE_T_FMT " on disk,"
@@ -240,7 +232,6 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk)
     }
 
 done:
-    if (gzuc) gzuc_close(&gzuc);
     fprintf(stderr, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
     return r;
 }
@@ -322,8 +313,13 @@ static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
         0,
     };
 
-    int r = backup_message_foreach(backup, chunk->id, _verify_message_cb,
-                                   &vmrock);
+    /* FIXME this is a mess */
+    int r = gzuc_member_start_from(gzuc, chunk->offset);
+
+    if (!r) r = backup_message_foreach(backup, chunk->id, _verify_message_cb,
+                                       &vmrock);
+
+    gzuc_member_end(gzuc, NULL);
 
     if (vmrock.cached_dlist)
         dlist_free(&vmrock.cached_dlist);
