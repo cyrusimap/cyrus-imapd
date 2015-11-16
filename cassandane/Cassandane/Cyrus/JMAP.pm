@@ -310,7 +310,8 @@ sub test_getcontactlist {
                                     postcode => "1234",
                                     country => "Someinistan",
                                     isDefault => JSON::false
-                                }]
+                                }],
+                            isFlagged => JSON::true
                         },
                         "#3" =>
                         {
@@ -326,7 +327,8 @@ sub test_getcontactlist {
                                     isDefault => JSON::false
                                 }]
                         },
-                        "#4" => {firstName => "bam", lastName => "last4"}
+                        "#4" => {firstName => "bam", lastName => "last4",
+                                 isFlagged => JSON::false }
                     }}, "R1"]]);
 
     $self->assert_not_null($res);
@@ -340,13 +342,15 @@ sub test_getcontactlist {
     xlog "create contact groups";
     $res = $jmap->Request([['setContactGroups', {create => {
                         "#1" => {name => "group1", contactIds => [$id1, $id2]},
-                        "#2" => {name => "group2", contactIds => [$id3, $id4]}
+                        "#2" => {name => "group2", contactIds => [$id3]},
+                        "#3" => {name => "group3", contactIds => [$id4]}
                     }}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     my $group1 = $res->[0][1]{created}{"#1"}{id};
     my $group2 = $res->[0][1]{created}{"#2"}{id};
+    my $group3 = $res->[0][1]{created}{"#3"}{id};
 
     xlog "get unfiltered contact list";
     $res = $jmap->Request([ ['getContactList', { }, "R1"] ]);
@@ -413,6 +417,32 @@ sub test_getcontactlist {
                 }, "R1"] ]);
     $self->assert_num_equals($res->[0][1]{total}, 2);
     $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 2);
+
+    xlog "filter by isFlagged (true)";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { isFlagged => JSON::true }
+                }, "R1"] ]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 1);
+    $self->assert_str_equals($res->[0][1]{contactIds}[0], $id2);
+
+    xlog "filter by isFlagged (false)";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { isFlagged => JSON::false }
+                }, "R1"] ]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 3);
+
+    xlog "filter by inContactGroup";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { inContactGroup => [$group1, $group3] }
+                }, "R1"] ]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 3);
+
+    xlog "filter by inContactGroup and firstName";
+    $res = $jmap->Request([ ['getContactList', {
+                    filter => { inContactGroup => [$group1, $group3], firstName => "foo" }
+                }, "R1"] ]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{contactIds}}, 1);
+    $self->assert_str_equals($res->[0][1]{contactIds}[0], $id1);
 }
 
 sub test_getcontactgroupupdates
