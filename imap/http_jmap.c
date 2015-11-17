@@ -1068,11 +1068,12 @@ static int getContactGroupUpdates(struct jmap_req *req)
     struct buf buf = BUF_INITIALIZER;
     int r = -1;
     int pe; /* property parse error */
+    modseq_t oldmodseq;
+    int dofetch = 0;
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
 
-    /* XXX Might want to use jmap_readprop for all properties. */
     json_int_t max_records = 0;
     pe = jmap_readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &max_records);
     if (pe > 0) {
@@ -1080,6 +1081,17 @@ static int getContactGroupUpdates(struct jmap_req *req)
             json_array_append_new(invalid, json_string("maxChanges"));
         }
     }
+
+    const char *since = NULL;
+    pe = jmap_readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
+    if (pe > 0) {
+        oldmodseq = str2uint64(since);
+        if (!oldmodseq) {
+            json_array_append_new(invalid, json_string("sinceState"));
+        }
+    }
+
+    jmap_readprop(req->args, "fetchRecords", 0 /*mandatory*/, invalid, "b", &dofetch);
 
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
@@ -1089,14 +1101,10 @@ static int getContactGroupUpdates(struct jmap_req *req)
     }
     json_decref(invalid);
 
-    const char *since = _json_object_get_string(req->args, "sinceState");
-    if (!since) goto done;
-    modseq_t oldmodseq = str2uint64(since);
-
+    /* Non-JMAP spec addressbookId argument */
     char *mboxname = NULL;
     json_t *abookid = json_object_get(req->args, "addressbookId");
     if (abookid && json_string_value(abookid)) {
-        /* XXX - invalid arguments */
         const char *addressbookId = json_string_value(abookid);
         mboxname = carddav_mboxname(req->userid, addressbookId);
     }
@@ -1143,8 +1151,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
 
     json_array_append_new(req->response, item);
 
-    json_t *dofetch = json_object_get(req->args, "fetchContactGroups");
-    if (dofetch && json_is_true(dofetch) && json_array_size(rock.changed)) {
+    if (dofetch && json_array_size(rock.changed)) {
         struct jmap_req subreq = *req; // struct copy, woot
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.changed);
@@ -1172,7 +1179,8 @@ static const char *_resolveid(struct jmap_req *req, const char *id)
 }
 
 static int _add_group_entries(struct jmap_req *req,
-                              struct vparse_card *card, json_t *members)
+                              struct vparse_card *card, json_t *members,
+                              json_t *invalid)
 {
     vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
     int r = 0;
@@ -1181,12 +1189,18 @@ static int _add_group_entries(struct jmap_req *req,
 
     for (index = 0; index < json_array_size(members); index++) {
         const char *item = _json_array_get_string(members, index);
-        if (!item) continue;
+        if (!item) {
+            buf_printf(&buf, "contactIds[%zu]", index);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+            continue;
+        }
         const char *uid = _resolveid(req, item);
         buf_setcstr(&buf, "urn:uuid:");
         buf_appendcstr(&buf, uid);
         vparse_add_entry(card, NULL,
                          "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
+        buf_reset(&buf);
     }
 
     buf_free(&buf);
@@ -1194,7 +1208,8 @@ static int _add_group_entries(struct jmap_req *req,
 }
 
 static int _add_othergroup_entries(struct jmap_req *req,
-                                   struct vparse_card *card, json_t *members)
+                                   struct vparse_card *card, json_t *members,
+                                   json_t *invalid)
 {
     vparse_delete_entries(card, NULL, "X-FM-OTHERACCOUNT-MEMBER");
     int r = 0;
@@ -1205,8 +1220,12 @@ static int _add_othergroup_entries(struct jmap_req *req,
         unsigned i;
         for (i = 0; i < json_array_size(arg); i++) {
             const char *item = json_string_value(json_array_get(arg, i));
-            if (!item)
-                return -1;
+            if (!item) {
+                buf_printf(&buf, "otherContactIds[%s]", key);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+                continue;
+            }
             const char *uid = _resolveid(req, item);
             buf_setcstr(&buf, "urn:uuid:");
             buf_appendcstr(&buf, uid);
@@ -1214,6 +1233,7 @@ static int _add_othergroup_entries(struct jmap_req *req,
                 vparse_add_entry(card, NULL,
                                  "X-FM-OTHERACCOUNT-MEMBER", buf_cstring(&buf));
             vparse_add_param(entry, "userid", key);
+            buf_reset(&buf);
         }
     }
     buf_free(&buf);
@@ -1250,22 +1270,11 @@ static int setContactGroups(struct jmap_req *req)
         json_t *arg;
         json_object_foreach(create, key, arg) {
             const char *uid = makeuuid();
-            json_t *jname = json_object_get(arg, "name");
-            if (!jname) {
-                /* XXX - missingParameters should be an invalidProperties
-                 * error. Fix this when the contacts error handling code gets
-                 * merged with the calendar codebase. */
-                json_t *err = json_pack("{s:s}", "type", "missingParameters");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-            const char *name = json_string_value(jname);
-            if (!name) {
-                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-            // XXX - no name => notCreated
+            const char *name = NULL;
+            json_t *invalid = json_pack("[]");
+
+            jmap_readprop(arg, "name", 1, invalid, "s", &name);
+
             struct vparse_card *card = vparse_new_card("VCARD");
             vparse_add_entry(card, NULL, "VERSION", "3.0");
             vparse_add_entry(card, NULL, "FN", name);
@@ -1275,34 +1284,23 @@ static int setContactGroups(struct jmap_req *req)
             /* it's legal to create an empty group */
             json_t *members = json_object_get(arg, "contactIds");
             if (members) {
-                r = _add_group_entries(req, card, members);
-                if (r) {
-                    /* this one is legit -
-                       it just means we'll be adding an error instead */
-                    r = 0;
-                    json_t *err = json_pack("{s:s}",
-                                            "type", "invalidContactId");
-                    json_object_set_new(notCreated, key, err);
-                    vparse_free_card(card);
-                    continue;
-                }
+                _add_group_entries(req, card, members, invalid);
             }
 
             /* it's legal to create an empty group */
             json_t *others = json_object_get(arg, "otherAccountContactIds");
             if (others) {
-                r = _add_othergroup_entries(req, card, others);
-                if (r) {
-                    /* this one is legit -
-                       it just means we'll be adding an error instead */
-                    r = 0;
-                    json_t *err = json_pack("{s:s}",
-                                            "type", "invalidContactId");
-                    json_object_set_new(notCreated, key, err);
-                    vparse_free_card(card);
-                    continue;
-                }
+                _add_othergroup_entries(req, card, others, invalid);
             }
+
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notCreated, key, err);
+                vparse_free_card(card);
+                continue;
+            }
+            json_decref(invalid);
 
             const char *addressbookId = "Default";
             json_t *abookid = json_object_get(arg, "addressbookId");
@@ -1326,7 +1324,6 @@ static int setContactGroups(struct jmap_req *req)
 
             if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL,
                                       req->userid, req->authstate, ignorequota);
-
             vparse_free_card(card);
 
             if (r) {
@@ -1448,37 +1445,25 @@ static int setContactGroups(struct jmap_req *req)
                 }
             }
 
+            json_t *invalid = json_pack("[]");
             json_t *members = json_object_get(arg, "contactIds");
             if (members) {
-                r = _add_group_entries(req, card, members);
-                if (r) {
-                    /* this one is legit -
-                       it just means we'll be adding an error instead */
-                    r = 0;
-                    json_t *err = json_pack("{s:s}",
-                                            "type", "invalidContactId");
-                    json_object_set_new(notUpdated, uid, err);
-                    vparse_free(&vparser);
-                    mailbox_close(&newmailbox);
-                    continue;
-                }
+                _add_group_entries(req, card, members, invalid);
             }
 
             json_t *others = json_object_get(arg, "otherAccountContactIds");
             if (others) {
-                r = _add_othergroup_entries(req, card, others);
-                if (r) {
-                    /* this one is legit -
-                       it just means we'll be adding an error instead */
-                    r = 0;
-                    json_t *err = json_pack("{s:s}",
-                                            "type", "invalidContactId");
-                    json_object_set_new(notUpdated, uid, err);
-                    vparse_free(&vparser);
-                    mailbox_close(&newmailbox);
-                    continue;
-                }
+                _add_othergroup_entries(req, card, others, invalid);
             }
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notUpdated, uid, err);
+                vparse_free(&vparser);
+                mailbox_close(&newmailbox);
+                continue;
+            }
+            json_decref(invalid);
 
             syslog(LOG_NOTICE, "jmap: update group %s/%s",
                    req->userid, resource);
