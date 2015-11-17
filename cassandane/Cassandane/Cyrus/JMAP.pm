@@ -276,6 +276,71 @@ sub test_getcontactupdates
     $self->assert_str_equals($res->[0][2], 'R1');
 }
 
+sub test_setcontactgroups
+{
+
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contacts";
+    my $res = $jmap->Request([['setContacts', {create => {
+                        "#1" => { firstName => "foo", lastName => "last1" },
+                        "#2" => { firstName => "bar", lastName => "last2" }
+                    }}, "R1"]]);
+    my $contact1 = $res->[0][1]{created}{"#1"}{id};
+    my $contact2 = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "create contact group with no contact ids";
+    $res = $jmap->Request([['setContactGroups', {create => {
+                        "#1" => {name => "group1"}
+                    }}, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert_str_equals($res->[0][2], 'R2');
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get contact group $id";
+    $res = $jmap->Request([['getContactGroups', { ids => [$id] }, "R3"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactGroups');
+    $self->assert_str_equals($res->[0][2], 'R3');
+    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'group1');
+    $self->assert(exists $res->[0][1]{list}[0]{contactIds});
+    $self->assert_num_equals(scalar @{$res->[0][1]{list}[0]{contactIds}}, 0);
+
+    xlog "update contact group with invalid contact ids";
+    $res = $jmap->Request([['setContactGroups', {update => {
+                        $id => {name => "group1", contactIds => [$contact1, $contact2, 255]}
+                    }}, "R4"]]);
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert(exists $res->[0][1]{notUpdated}{$id});
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, 'invalidProperties');
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], 'contactIds[2]');
+    $self->assert_str_equals($res->[0][2], 'R4');
+
+    xlog "get contact group $id";
+    $res = $jmap->Request([['getContactGroups', { ids => [$id] }, "R3"]]);
+    $self->assert(exists $res->[0][1]{list}[0]{contactIds});
+    $self->assert_num_equals(scalar @{$res->[0][1]{list}[0]{contactIds}}, 0);
+
+
+    xlog "update contact group with valid contact ids";
+    $res = $jmap->Request([['setContactGroups', {update => {
+                        $id => {name => "group1", contactIds => [$contact1, $contact2]}
+                    }}, "R4"]]);
+
+    $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact group $id";
+    $res = $jmap->Request([['getContactGroups', { ids => [$id] }, "R3"]]);
+    $self->assert(exists $res->[0][1]{list}[0]{contactIds});
+    $self->assert_num_equals(scalar @{$res->[0][1]{list}[0]{contactIds}}, 2);
+    $self->assert_str_equals($res->[0][1]{list}[0]{contactIds}[0], $contact1);
+    $self->assert_str_equals($res->[0][1]{list}[0]{contactIds}[1], $contact2);
+}
+
 sub test_getcontactlist {
     my ($self) = @_;
 
