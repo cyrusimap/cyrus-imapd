@@ -61,6 +61,7 @@
 #include "hash.h"
 #include "httpd.h"
 #include "http_caldav.h"
+#include "http_carddav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
@@ -899,6 +900,9 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     struct cards_rock rock;
     int r = 0;
 
+    r = carddav_create_defaultaddressbook(req->userid);
+    if (r) goto done;
+
     rock.array = json_pack("[]");
     rock.props = NULL;
     rock.mailbox = NULL;
@@ -1109,6 +1113,9 @@ static int getContactGroupUpdates(struct jmap_req *req)
         mboxname = carddav_mboxname(req->userid, addressbookId);
     }
 
+    r = carddav_create_defaultaddressbook(req->userid);
+    if (r) goto done;
+
     /* Lookup updates. */
     struct updates_rock rock;
     memset(&rock, 0, sizeof(struct updates_rock));
@@ -1260,6 +1267,9 @@ static int setContactGroups(struct jmap_req *req)
     json_t *set = json_pack("{s:o,s:s}",
                             "oldState", jmap_getstate(MBTYPE_ADDRESSBOOK, req),
                             "accountId", req->userid);
+
+    r = carddav_create_defaultaddressbook(req->userid);
+    if (r) goto done;
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
@@ -2134,6 +2144,9 @@ static int getContactUpdates(struct jmap_req *req)
         const char *addressbookId = json_string_value(abookid);
         mboxname = carddav_mboxname(req->userid, addressbookId);
     }
+
+    r = carddav_create_defaultaddressbook(req->userid);
+    if (r) goto done;
 
     /* Lookup updates. */
     struct updates_rock rock;
@@ -3233,6 +3246,9 @@ static int setContacts(struct jmap_req *req)
     json_t *set = json_pack("{s:o,s:s}",
                             "oldState", jmap_getstate(MBTYPE_ADDRESSBOOK, req),
                             "accountId", req->userid);
+
+    r = carddav_create_defaultaddressbook(req->userid);
+    if (r) goto done;
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
