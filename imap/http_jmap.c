@@ -7907,10 +7907,7 @@ static int calevent_filter_match_textprop(icalcomponent *comp,
          prop;
          prop = icalcomponent_get_next_property(comp, kind)) {
         const char *val = icalproperty_get_value_as_string(prop);
-        /* XXX This isn't really according the JMAP spec, which requires phrase
-         * matching and some other magic. Besides, it's really not efficient.
-         * Check what other options we have to search text. */
-        if (val && stristr(val, text)) {
+        if (val && jmap_match_text(val, text)) {
             return 1;
         }
     }
