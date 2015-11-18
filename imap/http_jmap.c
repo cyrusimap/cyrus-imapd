@@ -1270,7 +1270,7 @@ static int setContactGroups(struct jmap_req *req)
         const char *key;
         json_t *arg;
         json_object_foreach(create, key, arg) {
-            const char *uid = makeuuid();
+            char *uid = xstrdup(makeuuid());
             const char *name = NULL;
             json_t *invalid = json_pack("[]");
 
@@ -1299,6 +1299,7 @@ static int setContactGroups(struct jmap_req *req)
                         "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notCreated, key, err);
                 vparse_free_card(card);
+                free(uid);
                 continue;
             }
             json_decref(invalid);
@@ -1329,6 +1330,7 @@ static int setContactGroups(struct jmap_req *req)
 
             if (r) {
                 /* these are real "should never happen" errors */
+                free(uid);
                 goto done;
             }
 
@@ -1336,7 +1338,7 @@ static int setContactGroups(struct jmap_req *req)
             json_object_set_new(created, key, record);
 
             /* hash_insert takes ownership of uid here, skanky I know */
-            hash_insert(key, xstrdup(uid), req->idmap);
+            hash_insert(key, uid, req->idmap);
         }
 
         if (json_object_size(created))
