@@ -196,6 +196,8 @@ EXPORTED int cyrusdb_fetch(struct db *db,
              const char **data, size_t *datalen,
              struct txn **mytid)
 {
+    if (!db->backend->fetch)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->fetch(db->engine, key, keylen,
                               data, datalen, mytid);
 }
@@ -205,6 +207,8 @@ EXPORTED int cyrusdb_fetchlock(struct db *db,
                  const char **data, size_t *datalen,
                  struct txn **mytid)
 {
+    if (!db->backend->fetchlock)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->fetchlock(db->engine, key, keylen,
                                   data, datalen, mytid);
 }
@@ -215,6 +219,8 @@ EXPORTED int cyrusdb_fetchnext(struct db *db,
                  const char **data, size_t *datalen,
                  struct txn **mytid)
 {
+    if (!db->backend->fetchnext)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->fetchnext(db->engine, key, keylen,
                                   found, foundlen,
                                   data, datalen, mytid);
@@ -226,6 +232,8 @@ EXPORTED int cyrusdb_foreach(struct db *db,
                foreach_cb *cb, void *rock,
                struct txn **tid)
 {
+    if (!db->backend->foreach)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->foreach(db->engine, prefix, prefixlen,
                                 p, cb, rock, tid);
 }
@@ -252,6 +260,8 @@ EXPORTED int cyrusdb_create(struct db *db,
               const char *data, size_t datalen,
               struct txn **tid)
 {
+    if (!db->backend->create)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->create(db->engine, key, keylen, data, datalen, tid);
 }
 
@@ -260,6 +270,8 @@ EXPORTED int cyrusdb_store(struct db *db,
              const char *data, size_t datalen,
              struct txn **tid)
 {
+    if (!db->backend->store)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->store(db->engine, key, keylen, data, datalen, tid);
 }
 
@@ -267,16 +279,22 @@ EXPORTED int cyrusdb_delete(struct db *db,
               const char *key, size_t keylen,
               struct txn **tid, int force)
 {
+    if (!db->backend->delete)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->delete(db->engine, key, keylen, tid, force);
 }
 
 EXPORTED int cyrusdb_commit(struct db *db, struct txn *tid)
 {
+    if (!db->backend->commit)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->commit(db->engine, tid);
 }
 
 EXPORTED int cyrusdb_abort(struct db *db, struct txn *tid)
 {
+    if (!db->backend->abort)
+        return CYRUSDB_NOTIMPLEMENTED;
     return db->backend->abort(db->engine, tid);
 }
 

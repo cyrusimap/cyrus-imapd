@@ -56,7 +56,8 @@ enum cyrusdb_ret {
     CYRUSDB_EXISTS = -3,
     CYRUSDB_INTERNAL = -4,
     CYRUSDB_NOTFOUND = -5,
-    CYRUSDB_LOCKED = -6
+    CYRUSDB_LOCKED = -6,
+    CYRUSDB_NOTIMPLEMENTED = -7
 };
 
 #define cyrusdb_strerror(c) ("cyrusdb error")
