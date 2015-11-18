@@ -281,7 +281,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
             if (verbose)
                 fprintf(stderr, "Removing stale tombstone for %s\n", mbentry->name);
             syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
-            mboxlist_delete(mbentry->name, /*force*/1);
+            mboxlist_delete(mbentry->name);
         }
         goto done;
     }

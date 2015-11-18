@@ -2390,8 +2390,7 @@ int sync_apply_mailbox(struct dlist *kin,
 
     /* this happens all the time! */
     if (mailbox->i.highestmodseq != highestmodseq) {
-        mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype);
-        mailbox->i.highestmodseq = highestmodseq;
+        mailbox->i.highestmodseq = mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype, /*dofolder*/0);
     }
 
     /* this happens rarely, so let us know */
@@ -2399,8 +2398,7 @@ int sync_apply_mailbox(struct dlist *kin,
         syslog(LOG_NOTICE, "%s uidvalidity changed, updating %u => %u",
                mailbox->name, mailbox->i.uidvalidity, uidvalidity);
         /* make sure nothing new gets created with a lower value */
-        mboxname_setuidvalidity(mailbox->name, uidvalidity, mailbox->mbtype);
-        mailbox->i.uidvalidity = uidvalidity;
+        mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox->name, uidvalidity);
     }
 
     if (mailbox_has_conversations(mailbox)) {
@@ -4391,8 +4389,7 @@ static int mailbox_full_update(struct sync_folder *local,
                ", updating %u => %u",
                mailbox->name, mailbox->i.uidvalidity, uidvalidity);
         mailbox_index_dirty(mailbox);
-        mboxname_setuidvalidity(mailbox->name, uidvalidity, mailbox->mbtype);
-        mailbox->i.uidvalidity = uidvalidity;
+        mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox->name, uidvalidity);
     }
 
     if (mailbox->i.highestmodseq < highestmodseq) {

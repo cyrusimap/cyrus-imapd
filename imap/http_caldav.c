@@ -358,10 +358,6 @@ static const struct prop_entry caldav_props[] = {
     { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
-    /* draft-douglass-server-info */
-    { "server-info-href", NS_DAV, PROP_COLLECTION,
-      propfind_serverinfo, NULL, NULL },
-
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN,
       propfind_caldata, NULL, NULL },

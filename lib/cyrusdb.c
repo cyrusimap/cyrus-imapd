@@ -72,7 +72,7 @@ static struct cyrusdb_backend *_backends[] = {
     &cyrusdb_flat,
     &cyrusdb_skiplist,
     &cyrusdb_quotalegacy,
-#if defined HAVE_MYSQL || defined HAVE_PGSQL || defined HAVE_SQLITE
+#if defined USE_CYRUSDB_SQL
     &cyrusdb_sql,
 #endif
     &cyrusdb_twoskip,

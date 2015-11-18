@@ -286,6 +286,7 @@ static struct
     int isadmin;
     int altnamespace;
     int virtdomains;
+    int crossdomains;
     const char *defdomain;
     const char *userprefix;
     const char *sharedprefix;
@@ -301,6 +302,7 @@ static void toexternal_helper(const char *intname,
     config_virtdomains = conf.virtdomains;
     config_defdomain = conf.defdomain;
     imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = conf.unixhierarchysep;
+    imapopts[IMAPOPT_CROSSDOMAINS].val.b = conf.crossdomains;
     imapopts[IMAPOPT_ALTNAMESPACE].val.b = conf.altnamespace;
     imapopts[IMAPOPT_USERPREFIX].val.s = conf.userprefix;
     imapopts[IMAPOPT_SHAREDPREFIX].val.s = conf.sharedprefix;
@@ -312,9 +314,11 @@ static void toexternal_helper(const char *intname,
     CU_ASSERT_STRING_EQUAL(extname, extname_expected);
     free(extname);
 
-    char *intname_reversed = mboxname_from_external(extname_expected, &ns, conf.userid);
-    CU_ASSERT_STRING_EQUAL(intname, intname_reversed);
-    free(intname_reversed);
+    if (extname_expected) {
+        char *intname_reversed = mboxname_from_external(extname_expected, &ns, conf.userid);
+        CU_ASSERT_STRING_EQUAL(intname, intname_reversed);
+        free(intname_reversed);
+    }
 }
 
 static void test_toexternal_admin(void)
@@ -513,9 +517,54 @@ static void test_toexternal_domains(void)
     toexternal_helper("bloggs.com!user.jane", "user.jane");
     toexternal_helper("bloggs.com!user.jane.baz", "user.jane.baz");
     toexternal_helper("bloggs.com!shared.quux", "shared.quux");
-    /* disabled while cross domain sharing is not allowed */
-    //toexternal_helper("boop.com!user.betty", "user.betty@boop.com");
-    //toexternal_helper("boop.com!shared.quux", "shared.quux@boop.com");
+    /* cross domain sharing is not allowed */
+    toexternal_helper("boop.com!user.betty", NULL);
+    toexternal_helper("boop.com!shared.quux", NULL);
+}
+
+static void test_toexternal_crossdomains(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.virtdomains = 1;
+    conf.crossdomains = 1;
+    conf.unixhierarchysep = 1;
+    conf.userid = "fred@bloggs.com";
+
+    toexternal_helper("bloggs.com!user.fred", "INBOX");
+    toexternal_helper("bloggs.com!user.fred.foo", "INBOX/foo");
+    toexternal_helper("bloggs.com!user.fred.foo.barracuda", "INBOX/foo/barracuda");
+    toexternal_helper("bloggs.com!user.jane", "user/jane@bloggs.com");
+    toexternal_helper("bloggs.com!user.jane.baz", "user/jane@bloggs.com/baz");
+    // no domains in shared folders in crossdomain
+    toexternal_helper("bloggs.com!shared.quux", "shared/quux");
+
+    toexternal_helper("boop.com!user.betty", "user/betty@boop.com");
+    toexternal_helper("boop.com!user.betty.foo.bar", "user/betty@boop.com/foo/bar");
+    // shared folders in other domains can't be seen
+    toexternal_helper("boop.com!shared.quux", NULL);
+}
+
+static void test_toexternal_crossdomains_alt(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.altnamespace = 1;
+    conf.virtdomains = 1;
+    conf.crossdomains = 1;
+    conf.unixhierarchysep = 1;
+    conf.userprefix = "User Magic";
+    conf.sharedprefix = "Shared Magic";
+    conf.userid = "fred@bloggs.com";
+
+    toexternal_helper("bloggs.com!user.fred", "INBOX");
+    toexternal_helper("bloggs.com!user.fred.foo", "foo");
+    toexternal_helper("bloggs.com!user.fred.foo.barracuda", "foo/barracuda");
+    toexternal_helper("bloggs.com!user.jane", "User Magic/jane@bloggs.com");
+    toexternal_helper("bloggs.com!user.jane.baz", "User Magic/jane@bloggs.com/baz");
+    // no domains in shared folders in crossdomain
+    toexternal_helper("bloggs.com!shared.quux", "Shared Magic/shared/quux");
+
+    toexternal_helper("boop.com!user.betty", "User Magic/betty@boop.com");
+    toexternal_helper("boop.com!user.betty.foo.bar", "User Magic/betty@boop.com/foo/bar");
 }
 
 static void test_toexternal_unixhier(void)
@@ -569,13 +618,13 @@ static void test_nextmodseq(void)
     mbname_free(&mbname);
 
     /* initial value should be 1 without file */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0, 0), 1);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0, 0, 0), 1);
     /* next value should always increment */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0, 0), 2);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0, 0, 0), 2);
     /* higher value should force a jump */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 100, 0), 101);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 100, 0, 0), 101);
     /* lower value should not decrease */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 5, 0), 102);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 5, 0, 0), 102);
 }
 
 static enum enum_value old_config_virtdomains;

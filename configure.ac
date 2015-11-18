@@ -220,7 +220,7 @@ dnl parameters: backend name, variable to set, withval
 
 dnl SQL DB Detection
 
-HAVE_SQL=0
+HAVE_CYRUSDB_SQL=0
 
 dnl MySQL Detection
 
@@ -261,7 +261,7 @@ esac
 if test "$with_mysql" != "no"; then
     MYSQL_LIBADD=`$mysql_config --libs`
     MYSQL_INCADD=`$mysql_config --cflags`
-    HAVE_SQL=1
+    HAVE_CYRUSDB_SQL=1
     LIBS="${LIBS} ${MYSQL_LIBADD}"
     CPPFLAGS="${MYSQL_INCADD} ${CPPFLAGS}"
     AC_DEFINE(HAVE_MYSQL,[],[Build in MySQL support?])
@@ -271,17 +271,125 @@ AC_MSG_RESULT($with_mysql)
 dnl End MySQL Detection
 
 
-dnl
-dnl see if we're compiling with dummy_objstore support
-dnl
-AC_ARG_ENABLE(dummy_objstore,
-        [AS_HELP_STRING([--enable-dummy_objstore], [enable IMAP dummy_objstore support])],,enable_dummy_objstore="yes")
-AM_CONDITIONAL([DUMMY_OBJSTORE], [test "$enable_dummy_objstore" = "yes"])
+dnl PgSQL Detection
+AC_ARG_WITH(pgsql,
+        [AS_HELP_STRING([--with-pgsql=DIR], [use PostgreSQL (in DIR) [no]])],
+        with_pgsql=$withval, with_pgsql="no")
+
+case "$with_pgsql" in
+  no)
+        use_pgsql="no"
+        ;;
+  yes)
+        use_pgsql="yes"
+        with_pgsql_lib=none
+        with_pgsql_inc=none
+        ;;
+  *)
+        use_pgsql="yes"
+        with_pgsql_lib="$with_pgsql/lib"
+        with_pgsql_inc="$with_pgsql/include"
+        ;;
+esac
+
+if test "$use_pgsql" != "no"; then
+  CYRUS_PGSQL_CHK()
+
+  if test "$pgsqllib" = "no"; then
+    AC_MSG_ERROR([PgSQL was not found.  You may need to supply the
+    --with-pgsql-libdir or --with-pgsql-incdir configure options.])
+  else
+    HAVE_CYRUSDB_SQL=1
+  fi
+
+  if test "$with_pgsql_lib" != "none"; then
+    CMU_ADD_LIBPATH($with_pgsql_lib)
+  fi
+
+  LIBS="${LIBS} ${PGSQL_LIBADD}"
+  CPPFLAGS="${PGSQL_INCADD} ${CPPFLAGS}"
+
+  AC_DEFINE(HAVE_PGSQL,[],[Build in PgSQL support?])
+fi
+
+dnl End PgSQL Detection
+
+
+dnl SQLite Detection
+dnl XXX this is a bit gross... the same option for specifying WHERE sqlite is
+dnl (--with-sqlite) is also the option for enabling it as a cyrusdb backend,
+dnl which means if your sqlite is in a non-default location and you need httpd
+dnl or object storage etc, you're suddenly also supporting it as a cyrusdb
+dnl backend, possibly unexpectedly.
+AC_ARG_WITH(sqlite,
+        [AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
+        with_sqlite=$withval, with_sqlite=check)
+
+case "$with_sqlite" in
+  no)
+        use_sqlite="no"
+        ;;
+  yes)
+        use_sqlite="yes"
+        with_sqlite_lib=none
+        with_sqlite_inc=none
+        ;;
+  check)
+        use_sqlite="check"
+        with_sqlite_lib=none
+        with_sqlite_inc=none
+        ;;
+  *)
+        use_sqlite="yes"
+        with_sqlite_lib="$with_sqlite/lib"
+        with_sqlite_inc="$with_sqlite/include"
+        ;;
+esac
+
+if test "$use_sqlite" != "no"; then
+  CYRUS_SQLITE_CHK()
+
+  if test "$use_sqlite" = "yes"; then
+    dnl sqlite specifically requested: not found is a failure
+    if test "$sqlitelib" = "no"; then
+        AC_MSG_ERROR([Sqlite was not found.  You may need to supply the
+        --with-sqlite-libdir or --with-sqlite-incdir configure options.])
+    else
+        HAVE_CYRUSDB_SQL=1
+        HAVE_SQLITE=1
+    fi
+  else
+    dnl sqlite not specifically requested: not found isn't a failure (yet)
+    use_sqlite="no"
+    if test "$sqlitelib" = "no"; then
+        AC_MSG_NOTICE([sqlite was not found, will try to build without it])
+    else
+        HAVE_SQLITE=1
+    fi
+  fi
+
+  dnl other modules might yet need to link against sqlite.
+  dnl we will update LIBS/CPPFLAGS etc later, once their checks have run.
+  dnl for now:
+  dnl   * $use_sqlite = "yes" if we definitely need it
+  dnl   * $HAVE_SQLITE = 1 if we have it available
+fi
+
+dnl End SQLite Detection
+
+if test "x$HAVE_CYRUSDB_SQL" = x1; then
+    AC_DEFINE([USE_CYRUSDB_SQL],[],[Build in cyrusdb_sql support?])
+fi
+AM_CONDITIONAL([USE_CYRUSDB_SQL], [test $HAVE_CYRUSDB_SQL = 1])
+dnl End SQL DB Detection
 
 
 dnl
-dnl see if we're compiling with caringo_objstore support
+dnl Object Store support
 dnl
+
+dnl Caringo object store backend
+AC_MSG_CHECKING([whether to use Caringo])
 AC_ARG_WITH(caringo,
         [AS_HELP_STRING([--with-caringo], [use Caringo ("yes" or "no")])],,with_caringo="no")
 case "$with_caringo" in
@@ -289,13 +397,11 @@ case "$with_caringo" in
 	LDFLAGS="$LDFLAGS -lCastorSDK"
   ;;
 esac
-dnl End Caringo Detection
-AM_CONDITIONAL([WITH_CARINGO], [test "$with_caringo" = "yes"])
+AC_MSG_RESULT([$with_caringo])
 
-dnl OpenIO Detection
-
-dnl deps: metautils gridclient oiosds curl 
-
+dnl OpenIO object store backend
+dnl deps: metautils gridclient oiosds curl
+AC_MSG_CHECKING([whether to use OpenIO])
 AC_ARG_WITH(openio,
         [AS_HELP_STRING([--with-openio=yes|no], [use OpenIO ("yes" or "no")])],
         with_openio=$withval, with_openio="no")
@@ -350,98 +456,45 @@ if test "$use_openio" = "yes"; then
 
 	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
 fi
-dnl End OpenIO Detection
-AM_CONDITIONAL([WITH_OPENIO], [test "$use_openio" = "yes"])
+AC_MSG_RESULT([$use_openio])
 
-dnl PgSQL Detection
-AC_ARG_WITH(pgsql,
-        [AS_HELP_STRING([--with-pgsql=DIR], [use PostgreSQL (in DIR) [no]])],
-        with_pgsql=$withval, with_pgsql="no")
+dnl enable object store
+AC_MSG_CHECKING([whether to enable object store])
+AC_ARG_ENABLE(objectstore,
+    [AS_HELP_STRING([--enable-objectstore],
+        [enable IMAP objectstore support. Use --with-caringo or --with-openio to choose a backend])],
+    [],
+    [enable_objectstore=no])
 
-case "$with_pgsql" in
-  no)
-        use_pgsql="no"
-        ;;
-  yes)
-        use_pgsql="yes"
-        with_pgsql_lib=none
-        with_pgsql_inc=none
-        ;;
-  *)
-        use_pgsql="yes"
-        with_pgsql_lib="$with_pgsql/lib"
-        with_pgsql_inc="$with_pgsql/include"
-        ;;
-esac
-
-if test "$use_pgsql" != "no"; then
-  CYRUS_PGSQL_CHK()
-
-  if test "$pgsqllib" = "no"; then
-    AC_MSG_ERROR([PgSQL was not found.  You may need to supply the
-    --with-pgsql-libdir or --with-pgsql-incdir configure options.])
-  else
-    HAVE_SQL=1
-  fi
-
-  if test "$with_pgsql_lib" != "none"; then
-    CMU_ADD_LIBPATH($with_pgsql_lib)
-  fi
-
-  LIBS="${LIBS} ${PGSQL_LIBADD}"
-  CPPFLAGS="${PGSQL_INCADD} ${CPPFLAGS}"
-
-  AC_DEFINE(HAVE_PGSQL,[],[Build in PgSQL support?])
-fi
-
-dnl End PgSQL Detection
-
-
-dnl SQLite Detection
-AC_ARG_WITH(sqlite,
-        [AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
-        with_sqlite=$withval, with_sqlite=no)
-
-case "$with_sqlite" in
-  no)
-        use_sqlite="no"
-        ;;
-  yes)
+with_objectstore_dummy=no
+if test "x$enable_objectstore" != xno ; then
+    dnl we need sqlite for the objectstore database
+    if test "x$HAVE_SQLITE" != x1; then
+        AC_MSG_ERROR([Need sqlite3 for objectstore])
+    else
         use_sqlite="yes"
-        with_sqlite_lib=none
-        with_sqlite_inc=none
-        ;;
-  *)
-        use_sqlite="yes"
-        with_sqlite_lib="$with_sqlite/lib"
-        with_sqlite_inc="$with_sqlite/include"
-        ;;
-esac
+    fi
 
-if test "$use_sqlite" != "no"; then
-  CYRUS_SQLITE_CHK()
-
-  if test "$sqlitelib" = "no"; then
-    AC_MSG_ERROR([Sqlite was not found.  You may need to supply the
-    --with-sqlite-libdir or --with-sqlite-incdir configure options.])
-  else
-    HAVE_SQL=1
-  fi
-
-  if test "$with_sqlite_lib" != "none"; then
-    CMU_ADD_LIBPATH($with_sqlite_lib)
-  fi
-
-  LIBS="${LIBS} ${SQLITE_LIBADD}"
-  CPPFLAGS="${SQLITE_INCADD} ${CPPFLAGS}"
-
-  AC_DEFINE(HAVE_SQLITE,[],[Build in SQLite support?])
+    dnl arbitrarily prioritise OpenIO over Caringo if both are requested
+    AS_IF(
+        [test "x$with_openio" != xno -a "x$with_caringo" != xno],
+            [AC_MSG_WARN([both --with-openio and --with-caringo requested: using OpenIO])
+             enable_objectstore="openio"
+             with_caringo = "no"],
+        [test "x$with_openio" != xno],
+            [enable_objectstore="openio"],
+        [test "x$with_caringo" != xno],
+            [enable_objectstore="caringo"],
+        [enable_objectstore="dummy"
+         with_objectstore_dummy="yes"])
+    AC_DEFINE([ENABLE_OBJECTSTORE],[],[Build with Object Store support])
 fi
+AC_MSG_RESULT([$enable_objectstore])
+AM_CONDITIONAL([OBJECTSTORE], [test "x$enable_objectstore" != xno])
+AM_CONDITIONAL([WITH_CARINGO], [test "x$with_caringo" != xno])
+AM_CONDITIONAL([WITH_OPENIO], [test "x$use_openio" != xno])
+AM_CONDITIONAL([WITH_OBJSTR_DUMMY], [test "x$with_objectstore_dummy" != xno])
 
-dnl End SQLite Detection
-
-AM_CONDITIONAL([USE_SQL], [test $HAVE_SQL = 1])
-dnl End SQL DB Detection
 
 dnl
 dnl Search engines - SQUAT
@@ -1363,6 +1416,13 @@ if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
 dnl
+        if test "x$HAVE_SQLITE" != x1; then
+            AC_MSG_ERROR([Need sqlite3 for http])
+        else
+            use_sqlite="yes"
+            AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?])
+        fi
+
         PKG_CHECK_MODULES([XML2], [libxml-2.0],
                 LIBS="$LIBS ${XML2_LIBS}",
                 AC_MSG_ERROR([Need libxml-2.0 for http]))
@@ -1375,10 +1435,6 @@ dnl
                         AC_DEFINE(HAVE_XML_BUFFERDETACH,[],
                                 [Do we have support for xmlBufferDetach()?]))
                 ])
-
-        PKG_CHECK_MODULES([SQLITE3], [sqlite3],
-                AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),
-                AC_MSG_ERROR([Need sqlite3 for http]))
 
         PKG_CHECK_MODULES([ICAL], [libical], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
@@ -1720,6 +1776,24 @@ fi
 
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
 
+dnl Finally, now that we've checked everything else, we can see whether to link
+dnl in SQLite or not.
+dnl
+if test "x$use_sqlite" = xyes; then
+  if test "x$HAVE_SQLITE" = x1; then
+    if test "x$with_sqlite_lib" != xnone; then
+        CMU_ADD_LIBPATH($with_sqlite_lib)
+    fi
+
+    LIBS="${LIBS} ${SQLITE_LIBADD}"
+    CPPFLAGS="${SQLITE_INCADD} ${CPPFLAGS}"
+    AC_DEFINE(HAVE_SQLITE,[],[Build in SQLite support?])
+  else
+    AC_MSG_ERROR([SQLite required but not found])
+  fi
+fi
+AM_CONDITIONAL([USE_SQLITE], [test "x$use_sqlite" = xyes])
+
 AH_TOP([
 /*
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
@@ -1963,9 +2037,7 @@ Cyrus Server configured components
    replication:        $enable_replication
    sieve:              $enable_sieve
    calalarmd:          $enable_calalarmd
-   openio:             $use_openio
-   dummy_objstore:     $enable_dummy_objstore
-   caringo:            $with_caringo
+   objectstore:        $enable_objectstore
 
 External dependencies:
    ldap:               $have_ldap

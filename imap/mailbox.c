@@ -109,8 +109,10 @@
 #include "xstrlcat.h"
 #include "xstats.h"
 
+#if defined ENABLE_OBJECTSTORE
 #include "objectstore.h"
 #include "objectstore_db.h"
+#endif
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -167,8 +169,10 @@ static struct mailboxlist *create_listitem(const char *name)
     /* ensure we never print insane times */
     gettimeofday(&item->m.starttime, 0);
 
+#if defined ENABLE_OBJECTSTORE
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
         keep_user_message_db_open (1);
+#endif
 
     return item;
 }
@@ -199,8 +203,10 @@ static void remove_listitem(struct mailboxlist *remitem)
                 open_mailboxes = item->next;
             free(item);
 
+#if defined ENABLE_OBJECTSTORE
             if (!open_mailboxes && config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))  // time to force clese the database
                  keep_user_message_db_open (0);
+#endif
 
             return;
         }
@@ -827,12 +833,14 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_reco
     int r = _map_local_record(mailbox, fname, buf);
     if (!r) return 0;
 
+#if defined ENABLE_OBJECTSTORE
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)){
         r = objectstore_get(mailbox, record, fname);
         if (r) return r;
         r = _map_local_record(mailbox, fname, buf);
         remove(fname);
     }
+#endif
 
     return r;
 }
@@ -1038,19 +1046,21 @@ EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
     mailbox->i.dirty = 1;
 }
 
-EXPORTED void mailbox_modseq_dirty(struct mailbox *mailbox)
+EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
 
     if (mailbox->modseq_dirty)
-        return;
+        return mailbox->i.highestmodseq;
 
     mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name,
                                mailbox->i.highestmodseq,
-                               mailbox->mbtype);
+                               mailbox->mbtype, /*dofolder*/0);
     mailbox->last_updated = time(0);
     mailbox->modseq_dirty = 1;
     mailbox_index_dirty(mailbox);
+
+    return mailbox->i.highestmodseq;
 }
 
 EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
@@ -2734,6 +2744,7 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
     /* we are dirtying both index and quota */
     mailbox_index_dirty(mailbox);
     mailbox_quota_dirty(mailbox);
+    mboxlist_foldermodseq_dirty(mailbox);
 
     /* corruption prevention - check we don't go negative */
     if (mailbox->i.quota_annot_used > (quota_t)oldval->len)
@@ -3746,7 +3757,9 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 {
     const char *spoolfname = mailbox_spool_fname(mailbox, record->uid);
     const char *archivefname = mailbox_archive_fname(mailbox, record->uid);
+#if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
     int r;
 
     if (record->system_flags & FLAG_UNLINKED) {
@@ -3760,10 +3773,13 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
                        record->uid, record->system_flags);
         }
 
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             objectstore_delete(mailbox, record);
         }
-        else if (strcmp(spoolfname, archivefname)) {
+        else
+#endif
+        if (strcmp(spoolfname, archivefname)) {
             if (unlink(archivefname) == 0) {
                 if (config_auditlog)
                     syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
@@ -3794,10 +3810,13 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         unlink(spoolfname);
     }
     else {
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             objectstore_delete(mailbox, record);
         }
-        else if (strcmp(spoolfname, archivefname)) {
+        else
+#endif
+        if (strcmp(spoolfname, archivefname)) {
             unlink(archivefname);
         }
         /* else: nothing to cleanup if it's the same file! */
@@ -4310,7 +4329,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     char *spoolcache = xstrdup(mailbox_meta_fname(mailbox, META_CACHE));
     char *archivecache = xstrdup(mailbox_meta_fname(mailbox, META_ARCHIVECACHE));
     int differentcache = strcmp(spoolcache, archivecache);
+#if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
     free(spoolcache);
     free(archivecache);
 
@@ -4335,12 +4356,14 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                        mailbox->name, copyrecord.uid, error_message(r));
                 continue;
             }
+#if defined ENABLE_OBJECTSTORE
             if (object_storage_enabled){
                 /* upload on the blob store */
                 r = objectstore_put(mailbox, &copyrecord, srcname);
                 if (r)
                     continue;
             }
+#endif
             copyrecord.system_flags |= FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
             action = "archive";
         }
@@ -4363,6 +4386,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             action = "unarchive";
         }
 
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             /* get or fetch */
             if (copyrecord.system_flags & FLAG_ARCHIVED) {
@@ -4382,15 +4406,15 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 }
             }
         }
-        else {
+        else
+#endif
+        if (strcmp(srcname, destname)) {
             /* got a file to copy! */
-            if (strcmp(srcname, destname)) {
-                r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
-                            mailbox->name, copyrecord.uid, srcname, destname, error_message(r));
-                    continue;
-                }
+            r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
+                        mailbox->name, copyrecord.uid, srcname, destname, error_message(r));
+                continue;
             }
         }
 
@@ -4698,15 +4722,15 @@ EXPORTED int mailbox_create(const char *name,
 
     /* ensure a UIDVALIDITY is set */
     if (!uidvalidity)
-        uidvalidity = mboxname_nextuidvalidity(name, time(0), mbtype);
+        uidvalidity = mboxname_nextuidvalidity(name, time(0));
     else
-        mboxname_setuidvalidity(mailbox->name, uidvalidity, mbtype);
+        mboxname_setuidvalidity(mailbox->name, uidvalidity);
 
     /* and highest modseq */
     if (!highestmodseq)
-        highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mbtype);
+        highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mbtype, /*dofolder*/1);
     else
-        mboxname_setmodseq(mailbox->name, highestmodseq, mbtype);
+        mboxname_setmodseq(mailbox->name, highestmodseq, mbtype, /*dofolder*/1);
 
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
@@ -5164,6 +5188,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 
         if (r) break;
 
+#if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled) {
             static struct mailbox new_mailbox;
             memset(&new_mailbox, 0, sizeof(struct mailbox));
@@ -5172,6 +5197,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
             r = objectstore_put(&new_mailbox, record, newbuf);   // put should just add to refcount.
             if (r) break;
         }
+#endif
     }
     mailbox_iter_done(&iter);
 
@@ -5208,7 +5234,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* create uidvalidity if not explicitly requested */
     if (!uidvalidity)
-        uidvalidity = mboxname_nextuidvalidity(newname, oldmailbox->i.uidvalidity, oldmailbox->mbtype);
+        uidvalidity = mboxname_nextuidvalidity(newname, oldmailbox->i.uidvalidity);
 
     /* Create new mailbox */
     r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
@@ -5942,7 +5968,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         mailbox_index_dirty(mailbox);
         mailbox->i.highestmodseq = mboxname_setmodseq(mailbox->name,
                                                       record->modseq,
-                                                      mailbox->mbtype);
+                                                      mailbox->mbtype, /*dofolder*/0);
     }
 
     if (record->uid > mailbox->i.last_uid) {
@@ -6437,7 +6463,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     /* fix up 2.4.0 bug breakage */
     if (!mailbox->i.uidvalidity) {
         if (make_changes) {
-            mailbox->i.uidvalidity = mboxname_nextuidvalidity(mailbox->name, time(0), mailbox->mbtype);
+            mailbox->i.uidvalidity = mboxname_nextuidvalidity(mailbox->name, time(0));
             mailbox_index_dirty(mailbox);
         }
         syslog(LOG_ERR, "%s: zero uidvalidity", mailbox->name);
@@ -6445,7 +6471,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     if (!mailbox->i.highestmodseq) {
         if (make_changes) {
             mailbox_index_dirty(mailbox);
-            mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mailbox->mbtype);
+            mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name, 0, mailbox->mbtype, /*dofolder*/1);
         }
         syslog(LOG_ERR, "%s:  zero highestmodseq", mailbox->name);
     }

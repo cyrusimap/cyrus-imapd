@@ -263,10 +263,6 @@ static const struct prop_entry carddav_props[] = {
     { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
-    /* draft-douglass-server-info */
-    { "server-info-href", NS_DAV, PROP_COLLECTION,
-      propfind_serverinfo, NULL, NULL },
-
     /* CardDAV (RFC 6352) properties */
     { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_PRESCREEN,
       propfind_addrdata, NULL, NULL },

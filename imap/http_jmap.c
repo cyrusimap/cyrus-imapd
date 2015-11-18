@@ -602,7 +602,7 @@ static int jmap_bumpstate(int mbtype, struct jmap_req *req) {
     }
 
     /* Bump current counter... */
-    modseq = mboxname_nextmodseq(mboxname, modseq, mbtype);
+    modseq = mboxname_nextmodseq(mboxname, modseq, mbtype, 1 /*dofolder*/);
 
     /* ...and update counters. */
     r = mboxname_read_counters(mboxname, &req->counters);
@@ -1771,10 +1771,15 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     if (_wantprop(props, "department"))
         json_object_set_new(obj, "department",
                             json_string(strarray_safenth(org, 1)));
-    if (_wantprop(props, "jobTitle"))
-        json_object_set_new(obj, "jobTitle",
-                            json_string(strarray_safenth(org, 2)));
-    /* XXX - position? */
+    if (_wantprop(props, "jobTitle")) {
+        /* we used to store jobTitle in ORG[2] instead of TITLE, which confused
+         * CardDAV clients. that's fixed, but there's now lots of cards with it
+         * stored in the wrong place, so check both */
+        const char *item = vparse_stringval(card, "title");
+        if (!item)
+            item = strarray_safenth(org, 2);
+        json_object_set_new(obj, "jobTitle", json_string(item));
+    }
 
     /* address - we need to open code this, because it's repeated */
     if (_wantprop(props, "addresses")) {
@@ -3149,6 +3154,14 @@ static int _json_to_card(const char *uid,
             }
             record_is_dirty = 1;
         }
+        else if (!strcmp(key, "jobTitle")) {
+            int r = _kv_to_card(card, "title", jval);
+            if (r) {
+                json_array_append_new(invalid, json_string("jobTitle"));
+                return r;
+            }
+            record_is_dirty = 1;
+        }
         else if (!strcmp(key, "company")) {
             const char *val = json_string_value(jval);
             if (!val) {
@@ -3167,16 +3180,6 @@ static int _json_to_card(const char *uid,
             }
             struct vparse_entry *org = _card_multi(card, "org");
             strarray_set(org->v.values, 1, val);
-            record_is_dirty = 1;
-        }
-        else if (!strcmp(key, "jobTitle")) {
-            const char *val = json_string_value(jval);
-            if (!val) {
-                json_array_append_new(invalid, json_string("jobTitle"));
-                return -1;
-            }
-            struct vparse_entry *org = _card_multi(card, "org");
-            strarray_set(org->v.values, 2, val);
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "emails")) {
@@ -4348,7 +4351,7 @@ static int setCalendars(struct jmap_req *req)
             r = jmap_update_calendar(mboxname, req, name, color, sortOrder, isVisible);
             if (r) {
                 free(uid);
-                int rr = mboxlist_delete(mboxname, 1 /* force */);
+                int rr = mboxlist_delete(mboxname);
                 if (rr) {
                     syslog(LOG_ERR, "could not delete mailbox %s: %s",
                             mboxname, error_message(rr));

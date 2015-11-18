@@ -83,6 +83,7 @@ struct mboxlist_entry {
     char *ext_name;
     time_t mtime;
     uint32_t uidvalidity;
+    modseq_t foldermodseq;
     int mbtype;
     char *partition;
     char *server; /* holds remote machine for REMOTE mailboxes */
@@ -108,14 +109,10 @@ mbentry_t *mboxlist_entry_copy(const mbentry_t *src);
 
 void mboxlist_entry_free(mbentry_t **mbentryptr);
 
-/* formats a cstring from a mboxlist_entry.  Caller must free
- * after use */
-char *mboxlist_entry_cstring(mbentry_t *mbentry);
-
 const char *mboxlist_mbtype_to_string(uint32_t mbtype);
 uint32_t mboxlist_string_to_mbtype(const char *string);
 
-int mboxlist_delete(const char *name, int force);
+int mboxlist_delete(const char *name);
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, mbentry_t **mbentryptr,
                     struct txn **tid);
@@ -206,6 +203,10 @@ int mboxlist_setacl(const struct namespace *namespace, const char *name,
 
 /* Change all ACLs on mailbox */
 int mboxlist_sync_setacls(const char *name, const char *acl);
+
+int mboxlist_set_racls(int enabled);
+
+modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox);
 
 typedef int findall_cb(const char *name, int matchlen, int maycreate, void *rock);
 /* Find all mailboxes that match 'pattern'. */
