@@ -1280,16 +1280,25 @@ sub test_getcalendarupdates
 
     xlog "create calendar";
     my $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => {
+                        "#1" => {
                             name => "foo",
                             color => "coral",
                             sortOrder => 2,
                             isVisible => \1
-             }}}, "R1"]
+                        },
+                        "#2" => {
+                            name => "bar",
+                            color => "aqua",
+                            sortOrder => 3,
+                            isVisible => \1
+                        }
+                    }}, "R1"]
     ]);
     $self->assert_not_null($res);
 
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog "get calendar updates without changes";
@@ -1298,26 +1307,72 @@ sub test_getcalendarupdates
                 }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{oldState}, $state);
     $self->assert_str_equals($res->[0][1]{newState}, $state);
-    $self->assert_str_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $self->assert_str_equals(scalar @{$res->[0][1]{changed}}, 0);
     $self->assert_str_equals(scalar @{$res->[0][1]{removed}}, 0);
 
-    xlog "update calendar $id";
+    xlog "update name of calendar $id1, destroy calendar $id2";
     $res = $jmap->Request([
             ['setCalendars', {
                     ifInState => $state,
-                    update => {"$id" => {name => "bar"}}
+                    update => {"$id1" => {name => "foo (upd)"}},
+                    destroy => [$id2]
             }, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
 
-    xlog "get calendar updates with cannotCalculateChanges error";
+    xlog "get calendar updates";
     $res = $jmap->Request([['getCalendarUpdates', {
                     "sinceState" => $state
                 }, "R1"]]);
-    $self->assert_str_equals($res->[0][0], "error");
-    $self->assert_str_equals($res->[0][1]{type}, "cannotCalculateChanges");
+    $self->assert_str_equals($res->[0][0], "calendarUpdates");
+    $self->assert_str_equals($res->[0][2], "R1");
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
+    $self->assert_str_equals($res->[0][1]{removed}[0], $id2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $state = $res->[0][1]{newState};
+
+    xlog "update color of calendar $id1";
+    $res = $jmap->Request([
+            ['setCalendars', { update => { $id1 => { color => "aqua" }}}, "R1" ]
+        ]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id1);
+
+    xlog "get calendar updates";
+    $res = $jmap->Request([['getCalendarUpdates', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $state = $res->[0][1]{newState};
+
+    xlog "update sortOrder of calendar $id1";
+    $res = $jmap->Request([
+            ['setCalendars', { update => { $id1 => { sortOrder => 5 }}}, "R1" ]
+        ]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id1);
+
+    xlog "get calendar updates";
+    $res = $jmap->Request([['getCalendarUpdates', {
+                    "sinceState" => $state,
+                }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $state = $res->[0][1]{newState};
+
+    xlog "get empty calendar updates";
+    $res = $jmap->Request([['getCalendarUpdates', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
+    $self->assert_str_equals($res->[0][1]{oldState}, $state);
+    $self->assert_str_equals($res->[0][1]{newState}, $state);
 }
 
 
