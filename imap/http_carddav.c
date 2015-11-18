@@ -371,31 +371,11 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 
 #define DEFAULT_ADDRBOOK "Default"
 
-static void my_carddav_auth(const char *userid)
-{
-    int r;
-
-    if (httpd_userisadmin || httpd_userisanonymous ||
-        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
-        /* admin, anonymous, or proxy from frontend - won't have DAV database */
-        return;
-    }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* proxy-only server - won't have DAV databases */
-    }
-    else {
-        /* Open CardDAV DB for 'userid' */
-        my_carddav_reset();
-        auth_carddavdb = carddav_open_userid(userid);
-        if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
-    }
-
-    /* Auto-provision an addressbook for 'userid' */
-
+EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     /* addressbook-home-set */
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+    int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (config_mupdate_server) {
             /* Find location of INBOX */
@@ -437,6 +417,28 @@ static void my_carddav_auth(const char *userid)
 
  done:
     mbname_free(&mbname);
+    return r;
+}
+
+static void my_carddav_auth(const char *userid)
+{
+    if (httpd_userisadmin || httpd_userisanonymous ||
+        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
+        /* admin, anonymous, or proxy from frontend - won't have DAV database */
+        return;
+    }
+    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* proxy-only server - won't have DAV databases */
+    }
+    else {
+        /* Open CardDAV DB for 'userid' */
+        my_carddav_reset();
+        auth_carddavdb = carddav_open_userid(userid);
+        if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
+    }
+
+    /* Auto-provision an addressbook for 'userid' */
+    carddav_create_defaultaddressbook(userid);
 }
 
 
