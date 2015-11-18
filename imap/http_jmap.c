@@ -4141,6 +4141,44 @@ done:
     return r;
 }
 
+struct calendarupdates_rock {
+    modseq_t oldmodseq;
+    json_t *changed;
+    json_t *removed;
+};
+
+static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock) {
+    struct calendarupdates_rock *rock = (struct calendarupdates_rock *) vrock;
+    /* Ignore any mailboxes aren't (possibly deleted) calendars. */
+    if (!(mbentry->mbtype & (MBTYPE_CALENDAR|MBTYPE_DELETED))) {
+        return 0;
+    }
+    /* Ignore special-purpose calendar mailboxes. */
+    const char *uid = strrchr(mbentry->name, '.');
+    if (uid) {
+        uid++;
+    } else {
+        uid = mbentry->name;
+    }
+    if (jmap_calendar_ishidden(uid)) {
+        return 0;
+    }
+
+    /* Ignore old changes. */
+    if (mbentry->foldermodseq <= rock->oldmodseq) {
+        return 0;
+    }
+
+    /* Report this calendar as changed or removed. */
+    if (mbentry->mbtype & MBTYPE_CALENDAR) {
+        json_array_append_new(rock->changed, json_string(uid));
+    } else if (mbentry->mbtype & MBTYPE_DELETED) {
+        json_array_append_new(rock->removed, json_string(uid));
+    }
+
+    return 0;
+}
+
 static int getCalendarUpdates(struct jmap_req *req)
 {
     int r, pe;
@@ -4186,28 +4224,45 @@ static int getCalendarUpdates(struct jmap_req *req)
     }
     json_decref(invalid);
 
-    if (oldmodseq != req->counters.caldavmodseq) {
-        /* XXX - This is where we would report calendar changes. But since it's
-         * not clear yet, how to report purged mailboxes as removed, let's force
-         * the client to flush its cache. */
+    /* Lookup any updates. */
+    char *mboxname = caldav_mboxname(req->userid, NULL);
+    struct calendarupdates_rock rock;
+    memset(&rock, 0, sizeof(struct calendarupdates_rock));
+    rock.oldmodseq = oldmodseq;
+    rock.changed = json_pack("[]");
+    rock.removed = json_pack("[]");
+    r = mboxlist_mboxtree(mboxname, getcalendarupdates_cb, &rock,
+            MBOXTREE_TOMBSTONES|MBOXTREE_SKIP_ROOT);
+    free(mboxname);
+    if (r) {
         json_t *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-    } else {
-        /* Create response without any updates. */
-        json_t *eventUpdates = json_pack("{}");
-        json_object_set_new(eventUpdates, "accountId", json_string(req->userid));
-        json_object_set_new(eventUpdates, "oldState", json_string(since));
-        json_object_set_new(eventUpdates, "newState", json_string(since));
+        json_decref(rock.changed);
+        json_decref(rock.removed);
+        goto done;
+    }
 
-        json_object_set_new(eventUpdates, "hasMoreUpdates", json_false());
-        json_object_set_new(eventUpdates, "changed", json_pack("[]"));
-        json_object_set_new(eventUpdates, "removed", json_pack("[]"));
+    /* Create response. */
+    json_t *calendarUpdates = json_pack("{}");
+    json_object_set_new(calendarUpdates, "accountId", json_string(req->userid));
+    json_object_set_new(calendarUpdates, "oldState", json_string(since));
+    json_object_set_new(calendarUpdates, "newState", jmap_getstate(MBTYPE_CALENDAR, req));
 
-        json_t *item = json_pack("[]");
-        json_array_append_new(item, json_string("calendarUpdates"));
-        json_array_append_new(item, eventUpdates);
-        json_array_append_new(item, json_string(req->tag));
-        json_array_append_new(req->response, item);
+    json_object_set_new(calendarUpdates, "changed", rock.changed);
+    json_object_set_new(calendarUpdates, "removed", rock.removed);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("calendarUpdates"));
+    json_array_append_new(item, calendarUpdates);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+    if (dofetch && json_array_size(rock.changed)) {
+        struct jmap_req subreq = *req; // struct copy, woot
+        subreq.args = json_pack("{}");
+        json_object_set(subreq.args, "ids", rock.changed);
+        r = getCalendars(&subreq);
+        json_decref(subreq.args);
     }
 
   done:
