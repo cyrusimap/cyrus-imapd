@@ -627,27 +627,27 @@ static int jmap_readprop_full(json_t *root,
                               const char *fmt,
                               void *dst)
 {
+    int r = 0;
     json_t *jval = json_object_get(root, name);
     if (!jval && mandatory) {
-        json_array_append_new(invalid, json_string(name));
-        return -1;
-    }
-    if (jval) {
+        r = -1;
+    } else if (jval) {
         json_error_t err;
         if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
-            if (prefix) {
-                struct buf buf = BUF_INITIALIZER;
-                buf_printf(&buf, "%s.%s", prefix, name);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_free(&buf);
-            } else {
-                json_array_append_new(invalid, json_string(name));
-            }
-            return -2;
+            r = -2;
+        } else {
+            r = 1;
         }
-        return 1;
     }
-    return 0;
+    if (r < 0 && prefix) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%s.%s", prefix, name);
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_free(&buf);
+    } else if (r < 0) {
+        json_array_append_new(invalid, json_string(name));
+    }
+    return r;
 }
 
 static int jmap_readprop(json_t *root, const char *name, int mandatory,
@@ -1188,6 +1188,7 @@ static int _add_group_entries(struct jmap_req *req,
     struct buf buf = BUF_INITIALIZER;
 
     for (index = 0; index < json_array_size(members); index++) {
+        syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXX Looking at array member: %zu => %s", index, json_string_value(json_array_get(members, index)));
         const char *item = _json_array_get_string(members, index);
         if (!item) {
             buf_printf(&buf, "contactIds[%zu]", index);
@@ -1727,13 +1728,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
     if (_wantprop(props, "lastName")) {
         const char *family = strarray_safenth(n, 0);
-        const char *suffix = strarray_safenth(n, 4);
-        buf_setcstr(&buf, family);
-        if (*suffix) {
-            buf_putc(&buf, ' ');
-            buf_appendcstr(&buf, suffix);
-        }
-        json_object_set_new(obj, "lastName", json_string(buf_cstring(&buf)));
+        json_object_set_new(obj, "lastName", json_string(family));
     }
 
     if (_wantprop(props, "firstName")) {
@@ -1750,6 +1745,11 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         const char *prefix = strarray_safenth(n, 3);
         json_object_set_new(obj, "prefix",
                             json_string(prefix)); /* just prefix */
+    }
+    if (_wantprop(props, "suffix")) {
+        const char *suffix = strarray_safenth(n, 4);
+        json_object_set_new(obj, "suffix",
+                            json_string(suffix)); /* just suffix */
     }
 
     /* org fields */
@@ -2007,6 +2007,12 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     if (_wantprop(props, "nickname")) {
         const char *item = vparse_stringval(card, "nickname");
         json_object_set_new(obj, "nickname", json_string(item ? item : ""));
+    }
+
+    if (_wantprop(props, "anniversary")) {
+        struct vparse_entry *entry = vparse_get_entry(card, NULL, "anniversary");
+        _date_to_jmap(entry, &buf);
+        json_object_set_new(obj, "anniversary", json_string(buf_cstring(&buf)));
     }
 
     if (_wantprop(props, "birthday")) {
@@ -2647,23 +2653,37 @@ static struct vparse_entry *_card_multi(struct vparse_card *card,
     return res;
 }
 
-static int _emails_to_card(struct vparse_card *card, json_t *arg)
+static int _emails_to_card(struct vparse_card *card, json_t *arg, json_t *invalid)
 {
     vparse_delete_entries(card, NULL, "email");
 
     int i;
     int size = json_array_size(arg);
+    struct buf buf = BUF_INITIALIZER;
     for (i = 0; i < size; i++) {
         json_t *item = json_array_get(arg, i);
 
-        const char *type = _json_object_get_string(item, "type");
-        if (!type) return -1;
-        /*optional*/
-        const char *label = _json_object_get_string(item, "label");
-        const char *value = _json_object_get_string(item, "value");
-        if (!value) return -1;
+        buf_printf(&buf, "emails[%d]", i);
+        const char *prefix = buf_cstring(&buf);
+
+        /* Parse properties. */
+        const char *type = NULL;
+        const char *label = NULL;
+        const char *value = NULL;
+        int pe; /* parse error */
+
+        pe = jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        pe = jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
         json_t *jisDefault = json_object_get(item, "isDefault");
 
+        /* Bail out for any property errors. */
+        if (!type || !value || pe < 0) {
+            buf_free(&buf);
+            return -1;
+        }
+
+        /* Update card. */
         struct vparse_entry *entry =
             vparse_add_entry(card, NULL, "email", value);
 
@@ -2677,25 +2697,45 @@ static int _emails_to_card(struct vparse_card *card, json_t *arg)
 
         if (jisDefault && json_is_true(jisDefault))
             vparse_add_param(entry, "type", "pref");
+
+        buf_reset(&buf);
     }
+    buf_free(&buf);
     return 0;
 }
 
-static int _phones_to_card(struct vparse_card *card, json_t *arg)
+static int _phones_to_card(struct vparse_card *card, json_t *arg, json_t *invalid)
 {
     vparse_delete_entries(card, NULL, "tel");
 
     int i;
     int size = json_array_size(arg);
+    struct buf buf = BUF_INITIALIZER;
     for (i = 0; i < size; i++) {
         json_t *item = json_array_get(arg, i);
-        const char *type = _json_object_get_string(item, "type");
-        if (!type) return -1;
-        /* optional */
-        const char *label = _json_object_get_string(item, "label");
-        const char *value = _json_object_get_string(item, "value");
-        if (!value) return -1;
 
+        buf_printf(&buf, "phones[%d]", i);
+        const char *prefix = buf_cstring(&buf);
+
+        /* Parse properties. */
+        const char *type = NULL;
+        const char *label = NULL;
+        const char *value = NULL;
+        int pe; /* parse error */
+
+        pe = jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        pe = jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        if (json_object_get(item, "label") != json_null()) {
+            pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
+        }
+
+        /* Bail out for any property errors. */
+        if (!type || !value || pe < 0) {
+            buf_free(&buf);
+            return -1;
+        }
+
+        /* Update card. */
         struct vparse_entry *entry = vparse_add_entry(card, NULL, "tel", value);
 
         if (!strcmp(type, "mobile"))
@@ -2705,7 +2745,10 @@ static int _phones_to_card(struct vparse_card *card, json_t *arg)
 
         if (label)
             vparse_add_param(entry, "label", label);
+
+        buf_reset(&buf);
     }
+    buf_free(&buf);
     return 0;
 }
 
@@ -2727,7 +2770,7 @@ static int _is_im(const char *type)
     return 0;
 }
 
-static int _online_to_card(struct vparse_card *card, json_t *arg)
+static int _online_to_card(struct vparse_card *card, json_t *arg, json_t *invalid)
 {
     vparse_delete_entries(card, NULL, "url");
     vparse_delete_entries(card, NULL, "impp");
@@ -2736,14 +2779,32 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
 
     int i;
     int size = json_array_size(arg);
+    struct buf buf = BUF_INITIALIZER;
     for (i = 0; i < size; i++) {
         json_t *item = json_array_get(arg, i);
-        const char *value = _json_object_get_string(item, "value");
-        if (!value) return -1;
-        const char *type = _json_object_get_string(item, "type");
-        if (!type) return -1;
-        const char *label = _json_object_get_string(item, "label");
 
+        buf_printf(&buf, "online[%d]", i);
+        const char *prefix = buf_cstring(&buf);
+
+        /* Parse properties. */
+        const char *type = NULL;
+        const char *label = NULL;
+        const char *value = NULL;
+        int pe; /* parse error */
+
+        pe = jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        pe = jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        if (json_object_get(item, "label") != json_null()) {
+            pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
+        }
+
+        /* Bail out for any property errors. */
+        if (!type || !value || pe < 0) {
+            buf_free(&buf);
+            return -1;
+        }
+
+        /* Update card. */
         if (!strcmp(type, "uri")) {
             struct vparse_entry *entry =
                 vparse_add_entry(card, NULL, "url", value);
@@ -2770,33 +2831,53 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
                 vparse_add_param(entry, "label", label);
         }
     }
+    buf_free(&buf);
     return 0;
 }
 
-static int _addresses_to_card(struct vparse_card *card, json_t *arg)
+static int _addresses_to_card(struct vparse_card *card, json_t *arg, json_t *invalid)
 {
     vparse_delete_entries(card, NULL, "adr");
 
     int i;
     int size = json_array_size(arg);
+    struct buf buf = BUF_INITIALIZER;
     for (i = 0; i < size; i++) {
         json_t *item = json_array_get(arg, i);
 
-        const char *type = _json_object_get_string(item, "type");
-        if (!type) return -1;
-        /* optional */
-        const char *label = _json_object_get_string(item, "label");
-        const char *street = _json_object_get_string(item, "street");
-        if (!street) return -1;
-        const char *locality = _json_object_get_string(item, "locality");
-        if (!locality) return -1;
-        const char *region = _json_object_get_string(item, "region");
-        if (!region) return -1;
-        const char *postcode = _json_object_get_string(item, "postcode");
-        if (!postcode) return -1;
-        const char *country = _json_object_get_string(item, "country");
-        if (!country) return -1;
+        buf_printf(&buf, "addresses[%d]", i);
+        const char *prefix = buf_cstring(&buf);
 
+        /* Parse properties. */
+        const char *type = NULL;
+        const char *label = NULL;
+        const char *street = NULL;
+        const char *locality = NULL;
+        const char *region = NULL;
+        const char *postcode = NULL;
+        const char *country = NULL;
+        int pe; /* parse error */
+
+        /* Mandatory */
+        pe = jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        pe = jmap_readprop_full(item, prefix, "street", 1, invalid, "s", &street);
+        pe = jmap_readprop_full(item, prefix, "locality", 1, invalid, "s", &locality);
+        pe = jmap_readprop_full(item, prefix, "region", 1, invalid, "s", &region);
+        pe = jmap_readprop_full(item, prefix, "postcode", 1, invalid, "s", &postcode);
+        pe = jmap_readprop_full(item, prefix, "country", 1, invalid, "s", &country);
+
+        /* Optional */
+        if (json_object_get(item, "label") != json_null()) {
+            pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
+        }
+
+        /* Bail out for any property errors. */
+        if (!type || !street || !locality || !region || !postcode || !country || pe < 0) {
+            buf_free(&buf);
+            return -1;
+        }
+
+        /* Update card. */
         struct vparse_entry *entry = vparse_add_entry(card, NULL, "adr", NULL);
 
         if (strcmpsafe(type, "other"))
@@ -2814,8 +2895,11 @@ static int _addresses_to_card(struct vparse_card *card, json_t *arg)
         strarray_append(entry->v.values, region);
         strarray_append(entry->v.values, postcode);
         strarray_append(entry->v.values, country);
+
+        buf_reset(&buf);
     }
 
+    buf_free(&buf);
     return 0;
 }
 
@@ -2945,7 +3029,8 @@ static void _make_fn(struct vparse_card *card)
 
 static int _json_to_card(struct vparse_card *card,
                          json_t *arg, strarray_t *flags,
-                         struct entryattlist **annotsp)
+                         struct entryattlist **annotsp,
+                         json_t *invalid)
 {
     const char *key;
     json_t *jval;
@@ -2963,9 +3048,11 @@ static int _json_to_card(struct vparse_card *card,
         if (!strcmp(key, "isFlagged")) {
             if (json_is_true(jval)) {
                 strarray_add_case(flags, "\\Flagged");
-            }
-            else {
+            } else if (json_is_false(jval)) {
                 strarray_remove_all_case(flags, "\\Flagged");
+            } else {
+                json_array_append_new(invalid, json_string("isFlagged"));
+                return -1;
             }
         }
         else if (!strcmp(key, "x-importance")) {
@@ -2984,103 +3071,128 @@ static int _json_to_card(struct vparse_card *card,
         }
         else if (!strcmp(key, "prefix")) {
             const char *val = json_string_value(jval);
-            if (!val)
+            if (!val) {
+                json_array_append_new(invalid, json_string("prefix"));
                 return -1;
+            }
             name_is_dirty = 1;
             struct vparse_entry *n = _card_multi(card, "n");
             strarray_set(n->v.values, 3, val);
         }
         else if (!strcmp(key, "firstName")) {
             const char *val = json_string_value(jval);
-            if (!val)
+            if (!val) {
+                json_array_append_new(invalid, json_string("firstName"));
                 return -1;
+            }
             name_is_dirty = 1;
             struct vparse_entry *n = _card_multi(card, "n");
             strarray_set(n->v.values, 1, val);
         }
         else if (!strcmp(key, "lastName")) {
             const char *val = json_string_value(jval);
-            if (!val)
+            if (!val) {
+                json_array_append_new(invalid, json_string("lastName"));
                 return -1;
+            }
             name_is_dirty = 1;
             struct vparse_entry *n = _card_multi(card, "n");
             strarray_set(n->v.values, 0, val);
         }
         else if (!strcmp(key, "suffix")) {
             const char *val = json_string_value(jval);
-            if (!val)
+            if (!val) {
+                json_array_append_new(invalid, json_string("suffix"));
                 return -1;
+            }
             name_is_dirty = 1;
             struct vparse_entry *n = _card_multi(card, "n");
             strarray_set(n->v.values, 4, val);
         }
         else if (!strcmp(key, "nickname")) {
             int r = _kv_to_card(card, "nickname", jval);
-            if (r) return r;
+            if (r) {
+                json_array_append_new(invalid, json_string("nickname"));
+                return r;
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "birthday")) {
             int r = _date_to_card(card, "bday", jval);
-            if (r) return r;
+            if (r) {
+                json_array_append_new(invalid, json_string("birthday"));
+                return r;
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "anniversary")) {
-            int r = _kv_to_card(card, "anniversary", jval);
-            if (r) return r;
+            int r = _date_to_card(card, "anniversary", jval);
+            if (r) {
+                json_array_append_new(invalid, json_string("anniversary"));
+                return r;
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "company")) {
             const char *val = json_string_value(jval);
-            if (!val)
+            if (!val) {
+                json_array_append_new(invalid, json_string("company"));
                 return -1;
+            }
             struct vparse_entry *org = _card_multi(card, "org");
             strarray_set(org->v.values, 0, val);
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "department")) {
             const char *val = json_string_value(jval);
-            if (!val)
+            if (!val) {
+                json_array_append_new(invalid, json_string("department"));
                 return -1;
+            }
             struct vparse_entry *org = _card_multi(card, "org");
             strarray_set(org->v.values, 1, val);
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "jobTitle")) {
             const char *val = json_string_value(jval);
-            if (!val)
+            if (!val) {
+                json_array_append_new(invalid, json_string("jobTitle"));
                 return -1;
+            }
             struct vparse_entry *org = _card_multi(card, "org");
             strarray_set(org->v.values, 2, val);
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "emails")) {
-            int r = _emails_to_card(card, jval);
+            int r = _emails_to_card(card, jval, invalid);
             if (r) return r;
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "phones")) {
-            int r = _phones_to_card(card, jval);
+            int r = _phones_to_card(card, jval, invalid);
             if (r) return r;
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "online")) {
-            int r = _online_to_card(card, jval);
+            int r = _online_to_card(card, jval, invalid);
             if (r) return r;
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "addresses")) {
-            int r = _addresses_to_card(card, jval);
+            int r = _addresses_to_card(card, jval, invalid);
             if (r) return r;
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "notes")) {
             int r = _kv_to_card(card, "note", jval);
-            if (r) return r;
+            if (r) {
+                json_array_append_new(invalid, json_string("notes"));
+                return r;
+            }
             record_is_dirty = 1;
-        }
-
-        else {
+        } else {
             /* INVALID PARAM */
+            json_array_append_new(invalid, json_string(key));
             return -1; /* XXX - need codes */
         }
     }
@@ -3155,17 +3267,23 @@ static int setContacts(struct jmap_req *req)
                 }
             }
 
-            r = _json_to_card(card, arg, flags, &annots);
-            if (r) {
+            json_t *invalid = json_pack("[]");
+            r = _json_to_card(card, arg, flags, &annots, invalid);
+            if (r || json_array_size(invalid)) {
                 /* this is just a failure */
                 r = 0;
-                json_t *err = json_pack("{s:s}", "type", "invalidParameters");
+                json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+                if (json_array_size(invalid)) {
+                    json_object_set(err, "properties", invalid);
+                }
+                json_decref(invalid);
                 json_object_set_new(notCreated, key, err);
                 strarray_free(flags);
                 freeentryatts(annots);
                 vparse_free_card(card);
                 continue;
             }
+            json_decref(invalid);
 
             syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)",
                    req->userid, mboxname, uid);
@@ -3280,7 +3398,9 @@ static int setContacts(struct jmap_req *req)
             }
             struct vparse_card *card = vparser.card->objects;
 
-            r = _json_to_card(card, arg, flags, &annots);
+            json_t *invalid = json_pack("[]");
+
+            r = _json_to_card(card, arg, flags, &annots, invalid);
             if (r == 204) {
                 r = 0;
                 if (!newmailbox) {
@@ -3298,13 +3418,18 @@ static int setContacts(struct jmap_req *req)
                                             req->userid, req->authstate);
                     if (!r) r = annotate_state_store(state, annots);
                     if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
+                    json_decref(invalid);
                     goto finish;
                 }
             }
-            if (r) {
+            if (r || json_array_size(invalid)) {
                 /* this is just a failure to create the JSON, not an error */
                 r = 0;
-                json_t *err = json_pack("{s:s}", "type", "invalidParameters");
+                json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+                if (json_array_size(invalid)) {
+                    json_object_set(err, "properties", invalid);
+                }
+                json_decref(invalid);
                 json_object_set_new(notUpdated, uid, err);
                 vparse_free(&vparser);
                 strarray_free(flags);
@@ -3313,6 +3438,7 @@ static int setContacts(struct jmap_req *req)
                 free(resource);
                 continue;
             }
+            json_decref(invalid);
 
             syslog(LOG_NOTICE, "jmap: update contact %s/%s",
                    req->userid, resource);
