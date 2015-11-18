@@ -368,7 +368,7 @@ sub test_getcontactlist {
                                 }],
                             addresses => [{
                                     type => "home",
-                                    label => undef,
+                                   label => undef,
                                     street => "Some Lane 24",
                                     locality => "SomeWhere City",
                                     region => "",
@@ -410,6 +410,7 @@ sub test_getcontactlist {
                         "#2" => {name => "group2", contactIds => [$id3]},
                         "#3" => {name => "group3", contactIds => [$id4]}
                     }}, "R1"]]);
+
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
@@ -642,25 +643,318 @@ sub test_getcontactgroupupdates
     $self->assert_str_equals($res->[0][2], 'R1');
 }
 
-
 sub test_setcontacts
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
 
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    my $contact = {
+        firstName => "first",
+        lastName => "last"
+    };
+
+    my $res = $jmap->Request([['setContacts', {create => {"#1" => $contact }}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     my $id = $res->[0][1]{created}{"#1"}{id};
 
+    # get expands default values, so do the same manually
+    $contact->{id} = $id;
+    $contact->{isFlagged} = JSON::false;
+    $contact->{prefix} = '';
+    $contact->{suffix} = '';
+    $contact->{nickname} = '';
+    $contact->{birthday} = '0000-00-00';
+    $contact->{anniversary} = '0000-00-00';
+    $contact->{company} = '';
+    $contact->{department} = '';
+    $contact->{jobTitle} = '';
+    $contact->{online} = [];
+    $contact->{phones} = [];
+    $contact->{addresses} = [];
+    $contact->{emails} = [];
+    $contact->{notes} = '';
+
+    # Non-JMAP properties.
+    $contact->{"x-importance"} = 0;
+    $contact->{"x-hasPhoto"} = JSON::false;
+    $contact->{addressbookId} = 'Default';
+
+    xlog "get contact $id";
     my $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
     $self->assert_not_null($fetch);
     $self->assert_str_equals($fetch->[0][0], 'contacts');
     $self->assert_str_equals($fetch->[0][2], 'R2');
-    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
+    $contact->{"x-href"} = $fetch->[0][1]{list}[0]{"x-href"};
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # isFlagged
+    xlog "update isFlagged (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {isFlagged => 'nope'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "isFlagged");
+
+    xlog "update isFlagged";
+    $contact->{isFlagged} = JSON::true;
+    $res = $jmap->Request([['setContacts', {update => {$id => {isFlagged => JSON::true} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # prefix
+    xlog "update prefix (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {prefix => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "prefix");
+
+    xlog "update prefix";
+    $contact->{prefix} = 'foo';
+    $res = $jmap->Request([['setContacts', {update => {$id => {prefix => 'foo'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # suffix
+    xlog "update suffix (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {suffix => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "suffix");
+
+    xlog "update suffix";
+    $contact->{suffix} = 'bar';
+    $res = $jmap->Request([['setContacts', {update => {$id => {suffix => 'bar'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # nickname
+    xlog "update nickname (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {nickname => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "nickname");
+
+    xlog "update nickname";
+    $contact->{nickname} = 'nick';
+    $res = $jmap->Request([['setContacts', {update => {$id => {nickname => 'nick'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # birthday
+    xlog "update birthday (with null error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {birthday => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "birthday");
+
+    xlog "update birthday (with JMAP datetime error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {birthday => '1979-04-01T00:00:00Z'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "birthday");
+
+    xlog "update birthday";
+    $contact->{birthday} = '1979-04-01'; # Happy birthday, El Barto!
+    $res = $jmap->Request([['setContacts', {update => {$id => {birthday => '1979-04-01'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # anniversary
+    xlog "update anniversary (with null error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {anniversary => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "anniversary");
+
+    xlog "update anniversary (with JMAP datetime error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {anniversary => '1989-12-17T00:00:00Z'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "anniversary");
+
+    xlog "update anniversary";
+    $contact->{anniversary} = '1989-12-17'; # Happy anniversary, Simpsons!
+    $res = $jmap->Request([['setContacts', {update => {$id => {anniversary => '1989-12-17'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # company
+    xlog "update company (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {company => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "company");
+
+    xlog "update company";
+    $contact->{company} = 'acme';
+    $res = $jmap->Request([['setContacts', {update => {$id => {company => 'acme'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # department
+    xlog "update department (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {department => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "department");
+
+    xlog "update department";
+    $contact->{department} = 'looney tunes';
+    $res = $jmap->Request([['setContacts', {update => {$id => {department => 'looney tunes'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # jobTitle
+    xlog "update jobTitle (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {jobTitle => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "jobTitle");
+
+    xlog "update jobTitle";
+    $contact->{jobTitle} = 'director of everything';
+    $res = $jmap->Request([['setContacts', {update => {$id => {jobTitle => 'director of everything'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # emails
+    xlog "update emails (with missing type error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            emails => [{ value => "acme\@example.com" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "emails[0].type");
+
+    xlog "update emails (with missing value error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            emails => [{ type => "other" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "emails[0].value");
+
+    xlog "update emails";
+    $contact->{emails} = [{ type => "work", value => "acme\@example.com", isDefault => JSON::true }];
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            emails => [{ type => "work", value => "acme\@example.com" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # phones
+    xlog "update phones (with missing type error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            phones => [{ value => "12345678" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "phones[0].type");
+
+    xlog "update phones (with missing value error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            phones => [{ type => "home" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "phones[0].value");
+
+    xlog "update phones";
+    $contact->{phones} = [{ type => "home", value => "12345678" }];
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            phones => [{ type => "home", value => "12345678" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # online
+    xlog "update online (with missing type error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            online => [{ value => "http://example.com/me" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "online[0].type");
+
+    xlog "update online (with missing value error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            online => [{ type => "uri" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "online[0].value");
+
+    xlog "update online";
+    $contact->{online} = [{ type => "uri", value => "http://example.com/me" }];
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            online => [{ type => "uri", value => "http://example.com/me" }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # addresses
+    xlog "update addresses";
+    $contact->{addresses} = [{
+            type => "home",
+            street => "acme lane 1",
+            locality => "acme city",
+            region => "",
+            postcode => "1234",
+            country => "acme land"
+        }];
+    $res = $jmap->Request([['setContacts', {update => {$id => {
+                            addresses => [{
+                                    type => "home",
+                                    street => "acme lane 1",
+                                    locality => "acme city",
+                                    region => "",
+                                    postcode => "1234",
+                                    country => "acme land"
+                                }]
+                        } }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # notes
+    xlog "update notes (with error)";
+    $res = $jmap->Request([['setContacts', {update => {$id => {notes => undef} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{properties}[0], "notes");
+
+    xlog "update notes";
+    $contact->{notes} = 'baz';
+    $res = $jmap->Request([['setContacts', {update => {$id => {notes => 'baz'} }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get contact $id";
+    $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
 }
+
 
 sub test_setcontacts_state
 {
