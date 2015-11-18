@@ -3027,7 +3027,8 @@ static void _make_fn(struct vparse_card *card)
     free(fn);
 }
 
-static int _json_to_card(struct vparse_card *card,
+static int _json_to_card(const char *uid,
+                         struct vparse_card *card,
                          json_t *arg, strarray_t *flags,
                          struct entryattlist **annotsp,
                          json_t *invalid)
@@ -3190,10 +3191,12 @@ static int _json_to_card(struct vparse_card *card,
                 return r;
             }
             record_is_dirty = 1;
-        } else {
-            /* INVALID PARAM */
-            json_array_append_new(invalid, json_string(key));
-            return -1; /* XXX - need codes */
+        } if (!strcmp(key, "id")) {
+            const char *val = json_string_value(jval);
+            if (!val || (uid && strcmp(uid, val))) {
+                json_array_append_new(invalid, json_string("id"));
+                return -1;
+            }
         }
     }
 
@@ -3268,7 +3271,7 @@ static int setContacts(struct jmap_req *req)
             }
 
             json_t *invalid = json_pack("[]");
-            r = _json_to_card(card, arg, flags, &annots, invalid);
+            r = _json_to_card(uid, card, arg, flags, &annots, invalid);
             if (r || json_array_size(invalid)) {
                 /* this is just a failure */
                 r = 0;
@@ -3400,7 +3403,7 @@ static int setContacts(struct jmap_req *req)
 
             json_t *invalid = json_pack("[]");
 
-            r = _json_to_card(card, arg, flags, &annots, invalid);
+            r = _json_to_card(uid, card, arg, flags, &annots, invalid);
             if (r == 204) {
                 r = 0;
                 if (!newmailbox) {
