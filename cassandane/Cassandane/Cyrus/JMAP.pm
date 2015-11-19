@@ -1043,12 +1043,12 @@ sub test_getmailboxes
 
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     $self->assert_num_equals(scalar keys %m, 3);
-    my $inbox = $m{"user.cassandane"};
-    my $foo = $m{"user.cassandane.foo"};
-    my $bar = $m{"user.cassandane.foo.bar"};
+    my $inbox = $m{"INBOX"};
+    my $foo = $m{"INBOX.foo"};
+    my $bar = $m{"INBOX.foo.bar"};
 
     # INBOX
-    $self->assert_str_equals($inbox->{name}, "user.cassandane");
+    $self->assert_str_equals($inbox->{name}, "INBOX");
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals($inbox->{role}, "inbox");
     # XXX $self->assert_num_equals($inbox->{sortOrder}, 1);
@@ -1065,7 +1065,7 @@ sub test_getmailboxes
     $self->assert_num_equals($inbox->{unreadThreads}, 0);
 
     # INBOX.foo
-    $self->assert_str_equals($foo->{name}, "user.cassandane.foo");
+    $self->assert_str_equals($foo->{name}, "INBOX.foo");
     $self->assert_str_equals($foo->{parentId}, $inbox->{id});
     $self->assert_null($foo->{role});
     # XXX $self->assert_num_equals($foo->{sortOrder}, 1);
@@ -1082,7 +1082,7 @@ sub test_getmailboxes
     $self->assert_num_equals($foo->{unreadThreads}, 0);
 
     # INBOX.foo.bar
-    $self->assert_str_equals($bar->{name}, "user.cassandane.foo.bar");
+    $self->assert_str_equals($bar->{name}, "INBOX.foo.bar");
     $self->assert_str_equals($bar->{parentId}, $foo->{id});
     $self->assert_null($bar->{role});
     # XXX $self->assert_num_equals($bar->{sortOrder}, 1);
