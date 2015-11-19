@@ -4469,6 +4469,17 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                         name, ns, NULL, 0);
 
+    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+    char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
+    buf_reset(&fctx->buf);
+    int r = annotatemore_lookupmask(mailboxname, annotname,
+                                    fctx->req_tgt->userid, &fctx->buf);
+    free(mailboxname);
+    if (!r && fctx->buf.len) {
+        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        return 0;
+    }
+
     /* XXX  This needs to be done via an LDAP/DB lookup */
     if (strchr(fctx->req_tgt->userid, '@')) {
         buf_reset(&fctx->buf);
