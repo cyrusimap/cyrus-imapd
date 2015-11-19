@@ -1172,6 +1172,15 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
         webdav_close(webdavdb);
         mailbox_close(&attachments);
+
+        /* XXX  Relock index so that delete of calendar resource will succeed.
+           Remove this call when mailbox_unlock_index() above is removed. */
+        r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+        if (r) {
+            syslog(LOG_ERR, "relock index(%s) failed: %s",
+                   mailbox->name, error_message(r));
+            goto done;
+        }
     }
 
     if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
