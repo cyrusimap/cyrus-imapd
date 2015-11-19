@@ -863,7 +863,7 @@ static int getMailboxes(struct jmap_req *req)
 
     /* Determine which properties to fetch. */
     json_t *properties = json_object_get(req->args, "properties");
-    if (properties) {
+    if (properties && json_array_size(properties)) {
         rock.props = xzmalloc(sizeof(struct hash_table));
         construct_hash_table(rock.props, json_array_size(properties), 0);
         int i;
@@ -1046,6 +1046,20 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     rock.props = NULL;
     rock.mailbox = NULL;
 
+    json_t *properties = json_object_get(req->args, "properties");
+    if (properties && json_array_size(properties)) {
+        rock.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(rock.props, json_array_size(properties), 0);
+        int i;
+        int size = json_array_size(properties);
+        for (i = 0; i < size; i++) {
+            const char *id = json_string_value(json_array_get(properties, i));
+            if (id == NULL) continue;
+            /* 1 == properties */
+            hash_insert(id, (void *)1, rock.props);
+        }
+    }
+
     json_t *want = json_object_get(req->args, "ids");
     json_t *notFound = json_array();
     if (want) {
@@ -1064,6 +1078,10 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     else {
         rock.rows = 0;
         r = carddav_get_cards(db, mboxname, NULL, kind, cb, &rock);
+    }
+    if (rock.props) {
+        free_hash_table(rock.props, NULL);
+        free(rock.props);
     }
     if (r) goto done;
 
@@ -4216,9 +4234,9 @@ static int getCalendars(struct jmap_req *req)
     rock.rows = 0;
 
     json_t *properties = json_object_get(req->args, "properties");
-    if (properties) {
+    if (properties && json_array_size(properties)) {
         rock.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.props, 1024, 0);
+        construct_hash_table(rock.props, json_array_size(properties), 0);
         int i;
         int size = json_array_size(properties);
         for (i = 0; i < size; i++) {
@@ -5706,9 +5724,9 @@ static int getCalendarEvents(struct jmap_req *req)
     rock.mailbox = NULL;
 
     json_t *properties = json_object_get(req->args, "properties");
-    if (properties) {
+    if (properties && json_array_size(properties)) {
         rock.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.props, 1024, 0);
+        construct_hash_table(rock.props, json_array_size(properties), 0);
         int i;
         int size = json_array_size(properties);
         for (i = 0; i < size; i++) {
