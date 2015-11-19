@@ -6246,7 +6246,16 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             jmap_remove_icalproperty(excomp, ICAL_RRULE_PROPERTY);
             jmap_remove_icalproperty(excomp, ICAL_ORGANIZER_PROPERTY);
             jmap_remove_icalproperty(excomp, ICAL_ATTENDEE_PROPERTY);
+            jmap_remove_icalproperty(excomp, ICAL_LASTMODIFIED_PROPERTY);
+            jmap_remove_icalproperty(excomp, ICAL_CREATED_PROPERTY);
+            jmap_remove_icalproperty(excomp, ICAL_DTSTAMP_PROPERTY);
             /* XXX ATTACH? */
+
+            /* Timestamp creation time. */
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            struct icaltimetype now = icaltime_from_timet_with_zone(time(NULL), 0, utc);
+            icalcomponent_set_dtstamp(excomp, now);
+            icalcomponent_add_property(excomp, icalproperty_new_created(now));
 
             /* Purge any VALARMs that are of type DATETIME. They can't be right
              * for this exception. */
@@ -7597,11 +7606,18 @@ static int jmap_write_calendarevent(json_t *event,
             ical = NULL;
         }
     } else {
-        /* Create a new VCALENDAR and its VEVENT. */
+        /* Create a new VCALENDAR. */
         ical = icalcomponent_new_vcalendar();
         icalcomponent_add_property(ical, icalproperty_new_version("2.0"));
         icalcomponent_add_property(ical, icalproperty_new_calscale("GREGORIAN"));
+
+        /* Create a new VEVENT. */
+        icaltimezone *utc = icaltimezone_get_utc_timezone();
+        struct icaltimetype now = icaltime_from_timet_with_zone(time(NULL), 0, utc);
         comp = icalcomponent_new_vevent();
+        icalcomponent_set_sequence(comp, 0);
+        icalcomponent_set_dtstamp(comp, now);
+        icalcomponent_add_property(comp, icalproperty_new_created(now));
         icalcomponent_add_component(ical, comp);
     }
 
