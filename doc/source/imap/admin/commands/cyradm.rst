@@ -415,18 +415,18 @@ Set mailbox metadata. A value of "none" will remove the attribute.
     
 Aliases: ``mboxcfg``
     
-.. _imap-admin-commands-cyradm-pwd:
-
-pwd
----
-
-? Displays the current working directory.
-
 .. _imap-admin-commands-cyradm-reconstruct:
 
 reconstruct
 -----------
-?
+
+.. parsed-literal::
+
+    :command:`reconstruct` *mailboxid recurseflag*
+    
+.. option:: recurseflag true|false
+        
+        Whether to reconstruct all mailboxes in the tree under the given *mailboxid*.
 
 .. _imap-admin-commands-cyradm-renamemailbox:
 
@@ -565,14 +565,24 @@ See :ref:`imap-admin-commands-cyradm-listquota`.
 subscribe
 ---------
 
-?
+Subscribe to a mailbox.
+
+.. parsed-literal::
+
+    :command:`subscribe` *mailboxid*
+
+See :ref:`imap-admin-commands-cyradm-unsubscribe`.
 
 .. _imap-admin-commands-cyradm-unsubscribe:
 
 unsubscribe
 -----------
 
-?
+Unsubscribe from a mailbox.
+
+    :command:`unsubscribe` *mailboxid*
+    
+See :ref:`imap-admin-commands-cyradm-subscribe`.
 
 .. _imap-admin-commands-cyradm-version:
 
