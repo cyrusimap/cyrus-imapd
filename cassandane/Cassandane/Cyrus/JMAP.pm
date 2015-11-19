@@ -684,6 +684,7 @@ sub test_setcontacts
 
     xlog "get contact $id";
     my $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
+
     $self->assert_not_null($fetch);
     $self->assert_str_equals($fetch->[0][0], 'contacts');
     $self->assert_str_equals($fetch->[0][2], 'R2');
@@ -1044,8 +1045,8 @@ sub test_getmailboxes
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     $self->assert_num_equals(scalar keys %m, 3);
     my $inbox = $m{"INBOX"};
-    my $foo = $m{"INBOX.foo"};
-    my $bar = $m{"INBOX.foo.bar"};
+    my $foo = $m{"foo"};
+    my $bar = $m{"bar"};
 
     # INBOX
     $self->assert_str_equals($inbox->{name}, "INBOX");
@@ -1065,7 +1066,7 @@ sub test_getmailboxes
     $self->assert_num_equals($inbox->{unreadThreads}, 0);
 
     # INBOX.foo
-    $self->assert_str_equals($foo->{name}, "INBOX.foo");
+    $self->assert_str_equals($foo->{name}, "foo");
     $self->assert_str_equals($foo->{parentId}, $inbox->{id});
     $self->assert_null($foo->{role});
     # XXX $self->assert_num_equals($foo->{sortOrder}, 1);
@@ -1082,7 +1083,7 @@ sub test_getmailboxes
     $self->assert_num_equals($foo->{unreadThreads}, 0);
 
     # INBOX.foo.bar
-    $self->assert_str_equals($bar->{name}, "INBOX.foo.bar");
+    $self->assert_str_equals($bar->{name}, "bar");
     $self->assert_str_equals($bar->{parentId}, $foo->{id});
     $self->assert_null($bar->{role});
     # XXX $self->assert_num_equals($bar->{sortOrder}, 1);
@@ -1120,29 +1121,29 @@ sub test_getmailboxes_specialuse
 
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     my $inbox = $m{"INBOX"};
-    my $archive = $m{"INBOX.Archive"};
-    my $drafts = $m{"INBOX.Drafts"};
-    my $junk = $m{"INBOX.Junk"};
-    my $sent = $m{"INBOX.Sent"};
-    my $trash = $m{"INBOX.Trash"};
+    my $archive = $m{"Archive"};
+    my $drafts = $m{"Drafts"};
+    my $junk = $m{"Junk"};
+    my $sent = $m{"Sent"};
+    my $trash = $m{"Trash"};
 
-    $self->assert_str_equals($archive->{name}, "INBOX.Archive");
+    $self->assert_str_equals($archive->{name}, "Archive");
     $self->assert_str_equals($archive->{parentId}, $inbox->{id});
     $self->assert_str_equals($archive->{role}, "archive");
 
-    $self->assert_str_equals($drafts->{name}, "INBOX.Drafts");
+    $self->assert_str_equals($drafts->{name}, "Drafts");
     $self->assert_str_equals($drafts->{parentId}, $inbox->{id});
     $self->assert_str_equals($drafts->{role}, "drafts");
 
-    $self->assert_str_equals($junk->{name}, "INBOX.Junk");
+    $self->assert_str_equals($junk->{name}, "Junk");
     $self->assert_str_equals($junk->{parentId}, $inbox->{id});
     $self->assert_str_equals($junk->{role}, "junk");
 
-    $self->assert_str_equals($sent->{name}, "INBOX.Sent");
+    $self->assert_str_equals($sent->{name}, "Sent");
     $self->assert_str_equals($sent->{parentId}, $inbox->{id});
     $self->assert_str_equals($sent->{role}, "sent");
 
-    $self->assert_str_equals($trash->{name}, "INBOX.Trash");
+    $self->assert_str_equals($trash->{name}, "Trash");
     $self->assert_str_equals($trash->{parentId}, $inbox->{id});
     $self->assert_str_equals($trash->{role}, "trash");
 }
