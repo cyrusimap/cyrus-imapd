@@ -4346,7 +4346,6 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         p++; /* skip dot */
         if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
         if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
-        if (!strncmp(p, MANAGED_ATTACH, strlen(MANAGED_ATTACH) - 1)) goto done;
         /* magic folder filter */
         if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
         /* and while we're at it, reject the fricking top-level folders too.
@@ -4670,21 +4669,6 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         }
 
         xml_add_response(&fctx, 0, 0);
-
-        if (txn->req_tgt.namespace == URL_NS_DRIVE) {
-            /* Open the DAV DB corresponding to the mailbox. */
-            fctx.davdb = fctx.open_db(fctx.mailbox);
-
-            /* Add responses for all contained resources */
-            fctx.foreach_resource(fctx.davdb, txn->req_tgt.mbentry->name,
-                                  fctx.proc_by_resource, &fctx);
-            fctx.close_db(fctx.davdb);
-
-            /* Started with NULL resource, end with NULL resource */
-            fctx.req_tgt->resource = NULL;
-            fctx.req_tgt->reslen = 0;
-            fctx.davdb = NULL;
-        }
 
         mailbox_close(&fctx.mailbox);
     }
