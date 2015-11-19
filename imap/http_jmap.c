@@ -70,6 +70,7 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
+#include "seen.h"
 #include "statuscache.h"
 #include "stristr.h"
 #include "times.h"
@@ -85,6 +86,7 @@
 
 struct jmap_req {
     const char *userid;
+    const struct mailbox *inbox;
     struct auth_state *authstate;
     struct hash_table *idmap;
     json_t *args;
@@ -136,6 +138,7 @@ static int jmap_readprop(json_t *root, const char *name, int mandatory,
 static int jmap_readprop_full(json_t *root, const char *prefix,
                               const char *name, int mandatory,
                               json_t *invalid, const char *fmt, void *dst);
+static int _wantprop(hash_table *props, const char *name);
 
 static const struct message_t {
     const char *name;
@@ -301,6 +304,7 @@ static int jmap_post(struct transaction_t *txn,
 
         struct jmap_req req;
         req.userid = httpd_userid;
+        req.inbox = mailbox;
         req.authstate = httpd_authstate;
         req.args = args;
         req.response = resp;
@@ -660,17 +664,26 @@ static int jmap_readprop(json_t *root, const char *name, int mandatory,
  * JMAP Mailboxes API
  ****************************************************************************/
 
+struct getMailboxes_rock {
+    const struct mailbox *inbox; /* The main user inbox. Do not unlock or close. */
+    json_t *list;                /* List of the current http user mailboxes. */
+    hash_table *props;           /* Which properties to fetch. */
+};
+
 /* mboxlist_findall() callback to list mailboxes */
 int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
                     int maycreate __attribute__((unused)),
-                    void *rock)
+                    void *vrock)
 {
-    json_t *list = (json_t *) rock, *mbox;
-    struct mboxlist_entry *mbentry = NULL;
-    struct mailbox *mailbox = NULL;
-    int r = 0, rights;
+    struct getMailboxes_rock *rock = (struct getMailboxes_rock *) vrock;
+    json_t *list = (json_t *) rock->list, *mbox;
+    struct mboxlist_entry *mbentry = NULL, *mbparent = NULL;
+    struct mailbox *mailbox = NULL, *parent = NULL;
+    const struct mailbox *inbox = rock->inbox;
+    int r = 0, rights, parent_rights = 0;
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     struct statusdata sdata;
+    hash_table *props = rock->props;
 
     /* Check ACL on mailbox for current user */
     if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
@@ -678,7 +691,6 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
                mboxname, error_message(r));
         goto done;
     }
-
     rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
     if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) {
         goto done;
@@ -693,33 +705,115 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         goto done;
     }
 
-    /* Open mailbox to get uniqueid */
-    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
-        syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-               mboxname, error_message(r));
+    /* Open mailbox to get uniqueid. But make sure not to reopen INBOX. */
+    if (strcmp(mboxname, inbox->name)) {
+        if ((r = mailbox_open_irl(mboxname, &mailbox))) {
+            syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                    mboxname, error_message(r));
+            goto done;
+        }
+        mailbox_unlock_index(mailbox, NULL);
+    } else {
+        mailbox = (struct mailbox *) inbox;
+    }
+
+    /* Lookup status. */
+    r = status_lookup_mailbox(mailbox, httpd_userid, statusitems, &sdata);
+    if (r) {
+        syslog(LOG_INFO, "status_lookup_mailbox(%s) failed: %s",
+                mboxname, error_message(r));
         goto done;
     }
-    mailbox_unlock_index(mailbox, NULL);
 
-    r = status_lookup(mboxname, httpd_userid, statusitems, &sdata);
+    /* Determine parent. */
+    r = mboxlist_findparent(mboxname, &mbparent);
+    if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+        syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
+                mboxname, error_message(r));
+        goto done;
+    }
+    if (!r) {
+        parent_rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
+        if (strcmp(mbparent->name, inbox->name)) {
+            r = mailbox_open_irl(mbparent->name, &parent);
+            if (r) {
+                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                        mbparent->name, error_message(r));
+                goto done;
+            }
+            mailbox_unlock_index(parent, NULL);
+        } else {
+            parent = (struct mailbox *) inbox;
+        }
+    }
 
-    mbox = json_pack("{s:s s:s s:n s:n s:b s:b s:b s:b s:i s:i}",
-                     "id", mailbox->uniqueid,
-                     "name", mboxname,
-                     "parentId",
-                     "role",
-                     "mayAddMessages", rights & ACL_INSERT,
-                     "mayRemoveMessages", rights & ACL_DELETEMSG,
-                     "mayCreateChild", rights & ACL_CREATE,
-                     "mayDeleteMailbox", rights & ACL_DELETEMBOX,
-                     "totalMessages", sdata.messages,
-                     "unreadMessages", sdata.unseen);
+    /* Build JMAP mailbox response. */
+    mbox = json_pack("{s:s}", "id", mailbox->uniqueid);
+    if (_wantprop(props, "name")) {
+        /* XXX should strip "user.<id>" prefix ? */
+        json_object_set_new(mbox, "name", json_string(mboxname));
+    }
+    if (_wantprop(props, "sortOrder")) {
+        /* XXX */
+    }
+    if (_wantprop(props, "mustBeOnlyMailbox")) {
+        /* XXX */
+    }
+
+    if (_wantprop(props, "mayReadItems")) {
+        json_object_set_new(mbox, "mayReadItems", json_boolean(rights & ACL_READ));
+    }
+    if (_wantprop(props, "mayAddItems")) {
+        json_object_set_new(mbox, "mayAddItems", json_boolean(rights & ACL_INSERT));
+    }
+    if (_wantprop(props, "mayRemoveItems")) {
+        json_object_set_new(mbox, "mayRemoveItems", json_boolean(rights & ACL_DELETEMSG));
+    }
+    if (_wantprop(props, "mayCreateChild")) {
+        json_object_set_new(mbox, "mayCreateChild", json_boolean(rights & ACL_CREATE));
+    }
+
+    if (_wantprop(props, "totalMessages")) {
+        json_object_set_new(mbox, "totalMessages", json_integer(sdata.messages));
+    }
+    if (_wantprop(props, "unreadMessages")) {
+        json_object_set_new(mbox, "unreadMessages", json_integer(sdata.unseen));
+    }
+    if (_wantprop(props, "totalThreads")) {
+        /* XXX */
+        json_object_set_new(mbox, "totalThreads", json_integer(0));
+    }
+    if (_wantprop(props, "unreadThreads")) {
+        /* XXX */
+        json_object_set_new(mbox, "unreadThreads", json_integer(0));
+    }
+    if (_wantprop(props, "mayRename")) {
+        int mayRename = rights & ACL_DELETEMBOX && parent_rights & ACL_CREATE;
+        json_object_set_new(mbox, "mayRename", json_boolean(mayRename));
+    }
+    if (_wantprop(props, "mayDelete")) {
+        int mayDelete = rights & ACL_DELETEMBOX && mailbox != inbox;
+        json_object_set_new(mbox, "mayDelete", json_boolean(mayDelete));
+    }
+    if (_wantprop(props, "role")) {
+        const char *role = NULL;
+        if (mailbox == inbox) {
+            role = "inbox";
+        }
+        json_object_set_new(mbox, "role", role ? json_string(role) : json_null());
+    }
+    if (_wantprop(props, "parentId")) {
+        json_object_set_new(mbox, "parentId", parent ?
+                json_string(parent->uniqueid) : json_null());
+    }
+
     json_array_append_new(list, mbox);
 
-    mailbox_close(&mailbox);
-
   done:
+    if (mailbox && mailbox != inbox) mailbox_close(&mailbox);
+    if (parent && parent != inbox) mailbox_close(&parent);
     if (mbentry) mboxlist_entry_free(&mbentry);
+    if (mbparent) mboxlist_entry_free(&mbparent);
     return 0;
 }
 
@@ -742,8 +836,33 @@ static int getMailboxes(struct jmap_req *req)
 
     /* Generate list of mailboxes */
     int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+    struct getMailboxes_rock rock;
+    rock.list = list;
+    rock.inbox = req->inbox;
+    rock.props = NULL;
+
+    /* Determine which properties to fetch. */
+    json_t *properties = json_object_get(req->args, "properties");
+    if (properties) {
+        rock.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(rock.props, json_array_size(properties), 0);
+        int i;
+        int size = json_array_size(properties);
+        for (i = 0; i < size; i++) {
+            const char *id = json_string_value(json_array_get(properties, i));
+            if (id == NULL) continue;
+            /* 1 == properties */
+            hash_insert(id, (void *)1, rock.props);
+        }
+    }
+
+    /* Process mailboxes. */
     mboxlist_findall(&jmap_namespace, "*", isadmin, httpd_userid,
-                     httpd_authstate, &getMailboxes_cb, list);
+                     httpd_authstate, &getMailboxes_cb, &rock);
+    if (rock.props) {
+        free_hash_table(rock.props, NULL);
+        free(rock.props);
+    }
 
     mailboxes = json_array_get(item, 1);
     json_object_set_new(mailboxes, "list", list);
