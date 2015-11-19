@@ -53,6 +53,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "xmalloc.h"
+
 #ifdef ENABLE_REGEX
 # ifdef HAVE_PCREPOSIX_H
 #  include <pcre.h>
@@ -243,6 +245,8 @@ struct buf {
 };
 #define BUF_INITIALIZER { NULL, 0, 0, 0 }
 
+#define buf_new() xmalloc(sizeof(struct buf))
+#define buf_destroy(b) do { buf_free((b)); free((b)); } while (0)
 #define buf_ensure(b, n) do { if ((b)->alloc < (b)->len + (n)) _buf_ensure((b), (n)); } while (0)
 #define buf_putc(b, c) do { buf_ensure((b), 1); (b)->s[(b)->len++] = (c); } while (0)
 
