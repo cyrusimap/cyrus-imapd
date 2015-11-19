@@ -680,7 +680,7 @@ sub test_setcontacts
     # Non-JMAP properties.
     $contact->{"x-importance"} = 0;
     $contact->{"x-hasPhoto"} = JSON::false;
-    $contact->{addressbookId} = 'Default';
+    $contact->{"x-addressbookId"} = 'Default';
 
     xlog "get contact $id";
     my $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
