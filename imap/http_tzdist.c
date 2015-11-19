@@ -247,8 +247,11 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
 
 static void tzdist_shutdown(void)
 {
+    struct leapsec *leap;
+
     zoneinfo_close(NULL);
 
+    while ((leap = ptrarray_pop(leap_seconds))) free(leap);
     ptrarray_free(leap_seconds);
 }
 
