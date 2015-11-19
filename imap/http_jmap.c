@@ -750,8 +750,19 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
     /* Build JMAP mailbox response. */
     mbox = json_pack("{s:s}", "id", mailbox->uniqueid);
     if (_wantprop(props, "name")) {
-        char *extname = mboxname_to_external(mboxname, &jmap_namespace, httpd_userid);
-        if (!extname) extname = xstrdup(mboxname);
+        char *extname;
+        if (mailbox != inbox) {
+            mbname_t *mbname = mbname_from_intname(mboxname);
+            if (!mbname) {
+                syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mboxname);
+                r = IMAP_INTERNAL;
+                goto done;
+            }
+            extname = mbname_pop_boxes(mbname);
+            mbname_free(&mbname);
+        } else {
+            extname = xstrdup("INBOX");
+        }
         json_object_set_new(mbox, "name", json_string(extname));
         free(extname);
     }
@@ -1352,7 +1363,6 @@ static int _add_group_entries(struct jmap_req *req,
     struct buf buf = BUF_INITIALIZER;
 
     for (index = 0; index < json_array_size(members); index++) {
-        syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXX Looking at array member: %zu => %s", index, json_string_value(json_array_get(members, index)));
         const char *item = _json_array_get_string(members, index);
         if (!item) {
             buf_printf(&buf, "contactIds[%zu]", index);
