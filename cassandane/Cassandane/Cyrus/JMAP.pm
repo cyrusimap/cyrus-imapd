@@ -1099,6 +1099,54 @@ sub test_getmailboxes
     $self->assert_num_equals($bar->{unreadThreads}, 0);
 }
 
+sub test_getmailboxes_specialuse
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Archive", "(USE (\\Archive))") || die;
+    $imaptalk->create("INBOX.Drafts", "(USE (\\Drafts))") || die;
+    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))") || die;
+    $imaptalk->create("INBOX.Sent", "(USE (\\Sent))") || die;
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
+
+    xlog "get mailboxes";
+    my $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'mailboxes');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $inbox = $m{"INBOX"};
+    my $archive = $m{"INBOX.Archive"};
+    my $drafts = $m{"INBOX.Drafts"};
+    my $junk = $m{"INBOX.Junk"};
+    my $sent = $m{"INBOX.Sent"};
+    my $trash = $m{"INBOX.Trash"};
+
+    $self->assert_str_equals($archive->{name}, "INBOX.Archive");
+    $self->assert_str_equals($archive->{parentId}, $inbox->{id});
+    $self->assert_str_equals($archive->{role}, "archive");
+
+    $self->assert_str_equals($drafts->{name}, "INBOX.Drafts");
+    $self->assert_str_equals($drafts->{parentId}, $inbox->{id});
+    $self->assert_str_equals($drafts->{role}, "drafts");
+
+    $self->assert_str_equals($junk->{name}, "INBOX.Junk");
+    $self->assert_str_equals($junk->{parentId}, $inbox->{id});
+    $self->assert_str_equals($junk->{role}, "junk");
+
+    $self->assert_str_equals($sent->{name}, "INBOX.Sent");
+    $self->assert_str_equals($sent->{parentId}, $inbox->{id});
+    $self->assert_str_equals($sent->{role}, "sent");
+
+    $self->assert_str_equals($trash->{name}, "INBOX.Trash");
+    $self->assert_str_equals($trash->{parentId}, $inbox->{id});
+    $self->assert_str_equals($trash->{role}, "trash");
+}
+
 
 sub test_getmailboxes_nocalendars
 {
