@@ -750,8 +750,10 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
     /* Build JMAP mailbox response. */
     mbox = json_pack("{s:s}", "id", mailbox->uniqueid);
     if (_wantprop(props, "name")) {
-        /* XXX should strip "user.<id>" prefix ? */
-        json_object_set_new(mbox, "name", json_string(mboxname));
+        char *extname = mboxname_to_external(mboxname, &jmap_namespace, httpd_userid);
+        if (!extname) extname = xstrdup(mboxname);
+        json_object_set_new(mbox, "name", json_string(extname));
+        free(extname);
     }
     if (_wantprop(props, "sortOrder")) {
         /* XXX */
