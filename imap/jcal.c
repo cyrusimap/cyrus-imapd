@@ -447,8 +447,9 @@ static json_t *icalcomponent_as_json_array(icalcomponent *comp)
 /*
  * Construct a jCal string for an iCalendar component.
  */
-char *icalcomponent_as_jcal_string(icalcomponent *ical, unsigned long *len)
+struct buf *icalcomponent_as_jcal_string(icalcomponent *ical)
 {
+    struct buf *ret;
     json_t *jcal;
     size_t flags = JSON_PRESERVE_ORDER;
     char *buf;
@@ -462,9 +463,10 @@ char *icalcomponent_as_jcal_string(icalcomponent *ical, unsigned long *len)
 
     json_decref(jcal);
 
-    if (len) *len = strlen(buf);
+    ret = buf_new();
+    buf_initm(ret, buf, strlen(buf));
 
-    return buf;
+    return ret;
 }
 
 
@@ -838,11 +840,12 @@ static icalcomponent *json_object_to_icalcomponent(json_t *jobj)
 /*
  * Construct an iCalendar component from a jCal string.
  */
-EXPORTED icalcomponent *jcal_string_as_icalcomponent(const char *str)
+EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
 {
     json_t *jcal;
     json_error_t jerr;
     icalcomponent *ical;
+    const char *str = buf_base(buf);
 
     if (!str) return NULL;
 

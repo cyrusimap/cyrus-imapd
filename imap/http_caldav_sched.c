@@ -508,7 +508,7 @@ int sched_busytime_query(struct transaction_t *txn,
 
             if (busy) {
                 xmlNodePtr cdata;
-                char *fb_str = mime->to_string(busy, NULL);
+                struct buf *fb_str = mime->from_object(busy);
                 icalcomponent_free(busy);
 
                 xmlNewChild(resp, NULL, BAD_CAST "request-status",
@@ -531,9 +531,10 @@ int sched_busytime_query(struct transaction_t *txn,
                                BAD_CAST mime->version);
 
                 xmlAddChild(cdata,
-                            xmlNewCDataBlock(root->doc, BAD_CAST fb_str,
-                                             strlen(fb_str)));
-                free(fb_str);
+                            xmlNewCDataBlock(root->doc,
+                                             BAD_CAST buf_base(fb_str),
+                                             buf_len(fb_str)));
+                buf_destroy(fb_str);
 
                 /* iCalendar data in response should not be transformed */
                 txn->flags.cc |= CC_NOTRANSFORM;
