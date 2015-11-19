@@ -801,6 +801,24 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         const char *role = NULL;
         if (mailbox == inbox) {
             role = "inbox";
+        } else {
+            struct buf attrib = BUF_INITIALIZER;
+            annotatemore_lookup(mbentry->name, "/specialuse", httpd_userid, &attrib);
+            if (attrib.len) {
+                const char *use = buf_cstring(&attrib);
+                if (!strcmp(use, "\\Archive")) {
+                    role = "archive";
+                } else if (!strcmp(use, "\\Drafts")) {
+                    role = "drafts";
+                } else if (!strcmp(use, "\\Junk")) {
+                    role = "junk";
+                } else if (!strcmp(use, "\\Sent")) {
+                    role = "sent";
+                } else if (!strcmp(use, "\\Trash")) {
+                    role = "trash";
+                }
+            }
+            buf_free(&attrib);
         }
         json_object_set_new(mbox, "role", role ? json_string(role) : json_null());
     }
