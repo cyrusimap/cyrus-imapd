@@ -699,7 +699,7 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
         free(mboxent);
     }
     else {
-        r = cyrusdb_delete(mbdb, name, strlen(name), NULL, /*force*/1);
+        r = cyrusdb_delete(mbdb, name, strlen(name), txn, /*force*/1);
     }
     return r;
 }
