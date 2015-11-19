@@ -1022,6 +1022,83 @@ sub test_setcontacts_state
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
 }
 
+sub test_getmailboxes
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.foo")
+        or die "Cannot create mailbox INBOX.foo: $@";
+
+    $imaptalk->create("INBOX.foo.bar")
+        or die "Cannot create mailbox INBOX.foo.bar: $@";
+
+    xlog "get existing mailboxes";
+    my $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'mailboxes');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar keys %m, 3);
+    my $inbox = $m{"user.cassandane"};
+    my $foo = $m{"user.cassandane.foo"};
+    my $bar = $m{"user.cassandane.foo.bar"};
+
+    # INBOX
+    $self->assert_str_equals($inbox->{name}, "user.cassandane");
+    $self->assert_null($inbox->{parentId});
+    $self->assert_str_equals($inbox->{role}, "inbox");
+    # XXX $self->assert_num_equals($inbox->{sortOrder}, 1);
+    # XXX $self->assert_equals($inbox->{mustBeOnlyMailbox}, JSON::false);
+    $self->assert_equals($inbox->{mayReadItems}, JSON::true);
+    $self->assert_equals($inbox->{mayAddItems}, JSON::true);
+    $self->assert_equals($inbox->{mayRemoveItems}, JSON::true);
+    $self->assert_equals($inbox->{mayCreateChild}, JSON::true);
+    $self->assert_equals($inbox->{mayRename}, JSON::false);
+    $self->assert_equals($inbox->{mayDelete}, JSON::false);
+    $self->assert_num_equals($inbox->{totalMessages}, 0);
+    $self->assert_num_equals($inbox->{unreadMessages}, 0);
+    $self->assert_num_equals($inbox->{totalThreads}, 0);
+    $self->assert_num_equals($inbox->{unreadThreads}, 0);
+
+    # INBOX.foo
+    $self->assert_str_equals($foo->{name}, "user.cassandane.foo");
+    $self->assert_str_equals($foo->{parentId}, $inbox->{id});
+    $self->assert_null($foo->{role});
+    # XXX $self->assert_num_equals($foo->{sortOrder}, 1);
+    # XXX $self->assert_equals($foo->{mustBeOnlyMailbox}, JSON::false);
+    $self->assert_equals($foo->{mayReadItems}, JSON::true);
+    $self->assert_equals($foo->{mayAddItems}, JSON::true);
+    $self->assert_equals($foo->{mayRemoveItems}, JSON::true);
+    $self->assert_equals($foo->{mayCreateChild}, JSON::true);
+    $self->assert_equals($foo->{mayRename}, JSON::true);
+    $self->assert_equals($foo->{mayDelete}, JSON::true);
+    $self->assert_num_equals($foo->{totalMessages}, 0);
+    $self->assert_num_equals($foo->{unreadMessages}, 0);
+    $self->assert_num_equals($foo->{totalThreads}, 0);
+    $self->assert_num_equals($foo->{unreadThreads}, 0);
+
+    # INBOX.foo.bar
+    $self->assert_str_equals($bar->{name}, "user.cassandane.foo.bar");
+    $self->assert_str_equals($bar->{parentId}, $foo->{id});
+    $self->assert_null($bar->{role});
+    # XXX $self->assert_num_equals($bar->{sortOrder}, 1);
+    # XXX $self->assert_equals($bar->{mustBeOnlyMailbox}, JSON::false);
+    $self->assert_equals($bar->{mayReadItems}, JSON::true);
+    $self->assert_equals($bar->{mayAddItems}, JSON::true);
+    $self->assert_equals($bar->{mayRemoveItems}, JSON::true);
+    $self->assert_equals($bar->{mayCreateChild}, JSON::true);
+    $self->assert_equals($bar->{mayRename}, JSON::true);
+    $self->assert_equals($bar->{mayDelete}, JSON::true);
+    $self->assert_num_equals($bar->{totalMessages}, 0);
+    $self->assert_num_equals($bar->{unreadMessages}, 0);
+    $self->assert_num_equals($bar->{totalThreads}, 0);
+    $self->assert_num_equals($bar->{unreadThreads}, 0);
+}
+
 
 sub test_getmailboxes_nocalendars
 {
