@@ -1153,6 +1153,32 @@ sub test_getmailboxes_specialuse
     $self->assert_str_equals($trash->{sortOrder}, 2);
 }
 
+sub test_getmailboxes_properties
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get mailboxes with name property";
+    my $res = $jmap->Request([['getMailboxes', { properties => ["name"]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'mailboxes');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+    $self->assert_num_equals(scalar keys %{$inbox}, 2); # id and name
+
+    xlog "get mailboxes with erroneous property";
+    $res = $jmap->Request([['getMailboxes', { properties => ["name", 123]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my $err = $res->[0][1];
+    $self->assert_str_equals($err->{type}, "invalidArguments");
+    $self->assert_str_equals($err->{arguments}[0], "properties");
+}
 
 sub test_getmailboxes_nocalendars
 {
