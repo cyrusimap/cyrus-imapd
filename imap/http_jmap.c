@@ -884,8 +884,8 @@ static int getMailboxes(struct jmap_req *req)
         int i;
         int size = json_array_size(properties);
         for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) {
+            const char *prop = json_string_value(json_array_get(properties, i));
+            if (prop == NULL) {
                 json_t *err = json_pack("{s:s, s:[s]}",
                         "type", "invalidArguments", "arguments", "properties");
                 json_array_append_new(req->response, json_pack("[s,o,s]",
@@ -893,7 +893,7 @@ static int getMailboxes(struct jmap_req *req)
                 goto done;
             }
             /* 1 == properties */
-            hash_insert(id, (void *)1, rock.props);
+            hash_insert(prop, (void *)1, rock.props);
         }
     }
 
@@ -901,7 +901,30 @@ static int getMailboxes(struct jmap_req *req)
     mailboxes = json_array_get(item, 1);
     json_t *want = json_object_get(req->args, "ids");
     if (want && want != json_null()) {
-        /* XXX */
+        size_t i;
+        json_t *val, *notFound = json_pack("[]");
+        json_array_foreach(want, i, val) {
+            size_t rows = json_array_size(rock.list);
+            const char *id = json_string_value(val);
+            if (id == NULL) {
+                json_t *err = json_pack("{s:s, s:[s]}",
+                        "type", "invalidArguments", "arguments", "ids");
+                json_array_append_new(req->response, json_pack("[s,o,s]",
+                            "error", err, req->tag));
+                json_decref(notFound);
+                goto done;
+            }
+            /* getMailboxes_cb filters mailboxes without lookup permission. */
+            int r = mboxlist_mboxtree(id, &getMailboxes_cb, &rock, MBOXTREE_SKIP_CHILDREN);
+            if (r) {
+                json_decref(notFound);
+                goto done;
+            }
+            if (rows == json_array_size(rock.list)) {
+                json_array_append_new(notFound, json_string(id));
+            }
+        }
+        json_object_set_new(mailboxes, "notFound", notFound);
     } else {
         mboxlist_usermboxtree(req->userid, &getMailboxes_cb, &rock, 0 /*flags*/);
         json_object_set_new(mailboxes, "notFound", json_null());
