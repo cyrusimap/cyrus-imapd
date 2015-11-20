@@ -670,14 +670,11 @@ struct getMailboxes_rock {
     hash_table *props;           /* Which properties to fetch. */
 };
 
-/* mboxlist_findall() callback to list mailboxes */
-int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
-                    int maycreate __attribute__((unused)),
-                    void *vrock)
+int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getMailboxes_rock *rock = (struct getMailboxes_rock *) vrock;
     json_t *list = (json_t *) rock->list, *mbox;
-    struct mboxlist_entry *mbentry = NULL, *mbparent = NULL;
+    struct mboxlist_entry *mbparent = NULL;
     struct mailbox *mailbox = NULL, *parent = NULL;
     const struct mailbox *inbox = rock->inbox;
     int r = 0, rights, parent_rights = 0;
@@ -685,17 +682,7 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
     struct statusdata sdata;
     hash_table *props = rock->props;
     struct buf specialuse = BUF_INITIALIZER;
-
-    /* Check ACL on mailbox for current user */
-    if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
-        syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-               mboxname, error_message(r));
-        goto done;
-    }
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
-    if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) {
-        goto done;
-    }
+    const char *mboxname = mbentry->name;
 
     /* Don't list special-purpose mailboxes. */
     if ((mbentry->mbtype & MBTYPE_DELETED) ||
@@ -703,6 +690,12 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         (mbentry->mbtype & MBTYPE_CALENDAR) ||
         (mbentry->mbtype & MBTYPE_COLLECTION) ||
         (mbentry->mbtype & MBTYPE_ADDRESSBOOK)) {
+        goto done;
+    }
+
+    /* Check ACL on mailbox for current user */
+    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) {
         goto done;
     }
 
@@ -856,7 +849,6 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
   done:
     if (mailbox && mailbox != inbox) mailbox_close(&mailbox);
     if (parent && parent != inbox) mailbox_close(&parent);
-    if (mbentry) mboxlist_entry_free(&mbentry);
     if (mbparent) mboxlist_entry_free(&mbparent);
     buf_free(&specialuse);
     return 0;
@@ -867,7 +859,6 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
 static int getMailboxes(struct jmap_req *req)
 {
     json_t *item = NULL, *mailboxes, *state;
-    int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
     struct getMailboxes_rock rock;
     rock.list = NULL;
     rock.inbox = req->inbox;
@@ -912,8 +903,7 @@ static int getMailboxes(struct jmap_req *req)
     if (want && want != json_null()) {
         /* XXX */
     } else {
-        mboxlist_findall(&jmap_namespace, "*", isadmin, httpd_userid,
-                httpd_authstate, &getMailboxes_cb, &rock);
+        mboxlist_usermboxtree(req->userid, &getMailboxes_cb, &rock, 0 /*flags*/);
         json_object_set_new(mailboxes, "notFound", json_null());
     }
     json_object_set(mailboxes, "list", rock.list);
