@@ -770,7 +770,7 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         /* XXX */
     }
     if (_wantprop(props, "mustBeOnlyMailbox")) {
-        /* XXX */
+        json_object_set_new(mbox, "mustBeOnlyMailbox", json_true());
     }
 
     if (_wantprop(props, "mayReadItems")) {
