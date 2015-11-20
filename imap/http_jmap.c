@@ -838,9 +838,9 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
     }
     if (_wantprop(props, "parentId")) {
         /* XXX Keep both uniqueid and mailbox name for now. */
-        json_object_set_new(mbox, "x-parent-uniqueid", parent ?
+        json_object_set_new(mbox, "x-parent-uniqueid", parent && parent != inbox ?
                 json_string(parent->uniqueid) : json_null());
-        json_object_set_new(mbox, "parentId", parent ?
+        json_object_set_new(mbox, "parentId", parent && parent != inbox ?
                 json_string(parent->name) : json_null());
     }
 
