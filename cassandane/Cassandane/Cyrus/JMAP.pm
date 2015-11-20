@@ -1044,12 +1044,12 @@ sub test_getmailboxes
 
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     $self->assert_num_equals(scalar keys %m, 3);
-    my $inbox = $m{"INBOX"};
+    my $inbox = $m{"Inbox"};
     my $foo = $m{"foo"};
     my $bar = $m{"bar"};
 
     # INBOX
-    $self->assert_str_equals($inbox->{name}, "INBOX");
+    $self->assert_str_equals($inbox->{name}, "Inbox");
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals($inbox->{role}, "inbox");
     # XXX $self->assert_num_equals($inbox->{sortOrder}, 1);
@@ -1120,7 +1120,7 @@ sub test_getmailboxes_specialuse
     $self->assert_str_equals($res->[0][2], 'R1');
 
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    my $inbox = $m{"INBOX"};
+    my $inbox = $m{"Inbox"};
     my $archive = $m{"Archive"};
     my $drafts = $m{"Drafts"};
     my $junk = $m{"Junk"};
