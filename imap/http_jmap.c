@@ -752,7 +752,10 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
     annotatemore_lookup(mbentry->name, "/specialuse", httpd_userid, &specialuse);
 
     /* Build JMAP mailbox response. */
-    mbox = json_pack("{s:s}", "id", mailbox->uniqueid);
+    mbox = json_pack("{}");
+    /* XXX Keep uniqueid until we decided on unique vs. mboxname */
+    json_object_set_new(mbox, "x-uniqueid", json_string(mailbox->uniqueid));
+    json_object_set_new(mbox, "id", json_string(mailbox->name));
     if (_wantprop(props, "name")) {
         char *extname;
         if (mailbox != inbox) {
@@ -841,8 +844,11 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         json_object_set_new(mbox, "sortOrder", json_integer(sortOrder));
     }
     if (_wantprop(props, "parentId")) {
-        json_object_set_new(mbox, "parentId", parent ?
+        /* XXX Keep both uniqueid and mailbox name for now. */
+        json_object_set_new(mbox, "x-parent-uniqueid", parent ?
                 json_string(parent->uniqueid) : json_null());
+        json_object_set_new(mbox, "parentId", parent ?
+                json_string(parent->name) : json_null());
     }
 
     json_array_append_new(list, mbox);
