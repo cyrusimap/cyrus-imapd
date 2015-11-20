@@ -684,6 +684,7 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     struct statusdata sdata;
     hash_table *props = rock->props;
+    struct buf specialuse = BUF_INITIALIZER;
 
     /* Check ACL on mailbox for current user */
     if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
@@ -747,6 +748,9 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         }
     }
 
+    /* Determine special use annotation. */
+    annotatemore_lookup(mbentry->name, "/specialuse", httpd_userid, &specialuse);
+
     /* Build JMAP mailbox response. */
     mbox = json_pack("{s:s}", "id", mailbox->uniqueid);
     if (_wantprop(props, "name")) {
@@ -765,9 +769,6 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         }
         json_object_set_new(mbox, "name", json_string(extname));
         free(extname);
-    }
-    if (_wantprop(props, "sortOrder")) {
-        /* XXX */
     }
     if (_wantprop(props, "mustBeOnlyMailbox")) {
         json_object_set_new(mbox, "mustBeOnlyMailbox", json_true());
@@ -812,26 +813,32 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
         const char *role = NULL;
         if (mailbox == inbox) {
             role = "inbox";
-        } else {
-            struct buf attrib = BUF_INITIALIZER;
-            annotatemore_lookup(mbentry->name, "/specialuse", httpd_userid, &attrib);
-            if (attrib.len) {
-                const char *use = buf_cstring(&attrib);
-                if (!strcmp(use, "\\Archive")) {
-                    role = "archive";
-                } else if (!strcmp(use, "\\Drafts")) {
-                    role = "drafts";
-                } else if (!strcmp(use, "\\Junk")) {
-                    role = "junk";
-                } else if (!strcmp(use, "\\Sent")) {
-                    role = "sent";
-                } else if (!strcmp(use, "\\Trash")) {
-                    role = "trash";
-                }
+        } else if (specialuse.len) {
+            const char *use = buf_cstring(&specialuse);
+            if (!strcmp(use, "\\Archive")) {
+                role = "archive";
+            } else if (!strcmp(use, "\\Drafts")) {
+                role = "drafts";
+            } else if (!strcmp(use, "\\Junk")) {
+                role = "junk";
+            } else if (!strcmp(use, "\\Sent")) {
+                role = "sent";
+            } else if (!strcmp(use, "\\Trash")) {
+                role = "trash";
             }
-            buf_free(&attrib);
         }
         json_object_set_new(mbox, "role", role ? json_string(role) : json_null());
+    }
+    if (_wantprop(props, "sortOrder")) {
+        int sortOrder;
+        if (mailbox == inbox) {
+            sortOrder = 1;
+        } else if (specialuse.len) {
+            sortOrder = 2;
+        } else {
+            sortOrder = 3;
+        }
+        json_object_set_new(mbox, "sortOrder", json_integer(sortOrder));
     }
     if (_wantprop(props, "parentId")) {
         json_object_set_new(mbox, "parentId", parent ?
@@ -845,6 +852,7 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
     if (parent && parent != inbox) mailbox_close(&parent);
     if (mbentry) mboxlist_entry_free(&mbentry);
     if (mbparent) mboxlist_entry_free(&mbparent);
+    buf_free(&specialuse);
     return 0;
 }
 
