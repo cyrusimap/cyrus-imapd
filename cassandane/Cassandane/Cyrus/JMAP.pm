@@ -1052,7 +1052,7 @@ sub test_getmailboxes
     $self->assert_str_equals($inbox->{name}, "Inbox");
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals($inbox->{role}, "inbox");
-    # XXX $self->assert_num_equals($inbox->{sortOrder}, 1);
+    $self->assert_num_equals($inbox->{sortOrder}, 1);
     $self->assert_equals($inbox->{mustBeOnlyMailbox}, JSON::true);
     $self->assert_equals($inbox->{mayReadItems}, JSON::true);
     $self->assert_equals($inbox->{mayAddItems}, JSON::true);
@@ -1069,7 +1069,7 @@ sub test_getmailboxes
     $self->assert_str_equals($foo->{name}, "foo");
     $self->assert_str_equals($foo->{parentId}, $inbox->{id});
     $self->assert_null($foo->{role});
-    # XXX $self->assert_num_equals($foo->{sortOrder}, 1);
+    $self->assert_num_equals($foo->{sortOrder}, 3);
     $self->assert_equals($foo->{mustBeOnlyMailbox}, JSON::true);
     $self->assert_equals($foo->{mayReadItems}, JSON::true);
     $self->assert_equals($foo->{mayAddItems}, JSON::true);
@@ -1086,7 +1086,7 @@ sub test_getmailboxes
     $self->assert_str_equals($bar->{name}, "bar");
     $self->assert_str_equals($bar->{parentId}, $foo->{id});
     $self->assert_null($bar->{role});
-    # XXX $self->assert_num_equals($bar->{sortOrder}, 1);
+    $self->assert_num_equals($bar->{sortOrder}, 3);
     $self->assert_equals($bar->{mustBeOnlyMailbox}, JSON::true);
     $self->assert_equals($bar->{mayReadItems}, JSON::true);
     $self->assert_equals($bar->{mayAddItems}, JSON::true);
@@ -1130,22 +1130,27 @@ sub test_getmailboxes_specialuse
     $self->assert_str_equals($archive->{name}, "Archive");
     $self->assert_str_equals($archive->{parentId}, $inbox->{id});
     $self->assert_str_equals($archive->{role}, "archive");
+    $self->assert_str_equals($archive->{sortOrder}, 2);
 
     $self->assert_str_equals($drafts->{name}, "Drafts");
     $self->assert_str_equals($drafts->{parentId}, $inbox->{id});
     $self->assert_str_equals($drafts->{role}, "drafts");
+    $self->assert_str_equals($drafts->{sortOrder}, 2);
 
     $self->assert_str_equals($junk->{name}, "Junk");
     $self->assert_str_equals($junk->{parentId}, $inbox->{id});
     $self->assert_str_equals($junk->{role}, "junk");
+    $self->assert_str_equals($junk->{sortOrder}, 2);
 
     $self->assert_str_equals($sent->{name}, "Sent");
     $self->assert_str_equals($sent->{parentId}, $inbox->{id});
     $self->assert_str_equals($sent->{role}, "sent");
+    $self->assert_str_equals($sent->{sortOrder}, 2);
 
     $self->assert_str_equals($trash->{name}, "Trash");
     $self->assert_str_equals($trash->{parentId}, $inbox->{id});
     $self->assert_str_equals($trash->{role}, "trash");
+    $self->assert_str_equals($trash->{sortOrder}, 2);
 }
 
 
