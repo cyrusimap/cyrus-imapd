@@ -761,7 +761,7 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
             extname = mbname_pop_boxes(mbname);
             mbname_free(&mbname);
         } else {
-            extname = xstrdup("INBOX");
+            extname = xstrdup("Inbox");
         }
         json_object_set_new(mbox, "name", json_string(extname));
         free(extname);
