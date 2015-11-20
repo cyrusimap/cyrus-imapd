@@ -1180,6 +1180,43 @@ sub test_getmailboxes_properties
     $self->assert_str_equals($err->{arguments}[0], "properties");
 }
 
+sub test_getmailboxes_ids
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.foo") || die;
+
+    xlog "get all mailboxes";
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'mailboxes');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $inbox = $m{"Inbox"};
+    my $foo = $m{"foo"};
+    $self->assert_not_null($inbox);
+    $self->assert_not_null($foo);
+
+    xlog "get foo and unknown mailbox";
+    $res = $jmap->Request([['getMailboxes', { ids => [$foo->{id}, "nope"] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{id}, $foo->{id});
+    $self->assert_str_equals($res->[0][1]{notFound}[0], "nope");
+
+    xlog "get mailbox with erroneous id";
+    $res = $jmap->Request([['getMailboxes', { ids => [123]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my $err = $res->[0][1];
+    $self->assert_str_equals($err->{type}, "invalidArguments");
+    $self->assert_str_equals($err->{arguments}[0], "ids");
+}
+
 sub test_getmailboxes_nocalendars
 {
     my ($self) = @_;
