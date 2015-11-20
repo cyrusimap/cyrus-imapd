@@ -1167,7 +1167,7 @@ sub test_getmailboxes_properties
 
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals($inbox->{name}, "Inbox");
-    $self->assert_num_equals(scalar keys %{$inbox}, 2); # id and name
+    $self->assert_num_equals(scalar keys %{$inbox}, 3); # id and name, and x-uniqueid
 
     xlog "get mailboxes with erroneous property";
     $res = $jmap->Request([['getMailboxes', { properties => ["name", 123]}, "R1"]]);
