@@ -3262,7 +3262,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
 {
     hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
-    time_t since;
+    time_t since = 0;
 
     /* Step 1 */
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
@@ -3273,10 +3273,9 @@ EXPORTED int check_precond(struct transaction_t *txn,
 
     /* Step 2 */
     else if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
-        if (time_from_rfc822(hdr[0], &since))
-            return HTTP_BAD_REQUEST;
+        if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
 
-        if (since && (lastmod > since)) return HTTP_PRECOND_FAILED;
+        if (lastmod > since) return HTTP_PRECOND_FAILED;
 
         /* Continue to step 3 */
     }
@@ -3296,8 +3295,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
     /* Step 4 */
     else if ((txn->meth == METH_GET || txn->meth == METH_HEAD) &&
              (hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
-        if (time_from_rfc822(hdr[0], &since))
-            return HTTP_BAD_REQUEST;
+        if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
 
         if (lastmod <= since) return HTTP_NOT_MODIFIED;
 
