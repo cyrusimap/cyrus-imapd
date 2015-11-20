@@ -860,7 +860,12 @@ int getMailboxes_cb(const char *mboxname, int matchlen __attribute__((unused)),
 /* Execute a getMailboxes message */
 static int getMailboxes(struct jmap_req *req)
 {
-    json_t *item, *mailboxes, *list, *state;
+    json_t *item = NULL, *mailboxes, *state;
+    int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+    struct getMailboxes_rock rock;
+    rock.list = NULL;
+    rock.inbox = req->inbox;
+    rock.props = NULL;
 
     /* Determine current state. */
     state = jmap_getstate(0 /* MBTYPE */, req);
@@ -871,14 +876,8 @@ static int getMailboxes(struct jmap_req *req)
                      "state", state,
                      req->tag);
 
-    list = json_array();
-
     /* Generate list of mailboxes */
-    int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-    struct getMailboxes_rock rock;
-    rock.list = list;
-    rock.inbox = req->inbox;
-    rock.props = NULL;
+    rock.list = json_array();
 
     /* Determine which properties to fetch. */
     json_t *properties = json_object_get(req->args, "properties");
@@ -889,28 +888,39 @@ static int getMailboxes(struct jmap_req *req)
         int size = json_array_size(properties);
         for (i = 0; i < size; i++) {
             const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) continue;
+            if (id == NULL) {
+                json_t *err = json_pack("{s:s, s:[s]}",
+                        "type", "invalidArguments", "arguments", "properties");
+                json_array_append_new(req->response, json_pack("[s,o,s]",
+                            "error", err, req->tag));
+                goto done;
+            }
             /* 1 == properties */
             hash_insert(id, (void *)1, rock.props);
         }
     }
 
     /* Process mailboxes. */
-    mboxlist_findall(&jmap_namespace, "*", isadmin, httpd_userid,
-                     httpd_authstate, &getMailboxes_cb, &rock);
+    mailboxes = json_array_get(item, 1);
+    json_t *want = json_object_get(req->args, "ids");
+    if (want && want != json_null()) {
+        /* XXX */
+    } else {
+        mboxlist_findall(&jmap_namespace, "*", isadmin, httpd_userid,
+                httpd_authstate, &getMailboxes_cb, &rock);
+        json_object_set_new(mailboxes, "notFound", json_null());
+    }
+    json_object_set(mailboxes, "list", rock.list);
+
+    json_array_append(req->response, item);
+
+done:
+    if (item) json_decref(item);
+    if (rock.list) json_decref(rock.list);
     if (rock.props) {
         free_hash_table(rock.props, NULL);
         free(rock.props);
     }
-
-    mailboxes = json_array_get(item, 1);
-    json_object_set_new(mailboxes, "list", list);
-
-    /* xxx - args */
-    json_object_set_new(mailboxes, "notFound", json_null());
-
-    json_array_append_new(req->response, item);
-
     return 0;
 }
 
