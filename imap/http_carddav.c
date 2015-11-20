@@ -129,22 +129,22 @@ static int report_card_query(struct transaction_t *txn,
                              struct meth_params *rparams,
                              xmlNodePtr inroot, struct propfind_ctx *fctx);
 
-static char *vparser_as_vcard_string_r(struct vparse_state *vparser,
-                                       unsigned long *len)
+static struct buf *vparser_as_vcard_string_r(struct vparse_state *vparser)
 {
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vparser->card, &buf);
-    if (len) *len = buf_len(&buf);
-    return buf_release(&buf);
+    struct buf *buf = buf_new();
+
+    vparse_tobuf(vparser->card, buf);
+
+    return buf;
 }
 
-static struct vparse_state *vcard_string_as_vparser(const char *str)
+static struct vparse_state *vcard_string_as_vparser(const struct buf *buf)
 {
     struct vparse_state *vparser;
     int vr;
 
     vparser = (struct vparse_state *) xzmalloc(sizeof(struct vparse_state));
-    vparser->base = str;
+    vparser->base = buf_base(buf);
     vparse_set_multival(vparser, "adr");
     vparse_set_multival(vparser, "org");
     vparse_set_multival(vparser, "n");
@@ -162,8 +162,8 @@ static void free_vparser(void *vparser) {
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
-      (char* (*)(void *, unsigned long *)) &vparser_as_vcard_string_r,
-      (void * (*)(const char*)) &vcard_string_as_vparser,
+      (struct buf* (*)(void *)) &vparser_as_vcard_string_r,
+      (void * (*)(const struct buf*)) &vcard_string_as_vparser,
       (void (*)(void *)) &free_vparser, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }

@@ -244,19 +244,19 @@ static void end_icalendar(struct buf *buf);
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
-      (char* (*)(void *, unsigned long *)) &my_icalcomponent_as_ical_string,
-      (void * (*)(const char*)) &icalparser_parse_string,
+      (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
+      (void * (*)(const struct buf*)) &ical_string_as_icalcomponent,
       (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (char* (*)(void *, unsigned long *)) &icalcomponent_as_xcal_string,
-      (void * (*)(const char*)) &xcal_string_as_icalcomponent,
+      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
+      (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
       NULL, &begin_xcal, &end_xcal
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
-      (char* (*)(void *, unsigned long *)) &icalcomponent_as_jcal_string,
-      (void * (*)(const char*)) &jcal_string_as_icalcomponent,
+      (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
+      (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
 #endif
@@ -1182,6 +1182,15 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
         webdav_close(webdavdb);
         mailbox_close(&attachments);
+
+        /* XXX  Relock index so that delete of calendar resource will succeed.
+           Remove this call when mailbox_unlock_index() above is removed. */
+        r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+        if (r) {
+            syslog(LOG_ERR, "relock index(%s) failed: %s",
+                   mailbox->name, error_message(r));
+            goto done;
+        }
     }
 
     if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
@@ -1365,7 +1374,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
                  comp;
                  comp = icalcomponent_get_next_component(ical,
                                                          ICAL_ANY_COMPONENT)) {
-                char *cal_str;
+                struct buf *cal_str;
                 icalcomponent_kind kind = icalcomponent_isa(comp);
 
                 /* Don't duplicate any TZIDs in our iCalendar */
@@ -1386,9 +1395,9 @@ static int dump_calendar(struct transaction_t *txn, int rights)
                     buf_printf_markup(buf, 0, sep);
                     write_body(0, txn, buf_cstring(buf), buf_len(buf));
                 }
-                cal_str = mime->to_string(comp, NULL);
-                write_body(0, txn, cal_str, strlen(cal_str));
-                free(cal_str);
+                cal_str = mime->from_object(comp);
+                write_body(0, txn, buf_base(cal_str), buf_len(cal_str));
+                buf_destroy(cal_str);
             }
 
             icalcomponent_free(ical);
@@ -2343,17 +2352,17 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                                 txn->req_tgt.resource, caldavdb, 0);
 
     if (ret == HTTP_NO_CONTENT && return_rep) {
-        char *data;
+        struct buf *data;
 
         ret = (op == ATTACH_ADD) ? HTTP_CREATED : HTTP_OK;
 
       return_rep:
         /* Convert into requested MIME type */
-        data = mime->to_string(ical, NULL);
+        data = mime->from_object(ical);
 
         /* Fill in Content-Type, Content-Length */
         resp_body->type = mime->content_type;
-        resp_body->len = strlen(data);
+        resp_body->len = buf_len(data);
 
         /* Fill in Content-Location */
         resp_body->loc = txn->req_tgt.path;
@@ -2365,9 +2374,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             | CC_NOTRANSFORM;           /* don't alter iCal data */
 
         /* Output current representation */
-        write_body(ret, txn, data, resp_body->len);
+        write_body(ret, txn, buf_base(data), buf_len(data));
 
-        free(data);
+        buf_destroy(data);
         ret = 0;
     }
 
@@ -2422,7 +2431,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     }
 
     /* Parse the iCal data for important properties */
-    ical = mime->from_string(buf_cstring(&txn->req_body.payload));
+    ical = mime->to_object(&txn->req_body.payload);
     if (!ical || !icalrestriction_check(ical)) {
         txn->error.precond = CALDAV_VALID_DATA;
         ret = HTTP_BAD_REQUEST;
@@ -4098,12 +4107,14 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
         }
         else if (set) {
             icalcomponent *ical = NULL;
+            struct buf buf;
 
             freeme = xmlNodeGetContent(prop);
             tz = (const char *) freeme;
 
             /* Parse and validate the iCal data */
-            ical = mime->from_string(tz);
+            buf_init_ro_cstr(&buf, tz);
+            ical = mime->to_object(&buf);
             if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
                 xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                              &propstat[PROPSTAT_FORBID],
@@ -4257,12 +4268,14 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
         }
         else if (set) {
             icalcomponent *ical = NULL;
+            struct buf buf;
 
             freeme = xmlNodeGetContent(prop);
             avail = (const char *) freeme;
 
             /* Parse and validate the iCal data */
-            ical = mime->from_string(avail);
+            buf_init_ro_cstr(&buf, avail);
+            ical = mime->to_object(&buf);
             if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
                 xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                              &propstat[PROPSTAT_FORBID],
@@ -5115,7 +5128,7 @@ static int report_fb_query(struct transaction_t *txn,
 
     if (cal) {
         /* Output the iCalendar object as text/calendar */
-        char *cal_str = mime->to_string(cal, NULL);
+        struct buf *cal_str = mime->from_object(cal);
         icalcomponent_free(cal);
 
         txn->resp_body.type = mime->content_type;
@@ -5123,8 +5136,8 @@ static int report_fb_query(struct transaction_t *txn,
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
 
-        write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
-        free(cal_str);
+        write_body(HTTP_OK, txn, buf_base(cal_str), buf_len(cal_str));
+        buf_destroy(cal_str);
     }
     else ret = HTTP_NOT_FOUND;
 
@@ -5317,16 +5330,16 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 static struct mime_type_t freebusy_mime_types[] = {
     /* First item MUST be the default type */
     { "text/calendar; charset=utf-8", "2.0", "ifb",
-      (char* (*)(void *, unsigned long *)) &my_icalcomponent_as_ical_string,
+      (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
       NULL, NULL, NULL, NULL
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xfb",
-      (char* (*)(void *, unsigned long *)) &icalcomponent_as_xcal_string,
+      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jfb",
-      (char* (*)(void *, unsigned long *)) &icalcomponent_as_jcal_string,
+      (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       NULL, NULL, NULL, NULL
     },
 #endif
@@ -5477,7 +5490,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
         const char *proto, *host;
         icalcomponent *fb;
         icalproperty *url;
-        char *cal_str;
+        struct buf *cal_str;
 
         /* Construct URL */
         buf_reset(&txn->buf);
@@ -5504,11 +5517,11 @@ static int meth_get_head_fb(struct transaction_t *txn,
         txn->flags.cc |= CC_NOTRANSFORM;
 
         /* Output the iCalendar object */
-        cal_str = mime->to_string(cal, NULL);
+        cal_str = mime->from_object(cal);
         icalcomponent_free(cal);
 
-        write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
-        free(cal_str);
+        write_body(HTTP_OK, txn, buf_base(cal_str), buf_len(cal_str));
+        buf_destroy(cal_str);
     }
     else ret = HTTP_NOT_FOUND;
 

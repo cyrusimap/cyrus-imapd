@@ -1045,9 +1045,17 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 
         if (mime != mime_types) {
             /* Not the storage format - convert into requested MIME type */
-            void *obj = mime_types->from_string(data);
+            struct buf inbuf, *outbuf;
+            void *obj;
 
-            data = freeme = mime->to_string(obj, &datalen);
+            buf_init_ro(&inbuf, data, datalen);
+            obj = mime_types->to_object(&inbuf);
+
+            outbuf = mime->from_object(obj);
+            datalen = buf_len(outbuf);
+            data = freeme = buf_release(outbuf);
+            buf_destroy(outbuf);
+
             mime_types->free(obj);
         }
 
@@ -3129,7 +3137,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     time_t lastmod = 0;
     unsigned meth_move = (txn->meth == METH_MOVE);
     void *src_davdb = NULL, *dest_davdb = NULL, *obj = NULL;
-    struct buf msg_buf = BUF_INITIALIZER;
+    struct buf msg_buf = BUF_INITIALIZER, body_buf;
 
     memset(&dest_tgt, 0, sizeof(struct request_target_t));
 
@@ -3322,8 +3330,9 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Load message containing the resource and parse data */
     mailbox_map_record(src_mbox, &src_rec, &msg_buf);
-    obj = cparams->mime_types[0].from_string(buf_base(&msg_buf) +
-                                             src_rec.header_size);
+    buf_init_ro(&body_buf, buf_base(&msg_buf) + src_rec.header_size,
+                buf_len(&msg_buf) - src_rec.header_size);
+    obj = cparams->mime_types[0].to_object(&body_buf);
     buf_free(&msg_buf);
 
     if (!meth_move) {
@@ -3819,9 +3828,17 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
             if (mime != gparams->mime_types) {
                 /* Not the storage format - convert into requested MIME type */
-                void *obj = gparams->mime_types[0].from_string(data);
+                struct buf inbuf, *outbuf;
+                void *obj;
 
-                data = freeme = mime->to_string(obj, &datalen);
+                buf_init_ro(&inbuf, data, datalen);
+                obj = gparams->mime_types[0].to_object(&inbuf);
+
+                outbuf = mime->from_object(obj);
+                datalen = buf_len(outbuf);
+                data = freeme = buf_release(outbuf);
+                buf_destroy(outbuf);
+
                 gparams->mime_types[0].free(obj);
             }
         }
@@ -5060,13 +5077,14 @@ int meth_put(struct transaction_t *txn, void *params)
     switch (precond) {
     case HTTP_OK:
         /* Parse, validate, and store the resource */
-        obj = mime->from_string(buf_cstring(&txn->req_body.payload));
+        obj = mime->to_object(&txn->req_body.payload);
         ret = pparams->put.proc(txn, obj, mailbox, txn->req_tgt.resource, davdb);
         break;
 
     case HTTP_PRECOND_FAILED:
         if (flags & PREFER_REP) {
             unsigned offset;
+            struct buf buf;
 
             /* Load message containing the resource */
             mailbox_map_record(mailbox, &oldrecord, &msg_buf);
@@ -5075,8 +5093,9 @@ int meth_put(struct transaction_t *txn, void *params)
             offset = oldrecord.header_size;
 
             /* Parse existing resource */
-            obj =
-                pparams->mime_types[0].from_string(buf_base(&msg_buf) + offset);
+            buf_init_ro(&buf, buf_base(&msg_buf) + offset,
+                        buf_len(&msg_buf) - offset);
+            obj = pparams->mime_types[0].to_object(&buf);
 
             /* Fill in ETag and Last-Modified */
             txn->resp_body.etag = etag;
@@ -5096,8 +5115,7 @@ int meth_put(struct transaction_t *txn, void *params)
     if (flags & PREFER_REP) {
         struct resp_body_t *resp_body = &txn->resp_body;
         const char **hdr;
-        char *data;
-        unsigned long datalen;
+        struct buf *data;
 
         if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
             mime = get_accept_type(hdr, pparams->mime_types);
@@ -5111,11 +5129,11 @@ int meth_put(struct transaction_t *txn, void *params)
         case HTTP_CREATED:
         case HTTP_PRECOND_FAILED:
             /* Convert into requested MIME type */
-            data = mime->to_string(obj, &datalen);
+            data = mime->from_object(obj);
 
             /* Fill in Content-Type, Content-Length */
             resp_body->type = mime->content_type;
-            resp_body->len = datalen;
+            resp_body->len = buf_len(data);
 
             /* Fill in Content-Location */
             resp_body->loc = txn->req_tgt.path;
@@ -5127,9 +5145,9 @@ int meth_put(struct transaction_t *txn, void *params)
                 | CC_NOTRANSFORM;       /* don't alter iCal data */
 
             /* Output current representation */
-            write_body(ret, txn, data, datalen);
+            write_body(ret, txn, buf_base(data), buf_len(data));
 
-            free(data);
+            buf_destroy(data);
             ret = 0;
             break;
 

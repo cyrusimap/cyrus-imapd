@@ -98,19 +98,19 @@ static time_t compile_time;
 static struct mime_type_t isched_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
-      (char* (*)(void *, unsigned long *)) &my_icalcomponent_as_ical_string,
-      (void * (*)(const char*)) &icalparser_parse_string,
+      (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
+      (void * (*)(const struct buf*)) &ical_string_as_icalcomponent,
       (void (*)(void *)) &icalcomponent_free, NULL, NULL
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (char* (*)(void *, unsigned long *)) &icalcomponent_as_xcal_string,
-      (void * (*)(const char*)) &xcal_string_as_icalcomponent,
+      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
+      (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
       NULL, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
-      (char* (*)(void *, unsigned long *)) &icalcomponent_as_jcal_string,
-      (void * (*)(const char*)) &jcal_string_as_icalcomponent,
+      (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
+      (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, NULL, NULL,
     },
 #endif
@@ -472,7 +472,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Parse the iCal data for important properties */
-    ical = mime->from_string(buf_cstring(&txn->req_body.payload));
+    ical = mime->to_object(&txn->req_body.payload);
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
         txn->error.precond = ISCHED_INVALID_DATA;
         return HTTP_BAD_REQUEST;

@@ -51,13 +51,19 @@
 
 #ifdef HAVE_ICAL
 
-char *my_icalcomponent_as_ical_string(icalcomponent* comp, unsigned long *len)
+icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
+{
+    return icalparser_parse_string(buf_base(buf));
+}
+
+struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
 {
     char *str = icalcomponent_as_ical_string_r(comp);
+    struct buf *ret = buf_new();
 
-    if (len) *len = strlen(str);
+    buf_initm(ret, str, strlen(str));
 
-    return str;
+    return ret;
 }
 
 icalcomponent *record_to_ical(struct mailbox *mailbox,
