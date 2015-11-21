@@ -1223,7 +1223,7 @@ int propfind_lockdisc(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->mailbox && fctx->record) {
+    if (fctx->data) {
         struct dav_data *ddata = (struct dav_data *) fctx->data;
 
         xml_add_lockdisc(node, fctx->req_tgt->path, ddata);
@@ -2227,8 +2227,10 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     int r = 0;
 
-    if (fctx->req_tgt->resource)
+    if (fctx->req_tgt->resource) {
+        if (!fctx->record) return HTTP_NOT_FOUND;
         return propfind_fromresource(name, ns, fctx, prop, resp, propstat, rock);
+    }
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
@@ -3309,7 +3311,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
     else {
         /* Unmapped URL (empty resource) */
-        etag = NULL_ETAG;
+        etag = NULL;
         lastmod = ddata->creationdate;
     }
 
@@ -3609,7 +3611,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
     else {
         /* Unmapped URL (empty resource) */
-        etag = NULL_ETAG;
+        etag = NULL;
         lastmod = ddata->creationdate;
     }
 
@@ -3777,7 +3779,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     else {
         /* Unmapped URL (empty resource) */
         txn->flags.ranges = 0;
-        etag = NULL_ETAG;
+        etag = NULL;
         lastmod = ddata->creationdate;
     }
 
@@ -3940,26 +3942,28 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     lparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
-                                   txn->req_tgt.resource, (void *) &ddata, 0);
+                                   txn->req_tgt.resource, (void *) &ddata, 1);
 
-    if (ddata->imap_uid) {
-        /* Locking existing resource */
+    if (ddata->alive) {
+        if (ddata->imap_uid) {
+            /* Locking existing resource */
 
-        /* Fetch index record for the resource */
-        r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
-        if (r) {
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
+            /* Fetch index record for the resource */
+            r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
+            if (r) {
+                txn->error.desc = error_message(r);
+                ret = HTTP_SERVER_ERROR;
+                goto done;
+            }
+
+            etag = message_guid_encode(&oldrecord.guid);
+            lastmod = oldrecord.internaldate;
         }
-
-        etag = message_guid_encode(&oldrecord.guid);
-        lastmod = oldrecord.internaldate;
-    }
-    else if (ddata->rowid) {
-        /* Unmapped URL (empty resource) */
-        etag = NULL_ETAG;
-        lastmod = ddata->creationdate;
+        else {
+            /* Unmapped URL (empty resource) */
+            etag = NULL;
+            lastmod = ddata->creationdate;
+        }
     }
     else {
         /* New resource */
@@ -3969,6 +3973,9 @@ int meth_lock(struct transaction_t *txn, void *params)
         ddata->creationdate = now;
         ddata->mailbox = mailbox->name;
         ddata->resource = txn->req_tgt.resource;
+        ddata->imap_uid = 0;
+        ddata->lock_expire = 0;
+        ddata->alive = 1;
     }
 
     /* Check any preconditions */
@@ -4083,15 +4090,19 @@ int meth_lock(struct transaction_t *txn, void *params)
     root = xmlNewChild(root, NULL, BAD_CAST "lockdiscovery", NULL);
     xml_add_lockdisc(root, txn->req_tgt.path, (struct dav_data *) ddata);
 
-    lparams->davdb.write_resourceLOCKONLY(davdb, ddata);
+    r = lparams->davdb.write_resourceLOCKONLY(davdb, ddata);
+    if (r) {
+        syslog(LOG_ERR, "Unable to write lock record to DAV DB: %s",
+               error_message(r));
+        ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "Unable to create locked resource";
+        goto done;
+    }
 
     txn->resp_body.lock = ddata->lock_token;
 
     if (!ddata->rowid) {
         ret = HTTP_CREATED;
-
-        /* Tell client about the new resource */
-        txn->resp_body.etag = NULL_ETAG;
 
         /* Tell client where to find the new resource */
         txn->location = txn->req_tgt.path;
@@ -4279,7 +4290,7 @@ int propfind_by_resource(void *rock, void *data)
     struct index_record record;
     char *p;
     size_t len;
-    int r, ret = 0;
+    int r = 0, ret = 0;
 
     /* Append resource name to URL path */
     if (!fctx->req_tgt->resource) {
@@ -4303,12 +4314,11 @@ int propfind_by_resource(void *rock, void *data)
     if (ddata->imap_uid && !fctx->record) {
         /* Fetch index record for the resource */
         r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record);
-        /* XXX  Check errors */
 
         fctx->record = r ? NULL : &record;
     }
 
-    if (!ddata->imap_uid || !fctx->record) {
+    if (r) {
         /* Add response for missing target */
         ret = xml_add_response(fctx, HTTP_NOT_FOUND, 0);
     }
@@ -5076,7 +5086,7 @@ int meth_put(struct transaction_t *txn, void *params)
     }
     else if (ddata->rowid) {
         /* Unmapped URL (empty resource) */
-        etag = NULL_ETAG;
+        etag = NULL;
         lastmod = ddata->creationdate;
     }
     else {
@@ -6282,7 +6292,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     }
     else {
         /* Unmapped URL (empty resource) */
-        etag = NULL_ETAG;
+        etag = NULL;
         lastmod = ddata->creationdate;
     }
 
