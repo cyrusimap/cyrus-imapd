@@ -293,6 +293,7 @@ struct namespace_t *namespaces[] = {
     &namespace_calendar,
     &namespace_freebusy,
     &namespace_addressbook,
+    &namespace_drive,
 #ifdef HAVE_IANA_PARAMS
     &namespace_ischedule,
     &namespace_domainkey,

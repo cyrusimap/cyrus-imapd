@@ -429,6 +429,11 @@ struct mime_type_t {
     void (*end_stream)(struct buf *);
 };
 
+struct mkcol_params {
+    unsigned location_precond;          /* precond code for bad location */
+    uint32_t mbtype;                    /* mailbox type collection */
+};
+
 /*
  * Function to do special processing for POST method (optional).
  * Returns HTTP_CONTINUE if processing should continue in meth_post(),
@@ -440,6 +445,11 @@ typedef int (*post_proc_t)(struct transaction_t *txn);
 typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
                           struct mailbox *mailbox, const char *resource,
                           void *davdb);
+
+struct copy_params {
+    unsigned uid_conf_precond;          /* precond code for UID conflict */
+    put_proc_t proc;                    /* function to process & COPY a rsrc */
+};
 
 struct put_params {
     unsigned supp_data_precond;         /* precond code for unsupported data */
@@ -481,10 +491,10 @@ struct meth_params {
     check_precond_t check_precond;      /* check headers for preconditions */
     struct davdb_params davdb;          /* DAV DB access functions */
     acl_proc_t acl_ext;                 /* special ACL handling (extensions) */
-    put_proc_t copy;                    /* function to process & COPY a rsrc */
+    struct copy_params copy;            /* params for copying a resource */
     delete_proc_t delete;               /* special DELETE handling (optional) */
     get_proc_t get;                     /* special GET handling (optional) */
-    uint32_t mkcol_mbtype;              /* mbtype for MKCOL/MKCALENDAR */
+    struct mkcol_params mkcol;          /* params for creating new collection */
     post_proc_t post;                   /* special POST handling (optional) */
     struct put_params put;              /* params for putting a resource */
     const struct prop_entry *lprops;    /* array of "live" properties */

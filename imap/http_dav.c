@@ -3208,8 +3208,9 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Check we're not copying within the same user */
-    if (!meth_move && mboxname_same_userid(dest_tgt.mbentry->name, txn->req_tgt.mbentry->name)) {
-        /* XXX - need generic error for uid-conflict */
+    if (!meth_move && cparams->copy.uid_conf_precond &&
+        mboxname_same_userid(dest_tgt.mbentry->name, txn->req_tgt.mbentry->name)) {
+        txn->error.precond = cparams->copy.uid_conf_precond;
         txn->error.desc = "Can only move within same user";
         ret = HTTP_NOT_ALLOWED;
         goto done;
@@ -3333,7 +3334,6 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     buf_init_ro(&body_buf, buf_base(&msg_buf) + src_rec.header_size,
                 buf_len(&msg_buf) - src_rec.header_size);
     obj = cparams->mime_types[0].to_object(&body_buf);
-    buf_free(&msg_buf);
 
     if (!meth_move) {
         /* Done with source mailbox */
@@ -3370,7 +3370,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Store the resource at destination */
-    ret = cparams->copy(txn, obj, dest_mbox, dest_tgt.resource, dest_davdb);
+    ret = cparams->copy.proc(txn, obj, dest_mbox, dest_tgt.resource, dest_davdb);
 
     /* Done with destination mailbox */
     mailbox_unlock_index(dest_mbox, NULL);
@@ -3401,12 +3401,13 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         txn->resp_body.etag = NULL;
     }
 
-    if (obj) cparams->mime_types[0].free(obj);
+    if (obj && cparams->mime_types[0].free) cparams->mime_types[0].free(obj);
     if (dest_davdb) cparams->davdb.close_db(dest_davdb);
     if (dest_mbox) mailbox_close(&dest_mbox);
     if (src_davdb) cparams->davdb.close_db(src_davdb);
     if (src_mbox) mailbox_close(&src_mbox);
 
+    buf_free(&msg_buf);
     xmlFreeURI(dest_uri);
     free(dest_tgt.userid);
     mboxlist_entry_free(&dest_tgt.mbentry);
@@ -3470,7 +3471,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Parse the path */
     r = dparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc);
+                            &txn->req_tgt, &txn->error.desc);
     if (r) return r;
 
     /* Make sure method is allowed */
@@ -3807,7 +3808,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     }
 
     if (record.uid) {
-        if (mime) {
+        if (mime && !resp_body->type) {
             txn->flags.vary |= VARY_ACCEPT;
             resp_body->type = mime->content_type;
         }
@@ -3839,7 +3840,8 @@ int meth_get_head(struct transaction_t *txn, void *params)
                 data = freeme = buf_release(outbuf);
                 buf_destroy(outbuf);
 
-                gparams->mime_types[0].free(obj);
+                if (gparams->mime_types[0].free)
+                    gparams->mime_types[0].free(obj);
             }
         }
     }
@@ -4142,13 +4144,13 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     txn->req_tgt.mbentry = mboxlist_entry_create();
     if ((r = mparams->parse_path(txn->req_uri->path,
                                  &txn->req_tgt, &txn->error.desc))) {
-        txn->error.precond = CALDAV_LOCATION_OK;
+        txn->error.precond = mparams->mkcol.location_precond;
         return HTTP_FORBIDDEN;
     }
 
     /* Make sure method is allowed (only allowed on home-set) */
     if (!(txn->req_tgt.allow & ALLOW_WRITECOL)) {
-        txn->error.precond = CALDAV_LOCATION_OK;
+        txn->error.precond = mparams->mkcol.location_precond;
         return HTTP_FORBIDDEN;
     }
 
@@ -4159,7 +4161,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
         r = mboxlist_findparent(txn->req_tgt.mbentry->name, &parent);
         if (r) {
-            txn->error.precond = CALDAV_LOCATION_OK;
+            txn->error.precond = mparams->mkcol.location_precond;
             ret = HTTP_FORBIDDEN;
             goto done;
 	}
@@ -4196,7 +4198,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     /* Create the mailbox */
     r = mboxlist_createmailbox(txn->req_tgt.mbentry->name,
-                               mparams->mkcol_mbtype, partition,
+                               mparams->mkcol.mbtype, partition,
                                httpd_userisadmin || httpd_userisproxyadmin,
                                httpd_userid, httpd_authstate,
                                /*localonly*/0, /*forceuser*/0,
@@ -4322,6 +4324,46 @@ int propfind_by_resource(void *rock, void *data)
 }
 
 
+static int propfind_by_resources(struct propfind_ctx *fctx)
+{
+    int r = 0;
+
+    /* Open the DAV DB corresponding to the mailbox.
+     *
+     * Note we open the new one first before closing the old one, so we
+     * get refcounted retaining of the open database within a single user */
+    sqlite3 *newdb = fctx->open_db(fctx->mailbox);
+    if (fctx->davdb) fctx->close_db(fctx->davdb);
+    fctx->davdb = newdb;
+
+    if (fctx->req_tgt->resource) {
+        /* Add response for target resource */
+        struct dav_data *ddata;
+
+        /* Find message UID for the resource */
+        fctx->lookup_resource(fctx->davdb, fctx->mailbox->name,
+                              fctx->req_tgt->resource, (void **) &ddata, 0);
+        if (!ddata->rowid) {
+            /* Add response for missing target */
+            xml_add_response(fctx, HTTP_NOT_FOUND, 0);
+            return HTTP_NOT_FOUND;
+        }
+        r = fctx->proc_by_resource(fctx, ddata);
+    }
+    else {
+        /* Add responses for all contained resources */
+        fctx->foreach_resource(fctx->davdb, fctx->mailbox->name,
+                               fctx->proc_by_resource, fctx);
+
+        /* Started with NULL resource, end with NULL resource */
+        fctx->req_tgt->resource = NULL;
+        fctx->req_tgt->reslen = 0;
+    }
+
+    return r;
+}
+
+
 /* mboxlist_findall() callback to find props on a collection */
 int propfind_by_collection(const char *mboxname, int matchlen,
                            int maycreate __attribute__((unused)),
@@ -4346,6 +4388,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         p++; /* skip dot */
         if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
         if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
+        if (!strncmp(p, MANAGED_ATTACH, strlen(MANAGED_ATTACH) - 1)) goto done;
         /* magic folder filter */
         if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
         /* and while we're at it, reject the fricking top-level folders too.
@@ -4429,35 +4472,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
 
     if (fctx->depth > 1 && fctx->open_db) { // can't do davdb searches if no dav db
         /* Resource(s) */
-
-        /* Open the DAV DB corresponding to the mailbox.
-         *
-         * Note we open the new one first before closing the old one, so we
-         * get refcounted retaining of the open database within a single user */
-        sqlite3 *newdb = fctx->open_db(mailbox);
-        if (fctx->davdb) fctx->close_db(fctx->davdb);
-        fctx->davdb = newdb;
-
-        if (fctx->req_tgt->resource) {
-            /* Add response for target resource */
-            void *data;
-
-            /* Find message UID for the resource */
-            fctx->lookup_resource(fctx->davdb,
-                                  mboxname, fctx->req_tgt->resource, &data, 0);
-            /* XXX  Check errors */
-
-            r = fctx->proc_by_resource(rock, data);
-        }
-        else {
-            /* Add responses for all contained resources */
-            fctx->foreach_resource(fctx->davdb, mboxname,
-                                   fctx->proc_by_resource, rock);
-
-            /* Started with NULL resource, end with NULL resource */
-            fctx->req_tgt->resource = NULL;
-            fctx->req_tgt->reslen = 0;
-        }
+        r = propfind_by_resources(fctx);
     }
 
   done:
@@ -4668,7 +4683,13 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             }
         }
 
-        xml_add_response(&fctx, 0, 0);
+        if (!fctx.req_tgt->resource) xml_add_response(&fctx, 0, 0);
+
+        if (txn->req_tgt.namespace == URL_NS_DRIVE) {
+            /* Resource(s) */
+            r = propfind_by_resources(&fctx);
+            if (r) ret = r;
+        }
 
         mailbox_close(&fctx.mailbox);
     }
@@ -4687,10 +4708,10 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                                  httpd_authstate, propfind_by_collection, &fctx);
         }
 
-        if (fctx.davdb) fctx.close_db(fctx.davdb);
-
         ret = *fctx.ret;
     }
+
+    if (fctx.davdb) fctx.close_db(fctx.davdb);
 
     /* Output the XML response */
     if (!ret) {
@@ -4964,14 +4985,15 @@ int meth_put(struct transaction_t *txn, void *params)
         return HTTP_BAD_REQUEST;
 
     /* Check Content-Type */
+    mime = pparams->mime_types;
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
-        for (mime = pparams->mime_types; mime->content_type; mime++) {
+        for (; mime->content_type; mime++) {
             if (is_mediatype(mime->content_type, hdr[0])) break;
         }
-    }
-    if (!mime || !mime->content_type) {
-        txn->error.precond = pparams->put.supp_data_precond;
-        return HTTP_FORBIDDEN;
+        if (!mime->content_type) {
+            txn->error.precond = pparams->put.supp_data_precond;
+            return HTTP_FORBIDDEN;
+        }
     }
 
     /* Check ACL for current user */
@@ -5159,7 +5181,7 @@ int meth_put(struct transaction_t *txn, void *params)
 
   done:
     if (obj) {
-        pparams->mime_types[0].free(obj);
+        if (pparams->mime_types[0].free) pparams->mime_types[0].free(obj);
         buf_free(&msg_buf);
     }
     if (davdb) pparams->davdb.close_db(davdb);

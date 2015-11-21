@@ -430,10 +430,10 @@ static struct meth_params caldav_params = {
       (db_delete_proc_t) &caldav_delete,
       (db_delmbox_proc_t) &caldav_delmbox },
     &caldav_acl,
-    &caldav_copy,
+    { CALDAV_UID_CONFLICT, &caldav_copy },
     &caldav_delete_cal,
     &caldav_get,
-    MBTYPE_CALENDAR,
+    { CALDAV_LOCATION_OK, MBTYPE_CALENDAR },
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
     caldav_props,
@@ -878,7 +878,8 @@ static int caldav_parse_path(const char *path,
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
-        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+        if (mbname_localpart(mbname) &&
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
             return HTTP_NOT_FOUND;
         mbname_set_domain(mbname, NULL);
     }

@@ -298,10 +298,10 @@ static struct meth_params carddav_params = {
       (db_delete_proc_t) &carddav_delete,
       (db_delmbox_proc_t) &carddav_delmbox },
     NULL,                                       /* No ACL extensions */
-    &carddav_copy,
+    { CARDDAV_UID_CONFLICT, &carddav_copy },
     NULL,                                       /* No special DELETE handling */
     NULL,                                       /* No special GET handling */
-    MBTYPE_ADDRESSBOOK,
+    { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
     NULL,                                       /* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
     carddav_props,
@@ -551,7 +551,8 @@ static int carddav_parse_path(const char *path,
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
-        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+        if (mbname_localpart(mbname) &&
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
             return HTTP_NOT_FOUND;
         mbname_set_domain(mbname, NULL);
     }

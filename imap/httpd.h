@@ -120,6 +120,7 @@ enum {
     URL_NS_CALENDAR,
     URL_NS_FREEBUSY,
     URL_NS_ADDRESSBOOK,
+    URL_NS_DRIVE,
     URL_NS_ISCHEDULE,
     URL_NS_DOMAINKEY,
     URL_NS_TZDIST,
@@ -394,6 +395,7 @@ extern struct namespace_t namespace_principal;
 extern struct namespace_t namespace_calendar;
 extern struct namespace_t namespace_freebusy;
 extern struct namespace_t namespace_addressbook;
+extern struct namespace_t namespace_drive;
 extern struct namespace_t namespace_ischedule;
 extern struct namespace_t namespace_domainkey;
 extern struct namespace_t namespace_tzdist;
