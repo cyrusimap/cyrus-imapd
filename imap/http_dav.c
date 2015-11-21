@@ -3352,7 +3352,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Open the DAV DB corresponding to the dest mailbox */
     dest_davdb = cparams->davdb.open_db(dest_mbox);
-
+-
     /* Find message UID for the dest resource, if exists */
     cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mbentry->name,
                                    dest_tgt.resource, (void **) &ddata, 0);
@@ -5030,16 +5030,10 @@ int meth_put(struct transaction_t *txn, void *params)
         return ret;
     }
 
-    /* Make sure we have a body */
-    qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
-    if (!qdiffs[QUOTA_STORAGE]) {
-        txn->error.desc = "Missing request body\r\n";
-        return HTTP_BAD_REQUEST;
-    }
-
     /* Check if we can append a new message to mailbox */
-    if ((r = append_check(txn->req_tgt.mbentry->name,
-                          httpd_authstate, ACL_INSERT, ignorequota ? NULL : qdiffs))) {
+    qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
+    if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
+                          ACL_INSERT, ignorequota ? NULL : qdiffs))) {
         syslog(LOG_ERR, "append_check(%s) failed: %s",
                txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
