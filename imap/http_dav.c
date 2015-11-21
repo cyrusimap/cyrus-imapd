@@ -434,6 +434,7 @@ static int eval_if(const char *hdr, const char *etag, const char *lock_token,
         char *cond;
 
         /* XXX  Need to handle Resource-Tag for Tagged-list (COPY/MOVE dest) */
+        list = strchr(list, '(');
 
         /* Process each condition, ANDing the results */
         tok_initm(&tok_c, list+1, "]>", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -3352,7 +3353,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Open the DAV DB corresponding to the dest mailbox */
     dest_davdb = cparams->davdb.open_db(dest_mbox);
--
+
     /* Find message UID for the dest resource, if exists */
     cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mbentry->name,
                                    dest_tgt.resource, (void **) &ddata, 0);
