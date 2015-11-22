@@ -3269,7 +3269,12 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Local source and destination mailboxes */
 
-    if (meth_move) {
+    if (!strcmp(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name)) {
+        /* Same source and destination - Open source mailbox for writing */
+        r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &src_mbox);
+        dest_mbox = src_mbox;
+    }
+    else if (meth_move) {
         /* Open source mailbox for writing */
         r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &src_mbox);
     }
@@ -3279,7 +3284,10 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
     if (r) {
         syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
-               meth_move ? 'w' : 'r', txn->req_tgt.mbentry->name, error_message(r));
+               (meth_move ||
+                !strcmp(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name)) ?
+               'w' : 'r',
+               txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -3338,23 +3346,28 @@ int meth_copy_move(struct transaction_t *txn, void *params)
                 buf_len(&msg_buf) - src_rec.header_size);
     obj = cparams->mime_types[0].to_object(&body_buf);
 
-    if (!meth_move) {
-        /* Done with source mailbox */
-        mailbox_unlock_index(src_mbox, NULL);
-    }
+    if (dest_mbox != src_mbox) {
+        if (!meth_move) {
+            /* Done with source mailbox */
+            mailbox_unlock_index(src_mbox, NULL);
+        }
 
-    /* Open dest mailbox for writing */
-    r = mailbox_open_iwl(dest_tgt.mbentry->name, &dest_mbox);
-    if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               dest_tgt.mbentry->name, error_message(r));
-        txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
+        /* Open dest mailbox for writing */
+        r = mailbox_open_iwl(dest_tgt.mbentry->name, &dest_mbox);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   dest_tgt.mbentry->name, error_message(r));
+            txn->error.desc = error_message(r);
+            ret = HTTP_SERVER_ERROR;
+            goto done;
+        }
 
-    /* Open the DAV DB corresponding to the dest mailbox */
-    dest_davdb = cparams->davdb.open_db(dest_mbox);
+        /* Open the DAV DB corresponding to the dest mailbox */
+        dest_davdb = cparams->davdb.open_db(dest_mbox);
+    }
+    else {
+        dest_davdb = src_davdb;
+    }
 
     /* Find message UID for the dest resource, if exists */
     cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mbentry->name,
@@ -3375,8 +3388,10 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     /* Store the resource at destination */
     ret = cparams->copy.proc(txn, obj, dest_mbox, dest_tgt.resource, dest_davdb);
 
-    /* Done with destination mailbox */
-    mailbox_unlock_index(dest_mbox, NULL);
+    if (dest_mbox != src_mbox) {
+        /* Done with destination mailbox */
+        mailbox_unlock_index(dest_mbox, NULL);
+    }
 
     switch (ret) {
     case HTTP_CREATED:
@@ -3405,8 +3420,10 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     if (obj && cparams->mime_types[0].free) cparams->mime_types[0].free(obj);
-    if (dest_davdb) cparams->davdb.close_db(dest_davdb);
-    if (dest_mbox) mailbox_close(&dest_mbox);
+    if (dest_mbox != src_mbox) {
+        if (dest_davdb) cparams->davdb.close_db(dest_davdb);
+        if (dest_mbox) mailbox_close(&dest_mbox);
+    }
     if (src_davdb) cparams->davdb.close_db(src_davdb);
     if (src_mbox) mailbox_close(&src_mbox);
 
