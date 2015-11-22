@@ -162,6 +162,7 @@ enum {
     DAV_BAD_LOCK_TOKEN,
     DAV_NEED_LOCK_TOKEN,
     DAV_LOCKED,
+    DAV_FINITE_DEPTH,
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     DAV_SUPP_REPORT,

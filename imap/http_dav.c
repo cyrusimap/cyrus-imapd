@@ -284,6 +284,7 @@ static const struct precond_t {
     { "lock-token-matches-request-uri", NS_DAV },
     { "lock-token-submitted", NS_DAV },
     { "no-conflicting-lock", NS_DAV },
+    { "propfind-finite-depth", NS_DAV },
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     { "supported-report", NS_DAV },
@@ -4355,12 +4356,15 @@ int propfind_by_resource(void *rock, void *data)
 static int propfind_by_resources(struct propfind_ctx *fctx)
 {
     int r = 0;
+    sqlite3 *newdb;
+
+    if (!fctx->mailbox) return 0;
 
     /* Open the DAV DB corresponding to the mailbox.
      *
      * Note we open the new one first before closing the old one, so we
      * get refcounted retaining of the open database within a single user */
-    sqlite3 *newdb = fctx->open_db(fctx->mailbox);
+    newdb = fctx->open_db(fctx->mailbox);
     if (fctx->davdb) fctx->close_db(fctx->davdb);
     fctx->davdb = newdb;
 
