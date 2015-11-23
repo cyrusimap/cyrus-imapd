@@ -668,6 +668,8 @@ struct getMailboxes_rock {
     const struct mailbox *inbox; /* The main user inbox. Do not unlock or close. */
     json_t *list;                /* List of the current http user mailboxes. */
     hash_table *props;           /* Which properties to fetch. */
+
+    const char *uniqueid; /* XXX: until mboxlist allows lookup by uniqueid */
 };
 
 int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
@@ -711,6 +713,12 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         mailbox = (struct mailbox *) inbox;
     }
 
+    /* XXX Skip any mailboxes that do not match uniqueid. Only until the
+     * mboxlist API allows lookup by uniqueid. */
+    if (rock->uniqueid && strcmp(rock->uniqueid, mailbox->uniqueid)) {
+        goto done;
+    }
+
     /* Lookup status. */
     r = status_lookup_mailbox(mailbox, httpd_userid, statusitems, &sdata);
     if (r) {
@@ -746,9 +754,7 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
 
     /* Build JMAP mailbox response. */
     mbox = json_pack("{}");
-    /* XXX Keep uniqueid until we decided on unique vs. mboxname */
-    json_object_set_new(mbox, "x-uniqueid", json_string(mailbox->uniqueid));
-    json_object_set_new(mbox, "id", json_string(mailbox->name));
+    json_object_set_new(mbox, "id", json_string(mailbox->uniqueid));
     if (_wantprop(props, "name")) {
         char *extname;
         if (mailbox != inbox) {
@@ -837,11 +843,8 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(mbox, "sortOrder", json_integer(sortOrder));
     }
     if (_wantprop(props, "parentId")) {
-        /* XXX Keep both uniqueid and mailbox name for now. */
-        json_object_set_new(mbox, "x-parent-uniqueid", parent && parent != inbox ?
-                json_string(parent->uniqueid) : json_null());
         json_object_set_new(mbox, "parentId", parent && parent != inbox ?
-                json_string(parent->name) : json_null());
+                json_string(parent->uniqueid) : json_null());
     }
 
     json_array_append_new(list, mbox);
@@ -854,7 +857,6 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
     return 0;
 }
 
-
 /* Execute a getMailboxes message */
 static int getMailboxes(struct jmap_req *req)
 {
@@ -863,6 +865,7 @@ static int getMailboxes(struct jmap_req *req)
     rock.list = NULL;
     rock.inbox = req->inbox;
     rock.props = NULL;
+    rock.uniqueid = NULL;
 
     /* Determine current state. */
     state = jmap_getstate(0 /* MBTYPE */, req);
@@ -915,7 +918,8 @@ static int getMailboxes(struct jmap_req *req)
                 goto done;
             }
             /* getMailboxes_cb filters mailboxes without lookup permission. */
-            int r = mboxlist_mboxtree(id, &getMailboxes_cb, &rock, MBOXTREE_SKIP_CHILDREN);
+            rock.uniqueid = id;
+            int r = mboxlist_usermboxtree(req->userid, &getMailboxes_cb, &rock, 0 /* flags */);
             if (r) {
                 json_decref(notFound);
                 goto done;
