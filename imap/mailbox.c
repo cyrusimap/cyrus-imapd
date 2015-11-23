@@ -80,6 +80,7 @@
 #include "caldav_db.h"
 #include "caldav_alarm.h"
 #include "carddav_db.h"
+#include "webdav_db.h"
 #endif /* WITH_DAV */
 #include "crc32.h"
 #include "md5.h"
@@ -103,7 +104,6 @@
 #include "strarray.h"
 #include "sync_log.h"
 #include "vparse.h"
-#include "webdav_db.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -5011,12 +5011,28 @@ static int mailbox_delete_carddav(struct mailbox *mailbox)
     return 0;
 }
 
+static int mailbox_delete_webdav(struct mailbox *mailbox)
+{
+    struct webdav_db *webdavdb = NULL;
+
+    webdavdb = webdav_open_mailbox(mailbox);
+    if (webdavdb) {
+        int r = webdav_delmbox(webdavdb, mailbox->name);
+        webdav_close(webdavdb);
+        if (r) return r;
+    }
+
+    return 0;
+}
+
 static int mailbox_delete_dav(struct mailbox *mailbox)
 {
     if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
         return mailbox_delete_carddav(mailbox);
     if (mailbox->mbtype & MBTYPE_CALENDAR)
         return mailbox_delete_caldav(mailbox);
+    if (mailbox->mbtype & MBTYPE_COLLECTION)
+        return mailbox_delete_webdav(mailbox);
     return 0;
 }
 #endif /* WITH_DAV */
