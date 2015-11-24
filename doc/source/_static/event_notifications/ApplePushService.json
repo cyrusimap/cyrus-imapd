@@ -1,0 +1,9 @@
+{
+    "event":"ApplePushService",
+    "user": "john@example.org",
+    "apsVersion": "",     # Version of the Apple Push Service this message is compliant with.
+    "apsAccountId": "",   # Service Provider's accountID with the Apple Push Service.
+    "apsDeviceToken": "", # Unique identifier for the user's device registered with Apple
+    "apsSubtopic": "",    # 
+    "mailboxes": "[array of mailboxIDs]"
+}

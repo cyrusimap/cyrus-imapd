@@ -51,6 +51,8 @@ Setting up dependencies
 Compile Cyrus
 ---------------
 
+Do you want to use :ref:`Xapian for searching<imapinstall-xapian>`? If so, there's some additional steps. 
+
 .. code-block:: bash
 
     cd /path/to/cyrus-imapd
@@ -59,7 +61,7 @@ Compile Cyrus
     
     ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC" \
     --enable-coverage --enable-calalarmd --enable-apple-push-service --enable-autocreate \
-    --enable-nntp --enable-xapian --enable-http --enable-unit-tests \
+    --enable-nntp --enable-http --enable-unit-tests \
     --enable-replication --with-openssl=yes --enable-nntp --enable-murder \
     --enable-idled --enable-event-notification --enable-sieve --prefix=/usr/cyrus
 

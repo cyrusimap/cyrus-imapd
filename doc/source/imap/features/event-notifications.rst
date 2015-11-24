@@ -1,3 +1,5 @@
+.. _imap-features-event-notifications:
+
 ===================
 Event Notifications
 ===================
@@ -16,28 +18,39 @@ notifications, and :rfc:`5465` outlines the IMAP NOTIFY extensions.
 Available Event Notifications
 =============================
 
-*   :ref:`imap-features-event-notifications-aclchange`
-*   :ref:`imap-features-event-notifications-flagsclear`
-*   :ref:`imap-features-event-notifications-flagsset`
-*   :ref:`imap-features-event-notifications-login`
-*   :ref:`imap-features-event-notifications-logout`
-*   :ref:`imap-features-event-notifications-mailboxcreate`
-*   :ref:`imap-features-event-notifications-mailboxdelete`
-*   :ref:`imap-features-event-notifications-mailboxrename`
-*   :ref:`imap-features-event-notifications-mailboxsubscribe`
-*   :ref:`imap-features-event-notifications-mailboxunsubscribe`
-*   :ref:`imap-features-event-notifications-messageappend`
-*   :ref:`imap-features-event-notifications-messagecopy`
-*   :ref:`imap-features-event-notifications-messageexpire`
-*   :ref:`imap-features-event-notifications-messageexpunge`
-*   :ref:`imap-features-event-notifications-messagemove`
-*   :ref:`imap-features-event-notifications-messagenew`
-*   :ref:`imap-features-event-notifications-messageread`
-*   :ref:`imap-features-event-notifications-messagetrash`
-*   :ref:`imap-features-event-notifications-quotaexceed`
-*   :ref:`imap-features-event-notifications-quotawithin`
-*   :ref:`imap-features-event-notifications-quotachange`
+* Message Events
+    *   :ref:`imap-features-event-notifications-messageappend`
+    *   :ref:`imap-features-event-notifications-messagecopy`
+    *   :ref:`imap-features-event-notifications-messageexpire`
+    *   :ref:`imap-features-event-notifications-messageexpunge`
+    *   :ref:`imap-features-event-notifications-messagemove` 
+    *   :ref:`imap-features-event-notifications-messagenew`
+* Flag Events
+    *   :ref:`imap-features-event-notifications-flagsclear`
+    *   :ref:`imap-features-event-notifications-flagsset`
+    *   :ref:`imap-features-event-notifications-messageread`
+    *   :ref:`imap-features-event-notifications-messagetrash`
+* Mailbox Events
+    *   :ref:`imap-features-event-notifications-aclchange` 
+    *   :ref:`imap-features-event-notifications-mailboxcreate`
+    *   :ref:`imap-features-event-notifications-mailboxdelete`
+    *   :ref:`imap-features-event-notifications-mailboxrename`
+* Subscription Events
+    *   :ref:`imap-features-event-notifications-mailboxsubscribe`
+    *   :ref:`imap-features-event-notifications-mailboxunsubscribe`
+* Quota Events
+    *   :ref:`imap-features-event-notifications-quotaexceed`
+    *   :ref:`imap-features-event-notifications-quotawithin`
+    *   :ref:`imap-features-event-notifications-quotachange`
+* Calendar Events
+    *   :ref:`imap-features-event-notifications-calendaralarm`
+* Access Accounting    
+    *   :ref:`imap-features-event-notifications-login`
+    *   :ref:`imap-features-event-notifications-logout`
+* Apple Push
+    *   :ref:`imap-features-event-notifications-applepushservice`    
 
+    
 Example Event Notifications
 ===========================
 
@@ -330,4 +343,26 @@ The ``QuotaWithin`` event typically follows a
     the quota root to a level higher than the existing amount of
     resources used.
 
+.. _imap-features-event-notifications-calendaralarm:
+
+CalendarAlarm
+-------------
+
+The ``CalendarAlarm`` event occurs when a calendar event triggers an
+alarm.
+
+.. literalinclude:: ../../_static/event_notifications/CalendarAlarm.json
+    :language: json
+    :linenos:
+    
+.. _imap-features-event-notifications-applepushservice:    
+
+ApplePushService
+----------------
+The ``ApplePushService`` event occurs when 
+
+.. literalinclude:: ../../_static/event_notifications/ApplePushService.json
+    :language: json
+    :linenos:
+    
 Back to :ref:`imap-features`
