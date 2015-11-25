@@ -3673,7 +3673,7 @@ static int meth_propfind_root(struct transaction_t *txn,
         };
 
         struct meth_params root_params = {
-            .lprops = root_props
+            .propfind = { DAV_FINITE_DEPTH, root_props }
         };
 
         /* Make a working copy of target path */

@@ -453,6 +453,11 @@ struct put_params {
     put_proc_t proc;                    /* function to process & PUT a rsrc */
 };
 
+struct propfind_params {
+    unsigned finite_depth_precond;      /* precond code for finite depth */
+    const struct prop_entry *lprops;    /* array of "live" properties */
+};
+
 /* meth_report() parameters */
 struct meth_params;
 typedef int (*report_proc_t)(struct transaction_t *txn,
@@ -494,7 +499,7 @@ struct meth_params {
     struct mkcol_params mkcol;          /* params for creating new collection */
     post_proc_t post;                   /* special POST handling (optional) */
     struct put_params put;              /* params for putting a resource */
-    const struct prop_entry *lprops;    /* array of "live" properties */
+    struct propfind_params propfind;    /* params for finding properties */
     const struct report_type_t *reports;/* array of reports & proc functions */
 };
 

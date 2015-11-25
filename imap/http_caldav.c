@@ -435,7 +435,7 @@ static struct meth_params caldav_params = {
     { CALDAV_LOCATION_OK, MBTYPE_CALENDAR },
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
-    caldav_props,
+    { 0, caldav_props },                        /* Allow infinite depth */
     caldav_reports
 };
 

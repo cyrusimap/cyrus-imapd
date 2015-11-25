@@ -216,7 +216,7 @@ static const struct prop_entry principal_props[] = {
 
 static struct meth_params princ_params = {
     .parse_path = &principal_parse_path,
-    .lprops = principal_props,
+    .propfind = { DAV_FINITE_DEPTH, principal_props },
     .reports = principal_reports
 };
 
@@ -4566,7 +4566,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         pctx.req_tgt = &txn->req_tgt;
         pctx.meth = txn->meth;
         pctx.mailbox = mailbox;
-        pctx.lprops = mparams->lprops;
+        pctx.lprops = mparams->propfind.lprops;
         pctx.root = root;
         pctx.ns = ns;
         pctx.tid = NULL;
@@ -4862,6 +4862,11 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     hdr = spool_getheader(txn->req_hdrs, "Depth");
     if (!hdr || !strcmp(hdr[0], "infinity")) {
         depth = 3;
+
+        if ((txn->error.precond = fparams->propfind.finite_depth_precond)) {
+            ret = HTTP_FORBIDDEN;
+            goto done;
+        }
     }
     else if (!strcmp(hdr[0], "1")) {
         depth = 1;
@@ -5005,7 +5010,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.foreach_resource = fparams->davdb.foreach_resource;
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
-    fctx.lprops = fparams->lprops;
+    fctx.lprops = fparams->propfind.lprops;
     fctx.root = root;
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
@@ -5190,7 +5195,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     pctx.meth = txn->meth;
     pctx.mailbox = mailbox;
     pctx.record = NULL;
-    pctx.lprops = pparams->lprops;
+    pctx.lprops = pparams->propfind.lprops;
     pctx.root = resp;
     pctx.ns = ns;
     pctx.tid = NULL;
@@ -6453,7 +6458,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.record = NULL;
     fctx.reqd_privs = report->reqd_privs;
     fctx.elist = NULL;
-    fctx.lprops = rparams->lprops;
+    fctx.lprops = rparams->propfind.lprops;
     fctx.root = outroot;
     fctx.ns = ns;
     fctx.ns_table = &ns_table;

@@ -303,7 +303,7 @@ static struct meth_params carddav_params = {
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
     NULL,                                       /* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
-    carddav_props,
+    { 0, carddav_props },                       /* Allow infinite depth */
     carddav_reports
 };
 

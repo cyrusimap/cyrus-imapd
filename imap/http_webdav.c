@@ -215,13 +215,13 @@ struct meth_params webdav_params = {
       (db_write_proc_t) &webdav_write,
       (db_delete_proc_t) &webdav_delete },
     NULL,                                       /* No ACL extensions */
-    { 0, &webdav_put },
+    { 0, &webdav_put },                         /* Allow duplicate UIDs */
     NULL,                                       /* No special DELETE handling */
     &webdav_get,
-    { 0, MBTYPE_COLLECTION },
+    { 0, MBTYPE_COLLECTION },                   /* Allow any location */
     NULL,                                       /* No special POST handling */
-    { 0, &webdav_put },
-    webdav_props,
+    { 0, &webdav_put },                         /* Allow any MIME type */
+    { DAV_FINITE_DEPTH, webdav_props},
     webdav_reports
 };
 
