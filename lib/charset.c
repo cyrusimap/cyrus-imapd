@@ -160,6 +160,12 @@ struct striphtml_state {
     enum html_state stack[2];
 };
 
+struct utf7imap_state {
+    int mode;
+    uint8_t bytes[3];
+    size_t num_bytes;
+};
+
 struct convert_rock;
 
 typedef void convertproc_t(struct convert_rock *rock, int c);
@@ -608,6 +614,117 @@ static void utf7_2uni (struct convert_rock *rock, int c)
     }
 }
 
+/* Flush buffered octets if in base64 mode. If at the end of the octet stream,
+ * also emit '-' to leave base64 and reset state. */
+static void utf16_2utf7imap_flush(struct convert_rock *rock, int eos)
+{
+    static const char tbl[64] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
+
+#define UTF7IMAP_B64(c) \
+    convert_putc(rock->next, tbl[(c)])
+
+    struct utf7imap_state *s = (struct utf7imap_state *)rock->state;
+    uint8_t *src = s->bytes;
+
+    if (s->mode) {
+
+        assert(s->num_bytes <= 3);
+
+        /* Base64 encode buffered bytes. */
+        if (s->num_bytes == 3) {
+            UTF7IMAP_B64(src[0] >> 2);
+            UTF7IMAP_B64(((src[0] & 0x03) << 4) | (src[1] >> 4));
+            UTF7IMAP_B64(((src[1] & 0x0f) << 2) | ((src[2] & 0xc0) >> 6));
+            UTF7IMAP_B64(src[2] & 0x3f);
+        } else if (s->num_bytes) {
+            UTF7IMAP_B64(src[0] >> 2);
+            if (s->num_bytes == 1) {
+                UTF7IMAP_B64((src[0] & 0x03) << 4);
+            } else {
+                UTF7IMAP_B64(((src[0] & 0x03) << 4) | (src[1] >> 4));
+                UTF7IMAP_B64((src[1] & 0x0f) << 2);
+            }
+        }
+        s->num_bytes = 0;
+
+        if (eos) {
+            /* Leave base64 mode at end of stream. */
+            convert_putc(rock->next, '-');
+            s->mode = 0;
+        }
+    }
+
+#undef UTF7IMAP_B64
+}
+
+/* Given two octets in a UTF-16 encoded string, emit the octets of its
+ * IMAP UTF-7 representation, as defined in RFC 3501 */
+static void utf16_2utf7imap(struct convert_rock *rock, int c)
+{
+    struct utf7imap_state *s = (struct utf7imap_state *)rock->state;
+
+    if (c == U_REPLACEMENT) {
+        convert_putc(rock->next, c);
+        return;
+    }
+
+    assert((unsigned)c <= 0xffff);
+
+    /* Inside modified base64 mode. */
+    if (s->mode) {
+
+        /* Leave base64 mode for any plain IMAP UTF7 character.
+         *
+         * RFC 3501, section 5.1.3 Mailbox International Naming Convention
+         * states:
+         *
+         * "In modified UTF-7, printable US-ASCII characters, except for "&",
+         * represent themselves; that is, characters with octet values
+         * 0x20-0x25 and 0x27-0x7e."
+         *
+         * But most implementations emit any octet value 0x0-0x7e as plain, so
+         * let's do the same here.
+         * */
+        if (c < 0x80) {
+            /* Flush pipe with end-of-stream set. */
+            utf16_2utf7imap_flush(rock, 1);
+
+            /* Emit plain IMAP UTF7 character. */
+            convert_putc(rock->next, c & 0xff);
+            if (c == '&') convert_putc(rock->next, '-');
+
+            /* Bail out early. */
+            return;
+        }
+
+        /* Buffer octets. */
+        s->bytes[s->num_bytes++] = (c >> 8) & 0xff;
+        if (s->num_bytes == 3) utf16_2utf7imap_flush(rock, 0);
+        s->bytes[s->num_bytes++] = c & 0xff;
+        if (s->num_bytes == 3) utf16_2utf7imap_flush(rock, 0);
+    }
+    /* Inside plain mode. */
+    else {
+        /* Copy through plain IMAP UTF7 characters. */
+        if (c < 0x80) {
+            convert_putc(rock->next, c & 0xff);
+            if (c == '&') convert_putc(rock->next, '-');
+
+            /* Bail out early. */
+            return;
+        }
+
+        /* Switch to base64 mode. */
+        convert_putc(rock->next, '&');
+        s->mode = 1;
+
+        /* Buffer octets. */
+        s->bytes[s->num_bytes++] = (c >> 8) & 0xff;
+        s->bytes[s->num_bytes++] = c & 0xff;
+    }
+}
+
 /*
  * Given a Unicode codepoint, emit one or more Unicode codepoints in
  * search-normalised form (having applied recursive Unicode
@@ -729,6 +846,40 @@ static void uni2html(struct convert_rock *rock, int c)
         s->seenspace = 0;
 
     convert_putc(rock->next, c);
+}
+
+/* Given a 16-bit Unicode codepoint, emit its two octets */
+static void utf16_2bytes(struct convert_rock *rock, int c) {
+    assert(c <= 0xffff);
+    convert_putc(rock->next, (c >> 8) & 0xff);
+    convert_putc(rock->next, c & 0xff);
+}
+
+/* Given a Unicode codepoint, emit two valid UTF-16 encoded octets */
+static void uni2utf16(struct convert_rock *rock, int c)
+{
+    if (!unicode_isvalid(c)) {
+        c = U_REPLACEMENT;
+    }
+
+    if (c <= 0xffff) {
+        /* Basic Multilingual Plane (BMP) */
+        convert_putc(rock->next, c);
+    } else {
+        /* Supplementary Planes (SMP, SIP, SSP, S PUA A/B) */
+        static const uint16_t HI_SURROGATE_START = 0xd800;
+        static const uint16_t LO_SURROGATE_START = 0xdc00;
+
+        uint16_t x = (uint16_t) c;
+        uint32_t u = (c >> 16) & ((1 << 5) - 1);
+        uint16_t w = (uint16_t) u - 1;
+
+        uint16_t hi = HI_SURROGATE_START | (w << 6) | x >> 10;
+        convert_putc(rock->next, hi);
+
+        uint16_t lo = (uint16_t) (LO_SURROGATE_START | (x & ((1 << 10) - 1)));
+        convert_putc(rock->next, lo);
+    }
 }
 
 /* Given a Unicode codepoint, emit valid UTF-8 encoded octets */
@@ -1381,8 +1532,11 @@ static const char *convert_name(struct convert_rock *rock)
     if (rock->f == uni2searchform) return "uni2searchform";
     if (rock->f == uni2html) return "uni2html";
     if (rock->f == uni2utf8) return "uni2utf8";
+    if (rock->f == uni2utf16) return "uni2utf16";
     if (rock->f == utf7_2uni) return "utf7_2uni";
     if (rock->f == utf8_2uni) return "utf8_2uni";
+    if (rock->f == utf16_2utf7imap) return "utf16_2utf7imap";
+    if (rock->f == utf16_2bytes) return "utf16_2bytes";
     return "wtf";
 }
 
@@ -1584,6 +1738,24 @@ static struct convert_rock *buffer_init(void)
     return rock;
 }
 
+static struct convert_rock *uni2utf16_init(struct convert_rock *next)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    rock->f = uni2utf16;
+    rock->next = next;
+    return rock;
+}
+
+static struct convert_rock *utf16_2utf7imap_init(struct convert_rock *next)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    struct utf7imap_state *s = xzmalloc(sizeof(struct utf7imap_state));
+    rock->state = s;
+    rock->f = utf16_2utf7imap;
+    rock->next = next;
+    return rock;
+}
+
 struct convert_rock *striphtml_init(struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
@@ -1666,6 +1838,37 @@ EXPORTED char *charset_convert(const char *s, int charset, int flags)
 
     /* do the conversion */
     convert_cat(input, s);
+
+    /* extract the result */
+    res = buffer_cstring(tobuffer);
+
+    /* clean up */
+    convert_free(input);
+
+    return res;
+}
+
+EXPORTED char *charset_to_utf7imap(const char *s, int charset)
+{
+    struct convert_rock *input, *utf7imap, *tobuffer;
+    char *res;
+
+    if (!s) return 0;
+
+    if (charset < 0 || charset >= chartables_num_charsets)
+        return xstrdup("X");
+
+    /* set up the conversion path */
+    tobuffer = buffer_init();
+    utf7imap = utf16_2utf7imap_init(tobuffer);
+    input = uni2utf16_init(utf7imap);
+    input = table_init(charset, input);
+
+    /* do the conversion */
+    convert_cat(input, s);
+
+    /* flush any remaining base64 octets from utf7imap */
+    utf16_2utf7imap_flush(utf7imap, 1 /*eos*/);
 
     /* extract the result */
     res = buffer_cstring(tobuffer);

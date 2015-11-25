@@ -95,6 +95,47 @@ static void test_to_utf8(void)
     free(s);
 }
 
+static void test_to_utf7imap(void)
+{
+    int cs;
+    cs = charset_lookupname("utf8");
+    CU_ASSERT(cs >= 0);
+
+#define TESTCASE(in, want) \
+    { \
+        char *s; \
+        static const char _in[] = (in); \
+        static const char _want[] = (want); \
+        s = charset_to_utf7imap(_in, cs); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _want); \
+        free(s); \
+    }
+
+    /* Plain UTF7-IMAP */
+    TESTCASE("Hello, World", "Hello, World");
+
+    /* Escaped ampersand */
+    TESTCASE("Laurel&Hardy", "Laurel&-Hardy");
+
+    /* LATIN SMALL LETTER O WITH DIAERESIS (U+00F6) */
+    TESTCASE("Tr""\xC3\xB6""del", "Tr&APY-del");
+
+    /* LATIN SMALL LETTER E WITH ACUTE (U+00E9) */
+    TESTCASE("R""\xC3\xA9""pertoire", "R&AOk-pertoire");
+
+    /* WHITE SMILING FACE' (U+263A) */
+    TESTCASE("Hi Mom \xE2\x98\xBA!", "Hi Mom &Jjo-!");
+
+    /* WHITE SMILING FACE' (U+263A) at end */
+    TESTCASE("Hi Mom \xE2\x98\xBA", "Hi Mom &Jjo-");
+
+    /* DESERET SMALL LETTER YEE (U+10437) & HAN Character (U+24B62) */
+    TESTCASE("\xF0\x90\x90\xB7&\xF0\x90\x90\xB7", "&2AHcNw-&-&2AHcNw-");
+
+#undef TESTCASE
+}
+
 static void test_qp(void)
 {
     /* corner cases in Quoted-Printable */
