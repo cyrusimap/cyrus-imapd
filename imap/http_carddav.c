@@ -295,8 +295,7 @@ static struct meth_params carddav_params = {
       (db_lookup_proc_t) &carddav_lookup_resource,
       (db_foreach_proc_t) &carddav_foreach,
       (db_write_proc_t) &carddav_write,
-      (db_delete_proc_t) &carddav_delete,
-      (db_delmbox_proc_t) &carddav_delmbox },
+      (db_delete_proc_t) &carddav_delete },
     NULL,                                       /* No ACL extensions */
     { CARDDAV_UID_CONFLICT, &carddav_copy },
     NULL,                                       /* No special DELETE handling */

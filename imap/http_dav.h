@@ -382,9 +382,6 @@ typedef int (*db_write_proc_t)(void *davdb, void *data);
 /* Function to delete resource in 'rowid' */
 typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid);
 
-/* Function to delete all entries in 'mailbox' */
-typedef int (*db_delmbox_proc_t)(void *davdb, const char *mailbox);
-
 typedef int (*db_proc_t)(void *davdb);
 
 struct davdb_params {
@@ -399,7 +396,6 @@ struct davdb_params {
      * we need to go via mailbox.c for replication support */
     db_write_proc_t write_resourceLOCKONLY;     /* write a specific resource */
     db_delete_proc_t delete_resourceLOCKONLY;   /* delete a specific resource */
-    db_delmbox_proc_t delete_mboxDONTUSE;       /* delete all resources in mailbox */
 };
 
 /*
