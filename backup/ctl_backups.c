@@ -258,6 +258,52 @@ int main (int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_backups", 0, 0);
 
+    if (cmd == CTLBU_CMD_RECONSTRUCT) {
+        /* special handling for reconstruct */
+        // FIXME
+    }
+    else if (options.mode == CTLBU_MODE_ALL) {
+        // open backups.db
+        // cyrusdb_foreach with the right command
+        // FIXME
+    }
+    else {
+        /* loop over backups named on command line */
+        struct buf userid = BUF_INITIALIZER;
+        struct buf fname = BUF_INITIALIZER;
+        int i;
+
+        for (i = optind; i < argc; i++) {
+            buf_reset(&userid);
+            buf_reset(&fname);
+            mbname_t *mbname = NULL;
+
+            // FIXME error checking in here
+
+            if (options.mode == CTLBU_MODE_USERNAME)
+                mbname = mbname_from_userid(argv[i]);
+            else if (options.mode == CTLBU_MODE_MBOXNAME)
+                mbname = mbname_from_intname(argv[i]);
+
+            if (mbname)
+                backup_get_paths(mbname, &fname, NULL);
+            else
+                buf_setcstr(&fname, argv[i]);
+
+            if (cmd_func[cmd])
+                cmd_func[cmd](&options,
+                              buf_cstring(&userid),
+                              buf_len(&userid),
+                              buf_cstring(&fname),
+                              buf_len(&fname));
+
+            if (mbname) mbname_free(&mbname);
+        }
+
+        buf_free(&userid);
+        buf_free(&fname);
+    }
+
     cyrus_done();
     exit(0);
 }
