@@ -92,12 +92,13 @@ enum backup_open_mode {
     BACKUP_OPEN_REINDEX,
 };
 
-static struct backup *_open_internal(const char *data_fname,
-                                     const char *index_fname,
-                                     enum backup_open_mode mode)
+static int _open_internal(struct backup **backupp,
+                          const char *data_fname, const char *index_fname,
+                          enum backup_open_mode mode,
+                          enum backup_open_nonblock nonblock)
 {
     struct backup *backup = xzmalloc(sizeof *backup);
-    if (!backup) return NULL;
+    int r;
 
     backup->fd = -1;
 
@@ -109,12 +110,19 @@ static struct backup *_open_internal(const char *data_fname,
                       S_IRUSR | S_IWUSR);
     if (backup->fd < 0) {
         syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
+        r = IMAP_IOERROR;
         goto error;
     }
 
-    int r = lock_setlock(backup->fd, /*excl*/ 1, /*nb*/ 0, backup->data_fname);
+    r = lock_setlock(backup->fd, /*excl*/ 1, nonblock, backup->data_fname);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            r = IMAP_MAILBOX_LOCKED;
+        }
+        else {
+            syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
+            r = IMAP_IOERROR;
+        }
         goto error;
     }
 
@@ -127,6 +135,7 @@ static struct backup *_open_internal(const char *data_fname,
         if (r && errno != ENOENT) {
             syslog(LOG_ERR, "IOERROR: rename %s %s: %m", backup->index_fname, oldindex_fname);
             free(oldindex_fname);
+            r = IMAP_IOERROR;
             goto error;
         }
 
@@ -139,6 +148,7 @@ static struct backup *_open_internal(const char *data_fname,
         r = fstat(backup->fd, &data_statbuf);
         if (r) {
             syslog(LOG_ERR, "IOERROR: fstat %s: %m", backup->data_fname);
+            r = IMAP_IOERROR;
             goto error;
         }
         if (data_statbuf.st_size > 0) {
@@ -146,11 +156,13 @@ static struct backup *_open_internal(const char *data_fname,
             r = stat(backup->index_fname, &index_statbuf);
             if (r && errno != ENOENT) {
                 syslog(LOG_ERR, "IOERROR: stat %s: %m", backup->index_fname);
+                r = IMAP_IOERROR;
                 goto error;
             }
 
             if (errno == ENOENT || index_statbuf.st_size == 0) {
                 syslog(LOG_ERR, "reindex needed: %s", backup->index_fname);
+                r = IMAP_MAILBOX_BADFORMAT; // FIXME define special error code for this?
                 goto error;
             }
         }
@@ -158,38 +170,46 @@ static struct backup *_open_internal(const char *data_fname,
 
     backup->db = sqldb_open(backup->index_fname, backup_index_initsql,
                             backup_index_version, backup_index_upgrade);
-    if (!backup->db) goto error;
+    if (!backup->db) {
+        r = IMAP_INTERNAL; // FIXME what does it mean to error here?
+        goto error;
+    }
 
     // FIXME detect when last append didn't end correctly (no length/data_sha1)
     // and insist on reindex (can this happen with txns?)
 
-    return backup;
+    *backupp = backup;
+    return 0;
 
 error:
     backup_close(&backup);
-    return NULL;
+    if (!r) r = IMAP_INTERNAL;
+    return r;
 }
 
-EXPORTED struct backup *backup_open(const mbname_t *mbname)
+EXPORTED int backup_open(struct backup **backupp,
+                         const mbname_t *mbname,
+                         enum backup_open_nonblock nonblock)
 {
     struct buf data_fname = BUF_INITIALIZER;
     struct buf index_fname = BUF_INITIALIZER;
-    struct backup *backup = NULL;
 
     int r = backup_get_paths(mbname, &data_fname, &index_fname);
     if (r) goto done;
 
-    backup = _open_internal(buf_cstring(&data_fname),
-                            buf_cstring(&index_fname),
-                            BACKUP_OPEN_NORMAL);
-    r = backup_verify(backup, BACKUP_VERIFY_QUICK);
-    if (r) backup_close(&backup);
+    r = _open_internal(backupp,
+                       buf_cstring(&data_fname), buf_cstring(&index_fname),
+                       BACKUP_OPEN_NORMAL, nonblock);
+    if (r) goto done;
+
+    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK);
+    if (r) backup_close(backupp);
 
 done:
     buf_free(&data_fname);
     buf_free(&index_fname);
 
-    return backup;
+    return r;
 }
 
 /* Uses mkstemp() to create a new, unique, backup path for the given user.
@@ -343,23 +363,26 @@ done:
 /*
  * If index_fname is NULL, it will be automatically derived from data_fname
  */
-EXPORTED struct backup *backup_open_paths(const char *data_fname,
-                                          const char *index_fname)
+EXPORTED int backup_open_paths(struct backup **backupp,
+                               const char *data_fname,
+                               const char *index_fname,
+                               enum backup_open_nonblock nonblock)
 {
     if (index_fname)
-        return _open_internal(data_fname, index_fname, BACKUP_OPEN_NORMAL);
+        return _open_internal(backupp, data_fname, index_fname,
+                              BACKUP_OPEN_NORMAL, nonblock);
         /* FIXME verify */
 
     char *tmp = strconcat(data_fname, ".index", NULL);
-    struct backup *backup = _open_internal(data_fname, tmp, BACKUP_OPEN_NORMAL);
+    int r = _open_internal(backupp, data_fname, tmp,
+                           BACKUP_OPEN_NORMAL, nonblock);
     free(tmp);
+    if (r) return r;
 
-    if (backup) {
-        int r = backup_verify(backup, BACKUP_VERIFY_QUICK);
-        if (r) backup_close(&backup);
-    }
+    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK);
+    if (r) backup_close(backupp);
 
-    return backup;
+    return r;
 }
 
 EXPORTED int backup_close(struct backup **backupp)
@@ -710,17 +733,18 @@ EXPORTED int backup_reindex(const char *name)
 {
     struct buf data_fname = BUF_INITIALIZER;
     struct buf index_fname = BUF_INITIALIZER;
+    struct backup *backup = NULL;
     int r;
 
     buf_printf(&data_fname, "%s", name);
     buf_printf(&index_fname, "%s.index", name);
 
-    struct backup *backup = _open_internal(buf_cstring(&data_fname),
-                                           buf_cstring(&index_fname),
-                                           BACKUP_OPEN_REINDEX);
+    r = _open_internal(&backup,
+                       buf_cstring(&data_fname), buf_cstring(&index_fname),
+                       BACKUP_OPEN_REINDEX, BACKUP_OPEN_BLOCK);
     buf_free(&index_fname);
     buf_free(&data_fname);
-    if (!backup) return -1;
+    if (r) return r;
 
     struct gzuncat *gzuc = gzuc_open(backup->fd);
 

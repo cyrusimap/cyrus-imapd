@@ -49,14 +49,23 @@
 
 struct backup;
 
-
 /* opening and closing backups */
-struct backup *backup_open(const mbname_t *mbname);
+enum backup_open_nonblock {
+    BACKUP_OPEN_BLOCK = 0,
+    BACKUP_OPEN_NONBLOCK = 1,
+};
+
+int backup_open(struct backup **backupp,
+                const mbname_t *mbname,
+                enum backup_open_nonblock nonblock);
 
 int backup_get_paths(const mbname_t *mbname,
                      struct buf *data_fname, struct buf *index_fname);
-struct backup *backup_open_paths(const char *data_fname,
-                                 const char *index_fname);
+
+int backup_open_paths(struct backup **backupp,
+                      const char *data_fname,
+                      const char *index_fname,
+                      enum backup_open_nonblock nonblock);
 
 int backup_close(struct backup **backupp); // also ends index/append ops
 
