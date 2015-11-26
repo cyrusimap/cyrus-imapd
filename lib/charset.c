@@ -599,7 +599,7 @@ static void utf7_2uni (struct convert_rock *rock, int c)
     if (s->mode) {
         /* '-' marks the end of a fragment */
         if (c == '-') {
-            /* special case: sequence +- creates output '+' (or '&') */
+            /* special case: sequence +- creates output '+' (or '&' for IMAP) */
             if (s->mode == 1)
                 convert_putc(rock->next, s->shift);
             /* otherwise no output for the '-' */
@@ -658,7 +658,7 @@ static void utf7_2uni (struct convert_rock *rock, int c)
 
     /* regular ASCII mode */
     else {
-        /* '+' (or '&')  switches to base64 unicode mode */
+        /* '+' (or '&' for IMAP)  switches to base64 unicode mode */
         if (c == s->shift) {
             s->mode = 1; /* switch mode, but no content processed yet */
             s->codepoint = 0;
