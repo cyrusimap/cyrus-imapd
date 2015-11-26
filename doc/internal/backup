@@ -540,9 +540,9 @@ not sure if these should be included, or separate tools:
 
 usage:
     ctl_backups [options] reconstruct                       # reconstruct backups.db from disk files
-    ctl_backups [options] ls [list_opts] [[mode] backup...] # list backup locations for given/all users
-    ctl_backups [options] mv new_fname [mode] backup        # rename a backup (think about this more)
-    ctl_backups [options] rm [mode] backup                  # delete a backup
+    ctl_backups [options] list [list_opts] [[mode] backup...] # list backup info for given/all users
+    ctl_backups [options] move new_fname [mode] backup      # rename a backup (think about this more)
+    ctl_backups [options] delete [mode] backup              # delete a backup
     ctl_backups [options] verify [mode] backup...           # verify specified backups
     ctl_backups [options] reindex [mode] backup...          # reindex specified backups
     ctl_backups [options] compress [mode] backup...         # compress specified backups
