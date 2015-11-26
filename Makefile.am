@@ -245,7 +245,7 @@ noinst_LTLIBRARIES += backup/libcyrus_backup.la
 noinst_HEADERS += backup/api.h
 libexec_PROGRAMS += backup/backupd
 noinst_PROGRAMS += backup/reindex backup/verify
-sbin_PROGRAMS += backup/bu_lock
+sbin_PROGRAMS += backup/bu_lock backup/ctl_backups
 endif # BACKUP
 
 if HAVE_SSL
@@ -833,6 +833,11 @@ backup_bu_lock_SOURCES = \
     imap/mutex_fake.c \
     backup/bu_lock.c
 backup_bu_lock_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+
+backup_ctl_backups_SOURCES = \
+    imap/mutex_fake.c \
+    backup/ctl_backups.c
+backup_ctl_backups_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
