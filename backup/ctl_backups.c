@@ -43,6 +43,8 @@
 
 #include <config.h>
 
+#include <assert.h>
+
 #include "lib/exitcodes.h"
 
 #include "imap/global.h"
@@ -56,30 +58,285 @@ EXPORTED void fatal(const char *error, int code)
     exit(code);
 }
 
-static void usage(const char *name)
+static const char *argv0 = NULL;
+static void usage(void)
 {
-    fprintf(stderr, "Usage %s: not written\n", name);
+    fprintf(stderr, "Usage %s: not written\n", argv0);
     exit(EC_USAGE);
+}
+
+enum ctlbu_mode {
+    CTLBU_MODE_UNSPECIFIED = 0,
+    CTLBU_MODE_FILENAME,
+    CTLBU_MODE_MBOXNAME,
+    CTLBU_MODE_USERNAME,
+    CTLBU_MODE_ALL,
+};
+
+enum ctlbu_lock_mode {
+    CTLBU_LOCK_MODE_UNSPECIFIED = 0,
+    CTLBU_LOCK_MODE_PIPE,
+    CTLBU_LOCK_MODE_SQL,
+    CTLBU_LOCK_MODE_EXEC,
+};
+
+struct ctlbu_cmd_options {
+    enum ctlbu_mode mode;
+    enum ctlbu_lock_mode lock_mode;
+    int verbose;
+    int list_stale;
+    const char *lock_exec_cmd;
+};
+
+enum ctlbu_cmd {
+    CTLBU_CMD_UNSPECIFIED = 0,
+    CTLBU_CMD_COMPRESS,
+    CTLBU_CMD_DELETE,
+    CTLBU_CMD_LIST,
+    CTLBU_CMD_LOCK,
+    CTLBU_CMD_MOVE,
+    CTLBU_CMD_RECONSTRUCT,
+    CTLBU_CMD_REINDEX,
+    CTLBU_CMD_VERIFY,
+};
+
+static int cmd_compress_one(const mbname_t *mbname,
+                            const char *data_fname,
+                            const struct ctlbu_cmd_options *options);
+static int cmd_delete_one(const mbname_t *mbname,
+                          const char *data_fname,
+                          const struct ctlbu_cmd_options *options);
+static int cmd_list_one(const mbname_t *mbname,
+                        const char *data_fname,
+                        const struct ctlbu_cmd_options *options);
+static int cmd_lock_one(const mbname_t *mbname,
+                        const char *data_fname,
+                        const struct ctlbu_cmd_options *options);
+static int cmd_move_one(const mbname_t *mbname,
+                        const char *data_fname,
+                        const struct ctlbu_cmd_options *options);
+static int cmd_reindex_one(const mbname_t *mbname,
+                           const char *data_fname,
+                           const struct ctlbu_cmd_options *options);
+static int cmd_verify_one(const mbname_t *mbname,
+                          const char *data_fname,
+                          const struct ctlbu_cmd_options *options);
+
+typedef int (*ctlbu_cmd_func)(const mbname_t *,
+                              const char *,
+                              const struct ctlbu_cmd_options *);
+
+static const ctlbu_cmd_func cmd_func[] = {
+    NULL,
+    cmd_compress_one,
+    cmd_delete_one,
+    cmd_list_one,
+    cmd_lock_one,
+    cmd_move_one,
+    NULL, /* reconstruct one doesn't make sense */
+    cmd_reindex_one,
+    cmd_verify_one,
+};
+
+static enum ctlbu_cmd parse_cmd_string(const char *cmd)
+{
+    assert(cmd != NULL);
+
+    switch(cmd[0]) {
+    case 'c':
+        if (strcmp(cmd, "compress") == 0) return CTLBU_CMD_COMPRESS;
+        break;
+    case 'd':
+        if (strcmp(cmd, "delete") == 0) return CTLBU_CMD_DELETE;
+        break;
+    case 'l':
+        if (strcmp(cmd, "list") == 0) return CTLBU_CMD_LIST;
+        if (strcmp(cmd, "lock") == 0) return CTLBU_CMD_LOCK;
+        break;
+    case 'm':
+        if (strcmp(cmd, "move") == 0) return CTLBU_CMD_MOVE;
+        break;
+    case 'r':
+        if (strcmp(cmd, "reconstruct") == 0) return CTLBU_CMD_RECONSTRUCT;
+        if (strcmp(cmd, "reindex") == 0) return CTLBU_CMD_REINDEX;
+        break;
+    case 'v':
+        if (strcmp(cmd, "verify") == 0) return CTLBU_CMD_VERIFY;
+        break;
+    };
+
+    return CTLBU_CMD_UNSPECIFIED;
 }
 
 int main (int argc, char **argv)
 {
+    argv0 = argv[0];
+
     int opt;
     const char *alt_config = NULL;
+    enum ctlbu_cmd cmd = CTLBU_CMD_UNSPECIFIED;
+    struct ctlbu_cmd_options options = {0};
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:fmpst:x:u")) != EOF) {
         switch (opt) {
+        case 'A':
+            if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
+            options.mode = CTLBU_MODE_ALL;
+            break;
         case 'C':
             alt_config = optarg;
             break;
+        case 'f':
+            if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
+            options.mode = CTLBU_MODE_FILENAME;
+            break;
+        case 'm':
+            if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
+            options.mode = CTLBU_MODE_MBOXNAME;
+            break;
+        case 'p':
+            if (options.lock_mode != CTLBU_LOCK_MODE_UNSPECIFIED) usage();
+            options.lock_mode = CTLBU_LOCK_MODE_PIPE;
+            break;
+        case 's':
+            if (options.lock_mode != CTLBU_LOCK_MODE_UNSPECIFIED) usage();
+            options.lock_mode = CTLBU_LOCK_MODE_SQL;
+            break;
+        case 't':
+            options.list_stale = atoi(optarg);
+            if (!options.list_stale) usage();
+            break;
+        case 'u':
+            if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
+            options.mode = CTLBU_MODE_USERNAME;
+            break;
+        case 'v':
+            options.verbose ++;
+            break;
+        case 'x':
+            if (options.lock_mode != CTLBU_LOCK_MODE_UNSPECIFIED) usage();
+            options.lock_mode = CTLBU_LOCK_MODE_EXEC;
+            options.lock_exec_cmd = optarg;
+            break;
+        case ':':
+            if (optopt == 't') options.list_stale = 24;
+            else usage();
+            break;
         default:
-            usage(argv[0]);
+            usage();
             break;
         }
     }
+
+    if (optind == argc) usage();
+
+    cmd = parse_cmd_string(argv[optind++]);
+    if (cmd == CTLBU_CMD_UNSPECIFIED) usage();
+
+    switch (cmd) {
+    /* list defaults to all */
+    case CTLBU_CMD_LIST:
+        if (options.mode == CTLBU_MODE_UNSPECIFIED && argc - optind == 0)
+            options.mode = CTLBU_MODE_ALL;
+        break;
+
+    /* some commands can't do multiple at a time */
+    case CTLBU_CMD_LOCK:
+        if (options.lock_mode == CTLBU_LOCK_MODE_UNSPECIFIED) usage();
+        /* fall thru */
+    case CTLBU_CMD_MOVE:
+    case CTLBU_CMD_DELETE:
+        if (options.mode == CTLBU_MODE_ALL) usage();
+        if (argc - optind > 1) usage();
+        break;
+
+    default:
+        break;
+    }
+
+    /* default mode is username */
+    if (options.mode == CTLBU_MODE_UNSPECIFIED)
+        options.mode = CTLBU_MODE_USERNAME;
 
     cyrus_init(alt_config, "ctl_backups", 0, 0);
 
     cyrus_done();
     exit(0);
+}
+
+static int cmd_compress_one(const mbname_t *mbname,
+                            const char *data_fname,
+                            const struct ctlbu_cmd_options *options)
+{
+    (void) mbname;
+    (void) data_fname;
+    (void) options;
+    fprintf(stderr, "unimplemented: %s\n", __func__);
+    return -1;
+}
+
+static int cmd_delete_one(const mbname_t *mbname,
+                          const char *data_fname,
+                          const struct ctlbu_cmd_options *options)
+{
+    (void) mbname;
+    (void) data_fname;
+    (void) options;
+    fprintf(stderr, "unimplemented: %s\n", __func__);
+    return -1;
+}
+
+static int cmd_list_one(const mbname_t *mbname,
+                        const char *data_fname,
+                        const struct ctlbu_cmd_options *options)
+{
+    (void) mbname;
+    (void) data_fname;
+    (void) options;
+    fprintf(stderr, "unimplemented: %s\n", __func__);
+    return -1;
+}
+
+static int cmd_lock_one(const mbname_t *mbname,
+                        const char *data_fname,
+                        const struct ctlbu_cmd_options *options)
+{
+    (void) mbname;
+    (void) data_fname;
+    (void) options;
+    fprintf(stderr, "unimplemented: %s\n", __func__);
+    return -1;
+}
+
+static int cmd_move_one(const mbname_t *mbname,
+                        const char *data_fname,
+                        const struct ctlbu_cmd_options *options)
+{
+    (void) mbname;
+    (void) data_fname;
+    (void) options;
+    fprintf(stderr, "unimplemented: %s\n", __func__);
+    return -1;
+}
+
+static int cmd_reindex_one(const mbname_t *mbname,
+                           const char *data_fname,
+                           const struct ctlbu_cmd_options *options)
+{
+    (void) mbname;
+    (void) data_fname;
+    (void) options;
+    fprintf(stderr, "unimplemented: %s\n", __func__);
+    return -1;
+}
+
+static int cmd_verify_one(const mbname_t *mbname,
+                          const char *data_fname,
+                          const struct ctlbu_cmd_options *options)
+{
+    (void) mbname;
+    (void) data_fname;
+    (void) options;
+    fprintf(stderr, "unimplemented: %s\n", __func__);
+    return -1;
 }
