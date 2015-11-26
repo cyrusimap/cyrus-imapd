@@ -1247,6 +1247,88 @@ sub test_getmailboxes_nocalendars
     $self->assert_num_equals(scalar @{$res->[0][1]{list}}, scalar @{$mboxes});
 }
 
+sub test_setmailboxes
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get inbox";
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+
+    my $state = $res->[0][1]{state};
+
+    xlog "create mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "foo",
+                            # name => "I.feel.\N{WHITE SMILING FACE}",
+                            parentId => $inbox->{id},
+                            role => undef
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_not_null($res->[0][1]{created});
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get mailbox $id";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{id}, $id);
+
+    my $mbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($mbox->{name}, "foo");
+    $self->assert_null($mbox->{parentId});
+    $self->assert_null($mbox->{role});
+    $self->assert_num_equals($mbox->{sortOrder}, 3);
+    $self->assert_equals($mbox->{mustBeOnlyMailbox}, JSON::true);
+    $self->assert_equals($mbox->{mayReadItems}, JSON::true);
+    $self->assert_equals($mbox->{mayAddItems}, JSON::true);
+    $self->assert_equals($mbox->{mayRemoveItems}, JSON::true);
+    $self->assert_equals($mbox->{mayCreateChild}, JSON::true);
+    $self->assert_equals($mbox->{mayRename}, JSON::true);
+    $self->assert_equals($mbox->{mayDelete}, JSON::true);
+    $self->assert_num_equals($mbox->{totalMessages}, 0);
+    $self->assert_num_equals($mbox->{unreadMessages}, 0);
+    $self->assert_num_equals($mbox->{totalThreads}, 0);
+    $self->assert_num_equals($mbox->{unreadThreads}, 0);
+
+=pod
+    xlog "update mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => { $id => {
+                            name => "bar",
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    xlog "get mailbox $id";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{id}, $id);
+    $mbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($mbox->{name}, "bar");
+
+=cut
+    xlog "destroy mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { destroy => [ $id ] }, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+
+    xlog "get mailbox $id";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
+}
+
 sub test_getcalendars
 {
     my ($self) = @_;
