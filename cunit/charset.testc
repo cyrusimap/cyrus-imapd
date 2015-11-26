@@ -95,24 +95,30 @@ static void test_to_utf8(void)
     free(s);
 }
 
-static void test_to_utf7imap(void)
+static void test_to_imaputf7(void)
 {
-    int cs;
-    cs = charset_lookupname("utf8");
-    CU_ASSERT(cs >= 0);
+    int csu8 = charset_lookupname("utf-8");
+    CU_ASSERT(csu8 >= 0);
+    int csu7 = charset_lookupname("imap-utf-7");
+    CU_ASSERT(csu7 >= 0);
 
 #define TESTCASE(in, want) \
     { \
         char *s; \
+        char *q; \
         static const char _in[] = (in); \
         static const char _want[] = (want); \
-        s = charset_to_utf7imap(_in, cs); \
+        s = charset_to_imaputf7(_in, csu8); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
+        q = charset_to_utf8(s, strlen(s), csu7, ENCODING_NONE); \
+        CU_ASSERT_PTR_NOT_NULL(q); \
+        CU_ASSERT_STRING_EQUAL(q, _in); \
+        free(q); \
         free(s); \
     }
 
-    /* Plain UTF7-IMAP */
+    /* Plain IMAP UTF-7 */
     TESTCASE("Hello, World", "Hello, World");
 
     /* Escaped ampersand */
@@ -131,7 +137,7 @@ static void test_to_utf7imap(void)
     TESTCASE("Hi Mom \xE2\x98\xBA", "Hi Mom &Jjo-");
 
     /* DESERET SMALL LETTER YEE (U+10437) & HAN Character (U+24B62) */
-    TESTCASE("\xF0\x90\x90\xB7&\xF0\x90\x90\xB7", "&2AHcNw-&-&2AHcNw-");
+    TESTCASE("\xF0\x90\x90\xB7""&""\xF0\xA4\xAD\xA2", "&2AHcNw-&-&2FLfYg-");
 
     /* CARRIAGE RETURN (CR) (U+000D) LINE FEED (LF) (U+000A) */
     TESTCASE("\x0D\x0A", "&AA0ACg-");

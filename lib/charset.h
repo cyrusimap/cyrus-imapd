@@ -101,6 +101,6 @@ extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
                            charset_index charset, int encoding,
                            const char *subtype, int flags);
 
-extern char *charset_to_utf7imap(const char *s, int charset);
+extern char *charset_to_imaputf7(const char *s, int charset);
 
 #endif /* INCLUDED_CHARSET_H */
