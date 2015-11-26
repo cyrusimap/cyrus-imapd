@@ -45,6 +45,7 @@
 
 #include <assert.h>
 
+#include "lib/cyrusdb.h"
 #include "lib/exitcodes.h"
 
 #include "imap/global.h"
@@ -100,33 +101,30 @@ enum ctlbu_cmd {
     CTLBU_CMD_VERIFY,
 };
 
-static int cmd_compress_one(const mbname_t *mbname,
-                            const char *data_fname,
-                            const struct ctlbu_cmd_options *options);
-static int cmd_delete_one(const mbname_t *mbname,
-                          const char *data_fname,
-                          const struct ctlbu_cmd_options *options);
-static int cmd_list_one(const mbname_t *mbname,
-                        const char *data_fname,
-                        const struct ctlbu_cmd_options *options);
-static int cmd_lock_one(const mbname_t *mbname,
-                        const char *data_fname,
-                        const struct ctlbu_cmd_options *options);
-static int cmd_move_one(const mbname_t *mbname,
-                        const char *data_fname,
-                        const struct ctlbu_cmd_options *options);
-static int cmd_reindex_one(const mbname_t *mbname,
-                           const char *data_fname,
-                           const struct ctlbu_cmd_options *options);
-static int cmd_verify_one(const mbname_t *mbname,
-                          const char *data_fname,
-                          const struct ctlbu_cmd_options *options);
+/* same signature as foreach_cb */
+static int cmd_compress_one(void *rock,
+                            const char *userid, size_t userid_len,
+                            const char *fname, size_t fname_len);
+static int cmd_delete_one(void *rock,
+                          const char *userid, size_t userid_len,
+                          const char *fname, size_t fname_len);
+static int cmd_list_one(void *rock,
+                        const char *userid, size_t userid_len,
+                        const char *fname, size_t fname_len);
+static int cmd_lock_one(void *rock,
+                        const char *userid, size_t userid_len,
+                        const char *fname, size_t fname_len);
+static int cmd_move_one(void *rock,
+                        const char *userid, size_t userid_len,
+                        const char *fname, size_t fname_len);
+static int cmd_reindex_one(void *rock,
+                           const char *userid, size_t userid_len,
+                           const char *fname, size_t fname_len);
+static int cmd_verify_one(void *rock,
+                          const char *userid, size_t userid_len,
+                          const char *fname, size_t fname_len);
 
-typedef int (*ctlbu_cmd_func)(const mbname_t *,
-                              const char *,
-                              const struct ctlbu_cmd_options *);
-
-static const ctlbu_cmd_func cmd_func[] = {
+static foreach_cb *const cmd_func[] = {
     NULL,
     cmd_compress_one,
     cmd_delete_one,
@@ -264,79 +262,79 @@ int main (int argc, char **argv)
     exit(0);
 }
 
-static int cmd_compress_one(const mbname_t *mbname,
-                            const char *data_fname,
-                            const struct ctlbu_cmd_options *options)
+static int cmd_compress_one(void *rock,
+                            const char *userid, size_t userid_len,
+                            const char *fname, size_t fname_len)
 {
-    (void) mbname;
-    (void) data_fname;
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     (void) options;
-    fprintf(stderr, "unimplemented: %s\n", __func__);
+    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
+            userid, userid_len, fname, fname_len);
     return -1;
 }
 
-static int cmd_delete_one(const mbname_t *mbname,
-                          const char *data_fname,
-                          const struct ctlbu_cmd_options *options)
+static int cmd_delete_one(void *rock,
+                          const char *userid, size_t userid_len,
+                          const char *fname, size_t fname_len)
 {
-    (void) mbname;
-    (void) data_fname;
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     (void) options;
-    fprintf(stderr, "unimplemented: %s\n", __func__);
+    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
+            userid, userid_len, fname, fname_len);
     return -1;
 }
 
-static int cmd_list_one(const mbname_t *mbname,
-                        const char *data_fname,
-                        const struct ctlbu_cmd_options *options)
+static int cmd_list_one(void *rock,
+                        const char *userid, size_t userid_len,
+                        const char *fname, size_t fname_len)
 {
-    (void) mbname;
-    (void) data_fname;
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     (void) options;
-    fprintf(stderr, "unimplemented: %s\n", __func__);
+    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
+            userid, userid_len, fname, fname_len);
     return -1;
 }
 
-static int cmd_lock_one(const mbname_t *mbname,
-                        const char *data_fname,
-                        const struct ctlbu_cmd_options *options)
+static int cmd_lock_one(void *rock,
+                        const char *userid, size_t userid_len,
+                        const char *fname, size_t fname_len)
 {
-    (void) mbname;
-    (void) data_fname;
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     (void) options;
-    fprintf(stderr, "unimplemented: %s\n", __func__);
+    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
+            userid, userid_len, fname, fname_len);
     return -1;
 }
 
-static int cmd_move_one(const mbname_t *mbname,
-                        const char *data_fname,
-                        const struct ctlbu_cmd_options *options)
+static int cmd_move_one(void *rock,
+                        const char *userid, size_t userid_len,
+                        const char *fname, size_t fname_len)
 {
-    (void) mbname;
-    (void) data_fname;
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     (void) options;
-    fprintf(stderr, "unimplemented: %s\n", __func__);
+    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
+            userid, userid_len, fname, fname_len);
     return -1;
 }
 
-static int cmd_reindex_one(const mbname_t *mbname,
-                           const char *data_fname,
-                           const struct ctlbu_cmd_options *options)
+static int cmd_reindex_one(void *rock,
+                           const char *userid, size_t userid_len,
+                           const char *fname, size_t fname_len)
 {
-    (void) mbname;
-    (void) data_fname;
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     (void) options;
-    fprintf(stderr, "unimplemented: %s\n", __func__);
+    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
+            userid, userid_len, fname, fname_len);
     return -1;
 }
 
-static int cmd_verify_one(const mbname_t *mbname,
-                          const char *data_fname,
-                          const struct ctlbu_cmd_options *options)
+static int cmd_verify_one(void *rock,
+                          const char *userid, size_t userid_len,
+                          const char *fname, size_t fname_len)
 {
-    (void) mbname;
-    (void) data_fname;
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     (void) options;
-    fprintf(stderr, "unimplemented: %s\n", __func__);
+    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
+            userid, userid_len, fname, fname_len);
     return -1;
 }
