@@ -674,7 +674,7 @@ static void utf16_2utf7imap(struct convert_rock *rock, int c)
     /* Inside modified base64 mode. */
     if (s->mode) {
 
-        /* Leave base64 mode for any plain IMAP UTF7 character.
+        /* Leave base64 mode for any printable IMAP UTF7 character.
          *
          * RFC 3501, section 5.1.3 Mailbox International Naming Convention
          * states:
@@ -683,10 +683,10 @@ static void utf16_2utf7imap(struct convert_rock *rock, int c)
          * represent themselves; that is, characters with octet values
          * 0x20-0x25 and 0x27-0x7e."
          *
-         * But most implementations emit any octet value 0x0-0x7e as plain, so
-         * let's do the same here.
+         * Some implementations emit any octet value 0x0-0x7e as printable, but
+         * let's be strict unless this turns out to be an issue.
          * */
-        if (c < 0x80) {
+        if (0x20 <= c && c <= 0x7e) {
             /* Flush pipe with end-of-stream set. */
             utf16_2utf7imap_flush(rock, 1);
 
@@ -706,8 +706,8 @@ static void utf16_2utf7imap(struct convert_rock *rock, int c)
     }
     /* Inside plain mode. */
     else {
-        /* Copy through plain IMAP UTF7 characters. */
-        if (c < 0x80) {
+        /* Copy through printable IMAP UTF7 characters. */
+        if (0x20 <= c && c <= 0x7e) {
             convert_putc(rock->next, c & 0xff);
             if (c == '&') convert_putc(rock->next, '-');
 
