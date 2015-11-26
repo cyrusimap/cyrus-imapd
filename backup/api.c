@@ -346,10 +346,13 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
         goto done;
     }
 
-    buf_setmap(data_fname, backup_path, path_len);
+    if (data_fname)
+        buf_setmap(data_fname, backup_path, path_len);
 
-    buf_setmap(index_fname, backup_path, path_len);
-    buf_appendcstr(index_fname, ".index");
+    if (index_fname) {
+        buf_setmap(index_fname, backup_path, path_len);
+        buf_appendcstr(index_fname, ".index");
+    }
 
 done:
     if (backups_db) {
