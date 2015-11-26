@@ -855,7 +855,7 @@ static void utf16_2bytes(struct convert_rock *rock, int c) {
     convert_putc(rock->next, c & 0xff);
 }
 
-/* Given a Unicode codepoint, emit two valid UTF-16 encoded octets */
+/* Given a Unicode codepoint, emit its valid UTF-16 characters */
 static void uni2utf16(struct convert_rock *rock, int c)
 {
     if (!unicode_isvalid(c)) {
