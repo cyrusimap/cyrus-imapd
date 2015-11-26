@@ -95,26 +95,28 @@ static struct backup *my_backup_open(enum bu_lock_open_type open_type,
 {
     struct backup *backup = NULL;
     mbname_t *mbname = NULL;
+    int r;
 
     switch (open_type) {
     case BU_LOCK_OPEN_UNSPECIFIED:
         break;
     case BU_LOCK_OPEN_FILENAME:
-        backup = backup_open_paths(backup_spec, NULL);
+        r = backup_open_paths(&backup, backup_spec, NULL, BACKUP_OPEN_BLOCK);
         break;
     case BU_LOCK_OPEN_MBOXNAME:
         mbname = mbname_from_intname(backup_spec);
-        backup = backup_open(mbname);
+        r = backup_open(&backup, mbname, BACKUP_OPEN_BLOCK);
         break;
     case BU_LOCK_OPEN_USERNAME:
         mbname = mbname_from_userid(backup_spec);
-        backup = backup_open(mbname);
+        r = backup_open(&backup, mbname, BACKUP_OPEN_BLOCK);
         break;
     default:
         break;
     }
 
     if (mbname) mbname_free(&mbname);
+    if (r) return NULL;
     return backup;
 }
 
