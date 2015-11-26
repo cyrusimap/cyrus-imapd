@@ -106,6 +106,7 @@ static int jmap_post(struct transaction_t *txn, void *params);
 
 /* JMAP methods. */
 static int getMailboxes(struct jmap_req *req);
+static int setMailboxes(struct jmap_req *req);
 static int getContactGroups(struct jmap_req *req);
 static int getContactGroupUpdates(struct jmap_req *req);
 static int setContactGroups(struct jmap_req *req);
@@ -144,7 +145,8 @@ static const struct message_t {
     const char *name;
     int (*proc)(struct jmap_req *req);
 } messages[] = {
-    { "getMailboxes",   &getMailboxes },
+    { "getMailboxes",           &getMailboxes },
+    { "setMailboxes",           &setMailboxes },
     { "getContactGroups",       &getContactGroups },
     { "getContactGroupUpdates", &getContactGroupUpdates },
     { "setContactGroups",       &setContactGroups },
@@ -660,6 +662,37 @@ static int jmap_readprop(json_t *root, const char *name, int mandatory,
     return jmap_readprop_full(root, NULL, name, mandatory, invalid, fmt, dst);
 }
 
+static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
+{
+    /* XXX - look up root path from namespace? */
+    struct buf buf = BUF_INITIALIZER;
+    char *userid = mboxname_to_userid(mboxname);
+
+    const char *prefix = NULL;
+    if (mboxname_isaddressbookmailbox(mboxname, 0)) {
+        prefix = namespace_addressbook.prefix;
+    }
+    else if (mboxname_iscalendarmailbox(mboxname, 0)) {
+        prefix = namespace_calendar.prefix;
+    }
+
+    if (strchr(userid, '@') || !httpd_extradomain) {
+        buf_printf(&buf, "%s/user/%s/%s",
+                   prefix, userid, strrchr(mboxname, '.')+1);
+    }
+    else {
+        buf_printf(&buf, "%s/user/%s@%s/%s",
+                   prefix, userid, httpd_extradomain, strrchr(mboxname, '.')+1);
+    }
+    if (resource)
+        buf_printf(&buf, "/%s", resource);
+
+    json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
+    free(userid);
+    buf_free(&buf);
+}
+
+
 /*****************************************************************************
  * JMAP Mailboxes API
  ****************************************************************************/
@@ -671,6 +704,42 @@ struct getMailboxes_rock {
 
     const char *uniqueid; /* XXX: until mboxlist allows lookup by uniqueid */
 };
+
+/* Determine the JMAP role of a Cyrus mailbox named mboxname based on the
+ * specialuse annotation and HTTP users inbox name. */
+const char *jmap_mailbox_role(const char *mboxname)
+{
+    struct buf specialuse = BUF_INITIALIZER;
+    const char *role = NULL;
+    int r;
+    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+
+    if (!strcmp(mboxname, inboxname)) {
+        free(inboxname);
+        return "inbox";
+    }
+
+    r = annotatemore_lookup(mboxname, "/specialuse", httpd_userid, &specialuse);
+    if (r) return NULL;
+
+    if (specialuse.len) {
+        const char *use = buf_cstring(&specialuse);
+        if (!strcmp(use, "\\Archive")) {
+            role = "archive";
+        } else if (!strcmp(use, "\\Drafts")) {
+            role = "drafts";
+        } else if (!strcmp(use, "\\Junk")) {
+            role = "junk";
+        } else if (!strcmp(use, "\\Sent")) {
+            role = "sent";
+        } else if (!strcmp(use, "\\Trash")) {
+            role = "trash";
+        }
+    }
+    buf_free(&specialuse);
+    free(inboxname);
+    return role;
+}
 
 int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
 {
@@ -756,21 +825,45 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
     mbox = json_pack("{}");
     json_object_set_new(mbox, "id", json_string(mailbox->uniqueid));
     if (_wantprop(props, "name")) {
-        char *extname;
-        if (mailbox != inbox) {
-            mbname_t *mbname = mbname_from_intname(mboxname);
-            if (!mbname) {
-                syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mboxname);
-                r = IMAP_INTERNAL;
-                goto done;
-            }
-            extname = mbname_pop_boxes(mbname);
-            mbname_free(&mbname);
+        struct buf attrib = BUF_INITIALIZER;
+        static const char *displayname_annot =
+            IMAP_ANNOT_NS "x-displayname";
+        r = annotatemore_lookupmask(mbentry->name, displayname_annot, httpd_userid, &attrib);
+
+        /* XXX either wipe or set x-displayname for IMAP RENAME and CREATE */
+
+        if (!r && attrib.len) {
+            /* We got a mailbox with a displayname annotation. Use it. */
+            json_object_set_new(mbox, "name", json_string(buf_cstring(&attrib)));
         } else {
-            extname = xstrdup("Inbox");
+            /* No displayname annotation. Most probably this mailbox was
+             * created before JMAP. In any case, determine name from the
+             * the last segment of the mailboxname hierarchy. */
+            char *extname, *q = NULL;
+            charset_index cs;
+
+            if (mailbox != inbox) {
+                mbname_t *mbname = mbname_from_intname(mboxname);
+                if (!mbname) {
+                    syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mboxname);
+                    r = IMAP_INTERNAL;
+                    goto done;
+                }
+                extname = mbname_pop_boxes(mbname);
+                /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
+                cs = charset_lookupname("imap-utf-7");
+                if ((q = charset_to_utf8(extname, strlen(extname), cs, ENCODING_NONE))) {
+                    free(extname);
+                    extname = q;
+                }
+                mbname_free(&mbname);
+            } else {
+                extname = xstrdup("Inbox");
+            }
+            json_object_set_new(mbox, "name", json_string(extname));
+            free(extname);
         }
-        json_object_set_new(mbox, "name", json_string(extname));
-        free(extname);
+        buf_free(&attrib);
     }
     if (_wantprop(props, "mustBeOnlyMailbox")) {
         json_object_set_new(mbox, "mustBeOnlyMailbox", json_true());
@@ -786,6 +879,7 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(mbox, "mayRemoveItems", json_boolean(rights & ACL_DELETEMSG));
     }
     if (_wantprop(props, "mayCreateChild")) {
+        /* XXX What about \Noinferiors annotation */
         json_object_set_new(mbox, "mayCreateChild", json_boolean(rights & ACL_CREATE));
     }
 
@@ -812,23 +906,7 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(mbox, "mayDelete", json_boolean(mayDelete));
     }
     if (_wantprop(props, "role")) {
-        const char *role = NULL;
-        if (mailbox == inbox) {
-            role = "inbox";
-        } else if (specialuse.len) {
-            const char *use = buf_cstring(&specialuse);
-            if (!strcmp(use, "\\Archive")) {
-                role = "archive";
-            } else if (!strcmp(use, "\\Drafts")) {
-                role = "drafts";
-            } else if (!strcmp(use, "\\Junk")) {
-                role = "junk";
-            } else if (!strcmp(use, "\\Sent")) {
-                role = "sent";
-            } else if (!strcmp(use, "\\Trash")) {
-                role = "trash";
-            }
-        }
+        const char *role = jmap_mailbox_role(mailbox->name);
         json_object_set_new(mbox, "role", role ? json_string(role) : json_null());
     }
     if (_wantprop(props, "sortOrder")) {
@@ -947,34 +1025,516 @@ done:
     return 0;
 }
 
-static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
+struct _mboxname_uniqueid_rock {
+    const char *uniqueid;
+    char *mboxname;
+};
+
+static int _mboxname_uniqueid_cb(const mbentry_t *mbentry, void *vrock) {
+    struct mailbox *mailbox = NULL;
+    struct _mboxname_uniqueid_rock *rock = (struct _mboxname_uniqueid_rock *) vrock;
+    int r = 0;
+
+    /* Open mailbox to get uniqueid. */
+    if ((r = mailbox_open_irl(mbentry->name, &mailbox))) {
+        syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                mbentry->name, error_message(r));
+        goto done;
+    }
+    mailbox_unlock_index(mailbox, NULL);
+
+    if (!rock->mboxname && !strcmp(rock->uniqueid, mailbox->uniqueid)) {
+        rock->mboxname = xstrdup(mbentry->name);
+    }
+
+done:
+    if (mailbox) mailbox_close(&mailbox);
+    return r;
+}
+
+static int setMailboxes(struct jmap_req *req)
 {
-    /* XXX - look up root path from namespace? */
-    struct buf buf = BUF_INITIALIZER;
-    char *userid = mboxname_to_userid(mboxname);
+    int r = 0;
+    json_t *set = NULL;
 
-    const char *prefix = NULL;
-    if (mboxname_isaddressbookmailbox(mboxname, 0)) {
-        prefix = namespace_addressbook.prefix;
+    json_t *state = json_object_get(req->args, "ifInState");
+    if (state && jmap_checkstate(state, 0 /*MBTYPE*/, req)) {
+        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
+                    "error", "type", "stateMismatch", req->tag));
+        goto done;
     }
-    else if (mboxname_iscalendarmailbox(mboxname, 0)) {
-        prefix = namespace_calendar.prefix;
+    set = json_pack("{s:s}", "accountId", req->userid);
+    json_object_set_new(set, "oldState", state);
+
+    json_t *create = json_object_get(req->args, "create");
+    if (create) {
+        json_t *created = json_pack("{}");
+        json_t *notCreated = json_pack("{}");
+        const char *key;
+        json_t *arg;
+
+        json_object_foreach(create, key, arg) {
+            json_t *invalid = json_pack("[]");
+            const char *parentId = NULL, *name, *role = NULL;
+            int sortOrder = 0;
+            char *parentname = NULL;
+            char *mboxname = NULL;
+
+            /* XXX Validate key. */
+
+            /* Parse properties. */
+            if (json_object_get(arg, "id")) {
+                json_array_append_new(invalid, json_string("id"));
+            }
+            if (jmap_readprop(arg, "name", 1, invalid, "s", &name) > 0) {
+                /* XXX Validate name */
+            }
+            if (json_object_get(arg, "parentId") != json_null()) {
+                if (jmap_readprop(arg, "parentId", 1, invalid, "s", &parentId) > 0) {
+                    /* XXX Validate parentId */
+                }
+            } else {
+                parentId = req->inbox->uniqueid;
+            }
+            if (json_object_get(arg, "role") != json_null()) {
+                if (jmap_readprop(arg, "role", 1, invalid, "s", &role) > 0) {
+                    /* XXX Validate role */
+                    /* XXX Check role for uniqueness. */
+                }
+            }
+            if (jmap_readprop(arg, "sortOrder", 0, invalid, "i", &sortOrder) > 0) {
+                /* XXX Validate sortOrder */
+            }
+            if (json_object_get(arg, "mustBeOnlyMailbox")) {
+                json_array_append_new(invalid, json_string("mustBeOnlyMailbox"));
+            }
+            if (json_object_get(arg, "mayReadItems")) {
+                json_array_append_new(invalid, json_string("mayReadItems"));
+            }
+            if (json_object_get(arg, "mayAddItems")) {
+                json_array_append_new(invalid, json_string("mayAddItems"));
+            }
+            if (json_object_get(arg, "mayRemoveItems")) {
+                json_array_append_new(invalid, json_string("mayRemoveItems"));
+            }
+            if (json_object_get(arg, "mayRename")) {
+                json_array_append_new(invalid, json_string("mayRename"));
+            }
+            if (json_object_get(arg, "mayDelete")) {
+                json_array_append_new(invalid, json_string("mayDelete"));
+            }
+            if (json_object_get(arg, "totalMessages")) {
+                json_array_append_new(invalid, json_string("totalMessages"));
+            }
+            if (json_object_get(arg, "unreadMessages")) {
+                json_array_append_new(invalid, json_string("unreadMessages"));
+            }
+            if (json_object_get(arg, "totalThreads")) {
+                json_array_append_new(invalid, json_string("totalThreads"));
+            }
+            if (json_object_get(arg, "unreadThreads")) {
+                json_array_append_new(invalid, json_string("unreadThreads"));
+            }
+
+            /* Validate parent. */
+            if (parentId && strcmp(parentId, req->inbox->uniqueid)) {
+                /* Lookup parent by parentId. */
+                struct _mboxname_uniqueid_rock rock;
+                rock.uniqueid = parentId;
+                rock.mboxname = NULL;
+                r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
+                                          &rock, MBOXTREE_SKIP_ROOT);
+                if (r) goto done;
+                if (rock.mboxname) {
+                    parentname = rock.mboxname;
+                } else {
+                    json_array_append_new(invalid, json_string("parentId"));
+                }
+            } else {
+                /* parent must be INBOX */
+                parentname = xstrdup(req->inbox->name);
+            }
+
+            /* Report any property errors and bail out. */
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notCreated, key, err);
+                if (parentname) free(parentname);
+                continue;
+            }
+            json_decref(invalid);
+
+            /* Escape and build mailbox name. */
+            charset_index cs = charset_lookupname("utf-8");
+            if (cs == CHARSET_UNKNOWN_CHARSET) {
+                /* huh? */
+                syslog(LOG_INFO, "charset utf-8 is unknown");
+                r = IMAP_INTERNAL;
+                if (parentname) free(parentname);
+                goto done;
+            }
+            char *s = charset_to_imaputf7(name, strlen(name), cs, ENCODING_NONE);
+            if (!s) {
+                syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+                r = IMAP_INTERNAL;
+                if (parentname) free(parentname);
+                goto done;
+            }
+
+            /* XXX Deduplicate mailbox name. */
+            struct buf buf = BUF_INITIALIZER;
+            buf_printf(&buf, "%s%c%s", parentname, jmap_namespace.hier_sep, s);
+            free(s);
+            free(parentname);
+            /* XXX */
+            mboxname = buf_newcstring(&buf);
+            buf_free(&buf);
+
+            /* Create mailbox. */
+            struct buf acl = BUF_INITIALIZER;
+            char rights[100];
+            buf_reset(&acl);
+            cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
+            r = mboxlist_createsync(mboxname, 0 /* MBTYPE */,
+                    NULL /* partition */,
+                    req->userid, req->authstate,
+                    0 /* options */, 0 /* uidvalidity */,
+                    0 /* highestmodseq */, buf_cstring(&acl),
+                    NULL /* uniqueid */, 0 /* local_only */,
+                    NULL /* mboxptr */);
+            buf_free(&acl);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                        mboxname, error_message(r));
+                free(mboxname);
+                goto done;
+            }
+            buf_free(&acl);
+
+            /* Open our new mailbox. */
+            struct mailbox *mbox = NULL;
+            if ((r = mailbox_open_iwl(mboxname, &mbox))) {
+                syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
+                        mboxname, error_message(r));
+                free(mboxname);
+                goto done;
+            }
+            free(mboxname);
+
+            /* Set x-displayname annotation on mailbox. */
+            annotate_state_t *astate = NULL;
+            r = mailbox_get_annotate_state(mbox, 0, &astate);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
+                        mbox->name, error_message(r));
+                mailbox_close(&mbox);
+                goto done;
+            }
+            struct buf val = BUF_INITIALIZER;
+            buf_printf(&val, "%s", name);
+            static const char *displayname_annot =
+                IMAP_ANNOT_NS "x-displayname";
+            r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
+            if (r) {
+                syslog(LOG_ERR, "failed to write annotation %s: %s",
+                        displayname_annot, error_message(r));
+                mailbox_close(&mbox);
+                goto done;
+            }
+            buf_free(&val);
+
+            /* Return uniqueid. */
+            json_object_set_new(created, key, json_pack("{s:s}",
+                        "id", mbox->uniqueid));
+            mailbox_close(&mbox);
+        }
+
+        if (json_object_size(created)) {
+            json_object_set(set, "created", created);
+        }
+        json_decref(created);
+
+        if (json_object_size(notCreated)) {
+            json_object_set(set, "notCreated", notCreated);
+        }
+        json_decref(notCreated);
     }
 
-    if (strchr(userid, '@') || !httpd_extradomain) {
-        buf_printf(&buf, "%s/user/%s/%s",
-                   prefix, userid, strrchr(mboxname, '.')+1);
-    }
-    else {
-        buf_printf(&buf, "%s/user/%s@%s/%s",
-                   prefix, userid, httpd_extradomain, strrchr(mboxname, '.')+1);
-    }
-    if (resource)
-        buf_printf(&buf, "/%s", resource);
+    json_t *update = json_object_get(req->args, "update");
+    if (update) {
+        json_t *updated = json_pack("{}");
+        json_t *notUpdated = json_pack("{}");
+        const char *uid;
+        json_t *arg;
 
-    json_object_set_new(obj, "x-href", json_string(buf_cstring(&buf)));
-    free(userid);
-    buf_free(&buf);
+        json_object_foreach(update, uid, arg) {
+            json_t *invalid = json_pack("[]");
+            const char *id, *parentId = NULL, *name, *role = NULL, *currole = NULL;
+            int sortOrder = 0;
+            char *parentname = NULL;
+            char *mboxname = NULL;
+            int pe;
+
+            /* XXX Validate uid. */
+
+            /* Lookup mailbox by uid. */
+            if (strcmp(uid, req->inbox->uniqueid)) {
+                struct _mboxname_uniqueid_rock rock;
+                rock.uniqueid = uid;
+                rock.mboxname = NULL;
+                r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
+                        &rock, MBOXTREE_SKIP_ROOT);
+                if (r) goto done;
+                mboxname = rock.mboxname;
+            } else {
+                mboxname = xstrdup(req->inbox->name);
+            }
+            if (!mboxname) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notUpdated, uid, err);
+                continue;
+            }
+
+            /* Open the mailbox. */
+            struct mailbox *mbox = NULL;
+            r = mailbox_open_iwl(mboxname, &mbox);
+            if (r == IMAP_PERMISSION_DENIED) {
+                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                json_object_set_new(notUpdated, uid, err);
+                r = 0;
+                free(mboxname);
+                continue;
+            } else if (r) {
+                syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
+                        mboxname, error_message(r));
+                free(mboxname);
+                goto done;
+            }
+            free(mboxname);
+
+            /* Determine current role */
+            currole = jmap_mailbox_role(mbox->name);
+
+            /* Parse properties. */
+            pe = jmap_readprop(arg, "id", 0, invalid, "s", &id);
+            if (pe > 0 && strcmp(id, mbox->uniqueid)) {
+                json_array_append_new(invalid, json_string("id"));
+            }
+            pe = jmap_readprop(arg, "name", 0, invalid, "s", &name);
+            if (pe > 0) {
+                /* XXX Validate name */
+            }
+
+            if (json_object_get(arg, "parentId") != json_null()) {
+                pe = jmap_readprop(arg, "parentId", 0, invalid, "s", &parentId);
+                if (pe > 0) {
+                    /* XXX Validate parentId */
+                } else {
+                    /* XXX Leave current parentId unchanged. */
+                }
+            } else {
+                parentId = req->inbox->uniqueid;
+            }
+
+            if (json_object_get(arg, "role") != json_null()) {
+                pe = jmap_readprop(arg, "role", 0, invalid, "s", &role);
+                if (pe > 0) {
+                    /* XXX Validate role */
+                    /* XXX Check role for uniqueness. */
+                } else if (!pe) {
+                    /* Leave current role unchanged. */
+                    role = currole;
+                }
+            }
+            if (jmap_readprop(arg, "sortOrder", 0, invalid, "i", &sortOrder) > 0) {
+                /* XXX Validate sortOrder */
+            }
+            if (json_object_get(arg, "mustBeOnlyMailbox")) {
+                json_array_append_new(invalid, json_string("mustBeOnlyMailbox"));
+            }
+            if (json_object_get(arg, "mayReadItems")) {
+                json_array_append_new(invalid, json_string("mayReadItems"));
+            }
+            if (json_object_get(arg, "mayAddItems")) {
+                json_array_append_new(invalid, json_string("mayAddItems"));
+            }
+            if (json_object_get(arg, "mayRemoveItems")) {
+                json_array_append_new(invalid, json_string("mayRemoveItems"));
+            }
+            if (json_object_get(arg, "mayRename")) {
+                json_array_append_new(invalid, json_string("mayRename"));
+            }
+            if (json_object_get(arg, "mayDelete")) {
+                json_array_append_new(invalid, json_string("mayDelete"));
+            }
+            if (json_object_get(arg, "totalMessages")) {
+                json_array_append_new(invalid, json_string("totalMessages"));
+            }
+            if (json_object_get(arg, "unreadMessages")) {
+                json_array_append_new(invalid, json_string("unreadMessages"));
+            }
+            if (json_object_get(arg, "totalThreads")) {
+                json_array_append_new(invalid, json_string("totalThreads"));
+            }
+            if (json_object_get(arg, "unreadThreads")) {
+                json_array_append_new(invalid, json_string("unreadThreads"));
+            }
+
+            /* Report any property errors and bail out. */
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notUpdated, uid, err);
+                if (parentname) free(parentname);
+                continue;
+            }
+            json_decref(invalid);
+
+            if (parentId) {
+                /* XXX change parent... this can get ugly */
+            }
+
+            if (role) {
+                /* XXX change role */
+            }
+
+            if (name) {
+                /* Set x-displayname annotation on mailbox. */
+                /* XXX Rename mailbox */
+                annotate_state_t *astate = NULL;
+                r = mailbox_get_annotate_state(mbox, 0, &astate);
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
+                            mbox->name, error_message(r));
+                    mailbox_close(&mbox);
+                    goto done;
+                }
+                struct buf val = BUF_INITIALIZER;
+                buf_printf(&val, "%s", name);
+                static const char *displayname_annot =
+                    IMAP_ANNOT_NS "x-displayname";
+                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            displayname_annot, error_message(r));
+                    mailbox_close(&mbox);
+                    goto done;
+                }
+                buf_free(&val);
+            }
+
+            /* Report as updated. */
+            json_array_append_new(updated, json_string(uid));
+            mailbox_close(&mbox);
+        }
+
+        if (json_object_size(updated)) {
+            json_object_set(set, "updated", updated);
+        }
+        json_decref(updated);
+
+        if (json_object_size(notUpdated)) {
+            json_object_set(set, "notUpdated", notUpdated);
+        }
+        json_decref(notUpdated);
+    }
+
+    json_t *destroy = json_object_get(req->args, "destroy");
+    if (destroy) {
+        json_t *destroyed = json_pack("[]");
+        json_t *notDestroyed = json_pack("{}");
+
+        size_t index;
+        json_t *juid;
+        json_array_foreach(destroy, index, juid) {
+
+            /* Validate uid. JMAP destroy does not allow reference uids. */
+            const char *uid = json_string_value(juid);
+            if (!strlen(uid) || *uid == '#') {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Do not allow to remove INBOX. */
+            if (!strcmp(uid, req->inbox->uniqueid)) {
+                json_t *err = json_pack("{s:s}", "type", "forbidden");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Lookup mailbox by id. */
+            char *mboxname;
+            struct _mboxname_uniqueid_rock rock;
+            rock.uniqueid = uid;
+            rock.mboxname = NULL;
+            r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
+                    &rock, MBOXTREE_SKIP_ROOT);
+            if (r) goto done;
+            if (rock.mboxname) {
+                mboxname = rock.mboxname;
+            } else {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* Destroy mailbox. */
+            struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+            if (mboxlist_delayed_delete_isenabled()) {
+                r = mboxlist_delayed_deletemailbox(mboxname,
+                        httpd_userisadmin || httpd_userisproxyadmin,
+                        httpd_userid, req->authstate, mboxevent,
+                        1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+            } else {
+                r = mboxlist_deletemailbox(mboxname,
+                        httpd_userisadmin || httpd_userisproxyadmin,
+                        httpd_userid, req->authstate, mboxevent,
+                        1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+            }
+            if (r) {
+                syslog(LOG_ERR, "failed to delete mailbox(%s): %s",
+                        mboxname, error_message(r));
+                free(mboxname);
+                goto done;
+            }
+            free(mboxname);
+
+            /* Report mailbox as destroyed. */
+            json_array_append_new(destroyed, json_string(uid));
+        }
+        if (json_array_size(destroyed)) {
+            json_object_set(set, "destroyed", destroyed);
+        }
+        json_decref(destroyed);
+        if (json_object_size(notDestroyed)) {
+            json_object_set(set, "notDestroyed", notDestroyed);
+        }
+        json_decref(notDestroyed);
+    }
+
+    /* Set newState field in calendarsSet. */
+    if (json_object_get(set, "created") ||
+        json_object_get(set, "updated") ||
+        json_object_get(set, "destroyed")) {
+
+        r = jmap_bumpstate(0 /*MBTYPE*/, req);
+        if (r) goto done;
+    }
+    json_object_set_new(set, "newState", jmap_getstate(0 /*MBTYPE*/, req));
+
+    json_incref(set);
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("mailboxesSet"));
+    json_array_append_new(item, set);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    if (set) json_decref(set);
+    return r;
 }
 
 /*****************************************************************************
