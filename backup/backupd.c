@@ -498,8 +498,9 @@ static struct open_backup *backupd_open_backup(const mbname_t *mbname)
     time_t now = time(0);
 
     if (!open) {
-        struct backup *backup = backup_open(mbname);
-        if (!backup) return NULL;
+        struct backup *backup = NULL;
+        int r = backup_open(&backup, mbname, BACKUP_OPEN_BLOCK);
+        if (r) return NULL;
         backup_append_start(backup); // FIXME error checking
         open = open_backups_list_add(&backupd_open_backups, key, backup);
     }
