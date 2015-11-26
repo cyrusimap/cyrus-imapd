@@ -108,7 +108,7 @@ static void test_to_imaputf7(void)
         char *q; \
         static const char _in[] = (in); \
         static const char _want[] = (want); \
-        s = charset_to_imaputf7(_in, csu8); \
+        s = charset_to_imaputf7(_in, strlen(_in), csu8, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
         q = charset_to_utf8(s, strlen(s), csu7, ENCODING_NONE); \

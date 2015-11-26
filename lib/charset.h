@@ -87,6 +87,8 @@ extern char *charset_encode_mimebody(const char *msg_base, size_t len,
 extern char *charset_qpencode_mimebody(const char *msg_base, size_t len,
                                        size_t *outlen);
 extern char *charset_to_utf8(const char *msg_base, size_t len, charset_index charset, int encoding);
+extern char *charset_to_imaputf7(const char *msg_base, size_t len, charset_index charset, int encoding);
+
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
 extern char *charset_encode_mimeheader(const char *header, size_t len);
@@ -100,7 +102,5 @@ extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
                            const struct buf *data,
                            charset_index charset, int encoding,
                            const char *subtype, int flags);
-
-extern char *charset_to_imaputf7(const char *s, int charset);
 
 #endif /* INCLUDED_CHARSET_H */

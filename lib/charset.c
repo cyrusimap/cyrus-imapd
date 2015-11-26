@@ -1911,15 +1911,19 @@ EXPORTED char *charset_convert(const char *s, int charset, int flags)
     return res;
 }
 
-EXPORTED char *charset_to_imaputf7(const char *s, int charset)
+/* Convert from a given charset and encoding into IMAP UTF-7 */
+EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, int charset, int encoding)
 {
     struct convert_rock *input, *imaputf7, *tobuffer;
     char *res;
 
-    if (!s) return 0;
-
+    /* Initialize character set mapping */
     if (charset < 0 || charset >= chartables_num_charsets)
-        return xstrdup("X");
+        return 0;
+
+    /* check for trivial search */
+    if (len == 0)
+        return xstrdup("");
 
     /* set up the conversion path */
     tobuffer = buffer_init();
@@ -1927,8 +1931,30 @@ EXPORTED char *charset_to_imaputf7(const char *s, int charset)
     input = uni2utf16_init(imaputf7);
     input = table_init(charset, input);
 
+    /* choose encoding extraction if needed */
+    switch (encoding) {
+        case ENCODING_NONE:
+            break;
+
+        case ENCODING_QP:
+            input = qp_init(0, input);
+            break;
+
+        case ENCODING_BASE64:
+            input = b64_init(input);
+            /* XXX have to have nl-mapping base64 in order to
+             * properly count \n as 2 raw characters
+             */
+            break;
+
+        default:
+            /* Don't know encoding--nothing can match */
+            convert_free(input);
+            return 0;
+    }
+
     /* do the conversion */
-    convert_cat(input, s);
+    convert_catn(input, msg_base, len);
 
     /* flush any remaining base64 octets from imaputf7 */
     utf16_2imaputf7_flush(imaputf7, 1 /*eos*/);
