@@ -1296,13 +1296,13 @@ sub test_setmailboxes
     $self->assert_num_equals($mbox->{totalThreads}, 0);
     $self->assert_num_equals($mbox->{unreadThreads}, 0);
 
-=pod
     xlog "update mailbox";
     $res = $jmap->Request([
             ['setMailboxes', { update => { $id => {
                             name => "bar",
              }}}, "R1"]
     ]);
+
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
@@ -1314,7 +1314,6 @@ sub test_setmailboxes
     $mbox = $res->[0][1]{list}[0];
     $self->assert_str_equals($mbox->{name}, "bar");
 
-=cut
     xlog "destroy mailbox";
     $res = $jmap->Request([
             ['setMailboxes', { destroy => [ $id ] }, "R1"]
