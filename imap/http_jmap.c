@@ -893,8 +893,6 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
     int r = 0, rights, parent_rights = 0;
     struct mboxlist_entry *mbparent = NULL;
 
-    syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX: %s", mbentry->name);
-
     /* Don't list special-purpose mailboxes. */
     if ((mbentry->mbtype & MBTYPE_DELETED) ||
         (mbentry->mbtype & MBTYPE_NETNEWS) ||
@@ -1083,6 +1081,44 @@ done:
     return r;
 }
 
+/* Combine the UTF-8 encoded JMAP mailbox name and its parent IMAP mailbox
+ * name to a unique IMAP mailbox name.
+ *
+ * Parentname must already be encoded in IMAP UTF-7. A parent by this name
+ * must already exist. If a mailbox with the combined mailbox name already
+ * exists, the new mailbox name is made unique to avoid IMAP name collisions.
+ *
+ * Return the malloced, combined name, or NULL on error. */
+char *jmap_mailbox_newname(const char *name, const char *parentname) {
+    charset_index cs;
+    char *mboxname = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    cs = charset_lookupname("utf-8");
+    if (cs == CHARSET_UNKNOWN_CHARSET) {
+        /* huh? */
+        syslog(LOG_INFO, "charset utf-8 is unknown");
+        goto done;
+    }
+
+    char *s = charset_to_imaputf7(name, strlen(name), cs, ENCODING_NONE);
+    if (!s) {
+        syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+        goto done;
+        return NULL;
+    }
+    buf_printf(&buf, "%s%c%s", parentname, jmap_namespace.hier_sep, s);
+    free(s);
+
+    mboxname = buf_newcstring(&buf);
+
+    /* XXX Deduplicate */
+
+done:
+    buf_free(&buf);
+    return mboxname;
+}
+
 static int setMailboxes(struct jmap_req *req)
 {
     int r = 0;
@@ -1196,31 +1232,12 @@ static int setMailboxes(struct jmap_req *req)
             }
             json_decref(invalid);
 
-            /* Escape and build mailbox name. */
-            charset_index cs = charset_lookupname("utf-8");
-            if (cs == CHARSET_UNKNOWN_CHARSET) {
-                /* huh? */
-                syslog(LOG_INFO, "charset utf-8 is unknown");
-                r = IMAP_INTERNAL;
-                if (parentname) free(parentname);
-                goto done;
+            /* Encode the mailbox name for IMAP. */
+            mboxname = jmap_mailbox_newname(name, parentname);
+            if (!mboxname) {
+                syslog(LOG_ERR, "could not encode mailbox name");
             }
-            char *s = charset_to_imaputf7(name, strlen(name), cs, ENCODING_NONE);
-            if (!s) {
-                syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
-                r = IMAP_INTERNAL;
-                if (parentname) free(parentname);
-                goto done;
-            }
-
-            /* XXX Deduplicate mailbox name. */
-            struct buf buf = BUF_INITIALIZER;
-            buf_printf(&buf, "%s%c%s", parentname, jmap_namespace.hier_sep, s);
-            free(s);
             free(parentname);
-            /* XXX */
-            mboxname = buf_newcstring(&buf);
-            buf_free(&buf);
 
             /* Create mailbox. */
             struct buf acl = BUF_INITIALIZER;
@@ -1295,7 +1312,7 @@ static int setMailboxes(struct jmap_req *req)
 
     json_t *update = json_object_get(req->args, "update");
     if (update) {
-        json_t *updated = json_pack("{}");
+        json_t *updated = json_pack("[]");
         json_t *notUpdated = json_pack("{}");
         const char *uid;
         json_t *arg;
@@ -1310,7 +1327,7 @@ static int setMailboxes(struct jmap_req *req)
             /* XXX Validate uid. */
 
             /* Lookup mailbox by uid and open it. */
-            struct mailbox *mbox;
+            struct mailbox *mbox = NULL;
             if (strcmp(uid, req->inbox->uniqueid)) {
                 /* Lookup by uniqueid. */
                 /* XXX Only until mboxlist supports lookup by uniqued. */
@@ -1341,8 +1358,8 @@ static int setMailboxes(struct jmap_req *req)
                 }
                 free(rock.mboxname);
             } else {
-                /* XXX mbox = req->inbox; */
-
+                mbox = (struct mailbox *) req->inbox;
+                parentname = xstrdup(req->inbox->name);
             }
 
             /* Parse properties. */
@@ -1430,7 +1447,6 @@ static int setMailboxes(struct jmap_req *req)
 
             if (name) {
                 /* Set x-displayname annotation on mailbox. */
-                /* XXX Rename mailbox */
                 annotate_state_t *astate = NULL;
                 r = mailbox_get_annotate_state(mbox, 0, &astate);
                 if (r) {
@@ -1451,14 +1467,55 @@ static int setMailboxes(struct jmap_req *req)
                     goto done;
                 }
                 buf_free(&val);
-            }
 
+                /* Rename mailbox for IMAP. But only if it isn't the INBOX. */
+                if (mbox != req->inbox) {
+                    struct mboxlist_entry *mbparent = NULL;
+                    char *newname, *oldname;
+
+                    /* Determine parent name */
+                    r = mboxlist_findparent(mbox->name, &mbparent);
+                    if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+                        syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
+                                mbox->name, error_message(r));
+                        goto done;
+                    }
+                    /* Determine new, unique IMAP mailbox name. */
+                    newname = jmap_mailbox_newname(name, mbparent->name);
+                    mboxlist_entry_free(&mbparent);
+                    if (!newname) {
+                        syslog(LOG_ERR, "jmap_mailbox_newname returns NULL: can't rename %s", mbox->name);
+                        r = IMAP_INTERNAL;
+                        goto done;
+                    }
+                    oldname = xstrdup(mbox->name);
+
+                    /* Rename the mailbox. */
+                    struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
+                    mailbox_close(&mbox);
+                    mbox = NULL;
+                    r = mboxlist_renamemailbox(oldname, newname,
+                            NULL /* partition */, 0 /* uidvalidity */,
+                            httpd_userisadmin, httpd_userid, httpd_authstate,
+                            mboxevent,
+                            0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */);
+                    if (r) {
+                        syslog(LOG_ERR, "mboxlist_renamemailbox(old=%s new=%s): %s",
+                                oldname, newname, error_message(r));
+                        free(newname);
+                        free(oldname);
+                        goto done;
+                    }
+                    free(newname);
+                    free(oldname);
+                }
+            }
             /* Report as updated. */
             json_array_append_new(updated, json_string(uid));
-            mailbox_close(&mbox);
+            if (mbox) mailbox_close(&mbox);
         }
 
-        if (json_object_size(updated)) {
+        if (json_array_size(updated)) {
             json_object_set(set, "updated", updated);
         }
         json_decref(updated);
