@@ -1328,6 +1328,79 @@ sub test_setmailboxes
     $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
 }
 
+sub test_setmailboxes_name
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get inbox";
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+
+    my $state = $res->[0][1]{state};
+
+    xlog "create three mailboxes named foo";
+    $res = $jmap->Request([
+            ['setMailboxes', { create =>
+                    { "#1" => {
+                            name => "foo",
+                            parentId => $inbox->{id},
+                            role => undef
+                        },
+                        "#2" => {
+                            name => "foo",
+                            parentId => $inbox->{id},
+                            role => undef
+                        },
+                        "#3" => {
+                            name => "foo",
+                            parentId => $inbox->{id},
+                            role => undef
+                        }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id3 = $res->[0][1]{created}{"#3"}{id};
+
+    xlog "get mailbox $id1";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "foo");
+
+    xlog "get mailbox $id2";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id2] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "foo");
+
+    xlog "get mailbox $id3";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "foo");
+
+    xlog "rename all three mailboxes to bar";
+    $res = $jmap->Request([
+            ['setMailboxes', { update =>
+                    { $id1 => { name => "bar" },
+                      $id2 => { name => "bar" },
+                      $id3 => { name => "bar" }
+                  }}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "get mailbox $id1";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+
+    xlog "get mailbox $id2";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id2] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+
+    xlog "get mailbox $id3";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+}
+
 sub test_getcalendars
 {
     my ($self) = @_;
