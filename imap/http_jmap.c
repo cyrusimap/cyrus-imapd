@@ -741,19 +741,159 @@ const char *jmap_mailbox_role(const char *mboxname)
     return role;
 }
 
+/* Convert the mailbox mbox to a JMAP mailbox object.
+ *
+ * Parent and inbox must point to the parent of mbox and the user's inbox,
+ * respectively, and may be equal. Mbox and inbox may be equal as well, in
+ * which case parent must be NULL. All mailbox comparison is by pointer. If
+ * props is not NULL, only convert JMAP properties in props.
+ *
+ * Return NULL no error.
+ */
+json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
+                               const struct mailbox *parent,
+                               const struct mailbox *inbox,
+                               int rights,
+                               int parent_rights,
+                               hash_table *props)
+{
+    int r;
+    unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
+    struct statusdata sdata;
+    struct buf specialuse = BUF_INITIALIZER;
+    json_t *obj = NULL;
+
+    /* Lookup status. */
+    r = status_lookup_mailbox(mbox, httpd_userid, statusitems, &sdata);
+    if (r) {
+        syslog(LOG_INFO, "status_lookup_mailbox(%s) failed: %s",
+                mbox->name, error_message(r));
+        goto done;
+    }
+
+    /* Determine special use annotation. */
+    annotatemore_lookup(mbox->name, "/specialuse", httpd_userid, &specialuse);
+
+    /* Build JMAP mailbox response. */
+    obj = json_pack("{}");
+    json_object_set_new(obj, "id", json_string(mbox->uniqueid));
+    if (_wantprop(props, "name")) {
+        struct buf attrib = BUF_INITIALIZER;
+        static const char *displayname_annot =
+            IMAP_ANNOT_NS "x-displayname";
+        r = annotatemore_lookupmask(mbox->name, displayname_annot, httpd_userid, &attrib);
+
+        /* XXX either wipe or set x-displayname for IMAP RENAME and CREATE */
+
+        if (!r && attrib.len) {
+            /* We got a mailbox with a displayname annotation. Use it. */
+            json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
+        } else {
+            /* No displayname annotation. Most probably this mailbox was
+             * created before JMAP. In any case, determine name from the
+             * the last segment of the mailboxname hierarchy. */
+            char *extname, *q = NULL;
+            charset_index cs;
+
+            if (mbox != inbox) {
+                mbname_t *mbname = mbname_from_intname(mbox->name);
+                if (!mbname) {
+                    syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mbox->name);
+                    r = IMAP_INTERNAL;
+                    goto done;
+                }
+                extname = mbname_pop_boxes(mbname);
+                /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
+                cs = charset_lookupname("imap-utf-7");
+                if ((q = charset_to_utf8(extname, strlen(extname), cs, ENCODING_NONE))) {
+                    free(extname);
+                    extname = q;
+                }
+                mbname_free(&mbname);
+            } else {
+                extname = xstrdup("Inbox");
+            }
+            json_object_set_new(obj, "name", json_string(extname));
+            free(extname);
+        }
+        buf_free(&attrib);
+    }
+    if (_wantprop(props, "mustBeOnlyMailbox")) {
+        json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
+    }
+
+    if (_wantprop(props, "mayReadItems")) {
+        json_object_set_new(obj, "mayReadItems", json_boolean(rights & ACL_READ));
+    }
+    if (_wantprop(props, "mayAddItems")) {
+        json_object_set_new(obj, "mayAddItems", json_boolean(rights & ACL_INSERT));
+    }
+    if (_wantprop(props, "mayRemoveItems")) {
+        json_object_set_new(obj, "mayRemoveItems", json_boolean(rights & ACL_DELETEMSG));
+    }
+    if (_wantprop(props, "mayCreateChild")) {
+        /* XXX What about \Noinferiors annotation */
+        json_object_set_new(obj, "mayCreateChild", json_boolean(rights & ACL_CREATE));
+    }
+
+    if (_wantprop(props, "totalMessages")) {
+        json_object_set_new(obj, "totalMessages", json_integer(sdata.messages));
+    }
+    if (_wantprop(props, "unreadMessages")) {
+        json_object_set_new(obj, "unreadMessages", json_integer(sdata.unseen));
+    }
+    if (_wantprop(props, "totalThreads")) {
+        /* XXX */
+        json_object_set_new(obj, "totalThreads", json_integer(0));
+    }
+    if (_wantprop(props, "unreadThreads")) {
+        /* XXX */
+        json_object_set_new(obj, "unreadThreads", json_integer(0));
+    }
+    if (_wantprop(props, "mayRename")) {
+        int mayRename = rights & ACL_DELETEMBOX && parent_rights & ACL_CREATE;
+        json_object_set_new(obj, "mayRename", json_boolean(mayRename));
+    }
+    if (_wantprop(props, "mayDelete")) {
+        int mayDelete = rights & ACL_DELETEMBOX && mbox != inbox;
+        json_object_set_new(obj, "mayDelete", json_boolean(mayDelete));
+    }
+    if (_wantprop(props, "role")) {
+        const char *role = jmap_mailbox_role(mbox->name);
+        json_object_set_new(obj, "role", role ? json_string(role) : json_null());
+    }
+    if (_wantprop(props, "sortOrder")) {
+        int sortOrder;
+        if (mbox == inbox) {
+            sortOrder = 1;
+        } else if (specialuse.len) {
+            sortOrder = 2;
+        } else {
+            sortOrder = 3;
+        }
+        json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
+    }
+    if (_wantprop(props, "parentId")) {
+        json_object_set_new(obj, "parentId", parent && parent != inbox ?
+                json_string(parent->uniqueid) : json_null());
+    }
+
+done:
+    buf_free(&specialuse);
+    return obj;
+}
+
 int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getMailboxes_rock *rock = (struct getMailboxes_rock *) vrock;
     json_t *list = (json_t *) rock->list, *mbox;
-    struct mboxlist_entry *mbparent = NULL;
     struct mailbox *mailbox = NULL, *parent = NULL;
     const struct mailbox *inbox = rock->inbox;
-    int r = 0, rights, parent_rights = 0;
-    unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
-    struct statusdata sdata;
-    hash_table *props = rock->props;
-    struct buf specialuse = BUF_INITIALIZER;
     const char *mboxname = mbentry->name;
+    int r = 0, rights, parent_rights = 0;
+    struct mboxlist_entry *mbparent = NULL;
+
+    syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX: %s", mbentry->name);
 
     /* Don't list special-purpose mailboxes. */
     if ((mbentry->mbtype & MBTYPE_DELETED) ||
@@ -788,19 +928,11 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         goto done;
     }
 
-    /* Lookup status. */
-    r = status_lookup_mailbox(mailbox, httpd_userid, statusitems, &sdata);
-    if (r) {
-        syslog(LOG_INFO, "status_lookup_mailbox(%s) failed: %s",
-                mboxname, error_message(r));
-        goto done;
-    }
-
     /* Determine parent. */
-    r = mboxlist_findparent(mboxname, &mbparent);
+    r = mboxlist_findparent(mailbox->name, &mbparent);
     if (r && r != IMAP_MAILBOX_NONEXISTENT) {
         syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
-                mboxname, error_message(r));
+                mailbox->name, error_message(r));
         goto done;
     }
     if (!r) {
@@ -818,120 +950,19 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         }
     }
 
-    /* Determine special use annotation. */
-    annotatemore_lookup(mbentry->name, "/specialuse", httpd_userid, &specialuse);
-
-    /* Build JMAP mailbox response. */
-    mbox = json_pack("{}");
-    json_object_set_new(mbox, "id", json_string(mailbox->uniqueid));
-    if (_wantprop(props, "name")) {
-        struct buf attrib = BUF_INITIALIZER;
-        static const char *displayname_annot =
-            IMAP_ANNOT_NS "x-displayname";
-        r = annotatemore_lookupmask(mbentry->name, displayname_annot, httpd_userid, &attrib);
-
-        /* XXX either wipe or set x-displayname for IMAP RENAME and CREATE */
-
-        if (!r && attrib.len) {
-            /* We got a mailbox with a displayname annotation. Use it. */
-            json_object_set_new(mbox, "name", json_string(buf_cstring(&attrib)));
-        } else {
-            /* No displayname annotation. Most probably this mailbox was
-             * created before JMAP. In any case, determine name from the
-             * the last segment of the mailboxname hierarchy. */
-            char *extname, *q = NULL;
-            charset_index cs;
-
-            if (mailbox != inbox) {
-                mbname_t *mbname = mbname_from_intname(mboxname);
-                if (!mbname) {
-                    syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mboxname);
-                    r = IMAP_INTERNAL;
-                    goto done;
-                }
-                extname = mbname_pop_boxes(mbname);
-                /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
-                cs = charset_lookupname("imap-utf-7");
-                if ((q = charset_to_utf8(extname, strlen(extname), cs, ENCODING_NONE))) {
-                    free(extname);
-                    extname = q;
-                }
-                mbname_free(&mbname);
-            } else {
-                extname = xstrdup("Inbox");
-            }
-            json_object_set_new(mbox, "name", json_string(extname));
-            free(extname);
-        }
-        buf_free(&attrib);
+    /* Convert mbox to JMAP object. */
+    mbox = jmap_mailbox_from_mbox(mailbox, parent, inbox, rights,
+                                  parent_rights, rock->props);
+    if (!mbox) {
+        syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mailbox->name);
+        goto done;
     }
-    if (_wantprop(props, "mustBeOnlyMailbox")) {
-        json_object_set_new(mbox, "mustBeOnlyMailbox", json_true());
-    }
-
-    if (_wantprop(props, "mayReadItems")) {
-        json_object_set_new(mbox, "mayReadItems", json_boolean(rights & ACL_READ));
-    }
-    if (_wantprop(props, "mayAddItems")) {
-        json_object_set_new(mbox, "mayAddItems", json_boolean(rights & ACL_INSERT));
-    }
-    if (_wantprop(props, "mayRemoveItems")) {
-        json_object_set_new(mbox, "mayRemoveItems", json_boolean(rights & ACL_DELETEMSG));
-    }
-    if (_wantprop(props, "mayCreateChild")) {
-        /* XXX What about \Noinferiors annotation */
-        json_object_set_new(mbox, "mayCreateChild", json_boolean(rights & ACL_CREATE));
-    }
-
-    if (_wantprop(props, "totalMessages")) {
-        json_object_set_new(mbox, "totalMessages", json_integer(sdata.messages));
-    }
-    if (_wantprop(props, "unreadMessages")) {
-        json_object_set_new(mbox, "unreadMessages", json_integer(sdata.unseen));
-    }
-    if (_wantprop(props, "totalThreads")) {
-        /* XXX */
-        json_object_set_new(mbox, "totalThreads", json_integer(0));
-    }
-    if (_wantprop(props, "unreadThreads")) {
-        /* XXX */
-        json_object_set_new(mbox, "unreadThreads", json_integer(0));
-    }
-    if (_wantprop(props, "mayRename")) {
-        int mayRename = rights & ACL_DELETEMBOX && parent_rights & ACL_CREATE;
-        json_object_set_new(mbox, "mayRename", json_boolean(mayRename));
-    }
-    if (_wantprop(props, "mayDelete")) {
-        int mayDelete = rights & ACL_DELETEMBOX && mailbox != inbox;
-        json_object_set_new(mbox, "mayDelete", json_boolean(mayDelete));
-    }
-    if (_wantprop(props, "role")) {
-        const char *role = jmap_mailbox_role(mailbox->name);
-        json_object_set_new(mbox, "role", role ? json_string(role) : json_null());
-    }
-    if (_wantprop(props, "sortOrder")) {
-        int sortOrder;
-        if (mailbox == inbox) {
-            sortOrder = 1;
-        } else if (specialuse.len) {
-            sortOrder = 2;
-        } else {
-            sortOrder = 3;
-        }
-        json_object_set_new(mbox, "sortOrder", json_integer(sortOrder));
-    }
-    if (_wantprop(props, "parentId")) {
-        json_object_set_new(mbox, "parentId", parent && parent != inbox ?
-                json_string(parent->uniqueid) : json_null());
-    }
-
     json_array_append_new(list, mbox);
 
   done:
     if (mailbox && mailbox != inbox) mailbox_close(&mailbox);
     if (parent && parent != inbox) mailbox_close(&parent);
     if (mbparent) mboxlist_entry_free(&mbparent);
-    buf_free(&specialuse);
     return 0;
 }
 
@@ -1274,48 +1305,45 @@ static int setMailboxes(struct jmap_req *req)
             const char *id, *parentId = NULL, *name, *role = NULL, *currole = NULL;
             int sortOrder = 0;
             char *parentname = NULL;
-            char *mboxname = NULL;
             int pe;
 
             /* XXX Validate uid. */
 
-            /* Lookup mailbox by uid. */
+            /* Lookup mailbox by uid and open it. */
+            struct mailbox *mbox;
             if (strcmp(uid, req->inbox->uniqueid)) {
+                /* Lookup by uniqueid. */
+                /* XXX Only until mboxlist supports lookup by uniqued. */
                 struct _mboxname_uniqueid_rock rock;
                 rock.uniqueid = uid;
                 rock.mboxname = NULL;
                 r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
                         &rock, MBOXTREE_SKIP_ROOT);
                 if (r) goto done;
-                mboxname = rock.mboxname;
+                if (!rock.mboxname) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+                /* Open the mailbox. */
+                r = mailbox_open_iwl(rock.mboxname, &mbox);
+                if (r == IMAP_PERMISSION_DENIED) {
+                    json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                    json_object_set_new(notUpdated, uid, err);
+                    r = 0;
+                    free(rock.mboxname);
+                    continue;
+                } else if (r) {
+                    syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
+                            rock.mboxname, error_message(r));
+                    free(rock.mboxname);
+                    goto done;
+                }
+                free(rock.mboxname);
             } else {
-                mboxname = xstrdup(req->inbox->name);
-            }
-            if (!mboxname) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
-                continue;
-            }
+                /* XXX mbox = req->inbox; */
 
-            /* Open the mailbox. */
-            struct mailbox *mbox = NULL;
-            r = mailbox_open_iwl(mboxname, &mbox);
-            if (r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                json_object_set_new(notUpdated, uid, err);
-                r = 0;
-                free(mboxname);
-                continue;
-            } else if (r) {
-                syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
-                        mboxname, error_message(r));
-                free(mboxname);
-                goto done;
             }
-            free(mboxname);
-
-            /* Determine current role */
-            currole = jmap_mailbox_role(mbox->name);
 
             /* Parse properties. */
             pe = jmap_readprop(arg, "id", 0, invalid, "s", &id);
