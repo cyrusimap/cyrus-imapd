@@ -1081,6 +1081,59 @@ done:
     return r;
 }
 
+struct jmap_mailbox_newname_rock {
+    const char *mboxname;
+    int highest;
+    size_t len;
+};
+
+static int jmap_mailbox_newname_cb(const mbentry_t *mbentry, void *vrock) {
+    struct jmap_mailbox_newname_rock *rock = (struct jmap_mailbox_newname_rock *) vrock;
+    const char *s;
+
+    /* Only compute the length of mboxname once. */
+    if (!rock->len) {
+        rock->len = strlen(rock->mboxname);
+        assert(rock->len > 0);
+    }
+
+    /* Only look for names starting with mboxname. */
+    if (strncmp(mbentry->name, rock->mboxname, strlen(rock->mboxname))) {
+        return 0;
+    }
+    s = mbentry->name + rock->len;
+
+
+    /* Skip any grand-children. */
+    if (strchr(s, jmap_namespace.hier_sep)) {
+        return 0;
+    }
+
+    /* Does this mailbox match exactly our mboxname? */
+    if (*s == 0) {
+        rock->highest = 1;
+        return 0;
+    }
+
+    /* Now check if it ends with pattern "_\d+". If not, skip it. */
+    if (*s++ != '_') {
+        return 0;
+    }
+    const char *lo = s, *hi = lo;
+    while (isdigit(*s++)) { hi++; }
+    if (lo == hi || *hi != 0) {
+        return 0;
+    }
+
+    /* Gotcha! */
+    int n = atoi(lo);
+    if (n > rock->highest) {
+        rock->highest = n;
+    }
+
+    return 0;
+}
+
 /* Combine the UTF-8 encoded JMAP mailbox name and its parent IMAP mailbox
  * name to a unique IMAP mailbox name.
  *
@@ -1088,11 +1141,17 @@ done:
  * must already exist. If a mailbox with the combined mailbox name already
  * exists, the new mailbox name is made unique to avoid IMAP name collisions.
  *
+ * For example, if the named has been determined to be x and a mailbox with
+ * this name already exists, then look for all mailboxes named x_\d+. The
+ * new mailbox name will be x_<max+1> with max being he highest number found
+ * for any such named mailbox.
+ *
  * Return the malloced, combined name, or NULL on error. */
 char *jmap_mailbox_newname(const char *name, const char *parentname) {
     charset_index cs;
     char *mboxname = NULL;
     struct buf buf = BUF_INITIALIZER;
+    int r;
 
     cs = charset_lookupname("utf-8");
     if (cs == CHARSET_UNKNOWN_CHARSET) {
@@ -1101,18 +1160,35 @@ char *jmap_mailbox_newname(const char *name, const char *parentname) {
         goto done;
     }
 
+    /* Encode mailbox name in IMAP UTF-7 */
     char *s = charset_to_imaputf7(name, strlen(name), cs, ENCODING_NONE);
     if (!s) {
         syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
         goto done;
-        return NULL;
     }
     buf_printf(&buf, "%s%c%s", parentname, jmap_namespace.hier_sep, s);
     free(s);
-
     mboxname = buf_newcstring(&buf);
+    buf_reset(&buf);
 
-    /* XXX Deduplicate */
+    /* Avoid any name collisions */
+    struct jmap_mailbox_newname_rock rock;
+    memset(&rock, 0, sizeof(struct jmap_mailbox_newname_rock));
+    rock.mboxname = mboxname;
+    r = mboxlist_mboxtree(parentname, &jmap_mailbox_newname_cb, &rock,
+            /* XXX need MBOXTREE_SKIP_GRANDCHILDREN */
+            MBOXTREE_SKIP_ROOT);
+    if (r) {
+        syslog(LOG_ERR, "mboxlist_mboxtree(%s): %s",
+                parentname, error_message(r));
+        free(mboxname);
+        goto done;
+    }
+    if (rock.highest) {
+        buf_printf(&buf, "%s_%d", mboxname, rock.highest + 1);
+        free(mboxname);
+        mboxname = buf_newcstring(&buf);
+    }
 
 done:
     buf_free(&buf);
