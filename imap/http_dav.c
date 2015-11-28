@@ -4762,6 +4762,17 @@ int propfind_by_collection(const char *mboxname, int matchlen,
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
+    if (fctx->req_tgt->namespace == URL_NS_DRIVE) {
+        /* Reject folders that are not children of target URL
+           or are more than one level deep */
+        if (!fctx->req_tgt->mbentry) goto done;
+        len = strlen(fctx->req_tgt->mbentry->name);
+        if (strlen(mboxname) < len) goto done;
+        if (strncmp(mboxname, fctx->req_tgt->mbentry->name, len)) goto done;
+        p = (char *) mboxname + len;
+        if (*p && (*p != '.' || strchr(++p, '.'))) goto done;
+    }
+
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
         syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
@@ -4775,6 +4786,9 @@ int propfind_by_collection(const char *mboxname, int matchlen,
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
+        const strarray_t *boxes;
+        int n, size;
+
         mbname = mbname_from_intname(mboxname);
 
         buf_setcstr(&writebuf, fctx->req_tgt->prefix);
@@ -4791,16 +4805,13 @@ int propfind_by_collection(const char *mboxname, int matchlen,
 
         len = writebuf.len;
 
-        /* one day this will just be the final element of 'boxes' hopefully */
-        const strarray_t *boxes = mbname_boxes(mbname);
-        if (!strarray_size(boxes)) goto done;
-        const char *last = strarray_nth(boxes, -1);
-
-        /* OK, we're doing this mailbox */
-        buf_appendcstr(&writebuf, last);
-
-        /* don't forget the trailing slash */
-        buf_putc(&writebuf, '/');
+        /* add collection(s) to path */
+        boxes = mbname_boxes(mbname);
+        size = strarray_size(boxes);
+        for (n = 1; n < size; n++) {
+            buf_appendcstr(&writebuf, strarray_nth(boxes, n));
+            buf_putc(&writebuf, '/');
+        }
 
         /* copy it all back into place... in theory we should check against
          * 'last' and make sure it doesn't change from the original request.

@@ -339,13 +339,19 @@ static void my_webdav_shutdown(void)
 }
 
 
-/* Parse request-target path in WebDAV namespace */
+/* Parse request-target path in WebDAV namespace
+ *
+ * For purposes of PROPFIND and REPORT, we never assign tgt->collection.
+ * All collections are treated as though they are at the root so both
+ * contained resources and collection are listed.
+ */
 static int webdav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr)
 {
-    char *p, *last = 0;
+    char *p, *last = NULL;
     size_t len, lastlen = 0;
     mbname_t *mbname = NULL;
+    const char *mboxname = NULL;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -381,35 +387,32 @@ static int webdav_parse_path(const char *path,
         tgt->userid = xstrndup(p, len);
 
         p += len;
-        if (!*p || !*++p) goto done;
+        if (!*p || !*++p) {
+            /* Make sure collection is terminated with '/' */
+            if (p[-1] != '/') *p++ = '/';
+        }
 
         len = strcspn(p, "/");
     }
 
-    tgt->collection = p;
-
-  done:
     /* Create mailbox name from the parsed path */
     mbname = mbname_from_userid(tgt->userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
 
-    while (tgt->collection) {
+    while (len) {
         /* Get collection(s) */
-        last = p;
+        char *val = xstrndup(p, len);
+        mbname_push_boxes(mbname, val);
+        free(val);
 
-        if (len) {
-            char *val = xstrndup(p, len);
-            mbname_push_boxes(mbname, val);
-            free(val);
-        }
+        /* Keep track of last segment in path */
+        last = p;
 
         p += len;
         if (!*p || !*++p) {
             /* Make sure collection is terminated with '/' */
             if (p[-1] != '/') *p++ = '/';
-            tgt->collen = strlen(tgt->collection);
             lastlen = strlen(last);
-            break;
         }
 
         len = strcspn(p, "/");
@@ -424,24 +427,23 @@ static int webdav_parse_path(const char *path,
         mbname_set_domain(mbname, NULL);
     }
 
-    const char *mboxname = mbname_intname(mbname);
+    mboxname = mbname_intname(mbname);
     if (tgt->mbentry) {
-        /* Just return the mboxname */
+        /* Just return the mboxname (MKCOL or dest of COPY/MOVE collection) */
         tgt->mbentry->name = xstrdup(mboxname);
     }
     else if (*mboxname) {
         /* Locate the mailbox */
         int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
 
-        if (r == IMAP_MAILBOX_NONEXISTENT && tgt->collection) {
-            /* Adjust collection */
-            if (!(tgt->collen -= lastlen)) tgt->collection = NULL;
-            free(mbname_pop_boxes(mbname));
-
-            /* Get resource */
+        if (r == IMAP_MAILBOX_NONEXISTENT && last) {
+            /* Assume that the last segment of the path is a resource */
             tgt->resource = last;
             tgt->reslen = --lastlen;
             tgt->resource[lastlen] = '\0';  /* trim trailing '/' */
+
+            /* Adjust collection */
+            free(mbname_pop_boxes(mbname));
 
             r = http_mlookup(mbname_intname(mbname), &tgt->mbentry, NULL);
         }
