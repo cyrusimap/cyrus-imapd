@@ -554,7 +554,8 @@ options:
 
 mode:
     -A                  # all known backups (not valid for single backup commands)
-    -P prefix           # backups for users starting with "prefix" (nvfsbc)
+    -P prefix           # backups for all users starting with "prefix" (nvfsbc)
+    -D domain           # backups for all users in domain (nvfsbc)
     -f                  # specified backups interpreted as filenames
     -m                  # specified backups interpreted as mboxnames
     -u                  # specified backups interpteted as userids (default)
