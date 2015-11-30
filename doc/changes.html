@@ -8,6 +8,28 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.5.5</h1>
+<h2>New imapd.conf options</h2>
+<ul>
+<li>tls_required (default: 0). Set this to 1 to require a TLS session for ALL authentications,
+not just plain ones (thanks Carlos Velasco)</li>
+</ul>
+<h2>New cyradm options</h2>
+<ul>
+<li>--tlskey keyfile: use certificate with keyfile to authenticate with server</li>
+<li>--notls: disable StartTLS negotiation</li>
+<li>--cafile cacertfile: Use CA certificate file to validate server certificate</li>
+<li>--cadir cacertdirectory: Use CA certificate directory to validate server certificate</li>
+<li>Thanks Leena Heino and Carlos Velasco</li>
+</ul>
+<h2>Bug fixes</h2>
+<ul>
+<li>Fixed: cyr_synclog checks its arguments more strictly to avoid producing junk sync loc entries</li>
+<li>Fixed: reconstruct no longer segfaults on failure on Solaris 10 (thanks Marty Lee)</li>
+<li>Fixed: cyradm metadata implementation cleaned up and output made consistent (thanks Leena Heino)</li>
+<li>Fixed: timsieved no longer discloses name/version if ServerInfo is Off or Min (thanks Carlos Velasco)</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.5.4</h1>
 <ul>
 <li>Security fix: compiling with --enable-autocreate no longer allows arbitrary mailbox creation</li>
