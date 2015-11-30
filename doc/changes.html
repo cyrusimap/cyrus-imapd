@@ -8,6 +8,44 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.5.6</h1>
+<h2>Security fixes</h2>
+<ul>
+<li>CVE-2015-8077, CVE-2015-8078: protect against integer overflow in urlfetch range checks</li>
+</ul>
+<h2>SSL changes</h2>
+<ul>
+<li><p>Support for legacy SSLv2 and SSLv3 protocols has been removed</p>
+    <p>These protocols were previously enabled by default, but could be disabled by
+    removing them from tls_versions in imapd.conf(5). They are now completely unsupported.</p>
+    <p>Administrators needing to support these protocols may find a patch in
+    contrib/allow-broken-sslv23.patch. With this patch, SSLv2 and SSLv3 will be disabled
+    by default, but can be enabled by adding them to tls_versions. Users of this patch do
+    so at their own risk.</p>
+</li>
+<li><p>Support for TLS compression has been removed (thanks Ondřej Surý)</p>
+    <p>This was previously disabled by default, but could be enabled with tls_compression
+    in imapd.conf(5). It is now completely unsupported.</p>
+</li>
+</ul>
+<h2>Bug fixes</h2>
+<ul>
+<li>Fixed: crash in sync_server when built with buggy Sun CC (thanks Jens Erat)</li>
+<li>Fixed bug #3908: crash in ctl_mboxlist -m</li>
+<li>Fixed: setrlimit error on startup</li>
+<li>Fixed T216: don’t break quotas when transferring mailboxes between backends</li>
+<li>Fixed: idled shutdown on platforms without pselect (thanks Thomas Jarosch)</li>
+<li>Fixed: autocreate_sieve now uses sievedir setting correctly</li>
+<li>Fixed bug #3907: cyradm --cadir option is now called --capath, and works (thanks Leena Heino)</li>
+<li>Fixed bug #3905: fix segfault in all daemons when built with -DUSE_SETPROCTITLE</li>
+<li>Fixed: pop3d no longer applies plaintextloginpause to TLS connections</li>
+<li>Fixed bug #3866: lmtpd now consults local mailboxes.db first, before mupdate master (thanks Michael Menge)</li>
+</ul>
+<h2>Debian patches</h2>
+<p>A number of patches from Debian’s repository have been merged. Thanks to the various
+developers who contributed them to the Debian project, and to Ondřej Surý for collating
+and sending them upstream.</p>
+
 <h1>Changes to the Cyrus IMAP Server since 2.5.5</h1>
 <h2>New imapd.conf options</h2>
 <ul>
