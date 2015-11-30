@@ -226,8 +226,8 @@ int main (int argc, char **argv)
         }
     }
 
+    /* get the command */
     if (optind == argc) usage();
-
     cmd = parse_cmd_string(argv[optind++]);
     if (cmd == CTLBU_CMD_UNSPECIFIED) usage();
 
@@ -238,7 +238,7 @@ int main (int argc, char **argv)
             options.mode = CTLBU_MODE_ALL;
         break;
 
-    /* some commands can't do multiple at a time */
+    /* some commands only accept one backup at a time */
     case CTLBU_CMD_LOCK:
         if (options.lock_mode == CTLBU_LOCK_MODE_UNSPECIFIED) usage();
         /* fall thru */
@@ -248,6 +248,12 @@ int main (int argc, char **argv)
         if (argc - optind > 1) usage();
         break;
 
+    /* reconstruct doesn't accept named backups */
+    case CTLBU_CMD_RECONSTRUCT:
+        if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
+        if (optind != argc) usage();
+        break;
+
     default:
         break;
     }
@@ -255,6 +261,9 @@ int main (int argc, char **argv)
     /* default mode is username */
     if (options.mode == CTLBU_MODE_UNSPECIFIED)
         options.mode = CTLBU_MODE_USERNAME;
+
+    /* mode all doesn't want any named backups */
+    if (options.mode == CTLBU_MODE_ALL && optind != argc) usage();
 
     cyrus_init(alt_config, "ctl_backups", 0, 0);
 
