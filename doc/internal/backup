@@ -554,6 +554,7 @@ options:
 
 mode:
     -A                  # all known backups (not valid for single backup commands)
+    -P prefix           # backups for users starting with "prefix" (nvfsbc)
     -f                  # specified backups interpreted as filenames
     -m                  # specified backups interpreted as mboxnames
     -u                  # specified backups interpteted as userids (default)
@@ -732,6 +733,5 @@ todo list
 
 * clean up error handling
 * move _column_int etc into lib/sqldb, don't automatically xstrdup
-* probably need a non-blocking interface to backup_open...
 * clean up xsha1_file
 * perl tool to anonymise sync proto talk
