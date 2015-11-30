@@ -280,6 +280,7 @@ EXTRA_DIST += \
 	com_err/et/test1.et \
 	com_err/et/test2.et \
 	com_err/et/test_et.c \
+	contrib/allow-broken-sslv23.patch \
 	contrib/drac_auth.patch \
 	contrib/sieve-spamasssassin \
 	contrib/fud-client.c \
