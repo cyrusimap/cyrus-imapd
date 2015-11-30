@@ -16,13 +16,13 @@ Synopsis
 Description
 ===========
 
-**notifyd** is a daemon started from :cyrusman:`master(8)` that handles
-notification requests on behalf of :cyrusman:`lmtpd(8)`. **Notifyd**
+**notifyd** is a daemon started from :manpage:`master(8)` that handles
+notification requests on behalf of :manpage:`lmtpd(8)`. **Notifyd**
 accepts the request and performs the notification using the method
 specified in the request.
 
 Note that for **notifyd** to run properly you must set ``proto=udp`` in
-its :cyrusman:`cyrus.conf(5)` services entry.  ``prefork=1`` is also
+its :manpage:`cyrus.conf(5)` services entry.  ``prefork=1`` is also
 recommended.
 
 **notifyd** |default-conf-text|
@@ -91,5 +91,5 @@ Files
 See Also
 ========
 
-:cyrusman:`imapd.conf(5)`,
-:cyrusman:`cyrus.conf(5)`
+:manpage:`imapd.conf(5)`,
+:manpage:`cyrus.conf(5)`
