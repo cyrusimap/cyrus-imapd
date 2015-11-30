@@ -1,0 +1,213 @@
+This is a patch to re-enable insecure SSLv2/SSLv3, for those who need to
+support ancient clients.
+
+These two protocols are thoroughly broken.  You might as well allow plain
+text connections if you're going to allow these.
+
+Presumably, you will take proper precautions to protect your other users
+(i.e. those with modern clients) from the risk exposed by these broken
+protocols -- such as only installing this patch on a single server, and
+only placing users on that server who specifically need the legacy support.
+
+Presumably, if a user or group of users are important enough to your
+organisation that their need for a legacy client justifies reducing security,
+then they're important enough to justify running an extra server specifically
+for them (with this patch).  Conversely, if these users are so important,
+perhaps they should be expressly forbidden from using an email server with
+reduced security...
+
+Even with this patch, SSLv2 and SSLv3 are not enabled by default.  To
+use this you must both:
+
+    1) compile with this patch, and
+    2) add the desired SSL versions to tls_versions in imapd.conf
+
+The default value of tls_versions (if unspecified) is, at time of writing:
+    "tls1_0 tls1_1 tls1_2"
+
+so to also enable both SSLv2 and SSLv3, you want to set it to something like:
+    "ssl2 ssl3 tls1_0 tls1_1 tls1_2"
+
+Even with this patch, and even with these protocols enabled, they will
+not be used by cyrus for its own server-server communications.  Those will
+still use the most recent TLS version supported by your version of OpenSSL.
+
+This patch was contributed, but is not maintained, by the Cyrus team.  It
+applies cleanly against cyrus-imapd-2.5.7.  Good luck.
+
+diff --git a/cunit/backend.testc b/cunit/backend.testc
+index 5753ccd..333a1e8 100644
+--- a/cunit/backend.testc
++++ b/cunit/backend.testc
+@@ -918,7 +918,7 @@ static void cmd_starttls(struct server_state *state)
+     sasl_ssf_t ssf;
+ 
+     r = tls_init_serverengine("backend_test", /*verifydepth*/5,
+-			      /*askcert*/1);
++			      /*askcert*/1, /*tlsonly*/1);
+     if (r < 0) {
+ 	server_printf(state, "BAD error initializing TLS\r\n");
+ 	server_flush(state);
+diff --git a/imap/httpd.c b/imap/httpd.c
+index 89da682..2b93b59 100644
+--- a/imap/httpd.c
++++ b/imap/httpd.c
+@@ -779,7 +779,8 @@ static void starttls(int https)
+ 
+     result=tls_init_serverengine("http",
+ 				 5,        /* depth to verify */
+-				 !https);  /* can client auth? */
++				 !https,   /* can client auth? */
++				 !https);  /* TLS only? */
+ 
+     if (result == -1) {
+ 	syslog(LOG_ERR, "[httpd] error initializing TLS");
+diff --git a/imap/imapd.c b/imap/imapd.c
+index 97a7f5a..8798ba7 100644
+--- a/imap/imapd.c
++++ b/imap/imapd.c
+@@ -7484,7 +7484,8 @@ static void cmd_starttls(char *tag, int imaps)
+ 
+     result=tls_init_serverengine("imap",
+ 				 5,        /* depth to verify */
+-				 !imaps);  /* can client auth? */
++				 !imaps,   /* can client auth? */
++				 !imaps);  /* TLS only? */
+ 
+     if (result == -1) {
+ 
+diff --git a/imap/lmtpengine.c b/imap/lmtpengine.c
+index ab3990c..72271ae 100644
+--- a/imap/lmtpengine.c
++++ b/imap/lmtpengine.c
+@@ -1544,7 +1544,8 @@ void lmtpmode(struct lmtp_func *func,
+ 
+ 		r=tls_init_serverengine("lmtp",
+ 					5,   /* depth to verify */
+-					1);  /* can client auth? */
++					1,   /* can client auth? */
++					1);   /* TLS only? */
+ 
+ 		if (r == -1) {
+ 
+diff --git a/imap/mupdate.c b/imap/mupdate.c
+index 269cbc3..590ca11 100644
+--- a/imap/mupdate.c
++++ b/imap/mupdate.c
+@@ -1968,7 +1968,8 @@ static void cmd_starttls(struct conn *C, const char *tag)
+ 
+     result=tls_init_serverengine("mupdate",
+ 				 5,        /* depth to verify */
+-				 1);       /* can client auth? */
++				 1,        /* can client auth? */
++				 1);       /* TLS only? */
+ 
+     if (result == -1) {
+ 
+diff --git a/imap/nntpd.c b/imap/nntpd.c
+index 9d1523b..6f677e7 100644
+--- a/imap/nntpd.c
++++ b/imap/nntpd.c
+@@ -4090,7 +4090,8 @@ static void cmd_starttls(int nntps)
+ 
+     result=tls_init_serverengine("nntp",
+ 				 5,        /* depth to verify */
+-				 !nntps);  /* can client auth? */
++				 !nntps,   /* can client auth? */
++				 !nntps);  /* TLS only? */
+ 
+     if (result == -1) {
+ 
+diff --git a/imap/pop3d.c b/imap/pop3d.c
+index 6554a90..a7fbb43 100644
+--- a/imap/pop3d.c
++++ b/imap/pop3d.c
+@@ -1273,7 +1273,8 @@ static void cmd_starttls(int pop3s)
+ 
+     result=tls_init_serverengine("pop3",
+ 				 5,        /* depth to verify */
+-				 !pop3s);  /* can client auth? */
++				 !pop3s,   /* can client auth? */
++				 !pop3s);  /* TLS only? */
+ 
+     if (result == -1) {
+ 
+diff --git a/imap/sync_server.c b/imap/sync_server.c
+index c49df9f..2b8ad04 100644
+--- a/imap/sync_server.c
++++ b/imap/sync_server.c
+@@ -873,7 +873,8 @@ static void cmd_starttls(void)
+ 
+     result=tls_init_serverengine("csync",
+ 				 5,        /* depth to verify */
+-				 1);       /* can client auth? */
++				 1,        /* can client auth? */
++				 1);       /* TLS only? */
+ 
+     if (result == -1) {
+ 	syslog(LOG_ERR, "error initializing TLS");
+diff --git a/imap/tls.c b/imap/tls.c
+index d1d78fa..91b9f50 100644
+--- a/imap/tls.c
++++ b/imap/tls.c
+@@ -635,7 +635,8 @@ static int tls_rand_init(void)
+ // I am the server
+ EXPORTED int     tls_init_serverengine(const char *ident,
+ 			      int verifydepth,
+-			      int askcert)
++			      int askcert,
++			      int tlsonly)
+ {
+     int     off = 0;
+     int     verify_flags = SSL_VERIFY_NONE;
+@@ -681,12 +682,20 @@ EXPORTED int     tls_init_serverengine(const char *ident,
+     };
+ 
+     off |= SSL_OP_ALL;            /* Work around all known bugs */
+-    off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
+-    off |= SSL_OP_NO_SSLv3;       /* Disable insecure SSLv3 */
+     off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
+ 
+     const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
+ 
++    if (strstr(tls_versions, "ssl2") == NULL || tlsonly) {
++	//syslog(LOG_DEBUG, "TLS server engine: Disabled SSLv2");
++	off |= SSL_OP_NO_SSLv2;
++    }
++
++    if (strstr(tls_versions, "ssl3") == NULL || tlsonly) {
++	//syslog(LOG_DEBUG, "TLS server engine: Disabled SSLv3");
++	off |= SSL_OP_NO_SSLv3;
++    }
++
+     if (strstr(tls_versions, "tls1_2") == NULL) {
+ #if (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
+ 	//syslog(LOG_DEBUG, "TLS server engine: Disabled TLSv1.2");
+diff --git a/imap/tls.h b/imap/tls.h
+index 137a8bb..c284c1c 100644
+--- a/imap/tls.h
++++ b/imap/tls.h
+@@ -60,7 +60,8 @@ int tls_enabled(void);
+ /* init tls */
+ int tls_init_serverengine(const char *ident,
+ 			  int verifydepth, /* depth to verify */
+-			  int askcert);    /* 1 = client auth */
++			  int askcert,     /* 1 = client auth */
++			  int tlsonly);
+ 
+ int tls_init_clientengine(int verifydepth,
+ 			  const char *var_server_cert,
+diff --git a/timsieved/parser.c b/timsieved/parser.c
+index 303c1ea..4a6f7e6 100644
+--- a/timsieved/parser.c
++++ b/timsieved/parser.c
+@@ -907,7 +907,8 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
+ 
+     result=tls_init_serverengine("sieve",
+ 				 5,        /* depth to verify */
+-				 1);       /* can client auth? */
++				 1,        /* can client auth? */
++				 1);       /* TLS only? */
+ 
+     if (result == -1) {
+ 
