@@ -12655,6 +12655,8 @@ static void list_data(struct listargs *listargs)
                 free_hash_table(&listargs->server_table, NULL);
             if (rock.subs)
                 strarray_free(rock.subs);
+            if (rock.last_name)
+                free(rock.last_name);
         }
     }
 }
