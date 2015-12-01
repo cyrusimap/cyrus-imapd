@@ -3209,7 +3209,9 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
     struct rename_rock *rrock = (struct rename_rock *) rock;
     int r = 0;
 
-    if (rrock->newmailbox) {
+    if (rrock->newmailbox &&
+            /* XXX hack for JMAP support */
+            strcmp(entry, IMAP_ANNOT_NS "x-displayname")) {
         /* create newly renamed entry */
         const char *newuserid = userid;
 

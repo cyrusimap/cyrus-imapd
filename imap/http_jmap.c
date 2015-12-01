@@ -1522,28 +1522,6 @@ static int setMailboxes(struct jmap_req *req)
             }
 
             if (name) {
-                /* Set x-displayname annotation on mailbox. */
-                annotate_state_t *astate = NULL;
-                r = mailbox_get_annotate_state(mbox, 0, &astate);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
-                            mbox->name, error_message(r));
-                    mailbox_close(&mbox);
-                    goto done;
-                }
-                struct buf val = BUF_INITIALIZER;
-                buf_printf(&val, "%s", name);
-                static const char *displayname_annot =
-                    IMAP_ANNOT_NS "x-displayname";
-                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
-                if (r) {
-                    syslog(LOG_ERR, "failed to write annotation %s: %s",
-                            displayname_annot, error_message(r));
-                    mailbox_close(&mbox);
-                    goto done;
-                }
-                buf_free(&val);
-
                 /* Rename mailbox for IMAP. But only if it isn't the INBOX. */
                 if (mbox != req->inbox) {
                     struct mboxlist_entry *mbparent = NULL;
@@ -1569,7 +1547,6 @@ static int setMailboxes(struct jmap_req *req)
                     /* Rename the mailbox. */
                     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
                     mailbox_close(&mbox);
-                    mbox = NULL;
                     r = mboxlist_renamemailbox(oldname, newname,
                             NULL /* partition */, 0 /* uidvalidity */,
                             httpd_userisadmin, httpd_userid, httpd_authstate,
@@ -1582,9 +1559,41 @@ static int setMailboxes(struct jmap_req *req)
                         free(oldname);
                         goto done;
                     }
-                    free(newname);
                     free(oldname);
+
+                    /* Reopen the mailbox. */
+                    r = mailbox_open_iwl(newname, &mbox);
+                    if (r) {
+                        syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
+                                newname, error_message(r));
+                        free(newname);
+                        goto done;
+                    }
+                    free(newname);
                 }
+
+                /* Set x-displayname annotation on mailbox. */
+                annotate_state_t *astate = NULL;
+                r = mailbox_get_annotate_state(mbox, 0, &astate);
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
+                            mbox->name, error_message(r));
+                    mailbox_close(&mbox);
+                    goto done;
+                }
+                struct buf val = BUF_INITIALIZER;
+                buf_setcstr(&val, name);
+                static const char *displayname_annot =
+                    IMAP_ANNOT_NS "x-displayname";
+                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            displayname_annot, error_message(r));
+                    mailbox_close(&mbox);
+                    goto done;
+                }
+                buf_free(&val);
+
             }
             /* Report as updated. */
             json_array_append_new(updated, json_string(uid));
