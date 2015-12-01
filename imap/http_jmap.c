@@ -706,39 +706,64 @@ struct getMailboxes_rock {
 };
 
 /* Determine the JMAP role of a Cyrus mailbox named mboxname based on the
- * specialuse annotation and HTTP users inbox name. */
-const char *jmap_mailbox_role(const char *mboxname)
+ * specialuse annotation and HTTP users inbox name. The returned memory is
+ * owned by the caller. */
+char *jmap_mailbox_role(const char *mboxname)
 {
-    struct buf specialuse = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
     const char *role = NULL;
+    char *ret = NULL;
     int r;
-    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
 
+    /* Inbox is special. */
+    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
     if (!strcmp(mboxname, inboxname)) {
         free(inboxname);
-        return "inbox";
+        return xstrdup("inbox");
+    }
+    free(inboxname);
+
+    /* Does this mailbox has an IMAP special use role? */
+    r = annotatemore_lookup(mboxname, "/specialuse", httpd_userid, &buf);
+
+    if (r) return NULL;
+    if (buf.len) {
+        strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
+        if (uses->count) {
+            /* XXX In IMAP, a mailbox may have multiple roles. If the JMAP spec
+             * isn't updated to allow multiple roles, just return the first
+             * special use annotation of this mailbox. */
+            const char *use = strarray_nth(uses, 0);
+            if (!strcmp(use, "\\Archive")) {
+                role = "archive";
+            } else if (!strcmp(use, "\\Drafts")) {
+                role = "drafts";
+            } else if (!strcmp(use, "\\Junk")) {
+                role = "junk";
+            } else if (!strcmp(use, "\\Sent")) {
+                role = "sent";
+            } else if (!strcmp(use, "\\Trash")) {
+                role = "trash";
+            }
+        }
+        strarray_free(uses);
     }
 
-    r = annotatemore_lookup(mboxname, "/specialuse", httpd_userid, &specialuse);
-    if (r) return NULL;
-
-    if (specialuse.len) {
-        const char *use = buf_cstring(&specialuse);
-        if (!strcmp(use, "\\Archive")) {
-            role = "archive";
-        } else if (!strcmp(use, "\\Drafts")) {
-            role = "drafts";
-        } else if (!strcmp(use, "\\Junk")) {
-            role = "junk";
-        } else if (!strcmp(use, "\\Sent")) {
-            role = "sent";
-        } else if (!strcmp(use, "\\Trash")) {
-            role = "trash";
+    /* Otherwise, does it have the x-role annotation set? */
+    if (!role) {
+        buf_reset(&buf);
+        r = annotatemore_lookup(mboxname, IMAP_ANNOT_NS "x-role", httpd_userid, &buf);
+        if (r) return NULL;
+        if (buf.len) {
+            role = buf_cstring(&buf);
         }
     }
-    buf_free(&specialuse);
-    free(inboxname);
-    return role;
+
+    /* Make the caller own role. */
+    if (role) ret = xstrdup(role);
+
+    buf_free(&buf);
+    return ret;
 }
 
 /* Convert the mailbox mbox to a JMAP mailbox object.
@@ -779,19 +804,15 @@ json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
     json_object_set_new(obj, "id", json_string(mbox->uniqueid));
     if (_wantprop(props, "name")) {
         struct buf attrib = BUF_INITIALIZER;
-        static const char *displayname_annot =
-            IMAP_ANNOT_NS "x-displayname";
+        static const char *displayname_annot = IMAP_ANNOT_NS "x-displayname";
         r = annotatemore_lookupmask(mbox->name, displayname_annot, httpd_userid, &attrib);
-
-        /* XXX either wipe or set x-displayname for IMAP RENAME and CREATE */
-
         if (!r && attrib.len) {
             /* We got a mailbox with a displayname annotation. Use it. */
             json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
         } else {
             /* No displayname annotation. Most probably this mailbox was
-             * created before JMAP. In any case, determine name from the
-             * the last segment of the mailboxname hierarchy. */
+             * created via IMAP. In any case, determine name from the the
+             * last segment of the mailboxname hierarchy. */
             char *extname, *q = NULL;
             charset_index cs;
 
@@ -859,8 +880,9 @@ json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
         json_object_set_new(obj, "mayDelete", json_boolean(mayDelete));
     }
     if (_wantprop(props, "role")) {
-        const char *role = jmap_mailbox_role(mbox->name);
+        char *role = jmap_mailbox_role(mbox->name);
         json_object_set_new(obj, "role", role ? json_string(role) : json_null());
+        if (role) free(role);
     }
     if (_wantprop(props, "sortOrder")) {
         int sortOrder;
@@ -1096,25 +1118,20 @@ static int jmap_mailbox_newname_cb(const mbentry_t *mbentry, void *vrock) {
         rock->len = strlen(rock->mboxname);
         assert(rock->len > 0);
     }
-
     /* Only look for names starting with mboxname. */
     if (strncmp(mbentry->name, rock->mboxname, strlen(rock->mboxname))) {
         return 0;
     }
     s = mbentry->name + rock->len;
-
-
     /* Skip any grand-children. */
     if (strchr(s, jmap_namespace.hier_sep)) {
         return 0;
     }
-
     /* Does this mailbox match exactly our mboxname? */
     if (*s == 0) {
         rock->highest = 1;
         return 0;
     }
-
     /* Now check if it ends with pattern "_\d+". If not, skip it. */
     if (*s++ != '_') {
         return 0;
@@ -1124,7 +1141,6 @@ static int jmap_mailbox_newname_cb(const mbentry_t *mbentry, void *vrock) {
     if (lo == hi || *hi != 0) {
         return 0;
     }
-
     /* Gotcha! */
     int n = atoi(lo);
     if (n > rock->highest) {
@@ -1195,6 +1211,39 @@ done:
     return mboxname;
 }
 
+struct _jmap_find_xrole_data {
+    const char *xrole;
+    const char *userid;
+    char *mboxname;
+};
+
+static int _jmap_find_xrole(const mbentry_t *mbentry, void *rock)
+{
+    struct _jmap_find_xrole_data *d = (struct _jmap_find_xrole_data *)rock;
+    struct buf attrib = BUF_INITIALIZER;
+
+    /* XXX bad form to hard-code this here... */
+    annotatemore_lookup(mbentry->name, IMAP_ANNOT_NS "x-role", d->userid, &attrib);
+
+    if (attrib.len && !strcmp(buf_cstring(&attrib), d->xrole)) {
+        d->mboxname = xstrdup(mbentry->name);
+    }
+
+    buf_free(&attrib);
+
+    if (d->mboxname) return CYRUSDB_DONE;
+    return 0;
+}
+
+
+static char *jmap_find_xrole(const char *xrole, const char *userid)
+{
+    struct _jmap_find_xrole_data rock = { xrole, userid, NULL };
+    /* INBOX can never have an x-role. */
+    mboxlist_usermboxtree(userid, _jmap_find_xrole, &rock, MBOXTREE_SKIP_ROOT);
+    return rock.mboxname;
+}
+
 static int setMailboxes(struct jmap_req *req)
 {
     int r = 0;
@@ -1215,6 +1264,7 @@ static int setMailboxes(struct jmap_req *req)
         json_t *notCreated = json_pack("{}");
         const char *key;
         json_t *arg;
+        int pe;
 
         json_object_foreach(create, key, arg) {
             json_t *invalid = json_pack("[]");
@@ -1229,24 +1279,27 @@ static int setMailboxes(struct jmap_req *req)
             if (json_object_get(arg, "id")) {
                 json_array_append_new(invalid, json_string("id"));
             }
-            if (jmap_readprop(arg, "name", 1, invalid, "s", &name) > 0) {
-                /* XXX Validate name */
+            pe = jmap_readprop(arg, "name", 1, invalid, "s", &name);
+            if (pe > 0 && !strlen(name)) {
+                json_array_append_new(invalid, json_string("name"));
             }
             if (json_object_get(arg, "parentId") != json_null()) {
-                if (jmap_readprop(arg, "parentId", 1, invalid, "s", &parentId) > 0) {
-                    /* XXX Validate parentId */
+                pe = jmap_readprop(arg, "parentId", 1, invalid, "s", &parentId);
+                if (pe > 0 && !strlen(name)) {
+                    json_array_append_new(invalid, json_string("parentId"));
                 }
             } else {
                 parentId = req->inbox->uniqueid;
             }
             if (json_object_get(arg, "role") != json_null()) {
-                if (jmap_readprop(arg, "role", 1, invalid, "s", &role) > 0) {
-                    /* XXX Validate role */
-                    /* XXX Check role for uniqueness. */
+                pe = jmap_readprop(arg, "role", 1, invalid, "s", &role);
+                if (pe > 0 && !strlen(role)) {
+                    json_array_append_new(invalid, json_string("role"));
                 }
             }
             if (jmap_readprop(arg, "sortOrder", 0, invalid, "i", &sortOrder) > 0) {
-                /* XXX Validate sortOrder */
+                /* XXX In getMailboxes, we decide the sortOrder by the special
+                 * use of the mailbox. Just ignore this property for now. */
             }
             if (json_object_get(arg, "mustBeOnlyMailbox")) {
                 json_array_append_new(invalid, json_string("mustBeOnlyMailbox"));
@@ -1277,6 +1330,45 @@ static int setMailboxes(struct jmap_req *req)
             }
             if (json_object_get(arg, "unreadThreads")) {
                 json_array_append_new(invalid, json_string("unreadThreads"));
+            }
+
+            /* Check role for uniqueness. Also make use point to the name of
+             * the IMAP special-use annotation name, if role is one of the
+             * standard roles. */
+            const char *use = NULL;
+            if (role) {
+                if (!strcmp(role, "inbox")) {
+                    /* Creating a new inbox is always an error. */
+                    json_array_append_new(invalid, json_string("role"));
+                }  else {
+                    /* Is is one of the known special use mailboxes? */
+                    if (!strcmp(role, "archive")) {
+                        use = "\\Archive";
+                    } else if (!strcmp(role, "drafts")) {
+                        use = "\\Drafts";
+                    } else if (!strcmp(role, "junk")) {
+                        use = "\\Junk";
+                    } else if (!strcmp(role, "sent")) {
+                        use = "\\Sent";
+                    } else if (!strcmp(role, "trash")) {
+                        use = "\\Trash";
+                    } else if (strncmp(role, "x-", 2)) {
+                        /* Does it start with an "x-"? If not, reject it. */
+                        json_array_append_new(invalid, json_string("role"));
+                    }
+                }
+                char *found = NULL;
+                if (use) {
+                    /* Check that no such IMAP specialuse mailbox already exists. */
+                    found = mboxlist_find_specialuse(use, req->userid);
+                } else if (!json_array_size(invalid)) {
+                    /* Check that no mailbox with this x-role exists. */
+                    found = jmap_find_xrole(role, req->userid);
+                }
+                if (found) {
+                    json_array_append_new(invalid, json_string("role"));
+                    free(found);
+                }
             }
 
             /* Validate parent. */
@@ -1337,41 +1429,78 @@ static int setMailboxes(struct jmap_req *req)
             }
             buf_free(&acl);
 
-            /* Open our new mailbox. */
+            if (name) {
+                /* Open our new mailbox. */
+                struct mailbox *mbox = NULL;
+                if ((r = mailbox_open_iwl(mboxname, &mbox))) {
+                    syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
+                            mboxname, error_message(r));
+                    free(mboxname);
+                    goto done;
+                }
+                /* Set x-displayname annotation on mailbox. */
+                annotate_state_t *astate = NULL;
+                r = mailbox_get_annotate_state(mbox, 0, &astate);
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
+                            mbox->name, error_message(r));
+                    mailbox_close(&mbox);
+                    goto done;
+                }
+                struct buf val = BUF_INITIALIZER;
+                buf_printf(&val, "%s", name);
+                static const char *displayname_annot =
+                    IMAP_ANNOT_NS "x-displayname";
+                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            displayname_annot, error_message(r));
+                    mailbox_close(&mbox);
+                    goto done;
+                }
+                buf_free(&val);
+                mailbox_close(&mbox);
+            }
+
+            /* Set specialuse or x-role. specialuse takes precendence. */
+            if (use) {
+                struct buf val = BUF_INITIALIZER;
+                buf_setcstr(&val, use);
+                static const char *annot = "/specialuse";
+                r = annotatemore_write(mboxname, annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            annot, error_message(r));
+                    free(mboxname);
+                    goto done;
+                }
+                buf_free(&val);
+            } else if (role) {
+                struct buf val = BUF_INITIALIZER;
+                buf_setcstr(&val, role);
+                static const char *annot = IMAP_ANNOT_NS "x-role";
+                r = annotatemore_write(mboxname, annot, httpd_userid, &val);
+                if (r) {
+                    syslog(LOG_ERR, "failed to write annotation %s: %s",
+                            annot, error_message(r));
+                    free(mboxname);
+                    goto done;
+                }
+                buf_free(&val);
+            }
+
+            /* Return uniqueid. */
+            /* XXX Meh... must reopen mailbox to determine uniqued id. */
             struct mailbox *mbox = NULL;
-            if ((r = mailbox_open_iwl(mboxname, &mbox))) {
-                syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
+            if ((r = mailbox_open_irl(mboxname, &mbox))) {
+                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
                         mboxname, error_message(r));
                 free(mboxname);
                 goto done;
             }
-            free(mboxname);
-
-            /* Set x-displayname annotation on mailbox. */
-            annotate_state_t *astate = NULL;
-            r = mailbox_get_annotate_state(mbox, 0, &astate);
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
-                        mbox->name, error_message(r));
-                mailbox_close(&mbox);
-                goto done;
-            }
-            struct buf val = BUF_INITIALIZER;
-            buf_printf(&val, "%s", name);
-            static const char *displayname_annot =
-                IMAP_ANNOT_NS "x-displayname";
-            r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
-            if (r) {
-                syslog(LOG_ERR, "failed to write annotation %s: %s",
-                        displayname_annot, error_message(r));
-                mailbox_close(&mbox);
-                goto done;
-            }
-            buf_free(&val);
-
-            /* Return uniqueid. */
             json_object_set_new(created, key, json_pack("{s:s}",
                         "id", mbox->uniqueid));
+            free(mboxname);
             mailbox_close(&mbox);
         }
 
@@ -1395,7 +1524,7 @@ static int setMailboxes(struct jmap_req *req)
 
         json_object_foreach(update, uid, arg) {
             json_t *invalid = json_pack("[]");
-            const char *id, *parentId = NULL, *name, *role = NULL, *currole = NULL;
+            const char *id, *parentId = NULL, *name, *role = NULL;
             int sortOrder = 0;
             char *parentname = NULL;
             int pe;
@@ -1444,16 +1573,14 @@ static int setMailboxes(struct jmap_req *req)
                 json_array_append_new(invalid, json_string("id"));
             }
             pe = jmap_readprop(arg, "name", 0, invalid, "s", &name);
-            if (pe > 0) {
-                /* XXX Validate name */
+            if (pe > 0 && !strlen(name)) {
+                json_array_append_new(invalid, json_string("name"));
             }
 
             if (json_object_get(arg, "parentId") != json_null()) {
                 pe = jmap_readprop(arg, "parentId", 0, invalid, "s", &parentId);
-                if (pe > 0) {
-                    /* XXX Validate parentId */
-                } else {
-                    /* XXX Leave current parentId unchanged. */
+                if (pe > 0 && !strlen(parentId)) {
+                    json_array_append_new(invalid, json_string("parentId"));
                 }
             } else {
                 parentId = req->inbox->uniqueid;
@@ -1462,15 +1589,16 @@ static int setMailboxes(struct jmap_req *req)
             if (json_object_get(arg, "role") != json_null()) {
                 pe = jmap_readprop(arg, "role", 0, invalid, "s", &role);
                 if (pe > 0) {
-                    /* XXX Validate role */
-                    /* XXX Check role for uniqueness. */
-                } else if (!pe) {
-                    /* Leave current role unchanged. */
-                    role = currole;
+                    /* JMAP spec says: "This property is immutable" and "the
+                     * client MAY attempt to create mailboxes with the standard
+                     * roles if not already present". To comply, let's allow
+                     * "role" to be set during create, but refuse any updates. */
+                    json_array_append_new(invalid, json_string("role"));
                 }
             }
             if (jmap_readprop(arg, "sortOrder", 0, invalid, "i", &sortOrder) > 0) {
-                /* XXX Validate sortOrder */
+                /* XXX In getMailboxes, we decide the sortOrder by the special
+                 * use of the mailbox. Just ignore this property for now. */
             }
             if (json_object_get(arg, "mustBeOnlyMailbox")) {
                 json_array_append_new(invalid, json_string("mustBeOnlyMailbox"));
@@ -1509,16 +1637,13 @@ static int setMailboxes(struct jmap_req *req)
                         "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notUpdated, uid, err);
                 if (parentname) free(parentname);
+                if (mbox && mbox != req->inbox) mailbox_close(&mbox);
                 continue;
             }
             json_decref(invalid);
 
             if (parentId) {
                 /* XXX change parent... this can get ugly */
-            }
-
-            if (role) {
-                /* XXX change role */
             }
 
             if (name) {
@@ -1593,7 +1718,6 @@ static int setMailboxes(struct jmap_req *req)
                     goto done;
                 }
                 buf_free(&val);
-
             }
             /* Report as updated. */
             json_array_append_new(updated, json_string(uid));
