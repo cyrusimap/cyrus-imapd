@@ -1264,7 +1264,6 @@ sub test_setmailboxes
     $res = $jmap->Request([
             ['setMailboxes', { create => { "#1" => {
                             name => "foo",
-                            # name => "I.feel.\N{WHITE SMILING FACE}",
                             parentId => $inbox->{id},
                             role => undef
              }}}, "R1"]
@@ -1328,7 +1327,7 @@ sub test_setmailboxes
     $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
 }
 
-sub test_setmailboxes_name
+sub test_setmailboxes_name_collision
 {
     my ($self) = @_;
 
@@ -1399,6 +1398,66 @@ sub test_setmailboxes_name
     xlog "get mailbox $id3";
     $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+}
+
+sub test_setmailboxes_name_interop
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "create mailbox via IMAP";
+    $imaptalk->create("INBOX.foo")
+        or die "Cannot create mailbox INBOX.foo: $@";
+
+    xlog "get foo mailbox";
+    my $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $foo = $m{"foo"};
+    my $id = $foo->{id};
+    $self->assert_str_equals($foo->{name}, "foo");
+
+    xlog "rename mailbox foo to oof via JMAP";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => { $id => { name => "oof" }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "get mailbox via IMAP";
+    my $data = $imaptalk->list("INBOX.oof", "%");
+    $self->assert_num_equals(scalar @{$data}, 1);
+
+    xlog "rename mailbox oof to bar via IMAP";
+    $imaptalk->rename("INBOX.oof", "INBOX.bar")
+        or die "Cannot rename mailbox: $@";
+
+    xlog "get mailbox $id";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+
+    xlog "rename mailbox bar to baz via JMAP";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => { $id => { name => "baz" }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "get mailbox via IMAP";
+    $data = $imaptalk->list("INBOX.baz", "%");
+    $self->assert_num_equals(scalar @{$data}, 1);
+
+    xlog "rename mailbox baz to IFeel\N{WHITE SMILING FACE} via IMAP";
+ # IFeel&Jjo-")
+    $imaptalk->rename("INBOX.baz", "INBOX.IFeel\N{WHITE SMILING FACE}")
+        or die "Cannot rename mailbox: $@";
+
+    xlog "get mailbox $id";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
+
+    my $x = Dumper($res);
+    xlog "$x";
+
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "IFeel\N{WHITE SMILING FACE}");
 }
 
 sub test_getcalendars
