@@ -1597,7 +1597,7 @@ static int setMailboxes(struct jmap_req *req)
             }
             /* Report as updated. */
             json_array_append_new(updated, json_string(uid));
-            if (mbox) mailbox_close(&mbox);
+            if (mbox && mbox != req->inbox) mailbox_close(&mbox);
         }
 
         if (json_array_size(updated)) {
