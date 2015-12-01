@@ -1447,17 +1447,145 @@ sub test_setmailboxes_name_interop
     $self->assert_num_equals(scalar @{$data}, 1);
 
     xlog "rename mailbox baz to IFeel\N{WHITE SMILING FACE} via IMAP";
- # IFeel&Jjo-")
     $imaptalk->rename("INBOX.baz", "INBOX.IFeel\N{WHITE SMILING FACE}")
         or die "Cannot rename mailbox: $@";
 
     xlog "get mailbox $id";
     $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
-
-    my $x = Dumper($res);
-    xlog "$x";
-
     $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "IFeel\N{WHITE SMILING FACE}");
+}
+
+sub test_setmailboxes_role
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "get inbox";
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+
+    my $state = $res->[0][1]{state};
+
+    xlog "try to create mailbox with inbox role";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "foo",
+                            parentId => $inbox->{id},
+                            role => "inbox"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    my $errType = $res->[0][1]{notCreated}{"#1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, [ "role" ]);
+
+    xlog "create mailbox with trash role";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "foo",
+                            parentId => undef,
+                            role => "trash"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get mailbox $id";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
+
+    $self->assert_str_equals($res->[0][1]{list}[0]->{role}, "trash");
+
+    xlog "get mailbox $id via IMAP";
+    my $data = $imaptalk->xlist("INBOX.foo", "%");
+    my %annots = map { $_ => 1 } @{$data->[0]->[0]};
+    $self->assert(exists $annots{"\\Trash"});
+
+    xlog "try to create another mailbox with trash role";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "bar",
+                            parentId => $inbox->{id},
+                            role => "trash"
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notCreated}{"#1"}{type};
+    $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, [ "role" ]);
+
+    xlog "create mailbox with x-bam role";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "baz",
+                            parentId => undef,
+                            role => "x-bam"
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    $id = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get mailbox $id";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{role}, "x-bam");
+
+    xlog "update of a mailbox role is always an error";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => { "$id" => {
+                            role => "x-baz"
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notUpdated}{$id}{type};
+    $errProp = $res->[0][1]{notUpdated}{$id}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, [ "role" ]);
+
+    xlog "try to create another mailbox with the x-bam role";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "bar",
+                            parentId => $inbox->{id},
+                            role => "x-bam"
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notCreated}{"#1"}{type};
+    $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, [ "role" ]);
+
+    xlog "try to create a mailbox with an unknown, non-x role";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "bam",
+                            parentId => $inbox->{id},
+                            role => "unknown"
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notCreated}{"#1"}{type};
+    $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, [ "role" ]);
+
+    xlog "create a specialuse Sent mailbox via IMAP";
+    $imaptalk->create("INBOX.Sent", "(USE (\\Sent))") || die;
+
+    xlog "create a specialuse Archive and Junk mailbox via IMAP";
+    $imaptalk->create("INBOX.Multi", "(USE (\\Archive \\Junk))") || die;
+
+    xlog "get mailboxes";
+    $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $sent = $m{"Sent"};
+    my $multi = $m{"Multi"};
+    $self->assert_str_equals($sent->{role}, "sent");
+    $self->assert_str_equals($multi->{role}, "archive");
 }
 
 sub test_getcalendars
