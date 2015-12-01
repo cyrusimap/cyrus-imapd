@@ -162,6 +162,7 @@ enum {
     DAV_BAD_LOCK_TOKEN,
     DAV_NEED_LOCK_TOKEN,
     DAV_LOCKED,
+    DAV_FINITE_DEPTH,
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     DAV_SUPP_REPORT,
@@ -381,9 +382,6 @@ typedef int (*db_write_proc_t)(void *davdb, void *data);
 /* Function to delete resource in 'rowid' */
 typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid);
 
-/* Function to delete all entries in 'mailbox' */
-typedef int (*db_delmbox_proc_t)(void *davdb, const char *mailbox);
-
 typedef int (*db_proc_t)(void *davdb);
 
 struct davdb_params {
@@ -398,7 +396,6 @@ struct davdb_params {
      * we need to go via mailbox.c for replication support */
     db_write_proc_t write_resourceLOCKONLY;     /* write a specific resource */
     db_delete_proc_t delete_resourceLOCKONLY;   /* delete a specific resource */
-    db_delmbox_proc_t delete_mboxDONTUSE;       /* delete all resources in mailbox */
 };
 
 /*
@@ -429,6 +426,11 @@ struct mime_type_t {
     void (*end_stream)(struct buf *);
 };
 
+struct mkcol_params {
+    unsigned location_precond;          /* precond code for bad location */
+    uint32_t mbtype;                    /* mailbox type collection */
+};
+
 /*
  * Function to do special processing for POST method (optional).
  * Returns HTTP_CONTINUE if processing should continue in meth_post(),
@@ -441,9 +443,19 @@ typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
                           struct mailbox *mailbox, const char *resource,
                           void *davdb);
 
+struct copy_params {
+    unsigned uid_conf_precond;          /* precond code for UID conflict */
+    put_proc_t proc;                    /* function to process & COPY a rsrc */
+};
+
 struct put_params {
     unsigned supp_data_precond;         /* precond code for unsupported data */
     put_proc_t proc;                    /* function to process & PUT a rsrc */
+};
+
+struct propfind_params {
+    unsigned finite_depth_precond;      /* precond code for finite depth */
+    const struct prop_entry *lprops;    /* array of "live" properties */
 };
 
 /* meth_report() parameters */
@@ -481,13 +493,13 @@ struct meth_params {
     check_precond_t check_precond;      /* check headers for preconditions */
     struct davdb_params davdb;          /* DAV DB access functions */
     acl_proc_t acl_ext;                 /* special ACL handling (extensions) */
-    put_proc_t copy;                    /* function to process & COPY a rsrc */
+    struct copy_params copy;            /* params for copying a resource */
     delete_proc_t delete;               /* special DELETE handling (optional) */
     get_proc_t get;                     /* special GET handling (optional) */
-    uint32_t mkcol_mbtype;              /* mbtype for MKCOL/MKCALENDAR */
+    struct mkcol_params mkcol;          /* params for creating new collection */
     post_proc_t post;                   /* special POST handling (optional) */
     struct put_params put;              /* params for putting a resource */
-    const struct prop_entry *lprops;    /* array of "live" properties */
+    struct propfind_params propfind;    /* params for finding properties */
     const struct report_type_t *reports;/* array of reports & proc functions */
 };
 
@@ -509,7 +521,6 @@ int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
                        strarray_t *imapflags);
-int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 unsigned get_preferences(struct transaction_t *txn);
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
 

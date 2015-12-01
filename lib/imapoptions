@@ -97,7 +97,7 @@ are listed with ``<none>''.
 /* The prefix for the addressbook mailboxes hierarchies.  The hierarchy
    delimiter will be automatically appended.  The public addressbook
    hierarchy will be at the toplevel of the shared namespace.  A
-   user's personal calendar hierarchy will be a child of their Inbox. */
+   user's personal addressbook hierarchy will be a child of their Inbox. */
 
 { "admins", "", STRING }
 /* The list of userids with administrative rights.  Separate each userid
@@ -530,6 +530,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Enable cross domain sharing.  This works best with alt namespace and
    unix hierarchy separators on, so you get Other Users/foo@example.com/... */
 
+{ "davdriveprefix", "#drive", STRING }
+/* The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
+   delimiter will be automatically appended.  The public storage
+   hierarchy will be at the toplevel of the shared namespace.  A
+   user's personal storage hierarchy will be a child of their Inbox. */
+
 { "dav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of generic DAV
    resources (principals).  If not set (the default), the value of the
@@ -774,7 +780,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist") }
+{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist", "webdav") }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical).

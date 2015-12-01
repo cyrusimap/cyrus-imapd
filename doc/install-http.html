@@ -7,10 +7,10 @@
 </head>
 <body>
 
-<h1>Cyrus HTTP (<a href="#RSS">RSS</a>, <a href="#CardDAV">CardDAV</a>,
-  <a href="#CalDAV">CalDAV</a>, <a href="#Freebusy">Freebusy</a>,
-  <a href="#iSchedule">iSchedule</a>, <a href="#TZdist">TZdist</a>,
-  <a href="#JMAP">JMAP</a>)</h1>
+<h1>Cyrus HTTP (<a href="#RSS">RSS</a>, <a href="#CalDAV">CalDAV</a>,
+  <a href="#CardDAV">CardDAV</a>, <a href="#WebDAV">WebDAV</a>,
+  <a href="#Freebusy">Freebusy</a>, <a href="#iSchedule">iSchedule</a>,
+  <a href="#TZdist">TZdist</a>, <a href="#JMAP">JMAP</a>)</h1>
 
 <b><i>Note that the HTTP service and associated modules in Cyrus are
     still under development.  This release should be considered beta
@@ -22,12 +22,14 @@
 
 <ul>
 <li>Serve IMAP mailboxes as RSS feeds.</li>
-<li>Act as a contacts (CardDAV) server by using IMAP mailboxes as
-  addressbook collections and RFC 5322 messages to store vCard
-  data.</li>
 <li>Act as a calendar and scheduling (CalDAV) server by using IMAP
   mailboxes as calendar collections and RFC 5322 messages to store
   iCalendar data.</li>
+<li>Act as a contacts (CardDAV) server by using IMAP mailboxes as
+  addressbook collections and RFC 5322 messages to store vCard
+  data.</li>
+<li>Act as a remote storage server (WebDAV) server by using IMAP
+  mailboxes as collections and RFC 5322 message to store files.</li>
 <li>Allow non-CalDAV/remote calendar clients to query freebusy
   information of Cyrus CalDAV users via freebusy URLs.</li>
 <li>Allow scheduling transactions between separate calendaring and
@@ -192,97 +194,6 @@
   running Cyrus Murder,  <tt>rss_feedlist_template</tt> only needs to
   be set on frontend servers, since only those servers have the
   complete mailbox list.</p>
-
-<h2 id="CardDAV">CardDAV Module</h2>
-
-<h3>Configuration</h3>
-
-<p>When enabled, the CardDAV module allows Cyrus to function as a
-  contacts server.  This module uses a subset of the
-  mailbox hierarchy as addressbook collections, the toplevel of which is
-  specified by the <tt>addressbookprefix</tt> option.  The public
-  addressbook hierarchy will reside at the toplevel of the shared mailbox
-  namespace.  A user's personal addressbook hierarchy will be a child of
-  their Inbox.  For example, using the default value
-  for <tt>addressbookprefix</tt>, an addressbook named <tt>Default</tt> for
-  user <tt>murch</tt> would reside in the mailbox
-  named <tt>user.murch.#addressbooks.Default</tt>.<p>
-
-<p><i>Note that mailboxes in the addressbook hierarchies (those
-  under <tt>addressbookprefix</tt>) <b>SHOULD NOT</b> be accessed with an IMAP
-  client as doing so will leave a mailbox in a state unsuitable
-  for CardDAV.  To this end, addressbook mailboxes will not returned by
-  Cyrus <tt>imapd</tt> in response to an IMAP client's request for the
-  available mailbox list, but Cyrus <tt>imapd</tt> will not otherwise
-  prevent an IMAP client from accessing them.</i></p>
-
-<h3>Administration</h3>
-
-<h4>Addressbook provisioning</h4>
-
-<p>The CardDAV module will automatically create a default addressbook
-  for a user the first time that the user authenticates to the CardDAV
-  server.  Note that the user MUST have an
-  existing <a href="install-admin-mb.html">IMAP Inbox</a> in order for
-  the addressbook to be created.</p>
-
-<h4>Addressbook access controls</h4>
-
-<p>Cyrus uses the same access controls for addressbooks as it does for
-  <a href="#ACLs">calendars</a>, except that the scheduling rights (7,
-  8, 9) have no use with addressbooks and are ignored.</p>
-
-<h3>Client Setup</h3>
-
-<h4>Apple Contacts</h4>
-
-<p>This client will autodetect all available addressbooks on a server.
-  To add a Cyrus server to this client, perform the following steps:
-
-<ol>
-<li>Select the "Contacts -> Preferences" menu option.</li>
-<li>Select the "Accounts" tab.</li>
-<li>Click the "+" button.</li>
-<li>Select "CardDAV" as the Account Type.
-<li>Fill in User Name, Password, and Server Address accordingly.</li>
-<li>Click Create.</li>
-</ol>
-</p>
-
-<h4>Apple iOS Contacts</h4>
-
-<p>This client will autodetect all available addressbooks on a server.
-  To add a Cyrus server to this client, perform the following steps:
-
-<ol>
-<li>Run the "Settings" app.</li>
-<li>Select the "Mail, Contacts, Calendars" menu.</li>
-<li>Select the "Add Account..." menu.</li>
-<li>Select the "Other" menu.</li>
-<li>Select the "Add CardDAV Account" menu.</li>
-<li>Fill in Server, User Name, Password, and Description accordingly.</li>
-<li>Click Next.</li>
-</ol>
-</p>
-
-<h4><a href="http://www.inf-it.com/open-source/clients/carddavmate/">
-  CardDavMATE</a></h4>
-
-<p>This client will autodetect all available addressbooks on a server.
-  To configure this client for a Cyrus server, edit <tt>config.js</tt> as
-  follows:
-
-<ol>
-<li>Set the <tt>href</tt> value in
-  the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
-  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt>
-  <br>Note that the trailing "/" is REQUIRED.</li>
-<li>Set the <tt>globalSettingsType</tt> option
-  to <tt>addressbook-home-set</tt></li>
-<li>Set any other options as desired.</li>
-</ol>
-</p>
-
 
 <h2 id="CalDAV">CalDAV Module</h2>
 
@@ -546,6 +457,150 @@
 </ol>
 </p>
 
+
+<h2 id="CardDAV">CardDAV Module</h2>
+
+<h3>Configuration</h3>
+
+<p>When enabled, the CardDAV module allows Cyrus to function as a
+  contacts server.  This module uses a subset of the
+  mailbox hierarchy as addressbook collections, the toplevel of which is
+  specified by the <tt>addressbookprefix</tt> option.  The public
+  addressbook hierarchy will reside at the toplevel of the shared mailbox
+  namespace.  A user's personal addressbook hierarchy will be a child of
+  their Inbox.  For example, using the default value
+  for <tt>addressbookprefix</tt>, an addressbook named <tt>Default</tt> for
+  user <tt>murch</tt> would reside in the mailbox
+  named <tt>user.murch.#addressbooks.Default</tt>.<p>
+
+<p><i>Note that mailboxes in the addressbook hierarchies (those
+  under <tt>addressbookprefix</tt>) <b>SHOULD NOT</b> be accessed with an IMAP
+  client as doing so will leave a mailbox in a state unsuitable
+  for CardDAV.  To this end, addressbook mailboxes will not returned by
+  Cyrus <tt>imapd</tt> in response to an IMAP client's request for the
+  available mailbox list, but Cyrus <tt>imapd</tt> will not otherwise
+  prevent an IMAP client from accessing them.</i></p>
+
+<h3>Administration</h3>
+
+<h4>Addressbook provisioning</h4>
+
+<p>The CardDAV module will automatically create a default addressbook
+  for a user the first time that the user authenticates to the CardDAV
+  server.  Note that the user MUST have an
+  existing <a href="install-admin-mb.html">IMAP Inbox</a> in order for
+  the addressbook to be created.</p>
+
+<h4>Addressbook access controls</h4>
+
+<p>Cyrus uses the same access controls for addressbooks as it does for
+  <a href="#ACLs">calendars</a>, except that the scheduling rights (7,
+  8, 9) have no use with addressbooks and are ignored.</p>
+
+<h3>Client Setup</h3>
+
+<h4>Apple Contacts</h4>
+
+<p>This client will autodetect all available addressbooks on a server.
+  To add a Cyrus server to this client, perform the following steps:
+
+<ol>
+<li>Select the "Contacts -> Preferences" menu option.</li>
+<li>Select the "Accounts" tab.</li>
+<li>Click the "+" button.</li>
+<li>Select "CardDAV" as the Account Type.
+<li>Fill in User Name, Password, and Server Address accordingly.</li>
+<li>Click Create.</li>
+</ol>
+</p>
+
+<h4>Apple iOS Contacts</h4>
+
+<p>This client will autodetect all available addressbooks on a server.
+  To add a Cyrus server to this client, perform the following steps:
+
+<ol>
+<li>Run the "Settings" app.</li>
+<li>Select the "Mail, Contacts, Calendars" menu.</li>
+<li>Select the "Add Account..." menu.</li>
+<li>Select the "Other" menu.</li>
+<li>Select the "Add CardDAV Account" menu.</li>
+<li>Fill in Server, User Name, Password, and Description accordingly.</li>
+<li>Click Next.</li>
+</ol>
+</p>
+
+<h4><a href="http://www.inf-it.com/open-source/clients/carddavmate/">
+  CardDavMATE</a></h4>
+
+<p>This client will autodetect all available addressbooks on a server.
+  To configure this client for a Cyrus server, edit <tt>config.js</tt> as
+  follows:
+
+<ol>
+<li>Set the <tt>href</tt> value in
+  the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
+  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt>
+  <br>Note that the trailing "/" is REQUIRED.</li>
+<li>Set the <tt>globalSettingsType</tt> option
+  to <tt>addressbook-home-set</tt></li>
+<li>Set any other options as desired.</li>
+</ol>
+</p>
+
+
+<h2 id="WebDAV">WebDAV Module</h2>
+
+<h3>Configuration</h3>
+
+<p>When enabled, the WebDAV module allows Cyrus to function as a
+  storage server.  This module uses a subset of the
+  mailbox hierarchy as collections, the toplevel of which is
+  specified by the <tt>driveprefix</tt> option.  The public
+  storage hierarchy will reside at the toplevel of the shared mailbox
+  namespace.  A user's personal storage hierarchy will be a child of
+  their Inbox.  For example, using the default value
+  for <tt>driveprefix</tt>, an collection named <tt>photos</tt> for
+  user <tt>murch</tt> would reside in the mailbox
+  named <tt>user.murch.#drive.photos</tt>.<p>
+
+<p><i>Note that mailboxes in the storage hierarchies (those
+  under <tt>driveprefix</tt>) <b>SHOULD NOT</b> be accessed with an IMAP
+  client as doing so will leave a mailbox in a state unsuitable
+  for WebDAV.  To this end, storage mailboxes will not returned by
+  Cyrus <tt>imapd</tt> in response to an IMAP client's request for the
+  available mailbox list, but Cyrus <tt>imapd</tt> will not otherwise
+  prevent an IMAP client from accessing them.</i></p>
+
+<h3>Administration</h3>
+
+<h4>Storage provisioning</h4>
+
+<p>The WebDAV module will automatically create a toplevel (root) collection
+  for a user the first time that the user authenticates to the WebDAV
+  server.  Note that the user MUST have an
+  existing <a href="install-admin-mb.html">IMAP Inbox</a> in order for
+  the root collection to be created.</p>
+
+<h4>Storage access controls</h4>
+
+<p>Cyrus uses the same access controls for storage as it does for
+  <a href="#ACLs">calendars</a>, except that the scheduling rights (7,
+  8, 9) have no use with addressbooks and are ignored.</p>
+
+<h3>Client Setup</h3>
+
+<h4>Apple Finder</h4>
+
+<p>To add a Cyrus server to this client, perform the following steps:
+
+<ol>
+<li>Select the "Go -> Connect to Server..." menu option.</li>
+<li>Fill in Server Address accordingly
+  (e.g. https://mycyrus.example.com/dav/drive/user/murch).</li>
+<li>Click Connect.</li>
+</ol>
+</p>
 
 <h2 id="Freebusy">Freebusy URL Module</h2>
 
