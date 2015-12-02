@@ -185,7 +185,7 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
-        { &jmap_post,           NULL },                 /* POST */
+        { &jmap_post,           NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
@@ -1307,7 +1307,18 @@ static int setMailboxes(struct jmap_req *req)
             }
             if (json_object_get(arg, "parentId") != json_null()) {
                 pe = jmap_readprop(arg, "parentId", 1, invalid, "s", &parentId);
-                if (pe > 0 && !strlen(name)) {
+                if (pe > 0 && strlen(parentId)) {
+                    /* Check if parentId is a creation id. If so, look up its uid. */
+                    if (*parentId == '#') {
+                        const char *t = hash_lookup(parentId+1, req->idmap);
+                        if (!t) {
+                            json_array_append_new(invalid, json_string("parentId"));
+                        } else {
+                            parentId = t;
+                        }
+                    }
+                } else if (pe > 0) {
+                    /* An empty parentId is always an error. */
                     json_array_append_new(invalid, json_string("parentId"));
                 }
             } else {
@@ -1393,7 +1404,7 @@ static int setMailboxes(struct jmap_req *req)
                 }
             }
 
-            /* Validate parent. */
+            /* Validate parent and determine parent mailbox name. */
             if (parentId && strcmp(parentId, req->inbox->uniqueid)) {
                 /* Lookup parent by parentId. */
                 struct _mboxname_uniqueid_rock rock;
@@ -1487,8 +1498,7 @@ static int setMailboxes(struct jmap_req *req)
                 buf_free(&val);
             }
 
-            /* Return uniqueid. */
-            /* XXX Meh... must reopen mailbox to determine uniqued id. */
+            /* Return uniqueid. Must reopen mailbox to determine uniqueid. */
             struct mailbox *mbox = NULL;
             if ((r = mailbox_open_irl(mboxname, &mbox))) {
                 syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
@@ -1497,6 +1507,9 @@ static int setMailboxes(struct jmap_req *req)
             }
             json_object_set_new(created, key, json_pack("{s:s}",
                         "id", mbox->uniqueid));
+
+            /* hash_insert takes ownership of uniqueid's copy. */
+            hash_insert(key, xstrdup(mbox->uniqueid), req->idmap);
 
             /* Clean up memory. */
             free(mboxname);
@@ -1533,19 +1546,10 @@ static int setMailboxes(struct jmap_req *req)
             int pe;
 
             /* Validate uid */
-            if (!strlen(uid)) {
+            if (!strlen(uid) || *uid == '#') {
                 json_t *err= json_pack("{s:s}", "type", "invalidArguments");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
-            }
-            if (*uid == '#') {
-                const char *t = hash_lookup(uid, req->idmap);
-                if (!t) {
-                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                }
-                uid = t;
             }
 
             /* Lookup mailbox name by uid and determine its parent. */
@@ -1602,7 +1606,18 @@ static int setMailboxes(struct jmap_req *req)
 
             if (json_object_get(arg, "parentId") != json_null()) {
                 pe = jmap_readprop(arg, "parentId", 0, invalid, "s", &parentId);
-                if (pe > 0 && !strlen(parentId)) {
+                if (pe > 0 && strlen(parentId)) {
+                    /* Check if parentId is a creation id. If so, look up its uid. */
+                    if (*parentId == '#') {
+                        const char *t = hash_lookup(parentId+1, req->idmap);
+                        if (!t) {
+                            json_array_append_new(invalid, json_string("parentId"));
+                        } else {
+                            parentId = t;
+                        }
+                    }
+                } else if (pe > 0) {
+                    /* An empty parentId is always an error. */
                     json_array_append_new(invalid, json_string("parentId"));
                 }
             } else {
@@ -5512,19 +5527,10 @@ static int setCalendars(struct jmap_req *req)
         json_object_foreach(update, uid, arg) {
 
             /* Validate uid */
-            if (!strlen(uid)) {
+            if (!strlen(uid) || *uid == '#') {
                 json_t *err= json_pack("{s:s}", "type", "invalidArguments");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
-            }
-            if (*uid == '#') {
-                const char *t = hash_lookup(uid, req->idmap);
-                if (!t) {
-                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                }
-                uid = t;
             }
             if (jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
