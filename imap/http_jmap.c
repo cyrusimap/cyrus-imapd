@@ -810,8 +810,7 @@ json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
     json_object_set_new(obj, "id", json_string(mbox->uniqueid));
     if (_wantprop(props, "name")) {
         struct buf attrib = BUF_INITIALIZER;
-        static const char *displayname_annot = IMAP_ANNOT_NS "x-displayname";
-        r = annotatemore_lookupmask(mbox->name, displayname_annot, httpd_userid, &attrib);
+        r = annotatemore_lookup(mbox->name, IMAP_ANNOT_NS "x-displayname", httpd_userid, &attrib);
         if (!r && attrib.len) {
             /* We got a mailbox with a displayname annotation. Use it. */
             json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
@@ -1266,6 +1265,9 @@ static int setMailboxes(struct jmap_req *req)
     int r = 0;
     json_t *set = NULL;
 
+    char *mboxname = NULL;
+    char *parentname = NULL;
+
     json_t *state = json_object_get(req->args, "ifInState");
     if (state && jmap_checkstate(state, 0 /*MBTYPE*/, req)) {
         json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
@@ -1287,8 +1289,6 @@ static int setMailboxes(struct jmap_req *req)
             json_t *invalid = json_pack("[]");
             const char *parentId = NULL, *name, *role = NULL;
             int sortOrder = 0;
-            char *parentname = NULL;
-            char *mboxname = NULL;
 
             /* XXX Validate key. */
 
@@ -1412,7 +1412,6 @@ static int setMailboxes(struct jmap_req *req)
                 json_t *err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notCreated, key, err);
-                if (parentname) free(parentname);
                 continue;
             }
             json_decref(invalid);
@@ -1421,8 +1420,9 @@ static int setMailboxes(struct jmap_req *req)
             mboxname = jmap_mailbox_newname(name, parentname);
             if (!mboxname) {
                 syslog(LOG_ERR, "could not encode mailbox name");
+                r = IMAP_INTERNAL;
+                goto done;
             }
-            free(parentname);
 
             /* Create mailbox. */
             struct buf acl = BUF_INITIALIZER;
@@ -1441,43 +1441,21 @@ static int setMailboxes(struct jmap_req *req)
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                         mboxname, error_message(r));
-                free(mboxname);
                 goto done;
             }
             buf_free(&acl);
 
-            if (name) {
-                /* Open our new mailbox. */
-                struct mailbox *mbox = NULL;
-                if ((r = mailbox_open_iwl(mboxname, &mbox))) {
-                    syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
-                            mboxname, error_message(r));
-                    free(mboxname);
-                    goto done;
-                }
-                /* Set x-displayname annotation on mailbox. */
-                annotate_state_t *astate = NULL;
-                r = mailbox_get_annotate_state(mbox, 0, &astate);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
-                            mbox->name, error_message(r));
-                    mailbox_close(&mbox);
-                    goto done;
-                }
-                struct buf val = BUF_INITIALIZER;
-                buf_printf(&val, "%s", name);
-                static const char *displayname_annot =
-                    IMAP_ANNOT_NS "x-displayname";
-                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
-                if (r) {
-                    syslog(LOG_ERR, "failed to write annotation %s: %s",
-                            displayname_annot, error_message(r));
-                    mailbox_close(&mbox);
-                    goto done;
-                }
-                buf_free(&val);
-                mailbox_close(&mbox);
+            /* Set x-displayname annotation on mailbox. */
+            struct buf val = BUF_INITIALIZER;
+            buf_setcstr(&val, name);
+            static const char *annot = IMAP_ANNOT_NS "x-displayname";
+            r = annotatemore_write(mboxname, annot, httpd_userid, &val);
+            if (r) {
+                syslog(LOG_ERR, "failed to write annotation %s: %s",
+                        annot, error_message(r));
+                goto done;
             }
+            buf_free(&val);
 
             /* Set specialuse or x-role. specialuse takes precendence. */
             if (use) {
@@ -1488,7 +1466,6 @@ static int setMailboxes(struct jmap_req *req)
                 if (r) {
                     syslog(LOG_ERR, "failed to write annotation %s: %s",
                             annot, error_message(r));
-                    free(mboxname);
                     goto done;
                 }
                 buf_free(&val);
@@ -1500,7 +1477,6 @@ static int setMailboxes(struct jmap_req *req)
                 if (r) {
                     syslog(LOG_ERR, "failed to write annotation %s: %s",
                             annot, error_message(r));
-                    free(mboxname);
                     goto done;
                 }
                 buf_free(&val);
@@ -1512,12 +1488,18 @@ static int setMailboxes(struct jmap_req *req)
             if ((r = mailbox_open_irl(mboxname, &mbox))) {
                 syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
                         mboxname, error_message(r));
-                free(mboxname);
                 goto done;
             }
             json_object_set_new(created, key, json_pack("{s:s}",
                         "id", mbox->uniqueid));
+
+            /* Clean up memory. */
             free(mboxname);
+            mboxname = NULL;
+            if (parentname) {
+                free(parentname);
+                parentname = NULL;
+            }
             mailbox_close(&mbox);
         }
 
@@ -1543,13 +1525,11 @@ static int setMailboxes(struct jmap_req *req)
             json_t *invalid = json_pack("[]");
             const char *id, *parentId = NULL, *name, *role = NULL;
             int sortOrder = 0;
-            char *parentname = NULL;
             int pe;
 
             /* XXX Validate uid. */
 
-            /* Lookup mailbox by uid and open it. */
-            struct mailbox *mbox = NULL;
+            /* Lookup mailbox name by uid and determine its parent. */
             if (strcmp(uid, req->inbox->uniqueid)) {
                 /* Lookup by uniqueid. */
                 /* XXX Only until mboxlist supports lookup by uniqued. */
@@ -1564,30 +1544,37 @@ static int setMailboxes(struct jmap_req *req)
                     json_object_set_new(notUpdated, uid, err);
                     continue;
                 }
-                /* Open the mailbox. */
-                r = mailbox_open_iwl(rock.mboxname, &mbox);
-                if (r == IMAP_PERMISSION_DENIED) {
-                    json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                    json_object_set_new(notUpdated, uid, err);
-                    r = 0;
-                    free(rock.mboxname);
-                    continue;
-                } else if (r) {
-                    syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
-                            rock.mboxname, error_message(r));
-                    free(rock.mboxname);
+                mboxname = rock.mboxname;
+
+                /* Determine parent. */
+                struct mboxlist_entry *mbparent = NULL;
+                r = mboxlist_findparent(mboxname, &mbparent);
+                if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+                    syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
+                            mboxname, error_message(r));
                     goto done;
                 }
-                free(rock.mboxname);
+                parentname = !r ? xstrdup(mbparent->name) : NULL;
+                mboxlist_entry_free(&mbparent);
             } else {
-                mbox = (struct mailbox *) req->inbox;
-                parentname = xstrdup(req->inbox->name);
+                parentname = NULL;
+                mboxname = xstrdup(req->inbox->name);
             }
 
             /* Parse properties. */
             pe = jmap_readprop(arg, "id", 0, invalid, "s", &id);
-            if (pe > 0 && strcmp(id, mbox->uniqueid)) {
-                json_array_append_new(invalid, json_string("id"));
+            if (pe > 0) {
+                /* Open mailbox to determine its uniqueid. */
+                struct mailbox *mbox = NULL;
+                if ((r = mailbox_open_irl(mboxname, &mbox))) {
+                    syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                            mboxname, error_message(r));
+                    goto done;
+                }
+                if (strcmp(id, mbox->uniqueid)) {
+                    json_array_append_new(invalid, json_string("id"));
+                }
+                mailbox_close(&mbox);
             }
             pe = jmap_readprop(arg, "name", 0, invalid, "s", &name);
             if (pe > 0 && !strlen(name)) {
@@ -1653,8 +1640,6 @@ static int setMailboxes(struct jmap_req *req)
                 json_t *err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notUpdated, uid, err);
-                if (parentname) free(parentname);
-                if (mbox && mbox != req->inbox) mailbox_close(&mbox);
                 continue;
             }
             json_decref(invalid);
@@ -1665,30 +1650,20 @@ static int setMailboxes(struct jmap_req *req)
 
             if (name) {
                 /* Rename mailbox for IMAP. But only if it isn't the INBOX. */
-                if (mbox != req->inbox) {
-                    struct mboxlist_entry *mbparent = NULL;
+                if (strcmp(mboxname, req->inbox->name)) {
                     char *newname, *oldname;
 
-                    /* Determine parent name */
-                    r = mboxlist_findparent(mbox->name, &mbparent);
-                    if (r && r != IMAP_MAILBOX_NONEXISTENT) {
-                        syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
-                                mbox->name, error_message(r));
-                        goto done;
-                    }
                     /* Determine new, unique IMAP mailbox name. */
-                    newname = jmap_mailbox_newname(name, mbparent->name);
-                    mboxlist_entry_free(&mbparent);
+                    newname = jmap_mailbox_newname(name, parentname);
                     if (!newname) {
-                        syslog(LOG_ERR, "jmap_mailbox_newname returns NULL: can't rename %s", mbox->name);
+                        syslog(LOG_ERR, "jmap_mailbox_newname returns NULL: can't rename %s",mboxname);
                         r = IMAP_INTERNAL;
                         goto done;
                     }
-                    oldname = xstrdup(mbox->name);
+                    oldname = mboxname;
 
                     /* Rename the mailbox. */
                     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
-                    mailbox_close(&mbox);
                     r = mboxlist_renamemailbox(oldname, newname,
                             NULL /* partition */, 0 /* uidvalidity */,
                             httpd_userisadmin, httpd_userid, httpd_authstate,
@@ -1697,48 +1672,39 @@ static int setMailboxes(struct jmap_req *req)
                     if (r) {
                         syslog(LOG_ERR, "mboxlist_renamemailbox(old=%s new=%s): %s",
                                 oldname, newname, error_message(r));
+                        mboxevent_free(&mboxevent);
                         free(newname);
                         free(oldname);
                         goto done;
                     }
+                    mboxevent_free(&mboxevent);
                     free(oldname);
-
-                    /* Reopen the mailbox. */
-                    r = mailbox_open_iwl(newname, &mbox);
-                    if (r) {
-                        syslog(LOG_INFO, "mailbox_open_iwl(%s) failed: %s",
-                                newname, error_message(r));
-                        free(newname);
-                        goto done;
-                    }
-                    free(newname);
+                    mboxname = newname;
                 }
 
                 /* Set x-displayname annotation on mailbox. */
-                annotate_state_t *astate = NULL;
-                r = mailbox_get_annotate_state(mbox, 0, &astate);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
-                            mbox->name, error_message(r));
-                    mailbox_close(&mbox);
-                    goto done;
-                }
                 struct buf val = BUF_INITIALIZER;
                 buf_setcstr(&val, name);
-                static const char *displayname_annot =
-                    IMAP_ANNOT_NS "x-displayname";
-                r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
+                static const char *annot = IMAP_ANNOT_NS "x-displayname";
+                r = annotatemore_write(mboxname, annot, httpd_userid, &val);
                 if (r) {
                     syslog(LOG_ERR, "failed to write annotation %s: %s",
-                            displayname_annot, error_message(r));
-                    mailbox_close(&mbox);
+                            annot, error_message(r));
                     goto done;
                 }
                 buf_free(&val);
             }
+
             /* Report as updated. */
             json_array_append_new(updated, json_string(uid));
-            if (mbox && mbox != req->inbox) mailbox_close(&mbox);
+
+            /* Clean up memory. */
+            free(mboxname);
+            mboxname = NULL;
+            if (parentname) {
+                free(parentname);
+                parentname = NULL;
+            }
         }
 
         if (json_array_size(updated)) {
@@ -1777,7 +1743,6 @@ static int setMailboxes(struct jmap_req *req)
             }
 
             /* Lookup mailbox by id. */
-            char *mboxname;
             struct _mboxname_uniqueid_rock rock;
             rock.uniqueid = uid;
             rock.mboxname = NULL;
@@ -1808,13 +1773,15 @@ static int setMailboxes(struct jmap_req *req)
             if (r) {
                 syslog(LOG_ERR, "failed to delete mailbox(%s): %s",
                         mboxname, error_message(r));
-                free(mboxname);
                 goto done;
             }
-            free(mboxname);
 
             /* Report mailbox as destroyed. */
             json_array_append_new(destroyed, json_string(uid));
+
+            /* Clean up memory. */
+            free(mboxname);
+            mboxname = NULL;
         }
         if (json_array_size(destroyed)) {
             json_object_set(set, "destroyed", destroyed);
@@ -1844,6 +1811,9 @@ static int setMailboxes(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
 done:
+    if (mboxname) free(mboxname);
+    if (parentname) free(parentname);
+
     if (set) json_decref(set);
     return r;
 }
