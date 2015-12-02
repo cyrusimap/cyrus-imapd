@@ -1290,7 +1290,12 @@ static int setMailboxes(struct jmap_req *req)
             const char *parentId = NULL, *name, *role = NULL;
             int sortOrder = 0;
 
-            /* XXX Validate key. */
+            /* Validate key. */
+            if (!strlen(key)) {
+                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
 
             /* Parse properties. */
             if (json_object_get(arg, "id")) {
@@ -1527,7 +1532,21 @@ static int setMailboxes(struct jmap_req *req)
             int sortOrder = 0;
             int pe;
 
-            /* XXX Validate uid. */
+            /* Validate uid */
+            if (!strlen(uid)) {
+                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notUpdated, uid, err);
+                continue;
+            }
+            if (*uid == '#') {
+                const char *t = hash_lookup(uid, req->idmap);
+                if (!t) {
+                    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+                uid = t;
+            }
 
             /* Lookup mailbox name by uid and determine its parent. */
             if (strcmp(uid, req->inbox->uniqueid)) {
