@@ -1588,6 +1588,99 @@ sub test_setmailboxes_role
     $self->assert_str_equals($multi->{role}, "archive");
 }
 
+sub test_setmailboxes_parent
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Unfortunately, we can't create reshuffle mailbox and their parents in one
+    # big request, since Perl might reorder our map keys. This makes the JMAP
+    # requests non-deterministic. */
+
+    xlog "create mailbox foo";
+    my $res = $jmap->Request([['setMailboxes', { create => {
+                        "1" => { name => "foo", parentId => undef, role => undef }
+                    }}, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog "create mailbox foo.bar";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => {
+                        "2" => { name => "bar", parentId => $id1, role => undef }
+                    }}, "R1"]
+        ]);
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
+    xlog "create mailbox foo.bar.baz";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => {
+                        "3" => { name => "baz", parentId => $id2, role => undef }
+                    }}, "R1"]
+        ]);
+    my $id3 = $res->[0][1]{created}{"3"}{id};
+
+    xlog "get mailbox $id1";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
+    $self->assert_null($res->[0][1]{list}[0]->{parentId});
+
+    xlog "get mailbox $id2";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id2] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id1);
+
+    xlog "get mailbox $id3";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
+
+    xlog "move foo.bar.baz to foo.baz";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => {
+                        $id3 => { name => "baz", parentId => $id1, role => undef }
+                    }}, "R1"]
+        ]);
+
+    xlog "get mailbox $id3";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id1);
+
+    xlog "move foo.bar to bar";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => {
+                        $id2 => { name => "bar", parentId => undef, role => undef }
+                    }}, "R1"]
+        ]);
+
+    xlog "get mailbox $id2";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id2] }, "R1"]]);
+    $self->assert_null($res->[0][1]{list}[0]->{parentId});
+
+    xlog "move foo to bar.foo";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => {
+                        $id1 => { name => "foo", parentId => $id2, role => undef }
+                    }}, "R1"]
+        ]);
+
+    xlog "get mailbox $id1";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
+
+    xlog "move foo to non-existent parent";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => {
+                        $id1 => { name => "foo", parentId => "nope", role => undef }
+                    }}, "R1"]
+        ]);
+    my $errType = $res->[0][1]{notUpdated}{$id1}{type};
+    my $errProp = $res->[0][1]{notUpdated}{$id1}{properties};
+    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_deep_equals($errProp, [ "parentId" ]);
+
+    xlog "get mailbox $id1";
+    $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
+}
+
 sub test_getcalendars
 {
     my ($self) = @_;
