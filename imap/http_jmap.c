@@ -701,6 +701,12 @@ struct getMailboxes_rock {
     const struct mailbox *inbox; /* The main user inbox. Do not unlock or close. */
     json_t *list;                /* List of the current http user mailboxes. */
     hash_table *props;           /* Which properties to fetch. */
+    hash_table *roles;           /* Roles that were already reported. This isn't
+                                    strictly necessary, since Cyrus takes care
+                                    not to allow multiple mailboxes to have the
+                                    same SpecialUse flag. But RFC 6154 does not
+                                    forbid multiple mailboxes to have the same
+                                    role, so let's be resilient here. */
 
     const char *uniqueid; /* XXX: until mboxlist allows lookup by uniqueid */
 };
@@ -730,9 +736,8 @@ char *jmap_mailbox_role(const char *mboxname)
     if (buf.len) {
         strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
         if (uses->count) {
-            /* XXX In IMAP, a mailbox may have multiple roles. If the JMAP spec
-             * isn't updated to allow multiple roles, just return the first
-             * special use annotation of this mailbox. */
+            /* In IMAP, a mailbox may have multiple roles. But in JMAP we only
+             * return the first specialuse flag. */
             const char *use = strarray_nth(uses, 0);
             if (!strcmp(use, "\\Archive")) {
                 role = "archive";
@@ -780,7 +785,8 @@ json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
                                const struct mailbox *inbox,
                                int rights,
                                int parent_rights,
-                               hash_table *props)
+                               hash_table *props,
+                               hash_table *roles)
 {
     int r;
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
@@ -881,7 +887,12 @@ json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
     }
     if (_wantprop(props, "role")) {
         char *role = jmap_mailbox_role(mbox->name);
-        json_object_set_new(obj, "role", role ? json_string(role) : json_null());
+        if (role && !hash_lookup(role, roles)) {
+            json_object_set_new(obj, "role", json_string(role));
+            hash_insert(role, (void*)1, roles);
+        } else {
+            json_object_set_new(obj, "role", json_null());
+        }
         if (role) free(role);
     }
     if (_wantprop(props, "sortOrder")) {
@@ -972,7 +983,7 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
 
     /* Convert mbox to JMAP object. */
     mbox = jmap_mailbox_from_mbox(mailbox, parent, inbox, rights,
-                                  parent_rights, rock->props);
+                                  parent_rights, rock->props, rock->roles);
     if (!mbox) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mailbox->name);
         goto done;
@@ -995,6 +1006,8 @@ static int getMailboxes(struct jmap_req *req)
     rock.inbox = req->inbox;
     rock.props = NULL;
     rock.uniqueid = NULL;
+    rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
+    construct_hash_table(rock.roles, 8, 0);
 
     /* Determine current state. */
     state = jmap_getstate(0 /* MBTYPE */, req);
@@ -1072,6 +1085,10 @@ done:
     if (rock.props) {
         free_hash_table(rock.props, NULL);
         free(rock.props);
+    }
+    if (rock.roles) {
+        free_hash_table(rock.roles, NULL);
+        free(rock.roles);
     }
     return 0;
 }
