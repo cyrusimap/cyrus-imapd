@@ -184,6 +184,9 @@ magic(VirtDomains => sub {
 magic(AltNamespace => sub {
     shift->config_set(altnamespace => 'yes');
 });
+magic(CrossDomains => sub {
+    shift->config_set(crossdomains => 'yes');
+});
 magic(Conversations => sub {
     shift->config_set(conversations => 'yes');
 });

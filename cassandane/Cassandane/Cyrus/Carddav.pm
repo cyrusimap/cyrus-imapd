@@ -116,7 +116,7 @@ sub test_counters
 
     my $counters1 = $talk->getmetadata("", $KEY);
     $counters1 = $counters1->{''}{$KEY};
-    my ($v1, $all1, $mail1, $cal1, $card1, $notes1, $valid1) = split / /, $counters1;
+    my ($v1, $all1, $mail1, $cal1, $card1, $notes1, $mailfolders1, $calfolders1, $cardfolders1, $notesfolders1, $valid1, $nothing1) = split / /, $counters1;
 
     my $VCard = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
 BEGIN:VCARD
@@ -144,7 +144,7 @@ EOF
     my $counters2 = $talk->getmetadata("", $KEY);
     $counters2 = $counters2->{''}{$KEY};
 
-    my ($v2, $all2, $mail2, $cal2, $card2, $notes2, $valid2) = split / /, $counters2;
+    my ($v2, $all2, $mail2, $cal2, $card2, $notes2, $mailfolders2, $calfolders2, $cardfolders2, $notesfolders2, $valid2, $nothing2) = split / /, $counters2;
 
     $self->assert_num_equals($v1, $v2);
     $self->assert_num_not_equals($all1, $all2);
@@ -152,7 +152,43 @@ EOF
     $self->assert_num_equals($cal1, $cal2);
     $self->assert_num_not_equals($card1, $card2);
     $self->assert_num_equals($notes1, $notes2);
+    $self->assert_num_equals($mailfolders1, $mailfolders2);
+    $self->assert_num_equals($calfolders1, $calfolders2);
+    $self->assert_num_equals($cardfolders1, $cardfolders2);
+    $self->assert_num_equals($notesfolders1, $notesfolders2);
     $self->assert_num_equals($valid1, $valid2);
+    $self->assert_null($nothing1);
+    $self->assert_null($nothing2);
+}
+
+sub test_many_emails
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+
+    my $Phones = join("\r\n", map { sprintf("TEL;TYPE=HOME:(101) 555-%04d", $_) } (1..1000));
+    my $Emails = join("\r\n", map { sprintf("EMAIL;TYPE=INTERNET:user%04d\@example.com", $_) } (1..1000));
+
+    my $Str = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+$Phones
+$Emails
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($Str);
+
+    $CardDAV->NewContact($Id, $VCard);
 }
 
 sub test_many_emails

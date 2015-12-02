@@ -98,43 +98,6 @@ sub test_caldavcreate
     $self->assert_not_null($CalendarId);
 }
 
-sub test_caldav_autoprovision_default
-{
-    my ($self) = @_;
-    my $CalDAV = $self->{caldav};
-
-    xlog "fetch autoprovisioned calendars";
-    my $calendars = $CalDAV->GetCalendars();
-
-    my $default = undef;
-    # I am sure there are nicer ways to do this in Perl.
-    foreach my $cal (@$calendars) {
-        if ($cal->{id} == "Default") {
-            $default = $cal;
-            last;
-        }
-    }
-    $self->assert_not_null($default);
-}
-
-sub test_caldavcolor
-{
-    my ($self) = @_;
-
-    my $CalDAV = $self->{caldav};
-
-    xlog "create colored calendar";
-    my $CalendarId = $CalDAV->NewCalendar({name => 'bar', color => 'aqua'});
-    $self->assert_not_null($CalendarId);
-
-    xlog "fetch again";
-    my $Calendar = $CalDAV->GetCalendar($CalendarId);
-    $self->assert_not_null($Calendar);
-
-    xlog "check color matches";
-    $self->assert_str_equals($Calendar->{color}, 'aqua');
-}
-
 sub test_rename
 {
     my ($self) = @_;
@@ -517,45 +480,74 @@ EOF
   $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 }
 
-sub test_alarm_memleak
+sub test_invite
+    :VirtDomains
 {
-    # This calendar data caused caldav_alarm to leak memory. The test
-    # is only useful in combination with Valgrind.
     my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+	user => "cassandane%example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
     $self->assert_not_null($CalendarId);
 
-    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
     my $href = "$CalendarId/$uuid.ics";
     my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
 CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
 BEGIN:VEVENT
 CREATED:20150806T234327Z
-UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
-DTEND:20160831T183000Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
 TRANSP:OPAQUE
-SUMMARY:Map
-DTSTART:20160831T153000Z
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
 DTSTAMP:20150806T234327Z
 SEQUENCE:0
-BEGIN:VALARM
-TRIGGER:-PT30M
-REPEAT:2
-DURATION:PT15M
-ACTION:DISPLAY
-DESCRIPTION:My alert
-END:VALARM
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 END:VEVENT
 END:VCALENDAR
 EOF
 
+  my $data = $self->{instance}->getnotify();
+
   $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  my $newdata = $self->{instance}->getnotify();
+  my ($imip) = grep { $_->{METHOD} eq 'imip' } @$newdata;
+  my $payload = decode_json($imip->{MESSAGE});
+
+  $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
 }
 
 1;

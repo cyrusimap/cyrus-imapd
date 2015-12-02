@@ -56,7 +56,7 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
 
-    return $class->SUPER::new({ config => $config }, @args);
+    return $class->SUPER::new({ config => $config, adminstore => 1 }, @args);
 }
 
 sub set_up
@@ -371,6 +371,54 @@ sub test_folder_at_novirtdomains
     $self->_assert_list_data($data, '/', {
         'INBOX' => '\\Noinferiors',
         'foo@bar' => '\\HasNoChildren',
+    });
+}
+
+sub test_crossdomains
+    :UnixHierarchySep :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user/foo\@example.com");
+    $admintalk->create("user/bar\@example.net");
+    $admintalk->create("user/bar/Shared\@example.net"); # yay bogus domaining
+
+    $admintalk->setacl("user/foo\@example.com", 'cassandane' => 'lrswipkxtecd');
+    $admintalk->setacl("user/bar/Shared\@example.net", 'cassandane' => 'lrswipkxtecd');
+
+    my $data = $imaptalk->list("", "*");
+
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\HasNoChildren',
+        'user/foo@example.com' => '\\HasNoChildren',
+        'user/bar@example.net/Shared' => '\\HasNoChildren',
+    });
+}
+
+sub test_crossdomains_alt
+    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user/foo\@example.com");
+    $admintalk->create("user/bar\@example.net");
+    $admintalk->create("user/bar/Shared\@example.net"); # yay bogus domaining
+
+    $admintalk->setacl("user/foo\@example.com", 'cassandane' => 'lrswipkxtecd');
+    $admintalk->setacl("user/bar/Shared\@example.net", 'cassandane' => 'lrswipkxtecd');
+
+    my $data = $imaptalk->list("", "*");
+
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Other Users/foo@example.com' => '\\HasNoChildren',
+        'Other Users/bar@example.net/Shared' => '\\HasNoChildren',
     });
 }
 
