@@ -1568,12 +1568,12 @@ static int setMailboxes(struct jmap_req *req)
                 /* Determine parent. */
                 struct mboxlist_entry *mbparent = NULL;
                 r = mboxlist_findparent(mboxname, &mbparent);
-                if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+                if (r) {
                     syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
                             mboxname, error_message(r));
                     goto done;
                 }
-                parentname = !r ? xstrdup(mbparent->name) : NULL;
+                parentname = xstrdup(mbparent->name);
                 mboxlist_entry_free(&mbparent);
             } else {
                 parentname = NULL;
