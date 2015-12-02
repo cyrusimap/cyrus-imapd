@@ -771,6 +771,46 @@ char *jmap_mailbox_role(const char *mboxname)
     return ret;
 }
 
+/* Determine the JMAP mailbox name of the mailbox named mboxname. The returned
+ * name is owned by the caller. Return NULL on error. */
+static char *jmap_mailbox_name(const char *mboxname, const char *inboxname) {
+    struct buf attrib = BUF_INITIALIZER;
+    char *name;
+    int r = annotatemore_lookup(mboxname, IMAP_ANNOT_NS "x-displayname",
+            httpd_userid, &attrib);
+    if (!r && attrib.len) {
+        /* We got a mailbox with a displayname annotation. Use it. */
+        name = buf_newcstring(&attrib);
+    } else {
+        /* No displayname annotation. Most probably this mailbox was
+         * created via IMAP. In any case, determine name from the the
+         * last segment of the mailboxname hierarchy. */
+        char *extname, *q = NULL;
+        charset_index cs;
+
+        if (strcmp(mboxname, inboxname)) {
+            mbname_t *mbname = mbname_from_intname(mboxname);
+            if (!mbname) {
+                syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mboxname);
+                return NULL;
+            }
+            extname = mbname_pop_boxes(mbname);
+            /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
+            cs = charset_lookupname("imap-utf-7");
+            if ((q = charset_to_utf8(extname, strlen(extname), cs, ENCODING_NONE))) {
+                free(extname);
+                extname = q;
+            }
+            mbname_free(&mbname);
+        } else {
+            extname = xstrdup("Inbox");
+        }
+        name = extname;
+    }
+    buf_free(&attrib);
+    return name;
+}
+
 /* Convert the mailbox mbox to a JMAP mailbox object.
  *
  * Parent and inbox must point to the parent of mbox and the user's inbox,
@@ -780,7 +820,7 @@ char *jmap_mailbox_role(const char *mboxname)
  *
  * Return NULL no error.
  */
-json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
+static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
                                const struct mailbox *parent,
                                const struct mailbox *inbox,
                                int rights,
@@ -809,40 +849,10 @@ json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
     obj = json_pack("{}");
     json_object_set_new(obj, "id", json_string(mbox->uniqueid));
     if (_wantprop(props, "name")) {
-        struct buf attrib = BUF_INITIALIZER;
-        r = annotatemore_lookup(mbox->name, IMAP_ANNOT_NS "x-displayname", httpd_userid, &attrib);
-        if (!r && attrib.len) {
-            /* We got a mailbox with a displayname annotation. Use it. */
-            json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
-        } else {
-            /* No displayname annotation. Most probably this mailbox was
-             * created via IMAP. In any case, determine name from the the
-             * last segment of the mailboxname hierarchy. */
-            char *extname, *q = NULL;
-            charset_index cs;
-
-            if (mbox != inbox) {
-                mbname_t *mbname = mbname_from_intname(mbox->name);
-                if (!mbname) {
-                    syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mbox->name);
-                    r = IMAP_INTERNAL;
-                    goto done;
-                }
-                extname = mbname_pop_boxes(mbname);
-                /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
-                cs = charset_lookupname("imap-utf-7");
-                if ((q = charset_to_utf8(extname, strlen(extname), cs, ENCODING_NONE))) {
-                    free(extname);
-                    extname = q;
-                }
-                mbname_free(&mbname);
-            } else {
-                extname = xstrdup("Inbox");
-            }
-            json_object_set_new(obj, "name", json_string(extname));
-            free(extname);
-        }
-        buf_free(&attrib);
+        char *name = jmap_mailbox_name(mbox->name, inbox->name);
+        if (!name) goto done;
+        json_object_set_new(obj, "name", json_string(name));
+        free(name);
     }
     if (_wantprop(props, "mustBeOnlyMailbox")) {
         json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
@@ -1606,8 +1616,8 @@ static int setMailboxes(struct jmap_req *req)
 
             if (json_object_get(arg, "parentId") != json_null()) {
                 pe = jmap_readprop(arg, "parentId", 0, invalid, "s", &parentId);
-                if (pe > 0 && strlen(parentId)) {
-                    /* Check if parentId is a creation id. If so, look up its uid. */
+                if (pe > 0 && !strcmp(parentId, req->inbox->uniqueid)) {
+                    /* Check if it is a creation id. If so, look up its uid. */
                     if (*parentId == '#') {
                         const char *t = hash_lookup(parentId+1, req->idmap);
                         if (!t) {
@@ -1616,11 +1626,22 @@ static int setMailboxes(struct jmap_req *req)
                             parentId = t;
                         }
                     }
-                } else if (pe > 0) {
-                    /* An empty parentId is always an error. */
-                    json_array_append_new(invalid, json_string("parentId"));
+                    /* Check if a mailbox with this id exists. */
+                    /* XXX Only until mboxlist supports lookup by uniqued. */
+                    struct _mboxname_uniqueid_rock rock;
+                    rock.uniqueid = parentId;
+                    rock.mboxname = NULL;
+                    r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
+                            &rock, MBOXTREE_SKIP_ROOT);
+                    if (r) goto done;
+                    if (!rock.mboxname) {
+                        json_array_append_new(invalid, json_string("parentId"));
+                    } else {
+                        free(rock.mboxname);
+                    }
                 }
             } else {
+                /* parentId is explicitly set to JSON null */
                 parentId = req->inbox->uniqueid;
             }
 
@@ -1679,7 +1700,30 @@ static int setMailboxes(struct jmap_req *req)
             json_decref(invalid);
 
             if (parentId) {
-                /* XXX change parent... this can get ugly */
+                char *newparentname;
+                /* XXX Only until mboxlist supports lookup by uniqued. */
+                struct _mboxname_uniqueid_rock rock;
+                rock.uniqueid = parentId;
+                rock.mboxname = NULL;
+                r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
+                        &rock, MBOXTREE_SKIP_ROOT);
+                if (r) goto done;
+                if (!rock.mboxname) {
+                    /* This is always an error. We should have catched unknown
+                     * parentIds earlier while validating properties. */
+                    syslog(LOG_ERR, "can't find mailbox with unique id: %s", parentId);
+                    r = IMAP_INTERNAL;
+                    goto done;
+                }
+                newparentname = rock.mboxname;
+
+                if (strcmp(parentname, newparentname)) {
+                    /* Fetch name from mailbox, if not set during request. */
+                    if (!name) {
+                        /* XXX */
+                    }
+                }
+                free(newparentname);
             }
 
             if (name) {
