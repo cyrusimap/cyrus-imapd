@@ -374,13 +374,23 @@ static int webdav_parse_path(const char *path,
 
     /* Skip namespace */
     p += len;
-    if (!*p || !*++p) return 0;
+    if (!*p || !*++p) {
+        /* Make sure collection is terminated with '/' */
+        if (p[-1] != '/') *p++ = '/';
+    }
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
-    if (!strncmp(p, "user", len)) {
+    if (len && !strncmp(p, "user", len)) {
         p += len;
-        if (!*p || !*++p) return 0;
+        if (!*p || !*++p) {
+            tgt->mbentry = mboxlist_entry_create();
+            tgt->mbentry->name = xstrdup("user");
+            tgt->userid = xstrdup("");
+            tgt->mbentry->acl = xstrdup("anyone\tlr\t");
+            tgt->mbentry->mbtype = MBTYPE_COLLECTION;
+            return 0;
+        }
 
         /* Get user id */
         len = strcspn(p, "/");
