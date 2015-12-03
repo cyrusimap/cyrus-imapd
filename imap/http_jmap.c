@@ -770,9 +770,11 @@ char *jmap_mailbox_role(const char *mboxname)
 
 /* Determine the JMAP mailbox name of the mailbox named mboxname. The returned
  * name is owned by the caller. Return NULL on error. */
-static char *jmap_mailbox_name(const char *mboxname, const char *inboxname) {
+static char *jmap_mailbox_name(const char *mboxname) {
     struct buf attrib = BUF_INITIALIZER;
     char *name;
+    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+
     int r = annotatemore_lookup(mboxname, IMAP_ANNOT_NS "x-displayname",
             httpd_userid, &attrib);
     if (!r && attrib.len) {
@@ -789,6 +791,7 @@ static char *jmap_mailbox_name(const char *mboxname, const char *inboxname) {
             mbname_t *mbname = mbname_from_intname(mboxname);
             if (!mbname) {
                 syslog(LOG_ERR, "mbname_from_intname(%s): returned NULL", mboxname);
+                free(inboxname);
                 return NULL;
             }
             extname = mbname_pop_boxes(mbname);
@@ -805,6 +808,7 @@ static char *jmap_mailbox_name(const char *mboxname, const char *inboxname) {
         name = extname;
     }
     buf_free(&attrib);
+    free(inboxname);
     return name;
 }
 
@@ -852,7 +856,7 @@ static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
     obj = json_pack("{}");
     json_object_set_new(obj, "id", json_string(mbox->uniqueid));
     if (_wantprop(props, "name")) {
-        char *name = jmap_mailbox_name(mbox->name, inbox->name);
+        char *name = jmap_mailbox_name(mbox->name);
         if (!name) goto done;
         json_object_set_new(obj, "name", json_string(name));
         free(name);
@@ -1278,13 +1282,23 @@ static int _mbox_has_child_cb(const mbentry_t *mbentry, void *rock) {
     return CYRUSDB_DONE;
 }
 
+/* Create or update the JMAP mailbox as defined in arg.
+ *
+ * If uid points to NULL, create a new mailbox and make uid point to the newly
+ * allocated uid on success. Otherwise update the existing mailbox with unique
+ * id uid. Report any invalid properties in the invalid array. Store any other
+ * JMAP set error in err.
+ *
+ * Return 0 for success or managed JMAP errors.
+ */
 static int jmap_write_mailbox(char **uid,
                               json_t *arg,
                               json_t *invalid,
                               json_t **err,
                               struct jmap_req *req)
 {
-    const char *name = NULL, *parentId = NULL, *id = NULL;
+    const char *parentId = NULL, *id = NULL;
+    char *name = NULL;
     const char *role = NULL, *use = NULL;
     int sortOrder;
     char *mboxname = NULL, *parentname = NULL;
@@ -1304,20 +1318,60 @@ static int jmap_write_mailbox(char **uid,
     pe = jmap_readprop(arg, "name", is_create, invalid, "s", &name);
     if (pe > 0 && !strlen(name)) {
         json_array_append_new(invalid, json_string("name"));
+    } else if (pe > 0) {
+        /* Copy name to manage the memory of changed names. */
+        if (name) name = xstrdup(name);
     }
 
     /* parentId */
     if (json_object_get(arg, "parentId") != json_null()) {
         pe = jmap_readprop(arg, "parentId", is_create, invalid, "s", &parentId);
         if (pe > 0 && strlen(parentId)) {
-            /* Check if parentId is a creation id. If so, look up its uid. */
-            if (*parentId == '#') {
-                const char *t = hash_lookup(parentId+1, req->idmap);
-                if (!t) {
-                    json_array_append_new(invalid, json_string("parentId"));
-                } else {
-                    parentId = t;
+            if (strcmp(parentId, req->inbox->uniqueid)) {
+                char *newparentname = NULL;
+                int iserr = 0;
+                /* Check if parentId is a creation id. If so, look up its uid. */
+                if (*parentId == '#') {
+                    const char *t = hash_lookup(parentId+1, req->idmap);
+                    if (t) {
+                        parentId = t;
+                    } else {
+                        iserr = 1;
+                    }
                 }
+                /* Check if a mailbox with this id exists. */
+                if (!iserr) {
+                    /* XXX Only until mboxlist supports lookup by uniqued. */
+                    struct _mboxname_uniqueid_rock rock;
+                    rock.uniqueid = parentId;
+                    rock.mboxname = NULL;
+                    r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
+                            &rock, MBOXTREE_SKIP_ROOT);
+                    if (r) goto done;
+                    if (rock.mboxname) {
+                        newparentname = rock.mboxname;
+                    } else {
+                        iserr = 1;
+                    }
+                }
+                /* Check if the mailbox accepts children. */
+                if (!iserr) {
+                    int may_create = 0;
+                    struct mboxlist_entry *mbparent = NULL;
+                    r = mboxlist_lookup(newparentname, &mbparent, NULL);
+                    if (!r) {
+                        int rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
+                        may_create = (rights & (ACL_CREATE)) == ACL_CREATE;
+                    }
+                    if (mbparent) mboxlist_entry_free(&mbparent);
+                    iserr = !may_create;
+                }
+                if (iserr) {
+                    json_array_append_new(invalid, json_string("parentId"));
+                }
+                if (newparentname) free(newparentname);
+            } else {
+                parentId = req->inbox->uniqueid;
             }
         } else if (pe > 0) {
             /* An empty parentId is always an error. */
@@ -1412,14 +1466,15 @@ static int jmap_write_mailbox(char **uid,
         json_array_append_new(invalid, json_string("unreadThreads"));
     }
 
-    /* Leave early for any property errors. */
+    /* Bail out early for any property errors. */
     if (json_array_size(invalid)) {
         r = 0;
         goto done;
     }
 
     /* Determine the mailbox and its parent name. */
-    if (*uid) {
+    if (!is_create) {
+        /* Dertermine name of the existing mailbox with uniqueid uid. */
         if (strcmp(*uid, req->inbox->uniqueid)) {
             /* XXX Only until mboxlist supports lookup by uniqued. */
             struct _mboxname_uniqueid_rock rock;
@@ -1448,7 +1503,8 @@ static int jmap_write_mailbox(char **uid,
             parentname = NULL;
             mboxname = xstrdup(req->inbox->name);
         }
-    } else if (name) {
+    } else {
+        /* Determine name for the soon-to-be created mailbox. */
         if (parentId && strcmp(parentId, req->inbox->uniqueid)) {
             /* XXX Only do this until mboxlist allows lookup by uniqeid */
             struct _mboxname_uniqueid_rock rock;
@@ -1473,10 +1529,6 @@ static int jmap_write_mailbox(char **uid,
             r = IMAP_INTERNAL;
             goto done;
         }
-    } else {
-        syslog(LOG_ERR, "Can't determine mailbox name: name and uid are NULL");
-        r = IMAP_INTERNAL;
-        goto done;
     }
 
     if (is_create) {
@@ -1500,6 +1552,77 @@ static int jmap_write_mailbox(char **uid,
             goto done;
         }
         buf_free(&acl);
+    } else {
+        /* Do we need to move this mailbox to a new parent? */
+        int force_rename = 0;
+
+        if (parentId) {
+            char *newparentname;
+            if (strcmp(parentId, req->inbox->uniqueid)) {
+                /* Lookup new parent name by parentId. */
+                /* XXX Only until mboxlist supports lookup by uniqued. */
+                struct _mboxname_uniqueid_rock rock;
+                rock.uniqueid = parentId;
+                rock.mboxname = NULL;
+                r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
+                        &rock, MBOXTREE_SKIP_ROOT);
+                if (r) goto done;
+                /* We already validated that parentId exists. */
+                assert(rock.mboxname);
+                newparentname = rock.mboxname;
+            } else {
+                newparentname = xstrdup(req->inbox->name);
+            }
+
+            /* Did the parent's name change? */
+            if (strcmp(parentname, newparentname)) {
+                free(parentname);
+                parentname = newparentname;
+                force_rename = 1;
+            } else {
+                free(newparentname);
+            }
+        }
+
+        /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
+        if ((name || force_rename) && strcmp(mboxname, req->inbox->name)) {
+            char *oldname = jmap_mailbox_name(mboxname);
+            if (!name) name = xstrdup(oldname);
+
+            /* Do old and new mailbox names differ? */
+            if (force_rename || strcmp(oldname, name)) {
+                char *newmboxname, *oldmboxname;
+
+                /* Determine the unique IMAP mailbox name. */
+                newmboxname = jmap_mailbox_newname(name, parentname);
+                if (!newmboxname) {
+                    syslog(LOG_ERR, "jmap_mailbox_newname returns NULL: can't rename %s", mboxname);
+                    r = IMAP_INTERNAL;
+                    free(oldname);
+                    goto done;
+                }
+                oldmboxname = mboxname;
+
+                /* Rename the mailbox. */
+                struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
+                r = mboxlist_renamemailbox(oldmboxname, newmboxname,
+                        NULL /* partition */, 0 /* uidvalidity */,
+                        httpd_userisadmin, httpd_userid, httpd_authstate,
+                        mboxevent,
+                        0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */);
+                mboxevent_free(&mboxevent);
+                if (r) {
+                    syslog(LOG_ERR, "mboxlist_renamemailbox(old=%s new=%s): %s",
+                            oldmboxname, newmboxname, error_message(r));
+                    free(newmboxname);
+                    free(oldname);
+                    goto done;
+                }
+                free(oldmboxname);
+                mboxname = newmboxname;
+            }
+            free(oldname);
+        }
     }
 
     /* Set x-displayname annotation on mailbox. */
@@ -1552,6 +1675,7 @@ static int jmap_write_mailbox(char **uid,
     }
 
 done:
+    if (name) free(name);
     if (mboxname) free(mboxname);
     if (parentname) free(parentname);
     return r;
@@ -1614,20 +1738,6 @@ static int setMailboxes(struct jmap_req *req)
             }
             json_decref(invalid);
 
-            /* Check if parent allows to create children. */
-            /* XXX
-             * struct mboxlist_entry *mbparent = NULL;
-            r = mboxlist_lookup(parentname, &mbparent, NULL);
-            if (!r) {
-                int rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
-                if ((rights & (ACL_CREATE)) != (ACL_CREATE)) {
-                    json_array_append_new(invalid, json_string("parentId"));
-                }
-            } else {
-                json_array_append_new(invalid, json_string("parentId"));
-            }
-            if (mbparent) mboxlist_entry_free(&mbparent);*/
-
             /* Report mailbox as created. */
             json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
 
@@ -1655,10 +1765,7 @@ static int setMailboxes(struct jmap_req *req)
 
         json_object_foreach(update, uid, arg) {
             json_t *invalid = json_pack("[]");
-            const char *id, *parentId = NULL, *role = NULL;
-            char *name = NULL;
-            int sortOrder = 0;
-            int pe;
+            json_t *err;
 
             /* Validate uid */
             if (!strlen(uid) || *uid == '#') {
@@ -1667,137 +1774,18 @@ static int setMailboxes(struct jmap_req *req)
                 continue;
             }
 
-            /* Lookup mailbox name by uid and determine its parent. */
-            if (strcmp(uid, req->inbox->uniqueid)) {
-                /* Lookup by uniqueid. */
-                /* XXX Only until mboxlist supports lookup by uniqued. */
-                struct _mboxname_uniqueid_rock rock;
-                rock.uniqueid = uid;
-                rock.mboxname = NULL;
-                r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                        &rock, MBOXTREE_SKIP_ROOT);
-                if (r) goto done;
-                if (!rock.mboxname) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                }
-                mboxname = rock.mboxname;
+            /* Update mailbox. */
+            r = jmap_write_mailbox(((char **)&uid), arg, invalid, &err, req);
+            if (r) goto done;
 
-                /* Determine parent name. */
-                struct mboxlist_entry *mbparent = NULL;
-                r = mboxlist_findparent(mboxname, &mbparent);
-                if (r) {
-                    syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
-                            mboxname, error_message(r));
-                    goto done;
-                }
-                parentname = xstrdup(mbparent->name);
-                mboxlist_entry_free(&mbparent);
-            } else {
-                parentname = NULL;
-                mboxname = xstrdup(req->inbox->name);
+            /* Handle set errors. */
+            if (err) {
+                json_object_set_new(notUpdated, uid, err);
+                json_decref(invalid);
+                continue;
             }
 
-            /* Parse properties. */
-            pe = jmap_readprop(arg, "id", 0, invalid, "s", &id);
-            if (pe > 0) {
-                /* Open mailbox to determine its uniqueid. */
-                struct mailbox *mbox = NULL;
-                if ((r = mailbox_open_irl(mboxname, &mbox))) {
-                    syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                            mboxname, error_message(r));
-                    goto done;
-                }
-                if (strcmp(id, mbox->uniqueid)) {
-                    json_array_append_new(invalid, json_string("id"));
-                }
-                mailbox_close(&mbox);
-            }
-            pe = jmap_readprop(arg, "name", 0, invalid, "s", &name);
-            if (pe > 0 && !strlen(name)) {
-                json_array_append_new(invalid, json_string("name"));
-            }
-
-            if (json_object_get(arg, "parentId") != json_null()) {
-                pe = jmap_readprop(arg, "parentId", 0, invalid, "s", &parentId);
-                if (pe > 0 && strcmp(parentId, req->inbox->uniqueid)) {
-                    /* Check if it is a creation id. If so, look up its uid. */
-                    if (*parentId == '#') {
-                        const char *t = hash_lookup(parentId+1, req->idmap);
-                        if (!t) {
-                            json_array_append_new(invalid, json_string("parentId"));
-                        } else {
-                            parentId = t;
-                        }
-                    }
-                    if (!json_array_size(invalid)) {
-                        /* Check if a mailbox with this id exists. */
-                        /* XXX Only until mboxlist supports lookup by uniqued. */
-                        struct _mboxname_uniqueid_rock rock;
-                        rock.uniqueid = parentId;
-                        rock.mboxname = NULL;
-                        r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                                &rock, MBOXTREE_SKIP_ROOT);
-                        if (r) goto done;
-                        if (!rock.mboxname) {
-                            json_array_append_new(invalid, json_string("parentId"));
-                        } else {
-                            free(rock.mboxname);
-                        }
-                    }
-                }
-            } else {
-                /* parentId is explicitly set to JSON null */
-                parentId = req->inbox->uniqueid;
-            }
-
-            if (json_object_get(arg, "role") != json_null()) {
-                pe = jmap_readprop(arg, "role", 0, invalid, "s", &role);
-                if (pe > 0) {
-                    /* JMAP spec says: "This property is immutable" and "the
-                     * client MAY attempt to create mailboxes with the standard
-                     * roles if not already present". To comply, let's allow
-                     * "role" to be set during create, but refuse any updates. */
-                    json_array_append_new(invalid, json_string("role"));
-                }
-            }
-            if (jmap_readprop(arg, "sortOrder", 0, invalid, "i", &sortOrder) > 0) {
-                /* XXX In getMailboxes, sortOrder is determined by the special
-                 * use of the mailbox. Just ignore this property for now. */
-            }
-            if (json_object_get(arg, "mustBeOnlyMailbox")) {
-                json_array_append_new(invalid, json_string("mustBeOnlyMailbox"));
-            }
-            if (json_object_get(arg, "mayReadItems")) {
-                json_array_append_new(invalid, json_string("mayReadItems"));
-            }
-            if (json_object_get(arg, "mayAddItems")) {
-                json_array_append_new(invalid, json_string("mayAddItems"));
-            }
-            if (json_object_get(arg, "mayRemoveItems")) {
-                json_array_append_new(invalid, json_string("mayRemoveItems"));
-            }
-            if (json_object_get(arg, "mayRename")) {
-                json_array_append_new(invalid, json_string("mayRename"));
-            }
-            if (json_object_get(arg, "mayDelete")) {
-                json_array_append_new(invalid, json_string("mayDelete"));
-            }
-            if (json_object_get(arg, "totalMessages")) {
-                json_array_append_new(invalid, json_string("totalMessages"));
-            }
-            if (json_object_get(arg, "unreadMessages")) {
-                json_array_append_new(invalid, json_string("unreadMessages"));
-            }
-            if (json_object_get(arg, "totalThreads")) {
-                json_array_append_new(invalid, json_string("totalThreads"));
-            }
-            if (json_object_get(arg, "unreadThreads")) {
-                json_array_append_new(invalid, json_string("unreadThreads"));
-            }
-
-            /* Report any property errors and bail out. */
+            /* Handle invalid properties. */
             if (json_array_size(invalid)) {
                 json_t *err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
@@ -1806,133 +1794,8 @@ static int setMailboxes(struct jmap_req *req)
             }
             json_decref(invalid);
 
-            /* Copy name so we can later malloc and free custom names. */
-            if (name) name = xstrdup(name);
-
-            if (parentId) {
-                char *newparentname;
-                if (strcmp(parentId, req->inbox->uniqueid)) {
-                    /* XXX Only until mboxlist supports lookup by uniqued. */
-                    struct _mboxname_uniqueid_rock rock;
-                    rock.uniqueid = parentId;
-                    rock.mboxname = NULL;
-                    r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                            &rock, MBOXTREE_SKIP_ROOT);
-                    if (r) goto done;
-                    if (!rock.mboxname) {
-                        /* This is always an error. We should have catched unknown
-                         * parentIds earlier while validating properties. */
-                        syslog(LOG_ERR, "can't find mailbox with unique id: %s", parentId);
-                        r = IMAP_INTERNAL;
-                        if (name) free(name);
-                        goto done;
-                    }
-                    newparentname = rock.mboxname;
-                } else {
-                    newparentname = xstrdup(req->inbox->name);
-                }
-
-                /* Do we need to move this mailbox to a new parent? */
-                if (strcmp(parentname, newparentname)) {
-                    /* Check if the new parent allows to create children. */
-                    int may_create = 0;
-                    struct mboxlist_entry *mbparent = NULL;
-                    r = mboxlist_lookup(newparentname, &mbparent, NULL);
-                    if (!r) {
-                        int rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
-                        may_create = (rights & (ACL_CREATE)) == ACL_CREATE;
-                    }
-                    if (mbparent) mboxlist_entry_free(&mbparent);
-                    if (!may_create) {
-                        json_t *err = json_pack("{s:s, s:o}",
-                                "type", "invalidProperties",
-                                "properties", json_pack("[s]", "parentId"));
-                        json_object_set_new(notUpdated, uid, err);
-                        free(newparentname);
-                        free(parentname); parentname = NULL;
-                        free(mboxname); mboxname = NULL;
-                        if (name) free(name);
-                        r = 0;
-                        continue;
-                    }
-
-                    /* parentname now points to the new parent. */
-                    free(parentname);
-                    parentname = newparentname;
-
-                    /* Determine the new JMAP mailbox name. */
-                    if (!name) {
-                        name = jmap_mailbox_name(mboxname, req->inbox->name);
-                        if (!name) { r = IMAP_INTERNAL; goto done; }
-                    } else {
-                        name = xstrdup(name);
-                    }
-                } else {
-                    free(newparentname);
-                }
-            }
-
-            if (name) {
-                /* Rename mailbox for IMAP. But only if it isn't the INBOX. */
-                if (strcmp(mboxname, req->inbox->name)) {
-                    char *newname, *oldname;
-
-                    /* Determine new, unique IMAP mailbox name. */
-                    newname = jmap_mailbox_newname(name, parentname);
-                    if (!newname) {
-                        syslog(LOG_ERR, "jmap_mailbox_newname returns NULL: can't rename %s",mboxname);
-                        r = IMAP_INTERNAL;
-                        if (name) free(name);
-                        goto done;
-                    }
-                    oldname = mboxname;
-
-                    /* Rename the mailbox. */
-                    struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
-                    r = mboxlist_renamemailbox(oldname, newname,
-                            NULL /* partition */, 0 /* uidvalidity */,
-                            httpd_userisadmin, httpd_userid, httpd_authstate,
-                            mboxevent,
-                            0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */);
-                    if (r) {
-                        syslog(LOG_ERR, "mboxlist_renamemailbox(old=%s new=%s): %s",
-                                oldname, newname, error_message(r));
-                        mboxevent_free(&mboxevent);
-                        free(newname);
-                        free(oldname);
-                        if (name) free(name);
-                        goto done;
-                    }
-                    mboxevent_free(&mboxevent);
-                    free(oldname);
-                    mboxname = newname;
-                }
-
-                /* Set x-displayname annotation on mailbox. */
-                struct buf val = BUF_INITIALIZER;
-                buf_setcstr(&val, name);
-                static const char *annot = IMAP_ANNOT_NS "x-displayname";
-                r = annotatemore_write(mboxname, annot, httpd_userid, &val);
-                if (r) {
-                    syslog(LOG_ERR, "failed to write annotation %s: %s",
-                            annot, error_message(r));
-                    if (name) free(name);
-                    goto done;
-                }
-                buf_free(&val);
-            }
-            if (name) free(name);
-
             /* Report as updated. */
             json_array_append_new(updated, json_string(uid));
-
-            /* Clean up memory. */
-            free(mboxname);
-            mboxname = NULL;
-            if (parentname) {
-                free(parentname);
-                parentname = NULL;
-            }
         }
 
         if (json_array_size(updated)) {
