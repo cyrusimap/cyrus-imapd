@@ -2902,7 +2902,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
                                   const struct index_record *old,
                                   struct index_record *new)
 {
-    char *userid = mboxname_to_userid(mailbox->name);
     struct carddav_db *carddavdb = NULL;
     struct param *param;
     struct body *body = NULL;
@@ -2912,7 +2911,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
     /* conditions in which there's nothing to do */
     if (!new) goto done;
-    if (!userid) goto done;
 
     /* phantom record - never really existed here */
     if (!old && (new->system_flags & FLAG_UNLINKED))
@@ -2989,7 +2987,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 done:
     message_free_body(body);
     free(body);
-    free(userid);
 
     return r;
 }
@@ -2998,7 +2995,6 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
                                  const struct index_record *old,
                                  struct index_record *new)
 {
-    char *userid = mboxname_to_userid(mailbox->name);
     struct caldav_db *caldavdb = NULL;
     struct param *param;
     struct body *body = NULL;
@@ -3010,7 +3006,6 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
     /* conditions in which there's nothing to do */
     if (!new) goto done;
-    if (!userid) goto done;
 
     /* phantom record - never really existed at all */
     if (!old && (new->system_flags & FLAG_UNLINKED))
@@ -3119,7 +3114,6 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 done:
     message_free_body(body);
     free(body);
-    free(userid);
 
     return r;
 }
@@ -3128,7 +3122,6 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
                                  const struct index_record *old,
                                  struct index_record *new)
 {
-    char *userid = mboxname_to_userid(mailbox->name);
     struct webdav_db *webdavdb = NULL;
     struct param *param;
     struct body *body = NULL;
@@ -3138,7 +3131,6 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 
     /* conditions in which there's nothing to do */
     if (!new) goto done;
-    if (!userid) goto done;
 
     /* phantom record - never really existed here */
     if (!old && (new->system_flags & FLAG_EXPUNGED))
@@ -3210,7 +3202,6 @@ done:
         message_free_body(body);
         free(body);
     }
-    free(userid);
 
     return r;
 }
