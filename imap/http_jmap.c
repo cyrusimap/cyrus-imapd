@@ -1681,7 +1681,6 @@ done:
     return r;
 }
 
-
 static int setMailboxes(struct jmap_req *req)
 {
     int r = 0;
@@ -1765,7 +1764,7 @@ static int setMailboxes(struct jmap_req *req)
 
         json_object_foreach(update, uid, arg) {
             json_t *invalid = json_pack("[]");
-            json_t *err;
+            json_t *err = NULL;
 
             /* Validate uid */
             if (!strlen(uid) || *uid == '#') {
