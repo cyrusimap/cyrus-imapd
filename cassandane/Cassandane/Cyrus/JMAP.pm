@@ -1597,13 +1597,13 @@ sub test_setmailboxes_parent
     # Unfortunately, we can't create reshuffle mailbox and their parents in one
     # big request, since Perl might reorder our map keys. This makes the JMAP
     # requests non-deterministic. */
-
+    #
+    # Create mailbxoes, foo, foo.bar, foo.bar.baz one by one..
     xlog "create mailbox foo";
     my $res = $jmap->Request([['setMailboxes', { create => {
                         "1" => { name => "foo", parentId => undef, role => undef }
                     }}, "R1"]]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
-
     xlog "create mailbox foo.bar";
     $res = $jmap->Request([
             ['setMailboxes', { create => {
@@ -1611,7 +1611,6 @@ sub test_setmailboxes_parent
                     }}, "R1"]
         ]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
-
     xlog "create mailbox foo.bar.baz";
     $res = $jmap->Request([
             ['setMailboxes', { create => {
@@ -1620,28 +1619,13 @@ sub test_setmailboxes_parent
         ]);
     my $id3 = $res->[0][1]{created}{"3"}{id};
 
-    xlog "get mailbox $id1";
+    # All set up?
     $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
     $self->assert_null($res->[0][1]{list}[0]->{parentId});
-
-    xlog "get mailbox $id2";
     $res = $jmap->Request([['getMailboxes', { ids => [$id2] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id1);
-
-    xlog "get mailbox $id3";
     $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
-
-    xlog "move foo.bar.baz to foo.baz";
-    $res = $jmap->Request([
-            ['setMailboxes', { update => {
-                        $id3 => { name => "baz", parentId => $id1, role => undef }
-                    }}, "R1"]
-        ]);
-
-    xlog "get mailbox $id3";
-    $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id1);
 
     xlog "move foo.bar to bar";
     $res = $jmap->Request([
@@ -1649,10 +1633,17 @@ sub test_setmailboxes_parent
                         $id2 => { name => "bar", parentId => undef, role => undef }
                     }}, "R1"]
         ]);
-
-    xlog "get mailbox $id2";
     $res = $jmap->Request([['getMailboxes', { ids => [$id2] }, "R1"]]);
     $self->assert_null($res->[0][1]{list}[0]->{parentId});
+
+    xlog "move bar.baz to foo.baz";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => {
+                        $id3 => { name => "baz", parentId => $id1, role => undef }
+                    }}, "R1"]
+        ]);
+    $res = $jmap->Request([['getMailboxes', { ids => [$id3] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id1);
 
     xlog "move foo to bar.foo";
     $res = $jmap->Request([
@@ -1660,8 +1651,6 @@ sub test_setmailboxes_parent
                         $id1 => { name => "foo", parentId => $id2, role => undef }
                     }}, "R1"]
         ]);
-
-    xlog "get mailbox $id1";
     $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
 
@@ -1675,10 +1664,25 @@ sub test_setmailboxes_parent
     my $errProp = $res->[0][1]{notUpdated}{$id1}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [ "parentId" ]);
-
-    xlog "get mailbox $id1";
     $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
+
+    xlog "attempt to destroy bar (which has child foo)";
+    $res = $jmap->Request([
+            ['setMailboxes', { destroy => [$id2] }, "R1"]
+        ]);
+    $errType = $res->[0][1]{notDestroyed}{$id2}{type};
+    $self->assert_str_equals($errType, "mailboxHasChild");
+    $res = $jmap->Request([['getMailboxes', { ids => [$id2] }, "R1"]]);
+    $self->assert_null($res->[0][1]{list}[0]->{parentId});
+
+    xlog "destroy all";
+    $res = $jmap->Request([
+            ['setMailboxes', { destroy => [$id3, $id1, $id2] }, "R1"]
+        ]);
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id3);
+    $self->assert_str_equals($res->[0][1]{destroyed}[1], $id1);
+    $self->assert_str_equals($res->[0][1]{destroyed}[2], $id2);
 }
 
 sub test_getcalendars
