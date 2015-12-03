@@ -370,13 +370,10 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     r = index_lock(state);
     if (r) return r;
 
-    /* XXX - earlier list if the sequence names UIDs that don't exist? */
+    /* XXX - check if not mailbox->i.deleted count and need_deleted */
     seq = _parse_sequence(state, sequence, 1);
 
-    /* don't notify for messages that don't need \Deleted flag because
-     * a notification should be already send (eg. MessageMove) */
-    if (need_deleted)
-        mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+    mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
         im = &state->map[msgno-1];
