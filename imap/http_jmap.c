@@ -1270,6 +1270,12 @@ static char *jmap_find_xrole(const char *xrole, const char *userid)
     return rock.mboxname;
 }
 
+static int _mbox_has_child_cb(const mbentry_t *mbentry, void *rock) {
+    int *has = (int *) rock;
+    *has = 1;
+    return CYRUSDB_DONE;
+}
+
 static int setMailboxes(struct jmap_req *req)
 {
     int r = 0;
@@ -1375,15 +1381,13 @@ static int setMailboxes(struct jmap_req *req)
                 json_array_append_new(invalid, json_string("unreadThreads"));
             }
 
-            /* Check role for uniqueness. Also make use point to the name of
-             * the IMAP special-use annotation name, if role is one of the
-             * standard roles. */
+            /* Check role for uniqueness. */
             const char *use = NULL;
             if (role) {
                 if (!strcmp(role, "inbox")) {
                     /* Creating a new inbox is always an error. */
                     json_array_append_new(invalid, json_string("role"));
-                }  else {
+                } else {
                     /* Is is one of the known special use mailboxes? */
                     if (!strcmp(role, "archive")) {
                         use = "\\Archive";
@@ -1417,6 +1421,7 @@ static int setMailboxes(struct jmap_req *req)
             /* Validate parent and determine parent mailbox name. */
             if (parentId && strcmp(parentId, req->inbox->uniqueid)) {
                 /* Lookup parent by parentId. */
+                /* XXX Only do this until mboxlist allows lookup by uniqeid */
                 struct _mboxname_uniqueid_rock rock;
                 rock.uniqueid = parentId;
                 rock.mboxname = NULL;
@@ -1432,6 +1437,18 @@ static int setMailboxes(struct jmap_req *req)
                 /* parent must be INBOX */
                 parentname = xstrdup(req->inbox->name);
             }
+            /* Check if parent allows to create children. */
+            struct mboxlist_entry *mbparent = NULL;
+            r = mboxlist_lookup(parentname, &mbparent, NULL);
+            if (!r) {
+                int rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
+                if ((rights & (ACL_CREATE)) != (ACL_CREATE)) {
+                    json_array_append_new(invalid, json_string("parentId"));
+                }
+            } else {
+                json_array_append_new(invalid, json_string("parentId"));
+            }
+            if (mbparent) mboxlist_entry_free(&mbparent);
 
             /* Report any property errors and bail out. */
             if (json_array_size(invalid)) {
@@ -1648,7 +1665,6 @@ static int setMailboxes(struct jmap_req *req)
                 parentId = req->inbox->uniqueid;
             }
 
-
             if (json_object_get(arg, "role") != json_null()) {
                 pe = jmap_readprop(arg, "role", 0, invalid, "s", &role);
                 if (pe > 0) {
@@ -1660,7 +1676,7 @@ static int setMailboxes(struct jmap_req *req)
                 }
             }
             if (jmap_readprop(arg, "sortOrder", 0, invalid, "i", &sortOrder) > 0) {
-                /* XXX In getMailboxes, we decide the sortOrder by the special
+                /* XXX In getMailboxes, sortOrder is determined by the special
                  * use of the mailbox. Just ignore this property for now. */
             }
             if (json_object_get(arg, "mustBeOnlyMailbox")) {
@@ -1704,7 +1720,7 @@ static int setMailboxes(struct jmap_req *req)
             json_decref(invalid);
 
             /* Copy name so we can later malloc and free custom names. */
-            name = xstrdup(name);
+            if (name) name = xstrdup(name);
 
             if (parentId) {
                 char *newparentname;
@@ -1721,6 +1737,7 @@ static int setMailboxes(struct jmap_req *req)
                          * parentIds earlier while validating properties. */
                         syslog(LOG_ERR, "can't find mailbox with unique id: %s", parentId);
                         r = IMAP_INTERNAL;
+                        if (name) free(name);
                         goto done;
                     }
                     newparentname = rock.mboxname;
@@ -1730,19 +1747,36 @@ static int setMailboxes(struct jmap_req *req)
 
                 /* Do we need to move this mailbox to a new parent? */
                 if (strcmp(parentname, newparentname)) {
-                    /* XXX Check that the mailbox does not have any children. */
-                    /* XXX Validate the new mailbox accepts children. */
+                    /* Check if the new parent allows to create children. */
+                    int may_create = 0;
+                    struct mboxlist_entry *mbparent = NULL;
+                    r = mboxlist_lookup(newparentname, &mbparent, NULL);
+                    if (!r) {
+                        int rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
+                        may_create = (rights & (ACL_CREATE)) == ACL_CREATE;
+                    }
+                    if (mbparent) mboxlist_entry_free(&mbparent);
+                    if (!may_create) {
+                        json_t *err = json_pack("{s:s, s:o}",
+                                "type", "invalidProperties",
+                                "properties", json_pack("[s]", "parentId"));
+                        json_object_set_new(notUpdated, uid, err);
+                        free(newparentname);
+                        free(parentname); parentname = NULL;
+                        free(mboxname); mboxname = NULL;
+                        if (name) free(name);
+                        r = 0;
+                        continue;
+                    }
+
+                    /* parentname now points to the new parent. */
                     free(parentname);
                     parentname = newparentname;
-                    /* Fetch name from the mailbox, if not update during the
-                     * current request. This triggers a rename of the mailbox
-                     * in the next block. */
+
+                    /* Determine the new JMAP mailbox name. */
                     if (!name) {
                         name = jmap_mailbox_name(mboxname, req->inbox->name);
-                        if (!name) {
-                            r = IMAP_INTERNAL;
-                            goto done;
-                        }
+                        if (!name) { r = IMAP_INTERNAL; goto done; }
                     } else {
                         name = xstrdup(name);
                     }
@@ -1761,6 +1795,7 @@ static int setMailboxes(struct jmap_req *req)
                     if (!newname) {
                         syslog(LOG_ERR, "jmap_mailbox_newname returns NULL: can't rename %s",mboxname);
                         r = IMAP_INTERNAL;
+                        if (name) free(name);
                         goto done;
                     }
                     oldname = mboxname;
@@ -1778,6 +1813,7 @@ static int setMailboxes(struct jmap_req *req)
                         mboxevent_free(&mboxevent);
                         free(newname);
                         free(oldname);
+                        if (name) free(name);
                         goto done;
                     }
                     mboxevent_free(&mboxevent);
@@ -1793,11 +1829,12 @@ static int setMailboxes(struct jmap_req *req)
                 if (r) {
                     syslog(LOG_ERR, "failed to write annotation %s: %s",
                             annot, error_message(r));
+                    if (name) free(name);
                     goto done;
                 }
                 buf_free(&val);
-                free(name);
             }
+            if (name) free(name);
 
             /* Report as updated. */
             json_array_append_new(updated, json_string(uid));
@@ -1861,6 +1898,20 @@ static int setMailboxes(struct jmap_req *req)
                 continue;
             }
 
+            /* Check if the mailbox has any children. */
+            int has_child = 0;
+            mboxlist_mboxtree(mboxname, &_mbox_has_child_cb,&has_child, MBOXTREE_SKIP_ROOT);
+            if (has_child) {
+                json_t *err = json_pack("{s:s}", "type", "mailboxHasChild");
+                json_object_set_new(notDestroyed, uid, err);
+                if (mboxname) {
+                    free(mboxname);
+                    mboxname = NULL;
+                }
+                r = 0;
+                continue;
+            }
+
             /* Destroy mailbox. */
             struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
             if (mboxlist_delayed_delete_isenabled()) {
@@ -1874,7 +1925,16 @@ static int setMailboxes(struct jmap_req *req)
                         httpd_userid, req->authstate, mboxevent,
                         1 /* checkacl */, 0 /* local_only */, 0 /* force */);
             }
-            if (r) {
+            if (r == IMAP_PERMISSION_DENIED) {
+                json_t *err = json_pack("{s:s}", "type", "forbidden");
+                json_object_set_new(notDestroyed, uid, err);
+                if (mboxname) {
+                    free(mboxname);
+                    mboxname = NULL;
+                }
+                r = 0;
+                continue;
+            } else if (r) {
                 syslog(LOG_ERR, "failed to delete mailbox(%s): %s",
                         mboxname, error_message(r));
                 goto done;
