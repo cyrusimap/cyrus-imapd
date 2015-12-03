@@ -1245,7 +1245,7 @@ struct _jmap_find_xrole_data {
     char *mboxname;
 };
 
-static int _jmap_find_xrole(const mbentry_t *mbentry, void *rock)
+static int _jmap_find_xrole_cb(const mbentry_t *mbentry, void *rock)
 {
     struct _jmap_find_xrole_data *d = (struct _jmap_find_xrole_data *)rock;
     struct buf attrib = BUF_INITIALIZER;
@@ -1268,7 +1268,7 @@ static char *jmap_find_xrole(const char *xrole, const char *userid)
 {
     struct _jmap_find_xrole_data rock = { xrole, userid, NULL };
     /* INBOX can never have an x-role. */
-    mboxlist_usermboxtree(userid, _jmap_find_xrole, &rock, MBOXTREE_SKIP_ROOT);
+    mboxlist_usermboxtree(userid, _jmap_find_xrole_cb, &rock, MBOXTREE_SKIP_ROOT);
     return rock.mboxname;
 }
 
