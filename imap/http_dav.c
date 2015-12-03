@@ -4729,7 +4729,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
      * with matchlen == 0, this is the root resource of the PROPFIND,
      * otherwise it's just one of many found.  Inbox and Outbox can't
      * appear unless they are the root */
-    if (matchlen) {
+    if (matchlen && fctx->req_tgt->namespace != URL_NS_DRIVE) {
         p = strrchr(mboxname, '.');
         if (!p) goto done;
         p++; /* skip dot */
@@ -4770,6 +4770,10 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         if (strlen(mboxname) < len) goto done;
         if (strncmp(mboxname, fctx->req_tgt->mbentry->name, len)) goto done;
         p = (char *) mboxname + len;
+        if (!strcmp(fctx->req_tgt->mbentry->name, "user")) {
+            /* Special case of listing users with DAV #drives */
+            p = strchr(mboxname+5, '.');
+        }
         if (*p && (*p != '.' || strchr(++p, '.'))) goto done;
     }
 
@@ -5037,7 +5041,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         /* Add response for principal or home-set collection */
         if (txn->req_tgt.mbentry) {
             /* Open mailbox for reading */
-            if ((r = mailbox_open_irl(txn->req_tgt.mbentry->name, &fctx.mailbox))) {
+            if ((r = mailbox_open_irl(txn->req_tgt.mbentry->name, &fctx.mailbox))
+                && r != IMAP_MAILBOX_NONEXISTENT) {
                 syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
                        txn->req_tgt.mbentry->name, error_message(r));
                 txn->error.desc = error_message(r);
@@ -5069,6 +5074,16 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
             r = mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
                                  httpd_authstate, propfind_by_collection, &fctx);
+
+            if (!strcmp(txn->req_tgt.mbentry->name,
+                        config_getstring(IMAPOPT_DAVDRIVEPREFIX))) {
+                /* Add a response for 'user' hierarchy */
+                buf_setcstr(&fctx.buf, txn->req_tgt.prefix);
+                buf_appendcstr(&fctx.buf, "/user/");
+                strlcpy(fctx.req_tgt->path, buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
+                fctx.mailbox = NULL;
+                r = xml_add_response(&fctx, 0, 0);
+            }
         }
 
         ret = *fctx.ret;
