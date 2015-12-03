@@ -701,12 +701,8 @@ struct getMailboxes_rock {
     const struct mailbox *inbox; /* The main user inbox. Do not unlock or close. */
     json_t *list;                /* List of the current http user mailboxes. */
     hash_table *props;           /* Which properties to fetch. */
-    hash_table *roles;           /* Roles that were already reported. This isn't
-                                    strictly necessary, since Cyrus takes care
-                                    not to allow multiple mailboxes to have the
-                                    same SpecialUse flag. But RFC 6154 does not
-                                    forbid multiple mailboxes to have the same
-                                    role, so let's be resilient here. */
+    hash_table *roles;           /* Roles that were already reported for another
+                                    mailbox during this getMailboxes request. */
 
     const char *uniqueid; /* XXX: until mboxlist allows lookup by uniqueid */
 };
