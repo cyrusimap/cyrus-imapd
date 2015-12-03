@@ -703,6 +703,7 @@ struct getMailboxes_rock {
     hash_table *props;           /* Which properties to fetch. */
     hash_table *roles;           /* Roles that were already reported for another
                                     mailbox during this getMailboxes request. */
+    const struct jmap_req *req;  /* The context of this JMAP request. */
 
     const char *uniqueid; /* XXX: until mboxlist allows lookup by uniqueid */
 };
@@ -814,21 +815,27 @@ static char *jmap_mailbox_name(const char *mboxname, const char *inboxname) {
  * which case parent must be NULL. All mailbox comparison is by pointer. If
  * props is not NULL, only convert JMAP properties in props.
  *
- * Return NULL no error.
+ * Return NULL on error.
  */
 static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
                                const struct mailbox *parent,
                                const struct mailbox *inbox,
-                               int rights,
-                               int parent_rights,
                                hash_table *props,
-                               hash_table *roles)
+                               hash_table *roles,
+                               const struct jmap_req *req)
 {
     int r;
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     struct statusdata sdata;
     struct buf specialuse = BUF_INITIALIZER;
     json_t *obj = NULL;
+    int rights = 0, parent_rights = 0;
+
+    /* Determine rights */
+    rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
+    if (parent && parent->acl) {
+        parent_rights = cyrus_acl_myrights(req->authstate, parent->acl);
+    }
 
     /* Lookup status. */
     r = status_lookup_mailbox(mbox, httpd_userid, statusitems, &sdata);
@@ -928,7 +935,7 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
     struct mailbox *mailbox = NULL, *parent = NULL;
     const struct mailbox *inbox = rock->inbox;
     const char *mboxname = mbentry->name;
-    int r = 0, rights, parent_rights = 0;
+    int r = 0, rights;
     struct mboxlist_entry *mbparent = NULL;
 
     /* Don't list special-purpose mailboxes. */
@@ -972,7 +979,6 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         goto done;
     }
     if (!r) {
-        parent_rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
         if (strcmp(mbparent->name, inbox->name)) {
             r = mailbox_open_irl(mbparent->name, &parent);
             if (r) {
@@ -987,8 +993,7 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     /* Convert mbox to JMAP object. */
-    mbox = jmap_mailbox_from_mbox(mailbox, parent, inbox, rights,
-                                  parent_rights, rock->props, rock->roles);
+    mbox = jmap_mailbox_from_mbox(mailbox, parent, inbox, rock->props, rock->roles, rock->req);
     if (!mbox) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mailbox->name);
         goto done;
@@ -1012,6 +1017,7 @@ static int getMailboxes(struct jmap_req *req)
     rock.props = NULL;
     rock.uniqueid = NULL;
     rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
+    rock.req = req;
     construct_hash_table(rock.roles, 8, 0);
 
     /* Determine current state. */
