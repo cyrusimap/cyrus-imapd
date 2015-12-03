@@ -1273,7 +1273,7 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
-#define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~[]"
+#define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~[]()"
 HIDDEN int mboxname_policycheck(const char *name)
 {
     const char *p;
