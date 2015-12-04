@@ -8404,8 +8404,11 @@ static int jmap_schedule_ical(const char *userid,
 {
     struct sched_param sparam;
     int r;
-    const char *organizer = NULL;
+    const char *organizer = NULL, *uid;
     icalcomponent *comp = NULL;
+
+    /* Initialize scheduling parameters. */
+    memset(&sparam, 0, sizeof(struct sched_param));
 
     /* Determine if any scheduling is required. */
     icalcomponent *src = mode&JMAP_DESTROY ? oldical : ical;
@@ -8418,14 +8421,17 @@ static int jmap_schedule_ical(const char *userid,
     }
 
     /* Lookup the organizer. */
-    memset(&sparam, 0, sizeof(struct sched_param));
+    uid = icalcomponent_get_uid(comp);
     r = caladdress_lookup(organizer, &sparam, userid);
     if (r == HTTP_NOT_FOUND) {
-        r = 0; /* Skip non-local organizer. */ /* XXX need to handle non-local organizers? */
+        /* XXX need to handle non-local organizers? */
+        syslog(LOG_INFO, "ignoring unknown organizer %s in ical component %s",
+                organizer, uid);
+        r = 0; /* Skip non-local organizer. */
         goto done;
     } else if (r) {
-        syslog(LOG_ERR, "failed to process scheduling message (org=%s)",
-                organizer);
+        syslog(LOG_ERR, "failed to process scheduling message (org=%s, icaluid=%s)",
+                organizer, uid);
         goto done;
     }
 
@@ -8442,18 +8448,20 @@ static int jmap_schedule_ical(const char *userid,
             if (prop) oldorganizer = icalproperty_get_organizer(prop);
         }
         if (oldorganizer) {
+            const char *o = oldorganizer;
             const char *p = organizer;
             if (!strncasecmp(p, "mailto:", 7)) p += 7;
-            if (strcmp(oldorganizer, p)) {
+            if (!strncasecmp(o, "mailto:", 7)) o += 7;
+            if (strcmp(o, p)) {
                 /* XXX This should become a set error. */
-                r = IMAP_INTERNAL;
+                r = 0;
                 goto done;
             }
         }
     }
 
-    if (organizer && /* XXX Hack for Outlook */
-            icalcomponent_get_first_invitee(comp)) {
+    if (organizer &&
+            /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
         /* Send scheduling message. */
         if (!strcmpsafe(sparam.userid, userid)) {
             /* Organizer scheduling object resource */
@@ -8688,12 +8696,8 @@ static int jmap_write_calendarevent(json_t *event,
     }
 
     /* Handle scheduling. */
-    if (0) {
-        /* XXX This currently segfaults in Cassandane tests when trying to call
-         * sendmail. */
-        r = jmap_schedule_ical(req->userid, oldical, ical, mode);
-        if (r) goto done;
-    }
+    r = jmap_schedule_ical(req->userid, oldical, ical, mode);
+    if (r) goto done;
 
     if (destroy || (update && dstmbox)) {
         /* Expunge the resource from mailbox. */
