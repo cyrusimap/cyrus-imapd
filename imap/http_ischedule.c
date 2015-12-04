@@ -133,6 +133,7 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }, /* MKCOL        */
         { NULL,                 NULL }, /* MOVE         */
         { &meth_options_isched, NULL }, /* OPTIONS      */
+        { NULL,                 NULL }, /* PATCH        */
         { &meth_post_isched,    NULL }, /* POST         */
         { NULL,                 NULL }, /* PROPFIND     */
         { NULL,                 NULL }, /* PROPPATCH    */
@@ -140,7 +141,8 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }, /* REPORT       */
         { &meth_trace,          NULL }, /* TRACE        */
         { NULL,                 NULL }  /* UNLOCK       */
-    }
+    },
+    { NULL }
 };
 
 struct namespace_t namespace_domainkey = {

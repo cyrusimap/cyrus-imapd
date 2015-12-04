@@ -244,6 +244,7 @@ struct namespace_t namespace_drive = {
         { &meth_mkcol,          &webdav_params },      /* MKCOL        */
         { &meth_copy_move,      &webdav_params },      /* MOVE         */
         { &meth_options,        &webdav_parse_path },  /* OPTIONS      */
+        { NULL,                 NULL },                /* PATCH        */
         { &meth_post,           &webdav_params },      /* POST         */
         { &meth_propfind,       &webdav_params },      /* PROPFIND     */
         { &meth_proppatch,      &webdav_params },      /* PROPPATCH    */
@@ -251,7 +252,8 @@ struct namespace_t namespace_drive = {
         { &meth_report,         &webdav_params },      /* REPORT       */
         { &meth_trace,          &webdav_parse_path },  /* TRACE        */
         { &meth_unlock,         &webdav_params }       /* UNLOCK       */
-    }
+    },
+    { NULL }
 };
 
 static void my_webdav_init(struct buf *serverinfo __attribute__((unused)))

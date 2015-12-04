@@ -100,6 +100,7 @@ enum {
     METH_MKCOL,
     METH_MOVE,
     METH_OPTIONS,
+    METH_PATCH,
     METH_POST,
     METH_PROPFIND,
     METH_PROPPATCH,
@@ -110,6 +111,8 @@ enum {
 
     METH_UNKNOWN,  /* MUST be last */
 };
+
+#define NUM_HTTP_METHODS   METH_UNKNOWN
 
 
 extern int is_mediatype(const char *pat, const char *type);

@@ -150,14 +150,16 @@ struct namespace_t namespace_tzdist = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* POST */
+        { NULL,                 NULL },                 /* POST         */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    }
+    },
+    { NULL }
 };
 
 
