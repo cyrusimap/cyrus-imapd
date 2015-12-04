@@ -614,6 +614,7 @@ backup indexes:
     * how to detect corruption? assume sqlite will notice, complain?
 
 backup data:
+    * what's zlib's failure mode? do we lose the entire chunk or just the corrupt bit?
     * verify will notice sha1sum mismatches
     * dlist format will reject some kinds of corruption (but not all)
     * reindex: should skip unparseable dlist lines
