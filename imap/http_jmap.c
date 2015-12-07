@@ -5215,6 +5215,7 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
                 httpd_userid, req->authstate, mboxevent,
                 1 /* checkacl */, 0 /* local_only */, 0 /* force */);
     }
+    mboxevent_free(&mboxevent);
 
     int rr = caldav_close(db);
     if (!r) r = rr;
