@@ -1684,7 +1684,11 @@ sub notifyd
         @EVENTS = ();
     });
 
-    AnyEvent->condvar()->recv();
+    my $cv = AnyEvent->condvar();
+
+    $SIG{TERM} = sub { $cv->send() };
+
+    $cv->recv();
 }
 
 sub getnotify
