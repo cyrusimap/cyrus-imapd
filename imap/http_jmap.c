@@ -138,7 +138,8 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
-        { &jmap_post,           NULL },                 /* POST */
+        { NULL,                 NULL },                 /* PATCH        */
+        { &jmap_post,           NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */

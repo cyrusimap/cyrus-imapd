@@ -135,17 +135,18 @@ enum {
     ALLOW_READ =        (1<<0), /* Read resources/properties */
     ALLOW_POST =        (1<<1), /* Post to a URL */
     ALLOW_WRITE =       (1<<2), /* Create/modify/lock resources */
-    ALLOW_DELETE =      (1<<3), /* Delete resources/collections */
-    ALLOW_TRACE =       (1<<4), /* TRACE a request */
-    ALLOW_DAV =         (1<<5), /* WebDAV specific methods/features */
-    ALLOW_WRITECOL =    (1<<6), /* Create/modify collections */
-    ALLOW_CAL =         (1<<7), /* CalDAV specific methods/features */
-    ALLOW_CAL_AVAIL =   (1<<8), /* CalDAV Availability specific features */
-    ALLOW_CAL_SCHED =   (1<<9), /* CalDAV Scheduling specific features */
-    ALLOW_CAL_NOTZ =    (1<<10),/* CalDAV TZ by Ref specific features */
-    ALLOW_CAL_ATTACH =  (1<<11),/* CalDAV Managed Attachments features */
-    ALLOW_CARD =        (1<<12),/* CardDAV specific methods/features */
-    ALLOW_ISCHEDULE =   (1<<13) /* iSchedule specific methods/features */
+    ALLOW_PATCH =       (1<<3), /* Patch resources */
+    ALLOW_DELETE =      (1<<4), /* Delete resources/collections */
+    ALLOW_TRACE =       (1<<5), /* TRACE a request */
+    ALLOW_DAV =         (1<<6), /* WebDAV specific methods/features */
+    ALLOW_WRITECOL =    (1<<7), /* Create/modify collections */
+    ALLOW_CAL =         (1<<8), /* CalDAV specific methods/features */
+    ALLOW_CAL_AVAIL =   (1<<9), /* CalDAV Availability specific features */
+    ALLOW_CAL_SCHED =   (1<<10),/* CalDAV Scheduling specific features */
+    ALLOW_CAL_NOTZ =    (1<<11),/* CalDAV TZ by Ref specific features */
+    ALLOW_CAL_ATTACH =  (1<<12),/* CalDAV Managed Attachments features */
+    ALLOW_CARD =        (1<<13),/* CardDAV specific methods/features */
+    ALLOW_ISCHEDULE =   (1<<14) /* iSchedule specific methods/features */
 };
 
 struct auth_scheme_t {
@@ -239,26 +240,32 @@ struct range {
     struct range *next;
 };
 
+struct patch_doc_t {
+    const char *format;                 /* MIME format of patch document */
+    int (*proc)();                      /* Function to parse and apply doc */
+};
+
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
-    ulong len;          /* Content-Length   */
-    struct range *range;/* Content-Range    */
-    const char *fname;  /* Content-Dispo    */
-    unsigned char enc;  /* Content-Encoding */
-    const char *lang;   /* Content-Language */
-    const char *loc;    /* Content-Location */
-    const u_char *md5;  /* Content-MD5      */
-    const char *type;   /* Content-Type     */
-    unsigned prefs;     /* Prefer           */
-    const char *lock;   /* Lock-Token       */
-    const char *etag;   /* ETag             */
-    time_t lastmod;     /* Last-Modified    */
-    time_t maxage;      /* Expires          */
-    const char *stag;   /* Schedule-Tag     */
-    const char *cmid;   /* Cal-Managed-ID   */
-    time_t iserial;     /* iSched serial#   */
-    struct buf payload; /* Payload          */
+    ulong len;                          /* Content-Length   */
+    struct range *range;                /* Content-Range    */
+    const char *fname;                  /* Content-Dispo    */
+    unsigned char enc;                  /* Content-Encoding */
+    const char *lang;                   /* Content-Language */
+    const char *loc;                    /* Content-Location */
+    const u_char *md5;                  /* Content-MD5      */
+    const char *type;                   /* Content-Type     */
+    const struct patch_doc_t *patch;    /* Accept-Patch     */
+    unsigned prefs;                     /* Prefer           */
+    const char *lock;                   /* Lock-Token       */
+    const char *etag;                   /* ETag             */
+    time_t lastmod;                     /* Last-Modified    */
+    time_t maxage;                      /* Expires          */
+    const char *stag;                   /* Schedule-Tag     */
+    const char *cmid;                   /* Cal-Managed-ID   */
+    time_t iserial;                     /* iSched serial#   */
+    struct buf payload;                 /* Payload          */
 };
 
 /* Transaction flags */
@@ -369,7 +376,7 @@ struct namespace_t {
     const char *prefix;         /* Prefix of URL path denoting namespace */
     const char *well_known;     /* Any /.well-known/ URI */
     unsigned need_auth;         /* Do we need to auth for this namespace? */
-    int mboxtype;               /* what type of mailbox can be seen in this namespace? */
+    int mboxtype;               /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
     void (*init)(struct buf *serverinfo);
     void (*auth)(const char *userid);
@@ -377,7 +384,7 @@ struct namespace_t {
     void (*shutdown)(void);
     struct method_t methods[];  /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
-                                 * and in the SAME ORDER in which they appear,
+                                 * and in the SAME ORDER in which they appear
                                  * in the http_methods[] array.
                                  * If the method is not supported,
                                  * the function pointer MUST be NULL.

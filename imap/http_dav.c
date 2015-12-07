@@ -237,6 +237,7 @@ struct namespace_t namespace_principal = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { &meth_propfind,       &princ_params },        /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -495,6 +496,7 @@ int dav_check_precond(struct transaction_t *txn, const void *data,
         case METH_DELETE:
         case METH_LOCK:
         case METH_MOVE:
+        case METH_PATCH:
         case METH_POST:
         case METH_PUT:
             /* State-changing method: Only the lock owner can execute
@@ -549,6 +551,7 @@ unsigned get_preferences(struct transaction_t *txn)
     switch (txn->meth) {
     case METH_COPY:
     case METH_MOVE:
+    case METH_PATCH:
     case METH_POST:
     case METH_PUT:
         mask = PREFER_REP;

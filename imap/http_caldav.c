@@ -433,6 +433,7 @@ static struct meth_params caldav_params = {
     &caldav_delete_cal,
     &caldav_get,
     { CALDAV_LOCATION_OK, MBTYPE_CALENDAR },
+    NULL,
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
     { 0, caldav_props },                        /* Allow infinite depth */
@@ -461,6 +462,7 @@ struct namespace_t namespace_calendar = {
         { &meth_mkcol,          &caldav_params },       /* MKCOL        */
         { &meth_copy_move,      &caldav_params },       /* MOVE         */
         { &meth_options,        &caldav_parse_path },   /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { &meth_post,           &caldav_params },       /* POST         */
         { &meth_propfind,       &caldav_params },       /* PROPFIND     */
         { &meth_proppatch,      &caldav_params },       /* PROPPATCH    */
@@ -489,6 +491,7 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        &caldav_parse_path },   /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */

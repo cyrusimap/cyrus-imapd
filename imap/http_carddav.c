@@ -301,6 +301,7 @@ static struct meth_params carddav_params = {
     NULL,                                       /* No special DELETE handling */
     NULL,                                       /* No special GET handling */
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
+    NULL,                                       /* No PATCH handling */
     NULL,                                       /* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
     { 0, carddav_props },                       /* Allow infinite depth */
@@ -331,6 +332,7 @@ struct namespace_t namespace_addressbook = {
         { &meth_mkcol,          &carddav_params },      /* MKCOL        */
         { &meth_copy_move,      &carddav_params },      /* MOVE         */
         { &meth_options,        &carddav_parse_path },  /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
         { &meth_post,           &carddav_params },      /* POST         */
 #else

@@ -246,6 +246,7 @@ const struct known_meth_t http_methods[] = {
     { "MKCOL",          0 },
     { "MOVE",           METH_NOBODY },
     { "OPTIONS",        METH_NOBODY },
+    { "PATCH",          0 },
     { "POST",           0 },
     { "PROPFIND",       0 },
     { "PROPPATCH",      0 },
@@ -273,6 +274,7 @@ struct namespace_t namespace_default = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { &meth_propfind_root,  NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -1807,7 +1809,7 @@ EXPORTED void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags
 EXPORTED void allow_hdr(const char *hdr, unsigned allow)
 {
     const char *meths[] = {
-        "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
+        "OPTIONS, GET, HEAD", "POST", "PUT", "PATCH", "DELETE", "TRACE", NULL
     };
 
     comma_list_hdr(hdr, meths, allow);
@@ -1982,6 +1984,17 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
         comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
         if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
+    }
+    if (resp_body->patch) {
+        const char *sep = "";
+        int i;
+
+        prot_puts(httpd_out, "Accept-Patch: ");
+        for (i = 0; resp_body->patch[i].format; i++) {
+            prot_printf(httpd_out, "%s%s", sep, resp_body->patch[i].format);
+            sep = ", ";
+        }
+        prot_puts(httpd_out, "\r\n");
     }
 
     switch (code) {

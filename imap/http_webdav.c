@@ -219,6 +219,7 @@ struct meth_params webdav_params = {
     NULL,                                       /* No special DELETE handling */
     &webdav_get,
     { 0, MBTYPE_COLLECTION },                   /* Allow any location */
+    NULL,                                       /* No PATCH handling */
     NULL,                                       /* No special POST handling */
     { 0, &webdav_put },                         /* Allow any MIME type */
     { DAV_FINITE_DEPTH, webdav_props},
@@ -244,6 +245,7 @@ struct namespace_t namespace_drive = {
         { &meth_mkcol,          &webdav_params },      /* MKCOL        */
         { &meth_copy_move,      &webdav_params },      /* MOVE         */
         { &meth_options,        &webdav_parse_path },  /* OPTIONS      */
+        { NULL,                 NULL },                /* PATCH        */
         { &meth_post,           &webdav_params },      /* POST         */
         { &meth_propfind,       &webdav_params },      /* PROPFIND     */
         { &meth_proppatch,      &webdav_params },      /* PROPPATCH    */

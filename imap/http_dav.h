@@ -497,6 +497,7 @@ struct meth_params {
     delete_proc_t delete;               /* special DELETE handling (optional) */
     get_proc_t get;                     /* special GET handling (optional) */
     struct mkcol_params mkcol;          /* params for creating new collection */
+    struct patch_doc_t *patch_docs;     /* array of patch docs & funcs (opt) */
     post_proc_t post;                   /* special POST handling (optional) */
     struct put_params put;              /* params for putting a resource */
     struct propfind_params propfind;    /* params for finding properties */
