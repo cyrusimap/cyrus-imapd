@@ -112,8 +112,6 @@ enum {
     METH_UNKNOWN,  /* MUST be last */
 };
 
-#define NUM_HTTP_METHODS   METH_UNKNOWN
-
 
 extern int is_mediatype(const char *pat, const char *type);
 extern int http_parse_framing(hdrcache_t hdrs, struct body_t *body,

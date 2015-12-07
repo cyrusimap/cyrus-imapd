@@ -206,7 +206,6 @@ struct request_target_t {
     int mboxtype;               /* mailbox types to match on findall */
     mbentry_t *mbentry;         /* mboxlist entry of target collection */
     const char *prefix;         /* namespace prefix */
-    const char **patch_types;   /* array of accepted patch document types */
 };
 
 /* Request target flags */
@@ -241,26 +240,32 @@ struct range {
     struct range *next;
 };
 
+struct patch_doc_t {
+    const char *format;                 /* MIME format of patch document */
+    int (*proc)();                      /* Function to parse and apply doc */
+};
+
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
-    ulong len;          /* Content-Length   */
-    struct range *range;/* Content-Range    */
-    const char *fname;  /* Content-Dispo    */
-    unsigned char enc;  /* Content-Encoding */
-    const char *lang;   /* Content-Language */
-    const char *loc;    /* Content-Location */
-    const u_char *md5;  /* Content-MD5      */
-    const char *type;   /* Content-Type     */
-    unsigned prefs;     /* Prefer           */
-    const char *lock;   /* Lock-Token       */
-    const char *etag;   /* ETag             */
-    time_t lastmod;     /* Last-Modified    */
-    time_t maxage;      /* Expires          */
-    const char *stag;   /* Schedule-Tag     */
-    const char *cmid;   /* Cal-Managed-ID   */
-    time_t iserial;     /* iSched serial#   */
-    struct buf payload; /* Payload          */
+    ulong len;                          /* Content-Length   */
+    struct range *range;                /* Content-Range    */
+    const char *fname;                  /* Content-Dispo    */
+    unsigned char enc;                  /* Content-Encoding */
+    const char *lang;                   /* Content-Language */
+    const char *loc;                    /* Content-Location */
+    const u_char *md5;                  /* Content-MD5      */
+    const char *type;                   /* Content-Type     */
+    const struct patch_doc_t *patch;    /* Accept-Patch     */
+    unsigned prefs;                     /* Prefer           */
+    const char *lock;                   /* Lock-Token       */
+    const char *etag;                   /* ETag             */
+    time_t lastmod;                     /* Last-Modified    */
+    time_t maxage;                      /* Expires          */
+    const char *stag;                   /* Schedule-Tag     */
+    const char *cmid;                   /* Cal-Managed-ID   */
+    time_t iserial;                     /* iSched serial#   */
+    struct buf payload;                 /* Payload          */
 };
 
 /* Transaction flags */
@@ -377,15 +382,13 @@ struct namespace_t {
     void (*auth)(const char *userid);
     void (*reset)(void);
     void (*shutdown)(void);
-    struct method_t methods[NUM_HTTP_METHODS];
-                                /* Array of functions to perform HTTP methods.
+    struct method_t methods[];  /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
                                  * and in the SAME ORDER in which they appear
                                  * in the http_methods[] array.
                                  * If the method is not supported,
                                  * the function pointer MUST be NULL.
                                  */
-    const char *patch_types[];  /* Array of accepted patch document types */
 };
 
 struct accept {

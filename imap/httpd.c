@@ -282,8 +282,7 @@ struct namespace_t namespace_default = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 /* Array of different namespaces and features supported by the server */
@@ -1224,7 +1223,6 @@ static void cmdloop(void)
             txn.req_tgt.namespace = namespace->id;
             txn.req_tgt.allow = namespace->allow;
             txn.req_tgt.mboxtype = namespace->mboxtype;
-            txn.req_tgt.patch_types = (const char **) namespace->patch_types;
 
             /* Check if method is supported in this namespace */
             meth_t = &namespace->methods[txn.meth];
@@ -1831,21 +1829,6 @@ EXPORTED void allow_hdr(const char *hdr, unsigned allow)
     }
 }
 
-static void accept_patch_hdr(const char *types[])
-{
-    const char *sep = "";
-    int i;
-
-    if (!types[0]) return;
-    
-    prot_puts(httpd_out, "Accept-Patch: ");
-    for (i = 0; types[i]; i++) {
-        prot_printf(httpd_out, "%s%s", sep, types[i]);
-        sep = ", ";
-    }
-    prot_puts(httpd_out, "\r\n");
-}
-
 #define MD5_BASE64_LEN 25   /* ((MD5_DIGEST_LENGTH / 3) + 1) * 4 */
 
 EXPORTED void Content_MD5(const unsigned char *md5)
@@ -2002,6 +1985,17 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
         if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
     }
+    if (resp_body->patch) {
+        const char *sep = "";
+        int i;
+
+        prot_puts(httpd_out, "Accept-Patch: ");
+        for (i = 0; resp_body->patch[i].format; i++) {
+            prot_printf(httpd_out, "%s%s", sep, resp_body->patch[i].format);
+            sep = ", ";
+        }
+        prot_puts(httpd_out, "\r\n");
+    }
 
     switch (code) {
     case HTTP_OK:
@@ -2011,13 +2005,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             /* Construct Accept-Ranges header for GET and HEAD responses */
             prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
                         txn->flags.ranges ? "bytes" : "none");
-            break;
-
-        case METH_PUT:
-        case METH_POST:
-            if (txn->req_tgt.allow & ALLOW_PATCH) {
-                accept_patch_hdr(txn->req_tgt.patch_types);
-            }
             break;
 
         case METH_OPTIONS:
@@ -2062,26 +2049,18 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 }
             }
 
-            if (txn->req_tgt.allow & ALLOW_PATCH) {
-                accept_patch_hdr(txn->req_tgt.patch_types);
-            }
-
-            if (txn->flags.cors != CORS_PREFLIGHT) {
+            if (txn->flags.cors == CORS_PREFLIGHT) {
                 /* Access-Control-Allow-Methods supersedes Allow */
-                allow_hdr("Allow", txn->req_tgt.allow);
+                break;
             }
-            break;
+            else goto allow;
         }
         goto authorized;
 
     case HTTP_NOT_ALLOWED:
-        /* Construct Allow header(s) for 405 response */
+    allow:
+        /* Construct Allow header(s) for OPTIONS and 405 response */
         allow_hdr("Allow", txn->req_tgt.allow);
-        goto authorized;
-
-    case HTTP_BAD_MEDIATYPE:
-        /* Construct Accept-Patch header for 415 response */
-        if (txn->meth == METH_PATCH) accept_patch_hdr(txn->req_tgt.patch_types);
         goto authorized;
 
     case HTTP_BAD_CE:
@@ -2311,7 +2290,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (*sep == ';') buf_appendcstr(&log, ")");
     }
     buf_printf(&log, " => \"%s\"", error_message(code));
-
     /* Add any auxiliary response data */
     if (txn->location) {
         buf_printf(&log, " (location=%s)", txn->location);

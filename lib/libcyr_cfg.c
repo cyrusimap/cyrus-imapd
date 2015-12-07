@@ -49,6 +49,7 @@
 #include "assert.h"
 #include "libcyr_cfg.h"
 #include "cyrusdb.h"
+#include "crc32c.h"
 
 #if defined(__GNUC__) && __GNUC__ > 1
 /* We can use the GCC union constructor extension */
@@ -211,6 +212,7 @@ EXPORTED void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
 
 EXPORTED void libcyrus_init(void)
 {
+    crc32c_init();
     cyrusdb_init();
 }
 

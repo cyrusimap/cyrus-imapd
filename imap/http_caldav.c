@@ -433,6 +433,7 @@ static struct meth_params caldav_params = {
     &caldav_delete_cal,
     &caldav_get,
     { CALDAV_LOCATION_OK, MBTYPE_CALENDAR },
+    NULL,
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
     { 0, caldav_props },                        /* Allow infinite depth */
@@ -469,8 +470,7 @@ struct namespace_t namespace_calendar = {
         { &meth_report,         &caldav_params },       /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
         { &meth_unlock,         &caldav_params }        /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 
@@ -499,8 +499,7 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 

@@ -301,6 +301,7 @@ static struct meth_params carddav_params = {
     NULL,                                       /* No special DELETE handling */
     NULL,                                       /* No special GET handling */
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
+    NULL,                                       /* No PATCH handling */
     NULL,                                       /* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
     { 0, carddav_props },                       /* Allow infinite depth */
@@ -343,8 +344,7 @@ struct namespace_t namespace_addressbook = {
         { &meth_report,         &carddav_params },      /* REPORT       */
         { &meth_trace,          &carddav_parse_path },  /* TRACE        */
         { &meth_unlock,         &carddav_params }       /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))

@@ -219,6 +219,7 @@ struct meth_params webdav_params = {
     NULL,                                       /* No special DELETE handling */
     &webdav_get,
     { 0, MBTYPE_COLLECTION },                   /* Allow any location */
+    NULL,                                       /* No PATCH handling */
     NULL,                                       /* No special POST handling */
     { 0, &webdav_put },                         /* Allow any MIME type */
     { DAV_FINITE_DEPTH, webdav_props},
@@ -252,8 +253,7 @@ struct namespace_t namespace_drive = {
         { &meth_report,         &webdav_params },      /* REPORT       */
         { &meth_trace,          &webdav_parse_path },  /* TRACE        */
         { &meth_unlock,         &webdav_params }       /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 static void my_webdav_init(struct buf *serverinfo __attribute__((unused)))
