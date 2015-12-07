@@ -185,6 +185,7 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { &jmap_post,           NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -192,7 +193,8 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    }
+    },
+    { NULL }
 };
 
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
