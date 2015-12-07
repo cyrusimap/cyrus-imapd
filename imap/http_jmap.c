@@ -3816,6 +3816,7 @@ static int getContactList(struct jmap_req *req)
     json_object_set_new(contactList, "position", json_integer(rock.position));
     json_object_set_new(contactList, "total", json_integer(rock.total));
     json_object_set(contactList, "contactIds", rock.contacts);
+    if (filter) json_object_set(contactList, "filter", filter);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactList"));
@@ -9446,6 +9447,7 @@ static int getCalendarEventList(struct jmap_req *req)
     json_object_set_new(eventList, "position", json_integer(rock.position));
     json_object_set_new(eventList, "total", json_integer(rock.total));
     json_object_set(eventList, "calendarEventIds", rock.events);
+    if (filter) json_object_set(eventList, "filter", filter);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("calendarEventList"));
