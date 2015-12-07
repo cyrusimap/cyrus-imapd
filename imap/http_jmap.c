@@ -1876,6 +1876,7 @@ static int setMailboxes(struct jmap_req *req)
                         httpd_userid, req->authstate, mboxevent,
                         1 /* checkacl */, 0 /* local_only */, 0 /* force */);
             }
+            mboxevent_free(&mboxevent);
             if (r == IMAP_PERMISSION_DENIED) {
                 json_t *err = json_pack("{s:s}", "type", "forbidden");
                 json_object_set_new(notDestroyed, uid, err);
