@@ -1771,6 +1771,15 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl installed.
     AC_CHECK_HEADERS([valgrind/valgrind.h])
 
+    dnl We depend on some data files, which exist in the source directory,
+    dnl but need to be found at runtime by the built unit tests.
+    dnl Under VPATH builds the source and build directories are not the same,
+    dnl so the built unit tests can't easily find their data files.
+    dnl Solution: just link them into the build directory at the same path.
+    AC_CONFIG_LINKS([cunit/cacert.pem:cunit/cacert.pem])
+    AC_CONFIG_LINKS([cunit/cert.pem:cunit/cert.pem])
+    AC_CONFIG_LINKS([cunit/key.pem:cunit/key.pem])
+
     USE_MAINTAINER_MODE=yes
 fi
 
