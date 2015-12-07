@@ -135,17 +135,18 @@ enum {
     ALLOW_READ =        (1<<0), /* Read resources/properties */
     ALLOW_POST =        (1<<1), /* Post to a URL */
     ALLOW_WRITE =       (1<<2), /* Create/modify/lock resources */
-    ALLOW_DELETE =      (1<<3), /* Delete resources/collections */
-    ALLOW_TRACE =       (1<<4), /* TRACE a request */
-    ALLOW_DAV =         (1<<5), /* WebDAV specific methods/features */
-    ALLOW_WRITECOL =    (1<<6), /* Create/modify collections */
-    ALLOW_CAL =         (1<<7), /* CalDAV specific methods/features */
-    ALLOW_CAL_AVAIL =   (1<<8), /* CalDAV Availability specific features */
-    ALLOW_CAL_SCHED =   (1<<9), /* CalDAV Scheduling specific features */
-    ALLOW_CAL_NOTZ =    (1<<10),/* CalDAV TZ by Ref specific features */
-    ALLOW_CAL_ATTACH =  (1<<11),/* CalDAV Managed Attachments features */
-    ALLOW_CARD =        (1<<12),/* CardDAV specific methods/features */
-    ALLOW_ISCHEDULE =   (1<<13) /* iSchedule specific methods/features */
+    ALLOW_PATCH =       (1<<3), /* Patch resources */
+    ALLOW_DELETE =      (1<<4), /* Delete resources/collections */
+    ALLOW_TRACE =       (1<<5), /* TRACE a request */
+    ALLOW_DAV =         (1<<6), /* WebDAV specific methods/features */
+    ALLOW_WRITECOL =    (1<<7), /* Create/modify collections */
+    ALLOW_CAL =         (1<<8), /* CalDAV specific methods/features */
+    ALLOW_CAL_AVAIL =   (1<<9), /* CalDAV Availability specific features */
+    ALLOW_CAL_SCHED =   (1<<10),/* CalDAV Scheduling specific features */
+    ALLOW_CAL_NOTZ =    (1<<11),/* CalDAV TZ by Ref specific features */
+    ALLOW_CAL_ATTACH =  (1<<12),/* CalDAV Managed Attachments features */
+    ALLOW_CARD =        (1<<13),/* CardDAV specific methods/features */
+    ALLOW_ISCHEDULE =   (1<<14) /* iSchedule specific methods/features */
 };
 
 struct auth_scheme_t {
@@ -205,6 +206,7 @@ struct request_target_t {
     int mboxtype;               /* mailbox types to match on findall */
     mbentry_t *mbentry;         /* mboxlist entry of target collection */
     const char *prefix;         /* namespace prefix */
+    const char **patch_types;   /* array of accepted patch document types */
 };
 
 /* Request target flags */
@@ -369,19 +371,21 @@ struct namespace_t {
     const char *prefix;         /* Prefix of URL path denoting namespace */
     const char *well_known;     /* Any /.well-known/ URI */
     unsigned need_auth;         /* Do we need to auth for this namespace? */
-    int mboxtype;               /* what type of mailbox can be seen in this namespace? */
+    int mboxtype;               /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
     void (*init)(struct buf *serverinfo);
     void (*auth)(const char *userid);
     void (*reset)(void);
     void (*shutdown)(void);
-    struct method_t methods[];  /* Array of functions to perform HTTP methods.
+    struct method_t methods[NUM_HTTP_METHODS];
+                                /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
-                                 * and in the SAME ORDER in which they appear,
+                                 * and in the SAME ORDER in which they appear
                                  * in the http_methods[] array.
                                  * If the method is not supported,
                                  * the function pointer MUST be NULL.
                                  */
+    const char *patch_types[];  /* Array of accepted patch document types */
 };
 
 struct accept {

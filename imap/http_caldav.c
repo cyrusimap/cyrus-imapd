@@ -461,6 +461,7 @@ struct namespace_t namespace_calendar = {
         { &meth_mkcol,          &caldav_params },       /* MKCOL        */
         { &meth_copy_move,      &caldav_params },       /* MOVE         */
         { &meth_options,        &caldav_parse_path },   /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { &meth_post,           &caldav_params },       /* POST         */
         { &meth_propfind,       &caldav_params },       /* PROPFIND     */
         { &meth_proppatch,      &caldav_params },       /* PROPPATCH    */
@@ -468,7 +469,8 @@ struct namespace_t namespace_calendar = {
         { &meth_report,         &caldav_params },       /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
         { &meth_unlock,         &caldav_params }        /* UNLOCK       */
-    }
+    },
+    { NULL }
 };
 
 
@@ -489,6 +491,7 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        &caldav_parse_path },   /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -496,7 +499,8 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    }
+    },
+    { NULL }
 };
 
 
