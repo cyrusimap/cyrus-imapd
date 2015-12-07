@@ -759,7 +759,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     imapurl.server = config_servername;
 
     mbname_t *mbname = mbname_from_intname(mailboxname);
-    imapurl.mailbox = xstrdupnull(mbname_extname(mbname, &namespace, NULL));
+    char *extname = xstrdupnull(mbname_extname(mbname, &namespace, NULL));
+    imapurl.mailbox = extname;
     mbname_free(&mbname);
 
     imapurl_toURL(url, &imapurl);
@@ -774,8 +775,14 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     if (mailboxname) {
         mbentry_t *mbentry = NULL;
         r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-        if (!r && mbentry->uniqueid)
+        if (!r && mbentry->uniqueid) {
+            /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_ID,
+             * so make sure to deallocate its previous value */
+            if (event->params[EVENT_MAILBOX_ID].filled) {
+                free(event->params[EVENT_MAILBOX_ID].value.s);
+            }
             FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+        }
         mboxlist_entry_free(&mbentry);
     }
 
@@ -790,6 +797,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     if (userid && mboxevent_expected_param(event->type, EVENT_USER)) {
         FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
     }
+
+    free(extname);
 }
 
 EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
