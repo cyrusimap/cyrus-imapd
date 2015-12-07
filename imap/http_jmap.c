@@ -1770,7 +1770,7 @@ static int setMailboxes(struct jmap_req *req)
 
             /* Validate uid */
             if (!strlen(uid) || *uid == '#') {
-                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_t *err= json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
             }
@@ -1819,7 +1819,7 @@ static int setMailboxes(struct jmap_req *req)
         json_t *juid;
         json_array_foreach(destroy, index, juid) {
 
-            /* Validate uid. JMAP destroy does not allow reference uids. */
+            /* Validate uid. */
             const char *uid = json_string_value(juid);
             if (!strlen(uid) || *uid == '#') {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
@@ -5609,7 +5609,7 @@ static int setCalendars(struct jmap_req *req)
 
             /* Validate uid */
             if (!strlen(uid) || *uid == '#') {
-                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_t *err= json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notUpdated, uid, err);
                 continue;
             }
@@ -5722,9 +5722,14 @@ static int setCalendars(struct jmap_req *req)
 
         json_array_foreach(destroy, index, juid) {
 
-            /* Validate uid. JMAP destroy does not allow reference uids. */
+            /* Validate uid */
             const char *uid = json_string_value(juid);
-            if (!strlen(uid) || *uid == '#' || jmap_calendar_ishidden(uid)) {
+            if (!strlen(uid) || *uid == '#') {
+                json_t *err= json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+            if (jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
