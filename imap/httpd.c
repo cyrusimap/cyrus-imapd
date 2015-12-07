@@ -246,7 +246,6 @@ const struct known_meth_t http_methods[] = {
     { "MKCOL",          0 },
     { "MOVE",           METH_NOBODY },
     { "OPTIONS",        METH_NOBODY },
-    { "PATCH",          0 },
     { "POST",           0 },
     { "PROPFIND",       0 },
     { "PROPPATCH",      0 },
@@ -274,7 +273,6 @@ struct namespace_t namespace_default = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { &meth_propfind_root,  NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -282,8 +280,7 @@ struct namespace_t namespace_default = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 /* Array of different namespaces and features supported by the server */
@@ -1224,7 +1221,6 @@ static void cmdloop(void)
             txn.req_tgt.namespace = namespace->id;
             txn.req_tgt.allow = namespace->allow;
             txn.req_tgt.mboxtype = namespace->mboxtype;
-            txn.req_tgt.patch_types = (const char **) namespace->patch_types;
 
             /* Check if method is supported in this namespace */
             meth_t = &namespace->methods[txn.meth];
@@ -1811,7 +1807,7 @@ EXPORTED void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags
 EXPORTED void allow_hdr(const char *hdr, unsigned allow)
 {
     const char *meths[] = {
-        "OPTIONS, GET, HEAD", "POST", "PUT", "PATCH", "DELETE", "TRACE", NULL
+        "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
     };
 
     comma_list_hdr(hdr, meths, allow);
@@ -1829,21 +1825,6 @@ EXPORTED void allow_hdr(const char *hdr, unsigned allow)
         }
         prot_puts(httpd_out, "\r\n");
     }
-}
-
-static void accept_patch_hdr(const char *types[])
-{
-    const char *sep = "";
-    int i;
-
-    if (!types[0]) return;
-    
-    prot_puts(httpd_out, "Accept-Patch: ");
-    for (i = 0; types[i]; i++) {
-        prot_printf(httpd_out, "%s%s", sep, types[i]);
-        sep = ", ";
-    }
-    prot_puts(httpd_out, "\r\n");
 }
 
 #define MD5_BASE64_LEN 25   /* ((MD5_DIGEST_LENGTH / 3) + 1) * 4 */
@@ -2013,13 +1994,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                         txn->flags.ranges ? "bytes" : "none");
             break;
 
-        case METH_PUT:
-        case METH_POST:
-            if (txn->req_tgt.allow & ALLOW_PATCH) {
-                accept_patch_hdr(txn->req_tgt.patch_types);
-            }
-            break;
-
         case METH_OPTIONS:
             if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
                 prot_printf(httpd_out, "Server: %s\r\n",
@@ -2062,26 +2036,18 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 }
             }
 
-            if (txn->req_tgt.allow & ALLOW_PATCH) {
-                accept_patch_hdr(txn->req_tgt.patch_types);
-            }
-
-            if (txn->flags.cors != CORS_PREFLIGHT) {
+            if (txn->flags.cors == CORS_PREFLIGHT) {
                 /* Access-Control-Allow-Methods supersedes Allow */
-                allow_hdr("Allow", txn->req_tgt.allow);
+                break;
             }
-            break;
+            else goto allow;
         }
         goto authorized;
 
     case HTTP_NOT_ALLOWED:
-        /* Construct Allow header(s) for 405 response */
+    allow:
+        /* Construct Allow header(s) for OPTIONS and 405 response */
         allow_hdr("Allow", txn->req_tgt.allow);
-        goto authorized;
-
-    case HTTP_BAD_MEDIATYPE:
-        /* Construct Accept-Patch header for 415 response */
-        if (txn->meth == METH_PATCH) accept_patch_hdr(txn->req_tgt.patch_types);
         goto authorized;
 
     case HTTP_BAD_CE:
@@ -2311,7 +2277,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (*sep == ';') buf_appendcstr(&log, ")");
     }
     buf_printf(&log, " => \"%s\"", error_message(code));
-
     /* Add any auxiliary response data */
     if (txn->location) {
         buf_printf(&log, " (location=%s)", txn->location);

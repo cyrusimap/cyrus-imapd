@@ -71,7 +71,6 @@ struct namespace_t namespace_dblookup = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { NULL,                 NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -79,8 +78,7 @@ struct namespace_t namespace_dblookup = {
         { NULL,                 NULL },                 /* REPORT       */
         { NULL,                 NULL },                 /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 static int get_email(struct transaction_t *txn __attribute__((unused)),

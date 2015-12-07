@@ -237,7 +237,6 @@ struct namespace_t namespace_principal = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { &meth_propfind,       &princ_params },        /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -245,8 +244,7 @@ struct namespace_t namespace_principal = {
         { &meth_report,         &princ_params },        /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 

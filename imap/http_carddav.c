@@ -331,7 +331,6 @@ struct namespace_t namespace_addressbook = {
         { &meth_mkcol,          &carddav_params },      /* MKCOL        */
         { &meth_copy_move,      &carddav_params },      /* MOVE         */
         { &meth_options,        &carddav_parse_path },  /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
         { &meth_post,           &carddav_params },      /* POST         */
 #else
@@ -343,8 +342,7 @@ struct namespace_t namespace_addressbook = {
         { &meth_report,         &carddav_params },      /* REPORT       */
         { &meth_trace,          &carddav_parse_path },  /* TRACE        */
         { &meth_unlock,         &carddav_params }       /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))

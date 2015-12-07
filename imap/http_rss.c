@@ -123,7 +123,6 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        &rss_parse_path },      /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
@@ -131,8 +130,7 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          &rss_parse_path },      /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 
