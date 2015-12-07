@@ -2028,6 +2028,8 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 
     json_array_append_new(crock->array, obj);
 
+    vparse_free(&vparser);
+
     return 0;
 }
 
@@ -2554,6 +2556,7 @@ static int setContactGroups(struct jmap_req *req)
                 if (r) {
                     syslog(LOG_ERR, "IOERROR: failed to open %s",
                            cdata->dav.mailbox);
+                    free(resource);
                     goto done;
                 }
             }
@@ -2567,6 +2570,7 @@ static int setContactGroups(struct jmap_req *req)
                     r = mailbox_open_iwl(mboxname, &newmailbox);
                     if (r) {
                         syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
+                        free(resource);
                         goto done;
                     }
                 }
@@ -2580,11 +2584,17 @@ static int setContactGroups(struct jmap_req *req)
 
             r = mailbox_find_index_record(mailbox,
                                           cdata->dav.imap_uid, &record);
-            if (r) goto done;
+            if (r) {
+                free(resource);
+                goto done;
+            }
 
             /* Load message containing the resource and parse vcard data */
             r = mailbox_map_record(mailbox, &record, &msg_buf);
-            if (r) goto done;
+            if (r) {
+                free(resource);
+                goto done;
+            }
 
             memset(&vparser, 0, sizeof(struct vparse_state));
             vparser.base = buf_cstring(&msg_buf) + record.header_size;
@@ -2598,6 +2608,7 @@ static int setContactGroups(struct jmap_req *req)
                 json_object_set_new(notUpdated, uid, err);
                 vparse_free(&vparser);
                 mailbox_close(&newmailbox);
+                free(resource);
                 continue;
             }
             struct vparse_card *card = vparser.card->objects;
@@ -2611,6 +2622,7 @@ static int setContactGroups(struct jmap_req *req)
                     json_object_set_new(notUpdated, uid, err);
                     vparse_free(&vparser);
                     mailbox_close(&newmailbox);
+                    free(resource);
                     continue;
                 }
                 struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
@@ -2639,6 +2651,7 @@ static int setContactGroups(struct jmap_req *req)
                 json_object_set_new(notUpdated, uid, err);
                 vparse_free(&vparser);
                 mailbox_close(&newmailbox);
+                free(resource);
                 continue;
             }
             json_decref(invalid);
