@@ -61,8 +61,11 @@
  *    misrepresented as being the original software.
  */
 
+#include "config.h"
 #include "crc32c.h"
 #include <string.h>
+
+#ifdef HAVE_SSE42
 
 /* Block sizes for three-way parallel crc computation.  LONG and SHORT must
    both be powers of two.  The associated string constants must be set
@@ -445,6 +448,8 @@ static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
     return (uint32_t)crc0 ^ 0xffffffff;
 }
 
+#endif /* HAVE_SSE42 */
+
 
 /* Tables for slice-by-4 software fallback */
 static const uint32_t crc32c_lookup[4][256] = {
@@ -656,13 +661,19 @@ static int have_sse42 = 0;
 
 EXPORTED void crc32c_init()
 {
+#ifdef HAVE_SSE42
     SSE42(have_sse42);
+#endif
 }
 
 static uint32_t crc32c(uint32_t crc, const void *buf, size_t len) {
+#ifdef HAVE_SSE42
     return have_sse42
         ? crc32c_hw(0, buf, len)
         : crc32c_sw(0, buf, len);
+#else
+    return crc32c_sw(0, buf, len);
+#endif
 }
 
 EXPORTED uint32_t crc32c_map(const char *base, unsigned len)
