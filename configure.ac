@@ -1813,7 +1813,7 @@ AC_CACHE_VAL(cyrus_cv_sse42, AC_TRY_COMPILE([
     #include <stdint.h>
 ],[
     uint64_t a = 0, b = 1;
-    __asm__("rc32b\t" "(%1), %0"
+    __asm__("crc32b\t" "(%1), %0"
             : "=r"(b)
             : "r"(b), "0"(a));
     return b;
