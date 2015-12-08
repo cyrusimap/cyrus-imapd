@@ -657,7 +657,9 @@ static uint32_t crc32c_sw(uint32_t crc, const void *buf, size_t len) {
         (have) = (ecx >> 20) & 1; \
     } while (0)
 
+#ifdef HAVE_SSE42
 static int have_sse42 = 0;
+#endif
 
 EXPORTED void crc32c_init()
 {
@@ -669,10 +671,10 @@ EXPORTED void crc32c_init()
 static uint32_t crc32c(uint32_t crc, const void *buf, size_t len) {
 #ifdef HAVE_SSE42
     return have_sse42
-        ? crc32c_hw(0, buf, len)
-        : crc32c_sw(0, buf, len);
+        ? crc32c_hw(crc, buf, len)
+        : crc32c_sw(crc, buf, len);
 #else
-    return crc32c_sw(0, buf, len);
+    return crc32c_sw(crc, buf, len);
 #endif
 }
 
