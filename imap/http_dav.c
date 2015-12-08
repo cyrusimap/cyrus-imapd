@@ -5496,7 +5496,7 @@ int meth_patch(struct transaction_t *txn, void *params)
 
     if (flags & PREFER_REP) {
         struct resp_body_t *resp_body = &txn->resp_body;
-        struct mime_type_t *mime = NULL;
+        struct mime_type_t *mime = pparams->mime_types;
         struct buf *data;
 
         if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
