@@ -211,6 +211,7 @@ EXPORTED void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
 
 EXPORTED void libcyrus_init(void)
 {
+    crc32c_init();
     cyrusdb_init();
 }
 
