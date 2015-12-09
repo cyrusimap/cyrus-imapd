@@ -6007,9 +6007,6 @@ static json_t* jmap_recurrence_from_ical(struct icalrecurrencetype recur, const 
     json_t *jrecur = json_pack("{}");
 
     /* frequency */
-    /* XXX - icalrecur depends on a recent change to libical. Might need to
-     * add support for this to Cyrus imap/ical_support.h for backward
-     * compatibility. */
     char *s = xstrdup(icalrecur_freq_to_string(recur.freq));
     char *p = s; for ( ; *p; ++p) *p = tolower(*p);
     json_object_set_new(jrecur, "frequency", json_string(s));
