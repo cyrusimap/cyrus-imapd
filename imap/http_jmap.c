@@ -1985,7 +1985,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
 
-    json_object_set_new(obj, "x-addressbookId",
+    json_object_set_new(obj, "addressbookId",
                         json_string(strrchr(cdata->dav.mailbox, '.')+1));
 
     json_t *contactids = json_pack("[]");
@@ -2038,7 +2038,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     if (!db) return -1;
 
     char *mboxname = NULL;
-    json_t *abookid = json_object_get(req->args, "x-addressbookId");
+    json_t *abookid = json_object_get(req->args, "addressbookId");
     if (abookid && json_string_value(abookid)) {
         /* XXX - invalid arguments */
         const char *addressbookId = json_string_value(abookid);
@@ -2273,7 +2273,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
 
     /* Non-JMAP spec addressbookId argument */
     char *mboxname = NULL;
-    json_t *abookid = json_object_get(req->args, "x-addressbookId");
+    json_t *abookid = json_object_get(req->args, "addressbookId");
     if (abookid && json_string_value(abookid)) {
         const char *addressbookId = json_string_value(abookid);
         mboxname = carddav_mboxname(req->userid, addressbookId);
@@ -2329,7 +2329,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.changed);
         if (abookid) {
-            json_object_set(subreq.args, "x-addressbookId", abookid);
+            json_object_set(subreq.args, "addressbookId", abookid);
         }
         r = getContactGroups(&subreq);
         json_decref(subreq.args);
@@ -2480,13 +2480,13 @@ static int setContactGroups(struct jmap_req *req)
             json_decref(invalid);
 
             const char *addressbookId = "Default";
-            json_t *abookid = json_object_get(arg, "x-addressbookId");
+            json_t *abookid = json_object_get(arg, "addressbookId");
             if (abookid && json_string_value(abookid)) {
                 /* XXX - invalid arguments */
                 addressbookId = json_string_value(abookid);
             }
             char *mboxname = mboxname_abook(req->userid, addressbookId);
-            json_object_del(arg, "x-addressbookId");
+            json_object_del(arg, "addressbookId");
             addressbookId = NULL;
 
             /* we need to create and append a record */
@@ -2559,7 +2559,7 @@ static int setContactGroups(struct jmap_req *req)
                 }
             }
 
-            json_t *abookid = json_object_get(arg, "x-addressbookId");
+            json_t *abookid = json_object_get(arg, "addressbookId");
             if (abookid && json_string_value(abookid)) {
                 const char *mboxname =
                     mboxname_abook(req->userid, json_string_value(abookid));
@@ -2572,7 +2572,7 @@ static int setContactGroups(struct jmap_req *req)
                         goto done;
                     }
                 }
-                json_object_del(arg, "x-addressbookId");
+                json_object_del(arg, "addressbookId");
             }
 
             /* XXX - this could definitely be refactored from here and mailbox.c */
@@ -2881,7 +2881,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
 
-    json_object_set_new(obj, "x-addressbookId",
+    json_object_set_new(obj, "addressbookId",
                         json_string(strrchr(cdata->dav.mailbox, '.')+1));
 
     if (_wantprop(props, "isFlagged")) {
@@ -3319,7 +3319,7 @@ static int getContactUpdates(struct jmap_req *req)
     modseq_t oldmodseq = str2uint64(since);
 
     char *mboxname = NULL;
-    json_t *abookid = json_object_get(req->args, "x-addressbookId");
+    json_t *abookid = json_object_get(req->args, "addressbookId");
     if (abookid && json_string_value(abookid)) {
         /* XXX - invalid arguments */
         const char *addressbookId = json_string_value(abookid);
@@ -3378,7 +3378,7 @@ static int getContactUpdates(struct jmap_req *req)
         json_object_set(subreq.args, "ids", rock.changed);
         if (doprops) json_object_set(subreq.args, "properties", doprops);
         if (abookid) {
-            json_object_set(subreq.args, "x-addressbookId", abookid);
+            json_object_set(subreq.args, "addressbookId", abookid);
         }
         r = getContacts(&subreq);
         json_decref(subreq.args);
@@ -4444,13 +4444,13 @@ static int setContacts(struct jmap_req *req)
             struct entryattlist *annots = NULL;
 
             const char *addressbookId = "Default";
-            json_t *abookid = json_object_get(arg, "x-addressbookId");
+            json_t *abookid = json_object_get(arg, "addressbookId");
             if (abookid && json_string_value(abookid)) {
                 /* XXX - invalid arguments */
                 addressbookId = json_string_value(abookid);
             }
             char *mboxname = mboxname_abook(req->userid, addressbookId);
-            json_object_del(arg, "x-addressbookId");
+            json_object_del(arg, "addressbookId");
             addressbookId = NULL;
 
             struct vparse_card *card = vparse_new_card("VCARD");
@@ -4547,7 +4547,7 @@ static int setContacts(struct jmap_req *req)
                 }
             }
 
-            json_t *abookid = json_object_get(arg, "x-addressbookId");
+            json_t *abookid = json_object_get(arg, "addressbookId");
             if (abookid && json_string_value(abookid)) {
                 const char *mboxname =
                     mboxname_abook(req->userid, json_string_value(abookid));
@@ -4559,7 +4559,7 @@ static int setContacts(struct jmap_req *req)
                         goto done;
                     }
                 }
-                json_object_del(arg, "x-addressbookId");
+                json_object_del(arg, "addressbookId");
             }
 
             /* XXX - this could definitely be refactored from here and mailbox.c */
