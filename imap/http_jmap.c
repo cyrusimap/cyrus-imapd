@@ -1254,7 +1254,6 @@ static int _jmap_find_xrole_cb(const mbentry_t *mbentry, void *rock)
     struct _jmap_find_xrole_data *d = (struct _jmap_find_xrole_data *)rock;
     struct buf attrib = BUF_INITIALIZER;
 
-    /* XXX bad form to hard-code this here... */
     annotatemore_lookup(mbentry->name, IMAP_ANNOT_NS "x-role", d->userid, &attrib);
 
     if (attrib.len && !strcmp(buf_cstring(&attrib), d->xrole)) {
@@ -3297,7 +3296,6 @@ static int getContactUpdates(struct jmap_req *req)
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
 
-    /* XXX Might want to use jmap_readprop for all properties. */
     json_int_t max_records = 0;
     pe = jmap_readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &max_records);
     if (pe > 0) {
@@ -5516,7 +5514,6 @@ static int setCalendars(struct jmap_req *req)
                 json_array_append_new(invalid, json_string("name"));
             }
 
-            /* XXX - wait for CalConnect/Neil feedback on how to validate */
             jmap_readprop(arg, "color", 1,  invalid, "s", &color);
 
             pe = jmap_readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
@@ -5659,10 +5656,7 @@ static int setCalendars(struct jmap_req *req)
             if (pe > 0 && strnlen(name, 256) == 256) {
                 json_array_append_new(invalid, json_string("name"));
             }
-            pe = jmap_readprop(arg, "color", 0,  invalid, "s", &color);
-            if (pe > 0) {
-                /* XXX - wait for CalConnect/Neil feedback on how to validate */
-            }
+            jmap_readprop(arg, "color", 0,  invalid, "s", &color);
             pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
             if (pe > 0 && sortOrder < 0) {
                 json_array_append_new(invalid, json_string("sortOrder"));
@@ -6957,8 +6951,6 @@ static void jmap_participants_to_ical(icalcomponent *comp,
     json_t *att;
     hash_table cache;
 
-    /* XXX - Integrate iTIP, once all the semantics JMAP<->iTIP are agreed. */
-
     /* Purge existing ORGANIZER and ATTENDEEs only if instructed to do so. */
     if (organizer == json_null() && attendees == json_null()) {
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
@@ -7343,7 +7335,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             myrock.flags = JMAP_EXC;
             myrock.comp = comp;
             jmap_calendarevent_to_ical(excomp, exc, &myrock);
-            /* XXX - that's ugly. Need to make sure that the rocks timezone
+            /* That's ugly: Need to make sure that the rocks timezone
              * array still points to latest realloced memory block. */
             rock->tzs = myrock.tzs;
             rock->n_tzs = myrock.n_tzs;
@@ -9156,9 +9148,6 @@ static int calevent_filter_match(void *vf, void *rock)
     struct caldav_data *cdata = cfrock->cdata;
 
     /* Locate main VEVENT. */
-    /* XXX Might save comp and dtend, dtstart in the rock to avoid
-     * recalculating them. First wait for the decision if we want to
-     * optimize here or move filtering to the SQL layer. */
     icalcomponent *comp;
     for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
          comp;
@@ -9479,12 +9468,11 @@ done:
     return r;
 }
 
-/* XXX The following JMAP methods are not defined in the spec. */
+/* The following JMAP methods are not defined in the spec. */
 
 static int getCalendarPreferences(struct jmap_req *req)
 {
-    /* XXX Just a dummy implementation to make the JMAP web client happy while
-     * testing. */
+    /* Just a dummy implementation to make the JMAP web client happy. */
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("calendarPreferences"));
     json_array_append_new(item, json_pack("{}"));
@@ -9495,8 +9483,7 @@ static int getCalendarPreferences(struct jmap_req *req)
 
 static int getPersonalities(struct jmap_req *req)
 {
-    /* XXX Just a dummy implementation to make the JMAP web client happy while
-     * testing. */
+    /* Just a dummy implementation to make the JMAP web client happy. */
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("personalities"));
 
@@ -9518,8 +9505,7 @@ static int getPersonalities(struct jmap_req *req)
 
 static int getPreferences(struct jmap_req *req)
 {
-    /* XXX Just a dummy implementation to make the JMAP web client happy while
-     * testing. */
+    /* Just a dummy implementation to make the JMAP web client happy. */
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("preferences"));
     json_array_append_new(item, json_pack("{s:s}", "defaultPersonalityId", "1"));
