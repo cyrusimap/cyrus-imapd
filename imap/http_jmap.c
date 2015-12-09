@@ -1277,7 +1277,7 @@ static char *jmap_find_xrole(const char *xrole, const char *userid)
     return rock.mboxname;
 }
 
-static int _mbox_has_child_cb(const mbentry_t *mbentry, void *rock) {
+static int _mbox_has_child_cb(const mbentry_t *mbentry __attribute__ ((unused)), void *rock) {
     int *has = (int *) rock;
     *has = 1;
     return CYRUSDB_DONE;
