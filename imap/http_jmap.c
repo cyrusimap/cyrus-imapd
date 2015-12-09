@@ -5128,7 +5128,7 @@ static int jmap_update_calendar(const char *mboxname,
     }
     /* name */
     if (!r && name) {
-        buf_printf(&val, "%s", name);
+        buf_setcstr(&val, name);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotate_state_writemask(astate, displayname_annot, httpd_userid, &val);
@@ -5140,7 +5140,7 @@ static int jmap_update_calendar(const char *mboxname,
     }
     /* color */
     if (!r && color) {
-        buf_printf(&val, "%s", color);
+        buf_setcstr(&val, color);
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotate_state_writemask(astate, color_annot, httpd_userid, &val);
@@ -5164,7 +5164,7 @@ static int jmap_update_calendar(const char *mboxname,
     }
     /* isVisible */
     if (!r && isVisible >= 0) {
-        buf_printf(&val, "%s", isVisible ? "true" : "false");
+        buf_setcstr(&val, isVisible ? "true" : "false");
         static const char *sortOrder_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
         r = annotate_state_writemask(astate, sortOrder_annot, httpd_userid, &val);
