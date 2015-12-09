@@ -705,8 +705,6 @@ struct getMailboxes_rock {
     hash_table *roles;           /* Roles that were already reported for another
                                     mailbox during this getMailboxes request. */
     const struct jmap_req *req;  /* The context of this JMAP request. */
-
-    const char *uniqueid; /* XXX: until mboxlist allows lookup by uniqueid */
 };
 
 /* Determine the JMAP role of a Cyrus mailbox named mboxname based on the
@@ -973,12 +971,6 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
         mailbox = (struct mailbox *) inbox;
     }
 
-    /* XXX Skip any mailboxes that do not match uniqueid. Only until the
-     * mboxlist API allows lookup by uniqueid. */
-    if (rock->uniqueid && strcmp(rock->uniqueid, mailbox->uniqueid)) {
-        goto done;
-    }
-
     /* Determine parent. */
     r = mboxlist_findparent(mailbox->name, &mbparent);
     if (r && r != IMAP_MAILBOX_NONEXISTENT) {
@@ -1023,7 +1015,6 @@ static int getMailboxes(struct jmap_req *req)
     rock.list = NULL;
     rock.inbox = req->inbox;
     rock.props = NULL;
-    rock.uniqueid = NULL;
     rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
     rock.req = req;
     construct_hash_table(rock.roles, 8, 0);
@@ -1068,7 +1059,6 @@ static int getMailboxes(struct jmap_req *req)
         size_t i;
         json_t *val, *notFound = json_pack("[]");
         json_array_foreach(want, i, val) {
-            size_t rows = json_array_size(rock.list);
             const char *id = json_string_value(val);
             if (id == NULL) {
                 json_t *err = json_pack("{s:s, s:[s]}",
@@ -1078,14 +1068,21 @@ static int getMailboxes(struct jmap_req *req)
                 json_decref(notFound);
                 goto done;
             }
-            /* getMailboxes_cb filters mailboxes without lookup permission. */
-            rock.uniqueid = id;
-            int r = mboxlist_usermboxtree(req->userid, &getMailboxes_cb, &rock, 0 /* flags */);
-            if (r) {
-                json_decref(notFound);
-                goto done;
-            }
-            if (rows == json_array_size(rock.list)) {
+            /* Lookup mailbox by uniqueid. */
+            char *mboxname = mboxlist_find_uniqueid(id, req->userid);
+            if (mboxname) {
+                struct mboxlist_entry *mbentry = NULL;
+                int r = mboxlist_lookup(mboxname, &mbentry, NULL);
+                if (!r && mbentry) {
+                    getMailboxes_cb(mbentry, &rock);
+                    mboxlist_entry_free(&mbentry);
+                } else {
+                    syslog(LOG_ERR, "mboxlist_entry_free(%s): %s", mboxname,
+                            error_message(r));
+                    json_array_append_new(notFound, json_string(id));
+                }
+                free(mboxname);
+            } else {
                 json_array_append_new(notFound, json_string(id));
             }
         }
@@ -1110,33 +1107,6 @@ done:
         free(rock.roles);
     }
     return 0;
-}
-
-struct _mboxname_uniqueid_rock {
-    const char *uniqueid;
-    char *mboxname;
-};
-
-static int _mboxname_uniqueid_cb(const mbentry_t *mbentry, void *vrock) {
-    struct mailbox *mailbox = NULL;
-    struct _mboxname_uniqueid_rock *rock = (struct _mboxname_uniqueid_rock *) vrock;
-    int r = 0;
-
-    /* Open mailbox to get uniqueid. */
-    if ((r = mailbox_open_irl(mbentry->name, &mailbox))) {
-        syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                mbentry->name, error_message(r));
-        goto done;
-    }
-    mailbox_unlock_index(mailbox, NULL);
-
-    if (!rock->mboxname && !strcmp(rock->uniqueid, mailbox->uniqueid)) {
-        rock->mboxname = xstrdup(mbentry->name);
-    }
-
-done:
-    if (mailbox) mailbox_close(&mailbox);
-    return r;
 }
 
 struct jmap_mailbox_newname_rock {
@@ -1344,18 +1314,8 @@ static int jmap_write_mailbox(char **uid,
                 }
                 /* Check if a mailbox with this id exists. */
                 if (!iserr) {
-                    /* XXX Only until mboxlist supports lookup by uniqued. */
-                    struct _mboxname_uniqueid_rock rock;
-                    rock.uniqueid = parentId;
-                    rock.mboxname = NULL;
-                    r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                            &rock, MBOXTREE_SKIP_ROOT);
-                    if (r) goto done;
-                    if (rock.mboxname) {
-                        newparentname = rock.mboxname;
-                    } else {
-                        iserr = 1;
-                    }
+                    newparentname = mboxlist_find_uniqueid(parentId, req->userid);
+                    if (!newparentname) iserr = 1;
                 }
                 /* Check if the mailbox accepts children. */
                 if (!iserr) {
@@ -1480,18 +1440,11 @@ static int jmap_write_mailbox(char **uid,
     if (!is_create) {
         /* Dertermine name of the existing mailbox with uniqueid uid. */
         if (strcmp(*uid, req->inbox->uniqueid)) {
-            /* XXX Only until mboxlist supports lookup by uniqued. */
-            struct _mboxname_uniqueid_rock rock;
-            rock.uniqueid = *uid;
-            rock.mboxname = NULL;
-            r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                    &rock, MBOXTREE_SKIP_ROOT);
-            if (r) goto done;
-            if (!rock.mboxname) {
+            mboxname = mboxlist_find_uniqueid(*uid, req->userid);
+            if (!mboxname) {
                 *err = json_pack("{s:s}", "type", "notFound");
                 goto done;
             }
-            mboxname = rock.mboxname;
 
             /* Determine parent name. */
             struct mboxlist_entry *mbparent = NULL;
@@ -1510,16 +1463,8 @@ static int jmap_write_mailbox(char **uid,
     } else {
         /* Determine name for the soon-to-be created mailbox. */
         if (parentId && strcmp(parentId, req->inbox->uniqueid)) {
-            /* XXX Only do this until mboxlist allows lookup by uniqeid */
-            struct _mboxname_uniqueid_rock rock;
-            rock.uniqueid = parentId;
-            rock.mboxname = NULL;
-            r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                    &rock, MBOXTREE_SKIP_ROOT);
-            if (r) goto done;
-            if (rock.mboxname) {
-                parentname = rock.mboxname;
-            } else {
+            parentname = mboxlist_find_uniqueid(parentId, req->userid);
+            if (!parentname) {
                 json_array_append_new(invalid, json_string("parentId"));
             }
         } else {
@@ -1563,17 +1508,9 @@ static int jmap_write_mailbox(char **uid,
         if (parentId) {
             char *newparentname;
             if (strcmp(parentId, req->inbox->uniqueid)) {
-                /* Lookup new parent name by parentId. */
-                /* XXX Only until mboxlist supports lookup by uniqued. */
-                struct _mboxname_uniqueid_rock rock;
-                rock.uniqueid = parentId;
-                rock.mboxname = NULL;
-                r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                        &rock, MBOXTREE_SKIP_ROOT);
-                if (r) goto done;
+                newparentname = mboxlist_find_uniqueid(parentId, req->userid);
                 /* We already validated that parentId exists. */
-                assert(rock.mboxname);
-                newparentname = rock.mboxname;
+                assert(newparentname);
             } else {
                 newparentname = xstrdup(req->inbox->name);
             }
@@ -1848,15 +1785,8 @@ static int setMailboxes(struct jmap_req *req)
             }
 
             /* Lookup mailbox by id. */
-            struct _mboxname_uniqueid_rock rock;
-            rock.uniqueid = uid;
-            rock.mboxname = NULL;
-            r = mboxlist_usermboxtree(req->userid, &_mboxname_uniqueid_cb,
-                    &rock, MBOXTREE_SKIP_ROOT);
-            if (r) goto done;
-            if (rock.mboxname) {
-                mboxname = rock.mboxname;
-            } else {
+            mboxname = mboxlist_find_uniqueid(uid, req->userid);
+            if (!mboxname) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;

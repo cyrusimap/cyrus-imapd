@@ -121,6 +121,7 @@ int mboxlist_lookup_allow_all(const char *name,
                                    struct txn **tid);
 
 char *mboxlist_find_specialuse(const char *use, const char *userid);
+char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid);
 
 int mboxlist_parse_entry(mbentry_t **mbentryptr,
                          const char *name, size_t namelen,
