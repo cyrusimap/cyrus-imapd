@@ -4796,10 +4796,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
 /* Return a non-zero value if uid maps to a special-purpose calendar mailbox,
  * that may not be read or modified by the user. */
 static int jmap_calendar_ishidden(const char *uid) {
-    /* XXX - brong wrote to "check the specialuse magic on these instead" */
     if (!strcmp(uid, "#calendars")) return 1;
-    /* XXX - could also check the schedule-inbox and outbox annotations,
-     * instead. But as long as these names  are hardcoded in http_dav... */
     /* SCHED_INBOX  and SCHED_OUTBOX end in "/", so trim them */
     if (!strncmp(uid, SCHED_INBOX, strlen(SCHED_INBOX)-1)) return 1;
     if (!strncmp(uid, SCHED_OUTBOX, strlen(SCHED_OUTBOX)-1)) return 1;
@@ -4815,16 +4812,27 @@ struct calendars_rock {
     int rows;
 };
 
-/* Set is_cal, if the userid's calendar mailbox named mboxname is able to store
- * VEVENTs. Return non-zero on error. */
-/* XXX Also make sure to check for this in getCalendarUpdates. Might want to
- * check this also in the other calendar and calendar event methods. */
+/* Determine, if mboxname is a Cyrus calendar mailbox AND is able to
+ * store VEVENTs. Store the result in is_cal.
+ *
+ * By default, any Cyrus calendar mailbox is able to store VEVENTs,
+ * unless this is explicitly ruled out by setting the
+ * {CALDAV}:supported-calendar-component-set property on the mailbox.
+ *
+ * userid must be allowed to lookup annotations on mboxname.
+ *
+ * Return non-zero on error. */
 static int jmap_mboxname_is_calendar(const char *mboxname, const char *userid, int *is_cal)
 {
     struct buf attrib = BUF_INITIALIZER;
     static const char *calcompset_annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     unsigned long types = -1; /* ALL component types by default. */
+
+    if (!mboxname_iscalendarmailbox(mboxname, 0)) {
+        *is_cal = 0;
+        return 0;
+    }
 
     int r = annotatemore_lookupmask(mboxname, calcompset_annot, userid, &attrib);
     if (r) goto done;
@@ -5339,6 +5347,11 @@ static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock) {
         uid = mbentry->name;
     }
     if (jmap_calendar_ishidden(uid)) {
+        return 0;
+    }
+    int iscal;
+    jmap_mboxname_is_calendar(mbentry->name, httpd_userid, &iscal);
+    if (!iscal) {
         return 0;
     }
 
