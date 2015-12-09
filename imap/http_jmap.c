@@ -3522,7 +3522,7 @@ static int contact_filter_match(void *vf, void *rock)
     if (f->inContactGroup) {
         /* XXX Calling carddav_db for every contact isn't really efficient. If
          * this turns out to be a performance issue, the carddav_db API might
-         * support contacts by group ids. */
+         * support lookup contacts by group ids. */
         strarray_t *gids = carddav_getuid_groups(db, cdata->vcard_uid);
         if (!gids) {
             syslog(LOG_INFO, "carddav_getuid_groups(%s) returned NULL group array",
