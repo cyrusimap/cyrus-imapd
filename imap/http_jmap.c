@@ -912,13 +912,17 @@ static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
         if (role) free(role);
     }
     if (_wantprop(props, "sortOrder")) {
-        int sortOrder;
-        if (mbox == inbox) {
-            sortOrder = 1;
-        } else if (specialuse.len) {
-            sortOrder = 2;
-        } else {
-            sortOrder = 3;
+        struct buf attrib = BUF_INITIALIZER;
+        int sortOrder = 0;
+        /* Ignore lookup errors here. */
+        annotatemore_lookup(mbox->name, IMAP_ANNOT_NS "sortOrder", httpd_userid, &attrib);
+        if (attrib.len) {
+            uint64_t t = str2uint64(buf_cstring(&attrib));
+            if (t < INT_MAX) {
+                sortOrder = (int) t;
+            } else {
+                syslog(LOG_ERR, "%s: bogus sortOrder annotation value", mbox->name);
+            }
         }
         json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
     }
@@ -1299,7 +1303,7 @@ static int jmap_write_mailbox(char **uid,
     const char *parentId = NULL, *id = NULL;
     char *name = NULL;
     const char *role = NULL, *use = NULL;
-    int sortOrder;
+    int sortOrder = 0;
     char *mboxname = NULL, *parentname = NULL;
     int r = 0, pe, is_create = (*uid == NULL);
 
@@ -1429,8 +1433,9 @@ static int jmap_write_mailbox(char **uid,
 
     /* sortOder */
     if (jmap_readprop(arg, "sortOrder", 0, invalid, "i", &sortOrder) > 0) {
-        /* XXX In getMailboxes, we decide the sortOrder by the special
-         * use of the mailbox. Just ignore this property for now. */
+        if (sortOrder < 0 || sortOrder >= INT_MAX) {
+            json_array_append_new(invalid, json_string("sortOrder"));
+        }
     }
 
     /* mayXXX. These are immutable, but we ignore them during update. */
@@ -1627,14 +1632,14 @@ static int jmap_write_mailbox(char **uid,
     /* Set displayname annotation on mailbox. */
     struct buf val = BUF_INITIALIZER;
     buf_setcstr(&val, name);
-    static const char *annot = IMAP_ANNOT_NS "displayname";
-    r = annotatemore_write(mboxname, annot, httpd_userid, &val);
+    static const char *displayname_annot = IMAP_ANNOT_NS "displayname";
+    r = annotatemore_write(mboxname, displayname_annot, httpd_userid, &val);
     if (r) {
         syslog(LOG_ERR, "failed to write annotation %s: %s",
-                annot, error_message(r));
+                displayname_annot, error_message(r));
         goto done;
     }
-    buf_free(&val);
+    buf_reset(&val);
 
     /* Set specialuse or x-role. specialuse takes precendence. */
     if (use) {
@@ -1660,6 +1665,17 @@ static int jmap_write_mailbox(char **uid,
         }
         buf_free(&val);
     }
+
+    /* Set sortOrder annotation on mailbox. */
+    buf_printf(&val, "%d", sortOrder);
+    static const char *sortorder_annot = IMAP_ANNOT_NS "sortOrder";
+    r = annotatemore_write(mboxname, sortorder_annot, httpd_userid, &val);
+    if (r) {
+        syslog(LOG_ERR, "failed to write annotation %s: %s",
+                sortorder_annot, error_message(r));
+        goto done;
+    }
+    buf_free(&val);
 
     if (!*uid) {
         /* Return uniqueid. Must reopen mailbox to determine uniqueid. */
