@@ -776,7 +776,7 @@ static char *jmap_mailbox_name(const char *mboxname) {
     char *name;
     char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
 
-    int r = annotatemore_lookup(mboxname, IMAP_ANNOT_NS "x-displayname",
+    int r = annotatemore_lookup(mboxname, IMAP_ANNOT_NS "displayname",
             httpd_userid, &attrib);
     if (!r && attrib.len) {
         /* We got a mailbox with a displayname annotation. Use it. */
@@ -1626,10 +1626,10 @@ static int jmap_write_mailbox(char **uid,
         }
     }
 
-    /* Set x-displayname annotation on mailbox. */
+    /* Set displayname annotation on mailbox. */
     struct buf val = BUF_INITIALIZER;
     buf_setcstr(&val, name);
-    static const char *annot = IMAP_ANNOT_NS "x-displayname";
+    static const char *annot = IMAP_ANNOT_NS "displayname";
     r = annotatemore_write(mboxname, annot, httpd_userid, &val);
     if (r) {
         syslog(LOG_ERR, "failed to write annotation %s: %s",

@@ -3210,8 +3210,8 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
     int r = 0;
 
     if (rrock->newmailbox &&
-            /* XXX hack for JMAP support */
-            strcmp(entry, IMAP_ANNOT_NS "x-displayname")) {
+            /* displayname stores the UTF-8 encoded JMAP name of a mailbox */
+            strcmp(entry, IMAP_ANNOT_NS "displayname")) {
         /* create newly renamed entry */
         const char *newuserid = userid;
 
