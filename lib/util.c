@@ -866,7 +866,7 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
     }
     else {
         buf->alloc = roundup(newlen);
-        s = xzmalloc(buf->alloc);
+        s = xmalloc(buf->alloc);
 
         /* if no allocation, but data exists, it means copy on write.
          * grab a copy of what's there now */
