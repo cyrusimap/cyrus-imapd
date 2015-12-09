@@ -79,8 +79,7 @@ struct namespace_t namespace_dblookup = {
         { NULL,                 NULL },                 /* REPORT       */
         { NULL,                 NULL },                 /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 static int get_email(struct transaction_t *txn __attribute__((unused)),

@@ -739,6 +739,7 @@ include_HEADERS = \
 	lib/chartable.h \
 	lib/command.h \
 	lib/crc32.h \
+	lib/crc32c.h \
 	lib/cyr_lock.h \
 	lib/cyrusdb.h \
 	lib/exitcodes.h \
@@ -1339,7 +1340,7 @@ lib_libcyrus_la_LIBADD = libcrc32.a $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 noinst_LIBRARIES = libcrc32.a
-libcrc32_a_SOURCES = lib/crc32.c
+libcrc32_a_SOURCES = lib/crc32.c lib/crc32c.c
 libcrc32_a_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib_libcyrus_min_la_SOURCES = \

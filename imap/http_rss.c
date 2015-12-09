@@ -131,8 +131,7 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          &rss_parse_path },      /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 

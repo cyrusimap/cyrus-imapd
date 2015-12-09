@@ -141,8 +141,7 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }, /* REPORT       */
         { &meth_trace,          NULL }, /* TRACE        */
         { NULL,                 NULL }  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 struct namespace_t namespace_domainkey = {

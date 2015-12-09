@@ -497,6 +497,7 @@ struct meth_params {
     delete_proc_t delete;               /* special DELETE handling (optional) */
     get_proc_t get;                     /* special GET handling (optional) */
     struct mkcol_params mkcol;          /* params for creating new collection */
+    struct patch_doc_t *patch_docs;     /* array of patch docs & funcs (opt) */
     post_proc_t post;                   /* special POST handling (optional) */
     struct put_params put;              /* params for putting a resource */
     struct propfind_params propfind;    /* params for finding properties */
@@ -559,6 +560,7 @@ int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);
 int meth_proppatch(struct transaction_t *txn, void *params);
+int meth_patch(struct transaction_t *txn, void *params);
 int meth_post(struct transaction_t *txn, void *params);
 int meth_put(struct transaction_t *txn, void *params);
 int meth_report(struct transaction_t *txn, void *params);

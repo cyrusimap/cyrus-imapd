@@ -158,8 +158,7 @@ struct namespace_t namespace_tzdist = {
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL }                  /* UNLOCK       */
-    },
-    { NULL }
+    }
 };
 
 
