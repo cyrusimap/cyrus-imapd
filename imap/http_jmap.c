@@ -876,7 +876,6 @@ static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
         json_object_set_new(obj, "mayRemoveItems", json_boolean(rights & ACL_DELETEMSG));
     }
     if (_wantprop(props, "mayCreateChild")) {
-        /* XXX What about \Noinferiors annotation */
         json_object_set_new(obj, "mayCreateChild", json_boolean(rights & ACL_CREATE));
     }
 
