@@ -70,6 +70,7 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
+#include "parseaddr.h"
 #include "seen.h"
 #include "statuscache.h"
 #include "stristr.h"
@@ -107,6 +108,8 @@ static int jmap_post(struct transaction_t *txn, void *params);
 /* JMAP methods. */
 static int getMailboxes(struct jmap_req *req);
 static int setMailboxes(struct jmap_req *req);
+static int getMessageList(struct jmap_req *req);
+static int getMessages(struct jmap_req *req);
 static int getContactGroups(struct jmap_req *req);
 static int getContactGroupUpdates(struct jmap_req *req);
 static int setContactGroups(struct jmap_req *req);
@@ -147,6 +150,8 @@ static const struct message_t {
 } messages[] = {
     { "getMailboxes",           &getMailboxes },
     { "setMailboxes",           &setMailboxes },
+    { "getMessageList",         &getMessageList },
+    { "getMessages",            &getMessages },
     { "getContactGroups",       &getContactGroups },
     { "getContactGroupUpdates", &getContactGroupUpdates },
     { "setContactGroups",       &setContactGroups },
@@ -1874,6 +1879,411 @@ done:
     if (parentname) free(parentname);
 
     if (set) json_decref(set);
+    return r;
+}
+
+struct getmessagelist_data {
+    json_t *messageIds;
+};
+
+static int getmessagelist(struct mailbox *mbox, struct getmessagelist_data *d) {
+    struct mailbox_iter *mbiter;
+    const struct index_record *record;
+    int r = 0;
+
+    mbiter = mailbox_iter_init(mbox, 0, ITER_SKIP_UNLINKED);
+    if (!mbiter) {
+        syslog(LOG_ERR, "mailbox_iter_init(%s) returned NULL", mbox->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    while ((record = mailbox_iter_step(mbiter))) {
+        if (record->system_flags & FLAG_EXPUNGED) {
+            continue;
+        }
+        const char *id = message_guid_encode(&record->guid);
+        if (!id) {
+            /* huh? */
+            continue;
+        }
+        json_array_append_new(d->messageIds, json_string(id));
+    }
+    mailbox_iter_done(&mbiter);
+done:
+    return r;
+}
+
+int getmessagelist_cb(const mbentry_t *mbentry, void *rock) {
+    struct mailbox *mbox = NULL;
+    struct getmessagelist_data *d = (struct getmessagelist_data*) rock;
+    int r;
+
+    if ((r = mailbox_open_irl(mbentry->name, &mbox))) {
+        syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                mbentry->name, error_message(r));
+        goto done;
+    }
+    r = getmessagelist(mbox, d);
+    mailbox_close(&mbox);
+
+done:
+    return r;
+}
+
+static int getMessageList(struct jmap_req *req)
+{
+    int r;
+    struct getmessagelist_data rock;
+    rock.messageIds = json_pack("[]");
+
+    /* XXX Parse and validate properties. */
+
+    /* Inspect messages of INBOX. */
+    r = getmessagelist((struct mailbox*) req->inbox, &rock);
+    if (r && r != CYRUSDB_DONE) goto done;
+    /* Inspect any other mailboxes. */
+    r = mboxlist_usermboxtree(req->userid, getmessagelist_cb, &rock, MBOXTREE_SKIP_ROOT);
+    if (r && r != CYRUSDB_DONE) goto done;
+    r = 0;
+
+    /* Prepare response. */
+    json_t *msgList = json_pack("{}");
+    json_object_set_new(msgList, "accountId", json_string(req->userid));
+    json_object_set_new(msgList, "state", jmap_getstate(0 /* MBTYPE */, req));
+    json_object_set(msgList, "messageIds", rock.messageIds);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("messageList"));
+    json_array_append_new(item, msgList);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    json_decref(rock.messageIds);
+    return r;
+}
+
+static json_t *jmap_emailers_from_addresses(const char *addrs)
+{
+    json_t *emailers = json_pack("[]");
+    struct address *a = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    parseaddr_list(addrs, &a);
+    while (a) {
+        json_t *e = json_pack("{}");
+        const char *mailbox = a->mailbox;
+        const char *domain = a->domain;
+
+        if (!strcmp(domain, "unspecified-domain")) {
+            /* XXX the header of parseaddr doesn't document this. OK to use? */
+            domain = "";
+        }
+        buf_printf(&buf, "%s@%s", mailbox, domain);
+
+        json_object_set_new(e, "name", json_string(a->name ? a->name : ""));
+        json_object_set_new(e, "email", json_string(buf_cstring(&buf)));
+
+        json_array_append_new(emailers, e);
+        buf_reset(&buf);
+        a = a->next;
+    }
+
+    if (!json_array_size(emailers)) {
+        json_decref(emailers);
+        emailers = NULL;
+    }
+
+    buf_free(&buf);
+    return emailers;
+
+}
+
+static json_t *jmap_message_from_record(const char *id,
+                                        struct mailbox *mbox,
+                                        const struct index_record *record,
+                                        hash_table *props)
+{
+    message_t *m;
+    struct buf buf = BUF_INITIALIZER;
+    json_t *msg;
+    uint32_t flags;
+    
+    m = message_new_from_record(mbox, record);
+    if (!m) return NULL;
+    message_get_userflags(m, &flags);
+
+    msg = json_pack("{}");
+    json_object_set_new(msg, "id", json_string(id));
+
+    /* XXX blobId */
+    /* XXX threadId */
+    /* mailboxIds */
+    if (_wantprop(props, "mailboxIds")) {
+        json_object_set_new(msg, "mailboxIds", json_pack("[s]", mbox->uniqueid));
+    }
+    /* XXX inReplyToMessageId */
+    /* isUnread */
+    if (_wantprop(props, "isUnread")) {
+        json_object_set_new(msg, "isUnread", json_boolean(!(flags & FLAG_SEEN)));
+    }
+    /* isFlagged */
+    if (_wantprop(props, "isFlagged")) {
+        json_object_set_new(msg, "isFlagged", json_boolean(flags & FLAG_FLAGGED));
+    }
+    /* isAnswered */
+    if (_wantprop(props, "isAnswered")) {
+        json_object_set_new(msg, "isAnswered", json_boolean(flags & FLAG_ANSWERED));
+    }
+    /* isDraft */
+    if (_wantprop(props, "isDraft")) {
+        json_object_set_new(msg, "isDraft", json_boolean(flags & FLAG_DRAFT));
+    }
+    /* XXX hasAttachment */
+    /* XXX headers */
+    /* from */
+    if (_wantprop(props, "from")) {
+        message_get_from(m, &buf);
+        json_t *from = jmap_emailers_from_addresses(buf_cstring(&buf));
+        json_object_set_new(msg, "from", from ? json_array_get(from, 0) : json_null());
+        buf_reset(&buf);
+    }
+    /* to */
+    if (_wantprop(props, "to")) {
+        message_get_to(m, &buf);
+        json_t *to = jmap_emailers_from_addresses(buf_cstring(&buf));
+        json_object_set_new(msg, "to", to ? to : json_null());
+        buf_reset(&buf);
+    }
+    /* cc */
+    if (_wantprop(props, "cc")) {
+        message_get_cc(m, &buf);
+        json_t *cc = jmap_emailers_from_addresses(buf_cstring(&buf));
+        json_object_set_new(msg, "cc", cc ? cc : json_null());
+        buf_reset(&buf);
+    }
+    /*  bcc */
+    if (_wantprop(props, "bcc")) {
+        message_get_bcc(m, &buf);
+        json_t *bcc = jmap_emailers_from_addresses(buf_cstring(&buf));
+        json_object_set_new(msg, "bcc", bcc ? bcc : json_null());
+        buf_reset(&buf);
+    }
+    /* replyTo */
+    if (_wantprop(props, "replyTo")) {
+        /* XXX compiler error: undefined reference to `message_get_inreplyto' 
+        message_get_inreplyto(m, &buf);
+        json_t *replyTo = jmap_emailers_from_addresses(buf_cstring(&buf));
+        json_object_set_new(msg, "replyTo", replyTo ? json_array_get(replyTo, 0) : json_null());
+        buf_reset(&buf);
+        */
+    }
+    /* subject */
+    if (_wantprop(props, "subject")) {
+        message_get_subject(m, &buf);
+        json_object_set_new(msg, "subject", json_string(buf.len ? buf_cstring(&buf) : ""));
+        buf_reset(&buf);
+    }
+    /* date */
+    if (_wantprop(props, "date")) {
+        char datestr[RFC3339_DATETIME_MAX];
+        time_t t = 0;
+        message_get_sentdate(m, &t);
+        time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+        json_object_set_new(msg, "date", json_string(datestr));
+    }
+    /* size */
+    if (_wantprop(props, "size")) {
+        uint32_t size = 0;
+        message_get_size(m, &size);
+        json_object_set_new(msg, "size", json_integer(size));
+    }
+    /* XXX preview */
+    /* XXX textBody */
+    /* XXX htmlBody */
+    /* XXX attachments */
+    /* XXX attachedMessages */
+
+    return msg;
+}
+
+struct getmessages_data {
+    hash_table *want;
+    hash_table *found;
+    hash_table *props;
+
+    json_t *list;
+    json_t *notFound;
+};
+
+static int getmessages(struct mailbox *mbox, struct getmessages_data *d)
+{
+    struct mailbox_iter *mbiter;
+    const struct index_record *record;
+    int r = 0;
+
+    mbiter = mailbox_iter_init(mbox, 0, ITER_SKIP_UNLINKED);
+    if (!mbiter) {
+        syslog(LOG_ERR, "mailbox_iter_init(%s) returned NULL", mbox->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    while ((record = mailbox_iter_step(mbiter))) {
+        const char *id;
+        /* Ignore expunged messages */
+        if (record->system_flags & FLAG_EXPUNGED) {
+            continue;
+        }
+        id = message_guid_encode(&record->guid);
+        if (!id) {
+            continue;
+        }
+        /* Are we even interested in that message? */
+        if (!hash_lookup(id, d->want)) {
+            continue;
+        }
+        /* Check if we've seen this message already in another mailbox. */
+        json_t *msg = hash_lookup(id, d->found);
+        if (!msg) {
+            /* First time we see it. Convert and store it. */
+            msg = jmap_message_from_record(id, mbox, record, d->props);
+            if (msg) hash_insert(id, msg, d->found);
+        } else if (_wantprop(d->props, "mailboxIds")) {
+            /* We've already seen it. Just add this mailboxes unique id */
+            json_t *mailboxIds = json_object_get(msg, "mailboxIds");
+            json_array_append_new(mailboxIds, json_string(mbox->uniqueid));
+        }
+    }
+    mailbox_iter_done(&mbiter);
+done:
+    return r;
+}
+
+int getmessages_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct mailbox *mbox = NULL;
+    struct getmessages_data *d = (struct getmessages_data*) rock;
+    int r;
+
+    if ((r = mailbox_open_irl(mbentry->name, &mbox))) {
+        syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                mbentry->name, error_message(r));
+        goto done;
+    }
+    r = getmessages(mbox, d);
+    mailbox_close(&mbox);
+
+done:
+    return r;
+}
+
+static void getmessages_report(const char *id,
+                               void *data __attribute__((unused)),
+                               void *rock)
+{
+    struct getmessages_data *d = (struct getmessages_data *) rock;
+    json_t *msg = hash_lookup(id, d->found);
+    if (msg) {
+        /* Bump refcount. */
+        json_array_append(d->list, msg);
+    } else {
+        json_array_append_new(d->notFound, json_string(id));
+    }
+}
+
+static int getMessages(struct jmap_req *req)
+{
+    int r = 0;
+    struct getmessages_data rock;
+    memset(&rock, 0, sizeof(struct getmessages_data));
+    hash_table want = HASH_TABLE_INITIALIZER;
+    hash_table found = HASH_TABLE_INITIALIZER;
+    hash_table props = HASH_TABLE_INITIALIZER;
+    rock.list = json_pack("[]");
+    rock.notFound = json_pack("[]");
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+
+    /* ids */
+    json_t *ids = json_object_get(req->args, "ids");
+    if (ids && json_array_size(ids)) {
+        size_t i;
+        json_t *val;
+        construct_hash_table(&want, json_array_size(ids), 0);
+        construct_hash_table(&found, json_array_size(ids), 0);
+        json_array_foreach(ids, i, val) {
+            if (json_typeof(val) != JSON_STRING) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "ids[%llu]", (unsigned long long) i);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+                continue;
+            }
+            hash_insert(json_string_value(val), (void*)1, &want);
+        }
+    } else {
+        json_array_append_new(invalid, json_string("ids"));
+    }
+
+    /* properties */
+    json_t *properties = json_object_get(req->args, "properties");
+    if (properties && json_array_size(properties)) {
+        construct_hash_table(&props, json_array_size(properties), 0);
+        int i;
+        int size = json_array_size(properties);
+        for (i = 0; i < size; i++) {
+            const char *p = json_string_value(json_array_get(properties, i));
+            if (p == NULL) continue;
+            hash_insert(p, (void *)1, &props);
+        }
+    }
+
+    /* Bail out for any property errors. */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* Inspect messages of INBOX. */
+    rock.want = &want;
+    rock.found = &found;
+    if (hash_numrecords(&props)) {
+        rock.props = &props;
+    }
+    r = getmessages((struct mailbox*) req->inbox, &rock);
+    if (r && r != CYRUSDB_DONE) goto done;
+    /* Inspect any other mailboxes. */
+    r = mboxlist_usermboxtree(req->userid, getmessages_cb, &rock, MBOXTREE_SKIP_ROOT);
+    if (r && r != CYRUSDB_DONE) goto done;
+    r = 0;
+
+    /* Report all requested message ids */
+    hash_enumerate(&want, getmessages_report, &rock);
+
+    json_t *messages = json_pack("{}");
+    json_object_set_new(messages, "state", jmap_getstate(0 /*MBYTPE*/, req));
+    json_object_set_new(messages, "accountId", json_string(req->userid));
+    json_object_set(messages, "list", rock.list);
+    json_object_set(messages, "notFound", json_array_size(rock.notFound) ?
+            rock.notFound : json_null());
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("messages"));
+    json_array_append_new(item, messages);
+    json_array_append_new(item, json_string(req->tag));
+
+    json_array_append_new(req->response, item);
+
+done:
+    free_hash_table(&props, NULL);
+    free_hash_table(&want, NULL);
+    free_hash_table(&found, NULL);
+    json_decref(rock.list);
+    json_decref(rock.notFound);
     return r;
 }
 
