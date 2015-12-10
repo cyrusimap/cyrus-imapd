@@ -548,7 +548,7 @@ static int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req) {
         if (!s) {
             return -1;
         }
-        modseq_t clientState = str2uint64(s);
+        modseq_t clientState = atomodseq_t(s);
         switch (mbtype) {
          case MBTYPE_CALENDAR:
              return clientState != req->counters.caldavmodseq;
@@ -579,7 +579,7 @@ static json_t* jmap_getstate(int mbtype, struct jmap_req *req) {
             modseq = req->counters.highestmodseq;
     }
 
-    buf_printf(&buf, "%llu", modseq);
+    buf_printf(&buf, MODSEQ_FMT, modseq);
     state = json_string(buf_cstring(&buf));
     buf_free(&buf);
 
@@ -2200,7 +2200,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     const char *since = NULL;
     pe = jmap_readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
     if (pe > 0) {
-        oldmodseq = str2uint64(since);
+        oldmodseq = atomodseq_t(since);
         if (!oldmodseq) {
             json_array_append_new(invalid, json_string("sinceState"));
         }
@@ -2252,7 +2252,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     }
 
     json_t *contactGroupUpdates = json_pack("{}");
-    buf_printf(&buf, "%llu", newstate);
+    buf_printf(&buf, MODSEQ_FMT, newstate);
     json_object_set_new(contactGroupUpdates, "newState", json_string(buf_cstring(&buf)));
     buf_reset(&buf);
 
@@ -3260,7 +3260,7 @@ static int getContactUpdates(struct jmap_req *req)
 
     const char *since = _json_object_get_string(req->args, "sinceState");
     if (!since) goto done;
-    modseq_t oldmodseq = str2uint64(since);
+    modseq_t oldmodseq = atomodseq_t(since);
 
     char *mboxname = NULL;
     json_t *abookid = json_object_get(req->args, "addressbookId");
@@ -3298,7 +3298,7 @@ static int getContactUpdates(struct jmap_req *req)
     }
 
     json_t *contactUpdates = json_pack("{}");
-    buf_printf(&buf, "%llu", newstate);
+    buf_printf(&buf, MODSEQ_FMT, newstate);
     json_object_set_new(contactUpdates, "newState", json_string(buf_cstring(&buf)));
     buf_reset(&buf);
     json_object_set_new(contactUpdates, "accountId", json_string(req->userid));
@@ -5356,7 +5356,7 @@ static int getCalendarUpdates(struct jmap_req *req)
     invalid = json_pack("[]");
     pe = jmap_readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
     if (pe > 0) {
-        oldmodseq = str2uint64(since);
+        oldmodseq = atomodseq_t(since);
         if (!oldmodseq) {
             json_array_append_new(invalid, json_string("sinceState"));
         }
@@ -8954,7 +8954,7 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     invalid = json_pack("[]");
     pe = jmap_readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
     if (pe > 0) {
-        oldmodseq = str2uint64(since);
+        oldmodseq = atomodseq_t(since);
         if (!oldmodseq) {
             json_array_append_new(invalid, json_string("sinceState"));
         }
@@ -8999,7 +8999,7 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     json_object_set_new(eventUpdates, "accountId", json_string(req->userid));
     json_object_set_new(eventUpdates, "oldState", json_string(since));
 
-    buf_printf(&buf, "%llu", newstate);
+    buf_printf(&buf, MODSEQ_FMT, newstate);
     json_object_set_new(eventUpdates, "newState", json_string(buf_cstring(&buf)));
     buf_reset(&buf);
 
