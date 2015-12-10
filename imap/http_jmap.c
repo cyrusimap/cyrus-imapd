@@ -5160,6 +5160,17 @@ static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req
         syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
         return IMAP_INTERNAL;
     }
+    /* XXX 
+     * JMAP spec says that: "A calendar MAY be deleted that is currently
+     * associated with one or more events. In this case, the events belonging
+     * to this calendar MUST also be deleted. Conceptually, this MUST happen
+     * prior to the calendar itself being deleted, and MUST generate a push
+     * event that modifies the calendarState for the account, and has a
+     * clientId of null, to indicate that a change has been made to the
+     * calendar data not explicitly requested by the client."
+     *
+     * Need the Events API for this requirement.
+     */
     r = caldav_delmbox(db, mboxname);
     if (r) {
         syslog(LOG_ERR, "failed to delete mailbox from caldav_db: %s",
