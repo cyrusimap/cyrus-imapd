@@ -94,7 +94,7 @@ int annotate_state_set_server(annotate_state_t *state);
 int annotate_state_set_mailbox(annotate_state_t *state,
                                struct mailbox *mailbox);
 int annotate_state_set_mailbox_mbe(annotate_state_t *state,
-                                   mbentry_t *);
+                                   const mbentry_t *);
 int annotate_state_set_message(annotate_state_t *state,
                                struct mailbox *mailbox,
                                unsigned int uid);
