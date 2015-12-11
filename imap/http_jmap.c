@@ -2275,6 +2275,7 @@ static json_t *jmap_message_from_record(const char *id,
     struct buf buf = BUF_INITIALIZER;
     json_t *msg;
     uint32_t flags;
+    int r;
     
     m = message_new_from_record(mbox, record);
     if (!m) return NULL;
@@ -2283,13 +2284,28 @@ static json_t *jmap_message_from_record(const char *id,
     msg = json_pack("{}");
     json_object_set_new(msg, "id", json_string(id));
 
-    /* XXX blobId */
-    /* XXX threadId */
+    /* blobId */
+    if (_wantprop(props, "blobId")) {
+        r = message_get_messageid(m, &buf);
+        json_object_set_new(msg, "blobId", r ?
+                json_null() : json_string(buf_cstring(&buf)));
+    }
+    /* threadId */
+    if (_wantprop(props, "threadId")) {
+        conversation_id_t cid;
+        r = message_get_cid(m, &cid);
+        json_object_set_new(msg, "threadId", r ?
+                json_null() : json_string(conversation_id_encode(cid)));
+    }
     /* mailboxIds */
     if (_wantprop(props, "mailboxIds")) {
         json_object_set_new(msg, "mailboxIds", json_pack("[s]", mbox->uniqueid));
     }
     /* XXX inReplyToMessageId */
+    /* XXX compiler error: undefined reference to `message_get_inreplyto' 
+       message_get_inreplyto(m, &buf);
+       buf_reset(&buf);
+       */
     /* isUnread */
     if (_wantprop(props, "isUnread")) {
         json_object_set_new(msg, "isUnread", json_boolean(!(flags & FLAG_SEEN)));
@@ -2338,12 +2354,10 @@ static json_t *jmap_message_from_record(const char *id,
     }
     /* replyTo */
     if (_wantprop(props, "replyTo")) {
-        /* XXX compiler error: undefined reference to `message_get_inreplyto' 
-        message_get_inreplyto(m, &buf);
+        message_get_field(m, "replyTo", MESSAGE_RAW, &buf);
         json_t *replyTo = jmap_emailers_from_addresses(buf_cstring(&buf));
-        json_object_set_new(msg, "replyTo", replyTo ? json_array_get(replyTo, 0) : json_null());
+        json_object_set_new(msg, "replyTo", replyTo ? replyTo : json_null());
         buf_reset(&buf);
-        */
     }
     /* subject */
     if (_wantprop(props, "subject")) {
