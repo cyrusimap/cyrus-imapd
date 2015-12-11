@@ -1889,11 +1889,11 @@ typedef struct message_filter {
     time_t after;
     uint32_t minSize;
     uint32_t maxSize;
-    short *isFlagged;
-    short *isUnread;
-    short *isUnanswered;
-    short *isDraft;
-    short *hasAttachment;
+    json_t *isFlagged;
+    json_t *isUnread;
+    json_t *isAnswered;
+    json_t *isDraft;
+    json_t *hasAttachment;
     char *text;
     char *from;
     char *to;
@@ -1928,11 +1928,197 @@ static void* message_filter_parse(json_t *arg,
                                   const char *prefix,
                                   json_t *invalid)
 {
-    assert(arg != NULL);
-    assert(prefix != NULL);
-    assert(invalid != NULL);
+
     message_filter *f = (message_filter *) xzmalloc(sizeof(struct message_filter));
-    /* XXX */
+    struct buf buf = BUF_INITIALIZER;
+    json_int_t i;
+    const char *s;
+    json_t *j;
+
+    /* inMailboxes */
+    json_t *inMailboxes = json_object_get(arg, "inMailboxes");
+    if (inMailboxes && json_typeof(inMailboxes) != JSON_ARRAY) {
+        buf_printf(&buf, "%s.inMailboxes", prefix);
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    } else if (inMailboxes) {
+        f->inMailboxes = xmalloc(sizeof(struct hash_table));
+        construct_hash_table(f->inMailboxes, json_array_size(inMailboxes)+1, 0);
+        size_t i;
+        json_t *val;
+        json_array_foreach(inMailboxes, i, val) {
+            buf_printf(&buf, "%s.inMailboxes[%zu]", prefix, i);
+            const char *id;
+            if (json_unpack(val, "s", &id) != -1) {
+                hash_insert(id, (void*)1, f->inMailboxes);
+            } else {
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            }
+            buf_reset(&buf);
+        }
+    }
+
+    /* notInMailboxes */
+    json_t *notInMailboxes = json_object_get(arg, "notInMailboxes");
+    if (notInMailboxes && json_typeof(notInMailboxes) != JSON_ARRAY) {
+        buf_printf(&buf, "%s.notInMailboxes", prefix);
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    } else if (notInMailboxes) {
+        f->notInMailboxes = xmalloc(sizeof(struct hash_table));
+        construct_hash_table(f->notInMailboxes, json_array_size(notInMailboxes)+1, 0);
+        size_t i;
+        json_t *val;
+        json_array_foreach(notInMailboxes, i, val) {
+            buf_printf(&buf, "%s.notInMailboxes[%zu]", prefix, i);
+            const char *id;
+            if (json_unpack(val, "s", &id) != -1) {
+                hash_insert(id, (void*)1, f->notInMailboxes);
+            } else {
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            }
+            buf_reset(&buf);
+        }
+    }
+
+    /* before */
+    if (json_object_get(arg, "before") != json_null()) {
+        if (jmap_readprop_full(arg, prefix, "before", 0, invalid, "s", &s) > 0) {
+            struct tm tm;
+            const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+            if (!p || *p) {
+                buf_printf(&buf, "%s.before", prefix);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+            f->before = mktime(&tm);
+        }
+    }
+    /* after */
+    if (json_object_get(arg, "after") != json_null()) {
+        if (jmap_readprop_full(arg, prefix, "after", 0, invalid, "s", &s) > 0) {
+            struct tm tm;
+            const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+            if (!p || *p) {
+                buf_printf(&buf, "%s.after", prefix);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+            f->after = mktime(&tm);
+        }
+    }
+    /* minSize */
+    if (json_object_get(arg, "minSize") != json_null()) {
+        if (jmap_readprop_full(arg, prefix, "minSize", 0, invalid, "i", &i) > 0) {
+            if (i < 0) {
+                buf_printf(&buf, "%s.minSize", prefix);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            } else if (i > UINT32_MAX) {
+                /* Can't store this in an uint32_t. Ignore. */
+                i = 0;
+            }
+            f->minSize = i;
+        }
+    }
+    /* maxSize */
+    if (json_object_get(arg, "maxSize") != json_null()) {
+        if (jmap_readprop_full(arg, prefix, "maxSize", 0, invalid, "i", &i) > 0) {
+            if (i < 0) {
+                buf_printf(&buf, "%s.maxSize", prefix);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            } else if (i > UINT32_MAX) {
+                /* Can't store this in an uint32_t. Ignore. */
+                i = 0;
+            }
+            f->maxSize = i;
+        }
+    }
+    /* isFlagged */
+    if ((j = json_object_get(arg, "isFlagged")) != json_null()) {
+        short b;
+        if (jmap_readprop_full(arg, prefix, "isFlagged", 0, invalid, "b", &b) > 0) {
+            f->isFlagged = j;
+        }
+    }
+    /* isUnread */
+    if ((j = json_object_get(arg, "isUnread")) != json_null()) {
+        short b;
+        if (jmap_readprop_full(arg, prefix, "isUnread", 0, invalid, "b", &b) > 0) {
+            f->isUnread = j;
+        }
+    }
+    /* isAnswered */
+    if ((j = json_object_get(arg, "isAnswered")) != json_null()) {
+        short b;
+        if (jmap_readprop_full(arg, prefix, "isAnswered", 0, invalid, "b", &b) > 0) {
+            f->isAnswered = j;
+        }
+    }
+    /* isDraft */
+    if ((j = json_object_get(arg, "isDraft")) != json_null()) {
+        short b;
+        if (jmap_readprop_full(arg, prefix, "isDraft", 0, invalid, "b", &b) > 0) {
+            f->isDraft = j;
+        }
+    }
+    /* hasAttachment */
+    if ((j = json_object_get(arg, "hasAttachment")) != json_null()) {
+        short b;
+        if (jmap_readprop_full(arg, prefix, "hasAttachment", 0, invalid, "b", &b) > 0) {
+            f->hasAttachment = j;
+        }
+    }
+    /* text */
+    if (json_object_get(arg, "text") != json_null()) {
+        jmap_readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
+    }
+    /* from */
+    if (json_object_get(arg, "from") != json_null()) {
+        jmap_readprop_full(arg, prefix, "from", 0, invalid, "s", &f->from);
+    }
+    /* to */
+    if (json_object_get(arg, "to") != json_null()) {
+        jmap_readprop_full(arg, prefix, "to", 0, invalid, "s", &f->to);
+    }
+    /* cc */
+    if (json_object_get(arg, "cc") != json_null()) {
+        jmap_readprop_full(arg, prefix, "cc", 0, invalid, "s", &f->cc);
+    }
+    /* bcc */
+    if (json_object_get(arg, "bcc") != json_null()) {
+        jmap_readprop_full(arg, prefix, "bcc", 0, invalid, "s", &f->bcc);
+    }
+    /* subject */
+    if (json_object_get(arg, "subject") != json_null()) {
+        jmap_readprop_full(arg, prefix, "subject", 0, invalid, "s", &f->subject);
+    }
+    /* body */
+    if (json_object_get(arg, "body") != json_null()) {
+        jmap_readprop_full(arg, prefix, "body", 0, invalid, "s", &f->body);
+    }
+    /* header */
+    if ((j = json_object_get(arg, "header")) != json_null()) {
+        short iserr = 0;
+        switch (json_array_size(j)) {
+            case 2:
+                iserr = json_unpack(json_array_get(j, 1), "s", &f->header_value);
+                /* fallthrough */
+            case 1:
+                if (!iserr) iserr = json_unpack(json_array_get(j, 0), "s", &f->header);
+                break;
+            default:
+                iserr = 1;
+        }
+        if (iserr) {
+            buf_printf(&buf, "%s.header", prefix);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+
+    buf_free(&buf);
     return f;
 }
 
