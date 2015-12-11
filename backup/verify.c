@@ -41,6 +41,7 @@
  *
  */
 #include <assert.h>
+#include <syslog.h>
 
 #include "lib/hash.h"
 #include "lib/xmalloc.h"
@@ -184,7 +185,7 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
     int r;
 
     if (!chunk->id) {
-        fprintf(stderr, "%s: %s file checksum mismatch: not in index\n",
+        syslog(LOG_DEBUG, "%s: %s file checksum mismatch: not in index\n",
                 __func__, backup->data_fname);
         r = -1;
         goto done;
@@ -195,7 +196,7 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
     _sha1_file(backup->fd, backup->data_fname, chunk->offset, file_sha1);
     r = strncmp(chunk->file_sha1, file_sha1, sizeof(file_sha1));
     if (r) {
-        fprintf(stderr, "%s: %s (chunk %d) file checksum mismatch: %s on disk, %s in index\n",
+        syslog(LOG_DEBUG, "%s: %s (chunk %d) file checksum mismatch: %s on disk, %s in index\n",
                 __func__, backup->data_fname, chunk->id, file_sha1, chunk->file_sha1);
         goto done;
     }
@@ -215,7 +216,7 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
     }
     gzuc_member_end(gzuc, NULL);
     if (len != chunk->length) {
-        fprintf(stderr, "%s: %s (chunk %d) data length mismatch: "
+        syslog(LOG_DEBUG, "%s: %s (chunk %d) data length mismatch: "
                         SIZE_T_FMT " on disk,"
                         SIZE_T_FMT " in index\n",
                 __func__, backup->data_fname, chunk->id, len, chunk->length);
@@ -229,13 +230,13 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
     assert(r == 2 * SHA1_DIGEST_LENGTH);
     r = strncmp(chunk->data_sha1, data_sha1, sizeof(data_sha1));
     if (r) {
-        fprintf(stderr, "%s: %s (chunk %d) data checksum mismatch: %s on disk, %s in index\n",
+        syslog(LOG_DEBUG, "%s: %s (chunk %d) data checksum mismatch: %s on disk, %s in index\n",
                 __func__, backup->data_fname, chunk->id, data_sha1, chunk->data_sha1);
         goto done;
     }
 
 done:
-    fprintf(stderr, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
+    syslog(LOG_DEBUG, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
     return r;
 }
 
@@ -327,7 +328,7 @@ static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
     if (vmrock.cached_dlist)
         dlist_free(&vmrock.cached_dlist);
 
-    fprintf(stderr, "%s: chunk %d %s!\n", __func__, chunk->id,
+    syslog(LOG_DEBUG, "%s: chunk %d %s!\n", __func__, chunk->id,
             r ? "failed" : "passed");
     return r;
 }
@@ -401,7 +402,7 @@ static int mailbox_matches(const struct backup_mailbox *mailbox,
     if (synccrcs.annot != mailbox->sync_crc_annot)
         return 0;
 
-    fprintf(stderr, "%s: %s matches!\n", __func__, mailbox->uniqueid);
+    syslog(LOG_DEBUG, "%s: %s matches!\n", __func__, mailbox->uniqueid);
     return 1;
 }
 
@@ -434,7 +435,7 @@ static int mailbox_message_matches(const struct backup_mailbox_message *mailbox_
         || !message_guid_equal(guid, &mailbox_message->guid))
         return 0;
 
-    fprintf(stderr, "%s: %s:%u matches!\n", __func__,
+    syslog(LOG_DEBUG, "%s: %s:%u matches!\n", __func__,
             mailbox_message->mailbox_uniqueid, mailbox_message->uid);
     return 1;
 }
@@ -581,14 +582,14 @@ next_line:
     /* anything left in either of the lists is missing from the chunk data. bad! */
     mailbox = mailbox_list->head;
     while (mailbox) {
-        fprintf(stderr, "%s: chunk %d missing mailbox data for %s (%s)\n",
+        syslog(LOG_DEBUG, "%s: chunk %d missing mailbox data for %s (%s)\n",
                 __func__, chunk->id, mailbox->uniqueid, mailbox->mboxname);
         mailbox = mailbox->next;
     }
 
     mailbox_message = mailbox_message_list->head;
     while (mailbox_message) {
-        fprintf(stderr, "%s: chunk %d missing mailbox_message data for %s uid %u\n",
+        syslog(LOG_DEBUG, "%s: chunk %d missing mailbox_message data for %s uid %u\n",
                 __func__, chunk->id, mailbox_message->mailbox_uniqueid,
                 mailbox_message->uid);
         mailbox_message = mailbox_message->next;
@@ -605,7 +606,7 @@ next_line:
     backup_mailbox_message_list_empty(mailbox_message_list);
     free(mailbox_message_list);
 
-    fprintf(stderr, "%s: chunk %d %s!\n", __func__, chunk->id,
+    syslog(LOG_DEBUG, "%s: chunk %d %s!\n", __func__, chunk->id,
             r ? "failed" : "passed");
 
     return r;
