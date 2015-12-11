@@ -1917,8 +1917,16 @@ static int message_filter_match(void *vf, void *rock)
 /* Free the memory allocated by this message filter. */
 static void message_filter_free(void *vf)
 {
-    assert(vf != NULL);
-    /* XXX */
+    message_filter *f = (message_filter*) vf;
+    if (f->inMailboxes) {
+        free_hash_table(f->inMailboxes, NULL);
+        free(f->inMailboxes);
+    }
+    if (f->notInMailboxes) {
+        free_hash_table(f->notInMailboxes, NULL);
+        free(f->notInMailboxes);
+    }
+    free(f);
 }
 
 /* Parse the JMAP Message FilterCondition in arg.
