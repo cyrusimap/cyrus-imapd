@@ -1066,22 +1066,31 @@ static const char *backupd_response(int r)
 
 static int cmd_get_mailbox(struct dlist *dl, int want_records)
 {
+    int r;
     mbname_t *mbname = mbname_from_intname(dl->sval);
     if (!mbname) return IMAP_INTERNAL;
 
     struct open_backup *open = backupd_open_backup(mbname);
-    mbname_free(&mbname);
-
-    if (!open) return IMAP_INTERNAL;
+    if (!open) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     struct backup_mailbox *mb = backup_get_mailbox_by_name(open->backup, mbname,
                                                            want_records);
-    if (!mb) return IMAP_MAILBOX_NONEXISTENT;
+    if (!mb) {
+        r = IMAP_MAILBOX_NONEXISTENT;
+        goto done;
+    }
 
     backupd_print_mailbox(mb, NULL);
-    backup_mailbox_free(&mb);
+    r = 0;
 
-    return 0;
+done:
+    if (mb) backup_mailbox_free(&mb);
+    if (mbname) mbname_free(&mbname);
+
+    return r;
 }
 
 static void cmd_get(struct dlist *dl)
