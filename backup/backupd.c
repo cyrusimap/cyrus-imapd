@@ -1047,6 +1047,7 @@ static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
 
     prot_puts(backupd_out, "* ");
     dlist_print(dlist, /* printkeys */ 1, backupd_out);
+    prot_puts(backupd_out, "\r\n");
     dlist_free(&dlist);
 
     return 0;
