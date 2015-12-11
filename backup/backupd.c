@@ -910,7 +910,7 @@ static int cmd_apply_reserve(struct dlist *dl)
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;
-    if (!dlist_getlist(dl, "GUID", &ml)) return IMAP_PROTOCOL_ERROR;
+    if (!dlist_getlist(dl, "GUID", &gl)) return IMAP_PROTOCOL_ERROR;
 
     /* find the list of users this reserve applies to */
     strarray_t userids = STRARRAY_INITIALIZER;
