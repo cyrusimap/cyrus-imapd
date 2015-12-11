@@ -145,6 +145,7 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level)
     r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
                        NULL, chunk_select_cb, &chunk_list);
     if (r) goto done;
+    if (!chunk_list.head) goto done;
 
     gzuc = gzuc_open(backup->fd);
     if (!gzuc) {
