@@ -41,6 +41,7 @@
  *
  */
 #include <assert.h>
+#include <syslog.h>
 
 #include "lib/xmalloc.h"
 
@@ -75,7 +76,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_message(backup, dlist, ts, start, len);
 
     else {
-        fprintf(stderr, "ignoring unrecognised dlist name: %s\n", dlist->name);
+        syslog(LOG_DEBUG, "ignoring unrecognised dlist name: %s\n", dlist->name);
         r = -1; // FIXME
     }
 
@@ -85,7 +86,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
 static int _index_expunge(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset)
 {
-    fprintf(stderr, "indexing EXPUNGE at " OFF_T_FMT "...\n", dl_offset);
+    syslog(LOG_DEBUG, "indexing EXPUNGE at " OFF_T_FMT "...\n", dl_offset);
 
     const char *mboxname;
     const char *uniqueid;
@@ -150,7 +151,7 @@ static int _get_magic_flags(struct dlist *flags, int *is_expunged)
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset)
 {
-    fprintf(stderr, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
+    syslog(LOG_DEBUG, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
 
     const char *uniqueid = NULL;
     const char *mboxname = NULL;
@@ -248,7 +249,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
 
     if (r) {
         // FIXME handle this sensibly
-        fprintf(stderr, "%s: something went wrong: %i update %s\n", __func__, r, mboxname);
+        syslog(LOG_DEBUG, "%s: something went wrong: %i update %s\n", __func__, r, mboxname);
         goto error;
     }
     if (sqldb_changes(backup->db) == 0) {
@@ -256,7 +257,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                        mbox_bval, NULL, NULL);
         if (r) {
             // FIXME handle this sensibly
-            fprintf(stderr, "%s: something went wrong: %i insert %s\n", __func__, r, mboxname);
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s\n", __func__, r, mboxname);
             goto error;
         }
     }
@@ -296,12 +297,12 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             _get_magic_flags(flags, &is_expunged);
 
             if (is_expunged) {
-                fprintf(stderr, "%s: found expunge flag for message %s\n", __func__, guid);
+                syslog(LOG_DEBUG, "%s: found expunge flag for message %s\n", __func__, guid);
                 expunged = ts;
             }
 
             dlist_printbuf(flags, 0, &flags_buf);
-            fprintf(stderr, "%s: found flags for message %s: %s\n", __func__, guid, buf_cstring(&flags_buf));
+            syslog(LOG_DEBUG, "%s: found flags for message %s: %s\n", __func__, guid, buf_cstring(&flags_buf));
         }
 
         dlist_getlist(ki, "ANNOTATIONS", &annotations);
@@ -313,7 +314,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         message_id = backup_get_message_id(backup, guid);
         if (message_id == -1) {
             // FIXME handle this sensibly
-            fprintf(stderr, "%s: something went wrong: %i %s %s\n", __func__, r, mboxname, guid);
+            syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n", __func__, r, mboxname, guid);
             goto error;
         }
 
@@ -347,7 +348,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
 
         if (r) {
             // FIXME handle this sensibly
-            fprintf(stderr, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
+            syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
             goto error;
         }
         if (sqldb_changes(backup->db) == 0) {
@@ -355,18 +356,18 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                            record_bval, NULL, NULL);
             if (r) {
                 // FIXME handle this sensibly
-                fprintf(stderr, "%s: something went wrong: %i insert %s %s\n", __func__, r, mboxname, guid);
+                syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s\n", __func__, r, mboxname, guid);
                 goto error;
             }
         }
     }
 
-    fprintf(stderr, "%s: committing index change: %s\n", __func__, mboxname);
+    syslog(LOG_DEBUG, "%s: committing index change: %s\n", __func__, mboxname);
     sqldb_commit(backup->db, __func__);
     return 0;
 
 error:
-    fprintf(stderr, "%s: rolling back index change: %s\n", __func__, mboxname);
+    syslog(LOG_DEBUG, "%s: rolling back index change: %s\n", __func__, mboxname);
     sqldb_rollback(backup->db, __func__);
 
     return -1;
@@ -375,7 +376,7 @@ error:
 static int _index_message(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset, size_t dl_len)
 {
-    fprintf(stderr, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
+    syslog(LOG_DEBUG, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
     (void) ts;
 
     struct dlist *ki;
@@ -402,7 +403,7 @@ static int _index_message(struct backup *backup, struct dlist *dl,
                            NULL);
         if (r) {
             // FIXME handle this sensibly
-            fprintf(stderr, "%s: something went wrong: %i %s\n", __func__, r, guid);
+            syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n", __func__, r, guid);
         }
 
         free(guid);
