@@ -1882,8 +1882,66 @@ done:
     return r;
 }
 
+typedef struct message_filter {
+    hash_table *inMailboxes;
+    hash_table *notInMailboxes;
+    time_t before;
+    time_t after;
+    uint32_t minSize;
+    uint32_t maxSize;
+    short *isFlagged;
+    short *isUnread;
+    short *isUnanswered;
+    short *isDraft;
+    short *hasAttachment;
+    char *text;
+    char *from;
+    char *to;
+    char *cc;
+    char *bcc;
+    char *subject;
+    char *body;
+    char *header;
+    char *header_value;
+} message_filter;
+
+/* Match the message in rock against filter. */
+static int message_filter_match(void *vf, void *rock)
+{
+    /* XXX */
+    assert(vf != NULL);
+    assert(rock != NULL);
+    return 1;
+}
+
+/* Free the memory allocated by this message filter. */
+static void message_filter_free(void *vf)
+{
+    assert(vf != NULL);
+    /* XXX */
+}
+
+/* Parse the JMAP Message FilterCondition in arg.
+ * Report any invalid properties in invalid, prefixed by prefix.
+ * Return NULL on error. */
+static void* message_filter_parse(json_t *arg,
+                                  const char *prefix,
+                                  json_t *invalid)
+{
+    assert(arg != NULL);
+    assert(prefix != NULL);
+    assert(invalid != NULL);
+    message_filter *f = (message_filter *) xzmalloc(sizeof(struct message_filter));
+    /* XXX */
+    return f;
+}
+
 struct getmessagelist_data {
     json_t *messageIds;
+    size_t position;
+    size_t limit;
+    size_t total;
+    jmap_filter *filter;
 };
 
 static int getmessagelist(struct mailbox *mbox, struct getmessagelist_data *d) {
@@ -1904,6 +1962,10 @@ static int getmessagelist(struct mailbox *mbox, struct getmessagelist_data *d) {
         const char *id = message_guid_encode(&record->guid);
         if (!id) {
             /* huh? */
+            continue;
+        }
+        /* Match against filter. */
+        if (d->filter && !jmap_filter_match(d->filter, &message_filter_match, &d)) {
             continue;
         }
         json_array_append_new(d->messageIds, json_string(id));
@@ -1934,9 +1996,19 @@ static int getMessageList(struct jmap_req *req)
 {
     int r;
     struct getmessagelist_data rock;
+    memset(&rock, 0, sizeof(struct getmessagelist_data));
     rock.messageIds = json_pack("[]");
+    json_t *filter;
 
-    /* XXX Parse and validate properties. */
+
+    /* XXX Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+
+    /* filter */
+    filter = json_object_get(req->args, "filter");
+    if (filter && filter != json_null()) {
+        rock.filter = jmap_filter_parse(filter, "filter", invalid, message_filter_parse);
+    }
 
     /* Inspect messages of INBOX. */
     r = getmessagelist((struct mailbox*) req->inbox, &rock);
@@ -1960,6 +2032,7 @@ static int getMessageList(struct jmap_req *req)
 
 done:
     json_decref(rock.messageIds);
+    if (rock.filter) jmap_filter_free(rock.filter, message_filter_free);
     return r;
 }
 
@@ -2184,7 +2257,7 @@ static void getmessages_report(const char *id,
     struct getmessages_data *d = (struct getmessages_data *) rock;
     json_t *msg = hash_lookup(id, d->found);
     if (msg) {
-        /* Bump refcount. */
+        /* Bump refcount of JSON object. */
         json_array_append(d->list, msg);
     } else {
         json_array_append_new(d->notFound, json_string(id));
