@@ -1057,6 +1057,8 @@ static const char *backupd_response(int r)
     switch (r) {
     case 0:
         return "OK Success";
+    case IMAP_MAILBOX_NONEXISTENT:
+        return "NO IMAP_MAILBOX_NONEXISTENT No Such Mailbox";
     case IMAP_PROTOCOL_ERROR:
         return "NO IMAP_PROTOCOL_ERROR protocol error FIXME";
     default:
