@@ -74,6 +74,8 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_mailbox(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
         r = _index_message(backup, dlist, ts, start, len);
+    else if (strcmp(dlist->name, "RESERVE") == 0)
+        r = 0; /* nothing to index for a reserve, just return success */
 
     else {
         syslog(LOG_DEBUG, "ignoring unrecognised dlist name: %s\n", dlist->name);
