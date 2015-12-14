@@ -785,3 +785,4 @@ todo list
 * clean up xsha1_file
 * perl tool to anonymise sync proto talk
 * record start and end time in each chunk
+* check for/log error when prot_stream reads return EOF
