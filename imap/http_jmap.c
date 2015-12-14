@@ -2326,6 +2326,44 @@ static int jmap_message_bodies_cb(int isbody,
     return 0;
 }
 
+/* Generate a preview of text of at most len bytes, excluding the zero
+ * byte.
+ *
+ * If text is longer than len and len is greater than 4, then return a
+ * string  ending in '...' and holding as many complete UTF-8 characters,
+ * that the total byte count of non-zero characters is at most len.
+ *
+ * The input string must be properly encoded UTF-8 and is not checked
+ * for errors. */
+static char *jmap_message_extract_preview(char *text, size_t len)
+{
+    unsigned char *p;
+
+    if (!text) {
+        return xstrdup("");
+    }
+    if (strlen(text) < len) {
+        return xstrdup(text);
+    }
+    p = (unsigned char *) xstrndup(text, len);
+    if (len <= 4) {
+        return (char *) p;
+    }
+    p[--len] = '.';
+    p[--len] = '.';
+    p[--len] = '.';
+    /* XXX The conversions are only rudimentary tested */
+    while ((p[len] & 0xc0) == 0x80) {
+        p[len+2] = 0;
+        p[--len] = '.';
+    }
+    if (p[len] > 0x80) {
+        p[len+2] = 0;
+        p[--len] = '.';
+    }
+    return (char *) p;
+}
+
 static json_t *jmap_message_from_record(const char *id,
                                         struct mailbox *mbox,
                                         const struct index_record *record,
@@ -2454,6 +2492,23 @@ static json_t *jmap_message_from_record(const char *id,
     }
     if (_wantprop(props, "htmlBody")) {
         json_object_set_new(msg, "htmlBody", d.html ? json_string(d.html) : json_null());
+    }
+    if (_wantprop(props, "preview")) {
+
+    /* XXX make it configurable (preview_annotation) */
+#define PREVIEW_ANNOT "/vendor/messagingengine.com/preview"
+
+        annotatemore_msg_lookup(mbox->name, record->uid, PREVIEW_ANNOT, httpd_userid, &buf);
+        if (buf.len) {
+            /* FastMail store the preview as message  annotations, so if there
+             * is one defined, use that one. */
+            json_object_set_new(msg, "preview", json_string(buf_cstring(&buf)));
+        } else {
+            char *preview = jmap_message_extract_preview(d.text, 32);
+            json_object_set_new(msg, "preview", json_string(preview));
+            free(preview);
+        }
+        buf_reset(&buf);
     }
 
     /* XXX attachments */
