@@ -796,7 +796,8 @@ EXPORTED int backup_reindex(const char *name)
             }
         }
 
-        backup_append_end(backup);
+        if (backup->append_state)
+            backup_append_end(backup);
         prot_free(member);
         gzuc_member_end(gzuc, NULL);
 
