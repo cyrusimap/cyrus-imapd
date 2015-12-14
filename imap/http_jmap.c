@@ -2266,6 +2266,66 @@ static json_t *jmap_emailers_from_addresses(const char *addrs)
 
 }
 
+struct jmap_message_bodies_data {
+    char *text;
+    char *html;
+};
+
+static void jmap_message_bodies_extract_plain(const struct buf *buf, void *rock)
+{
+    char **dst = (char **) rock;
+    *dst = buf_newcstring((struct buf*) buf);
+}
+
+static int jmap_message_bodies_cb(int isbody,
+                                  int charset,
+                                  int encoding,
+                                  const char *subtype,
+                                  struct buf *data,
+                                  void *rock)
+{
+    struct jmap_message_bodies_data *d = (struct jmap_message_bodies_data *) rock;
+    /* Skip headers. */
+    if (!isbody) {
+        return 0;
+    }
+    /* Extract plain and html bodies. */
+    if (!strcmp(subtype, "PLAIN")) {
+        char *body = charset_to_utf8(buf_base(data), buf_len(data), charset, encoding);
+        if (body) {
+            if (d->text) free(d->text);
+            d->text = body;
+            if (!d->html) {
+                /* JMAP spec: "If there is only a plain text version of the body,
+                 * an HTML version will be generated from this." */
+                d->html = xstrdup(body);
+            }
+        }
+    } else if (!strcmp(subtype, "HTML")) {
+        char *body = charset_to_utf8(buf_base(data), buf_len(data), charset, encoding);
+        if (body) {
+            if (d->html) free(d->html);
+            d->html = body;
+            if (!d->text) {
+                /* JMAP spec: "If there is only an HTML version of the body, a
+                 * plain text version will be generated from this." */
+
+                /* XXX Canonical search form replaces every HTML tag with a single
+                 * space and uppercases all characters, e.g.
+                 *     "<html><body><p>An html message.</p></body></html>"
+                 * becomes
+                 *     "   AN HTML MESSAGE.   "
+                 *
+                 * Might want to make striphtml in charset.c public to only get
+                 * rid of the HTML tags? */
+                charset_extract(&jmap_message_bodies_extract_plain, &d->text,
+                                data, charset, encoding, subtype, 0);
+            }
+        }
+    }
+    return 0;
+}
+
 static json_t *jmap_message_from_record(const char *id,
                                         struct mailbox *mbox,
                                         const struct index_record *record,
@@ -2274,9 +2334,12 @@ static json_t *jmap_message_from_record(const char *id,
     message_t *m;
     struct buf buf = BUF_INITIALIZER;
     json_t *msg;
+    struct jmap_message_bodies_data d;
     uint32_t flags;
     int r;
     
+    memset(&d, 0, sizeof(struct jmap_message_bodies_data));
+
     m = message_new_from_record(mbox, record);
     if (!m) return NULL;
     message_get_userflags(m, &flags);
@@ -2323,6 +2386,7 @@ static json_t *jmap_message_from_record(const char *id,
         json_object_set_new(msg, "isDraft", json_boolean(flags & FLAG_DRAFT));
     }
     /* XXX hasAttachment */
+
     /* XXX headers */
     /* from */
     if (_wantprop(props, "from")) {
@@ -2379,11 +2443,24 @@ static json_t *jmap_message_from_record(const char *id,
         message_get_size(m, &size);
         json_object_set_new(msg, "size", json_integer(size));
     }
+    /* textBody */
+    /* htmlBody */
     /* XXX preview */
-    /* XXX textBody */
-    /* XXX htmlBody */
+    if (_wantprop(props, "textBody") || _wantprop(props, "htmlBody") || _wantprop(props, "preview")) {
+        message_foreach_text_section(m, &jmap_message_bodies_cb, &d);
+    }
+    if (_wantprop(props, "textBody")) {
+        json_object_set_new(msg, "textBody", d.text ? json_string(d.text) : json_null());
+    }
+    if (_wantprop(props, "htmlBody")) {
+        json_object_set_new(msg, "htmlBody", d.html ? json_string(d.html) : json_null());
+    }
+
     /* XXX attachments */
     /* XXX attachedMessages */
+
+    if (d.text) free(d.text);
+    if (d.html) free(d.html);
 
     return msg;
 }
