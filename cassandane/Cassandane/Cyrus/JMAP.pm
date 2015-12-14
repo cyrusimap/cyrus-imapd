@@ -4240,5 +4240,39 @@ sub test_getmessages_body_html
     $self->assert_str_equals($msg->{htmlBody}, '<html><body><p>An html message.</p></body></html>');
 }
 
+sub test_getmessages_preview
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate a message in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "A plain text message.";
+    $exp_sub{A} = $self->make_message("foo",
+        body => $body
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+
+    xlog "get messages";
+    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my $x = Dumper($msg);
+    xlog "$x";
+
+    $self->assert_str_equals($msg->{textBody}, 'A plain text message.');
+    $self->assert_str_equals($msg->{preview}, 'A plain text message.');
+}
+
 
 1;
