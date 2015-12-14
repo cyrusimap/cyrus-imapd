@@ -117,10 +117,10 @@ struct annotate_state
      * Common between storing and fetching
      */
     int which;                  /* ANNOTATION_SCOPE_* */
-    mbentry_t *mbentry; /* for _MAILBOX */
-    int mbentry_is_ours;
+    const mbentry_t *mbentry; /* for _MAILBOX */
+    mbentry_t *ourmbentry;
     struct mailbox *mailbox;    /* for _MAILBOX, _MESSAGE */
-    int mailbox_is_ours;
+    struct mailbox *ourmailbox;
     unsigned int uid;           /* for _MESSAGE */
     const char *acl;            /* for _MESSAGE */
     annotate_db_t *d;
@@ -231,7 +231,7 @@ static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
 static void annotate_state_unset_scope(annotate_state_t *state);
 static int annotate_state_set_scope(annotate_state_t *state,
-                                    mbentry_t *mbentry,
+                                    const mbentry_t *mbentry,
                                     struct mailbox *mailbox,
                                     unsigned int uid);
 static void init_annotation_definitions(void);
@@ -1131,7 +1131,7 @@ EXPORTED int annotate_state_set_mailbox(annotate_state_t *state,
 }
 
 EXPORTED int annotate_state_set_mailbox_mbe(annotate_state_t *state,
-                                   mbentry_t *mbentry)
+                                   const mbentry_t *mbentry)
 {
     return annotate_state_set_scope(state, mbentry, NULL, 0);
 }
@@ -1146,15 +1146,13 @@ HIDDEN int annotate_state_set_message(annotate_state_t *state,
 /* unset any state from a previous scope */
 static void annotate_state_unset_scope(annotate_state_t *state)
 {
-    if (state->mailbox && state->mailbox_is_ours)
-        mailbox_close(&state->mailbox);
+    if (state->ourmailbox)
+        mailbox_close(&state->ourmailbox);
     state->mailbox = NULL;
-    state->mailbox_is_ours = 0;
 
-    if (state->mbentry && state->mbentry_is_ours)
-        mboxlist_entry_free(&state->mbentry);
+    if (state->ourmbentry)
+        mboxlist_entry_free(&state->ourmbentry);
     state->mbentry = NULL;
-    state->mbentry_is_ours = 0;
 
     state->uid = 0;
     state->which = ANNOTATION_SCOPE_UNKNOWN;
@@ -1162,7 +1160,7 @@ static void annotate_state_unset_scope(annotate_state_t *state)
 }
 
 static int annotate_state_set_scope(annotate_state_t *state,
-                                    mbentry_t *mbentry,
+                                    const mbentry_t *mbentry,
                                     struct mailbox *mailbox,
                                     unsigned int uid)
 {
@@ -1186,7 +1184,7 @@ static int annotate_state_set_scope(annotate_state_t *state,
             r = mailbox_open_iwl(mbentry->name, &mailbox);
             if (r)
                 goto out;
-            state->mailbox_is_ours = 1;
+            state->ourmailbox = mailbox;
         }
         state->mbentry = mbentry;
         state->which = ANNOTATION_SCOPE_MAILBOX;
@@ -1223,13 +1221,13 @@ static int annotate_state_need_mbentry(annotate_state_t *state)
     int r = 0;
 
     if (!state->mbentry && state->mailbox) {
-        r = mboxlist_lookup(state->mailbox->name, &state->mbentry, NULL);
+        r = mboxlist_lookup(state->mailbox->name, &state->ourmbentry, NULL);
         if (r) {
             syslog(LOG_ERR, "Failed to lookup mbentry for %s: %s",
                     state->mailbox->name, error_message(r));
             goto out;
         }
-        state->mbentry_is_ours = 1;
+        state->mbentry = state->ourmbentry;
     }
 
 out:

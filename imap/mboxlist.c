@@ -699,7 +699,7 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
         free(mboxent);
     }
     else {
-        r = cyrusdb_delete(mbdb, name, strlen(name), NULL, /*force*/1);
+        r = cyrusdb_delete(mbdb, name, strlen(name), txn, /*force*/1);
     }
     return r;
 }
@@ -1083,7 +1083,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         if (r) {
             syslog(LOG_ERR, "MUPDATE: can't commit mailbox entry for '%s'",
                    mboxname);
-            cyrusdb_delete(mbdb, mboxname, strlen(mboxname), NULL, 0);
+            mboxlist_update_entry(mboxname, NULL, 0);
         }
         if (mupdate_h) mupdate_disconnect(&mupdate_h);
         free(loc);
@@ -1225,22 +1225,15 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
         goto done;
     }
 
-    if ((mbentry->mbtype & MBTYPE_REMOTE) && !mbentry->server) {
+    if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE) && !mbentry->server) {
         syslog(LOG_ERR,
                "mboxlist_deleteremote called on non-remote mailbox: %s",
                name);
         goto done;
     }
 
- retry_del:
-    /* delete entry */
-    r = cyrusdb_delete(mbdb, name, strlen(name), tid, 0);
-    switch (r) {
-    case CYRUSDB_OK: /* success */
-        break;
-    case CYRUSDB_AGAIN:
-        goto retry_del;
-    default:
+    r = mboxlist_update_entry(name, NULL, tid);
+    if (r) {
         syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
                name, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
@@ -1491,7 +1484,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     else {
         /* delete entry (including DELETED.* mailboxes, no need
          * to keep that rubbish around) */
-        r = cyrusdb_delete(mbdb, name, strlen(name), NULL, 0);
+        r = mboxlist_update_entry(name, NULL, 0);
         if (r) {
             syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
                    name, cyrusdb_strerror(r));
