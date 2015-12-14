@@ -778,7 +778,15 @@ EXPORTED int backup_reindex(const char *name)
             struct dlist *dl = NULL;
 
             int c = _parse_line(member, &ts, &cmd, &dl);
-            if (c == EOF) break;
+            if (c == EOF) {
+                const char *error = prot_error(member);
+                if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
+                    fprintf(stderr,
+                            "error reading chunk at offset %jd, byte %i: %s\n",
+                            member_offset, prot_bytes_in(member), error);
+                }
+                break;
+            }
 
             if (member_ts == -1) {
                 if (prev_member_ts != -1 && prev_member_ts > ts) {
