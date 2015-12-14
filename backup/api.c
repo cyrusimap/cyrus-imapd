@@ -729,7 +729,14 @@ fail:
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
-    return gzuc_read(gzuc, buf, len);
+    int r = gzuc_read(gzuc, buf, len);
+
+    if (r < 0)
+        syslog(LOG_ERR, "IOERROR: gzuc_read returned %i", r);
+    if (r < -1)
+        errno = EIO;
+
+    return r;
 }
 
 EXPORTED int backup_reindex(const char *name)
