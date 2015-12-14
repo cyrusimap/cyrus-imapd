@@ -345,23 +345,23 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
                        record_bval, NULL, NULL);
 
-        buf_free(&annotations_buf);
-        buf_free(&flags_buf);
-
-        if (r) {
-            // FIXME handle this sensibly
-            syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
-            goto error;
-        }
-        if (sqldb_changes(backup->db) == 0) {
+        if (!r && sqldb_changes(backup->db) == 0) {
             r = sqldb_exec(backup->db, backup_index_mailbox_message_insert_sql,
                            record_bval, NULL, NULL);
             if (r) {
                 // FIXME handle this sensibly
                 syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s\n", __func__, r, mboxname, guid);
-                goto error;
             }
         }
+        else if (r) {
+            // FIXME handle this sensibly
+            syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
+        }
+
+        buf_free(&annotations_buf);
+        buf_free(&flags_buf);
+
+        if (r) goto error;
     }
 
     syslog(LOG_DEBUG, "%s: committing index change: %s\n", __func__, mboxname);
