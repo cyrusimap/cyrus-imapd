@@ -278,7 +278,8 @@ EXPORTED int gzuc_skip(struct gzuncat *gz, size_t len)
         if (want > sizeof(discard)) want = sizeof(discard);
 
         ssize_t got = gzuc_read(gz, discard, want);
-        if (got <= 0) return -1;
+        if (got == 0) return -1;
+        if (got < 0) return got;
 
         len -= got;
     }
