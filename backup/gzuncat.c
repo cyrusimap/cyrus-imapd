@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <zlib.h>
 
 #include "gzuncat.h"
@@ -256,6 +257,7 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
             break;
         }
         else {
+            syslog(LOG_DEBUG, "IOERROR: gzuc_read: returning %i (%s)", r, gz->strm.msg);
             return r;
         }
     } while (gz->strm.avail_out); // keep going while we haven't filled the buffer
