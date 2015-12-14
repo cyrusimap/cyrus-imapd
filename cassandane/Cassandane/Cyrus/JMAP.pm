@@ -4130,4 +4130,115 @@ EOF
     $self->assert($res !~ "$id");
 }
 
+sub test_getmessages_body_both
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate a message in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "\r\n";
+    $body .= "This is the plain text part.";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
+    $body .= "\r\n";
+    $body .= "<html>";
+    $body .= "<body>";
+    $body .= "<p>This is the html part.</p>";
+    $body .= "</body>";
+    $body .= "</html>";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348--";
+    $exp_sub{A} = $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+
+    xlog "get messages";
+    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals($msg->{textBody}, 'This is the plain text part.');
+    $self->assert_str_equals($msg->{htmlBody}, '<html><body><p>This is the html part.</p></body></html>');
+}
+
+sub test_getmessages_body_plain
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate a message in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "A plain text message.";
+    $exp_sub{A} = $self->make_message("foo",
+        body => $body
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+
+    xlog "get messages";
+    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals($msg->{textBody}, 'A plain text message.');
+    $self->assert_str_equals($msg->{htmlBody}, 'A plain text message.');
+}
+
+sub test_getmessages_body_html
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate a message in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "<html><body><p>An html message.</p></body></html>";
+    $exp_sub{A} = $self->make_message("foo",
+        mime_type => "text/html",
+        body => $body
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+
+    xlog "get messages";
+    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals($msg->{textBody}, '   AN HTML MESSAGE.   ');
+    $self->assert_str_equals($msg->{htmlBody}, '<html><body><p>An html message.</p></body></html>');
+}
+
+
 1;
