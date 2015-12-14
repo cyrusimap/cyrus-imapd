@@ -275,7 +275,15 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
         r = _parse_line(ps, NULL, NULL, &dl);
         prot_free(ps);
 
-        if (r == EOF) return r;
+        if (r == EOF) {
+            const char *error = prot_error(ps);
+            if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
+                syslog(LOG_ERR,
+                       "%s: error reading message %i at offset %jd, byte %i: %s",
+                       __func__, message->id, message->offset, prot_bytes_in(ps), error);
+            }
+            return r;
+        }
 
         vmrock->cached_dlist = dl;
         vmrock->cached_offset = message->offset;
@@ -518,7 +526,16 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk
         int mailbox_removed = 0;
 
         int c = _parse_line(ps, NULL, &cmd, &dl);
-        if (c == EOF) break;
+        if (c == EOF) {
+            const char *error = prot_error(ps);
+            if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
+                syslog(LOG_ERR,
+                       "%s: error reading chunk %i data at offset %jd, byte %i: %s",
+                       __func__, chunk->id, chunk->offset, prot_bytes_in(ps), error);
+                r = EOF;
+            }
+            break;
+        }
 
         if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
             goto next_line;
