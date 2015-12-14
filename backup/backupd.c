@@ -860,7 +860,7 @@ static int cmd_apply_message(struct dlist *dl)
 {
     struct sync_msgid_list *guids = sync_msgid_list_create(0);
     struct dlist *ki;
-    int r = IMAP_PROTOCOL_ERROR;
+    int r = 0;
 
     /* dig out each guid */
     for (ki = dl->head; ki; ki = ki->next) {
@@ -871,13 +871,16 @@ static int cmd_apply_message(struct dlist *dl)
     }
 
     /* bail out if there's no messages */
-    if (!guids->head)
+    if (!guids->head) {
+        r = IMAP_PROTOCOL_ERROR;
         goto done;
+    }
 
     /* find each open backup that wants a copy of any of these guids,
      * and append the entire MESSAGE line to it
      */
     struct open_backup *open;
+    int appended = 0;
     for (open = backupd_open_backups.head; open; open = open->next) {
         struct sync_msgid *msgid;
         int want_append = 0;
@@ -890,6 +893,23 @@ static int cmd_apply_message(struct dlist *dl)
         }
 
         if (want_append) {
+            r = backup_append(open->backup, dl, time(0));
+            if (r) break;
+            appended++;
+        }
+    }
+
+    /* for mailboxes that have never been seen before, the sync client
+     * will send APPLY MESSAGE commands without a corresponding reserve,
+     * which means none of the open backups will accept the message. if
+     * we get here and haven't appended the line to any backup, then
+     * we've found this case.  so append it to all of the open backups,
+     * and let compress sort it out.
+     */
+    if (!r && appended == 0) {
+        syslog(LOG_DEBUG, "received unreserved messages, applying to all open backups...\n");
+        for (open = backupd_open_backups.head; open; open = open->next) {
+            syslog(LOG_DEBUG, "applying unreserved messages to %s\n", open->name);
             r = backup_append(open->backup, dl, time(0));
             if (r) break;
         }
@@ -1036,6 +1056,7 @@ static void cmd_apply(struct dlist *dl)
         r = IMAP_PROTOCOL_ERROR;
     }
 
+    syslog(LOG_DEBUG, "sending response to %s: %i", dl->name, r);
     prot_printf(backupd_out, "%s\r\n", backupd_response(r));
 }
 
