@@ -611,7 +611,8 @@ error:
     return IMAP_INTERNAL;
 }
 
-int backup_append_end(struct backup *backup) {
+static int _append_end(struct backup *backup, time_t ts)
+{
     int r;
     struct backup_append_state *append_state = backup->append_state;
 
@@ -636,7 +637,7 @@ int backup_append_end(struct backup *backup) {
 
     struct sqldb_bindval bval[] = {
         { ":id",        SQLITE_INTEGER, { .i = append_state->chunk_id   } },
-        { ":ts_end",    SQLITE_INTEGER, { .i = time(NULL)               } },
+        { ":ts_end",    SQLITE_INTEGER, { .i = ts                       } },
         { ":length",    SQLITE_INTEGER, { .i = append_state->wrote      } },
         { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1                } },
         { NULL,         SQLITE_NULL,    { .s = NULL                     } },
@@ -654,6 +655,11 @@ int backup_append_end(struct backup *backup) {
 
     free(append_state);
     return r;
+}
+
+EXPORTED int backup_append_end(struct backup *backup)
+{
+    return _append_end(backup, time(NULL));
 }
 
 EXPORTED int backup_append_abort(struct backup *backup)
@@ -771,11 +777,12 @@ EXPORTED int backup_reindex(const char *name)
         prot_setisclient(member, 1); /* don't sync literals */
 
         // FIXME stricter timestamp sequence checks
-        time_t member_ts = -1;
+        time_t member_start_ts = -1;
+        time_t member_end_ts = -1;
+        time_t ts = -1;
 
         while (1) {
             struct buf cmd = BUF_INITIALIZER;
-            time_t ts;
             struct dlist *dl = NULL;
 
             int c = _parse_line(member, &ts, &cmd, &dl);
@@ -786,19 +793,20 @@ EXPORTED int backup_reindex(const char *name)
                             "error reading chunk at offset %jd, byte %i: %s\n",
                             member_offset, prot_bytes_in(member), error);
                 }
+                member_end_ts = ts;
                 break;
             }
 
-            if (member_ts == -1) {
+            if (member_start_ts == -1) {
                 if (prev_member_ts != -1 && prev_member_ts > ts) {
                     fatal("member timestamp older than previous", EC_DATAERR);
                 }
-                member_ts = ts;
+                member_start_ts = ts;
                 char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
                 _sha1_file(backup->fd, backup->data_fname, member_offset, file_sha1);
-                _append_start(backup, member_ts, member_offset, file_sha1, 1, 0);
+                _append_start(backup, member_start_ts, member_offset, file_sha1, 1, 0);
             }
-            else if (member_ts > ts)
+            else if (member_start_ts > ts)
                 fatal("line timestamp older than previous", EC_DATAERR);
 
             if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
@@ -813,11 +821,11 @@ EXPORTED int backup_reindex(const char *name)
         }
 
         if (backup->append_state)
-            backup_append_end(backup);
+            _append_end(backup, member_end_ts);
         prot_free(member);
         gzuc_member_end(gzuc, NULL);
 
-        prev_member_ts = member_ts;
+        prev_member_ts = member_start_ts;
     }
 
     fprintf(stderr, "reached end of file\n");
