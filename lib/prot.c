@@ -1775,7 +1775,6 @@ EXPORTED char *prot_fgets(char *buf, unsigned size, struct protstream *s)
     while (size && (c = prot_getc(s)) != EOF) {
         size--;
         *p++ = c;
-        s->bytes_in++;
         if (c == '\n') break;
     }
     if (p == buf) return 0;
