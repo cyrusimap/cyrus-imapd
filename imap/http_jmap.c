@@ -2261,6 +2261,7 @@ static json_t *jmap_emailers_from_addresses(const char *addrs)
         emailers = NULL;
     }
 
+    parseaddr_free(a);
     buf_free(&buf);
     return emailers;
 
@@ -2285,6 +2286,7 @@ static int jmap_message_bodies_cb(int isbody,
                                   void *rock)
 {
     struct jmap_message_bodies_data *d = (struct jmap_message_bodies_data *) rock;
+
     /* Skip headers. */
     if (!isbody) {
         return 0;
@@ -2403,6 +2405,7 @@ static json_t *jmap_message_from_record(const char *id,
         r = message_get_messageid(m, &buf);
         json_object_set_new(msg, "blobId", r ?
                 json_null() : json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
     }
     /* threadId */
     if (_wantprop(props, "threadId")) {
@@ -2438,7 +2441,83 @@ static json_t *jmap_message_from_record(const char *id,
     }
     /* XXX hasAttachment */
 
-    /* XXX headers */
+    /* headers */
+    if (_wantprop(props, "headers")) {
+        /* XXX compiler error: undefined reference to 'message_get_header'
+        message_get_header(m, MESSAGE_DECODED, &buf);
+        buf_reset(&buf);
+        */
+        struct buf msgbuf = BUF_INITIALIZER;
+        if ((r = mailbox_map_record(mbox, record, &msgbuf))) {
+            syslog(LOG_ERR, "mailbox_map_record(%s): %s",
+                    mbox->name, error_message(r));
+            json_decref(msg);
+            return NULL;
+        }
+
+        /* Parse headers. */
+        /* XXX Does mailbox_map_record returns decoded message data? */
+        struct buf hdrbuf = BUF_INITIALIZER;
+        char *base = buf_newcstring(&msgbuf);
+        char *top = base + record->header_size;
+        char *key = base;
+        json_t *headers = json_pack("{}");
+        while (key && key < top) {
+            int isgood = 0;
+
+            /* Look for the key-value separator. */
+            char *val = strchr(key, ':');
+            if (!val || val == key || val > top) {
+                break;
+            }
+            /* Terminate key. */
+            *val++ = '\0';
+
+            /* Look for end of header value. */
+            char *crlf = val;
+            while (crlf && crlf < top && !isgood) {
+                crlf = strchr(crlf, '\r');
+                if (!crlf || crlf >= top || *(crlf+1) != '\n') {
+                    /* bogus data */
+                    break;
+                }
+                if (*(crlf+2) == ' ' || *(crlf+2) == '\t') {
+                    /* a continuation line */
+                    crlf += 3;
+                    continue;
+                }
+                /* found a new header value */
+                *crlf = '\0';
+                crlf += 2;
+                isgood = 1;
+            }
+
+            /* Add or append the the header value to the JSON header object. */
+            if (isgood) {
+                /* Header values tend to come with a leading blank. */
+                if (*val == ' ') val++;
+                json_t *curval = json_object_get(headers, key);
+                if (!curval) {
+                    /* Header hasn't been defined yet. Add it to the map. */
+                    json_object_set_new(headers, key, json_string(val));
+                } else {
+                    /* Concatenate values for recurring keys. This shouldn't
+                     * occur too often, so let's just realloc */
+                    buf_setcstr(&hdrbuf, json_string_value(curval));
+                    buf_appendcstr(&hdrbuf, "\n");
+                    buf_appendcstr(&hdrbuf, val);
+                    json_object_set_new(headers, key, json_string(buf_cstring(&hdrbuf)));
+                    buf_reset(&hdrbuf);
+                }
+            }
+            key = crlf;
+        }
+        buf_free(&msgbuf);
+        buf_free(&hdrbuf);
+        free(base);
+
+        json_object_set_new(msg, "headers", headers);
+    }
     /* from */
     if (_wantprop(props, "from")) {
         message_get_from(m, &buf);
@@ -2497,7 +2576,7 @@ static json_t *jmap_message_from_record(const char *id,
     /* textBody */
     /* htmlBody */
     /* preview */
-    if (_wantprop(props, "textBody") || _wantprop(props, "htmlBody") || _wantprop(props, "preview")) {
+    if (_wantprop(props, "textBody") ||_wantprop(props, "htmlBody") || _wantprop(props, "preview")) {
         message_foreach_text_section(m, &jmap_message_bodies_cb, &d);
     }
     if (_wantprop(props, "textBody")) {
@@ -2528,6 +2607,7 @@ static json_t *jmap_message_from_record(const char *id,
 
     if (d.text) free(d.text);
     if (d.html) free(d.html);
+    buf_free(&buf);
 
     return msg;
 }
