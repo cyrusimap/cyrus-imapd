@@ -384,6 +384,8 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
     message_parse_body(&msg, *body,
                        DEFAULT_CONTENT_TYPE, (strarray_t *)0);
 
+    (*body)->filesize = msg.len;
+
     message_guid_generate(&(*body)->guid, msg.base, msg.len);
 
     lseek(fd, 0L, SEEK_SET);
@@ -415,7 +417,15 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     message_parse_body(&msg, body,
                        DEFAULT_CONTENT_TYPE, (strarray_t *)0);
 
+    body->filesize = msg_len;
+
     message_guid_generate(&body->guid, msg_base, msg_len);
+
+    if ((int)body->filesize != (int)(body->header_size + body->content_size)) {
+        syslog(LOG_NOTICE, "IOERROR: size mismatch on parse %s (%d, %d)",
+               message_guid_encode(&body->guid), (int)body->filesize,
+               (int)(body->header_size + body->content_size));
+    }
 
     return 0;
 }
@@ -588,7 +598,7 @@ HIDDEN int message_create_record(struct index_record *record,
     if (time_from_rfc822(body->date, &record->gmtime) < 0)
         record->gmtime = 0;
 
-    record->size = body->header_size + body->content_size;
+    record->size = body->filesize;
     record->header_size = body->header_size;
     record->content_lines = body->content_lines;
     message_guid_copy(&record->guid, &body->guid);
