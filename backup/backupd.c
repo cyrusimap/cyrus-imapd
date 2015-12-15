@@ -966,6 +966,10 @@ static int cmd_apply_reserve(struct dlist *dl)
             int message_id = backup_get_message_id(open->backup, guid_str);
 
             if (message_id <= 0) {
+                syslog(LOG_DEBUG,
+                       "%s: %s wants message %s",
+                       __func__, strarray_nth(&userids, i), guid_str);
+
                 /* add it to the reserved guids list */
                 sync_msgid_insert(open->reserved_guids, guid);
 
