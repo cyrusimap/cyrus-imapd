@@ -4255,7 +4255,7 @@ sub test_getmessages_preview
     $store->_select();
     $self->{gen}->set_next_uid(1);
 
-    my $body = "A plain text message.";
+    my $body = "A   plain\r\ntext message.";
     $exp_sub{A} = $self->make_message("foo",
         body => $body
     );
@@ -4267,10 +4267,7 @@ sub test_getmessages_preview
     $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    my $x = Dumper($msg);
-    xlog "$x";
-
-    $self->assert_str_equals($msg->{textBody}, 'A plain text message.');
+    $self->assert_str_equals($msg->{textBody}, "A   plain\r\ntext message.");
     $self->assert_str_equals($msg->{preview}, 'A plain text message.');
 }
 
