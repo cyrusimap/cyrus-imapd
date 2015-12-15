@@ -1882,6 +1882,8 @@ done:
     return r;
 }
 
+/* Convert the email addresses in addrs to a JSON array of
+ * JMAP Emailer objects. */
 static json_t *jmap_emailers_from_addresses(const char *addrs)
 {
     json_t *emailers = json_pack("[]");
@@ -1930,6 +1932,9 @@ static void jmap_message_bodies_extract_plain(const struct buf *buf, void *rock)
     *dst = buf_newcstring((struct buf*) buf);
 }
 
+/* Extract the plain text and HTML bodies of a Cyrus message to UTF-8 encoded
+ * strings. Later parts in a multipart message of the same conten type
+ * overwrite earlier ones. */
 static int jmap_message_bodies_cb(int isbody,
                                   int charset,
                                   int encoding,
@@ -2031,6 +2036,9 @@ static char *jmap_message_extract_preview(char *text, size_t len)
     return (char *) dst;
 }
 
+/* Convert the mail contained in record to a JMAP Message object. If props
+ * is not NULL, only convert the properties defined in props.
+ * Return NULL on error. */
 static json_t *jmap_message_from_record(const char *id,
                                         struct mailbox *mbox,
                                         const struct index_record *record,
