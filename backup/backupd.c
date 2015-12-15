@@ -1049,11 +1049,27 @@ static void cmd_apply(struct dlist *dl)
     else if (strcmp(dl->name, "MESSAGE") == 0) {
         r = cmd_apply_message(dl);
     }
+    else if (strcmp(dl->name, "QUOTA") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
     else if (strcmp(dl->name, "RENAME") == 0) {
         r = cmd_apply_rename(dl);
     }
     else if (strcmp(dl->name, "RESERVE") == 0) {
         r = cmd_apply_reserve(dl);
+    }
+    else if (strcmp(dl->name, "SEEN") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
+    else if (strcmp(dl->name, "SIEVE") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
+    else if (strcmp(dl->name, "SUB") == 0) {
+        /* ignore and succeed */
+        r = 0;
     }
     // FIXME support other commands
     else {
