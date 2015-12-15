@@ -53,7 +53,8 @@ const int backup_index_version = 1;
 const char backup_index_initsql[] = QUOTE(
     CREATE TABLE chunk(
         id INTEGER PRIMARY KEY ASC,
-        timestamp INTEGER,
+        ts_start INTEGER,
+        ts_end INTEGER,
         offset INTEGER unique,
         length INTEGER,
         file_sha1 TEXT,
@@ -118,19 +119,20 @@ const struct sqldb_upgrade backup_index_upgrade[] = {
 };
 
 const char backup_index_start_sql[] = QUOTE(
-    INSERT INTO chunk ( timestamp, offset, file_sha1 )
-        VALUES ( :timestamp, :offset, :file_sha1 );
+    INSERT INTO chunk ( ts_start, offset, file_sha1 )
+        VALUES ( :ts_start, :offset, :file_sha1 );
 );
 
 const char backup_index_end_sql[] = QUOTE(
     UPDATE chunk SET
+        ts_end = :ts_end,
         length = :length,
         data_sha1 = :data_sha1
     WHERE id = :id;
 );
 
-#define CHUNK_SELECT_FIELDS QUOTE(                          \
-    id, timestamp, offset, length, file_sha1, data_sha1     \
+#define CHUNK_SELECT_FIELDS QUOTE(                              \
+    id, ts_start, ts_end, offset, length, file_sha1, data_sha1  \
 )
 
 const char backup_index_chunk_select_all_sql[] =

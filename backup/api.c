@@ -502,7 +502,7 @@ static int _append_start(struct backup *backup, time_t ts, off_t offset,
     append_state->wrote += strlen(header);
 
     struct sqldb_bindval bval[] = {
-        { ":timestamp", SQLITE_INTEGER, { .i = ts           } },
+        { ":ts_start",  SQLITE_INTEGER, { .i = ts           } },
         { ":offset",    SQLITE_INTEGER, { .i = offset       } },
         { ":file_sha1", SQLITE_TEXT,    { .s = file_sha1    } },
         { NULL,         SQLITE_NULL,    { .s = NULL         } },
@@ -636,6 +636,7 @@ int backup_append_end(struct backup *backup) {
 
     struct sqldb_bindval bval[] = {
         { ":id",        SQLITE_INTEGER, { .i = append_state->chunk_id   } },
+        { ":ts_end",    SQLITE_INTEGER, { .i = time(NULL)               } },
         { ":length",    SQLITE_INTEGER, { .i = append_state->wrote      } },
         { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1                } },
         { NULL,         SQLITE_NULL,    { .s = NULL                     } },

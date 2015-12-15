@@ -69,7 +69,8 @@ char * _column_text(sqlite3_stmt *stmt, int column);
 struct chunk {
     struct chunk *next;
     int id;
-    time_t timestamp;
+    time_t ts_start;
+    time_t ts_end;
     off_t offset;
     size_t length;
     char *file_sha1;
@@ -118,7 +119,8 @@ static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
 
     int column = 0;
     chunk->id = _column_int(stmt, column++);
-    chunk->timestamp = _column_int64(stmt, column++);
+    chunk->ts_start = _column_int64(stmt, column++);
+    chunk->ts_end = _column_int64(stmt, column++);
     chunk->offset = _column_int64(stmt, column++);
     chunk->length = _column_int64(stmt, column++);
     chunk->file_sha1 = _column_text(stmt, column++);
@@ -202,6 +204,8 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
     }
 
     /* validate data-within-this-chunk checksum */
+    // FIXME length and data_sha1 are set at backup_append_end.
+    //       detect and correctly report case where this hasn't occurred.
     char buf[8192]; /* FIXME whatever */
     size_t len = 0;
     SHA_CTX sha_ctx;
