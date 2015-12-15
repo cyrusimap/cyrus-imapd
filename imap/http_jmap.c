@@ -2329,39 +2329,52 @@ static int jmap_message_bodies_cb(int isbody,
 /* Generate a preview of text of at most len bytes, excluding the zero
  * byte.
  *
- * If text is longer than len and len is greater than 4, then return a
- * string  ending in '...' and holding as many complete UTF-8 characters,
+ * Consecutive whitespaces, including newlines, are collapsed to a single
+ * blank. If text is longer than len and len is greater than 4, then return
+ * a string  ending in '...' and holding as many complete UTF-8 characters,
  * that the total byte count of non-zero characters is at most len.
  *
  * The input string must be properly encoded UTF-8 and is not checked
  * for errors. */
 static char *jmap_message_extract_preview(char *text, size_t len)
 {
-    unsigned char *p;
+    unsigned char *dst, *d, *t;
+    size_t n;
 
     if (!text) {
-        return xstrdup("");
+        return NULL;
     }
-    if (strlen(text) < len) {
-        return xstrdup(text);
+
+    /* Replace all whitespace with single blanks. */
+    dst = (unsigned char *) xzmalloc(len+1);
+    for (t = (unsigned char *) text, d = dst; *t && d < (dst+len); ++t, ++d) {
+        *d = isspace(*t) ? ' ' : *t;
+        if (isspace(*t)) {
+            while(isspace(*++t))
+                ;
+            --t;
+        }
     }
-    p = (unsigned char *) xstrndup(text, len);
-    if (len <= 4) {
-        return (char *) p;
+    n = d - dst;
+
+    /* Anything left to do? */
+    if (n < len || len <= 4) {
+        return (char*) dst;
     }
-    p[--len] = '.';
-    p[--len] = '.';
-    p[--len] = '.';
-    /* XXX The conversions are only rudimentary tested */
-    while ((p[len] & 0xc0) == 0x80) {
-        p[len+2] = 0;
-        p[--len] = '.';
+
+    /* Append trailing ellipsis. */
+    dst[--n] = '.';
+    dst[--n] = '.';
+    dst[--n] = '.';
+    while (n && (dst[n] & 0xc0) == 0x80) {
+        dst[n+2] = 0;
+        dst[--n] = '.';
     }
-    if (p[len] > 0x80) {
-        p[len+2] = 0;
-        p[--len] = '.';
+    if (dst[n] >= 0x80) {
+        dst[n+2] = 0;
+        dst[--n] = '.';
     }
-    return (char *) p;
+    return (char *) dst;
 }
 
 static json_t *jmap_message_from_record(const char *id,
@@ -2483,7 +2496,7 @@ static json_t *jmap_message_from_record(const char *id,
     }
     /* textBody */
     /* htmlBody */
-    /* XXX preview */
+    /* preview */
     if (_wantprop(props, "textBody") || _wantprop(props, "htmlBody") || _wantprop(props, "preview")) {
         message_foreach_text_section(m, &jmap_message_bodies_cb, &d);
     }
@@ -2494,17 +2507,16 @@ static json_t *jmap_message_from_record(const char *id,
         json_object_set_new(msg, "htmlBody", d.html ? json_string(d.html) : json_null());
     }
     if (_wantprop(props, "preview")) {
-
-    /* XXX make it configurable (preview_annotation) */
-#define PREVIEW_ANNOT "/vendor/messagingengine.com/preview"
-
-        annotatemore_msg_lookup(mbox->name, record->uid, PREVIEW_ANNOT, httpd_userid, &buf);
+        const char *annot;
+        if ((annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT))) {
+            annotatemore_msg_lookup(mbox->name, record->uid, annot, httpd_userid, &buf);
+        }
         if (buf.len) {
-            /* FastMail store the preview as message  annotations, so if there
+            /* FastMail store the preview as message annotations, so if there
              * is one defined, use that one. */
             json_object_set_new(msg, "preview", json_string(buf_cstring(&buf)));
         } else {
-            char *preview = jmap_message_extract_preview(d.text, 32);
+            char *preview = jmap_message_extract_preview(d.text, config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH));
             json_object_set_new(msg, "preview", json_string(preview));
             free(preview);
         }
