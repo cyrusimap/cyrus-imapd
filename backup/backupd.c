@@ -1137,9 +1137,9 @@ static void cmd_get(struct dlist *dl)
     else if (strcmp(dl->name, "MAILBOXES") == 0) {
         struct dlist *di;
         for (di = dl->head; di; di = di->next) {
-            r = cmd_get_mailbox(di, 0);
-            if (r) goto done;
+            cmd_get_mailbox(di, 0);
         }
+        r = 0; /* sync proto expects this to always report success */
     }
     else if (strcmp(dl->name, "FULLMAILBOX") == 0) {
         r = cmd_get_mailbox(dl, 1);
