@@ -247,22 +247,22 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
     int r = sqldb_exec(backup->db, backup_index_mailbox_update_sql,
                        mbox_bval, NULL, NULL);
 
-    buf_free(&annotations_buf);
-
-    if (r) {
-        // FIXME handle this sensibly
-        syslog(LOG_DEBUG, "%s: something went wrong: %i update %s\n", __func__, r, mboxname);
-        goto error;
-    }
-    if (sqldb_changes(backup->db) == 0) {
+    if (!r && sqldb_changes(backup->db) == 0) {
         r = sqldb_exec(backup->db, backup_index_mailbox_insert_sql,
                        mbox_bval, NULL, NULL);
         if (r) {
             // FIXME handle this sensibly
             syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s\n", __func__, r, mboxname);
-            goto error;
         }
     }
+    else if (r) {
+        // FIXME handle this sensibly
+        syslog(LOG_DEBUG, "%s: something went wrong: %i update %s\n", __func__, r, mboxname);
+    }
+
+    buf_free(&annotations_buf);
+
+    if (r) goto error;
 
     int mailbox_id = backup_get_mailbox_id(backup, uniqueid);
 
