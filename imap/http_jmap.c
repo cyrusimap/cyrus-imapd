@@ -66,6 +66,7 @@
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
+#include "json_support.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"

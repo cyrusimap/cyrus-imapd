@@ -50,31 +50,13 @@
 #include <syslog.h>
 
 #include "httpd.h"
+#include "json_support.h"
 #include "jcal.h"
 #include "xcal.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xstrlcat.h"
-
-
-#ifndef json_boolean
-#define json_boolean(val)       ((val) ? json_true() : json_false())
-#endif /* json_boolean */
-
-#ifndef json_boolean_value
-#define json_boolean_value(val) ((val) == json_true() ? 1 : 0)
-#endif /* json_boolean_value */
-
-#ifndef json_object_foreach
-#define json_object_foreach(obj, key, val)                      \
-     void *_iter_;                                              \
-     for (_iter_ = json_object_iter(obj);                       \
-          _iter_                                                \
-              && (key = json_object_iter_key(_iter_))           \
-              && (val = json_object_iter_value(_iter_));        \
-          _iter_ = json_object_iter_next(obj, _iter_))
-#endif /* json_object_foreach */
 
 
 /*
