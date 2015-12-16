@@ -2063,10 +2063,11 @@ static json_t *jmap_message_from_record(const char *id,
 
     /* blobId */
     if (_wantprop(props, "blobId")) {
-        r = message_get_messageid(m, &buf);
-        json_object_set_new(msg, "blobId", r ?
-                json_null() : json_string(buf_cstring(&buf)));
+        buf_appendcstr(&buf, "m-");
+        buf_appendcstr(&buf, id);
+        json_object_set_new(msg, "blobId", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
+
     }
     /* threadId */
     if (_wantprop(props, "threadId")) {
