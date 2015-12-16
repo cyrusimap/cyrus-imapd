@@ -1103,6 +1103,8 @@ static const char *backupd_response(int r)
         return "NO IMAP_MAILBOX_NONEXISTENT No Such Mailbox";
     case IMAP_PROTOCOL_ERROR:
         return "NO IMAP_PROTOCOL_ERROR protocol error FIXME";
+    case IMAP_PROTOCOL_BAD_PARAMETERS:
+        return "NO IMAP_PROTOCOL_BAD_PARAMETERS Bad parameters";
     default:
         return "NO Unknown error";
     }
@@ -1137,6 +1139,30 @@ done:
     return r;
 }
 
+static int is_mailboxes_single_user(struct dlist *dl)
+{
+    char *userid = NULL;
+    struct dlist *di;
+
+    for (di = dl->head; di; di = di->next) {
+        mbname_t *mbname = mbname_from_intname(di->sval);
+
+        if (!userid) {
+            userid = xstrdup(mbname_userid(mbname));
+        }
+        else if (strcmp(userid, mbname_userid(mbname)) != 0) {
+            mbname_free(&mbname);
+            free(userid);
+            return 0;
+        }
+
+        mbname_free(&mbname);
+    }
+
+    free(userid);
+    return 1;
+}
+
 static void cmd_get(struct dlist *dl)
 {
     int r = IMAP_PROTOCOL_ERROR;
@@ -1156,10 +1182,19 @@ static void cmd_get(struct dlist *dl)
     }
     else if (strcmp(dl->name, "MAILBOXES") == 0) {
         struct dlist *di;
-        for (di = dl->head; di; di = di->next) {
-            cmd_get_mailbox(di, 0);
+        if (is_mailboxes_single_user(dl)) {
+            for (di = dl->head; di; di = di->next) {
+                cmd_get_mailbox(di, 0);
+            }
+            r = 0; /* sync proto expects this to always report success */
         }
-        r = 0; /* sync proto expects this to always report success */
+        else {
+            /* reject MAILBOXES requests that span multiple users.
+             * sync_client will promote these to USER requests, which
+             * it always sends one at a time with a restart in between
+             */
+            r = IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
     }
     else if (strcmp(dl->name, "FULLMAILBOX") == 0) {
         r = cmd_get_mailbox(dl, 1);
