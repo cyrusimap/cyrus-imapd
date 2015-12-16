@@ -49,6 +49,7 @@
 #include "lib/exitcodes.h"
 
 #include "imap/global.h"
+#include "imap/imap_err.h"
 
 #include "backup/api.h"
 
@@ -314,8 +315,10 @@ int main (int argc, char **argv)
             else if (options.mode == CTLBU_MODE_MBOXNAME)
                 mbname = mbname_from_intname(argv[i]);
 
-            if (mbname)
+            if (mbname) {
                 backup_get_paths(mbname, &fname, NULL);
+                buf_setcstr(&userid, mbname_userid(mbname));
+            }
             else
                 buf_setcstr(&fname, argv[i]);
 
@@ -404,12 +407,43 @@ static int cmd_reindex_one(void *rock,
 }
 
 static int cmd_verify_one(void *rock,
-                          const char *userid, size_t userid_len,
-                          const char *fname, size_t fname_len)
+                          const char *key, size_t key_len,
+                          const char *data, size_t data_len)
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
-    (void) options;
-    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
-            userid, userid_len, fname, fname_len);
-    return -1;
+    struct backup *backup = NULL;
+    char *userid = NULL;
+    char *fname = NULL;
+    int r;
+
+    (void) options;  // not currently using this
+
+    /* input args might not be 0-terminated, so make a safe copy */
+    if (key_len)
+        userid = xstrndup(key, key_len);
+    if (data_len)
+        fname = xstrndup(data, data_len);
+
+    r = backup_open_paths(&backup, fname, NULL, 1);
+
+    if (r == IMAP_MAILBOX_LOCKED) {
+        printf("verify %s: locked\n", userid ? userid : fname);
+        r = 0;
+        goto done;
+    }
+    else if (r) {
+        fprintf(stderr, "error opening %s: %s\n", fname, error_message(r));
+    }
+
+    if (!r) r = backup_verify(backup, BACKUP_VERIFY_FULL);
+
+    printf("verify %s: %s\n",
+           userid ? userid : fname,
+           r ? "failed" : "ok");
+
+done:
+    if (userid) free(userid);
+    if (fname) free(fname);
+
+    return r;
 }
