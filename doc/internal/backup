@@ -106,6 +106,18 @@ APPLY MESSAGE command, and search it by GUID for the message in question if/when
 the message content is needed.  this cooperates nicely with reserve/message's
 multiplicity and makes compress easier to implement.
 
+the indexed length needs to be the length of the message, not the length of the
+dlist wrapper, because we need to know this cheaply to supply RECORDs in
+MAILBOX responses.
+
+we can possibly solve the problem where we need to append the entire APPLY
+MESSAGE dlist to every backup file it touches (even though most of the
+contained messages belong to only one of those users) by simply rejecting
+"GET MAILBOXES" requests.  i think the sync_client will promote those to USER
+and retry, which always looks at a single user at a time and always restarts
+between each user.  or maybe just reject "GET MAILBOXES" requests that request
+mailboxes belonging to >1 user.
+
 
 renames
 -------
@@ -604,6 +616,19 @@ reason we're beholden to it for the mailboxes db too
 
 if we have a mailboxes db then we need a reconstruct tool for that, too
 
+what if we support multiple backup partitions, but don't expect these
+to necessarily correspond with mailbox partitions.  they're just for spreading
+disk usage around.
+
+* when creating a backup for a previously-unseen user we'd pick a random
+  partition to put them on
+* ctl_backups would need a command to move an existing backup to a
+  given partition
+* ctl_backups would need a command to pre-create a user backup on a
+  given partition for initial distribution
+* instead of "backup_data_path" setting, have one-or-more
+  "backup_partition-<name>" settings, ala partition- and friends
+
 
 data corruption
 ---------------
@@ -787,8 +812,7 @@ todo list
 * move _column_int etc into lib/sqldb, don't automatically xstrdup
 * clean up xsha1_file
 * perl tool to anonymise sync proto talk
-* record start and end time in each chunk
-* check for/log error when prot_stream reads return EOF
 * verification step to check entire data stream for errors (even chunks that aren't indexed)
 * prot_fill_cb: extra argument to pass back an error string to prot_fill
 * validate guids as they come off the wire?
+* compress -> compact?
