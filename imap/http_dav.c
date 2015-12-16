@@ -5478,8 +5478,11 @@ int meth_patch(struct transaction_t *txn, void *params)
         if (precond == HTTP_OK) {
             /* Parse, validate, and apply the patch document to the resource */
             ret = patch_doc->proc(txn, obj);
-            if (!ret) ret = pparams->put.proc(txn, obj, mailbox,
-                                              txn->req_tgt.resource, davdb);
+            if (!ret) {
+                ret = pparams->put.proc(txn, obj, mailbox,
+                                        txn->req_tgt.resource, davdb);
+                if (ret == HTTP_FORBIDDEN) ret = HTTP_UNPROCESSABLE;
+            }
         }
 
         break;
