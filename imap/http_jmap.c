@@ -4251,6 +4251,9 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     }
 
     if (_wantprop(props, "firstName")) {
+        /* JMAP doesn't have a separate field for Middle (aka "Additional
+         * Names"), so we just mash them into firstName. See reverse of this in
+         * _json_to_card */
         const char *given = strarray_safenth(n, 1);
         const char *middle = strarray_safenth(n, 2);
         buf_setcstr(&buf, given);
@@ -5614,8 +5617,21 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
+            /* JMAP doesn't have a separate field for Middle (aka "Additional
+             * Names"), so any extra names are probably in firstName, and we
+             * should split them out. See reverse of this in getcontacts_cb */
             struct vparse_entry *n = _card_multi(card, "n");
-            strarray_set(n->v.values, 1, val);
+            const char *middle = strchr(val, ' ');
+            if (middle) {
+                /* multiple worlds, first to First, rest to Middle */
+                strarray_setm(n->v.values, 1, xstrndup(val, middle-val));
+                strarray_set(n->v.values, 2, ++middle);
+            }
+            else {
+                /* single word, set First, clear Middle */
+                strarray_set(n->v.values, 1, val);
+                strarray_set(n->v.values, 2, "");
+            }
         }
         else if (!strcmp(key, "lastName")) {
             const char *val = json_string_value(jval);
