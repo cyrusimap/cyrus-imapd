@@ -63,7 +63,32 @@ EXPORTED void fatal(const char *error, int code)
 static const char *argv0 = NULL;
 static void usage(void)
 {
-    fprintf(stderr, "Usage %s: not written\n", argv0);
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    %s [options] verify [mode] backup...\n", argv0);
+
+    fprintf(stderr, "\n%s\n",
+            "Commands:\n"
+            "    verify              # verify specified backups\n"
+    );
+
+    fprintf(stderr, "%s\n",
+            "Options:\n"
+            "    -C alt_config       # alternate config file\n"
+            "    -v                  # verbose (repeat for more verbosity)\n"
+    );
+
+    fprintf(stderr, "%s\n",
+            "Modes:\n"
+            "    -A                  # all known backups\n"
+//            "    -P prefix           # backups for all users starting with \"prefix\"\n"
+//            "    -D domain           # backups for all users in domain\n"
+            "    -f                  # specified backups interpreted as filenames\n"
+            "    -m                  # specified backups interpreted as mboxnames\n"
+            "    -u                  # specified backups interpreted as userids (default)\n"
+            "\n"
+            "    Modes -A, -P, -D not available for all commands\n" /* FIXME which */
+    );
+
     exit(EC_USAGE);
 }
 
@@ -167,9 +192,18 @@ static enum ctlbu_cmd parse_cmd_string(const char *cmd)
     return CTLBU_CMD_UNSPECIFIED;
 }
 
+static void save_argv0(const char *s)
+{
+    const char *slash = strrchr(s, '/');
+    if (slash)
+        argv0 = slash + 1;
+    else
+        argv0 = s;
+}
+
 int main (int argc, char **argv)
 {
-    argv0 = argv[0];
+    save_argv0(argv[0]);
 
     int opt;
     const char *alt_config = NULL;
