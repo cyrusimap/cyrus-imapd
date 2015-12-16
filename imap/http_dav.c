@@ -5736,6 +5736,11 @@ int meth_put(struct transaction_t *txn, void *params)
         goto done;
     }
 
+    if (txn->req_tgt.allow & ALLOW_PATCH) {
+        /* Add Accept-Patch formats to response */
+        txn->resp_body.patch = pparams->patch_docs;
+    }
+
     if (flags & PREFER_REP) {
         struct resp_body_t *resp_body = &txn->resp_body;
         const char **hdr;
