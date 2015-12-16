@@ -89,6 +89,8 @@ struct body {
     int numparts;               /* For multipart types */
     struct body *subpart;       /* For message/rfc822 and multipart types */
 
+    size_t filesize;            /* to make sure that things match up! */
+
     /*
      * Other header information.
      * Only meaningful for body-parts at top level or
