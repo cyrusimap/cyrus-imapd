@@ -7930,15 +7930,15 @@ static void jmap_participants_to_ical(icalcomponent *comp,
 
     if (name && email) {
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        buf_printf(&buf, "mailto:%s", email);
         if (prop) {
             /* Remove but keep property to preserve ical parameters. */
             icalcomponent_remove_property(comp, prop);
-            buf_printf(&buf, "mailto:%s", email);
             icalproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
-            buf_reset(&buf);
         } else {
-            prop = icalproperty_new_organizer(email);
+            prop = icalproperty_new_organizer(buf_cstring(&buf));
         }
+        buf_reset(&buf);
         icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
         if (param) {
             icalproperty_remove_parameter_by_ref(prop, param);
@@ -9388,6 +9388,7 @@ static int jmap_schedule_ical(const char *userid,
     const char *organizer = NULL, *uid;
     icalcomponent *comp = NULL;
 
+
     /* Initialize scheduling parameters. */
     memset(&sparam, 0, sizeof(struct sched_param));
 
@@ -9404,13 +9405,7 @@ static int jmap_schedule_ical(const char *userid,
     /* Lookup the organizer. */
     uid = icalcomponent_get_uid(comp);
     r = caladdress_lookup(organizer, &sparam, userid);
-    if (r == HTTP_NOT_FOUND) {
-        /* XXX need to handle non-local organizers? */
-        syslog(LOG_INFO, "ignoring unknown organizer %s in ical component %s",
-                organizer, uid);
-        r = 0; /* Skip non-local organizer. */
-        goto done;
-    } else if (r) {
+    if (r && r != HTTP_NOT_FOUND) {
         syslog(LOG_ERR, "failed to process scheduling message (org=%s, icaluid=%s)",
                 organizer, uid);
         goto done;
