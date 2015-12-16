@@ -32,7 +32,7 @@ HIDDEN int main (int argc, char **argv) {
 
     fprintf(stderr, "verifying %s...\n", backup_name);
 
-    r = backup_verify(backup, BACKUP_VERIFY_FULL);
+    r = backup_verify(backup, BACKUP_VERIFY_FULL, 99, stdout);
     backup_close(&backup);
 
     return r;

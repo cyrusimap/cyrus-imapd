@@ -202,7 +202,7 @@ EXPORTED int backup_open(struct backup **backupp,
                        BACKUP_OPEN_NORMAL, nonblock);
     if (r) goto done;
 
-    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK);
+    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK, 0, NULL);
     if (r) backup_close(backupp);
 
 done:
@@ -382,7 +382,7 @@ EXPORTED int backup_open_paths(struct backup **backupp,
     free(tmp);
     if (r) return r;
 
-    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK);
+    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK, 0, NULL);
     if (r) backup_close(backupp);
 
     return r;

@@ -176,7 +176,7 @@ int main (int argc, char **argv)
     enum ctlbu_cmd cmd = CTLBU_CMD_UNSPECIFIED;
     struct ctlbu_cmd_options options = {0};
 
-    while ((opt = getopt(argc, argv, ":AC:fmpst:x:u")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:fmpst:x:uv")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -435,7 +435,7 @@ static int cmd_verify_one(void *rock,
         fprintf(stderr, "error opening %s: %s\n", fname, error_message(r));
     }
 
-    if (!r) r = backup_verify(backup, BACKUP_VERIFY_FULL);
+    if (!r) r = backup_verify(backup, BACKUP_VERIFY_FULL, options->verbose, stdout);
 
     printf("verify %s: %s\n",
            userid ? userid : fname,

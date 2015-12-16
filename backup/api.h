@@ -81,7 +81,7 @@ enum {
 #define BACKUP_VERIFY_QUICK BACKUP_VERIFY_LAST_CHECKSUM
 #define BACKUP_VERIFY_MESSAGES (BACKUP_VERIFY_MESSAGE_LINKS | BACKUP_VERIFY_MESSAGE_GUIDS)
 #define BACKUP_VERIFY_FULL  ((unsigned) -1)
-int backup_verify(struct backup *backup, unsigned level);
+int backup_verify(struct backup *backup, unsigned level, int verbose, FILE *out);
 
 /* accessing backup properties */
 const char *backup_get_data_fname(const struct backup *backup);

@@ -105,11 +105,14 @@ static void chunk_list_empty(struct chunk_list *list) {
 }
 
 static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
-                                  struct gzuncat *gzuc);
+                                  struct gzuncat *gzuc, int verbose,
+                                  FILE *out);
 static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
-                                 struct gzuncat *gzuc, unsigned level);
+                                 struct gzuncat *gzuc, unsigned level,
+                                 int verbose, FILE *out);
 static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk,
-                                      struct gzuncat *gzuc);
+                                      struct gzuncat *gzuc, int verbose,
+                                      FILE *out);
 
 static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -131,7 +134,7 @@ static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED int backup_verify(struct backup *backup, unsigned level)
+EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, FILE *out)
 {
     struct chunk_list chunk_list = {0};
     struct gzuncat *gzuc = NULL;
@@ -157,19 +160,19 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level)
     }
 
     if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
-        r = verify_chunk_checksums(backup, chunk_list.head, gzuc);
+        r = verify_chunk_checksums(backup, chunk_list.head, gzuc, verbose, out);
 
     if (!r && level > BACKUP_VERIFY_LAST_CHECKSUM) {
         struct chunk *chunk = chunk_list.head;
         while (!r && chunk) {
             if (!r && (level & BACKUP_VERIFY_ALL_CHECKSUMS))
-                r = verify_chunk_checksums(backup, chunk, gzuc);
+                r = verify_chunk_checksums(backup, chunk, gzuc, verbose, out);
 
             if (!r && (level & BACKUP_VERIFY_MESSAGES))
-                r = verify_chunk_messages(backup, chunk, gzuc, level);
+                r = verify_chunk_messages(backup, chunk, gzuc, level, verbose, out);
 
             if (!r && (level & BACKUP_VERIFY_MAILBOX_LINKS))
-                r = verify_chunk_mailbox_links(backup, chunk, gzuc);
+                r = verify_chunk_mailbox_links(backup, chunk, gzuc, verbose, out);
 
             chunk = chunk->next;
         }
@@ -182,30 +185,33 @@ done:
 }
 
 static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
-                                  struct gzuncat *gzuc)
+                                  struct gzuncat *gzuc, int verbose, FILE *out)
 {
     int r;
 
-    if (!chunk->id) {
-        syslog(LOG_DEBUG, "%s: %s file checksum mismatch: not in index\n",
-                __func__, backup->data_fname);
-        r = -1;
-        goto done;
-    }
+    if (out && verbose)
+        fprintf(out, "checking chunk %d checksums...\n", chunk->id);
 
     /* validate file-prior-to-this-chunk checksum */
+    if (out && verbose > 1)
+        fprintf(out, "  checking file checksum...\n");
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     _sha1_file(backup->fd, backup->data_fname, chunk->offset, file_sha1);
     r = strncmp(chunk->file_sha1, file_sha1, sizeof(file_sha1));
     if (r) {
         syslog(LOG_DEBUG, "%s: %s (chunk %d) file checksum mismatch: %s on disk, %s in index\n",
                 __func__, backup->data_fname, chunk->id, file_sha1, chunk->file_sha1);
+        if (out)
+            fprintf(out, "file checksum mismatch for chunk %d: %s on disk, %s in index\n",
+                    chunk->id, file_sha1, chunk->file_sha1);
         goto done;
     }
 
     /* validate data-within-this-chunk checksum */
     // FIXME length and data_sha1 are set at backup_append_end.
     //       detect and correctly report case where this hasn't occurred.
+    if (out && verbose > 1)
+        fprintf(out, "  checking data length\n");
     char buf[8192]; /* FIXME whatever */
     size_t len = 0;
     SHA_CTX sha_ctx;
@@ -224,9 +230,17 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
                         SIZE_T_FMT " on disk,"
                         SIZE_T_FMT " in index\n",
                 __func__, backup->data_fname, chunk->id, len, chunk->length);
+        if (out)
+            fprintf(out, "data length mismatch for chunk %d: "
+                         SIZE_T_FMT " on disk,"
+                         SIZE_T_FMT " in index\n",
+                    chunk->id, len, chunk->length);
         r = -1;
         goto done;
     }
+
+    if (out && verbose > 1)
+        fprintf(out, "  checking data checksum...\n");
     unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
     char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     SHA1_Final(sha1_raw, &sha_ctx);
@@ -236,11 +250,16 @@ static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
     if (r) {
         syslog(LOG_DEBUG, "%s: %s (chunk %d) data checksum mismatch: %s on disk, %s in index\n",
                 __func__, backup->data_fname, chunk->id, data_sha1, chunk->data_sha1);
+        if (out)
+            fprintf(out, "data checksum mismatch for chunk %d: %s on disk, %s in index\n",
+                    chunk->id, data_sha1, chunk->data_sha1);
         goto done;
     }
 
 done:
     syslog(LOG_DEBUG, "%s: checksum %s!\n", __func__, r ? "failed" : "passed");
+    if (out && verbose)
+        fprintf(out, "%s\n", r ? "error" : "ok");
     return r;
 }
 
@@ -255,6 +274,8 @@ struct verify_message_rock {
     int verify_guid;
     struct dlist *cached_dlist;
     off_t cached_offset;
+    int verbose;
+    FILE *out;
 };
 
 static int _verify_message_cb(const struct backup_message *message, void *rock)
@@ -262,6 +283,7 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
     struct verify_message_rock *vmrock = (struct verify_message_rock *) rock;
     struct dlist *dl = NULL;
     struct dlist *di = NULL;
+    FILE *out = vmrock->out;
     int r;
 
     /* cache the dlist so that multiple reads from the same offset don't
@@ -285,6 +307,9 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
                 syslog(LOG_ERR,
                        "%s: error reading message %i at offset %jd, byte %i: %s",
                        __func__, message->id, message->offset, prot_bytes_in(ps), error);
+                if (out)
+                    fprintf(out, "error reading message %i at offset %jd, byte %i: %s",
+                            message->id, message->offset, prot_bytes_in(ps), error);
             }
             return r;
         }
@@ -310,6 +335,8 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
                 struct message_guid guid;
                 message_guid_generate(&guid, di->sval, di->nval);
                 r = message_guid_cmp(&guid, message->guid);
+                if (r && out)
+                    fprintf(out, "guid mismatch for message %i\n", message->id);
             }
             break;
         }
@@ -320,14 +347,20 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
 
 /* verify that each message exists within the chunk the index claims */
 static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
-                                 struct gzuncat *gzuc, unsigned level)
+                                 struct gzuncat *gzuc, unsigned level,
+                                 int verbose, FILE *out)
 {
     struct verify_message_rock vmrock = {
         gzuc,
         (level & BACKUP_VERIFY_MESSAGE_GUIDS),
         NULL,
         0,
+        verbose,
+        out,
     };
+
+    if (out && verbose)
+        fprintf(out, "checking chunk %d messages...\n", chunk->id);
 
     /* FIXME this is a mess */
     int r = gzuc_member_start_from(gzuc, chunk->offset);
@@ -342,6 +375,8 @@ static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
 
     syslog(LOG_DEBUG, "%s: chunk %d %s!\n", __func__, chunk->id,
             r ? "failed" : "passed");
+    if (out && verbose)
+        fprintf(out, "%s\n", r ? "error" : "ok");
     return r;
 }
 
@@ -456,7 +491,7 @@ static int mailbox_message_matches(const struct backup_mailbox_message *mailbox_
  * for each mailbox or mailbox_message in the index
  */
 static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk,
-                                      struct gzuncat *gzuc)
+                                      struct gzuncat *gzuc, int verbose, FILE *out)
 {
     /*
      *   get list of mailboxes in chunk
@@ -483,6 +518,9 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk
     struct backup_mailbox_message *mailbox_message = NULL;
     int r;
 
+    if (out && verbose)
+        fprintf(out, "checking chunk %d mailbox links...\n", chunk->id);
+
     mailbox_list = backup_get_mailboxes(backup, chunk->id, 0);
     mailbox_message_list = backup_get_mailbox_messages(backup, chunk->id);
 
@@ -490,6 +528,8 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk
         /* nothing we care about in this chunk */
         free(mailbox_list);
         free(mailbox_message_list);
+        if (out && verbose)
+            fprintf(out, "ok\n");
         return 0;
     }
 
@@ -536,6 +576,9 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk
                 syslog(LOG_ERR,
                        "%s: error reading chunk %i data at offset %jd, byte %i: %s",
                        __func__, chunk->id, chunk->offset, prot_bytes_in(ps), error);
+                if (out)
+                    fprintf(out, "error reading chunk %i data at offset %jd, byte %i: %s",
+                            chunk->id, chunk->offset, prot_bytes_in(ps), error);
                 r = EOF;
             }
             break;
@@ -605,6 +648,9 @@ next_line:
     while (mailbox) {
         syslog(LOG_DEBUG, "%s: chunk %d missing mailbox data for %s (%s)\n",
                 __func__, chunk->id, mailbox->uniqueid, mailbox->mboxname);
+        if (out)
+            fprintf(out, "chunk %d missing mailbox data for %s (%s)\n",
+                    chunk->id, mailbox->uniqueid, mailbox->mboxname);
         mailbox = mailbox->next;
     }
 
@@ -613,6 +659,10 @@ next_line:
         syslog(LOG_DEBUG, "%s: chunk %d missing mailbox_message data for %s uid %u\n",
                 __func__, chunk->id, mailbox_message->mailbox_uniqueid,
                 mailbox_message->uid);
+        if (out)
+            fprintf(out, "chunk %d missing mailbox_message data for %s uid %u\n",
+                    chunk->id, mailbox_message->mailbox_uniqueid,
+                    mailbox_message->uid);
         mailbox_message = mailbox_message->next;
     }
 
@@ -629,6 +679,7 @@ next_line:
 
     syslog(LOG_DEBUG, "%s: chunk %d %s!\n", __func__, chunk->id,
             r ? "failed" : "passed");
-
+    if (out && verbose)
+        fprintf(out, "%s\n", r ? "error" : "ok");
     return r;
 }
