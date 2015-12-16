@@ -8055,7 +8055,7 @@ static void jmap_byday_to_ical(struct buf *buf, int val) {
     if (week) {
         buf_printf(buf, "%+d", week);
     }
-    buf_printf(buf, icalrecur_weekday_to_string(day+1));
+    buf_appendcstr(buf, icalrecur_weekday_to_string(day+1));
 }
 
 
