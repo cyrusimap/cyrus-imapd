@@ -51,22 +51,26 @@
 #include "gzuncat.h"
 
 /*
- * current_offset and next_offset together indicate the state of the reader:
+ * current_offset, next_offset, and member_eof together indicate the state of
+ * the reader:
  *
  * when not reading a member (after gzuc_open or gzuc_member_end):
  *
  *     current_offset = -1
  *     next_offset = start point for next call to gzuc_start()
+ *     member_eof = undefined
  *
  * when reading a member (after gzuc_member_start):
  *
  *     current_offset = file offset of the start of the member being read
  *     next_offset = -1
+ *     member_eof = 0
  *
  * when reaching the end of a member (before gzuc_member_end):
  *
- *     current_offset = -1
+ *     current_offset = file offset of the start of the member being read
  *     next_offset = -1
+ *     member_eof = 1
  */
 
 static const size_t default_in_buf_size = 16 * 1024;
@@ -75,6 +79,7 @@ struct gzuncat {
     FILE *file;
     off_t current_offset;
     off_t next_offset;
+    int   member_eof;
     z_stream strm;
     unsigned char *in_buf;
     size_t in_buf_size;
@@ -91,6 +96,7 @@ EXPORTED struct gzuncat *gzuc_open(int fd)
 
     gz->current_offset = -1;
     gz->next_offset = 0;
+    gz->member_eof = -1;
     gz->in_buf = NULL;
     gz->in_buf_size = default_in_buf_size;
     gz->bytes_read = 0;
@@ -112,6 +118,19 @@ EXPORTED int gzuc_set_bufsize(struct gzuncat *gz, size_t size)
     return 0;
 }
 
+static int _inflate_init(z_stream *strm, unsigned char *in_buf)
+{
+    strm->zalloc = Z_NULL;
+    strm->zfree = Z_NULL;
+    strm->opaque = Z_NULL;
+    strm->avail_in = 0;
+    strm->next_in = in_buf;
+
+    // 15 = support maximum window size
+    // 16 = decode gzip format
+    return inflateInit2(strm, 15 + 16);
+}
+
 EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
 {
     if (gz->current_offset >= 0) return -1;
@@ -127,21 +146,14 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
     int r = fseeko(gz->file, offset, SEEK_SET);
     if (r) return r;
 
-    gz->strm.zalloc = Z_NULL;
-    gz->strm.zfree = Z_NULL;
-    gz->strm.opaque = Z_NULL;
-    gz->strm.avail_in = 0;
-    gz->strm.next_in = gz->in_buf;
-
-    // 15 = support maximum window size
-    // 16 = decode gzip format
-    r = inflateInit2(&gz->strm, 15 + 16);
+    r = _inflate_init(&gz->strm, gz->in_buf);
     if (r) return r;
 
     // anything else to initialise?
 
     gz->current_offset = offset;
     gz->next_offset = -1;
+    gz->member_eof = 0;
     gz->bytes_read = 0;
 
     return 0;
@@ -172,6 +184,7 @@ EXPORTED int gzuc_member_end(struct gzuncat *gz, off_t *offset)
 done:
     inflateEnd(&gz->strm);
     gz->current_offset = -1;
+    gz->member_eof = -1;
     gz->bytes_read = 0;
     if (!r && offset) *offset = gz->next_offset;
     return r;
@@ -200,6 +213,7 @@ EXPORTED void gzuc_close(struct gzuncat **gzp)
 
 EXPORTED int gzuc_member_eof(struct gzuncat *gz)
 {
+    if (gz->member_eof == 1) return 1;
     if (gz->current_offset < 0) return 1;
     if (gz->strm.avail_in) return 0;
     return feof(gz->file);
@@ -212,7 +226,8 @@ EXPORTED int gzuc_eof(struct gzuncat *gz)
 
 EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
 {
-    if (gz->current_offset < 0) return 0;
+    if (gz->current_offset < 0) return -1;
+    if (gz->member_eof == 1) return 0;
 
     gz->strm.avail_out = count;
     gz->strm.next_out = buf;
@@ -253,7 +268,7 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
                 gz->strm.next_in = gz->in_buf;
             }
 
-            gz->current_offset = -1;
+            gz->member_eof = 1;
             break;
         }
         else {
@@ -268,8 +283,7 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
 
 EXPORTED int gzuc_skip(struct gzuncat *gz, size_t len)
 {
-    if (gz->current_offset < 0) return -1;
-    if (feof(gz->file)) return -1;
+    if (gzuc_member_eof(gz)) return -1;
 
     while (len) {
         unsigned char discard[16 * 1024];
@@ -295,13 +309,18 @@ EXPORTED int gzuc_seekto(struct gzuncat *gz, size_t pos)
 {
     if (gz->current_offset < 0) return -1;
 
+    gz->member_eof = 0;
+
     if (pos == gz->bytes_read) return 0;
 
     if (pos < gz->bytes_read) {
         int r = fseeko(gz->file, gz->current_offset, SEEK_SET);
         if (r) return r;
-        gz->strm.avail_in = 0;
-        gz->strm.next_in = gz->in_buf;
+
+        inflateEnd(&gz->strm);
+        r = _inflate_init(&gz->strm, gz->in_buf);
+        if (r) return r;
+
         gz->bytes_read = 0;
     }
 
