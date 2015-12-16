@@ -554,6 +554,8 @@ usage:
     ctl_backups [options] compress [mode] backup...         # compress specified backups
     ctl_backups [options] lock [lock_opts] [mode] backup    # lock specified backup
 
+=> option to 'stop on error' for multi-backup commands
+
 options:
     -C alt_config       # alternate config file
     -v                  # verbose
