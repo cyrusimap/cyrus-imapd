@@ -856,6 +856,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    "receivedheader" looks at the top most Received header
    or time/mtime otherwise */
 
+{ "jmap_preview_annot", NULL, STRING }
+/* The name of the per-message annotation, if any, to store message
+   previews. */
+
+{ "jmap_preview_length", 64, INT }
+/* The maximum byte length of dynamically generated message previews. Previews
+   stored in jmap_preview_annot take precedence. */
+
 { "iolog", 0, SWITCH }
 /* Should cyrus output I/O log entries */
 

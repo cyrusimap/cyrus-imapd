@@ -580,6 +580,28 @@ EXPORTED char *mboxlist_find_specialuse(const char *use, const char *userid)
     return rock.mboxname;
 }
 
+struct _find_uniqueid_data {
+    const char *uniqueid;
+    char *mboxname;
+};
+
+static int _find_uniqueid(const mbentry_t *mbentry, void *rock) {
+    struct _find_uniqueid_data *d = (struct _find_uniqueid_data *) rock;
+    int r = 0;
+    if (!strcmp(d->uniqueid, mbentry->uniqueid)) {
+        d->mboxname = xstrdup(mbentry->name);
+        r = CYRUSDB_DONE;
+    }
+    return r;
+}
+
+EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid)
+{
+    struct _find_uniqueid_data rock = { uniqueid, NULL };
+    mboxlist_usermboxtree(userid, _find_uniqueid, &rock, 0);
+    return rock.mboxname;
+}
+
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)

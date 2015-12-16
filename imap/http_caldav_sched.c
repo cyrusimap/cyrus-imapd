@@ -1534,6 +1534,8 @@ void sched_deliver(const char *recipient, void *data, void *rock)
         /* Local recipient */
         sched_deliver_local(recipient, &sparam, sched_data, authstate);
     }
+
+    sched_param_free(&sparam);
 }
 
 

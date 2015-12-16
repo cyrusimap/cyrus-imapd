@@ -2175,6 +2175,11 @@ static struct buf *_icaltimezone_as_tzfile(icalcomponent* ical,
     return tzfile;
 }
 
+extern void tzdist_truncate_vtimezone(icalcomponent *vtz,
+                                      icaltimetype *startp, icaltimetype *endp) {
+    truncate_vtimezone(vtz, startp, endp, NULL, NULL, NULL, NULL, NULL);
+}
+
 static struct buf *icaltimezone_as_tzfile(icalcomponent* ical)
 {
     return _icaltimezone_as_tzfile(ical, 0);
