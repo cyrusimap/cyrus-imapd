@@ -4271,5 +4271,183 @@ sub test_getmessages_preview
     $self->assert_str_equals($msg->{preview}, 'A plain text message.');
 }
 
+sub test_setcalendarevents_schedule_request
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "create event";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "summary" => "foo",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Australia/Melbourne",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Australia/Melbourne",
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "send invitation as organizer to attendee";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        "$id" => {
+                            "organizer" => {
+                                "name" => "Cassandane",
+                                "email" => "cassandane",
+                            },
+                            "attendees" => [{
+                                "name" => "Bugs Bunny",
+                                "email" => "bugs\@localhost",
+                                "rsvp" => ""
+                            }]
+                        }
+                    }}, "R1"]]);
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals($payload->{recipient}, "bugs\@localhost");
+    $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "ATTENDEE;CN=Bugs Bunny;PARTSTAT=NEEDS-ACTION:mailto:bugs\@localhost");
+}
+
+sub test_setcalendarevents_schedule_reply
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "create event";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "summary" => "foo",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Australia/Melbourne",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Australia/Melbourne",
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "send reply as attendee to organizer";
+    $res = $jmap->Request([['setCalendarEvents', { update => {
+                        "$id" => {
+                            "organizer" => {
+                                "name" => "Bugs Bunny",
+                                "email" => "bugs\@localhost"
+                            },
+                            "attendees" => [{
+                                "name" => "Cassandane",
+                                "email" => "cassandane",
+                                "rsvp" => "maybe"
+                            }]
+                        }
+                    }}, "R1"]]);
+
+
+    my $data = $self->{instance}->getnotify();
+
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals($payload->{recipient}, "bugs\@localhost");
+    $self->assert($ical =~ "METHOD:REPLY");
+    $self->assert($ical =~ "ATTENDEE;CN=Cassandane;PARTSTAT=TENTATIVE:mailto:cassandane");
+}
+
+sub test_setcalendarevents_schedule_cancel
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create calendar";
+    my $res = $jmap->Request([
+            ['setCalendars', { create => { "#1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "send invitation as organizer";
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "summary" => "foo",
+                            "description" => "foo's description",
+                            "location" => "foo's location",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "startTimeZone" => "Australia/Melbourne",
+                            "end" => "2015-10-06T17:15:00",
+                            "endTimeZone" => "Australia/Melbourne",
+                            "organizer" => {
+                                "name" => "Cassandane",
+                                "email" => "cassandane",
+                            },
+                            "attendees" => [{
+                                "name" => "Bugs Bunny",
+                                "email" => "bugs\@localhost",
+                                "rsvp" => ""
+                            }]
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"#1"}{id};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "cancel event as organizer";
+    $res = $jmap->Request([['setCalendarEvents', { destroy => [$id]}, "R1"]]);
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals($payload->{recipient}, "bugs\@localhost");
+    $self->assert($ical =~ "METHOD:CANCEL");
+}
+
 
 1;
