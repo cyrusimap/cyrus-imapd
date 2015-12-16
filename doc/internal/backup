@@ -788,3 +788,4 @@ todo list
 * check for/log error when prot_stream reads return EOF
 * verification step to check entire data stream for errors (even chunks that aren't indexed)
 * prot_fill_cb: extra argument to pass back an error string to prot_fill
+* validate guids as they come off the wire?
