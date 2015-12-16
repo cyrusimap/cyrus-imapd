@@ -963,6 +963,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/httpd.h \
 	imap/jcal.c \
 	imap/jcal.h \
+	imap/json_support.h \
 	imap/proxy.c \
 	imap/proxy.h \
 	imap/smtpclient.c \
@@ -1068,6 +1069,7 @@ imap_httpd_SOURCES = \
 	imap/http_timezone.c \
 	imap/httpd.c \
 	imap/jcal.c \
+	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
