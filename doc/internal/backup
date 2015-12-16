@@ -823,3 +823,4 @@ todo list
 * validate guids as they come off the wire?
 * compress -> compact?
 * rename backup_data_path => backuppartition-default?
+* ctl_backups verify: set level
