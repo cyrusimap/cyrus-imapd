@@ -629,6 +629,12 @@ disk usage around.
 * instead of "backup_data_path" setting, have one-or-more
   "backup_partition-<name>" settings, ala partition- and friends
 
+see imap/partlist.[ch] for partition list management stuff.  it's complicated
+and doesn't have a test suite, so maybe save this implementation until needed.
+
+but... maybe rename backup_data_path to backuppartition-default in the meantime,
+so that when we do add this it's not a complicated reconfig to update?
+
 
 data corruption
 ---------------
@@ -816,3 +822,4 @@ todo list
 * prot_fill_cb: extra argument to pass back an error string to prot_fill
 * validate guids as they come off the wire?
 * compress -> compact?
+* rename backup_data_path => backuppartition-default?
