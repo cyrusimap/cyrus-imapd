@@ -867,6 +867,24 @@ static int cmd_apply_message(struct dlist *dl)
         if (ki->type != DL_SFILE)
             continue;
 
+        /* bail out if it doesn't match the data */
+        struct message_guid guid;
+        message_guid_generate(&guid, ki->sval, ki->nval);
+
+        if (!message_guid_equal(&guid, ki->gval)) {
+            char *header = xstrdup(message_guid_encode(ki->gval));
+            char *derived = xstrdup(message_guid_encode(&guid));
+
+            syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s\n",
+                   __func__, header, derived);
+
+            free(derived);
+            free(header);
+
+            r = IMAP_PROTOCOL_ERROR;
+            goto done;
+        }
+
         sync_msgid_insert(guids, ki->gval);
     }
 
