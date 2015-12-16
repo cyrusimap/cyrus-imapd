@@ -244,7 +244,7 @@ if BACKUP
 noinst_LTLIBRARIES += backup/libcyrus_backup.la
 noinst_HEADERS += backup/api.h
 libexec_PROGRAMS += backup/backupd
-noinst_PROGRAMS += backup/reindex backup/verify
+noinst_PROGRAMS += backup/reindex
 sbin_PROGRAMS += backup/bu_lock backup/ctl_backups
 endif # BACKUP
 
@@ -823,11 +823,6 @@ backup_reindex_SOURCES = \
     imap/mutex_fake.c \
     backup/reindex.c
 backup_reindex_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
-
-backup_verify_SOURCES = \
-    imap/mutex_fake.c \
-    backup/verify_main.c
-backup_verify_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
 
 backup_bu_lock_SOURCES = \
     imap/mutex_fake.c \
