@@ -1888,9 +1888,11 @@ static json_t *jmap_emailers_from_addresses(const char *addrs)
 {
     json_t *emailers = json_pack("[]");
     struct address *a = NULL;
+    struct address *freeme;
     struct buf buf = BUF_INITIALIZER;
 
     parseaddr_list(addrs, &a);
+    freeme = a;
     while (a) {
         json_t *e = json_pack("{}");
         const char *mailbox = a->mailbox;
@@ -1915,7 +1917,7 @@ static json_t *jmap_emailers_from_addresses(const char *addrs)
         emailers = NULL;
     }
 
-    parseaddr_free(a);
+    if (freeme) parseaddr_free(freeme);
     buf_free(&buf);
     return emailers;
 
@@ -2170,35 +2172,40 @@ static json_t *jmap_message_from_record(const char *id,
     if (_wantprop(props, "from")) {
         message_get_from(m, &buf);
         json_t *from = jmap_emailers_from_addresses(buf_cstring(&buf));
-        json_object_set_new(msg, "from", from ? json_array_get(from, 0) : json_null());
+        json_object_set(msg, "from", from ? json_array_get(from, 0) : json_null());
+        json_decref(from);
         buf_reset(&buf);
     }
     /* to */
     if (_wantprop(props, "to")) {
         message_get_to(m, &buf);
         json_t *to = jmap_emailers_from_addresses(buf_cstring(&buf));
-        json_object_set_new(msg, "to", to ? to : json_null());
+        json_object_set(msg, "to", to ? to : json_null());
+        json_decref(to);
         buf_reset(&buf);
     }
     /* cc */
     if (_wantprop(props, "cc")) {
         message_get_cc(m, &buf);
         json_t *cc = jmap_emailers_from_addresses(buf_cstring(&buf));
-        json_object_set_new(msg, "cc", cc ? cc : json_null());
+        json_object_set(msg, "cc", cc ? cc : json_null());
+        json_decref(cc);
         buf_reset(&buf);
     }
     /*  bcc */
     if (_wantprop(props, "bcc")) {
         message_get_bcc(m, &buf);
         json_t *bcc = jmap_emailers_from_addresses(buf_cstring(&buf));
-        json_object_set_new(msg, "bcc", bcc ? bcc : json_null());
+        json_object_set(msg, "bcc", bcc ? bcc : json_null());
+        json_decref(bcc);
         buf_reset(&buf);
     }
     /* replyTo */
     if (_wantprop(props, "replyTo")) {
         message_get_field(m, "replyTo", MESSAGE_RAW, &buf);
         json_t *replyTo = jmap_emailers_from_addresses(buf_cstring(&buf));
-        json_object_set_new(msg, "replyTo", replyTo ? replyTo : json_null());
+        json_object_set(msg, "replyTo", replyTo ? replyTo : json_null());
+        json_decref(replyTo);
         buf_reset(&buf);
     }
     /* subject */
@@ -2253,6 +2260,7 @@ static json_t *jmap_message_from_record(const char *id,
     /* XXX attachments */
     /* XXX attachedMessages */
 
+    message_unref(&m);
     if (d.text) free(d.text);
     if (d.html) free(d.html);
     buf_free(&buf);
@@ -2659,6 +2667,15 @@ static int getMessageList(struct jmap_req *req)
         rock.filter = jmap_filter_parse(filter, "filter", invalid, message_filter_parse);
     }
 
+    /* Bail out for any property errors. */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
     /* Inspect messages of INBOX. */
     r = getmessagelist((struct mailbox*) req->inbox, &rock);
     if (r && r != CYRUSDB_DONE) goto done;
@@ -2762,8 +2779,7 @@ static void getmessages_report(const char *id,
     struct getmessages_data *d = (struct getmessages_data *) rock;
     json_t *msg = hash_lookup(id, d->found);
     if (msg) {
-        /* Bump refcount of JSON object. */
-        json_array_append(d->list, msg);
+        json_array_append_new(d->list, msg);
     } else {
         json_array_append_new(d->notFound, json_string(id));
     }
