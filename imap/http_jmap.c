@@ -2119,9 +2119,6 @@ static json_t *jmap_message_from_record(const char *id,
             return NULL;
         }
 
-        /* Parse headers. */
-        /* XXX Does mailbox_map_record return decoded message data? */
-
         /* Unfold continuation lines in headers. */
         char *hdrs = charset_unfold(buf_base(&msgbuf), record->header_size, 0);
         char *key = hdrs;
