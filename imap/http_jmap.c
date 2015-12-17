@@ -2117,65 +2117,52 @@ static json_t *jmap_message_from_record(const char *id,
         }
 
         /* Parse headers. */
-        /* XXX Does mailbox_map_record returns decoded message data? */
-        struct buf hdrbuf = BUF_INITIALIZER;
-        char *base = buf_newcstring(&msgbuf);
-        char *top = base + record->header_size;
-        char *key = base;
-        json_t *headers = json_pack("{}");
-        while (key && key < top) {
-            int isgood = 0;
+        /* XXX Does mailbox_map_record return decoded message data? */
 
+        /* Unfold continuation lines in headers. */
+        char *hdrs = charset_unfold(buf_base(&msgbuf), record->header_size, 0);
+        char *key = hdrs;
+        json_t *headers = json_pack("{}");
+        struct buf hdrbuf = BUF_INITIALIZER;
+        while (key && *key) {
             /* Look for the key-value separator. */
             char *val = strchr(key, ':');
-            if (!val || val == key || val > top) {
+            if (!val || val == key) {
                 break;
             }
             /* Terminate key. */
             *val++ = '\0';
 
-            /* Look for end of header value. */
-            char *crlf = val;
-            while (crlf && crlf < top && !isgood) {
+            /* Look for end of header. */
+            char *crlf = strchr(val, '\r');
+            while (crlf && (*++crlf != '\n'))
                 crlf = strchr(crlf, '\r');
-                if (!crlf || crlf >= top || *(crlf+1) != '\n') {
-                    /* bogus data */
-                    break;
-                }
-                if (*(crlf+2) == ' ' || *(crlf+2) == '\t') {
-                    /* a continuation line */
-                    crlf += 3;
-                    continue;
-                }
-                /* found a new header value */
-                *crlf = '\0';
-                crlf += 2;
-                isgood = 1;
+            if (crlf) {
+                *(crlf-1) = '\0';
+                ++crlf;
             }
 
             /* Add or append the the header value to the JSON header object. */
-            if (isgood) {
-                /* Header values tend to come with a leading blank. */
-                if (*val == ' ') val++;
-                json_t *curval = json_object_get(headers, key);
-                if (!curval) {
-                    /* Header hasn't been defined yet. Add it to the map. */
-                    json_object_set_new(headers, key, json_string(val));
-                } else {
-                    /* Concatenate values for recurring keys. This shouldn't
-                     * occur too often, so let's just realloc */
-                    buf_setcstr(&hdrbuf, json_string_value(curval));
-                    buf_appendcstr(&hdrbuf, "\n");
-                    buf_appendcstr(&hdrbuf, val);
-                    json_object_set_new(headers, key, json_string(buf_cstring(&hdrbuf)));
-                    buf_reset(&hdrbuf);
-                }
+            /* Header values tend to come with a leading blank. */
+            if (*val == ' ') val++;
+            json_t *curval = json_object_get(headers, key);
+            if (!curval) {
+                /* Header hasn't been defined yet. Add it to the map. */
+                json_object_set_new(headers, key, json_string(val));
+            } else {
+                /* Concatenate values for recurring keys. This shouldn't
+                 * occur too often, so let's just realloc */
+                buf_setcstr(&hdrbuf, json_string_value(curval));
+                buf_appendcstr(&hdrbuf, "\n");
+                buf_appendcstr(&hdrbuf, val);
+                json_object_set_new(headers, key, json_string(buf_cstring(&hdrbuf)));
+                buf_reset(&hdrbuf);
             }
             key = crlf;
         }
-        buf_free(&msgbuf);
+        free(hdrs);
         buf_free(&hdrbuf);
-        free(base);
+        buf_free(&msgbuf);
 
         json_object_set_new(msg, "headers", headers);
     }
