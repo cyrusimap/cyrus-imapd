@@ -111,6 +111,7 @@ static int getMailboxes(struct jmap_req *req);
 static int setMailboxes(struct jmap_req *req);
 static int getMessageList(struct jmap_req *req);
 static int getMessages(struct jmap_req *req);
+static int setMessages(struct jmap_req *req);
 static int getContactGroups(struct jmap_req *req);
 static int getContactGroupUpdates(struct jmap_req *req);
 static int setContactGroups(struct jmap_req *req);
@@ -153,6 +154,7 @@ static const struct message_t {
     { "setMailboxes",           &setMailboxes },
     { "getMessageList",         &getMessageList },
     { "getMessages",            &getMessages },
+    { "setMessages",            &setMessages },
     { "getContactGroups",       &getContactGroups },
     { "getContactGroupUpdates", &getContactGroupUpdates },
     { "setContactGroups",       &setContactGroups },
@@ -2874,6 +2876,310 @@ done:
     free_hash_table(&found, NULL);
     json_decref(rock.list);
     json_decref(rock.notFound);
+    return r;
+}
+
+static int jmap_message_create_draft(json_t *arg,
+                                     char **uid,
+                                     json_t **err,
+                                     json_t *invalid)
+{
+    int r = 0, pe;
+    json_t *prop;
+    const char *sval, *subject = "", *htmlBody = NULL, *textBody = NULL;
+    int bval;
+
+    /* Parse properties */
+    if (json_object_get(arg, "id")) {
+        json_array_append_new(invalid, json_string("id"));
+    }
+    if (json_object_get(arg, "blobId")) {
+        json_array_append_new(invalid, json_string("blobId"));
+    }
+    if (json_object_get(arg, "threadId")) {
+        json_array_append_new(invalid, json_string("threadId"));
+    }
+    prop = json_object_get(arg, "mailboxIds");
+    if (json_array_size(prop)) {
+        /* XXX validate */
+    } else {
+        json_array_append_new(invalid, json_string("mailboxIds"));
+    }
+    prop = json_object_get(arg, "inReplyToMessageId");
+    if (prop && prop != json_null()) {
+        if ((sval = json_string_value(prop)) && sval && !strlen(sval)) {
+            json_array_append_new(invalid, json_string("inReplyToMessageId"));
+        }
+    }
+    pe = jmap_readprop(arg, "isUnread", 0, invalid, "b", &bval);
+    if (pe > 0 && bval) {
+        json_array_append_new(invalid, json_string("isUnread"));
+    }
+    pe = jmap_readprop(arg, "isFlagged", 0, invalid, "b", &bval);
+    if (pe > 0 && bval) {
+        json_array_append_new(invalid, json_string("isFlagged"));
+    }
+    pe = jmap_readprop(arg, "isAnswered", 0, invalid, "b", &bval);
+    if (pe > 0 && bval) {
+        json_array_append_new(invalid, json_string("isAnswered"));
+    }
+    pe = jmap_readprop(arg, "isDraft", 0, invalid, "b", &bval);
+    if (pe > 0 && !bval) {
+        json_array_append_new(invalid, json_string("isDraft"));
+    }
+    if (json_object_get(arg, "hasAttachment")) {
+        json_array_append_new(invalid, json_string("hasAttachment"));
+    }
+    prop = json_object_get(arg, "headers");
+    if (json_array_size(prop)) {
+        /* XXX validate */
+    } else if (prop && json_typeof(prop) != JSON_ARRAY) {
+        json_array_append_new(invalid, json_string("headers"));
+    }
+    prop = json_object_get(arg, "from");
+    if (prop && prop != json_null()) {
+        /* XXX validate */
+    }
+    prop = json_object_get(arg, "to");
+    if (json_array_size(prop)) {
+        /* XXX validate */
+    } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
+        json_array_append_new(invalid, json_string("to"));
+    }
+    prop = json_object_get(arg, "cc");
+    if (json_array_size(prop)) {
+        /* XXX validate */
+    } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
+        json_array_append_new(invalid, json_string("cc"));
+    }
+    prop = json_object_get(arg, "bcc");
+    if (json_array_size(prop)) {
+        /* XXX validate */
+    } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
+        json_array_append_new(invalid, json_string("bcc"));
+    }
+    prop = json_object_get(arg, "replyTo");
+    if (prop && prop != json_null()) {
+        /* XXX validate */
+    }
+    pe = jmap_readprop(arg, "subject", 0, invalid, "s", &sval);
+    if (pe > 0) {
+        subject = sval;
+    }
+    pe = jmap_readprop(arg, "date", 0, invalid, "s", &sval);
+    if (pe > 0) {
+        /* XXX */
+    }
+    if (json_object_get(arg, "size")) {
+        json_array_append_new(invalid, json_string("size"));
+    }
+    if (json_object_get(arg, "preview")) {
+        json_array_append_new(invalid, json_string("preview"));
+    }
+    pe = jmap_readprop(arg, "textBody", 0, invalid, "s", &sval);
+    if (pe > 0) {
+        textBody = sval;
+    }
+    pe = jmap_readprop(arg, "htmlBody", 0, invalid, "s", &sval);
+    if (pe > 0) {
+        htmlBody = sval;
+    }
+    if (json_object_get(arg, "attachedMessages")) {
+        json_array_append_new(invalid, json_string("attachedMessages"));
+    }
+    prop = json_object_get(arg, "attachments");
+    if (json_array_size(prop)) {
+        /* XXX validate */
+    }
+    if (json_array_size(invalid)) {
+        goto done;
+    }
+
+    /* XXX */
+
+    *uid = xstrdup("fakeid"); /* XXX */
+    *err = NULL; /* XXX */
+    /* make -Werror happy */
+    syslog(LOG_DEBUG, "jmap_message_create_draft(%s): text=[%s], html=[%s]",
+            subject, textBody, htmlBody);
+
+done:
+    return r;
+}
+
+static int setMessages(struct jmap_req *req)
+{
+    int r = 0;
+    json_t *set = NULL;
+
+    json_t *state = json_object_get(req->args, "ifInState");
+    if (state && jmap_checkstate(state, 0 /*MBTYPE*/, req)) {
+        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
+                    "error", "type", "stateMismatch", req->tag));
+        goto done;
+    }
+    set = json_pack("{s:s}", "accountId", req->userid);
+    json_object_set_new(set, "oldState", state);
+
+    json_t *create = json_object_get(req->args, "create");
+    if (create) {
+        json_t *created = json_pack("{}");
+        json_t *notCreated = json_pack("{}");
+        const char *key;
+        json_t *arg;
+
+        json_object_foreach(create, key, arg) {
+            json_t *invalid = json_pack("[]");
+            char *uid = NULL;
+            json_t *err = NULL;
+
+            /* Validate key. */
+            if (!strlen(key)) {
+                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+
+            /* Create the draft */
+            r = jmap_message_create_draft(arg, &uid, &err, invalid);
+            if (r) goto done;
+
+            /* Handle invalid properties. */
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notCreated, key, err);
+                continue;
+            }
+            json_decref(invalid);
+
+            /* Handle set errors. */
+            if (err) {
+                json_object_set_new(notCreated, key, err);
+                json_decref(invalid);
+                continue;
+            }
+
+            /* Report message as created. */
+            json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
+
+            /* hash_insert takes ownership of uid */
+            hash_insert(key, uid, req->idmap);
+        }
+
+        if (json_object_size(created)) {
+            json_object_set(set, "created", created);
+        }
+        json_decref(created);
+
+        if (json_object_size(notCreated)) {
+            json_object_set(set, "notCreated", notCreated);
+        }
+        json_decref(notCreated);
+    }
+
+    json_t *update = json_object_get(req->args, "update");
+    if (update) {
+        json_t *updated = json_pack("[]");
+        json_t *notUpdated = json_pack("{}");
+        const char *uid;
+        json_t *arg;
+
+        json_object_foreach(update, uid, arg) {
+            json_t *invalid = json_pack("[]");
+            json_t *err = NULL;
+
+            /* Validate uid */
+            if (!strlen(uid) || *uid == '#') {
+                json_t *err= json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notUpdated, uid, err);
+                continue;
+            }
+
+            /* XXX Update message. */
+
+            /* Handle set errors. */
+            if (err) {
+                json_object_set_new(notUpdated, uid, err);
+                json_decref(invalid);
+                continue;
+            }
+
+            /* Handle invalid properties. */
+            if (json_array_size(invalid)) {
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notUpdated, uid, err);
+                continue;
+            }
+            json_decref(invalid);
+
+            /* Report as updated. */
+            json_array_append_new(updated, json_string(uid));
+        }
+
+        if (json_array_size(updated)) {
+            json_object_set(set, "updated", updated);
+        }
+        json_decref(updated);
+
+        if (json_object_size(notUpdated)) {
+            json_object_set(set, "notUpdated", notUpdated);
+        }
+        json_decref(notUpdated);
+    }
+
+    json_t *destroy = json_object_get(req->args, "destroy");
+    if (destroy) {
+        json_t *destroyed = json_pack("[]");
+        json_t *notDestroyed = json_pack("{}");
+
+        size_t index;
+        json_t *juid;
+        json_array_foreach(destroy, index, juid) {
+
+            /* Validate uid. */
+            const char *uid = json_string_value(juid);
+            if (!strlen(uid) || *uid == '#') {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
+            /* XXX Destroy message. */
+
+            /* XXX Report message as destroyed. */
+            json_array_append_new(destroyed, json_string(uid));
+        }
+        if (json_array_size(destroyed)) {
+            json_object_set(set, "destroyed", destroyed);
+        }
+        json_decref(destroyed);
+        if (json_object_size(notDestroyed)) {
+            json_object_set(set, "notDestroyed", notDestroyed);
+        }
+        json_decref(notDestroyed);
+    }
+
+    /* Set newState field in messageSet. */
+    if (json_object_get(set, "created") ||
+            json_object_get(set, "updated") ||
+            json_object_get(set, "destroyed")) {
+
+        r = jmap_bumpstate(0 /*MBTYPE*/, req);
+        if (r) goto done;
+    }
+    json_object_set_new(set, "newState", jmap_getstate(0 /*MBTYPE*/, req));
+
+    json_incref(set);
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("messagesSet"));
+    json_array_append_new(item, set);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    if (set) json_decref(set);
     return r;
 }
 
