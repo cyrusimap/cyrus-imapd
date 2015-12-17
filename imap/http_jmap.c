@@ -2215,9 +2215,7 @@ static json_t *jmap_message_from_record(const char *id,
     /* date */
     if (_wantprop(props, "date")) {
         char datestr[RFC3339_DATETIME_MAX];
-        time_t t = 0;
-        message_get_sentdate(m, &t);
-        time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+        time_to_rfc3339(record->last_updated, datestr, RFC3339_DATETIME_MAX);
         json_object_set_new(msg, "date", json_string(datestr));
     }
     /* size */
