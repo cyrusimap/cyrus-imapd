@@ -4142,8 +4142,8 @@ sub test_getmessages
     my $inboxid = $res->[0][1]{list}[0]{id};
 
     my $body = "";
-    $body += "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
-    $body += "elit. Nunc in fermentum nibh. Vivamus enim metus.";
+    $body .= "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
+    $body .= "elit. Nunc in fermentum nibh. Vivamus enim metus.";
 
     my $now = DateTime->now();
 
