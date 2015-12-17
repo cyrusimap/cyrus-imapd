@@ -4130,6 +4130,103 @@ EOF
     $self->assert($res !~ "$id");
 }
 
+sub test_getmessages
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $body = "";
+    $body += "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
+    $body += "elit. Nunc in fermentum nibh. Vivamus enim metus.";
+
+    my $now = DateTime->now();
+
+    xlog "Generate a message in INBOX via IMAP";
+    my %exp_inbox;
+    my %params = (
+        date => $now,
+        from => Cassandane::Address->new(
+            name => "Sally Sender",
+            localpart => "sally",
+            domain => "local"
+        ),
+        to => Cassandane::Address->new(
+            name => "Tom To",
+            localpart => 'tom',
+            domain => 'local'
+        ),
+        cc => Cassandane::Address->new(
+            name => "Cindy CeeCee",
+            localpart => 'cindy',
+            domain => 'local'
+        ),
+        bcc => Cassandane::Address->new(
+            name => "Benny CarbonCopy",
+            localpart => 'benny',
+            domain => 'local'
+        ),
+        messageid => 'fake.123456789@local',
+        extra_headers => [
+            ['X-Tra', "foo bar\r\n baz"]
+        ],
+        body => $body
+    );
+    $self->make_message("Message A", %params) || die;
+
+    xlog "get message list";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]->{messageIds}}, 1);
+
+    xlog "get messages";
+    # Could also have set fetchMessages in getMessageList, but let's call
+    # getMessages explicitely.
+    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+
+    $self->assert_str_equals($msg->{mailboxIds}[0], $inboxid);
+    $self->assert_num_equals(scalar @{$msg->{mailboxIds}}, 1);
+    $self->assert_equals($msg->{isUnread}, JSON::true);
+    $self->assert_equals($msg->{isFlagged}, JSON::false);
+    $self->assert_equals($msg->{isAnswered}, JSON::false);
+    $self->assert_equals($msg->{isDraft}, JSON::false);
+
+    my $hdrs = $msg->{headers};
+    $self->assert_str_equals($hdrs->{'Message-ID'}, '<fake.123456789@local>');
+    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
+    $self->assert_deep_equals($msg->{from}, {
+            name => "Sally Sender",
+            email => "sally\@local"
+    });
+    $self->assert_deep_equals($msg->{to}[0], {
+            name => "Tom To",
+            email => "tom\@local"
+    });
+    $self->assert_num_equals(scalar @{$msg->{to}}, 1);
+    $self->assert_deep_equals($msg->{cc}[0], {
+            name => "Cindy CeeCee",
+            email => "cindy\@local"
+    });
+    $self->assert_num_equals(scalar @{$msg->{cc}}, 1);
+    $self->assert_deep_equals($msg->{bcc}[0], {
+            name => "Benny CarbonCopy",
+            email => "benny\@local"
+    });
+    $self->assert_num_equals(scalar @{$msg->{bcc}}, 1);
+    $self->assert_null($msg->{replyTo});
+    $self->assert_str_equals($msg->{subject}, "Message A");
+
+    my $datestr = $now->strftime('%Y-%m-%dT%TZ');
+    $self->assert_str_equals($msg->{date}, $datestr);
+    $self->assert_not_null($msg->{size});
+}
+
+
 sub test_getmessages_body_both
 {
     my ($self) = @_;
@@ -4448,6 +4545,5 @@ sub test_setcalendarevents_schedule_cancel
     $self->assert_str_equals($payload->{recipient}, "bugs\@localhost");
     $self->assert($ical =~ "METHOD:CANCEL");
 }
-
 
 1;
