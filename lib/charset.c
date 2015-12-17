@@ -94,6 +94,7 @@ struct b64_state {
 
 struct unfold_state {
     int state;
+    int skipws;
 };
 
 struct table_state {
@@ -453,8 +454,10 @@ static void unfold2uni(struct convert_rock *rock, int c)
         if (c != ' ' && c != '\t') {
             convert_putc(rock->next, '\r');
             convert_putc(rock->next, '\n');
+            convert_putc(rock->next, c);
+        } else if (!s->skipws) {
+            convert_putc(rock->next, c);
         }
-        convert_putc(rock->next, c);
         s->state = 0;
         break;
     }
@@ -1724,10 +1727,12 @@ static struct convert_rock *b64_init(struct convert_rock *next)
     return rock;
 }
 
-static struct convert_rock *unfold_init(struct convert_rock *next)
+static struct convert_rock *unfold_init(int skipws, struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    rock->state = xzmalloc(sizeof(struct unfold_state));
+    struct unfold_state *s = xzmalloc(sizeof(struct unfold_state));
+    s->skipws = skipws;
+    rock->state = s;
     rock->f = unfold2uni;
     rock->next = next;
     return rock;
@@ -2037,7 +2042,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
     input = table_init(0, target);
     /* note: we assume the caller of this function has already
      * determined that all newlines are followed by whitespace */
-    unfold = unfold_init(input);
+    unfold = unfold_init(0 /*skipws*/, input);
 
     start = s;
     while ((start = (const char*) strchr(start, '=')) != 0) {
@@ -2130,6 +2135,31 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
     input = canon_init(flags, input);
 
     mimeheader_cat(input, s);
+
+    res = buffer_cstring(tobuffer);
+
+    convert_free(input);
+
+    return res;
+}
+
+/*
+ * Unfold len bytes of string s into a new string, which must be freed()
+ * by the caller. Unfolding removes any CRLF that is mmediately followed
+ * by a tab or space character. If flags sets CHARSET_UNFOLD_SKIPWS, then
+ * the whitespace character is also omitted.
+ */
+EXPORTED char *charset_unfold(const char *s, size_t len, int flags)
+{
+    struct convert_rock *tobuffer, *input;
+    char *res;
+
+    if (!s) return NULL;
+
+    tobuffer = buffer_init();
+    input = unfold_init(flags&CHARSET_UNFOLD_SKIPWS, tobuffer);
+
+    convert_catn(input, s, len);
 
     res = buffer_cstring(tobuffer);
 
