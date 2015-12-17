@@ -1958,32 +1958,12 @@ static int jmap_message_bodies_cb(int isbody,
         if (body) {
             if (d->text) free(d->text);
             d->text = body;
-            if (!d->html) {
-                /* JMAP spec: "If there is only a plain text version of the body,
-                 * an HTML version will be generated from this." */
-                d->html = xstrdup(body);
-            }
         }
     } else if (!strcmp(subtype, "HTML")) {
         char *body = charset_to_utf8(buf_base(data), buf_len(data), charset, encoding);
         if (body) {
             if (d->html) free(d->html);
             d->html = body;
-            if (!d->text) {
-                /* JMAP spec: "If there is only an HTML version of the body, a
-                 * plain text version will be generated from this." */
-
-                /* XXX Canonical search form replaces every HTML tag with a single
-                 * space and uppercases all characters, e.g.
-                 *     "<html><body><p>An html message.</p></body></html>"
-                 * becomes
-                 *     "   AN HTML MESSAGE.   "
-                 *
-                 * Might want to make striphtml in charset.c public to only get
-                 * rid of the HTML tags? */
-                charset_extract(&jmap_message_bodies_extract_plain, &d->text,
-                                data, charset, encoding, subtype, 0);
-            }
         }
     }
     return 0;
@@ -2230,11 +2210,35 @@ static json_t *jmap_message_from_record(const char *id,
     /* preview */
     if (_wantprop(props, "textBody") ||_wantprop(props, "htmlBody") || _wantprop(props, "preview")) {
         message_foreach_text_section(m, &jmap_message_bodies_cb, &d);
+
     }
     if (_wantprop(props, "textBody")) {
+        if (!d.text && d.html) {
+            /* JMAP spec: "If there is only an HTML version of the body, a
+             * plain text version will be generated from this." */
+
+            /* XXX Canonical search form replaces every HTML tag with a single
+             * space and uppercases all characters, e.g.
+             *     "<html><body><p>An html message.</p></body></html>"
+             * becomes
+             *     "   AN HTML MESSAGE.   "
+             *
+             * Might want to make striphtml in charset.c public to only get
+             * rid of the HTML tags? */
+            struct buf data = BUF_INITIALIZER;
+            buf_setcstr(&data, d.html);
+            charset_extract(&jmap_message_bodies_extract_plain, &d.text,
+                    &data, charset_lookupname("utf8"), ENCODING_NONE, "HTML", 0);
+            buf_free(&data);
+        }
         json_object_set_new(msg, "textBody", d.text ? json_string(d.text) : json_null());
     }
     if (_wantprop(props, "htmlBody")) {
+        if (!d.html && d.text) {
+            /* JMAP spec: "If there is only a plain text version of the body,
+             * an HTML version will be generated from this." */
+            d.html = xstrdup(d.text);
+        }
         json_object_set_new(msg, "htmlBody", d.html ? json_string(d.html) : json_null());
     }
     if (_wantprop(props, "preview")) {
