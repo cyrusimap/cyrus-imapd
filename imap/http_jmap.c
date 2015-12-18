@@ -1898,8 +1898,8 @@ static json_t *jmap_emailers_from_addresses(const char *addrs)
     freeme = a;
     while (a) {
         json_t *e = json_pack("{}");
-        const char *mailbox = a->mailbox;
-        const char *domain = a->domain;
+        const char *mailbox = a->mailbox ? a->mailbox : "";
+        const char *domain = a->domain ? a->domain : "";
 
         if (!strcmp(domain, "unspecified-domain")) {
             /* XXX the header of parseaddr doesn't document this. OK to use? */
