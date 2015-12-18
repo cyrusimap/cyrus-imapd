@@ -2882,15 +2882,49 @@ done:
     return r;
 }
 
+static int jmap_validate_emailer(json_t *emailer,
+                                 const char *prefix,
+                                 json_t *invalid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int r = 1;
+    json_t *val;
+
+    val = json_object_get(emailer, "name");
+    if (!val || json_typeof(val) != JSON_STRING) {
+        buf_printf(&buf, "%s.%s", prefix, "name");
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+        r = 0;
+    }
+    val = json_object_get(emailer, "email");
+    if (!val || json_typeof(val) != JSON_STRING) {
+        buf_printf(&buf, "%s.%s", prefix, "email");
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+        r = 0;
+    }
+
+    buf_free(&buf);
+    return r;
+}
+
 static int jmap_message_create_draft(json_t *arg,
                                      char **uid,
                                      json_t **err,
-                                     json_t *invalid)
+                                     json_t *invalid,
+                                     struct jmap_req *req)
 {
     int r = 0, pe;
     json_t *prop;
     const char *sval, *subject = "", *htmlBody = NULL, *textBody = NULL;
     int bval;
+    struct buf buf = BUF_INITIALIZER;
+    struct tm *date = xzmalloc(sizeof(struct tm));
+
+    /* XXX Support messages in multiple mailboxes */
+    char *mboxname = NULL;
+    char *mboxrole = NULL;
 
     /* Parse properties */
     if (json_object_get(arg, "id")) {
@@ -2904,7 +2938,18 @@ static int jmap_message_create_draft(json_t *arg,
     }
     prop = json_object_get(arg, "mailboxIds");
     if (json_array_size(prop)) {
-        /* XXX validate */
+        /* XXX Support messages in multiple mailboxes */
+        /* Check that mailbox role is draft or outbox */
+        const char *id = json_string_value(json_array_get(prop, 0));
+        if (!id) {
+            json_array_append_new(invalid, json_string("mailboxIds[0]"));
+        }
+        mboxname = mboxlist_find_uniqueid(id, req->userid);
+        mboxrole = jmap_mailbox_role(mboxname);
+        if (!mboxrole || (strcmp(mboxrole, "drafts") && strcmp(mboxrole, "outbox"))) {
+            json_array_append_new(invalid, json_string("mailboxIds[0]"));
+        }
+        /* XXX Check that none of mailboxes has mustBeOnlyMailbox set */
     } else {
         json_array_append_new(invalid, json_string("mailboxIds"));
     }
@@ -2935,35 +2980,60 @@ static int jmap_message_create_draft(json_t *arg,
     }
     prop = json_object_get(arg, "headers");
     if (json_array_size(prop)) {
-        /* XXX validate */
+        const char *key;
+        json_t *val;
+        json_object_foreach(prop, key, val) {
+            if (!strlen(key) || !val || json_typeof(val) != JSON_STRING) {
+                json_array_append_new(invalid, json_string("headers"));
+                break;
+            }
+        }
     } else if (prop && json_typeof(prop) != JSON_ARRAY) {
         json_array_append_new(invalid, json_string("headers"));
     }
     prop = json_object_get(arg, "from");
     if (prop && prop != json_null()) {
-        /* XXX validate */
+        jmap_validate_emailer(prop, "from", invalid);
     }
     prop = json_object_get(arg, "to");
     if (json_array_size(prop)) {
-        /* XXX validate */
+        json_t *emailer;
+        size_t i;
+        json_array_foreach(prop, i, emailer) {
+            buf_printf(&buf, "to[%zu]", i);
+            jmap_validate_emailer(emailer, buf_cstring(&buf), invalid);
+            buf_reset(&buf);
+        }
     } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
         json_array_append_new(invalid, json_string("to"));
     }
     prop = json_object_get(arg, "cc");
     if (json_array_size(prop)) {
-        /* XXX validate */
+        json_t *emailer;
+        size_t i;
+        json_array_foreach(prop, i, emailer) {
+            buf_printf(&buf, "cc[%zu]", i);
+            jmap_validate_emailer(emailer, buf_cstring(&buf), invalid);
+            buf_reset(&buf);
+        }
     } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
         json_array_append_new(invalid, json_string("cc"));
     }
     prop = json_object_get(arg, "bcc");
     if (json_array_size(prop)) {
-        /* XXX validate */
+        json_t *emailer;
+        size_t i;
+        json_array_foreach(prop, i, emailer) {
+            buf_printf(&buf, "bcc[%zu]", i);
+            jmap_validate_emailer(emailer, buf_cstring(&buf), invalid);
+            buf_reset(&buf);
+        }
     } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
         json_array_append_new(invalid, json_string("bcc"));
     }
     prop = json_object_get(arg, "replyTo");
     if (prop && prop != json_null()) {
-        /* XXX validate */
+        jmap_validate_emailer(prop, "replyTo", invalid);
     }
     pe = jmap_readprop(arg, "subject", 0, invalid, "s", &sval);
     if (pe > 0) {
@@ -2971,7 +3041,10 @@ static int jmap_message_create_draft(json_t *arg,
     }
     pe = jmap_readprop(arg, "date", 0, invalid, "s", &sval);
     if (pe > 0) {
-        /* XXX */
+        const char *p = strptime(sval, "%Y-%m-%dT%H:%M:%SZ", date);
+        if (!p || *p) {
+            json_array_append_new(invalid, json_string("date"));
+        }
     }
     if (json_object_get(arg, "size")) {
         json_array_append_new(invalid, json_string("size"));
@@ -3007,6 +3080,9 @@ static int jmap_message_create_draft(json_t *arg,
             subject, textBody, htmlBody);
 
 done:
+    buf_free(&buf);
+    if (mboxname) free(mboxname);
+    if (date) free(date);
     return r;
 }
 
@@ -3044,7 +3120,7 @@ static int setMessages(struct jmap_req *req)
             }
 
             /* Create the draft */
-            r = jmap_message_create_draft(arg, &uid, &err, invalid);
+            r = jmap_message_create_draft(arg, &uid, &err, invalid, req);
             if (r) goto done;
 
             /* Handle invalid properties. */
