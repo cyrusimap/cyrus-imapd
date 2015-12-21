@@ -552,9 +552,6 @@ static void my_caldav_init(struct buf *serverinfo)
         fatal("Required 'calendarprefix' option is not set", EC_CONFIG);
     }
 
-    caldav_init();
-    webdav_init();
-
 #ifdef HAVE_IANA_PARAMS
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {
@@ -573,6 +570,8 @@ static void my_caldav_init(struct buf *serverinfo)
 
 #ifdef HAVE_TZ_BY_REF
     if (namespace_tzdist.enabled) {
+        /* Tell libical to use our builtin TZ */
+        /* XXX  MUST be done before any use of libical, e.g caldav_init() */
         char zonedir[MAX_MAILBOX_PATH+1];
 
         snprintf(zonedir, MAX_MAILBOX_PATH, "%s%s",
@@ -584,6 +583,9 @@ static void my_caldav_init(struct buf *serverinfo)
         namespace_calendar.allow |= ALLOW_CAL_NOTZ;
     }
 #endif
+
+    caldav_init();
+    webdav_init();
 
     namespace_principal.enabled = 1;
     /* Apple clients check principal resources for these DAV tokens */
