@@ -550,4 +550,122 @@ EOF
   $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
 }
 
+sub test_changes_add
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $Cal = $CalDAV->GetCalendar($CalendarId);
+
+    my $uuid = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:Test Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  my ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $Cal->{syncToken});
+
+  $self->assert_equals(scalar @$adds, 1);
+  $self->assert_str_equals($adds->[0]{uid}, $uuid);
+  $self->assert_deep_equals($removes, []);
+  $self->assert_deep_equals($errors, []);
+}
+
+sub test_changes_remove
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:Test Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  my $Cal = $CalDAV->GetCalendar($CalendarId);
+
+  $CalDAV->DeleteEvent($href);
+
+  my ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $Cal->{syncToken});
+
+  $self->assert_deep_equals([], $adds);
+  $self->assert_equals(1, scalar @$removes);
+  $self->assert_str_equals($href, $removes->[0]);
+  $self->assert_deep_equals([], $errors);
+}
+
 1;
