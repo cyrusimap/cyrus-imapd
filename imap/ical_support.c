@@ -53,7 +53,7 @@
 
 icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {
-    return icalparser_parse_string(buf_base(buf));
+    return icalparser_parse_string(buf_cstring(buf));
 }
 
 struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)

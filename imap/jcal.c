@@ -827,7 +827,7 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
     json_t *jcal;
     json_error_t jerr;
     icalcomponent *ical;
-    const char *str = buf_base(buf);
+    const char *str = buf_cstring(buf);
 
     if (!str) return NULL;
 

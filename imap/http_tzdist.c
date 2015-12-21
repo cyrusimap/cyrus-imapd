@@ -2014,7 +2014,7 @@ static struct buf *_icaltimezone_as_tzfile(icalcomponent* ical,
                     (obs->is_daylight == types[typeidx].isdst) &&
                     (obs->is_std == types[typeidx].isstd) &&
                     (obs->is_gmt == types[typeidx].isgmt) &&
-                    !strcmp(obs->name, buf_base(&abbrev) + types[typeidx].idx))
+                    !strcmp(obs->name, buf_cstring(&abbrev) + types[typeidx].idx))
                     break;
             }
 

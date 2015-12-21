@@ -3988,12 +3988,12 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
         if (fctx->record) mailbox_map_record(fctx->mailbox, fctx->record, &msg_buf);
 
-        if (buf_base(&msg_buf)) {
+        if (buf_len(&msg_buf)) {
             /* Parse the resource and re-store it */
             struct transaction_t txn;
             icalcomponent *ical;
 
-            ical = icalparser_parse_string(buf_base(&msg_buf)
+            ical = icalparser_parse_string(buf_cstring(&msg_buf)
                                            + fctx->record->header_size);
             buf_free(&msg_buf);
             if (!ical) {
