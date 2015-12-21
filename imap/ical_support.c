@@ -190,6 +190,47 @@ const char *icalproperty_get_invitee(icalproperty *prop)
 }
 
 
+icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
+{
+    icalcomponent *inner;
+    icalproperty *prop;
+    icalparameter *param;
+    struct icaltimetype ret = icaltime_null_time();
+
+    if (!comp) {
+        icalerror_set_errno(ICAL_BADARG_ERROR);
+        return ret;
+    }
+
+    inner = icalcomponent_get_inner(comp);
+    if (!inner) {
+        icalerror_set_errno(ICAL_MALFORMEDDATA_ERROR);
+        return ret;
+    }
+
+    prop = icalcomponent_get_first_property(inner, ICAL_RECURRENCEID_PROPERTY);
+    if (!prop) return ret;
+
+    ret = icalproperty_get_recurrenceid(prop);
+
+    if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER))) {
+        const char *tzid = icalparameter_get_tzid(param);
+        icaltimezone *tz = NULL;
+        icalcomponent *c;
+
+        for (c = comp; c; c = icalcomponent_get_parent(c)) {
+            tz = icalcomponent_get_timezone(c, tzid);
+            if (tz) break;
+        }
+
+        if (!tz) tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+
+        if (!tz) ret = icaltime_set_timezone(&ret, tz);
+    }
+
+    return ret;
+}
+
 #ifndef HAVE_TZDIST_PROPS
 
 /* Functions to replace those not available in libical < v2.0 */

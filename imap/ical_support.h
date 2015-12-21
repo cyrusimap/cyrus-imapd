@@ -66,6 +66,8 @@ extern icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp);
 extern icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp);
 extern const char *icalproperty_get_invitee(icalproperty *prop);
 
+extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
+
 #ifndef HAVE_TZDIST_PROPS
 
 /* Functions to replace those not available in libical < v2.0 */
