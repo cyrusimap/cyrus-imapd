@@ -3708,31 +3708,12 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
     /* Handle overridden recurrences */
     for (comp = icalcomponent_get_first_component(ical, kind);
          comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        icalproperty *prop;
         struct icaltimetype recurid;
-        icalparameter *param;
         struct freebusy *overridden;
         icaltime_span recurspan;
 
-        /* The *_get_recurrenceid() functions don't appear
-           to deal with timezones properly, so we do it ourselves */
-        prop =
-            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (!prop) continue;
-
-        recurid = icalproperty_get_recurrenceid(prop);
-        param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-
-        if (param) {
-            const char *tzid = icalparameter_get_tzid(param);
-            icaltimezone *tz = NULL;
-
-            tz = icalcomponent_get_timezone(ical, tzid);
-            if (!tz) {
-                tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
-            }
-            if (tz) icaltime_set_timezone(&recurid, tz);
-        }
+        recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+        if (icaltime_is_null_time(recurid)) continue;
 
         recurid = icaltime_convert_to_zone(recurid, utc_zone);
         recurid.is_date = 0;  /* make DATE-TIME for comparison */
