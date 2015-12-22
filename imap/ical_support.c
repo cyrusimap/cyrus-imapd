@@ -225,7 +225,7 @@ icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
 
         if (!tz) tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
 
-        if (!tz) ret = icaltime_set_timezone(&ret, tz);
+        if (tz) ret = icaltime_set_timezone(&ret, tz);
     }
 
     return ret;
