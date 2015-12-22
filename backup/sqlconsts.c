@@ -182,6 +182,12 @@ const char backup_index_mailbox_rename_sql[] = QUOTE(
     WHERE mboxname = :oldmboxname;
 );
 
+const char backup_index_mailbox_delete_sql[] = QUOTE(
+    UPDATE mailbox SET
+        deleted = :deleted
+    WHERE mboxname = :mboxname;
+);
+
 const char backup_index_mailbox_insert_sql[] = QUOTE(
     INSERT INTO mailbox (
         last_chunk_id, uniqueid, mboxname, mboxtype, last_uid,

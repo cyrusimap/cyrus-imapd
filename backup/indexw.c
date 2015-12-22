@@ -58,6 +58,8 @@ static int _index_expunge(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
+static int _index_unmailbox(struct backup *backup, struct dlist *dl,
+                            time_t ts, off_t dl_offset);
 static int _index_message(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset, size_t dl_len);
 static int _index_rename(struct backup *backup, struct dlist *dl,
@@ -74,6 +76,8 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_expunge(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MAILBOX") == 0)
         r = _index_mailbox(backup, dlist, ts, start);
+    else if (strcmp(dlist->name, "UNMAILBOX") == 0)
+        r = _index_unmailbox(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
         r = _index_message(backup, dlist, ts, start, len);
     else if (strcmp(dlist->name, "RENAME") == 0)
@@ -377,6 +381,29 @@ error:
     sqldb_rollback(backup->db, __func__);
 
     return -1;
+}
+
+static int _index_unmailbox(struct backup *backup, struct dlist *dl,
+                            time_t ts, off_t dl_offset)
+{
+    syslog(LOG_DEBUG, "indexing UNMAILBOX at " OFF_T_FMT "...\n", dl_offset);
+
+    const char *mboxname = dl->sval;
+
+    struct sqldb_bindval bval[] = {
+        { ":mboxname",  SQLITE_TEXT,    { .s = mboxname  } },
+        { ":deleted",   SQLITE_INTEGER, { .i = ts        } },
+        { NULL,         SQLITE_NULL,    { .s = NULL      } },
+    };
+
+    int r = sqldb_exec(backup->db, backup_index_mailbox_delete_sql, bval, NULL,
+                        NULL);
+    if (r) {
+        // FIXME handle this sensibly
+        syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n", __func__, r, mboxname);
+    }
+
+    return r ? IMAP_INTERNAL : 0;
 }
 
 static int _index_message(struct backup *backup, struct dlist *dl,

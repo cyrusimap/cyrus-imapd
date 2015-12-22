@@ -60,6 +60,7 @@ extern const char backup_index_chunk_select_latest_sql[];
 
 extern const char backup_index_mailbox_update_sql[];
 extern const char backup_index_mailbox_rename_sql[];
+extern const char backup_index_mailbox_delete_sql[];
 extern const char backup_index_mailbox_insert_sql[];
 extern const char backup_index_mailbox_select_all_sql[];
 extern const char backup_index_mailbox_select_mboxname_sql[];

@@ -136,7 +136,7 @@ struct backup_mailbox {
     char *quotaroot;
     modseq_t xconvmodseq;
     char *annotations;
-    int deleted;
+    time_t deleted;
     struct backup_mailbox_message_list *records;
 };
 

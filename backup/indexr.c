@@ -323,7 +323,7 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
     mailbox->quotaroot = _column_text(stmt, column++);
     mailbox->xconvmodseq = _column_int64(stmt, column++);
     mailbox->annotations = _column_text(stmt, column++);
-    mailbox->deleted = _column_int(stmt, column++);
+    mailbox->deleted = _column_int64(stmt, column++);
 
     if (mbrock->want_records) {
         struct backup_mailbox_message_list *records =
