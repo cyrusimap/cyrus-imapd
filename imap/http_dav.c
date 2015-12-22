@@ -6513,8 +6513,12 @@ static int report_prin_prop_search(struct transaction_t *txn,
         /* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
 
         /* Add responses for all users with INBOX on server (as admin) */
-        ret = mboxlist_findall(&httpd_namespace, "user.%", 1, httpd_userid,
-                               httpd_authstate, principal_search, fctx);
+        // XXX - this is a security risk without ACL checks,
+        // we shouldn't be doing this as admin
+        if (0) {
+            ret = mboxlist_findall(&httpd_namespace, "user.%", 1, httpd_userid,
+                                   httpd_authstate, principal_search, fctx);
+        }
     }
 
   done:
