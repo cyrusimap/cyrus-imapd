@@ -60,6 +60,8 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);
 static int _index_message(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset, size_t dl_len);
+static int _index_rename(struct backup *backup, struct dlist *dl,
+                         time_t ts, off_t dl_offset);
 
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len)
@@ -74,6 +76,8 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_mailbox(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MESSAGE") == 0)
         r = _index_message(backup, dlist, ts, start, len);
+    else if (strcmp(dlist->name, "RENAME") == 0)
+        r = _index_rename(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "RESERVE") == 0)
         r = 0; /* nothing to index for a reserve, just return success */
 
@@ -412,4 +416,50 @@ static int _index_message(struct backup *backup, struct dlist *dl,
     }
 
     return 0;
+}
+
+static int _index_rename(struct backup *backup, struct dlist *dl,
+                         time_t ts, off_t dl_offset)
+{
+    syslog(LOG_DEBUG, "indexing RENAME at " OFF_T_FMT "\n", dl_offset);
+    (void) ts;
+
+    const char *uniqueid = NULL;
+    const char *oldmboxname = NULL;
+    const char *newmboxname = NULL;
+    const char *partition = NULL;
+    uint32_t uidvalidity = 0;
+
+    /* XXX use uniqueid once sync proto includes it (D73) */
+    dlist_getatom(dl, "UNIQUEID", &uniqueid);
+    (void) uniqueid; /* silence unused warning */
+
+    if (!dlist_getatom(dl, "OLDMBOXNAME", &oldmboxname))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(dl, "NEWMBOXNAME", &newmboxname))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(dl, "PARTITION", &partition))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getnum32(dl, "UIDVALIDITY", &uidvalidity))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    struct sqldb_bindval mbox_bval[] = {
+//        { ":uniqueid",          SQLITE_TEXT,    { .s = uniqueid } },
+        { ":oldmboxname",       SQLITE_TEXT,    { .s = oldmboxname } },
+        { ":newmboxname",       SQLITE_TEXT,    { .s = newmboxname } },
+        { ":partition",         SQLITE_TEXT,    { .s = partition } },
+        { ":uidvalidity",       SQLITE_INTEGER, { .i = uidvalidity } },
+        { NULL,                 SQLITE_NULL,    { .s = NULL      } },
+    };
+
+    int r = sqldb_exec(backup->db, backup_index_mailbox_rename_sql,
+                       mbox_bval, NULL, NULL);
+
+    if (r) {
+        // FIXME handle this sensibly
+        syslog(LOG_DEBUG, "%s: something went wrong: %i rename %s => %s\n",
+               __func__, r, oldmboxname, newmboxname);
+    }
+
+    return r ? IMAP_INTERNAL : 0;
 }

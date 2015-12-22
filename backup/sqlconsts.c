@@ -173,6 +173,15 @@ const char backup_index_mailbox_update_sql[] = QUOTE(
     WHERE uniqueid = :uniqueid;
 );
 
+/* FIXME use uniqueid when sync proto contains it */
+const char backup_index_mailbox_rename_sql[] = QUOTE(
+    UPDATE mailbox SET
+        mboxname = :newmboxname,
+        partition = :partition,
+        uidvalidity = :uidvalidity
+    WHERE mboxname = :oldmboxname;
+);
+
 const char backup_index_mailbox_insert_sql[] = QUOTE(
     INSERT INTO mailbox (
         last_chunk_id, uniqueid, mboxname, mboxtype, last_uid,
