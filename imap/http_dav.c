@@ -4654,7 +4654,7 @@ int propfind_by_resource(void *rock, void *data)
         fctx->record = r ? NULL : &record;
     }
 
-    if (r || !ddata->alive) {
+    if (r || (!ddata->imap_uid && ddata->lock_expire <= time(NULL))) {
         /* Add response for missing target */
         ret = xml_add_response(fctx, HTTP_NOT_FOUND, 0);
     }
