@@ -1121,6 +1121,8 @@ static void cmd_apply(struct dlist *dl)
 static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
                                  void *rock __attribute__((__unused__)))
 {
+    if (mailbox->deleted) return 0;
+
     struct dlist *dlist = backup_mailbox_to_dlist(mailbox);
     if (!dlist) return IMAP_INTERNAL;
 
