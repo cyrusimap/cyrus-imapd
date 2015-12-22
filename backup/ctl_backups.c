@@ -64,10 +64,12 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    %s [options] reindex [mode] backup...\n", argv0);
     fprintf(stderr, "    %s [options] verify [mode] backup...\n", argv0);
 
     fprintf(stderr, "\n%s\n",
             "Commands:\n"
+            "    reindex             # reindex specified backups\n"
             "    verify              # verify specified backups\n"
     );
 
@@ -430,14 +432,32 @@ static int cmd_move_one(void *rock,
 }
 
 static int cmd_reindex_one(void *rock,
-                           const char *userid, size_t userid_len,
-                           const char *fname, size_t fname_len)
+                           const char *key, size_t key_len,
+                           const char *data, size_t data_len)
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
+    char *userid = NULL;
+    char *fname = NULL;
+    int r;
+
     (void) options;
-    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
-            userid, userid_len, fname, fname_len);
-    return -1;
+
+    /* input args might not be 0-terminated, so make a safe copy */
+    if (key_len)
+        userid = xstrndup(key, key_len);
+    if (data_len)
+        fname = xstrndup(data, data_len);
+
+    r = backup_reindex(fname);
+
+    printf("reindex %s: %s\n",
+           userid ? userid : fname,
+           r ? "failed" : "ok");
+
+    if (userid) free(userid);
+    if (fname) free(fname);
+
+    return r;
 }
 
 static int cmd_verify_one(void *rock,
