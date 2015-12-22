@@ -43,7 +43,11 @@
 
 #include <config.h>
 
+#include <sys/types.h>
+#include <sys/wait.h>
+
 #include <assert.h>
+#include <stdlib.h>
 
 #include "lib/cyrusdb.h"
 #include "lib/exitcodes.h"
@@ -64,11 +68,13 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    %s [options] lock [lock_opts] [mode] backup\n", argv0);
     fprintf(stderr, "    %s [options] reindex [mode] backup...\n", argv0);
     fprintf(stderr, "    %s [options] verify [mode] backup...\n", argv0);
 
     fprintf(stderr, "\n%s\n",
             "Commands:\n"
+            "    lock [lock_opts]    # lock specified backup\n"
             "    reindex             # reindex specified backups\n"
             "    verify              # verify specified backups\n"
     );
@@ -77,6 +83,13 @@ static void usage(void)
             "Options:\n"
             "    -C alt_config       # alternate config file\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
+    );
+
+    fprintf(stderr, "%s\n",
+            "Lock options:\n"
+            "    -p                  # lock backup and wait for eof on stdin (default)\n"
+            "    -s                  # lock backup and open index in sqlite3\n"
+            "    -x command          # lock backup and execute command\n"
     );
 
     fprintf(stderr, "%s\n",
@@ -268,6 +281,10 @@ int main (int argc, char **argv)
     cmd = parse_cmd_string(argv[optind++]);
     if (cmd == CTLBU_CMD_UNSPECIFIED) usage();
 
+    if (options.lock_mode != CTLBU_LOCK_MODE_UNSPECIFIED
+        && cmd != CTLBU_CMD_LOCK)
+        usage();
+
     switch (cmd) {
     /* list defaults to all */
     case CTLBU_CMD_LIST:
@@ -277,8 +294,6 @@ int main (int argc, char **argv)
 
     /* some commands only accept one backup at a time */
     case CTLBU_CMD_LOCK:
-        if (options.lock_mode == CTLBU_LOCK_MODE_UNSPECIFIED) usage();
-        /* fall thru */
     case CTLBU_CMD_MOVE:
     case CTLBU_CMD_DELETE:
         if (options.mode == CTLBU_MODE_ALL) usage();
@@ -409,15 +424,147 @@ static int cmd_list_one(void *rock,
     return -1;
 }
 
+static int lock_run_pipe(const char *userid, const char *fname)
+{
+    printf("* Trying to obtain lock on %s...\n", userid ? userid : fname);
+
+    struct backup *backup = NULL;
+    int r;
+
+    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+
+    if (r) {
+        printf("NO failed\n");
+        return EC_SOFTWARE; // FIXME would something else be more appropriate?
+    }
+
+    printf("OK locked\n");
+
+    /* wait until stdin closes */
+    char buf[PROT_BUFSIZE] = {0};
+    while (!feof(stdin))
+        fgets(buf, sizeof(buf), stdin);
+
+    r = backup_close(&backup);
+    if (r) fprintf(stderr, "warning: backup_close() returned %i\n", r);
+
+    return 0;
+}
+
+static int lock_run_sqlite(const char *userid, const char *fname)
+{
+    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
+
+    struct backup *backup = NULL;
+    const char *index_fname = NULL;
+    int r, status;
+    pid_t pid;
+
+    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+
+    if (r) {
+        fprintf(stderr, "unable to lock %s: %s\n",
+                userid ? userid : fname,
+                error_message(r));
+        return EC_SOFTWARE;
+    }
+
+    index_fname = backup_get_index_fname(backup);
+
+    /* FIXME probably need to do something with signals here */
+
+    pid = fork();
+
+    switch (pid) {
+    case -1:
+        perror("fork");
+        r = EC_SOFTWARE;
+        break;
+
+    case 0:
+        /* child */
+        fprintf(stderr, "execlp: %s %s\n", "sqlite3", index_fname);
+        execlp("sqlite3", "sqlite3", index_fname, NULL);
+        /* execlp never returns */
+        perror("execlp sqlite3");
+        _exit(EC_SOFTWARE);
+        break;
+
+    default:
+        /* parent */
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status))
+            r = WEXITSTATUS(status);
+        else
+            r = EC_SOFTWARE;
+        break;
+    }
+
+    backup_close(&backup);
+    return r;
+}
+
+static int lock_run_exec(const char *userid, const char *fname, const char *cmd)
+{
+    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
+
+    struct backup *backup = NULL;
+    int r;
+
+    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+
+    if (r) {
+        fprintf(stderr, "unable to lock %s: %s\n",
+                userid ? userid : fname,
+                error_message(r));
+        return EC_SOFTWARE;
+    }
+
+    r = system(cmd);
+
+    if (r == -1)
+        r = EC_SOFTWARE;
+    else if (WIFEXITED(r))
+        r = WEXITSTATUS(r);
+    else
+        r = EC_SOFTWARE;
+
+    backup_close(&backup);
+    return r;
+}
+
 static int cmd_lock_one(void *rock,
-                        const char *userid, size_t userid_len,
-                        const char *fname, size_t fname_len)
+                        const char *key, size_t key_len,
+                        const char *data, size_t data_len)
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
-    (void) options;
-    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
-            userid, userid_len, fname, fname_len);
-    return -1;
+    char *userid = NULL;
+    char *fname = NULL;
+    int r;
+
+    /* input args might not be 0-terminated, so make a safe copy */
+    if (key_len)
+        userid = xstrndup(key, key_len);
+    if (data_len)
+        fname = xstrndup(data, data_len);
+
+    switch (options->lock_mode) {
+    case CTLBU_LOCK_MODE_UNSPECIFIED:
+    case CTLBU_LOCK_MODE_PIPE:
+        r = lock_run_pipe(userid, fname);
+        break;
+    case CTLBU_LOCK_MODE_SQL:
+        r = lock_run_sqlite(userid, fname);
+        break;
+    case CTLBU_LOCK_MODE_EXEC:
+        r = lock_run_exec(userid, fname, options->lock_exec_cmd);
+        break;
+    }
+
+    if (userid) free(userid);
+    if (fname) free(fname);
+
+    return r;
 }
 
 static int cmd_move_one(void *rock,
@@ -478,7 +625,7 @@ static int cmd_verify_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_open_paths(&backup, fname, NULL, 1);
+    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
 
     if (r == IMAP_MAILBOX_LOCKED) {
         printf("verify %s: locked\n", userid ? userid : fname);
