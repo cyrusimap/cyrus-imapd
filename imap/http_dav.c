@@ -6094,10 +6094,10 @@ int report_sync_col(struct transaction_t *txn,
 
     /* XXX - this is crappy - re-reading the messages again */
     /* Report the resources within the client requested limit (if any) */
-    struct index_record thisrecord;
     for (msgno = 1; msgno <= nresp; msgno++) {
         char *p, *resource = NULL;
         struct dav_data ddata;
+        struct index_record thisrecord;
 
         if (index_reload_record(&istate, msgno, &thisrecord))
             continue;
@@ -6126,9 +6126,12 @@ int report_sync_col(struct transaction_t *txn,
         }
         else {
             fctx->record = &thisrecord;
+            ddata.alive = 1;
             ddata.imap_uid = thisrecord.uid;
             fctx->proc_by_resource(fctx, &ddata);
         }
+
+        fctx->record = NULL;
     }
 
     /* Add sync-token element */
