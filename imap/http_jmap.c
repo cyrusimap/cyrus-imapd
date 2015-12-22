@@ -3184,7 +3184,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     struct buf buf = BUF_INITIALIZER;
     int r = -1;
     int pe; /* property parse error */
-    modseq_t oldmodseq;
+    modseq_t oldmodseq = 0;
     int dofetch = 0;
 
     /* Parse and validate arguments. */
@@ -4612,7 +4612,7 @@ struct contactlist_rock {
 static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
     struct contactlist_rock *crock = (struct contactlist_rock*) rock;
     struct index_record record;
-    struct json_t *contact = NULL;
+    json_t *contact = NULL;
     int r = 0;
 
     if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
@@ -6334,7 +6334,7 @@ static int getCalendarUpdates(struct jmap_req *req)
     const char *since = NULL;
     int dofetch = 0;
     struct buf buf = BUF_INITIALIZER;
-    modseq_t oldmodseq;
+    modseq_t oldmodseq = 0;
 
     r = caldav_create_defaultcalendars(req->userid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -8121,7 +8121,7 @@ static void jmap_exceptions_update_tz(icalcomponent *comp,
                                       calevent_rock *rock) {
 
     const char *tzid;
-    icaltimezone *tz;
+    icaltimezone *tz = NULL;
 
     /* Change the TZID of all EXDATEs that are in the former startTimezone. */
     icalproperty *prop;
@@ -9935,7 +9935,7 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     json_t *invalid;
     struct caldav_db *db;
     const char *since;
-    modseq_t oldmodseq;
+    modseq_t oldmodseq = 0;
     json_int_t maxChanges = 0;
     int dofetch = 0;
     struct updates_rock rock;
