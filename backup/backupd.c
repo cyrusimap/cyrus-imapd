@@ -856,6 +856,19 @@ static int cmd_apply_mailbox(struct dlist *dl)
     return backup_append(open->backup, dl, time(0));
 }
 
+static int cmd_apply_unmailbox(struct dlist *dl)
+{
+    const char *mboxname = dl->sval;
+
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    struct open_backup *open = backupd_open_backup(mbname);
+    mbname_free(&mbname);
+
+    if (!open) return IMAP_INTERNAL;
+
+    return backup_append(open->backup, dl, time(0));
+}
+
 static int cmd_apply_message(struct dlist *dl)
 {
     struct sync_msgid_list *guids = sync_msgid_list_create(0);
@@ -1063,6 +1076,9 @@ static void cmd_apply(struct dlist *dl)
 
     if (strcmp(dl->name, "MAILBOX") == 0) {
         r = cmd_apply_mailbox(dl);
+    }
+    else if (strcmp(dl->name, "UNMAILBOX") == 0) {
+        r = cmd_apply_unmailbox(dl);
     }
     else if (strcmp(dl->name, "MESSAGE") == 0) {
         r = cmd_apply_message(dl);
