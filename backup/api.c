@@ -746,7 +746,7 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     return r;
 }
 
-EXPORTED int backup_reindex(const char *name)
+EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
 {
     struct buf data_fname = BUF_INITIALIZER;
     struct buf index_fname = BUF_INITIALIZER;
@@ -771,7 +771,8 @@ EXPORTED int backup_reindex(const char *name)
         gzuc_member_start(gzuc);
         off_t member_offset = gzuc_member_offset(gzuc);
 
-        fprintf(stderr, "\nfound chunk at offset %jd\n\n", member_offset);
+        if (verbose)
+            fprintf(out, "\nfound chunk at offset %jd\n\n", member_offset);
 
         struct protstream *member = prot_readcb(_prot_fill_cb, gzuc);
         prot_setisclient(member, 1); /* don't sync literals */
@@ -789,9 +790,15 @@ EXPORTED int backup_reindex(const char *name)
             if (c == EOF) {
                 const char *error = prot_error(member);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
-                    fprintf(stderr,
-                            "error reading chunk at offset %jd, byte %i: %s\n",
-                            member_offset, prot_bytes_in(member), error);
+                    syslog(LOG_ERR,
+                           "IOERROR: %s: error reading chunk at offset %jd, byte %i: %s\n",
+                           name, member_offset, prot_bytes_in(member), error);
+
+                    if (out)
+                        fprintf(out, "error reading chunk at offset %jd, byte %i: %s\n",
+                                member_offset, prot_bytes_in(member), error);
+
+                    r = IMAP_IOERROR;
                 }
                 member_end_ts = ts;
                 break;
@@ -828,7 +835,8 @@ EXPORTED int backup_reindex(const char *name)
         prev_member_ts = member_start_ts;
     }
 
-    fprintf(stderr, "reached end of file\n");
+    if (verbose)
+        fprintf(out, "reached end of file\n");
 
     gzuc_close(&gzuc);
     backup_close(&backup);

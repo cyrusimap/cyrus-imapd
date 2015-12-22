@@ -448,7 +448,7 @@ static int cmd_reindex_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_reindex(fname);
+    r = backup_reindex(fname, options->verbose, stdout);
 
     printf("reindex %s: %s\n",
            userid ? userid : fname,
