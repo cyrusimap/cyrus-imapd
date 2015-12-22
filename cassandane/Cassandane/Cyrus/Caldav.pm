@@ -668,7 +668,7 @@ EOF
   $self->assert_deep_equals([], $errors);
 }
 
-sub test_propfind_principle
+sub test_propfind_principal
 {
     my ($self) = @_;
 
