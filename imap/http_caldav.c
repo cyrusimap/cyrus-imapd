@@ -3062,7 +3062,8 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
 
                 if (data) {
                     /* Skip leading ';' and trim trailing CRLF */
-                    p = ++data + strcspn(data, "\r\n");
+                    data++;
+                    p = data + strcspn(data, "\r\n");
                     *p = '\0';
 
                     /* Parse new/replacement parameter data */
@@ -3098,8 +3099,9 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
                         const char *propname =
                             icalproperty_kind_to_string(tail->kind);
                         do {
-                            p = ++data +    /* Skip leading '=' */
-                                strcspn(data, "=");
+                            /* Skip leading '=' */
+                            data++;
+                            p = data + strcspn(data, "=");
                             buf_printf(&buf, "%s:%.*s",
                                        propname, (int) (p - data), data);
                             data = p;
@@ -3121,8 +3123,9 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
                 case ACTION_REMOVE:
                     /* Parse property value(s) into property-match value(s) */
                     do {
-                        p = ++data +   /* Skip leading '=' */
-                            strcspn(data, "=");
+                        /* Skip leading '=' */
+                        data++;
+                        p = data + strcspn(data, "=");
 
                         /* Trim trailing CRLF */
                         if (p[-1] == '\n') p[-1] = '\0';
