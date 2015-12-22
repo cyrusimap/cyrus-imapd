@@ -668,4 +668,53 @@ EOF
   $self->assert_deep_equals([], $errors);
 }
 
+sub test_propfind_principle
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.reallyprivateuser");
+    $admintalk->setacl("user.reallyprivateuser", "reallyprivateuser" => "lrswipkxtecda");
+
+    my $service = $self->{instance}->get_service("http");
+    my $caltalk = Net::CalDAVTalk->new(
+	user => "reallyprivateuser",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    xlog "create calendar";
+    my $CalendarId = $caltalk->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $CalDAV = $self->{caldav};
+
+    xlog "principal property search";
+
+    my $xml = <<EOF;
+<B:principal-property-search xmlns:B="DAV:">
+  <B:property-search>
+    <B:prop>
+      <E:calendar-user-type xmlns:E="urn:ietf:params:xml:ns:caldav"/>
+    </B:prop>
+    <B:match>INDIVIDUAL</B:match>
+  </B:property-search>
+  <B:prop>
+    <E:calendar-user-address-set xmlns:E="urn:ietf:params:xml:ns:caldav"/>
+    <B:principal-URL/>
+  </B:prop>
+</B:principal-property-search>
+EOF
+
+    my $res = $CalDAV->Request('REPORT', '/dav/principals', $xml, Depth => 0, 'Content-Type' => 'text/xml');
+    my $text = Dumper($res);
+    # in an ideal world we would have assert_not_matches
+    $self->assert($text !~ m/reallyprivateuser/);
+}
+
 1;
