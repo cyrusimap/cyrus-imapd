@@ -1089,6 +1089,10 @@ static void cmd_apply(struct dlist *dl)
         /* ignore and succeed */
         r = 0;
     }
+    else if (strcmp(dl->name, "UNSUB") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
     // FIXME support other commands
     else {
         r = IMAP_PROTOCOL_ERROR;
