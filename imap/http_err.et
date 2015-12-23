@@ -262,7 +262,7 @@ ec HTTP_NO_STORAGE,
 # Binding Extensions to WebDAV (RFC 5842)
 
 ec HTTP_DUPLICATE,
-   "208 Already Reported
+   "208 Already Reported"
 
 ec HTTP_LOOP,
    "508 Loop Detected"
