@@ -215,6 +215,8 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
             if (mbentry->mbtype & MBTYPE_MOVING) {
                 struct mb_node *next;
 
+                syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
+
                 if (warn_only) {
                     printf("Remove remote flag on: %s\n", mbentry->name);
                 } else {
@@ -286,6 +288,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
                 if (config_mupdate_config !=
                     IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
                     /* But not for a unified configuration */
+
+                    syslog(LOG_WARNING, "Remove Local Mailbox: %s", mbentry->name);
+
                     if (warn_only) {
                         printf("Remove Local Mailbox: %s\n", mbentry->name);
                     } else {
@@ -303,6 +308,8 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
                     /* it's flagged moving, we'll fix it later (and
                      * push it then too) */
                     struct mb_node *next;
+
+                    syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
 
                     if (warn_only) {
                         printf("Remove remote flag on: %s\n", mbentry->name);
@@ -324,6 +331,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
             free(realpart);
             break;
         }
+
+        syslog(LOG_WARNING, "Force Activate: %s", mbentry->name);
+
         if (warn_only) {
             printf("Force Activate: %s\n", mbentry->name);
             free(realpart);
@@ -431,6 +441,8 @@ static void do_dump(enum mboxop op, const char *part, int purge)
         while (del_head) {
             struct mb_node *me = del_head;
             del_head = del_head->next;
+
+            syslog(LOG_WARNING, "Remove from MUPDATE: %s", me->mailbox);
 
             if (warn_only) {
                 printf("Remove from MUPDATE: %s\n", me->mailbox);
@@ -988,10 +1000,13 @@ int main(int argc, char *argv[])
         syslog(LOG_NOTICE, "checkpointing mboxlist");
         mboxlist_init(MBOXLIST_SYNC);
         mboxlist_done();
+        syslog(LOG_NOTICE, "done checkpointing mboxlist");
         break;
 
-    case DUMP:
     case M_POPULATE:
+        syslog(LOG_NOTICE, "%spopulating mupdate", warn_only ? "test " : "");
+
+    case DUMP:
         mboxlist_init(0);
         mboxlist_open(mboxdb_fname);
 
@@ -1011,6 +1026,11 @@ int main(int argc, char *argv[])
 
         mboxlist_close();
         mboxlist_done();
+
+        if (op == M_POPULATE) {
+            syslog(LOG_NOTICE,
+                   "done %spopulating mupdate", warn_only ? "test " : "");
+        }
         break;
 
     case UNDUMP:
