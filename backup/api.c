@@ -160,7 +160,7 @@ static int _open_internal(struct backup **backupp,
                 goto error;
             }
 
-            if (errno == ENOENT || index_statbuf.st_size == 0) {
+            if ((r && errno == ENOENT) || index_statbuf.st_size == 0) {
                 syslog(LOG_ERR, "reindex needed: %s", backup->index_fname);
                 r = IMAP_MAILBOX_BADFORMAT; // FIXME define special error code for this?
                 goto error;
@@ -227,7 +227,7 @@ done:
  */
 static const char *_make_path(const mbname_t *mbname, int *out_fd)
 {
-    char pathresult[PATH_MAX];
+    static char pathresult[PATH_MAX];
 
     const char *userid = mbname_userid(mbname);
     const char *backup_data_path = config_getstring(IMAPOPT_BACKUP_DATA_PATH);
@@ -294,7 +294,7 @@ error:
 EXPORTED int backup_get_paths(const mbname_t *mbname,
                               struct buf *data_fname, struct buf *index_fname)
 {
-    char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
+    char *backups_db_fname = xstrdupnull(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
     if (!backups_db_fname)
         backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
 
@@ -315,6 +315,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                       &tid);
 
     if (r == CYRUSDB_NOTFOUND) {
+        syslog(LOG_DEBUG, "%s not found in backups.db, creating new record", userid);
         backup_path = _make_path(mbname, NULL);
         if (!backup_path) {
             r = IMAP_INTERNAL; /* FIXME ?? */
