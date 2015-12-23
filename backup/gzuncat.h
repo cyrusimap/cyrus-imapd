@@ -44,12 +44,13 @@
 
 struct gzuncat;
 
-struct gzuncat *gzuc_open(int fd);
+struct gzuncat *gzuc_new(int fd);
+void gzuc_free(struct gzuncat **gzp);
+
 int gzuc_set_bufsize(struct gzuncat *gz, size_t size);
 int gzuc_member_start_from(struct gzuncat *gz, off_t offset);
 int gzuc_member_start(struct gzuncat *gz);
 int gzuc_member_end(struct gzuncat *gz, off_t *offset);
-void gzuc_close(struct gzuncat **gzp);
 int gzuc_member_eof(struct gzuncat *gz);
 int gzuc_eof(struct gzuncat *gz);
 ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count);

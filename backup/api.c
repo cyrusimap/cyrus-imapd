@@ -764,7 +764,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
     buf_free(&data_fname);
     if (r) return r;
 
-    struct gzuncat *gzuc = gzuc_open(backup->fd);
+    struct gzuncat *gzuc = gzuc_new(backup->fd);
 
     time_t prev_member_ts = -1;
 
@@ -839,7 +839,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
     if (verbose)
         fprintf(out, "reached end of file\n");
 
-    gzuc_close(&gzuc);
+    gzuc_free(&gzuc);
     backup_close(&backup);
 
     return r;

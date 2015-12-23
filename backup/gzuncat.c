@@ -42,11 +42,16 @@
 
 #include <config.h>
 
+#include <sys/types.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <unistd.h>
 #include <zlib.h>
+
+#include "lib/xmalloc.h"
 
 #include "gzuncat.h"
 
@@ -54,7 +59,7 @@
  * current_offset, next_offset, and member_eof together indicate the state of
  * the reader:
  *
- * when not reading a member (after gzuc_open or gzuc_member_end):
+ * when not reading a member (after gzuc_new or gzuc_member_end):
  *
  *     current_offset = -1
  *     next_offset = start point for next call to gzuc_start()
@@ -76,36 +81,33 @@
 static const size_t default_in_buf_size = 16 * 1024;
 
 struct gzuncat {
-    FILE *file;
+    int   fd;
     off_t current_offset;
     off_t next_offset;
     int   member_eof;
+    int   file_eof;
     z_stream strm;
     unsigned char *in_buf;
     size_t in_buf_size;
     size_t bytes_read;
 };
 
-EXPORTED struct gzuncat *gzuc_open(int fd)
+EXPORTED struct gzuncat *gzuc_new(int fd)
 {
-    struct gzuncat *gz = malloc(sizeof(*gz));
-    if (!gz) return NULL;
+    if (fd < 0) return NULL;
 
-    gz->file = fdopen(dup(fd), "rb");
-    if (!gz->file) goto error;
+    struct gzuncat *gz = xmalloc(sizeof(*gz));
 
+    gz->fd = fd;
     gz->current_offset = -1;
     gz->next_offset = 0;
     gz->member_eof = -1;
+    gz->file_eof = 0;
     gz->in_buf = NULL;
     gz->in_buf_size = default_in_buf_size;
     gz->bytes_read = 0;
 
     return gz;
-
-error:
-    free(gz);
-    return NULL;
 }
 
 EXPORTED int gzuc_set_bufsize(struct gzuncat *gz, size_t size)
@@ -136,15 +138,13 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
     if (gz->current_offset >= 0) return -1;
     if (offset < 0) return -1;
 
-    if (!gz->in_buf) {
-        gz->in_buf = malloc(gz->in_buf_size);
-        if (!gz->in_buf) return -1;
-    }
+    if (!gz->in_buf)
+        gz->in_buf = xmalloc(gz->in_buf_size);
 
     memset(gz->in_buf, 0, gz->in_buf_size);
 
-    int r = fseeko(gz->file, offset, SEEK_SET);
-    if (r) return r;
+    int r = lseek(gz->fd, offset, SEEK_SET);
+    if (r < 0) return -1;
 
     r = _inflate_init(&gz->strm, gz->in_buf);
     if (r) return r;
@@ -154,6 +154,7 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
     gz->current_offset = offset;
     gz->next_offset = -1;
     gz->member_eof = 0;
+    gz->file_eof = 0;
     gz->bytes_read = 0;
 
     return 0;
@@ -170,16 +171,20 @@ EXPORTED int gzuc_member_end(struct gzuncat *gz, off_t *offset)
 
     int r = 0;
 
-    if (feof(gz->file)) goto done;
+    if (gz->file_eof) goto done;
 
     if (gz->current_offset >= 0) {
         char discard[16 * 1024];
         while ((r = gzuc_read(gz, discard, sizeof(discard))) > 0);
-        if (feof(gz->file)) goto done;
+
+        /* don't set next_offset if we're at end of underlying file */
+        if (gz->file_eof) goto done;
+        /* nor if there was an error */
         if (r < 0) goto done;
     }
 
-    gz->next_offset = ftello(gz->file);
+    /* we're now at the start of the next member */
+    gz->next_offset = lseek(gz->fd, 0, SEEK_CUR);
 
 done:
     inflateEnd(&gz->strm);
@@ -190,7 +195,7 @@ done:
     return r;
 }
 
-EXPORTED void gzuc_close(struct gzuncat **gzp)
+EXPORTED void gzuc_free(struct gzuncat **gzp)
 {
     if (!gzp) return;
     if (!*gzp) return;
@@ -204,10 +209,6 @@ EXPORTED void gzuc_close(struct gzuncat **gzp)
         free(gz->in_buf);
     }
 
-    if (gz->file) {
-        fclose(gz->file);
-    }
-
     free(gz);
 }
 
@@ -216,18 +217,19 @@ EXPORTED int gzuc_member_eof(struct gzuncat *gz)
     if (gz->member_eof == 1) return 1;
     if (gz->current_offset < 0) return 1;
     if (gz->strm.avail_in) return 0;
-    return feof(gz->file);
+    return gz->file_eof;
 }
 
 EXPORTED int gzuc_eof(struct gzuncat *gz)
 {
-    return feof(gz->file);
+    return gz->file_eof;
 }
 
 EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
 {
     if (gz->current_offset < 0) return -1;
     if (gz->member_eof == 1) return 0;
+    if (gz->file_eof == 1) return 0;
 
     gz->strm.avail_out = count;
     gz->strm.next_out = buf;
@@ -240,15 +242,20 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
     do {
         // read some more input if we need it
         if (!gz->strm.avail_in) {
-            gz->strm.avail_in = fread(gz->in_buf, 1, gz->in_buf_size, gz->file);
+            r = read(gz->fd, gz->in_buf, gz->in_buf_size);
 
-            r = ferror(gz->file);
-            if (r) return r;
-
-            if (gz->strm.avail_in == 0)
+            if (r < 0) {
+                syslog(LOG_ERR, "IOERROR: %s: read %d: %m", __func__, gz->fd);
+                return r;
+            }
+            else if (r == 0) {
+                gz->file_eof = 1;
                 break;
-
-            gz->strm.next_in = gz->in_buf;
+            }
+            else {
+                gz->strm.avail_in = r;
+                gz->strm.next_in = gz->in_buf;
+            }
         }
 
         r = inflate(&gz->strm, Z_SYNC_FLUSH /* FIXME what */);
@@ -262,8 +269,11 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
             // object, then we've read too much (we're starting to see the next section of the file)
             // so we need to seek back to the right spot and update next_offset
             if (gz->strm.avail_in) {
-                r = fseeko(gz->file, 0 - (off_t) gz->strm.avail_in, SEEK_CUR);
-                if (r) return r;
+                r = lseek(gz->fd, 0 - (off_t) gz->strm.avail_in, SEEK_CUR);
+                if (r < 0) {
+                    syslog(LOG_ERR, "IOERROR: %s: lseek %d: %m", __func__, gz->fd);
+                    return r;
+                }
                 gz->strm.avail_in = 0;
                 gz->strm.next_in = gz->in_buf;
             }
@@ -310,12 +320,13 @@ EXPORTED int gzuc_seekto(struct gzuncat *gz, size_t pos)
     if (gz->current_offset < 0) return -1;
 
     gz->member_eof = 0;
+    gz->file_eof = 0;
 
     if (pos == gz->bytes_read) return 0;
 
     if (pos < gz->bytes_read) {
-        int r = fseeko(gz->file, gz->current_offset, SEEK_SET);
-        if (r) return r;
+        int r = lseek(gz->fd, gz->current_offset, SEEK_SET);
+        if (r < 0) return r;
 
         inflateEnd(&gz->strm);
         r = _inflate_init(&gz->strm, gz->in_buf);

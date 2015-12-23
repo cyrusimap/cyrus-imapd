@@ -153,7 +153,7 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, F
     if (r) goto done;
     if (!chunk_list.head) goto done;
 
-    gzuc = gzuc_open(backup->fd);
+    gzuc = gzuc_new(backup->fd);
     if (!gzuc) {
         r = -1;
         goto done;
@@ -179,7 +179,7 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, F
     }
 
 done:
-    if (gzuc) gzuc_close(&gzuc);
+    if (gzuc) gzuc_free(&gzuc);
     chunk_list_empty(&chunk_list);
     return r;
 }
