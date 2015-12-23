@@ -824,3 +824,8 @@ todo list
 * compress -> compact?
 * rename backup_data_path => backuppartition-default?
 * ctl_backups verify: set level
+* change architecture of struct backup/struct gzuncat so that there's exactly one file
+  descriptor ever.  otherwise closing any of the dup's prematurely releases the lock.
+  -> gzuncat: never close your fd, use read(2) instead of stdio
+  -> append: never gzclose, just gzflush(Z_FINISH) and keep the append_state around
+  -> _sha1_file: looks ok, uses mmap, doesn't try to close any fds
