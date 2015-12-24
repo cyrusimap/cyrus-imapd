@@ -5327,9 +5327,9 @@ static int busytime_by_resource(void *rock, void *data)
 
 
 /* mboxlist_findall() callback to find busytime of a collection */
-static int busytime_by_collection(const char *mboxname, int matchlen,
-                                  int maycreate, void *rock)
+static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 {
+    const char *mboxname = mbentry->name;
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct calquery_filter *calfilter =
         (struct calquery_filter *) fctx->filter_crit;
@@ -5349,7 +5349,7 @@ static int busytime_by_collection(const char *mboxname, int matchlen,
         }
     }
 
-    return propfind_by_collection(mboxname, matchlen, maycreate, rock);
+    return propfind_by_collection(mboxname, strlen(mboxname), 0, rock);
 }
 
 
@@ -5554,14 +5554,11 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
 
         if (txn->req_tgt.collection) {
             /* Get busytime for target calendar collection */
-            busytime_by_collection(mailboxname, 0, 0, fctx);
+            busytime_by_collection(txn->req_tgt.mbentry, fctx);
         }
         else {
             /* Get busytime for all contained calendar collections */
-            char mboxpat[MAX_MAILBOX_BUFFER+1];
-            snprintf(mboxpat, sizeof(mboxpat), "%s.%%", mailboxname);
-            mboxlist_findall(NULL, mboxpat, 1 /*admin*/, httpd_userid,
-                             httpd_authstate, busytime_by_collection, fctx);
+            mboxlist_allmbox(mailboxname, busytime_by_collection, fctx, 0);
         }
 
         if (fctx->davdb) caldav_close(fctx->davdb);
