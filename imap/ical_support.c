@@ -315,6 +315,11 @@ icalparameter *icalparameter_new_size(const char *sz)
     return param;
 }
 
+const char *icalparameter_get_size(icalparameter *param)
+{
+    return icalparameter_get_iana_value(param);
+}
+
 void icalparameter_set_size(icalparameter *param, const char *sz)
 {
     icalparameter_set_iana_value(param, sz);

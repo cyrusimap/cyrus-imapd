@@ -122,6 +122,8 @@ extern void icalparameter_set_managedid(icalparameter *param, const char *id);
 
 extern icalparameter *icalparameter_new_size(const char *sz);
 
+extern const char *icalparameter_get_size(icalparameter *param);
+
 extern void icalparameter_set_size(icalparameter *param, const char *sz);
 
 /* Wrappers to fetch managed attachment parameters by kind */
