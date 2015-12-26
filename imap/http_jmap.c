@@ -7476,7 +7476,7 @@ static json_t* jmap_attachments_from_ical(icalcomponent *comp) {
 
         /* size */
         json_int_t size = -1;
-        param = icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER);
+        param = icalproperty_get_size_parameter(prop);
         if (param) {
             const char *s = icalparameter_get_size(param);
             if (s) {
@@ -8880,7 +8880,7 @@ static void jmap_attachments_to_ical(icalcomponent *comp,
              * but that's only for binary attachments. For now, ignore name. */
 
             /* size */
-            param = icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER);
+            param = icalproperty_get_size_parameter(prop);
             if (param) icalproperty_remove_parameter_by_ref(prop, param);
             if (size >= 0) {
                 buf_printf(&buf, "%lld", (long long) size);
