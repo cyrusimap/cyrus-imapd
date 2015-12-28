@@ -124,6 +124,7 @@ struct namespace_t namespace_ischedule = {
     isched_init, NULL, NULL, isched_shutdown,
     {
         { NULL,                 NULL }, /* ACL          */
+        { NULL,                 NULL }, /* BIND         */
         { NULL,                 NULL }, /* COPY         */
         { NULL,                 NULL }, /* DELETE       */
         { &meth_get_isched,     NULL }, /* GET          */
@@ -140,6 +141,7 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }, /* PUT          */
         { NULL,                 NULL }, /* REPORT       */
         { &meth_trace,          NULL }, /* TRACE        */
+        { NULL,                 NULL }, /* UNBIND       */
         { NULL,                 NULL }  /* UNLOCK       */
     }
 };
@@ -150,6 +152,7 @@ struct namespace_t namespace_domainkey = {
     ALLOW_READ, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
+        { NULL,                 NULL }, /* BIND         */
         { NULL,                 NULL }, /* COPY         */
         { NULL,                 NULL }, /* DELETE       */
         { &meth_get_domainkey,  NULL }, /* GET          */
@@ -165,6 +168,7 @@ struct namespace_t namespace_domainkey = {
         { NULL,                 NULL }, /* PUT          */
         { NULL,                 NULL }, /* REPORT       */
         { &meth_trace,          NULL }, /* TRACE        */
+        { NULL,                 NULL }, /* UNBIND       */
         { NULL,                 NULL }  /* UNLOCK       */
     }
 };

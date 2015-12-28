@@ -461,6 +461,7 @@ struct namespace_t namespace_calendar = {
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     {
         { &meth_acl,            &caldav_params },       /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { &meth_copy_move,      &caldav_params },       /* COPY         */
         { &meth_delete,         &caldav_params },       /* DELETE       */
         { &meth_get_head_cal,   NULL },                 /* GET          */
@@ -477,6 +478,7 @@ struct namespace_t namespace_calendar = {
         { &meth_put,            &caldav_params },       /* PUT          */
         { &meth_report,         &caldav_params },       /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { &meth_unlock,         &caldav_params }        /* UNLOCK       */
     }
 };
@@ -490,6 +492,7 @@ struct namespace_t namespace_freebusy = {
     NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get_head_fb,    NULL },                 /* GET          */
@@ -506,6 +509,7 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
