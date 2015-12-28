@@ -293,6 +293,47 @@ static void test_mimeheader_badcharset(void)
     free(s);
 }
 
+static void test_unfold(void)
+{
+#define TESTCASE(in, wantSkip, wantKeep) \
+    { \
+        char *s; \
+        char *k; \
+        static const char _in[] = (in); \
+        static const char _wantSkip[] = (wantSkip); \
+        static const char _wantKeep[] = (wantKeep); \
+        s = charset_unfold(_in, strlen(_in), CHARSET_UNFOLD_SKIPWS); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _wantSkip); \
+        k = charset_unfold(_in, strlen(_in), 0); \
+        CU_ASSERT_PTR_NOT_NULL(k); \
+        CU_ASSERT_STRING_EQUAL(k, _wantKeep); \
+        free(k); \
+        free(s); \
+    }
+
+    /* Single line */
+    TESTCASE("abcdef", "abcdef", "abcdef");
+
+    /* Single line, ending in CRLF */
+    TESTCASE("abcdef\r\n", "abcdef", "abcdef");
+
+    /* Two lines */
+    TESTCASE("abc\r\ndef", "abc\r\ndef", "abc\r\ndef");
+
+    /* Two lines, first with continuation line */
+    TESTCASE("ab\r\n c\r\ndef", "abc\r\ndef", "ab c\r\ndef");
+
+    /* Two lines, both with continuation lines */
+    TESTCASE("a\r\n\t\r\n b\r\n c\r\nd\r\n ef", "abc\r\ndef", "a\t b c\r\nd ef");
+
+    /* One long, empty continuation line */
+    /* Typically, RFCs using unfolding forbid this case. */
+    TESTCASE("\r\n\t\r\n \r\n \r\n", "", "\t  ");
+
+#undef TESTCASE
+}
+
 static void test_mime_unfold(void)
 {
     char *s;

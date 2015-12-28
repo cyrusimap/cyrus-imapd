@@ -11069,8 +11069,8 @@ static int xfer_reactivate(struct xfer_header *xfer)
                     strlen(item->extname), item->extname);
         r = getresult(xfer->be->in, "MP1");
         if (r) {
-            syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
-                   item->mbentry->name);
+            syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s': %s",
+                   item->mbentry->name, error_message(r));
             return r;
         }
     }

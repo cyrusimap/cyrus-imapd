@@ -886,10 +886,11 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
     }
 }
 
-EXPORTED const char *buf_cstring(struct buf *buf)
+EXPORTED const char *buf_cstring(const struct buf *buf)
 {
-    buf_ensure(buf, 1);
-    buf->s[buf->len] = '\0';
+    struct buf *backdoor = (struct buf*)buf;
+    buf_ensure(backdoor, 1);
+    backdoor->s[backdoor->len] = '\0';
     return buf->s;
 }
 
@@ -907,7 +908,7 @@ EXPORTED char *buf_release(struct buf *buf)
     return ret;
 }
 
-EXPORTED const char *buf_cstringnull(struct buf *buf)
+EXPORTED const char *buf_cstringnull(const struct buf *buf)
 {
     if (!buf->s) return NULL;
     return buf_cstring(buf);

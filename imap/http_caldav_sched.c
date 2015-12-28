@@ -75,18 +75,36 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
     size_t len;
     char *testuser = NULL;
 
+    if (!addr) return HTTP_NOT_FOUND;
+
     if (myuserid) {
-        if (strchr(myuserid, '@') || !httpd_extradomain)
+        const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        char *mailboxname = caldav_mboxname(myuserid, NULL);
+        struct buf mybuf = BUF_INITIALIZER;
+        int r = annotatemore_lookupmask(mailboxname, annotname,
+                                        myuserid, &mybuf);
+
+        if (!r && mybuf.len) {
+            if (!strncasecmp(buf_cstring(&mybuf), "mailto:", 7))
+                testuser = xstrdup(buf_cstring(&mybuf) + 7);
+            else
+                testuser = buf_release(&mybuf);
+        }
+        else if (strchr(myuserid, '@') || !httpd_extradomain) {
             testuser = xstrdup(myuserid);
-        else
+        }
+        else {
             testuser = strconcat(myuserid, "@", httpd_extradomain, (char *)NULL);
+        }
+
+        free(mailboxname);
+        buf_free(&mybuf);
     }
+
+    if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
 
     memset(param, 0, sizeof(struct sched_param));
 
-    if (!addr) return HTTP_NOT_FOUND;
-
-    if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
     if (testuser && !strcasecmp(userid, testuser)) {
         param->isyou = 1;
         param->userid = testuser;

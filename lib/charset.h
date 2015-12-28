@@ -52,6 +52,7 @@
 #define CHARSET_MERGESPACE (1<<2)
 #define CHARSET_SKIPHTML (1<<3)
 #define CHARSET_SNIPPET (1<<4)
+#define CHARSET_UNFOLD_SKIPWS (1<<5)
 
 #define CHARSET_UNKNOWN_CHARSET (-1)
 
@@ -92,6 +93,8 @@ extern char *charset_to_imaputf7(const char *msg_base, size_t len, charset_index
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
 extern char *charset_encode_mimeheader(const char *header, size_t len);
+
+extern char *charset_unfold(const char *s, size_t len, int flags);
 
 /* Extract the body text for the message denoted by 'uid', convert its
    text to the canonical form for searching, and pass the converted text

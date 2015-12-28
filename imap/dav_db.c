@@ -212,7 +212,7 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
 }
 
 /*
- * mboxlist_findall() callback function to create DAV DB entries for a mailbox
+ * mboxlist_usermboxtree() callback function to create DAV DB entries for a mailbox
  */
 static int _dav_reconstruct_mb(const mbentry_t *mbentry, void *rock __attribute__((unused)))
 {
