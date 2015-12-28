@@ -144,7 +144,7 @@ static struct vparse_state *vcard_string_as_vparser(const struct buf *buf)
     int vr;
 
     vparser = (struct vparse_state *) xzmalloc(sizeof(struct vparse_state));
-    vparser->base = buf_base(buf);
+    vparser->base = buf_cstring(buf);
     vparse_set_multival(vparser, "adr");
     vparse_set_multival(vparser, "org");
     vparse_set_multival(vparser, "n");

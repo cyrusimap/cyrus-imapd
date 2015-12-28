@@ -130,15 +130,20 @@ EXPORTED sqldb_t *caldav_alarm_open()
 
     /* we need exclusivity! */
     int r = mboxname_lock("$CALDAVALARMDB", &my_alarmdb_lock, LOCK_EXCLUSIVE);
-    if (r)
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: failed to lock $CALDAVALARMDB");
         return NULL;
+    }
 
     char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
     my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade);
+
+    if (!my_alarmdb) {
+        syslog(LOG_ERR, "DBERROR: failed to open %s", dbfilename);
+        mboxname_release(&my_alarmdb_lock);
+    }
+
     free(dbfilename);
-
-    if (!my_alarmdb) mboxname_release(&my_alarmdb_lock);
-
     refcount = 1;
     return my_alarmdb;
 

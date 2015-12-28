@@ -66,6 +66,7 @@
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
+#include "json_support.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -2994,19 +2995,20 @@ static int jmap_message_to_wire(json_t *msg,
     return 0;
 }
 
-static int jmap_message_create(json_t *arg,
-                               char **uid,
-                               json_t **err,
-                               json_t *invalid,
-                               struct jmap_req *req)
+static int jmap_message_create_draft(json_t *arg,
+                                     char **uid,
+                                     json_t **err,
+                                     json_t *invalid,
+                                     struct jmap_req *req)
 {
     int r = 0, pe;
     json_t *prop;
     const char *sval;
-    const char *inReplyToMessageId = NULL;
     int bval;
     struct buf buf = BUF_INITIALIZER;
     struct tm *date = xzmalloc(sizeof(struct tm));
+
+    const char *inReplyToMessageId = NULL;
 
     /* XXX Support messages in multiple mailboxes */
     char *mboxname = NULL;
@@ -3033,7 +3035,6 @@ static int jmap_message_create(json_t *arg,
         }
         mboxname = mboxlist_find_uniqueid(id, req->userid);
         mboxrole = jmap_mailbox_role(mboxname);
-        /* XXX how to determine role outbox */
         if (!mboxrole || (strcmp(mboxrole, "drafts") && strcmp(mboxrole, "outbox"))) {
             json_array_append_new(invalid, json_string("mailboxIds[0]"));
         }
@@ -3044,6 +3045,9 @@ static int jmap_message_create(json_t *arg,
     prop = json_object_get(arg, "inReplyToMessageId");
     if (prop && prop != json_null()) {
         inReplyToMessageId = json_string_value(prop);
+        if ((sval = json_string_value(prop)) && sval && !strlen(sval)) {
+            json_array_append_new(invalid, json_string("inReplyToMessageId"));
+        }
     }
     pe = jmap_readprop(arg, "isUnread", 0, invalid, "b", &bval);
     if (pe > 0 && bval) {
@@ -3232,7 +3236,7 @@ static int setMessages(struct jmap_req *req)
             }
 
             /* Create the draft */
-            r = jmap_message_create(arg, &uid, &err, invalid, req);
+            r = jmap_message_create_draft(arg, &uid, &err, invalid, req);
             if (r) goto done;
 
             /* Handle invalid properties. */
@@ -3680,7 +3684,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     struct buf buf = BUF_INITIALIZER;
     int r = -1;
     int pe; /* property parse error */
-    modseq_t oldmodseq;
+    modseq_t oldmodseq = 0;
     int dofetch = 0;
 
     /* Parse and validate arguments. */
@@ -4362,6 +4366,9 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     }
 
     if (_wantprop(props, "firstName")) {
+        /* JMAP doesn't have a separate field for Middle (aka "Additional
+         * Names"), so we just mash them into firstName. See reverse of this in
+         * _json_to_card */
         const char *given = strarray_safenth(n, 1);
         const char *middle = strarray_safenth(n, 2);
         buf_setcstr(&buf, given);
@@ -5108,7 +5115,7 @@ struct contactlist_rock {
 static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
     struct contactlist_rock *crock = (struct contactlist_rock*) rock;
     struct index_record record;
-    struct json_t *contact = NULL;
+    json_t *contact = NULL;
     int r = 0;
 
     if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
@@ -5725,8 +5732,21 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
+            /* JMAP doesn't have a separate field for Middle (aka "Additional
+             * Names"), so any extra names are probably in firstName, and we
+             * should split them out. See reverse of this in getcontacts_cb */
             struct vparse_entry *n = _card_multi(card, "n");
-            strarray_set(n->v.values, 1, val);
+            const char *middle = strchr(val, ' ');
+            if (middle) {
+                /* multiple worlds, first to First, rest to Middle */
+                strarray_setm(n->v.values, 1, xstrndup(val, middle-val));
+                strarray_set(n->v.values, 2, ++middle);
+            }
+            else {
+                /* single word, set First, clear Middle */
+                strarray_set(n->v.values, 1, val);
+                strarray_set(n->v.values, 2, "");
+            }
         }
         else if (!strcmp(key, "lastName")) {
             const char *val = json_string_value(jval);
@@ -6830,7 +6850,7 @@ static int getCalendarUpdates(struct jmap_req *req)
     const char *since = NULL;
     int dofetch = 0;
     struct buf buf = BUF_INITIALIZER;
-    modseq_t oldmodseq;
+    modseq_t oldmodseq = 0;
 
     r = caldav_create_defaultcalendars(req->userid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -7571,7 +7591,7 @@ static json_t* jmap_attachments_from_ical(icalcomponent *comp) {
 
         /* size */
         json_int_t size = -1;
-        param = icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER);
+        param = icalproperty_get_size_parameter(prop);
         if (param) {
             const char *s = icalparameter_get_size(param);
             if (s) {
@@ -8617,7 +8637,7 @@ static void jmap_exceptions_update_tz(icalcomponent *comp,
                                       calevent_rock *rock) {
 
     const char *tzid;
-    icaltimezone *tz;
+    icaltimezone *tz = NULL;
 
     /* Change the TZID of all EXDATEs that are in the former startTimezone. */
     icalproperty *prop;
@@ -8975,7 +8995,7 @@ static void jmap_attachments_to_ical(icalcomponent *comp,
              * but that's only for binary attachments. For now, ignore name. */
 
             /* size */
-            param = icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER);
+            param = icalproperty_get_size_parameter(prop);
             if (param) icalproperty_remove_parameter_by_ref(prop, param);
             if (size >= 0) {
                 buf_printf(&buf, "%lld", (long long) size);
@@ -10426,7 +10446,7 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     json_t *invalid;
     struct caldav_db *db;
     const char *since;
-    modseq_t oldmodseq;
+    modseq_t oldmodseq = 0;
     json_int_t maxChanges = 0;
     int dofetch = 0;
     struct updates_rock rock;

@@ -1128,11 +1128,17 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
                                 void *rock __attribute__((unused)))
 {
     /* XXX  Do LDAP/SQL lookup here */
-
     buf_reset(&fctx->buf);
 
-    if (fctx->req_tgt->userid)
+    const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
+    int r = annotatemore_lookupmask(mailboxname, annotname,
+                                    fctx->req_tgt->userid, &fctx->buf);
+    free(mailboxname);
+
+    if (r || !buf_len(&fctx->buf)) {
         buf_printf(&fctx->buf, "%s", fctx->req_tgt->userid);
+    }
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -4654,7 +4660,7 @@ int propfind_by_resource(void *rock, void *data)
         fctx->record = r ? NULL : &record;
     }
 
-    if (r) {
+    if (r || (!ddata->imap_uid && ddata->lock_expire <= time(NULL))) {
         /* Add response for missing target */
         ret = xml_add_response(fctx, HTTP_NOT_FOUND, 0);
     }
@@ -5478,8 +5484,11 @@ int meth_patch(struct transaction_t *txn, void *params)
         if (precond == HTTP_OK) {
             /* Parse, validate, and apply the patch document to the resource */
             ret = patch_doc->proc(txn, obj);
-            if (!ret) ret = pparams->put.proc(txn, obj, mailbox,
-                                              txn->req_tgt.resource, davdb);
+            if (!ret) {
+                ret = pparams->put.proc(txn, obj, mailbox,
+                                        txn->req_tgt.resource, davdb);
+                if (ret == HTTP_FORBIDDEN) ret = HTTP_UNPROCESSABLE;
+            }
         }
 
         break;
@@ -5496,7 +5505,7 @@ int meth_patch(struct transaction_t *txn, void *params)
 
     if (flags & PREFER_REP) {
         struct resp_body_t *resp_body = &txn->resp_body;
-        struct mime_type_t *mime = NULL;
+        struct mime_type_t *mime = pparams->mime_types;
         struct buf *data;
 
         if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
@@ -5733,6 +5742,11 @@ int meth_put(struct transaction_t *txn, void *params)
         goto done;
     }
 
+    if (txn->req_tgt.allow & ALLOW_PATCH) {
+        /* Add Accept-Patch formats to response */
+        txn->resp_body.patch = pparams->patch_docs;
+    }
+
     if (flags & PREFER_REP) {
         struct resp_body_t *resp_body = &txn->resp_body;
         const char **hdr;
@@ -5938,7 +5952,7 @@ int report_sync_col(struct transaction_t *txn,
                            &uidvalidity, &syncmodseq, &basemodseq,
                            tokenuri /* test for trailing junk */);
 
-                syslog(LOG_ERR, "scanned token %s to %d %u %llu %llu",
+                syslog(LOG_DEBUG, "scanned token %s to %d %u %llu %llu",
                        str, r, uidvalidity, syncmodseq, basemodseq);
                 /* Sanity check the token components */
                 if (r < 2 || r > 3 ||
@@ -6086,10 +6100,10 @@ int report_sync_col(struct transaction_t *txn,
 
     /* XXX - this is crappy - re-reading the messages again */
     /* Report the resources within the client requested limit (if any) */
-    struct index_record thisrecord;
     for (msgno = 1; msgno <= nresp; msgno++) {
         char *p, *resource = NULL;
         struct dav_data ddata;
+        struct index_record thisrecord;
 
         if (index_reload_record(&istate, msgno, &thisrecord))
             continue;
@@ -6118,9 +6132,12 @@ int report_sync_col(struct transaction_t *txn,
         }
         else {
             fctx->record = &thisrecord;
+            ddata.alive = 1;
             ddata.imap_uid = thisrecord.uid;
             fctx->proc_by_resource(fctx, &ddata);
         }
+
+        fctx->record = NULL;
     }
 
     /* Add sync-token element */
@@ -6505,8 +6522,12 @@ static int report_prin_prop_search(struct transaction_t *txn,
         /* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
 
         /* Add responses for all users with INBOX on server (as admin) */
-        ret = mboxlist_findall(&httpd_namespace, "user.%", 1, httpd_userid,
-                               httpd_authstate, principal_search, fctx);
+        // XXX - this is a security risk without ACL checks,
+        // we shouldn't be doing this as admin
+        if (0) {
+            ret = mboxlist_findall(&httpd_namespace, "user.%", 1, httpd_userid,
+                                   httpd_authstate, principal_search, fctx);
+        }
     }
 
   done:

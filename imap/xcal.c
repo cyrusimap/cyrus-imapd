@@ -1058,7 +1058,7 @@ icalcomponent *xcal_string_as_icalcomponent(const struct buf *buf)
     xmlDocPtr doc = NULL;
     xmlNodePtr root;
     icalcomponent *ical = NULL;
-    const char *str = buf_base(buf);
+    const char *str = buf_cstring(buf);
 
     if (!str) return NULL;
 

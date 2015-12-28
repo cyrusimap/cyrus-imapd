@@ -1433,20 +1433,24 @@ static void database_log(const struct mbent *mb, struct txn **mytid)
 }
 
 /* lookup in database. database must be locked */
-/* This could probabally be more efficient and avoid some copies */
+/* This could probably be more efficient and avoid some copies */
 /* passing in a NULL pool implies that we should use regular xmalloc,
  * a non-null pool implies we should use the mpool functionality */
-static struct mbent *database_lookup(const char *name, struct mpool *pool)
+static struct mbent *database_lookup(const char *name, const mbentry_t *mbentry,
+                                     struct mpool *pool)
 {
-    mbentry_t *mbentry = NULL;
+    mbentry_t *my_mbentry = NULL;
     struct mbent *out;
     char *location = NULL;
     int r;
 
     if (!name) return NULL;
 
-    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
-    if (r) return NULL;
+    if (!mbentry) {
+        r = mboxlist_lookup_allow_all(name, &my_mbentry, NULL);
+        if (r) return NULL;
+        mbentry = my_mbentry;
+    }
 
     /* XXX - if mbtype & MBTYPE_DELETED, maybe set a delete */
 
@@ -1477,7 +1481,7 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
                          : xstrdup(location);
 
     free(location);
-    mboxlist_entry_free(&mbentry);
+    if (my_mbentry) mboxlist_entry_free(&my_mbentry);
 
     return out;
 }
@@ -1606,7 +1610,7 @@ static void cmd_set(struct conn *C,
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    m = database_lookup(mailbox, NULL);
+    m = database_lookup(mailbox, NULL, NULL);
     if (m && t == SET_RESERVE) {
         if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
             /* failed; mailbox already exists */
@@ -1730,7 +1734,7 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
      * since the mbent stays valid even if the database changes,
      * and we don't want to block on network I/O */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
-    m = database_lookup(mailbox, NULL);
+    m = database_lookup(mailbox, NULL, NULL);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     if (m && m->t == SET_ACTIVE) {
@@ -1771,35 +1775,24 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
     }
 }
 
-/* Callback for cmd_startupdate to be passed to mboxlist_findall. */
+/* Callback for cmd_startupdate to be passed to mboxlist_allmbox. */
 /* Requires that C->streaming be set to the tag to respond with */
-static int sendupdate(const char *name,
-                      int matchlen __attribute__((unused)),
-                      int maycreate __attribute__((unused)),
-                      void *rock)
+static int sendupdate(const mbentry_t *mbentry, void *rock)
 {
     struct conn *C = (struct conn *)rock;
     struct mbent *m;
-    char *location = NULL;
 
     if (!C) return -1;
 
-    m = database_lookup(name, NULL);
+    m = database_lookup(mbentry->name, mbentry, NULL);
     if (!m) return -1;
 
     if (!C->list_prefix ||
        !strncmp(m->location, C->list_prefix, C->list_prefix_len)) {
         /* Either there is not a prefix to test, or we matched it */
-        char *tmp;
-
-        if (C->streaming_hosts) {
-            location = xstrdup(m->location);
-            tmp = strchr(location, '!');
-            if (tmp) *tmp = '\0';
-        }
 
         if (!C->streaming_hosts ||
-           strarray_find(C->streaming_hosts, location, 0) >= 0) {
+            strarray_find(C->streaming_hosts, mbentry->server, 0) >= 0) {
             switch (m->t) {
             case SET_ACTIVE:
                 prot_printf(C->pout,
@@ -1835,15 +1828,12 @@ static int sendupdate(const char *name,
         }
     }
 
-    if (location) free(location);
     free_mbent(m);
     return 0;
 }
 
 static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 {
-    char pattern[2] = {'*','\0'};
-
     /* List operations can result in a lot of output, let's do this
      * with the prot layer nonblocking so we don't hold the mutex forever*/
     prot_NONBLOCK(C->pout);
@@ -1857,8 +1847,7 @@ static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
     if (C->list_prefix) C->list_prefix_len = strlen(C->list_prefix);
     else C->list_prefix_len = 0;
 
-    mboxlist_findall(NULL, pattern, 1, NULL,
-                     NULL, sendupdate, (void*)C);
+    mboxlist_allmbox("", sendupdate, (void*)C, /*incdel*/0);
 
     C->streaming = NULL;
     C->list_prefix = NULL;
@@ -1890,8 +1879,6 @@ static struct prot_waitevent *sendupdates_evt(struct protstream *s __attribute__
 static void cmd_startupdate(struct conn *C, const char *tag,
                      strarray_t *partial)
 {
-    char pattern[2] = {'*','\0'};
-
     /* initialize my condition variable */
 
     /* The inital dump of the database can result in a lot of data,
@@ -1907,8 +1894,7 @@ static void cmd_startupdate(struct conn *C, const char *tag,
     C->streaming_hosts = partial;
 
     /* dump initial list */
-    mboxlist_findall(NULL, pattern, 1, NULL,
-                     NULL, sendupdate, (void*)C);
+    mboxlist_allmbox("", sendupdate, (void*)C, /*incdel*/0);
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
@@ -2149,7 +2135,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
     if (!strncmp(rock, "DELETE", 6)) {
-        m = database_lookup(mdata->mailbox, NULL);
+        m = database_lookup(mdata->mailbox, NULL, NULL);
 
         if (!m) {
             syslog(LOG_DEBUG, "attempt to delete unknown mailbox %s",
@@ -2163,7 +2149,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 
         oldlocation = xstrdup(m->location);
     } else {
-        m = database_lookup(mdata->mailbox, NULL);
+        m = database_lookup(mdata->mailbox, NULL, NULL);
 
         if (m)
             oldlocation = m->location;
@@ -2304,11 +2290,8 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
     return 0;
 }
 
-/* Callback for mupdate_synchronize to be passed to mboxlist_findall. */
-static int sync_findall_cb(const char *name,
-                           int matchlen __attribute__((unused)),
-                           int maycreate __attribute__((unused)),
-                           void *rock)
+/* Callback for mupdate_synchronize to be passed to mboxlist_allmbox. */
+static int sync_findall_cb(const mbentry_t *mbentry, void *rock)
 {
     struct sync_rock *r = (struct sync_rock *)rock;
     struct mbent_queue *local_boxes = (struct mbent_queue *)r->boxes;
@@ -2316,7 +2299,7 @@ static int sync_findall_cb(const char *name,
 
     if (!local_boxes) return 1;
 
-    m = database_lookup(name, r->pool);
+    m = database_lookup(mbentry->name, mbentry, r->pool);
     /* If it doesn't exist, fine... */
     if (!m) return 0;
 
@@ -2369,7 +2352,6 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     struct mbent_queue local_boxes;
     struct mbent *l,*r;
     struct sync_rock rock;
-    char pattern[] = { '*', '\0' };
     struct txn *tid = NULL;
     int ret = 0;
     int err = 0;
@@ -2389,8 +2371,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 
     rock.boxes = &local_boxes;
 
-    mboxlist_findall(NULL, pattern, 1, NULL,
-                     NULL, sync_findall_cb, (void*)&rock);
+    mboxlist_allmbox("", sync_findall_cb, (void*)&rock, /*incdel*/0);
 
     /* Traverse both lists, compare the names */
     /* If they match, ensure that location and acl are correct, if so,
