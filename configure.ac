@@ -1442,6 +1442,9 @@ dnl
                 ],
                 AC_MSG_ERROR([Need libical for http]))
 
+        AC_CHECK_DECLS([icalrecur_freq_to_string, icalrecur_weekday_to_string],
+                [], [], [[#include <libical/ical.h>]])
+
         AC_CHECK_LIB(ical, icalparameter_new_iana, [
                 AC_DEFINE(HAVE_IANA_PARAMS,[],
                         [Do we have support for IANA params?])

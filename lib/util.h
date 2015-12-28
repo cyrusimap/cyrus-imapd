@@ -251,8 +251,8 @@ struct buf {
 #define buf_putc(b, c) do { buf_ensure((b), 1); (b)->s[(b)->len++] = (c); } while (0)
 
 void _buf_ensure(struct buf *buf, size_t len);
-const char *buf_cstring(struct buf *buf);
-const char *buf_cstringnull(struct buf *buf);
+const char *buf_cstring(const struct buf *buf);
+const char *buf_cstringnull(const struct buf *buf);
 char *buf_release(struct buf *buf);
 char *buf_newcstring(struct buf *buf);
 char *buf_releasenull(struct buf *buf);

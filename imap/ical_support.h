@@ -66,6 +66,20 @@ extern icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp);
 extern icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp);
 extern const char *icalproperty_get_invitee(icalproperty *prop);
 
+extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
+
+
+/* Functions not declared in in libical < v2.0 */
+
+#if !HAVE_DECL_ICALRECUR_FREQ_TO_STRING
+extern const char *icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
+#endif
+
+#if !HAVE_DECL_ICALRECUR_WEEKDAY_TO_STRING
+extern const char *icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
+#endif
+
+
 #ifndef HAVE_TZDIST_PROPS
 
 /* Functions to replace those not available in libical < v2.0 */
@@ -107,6 +121,8 @@ extern const char *icalparameter_get_managedid(icalparameter *param);
 extern void icalparameter_set_managedid(icalparameter *param, const char *id);
 
 extern icalparameter *icalparameter_new_size(const char *sz);
+
+extern const char *icalparameter_get_size(icalparameter *param);
 
 extern void icalparameter_set_size(icalparameter *param, const char *sz);
 

@@ -1,6 +1,6 @@
-/* notify.h -- abstract interface for notifications
+/* json_support.h -- Helper functions for jansson
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,21 +38,43 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
  */
 
-#ifndef NOTIFY_H
-#define NOTIFY_H
 
-void notify(const char *method,
-            const char *class, const char *priority,
-            const char *user, const char *mailbox,
-            int nopt, const char **options,
-            const char *message, const char *fname);
+#ifndef JSON_SUPPORT_H
+#define JSON_SUPPORT_H
 
-int notify_at(time_t when, const char *method,
-            const char *class, const char *priority,
-            const char *user, const char *mboxname,
-            int nopt, const char **options,
-            const char *message);
+#include <config.h>
 
-#endif /* NOTIFY_H */
+#include <jansson.h>
+
+/* jansson replacement functions for those missing in older versions */
+
+#ifndef json_boolean
+#define json_boolean(val)       ((val) ? json_true() : json_false())
+#endif /* json_boolean */
+
+#ifndef json_boolean_value
+#define json_boolean_value(val) ((val) == json_true() ? 1 : 0)
+#endif /* json_boolean_value */
+
+#ifndef json_object_foreach
+#define json_object_foreach(obj, key, val)                      \
+     void *_iter_;                                              \
+     for (_iter_ = json_object_iter(obj);                       \
+          _iter_                                                \
+              && (key = json_object_iter_key(_iter_))           \
+              && (val = json_object_iter_value(_iter_));        \
+          _iter_ = json_object_iter_next(obj, _iter_))
+#endif /* json_object_foreach */
+
+#ifndef json_array_foreach
+#define json_array_foreach(array, index, value)                 \
+    for (index = 0;                                             \
+         index < json_array_size(array)                         \
+             && (value = json_array_get(array, index));         \
+         index++)
+#endif /* json_array_foreach */
+
+#endif /* JSON_SUPPORT_H */

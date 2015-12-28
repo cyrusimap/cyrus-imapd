@@ -58,6 +58,7 @@
 #include "acl.h"
 #include "assert.h"
 #include "mailbox.h"
+#include "notify.h"
 #include "message.h"
 #include "append.h"
 #include "global.h"
@@ -224,6 +225,15 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     as->mboxevents = NULL;
 
     as->mailbox = mailbox;
+
+    if (config_getswitch(IMAPOPT_OUTBOX_SENDLATER)) {
+        /* XXX - use specialuse for this later */
+        mbname_t *mbname = mbname_from_intname(mailbox->name);
+        const strarray_t *boxes = mbname_boxes(mbname);
+        if (mbname_localpart(mbname) && strarray_size(boxes) == 1 && !strcmp(strarray_nth(boxes, 0), "Outbox"))
+            as->isoutbox = 1;
+        mbname_free(&mbname);
+    }
 
     return 0;
 }
@@ -987,6 +997,13 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         }
     }
 
+    if (as->isoutbox) {
+        char num[10];
+        snprintf(num, 10, "%u", record.uid);
+        r = notify_at(record.internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
+        if (r) goto out;
+    }
+
     /* Write out index file entry */
     r = mailbox_append_index_record(mailbox, &record);
     if (r) goto out;
@@ -1352,6 +1369,13 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
             }
         }
 #endif
+
+        if (as->isoutbox) {
+            char num[10];
+            snprintf(num, 10, "%u", record.uid);
+            r = notify_at(record.internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
+            if (r) goto out;
+        }
 
         /* Write out index file entry */
         r = mailbox_append_index_record(as->mailbox, &record);

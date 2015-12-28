@@ -573,6 +573,12 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
                 return PE_BEGIN_PARAMS;
             }
 
+            if (!card->type) {
+                /* no type means we're at the top level, haven't seen a BEGIN! */
+                state->itemstart = cardstart;
+                return PE_MISMATCHED_CARD;
+            }
+
             if (strcasecmp(state->entry->v.value, card->type)) {
                 /* special case mismatched card, the "start" was the start of
                  * the card */
