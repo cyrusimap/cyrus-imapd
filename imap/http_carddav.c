@@ -323,6 +323,7 @@ struct namespace_t namespace_addressbook = {
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
     {
         { &meth_acl,            &carddav_params },      /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { &meth_copy_move,      &carddav_params },      /* COPY         */
         { &meth_delete,         &carddav_params },      /* DELETE       */
         { &meth_get_head,       &carddav_params },      /* GET          */
@@ -343,6 +344,7 @@ struct namespace_t namespace_addressbook = {
         { &meth_put,            &carddav_params },      /* PUT          */
         { &meth_report,         &carddav_params },      /* REPORT       */
         { &meth_trace,          &carddav_parse_path },  /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { &meth_unlock,         &carddav_params }       /* UNLOCK       */
     }
 };
