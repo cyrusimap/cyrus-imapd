@@ -2969,7 +2969,17 @@ static int jmap_message_to_wire(json_t *msg,
         } else if (!strcasecmp(key, "Date")) {
             d.date = xstrdup(s);
         } else {
-            json_object_set(headers, key, val);
+            /* JMAP setMessages:"The keys MUST only contain the characters A-Z,
+             * a-z, 0-9 and hyphens." */
+            int valid = 1;
+            const char *c;
+            for (c = key; *c && valid; c++) {
+                if (!((*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') ||
+                      (*c >= '0' && *c <= '9') || (*c == '-'))) {
+                    valid = 0;
+                }
+            }
+            if (valid) json_object_set(headers, key, val);
         }
     }
 
@@ -3191,7 +3201,7 @@ static int jmap_message_create_draft(json_t *arg,
         json_array_append_new(invalid, json_string("hasAttachment"));
     }
     prop = json_object_get(arg, "headers");
-    if (json_array_size(prop)) {
+    if (json_object_size(prop)) {
         const char *key;
         json_t *val;
         json_object_foreach(prop, key, val) {
