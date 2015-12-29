@@ -2913,86 +2913,206 @@ static int jmap_validate_emailer(json_t *emailer,
 }
 
 struct jmap_message_data {
-    /* Header values must be malloced */
     char *subject;
     char *to;
     char *from;
-    /* XXX */
+    char *date;
+    char *messageid;
+    char *contenttype;
+    char *boundary;
+
     const char *textBody;
     const char *htmlBody;
 };
 
+/* Convert the JMAP Message msg to RFC-5322 compliant wire format.
+ *
+ * The message is assumed to not contain value errors. Missing properties
+ * are silently discarded, including the mandatory From and Date headers.
+ *
+ * Return 0 on success. */
 static int jmap_message_to_wire(json_t *msg,
                                 struct buf *out)
 {
     struct jmap_message_data d;
-    const char *key;
+    const char *key, *s;
     json_t *val, *prop;
     size_t i;
-    const char *s;
     struct buf buf = BUF_INITIALIZER;
     memset(&d, 0, sizeof(struct jmap_message_data));
 
-    /* Read headers */
+    /* XXX
+     * RFC 5322 - 2.1.1.  Line Length Limits
+     * There are two limits that this specification places on the number of
+     * characters in a line.  Each line of characters MUST be no more than
+     * 998 characters, and SHOULD be no more than 78 characters, excluding
+     * the CRLF.
+     */
+
+    /* Weed out special header values. The iteration allows to find and
+     * remove headers case-insensitively */
+    json_t *headers = json_pack("{}");
     json_object_foreach(json_object_get(msg, "headers"), key, val) {
+        /* XXX JMAP spec: "keys MUST only contain the characters
+         * A-Z, a-z, 0-9 and hyphens" */
         s = json_string_value(val);
         if (!s) {
-            /* XXX validate should already have checked for this */
             continue;
-        }
-        if (!strcasecmp(key, "From")) {
-            d.to = xstrdup(s);
+        } else if (!strcasecmp(key, "From")) {
+            d.from = xstrdup(s);
         } else if (!strcasecmp(key, "To")) {
-           d.to = xstrdup(s);
+            d.to = xstrdup(s);
         } else if (!strcasecmp(key, "Subject")) {
             d.subject = xstrdup(s);
+        } else if (!strcasecmp(key, "Message-ID")) {
+            d.messageid = xstrdup(s);
+        } else if (!strcasecmp(key, "Date")) {
+            d.date = xstrdup(s);
+        } else {
+            json_object_set(headers, key, val);
         }
-        /* XXX */
     }
 
-    if ((s = json_string_value(json_object_get(msg, "from")))) {
-        free(d.from);
-        d.from = xstrdup(s);
+    /* Override From header */
+    if ((prop = json_object_get(msg, "from"))) {
+        const char *name = json_string_value(json_object_get(prop, "name"));
+        const char *email = json_string_value(json_object_get(prop, "email"));
+        if (strlen(name) && email) {
+            buf_printf(&buf, "%s <%s>", name, email);
+        } else if (email) {
+            buf_appendcstr(&buf, email);
+        }
+        if (d.from) free(d.from);
+        d.from = buf_newcstring(&buf);
+        buf_reset(&buf);
     }
 
+    /* Override To header */
     if ((prop = json_object_get(msg, "to"))) {
         json_array_foreach(prop, i, val) {
             const char *name = json_string_value(json_object_get(val, "name"));
             const char *email = json_string_value(json_object_get(val, "email"));
-            if (name && email) {
-                /* XXX escape name */
-                if (i) buf_appendcstr(&buf, ", ");
+            if (i) buf_appendcstr(&buf, ", ");
+            if (strlen(name) && email) {
                 buf_printf(&buf, "%s <%s>", name, email);
             } else if (email) {
-                if (i) buf_appendcstr(&buf, ", ");
                 buf_appendcstr(&buf, email);
             }
         }
+        if (d.to) free(d.to);
         d.to = buf_newcstring(&buf);
         buf_reset(&buf);
     }
 
+    /* Override Subject header */
     if ((s = json_string_value(json_object_get(msg, "subject")))) {
-        free(d.subject);
+        if (d.subject) free(d.subject);
         d.subject = xstrdup(s);
     }
+    if (!d.subject) d.subject = xstrdup("");
 
+    /* Override Date header */
+    /* Precendence (high to low): "date" property, Date header, now */
+    time_t date = time(NULL);
+    if ((s = json_string_value(json_object_get(msg, "date")))) {
+        struct tm tm;
+        strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+        date = mktime(&tm);
+    }
+    if (json_object_get(msg, "date") || !d.date) {
+        char fmt[RFC822_DATETIME_MAX+1];
+        memset(fmt, 0, RFC822_DATETIME_MAX+1);
+        time_to_rfc822(date, fmt, RFC822_DATETIME_MAX+1);
+        if (d.date) free(d.date);
+        d.date = xstrdup(fmt);
+    }
+
+    /* XXX inReplyToMessageId: set References and In-Reply-To */
+    /* XXX bcc  Overrides a “Bcc” in the headers. */
+    /* XXX replyTo  Overrides a “Reply-To” in the headers. */
+
+    /* Determine Content-Type header and multi-part boundary */
+    d.textBody = json_string_value(json_object_get(msg, "textBody"));
+    d.htmlBody = json_string_value(json_object_get(msg, "htmlBody"));
+    if (d.textBody && d.htmlBody) {
+        char *p, *q, *uuid = xstrdup(makeuuid());
+        d.boundary = xzmalloc(strlen(uuid));
+        for (p = uuid, q = d.boundary; *p; p++) {
+            if (*p != '-') *q++ = *p;
+        }
+        free(uuid);
+    }
+
+    /* Set Content-Type header */
+    /* XXX Might want to encode the UTF-8 bodies in 7bit */
+    if (d.boundary) {
+        buf_appendcstr(&buf, "multipart/mixed; boundary=");
+        buf_appendcstr(&buf, d.boundary);
+        d.contenttype = buf_release(&buf);
+    } else if (d.htmlBody) {
+        d.contenttype = xstrdup("text/html;charset=UTF-8");
+    } else {
+        d.contenttype = xstrdup("text/plain;charset=UTF-8");
+    }
+
+    /* Set Message-ID header */
+    /* XXX Use message guid here? */
+    buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
+    d.messageid = buf_release(&buf);
+
+    /* Build raw message */
+    buf_appendcstr(out, "MIME-Version: 1.0\r\n");
+
+    /* Write headers */
 #define JMAP_MESSAGE_WRITE_HEADER(b, k, v) \
-    buf_appendcstr((b), (k)); \
-    buf_appendcstr((b), ": "); \
-    buf_appendcstr((b), (v)); \
-    buf_appendcstr((b), "\r\n");
-
-    /* XXX */
+    { \
+       char *_v = (v); \
+       char *s = charset_encode_mimeheader(_v, strlen(_v)); \
+       buf_appendcstr((b), (k)); \
+       buf_appendcstr((b), ": "); \
+       buf_appendcstr((b), (v)); \
+       buf_appendcstr((b), "\r\n"); \
+       free(s); \
+    }
+    if (d.to) JMAP_MESSAGE_WRITE_HEADER(out, "To", d.to);
     if (d.from) JMAP_MESSAGE_WRITE_HEADER(out, "From", d.from);
     if (d.subject) JMAP_MESSAGE_WRITE_HEADER(out, "Subject", d.subject);
+    if (d.date) JMAP_MESSAGE_WRITE_HEADER(out, "Date", d.date);
+    if (d.messageid) JMAP_MESSAGE_WRITE_HEADER(out, "Message-ID", d.messageid);
 
+    JMAP_MESSAGE_WRITE_HEADER(out, "Content-Type", d.contenttype);
+    /* XXX Decode and write custom headers */
 #undef JMAP_MESSAGE_WRITE_HEADER
+    buf_appendcstr(out, "\r\n");
 
+    /* Write body */
+    if (d.textBody) {
+        /* XXX JMAP spec: "If not supplied and an htmlBody is, the server
+         * SHOULD generate a text version for the message from this." */
+        if (d.boundary) {
+            buf_printf(out, "\r\n--%s\r\n", d.boundary);
+            buf_printf(out, "Content-Type: text/plain;charset=UTF-8\r\n\r\n");
+        }
+        buf_appendcstr(out, d.textBody);
+    }
+    if (d.htmlBody) {
+        /* XXX JMAP spec: "If this contains internal links (cid:) the cid
+         * value should be the attachment id." */
+        if (d.boundary) {
+            buf_printf(out, "\r\n--%s\r\n", d.boundary);
+            buf_printf(out, "Content-Type: text/html;charset=UTF-8\r\n\r\n");
+        }
+        buf_appendcstr(out, d.htmlBody);
+    }
+    if (d.boundary) buf_printf(out, "\r\n--%s--\r\n", d.boundary);
+
+    /* All done */
     if (d.from) free(d.from);
     if (d.to) free(d.to);
     if (d.subject) free(d.subject);
-
+    if (d.messageid) free(d.messageid);
+    if (d.contenttype) free(d.contenttype);
+    if (d.boundary) free(d.boundary);
     buf_free(&buf);
     return 0;
 }
@@ -3180,7 +3300,7 @@ static int jmap_message_create_draft(json_t *arg,
         syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX: mail=%s",
                 buf_cstring(&buf));
 
-        /* Open mailbox. */
+        /* Open drafts mailbox. */
 /*        if (strcmp(mboxname, req->inbox->name)) {
             r = mailbox_open_iwl(mboxname, &mbox);
             if (r) {
