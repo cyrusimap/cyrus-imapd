@@ -2929,20 +2929,20 @@ struct jmap_message_data {
     const char *htmlBody;
 };
 
-/* Convert the JMAP Message msg to RFC-5322 compliant wire format.
+/* Write the JMAP Message msg in RFC-5322 compliant wire format.
  *
  * The message is assumed to not contain value errors. Missing properties
  * are silently discarded, including the mandatory From and Date headers.
  *
- * Return 0 on success. */
-static int jmap_message_to_wire(json_t *msg,
-                                struct buf *out)
+ * Return 0 on success or non-zero if writing to the file failed */
+static int jmap_message_to_wire(json_t *msg, FILE *out)
 {
     struct jmap_message_data d;
     const char *key, *s;
     json_t *val, *prop;
     size_t i;
     struct buf buf = BUF_INITIALIZER;
+    int r;
     memset(&d, 0, sizeof(struct jmap_message_data));
 
     /* XXX
@@ -3104,7 +3104,7 @@ static int jmap_message_to_wire(json_t *msg,
     }
 
     /* Set Message-ID header */
-    /* XXX Use message guid here? */
+    /* XXX Use message guid here */
     buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
     d.msgid = buf_release(&buf);
 
@@ -3120,18 +3120,16 @@ static int jmap_message_to_wire(json_t *msg,
     }
 
     /* Build raw message */
-    buf_appendcstr(out, "MIME-Version: 1.0\r\n");
+    fputs("MIME-Version: 1.0\r\n", out);
 
     /* Write headers */
 #define JMAP_MESSAGE_WRITE_HEADER(b, k, v) \
     { \
        char *_v = (v); \
        char *s = charset_encode_mimeheader(_v, strlen(_v)); \
-       buf_appendcstr((b), (k)); \
-       buf_appendcstr((b), ": "); \
-       buf_appendcstr((b), (v)); \
-       buf_appendcstr((b), "\r\n"); \
+       r = fprintf(out, "%s: %s\r\n", k, s); \
        free(s); \
+       if (r < 0) goto done; \
     }
     if (d.to)      JMAP_MESSAGE_WRITE_HEADER(out, "To", d.to);
     if (d.from)    JMAP_MESSAGE_WRITE_HEADER(out, "From", d.from);
@@ -3146,30 +3144,43 @@ static int jmap_message_to_wire(json_t *msg,
     JMAP_MESSAGE_WRITE_HEADER(out, "Content-Type", d.contenttype);
     /* XXX Decode and write custom headers */
 #undef JMAP_MESSAGE_WRITE_HEADER
-    buf_appendcstr(out, "\r\n");
+    r = fputs("\r\n", out);
+    if (r == EOF) goto done;
 
     /* Write body */
     if (d.textBody) {
         /* XXX JMAP spec: "If not supplied and an htmlBody is, the server
          * SHOULD generate a text version for the message from this." */
         if (d.boundary) {
-            buf_printf(out, "\r\n--%s\r\n", d.boundary);
-            buf_printf(out, "Content-Type: text/plain;charset=UTF-8\r\n\r\n");
+            r = fprintf(out, "\r\n--%s\r\n", d.boundary);
+            if (r < 0) goto done;
+            r = fputs("Content-Type: text/plain;charset=UTF-8\r\n\r\n", out);
+            if (r == EOF) goto done;
         }
-        buf_appendcstr(out, d.textBody);
+        r = fputs(d.textBody, out);
+        if (r == EOF) goto done;
     }
     if (d.htmlBody) {
         /* XXX JMAP spec: "If this contains internal links (cid:) the cid
          * value should be the attachment id." */
         if (d.boundary) {
-            buf_printf(out, "\r\n--%s\r\n", d.boundary);
-            buf_printf(out, "Content-Type: text/html;charset=UTF-8\r\n\r\n");
+            r = fprintf(out, "\r\n--%s\r\n", d.boundary);
+            if (r < 0) goto done;
+            r = fputs("Content-Type: text/html;charset=UTF-8\r\n\r\n", out);
+            if (r == EOF) goto done;
         }
-        buf_appendcstr(out, d.htmlBody);
+        r = fputs(d.htmlBody, out);
+        if (r == EOF) goto done;
     }
-    if (d.boundary) buf_printf(out, "\r\n--%s--\r\n", d.boundary);
+    if (d.boundary) {
+        r = fprintf(out, "\r\n--%s--\r\n", d.boundary);
+        if (r < 0) goto done;
+    }
 
     /* All done */
+    r = 0;
+
+done:
     if (d.from) free(d.from);
     if (d.to) free(d.to);
     if (d.cc) free(d.cc);
@@ -3181,7 +3192,8 @@ static int jmap_message_to_wire(json_t *msg,
     if (d.contenttype) free(d.contenttype);
     if (d.boundary) free(d.boundary);
     buf_free(&buf);
-    return 0;
+    if (r) r = HTTP_SERVER_ERROR;
+    return r;
 }
 
 static int jmap_message_create_draft(json_t *arg,
@@ -3354,6 +3366,7 @@ static int jmap_message_create_draft(json_t *arg,
         goto done;
     }
 
+    /* XXX make uid point to the newly created message GUID */
     *uid = xstrdup(makeuuid());
 
     if (inReplyToMessageId) {
@@ -3367,32 +3380,61 @@ static int jmap_message_create_draft(json_t *arg,
 
     /* XXX */
     if (!strcmp(mboxrole, "outbox")) {
-        /* send message */
-    } else  {
-        /* Save draft. */
-
-        /* XXX Serialize message into mail format. */
-        r = jmap_message_to_wire(arg, &buf);
-        if (r) goto done;
-
-        syslog(LOG_ERR, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX: mail=%s",
-                buf_cstring(&buf));
+        /* XXX send message */
+        /* XXX store message in Sent folder */
+    } else if (!strcmp(mboxrole, "drafts")) {
+        FILE *f = NULL;
+        struct stagemsg *stage;
+        time_t now = time(NULL);
+        struct body *body = NULL;
+        struct appendstate as;
+        quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
 
         /* Open drafts mailbox. */
-/*        if (strcmp(mboxname, req->inbox->name)) {
-            r = mailbox_open_iwl(mboxname, &mbox);
-            if (r) {
-                syslog(LOG_ERR, "mailbox_open_iwl(%s): %s",
-                        mboxname, error_message(r));
-                goto done;
-            }
-        } else {
-            mbox = req->inbox;
-        }*/
+        r = mailbox_open_iwl(mboxname, &mbox);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s): %s",
+                    mboxname, error_message(r));
+            goto done;
+        }
 
-        /* XXX Write record. */
+        /* Prepare to stage the message */
+        if (!(f = append_newstage(mbox->name, now, 0, &stage))) {
+            syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
+            r = HTTP_SERVER_ERROR;
+            goto done;
+        }
 
-        if (mbox != req->inbox) mailbox_close(&mbox);
+        /* Write the message to the file */
+        r = jmap_message_to_wire(arg, f);
+        qdiffs[QUOTA_STORAGE] = ftell(f);
+        fclose(f);
+        if (r) {
+            append_removestage(stage);
+            goto done;
+        }
+        qdiffs[QUOTA_MESSAGE] = 1;
+
+        /* Prepare to append the message to the mailbox */
+        r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
+                0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
+        if (r) {
+            append_removestage(stage);
+            goto done;
+        }
+
+        /* Append the message to the mailbox */
+        r = append_fromstage(&as, &body, stage, now, NULL, 0, NULL);
+        if (r) {
+            append_abort(&as);
+            append_removestage(stage);
+            goto done;
+        }
+        r = append_commit(&as);
+        append_removestage(stage);
+        if (r) goto done;
+
+        if (mbox) mailbox_close(&mbox);
     }
 
 done:
