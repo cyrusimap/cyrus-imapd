@@ -228,6 +228,7 @@ struct namespace_t namespace_principal = {
     NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get_head,       &princ_params },        /* GET          */
@@ -244,6 +245,7 @@ struct namespace_t namespace_principal = {
         { NULL,                 NULL },                 /* PUT          */
         { &meth_report,         &princ_params },        /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };

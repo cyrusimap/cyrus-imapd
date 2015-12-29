@@ -236,6 +236,7 @@ struct namespace_t namespace_drive = {
     &my_webdav_init, &my_webdav_auth, my_webdav_reset, &my_webdav_shutdown,
     {
         { &meth_acl,            &webdav_params },      /* ACL          */
+        { NULL,                 NULL },                /* BIND         */
         { &meth_copy_move,      &webdav_params },      /* COPY         */
         { &meth_delete,         &webdav_params },      /* DELETE       */
         { &meth_get_head,       &webdav_params },      /* GET          */
@@ -252,6 +253,7 @@ struct namespace_t namespace_drive = {
         { &meth_put,            &webdav_params },      /* PUT          */
         { &meth_report,         &webdav_params },      /* REPORT       */
         { &meth_trace,          &webdav_parse_path },  /* TRACE        */
+        { NULL,                 NULL },                /* UNBIND       */
         { &meth_unlock,         &webdav_params }       /* UNLOCK       */
     }
 };

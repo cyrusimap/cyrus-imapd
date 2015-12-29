@@ -184,6 +184,7 @@ struct namespace_t namespace_jmap = {
     &jmap_init, &jmap_auth, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &jmap_get,            NULL },                 /* GET          */
@@ -200,6 +201,7 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
