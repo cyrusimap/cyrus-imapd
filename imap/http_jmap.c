@@ -2986,8 +2986,9 @@ static int jmap_message_to_wire(json_t *msg,
         const char *name = json_string_value(json_object_get(_m, "name")); \
         const char *email = json_string_value(json_object_get(_m, "email")); \
         if (strlen(name) && email) { \
-            /* XXX escape name */ \
-            buf_printf(b, "%s <%s>", name, email); \
+            char *xname = charset_encode_mimeheader(name, strlen(name)); \
+            buf_printf(b, "%s <%s>", xname, email); \
+            free(xname); \
         } else if (email) { \
             buf_appendcstr(b, email); \
         } \
