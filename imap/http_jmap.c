@@ -2915,9 +2915,12 @@ static int jmap_validate_emailer(json_t *emailer,
 struct jmap_message_data {
     char *subject;
     char *to;
+    char *cc;
+    char *bcc;
+    char *replyto;
     char *from;
     char *date;
-    char *messageid;
+    char *msgid;
     char *contenttype;
     char *boundary;
 
@@ -2953,8 +2956,6 @@ static int jmap_message_to_wire(json_t *msg,
      * remove headers case-insensitively */
     json_t *headers = json_pack("{}");
     json_object_foreach(json_object_get(msg, "headers"), key, val) {
-        /* XXX JMAP spec: "keys MUST only contain the characters
-         * A-Z, a-z, 0-9 and hyphens" */
         s = json_string_value(val);
         if (!s) {
             continue;
@@ -2962,57 +2963,86 @@ static int jmap_message_to_wire(json_t *msg,
             d.from = xstrdup(s);
         } else if (!strcasecmp(key, "To")) {
             d.to = xstrdup(s);
+        } else if (!strcasecmp(key, "Cc")) {
+            d.cc = xstrdup(s);
+        } else if (!strcasecmp(key, "Bcc")) {
+            d.bcc = xstrdup(s);
+        } else if (!strcasecmp(key, "Reply-To")) {
+            d.replyto = xstrdup(s);
         } else if (!strcasecmp(key, "Subject")) {
             d.subject = xstrdup(s);
         } else if (!strcasecmp(key, "Message-ID")) {
-            d.messageid = xstrdup(s);
+            d.msgid = xstrdup(s);
         } else if (!strcasecmp(key, "Date")) {
             d.date = xstrdup(s);
         } else {
-            /* JMAP setMessages:"The keys MUST only contain the characters A-Z,
-             * a-z, 0-9 and hyphens." */
-            int valid = 1;
-            const char *c;
-            for (c = key; *c && valid; c++) {
-                if (!((*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') ||
-                      (*c >= '0' && *c <= '9') || (*c == '-'))) {
-                    valid = 0;
-                }
-            }
-            if (valid) json_object_set(headers, key, val);
+            json_object_set(headers, key, val);
         }
     }
 
-    /* Override From header */
+#define JMAP_MESSAGE_EMAILER_TO_WIRE(b, m) \
+    { \
+        json_t *_m = (m); \
+        const char *name = json_string_value(json_object_get(_m, "name")); \
+        const char *email = json_string_value(json_object_get(_m, "email")); \
+        if (strlen(name) && email) { \
+            /* XXX escape name */ \
+            buf_printf(b, "%s <%s>", name, email); \
+        } else if (email) { \
+            buf_appendcstr(b, email); \
+        } \
+    }
+
+    /* Override the From header */
     if ((prop = json_object_get(msg, "from"))) {
-        const char *name = json_string_value(json_object_get(prop, "name"));
-        const char *email = json_string_value(json_object_get(prop, "email"));
-        if (strlen(name) && email) {
-            buf_printf(&buf, "%s <%s>", name, email);
-        } else if (email) {
-            buf_appendcstr(&buf, email);
-        }
+        JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, prop);
         if (d.from) free(d.from);
         d.from = buf_newcstring(&buf);
         buf_reset(&buf);
     }
 
-    /* Override To header */
+    /* Override the To header */
     if ((prop = json_object_get(msg, "to"))) {
         json_array_foreach(prop, i, val) {
-            const char *name = json_string_value(json_object_get(val, "name"));
-            const char *email = json_string_value(json_object_get(val, "email"));
             if (i) buf_appendcstr(&buf, ", ");
-            if (strlen(name) && email) {
-                buf_printf(&buf, "%s <%s>", name, email);
-            } else if (email) {
-                buf_appendcstr(&buf, email);
-            }
+            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
         }
         if (d.to) free(d.to);
         d.to = buf_newcstring(&buf);
         buf_reset(&buf);
     }
+
+    /* Override the Cc header */
+    if ((prop = json_object_get(msg, "cc"))) {
+        json_array_foreach(prop, i, val) {
+            if (i) buf_appendcstr(&buf, ", ");
+            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+        }
+        if (d.cc) free(d.cc);
+        d.cc = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+
+    /* Override the Bcc header */
+    if ((prop = json_object_get(msg, "bcc"))) {
+        json_array_foreach(prop, i, val) {
+            if (i) buf_appendcstr(&buf, ", ");
+            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+        }
+        if (d.bcc) free(d.bcc);
+        d.bcc = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+
+    /* Override the Reply-To header */
+    if ((prop = json_object_get(msg, "replyTo"))) {
+        JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, prop);
+        if (d.replyto) free(d.replyto);
+        d.replyto = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+
+#undef JMAP_MESSAGE_EMAILER_TO_WIRE
 
     /* Override Subject header */
     if ((s = json_string_value(json_object_get(msg, "subject")))) {
@@ -3038,8 +3068,6 @@ static int jmap_message_to_wire(json_t *msg,
     }
 
     /* XXX inReplyToMessageId: set References and In-Reply-To */
-    /* XXX bcc  Overrides a “Bcc” in the headers. */
-    /* XXX replyTo  Overrides a “Reply-To” in the headers. */
 
     /* Determine Content-Type header and multi-part boundary */
     d.textBody = json_string_value(json_object_get(msg, "textBody"));
@@ -3068,7 +3096,7 @@ static int jmap_message_to_wire(json_t *msg,
     /* Set Message-ID header */
     /* XXX Use message guid here? */
     buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
-    d.messageid = buf_release(&buf);
+    d.msgid = buf_release(&buf);
 
     /* Build raw message */
     buf_appendcstr(out, "MIME-Version: 1.0\r\n");
@@ -3084,11 +3112,14 @@ static int jmap_message_to_wire(json_t *msg,
        buf_appendcstr((b), "\r\n"); \
        free(s); \
     }
-    if (d.to) JMAP_MESSAGE_WRITE_HEADER(out, "To", d.to);
-    if (d.from) JMAP_MESSAGE_WRITE_HEADER(out, "From", d.from);
+    if (d.to)      JMAP_MESSAGE_WRITE_HEADER(out, "To", d.to);
+    if (d.from)    JMAP_MESSAGE_WRITE_HEADER(out, "From", d.from);
+    if (d.cc)      JMAP_MESSAGE_WRITE_HEADER(out, "Cc", d.cc);
+    if (d.bcc)     JMAP_MESSAGE_WRITE_HEADER(out, "Bcc", d.bcc);
+    if (d.replyto) JMAP_MESSAGE_WRITE_HEADER(out, "Reply-To", d.replyto);
     if (d.subject) JMAP_MESSAGE_WRITE_HEADER(out, "Subject", d.subject);
-    if (d.date) JMAP_MESSAGE_WRITE_HEADER(out, "Date", d.date);
-    if (d.messageid) JMAP_MESSAGE_WRITE_HEADER(out, "Message-ID", d.messageid);
+    if (d.date)    JMAP_MESSAGE_WRITE_HEADER(out, "Date", d.date);
+    if (d.msgid)   JMAP_MESSAGE_WRITE_HEADER(out, "Message-ID", d.msgid);
 
     JMAP_MESSAGE_WRITE_HEADER(out, "Content-Type", d.contenttype);
     /* XXX Decode and write custom headers */
@@ -3119,8 +3150,11 @@ static int jmap_message_to_wire(json_t *msg,
     /* All done */
     if (d.from) free(d.from);
     if (d.to) free(d.to);
+    if (d.cc) free(d.cc);
+    if (d.bcc) free(d.bcc);
+    if (d.replyto) free(d.replyto);
     if (d.subject) free(d.subject);
-    if (d.messageid) free(d.messageid);
+    if (d.msgid) free(d.msgid);
     if (d.contenttype) free(d.contenttype);
     if (d.boundary) free(d.boundary);
     buf_free(&buf);
@@ -3205,8 +3239,19 @@ static int jmap_message_create_draft(json_t *arg,
         const char *key;
         json_t *val;
         json_object_foreach(prop, key, val) {
-            if (!strlen(key) || !val || json_typeof(val) != JSON_STRING) {
-                json_array_append_new(invalid, json_string("headers"));
+            int valid = strlen(key) && val && json_typeof(val) == JSON_STRING;
+            /* Keys MUST only contain A-Z,* a-z, 0-9 and hyphens. */
+            const char *c;
+            for (c = key; *c && valid; c++) {
+                if (!((*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') ||
+                      (*c >= '0' && *c <= '9') || (*c == '-'))) {
+                    valid = 0;
+                }
+            }
+            if (!valid) {
+                buf_printf(&buf, "header[%s]", key);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
                 break;
             }
         }
