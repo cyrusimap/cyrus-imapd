@@ -2923,6 +2923,7 @@ struct jmap_message_data {
     char *msgid;
     char *contenttype;
     char *boundary;
+    char *mua;
 
     const char *textBody;
     const char *htmlBody;
@@ -2975,6 +2976,14 @@ static int jmap_message_to_wire(json_t *msg,
             d.msgid = xstrdup(s);
         } else if (!strcasecmp(key, "Date")) {
             d.date = xstrdup(s);
+        } else if (!strcasecmp(key, "User-Agent")) {
+            d.mua = xstrdup(s);
+        } else if (!strcasecmp(key, "MIME-Version")) {
+            /* Ignore */
+        } else if (!strcasecmp(key, "Content-Type")) {
+            /* Ignore */
+        } else if (!strcasecmp(key, "Content-Transfer-Encoding")) {
+            /* Ignore */
         } else {
             json_object_set(headers, key, val);
         }
@@ -3099,6 +3108,17 @@ static int jmap_message_to_wire(json_t *msg,
     buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
     d.msgid = buf_release(&buf);
 
+    /* Set User-Agent header */
+    if (!d.mua) {
+        /* Cyrus server-info is great but way to expressive. Cut of
+         * anything after after the main server info */
+        char *p;
+        d.mua = buf_newcstring(&serverinfo);
+        for (p = d.mua; *p; p++) {
+            if (isspace(*p)) { *p = '\0'; break; }
+        }
+    }
+
     /* Build raw message */
     buf_appendcstr(out, "MIME-Version: 1.0\r\n");
 
@@ -3121,6 +3141,7 @@ static int jmap_message_to_wire(json_t *msg,
     if (d.subject) JMAP_MESSAGE_WRITE_HEADER(out, "Subject", d.subject);
     if (d.date)    JMAP_MESSAGE_WRITE_HEADER(out, "Date", d.date);
     if (d.msgid)   JMAP_MESSAGE_WRITE_HEADER(out, "Message-ID", d.msgid);
+    if (d.mua)     JMAP_MESSAGE_WRITE_HEADER(out, "User-Agent", d.mua);
 
     JMAP_MESSAGE_WRITE_HEADER(out, "Content-Type", d.contenttype);
     /* XXX Decode and write custom headers */
@@ -3156,6 +3177,7 @@ static int jmap_message_to_wire(json_t *msg,
     if (d.replyto) free(d.replyto);
     if (d.subject) free(d.subject);
     if (d.msgid) free(d.msgid);
+    if (d.mua) free(d.mua);
     if (d.contenttype) free(d.contenttype);
     if (d.boundary) free(d.boundary);
     buf_free(&buf);
