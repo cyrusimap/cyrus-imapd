@@ -237,6 +237,7 @@ static struct sasl_callback mysasl_cb[] = {
 /* Array of HTTP methods known by our server. */
 const struct known_meth_t http_methods[] = {
     { "ACL",            0 },
+    { "BIND",           0 },
     { "COPY",           METH_NOBODY },
     { "DELETE",         METH_NOBODY },
     { "GET",            METH_NOBODY },
