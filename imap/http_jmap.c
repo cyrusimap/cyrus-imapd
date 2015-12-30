@@ -933,6 +933,7 @@ static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
             }
         }
         json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
+        buf_free(&attrib);
     }
     if (_wantprop(props, "parentId")) {
         json_object_set_new(obj, "parentId", parent && parent != inbox ?
