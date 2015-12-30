@@ -4430,6 +4430,40 @@ sub test_setmessages_draft
     $self->assert_equals($msg->{isDraft}, JSON::true);
 }
 
+sub test_setmessages_send_error
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # XXX Why do we have to do this? Shouldn't Cyrus provision the Outbox?
+    xlog "create outbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "outbox"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $outbox = $res->[0][1]{created}{"#1"}{id};
+
+    my $draft =  {
+        mailboxIds => [$outbox],
+        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        replyTo => { name => "", email => "a\@bad\@address\@acme.local" },
+        subject => "Memo",
+        textBody => "I'm givin' ya one last chance ta surrenda!",
+    };
+
+    xlog "Send a message with bad replyTo";
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, 'invalidProperties');
+    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{properties}[0], 'replyTo.email');
+}
+
 sub test_setcalendarevents_schedule_request
 {
     my ($self) = @_;
