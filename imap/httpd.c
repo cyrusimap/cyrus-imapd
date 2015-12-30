@@ -254,6 +254,7 @@ const struct known_meth_t http_methods[] = {
     { "PUT",            0 },
     { "REPORT",         0 },
     { "TRACE",          METH_NOBODY },
+    { "UNBIND",         0 },
     { "UNLOCK",         METH_NOBODY },
     { NULL,             0 }
 };
