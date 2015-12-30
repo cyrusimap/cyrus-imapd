@@ -3147,6 +3147,24 @@ static int jmap_message_fwrite(struct jmap_req *req, json_t *msg, FILE *out)
     if (d.replyto) JMAP_MESSAGE_WRITE_HEADER("Reply-To", d.replyto);
     if (d.subject) JMAP_MESSAGE_WRITE_HEADER("Subject", d.subject);
 
+    /* Custom headers */
+    json_object_foreach(headers, key, val) {
+        char *freeme, *p, *q;
+        s = json_string_value(val);
+        if (!s) continue;
+        freeme = xstrdup(s);
+        for (q = freeme, p = freeme; *p; p++) {
+            if (*p == '\n' && (p == q || *(p-1) != '\r')) {
+                *p = '\0';
+                JMAP_MESSAGE_WRITE_HEADER(key, q);
+                *p = '\n';
+                q = p + 1;
+            }
+        }
+        JMAP_MESSAGE_WRITE_HEADER(key, q);
+        free(freeme);
+    }
+
     /* Not mandatory but we'll always write these */
     JMAP_MESSAGE_WRITE_HEADER("Message-ID", d.msgid);
     JMAP_MESSAGE_WRITE_HEADER("User-Agent", d.mua);
