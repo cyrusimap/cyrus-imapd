@@ -4405,7 +4405,7 @@ sub test_setmessages_draft
         textBody => "I'm givin' ya one last chance ta surrenda!",
         htmlBody => "Oh!!! I <em>hate</em> that Rabbit.",
         headers => {
-            "Foo" => "bar",
+            "Foo" => "bar\nbaz\nbam",
         }
     };
 
@@ -4426,7 +4426,7 @@ sub test_setmessages_draft
     $self->assert_str_equals($msg->{subject}, $draft->{subject});
     $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
     $self->assert_str_equals($msg->{htmlBody}, $draft->{htmlBody});
-    # XXX $self->assert_str_equals($msg->{headers}->{Foo}, $draft->{headers}->{Foo});
+    $self->assert_str_equals($msg->{headers}->{Foo}, $draft->{headers}->{Foo});
 }
 
 sub test_setcalendarevents_schedule_request
