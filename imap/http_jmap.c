@@ -2935,7 +2935,7 @@ struct jmap_message_data {
  * are silently discarded, including the mandatory From and Date headers.
  *
  * Return 0 on success or non-zero if writing to the file failed */
-static int jmap_message_to_wire(json_t *msg, FILE *out)
+static int jmap_message_fwrite(json_t *msg, FILE *out)
 {
     struct jmap_message_data d;
     const char *key, *s;
@@ -3104,9 +3104,10 @@ static int jmap_message_to_wire(json_t *msg, FILE *out)
     }
 
     /* Set Message-ID header */
-    /* XXX Use message guid here */
-    buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
-    d.msgid = buf_release(&buf);
+    if (!d.msgid) {
+        buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
+        d.msgid = buf_release(&buf);
+    }
 
     /* Set User-Agent header */
     if (!d.mua) {
@@ -3123,7 +3124,7 @@ static int jmap_message_to_wire(json_t *msg, FILE *out)
     fputs("MIME-Version: 1.0\r\n", out);
 
     /* Write headers */
-#define JMAP_MESSAGE_WRITE_HEADER(b, k, v) \
+#define JMAP_MESSAGE_WRITE_HEADER(k, v) \
     { \
        char *_v = (v); \
        char *s = charset_encode_mimeheader(_v, strlen(_v)); \
@@ -3131,17 +3132,20 @@ static int jmap_message_to_wire(json_t *msg, FILE *out)
        free(s); \
        if (r < 0) goto done; \
     }
-    if (d.to)      JMAP_MESSAGE_WRITE_HEADER(out, "To", d.to);
-    if (d.from)    JMAP_MESSAGE_WRITE_HEADER(out, "From", d.from);
-    if (d.cc)      JMAP_MESSAGE_WRITE_HEADER(out, "Cc", d.cc);
-    if (d.bcc)     JMAP_MESSAGE_WRITE_HEADER(out, "Bcc", d.bcc);
-    if (d.replyto) JMAP_MESSAGE_WRITE_HEADER(out, "Reply-To", d.replyto);
-    if (d.subject) JMAP_MESSAGE_WRITE_HEADER(out, "Subject", d.subject);
-    if (d.date)    JMAP_MESSAGE_WRITE_HEADER(out, "Date", d.date);
-    if (d.msgid)   JMAP_MESSAGE_WRITE_HEADER(out, "Message-ID", d.msgid);
-    if (d.mua)     JMAP_MESSAGE_WRITE_HEADER(out, "User-Agent", d.mua);
 
-    JMAP_MESSAGE_WRITE_HEADER(out, "Content-Type", d.contenttype);
+    /* Optional headers */
+    if (d.to)      JMAP_MESSAGE_WRITE_HEADER("To", d.to);
+    /* XXX From is mandatory according to RFC5322 */
+    if (d.from)    JMAP_MESSAGE_WRITE_HEADER("From", d.from);
+    if (d.cc)      JMAP_MESSAGE_WRITE_HEADER("Cc", d.cc);
+    if (d.bcc)     JMAP_MESSAGE_WRITE_HEADER("Bcc", d.bcc);
+    if (d.replyto) JMAP_MESSAGE_WRITE_HEADER("Reply-To", d.replyto);
+    if (d.subject) JMAP_MESSAGE_WRITE_HEADER("Subject", d.subject);
+
+    JMAP_MESSAGE_WRITE_HEADER("Date", d.date);
+    JMAP_MESSAGE_WRITE_HEADER("Message-ID", d.msgid);
+    JMAP_MESSAGE_WRITE_HEADER("User-Agent", d.mua);
+    JMAP_MESSAGE_WRITE_HEADER("Content-Type", d.contenttype);
     /* XXX Decode and write custom headers */
 #undef JMAP_MESSAGE_WRITE_HEADER
     r = fputs("\r\n", out);
@@ -3406,7 +3410,7 @@ static int jmap_message_create_draft(json_t *arg,
         }
 
         /* Write the message to the file */
-        r = jmap_message_to_wire(arg, f);
+        r = jmap_message_fwrite(arg, f);
         qdiffs[QUOTA_STORAGE] = ftell(f);
         fclose(f);
         if (r) {
@@ -3433,6 +3437,8 @@ static int jmap_message_create_draft(json_t *arg,
         r = append_commit(&as);
         append_removestage(stage);
         if (r) goto done;
+
+        *uid = xstrdup(message_guid_encode(&body->guid));
 
         if (mbox) mailbox_close(&mbox);
     }
