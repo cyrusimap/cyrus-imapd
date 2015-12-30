@@ -4427,6 +4427,7 @@ sub test_setmessages_draft
     $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
     $self->assert_str_equals($msg->{htmlBody}, $draft->{htmlBody});
     $self->assert_str_equals($msg->{headers}->{Foo}, $draft->{headers}->{Foo});
+    $self->assert_equals($msg->{isDraft}, JSON::true);
 }
 
 sub test_setcalendarevents_schedule_request
