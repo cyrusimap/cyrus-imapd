@@ -2931,11 +2931,14 @@ struct jmap_message_data {
 
 /* Write the JMAP Message msg in RFC-5322 compliant wire format.
  *
- * The message is assumed to not contain value errors. Missing properties
- * are silently discarded, including the mandatory From and Date headers.
+ *
+ * The message is assumed to not contain value errors. If Date is neither
+ * set in the message headers nor property, the current date is set. If
+ * From isn't set, the userid of the current jmap request is used as
+ * email address.
  *
  * Return 0 on success or non-zero if writing to the file failed */
-static int jmap_message_fwrite(json_t *msg, FILE *out)
+static int jmap_message_fwrite(struct jmap_req *req, json_t *msg, FILE *out)
 {
     struct jmap_message_data d;
     const char *key, *s;
@@ -3010,6 +3013,7 @@ static int jmap_message_fwrite(json_t *msg, FILE *out)
         d.from = buf_newcstring(&buf);
         buf_reset(&buf);
     }
+    if (!d.from) d.from = xstrdup(req->userid);
 
     /* Override the To header */
     if ((prop = json_object_get(msg, "to"))) {
@@ -3092,7 +3096,6 @@ static int jmap_message_fwrite(json_t *msg, FILE *out)
     }
 
     /* Set Content-Type header */
-    /* XXX Might want to encode the UTF-8 bodies in 7bit */
     if (d.boundary) {
         buf_appendcstr(&buf, "multipart/mixed; boundary=");
         buf_appendcstr(&buf, d.boundary);
@@ -3133,16 +3136,18 @@ static int jmap_message_fwrite(json_t *msg, FILE *out)
        if (r < 0) goto done; \
     }
 
+    /* Mandatory headers according to RFC 5322 */
+    JMAP_MESSAGE_WRITE_HEADER("From", d.from);
+    JMAP_MESSAGE_WRITE_HEADER("Date", d.date);
+
     /* Optional headers */
     if (d.to)      JMAP_MESSAGE_WRITE_HEADER("To", d.to);
-    /* XXX From is mandatory according to RFC5322 */
-    if (d.from)    JMAP_MESSAGE_WRITE_HEADER("From", d.from);
     if (d.cc)      JMAP_MESSAGE_WRITE_HEADER("Cc", d.cc);
     if (d.bcc)     JMAP_MESSAGE_WRITE_HEADER("Bcc", d.bcc);
     if (d.replyto) JMAP_MESSAGE_WRITE_HEADER("Reply-To", d.replyto);
     if (d.subject) JMAP_MESSAGE_WRITE_HEADER("Subject", d.subject);
 
-    JMAP_MESSAGE_WRITE_HEADER("Date", d.date);
+    /* Not mandatory but we'll always write these */
     JMAP_MESSAGE_WRITE_HEADER("Message-ID", d.msgid);
     JMAP_MESSAGE_WRITE_HEADER("User-Agent", d.mua);
     JMAP_MESSAGE_WRITE_HEADER("Content-Type", d.contenttype);
@@ -3196,6 +3201,7 @@ done:
     if (d.contenttype) free(d.contenttype);
     if (d.boundary) free(d.boundary);
     buf_free(&buf);
+    json_decref(headers);
     if (r) r = HTTP_SERVER_ERROR;
     return r;
 }
@@ -3235,7 +3241,7 @@ static int jmap_message_create_draft(json_t *arg,
         /* XXX Support messages in multiple mailboxes */
         /* Check that mailbox role is draft or outbox */
         const char *id = json_string_value(json_array_get(prop, 0));
-        if (id && *id == "#") id = hash_lookup(id, req->idmap);
+        if (id && *id == '#') id = hash_lookup(id, req->idmap);
         if (!id) {
             json_array_append_new(invalid, json_string("mailboxIds[0]"));
         }
@@ -3411,7 +3417,7 @@ static int jmap_message_create_draft(json_t *arg,
         }
 
         /* Write the message to the file */
-        r = jmap_message_fwrite(arg, f);
+        r = jmap_message_fwrite(req, arg, f);
         qdiffs[QUOTA_STORAGE] = ftell(f);
         fclose(f);
         if (r) {
