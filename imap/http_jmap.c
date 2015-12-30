@@ -735,7 +735,10 @@ char *jmap_mailbox_role(const char *mboxname)
     }
     free(inboxname);
 
-    /* Does this mailbox has an IMAP special use role? */
+    /* Is it an outbox? */
+    if (mboxname_isoutbox(mboxname)) return xstrdup("outbox");
+
+    /* Does this mailbox have an IMAP special use role? */
     r = annotatemore_lookup(mboxname, "/specialuse", httpd_userid, &buf);
 
     if (r) return NULL;
