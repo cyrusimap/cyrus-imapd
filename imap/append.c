@@ -227,12 +227,7 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     as->mailbox = mailbox;
 
     if (config_getswitch(IMAPOPT_OUTBOX_SENDLATER)) {
-        /* XXX - use specialuse for this later */
-        mbname_t *mbname = mbname_from_intname(mailbox->name);
-        const strarray_t *boxes = mbname_boxes(mbname);
-        if (mbname_localpart(mbname) && strarray_size(boxes) == 1 && !strcmp(strarray_nth(boxes, 0), "Outbox"))
-            as->isoutbox = 1;
-        mbname_free(&mbname);
+        as->isoutbox = mboxname_isoutbox(mailbox->name);
     }
 
     return 0;

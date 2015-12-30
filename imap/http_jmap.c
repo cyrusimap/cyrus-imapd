@@ -735,7 +735,10 @@ char *jmap_mailbox_role(const char *mboxname)
     }
     free(inboxname);
 
-    /* Does this mailbox has an IMAP special use role? */
+    /* Is it an outbox? */
+    if (mboxname_isoutbox(mboxname)) return xstrdup("outbox");
+
+    /* Does this mailbox have an IMAP special use role? */
     r = annotatemore_lookup(mboxname, "/specialuse", httpd_userid, &buf);
 
     if (r) return NULL;
@@ -933,6 +936,7 @@ static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
             }
         }
         json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
+        buf_free(&attrib);
     }
     if (_wantprop(props, "parentId")) {
         json_object_set_new(obj, "parentId", parent && parent != inbox ?
@@ -2912,24 +2916,336 @@ static int jmap_validate_emailer(json_t *emailer,
     return r;
 }
 
-static int jmap_message_create_draft(json_t *arg,
-                                     char **uid,
-                                     json_t **err,
-                                     json_t *invalid,
-                                     struct jmap_req *req)
+struct jmap_message_data {
+    char *subject;
+    char *to;
+    char *cc;
+    char *bcc;
+    char *replyto;
+    char *from;
+    char *date;
+    char *msgid;
+    char *contenttype;
+    char *boundary;
+    char *mua;
+
+    const char *textBody;
+    const char *htmlBody;
+};
+
+/* Write the JMAP Message msg in RFC-5322 compliant wire format.
+ *
+ *
+ * The message is assumed to not contain value errors. If Date is neither
+ * set in the message headers nor property, the current date is set. If
+ * From isn't set, the userid of the current jmap request is used as
+ * email address.
+ *
+ * Return 0 on success or non-zero if writing to the file failed */
+static int jmap_message_write(json_t *msg, FILE *out, struct jmap_req *req)
 {
-    int r = 0, pe;
+    struct jmap_message_data d;
+    const char *key, *s;
+    json_t *val, *prop;
+    size_t i;
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+    memset(&d, 0, sizeof(struct jmap_message_data));
+
+    /* XXX
+     * RFC 5322 - 2.1.1.  Line Length Limits
+     * There are two limits that this specification places on the number of
+     * characters in a line.  Each line of characters MUST be no more than
+     * 998 characters, and SHOULD be no more than 78 characters, excluding
+     * the CRLF.
+     */
+
+    /* Weed out special header values. The iteration allows to find and
+     * remove headers case-insensitively */
+    json_t *headers = json_pack("{}");
+    json_object_foreach(json_object_get(msg, "headers"), key, val) {
+        s = json_string_value(val);
+        if (!s) {
+            continue;
+        } else if (!strcasecmp(key, "From")) {
+            d.from = xstrdup(s);
+        } else if (!strcasecmp(key, "To")) {
+            d.to = xstrdup(s);
+        } else if (!strcasecmp(key, "Cc")) {
+            d.cc = xstrdup(s);
+        } else if (!strcasecmp(key, "Bcc")) {
+            d.bcc = xstrdup(s);
+        } else if (!strcasecmp(key, "Reply-To")) {
+            d.replyto = xstrdup(s);
+        } else if (!strcasecmp(key, "Subject")) {
+            d.subject = xstrdup(s);
+        } else if (!strcasecmp(key, "Message-ID")) {
+            d.msgid = xstrdup(s);
+        } else if (!strcasecmp(key, "Date")) {
+            d.date = xstrdup(s);
+        } else if (!strcasecmp(key, "User-Agent")) {
+            d.mua = xstrdup(s);
+        } else if (!strcasecmp(key, "MIME-Version")) {
+            /* Ignore */
+        } else if (!strcasecmp(key, "Content-Type")) {
+            /* Ignore */
+        } else if (!strcasecmp(key, "Content-Transfer-Encoding")) {
+            /* Ignore */
+        } else {
+            json_object_set(headers, key, val);
+        }
+    }
+
+#define JMAP_MESSAGE_EMAILER_TO_WIRE(b, m) \
+    { \
+        json_t *_m = (m); \
+        const char *name = json_string_value(json_object_get(_m, "name")); \
+        const char *email = json_string_value(json_object_get(_m, "email")); \
+        if (strlen(name) && email) { \
+            char *xname = charset_encode_mimeheader(name, strlen(name)); \
+            buf_printf(b, "%s <%s>", xname, email); \
+            free(xname); \
+        } else if (email) { \
+            buf_appendcstr(b, email); \
+        } \
+    }
+
+    /* Override the From header */
+    if ((prop = json_object_get(msg, "from"))) {
+        JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, prop);
+        if (d.from) free(d.from);
+        d.from = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+    if (!d.from) d.from = xstrdup(req->userid);
+
+    /* Override the To header */
+    if ((prop = json_object_get(msg, "to"))) {
+        json_array_foreach(prop, i, val) {
+            if (i) buf_appendcstr(&buf, ", ");
+            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+        }
+        if (d.to) free(d.to);
+        d.to = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+
+    /* Override the Cc header */
+    if ((prop = json_object_get(msg, "cc"))) {
+        json_array_foreach(prop, i, val) {
+            if (i) buf_appendcstr(&buf, ", ");
+            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+        }
+        if (d.cc) free(d.cc);
+        d.cc = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+
+    /* Override the Bcc header */
+    if ((prop = json_object_get(msg, "bcc"))) {
+        json_array_foreach(prop, i, val) {
+            if (i) buf_appendcstr(&buf, ", ");
+            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+        }
+        if (d.bcc) free(d.bcc);
+        d.bcc = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+
+    /* Override the Reply-To header */
+    if ((prop = json_object_get(msg, "replyTo"))) {
+        JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, prop);
+        if (d.replyto) free(d.replyto);
+        d.replyto = buf_newcstring(&buf);
+        buf_reset(&buf);
+    }
+
+#undef JMAP_MESSAGE_EMAILER_TO_WIRE
+
+    /* Override Subject header */
+    if ((s = json_string_value(json_object_get(msg, "subject")))) {
+        if (d.subject) free(d.subject);
+        d.subject = xstrdup(s);
+    }
+    if (!d.subject) d.subject = xstrdup("");
+
+    /* Override Date header */
+    /* Precendence (high to low): "date" property, Date header, now */
+    time_t date = time(NULL);
+    if ((s = json_string_value(json_object_get(msg, "date")))) {
+        struct tm tm;
+        strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+        date = mktime(&tm);
+    }
+    if (json_object_get(msg, "date") || !d.date) {
+        char fmt[RFC822_DATETIME_MAX+1];
+        memset(fmt, 0, RFC822_DATETIME_MAX+1);
+        time_to_rfc822(date, fmt, RFC822_DATETIME_MAX+1);
+        if (d.date) free(d.date);
+        d.date = xstrdup(fmt);
+    }
+
+    /* XXX inReplyToMessageId: set References and In-Reply-To */
+
+    /* Determine Content-Type header and multi-part boundary */
+    d.textBody = json_string_value(json_object_get(msg, "textBody"));
+    d.htmlBody = json_string_value(json_object_get(msg, "htmlBody"));
+    if (d.textBody && d.htmlBody) {
+        char *p, *q, *uuid = xstrdup(makeuuid());
+        d.boundary = xzmalloc(strlen(uuid));
+        for (p = uuid, q = d.boundary; *p; p++) {
+            if (*p != '-') *q++ = *p;
+        }
+        free(uuid);
+    }
+
+    /* Set Content-Type header */
+    if (d.boundary) {
+        buf_appendcstr(&buf, "multipart/mixed; boundary=");
+        buf_appendcstr(&buf, d.boundary);
+        d.contenttype = buf_release(&buf);
+    } else if (d.htmlBody) {
+        d.contenttype = xstrdup("text/html;charset=UTF-8");
+    } else {
+        d.contenttype = xstrdup("text/plain;charset=UTF-8");
+    }
+
+    /* Set Message-ID header */
+    if (!d.msgid) {
+        buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
+        d.msgid = buf_release(&buf);
+    }
+
+    /* Set User-Agent header */
+    if (!d.mua) {
+        /* Cyrus server-info is great but way to expressive. Cut of
+         * anything after after the main server info */
+        char *p;
+        d.mua = buf_newcstring(&serverinfo);
+        for (p = d.mua; *p; p++) {
+            if (isspace(*p)) { *p = '\0'; break; }
+        }
+    }
+
+    /* Build raw message */
+    fputs("MIME-Version: 1.0\r\n", out);
+
+    /* Write headers */
+#define JMAP_MESSAGE_WRITE_HEADER(k, v) \
+    { \
+       char *_v = (v); \
+       char *s = charset_encode_mimeheader(_v, strlen(_v)); \
+       r = fprintf(out, "%s: %s\r\n", k, s); \
+       free(s); \
+       if (r < 0) goto done; \
+    }
+
+    /* Mandatory headers according to RFC 5322 */
+    JMAP_MESSAGE_WRITE_HEADER("From", d.from);
+    JMAP_MESSAGE_WRITE_HEADER("Date", d.date);
+
+    /* Optional headers */
+    if (d.to)      JMAP_MESSAGE_WRITE_HEADER("To", d.to);
+    if (d.cc)      JMAP_MESSAGE_WRITE_HEADER("Cc", d.cc);
+    if (d.bcc)     JMAP_MESSAGE_WRITE_HEADER("Bcc", d.bcc);
+    if (d.replyto) JMAP_MESSAGE_WRITE_HEADER("Reply-To", d.replyto);
+    if (d.subject) JMAP_MESSAGE_WRITE_HEADER("Subject", d.subject);
+
+    /* Custom headers */
+    json_object_foreach(headers, key, val) {
+        char *freeme, *p, *q;
+        s = json_string_value(val);
+        if (!s) continue;
+        freeme = xstrdup(s);
+        for (q = freeme, p = freeme; *p; p++) {
+            if (*p == '\n' && (p == q || *(p-1) != '\r')) {
+                *p = '\0';
+                JMAP_MESSAGE_WRITE_HEADER(key, q);
+                *p = '\n';
+                q = p + 1;
+            }
+        }
+        JMAP_MESSAGE_WRITE_HEADER(key, q);
+        free(freeme);
+    }
+
+    /* Not mandatory but we'll always write these */
+    JMAP_MESSAGE_WRITE_HEADER("Message-ID", d.msgid);
+    JMAP_MESSAGE_WRITE_HEADER("User-Agent", d.mua);
+    JMAP_MESSAGE_WRITE_HEADER("Content-Type", d.contenttype);
+    /* XXX Decode and write custom headers */
+#undef JMAP_MESSAGE_WRITE_HEADER
+    r = fputs("\r\n", out);
+    if (r == EOF) goto done;
+
+    /* Write body */
+    if (d.textBody) {
+        /* XXX JMAP spec: "If not supplied and an htmlBody is, the server
+         * SHOULD generate a text version for the message from this." */
+        if (d.boundary) {
+            r = fprintf(out, "\r\n--%s\r\n", d.boundary);
+            if (r < 0) goto done;
+            r = fputs("Content-Type: text/plain;charset=UTF-8\r\n\r\n", out);
+            if (r == EOF) goto done;
+        }
+        r = fputs(d.textBody, out);
+        if (r == EOF) goto done;
+    }
+    if (d.htmlBody) {
+        /* XXX JMAP spec: "If this contains internal links (cid:) the cid
+         * value should be the attachment id." */
+        if (d.boundary) {
+            r = fprintf(out, "\r\n--%s\r\n", d.boundary);
+            if (r < 0) goto done;
+            r = fputs("Content-Type: text/html;charset=UTF-8\r\n\r\n", out);
+            if (r == EOF) goto done;
+        }
+        r = fputs(d.htmlBody, out);
+        if (r == EOF) goto done;
+    }
+    if (d.boundary) {
+        r = fprintf(out, "\r\n--%s--\r\n", d.boundary);
+        if (r < 0) goto done;
+    }
+
+    /* All done */
+    r = 0;
+
+done:
+    if (d.from) free(d.from);
+    if (d.date) free(d.date);
+    if (d.to) free(d.to);
+    if (d.cc) free(d.cc);
+    if (d.bcc) free(d.bcc);
+    if (d.replyto) free(d.replyto);
+    if (d.subject) free(d.subject);
+    if (d.msgid) free(d.msgid);
+    if (d.mua) free(d.mua);
+    if (d.contenttype) free(d.contenttype);
+    if (d.boundary) free(d.boundary);
+    buf_free(&buf);
+    json_decref(headers);
+    if (r) r = HTTP_SERVER_ERROR;
+    return r;
+}
+
+static void jmap_message_validate(json_t *arg,
+                                  json_t **err,
+                                  json_t *invalid,
+                                  struct jmap_req *req)
+{
+    int pe;
     json_t *prop;
-    const char *sval, *subject = "", *htmlBody = NULL, *textBody = NULL;
+    const char *sval;
     int bval;
     struct buf buf = BUF_INITIALIZER;
     struct tm *date = xzmalloc(sizeof(struct tm));
-
+    const char *inReplyToMessageId = NULL;
     /* XXX Support messages in multiple mailboxes */
     char *mboxname = NULL;
     char *mboxrole = NULL;
 
-    /* Parse properties */
+    /* Validate properties */
     if (json_object_get(arg, "id")) {
         json_array_append_new(invalid, json_string("id"));
     }
@@ -2940,10 +3256,10 @@ static int jmap_message_create_draft(json_t *arg,
         json_array_append_new(invalid, json_string("threadId"));
     }
     prop = json_object_get(arg, "mailboxIds");
-    if (json_array_size(prop)) {
-        /* XXX Support messages in multiple mailboxes */
-        /* Check that mailbox role is draft or outbox */
+    if (json_array_size(prop) == 1 /* XXX Support multiple mailboxes */) {
+        /* Check that first mailbox's role is either drafts or outbox */
         const char *id = json_string_value(json_array_get(prop, 0));
+        if (id && *id == '#') id = hash_lookup(id, req->idmap);
         if (!id) {
             json_array_append_new(invalid, json_string("mailboxIds[0]"));
         }
@@ -2958,6 +3274,7 @@ static int jmap_message_create_draft(json_t *arg,
     }
     prop = json_object_get(arg, "inReplyToMessageId");
     if (prop && prop != json_null()) {
+        inReplyToMessageId = json_string_value(prop);
         if ((sval = json_string_value(prop)) && sval && !strlen(sval)) {
             json_array_append_new(invalid, json_string("inReplyToMessageId"));
         }
@@ -2982,12 +3299,23 @@ static int jmap_message_create_draft(json_t *arg,
         json_array_append_new(invalid, json_string("hasAttachment"));
     }
     prop = json_object_get(arg, "headers");
-    if (json_array_size(prop)) {
+    if (json_object_size(prop)) {
         const char *key;
         json_t *val;
         json_object_foreach(prop, key, val) {
-            if (!strlen(key) || !val || json_typeof(val) != JSON_STRING) {
-                json_array_append_new(invalid, json_string("headers"));
+            int valid = strlen(key) && val && json_typeof(val) == JSON_STRING;
+            /* Keys MUST only contain A-Z,* a-z, 0-9 and hyphens. */
+            const char *c;
+            for (c = key; *c && valid; c++) {
+                if (!((*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') ||
+                      (*c >= '0' && *c <= '9') || (*c == '-'))) {
+                    valid = 0;
+                }
+            }
+            if (!valid) {
+                buf_printf(&buf, "header[%s]", key);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
                 break;
             }
         }
@@ -3038,10 +3366,6 @@ static int jmap_message_create_draft(json_t *arg,
     if (prop && prop != json_null()) {
         jmap_validate_emailer(prop, "replyTo", invalid);
     }
-    pe = jmap_readprop(arg, "subject", 0, invalid, "s", &sval);
-    if (pe > 0) {
-        subject = sval;
-    }
     pe = jmap_readprop(arg, "date", 0, invalid, "s", &sval);
     if (pe > 0) {
         const char *p = strptime(sval, "%Y-%m-%dT%H:%M:%SZ", date);
@@ -3055,14 +3379,11 @@ static int jmap_message_create_draft(json_t *arg,
     if (json_object_get(arg, "preview")) {
         json_array_append_new(invalid, json_string("preview"));
     }
-    pe = jmap_readprop(arg, "textBody", 0, invalid, "s", &sval);
-    if (pe > 0) {
-        textBody = sval;
-    }
-    pe = jmap_readprop(arg, "htmlBody", 0, invalid, "s", &sval);
-    if (pe > 0) {
-        htmlBody = sval;
-    }
+
+    jmap_readprop(arg, "subject", 0, invalid, "s", &sval);
+    jmap_readprop(arg, "textBody", 0, invalid, "s", &sval);
+    jmap_readprop(arg, "htmlBody", 0, invalid, "s", &sval);
+
     if (json_object_get(arg, "attachedMessages")) {
         json_array_append_new(invalid, json_string("attachedMessages"));
     }
@@ -3074,18 +3395,110 @@ static int jmap_message_create_draft(json_t *arg,
         goto done;
     }
 
-    /* XXX */
-
-    *uid = xstrdup("fakeid"); /* XXX */
-    *err = NULL; /* XXX */
-    /* make -Werror happy */
-    syslog(LOG_DEBUG, "jmap_message_create_draft(%s): text=[%s], html=[%s]",
-            subject, textBody, htmlBody);
+    if (inReplyToMessageId) {
+        /* XXX Lookup message and validate inReplyToMessageId */
+        if (0) {
+            *err = json_pack("{s:s}", "type", "inReplyToNotFound");
+            goto done;
+        }
+    }
+    *err = NULL;
 
 done:
     buf_free(&buf);
     if (mboxname) free(mboxname);
+    if (mboxrole) free(mboxrole);
     if (date) free(date);
+}
+
+/* Create the JMAP message in all mailboxes as specified in the
+ * mandatory mailboxIds property.
+ *
+ * Report any invalid properties in the JSON array invalid. Report
+ * any other setErrors in err.
+ *
+ * On success, return 0 and store the message id in uid, which must
+ * be freed by the caller. */
+static int jmap_message_create(json_t *msg,
+                               char **uid,
+                               json_t **err,
+                               json_t *invalid,
+                               struct jmap_req *req)
+{
+    FILE *f = NULL;
+    struct stagemsg *stage;
+    time_t now = time(NULL);
+    struct body *body = NULL;
+    struct appendstate as;
+    char *mboxname = NULL;
+    const char *id;
+    struct mailbox *mbox = NULL;
+    int r = HTTP_SERVER_ERROR;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+
+    /* Validate the message */
+    jmap_message_validate(msg, err, invalid, req);
+    if (json_array_size(invalid) || *err) return HTTP_BAD_REQUEST;
+
+    /* XXX Support multiple mailboxes */
+    id = json_string_value(json_array_get(json_object_get(msg, "mailboxIds"), 0));
+    if (id && *id == '#') id = hash_lookup(id, req->idmap);
+    if (!id) goto done;
+    mboxname = mboxlist_find_uniqueid(id, req->userid);
+    if (!mboxname) goto done;
+
+    /* Open mailbox. */
+    r = mailbox_open_iwl(mboxname, &mbox);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_open_iwl(%s): %s",
+                mboxname, error_message(r));
+        goto done;
+    }
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(mbox->name, now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Write the message to the file */
+    r = jmap_message_write(msg, f, req);
+    qdiffs[QUOTA_STORAGE] = ftell(f);
+    fclose(f);
+    if (r) {
+        append_removestage(stage);
+        goto done;
+    }
+    qdiffs[QUOTA_MESSAGE] = 1;
+
+    /* Prepare to append the message to the mailbox */
+    r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
+            0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
+    if (r) {
+        append_removestage(stage);
+        goto done;
+    }
+
+    /* Append the message to the mailbox */
+    r = append_fromstage(&as, &body, stage, now, NULL, 0, NULL);
+    if (body) {
+        *uid = xstrdup(message_guid_encode(&body->guid));
+        message_free_body(body);
+        free(body);
+    }
+    if (r) {
+        append_abort(&as);
+        append_removestage(stage);
+        goto done;
+    }
+    r = append_commit(&as);
+    append_removestage(stage);
+    if (r) goto done;
+
+done:
+    if (mboxname) free(mboxname);
+    if (mbox && mbox != req->inbox) mailbox_close(&mbox);
     return r;
 }
 
@@ -3122,8 +3535,8 @@ static int setMessages(struct jmap_req *req)
                 continue;
             }
 
-            /* Create the draft */
-            r = jmap_message_create_draft(arg, &uid, &err, invalid, req);
+            /* Create the message. */
+            r = jmap_message_create(arg, &uid, &err, invalid, req);
             if (r) goto done;
 
             /* Handle invalid properties. */
