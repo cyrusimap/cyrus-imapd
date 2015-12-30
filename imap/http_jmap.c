@@ -1278,7 +1278,7 @@ static int _mbox_has_child_cb(const mbentry_t *mbentry __attribute__ ((unused)),
  *
  * Return 0 for success or managed JMAP errors.
  */
-static int jmap_write_mailbox(char **uid,
+static int jmap_mailbox_write(char **uid,
                               json_t *arg,
                               json_t *invalid,
                               json_t **err,
@@ -1286,7 +1286,7 @@ static int jmap_write_mailbox(char **uid,
 {
     const char *parentId = NULL, *id = NULL;
     char *name = NULL;
-    const char *role = NULL, *use = NULL;
+    const char *role = NULL, *specialuse = NULL;
     int sortOrder = 0;
     char *mboxname = NULL, *parentname = NULL;
     int r = 0, pe, is_create = (*uid == NULL);
@@ -1326,7 +1326,7 @@ static int jmap_write_mailbox(char **uid,
                         iserr = 1;
                     }
                 }
-                /* Check if a mailbox with this id exists. */
+                /* Check if the parent mailbox exists. */
                 if (!iserr) {
                     newparentname = mboxlist_find_uniqueid(parentId, req->userid);
                     if (!newparentname) iserr = 1;
@@ -1372,34 +1372,48 @@ static int jmap_write_mailbox(char **uid,
                 if (!strcmp(role, "inbox")) {
                     /* Creating a new inbox is always an error. */
                     json_array_append_new(invalid, json_string("role"));
+                } else if (!strcmp(role, "outbox")) {
+                    /* Outbox may only be created on top-level. */
+                    if (!strcmp(parentId, req->inbox->uniqueid)) {
+                        /* Check that no outbox exists. */
+                        /* XXX mboxname_isoutbox checks for top-level mailbox 'Outbox' */
+                        char *outboxname = mboxname_user_mbox(req->userid, "Outbox");
+                        mbentry_t *mbentry = NULL;
+                        if (mboxlist_lookup(outboxname, &mbentry, NULL) != IMAP_MAILBOX_NONEXISTENT)
+                            json_array_append_new(invalid, json_string("role"));
+                        if (mbentry) mboxlist_entry_free(&mbentry);
+                        free(outboxname);
+                    } else {
+                        json_array_append_new(invalid, json_string("role"));
+                    }
                 } else {
                     /* Is is one of the known special use mailboxes? */
                     if (!strcmp(role, "archive")) {
-                        use = "\\Archive";
+                        specialuse = "\\Archive";
                     } else if (!strcmp(role, "drafts")) {
-                        use = "\\Drafts";
+                        specialuse = "\\Drafts";
                     } else if (!strcmp(role, "junk")) {
-                        use = "\\Junk";
+                        specialuse = "\\Junk";
                     } else if (!strcmp(role, "sent")) {
-                        use = "\\Sent";
+                        specialuse = "\\Sent";
                     } else if (!strcmp(role, "trash")) {
-                        use = "\\Trash";
+                        specialuse = "\\Trash";
                     } else if (strncmp(role, "x-", 2)) {
                         /* Does it start with an "x-"? If not, reject it. */
                         json_array_append_new(invalid, json_string("role"));
                     }
                 }
-                char *found = NULL;
-                if (use) {
+                char *exists = NULL;
+                if (specialuse) {
                     /* Check that no such IMAP specialuse mailbox already exists. */
-                    found = mboxlist_find_specialuse(use, req->userid);
+                    exists = mboxlist_find_specialuse(specialuse, req->userid);
                 } else if (!json_array_size(invalid)) {
                     /* Check that no mailbox with this x-role exists. */
-                    found = jmap_find_xrole(role, req->userid);
+                    exists = jmap_find_xrole(role, req->userid);
                 }
-                if (found) {
+                if (exists) {
                     json_array_append_new(invalid, json_string("role"));
-                    free(found);
+                    free(exists);
                 }
             }
         }
@@ -1452,7 +1466,7 @@ static int jmap_write_mailbox(char **uid,
 
     /* Determine the mailbox and its parent name. */
     if (!is_create) {
-        /* Dertermine name of the existing mailbox with uniqueid uid. */
+        /* Determine name of the existing mailbox with uniqueid uid. */
         if (strcmp(*uid, req->inbox->uniqueid)) {
             mboxname = mboxlist_find_uniqueid(*uid, req->userid);
             if (!mboxname) {
@@ -1485,12 +1499,17 @@ static int jmap_write_mailbox(char **uid,
             /* parent must be INBOX */
             parentname = xstrdup(req->inbox->name);
         }
-        /* Encode the mailbox name for IMAP. */
-        mboxname = jmap_mailbox_newname(name, parentname);
-        if (!mboxname) {
-            syslog(LOG_ERR, "could not encode mailbox name");
-            r = IMAP_INTERNAL;
-            goto done;
+        if (!strcmp(role, "outbox")) {
+            /* XXX mboxname_isoutbox checks for top-level mailbox 'Outbox' */
+            mboxname = mboxname_user_mbox(req->userid, "Outbox");
+        } else {
+            /* Encode the mailbox name for IMAP. */
+            mboxname = jmap_mailbox_newname(name, parentname);
+            if (!mboxname) {
+                syslog(LOG_ERR, "could not encode mailbox name");
+                r = IMAP_INTERNAL;
+                goto done;
+            }
         }
     }
 
@@ -1593,9 +1612,9 @@ static int jmap_write_mailbox(char **uid,
     buf_reset(&val);
 
     /* Set specialuse or x-role. specialuse takes precendence. */
-    if (use) {
+    if (specialuse) {
         struct buf val = BUF_INITIALIZER;
-        buf_setcstr(&val, use);
+        buf_setcstr(&val, specialuse);
         static const char *annot = "/specialuse";
         r = annotatemore_write(mboxname, annot, httpd_userid, &val);
         if (r) {
@@ -1684,7 +1703,7 @@ static int setMailboxes(struct jmap_req *req)
             }
 
             /* Create mailbox. */
-            r = jmap_write_mailbox(&uid, arg, invalid, &err, req);
+            r = jmap_mailbox_write(&uid, arg, invalid, &err, req);
             if (r) goto done;
 
             /* Handle set errors. */
@@ -1740,7 +1759,7 @@ static int setMailboxes(struct jmap_req *req)
             }
 
             /* Update mailbox. */
-            r = jmap_write_mailbox(((char **)&uid), arg, invalid, &err, req);
+            r = jmap_mailbox_write(((char **)&uid), arg, invalid, &err, req);
             if (r) goto done;
 
             /* Handle set errors. */
