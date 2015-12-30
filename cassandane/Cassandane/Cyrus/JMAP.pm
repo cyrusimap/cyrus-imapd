@@ -4368,6 +4368,67 @@ sub test_getmessages_preview
     $self->assert_str_equals($msg->{preview}, 'A plain text message.');
 }
 
+sub test_setmessages_draft
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $drafts = $res->[0][1]{created}{"#1"}{id};
+
+    my $draft =  {
+        mailboxIds => [$drafts],
+        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+            { name => "Rainer M\N{LATIN SMALL LETTER U WITH DIAERESIS}ller", email => "rainer\@de.local" },
+        ],
+        cc => [
+            { name => "Elmer Fudd", email => "elmer\@acme.local" },
+            { name => "Porky Pig", email => "porky\@acme.local" },
+        ],
+        bcc => [
+            { name => "Wile E. Coyote", email => "coyote\@acme.local" },
+        ],
+        replyTo => { name => "", email => "the.other.sam\@acme.local" },
+        subject => "Memo",
+        textBody => "I'm givin' ya one last chance ta surrenda!",
+        htmlBody => "Oh!!! I <em>hate</em> that Rabbit.",
+        headers => {
+            "Foo" => "bar",
+        }
+    };
+
+    xlog "Create a draft";
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Get draft $id";
+    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+
+    $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
+    $self->assert_deep_equals($msg->{from}, $draft->{from});
+    $self->assert_deep_equals($msg->{to}, $draft->{to});
+    $self->assert_deep_equals($msg->{cc}, $draft->{cc});
+    $self->assert_deep_equals($msg->{bcc}, $draft->{bcc});
+    # XXX $self->assert_deep_equals($msg->{replyTo}, $draft->{replyTo});
+    $self->assert_str_equals($msg->{subject}, $draft->{subject});
+    $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
+    $self->assert_str_equals($msg->{htmlBody}, $draft->{htmlBody});
+    # XXX $self->assert_str_equals($msg->{headers}->{Foo}, $draft->{headers}->{Foo});
+}
+
 sub test_setcalendarevents_schedule_request
 {
     my ($self) = @_;
