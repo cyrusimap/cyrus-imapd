@@ -3235,6 +3235,7 @@ static int jmap_message_create_draft(json_t *arg,
         /* XXX Support messages in multiple mailboxes */
         /* Check that mailbox role is draft or outbox */
         const char *id = json_string_value(json_array_get(prop, 0));
+        if (id && *id == "#") id = hash_lookup(id, req->idmap);
         if (!id) {
             json_array_append_new(invalid, json_string("mailboxIds[0]"));
         }
