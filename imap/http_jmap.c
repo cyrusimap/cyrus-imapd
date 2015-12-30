@@ -1499,7 +1499,7 @@ static int jmap_mailbox_write(char **uid,
             /* parent must be INBOX */
             parentname = xstrdup(req->inbox->name);
         }
-        if (!strcmp(role, "outbox")) {
+        if (role && !strcmp(role, "outbox")) {
             /* XXX mboxname_isoutbox checks for top-level mailbox 'Outbox' */
             mboxname = mboxname_user_mbox(req->userid, "Outbox");
         } else {
@@ -2925,14 +2925,15 @@ static int jmap_validate_emailer(json_t *emailer,
         buf_reset(&buf);
         r = 0;
     }
+    val = json_object_get(emailer, "email");
     if (val && parseaddr && json_string_value(val)) {
         struct address *addr = NULL;
         parseaddr_list(json_string_value(val), &addr);
-        if (!addr || !addr->mailbox || !addr->domain || addr->next)
+        if (!addr || !addr->mailbox || !addr->domain || addr->next) {
             valid = 0;
+        }
         parseaddr_free(addr);
     }
-    val = json_object_get(emailer, "email");
     if (!val || json_typeof(val) != JSON_STRING || !valid) {
         buf_printf(&buf, "%s.%s", prefix, "email");
         json_array_append_new(invalid, json_string(buf_cstring(&buf)));
@@ -3474,7 +3475,7 @@ static int jmap_message_create(json_t *msg,
 
     /* Validate the message */
     jmap_message_validate(msg, err, invalid, req);
-    if (json_array_size(invalid) || *err) return HTTP_BAD_REQUEST;
+    if (json_array_size(invalid) || *err) return 0;
 
     /* XXX Support multiple mailboxes */
     id = json_string_value(json_array_get(json_object_get(msg, "mailboxIds"), 0));
