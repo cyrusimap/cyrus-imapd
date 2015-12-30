@@ -2046,7 +2046,7 @@ static json_t *jmap_message_from_record(const char *id,
 
     m = message_new_from_record(mbox, record);
     if (!m) return NULL;
-    message_get_userflags(m, &flags);
+    message_get_systemflags(m, &flags);
 
     msg = json_pack("{}");
     json_object_set_new(msg, "id", json_string(id));
@@ -3426,11 +3426,12 @@ static int jmap_message_create(json_t *msg,
                                struct jmap_req *req)
 {
     FILE *f = NULL;
-    struct stagemsg *stage;
+    struct stagemsg *stage = NULL;
     time_t now = time(NULL);
     struct body *body = NULL;
     struct appendstate as;
     char *mboxname = NULL;
+    char *mboxrole = NULL;
     const char *id;
     struct mailbox *mbox = NULL;
     int r = HTTP_SERVER_ERROR;
@@ -3446,6 +3447,7 @@ static int jmap_message_create(json_t *msg,
     if (!id) goto done;
     mboxname = mboxlist_find_uniqueid(id, req->userid);
     if (!mboxname) goto done;
+    mboxrole = jmap_mailbox_role(mboxname);
 
     /* Open mailbox. */
     r = mailbox_open_iwl(mboxname, &mbox);
@@ -3475,10 +3477,7 @@ static int jmap_message_create(json_t *msg,
     /* Prepare to append the message to the mailbox */
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
-    if (r) {
-        append_removestage(stage);
-        goto done;
-    }
+    if (r) goto done;
 
     /* Append the message to the mailbox */
     r = append_fromstage(&as, &body, stage, now, NULL, 0, NULL);
@@ -3489,15 +3488,27 @@ static int jmap_message_create(json_t *msg,
     }
     if (r) {
         append_abort(&as);
-        append_removestage(stage);
         goto done;
     }
     r = append_commit(&as);
-    append_removestage(stage);
+    if (r) goto done;
+
+    /* Mark new message as draft */
+    /* Read index record for new message (always the last one) */
+    struct index_record record;
+    memset(&record, 0, sizeof(struct index_record));
+    record.recno = mbox->i.num_records;
+    record.uid = mbox->i.last_uid;
+    r = mailbox_reload_index_record(mbox, &record);
+    if (r) goto done;
+    record.system_flags |= FLAG_DRAFT;
+    r = mailbox_rewrite_index_record(mbox, &record);
     if (r) goto done;
 
 done:
+    if (stage) append_removestage(stage);
     if (mboxname) free(mboxname);
+    if (mboxrole) free(mboxrole);
     if (mbox && mbox != req->inbox) mailbox_close(&mbox);
     return r;
 }
