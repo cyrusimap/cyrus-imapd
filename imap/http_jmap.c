@@ -2891,11 +2891,13 @@ done:
 
 static int jmap_validate_emailer(json_t *emailer,
                                  const char *prefix,
+                                 int parseaddr,
                                  json_t *invalid)
 {
     struct buf buf = BUF_INITIALIZER;
     int r = 1;
     json_t *val;
+    int valid = 1;
 
     val = json_object_get(emailer, "name");
     if (!val || json_typeof(val) != JSON_STRING) {
@@ -2904,8 +2906,15 @@ static int jmap_validate_emailer(json_t *emailer,
         buf_reset(&buf);
         r = 0;
     }
+    if (val && parseaddr && json_string_value(val)) {
+        struct address *addr = NULL;
+        parseaddr_list(json_string_value(val), &addr);
+        if (!addr || !addr->mailbox || !addr->domain || addr->next)
+            valid = 0;
+        parseaddr_free(addr);
+    }
     val = json_object_get(emailer, "email");
-    if (!val || json_typeof(val) != JSON_STRING) {
+    if (!val || json_typeof(val) != JSON_STRING || !valid) {
         buf_printf(&buf, "%s.%s", prefix, "email");
         json_array_append_new(invalid, json_string(buf_cstring(&buf)));
         buf_reset(&buf);
@@ -2934,7 +2943,6 @@ struct jmap_message_data {
 };
 
 /* Write the JMAP Message msg in RFC-5322 compliant wire format.
- *
  *
  * The message is assumed to not contain value errors. If Date is neither
  * set in the message headers nor property, the current date is set. If
@@ -3244,17 +3252,9 @@ static void jmap_message_validate(json_t *arg,
     /* XXX Support messages in multiple mailboxes */
     char *mboxname = NULL;
     char *mboxrole = NULL;
+    int parseaddr = 0;
 
-    /* Validate properties */
-    if (json_object_get(arg, "id")) {
-        json_array_append_new(invalid, json_string("id"));
-    }
-    if (json_object_get(arg, "blobId")) {
-        json_array_append_new(invalid, json_string("blobId"));
-    }
-    if (json_object_get(arg, "threadId")) {
-        json_array_append_new(invalid, json_string("threadId"));
-    }
+    /* Check if any of the mailboxes is an outbox. */
     prop = json_object_get(arg, "mailboxIds");
     if (json_array_size(prop) == 1 /* XXX Support multiple mailboxes */) {
         /* Check that first mailbox's role is either drafts or outbox */
@@ -3268,9 +3268,22 @@ static void jmap_message_validate(json_t *arg,
         if (!mboxrole || (strcmp(mboxrole, "drafts") && strcmp(mboxrole, "outbox"))) {
             json_array_append_new(invalid, json_string("mailboxIds[0]"));
         }
+        /* Enforce valid email address for to-be-sent messages */
+        if (!strcmp(mboxrole, "outbox")) parseaddr = 1;
         /* XXX Check that none of mailboxes has mustBeOnlyMailbox set */
     } else {
         json_array_append_new(invalid, json_string("mailboxIds"));
+    }
+
+    /* Validate properties */
+    if (json_object_get(arg, "id")) {
+        json_array_append_new(invalid, json_string("id"));
+    }
+    if (json_object_get(arg, "blobId")) {
+        json_array_append_new(invalid, json_string("blobId"));
+    }
+    if (json_object_get(arg, "threadId")) {
+        json_array_append_new(invalid, json_string("threadId"));
     }
     prop = json_object_get(arg, "inReplyToMessageId");
     if (prop && prop != json_null()) {
@@ -3312,6 +3325,9 @@ static void jmap_message_validate(json_t *arg,
                     valid = 0;
                 }
             }
+            if (parseaddr && valid) {
+                /* XXX Check mail addresses */
+            }
             if (!valid) {
                 buf_printf(&buf, "header[%s]", key);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
@@ -3324,7 +3340,7 @@ static void jmap_message_validate(json_t *arg,
     }
     prop = json_object_get(arg, "from");
     if (prop && prop != json_null()) {
-        jmap_validate_emailer(prop, "from", invalid);
+        jmap_validate_emailer(prop, "from", parseaddr, invalid);
     }
     prop = json_object_get(arg, "to");
     if (json_array_size(prop)) {
@@ -3332,7 +3348,7 @@ static void jmap_message_validate(json_t *arg,
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "to[%zu]", i);
-            jmap_validate_emailer(emailer, buf_cstring(&buf), invalid);
+            jmap_validate_emailer(emailer, buf_cstring(&buf), parseaddr, invalid);
             buf_reset(&buf);
         }
     } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
@@ -3344,7 +3360,7 @@ static void jmap_message_validate(json_t *arg,
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "cc[%zu]", i);
-            jmap_validate_emailer(emailer, buf_cstring(&buf), invalid);
+            jmap_validate_emailer(emailer, buf_cstring(&buf), parseaddr, invalid);
             buf_reset(&buf);
         }
     } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
@@ -3356,7 +3372,7 @@ static void jmap_message_validate(json_t *arg,
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "bcc[%zu]", i);
-            jmap_validate_emailer(emailer, buf_cstring(&buf), invalid);
+            jmap_validate_emailer(emailer, buf_cstring(&buf), parseaddr, invalid);
             buf_reset(&buf);
         }
     } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
@@ -3364,7 +3380,7 @@ static void jmap_message_validate(json_t *arg,
     }
     prop = json_object_get(arg, "replyTo");
     if (prop && prop != json_null()) {
-        jmap_validate_emailer(prop, "replyTo", invalid);
+        jmap_validate_emailer(prop, "replyTo", parseaddr, invalid);
     }
     pe = jmap_readprop(arg, "date", 0, invalid, "s", &sval);
     if (pe > 0) {
