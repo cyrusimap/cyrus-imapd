@@ -2938,7 +2938,7 @@ struct jmap_message_data {
  * email address.
  *
  * Return 0 on success or non-zero if writing to the file failed */
-static int jmap_message_fwrite(struct jmap_req *req, json_t *msg, FILE *out)
+static int jmap_message_write(json_t *msg, FILE *out, struct jmap_req *req)
 {
     struct jmap_message_data d;
     const char *key, *s;
@@ -3224,25 +3224,21 @@ done:
     return r;
 }
 
-static int jmap_message_create(json_t *arg,
-                               char **uid,
-                               json_t **err,
-                               json_t *invalid,
-                               struct jmap_req *req)
+static void jmap_message_validate(json_t *arg,
+                                  json_t **err,
+                                  json_t *invalid,
+                                  struct jmap_req *req)
 {
-    int r = 0, pe;
+    int pe;
     json_t *prop;
     const char *sval;
     int bval;
     struct buf buf = BUF_INITIALIZER;
     struct tm *date = xzmalloc(sizeof(struct tm));
-
     const char *inReplyToMessageId = NULL;
-
     /* XXX Support messages in multiple mailboxes */
     char *mboxname = NULL;
     char *mboxrole = NULL;
-    struct mailbox *mbox = NULL;
 
     /* Validate properties */
     if (json_object_get(arg, "id")) {
@@ -3255,8 +3251,7 @@ static int jmap_message_create(json_t *arg,
         json_array_append_new(invalid, json_string("threadId"));
     }
     prop = json_object_get(arg, "mailboxIds");
-    if (json_array_size(prop)) {
-        /* XXX Support messages in multiple mailboxes */
+    if (json_array_size(prop) == 1 /* XXX Support multiple mailboxes */) {
         /* Check that first mailbox's role is either drafts or outbox */
         const char *id = json_string_value(json_array_get(prop, 0));
         if (id && *id == '#') id = hash_lookup(id, req->idmap);
@@ -3404,16 +3399,49 @@ static int jmap_message_create(json_t *arg,
     }
     *err = NULL;
 
-    /* Validation passed. Now convert and save the message. */
+done:
+    buf_free(&buf);
+    if (mboxname) free(mboxname);
+    if (date) free(date);
+}
+
+/* Create the JMAP message in all mailboxes as specified in the
+ * mandatory mailboxIds property.
+ *
+ * Report any invalid properties in the JSON array invalid. Report
+ * any other setErrors in err.
+ *
+ * On success, return 0 and store the message id in uid, which must
+ * be freed by the caller. */
+static int jmap_message_create(json_t *msg,
+                               char **uid,
+                               json_t **err,
+                               json_t *invalid,
+                               struct jmap_req *req)
+{
     FILE *f = NULL;
     struct stagemsg *stage;
     time_t now = time(NULL);
     struct body *body = NULL;
     struct appendstate as;
+    char *mboxname = NULL;
+    const char *id;
+    struct mailbox *mbox = NULL;
+    int r = HTTP_SERVER_ERROR;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
 
-    /* Open mailbox. */
+    /* Validate the message */
+    jmap_message_validate(msg, err, invalid, req);
+    if (json_array_size(invalid) || *err) return HTTP_BAD_REQUEST;
+
     /* XXX Support multiple mailboxes */
+    id = json_string_value(json_array_get(json_object_get(msg, "mailboxIds"), 0));
+    if (id && *id == '#') id = hash_lookup(id, req->idmap);
+    if (!id) goto done;
+    mboxname = mboxlist_find_uniqueid(id, req->userid);
+    if (!mboxname) goto done;
+
+    /* Open mailbox. */
     r = mailbox_open_iwl(mboxname, &mbox);
     if (r) {
         syslog(LOG_ERR, "mailbox_open_iwl(%s): %s",
@@ -3429,7 +3457,7 @@ static int jmap_message_create(json_t *arg,
     }
 
     /* Write the message to the file */
-    r = jmap_message_fwrite(req, arg, f);
+    r = jmap_message_write(msg, f, req);
     qdiffs[QUOTA_STORAGE] = ftell(f);
     fclose(f);
     if (r) {
@@ -3459,12 +3487,9 @@ static int jmap_message_create(json_t *arg,
 
     *uid = xstrdup(message_guid_encode(&body->guid));
 
-    if (mbox) mailbox_close(&mbox);
-
 done:
-    buf_free(&buf);
     if (mboxname) free(mboxname);
-    if (date) free(date);
+    if (mbox && mbox != req->inbox) mailbox_close(&mbox);
     return r;
 }
 
