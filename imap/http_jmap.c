@@ -3224,11 +3224,11 @@ done:
     return r;
 }
 
-static int jmap_message_create_draft(json_t *arg,
-                                     char **uid,
-                                     json_t **err,
-                                     json_t *invalid,
-                                     struct jmap_req *req)
+static int jmap_message_create(json_t *arg,
+                               char **uid,
+                               json_t **err,
+                               json_t *invalid,
+                               struct jmap_req *req)
 {
     int r = 0, pe;
     json_t *prop;
@@ -3244,7 +3244,7 @@ static int jmap_message_create_draft(json_t *arg,
     char *mboxrole = NULL;
     struct mailbox *mbox = NULL;
 
-    /* Parse properties */
+    /* Validate properties */
     if (json_object_get(arg, "id")) {
         json_array_append_new(invalid, json_string("id"));
     }
@@ -3257,7 +3257,7 @@ static int jmap_message_create_draft(json_t *arg,
     prop = json_object_get(arg, "mailboxIds");
     if (json_array_size(prop)) {
         /* XXX Support messages in multiple mailboxes */
-        /* Check that mailbox role is draft or outbox */
+        /* Check that first mailbox's role is either drafts or outbox */
         const char *id = json_string_value(json_array_get(prop, 0));
         if (id && *id == '#') id = hash_lookup(id, req->idmap);
         if (!id) {
@@ -3395,9 +3395,6 @@ static int jmap_message_create_draft(json_t *arg,
         goto done;
     }
 
-    /* XXX make uid point to the newly created message GUID */
-    *uid = xstrdup(makeuuid());
-
     if (inReplyToMessageId) {
         /* XXX Lookup message and validate inReplyToMessageId */
         if (0) {
@@ -3407,66 +3404,62 @@ static int jmap_message_create_draft(json_t *arg,
     }
     *err = NULL;
 
-    /* XXX */
-    if (!strcmp(mboxrole, "outbox")) {
-        /* XXX send message */
-        /* XXX store message in Sent folder */
-    } else if (!strcmp(mboxrole, "drafts")) {
-        FILE *f = NULL;
-        struct stagemsg *stage;
-        time_t now = time(NULL);
-        struct body *body = NULL;
-        struct appendstate as;
-        quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    /* Validation passed. Now convert and save the message. */
+    FILE *f = NULL;
+    struct stagemsg *stage;
+    time_t now = time(NULL);
+    struct body *body = NULL;
+    struct appendstate as;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
 
-        /* Open drafts mailbox. */
-        r = mailbox_open_iwl(mboxname, &mbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s): %s",
-                    mboxname, error_message(r));
-            goto done;
-        }
-
-        /* Prepare to stage the message */
-        if (!(f = append_newstage(mbox->name, now, 0, &stage))) {
-            syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
-            r = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        /* Write the message to the file */
-        r = jmap_message_fwrite(req, arg, f);
-        qdiffs[QUOTA_STORAGE] = ftell(f);
-        fclose(f);
-        if (r) {
-            append_removestage(stage);
-            goto done;
-        }
-        qdiffs[QUOTA_MESSAGE] = 1;
-
-        /* Prepare to append the message to the mailbox */
-        r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
-                0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
-        if (r) {
-            append_removestage(stage);
-            goto done;
-        }
-
-        /* Append the message to the mailbox */
-        r = append_fromstage(&as, &body, stage, now, NULL, 0, NULL);
-        if (r) {
-            append_abort(&as);
-            append_removestage(stage);
-            goto done;
-        }
-        r = append_commit(&as);
-        append_removestage(stage);
-        if (r) goto done;
-
-        *uid = xstrdup(message_guid_encode(&body->guid));
-
-        if (mbox) mailbox_close(&mbox);
+    /* Open mailbox. */
+    /* XXX Support multiple mailboxes */
+    r = mailbox_open_iwl(mboxname, &mbox);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_open_iwl(%s): %s",
+                mboxname, error_message(r));
+        goto done;
     }
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(mbox->name, now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Write the message to the file */
+    r = jmap_message_fwrite(req, arg, f);
+    qdiffs[QUOTA_STORAGE] = ftell(f);
+    fclose(f);
+    if (r) {
+        append_removestage(stage);
+        goto done;
+    }
+    qdiffs[QUOTA_MESSAGE] = 1;
+
+    /* Prepare to append the message to the mailbox */
+    r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
+            0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
+    if (r) {
+        append_removestage(stage);
+        goto done;
+    }
+
+    /* Append the message to the mailbox */
+    r = append_fromstage(&as, &body, stage, now, NULL, 0, NULL);
+    if (r) {
+        append_abort(&as);
+        append_removestage(stage);
+        goto done;
+    }
+    r = append_commit(&as);
+    append_removestage(stage);
+    if (r) goto done;
+
+    *uid = xstrdup(message_guid_encode(&body->guid));
+
+    if (mbox) mailbox_close(&mbox);
 
 done:
     buf_free(&buf);
@@ -3508,8 +3501,8 @@ static int setMessages(struct jmap_req *req)
                 continue;
             }
 
-            /* Create the draft */
-            r = jmap_message_create_draft(arg, &uid, &err, invalid, req);
+            /* Create the message. */
+            r = jmap_message_create(arg, &uid, &err, invalid, req);
             if (r) goto done;
 
             /* Handle invalid properties. */
