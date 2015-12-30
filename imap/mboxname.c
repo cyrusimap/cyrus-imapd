@@ -1191,6 +1191,23 @@ EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__(
     return res;
 }
 
+/*
+ * If (internal) mailbox 'name' is a user's mail outbox
+ * returns boolean
+ */
+EXPORTED int mboxname_isoutbox(const char *name)
+{
+
+    int isoutbox = 0;
+    /* XXX - use specialuse for this later */
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    if (mbname_localpart(mbname) && strarray_size(boxes) == 1 && !strcmp(strarray_nth(boxes, 0), "Outbox"))
+        isoutbox = 1;
+    mbname_free(&mbname);
+    return isoutbox;
+}
+
 EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
     if (!userid) return NULL;
