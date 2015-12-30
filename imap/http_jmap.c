@@ -3209,6 +3209,7 @@ static int jmap_message_write(json_t *msg, FILE *out, struct jmap_req *req)
 
 done:
     if (d.from) free(d.from);
+    if (d.date) free(d.date);
     if (d.to) free(d.to);
     if (d.cc) free(d.cc);
     if (d.bcc) free(d.bcc);
@@ -3402,6 +3403,7 @@ static void jmap_message_validate(json_t *arg,
 done:
     buf_free(&buf);
     if (mboxname) free(mboxname);
+    if (mboxrole) free(mboxrole);
     if (date) free(date);
 }
 
@@ -3476,6 +3478,11 @@ static int jmap_message_create(json_t *msg,
 
     /* Append the message to the mailbox */
     r = append_fromstage(&as, &body, stage, now, NULL, 0, NULL);
+    if (body) {
+        *uid = xstrdup(message_guid_encode(&body->guid));
+        message_free_body(body);
+        free(body);
+    }
     if (r) {
         append_abort(&as);
         append_removestage(stage);
@@ -3484,8 +3491,6 @@ static int jmap_message_create(json_t *msg,
     r = append_commit(&as);
     append_removestage(stage);
     if (r) goto done;
-
-    *uid = xstrdup(message_guid_encode(&body->guid));
 
 done:
     if (mboxname) free(mboxname);
