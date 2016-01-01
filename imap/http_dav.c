@@ -4636,6 +4636,8 @@ int propfind_by_resource(void *rock, void *data)
     size_t len;
     int r = 0, ret = 0;
 
+    keepalive_response();
+
     /* Append resource name to URL path */
     if (!fctx->req_tgt->resource) {
         len = strlen(fctx->req_tgt->path);
