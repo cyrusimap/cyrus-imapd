@@ -254,6 +254,8 @@ static void tzdist_shutdown(void)
 
     zoneinfo_close(NULL);
 
+    if (!leap_seconds) return;
+
     while ((leap = ptrarray_pop(leap_seconds))) free(leap);
     ptrarray_free(leap_seconds);
 }
