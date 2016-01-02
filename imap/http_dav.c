@@ -6351,16 +6351,26 @@ struct search_crit {
 
 
 /* mboxlist_findall() callback to find user principals (has Inbox) */
-static int principal_search(const char *mboxname,
-                            int matchlen __attribute__((unused)),
+static int principal_search(const char *mboxname, int matchlen,
                             int maycreate __attribute__((unused)),
                             void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     char *userid = mboxname_to_userid(mboxname);
+    mbentry_t *mbentry = NULL;
     struct search_crit *search_crit;
     size_t len;
     char *p;
+
+    /* If this function is called outside of mboxlist_findall()
+     * with matchlen == 0, this is a mailbox of the authenticated user
+     * and we always process it.  Otherwise it's just one of many found
+     * and we need to check the ACL for the authenticated user */
+    if (matchlen &&
+        (mboxlist_lookup(mboxname, &mbentry, NULL) ||
+         !(httpd_myrights(httpd_authstate, mbentry->acl) & DACL_SCHED))) {
+        goto bad;
+    }
 
     for (search_crit = (struct search_crit *) fctx->filter_crit;
          search_crit; search_crit = search_crit->next) {
@@ -6389,10 +6399,7 @@ static int principal_search(const char *mboxname,
     /* Append principal name to URL path */
     len = strlen(namespace_principal.prefix);
     p = fctx->req_tgt->path + len;
-    len += strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
-    p = fctx->req_tgt->path + len;
-    strlcpy(p, userid, MAX_MAILBOX_PATH - len);
-    strlcpy(p, "/", MAX_MAILBOX_PATH - len);
+    snprintf(p, MAX_MAILBOX_PATH - len, "/user/%s/", userid);
 
     free(fctx->req_tgt->userid);
     fctx->req_tgt->userid = userid;
@@ -6525,13 +6532,17 @@ static int report_prin_prop_search(struct transaction_t *txn,
     if (apply_prin_set || !fctx->req_tgt->userid) {
         /* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
 
-        /* Add responses for all users with INBOX on server (as admin) */
-        // XXX - this is a security risk without ACL checks,
-        // we shouldn't be doing this as admin
-        if (0) {
-            ret = mboxlist_findall(&httpd_namespace, "user.%", 1, httpd_userid,
-                                   httpd_authstate, principal_search, fctx);
-        }
+        /* Add response for authenticated user */
+        char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+        principal_search(inboxname, 0, 0, fctx);
+        free(inboxname);
+
+        /* Add responses for all other users with a scheduling Inbox on server
+           (as admin because we only need SCHED rights, not LIST) */
+        inboxname = caldav_mboxname("%" /* IMAP wildcard */, SCHED_INBOX);
+        ret = mboxlist_findall(&httpd_namespace, inboxname, 1, httpd_userid,
+                               httpd_authstate, principal_search, fctx);
+        free(inboxname);
     }
 
   done:
