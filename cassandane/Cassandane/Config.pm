@@ -85,6 +85,7 @@ sub default
             auditlog => 'yes',
             chatty => 'yes',
             debug => 'yes',
+            httpprettytelemetry => 'yes',
 	);
 	my $defs = Cassandane::Cassini->instance()->get_section('config');
 	$default->set(%$defs);
