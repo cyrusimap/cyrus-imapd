@@ -394,10 +394,18 @@ EXPORTED int backup_close(struct backup **backupp)
     struct backup *backup = *backupp;
     *backupp = NULL;
 
+    gzFile gzfile = NULL;
     int r1 = 0, r2 = 0;
 
-    if (backup->append_state)
-        r1 = backup_append_end(backup);
+    if (backup->append_state) {
+        if (backup->append_state->mode != BACKUP_APPEND_INACTIVE)
+            r1 = backup_append_end(backup);
+
+        gzfile = backup->append_state->gzfile;
+
+        free(backup->append_state);
+        backup->append_state = NULL;
+    }
 
     if (backup->db) r2 = sqldb_close(&backup->db);
 
@@ -407,8 +415,11 @@ EXPORTED int backup_close(struct backup **backupp)
     }
 
     if (backup->fd >= 0) {
-        lock_unlock(backup->fd, backup->data_fname);
-        close(backup->fd);
+        /* closing the file will also release the lock on the fd */
+        if (gzfile)
+            gzclose_w(gzfile);
+        else
+            close(backup->fd);
     }
 
     if (backup->index_fname) free(backup->index_fname);
@@ -473,34 +484,42 @@ HIDDEN const char *_sha1_file(int fd, const char *fname, size_t limit,
 static int _append_start(struct backup *backup, time_t ts, off_t offset,
                          const char *file_sha1, int index_only, int noflush)
 {
-    if (backup->append_state != NULL) fatal("backup append already started", EC_SOFTWARE);
+    if (backup->append_state != NULL
+        && backup->append_state->mode != BACKUP_APPEND_INACTIVE) {
+        fatal("backup append already started", EC_SOFTWARE);
+    }
 
-    struct backup_append_state *append_state = xzmalloc(sizeof(*append_state));
+    if (!backup->append_state)
+        backup->append_state = xzmalloc(sizeof(*backup->append_state));
 
-    if (index_only) append_state->mode |= BACKUP_APPEND_INDEXONLY;
-    if (noflush) append_state->mode |= BACKUP_APPEND_NOFLUSH;
+    if (index_only) backup->append_state->mode |= BACKUP_APPEND_INDEXONLY;
+    if (noflush) backup->append_state->mode |= BACKUP_APPEND_NOFLUSH;
 
-    SHA1_Init(&append_state->sha_ctx);
+    backup->append_state->wrote = 0;
+    SHA1_Init(&backup->append_state->sha_ctx);
 
     char header[80];
-    snprintf(header, sizeof(header), "# cyrus backup: chunk start %ld\r\n", (int64_t) ts);
+    snprintf(header, sizeof(header),
+             "# cyrus backup: chunk start %ld\r\n", (int64_t) ts);
 
     if (!index_only) {
-        int dup_fd = dup(backup->fd);
-        append_state->gzfile = gzdopen(dup_fd, "ab");
-        if (!append_state->gzfile) {
-            fprintf(stderr, "%s: gzdopen fd %i failed: %s\n", __func__, dup_fd, strerror(errno));
-            return -1;
+        if (!backup->append_state->gzfile) {
+            backup->append_state->gzfile = gzdopen(backup->fd, "ab");
+            if (!backup->append_state->gzfile) {
+                fprintf(stderr, "%s: gzdopen fd %i failed: %s\n",
+                        __func__, backup->fd, strerror(errno));
+                goto error;
+            }
         }
 
         // FIXME check for error return
-        gzwrite(append_state->gzfile, header, strlen(header));
+        gzwrite(backup->append_state->gzfile, header, strlen(header));
         if (!noflush)
-            gzflush(append_state->gzfile, Z_FULL_FLUSH);
+            gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
     }
 
-    SHA1_Update(&append_state->sha_ctx, header, strlen(header));
-    append_state->wrote += strlen(header);
+    SHA1_Update(&backup->append_state->sha_ctx, header, strlen(header));
+    backup->append_state->wrote += strlen(header);
 
     struct sqldb_bindval bval[] = {
         { ":ts_start",  SQLITE_INTEGER, { .i = ts           } },
@@ -519,16 +538,13 @@ static int _append_start(struct backup *backup, time_t ts, off_t offset,
         goto error;
     }
 
-    append_state->chunk_id = sqldb_lastid(backup->db);
-    backup->append_state = append_state;
+    backup->append_state->chunk_id = sqldb_lastid(backup->db);
+
+    backup->append_state->mode |= BACKUP_APPEND_ACTIVE;
     return 0;
 
 error:
-    if (append_state) {
-        if (append_state->gzfile)
-            gzclose_w(append_state->gzfile);
-        free(append_state);
-    }
+    backup->append_state->mode = BACKUP_APPEND_INACTIVE;
     return -1;
 }
 
@@ -545,7 +561,8 @@ EXPORTED int backup_append_start(struct backup *backup)
 EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts)
 {
     int r;
-    if (!backup->append_state) fatal("backup append not started", EC_SOFTWARE);
+    if (!backup->append_state || backup->append_state->mode == BACKUP_APPEND_INACTIVE)
+        fatal("backup append not started", EC_SOFTWARE);
 
     off_t start = backup->append_state->wrote;
     size_t len;
@@ -615,33 +632,32 @@ error:
 static int _append_end(struct backup *backup, time_t ts)
 {
     int r;
-    struct backup_append_state *append_state = backup->append_state;
 
-    backup->append_state = NULL;
+    if (!backup->append_state)
+        fatal("backup append not started", EC_SOFTWARE);
+    if (backup->append_state->mode == BACKUP_APPEND_INACTIVE)
+        fatal("backup append not started", EC_SOFTWARE);
 
-    if (!append_state) fatal("backup append not started", EC_SOFTWARE);
-
-    if (!(append_state->mode & BACKUP_APPEND_INDEXONLY)) {
-        r = gzflush(append_state->gzfile, Z_FULL_FLUSH);
-        if (!r) r = gzclose_w(append_state->gzfile);
+    if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
+        r = gzflush(backup->append_state->gzfile, Z_FINISH);
         if (r != Z_OK) {
-            fprintf(stderr, "%s: gzclose_w failed: %i\n", __func__, r);
+            fprintf(stderr, "%s: gzflush failed: %i\n", __func__, r);
             // FIXME handle this sensibly
         }
     }
 
     unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
     char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    SHA1_Final(sha1_raw, &append_state->sha_ctx);
+    SHA1_Final(sha1_raw, &backup->append_state->sha_ctx);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
     assert(r == 2 * SHA1_DIGEST_LENGTH);
 
     struct sqldb_bindval bval[] = {
-        { ":id",        SQLITE_INTEGER, { .i = append_state->chunk_id   } },
-        { ":ts_end",    SQLITE_INTEGER, { .i = ts                       } },
-        { ":length",    SQLITE_INTEGER, { .i = append_state->wrote      } },
-        { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1                } },
-        { NULL,         SQLITE_NULL,    { .s = NULL                     } },
+        { ":id",        SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
+        { ":ts_end",    SQLITE_INTEGER, { .i = ts                             } },
+        { ":length",    SQLITE_INTEGER, { .i = backup->append_state->wrote    } },
+        { ":data_sha1", SQLITE_TEXT,    { .s = data_sha1                      } },
+        { NULL,         SQLITE_NULL,    { .s = NULL                           } },
     };
 
     r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
@@ -654,7 +670,9 @@ static int _append_end(struct backup *backup, time_t ts)
         sqldb_commit(backup->db, "backup_append");
     }
 
-    free(append_state);
+    backup->append_state->mode = BACKUP_APPEND_INACTIVE;
+    backup->append_state->wrote = 0;
+
     return r;
 }
 
@@ -665,11 +683,10 @@ EXPORTED int backup_append_end(struct backup *backup)
 
 EXPORTED int backup_append_abort(struct backup *backup)
 {
-    struct backup_append_state *append_state = backup->append_state;
-
-    backup->append_state = NULL;
-
-    if (!append_state) fatal("backup append not started", EC_SOFTWARE);
+    if (!backup->append_state)
+        fatal("backup append not started", EC_SOFTWARE);
+    if (backup->append_state == BACKUP_APPEND_INACTIVE)
+        fatal("backup append not started", EC_SOFTWARE);
 
     sqldb_rollback(backup->db, "backup_append");
 
@@ -679,9 +696,9 @@ EXPORTED int backup_append_abort(struct backup *backup)
     // opened with O_APPEND...
     // seems like it might work, but test it first.
 
-    // FIXME at least close the damn file...
+    // FIXME at least z_finish the damn file...
 
-    free(append_state);
+    backup->append_state->mode = BACKUP_APPEND_INACTIVE;
     return 0;
 }
 
@@ -828,7 +845,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
             }
         }
 
-        if (backup->append_state)
+        if (backup->append_state && backup->append_state->mode)
             _append_end(backup, member_end_ts);
         prot_free(member);
         gzuc_member_end(gzuc, NULL);
