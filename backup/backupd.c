@@ -945,11 +945,21 @@ static int cmd_apply_message(struct dlist *dl)
      * and let compress sort it out.
      */
     if (!r && appended == 0) {
-        syslog(LOG_DEBUG, "received unreserved messages, applying to all open backups...\n");
-        for (open = backupd_open_backups.head; open; open = open->next) {
-            syslog(LOG_DEBUG, "applying unreserved messages to %s\n", open->name);
-            r = backup_append(open->backup, dl, time(0));
-            if (r) break;
+        if (backupd_open_backups.count) {
+            syslog(LOG_DEBUG,
+                   "received unreserved messages, applying to all ("
+                   SIZE_T_FMT ") open backups...",
+                   backupd_open_backups.count);
+            for (open = backupd_open_backups.head; open; open = open->next) {
+                syslog(LOG_DEBUG, "applying unreserved messages to %s", open->name);
+                r = backup_append(open->backup, dl, time(0));
+                if (r) break;
+            }
+        }
+        else {
+            syslog(LOG_DEBUG,
+                   "received unreserved messages, but no open backups to apply to");
+            r = IMAP_PROTOCOL_ERROR;
         }
     }
 
