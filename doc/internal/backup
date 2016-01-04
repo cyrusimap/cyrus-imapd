@@ -828,4 +828,4 @@ todo list
   -> gzuncat: never close your fd, use read(2) instead of stdio (done)
   -> append: never gzclose, just gzflush(Z_FINISH) and keep the append_state around (done)
   -> _sha1_file: looks ok, uses mmap, doesn't try to close any fds
-* backupd: don't block on locked backups, return mailbox locked
+* backupd: don't block on locked backups, return mailbox locked -- but sync_client doesn't handle this
