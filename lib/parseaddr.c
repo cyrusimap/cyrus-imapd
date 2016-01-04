@@ -54,9 +54,9 @@ static const char unspecified_domain[] = "unspecified-domain";
 
 static void parseaddr_append(struct address ***addrpp, const char *name,
                              const char *route, const char *mailbox,
-                             const char *domain, char **freemep);
+                             const char *domain, char **freemep, int invalid);
 static int parseaddr_phrase (char **inp, char **phrasep, const char *specials);
-static int parseaddr_domain (char **inp, char **domainp, char **commmentp);
+static int parseaddr_domain (char **inp, char **domainp, char **commmentp, int *invalid);
 static int parseaddr_route (char **inp, char **routep);
 
 /*
@@ -68,7 +68,7 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
     char *s;
     int ingroup = 0;
     char *freeme;
-    int tok = ' ';
+    int tok = ' ', invalid = 0;
     char *phrase, *route, *mailbox, *domain, *comment;
 
     /* Skip down to the tail */
@@ -85,24 +85,24 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
         case '\0':
         case ';':
             if (*phrase) {
-                parseaddr_append(&addrp, 0, 0, phrase, "", &freeme);
+                parseaddr_append(&addrp, 0, 0, phrase, "", &freeme, invalid);
             }
             if (tok == ';') {
-                parseaddr_append(&addrp, 0, 0, 0, 0, &freeme);
+                parseaddr_append(&addrp, 0, 0, 0, 0, &freeme, invalid);
                 ingroup = 0;
             }
             continue;
 
         case ':':
-            parseaddr_append(&addrp, 0, 0, phrase, 0, &freeme);
+            parseaddr_append(&addrp, 0, 0, phrase, 0, &freeme, invalid);
             ingroup++;
             continue;
 
         case '@':
-            tok = parseaddr_domain(&s, &domain, &comment);
-            parseaddr_append(&addrp, comment, 0, phrase, domain, &freeme);
+            tok = parseaddr_domain(&s, &domain, &comment, &invalid);
+            parseaddr_append(&addrp, comment, 0, phrase, domain, &freeme, invalid);
             if (tok == ';') {
-                parseaddr_append(&addrp, 0, 0, 0, 0, &freeme);
+                parseaddr_append(&addrp, 0, 0, 0, 0, &freeme, invalid);
                 ingroup = 0;
             }
             continue;
@@ -115,29 +115,29 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
                     *--s = '@';
                     tok = parseaddr_route(&s, &route);
                     if (tok != ':') {
-                        parseaddr_append(&addrp, phrase, route, "", "", &freeme);
+                        parseaddr_append(&addrp, phrase, route, "", "", &freeme, invalid);
                         while (tok && tok != '>') tok = *s++;
                         continue;
                     }
                     tok = parseaddr_phrase(&s, &mailbox, "@>");
                     if (tok != '@') {
                         parseaddr_append(&addrp, phrase, route, mailbox, "",
-                                         &freeme);
+                                         &freeme, invalid);
                         continue;
                     }
                 }
-                tok = parseaddr_domain(&s, &domain, 0);
+                tok = parseaddr_domain(&s, &domain, 0, &invalid);
                 parseaddr_append(&addrp, phrase, route, mailbox, domain,
-                                 &freeme);
+                                 &freeme, invalid);
                 while (tok && tok != '>') tok = *s++;
                 continue; /* effectively auto-inserts a comma */
             }
             else {
-                parseaddr_append(&addrp, phrase, 0, mailbox, "", &freeme);
+                parseaddr_append(&addrp, phrase, 0, mailbox, "", &freeme, invalid);
             }
         }
     }
-    if (ingroup) parseaddr_append(&addrp, 0, 0, 0, 0, &freeme);
+    if (ingroup) parseaddr_append(&addrp, 0, 0, 0, 0, &freeme, invalid);
 
     if (freeme) free(freeme);
 }
@@ -162,7 +162,7 @@ EXPORTED void parseaddr_free(struct address *addr)
  */
 static void parseaddr_append(struct address ***addrpp, const char *name,
                              const char *route, const char *mailbox,
-                             const char *domain, char **freemep)
+                             const char *domain, char **freemep, int invalid)
 {
     struct address *newaddr;
 
@@ -191,6 +191,8 @@ static void parseaddr_append(struct address ***addrpp, const char *name,
     newaddr->next = 0;
     newaddr->freeme = *freemep;
     *freemep = 0;
+
+    newaddr->invalid = invalid;
 
     **addrpp = newaddr;
     *addrpp = &newaddr->next;
@@ -282,9 +284,10 @@ fail:
 }
 
 /*
- * Parse a domain.  If 'commentp' is non-nil, parses any trailing comment
+ * Parse a domain.  If 'commentp' is non-nil, parses any trailing comment.
+ * If the domain is invalid, set invalid to non-zero.
  */
-static int parseaddr_domain(char **inp, char **domainp, char **commentp)
+static int parseaddr_domain(char **inp, char **domainp, char **commentp, int *invalid)
 {
     int c;
     char *src = *inp;
@@ -325,6 +328,13 @@ static int parseaddr_domain(char **inp, char **domainp, char **commentp)
                 src--;
                 SKIPWHITESPACE(src);
             }
+        }
+        else if (c == '@') {
+            /* This domain name is garbage. Continue eating up the characters
+             * until we get to a sane state. */
+            *invalid = 1;
+            *dst++ = c;
+            if (commentp) *commentp = 0;
         }
         else if (!Uisspace(c)) {
             if (dst > *domainp && dst[-1] == '.') dst--;

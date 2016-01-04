@@ -6227,7 +6227,7 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
     static int envsize = 0, fromsize = 0, hdrsize = 0;
     int size;
     char *envtokens[NUMENVTOKENS];
-    struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL };
+    struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL, 0 };
     strarray_t refhdr = STRARRAY_INITIALIZER;
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;

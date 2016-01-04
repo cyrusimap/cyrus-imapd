@@ -3432,7 +3432,7 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
     if (!mailbox_cacherecord(mailbox, record)) {
         char *env = NULL;
         char *envtokens[NUMENVTOKENS];
-        struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL };
+        struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL, 0 };
 
         /* Need to find the sender */
 
