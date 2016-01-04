@@ -1388,13 +1388,10 @@ static void database_init(void)
 static void database_log(const struct mbent *mb, struct txn **mytid)
 {
     char *c;
-    char *location = NULL;
     mbentry_t *mbentry = NULL;
 
     mbentry = mboxlist_entry_create();
     mbentry->name = xstrdupnull(mb->mailbox);
-
-    location = xstrdupnull(mb->location);
 
     mbentry->server = xstrdupnull(mb->location);
 
@@ -1403,8 +1400,6 @@ static void database_log(const struct mbent *mb, struct txn **mytid)
         *c++ = '\0';
         mbentry->partition = xstrdupnull(c);
     }
-
-    if (location) free(location);
 
     mbentry->acl = xstrdupnull(mb->acl);
 
