@@ -260,10 +260,13 @@ int main (int argc, char **argv)
         case 'x':
             if (run_mode != BU_LOCK_RUN_PIPE) usage(argv[0]);
             run_mode = BU_LOCK_RUN_EXEC;
+            /* rest of argv is command for -x: don't try to process it */
+            goto no_more_opts;
             break;
         }
     }
 
+no_more_opts:
     if (open_type == BU_LOCK_OPEN_UNSPECIFIED) usage(argv[0]);
     if (backup_spec == NULL) usage(argv[0]);
     if (run_mode == BU_LOCK_RUN_EXEC && optind == argc) usage(argv[0]);
