@@ -5301,6 +5301,8 @@ static int busytime_by_resource(void *rock, void *data)
     struct index_record record;
     int r;
 
+    keepalive_response();
+
     if (!cdata->dav.imap_uid) return 0;
 
     /* Fetch index record for the resource */

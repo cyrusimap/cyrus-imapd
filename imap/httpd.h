@@ -447,6 +447,7 @@ extern void comma_list_hdr(const char *hdr, const char *vals[],
 extern void response_header(long code, struct transaction_t *txn);
 extern void buf_printf_markup(struct buf *buf, unsigned level,
                               const char *fmt, ...);
+extern void keepalive_response(void);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);

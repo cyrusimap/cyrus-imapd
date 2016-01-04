@@ -214,7 +214,6 @@ static int parse_ranges(const char *hdr, unsigned long len,
 static int proxy_authz(const char **authzid, struct transaction_t *txn);
 static void auth_success(struct transaction_t *txn);
 static int http_auth(const char *creds, struct transaction_t *txn);
-static void keep_alive(int sig);
 
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
@@ -530,6 +529,14 @@ int service_init(int argc __attribute__((unused)),
 }
 
 
+static volatile sig_atomic_t gotsigalrm = 0;
+
+static void sigalrm_handler(int sig __attribute__((unused)))
+{
+    gotsigalrm = 1;
+}
+
+
 /*
  * run for each accepted connection
  */
@@ -659,7 +666,7 @@ int service_main(int argc __attribute__((unused)),
 #ifdef SA_RESTART
         action.sa_flags |= SA_RESTART;
 #endif
-        action.sa_handler = keep_alive;
+        action.sa_handler = sigalrm_handler;
         if (sigaction(SIGALRM, &action, NULL) < 0) {
             syslog(LOG_ERR, "unable to install signal handler for %d: %m", SIGALRM);
             httpd_keepalive = 0;
@@ -1849,14 +1856,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 {
     time_t now;
     char datestr[30];
-    unsigned keepalive;
     const char **hdr;
     struct auth_challenge_t *auth_chal;
     struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
 
     /* Stop method processing alarm */
-    keepalive = alarm(0);
+    alarm(0);
+    gotsigalrm = 0;
 
 
     /* Status-Line */
@@ -1866,8 +1873,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     /* Connection Management */
     switch (code) {
     case HTTP_SWITCH_PROT:
-        keepalive = 0;  /* No alarm during TLS negotiation */
-
+        /* Tell client to start TLS negotiation */
         prot_printf(httpd_out, "Upgrade: %s\r\n", TLS_VERSION);
         prot_puts(httpd_out, "Connection: Upgrade\r\n");
 
@@ -1882,9 +1888,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
         /* Force the response to the client immediately */
         prot_flush(httpd_out);
-
-        /* Reset method processing alarm */
-        alarm(keepalive);
 
         return;
 
@@ -2308,9 +2311,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 }
 
 
-static void keep_alive(int sig)
+EXPORTED void keepalive_response(void)
 {
-    if (sig == SIGALRM) {
+    if (gotsigalrm) {
         response_header(HTTP_CONTINUE, NULL);
         alarm(httpd_keepalive);
     }
