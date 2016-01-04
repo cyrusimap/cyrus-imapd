@@ -489,7 +489,7 @@ static struct open_backup *open_backups_list_find(struct open_backups_list *list
     return NULL;
 }
 
-static struct open_backup *backupd_open_backup(const mbname_t *mbname)
+static int backupd_open_backup(struct open_backup **openp, const mbname_t *mbname)
 {
     const char *key = mbname_userid(mbname);
 
@@ -500,14 +500,15 @@ static struct open_backup *backupd_open_backup(const mbname_t *mbname)
     if (!open) {
         struct backup *backup = NULL;
         int r = backup_open(&backup, mbname, BACKUP_OPEN_BLOCK);
-        if (r) return NULL;
+        if (r) return r;
         backup_append_start(backup); // FIXME error checking
         open = open_backups_list_add(&backupd_open_backups, key, backup);
     }
 
     open->timestamp = now;
+    *openp = open;
 
-    return open;
+    return 0;
 }
 
 
@@ -844,29 +845,35 @@ static void cmd_authenticate(char *mech, char *resp)
 static int cmd_apply_mailbox(struct dlist *dl)
 {
     const char *mboxname = NULL;
+    struct open_backup *open = NULL;
+    int r;
 
     if (!dlist_getatom(dl, "MBOXNAME", &mboxname)) return IMAP_PROTOCOL_ERROR;
 
     mbname_t *mbname = mbname_from_intname(mboxname);
-    struct open_backup *open = backupd_open_backup(mbname);
+    r = backupd_open_backup(&open, mbname);
     mbname_free(&mbname);
 
-    if (!open) return IMAP_INTERNAL;
+    if (!r)
+        r = backup_append(open->backup, dl, time(0));
 
-    return backup_append(open->backup, dl, time(0));
+    return r;
 }
 
 static int cmd_apply_unmailbox(struct dlist *dl)
 {
     const char *mboxname = dl->sval;
+    struct open_backup *open = NULL;
+    int r;
 
     mbname_t *mbname = mbname_from_intname(mboxname);
-    struct open_backup *open = backupd_open_backup(mbname);
+    r = backupd_open_backup(&open, mbname);
     mbname_free(&mbname);
 
-    if (!open) return IMAP_INTERNAL;
+    if (!r)
+        r = backup_append(open->backup, dl, time(0));
 
-    return backup_append(open->backup, dl, time(0));
+    return r;
 }
 
 static int cmd_apply_message(struct dlist *dl)
@@ -978,11 +985,12 @@ static int cmd_apply_reserve(struct dlist *dl)
 
     /* log the entire reserve to all relevant backups, and accumulate missing list */
     for (i = 0; i < strarray_size(&userids); i++) {
+        struct open_backup *open = NULL;
         mbname_t *mbname = mbname_from_userid(strarray_nth(&userids, i));
-        struct open_backup *open = backupd_open_backup(mbname);
+        r = backupd_open_backup(&open, mbname);
         mbname_free(&mbname);
 
-        if (!open) return IMAP_INTERNAL;  // FIXME continue?
+        if (r) return r;  // FIXME continue?
 
         r = backup_append(open->backup, dl, time(0));
         if (r) goto done;
@@ -1047,13 +1055,10 @@ static int cmd_apply_rename(struct dlist *dl)
 
     if (strcmp(mbname_userid(old), mbname_userid(new)) == 0) {
         // same user, unremarkable folder rename *whew*
-        struct open_backup *open = backupd_open_backup(old);
-        if (!open) {
-            r = IMAP_INTERNAL;
-            goto done;
-        }
-
-        r = backup_append(open->backup, dl, time(0));
+        struct open_backup *open = NULL;
+        r = backupd_open_backup(&open, old);
+        if (!r)
+            r = backup_append(open->backup, dl, time(0));
     }
     else {
         // user name has changed!
@@ -1063,7 +1068,6 @@ static int cmd_apply_rename(struct dlist *dl)
         r = IMAP_INTERNAL;
     }
 
-done:
     mbname_free(&old);
     mbname_free(&new);
 
@@ -1139,6 +1143,8 @@ static const char *backupd_response(int r)
     switch (r) {
     case 0:
         return "OK Success";
+    case IMAP_MAILBOX_LOCKED:
+        return "NO IMAP_MAILBOX_LOCKED Mailbox locked";
     case IMAP_MAILBOX_NONEXISTENT:
         return "NO IMAP_MAILBOX_NONEXISTENT No Such Mailbox";
     case IMAP_PROTOCOL_ERROR:
@@ -1152,18 +1158,18 @@ static const char *backupd_response(int r)
 
 static int cmd_get_mailbox(struct dlist *dl, int want_records)
 {
+    struct open_backup *open = NULL;
+    struct backup_mailbox *mb = NULL;
+    mbname_t *mbname = NULL;
     int r;
-    mbname_t *mbname = mbname_from_intname(dl->sval);
+
+    mbname = mbname_from_intname(dl->sval);
     if (!mbname) return IMAP_INTERNAL;
 
-    struct open_backup *open = backupd_open_backup(mbname);
-    if (!open) {
-        r = IMAP_INTERNAL;
-        goto done;
-    }
+    r = backupd_open_backup(&open, mbname);
+    if (r) goto done;
 
-    struct backup_mailbox *mb = backup_get_mailbox_by_name(open->backup, mbname,
-                                                           want_records);
+    mb = backup_get_mailbox_by_name(open->backup, mbname, want_records);
     if (!mb) {
         r = IMAP_MAILBOX_NONEXISTENT;
         goto done;
@@ -1211,14 +1217,13 @@ static void cmd_get(struct dlist *dl)
     ucase(dl->name);
 
     if (strcmp(dl->name, "USER") == 0) {
+        struct open_backup *open = NULL;
+
         mbname = mbname_from_userid(dl->sval);
-        struct open_backup *open = backupd_open_backup(mbname);
-        if (!open) {
-            r = IMAP_INTERNAL;
-            goto done;
-        }
-        r = backup_mailbox_foreach(open->backup, 0, 0,
-                                   backupd_print_mailbox, NULL);
+        r = backupd_open_backup(&open, mbname);
+        if (!r)
+            r = backup_mailbox_foreach(open->backup, 0, 0,
+                                       backupd_print_mailbox, NULL);
     }
     else if (strcmp(dl->name, "MAILBOXES") == 0) {
         struct dlist *di;
@@ -1244,7 +1249,6 @@ static void cmd_get(struct dlist *dl)
         r = IMAP_PROTOCOL_ERROR;
     }
 
-done:
     if (mbname) mbname_free(&mbname);
 
     prot_printf(backupd_out, "%s\r\n", backupd_response(r));
