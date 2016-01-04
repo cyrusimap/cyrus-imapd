@@ -44,10 +44,14 @@
 #include <config.h>
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include <assert.h>
+#include <errno.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "lib/cyrusdb.h"
 #include "lib/exitcodes.h"
@@ -68,12 +72,14 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    %s [options] list [list_opts] [[mode] backup...]\n", argv0);
     fprintf(stderr, "    %s [options] lock [lock_opts] [mode] backup\n", argv0);
     fprintf(stderr, "    %s [options] reindex [mode] backup...\n", argv0);
     fprintf(stderr, "    %s [options] verify [mode] backup...\n", argv0);
 
     fprintf(stderr, "\n%s\n",
             "Commands:\n"
+            "    list [list_opts]    # list backups (all if none specified)\n"
             "    lock [lock_opts]    # lock specified backup\n"
             "    reindex             # reindex specified backups\n"
             "    verify              # verify specified backups\n"
@@ -83,6 +89,10 @@ static void usage(void)
             "Options:\n"
             "    -C alt_config       # alternate config file\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
+    );
+
+    fprintf(stderr, "%s\n",
+            "List options:\n"
     );
 
     fprintf(stderr, "%s\n",
@@ -414,14 +424,58 @@ static int cmd_delete_one(void *rock,
 }
 
 static int cmd_list_one(void *rock,
-                        const char *userid, size_t userid_len,
-                        const char *fname, size_t fname_len)
+                        const char *key, size_t key_len,
+                        const char *data, size_t data_len)
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
-    (void) options;
-    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
-            userid, userid_len, fname, fname_len);
-    return -1;
+    char *userid = NULL;
+    char *fname = NULL;
+    int r = 0;
+
+    /* input args might not be 0-terminated, so make a safe copy */
+    if (key_len)
+        userid = xstrndup(key, key_len);
+    if (data_len)
+        fname = xstrndup(data, data_len);
+
+    /* FIXME iterate backups.db and try to find the user */
+    if (!userid) userid = xstrdup("(unknown user)");
+
+    printf("%s\t%s", userid, fname);
+
+    if (options->verbose) {
+        struct backup *backup = NULL;
+        struct stat stat_buf;
+
+        r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+
+        if (r) {
+            fprintf(stderr, "%s: %s\n", fname, error_message(r));
+            goto done;
+        }
+
+        /* we're holding the lock, so fname/fd won't move under us */
+        r = stat(fname, &stat_buf);
+        if (r) {
+            fprintf(stderr, "stat %s: %s", fname, strerror(errno));
+            goto close;
+        }
+
+        /* FIXME handle decreasing verbosity levels here */
+
+        printf("\t" OFF_T_FMT, stat_buf.st_size);
+
+close:
+        backup_close(&backup);
+    }
+
+done:
+    printf("\n");
+
+    if (userid) free(userid);
+    if (fname) free(fname);
+
+    return r;
 }
 
 static int lock_run_pipe(const char *userid, const char *fname)
