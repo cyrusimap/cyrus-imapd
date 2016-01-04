@@ -1128,7 +1128,8 @@ static void cmd_apply(struct dlist *dl)
         r = IMAP_PROTOCOL_ERROR;
     }
 
-    syslog(LOG_DEBUG, "sending response to %s: %i", dl->name, r);
+    syslog(LOG_DEBUG, "sending response to %s: %i (%s)",
+           dl->name, r, error_message(r));
     prot_printf(backupd_out, "%s\r\n", backupd_response(r));
 }
 
@@ -1263,6 +1264,8 @@ static void cmd_get(struct dlist *dl)
 
     if (mbname) mbname_free(&mbname);
 
+    syslog(LOG_DEBUG, "sending response to %s: %i (%s)",
+           dl->name, r, error_message(r));
     prot_printf(backupd_out, "%s\r\n", backupd_response(r));
 }
 
