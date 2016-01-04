@@ -3201,7 +3201,6 @@ static int jmap_message_write(json_t *msg, FILE *out, struct jmap_req *req)
     JMAP_MESSAGE_WRITE_HEADER("Message-ID", d.msgid);
     JMAP_MESSAGE_WRITE_HEADER("User-Agent", d.mua);
     JMAP_MESSAGE_WRITE_HEADER("Content-Type", d.contenttype);
-    /* XXX Decode and write custom headers */
 #undef JMAP_MESSAGE_WRITE_HEADER
     r = fputs("\r\n", out);
     if (r == EOF) goto done;
