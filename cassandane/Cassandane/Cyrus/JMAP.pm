@@ -4430,7 +4430,7 @@ sub test_setmessages_draft
     $self->assert_equals($msg->{isDraft}, JSON::true);
 }
 
-sub test_setmessages_send_error
+sub test_setmessages_invalid_mailaddr
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4449,6 +4449,7 @@ sub test_setmessages_send_error
     $self->assert_not_null($res->[0][1]{created});
     my $outbox = $res->[0][1]{created}{"#1"}{id};
 
+    xlog "Send a message with invalid replyTo property";
     my $draft =  {
         mailboxIds => [$outbox],
         from => { name => "Yosemite Sam", email => "sam\@acme.local" },
@@ -4457,11 +4458,21 @@ sub test_setmessages_send_error
         subject => "Memo",
         textBody => "I'm givin' ya one last chance ta surrenda!",
     };
-
-    xlog "Send a message with bad replyTo";
     $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, 'invalidProperties');
     $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{properties}[0], 'replyTo.email');
+
+    xlog "Send a message with invalid To header";
+    $draft =  {
+        mailboxIds => [$outbox],
+        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        headers => { "To" => "bugs\@acme.local, a\@bad\@address\@acme.local" },
+        subject => "Memo",
+        textBody => "I'm givin' ya one last chance ta surrenda!",
+    };
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, 'invalidProperties');
+    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{properties}[0], 'header[To]');
 }
 
 sub test_setcalendarevents_schedule_request
