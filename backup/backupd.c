@@ -1239,9 +1239,11 @@ static void cmd_get(struct dlist *dl)
         struct dlist *di;
         if (is_mailboxes_single_user(dl)) {
             for (di = dl->head; di; di = di->next) {
-                cmd_get_mailbox(di, 0);
+                r = cmd_get_mailbox(di, 0);
+                /* it's not an error for a mailbox to not exist here */
+                if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+                if (r) break;
             }
-            r = 0; /* sync proto expects this to always report success */
         }
         else {
             /* reject MAILBOXES requests that span multiple users.
