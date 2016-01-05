@@ -3315,10 +3315,7 @@ static void jmap_message_validate(json_t *arg,
     if (pe > 0 && bval) {
         json_array_append_new(invalid, json_string("isUnread"));
     }
-    pe = jmap_readprop(arg, "isFlagged", 0, invalid, "b", &bval);
-    if (pe > 0 && bval) {
-        json_array_append_new(invalid, json_string("isFlagged"));
-    }
+    jmap_readprop(arg, "isFlagged", 0, invalid, "b", &bval);
     pe = jmap_readprop(arg, "isAnswered", 0, invalid, "b", &bval);
     if (pe > 0 && bval) {
         json_array_append_new(invalid, json_string("isAnswered"));
@@ -3542,7 +3539,6 @@ static int jmap_message_create(json_t *msg,
     r = append_commit(&as);
     if (r) goto done;
 
-    /* Mark new message as draft */
     /* Read index record for new message (always the last one) */
     struct index_record record;
     memset(&record, 0, sizeof(struct index_record));
@@ -3550,7 +3546,15 @@ static int jmap_message_create(json_t *msg,
     record.uid = mbox->i.last_uid;
     r = mailbox_reload_index_record(mbox, &record);
     if (r) goto done;
+
+    /* Mark as draft */
     record.system_flags |= FLAG_DRAFT;
+    /* Mark as flagged, if requested */
+    if (json_object_get(msg, "isFlagged") == json_true()) {
+        record.system_flags |= FLAG_FLAGGED;
+    }
+
+    /* Save record */
     r = mailbox_rewrite_index_record(mbox, &record);
     if (r) goto done;
 
