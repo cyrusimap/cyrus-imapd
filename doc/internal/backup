@@ -503,7 +503,7 @@ lock_opts:
     -p                  # lock backup and wait for eof on stdin (default)
 
 list_opts:
-    -t [hours]          # "stale" backups (no update in hours) only (default: 24)
+    -t [hours]          # "stale" (no update in hours) backups only (default: 24)
 
 
 partitions
