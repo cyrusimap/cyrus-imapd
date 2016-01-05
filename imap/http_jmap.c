@@ -3256,6 +3256,14 @@ done:
     return r;
 }
 
+/* Validate if the JMAP message arg is a valid draft of email.
+ *
+ * If From is not set in a draft, use the userid of the JMAP request req as
+ * value. Use the id map in req to lookup creation ids.
+ *
+ * Report any invalid properties in the JSON array invalid, store any setError
+ * in err.
+ */
 static void jmap_message_validate(json_t *arg,
                                   json_t **err,
                                   json_t *invalid,
