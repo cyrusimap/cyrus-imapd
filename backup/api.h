@@ -83,9 +83,35 @@ enum {
 #define BACKUP_VERIFY_FULL  ((unsigned) -1)
 int backup_verify(struct backup *backup, unsigned level, int verbose, FILE *out);
 
+
 /* accessing backup properties */
 const char *backup_get_data_fname(const struct backup *backup);
 const char *backup_get_index_fname(const struct backup *backup);
+
+
+/* reading backup chunk data */
+struct backup_chunk {
+    struct backup_chunk *next;
+    int id;
+    time_t ts_start;
+    time_t ts_end;
+    off_t offset;
+    size_t length;
+    char *file_sha1;
+    char *data_sha1;
+};
+
+struct backup_chunk_list {
+    struct backup_chunk *head;
+    struct backup_chunk *tail;
+    size_t count;
+};
+
+void backup_chunk_list_add(struct backup_chunk_list *list,
+                           struct backup_chunk *chunk);
+void backup_chunk_list_empty(struct backup_chunk_list *list);
+void backup_chunk_list_free(struct backup_chunk_list **chunk_listp);
+struct backup_chunk_list *backup_get_chunks(struct backup *backup);
 
 
 /* reading backup mailbox data */
@@ -171,6 +197,7 @@ void backup_mailbox_message_free(struct backup_mailbox_message **mailbox_message
 
 void backup_mailbox_list_empty(struct backup_mailbox_list *list);
 void backup_mailbox_message_list_empty(struct backup_mailbox_message_list *list);
+
 
 /* reading backup message data */
 struct backup_message {

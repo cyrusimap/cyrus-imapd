@@ -694,3 +694,75 @@ EXPORTED int backup_message_foreach(struct backup *backup, int chunk_id,
 
     return sqldb_exec(backup->db, sql, bval, _message_row_cb, &mrock);
 }
+
+EXPORTED void backup_chunk_list_add(struct backup_chunk_list *list,
+                                    struct backup_chunk *chunk)
+{
+    /* n.b. always inserts at head */
+    chunk->next = list->head;
+    list->head = chunk;
+    if (!list->tail)
+        list->tail = chunk;
+
+    list->count++;
+}
+
+EXPORTED void backup_chunk_list_empty(struct backup_chunk_list *list)
+{
+    struct backup_chunk *curr, *next;
+    curr = list->head;
+    while (curr) {
+        next = curr->next;
+        if (curr->file_sha1) free(curr->file_sha1);
+        if (curr->data_sha1) free(curr->data_sha1);
+        free(curr);
+        curr = next;
+    }
+
+    list->head = list->tail = NULL;
+    list->count = 0;
+}
+
+EXPORTED void backup_chunk_list_free(struct backup_chunk_list **chunk_listp)
+{
+    struct backup_chunk_list *chunk_list = *chunk_listp;
+    *chunk_listp = NULL;
+
+    backup_chunk_list_empty(chunk_list);
+    free(chunk_list);
+}
+
+static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct backup_chunk_list *list = (struct backup_chunk_list *) rock;
+
+    struct backup_chunk *chunk = xzmalloc(sizeof(*chunk));
+
+    int column = 0;
+    chunk->id = _column_int(stmt, column++);
+    chunk->ts_start = _column_int64(stmt, column++);
+    chunk->ts_end = _column_int64(stmt, column++);
+    chunk->offset = _column_int64(stmt, column++);
+    chunk->length = _column_int64(stmt, column++);
+    chunk->file_sha1 = _column_text(stmt, column++);
+    chunk->data_sha1 = _column_text(stmt, column++);
+
+    backup_chunk_list_add(list, chunk);
+
+    return 0;
+}
+
+EXPORTED struct backup_chunk_list *backup_get_chunks(struct backup *backup)
+{
+    struct backup_chunk_list *chunk_list = xzmalloc(sizeof *chunk_list);
+
+    int r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
+                       NULL, chunk_select_cb, chunk_list);
+
+    if (r) {
+        backup_chunk_list_free(&chunk_list);
+        return NULL;
+    }
+
+    return chunk_list;
+}
