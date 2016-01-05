@@ -738,6 +738,8 @@ char *jmap_mailbox_role(const char *mboxname)
     /* Is it an outbox? */
     if (mboxname_isoutbox(mboxname)) return xstrdup("outbox");
 
+    /* XXX How to determine the templates role? */
+
     /* Does this mailbox have an IMAP special use role? */
     r = annotatemore_lookup(mboxname, "/specialuse", httpd_userid, &buf);
 
