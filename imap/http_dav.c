@@ -362,6 +362,32 @@ static const struct precond_t {
 };
 
 
+/* Check ACL on userid's principal (Inbox): ANY right gives access */
+static int principal_acl_check(const char *userid, struct auth_state *authstate)
+{
+    int r = 0;
+
+    if (!httpd_userisadmin) {
+        char *inboxname = mboxname_user_mbox(userid, NULL);
+        mbentry_t *mbentry = NULL;
+
+        r = http_mlookup(inboxname, &mbentry, NULL);
+        if (r) {
+            syslog(LOG_ERR, "mlookup(%s) failed: %s",
+                   inboxname, error_message(r));
+        }
+        else if (!(httpd_myrights(authstate, mbentry->acl) & ACL_FULL)) {
+            r = HTTP_NOT_FOUND;
+        }
+
+        mboxlist_entry_free(&mbentry);
+        free(inboxname);
+    }
+
+    return r;
+}
+
+
 /* Parse request-target path in DAV principals namespace */
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr)
@@ -401,7 +427,10 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         tgt->userid = xstrndup(p, len);
 
         p += len;
-        if (!*p || !*++p) return 0;
+        if (!*p || !*++p) {
+            /* Check ACL for current user */
+            return principal_acl_check(tgt->userid, httpd_authstate);
+        }
     }
     else if (!strncmp(p, SERVER_INFO, len)) {
         p += len;
@@ -6350,28 +6379,18 @@ struct search_crit {
 };
 
 
-/* mboxlist_findall() callback to find user principals (has Inbox) */
-static int principal_search(const char *mboxname, int matchlen,
-                            int maycreate __attribute__((unused)),
-                            void *rock)
+/* mboxlist_alluser() callback to find user principals (has Inbox) */
+static int principal_search(const char *userid, void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    char *userid = mboxname_to_userid(mboxname);
-    mbentry_t *mbentry = NULL;
     struct search_crit *search_crit;
     size_t len;
     char *p;
 
-    /* If this function is called outside of mboxlist_findall()
-     * with matchlen == 0, this is a mailbox of the authenticated user
-     * and we always process it.  Otherwise it's just one of many found
-     * and we need to check the ACL for the authenticated user */
-    if (matchlen &&
-        (mboxlist_lookup(mboxname, &mbentry, NULL) ||
-         !(httpd_myrights(httpd_authstate, mbentry->acl) & DACL_SCHED))) {
-        goto bad;
-    }
+    /* Check ACL for current user */
+    if (principal_acl_check(userid, httpd_authstate)) return 0;
 
+    /* Check against search criteria */
     for (search_crit = (struct search_crit *) fctx->filter_crit;
          search_crit; search_crit = search_crit->next) {
         struct strlist *prop;
@@ -6379,7 +6398,7 @@ static int principal_search(const char *mboxname, int matchlen,
         for (prop = search_crit->props; prop; prop = prop->next) {
             if (!strcmp(prop->s, "displayname")) {
                 if (!xmlStrcasestr(BAD_CAST userid,
-                                   search_crit->match)) goto bad;
+                                   search_crit->match)) return 0;
             }
             else if (!strcmp(prop->s, "calendar-user-address-set")) {
                 char email[MAX_MAILBOX_NAME+1];
@@ -6387,11 +6406,11 @@ static int principal_search(const char *mboxname, int matchlen,
                 snprintf(email, MAX_MAILBOX_NAME, "%s@%s",
                          userid, config_servername);
                 if (!xmlStrcasestr(BAD_CAST email,
-                                   search_crit->match)) goto bad;
+                                   search_crit->match)) return 0;
             }
             else if (!strcmp(prop->s, "calendar-user-type")) {
                 if (!xmlStrcasestr(BAD_CAST "INDIVIDUAL",
-                                   search_crit->match)) goto bad;
+                                   search_crit->match)) return 0;
             }
         }
     }
@@ -6402,13 +6421,9 @@ static int principal_search(const char *mboxname, int matchlen,
     snprintf(p, MAX_MAILBOX_PATH - len, "/user/%s/", userid);
 
     free(fctx->req_tgt->userid);
-    fctx->req_tgt->userid = userid;
+    fctx->req_tgt->userid = xstrdup(userid);
 
     return xml_add_response(fctx, 0, 0);
-
-bad:
-    free(userid);
-    return 0;
 }
 
 
@@ -6532,17 +6547,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
     if (apply_prin_set || !fctx->req_tgt->userid) {
         /* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
 
-        /* Add response for authenticated user */
-        char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
-        principal_search(inboxname, 0, 0, fctx);
-        free(inboxname);
-
-        /* Add responses for all other users with a scheduling Inbox on server
-           (as admin because we only need SCHED rights, not LIST) */
-        inboxname = caldav_mboxname("%" /* IMAP wildcard */, SCHED_INBOX);
-        ret = mboxlist_findall(&httpd_namespace, inboxname, 1, httpd_userid,
-                               httpd_authstate, principal_search, fctx);
-        free(inboxname);
+        ret = mboxlist_alluser(principal_search, fctx);
     }
 
   done:
