@@ -2115,6 +2115,15 @@ static json_t *jmap_message_from_record(const char *id,
     /* XXX hasAttachment */
 
     /* headers */
+    /* XXX
+     * JMAP Spec: getMessages:
+     * headers.property: Instead of requesting all the headers (by requesting
+     * the "headers" property, the client may specify the particular headers it
+     * wants using the headers.property-name syntax, e.g.
+     * "headers.X-Spam-Score", "headers.X-Spam-Hits"). The server will return a
+     * headers property but with just the requested headers in the object
+     * rather than all headers.
+     */
     if (_wantprop(props, "headers")) {
         /* XXX compiler error: undefined reference to 'message_get_header'
         message_get_header(m, MESSAGE_DECODED, &buf);
@@ -2235,6 +2244,12 @@ static json_t *jmap_message_from_record(const char *id,
     }
     /* textBody */
     /* htmlBody */
+    /* XXX
+     * JMAP Spec: getMessages:
+     * body: If "body" is included in the list of requested properties, it will
+     * be interpreted by the server as a request for "htmlBody" if the message
+     * has an HTML part, or "textBody" otherwise.
+     */
     /* preview */
     if (_wantprop(props, "textBody") ||_wantprop(props, "htmlBody") || _wantprop(props, "preview")) {
         message_foreach_text_section(m, &jmap_message_bodies_cb, &d);
