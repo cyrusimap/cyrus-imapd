@@ -1287,6 +1287,8 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 
     if (fctx->req_tgt->userid)
         xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
+    else
+        xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
     return 0;
 }
