@@ -60,83 +60,19 @@ extern const char *_sha1_file(int fd, const char *fname, size_t limit,
                               char buf[2 * SHA1_DIGEST_LENGTH + 1]);
 /***********************************************/
 
-/* FIXME do this properly too */
-int _column_int(sqlite3_stmt *stmt, int column);
-sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column);
-char * _column_text(sqlite3_stmt *stmt, int column);
-/***********************************************/
-
-struct chunk {
-    struct chunk *next;
-    int id;
-    time_t ts_start;
-    time_t ts_end;
-    off_t offset;
-    size_t length;
-    char *file_sha1;
-    char *data_sha1;
-};
-
-struct chunk_list {
-    struct chunk *head;
-    struct chunk *tail;
-};
-
-static void chunk_list_add(struct chunk_list *list, struct chunk *chunk) {
-    /* n.b. always inserts at head */
-    chunk->next = list->head;
-    list->head = chunk;
-    if (!list->tail)
-        list->tail = chunk;
-}
-
-static void chunk_list_empty(struct chunk_list *list) {
-    struct chunk *curr, *next;
-    curr = list->head;
-    while (curr) {
-        next = curr->next;
-        if (curr->file_sha1) free(curr->file_sha1);
-        if (curr->data_sha1) free(curr->data_sha1);
-        free(curr);
-        curr = next;
-    }
-
-    list->head = list->tail = NULL;
-}
-
-static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
+static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *chunk,
                                   struct gzuncat *gzuc, int verbose,
                                   FILE *out);
-static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
+static int verify_chunk_messages(struct backup *backup, struct backup_chunk *chunk,
                                  struct gzuncat *gzuc, unsigned level,
                                  int verbose, FILE *out);
-static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk,
+static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk *chunk,
                                       struct gzuncat *gzuc, int verbose,
                                       FILE *out);
 
-static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
-{
-    struct chunk_list *list = (struct chunk_list *) rock;
-
-    struct chunk *chunk = xzmalloc(sizeof(*chunk));
-
-    int column = 0;
-    chunk->id = _column_int(stmt, column++);
-    chunk->ts_start = _column_int64(stmt, column++);
-    chunk->ts_end = _column_int64(stmt, column++);
-    chunk->offset = _column_int64(stmt, column++);
-    chunk->length = _column_int64(stmt, column++);
-    chunk->file_sha1 = _column_text(stmt, column++);
-    chunk->data_sha1 = _column_text(stmt, column++);
-
-    chunk_list_add(list, chunk);
-
-    return 0;
-}
-
 EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, FILE *out)
 {
-    struct chunk_list chunk_list = {0};
+    struct backup_chunk_list *chunk_list = NULL;
     struct gzuncat *gzuc = NULL;
     int r = 0;
 
@@ -148,10 +84,8 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, F
     if ((level & BACKUP_VERIFY_MESSAGE_GUIDS))
         level &= ~BACKUP_VERIFY_MESSAGE_LINKS;
 
-    r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
-                       NULL, chunk_select_cb, &chunk_list);
-    if (r) goto done;
-    if (!chunk_list.head) goto done;
+    chunk_list = backup_get_chunks(backup);
+    if (!chunk_list || !chunk_list->count) goto done;
 
     gzuc = gzuc_new(backup->fd);
     if (!gzuc) {
@@ -160,10 +94,10 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, F
     }
 
     if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
-        r = verify_chunk_checksums(backup, chunk_list.head, gzuc, verbose, out);
+        r = verify_chunk_checksums(backup, chunk_list->head, gzuc, verbose, out);
 
     if (!r && level > BACKUP_VERIFY_LAST_CHECKSUM) {
-        struct chunk *chunk = chunk_list.head;
+        struct backup_chunk *chunk = chunk_list->head;
         while (!r && chunk) {
             if (!r && (level & BACKUP_VERIFY_ALL_CHECKSUMS))
                 r = verify_chunk_checksums(backup, chunk, gzuc, verbose, out);
@@ -180,11 +114,11 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, F
 
 done:
     if (gzuc) gzuc_free(&gzuc);
-    chunk_list_empty(&chunk_list);
+    if (chunk_list) backup_chunk_list_free(&chunk_list);
     return r;
 }
 
-static int verify_chunk_checksums(struct backup *backup, struct chunk *chunk,
+static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *chunk,
                                   struct gzuncat *gzuc, int verbose, FILE *out)
 {
     int r;
@@ -346,7 +280,7 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
 }
 
 /* verify that each message exists within the chunk the index claims */
-static int verify_chunk_messages(struct backup *backup, struct chunk *chunk,
+static int verify_chunk_messages(struct backup *backup, struct backup_chunk *chunk,
                                  struct gzuncat *gzuc, unsigned level,
                                  int verbose, FILE *out)
 {
@@ -490,7 +424,7 @@ static int mailbox_message_matches(const struct backup_mailbox_message *mailbox_
 /* verify that the matching MAILBOX exists within the claimed chunk
  * for each mailbox or mailbox_message in the index
  */
-static int verify_chunk_mailbox_links(struct backup *backup, struct chunk *chunk,
+static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk *chunk,
                                       struct gzuncat *gzuc, int verbose, FILE *out)
 {
     /*
