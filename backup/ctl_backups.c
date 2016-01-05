@@ -558,6 +558,9 @@ static int lock_run_sqlite(const char *userid, const char *fname)
     return r;
 }
 
+static const char data_fname_env[] = "ctl_backups_lock_data_fname";
+static const char index_fname_env[] = "ctl_backups_lock_index_fname";
+
 static int lock_run_exec(const char *userid, const char *fname, const char *cmd)
 {
     fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
@@ -574,7 +577,13 @@ static int lock_run_exec(const char *userid, const char *fname, const char *cmd)
         return EC_SOFTWARE;
     }
 
+    setenv(data_fname_env, fname, 1);
+    setenv(index_fname_env, backup_get_index_fname(backup), 1);
+
     r = system(cmd);
+
+    unsetenv(data_fname_env);
+    unsetenv(index_fname_env);
 
     if (r == -1)
         r = EC_SOFTWARE;
