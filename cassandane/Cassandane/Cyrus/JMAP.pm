@@ -4428,6 +4428,43 @@ sub test_setmessages_draft
     $self->assert_str_equals($msg->{htmlBody}, $draft->{htmlBody});
     $self->assert_str_equals($msg->{headers}->{Foo}, $draft->{headers}->{Foo});
     $self->assert_equals($msg->{isDraft}, JSON::true);
+    $self->assert_equals($msg->{isFlagged}, JSON::false);
+}
+
+sub test_setmessages_flagged
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $drafts = $res->[0][1]{created}{"#1"}{id};
+
+    my $draft =  {
+        mailboxIds => [$drafts],
+        isFlagged => JSON::true,
+        textBody => "a flagged draft"
+    };
+
+    xlog "Create a draft";
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Get draft $id";
+    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+
+    $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
+    $self->assert_equals($msg->{isFlagged}, JSON::true);
 }
 
 sub test_setmessages_invalid_mailaddr
