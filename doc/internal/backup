@@ -2,24 +2,27 @@ Notes for backup implementation
 
 Backup index database (one per user):
 
-backup:
+chunk:
     int id
     timestamp ts
     int offset
     int length
+    text file_sha1              -> sha1 of (compressed) data prior to this chunk
+    text data_sha1              -> sha1 of (uncompressed) data contained in this chunk
 
-backup_mailbox:
+mailbox:
     int id
-    int backup_id
-    char uniqueid
-    char mboxname
+    int last_chunk_id           -> chunk that knows the current state
+    char uniqueid               -> unique
+    char mboxname               -> altered by a rename
+    char mboxtype
     int last_uid
     int highestmodseq
     int recentuid
     timestamp recenttime
     timestamp last_appenddate
-    ? pop3_last_login
-    ? pop3_show_after
+    timestamp pop3_last_login
+    timestamp pop3_show_after
     timestamp uidvalidity
     char partition
     char acl
@@ -28,41 +31,35 @@ backup_mailbox:
     int sync_crc_annot
     char quotaroot
     int xconvmodseq
-    [annotations]
-
-mailbox_record:
-    char mailbox_uniqueid
-    int uid
-    int modseq
-    timestamp last_updated
-    [flags]
-    timestamp internaldate
-    int size
-    char guid
-    [annotations]
-    boolean expunged # duplicated from [flags]?
+    char annotations
+    timestamp deleted           -> set by unmailbox i guess
 
 message:
     int id
-    char partition
     char guid
-    int backup_id
-    int offset
-    int length
+    char partition              -> this is used to set the spool directory for the temp file - we might not need it
+    int chunk_id
+    int offset                  -> offset within chunk of dlist containing this message
+    int size                    -> size of this message (n.b. not length of dlist)
+
+mailbox_message:
+    int mailbox_id
+    int message_id
+    int last_chunk_id           -> chunk that has a RECORD in a MAILBOX for this
+    int uid
+    int modseq
+    timestamp last_updated
+    char flags
+    timestamp internaldate
+    int size
+    char annotations
+    timestamp expunged          -> time that it was expunged, or NULL if still alive
+
 
 sieve scripts and messages are both identified by a GUID
 but APPLY SIEVE doesn't take a GUID, it seems to be generated locally?
 the GUID in the response to APPLY SIEVE is generated in the process of
 reading the script from disk (sync_sieve_list_generate)
-
-
-do i need a small table with the current state of the mailboxes, just pointing to the
-most recent backup_mailbox record for each? like:
-
-mailbox:
-    char uniqueid
-    char mboxname
-    int backup_mailbox_id (fk backup_mailbox.id)
 
 
 messages
@@ -297,87 +294,6 @@ incremental backups that's not a problem.  when the compress process hits the
 file it will recompress the data more efficiently.
 
 
-sql snippets
------------
-
-sqlite> select id, backup_id, substr(uniqueid,1,6),mboxname from backup_mailbox;
-id|backup_id|substr(uniqueid,1,6)|mboxname
-1|1|c9b238|fastmail.com!user.seleniumbetauser5
-2|2|c9b238|fastmail.com!user.seleniumbetauser5
-3|3|c9b238|fastmail.com!user.seleniumbetauser5
-4|3|1475ff|fastmail.com!user.seleniumbetauser5.Archive
-5|4|afd5c4|fastmail.com!user.seleniumbetauser5.#calendars.b7eb1eab-a6dc-4ef5-b44f-ac67efcfb5e0
-6|4|6e15a6|fastmail.com!user.seleniumbetauser5.testfolder
-7|5|c9b238|fastmail.com!user.seleniumbetauser5
-8|5|1475ff|fastmail.com!user.seleniumbetauser5.Archive
-9|5|6e15a6|fastmail.com!user.seleniumbetauser5.testfolder renamed
-sqlite> select bm.id, z.backup_id, substr(bm.uniqueid,1,6), bm.mboxname from backup_mailbox as bm inner join ( select uniqueid, max(backup_id) as backup_id from backup_mailbox group by uniqueid) as z on bm.uniqueid = z.uniqueid and bm.backup_id = z.backup_id;
-id|backup_id|substr(bm.uniqueid,1,6)|mboxname
-8|5|1475ff|fastmail.com!user.seleniumbetauser5.Archive
-9|5|6e15a6|fastmail.com!user.seleniumbetauser5.testfolder renamed
-5|4|afd5c4|fastmail.com!user.seleniumbetauser5.#calendars.b7eb1eab-a6dc-4ef5-b44f-ac67efcfb5e0
-7|5|c9b238|fastmail.com!user.seleniumbetauser5
-
-
-redesigned index database
--------------------------
-
-i don't think i need to index every version of every mailbox, just the most recent version
-
-chunk:
-    int id
-    timestamp ts
-    int offset
-    int length
-    text file_sha1              -> sha1 of (compressed) data prior to this chunk
-    text data_sha1              -> sha1 of (uncompressed) data contained in this chunk
-
-mailbox:
-    int id
-    int last_chunk_id           -> chunk that knows the current state
-    char uniqueid               -> unique
-    char mboxname               -> altered by a rename
-    char mboxtype
-    int last_uid
-    int highestmodseq
-    int recentuid
-    timestamp recenttime
-    timestamp last_appenddate
-    timestamp pop3_last_login
-    timestamp pop3_show_after
-    timestamp uidvalidity
-    char partition
-    char acl
-    char options
-    int sync_crc
-    int sync_crc_annot
-    char quotaroot
-    int xconvmodseq
-    char annotations
-    timestamp deleted           -> set by unmailbox i guess
-
-message:
-    int id
-    char guid
-    char partition              -> this is used to set the spool directory for the temp file - we might not need it
-    int chunk_id
-    int offset                  -> offset within chunk of dlist containing this message
-    int size                    -> size of this message (n.b. not length of dlist)
-
-mailbox_message:
-    int mailbox_id
-    int message_id
-    int last_chunk_id           -> chunk that has a RECORD in a MAILBOX for this
-    int uid
-    int modseq
-    timestamp last_updated
-    char flags
-    timestamp internaldate
-    int size
-    char annotations
-    timestamp expunged          -> time that it was expunged, or NULL if still alive
-
-
 questions
 ---------
 * what does it look like when uidvalidity changes?
@@ -494,24 +410,24 @@ algorithm:
 *   close (and unlock) backup.old and backup
 
 
-bu_lock
+command line locking utility
 -------
 
 command line utility to lock a backup (for e.g. safely poking around in the
 .index on a live system).
 
 example failure:
-$bu_lock -f /path/to/backup
+$ctl_backups lock -f /path/to/backup
 * Trying to obtain lock on /path/to/backup...
 NO some error
 <EOF>
 
 example success:
-$bu_lock -f /path/to/backup
+$ctl_backups lock -f /path/to/backup
 * Trying to obtain lock on /path/to/backup...
 [potentially a delay here if we need to wait for another process to release the lock]
 OK locked
-[bu_lock waits for its stdin to close, then unlocks and exits]
+[waits for its stdin to close, then unlocks and exits]
 
 if you need to rummage around in backup.index, run this program in another
 shell, do your work, then ^D it when you're finished.
