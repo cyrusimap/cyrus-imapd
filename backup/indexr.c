@@ -43,6 +43,7 @@
 #include <config.h>
 
 #include <assert.h>
+#include <syslog.h>
 
 #include "lib/xmalloc.h"
 
@@ -713,9 +714,7 @@ EXPORTED void backup_chunk_list_empty(struct backup_chunk_list *list)
     curr = list->head;
     while (curr) {
         next = curr->next;
-        if (curr->file_sha1) free(curr->file_sha1);
-        if (curr->data_sha1) free(curr->data_sha1);
-        free(curr);
+        backup_chunk_free(&curr);
         curr = next;
     }
 
@@ -732,9 +731,14 @@ EXPORTED void backup_chunk_list_free(struct backup_chunk_list **chunk_listp)
     free(chunk_list);
 }
 
-static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
+struct _chunk_row_rock {
+    struct backup_chunk_list *save_list;
+    struct backup_chunk **save_one;
+};
+
+static int _chunk_row_cb(sqlite3_stmt *stmt, void *rock)
 {
-    struct backup_chunk_list *list = (struct backup_chunk_list *) rock;
+    struct _chunk_row_rock *crock = (struct _chunk_row_rock *) rock;
 
     struct backup_chunk *chunk = xzmalloc(sizeof(*chunk));
 
@@ -747,7 +751,16 @@ static int chunk_select_cb(sqlite3_stmt *stmt, void *rock)
     chunk->file_sha1 = _column_text(stmt, column++);
     chunk->data_sha1 = _column_text(stmt, column++);
 
-    backup_chunk_list_add(list, chunk);
+    if (crock->save_list) {
+        backup_chunk_list_add(crock->save_list, chunk);
+    }
+    else if (crock->save_one) {
+        *crock->save_one = chunk;
+    }
+    else {
+        syslog(LOG_DEBUG, "%s: useless invocation with nowhere to save to", __func__);
+        backup_chunk_free(&chunk);
+    }
 
     return 0;
 }
@@ -756,8 +769,10 @@ EXPORTED struct backup_chunk_list *backup_get_chunks(struct backup *backup)
 {
     struct backup_chunk_list *chunk_list = xzmalloc(sizeof *chunk_list);
 
+    struct _chunk_row_rock crock = { chunk_list, NULL };
+
     int r = sqldb_exec(backup->db, backup_index_chunk_select_all_sql,
-                       NULL, chunk_select_cb, chunk_list);
+                       NULL, _chunk_row_cb, &crock);
 
     if (r) {
         backup_chunk_list_free(&chunk_list);
@@ -765,4 +780,31 @@ EXPORTED struct backup_chunk_list *backup_get_chunks(struct backup *backup)
     }
 
     return chunk_list;
+}
+
+EXPORTED struct backup_chunk *backup_get_latest_chunk(struct backup *backup)
+{
+    struct backup_chunk *chunk = NULL;
+    struct _chunk_row_rock crock = { NULL, &chunk };
+
+    int r = sqldb_exec(backup->db, backup_index_chunk_select_latest_sql,
+                       NULL, _chunk_row_cb, &crock);
+
+    if (r) {
+        if (chunk) backup_chunk_free(&chunk);
+        return NULL;
+    }
+
+    return chunk;
+}
+
+EXPORTED void backup_chunk_free(struct backup_chunk **chunkp)
+{
+    struct backup_chunk *chunk = *chunkp;
+    *chunkp = NULL;
+
+    if (chunk->file_sha1) free(chunk->file_sha1);
+    if (chunk->data_sha1) free(chunk->data_sha1);
+
+    free(chunk);
 }

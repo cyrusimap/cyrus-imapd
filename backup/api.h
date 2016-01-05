@@ -113,6 +113,8 @@ void backup_chunk_list_empty(struct backup_chunk_list *list);
 void backup_chunk_list_free(struct backup_chunk_list **chunk_listp);
 struct backup_chunk_list *backup_get_chunks(struct backup *backup);
 
+struct backup_chunk *backup_get_latest_chunk(struct backup *backup);
+void backup_chunk_free(struct backup_chunk **chunkp);
 
 /* reading backup mailbox data */
 struct backup_mailbox_message {
