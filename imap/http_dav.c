@@ -120,6 +120,7 @@ static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
                               struct propstat propstat[], void *rock);
 #define propfind_principalurl  propfind_owner
 
+static int principal_search(const char *userid, void *rock);
 static int report_prin_prop_search(struct transaction_t *txn,
                                    struct meth_params *rparams,
                                    xmlNodePtr inroot,
@@ -216,7 +217,7 @@ static const struct prop_entry principal_props[] = {
 
 static struct meth_params princ_params = {
     .parse_path = &principal_parse_path,
-    .propfind = { DAV_FINITE_DEPTH, principal_props },
+    .propfind = { 0, principal_props },
     .reports = principal_reports
 };
 
@@ -414,13 +415,21 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
     /* Skip namespace */
     p += len;
-    if (!*p || !*++p) return 0;
+    if (!*p || !*++p) {
+        /* Make sure collection is terminated with '/' */
+        if (p[-1] != '/') *p++ = '/';
+        return 0;
+    }
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
     if (!strncmp(p, "user", len)) {
         p += len;
-        if (!*p || !*++p) return 0;
+        if (!*p || !*++p) {
+            /* Make sure collection is terminated with '/' */
+            if (p[-1] != '/') *p++ = '/';
+            return 0;
+        }
 
         /* Get user id */
         len = strcspn(p, "/");
@@ -4969,12 +4978,6 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
     /* Principal or Local Mailbox */
 
-    /* Normalize depth so that:
-     * 0 = home-set, 1+ = collection, 2+ = resource, 3+ = infinity!
-     */
-    if (txn->req_tgt.collection) depth++;
-    if (txn->req_tgt.resource) depth++;
-
     /* Parse the PROPFIND body, if exists */
     ret = parse_xml_body(txn, &root);
     if (ret) goto done;
@@ -5080,57 +5083,97 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Parse the list of properties and build a list of callbacks */
     preload_proplist(props, &fctx);
 
-    if (!txn->req_tgt.collection &&
-        (!depth || !(fctx.prefer & PREFER_NOROOT))) {
-        /* Add response for principal or home-set collection */
-        if (txn->req_tgt.mbentry) {
-            /* Open mailbox for reading */
-            if ((r = mailbox_open_irl(txn->req_tgt.mbentry->name, &fctx.mailbox))
-                && r != IMAP_MAILBOX_NONEXISTENT) {
-                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                       txn->req_tgt.mbentry->name, error_message(r));
-                txn->error.desc = error_message(r);
-                ret = HTTP_SERVER_ERROR;
-                goto done;
+    /* Generate responses */
+    if (txn->req_tgt.namespace == URL_NS_PRINCIPAL) {
+        if (!depth || !(fctx.prefer & PREFER_NOROOT)) {
+            /* Add response for target URL */
+            xml_add_response(&fctx, 0, 0);
+        }
+
+        if (depth > 0 && !txn->req_tgt.userid) {
+            size_t len = strlen(namespace_principal.prefix);
+            char *p = txn->req_tgt.path + len;
+
+            if (!strcmp(p, "/user/")) {
+                /* Normalize depth so that:
+                 * 0 = prin-set, 1+ = collection, 2+ = principal, 3+ = infinity!
+                 */
+                depth++;
+            }
+            else {
+                /* Add a response for 'user' collection */
+                strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
+                xml_add_response(&fctx, 0, 0);
+            }
+
+            if (depth >= 2) {
+                /* Add responses for all user principals */
+                ret = mboxlist_alluser(principal_search, &fctx);
             }
         }
-
-        if (!fctx.req_tgt->resource) xml_add_response(&fctx, 0, 0);
-
-        if (txn->req_tgt.namespace == URL_NS_DRIVE) {
-            /* Resource(s) */
-            r = propfind_by_resources(&fctx);
-            if (r) ret = r;
-        }
-
-        mailbox_close(&fctx.mailbox);
     }
+    else {
+        /* Normalize depth so that:
+         * 0 = home-set, 1+ = collection, 2+ = resource, 3+ = infinity!
+         */
+        if (txn->req_tgt.collection) depth++;
+        if (txn->req_tgt.resource) depth++;
 
-    if (depth > 0) {
-        /* Calendar collection(s) */
-
-        if (txn->req_tgt.collection) {
-            /* Add response for target calendar collection */
-            propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, &fctx);
-        }
-        else {
-            /* Add responses for all calendar collections */
-            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-            r = mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
-                                 httpd_authstate, propfind_by_collection, &fctx);
-
-            if (!strcmp(txn->req_tgt.mbentry->name,
-                        config_getstring(IMAPOPT_DAVDRIVEPREFIX))) {
-                /* Add a response for 'user' hierarchy */
-                buf_setcstr(&fctx.buf, txn->req_tgt.prefix);
-                buf_appendcstr(&fctx.buf, "/user/");
-                strlcpy(fctx.req_tgt->path, buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
-                fctx.mailbox = NULL;
-                r = xml_add_response(&fctx, 0, 0);
+        if (!txn->req_tgt.collection &&
+            (!depth || !(fctx.prefer & PREFER_NOROOT))) {
+            /* Add response for home-set collection */
+            if (txn->req_tgt.mbentry) {
+                /* Open mailbox for reading */
+                if ((r = mailbox_open_irl(txn->req_tgt.mbentry->name,
+                                          &fctx.mailbox))
+                    && r != IMAP_MAILBOX_NONEXISTENT) {
+                    syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                           txn->req_tgt.mbentry->name, error_message(r));
+                    txn->error.desc = error_message(r);
+                    ret = HTTP_SERVER_ERROR;
+                    goto done;
+                }
             }
+
+            if (!fctx.req_tgt->resource) xml_add_response(&fctx, 0, 0);
+
+            if (txn->req_tgt.namespace == URL_NS_DRIVE) {
+                /* Resource(s) */
+                r = propfind_by_resources(&fctx);
+                if (r) ret = r;
+            }
+
+            mailbox_close(&fctx.mailbox);
         }
 
-        ret = *fctx.ret;
+        if (depth > 0) {
+            /* Calendar collection(s) */
+
+            if (txn->req_tgt.collection) {
+                /* Add response for target calendar collection */
+                propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, &fctx);
+            }
+            else {
+                /* Add responses for all calendar collections */
+                int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
+                r = mboxlist_findall(&httpd_namespace, "*", isadmin,
+                                     httpd_userid, httpd_authstate,
+                                     propfind_by_collection, &fctx);
+
+                if (!strcmp(txn->req_tgt.mbentry->name,
+                            config_getstring(IMAPOPT_DAVDRIVEPREFIX))) {
+                    /* Add a response for 'user' hierarchy */
+                    buf_setcstr(&fctx.buf, txn->req_tgt.prefix);
+                    buf_appendcstr(&fctx.buf, "/user/");
+                    strlcpy(fctx.req_tgt->path,
+                            buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
+                    fctx.mailbox = NULL;
+                    r = xml_add_response(&fctx, 0, 0);
+                }
+            }
+
+            ret = *fctx.ret;
+        }
     }
 
     if (fctx.davdb) fctx.close_db(fctx.davdb);
