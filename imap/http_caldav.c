@@ -819,7 +819,7 @@ static int caldav_parse_path(const char *path,
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
-    if (!strncmp(p, "user", len)) {
+    if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
         p += len;
         if (!*p || !*++p) return 0;
 
@@ -2271,8 +2271,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
             assert(!buf_len(&txn->buf));
             http_proto_host(txn->req_hdrs, &proto, &host);
-            buf_printf(&txn->buf, "%s://%s%s/user/%s/%s%s",
+            buf_printf(&txn->buf, "%s://%s%s/%s/%s/%s%s",
                        proto, host, namespace_calendar.prefix,
+                       USER_COLLECTION_PREFIX,
                        txn->req_tgt.userid, MANAGED_ATTACH, uid);
             attach = icalattach_new_from_url(buf_cstring(&txn->buf));
             buf_reset(&txn->buf);
@@ -3299,8 +3300,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         txn->error.precond = CALDAV_UID_CONFLICT;
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-                   namespace_calendar.prefix, owner,
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
                    strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
         free(owner);
@@ -4182,12 +4183,12 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 
     buf_reset(&fctx->buf);
     if (strchr(httpd_userid, '@') || !httpd_extradomain) {
-        buf_printf(&fctx->buf, "%s/user/%s/",
-                   namespace_calendar.prefix, httpd_userid);
+        buf_printf(&fctx->buf, "%s/%s/%s/", namespace_calendar.prefix,
+                   USER_COLLECTION_PREFIX, httpd_userid);
     }
     else {
-        buf_printf(&fctx->buf, "%s/user/%s@%s/",
-                   namespace_calendar.prefix, httpd_userid, httpd_extradomain);
+        buf_printf(&fctx->buf, "%s/%s/%s@%s/", namespace_calendar.prefix,
+                   USER_COLLECTION_PREFIX, httpd_userid, httpd_extradomain);
     }
     if (cal) buf_appendcstr(&fctx->buf, cal);
 

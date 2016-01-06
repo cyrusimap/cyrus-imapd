@@ -385,11 +385,11 @@ static int webdav_parse_path(const char *path,
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
-    if (len && !strncmp(p, "user", len)) {
+    if (len && !strncmp(p, USER_COLLECTION_PREFIX, len)) {
         p += len;
         if (!*p || !*++p) {
             tgt->mbentry = mboxlist_entry_create();
-            tgt->mbentry->name = xstrdup("user");
+            tgt->mbentry->name = xstrdup(USER_COLLECTION_PREFIX);
             tgt->userid = xstrdup("");
             tgt->mbentry->acl = xstrdup("anyone\tlr\t");
             tgt->mbentry->mbtype = MBTYPE_COLLECTION;

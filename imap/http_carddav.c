@@ -489,7 +489,7 @@ static int carddav_parse_path(const char *path,
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
-    if (!strncmp(p, "user", len)) {
+    if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
         p += len;
         if (!*p || !*++p) return 0;
 
@@ -653,15 +653,18 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
 
         if (cdata->dav.imap_uid) {
             /* is it the same one? */
-            if (strcmp(cdata->dav.mailbox, mailbox->name) || strcmp(cdata->dav.resource, resource)) {
+            if (strcmp(cdata->dav.mailbox, mailbox->name) ||
+                strcmp(cdata->dav.resource, resource)) {
                 /* CARDDAV:no-uid-conflict */
                 char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
                 txn->error.precond = CARDDAV_UID_CONFLICT;
                 assert(!buf_len(&txn->buf));
-                buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-                           namespace_addressbook.prefix, owner,
-                           strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
+                buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                           namespace_addressbook.prefix,
+                           USER_COLLECTION_PREFIX, owner,
+                           strrchr(cdata->dav.mailbox, '.')+1,
+                           cdata->dav.resource);
                 txn->error.resource = buf_cstring(&txn->buf);
                 free(owner);
                 return HTTP_FORBIDDEN;
@@ -820,8 +823,8 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
                         name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/", namespace_addressbook.prefix,
-               fctx->req_tgt->userid);
+    buf_printf(&fctx->buf, "%s/%s/%s/", namespace_addressbook.prefix,
+               USER_COLLECTION_PREFIX, fctx->req_tgt->userid);
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
         /* Return properties for this URL */

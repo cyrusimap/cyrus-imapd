@@ -688,12 +688,12 @@ static void _add_xhref(json_t *obj, const char *mboxname, const char *resource)
     }
 
     if (strchr(userid, '@') || !httpd_extradomain) {
-        buf_printf(&buf, "%s/user/%s/%s",
-                   prefix, userid, strrchr(mboxname, '.')+1);
+        buf_printf(&buf, "%s/%s/%s/%s", prefix, USER_COLLECTION_PREFIX,
+                   userid, strrchr(mboxname, '.')+1);
     }
     else {
-        buf_printf(&buf, "%s/user/%s@%s/%s",
-                   prefix, userid, httpd_extradomain, strrchr(mboxname, '.')+1);
+        buf_printf(&buf, "%s/%s/%s@%s/%s", prefix, USER_COLLECTION_PREFIX,
+                   userid, httpd_extradomain, strrchr(mboxname, '.')+1);
     }
     if (resource)
         buf_printf(&buf, "/%s", resource);

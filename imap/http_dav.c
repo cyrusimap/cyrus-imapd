@@ -423,7 +423,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
-    if (!strncmp(p, "user", len)) {
+    if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
         p += len;
         if (!*p || !*++p) {
             /* Make sure collection is terminated with '/' */
@@ -1432,12 +1432,12 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
         buf_reset(&fctx->buf);
 
         if (strchr(userid, '@') || !httpd_extradomain) {
-            buf_printf(&fctx->buf, "%s/user/%s/",
-                       namespace_principal.prefix, userid);
+            buf_printf(&fctx->buf, "%s/%s/%s/", namespace_principal.prefix,
+                       USER_COLLECTION_PREFIX, userid);
         }
         else {
-            buf_printf(&fctx->buf, "%s/user/%s@%s/",
-                       namespace_principal.prefix, userid, httpd_extradomain);
+            buf_printf(&fctx->buf, "%s/%s/%s@%s/", namespace_principal.prefix,
+                       USER_COLLECTION_PREFIX, userid, httpd_extradomain);
         }
 
         if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
@@ -1853,14 +1853,14 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
             xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
         else if (!strncmp(userid, "group:", 6)) {
             buf_reset(&fctx->buf);
-            buf_printf(&fctx->buf, "%s/group/%s/",
-                       namespace_principal.prefix, userid+6);
+            buf_printf(&fctx->buf, "%s/%s/%s/", namespace_principal.prefix,
+                       GROUP_COLLECTION_PREFIX, userid+6);
             xml_add_href(node, NULL, buf_cstring(&fctx->buf));
         }
         else {
             buf_reset(&fctx->buf);
-            buf_printf(&fctx->buf, "%s/user/%s/",
-                       namespace_principal.prefix, userid);
+            buf_printf(&fctx->buf, "%s/%s/%s/", namespace_principal.prefix,
+                       USER_COLLECTION_PREFIX, userid);
             xml_add_href(node, NULL, buf_cstring(&fctx->buf));
         }
 
@@ -3231,7 +3231,8 @@ static int move_collection(const mbentry_t *mbentry, void *rock)
                 mbname_domain(mbname) ? mbname_domain(mbname) :
                 httpd_extradomain;
 
-            buf_printf(&href, "/user/%s", mbname_localpart(mbname));
+            buf_printf(&href, "/%s/%s",
+                       USER_COLLECTION_PREFIX, mbname_localpart(mbname));
             if (domain) buf_printf(&href, "@%s", domain);
         }
         buf_putc(&href, '/');
@@ -4823,7 +4824,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         if (strlen(mboxname) < len) goto done;
         if (strncmp(mboxname, fctx->req_tgt->mbentry->name, len)) goto done;
         p = (char *) mboxname + len;
-        if (!strcmp(fctx->req_tgt->mbentry->name, "user")) {
+        if (!strcmp(fctx->req_tgt->mbentry->name, USER_COLLECTION_PREFIX)) {
             /* Special case of listing users with DAV #drives */
             p = strchr(mboxname+5, '.');
         }
@@ -4855,7 +4856,8 @@ int propfind_by_collection(const char *mboxname, int matchlen,
                 mbname_domain(mbname) ? mbname_domain(mbname) :
                 httpd_extradomain;
 
-            buf_printf(&writebuf, "/user/%s", mbname_localpart(mbname));
+            buf_printf(&writebuf, "/%s/%s",
+                       USER_COLLECTION_PREFIX, mbname_localpart(mbname));
             if (domain) buf_printf(&writebuf, "@%s", domain);
         }
         buf_putc(&writebuf, '/');
@@ -5094,7 +5096,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             size_t len = strlen(namespace_principal.prefix);
             char *p = txn->req_tgt.path + len;
 
-            if (!strcmp(p, "/user/")) {
+            if (!strcmp(p, "/" USER_COLLECTION_PREFIX "/")) {
                 /* Normalize depth so that:
                  * 0 = prin-set, 1+ = collection, 2+ = principal, 3+ = infinity!
                  */
@@ -5102,7 +5104,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             }
             else {
                 /* Add a response for 'user' collection */
-                strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
+                snprintf(p, MAX_MAILBOX_PATH - len,
+                         "/%s/", USER_COLLECTION_PREFIX);
                 xml_add_response(&fctx, 0, 0);
             }
 
@@ -5164,7 +5167,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                             config_getstring(IMAPOPT_DAVDRIVEPREFIX))) {
                     /* Add a response for 'user' hierarchy */
                     buf_setcstr(&fctx.buf, txn->req_tgt.prefix);
-                    buf_appendcstr(&fctx.buf, "/user/");
+                    buf_printf(&fctx.buf, "/%s/", USER_COLLECTION_PREFIX);
                     strlcpy(fctx.req_tgt->path,
                             buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
                     fctx.mailbox = NULL;
@@ -6369,7 +6372,8 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
 
     /* Generate URL for user principal collection */
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/", namespace_principal.prefix);
+    buf_printf(&fctx->buf, "%s/%s/",
+               namespace_principal.prefix, USER_COLLECTION_PREFIX);
 
     /* Allowed properties are for principals, NOT the request URL */
     memset(&req_tgt, 0, sizeof(struct request_target_t));
@@ -6463,7 +6467,8 @@ static int principal_search(const char *userid, void *rock)
     /* Append principal name to URL path */
     len = strlen(namespace_principal.prefix);
     p = fctx->req_tgt->path + len;
-    snprintf(p, MAX_MAILBOX_PATH - len, "/user/%s/", userid);
+    snprintf(p, MAX_MAILBOX_PATH - len, "/%s/%s/",
+             USER_COLLECTION_PREFIX, userid);
 
     free(fctx->req_tgt->userid);
     fctx->req_tgt->userid = xstrdup(userid);

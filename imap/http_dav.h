@@ -75,6 +75,9 @@
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
 
+#define USER_COLLECTION_PREFIX  "user"
+#define GROUP_COLLECTION_PREFIX "group"
+
 /* Index into known namespace array */
 enum {
     NS_REQ_ROOT = -1,   /* special case: ns of request root (not an index) */
