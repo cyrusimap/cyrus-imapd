@@ -4520,9 +4520,9 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
                          struct propstat propstat[],
                          void *rock __attribute__((unused)))
 {
-    const char *type = fctx->req_tgt->userid ? "INDIVIDUAL" : "UNKNOWN";
+    const char *type = fctx->req_tgt->userid ? "INDIVIDUAL" : NULL;
 
-    if (!namespace_calendar.enabled) return HTTP_NOT_FOUND;
+    if (!namespace_calendar.enabled || !type) return HTTP_NOT_FOUND;
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST type, 0);
