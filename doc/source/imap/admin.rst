@@ -13,8 +13,8 @@ Overview
 
     developer/architecture
 
-Configuration
-=============
+Management
+==========
 .. toctree::
     :maxdepth: 2
 
@@ -24,11 +24,11 @@ Configuration
     admin/protlayer
     admin/sieve
     admin/sop
+    admin/eventsource    
     admin/config-mailboxdistribution
     admin/nginx-proxy
 
 .. :todo:
-    Event Source (we need a listener that just logs events to syslog)
     admin/sop/search Search (squat, xapian, ...)
     Alt Namespace / UnixHS
     Split meta
