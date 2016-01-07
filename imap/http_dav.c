@@ -1914,7 +1914,8 @@ EXPORTED int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/", namespace_principal.prefix);
+    buf_printf(&fctx->buf, "%s/%s/",
+               namespace_principal.prefix, USER_COLLECTION_PREFIX);
     xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 
     return 0;
