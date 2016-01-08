@@ -680,7 +680,7 @@ int caldav_create_defaultcalendars(const char *userid)
             }
             mboxlist_entry_free(&mbentry);
         }
-        r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION,
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
                             ACL_ALL | DACL_READFB, DACL_READFB);
     }
 

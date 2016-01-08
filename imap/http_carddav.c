@@ -393,7 +393,7 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
         }
         else r = 0;
 
-        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
+        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_ADDRESSBOOK,
                                    NULL, 0,
                                    userid, httpd_authstate,
                                    0, 0, 0, 0, NULL);
