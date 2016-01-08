@@ -428,6 +428,7 @@ static int cmd_list_one(void *rock,
                         const char *data, size_t data_len)
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
+    struct backup *backup = NULL;
     char *userid = NULL;
     char *fname = NULL;
     int r = 0;
@@ -438,39 +439,14 @@ static int cmd_list_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    /* FIXME iterate backups.db and try to find the user */
-    if (!userid) userid = xstrdup("(unknown user)");
-
-    printf("%s\t%s", userid, fname);
-
-    if (options->verbose) {
-        struct backup *backup = NULL;
-        struct stat stat_buf;
-
-        r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
-
-        if (r) {
-            fprintf(stderr, "%s: %s\n", fname, error_message(r));
-            goto done;
-        }
-
-        /* we're holding the lock, so fname/fd won't move under us */
-        r = stat(fname, &stat_buf);
-        if (r) {
-            fprintf(stderr, "stat %s: %s", fname, strerror(errno));
-            goto close;
-        }
-
-        /* FIXME handle decreasing verbosity levels here */
-
-        printf("\t" OFF_T_FMT, stat_buf.st_size);
-
-close:
+    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+    if (r) {
+        fprintf(stderr, "%s: %s\n", userid ? userid : fname, error_message(r));
+    }
+    else {
+        backup_printinfo(backup, userid, stdout, options->verbose);
         backup_close(&backup);
     }
-
-done:
-    printf("\n");
 
     if (userid) free(userid);
     if (fname) free(fname);
