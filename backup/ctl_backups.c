@@ -93,6 +93,7 @@ static void usage(void)
 
     fprintf(stderr, "%s\n",
             "List options:\n"
+            "    -t [hours]          # stale (no update in hours) backups only (default: 24)\n"
     );
 
     fprintf(stderr, "%s\n",
@@ -429,6 +430,7 @@ static int cmd_list_one(void *rock,
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     struct backup *backup = NULL;
+    struct backup_chunk *chunk = NULL;
     char *userid = NULL;
     char *fname = NULL;
     int r = 0;
@@ -442,12 +444,22 @@ static int cmd_list_one(void *rock,
     r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
     if (r) {
         fprintf(stderr, "%s: %s\n", userid ? userid : fname, error_message(r));
-    }
-    else {
-        backup_printinfo(backup, userid, stdout, options->verbose);
-        backup_close(&backup);
+        goto done;
     }
 
+    if (options->list_stale) {
+        chunk = backup_get_latest_chunk(backup);
+
+        /* skip out early if it's not stale */
+        if (chunk && time(NULL) - chunk->ts_end < 3600 * options->list_stale)
+            goto done;
+    }
+
+    backup_printinfo(backup, userid, stdout, options->verbose);
+
+done:
+    if (chunk) backup_chunk_free(&chunk);
+    if (backup) backup_close(&backup);
     if (userid) free(userid);
     if (fname) free(fname);
 
