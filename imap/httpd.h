@@ -214,7 +214,9 @@ enum {
     TGT_SERVER_INFO = 1,
     TGT_SCHED_INBOX,
     TGT_SCHED_OUTBOX,
-    TGT_MANAGED_ATTACH
+    TGT_MANAGED_ATTACH,
+    TGT_DRIVE_ROOT,
+    TGT_DRIVE_USER
 };
 
 /* Function to parse URI path and generate a mailbox name */

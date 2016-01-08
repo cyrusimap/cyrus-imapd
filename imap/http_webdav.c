@@ -381,6 +381,8 @@ static int webdav_parse_path(const char *path,
     if (!*p || !*++p) {
         /* Make sure collection is terminated with '/' */
         if (p[-1] != '/') *p++ = '/';
+
+        tgt->flags = TGT_DRIVE_ROOT;
     }
 
     /* Check if we're in user space */
@@ -388,6 +390,10 @@ static int webdav_parse_path(const char *path,
     if (len && !strncmp(p, USER_COLLECTION_PREFIX, len)) {
         p += len;
         if (!*p || !*++p) {
+            /* Make sure collection is terminated with '/' */
+            if (p[-1] != '/') *p++ = '/';
+
+            tgt->flags = TGT_DRIVE_USER;
             tgt->mbentry = mboxlist_entry_create();
             tgt->mbentry->name = xstrdup(USER_COLLECTION_PREFIX);
             tgt->userid = xstrdup("");

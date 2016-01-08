@@ -4814,7 +4814,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
             if (strlen(mboxname) < len) goto done;
             if (strncmp(mboxname, fctx->req_tgt->mbentry->name, len)) goto done;
             p = (char *) mboxname + len;
-            if (!strcmp(fctx->req_tgt->mbentry->name, USER_COLLECTION_PREFIX)) {
+            if (fctx->req_tgt->flags == TGT_DRIVE_USER) {
                 /* Special case of listing users with DAV #drives */
                 p = strchr(mboxname+5, '.');
             }
@@ -5172,8 +5172,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                                      httpd_userid, httpd_authstate,
                                      propfind_by_collection, &fctx);
 
-                if (!strcmp(txn->req_tgt.mbentry->name,
-                            config_getstring(IMAPOPT_DAVDRIVEPREFIX))) {
+                if (txn->req_tgt.flags == TGT_DRIVE_ROOT) {
                     /* Add a response for 'user' hierarchy */
                     buf_setcstr(&fctx.buf, txn->req_tgt.prefix);
                     buf_printf(&fctx.buf, "/%s/", USER_COLLECTION_PREFIX);
