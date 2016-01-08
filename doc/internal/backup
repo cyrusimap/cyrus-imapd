@@ -543,7 +543,7 @@ disk usage around.
 * ctl_backups would need a command to pre-create a user backup on a
   given partition for initial distribution
 * instead of "backup_data_path" setting, have one-or-more
-  "backup_partition-<name>" settings, ala partition- and friends
+  "backuppartition-<name>" settings, ala partition- and friends
 
 see imap/partlist.[ch] for partition list management stuff.  it's complicated
 and doesn't have a test suite, so maybe save this implementation until needed.
@@ -607,7 +607,7 @@ exist.  but this is, approximately, where things are heading.)
 on your backup server:
     * compile with --enable-backup configure option and install
     * imapd.conf:
-        backup_data_path: /var/spool/backup
+        backuppartition-default: /var/spool/backup
         backups_db: twoskip
         backups_db_path: /var/imap/backups.db
     * cyrus.conf SERVICES:
@@ -636,9 +636,9 @@ on your imap server:
     * start/restart master
 
 files and such:
-    {configdirectory}/backups.db                    - database mapping userids to backup locations
-    {backup_data_path}/<hash>/<userid>_XXXXXX       - backup data stream for userid
-    {backup_data_path}/<hash>/<userid>_XXXXXX.index - index into userid's backup data stream
+    {configdirectory}/backups.db                        - database mapping userids to backup locations
+    {backuppartition-name}/<hash>/<userid>_XXXXXX       - backup data stream for userid
+    {backuppartition-name}/<hash>/<userid>_XXXXXX.index - index into userid's backup data stream
 
 do i want rhost in the path?
     * protects from issue if multiple servers are trying to back up their own version of same user
@@ -741,7 +741,6 @@ todo list
 * verification step to check entire data stream for errors (even chunks that aren't indexed)
 * prot_fill_cb: extra argument to pass back an error string to prot_fill
 * compress -> compact?
-* rename backup_data_path => backuppartition-default?
 * ctl_backups verify: set level
 * change architecture of struct backup/struct gzuncat so that there's exactly one file
   descriptor ever.  otherwise closing any of the dup's prematurely releases the lock.
@@ -749,3 +748,4 @@ todo list
   -> append: never gzclose, just gzflush(Z_FINISH) and keep the append_state around (done)
   -> _sha1_file: looks ok, uses mmap, doesn't try to close any fds
 * backupd: don't block on locked backups, return mailbox locked -- but sync_client doesn't handle this
+* test multiple backup partitions
