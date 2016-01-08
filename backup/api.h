@@ -55,17 +55,25 @@ enum backup_open_nonblock {
     BACKUP_OPEN_NONBLOCK = 1,
 };
 
+enum backup_open_create {
+    BACKUP_OPEN_NOCREATE = 0,
+    BACKUP_OPEN_CREATE = 1,
+};
+
 int backup_open(struct backup **backupp,
                 const mbname_t *mbname,
-                enum backup_open_nonblock nonblock);
+                enum backup_open_nonblock nonblock,
+                enum backup_open_create create);
 
 int backup_get_paths(const mbname_t *mbname,
-                     struct buf *data_fname, struct buf *index_fname);
+                     struct buf *data_fname, struct buf *index_fname,
+                     enum backup_open_create create);
 
 int backup_open_paths(struct backup **backupp,
                       const char *data_fname,
                       const char *index_fname,
-                      enum backup_open_nonblock nonblock);
+                      enum backup_open_nonblock nonblock,
+                      enum backup_open_create create);
 
 int backup_close(struct backup **backupp); // also ends index/append ops
 

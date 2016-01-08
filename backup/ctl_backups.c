@@ -378,7 +378,7 @@ int main (int argc, char **argv)
                 mbname = mbname_from_intname(argv[i]);
 
             if (mbname) {
-                backup_get_paths(mbname, &fname, NULL);
+                backup_get_paths(mbname, &fname, NULL, BACKUP_OPEN_NOCREATE);
                 buf_setcstr(&userid, mbname_userid(mbname));
             }
             else
@@ -441,7 +441,8 @@ static int cmd_list_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+    r = backup_open_paths(&backup, fname, NULL,
+                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
     if (r) {
         fprintf(stderr, "%s: %s\n", userid ? userid : fname, error_message(r));
         goto done;
@@ -473,7 +474,8 @@ static int lock_run_pipe(const char *userid, const char *fname)
     struct backup *backup = NULL;
     int r;
 
-    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+    r = backup_open_paths(&backup, fname, NULL,
+                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
 
     if (r) {
         printf("NO failed\n");
@@ -502,7 +504,8 @@ static int lock_run_sqlite(const char *userid, const char *fname)
     int r, status;
     pid_t pid;
 
-    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+    r = backup_open_paths(&backup, fname, NULL,
+                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
 
     if (r) {
         fprintf(stderr, "unable to lock %s: %s\n",
@@ -556,7 +559,8 @@ static int lock_run_exec(const char *userid, const char *fname, const char *cmd)
     struct backup *backup = NULL;
     int r;
 
-    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+    r = backup_open_paths(&backup, fname, NULL,
+                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
 
     if (r) {
         fprintf(stderr, "unable to lock %s: %s\n",
@@ -676,7 +680,8 @@ static int cmd_verify_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_open_paths(&backup, fname, NULL, BACKUP_OPEN_NONBLOCK);
+    r = backup_open_paths(&backup, fname, NULL,
+                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
 
     if (r == IMAP_MAILBOX_LOCKED) {
         printf("verify %s: locked\n", userid ? userid : fname);

@@ -95,7 +95,8 @@ enum backup_open_mode {
 static int _open_internal(struct backup **backupp,
                           const char *data_fname, const char *index_fname,
                           enum backup_open_mode mode,
-                          enum backup_open_nonblock nonblock)
+                          enum backup_open_nonblock nonblock,
+                          enum backup_open_create create)
 {
     struct backup *backup = xzmalloc(sizeof *backup);
     int r;
@@ -105,8 +106,11 @@ static int _open_internal(struct backup **backupp,
     backup->data_fname = xstrdup(data_fname);
     backup->index_fname = xstrdup(index_fname);
 
+    int open_flags = O_RDWR | O_APPEND;
+    if (create)
+        open_flags |= O_CREAT;
     backup->fd = open(backup->data_fname,
-                      O_RDWR | O_CREAT | O_APPEND,
+                      open_flags,
                       S_IRUSR | S_IWUSR);
     if (backup->fd < 0) {
         syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
@@ -189,17 +193,18 @@ error:
 
 EXPORTED int backup_open(struct backup **backupp,
                          const mbname_t *mbname,
-                         enum backup_open_nonblock nonblock)
+                         enum backup_open_nonblock nonblock,
+                         enum backup_open_create create)
 {
     struct buf data_fname = BUF_INITIALIZER;
     struct buf index_fname = BUF_INITIALIZER;
 
-    int r = backup_get_paths(mbname, &data_fname, &index_fname);
+    int r = backup_get_paths(mbname, &data_fname, &index_fname, create);
     if (r) goto done;
 
     r = _open_internal(backupp,
                        buf_cstring(&data_fname), buf_cstring(&index_fname),
-                       BACKUP_OPEN_NORMAL, nonblock);
+                       BACKUP_OPEN_NORMAL, nonblock, create);
     if (r) goto done;
 
     r = backup_verify(*backupp, BACKUP_VERIFY_QUICK, 0, NULL);
@@ -292,7 +297,8 @@ error:
 }
 
 EXPORTED int backup_get_paths(const mbname_t *mbname,
-                              struct buf *data_fname, struct buf *index_fname)
+                              struct buf *data_fname, struct buf *index_fname,
+                              enum backup_open_create create)
 {
     char *backups_db_fname = xstrdupnull(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
     if (!backups_db_fname)
@@ -314,7 +320,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                       &backup_path, &path_len,
                       &tid);
 
-    if (r == CYRUSDB_NOTFOUND) {
+    if (r == CYRUSDB_NOTFOUND && create) {
         syslog(LOG_DEBUG, "%s not found in backups.db, creating new record", userid);
         backup_path = _make_path(mbname, NULL);
         if (!backup_path) {
@@ -370,16 +376,17 @@ done:
 EXPORTED int backup_open_paths(struct backup **backupp,
                                const char *data_fname,
                                const char *index_fname,
-                               enum backup_open_nonblock nonblock)
+                               enum backup_open_nonblock nonblock,
+                               enum backup_open_create create)
 {
     if (index_fname)
         return _open_internal(backupp, data_fname, index_fname,
-                              BACKUP_OPEN_NORMAL, nonblock);
+                              BACKUP_OPEN_NORMAL, nonblock, create);
         /* FIXME verify */
 
     char *tmp = strconcat(data_fname, ".index", NULL);
     int r = _open_internal(backupp, data_fname, tmp,
-                           BACKUP_OPEN_NORMAL, nonblock);
+                           BACKUP_OPEN_NORMAL, nonblock, create);
     free(tmp);
     if (r) return r;
 
@@ -776,7 +783,8 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
 
     r = _open_internal(&backup,
                        buf_cstring(&data_fname), buf_cstring(&index_fname),
-                       BACKUP_OPEN_REINDEX, BACKUP_OPEN_BLOCK);
+                       BACKUP_OPEN_REINDEX, BACKUP_OPEN_BLOCK,
+                       BACKUP_OPEN_NOCREATE);
     buf_free(&index_fname);
     buf_free(&data_fname);
     if (r) return r;
