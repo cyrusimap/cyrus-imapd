@@ -4780,25 +4780,6 @@ int propfind_by_collection(const char *mboxname, int matchlen,
     size_t len;
     int r = 0, rights, root = 1;
 
-    /* If this function is called outside of mboxlist_findall()
-     * with matchlen == 0, this is the root resource of the PROPFIND,
-     * otherwise it's just one of many found.  Inbox and Outbox can't
-     * appear unless they are the root */
-    if (matchlen && fctx->req_tgt->namespace != URL_NS_DRIVE) {
-        p = strrchr(mboxname, '.');
-        if (!p) goto done;
-        p++; /* skip dot */
-        if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
-        if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
-        if (!strncmp(p, MANAGED_ATTACH, strlen(MANAGED_ATTACH) - 1)) goto done;
-        /* magic folder filter */
-        if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
-        /* and while we're at it, reject the fricking top-level folders too.
-         * XXX - this is evil and bad and wrong */
-        if (*p == '#') goto done;
-        root = 0;
-    }
-
     /* Check ACL on mailbox for current user */
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
@@ -4810,26 +4791,52 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         goto done;
     }
 
-    /* if finding all, we only match known types */
-    if (matchlen && !(mbentry->mbtype & fctx->req_tgt->mboxtype))
-        goto done;
-
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
-    if (fctx->req_tgt->namespace == URL_NS_DRIVE) {
-        /* Reject folders that are not children of target URL
-           or are more than one level deep */
-        if (!fctx->req_tgt->mbentry) goto done;
-        len = strlen(fctx->req_tgt->mbentry->name);
-        if (strlen(mboxname) < len) goto done;
-        if (strncmp(mboxname, fctx->req_tgt->mbentry->name, len)) goto done;
-        p = (char *) mboxname + len;
-        if (!strcmp(fctx->req_tgt->mbentry->name, USER_COLLECTION_PREFIX)) {
-            /* Special case of listing users with DAV #drives */
-            p = strchr(mboxname+5, '.');
+    /* If this function is called outside of mboxlist_findall()
+     * with matchlen == 0, this is the root resource of the PROPFIND,
+     * otherwise it's just one of many found. */
+    if (matchlen) {
+        /* if finding all, we only match known types */
+        if (!(mbentry->mbtype & fctx->req_tgt->mboxtype)) goto done;
+
+        p = strrchr(mboxname, '.');
+        if (!p) goto done;
+        p++; /* skip dot */
+
+        switch (fctx->req_tgt->namespace) {
+        case URL_NS_DRIVE:
+            /* Reject folders that are not children of target URL
+               or are more than one level deep */
+            if (!fctx->req_tgt->mbentry) goto done;
+            len = strlen(fctx->req_tgt->mbentry->name);
+            if (strlen(mboxname) < len) goto done;
+            if (strncmp(mboxname, fctx->req_tgt->mbentry->name, len)) goto done;
+            p = (char *) mboxname + len;
+            if (!strcmp(fctx->req_tgt->mbentry->name, USER_COLLECTION_PREFIX)) {
+                /* Special case of listing users with DAV #drives */
+                p = strchr(mboxname+5, '.');
+            }
+            if (*p && (*p != '.' || strchr(++p, '.'))) goto done;
+            break;
+
+        case URL_NS_CALENDAR:
+            /*  Inbox and Outbox can't appear unless they are the root */
+            if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
+            if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
+            /* fall through */
+
+        default:
+            /* magic folder filter */
+            if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
+            /* and while we're at it, reject the fricking top-level folders too.
+             * XXX - this is evil and bad and wrong */
+            if (*p == '#') goto done;
+            break;
         }
-        if (*p && (*p != '.' || strchr(++p, '.'))) goto done;
+
+        root = 0;
     }
 
     /* Open mailbox for reading */
