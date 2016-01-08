@@ -87,14 +87,14 @@ const char *_sha1_file(int fd, const char *fname, size_t limit,
  *
  * with only one shared case, might as well always lock exclusively...
  */
-enum backup_open_mode {
-    BACKUP_OPEN_NORMAL = 0,
-    BACKUP_OPEN_REINDEX,
+enum backup_open_reindex {
+    BACKUP_OPEN_NOREINDEX = 0,
+    BACKUP_OPEN_REINDEX = 1,
 };
 
 static int _open_internal(struct backup **backupp,
                           const char *data_fname, const char *index_fname,
-                          enum backup_open_mode mode,
+                          enum backup_open_reindex reindex,
                           enum backup_open_nonblock nonblock,
                           enum backup_open_create create)
 {
@@ -130,7 +130,7 @@ static int _open_internal(struct backup **backupp,
         goto error;
     }
 
-    if (mode == BACKUP_OPEN_REINDEX) {
+    if (reindex) {
         // when reindexing, we want to move the old index out of the way
         // and create a new, empty one -- while holding the lock
         char *oldindex_fname = strconcat(backup->index_fname, ".old", NULL);
@@ -204,7 +204,7 @@ EXPORTED int backup_open(struct backup **backupp,
 
     r = _open_internal(backupp,
                        buf_cstring(&data_fname), buf_cstring(&index_fname),
-                       BACKUP_OPEN_NORMAL, nonblock, create);
+                       BACKUP_OPEN_NOREINDEX, nonblock, create);
     if (r) goto done;
 
     r = backup_verify(*backupp, BACKUP_VERIFY_QUICK, 0, NULL);
@@ -381,12 +381,12 @@ EXPORTED int backup_open_paths(struct backup **backupp,
 {
     if (index_fname)
         return _open_internal(backupp, data_fname, index_fname,
-                              BACKUP_OPEN_NORMAL, nonblock, create);
+                              BACKUP_OPEN_NOREINDEX, nonblock, create);
         /* FIXME verify */
 
     char *tmp = strconcat(data_fname, ".index", NULL);
     int r = _open_internal(backupp, data_fname, tmp,
-                           BACKUP_OPEN_NORMAL, nonblock, create);
+                           BACKUP_OPEN_NOREINDEX, nonblock, create);
     free(tmp);
     if (r) return r;
 
