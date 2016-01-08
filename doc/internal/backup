@@ -551,6 +551,10 @@ and doesn't have a test suite, so maybe save this implementation until needed.
 but... maybe rename backup_data_path to backuppartition-default in the meantime,
 so that when we do add this it's not a complicated reconfig to update?
 
+partlist_local_select (and lazy-loaded partlist_local_init) are where the
+mailbox partitions come from (see also mboxlist_create_partition), do something
+similar for backup partitions
+
 
 data corruption
 ---------------
