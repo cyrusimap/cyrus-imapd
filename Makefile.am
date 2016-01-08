@@ -806,6 +806,7 @@ backup_libcyrus_backup_la_SOURCES = \
     backup/indexr.c \
     backup/indexw.c \
     backup/internal.h \
+    backup/printinfo.c \
     backup/sqlconsts.c \
     backup/sqlconsts.h \
     backup/verify.c
