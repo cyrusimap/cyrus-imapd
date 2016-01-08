@@ -5058,7 +5058,6 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
-    fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
     fctx.req_hdrs = txn->req_hdrs;
     fctx.userid = httpd_userid;
@@ -5122,6 +5121,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
          */
         if (txn->req_tgt.collection) depth++;
         if (txn->req_tgt.resource) depth++;
+
+        fctx.depth = depth;
 
         if (!txn->req_tgt.collection &&
             (!depth || !(fctx.prefer & PREFER_NOROOT))) {
