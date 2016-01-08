@@ -154,7 +154,7 @@ EXPORTED void partlist_initialize(partlist_t *part_list, cb_part_filldata fillda
 }
 
 
-static void partlist_free(partlist_t *part_list)
+EXPORTED void partlist_free(partlist_t *part_list)
 {
     int i;
 

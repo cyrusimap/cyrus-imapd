@@ -125,6 +125,13 @@ extern void partlist_initialize(partlist_t *part_list, cb_part_filldata filldata
                          int soft_usage_limit, int reinit);
 
 /**
+ * \brief Frees items list.
+ *
+ * @param inout part_list   items list structure
+ */
+extern void partlist_free(partlist_t *part_list);
+
+/**
  * \brief Selects item value from list.
  *
  * @param inout part_list   items list structure
