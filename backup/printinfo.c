@@ -88,11 +88,10 @@ static int detail_sz_ts(struct backup *backup, const char *userid, FILE *out)
     int r = 0;
 
     chunk = backup_get_latest_chunk(backup);
-    if (!chunk) {
-        fprintf(stderr, "%s %s: backup_get_latest_chunk failed\n",
-                __func__, backup->data_fname);
-        r = -1;
-        goto done;
+    if (chunk) {
+        strftime(timestamp, sizeof(timestamp), "%F %T",
+                 localtime(&chunk->ts_end));
+        backup_chunk_free(&chunk);
     }
 
     r = fstat(backup->fd, &stat_buf);
@@ -101,15 +100,11 @@ static int detail_sz_ts(struct backup *backup, const char *userid, FILE *out)
         stat_buf.st_size = -1;
     }
 
-    strftime(timestamp, sizeof(timestamp), "%F %T", localtime(&chunk->ts_end));
-
     fprintf(out, "%s\t" OFF_T_FMT "\t%s\t%s\n",
             userid,
             stat_buf.st_size,
             timestamp,
             backup->data_fname);
 
-done:
-    if (chunk) backup_chunk_free(&chunk);
     return r;
 }
