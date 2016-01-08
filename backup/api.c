@@ -230,19 +230,19 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
     static char pathresult[PATH_MAX];
 
     const char *userid = mbname_userid(mbname);
-    const char *backup_data_path = config_getstring(IMAPOPT_BACKUP_DATA_PATH);
+    const char *partition = partlist_backup_select();
     const char *ret = NULL;
 
-    if (!backup_data_path) {
+    if (!partition) {
         syslog(LOG_ERR,
                "unable to make backup path for %s: "
-               "no backup_data_path defined in imapd.conf",
+               "couldn't select partition",
                userid);
         return NULL;
     }
 
     char hash_buf[2];
-    char *template = strconcat(backup_data_path,
+    char *template = strconcat(partition,
                                "/", dir_hash_b(userid, 1, hash_buf),
                                "/", userid, "_XXXXXX",
                                NULL);

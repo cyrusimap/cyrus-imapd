@@ -1,6 +1,6 @@
-/* internal.h -- replication-based backup internals
+/* partlist.c -- replication-based backup api - partlist functions
  *
- * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,53 +40,53 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+#include <config.h>
 
-#ifndef BACKUP_INTERNAL_SOURCE
-#error "backup/internal.h is for internal use by the backup system ONLY"
-#else
-#ifndef BACKUP_INTERNAL_H
-#define BACKUP_INTERNAL_H
+#include "lib/libconfig.h"
+#include "lib/xmalloc.h"
 
-enum {
-    BACKUP_APPEND_INACTIVE  = 0,
-    BACKUP_APPEND_ACTIVE    = 0x0001,
-    BACKUP_APPEND_NOFLUSH   = 0x0002,
-    BACKUP_APPEND_INDEXONLY = 0x0004,
-};
+#include "imap/partlist.h"
 
-struct backup_append_state {
-    unsigned mode;
-    gzFile gzfile;
-    int chunk_id;
-    size_t wrote;
-    SHA_CTX sha_ctx;
-};
+static partlist_t *partlist_backup = NULL;
 
-struct backup {
-    int fd;
-    char *data_fname;
-    char *index_fname;
-    char *oldindex_fname;
-    sqldb_t *db;
-    struct backup_append_state *append_state;
-};
 
-HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
-                        time_t ts, off_t start, size_t len);
+static void partlist_backup_init(void)
+{
+    if (partlist_backup) {
+        /* already done */
+        return;
+    }
 
-/* FIXME do this properly */
-HIDDEN int _parse_line(struct protstream *in, time_t *ts,
-                       struct buf *cmd, struct dlist **kin);
+    partlist_backup = xzmalloc(sizeof(partlist_t));
+    partlist_initialize(
+        partlist_backup,
+        NULL,
+        "backuppartition-",
+        NULL,
+        config_getstring(IMAPOPT_PARTITION_SELECT_EXCLUDE),
+        partlist_getmode(config_getstring(IMAPOPT_PARTITION_SELECT_MODE)),
+        config_getint(IMAPOPT_PARTITION_SELECT_SOFT_USAGE_LIMIT),
+        config_getint(IMAPOPT_PARTITION_SELECT_USAGE_REINIT)
+    );
+}
 
-struct backup_mailbox *backup_mailbox_list_remove(
-    struct backup_mailbox_list *list,
-    struct backup_mailbox *node);
 
-struct backup_mailbox_message *backup_mailbox_message_list_remove(
-    struct backup_mailbox_message_list *list,
-    struct backup_mailbox_message *mailbox_message);
+HIDDEN const char *partlist_backup_select(void)
+{
+    /* lazy loading */
+    if (!partlist_backup) {
+        partlist_backup_init();
+    }
 
-const char *partlist_backup_select(void);
-void partlist_backup_done(void);
-#endif
-#endif
+    return (char *)partlist_select_value(partlist_backup);
+}
+
+
+EXPORTED void partlist_backup_done(void)
+{
+    if (partlist_backup) {
+        partlist_free(partlist_backup);
+        free(partlist_backup);
+        partlist_backup = NULL;
+    }
+}
