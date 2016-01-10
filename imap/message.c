@@ -3056,7 +3056,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     struct buf msubject = BUF_INITIALIZER;
     strarray_t msgidlist = STRARRAY_INITIALIZER;
     arrayu64_t matchlist = ARRAYU64_INITIALIZER;
-    arrayu64_t emptylist = ARRAYU64_INITIALIZER;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
     conversation_t *conv = NULL;
     const char *msubj = NULL;
@@ -3164,11 +3163,9 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
                 conv = NULL;
                 r = conversation_load(state, cid, &conv);
                 if (r) goto out;
-                if (!conv)
-                    arrayu64_add(&emptylist, cid);
                 /* [IRIS-1576] if X-ME-Message-ID says the messages are
                 * linked, ignore any difference in Subject: header fields. */
-                else if (i == 3 || !strcmpsafe(conv->subject, msubj))
+                if (!conv || i == 3 || !strcmpsafe(conv->subject, msubj))
                     arrayu64_add(&matchlist, cid);
             }
 
@@ -3178,40 +3175,11 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     }
 
     if (!record->silent) {
-        conversation_id_t newcid = record->cid;
-        conversation_id_t val;
-
-        /* Work out the new CID this message will belong to.
-         * Use the MAX of any CIDs found - as NULLCONVERSATION is
-         * numerically zero this will be the only non-NULL CID or
-         * the MAX of two or more non-NULL CIDs */
-        val = arrayu64_max(&matchlist);
-        if (val > newcid) newcid = val;
-
-        val = arrayu64_max(&emptylist);
-        if (val > newcid) newcid = val;
-
-        if (!newcid)
-            newcid = generate_conversation_id(record);
-
-        /* Mark any CID renames */
-        for (i = 0 ; i < matchlist.count ; i++)
-            conversations_rename_cid(state, arrayu64_nth(&matchlist, i), newcid);
-
-        if (record->cid) conversations_rename_cid(state, record->cid, newcid);
-        else record->cid = newcid;
+        if (!record->cid) record->cid = arrayu64_max(&matchlist);
+        if (!record->cid) record->cid = generate_conversation_id(record);
     }
 
     if (!record->cid) goto out;
-
-    /* for CIDs with no 'B' record (hence, no existing members) it is
-     * safe to rename all the entries for that CID to the higher numbered
-     * cid.  In both master and replica cases, this will execute once the
-     * last message has its CID renamed */
-    for (i = 0; i < emptylist.count; i++) {
-        conversation_id_t item = arrayu64_nth(&emptylist, i);
-        conversations_rename_cidentry(state, item, record->cid);
-    }
 
     r = conversation_load(state, record->cid, &conv);
     if (r) goto out;
@@ -3236,7 +3204,6 @@ out:
     free(msgid);
     strarray_fini(&msgidlist);
     arrayu64_fini(&matchlist);
-    arrayu64_fini(&emptylist);
     arrayu64_fini(&cids);
     free(c_refs);
     free(c_env);

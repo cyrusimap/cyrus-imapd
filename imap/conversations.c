@@ -97,6 +97,8 @@
 
 #define CONVERSATIONS_VERSION 0
 
+static conv_status_t NULLSTATUS = { 0, 0, 0};
+
 static char *convdir = NULL;
 static char *suffix = NULL;
 
@@ -233,9 +235,6 @@ EXPORTED int conversations_open_path(const char *fname, struct conversations_sta
     /* create the status cache */
     construct_hash_table(&open->s.folderstatus, open->s.folder_names->count/4+4, 0);
 
-    /* create the cid rename table */
-    construct_hashu64_table(&open->s.cidrenames, 1023, 0);
-
     *statep = &open->s;
 
     return 0;
@@ -323,12 +322,6 @@ static void conversations_abortcache(struct conversations_state *state)
     free_hash_table(&state->folderstatus, free);
 }
 
-static void conversations_abortcidrenames(struct conversations_state *state)
-{
-    /* still gotta clean up */
-    free_hashu64_table(&state->cidrenames, free);
-}
-
 static void commitstatus_cb(const char *key, void *data, void *rock)
 {
     conv_status_t *status = (conv_status_t *)data;
@@ -347,114 +340,6 @@ static void conversations_commitcache(struct conversations_state *state)
     free_hash_table(&state->folderstatus, free);
 }
 
-struct rename_rock {
-    struct conversations_state *state;
-    conversation_id_t from_cid;
-    conversation_id_t to_cid;
-    unsigned long entries_seen;
-    unsigned long entries_renamed;
-};
-
-static int do_one_rename(void *rock,
-                         const char *key, size_t keylen,
-                         const char *data, size_t datalen)
-{
-    struct rename_rock *rrock = (struct rename_rock *)rock;
-    arrayu64_t cids = ARRAYU64_INITIALIZER;
-    time_t stamp;
-    int r;
-    int removed;
-
-    r = check_msgid(key, keylen, NULL);
-    if (r) return r;
-
-    r = _conversations_parse(data, datalen, &cids, &stamp);
-    if (r) goto done;
-
-    rrock->entries_seen++;
-
-    removed = arrayu64_remove_all(&cids, rrock->from_cid);
-    if (!removed) goto done;
-
-    arrayu64_add(&cids, rrock->to_cid);
-
-    rrock->entries_renamed++;
-
-    r = _conversations_set_key(rrock->state, key, keylen,
-                               &cids, stamp);
-
-done:
-    arrayu64_fini(&cids);
-    return r;
-}
-
-EXPORTED void conversations_rename_cidentry(struct conversations_state *state,
-                                            conversation_id_t from,
-                                            conversation_id_t to)
-{
-    struct rename_rock rrock;
-
-    if (from == to) return;
-
-    memset(&rrock, 0, sizeof(rrock));
-    rrock.state = state;
-    rrock.from_cid = from;
-    rrock.to_cid = to;
-
-    cyrusdb_foreach(state->db, "<", 1, NULL, do_one_rename, &rrock, &state->txn);
-
-    syslog(LOG_NOTICE, "conversations_rename_cid: saw %lu entries, renamed %lu"
-                       " from " CONV_FMT " to " CONV_FMT,
-                        rrock.entries_seen, rrock.entries_renamed,
-                        from, to);
-}
-
-static void commitrename_cb(uint64_t fromval, void *data, void *rock)
-{
-    conversation_id_t to = *((conversation_id_t *)data);
-    conversation_id_t from = (conversation_id_t)fromval;
-    struct conversations_state *state = (struct conversations_state *)rock;
-
-    conv_folder_t *folder = NULL;
-    conversation_t *conv = NULL;
-    int r = 0;
-
-    while ((data = hashu64_lookup(to, &state->cidrenames))) {
-        /* got renamed again! */
-        to = *((uint64_t *)data);
-    }
-
-    /* Use the B record to find the mailboxes for a CID rename.
-     * The rename events will decrease the NUM_RECORDS count back
-     * to zero, and the record will delete itself! */
-    r = conversation_load(state, from, &conv);
-    if (r) return;
-    if (!conv) return;
-
-    for (folder = conv->folders ; folder ; folder = folder->next) {
-        const char *mboxname = strarray_nth(state->folder_names, folder->number);
-        struct mailbox *mailbox = NULL;
-
-        r = mailbox_open_iwl(mboxname, &mailbox);
-        if (r) break;
-
-        r = mailbox_cid_rename(mailbox, from, to);
-        mailbox_close(&mailbox);
-
-        if (r) break;
-    }
-
-    conversation_free(conv);
-
-    /* XXX - COULD try to read the B key and confirm that it doesn't exist any more... */
-}
-
-static void conversations_commitcidrenames(struct conversations_state *state)
-{
-    hashu64_enumerate(&state->cidrenames, commitrename_cb, state);
-    free_hashu64_table(&state->cidrenames, free);
-}
-
 EXPORTED int conversations_abort(struct conversations_state **statep)
 {
     struct conversations_state *state = *statep;
@@ -464,7 +349,6 @@ EXPORTED int conversations_abort(struct conversations_state **statep)
     *statep = NULL;
 
     /* clean up hashes */
-    conversations_abortcidrenames(state);
     conversations_abortcache(state);
 
     if (state->db) {
@@ -487,9 +371,7 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
 
     *statep = NULL;
 
-    /* clean up the renames first, it will update the cache */
-    conversations_commitcidrenames(state);
-    /* cache second - also writes to to DB */
+    /* commit cache, writes to to DB */
     conversations_commitcache(state);
 
     /* finally it's safe to commit the DB itself */
@@ -812,27 +694,29 @@ static int folder_number_rename(struct conversations_state *state,
 }
 
 EXPORTED int conversation_storestatus(struct conversations_state *state,
-                             const char *key, size_t keylen,
-                             const conv_status_t *status)
+                                      const char *key, size_t keylen,
+                                      const conv_status_t *status)
 {
-    struct dlist *dl = NULL;
-    struct buf buf = BUF_INITIALIZER;
-    int version = CONVERSATIONS_VERSION;
-    int r;
+    if (!status || !status->modseq) {
+        return cyrusdb_delete(state->db,
+                              key, keylen,
+                              &state->txn, /*force*/1);
+    }
 
-    dl = dlist_newlist(NULL, NULL);
+    struct dlist *dl = dlist_newlist(NULL, NULL);
     dlist_setnum64(dl, "MODSEQ", status->modseq);
     dlist_setnum32(dl, "EXISTS", status->exists);
     dlist_setnum32(dl, "UNSEEN", status->unseen);
 
-    buf_printf(&buf, "%d ", version);
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%d ", CONVERSATIONS_VERSION);
     dlist_printbuf(dl, 0, &buf);
     dlist_free(&dl);
 
-    r = cyrusdb_store(state->db,
-                      key, keylen,
-                      buf.s, buf.len,
-                      &state->txn);
+    int r = cyrusdb_store(state->db,
+                          key, keylen,
+                          buf.s, buf.len,
+                          &state->txn);
 
     buf_free(&buf);
 
@@ -853,7 +737,7 @@ EXPORTED int conversation_setstatus(struct conversations_state *state,
     }
 
     /* either way it's in the hash, update the value */
-    *cachestatus = *status;
+    *cachestatus = status ? *status : NULLSTATUS;
 
     free(key);
 
@@ -1086,6 +970,8 @@ EXPORTED int conversation_getstatus(struct conversations_state *state,
         *status = *cachestatus;
         goto done;
     }
+
+    *status = NULLSTATUS;
 
     if (!state->db) {
         r = IMAP_IOERROR;
@@ -1725,66 +1611,24 @@ EXPORTED int conversation_id_decode(conversation_id_t *cid, const char *text)
     return 1;
 }
 
-EXPORTED void conversations_rename_cid(struct conversations_state *state,
-                             conversation_id_t from_cid,
-                             conversation_id_t to_cid)
-{
-    uint64_t *valptr;
-
-    if (!from_cid)
-        return;
-
-    if (from_cid == to_cid)
-        return;
-
-    /* we never rename down! */
-    assert(from_cid < to_cid);
-
-    valptr = hashu64_lookup(from_cid, &state->cidrenames);
-    if (valptr) {
-        /* already there or better? */
-        if (*valptr >= to_cid)
-            return;
-        free(valptr);
-    }
-
-    valptr = xmalloc(sizeof(uint64_t));
-    *valptr = to_cid;
-
-    hashu64_insert(from_cid, valptr, &state->cidrenames);
-}
-
 static int folder_key_rename(struct conversations_state *state,
                              const char *from_name,
                              const char *to_name)
 {
-    const char *val;
-    size_t vallen;
-    char *oldkey = strconcat("F", from_name, (void *)NULL);
-    int r = 0;
+    conv_status_t status;
+    int r = conversation_getstatus(state, from_name, &status);
+    if (r) return r;
 
-    r = cyrusdb_fetch(state->db, oldkey, strlen(oldkey),
-                      &val, &vallen, &state->txn);
-    if (r) {
-        if (r == CYRUSDB_NOTFOUND) r = 0; /* nothing to delete */
-        goto done;
-    }
-
-    /* create before deleting so val is still valid */
     if (to_name) {
-        char *newkey = strconcat("F", to_name, (void *)NULL);
-        r = cyrusdb_store(state->db, newkey, strlen(newkey),
-                          val, vallen, &state->txn);
-        free(newkey);
-        if (r) goto done;
+        r = conversation_setstatus(state, to_name, &status);
+        if (r) return r;
+        return conversation_setstatus(state, from_name, NULL);
     }
 
-    r = cyrusdb_delete(state->db, oldkey, strlen(oldkey), &state->txn, 1);
+    /* you can't delete a folder until the messages are cleared */
+    assert(!status.exists);
 
- done:
-    free(oldkey);
-
-    return r;
+    return 0;
 }
 
 EXPORTED int conversations_rename_folder(struct conversations_state *state,
