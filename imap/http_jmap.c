@@ -738,6 +738,8 @@ char *jmap_mailbox_role(const char *mboxname)
     /* Is it an outbox? */
     if (mboxname_isoutbox(mboxname)) return xstrdup("outbox");
 
+    /* XXX How to determine the templates role? */
+
     /* Does this mailbox have an IMAP special use role? */
     r = annotatemore_lookup(mboxname, "/specialuse", httpd_userid, &buf);
 
@@ -2113,6 +2115,15 @@ static json_t *jmap_message_from_record(const char *id,
     /* XXX hasAttachment */
 
     /* headers */
+    /* XXX
+     * JMAP Spec: getMessages:
+     * headers.property: Instead of requesting all the headers (by requesting
+     * the "headers" property, the client may specify the particular headers it
+     * wants using the headers.property-name syntax, e.g.
+     * "headers.X-Spam-Score", "headers.X-Spam-Hits"). The server will return a
+     * headers property but with just the requested headers in the object
+     * rather than all headers.
+     */
     if (_wantprop(props, "headers")) {
         /* XXX compiler error: undefined reference to 'message_get_header'
         message_get_header(m, MESSAGE_DECODED, &buf);
@@ -2233,6 +2244,12 @@ static json_t *jmap_message_from_record(const char *id,
     }
     /* textBody */
     /* htmlBody */
+    /* XXX
+     * JMAP Spec: getMessages:
+     * body: If "body" is included in the list of requested properties, it will
+     * be interpreted by the server as a request for "htmlBody" if the message
+     * has an HTML part, or "textBody" otherwise.
+     */
     /* preview */
     if (_wantprop(props, "textBody") ||_wantprop(props, "htmlBody") || _wantprop(props, "preview")) {
         message_foreach_text_section(m, &jmap_message_bodies_cb, &d);
@@ -2783,6 +2800,9 @@ done:
 
 int getmessages_cb(const mbentry_t *mbentry, void *rock)
 {
+    /* XXX This function allows to lookup multiple message ids in one
+     * run and has O(N). Once there is a more performant lookup of
+     * messages by guid, we might get rid of the current function. */
     struct mailbox *mbox = NULL;
     struct getmessages_data *d = (struct getmessages_data*) rock;
     int r;
@@ -2797,6 +2817,98 @@ int getmessages_cb(const mbentry_t *mbentry, void *rock)
 
 done:
     return r;
+}
+
+struct find_indexrecord_data {
+    struct message_guid guid;
+    char *mboxname;
+    uint32_t uid;
+};
+
+
+static int find_indexrecord(struct mailbox *mbox, struct find_indexrecord_data *d)
+{
+    struct mailbox_iter *mbiter;
+    const struct index_record *record;
+    int r = 0;
+
+    mbiter = mailbox_iter_init(mbox, 0, ITER_SKIP_UNLINKED);
+    if (!mbiter) {
+        syslog(LOG_ERR, "mailbox_iter_init(%s) returned NULL", mbox->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    while ((record = mailbox_iter_step(mbiter))) {
+        /* Ignore expunged messages */
+        if (record->system_flags & FLAG_EXPUNGED) {
+            continue;
+        }
+        if (!message_guid_equal(&d->guid, &record->guid)) {
+            /* Not the record we are looking for */
+            continue;
+        }
+        /* Allright, this is the one. Keep the mailbox name and uid. */
+        d->uid = record->uid;
+        d->mboxname = xstrdup(mbox->name);
+        r = CYRUSDB_DONE;
+        break;
+    }
+    mailbox_iter_done(&mbiter);
+done:
+    return r;
+}
+
+int find_indexrecord_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct mailbox *mbox = NULL;
+    struct find_indexrecord_data *d = (struct find_indexrecord_data*) rock;
+    int r;
+
+    if ((r = mailbox_open_irl(mbentry->name, &mbox))) {
+        syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                mbentry->name, error_message(r));
+        goto done;
+    }
+    r = find_indexrecord(mbox, d);
+    mailbox_close(&mbox);
+
+done:
+    return r;
+}
+
+static int jmap_message_find_record(const char *id,
+                                    const struct mailbox *inbox,
+                                    const char *userid,
+                                    char **mboxname,
+                                    uint32_t *uid)
+{
+    /* XXX Need to lookup by message guid with O(1) or O(lgN).
+     * Also: the JMAP-independent bits of this function should be refactored
+     * to message.h or the like. */
+    int r = 0;
+    struct find_indexrecord_data d;
+    d.mboxname = NULL;
+    d.uid = 0;
+
+    if (!message_guid_decode(&d.guid, id)) return 0;
+
+    if (inbox) {
+        r = find_indexrecord((struct mailbox*) inbox, &d);
+        if (r == CYRUSDB_DONE) {
+            *mboxname = d.mboxname;
+            *uid = d.uid;
+            return 0;
+        } else if (r) {
+            return r;
+        }
+    }
+
+    /* Inspect any other mailboxes. */
+    r = mboxlist_usermboxtree(userid, find_indexrecord_cb, &d, MBOXTREE_SKIP_ROOT);
+    if (r && r != CYRUSDB_DONE) return r;
+    *mboxname = d.mboxname;
+    *uid = d.uid;
+    return 0;
 }
 
 static void getmessages_report(const char *id,
@@ -3256,6 +3368,14 @@ done:
     return r;
 }
 
+/* Validate if the JMAP message arg is a valid draft of email.
+ *
+ * If From is not set in a draft, use the userid of the JMAP request req as
+ * value. Use the id map in req to lookup creation ids.
+ *
+ * Report any invalid properties in the JSON array invalid, store any setError
+ * in err.
+ */
 static void jmap_message_validate(json_t *arg,
                                   json_t **err,
                                   json_t *invalid,
@@ -3315,10 +3435,7 @@ static void jmap_message_validate(json_t *arg,
     if (pe > 0 && bval) {
         json_array_append_new(invalid, json_string("isUnread"));
     }
-    pe = jmap_readprop(arg, "isFlagged", 0, invalid, "b", &bval);
-    if (pe > 0 && bval) {
-        json_array_append_new(invalid, json_string("isFlagged"));
-    }
+    jmap_readprop(arg, "isFlagged", 0, invalid, "b", &bval);
     pe = jmap_readprop(arg, "isAnswered", 0, invalid, "b", &bval);
     if (pe > 0 && bval) {
         json_array_append_new(invalid, json_string("isAnswered"));
@@ -3542,7 +3659,6 @@ static int jmap_message_create(json_t *msg,
     r = append_commit(&as);
     if (r) goto done;
 
-    /* Mark new message as draft */
     /* Read index record for new message (always the last one) */
     struct index_record record;
     memset(&record, 0, sizeof(struct index_record));
@@ -3550,7 +3666,15 @@ static int jmap_message_create(json_t *msg,
     record.uid = mbox->i.last_uid;
     r = mailbox_reload_index_record(mbox, &record);
     if (r) goto done;
+
+    /* Mark as draft */
     record.system_flags |= FLAG_DRAFT;
+    /* Mark as flagged, if requested */
+    if (json_object_get(msg, "isFlagged") == json_true()) {
+        record.system_flags |= FLAG_FLAGGED;
+    }
+
+    /* Save record */
     r = mailbox_rewrite_index_record(mbox, &record);
     if (r) goto done;
 
@@ -3565,6 +3689,8 @@ done:
 static int setMessages(struct jmap_req *req)
 {
     int r = 0;
+    char *mboxname = NULL;
+    struct mailbox *mbox = NULL;
     json_t *set = NULL;
 
     json_t *state = json_object_get(req->args, "ifInState");
@@ -3637,40 +3763,101 @@ static int setMessages(struct jmap_req *req)
     if (update) {
         json_t *updated = json_pack("[]");
         json_t *notUpdated = json_pack("{}");
-        const char *uid;
+        const char *id;
         json_t *arg;
 
-        json_object_foreach(update, uid, arg) {
+        json_object_foreach(update, id, arg) {
             json_t *invalid = json_pack("[]");
-            json_t *err = NULL;
+            int unread = -1, flagged = -1, answered = -1;
 
             /* Validate uid */
-            if (!strlen(uid) || *uid == '#') {
+            if (!strlen(id) || *id == '#') {
                 json_t *err= json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
+                json_object_set_new(notUpdated, id, err);
                 continue;
             }
 
-            /* XXX Update message. */
-
-            /* Handle set errors. */
-            if (err) {
-                json_object_set_new(notUpdated, uid, err);
-                json_decref(invalid);
-                continue;
+            /* Parse properties */
+            /* XXX Compare immutable message properties. */
+            json_t *prop;
+            prop = json_object_get(arg, "isFlagged");
+            if (prop && prop != json_null()) {
+                jmap_readprop(arg, "isFlagged", 1, invalid, "b", &flagged);
+            }
+            prop = json_object_get(arg, "isUnread");
+            if (prop && prop != json_null()) {
+                jmap_readprop(arg, "isUnread", 1, invalid, "b", &unread);
+            }
+            prop = json_object_get(arg, "isAnswered");
+            if (prop && prop != json_null()) {
+                jmap_readprop(arg, "isAnswered", 1, invalid, "b", &answered);
             }
 
             /* Handle invalid properties. */
             if (json_array_size(invalid)) {
                 json_t *err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notUpdated, uid, err);
+                json_object_set_new(notUpdated, id, err);
                 continue;
             }
             json_decref(invalid);
 
+            /* Lookup mailbox and message record */
+            uint32_t uid;
+            struct index_record record;
+            r = jmap_message_find_record(id, req->inbox, req->userid, &mboxname, &uid);
+
+            if (r) goto done;
+            if (!mboxname || !uid) {
+                json_t *err= json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notUpdated, id, err);
+                continue;
+            }
+
+            if (strcmp(mboxname, req->inbox->name)) {
+                r = mailbox_open_iwl(mboxname, &mbox);
+                if (r) goto done;
+            } else {
+                mbox = (struct mailbox *) req->inbox;
+            }
+            r = mailbox_find_index_record(mbox, uid, &record);
+            if (r) goto done;
+
+            /* XXX Support multiple mailboxes */
+            /* XXX Support move */
+
+            /* Update flags */
+            if (flagged > 0)
+                record.system_flags |= FLAG_FLAGGED;
+            else if (!flagged)
+                record.system_flags &= ~FLAG_FLAGGED;
+
+            if (unread > 0)
+                record.system_flags &= ~FLAG_SEEN;
+            else if (!unread)
+                record.system_flags |= FLAG_SEEN;
+
+            if (answered > 0)
+                record.system_flags |= FLAG_ANSWERED;
+            else if (!answered)
+                record.system_flags &= ~FLAG_ANSWERED;
+
+            /* Rewrite index record */
+            r = mailbox_rewrite_index_record(mbox, &record);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
+                        mbox->name, error_message(r));
+            }
+            if (mbox != req->inbox) {
+                mailbox_close(&mbox);
+                mbox = NULL;
+            }
+            free(mboxname);
+            mboxname = NULL;
+            if (r) goto done;
+
             /* Report as updated. */
-            json_array_append_new(updated, json_string(uid));
+            json_array_append_new(updated, json_string(id));
         }
 
         if (json_array_size(updated)) {
@@ -3690,21 +3877,68 @@ static int setMessages(struct jmap_req *req)
         json_t *notDestroyed = json_pack("{}");
 
         size_t index;
-        json_t *juid;
-        json_array_foreach(destroy, index, juid) {
+        json_t *jid;
+        json_array_foreach(destroy, index, jid) {
 
-            /* Validate uid. */
-            const char *uid = json_string_value(juid);
-            if (!strlen(uid) || *uid == '#') {
+            /* Validate id. */
+            const char *id = json_string_value(jid);
+            if (!strlen(id) || *id == '#') {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
+                json_object_set_new(notDestroyed, id, err);
                 continue;
             }
 
-            /* XXX Destroy message. */
+            /* Lookup mailbox and message record */
+            uint32_t uid;
+            struct index_record record;
+            r = jmap_message_find_record(id, req->inbox, req->userid, &mboxname, &uid);
 
-            /* XXX Report message as destroyed. */
-            json_array_append_new(destroyed, json_string(uid));
+            if (r) goto done;
+            if (!mboxname || !uid) {
+                json_t *err= json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(notDestroyed, id, err);
+                continue;
+            }
+            if (strcmp(mboxname, req->inbox->name)) {
+                r = mailbox_open_iwl(mboxname, &mbox);
+                if (r) goto done;
+            } else {
+                mbox = (struct mailbox *) req->inbox;
+            }
+            r = mailbox_find_index_record(mbox, uid, &record);
+            if (r) goto done;
+
+            /* Destroy message. */
+            record.system_flags |= FLAG_EXPUNGED;
+
+            /* Rewrite index record */
+            r = mailbox_rewrite_index_record(mbox, &record);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
+                        mbox->name, error_message(r));
+                goto done;
+            }
+
+            /* Report mailbox event. */
+            struct mboxevent *mboxevent = NULL;
+            mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+            mboxevent_extract_record(mboxevent, mbox, &record);
+            mboxevent_extract_mailbox(mboxevent, mbox);
+            mboxevent_set_numunseen(mboxevent, mbox, -1);
+            mboxevent_set_access(mboxevent, NULL, NULL, req->userid, mbox->name, 0);
+            mboxevent_notify(mboxevent);
+            mboxevent_free(&mboxevent);
+
+            /* Clean up */
+            if (mbox != req->inbox) {
+                mailbox_close(&mbox);
+                mbox = NULL;
+            }
+            free(mboxname);
+            mboxname = NULL;
+
+            /* Report message as destroyed. */
+            json_array_append_new(destroyed, json_string(id));
         }
         if (json_array_size(destroyed)) {
             json_object_set(set, "destroyed", destroyed);
@@ -3735,6 +3969,8 @@ static int setMessages(struct jmap_req *req)
 
 done:
     if (set) json_decref(set);
+    if (mboxname) free(mboxname);
+    if (mbox && mbox != req->inbox) mailbox_close(&mbox);
     return r;
 }
 
