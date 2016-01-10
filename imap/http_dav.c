@@ -436,9 +436,9 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         tgt->userid = xstrndup(p, len);
 
         if (httpd_extradomain) {
-            p = strchr(tgt->userid, '@');
-            if (p && !strcmp(p+1, httpd_extradomain))
-                *p = 0;
+            char *at = strchr(tgt->userid, '@');
+            if (at && !strcmp(at+1, httpd_extradomain))
+                *at = 0;
         }
 
         p += len;
