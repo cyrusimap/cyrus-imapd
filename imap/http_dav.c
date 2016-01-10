@@ -435,6 +435,12 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         len = strcspn(p, "/");
         tgt->userid = xstrndup(p, len);
 
+        if (httpd_extradomain) {
+            p = strchr(tgt->userid, '@');
+            if (p && !strcmp(p+1, httpd_extradomain))
+                *p = 0;
+        }
+
         p += len;
         if (!*p || !*++p) {
             /* Check ACL for current user */
