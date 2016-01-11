@@ -140,7 +140,8 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 #define SERVICE_MAX  INT_MAX-10
 #define SERVICEPARAM(x) ((x) ? x : "unknown")
 
-#define MAX_READY_FAILS     5
+#define MAX_READY_FAILS              5
+#define MAX_READY_FAIL_INTERVAL     10  /* 10 seconds */
 
 struct service *Services = NULL;
 static int allocservices = 0;
@@ -1073,11 +1074,17 @@ static void reap_child(void)
                     s->nactive--;
                     s->ready_workers--;
                     if (!in_shutdown && failed) {
+                        time_t now = time(NULL);
+
                         syslog(LOG_WARNING,
                                "service %s/%s pid %d in READY state: "
                                "terminated abnormally",
                                SERVICEPARAM(s->name),
                                SERVICEPARAM(s->familyname), pid);
+                        if (now - s->lastreadyfail > MAX_READY_FAIL_INTERVAL) {
+                            s->nreadyfails = 0;
+                        }
+                        s->lastreadyfail = now;
                         if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
                             syslog(LOG_ERR, "too many failures for "
                                    "service %s/%s, disabling until next SIGHUP",
