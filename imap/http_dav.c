@@ -376,6 +376,7 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    inboxname, error_message(r));
+            r = HTTP_NOT_FOUND;
         }
         else if (!(httpd_myrights(authstate, mbentry->acl) & ACL_FULL)) {
             r = HTTP_NOT_FOUND;
