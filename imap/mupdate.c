@@ -197,6 +197,8 @@ static int worker_count = 0;
 static pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct conn *connlist = NULL;
 
+static pthread_mutex_t clienthost_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* ---- connection signaling pipe */
 static int conn_pipe[2];
 
@@ -267,7 +269,12 @@ static struct conn *conn_new(int fd)
     connection_count++;
     pthread_mutex_unlock(&connection_count_mutex); /* UNLOCK */
 
-    /* Find out name of client host */
+    /* Find out name of client host
+     *
+     * MUST do this inside a mutex because the values returned
+     * from get_clienthost are all static to that function.
+     */
+    pthread_mutex_lock(&clienthost_mutex); /* LOCK */
     clienthost = get_clienthost(C->fd, &localip, &remoteip);
     strlcpy(C->clienthost, clienthost, sizeof(C->clienthost));
 
@@ -279,6 +286,7 @@ static struct conn *conn_new(int fd)
                 sizeof(C->saslprops.iplocalport_buf));
         C->saslprops.iplocalport = C->saslprops.iplocalport_buf;
     }
+    pthread_mutex_unlock(&clienthost_mutex); /* UNLOCK */
 
     /* create sasl connection */
     r = sasl_server_new("mupdate",
