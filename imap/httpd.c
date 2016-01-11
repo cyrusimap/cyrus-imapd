@@ -372,7 +372,7 @@ static void httpd_reset(void)
 
     cyrus_reset_stdio();
 
-    strcpy(httpd_clienthost, "[local]");
+    httpd_clienthost = "[local]";
     if (httpd_logfd != -1) {
         close(httpd_logfd);
         httpd_logfd = -1;
@@ -543,10 +543,6 @@ int service_main(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
-    socklen_t salen;
-    char hbuf[NI_MAXHOST];
-    char localip[60], remoteip[60];
-    int niflags;
     sasl_security_properties_t *secprops=NULL;
     const char *mechlist, *mech;
     int mechcount = 0;
