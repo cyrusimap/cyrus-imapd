@@ -120,3 +120,16 @@
 # to trigger unfixed bugs in Cyrus at the moment, hopefully that will
 # shrink to nil in the future.
 ##suppress = listext subscribe
+
+# This section describes how Cassandane interacts with the CalDAVTester
+# testsuite, which is a test suite for CalDAV and CardDAV servers written
+# by Apple and downloadable from http://calendarserver.org/wiki/CalDAVTester
+[caldavtester]
+# The base directory of a svn checkout of CalDAVTester. If empty, no
+# CalDAV or CardDAV tests will be found or run
+## basedir =
+# A list of tests which will be suppressed for each category.  The default
+# is a list of CalDAVTester tests which are known to trigger unfixed bugs
+# in Cyrus or which are very Apple specific
+## suppress-caldav =
+## suppress-carddav =
