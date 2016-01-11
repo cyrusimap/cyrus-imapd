@@ -850,6 +850,8 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
             r = backup_append(backup, dl, ts);
             if (r) {
                 // FIXME do something
+                syslog(LOG_ERR, "backup_append returned %d\n", r);
+                fprintf(out, "backup_append returned %d\n", r);
             }
         }
 
