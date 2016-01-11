@@ -246,7 +246,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         { ":quotaroot",         SQLITE_TEXT,    { .s = quotaroot } },
         { ":xconvmodseq",       SQLITE_INTEGER, { .i = xconvmodseq } },
         { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations_buf) } },
-        { ":deleted",           SQLITE_INTEGER, { .i = 0 } },
+        { ":deleted",           SQLITE_NULL,    { .s = NULL } },
         { NULL,                 SQLITE_NULL,    { .s = NULL      } },
     };
 
