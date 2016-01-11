@@ -749,3 +749,4 @@ todo list
   -> _sha1_file: looks ok, uses mmap, doesn't try to close any fds
 * backupd: don't block on locked backups, return mailbox locked -- but sync_client doesn't handle this
 * test multiple backup partitions
+* need to get timestamp out of 'cyrus chunk start' line because reindex can't reproduce it reliably
