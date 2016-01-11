@@ -32,7 +32,7 @@ mailbox:
     char quotaroot
     int xconvmodseq
     char annotations
-    timestamp deleted           -> set by unmailbox i guess
+    timestamp deleted           -> time that it was unmailbox'd, or NULL if still alive
 
 message:
     int id
