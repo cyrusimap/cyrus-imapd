@@ -251,5 +251,6 @@ int backup_reindex(const char *name, int verbose, FILE *out);
 int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbname);
 int backup_printinfo(struct backup *backup, const char *userid,
                      FILE *out, int detail);
+int backup_compact(const char *name, int verbose, FILE *out);
 
 #endif

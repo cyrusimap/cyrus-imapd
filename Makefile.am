@@ -801,6 +801,7 @@ noinst_HEADERS += \
 
 backup_libcyrus_backup_la_SOURCES = \
     backup/api.c \
+    backup/compact.c \
     backup/gzuncat.c \
     backup/gzuncat.h \
     backup/indexr.c \
