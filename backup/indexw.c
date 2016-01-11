@@ -272,104 +272,105 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
 
     if (r) goto error;
 
-    int mailbox_id = backup_get_mailbox_id(backup, uniqueid);
+    if (record->head) {
+        int mailbox_id = backup_get_mailbox_id(backup, uniqueid);
+        struct dlist *ki = NULL;
 
-    struct dlist *ki = NULL;
+        for (ki = record->head; ki; ki = ki->next) {
+            uint32_t uid = 0;
+            modseq_t modseq = 0;
+            uint32_t last_updated = 0;
+            struct dlist *flags = NULL;
+            struct buf flags_buf = BUF_INITIALIZER;
+            uint32_t internaldate;
+            const char *guid;
+            struct dlist *annotations = NULL;
+            struct buf annotations_buf = BUF_INITIALIZER;
+            int message_id = -1;
+            time_t expunged = 0;
 
-    for (ki = record->head; ki; ki = ki->next) {
-        uint32_t uid = 0;
-        modseq_t modseq = 0;
-        uint32_t last_updated = 0;
-        struct dlist *flags = NULL;
-        struct buf flags_buf = BUF_INITIALIZER;
-        uint32_t internaldate;
-        const char *guid;
-        struct dlist *annotations = NULL;
-        struct buf annotations_buf = BUF_INITIALIZER;
-        int message_id = -1;
-        time_t expunged = 0;
+            if (!dlist_getnum32(ki, "UID", &uid))
+                goto error;
+            if (!dlist_getnum64(ki, "MODSEQ", &modseq))
+                goto error;
+            if (!dlist_getnum32(ki, "LAST_UPDATED", &last_updated))
+                goto error;
+            if (!dlist_getnum32(ki, "INTERNALDATE", &internaldate))
+                goto error;
+            if (!dlist_getatom(ki, "GUID", &guid))
+                goto error;
 
-        if (!dlist_getnum32(ki, "UID", &uid))
-            goto error;
-        if (!dlist_getnum64(ki, "MODSEQ", &modseq))
-            goto error;
-        if (!dlist_getnum32(ki, "LAST_UPDATED", &last_updated))
-            goto error;
-        if (!dlist_getnum32(ki, "INTERNALDATE", &internaldate))
-            goto error;
-        if (!dlist_getatom(ki, "GUID", &guid))
-            goto error;
+            dlist_getlist(ki, "FLAGS", &flags);
+            if (flags) {
+                int is_expunged = 0;
 
-        dlist_getlist(ki, "FLAGS", &flags);
-        if (flags) {
-            int is_expunged = 0;
+                _get_magic_flags(flags, &is_expunged);
 
-            _get_magic_flags(flags, &is_expunged);
+                if (is_expunged) {
+                    syslog(LOG_DEBUG, "%s: found expunge flag for message %s\n", __func__, guid);
+                    expunged = ts;
+                }
 
-            if (is_expunged) {
-                syslog(LOG_DEBUG, "%s: found expunge flag for message %s\n", __func__, guid);
-                expunged = ts;
+                dlist_printbuf(flags, 0, &flags_buf);
+                syslog(LOG_DEBUG, "%s: found flags for message %s: %s\n", __func__, guid, buf_cstring(&flags_buf));
             }
 
-            dlist_printbuf(flags, 0, &flags_buf);
-            syslog(LOG_DEBUG, "%s: found flags for message %s: %s\n", __func__, guid, buf_cstring(&flags_buf));
-        }
+            dlist_getlist(ki, "ANNOTATIONS", &annotations);
+            if (annotations) {
+                dlist_printbuf(annotations, 0, &annotations_buf);
+            }
 
-        dlist_getlist(ki, "ANNOTATIONS", &annotations);
-        if (annotations) {
-            dlist_printbuf(annotations, 0, &annotations_buf);
-        }
-
-        // FIXME should this search for guid+size rather than just guid?
-        message_id = backup_get_message_id(backup, guid);
-        if (message_id == -1) {
-            // FIXME handle this sensibly
-            syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n", __func__, r, mboxname, guid);
-            goto error;
-        }
-
-        struct sqldb_bindval record_bval[] = {
-            { ":mailbox_id",        SQLITE_INTEGER, { .i = mailbox_id } },
-            { ":message_id",        SQLITE_INTEGER, { .i = message_id } },
-            { ":last_chunk_id",     SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
-            { ":uid",               SQLITE_INTEGER, { .i = uid } },
-            { ":modseq",            SQLITE_INTEGER, { .i = modseq } },
-            { ":last_updated",      SQLITE_INTEGER, { .i = last_updated } },
-            { ":flags",             SQLITE_TEXT,    { .s = buf_cstring(&flags_buf) } },
-            { ":internaldate",      SQLITE_INTEGER, { .i = internaldate } },
-            { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations_buf) } },
-            { ":expunged",          SQLITE_NULL,    { .s = NULL      } },
-            { NULL,                 SQLITE_NULL,    { .s = NULL      } },
-        };
-
-        /* provide an expunged value if we have one */
-        if (expunged) {
-            struct sqldb_bindval *expunged_bval = &record_bval[9];
-            assert(strcmp(expunged_bval->name, ":expunged") == 0);
-            expunged_bval->type = SQLITE_INTEGER;
-            expunged_bval->val.i = expunged;
-        }
-
-        r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
-                       record_bval, NULL, NULL);
-
-        if (!r && sqldb_changes(backup->db) == 0) {
-            r = sqldb_exec(backup->db, backup_index_mailbox_message_insert_sql,
-                           record_bval, NULL, NULL);
-            if (r) {
+            // FIXME should this search for guid+size rather than just guid?
+            message_id = backup_get_message_id(backup, guid);
+            if (message_id == -1) {
                 // FIXME handle this sensibly
-                syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s\n", __func__, r, mboxname, guid);
+                syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n", __func__, r, mboxname, guid);
+                goto error;
             }
-        }
-        else if (r) {
-            // FIXME handle this sensibly
-            syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
-        }
 
-        buf_free(&annotations_buf);
-        buf_free(&flags_buf);
+            struct sqldb_bindval record_bval[] = {
+                { ":mailbox_id",        SQLITE_INTEGER, { .i = mailbox_id } },
+                { ":message_id",        SQLITE_INTEGER, { .i = message_id } },
+                { ":last_chunk_id",     SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
+                { ":uid",               SQLITE_INTEGER, { .i = uid } },
+                { ":modseq",            SQLITE_INTEGER, { .i = modseq } },
+                { ":last_updated",      SQLITE_INTEGER, { .i = last_updated } },
+                { ":flags",             SQLITE_TEXT,    { .s = buf_cstring(&flags_buf) } },
+                { ":internaldate",      SQLITE_INTEGER, { .i = internaldate } },
+                { ":annotations",       SQLITE_TEXT,    { .s = buf_cstring(&annotations_buf) } },
+                { ":expunged",          SQLITE_NULL,    { .s = NULL      } },
+                { NULL,                 SQLITE_NULL,    { .s = NULL      } },
+            };
 
-        if (r) goto error;
+            /* provide an expunged value if we have one */
+            if (expunged) {
+                struct sqldb_bindval *expunged_bval = &record_bval[9];
+                assert(strcmp(expunged_bval->name, ":expunged") == 0);
+                expunged_bval->type = SQLITE_INTEGER;
+                expunged_bval->val.i = expunged;
+            }
+
+            r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
+                        record_bval, NULL, NULL);
+
+            if (!r && sqldb_changes(backup->db) == 0) {
+                r = sqldb_exec(backup->db, backup_index_mailbox_message_insert_sql,
+                            record_bval, NULL, NULL);
+                if (r) {
+                    // FIXME handle this sensibly
+                    syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s\n", __func__, r, mboxname, guid);
+                }
+            }
+            else if (r) {
+                // FIXME handle this sensibly
+                syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
+            }
+
+            buf_free(&annotations_buf);
+            buf_free(&flags_buf);
+
+            if (r) goto error;
+        }
     }
 
     syslog(LOG_DEBUG, "%s: committing index change: %s\n", __func__, mboxname);
