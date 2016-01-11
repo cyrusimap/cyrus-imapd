@@ -133,17 +133,18 @@ static int _open_internal(struct backup **backupp,
     if (reindex) {
         // when reindexing, we want to move the old index out of the way
         // and create a new, empty one -- while holding the lock
-        char *oldindex_fname = strconcat(backup->index_fname, ".old", NULL);
+        char oldindex_fname[PATH_MAX];
+        snprintf(oldindex_fname, sizeof(oldindex_fname), "%s.%ld",
+                 backup->index_fname, (int64_t) time(NULL));
 
         r = rename(backup->index_fname, oldindex_fname);
         if (r && errno != ENOENT) {
             syslog(LOG_ERR, "IOERROR: rename %s %s: %m", backup->index_fname, oldindex_fname);
-            free(oldindex_fname);
             r = IMAP_IOERROR;
             goto error;
         }
 
-        backup->oldindex_fname = oldindex_fname;
+        backup->oldindex_fname = xstrdup(oldindex_fname);
     }
     else {
         // if there's data in the data file but the index file is empty
