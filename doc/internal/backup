@@ -101,7 +101,7 @@ dlist's offset in the stream plus the DL_SFILE's offset within the dlist
 ... nah, short of changing the data format i think it's best to index the
 APPLY MESSAGE command, and search it by GUID for the message in question if/when
 the message content is needed.  this cooperates nicely with reserve/message's
-multiplicity and makes compress easier to implement.
+multiplicity and makes compact easier to implement.
 
 the indexed length needs to be the length of the message, not the length of the
 dlist wrapper, because we need to know this cheaply to supply RECORDs in
@@ -202,7 +202,7 @@ if that lock succeeded
 backup:   needs to append foo and update foo.index
 reindex:  only needs to read foo, but needs a write lock to prevent writes
           while it does so. needs to write to (replace) foo.index
-compress: needs to re-write foo and foo.index
+compact:  needs to re-write foo and foo.index
 restore:  needs to read
 
 
@@ -276,7 +276,7 @@ cmdloop:
 periodic cleanup:
 * check timestamp of each held lock
 * if stale (define: stale?), release
-* FIXME if we've appended more than the chunk size we would compress to, release
+* FIXME if we've appended more than the chunk size we would compact to, release
 
 sync restart:
 * release each held lock
@@ -290,7 +290,7 @@ roll it back.  then, if backupd fails to write to the gzip file for some
 reason, the (now invalid) index info we added can be discarded too.
 
 flushing immediately on write results in poor gzip compression, but for
-incremental backups that's not a problem.  when the compress process hits the
+incremental backups that's not a problem.  when the compact process hits the
 file it will recompress the data more efficiently.
 
 
@@ -332,7 +332,7 @@ messages will be backed up again with their new uids, etc.  additional wire tran
 of message data should be avoided by keeping the same guid.
 
 
-compress
+compact
 --------
 
 # finding messages that are to be kept (either exist as unexpunged somewhere,
@@ -356,9 +356,9 @@ id|timestamp|offset|length|file_sha1|data_sha1
 remember: a single APPLY MESSAGE line can contain many messages!
 
 thoughts:
-* need a heuristic for quickly determining whether a backup needs to be compressed
+* need a heuristic for quickly determining whether a backup needs to be compacted
     -> maybe threshold for proportion of chunks that are smaller than chunk combine size?
-* "quick" vs "full" compression
+* "quick" vs "full" compaction
 
 settings:
 
@@ -377,7 +377,7 @@ data that we should practically keep:
 * all APPLY MAILBOXes containing a RECORD for a given message from the chunk identified as its last
 * the APPLY MESSAGE for each message we're keeping
 
-four kinds of compression (probably at least two simultaneously):
+four kinds of compaction (probably at least two simultaneously):
 
 * removing unused chunks
 * combining adjacent chunks into a single chunk (for better gz compression)
@@ -446,7 +446,7 @@ default run mode as above
 reconstruct
 -----------
 
-* compress/reindex are probably both invocations of a backup reconstruct tool
+* compact/reindex are probably both invocations of a backup reconstruct tool
   rather than distinct tools
 * functionality for re-ordering a backup whose data is in funky order?
   it shouldn't be able to get out of order if it's only being written to by
@@ -468,9 +468,9 @@ needs:
 
 not sure if these should be included, or separate tools:
     * reindex a backup (or more)
-    * compress a backup (or more)
+    * compact a backup (or more)
     * lock a backup
-    * some sort of rolling compression?
+    * some sort of rolling compaction?
 
 usage:
     ctl_backups [options] reconstruct                       # reconstruct backups.db from disk files
@@ -479,7 +479,7 @@ usage:
     ctl_backups [options] delete [mode] backup              # delete a backup
     ctl_backups [options] verify [mode] backup...           # verify specified backups
     ctl_backups [options] reindex [mode] backup...          # reindex specified backups
-    ctl_backups [options] compress [mode] backup...         # compress specified backups
+    ctl_backups [options] compact [mode] backup...          # compact specified backups
     ctl_backups [options] lock [lock_opts] [mode] backup    # lock specified backup
 
 => option to 'stop on error' for multi-backup commands
@@ -574,14 +574,14 @@ backup data:
     * reindex: should skip unparseable dlist lines
     * message data has its own checksums (guid)
     * reindex: should skip messages that don't match their own checksums
-    * compress: "full" compress will only keep useful data according to index
+    * compact: "full" compact will only keep useful data according to index
     * backupd: will sync anything that's in user mailbox but not in backup index
 
 i think this means that if a message or mailbox state becomes corrupted in
 the backup data file, and it still exists in the user's real mailbox, you
 recover from the corruption by reindexing and then letting the sync process
 copy the missing data back in again.  and you can tidy up the data file by
-running a compress over it.
+running a compact over it.
 
 you detect data corruption in most recent chunk reactively as soon as the
 backup system needs to open it again (quick verify on open)
@@ -595,7 +595,7 @@ recommend scheduling this in EVENTS/cron?
 
 if data corruption occurs in message that's no longer in user's mailbox, that
 message is lost.  it was going to be deleted from the backup after $retention
-period anyway (by compress), but if it needs restoring in the meantime, sorry
+period anyway (by compact), but if it needs restoring in the meantime, sorry
 
 
 installation instructions
@@ -615,7 +615,7 @@ on your backup server:
         (remove other services, most likely)
         (should i create a master/conf/backup.conf example file?)
     * cyrus.conf EVENTS:
-        bu_compress cmd="bu_compress -A" at=0400
+        compact cmd="ctl_backups compact -A" at=0400
     * start server as usual
     * do i want a special port for backupd?
 
@@ -740,7 +740,6 @@ todo list
 * perl tool to anonymise sync proto talk
 * verification step to check entire data stream for errors (even chunks that aren't indexed)
 * prot_fill_cb: extra argument to pass back an error string to prot_fill
-* compress -> compact?
 * ctl_backups verify: set level
 * change architecture of struct backup/struct gzuncat so that there's exactly one file
   descriptor ever.  otherwise closing any of the dup's prematurely releases the lock.
