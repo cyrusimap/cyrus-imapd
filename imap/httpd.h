@@ -431,7 +431,7 @@ extern char *httpd_extrafolder;
 extern char *httpd_extradomain;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
-extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
+extern const char *httpd_localip, *httpd_remoteip;
 extern unsigned long config_httpmodules;
 extern int config_httpprettytelemetry;
 

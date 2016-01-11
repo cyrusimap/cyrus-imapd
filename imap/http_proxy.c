@@ -563,21 +563,18 @@ static void write_forwarding_hdrs(struct protstream *pout, hdrcache_t hdrs,
 
     /* Create our own Forwarded header */
     if (proto) {
-        char localip[60], remoteip[60], *p;
-        socklen_t salen = sizeof(httpd_remoteaddr);
         const char **host = spool_getheader(hdrs, "Host");
+        size_t len;
 
         prot_printf(pout, "Forwarded: proto=%s", proto);
         if (host) prot_printf(pout, ";host=%s", *host);
-        if (!iptostring((struct sockaddr *)&httpd_remoteaddr, salen,
-                        remoteip, 60)) {
-            if ((p = strrchr(remoteip, ';'))) *p = '\0';
-            prot_printf(pout, ";for=%s", remoteip);
+        if (httpd_remoteip) {
+            len = strcspn(httpd_remoteip, ";");
+            prot_printf(pout, ";for=%.*s", len, httpd_remoteip);
         }
-        if (!iptostring((struct sockaddr *)&httpd_localaddr, salen,
-                        localip, 60)) {
-            if ((p = strrchr(localip, ';'))) *p = '\0';
-            prot_printf(pout, ";by=%s", localip);
+        if (httpd_localip) {
+            len = strcspn(httpd_localip, ";");
+            prot_printf(pout, ";for=%.*s", len, httpd_localip);
         }
         prot_puts(pout, "\r\n");
     }

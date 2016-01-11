@@ -138,9 +138,8 @@ struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
 int httpd_userisanonymous = 1;
-struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
-int httpd_haveaddr = 0;
-char httpd_clienthost[NI_MAXHOST*2+1] = "[local]";
+static const char *httpd_clienthost = "[local]";
+const char *httpd_localip = NULL, *httpd_remoteip = NULL;
 struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
 struct protgroup *protin = NULL;
@@ -565,36 +564,7 @@ int service_main(int argc __attribute__((unused)),
     protgroup_insert(protin, httpd_in);
 
     /* Find out name of client host */
-    salen = sizeof(httpd_remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&httpd_remoteaddr, &salen) == 0 &&
-        (httpd_remoteaddr.ss_family == AF_INET ||
-         httpd_remoteaddr.ss_family == AF_INET6)) {
-        if (getnameinfo((struct sockaddr *)&httpd_remoteaddr, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-            strncpy(httpd_clienthost, hbuf, sizeof(hbuf));
-            strlcat(httpd_clienthost, " ", sizeof(httpd_clienthost));
-        } else {
-            httpd_clienthost[0] = '\0';
-        }
-        niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-        if (((struct sockaddr *)&httpd_remoteaddr)->sa_family == AF_INET6)
-            niflags |= NI_WITHSCOPEID;
-#endif
-        if (getnameinfo((struct sockaddr *)&httpd_remoteaddr, salen, hbuf,
-                        sizeof(hbuf), NULL, 0, niflags) != 0)
-            strlcpy(hbuf, "unknown", sizeof(hbuf));
-        strlcat(httpd_clienthost, "[", sizeof(httpd_clienthost));
-        strlcat(httpd_clienthost, hbuf, sizeof(httpd_clienthost));
-        strlcat(httpd_clienthost, "]", sizeof(httpd_clienthost));
-        salen = sizeof(httpd_localaddr);
-        if (getsockname(0, (struct sockaddr *)&httpd_localaddr, &salen) == 0) {
-            httpd_haveaddr = 1;
-        }
-
-        /* Create pre-authentication telemetry log based on client IP */
-        httpd_logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
-    }
+    httpd_clienthost = get_clienthost(0, &httpd_localip, &httpd_remoteip);
 
     /* other params should be filled in */
     if (sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
@@ -612,16 +582,21 @@ int service_main(int argc __attribute__((unused)),
     if (sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
         fatal("Failed to set SASL property", EC_TEMPFAIL);
 
-    if(iptostring((struct sockaddr *)&httpd_localaddr,
-                  salen, localip, 60) == 0) {
-        sasl_setprop(httpd_saslconn, SASL_IPLOCALPORT, localip);
-        saslprops.iplocalport = xstrdup(localip);
+    if (httpd_localip) {
+        sasl_setprop(httpd_saslconn, SASL_IPLOCALPORT, httpd_localip);
+        saslprops.iplocalport = xstrdup(httpd_localip);
     }
 
-    if(iptostring((struct sockaddr *)&httpd_remoteaddr,
-                  salen, remoteip, 60) == 0) {
-        sasl_setprop(httpd_saslconn, SASL_IPREMOTEPORT, remoteip);
-        saslprops.ipremoteport = xstrdup(remoteip);
+    if (httpd_remoteip) {
+        char hbuf[NI_MAXHOST], *p;
+
+        sasl_setprop(httpd_saslconn, SASL_IPREMOTEPORT, httpd_remoteip);
+        saslprops.ipremoteport = xstrdup(httpd_remoteip);
+
+        /* Create pre-authentication telemetry log based on client IP */
+        strlcpy(hbuf, httpd_remoteip, NI_MAXHOST);
+        if ((p = strchr(hbuf, ';'))) *p = '\0';
+        httpd_logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
     }
 
     /* See which auth schemes are available to us */
