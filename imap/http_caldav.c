@@ -5523,7 +5523,7 @@ static int report_cal_query(struct transaction_t *txn,
                 /* XXX  Need to do pass this to query for floating time */
                 syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
                 tzdata = xmlNodeGetContent(node);
-                ical = icalparser_parse_string((const char *) tz);
+                ical = icalparser_parse_string((const char *) tzdata);
                 if (ical) tz = icalcomponent_get_first_component(ical,
                                                                  ICAL_VTIMEZONE_COMPONENT);
                 if (!tz || icalcomponent_get_first_real_component(ical)) {
