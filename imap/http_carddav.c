@@ -614,7 +614,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
         !(vcard = vparser->card) ||
         !vcard->objects ||
         !vcard->objects->type ||
-        strcmp(vcard->objects->type, "vcard")) {
+        strcasecmp(vcard->objects->type, "vcard")) {
         txn->error.precond = CARDDAV_VALID_DATA;
         return HTTP_FORBIDDEN;
     }
@@ -627,7 +627,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcmp(name, "version")) {
+        if (!strcasecmp(name, "version")) {
             version = propval;
             if (strcmp(version, "3.0")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
@@ -635,10 +635,10 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
             }
         }
 
-        else if (!strcmp(name, "uid"))
+        else if (!strcasecmp(name, "uid"))
             uid = propval;
 
-        else if (!strcmp(name, "fn"))
+        else if (!strcasecmp(name, "fn"))
             fullname = propval;
     }
 
