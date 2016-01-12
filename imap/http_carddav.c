@@ -304,7 +304,7 @@ static struct meth_params carddav_params = {
     NULL,                                       /* No PATCH handling */
     NULL,                                       /* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
-    { 1, carddav_props },                       /* Disable infinite depth */
+    { DAV_FINITE_DEPTH, carddav_props },                       /* Disable infinite depth */
     carddav_reports
 };
 
@@ -648,34 +648,44 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
         return HTTP_FORBIDDEN;
     }
 
+    /* Check for changed UID on existing resource */
+    carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
+    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
+        char *owner = mboxname_to_userid(cdata->dav.mailbox);
+
+        txn->error.precond = CARDDAV_UID_CONFLICT;
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX, owner,
+                   strrchr(cdata->dav.mailbox, '.')+1,
+                   cdata->dav.resource);
+        txn->error.resource = buf_cstring(&txn->buf);
+        free(owner);
+        return HTTP_FORBIDDEN;
+    }
+
     if (dupcheck) {
-        /* Check for existing vCard UID */
+        /* Check for different resource with same UID */
         carddav_lookup_uid(davdb, uid, &cdata);
+        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
+                                    strcmp(cdata->dav.resource, resource))) {
+            /* CARDDAV:no-uid-conflict */
+            char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
-        if (cdata->dav.imap_uid) {
-            /* is it the same one? */
-            if (strcmp(cdata->dav.mailbox, mailbox->name) ||
-                strcmp(cdata->dav.resource, resource)) {
-                /* CARDDAV:no-uid-conflict */
-                char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
-                txn->error.precond = CARDDAV_UID_CONFLICT;
-                assert(!buf_len(&txn->buf));
-                buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                           namespace_addressbook.prefix,
-                           USER_COLLECTION_PREFIX, owner,
-                           strrchr(cdata->dav.mailbox, '.')+1,
-                           cdata->dav.resource);
-                txn->error.resource = buf_cstring(&txn->buf);
-                free(owner);
-                return HTTP_FORBIDDEN;
-            }
+            txn->error.precond = CARDDAV_UID_CONFLICT;
+            assert(!buf_len(&txn->buf));
+            buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                       namespace_addressbook.prefix,
+                       USER_COLLECTION_PREFIX, owner,
+                       strrchr(cdata->dav.mailbox, '.')+1,
+                       cdata->dav.resource);
+            txn->error.resource = buf_cstring(&txn->buf);
+            free(owner);
+            return HTTP_FORBIDDEN;
         }
     }
-    else {
-        /* Check for existing vCard UID */
-        carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
-    }
+
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
         oldrecord = &record;
