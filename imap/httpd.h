@@ -273,16 +273,16 @@ struct resp_body_t {
 
 /* Transaction flags */
 struct txn_flags_t {
-    unsigned char ver1_0;               /* Request from HTTP/1.0 client */
-    unsigned char conn;                 /* Connection opts on req/resp */
-    unsigned char override;             /* HTTP method override */
-    unsigned char cors;                 /* Cross-Origin Resource Sharing */
-    unsigned char mime;                 /* MIME-conformant response */
-    unsigned char te;                   /* Transfer-Encoding for resp */
-    unsigned char cc;                   /* Cache-Control directives for resp */
-    unsigned char ranges;               /* Accept range requests for resource */
-    unsigned char vary;                 /* Headers on which response varied */
-    unsigned char trailer;              /* Headers which will be in trailer */
+    unsigned long ver1_0   : 1;         /* Request from HTTP/1.0 client */
+    unsigned long conn     : 3;         /* Connection opts on req/resp */
+    unsigned long override : 1;         /* HTTP method override */
+    unsigned long cors     : 3;         /* Cross-Origin Resource Sharing */
+    unsigned long mime     : 1;         /* MIME-conformant response */
+    unsigned long te       : 3;         /* Transfer-Encoding for resp */
+    unsigned long cc       : 7;         /* Cache-Control directives for resp */
+    unsigned long ranges   : 1;         /* Accept range requests for resource */
+    unsigned long vary     : 4;         /* Headers on which response varied */
+    unsigned long trailer  : 1;         /* Headers which will be in trailer */
 };
 
 /* Transaction context */
