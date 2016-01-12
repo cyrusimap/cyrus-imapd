@@ -111,7 +111,7 @@ struct namespace_t namespace_rss = {
     URL_NS_RSS, 0, "/rss", NULL, 1 /* auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    rss_init, NULL, NULL, NULL,
+    rss_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

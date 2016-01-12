@@ -321,6 +321,7 @@ struct namespace_t namespace_addressbook = {
      ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
 #endif
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
+    &dav_premethod,
     {
         { &meth_acl,            &carddav_params },      /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

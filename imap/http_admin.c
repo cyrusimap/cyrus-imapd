@@ -94,7 +94,7 @@ struct namespace_t namespace_admin = {
     URL_NS_ADMIN, 1, "/admin", NULL, 1 /* auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    admin_init, NULL, NULL, NULL,
+    admin_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

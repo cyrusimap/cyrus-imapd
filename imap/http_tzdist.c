@@ -138,7 +138,7 @@ struct namespace_t namespace_tzdist = {
     URL_NS_TZDIST, 0, "/tzdist", TZDIST_WELLKNOWN_URI, 0 /* auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    tzdist_init, NULL, NULL, tzdist_shutdown,
+    tzdist_init, NULL, NULL, tzdist_shutdown, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

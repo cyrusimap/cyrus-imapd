@@ -121,7 +121,7 @@ struct namespace_t namespace_ischedule = {
     URL_NS_ISCHEDULE, 0, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
     /*mbtype*/0,
     (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
-    isched_init, NULL, NULL, isched_shutdown,
+    isched_init, NULL, NULL, isched_shutdown, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */
@@ -149,7 +149,8 @@ struct namespace_t namespace_ischedule = {
 struct namespace_t namespace_domainkey = {
     URL_NS_DOMAINKEY, 0, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
     /*mbtype*/0,
-    ALLOW_READ, NULL, NULL, NULL, NULL,
+    ALLOW_READ,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */

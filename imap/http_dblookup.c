@@ -59,7 +59,7 @@ struct namespace_t namespace_dblookup = {
     URL_NS_DBLOOKUP, /*enabled*/1, "/dblookup", NULL, 0 /* auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

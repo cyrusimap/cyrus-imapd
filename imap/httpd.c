@@ -262,7 +262,7 @@ struct namespace_t namespace_default = {
     URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -1416,7 +1416,8 @@ static void cmdloop(void)
         if (!txn.flags.ver1_0) alarm(httpd_keepalive);
 
         /* Process the requested method */
-        ret = (*meth_t->proc)(&txn, meth_t->params);
+        if (namespace->premethod) ret = namespace->premethod(&txn);
+        if (!ret) ret = (*meth_t->proc)(&txn, meth_t->params);
 
       need_auth:
         if (ret == HTTP_UNAUTHORIZED) {
@@ -1973,6 +1974,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             sep = ", ";
         }
         prot_puts(httpd_out, "\r\n");
+    }
+    if (resp_body->link) {
+        prot_printf(httpd_out, "Link: %s\r\n", resp_body->link);
     }
 
     switch (code) {

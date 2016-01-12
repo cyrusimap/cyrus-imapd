@@ -261,6 +261,7 @@ struct resp_body_t {
     const char *type;                   /* Content-Type     */
     const struct patch_doc_t *patch;    /* Accept-Patch     */
     unsigned prefs;                     /* Prefer           */
+    const char *link;                   /* Link             */
     const char *lock;                   /* Lock-Token       */
     const char *etag;                   /* ETag             */
     time_t lastmod;                     /* Last-Modified    */
@@ -364,9 +365,8 @@ enum {
     TRAILER_CMD5 =      (1<<0)  /* Content-MD5 */
 };
 
+typedef int (*premethod_proc_t)(struct transaction_t *txn);
 typedef int (*method_proc_t)(struct transaction_t *txn, void *params);
-typedef int (*filter_proc_t)(struct transaction_t *txn,
-                             const char *base, unsigned long len);
 
 struct method_t {
     method_proc_t proc;         /* Function to perform the method */
@@ -381,10 +381,11 @@ struct namespace_t {
     unsigned need_auth;         /* Do we need to auth for this namespace? */
     int mboxtype;               /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
-    void (*init)(struct buf *serverinfo);
-    void (*auth)(const char *userid);
-    void (*reset)(void);
-    void (*shutdown)(void);
+    void (*init)(struct buf *); /* Function run during service startup */
+    void (*auth)(const char *); /* Function run after authentication */
+    void (*reset)(void);        /* Function run before change in auth */
+    void (*shutdown)(void);     /* Function run during service shutdown */
+    int (*premethod)(struct transaction_t *); /* Func run prior to any method */
     struct method_t methods[];  /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
                                  * and in the SAME ORDER in which they appear

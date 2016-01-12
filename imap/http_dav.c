@@ -75,6 +75,7 @@
 #include "syslog.h"
 #include "strhash.h"
 #include "tok.h"
+#include "util.h"
 #include "version.h"
 #include "xmalloc.h"
 #include "xml_support.h"
@@ -103,7 +104,15 @@ static const struct dav_namespace_t {
     { XML_NS_SYSFLAG, "SF" },
 };
 
-static int server_info(struct transaction_t *txn);
+static xmlChar *server_info = NULL;
+static int server_info_size = 0;
+static time_t server_info_lastmod = 0;
+static struct buf server_info_token = BUF_INITIALIZER;
+static struct buf server_info_link = BUF_INITIALIZER;
+
+static void my_dav_auth(const char *userid);
+static void my_dav_shutdown(void);
+static int get_server_info(struct transaction_t *txn);
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
@@ -226,7 +235,7 @@ struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "/dav/principals", NULL, 1 /* auth */,
     /*mbtype */ 0,
     ALLOW_READ | ALLOW_DAV,
-    NULL, NULL, NULL, NULL,
+    NULL, &my_dav_auth, NULL, &my_dav_shutdown, &dav_premethod,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -526,8 +535,8 @@ static int eval_if(const char *hdr, const char *etag, const char *lock_token,
 
 
 /* Check headers for any preconditions */
-int dav_check_precond(struct transaction_t *txn, const void *data,
-                      const char *etag, time_t lastmod)
+EXPORTED int dav_check_precond(struct transaction_t *txn, const void *data,
+                               const char *etag, time_t lastmod)
 {
     const struct dav_data *ddata = (const struct dav_data *) data;
     hdrcache_t hdrcache = txn->req_hdrs;
@@ -589,7 +598,23 @@ int dav_check_precond(struct transaction_t *txn, const void *data,
 }
 
 
-unsigned get_preferences(struct transaction_t *txn)
+EXPORTED int dav_premethod(struct transaction_t *txn)
+{
+    if (buf_len(&server_info_link)) {
+        /* Check for Server-Info-Token header */
+        const char **hdr = spool_getheader(txn->req_hdrs, "Server-Info-Token");
+
+        if ((hdr && strcmp(hdr[0], buf_cstring(&server_info_token))) ||
+            (!hdr && txn->meth == METH_OPTIONS)) {
+            txn->resp_body.link = buf_cstring(&server_info_link);
+        }
+    }
+
+    return 0;
+}
+
+
+EXPORTED unsigned get_preferences(struct transaction_t *txn)
 {
     unsigned mask = 0, prefs = 0;
     const char **hdr;
@@ -4089,7 +4114,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
     if (txn->req_tgt.namespace == URL_NS_PRINCIPAL) {
         /* Special "principal" */
-        if (txn->req_tgt.flags == TGT_SERVER_INFO) return server_info(txn);
+        if (txn->req_tgt.flags == TGT_SERVER_INFO) return get_server_info(txn);
 
         /* No content for principals (yet) */
         return HTTP_NO_CONTENT;
@@ -7237,74 +7262,41 @@ int dav_store_resource(struct transaction_t *txn,
 }
 
 
-static int server_info(struct transaction_t *txn)
+static void my_dav_auth(const char *userid __attribute__((unused)))
 {
-    int precond;
-    static struct message_guid prev_guid;
-    struct message_guid guid;
-    const char **hdr, *etag;
-    static time_t compile_time = 0, lastmod;
-    struct stat sbuf;
-    static xmlChar *buf = NULL;
-    static int bufsiz = 0;
-
-    if (!httpd_userid) return HTTP_UNAUTHORIZED;
-
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")) &&
-        strcmp(hdr[0], "application/server-info+xml"))
-        return HTTP_NOT_ACCEPTABLE;
-
-    /* Initialize */
-    if (!compile_time) {
-        compile_time = calc_compile_time(__TIME__, __DATE__);
-        message_guid_set_null(&prev_guid);
-    }
-
-    /* Generate ETag based on compile date/time of this source file,
-       the number of available RSCALEs and the config file size/mtime */
-    stat(config_filename, &sbuf);
-    lastmod = MAX(compile_time, sbuf.st_mtime);
-
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
-               sbuf.st_mtime, sbuf.st_size);
-
-    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
-    etag = message_guid_encode(&guid);
-
-    /* Check any preconditions, including range request */
-    txn->flags.ranges = 1;
-    precond = check_precond(txn, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-    case HTTP_PARTIAL:
-    case HTTP_NOT_MODIFIED:
-        /* Fill in Etag,  Last-Modified, and Expires */
-        txn->resp_body.etag = etag;
-        txn->resp_body.lastmod = lastmod;
-        txn->resp_body.maxage = 86400;  /* 24 hrs */
-        txn->flags.cc |= CC_MAXAGE;
-
-        if (precond != HTTP_NOT_MODIFIED) break;
-
-    default:
-        /* We failed a precondition - don't perform the request */
-        return precond;
-    }
-
-    if (!message_guid_equal(&prev_guid, &guid)) {
+    if (!server_info) {
+        time_t compile_time = calc_compile_time(__TIME__, __DATE__);
+        struct stat sbuf;
+        struct message_guid guid;
         xmlNodePtr root, node, services, service;
         xmlNsPtr ns[NUM_NAMESPACE];
 
+        /* Generate token based on compile date/time of this source file,
+           the number of available RSCALEs and the config file size/mtime */
+        stat(config_filename, &sbuf);
+        server_info_lastmod = MAX(compile_time, sbuf.st_mtime);
+
+        buf_printf(&server_info_token, "%ld-%ld-%ld", (long) compile_time,
+                   sbuf.st_mtime, sbuf.st_size);
+        message_guid_generate(&guid, buf_cstring(&server_info_token),
+                              buf_len(&server_info_token));
+        buf_setcstr(&server_info_token, message_guid_encode(&guid));
+
+        /* Generate link header contents */
+        buf_printf(&server_info_link,
+                   "<%s/%s>; rel=\"server-info\"; token=\'%s\"",
+                   namespace_principal.prefix, SERVER_INFO,
+                   buf_cstring(&server_info_token));
+
         /* Start construction of our server-info */
         if (!(root = init_xml_response("server-info", NS_DAV, NULL, ns))) {
-            txn->error.desc = "Unable to create XML response";
-            return HTTP_SERVER_ERROR;
+            syslog(LOG_ERR, "Unable to create server-info XML");
+            return;
         }
 
         /* Add token */
-        xmlNewTextChild(root, ns[NS_DAV], BAD_CAST "token", BAD_CAST etag);
+        xmlNewTextChild(root, ns[NS_DAV], BAD_CAST "token",
+                        BAD_CAST buf_cstring(&server_info_token));
 
         /* Add server */
         if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -7373,21 +7365,62 @@ static int server_info(struct transaction_t *txn)
         }
 
         /* Dump XML response tree into a text buffer */
-        if (buf) xmlFree(buf);
-        xmlDocDumpFormatMemoryEnc(root->doc, &buf, &bufsiz, "utf-8", 1);
+        xmlDocDumpFormatMemoryEnc(root->doc,
+                                  &server_info, &server_info_size, "utf-8", 1);
         xmlFreeDoc(root->doc);
 
-        if (!buf) {
-            txn->error.desc = "Error dumping XML tree";
-            return HTTP_SERVER_ERROR;
+        if (!server_info) {
+            syslog(LOG_ERR, "Unable to dump server-info XML tree");
         }
+    }
+}
 
-        message_guid_copy(&prev_guid, &guid);
+static void my_dav_shutdown(void)
+{
+    if (server_info) xmlFree(server_info);
+    buf_free(&server_info_token);
+    buf_free(&server_info_link);
+}
+
+
+static int get_server_info(struct transaction_t *txn)
+{
+    int precond;
+    const char **hdr, *etag;
+
+    if (!server_info) return HTTP_NOT_FOUND;
+
+    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")) &&
+        strcmp(hdr[0], "application/server-info+xml"))
+        return HTTP_NOT_ACCEPTABLE;
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    etag = buf_cstring(&server_info_token);
+    precond = check_precond(txn, etag, server_info_lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+        /* Fill in Etag,  Last-Modified, and Expires */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = server_info_lastmod;
+        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->flags.cc |= CC_MAXAGE;
+
+        if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        return precond;
     }
 
     /* Output the XML response */
     txn->resp_body.type = "application/server-info+xml; charset=utf-8";
-    write_body(precond, txn, (char *) buf, bufsiz);
+    write_body(precond, txn, (char *) server_info, server_info_size);
 
     return 0;
 }
