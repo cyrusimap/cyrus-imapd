@@ -346,7 +346,7 @@ id|guid|partition|chunk_id|offset|length|expunged
 
 # finding chunks that are still needed (due to containing last state
 # of mailbox or mailbox_message, or containing a message)
-sqlite> select * from chunk where id in (select last_chunk_id from mailbox where deleted is null or deleted > 1437709300 union select last_chunk_id from mailbox_message where expunged is null or expunged > 1437709300 union select chunk_id from message as m join mailbox_message as mm on m.id = mm.message_id and mm.expunged > 1437709300);
+sqlite> select * from chunk where id in (select last_chunk_id from mailbox where deleted is null or deleted > 1437709300 union select last_chunk_id from mailbox_message where expunged is null or expunged > 1437709300 union select chunk_id from message as m join mailbox_message as mm on m.id = mm.message_id and (mm.expunged is null or mm.expunged > 1437709300));
 id|timestamp|offset|length|file_sha1|data_sha1
 1|1437709276|0|3397|da39a3ee5e6b4b0d3255bfef95601890afd80709|6836d0110252d08a0656c14c2d2d314124755491
 3|1437709355|1977|2129|fee183c329c011ead7757f59182116500776eaaf|a5677cfa1f5f7b627763652f4bb9b99f5970748c
@@ -610,6 +610,7 @@ on your backup server:
         backuppartition-default: /var/spool/backup
         backups_db: twoskip
         backups_db_path: /var/imap/backups.db
+        backup_retention_days: 7
     * cyrus.conf SERVICES:
         backupd cmd="backupd" listen="csync" prefork=0
         (remove other services, most likely)
@@ -748,4 +749,10 @@ todo list
   -> _sha1_file: looks ok, uses mmap, doesn't try to close any fds
 * backupd: don't block on locked backups, return mailbox locked -- but sync_client doesn't handle this
 * test multiple backup partitions
-* need to get timestamp out of 'cyrus chunk start' line because reindex can't reproduce it reliably
+* rearrange backup files => lcb_foo.* for lib stuff?
+
+compact implementation steps:
+    1 remove unused chunks, keep everything else as is
+    2 join adjacent chunks if small enough
+    3 discard old message/mailbox lines
+    4 parse/rebuild message lines
