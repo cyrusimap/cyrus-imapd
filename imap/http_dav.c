@@ -1969,7 +1969,7 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
         /* Use the quotaroot as specified in mailbox header */
         qr = fctx->mailbox->quotaroot;
     }
-    else {
+    else if (fctx->req_tgt->mbentry) {
         /* Find the quotaroot governing this hierarchy */
         if (quota_findroot(foundroot, sizeof(foundroot),
                            fctx->req_tgt->mbentry->name)) {
