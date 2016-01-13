@@ -4042,16 +4042,16 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcmp(name, "fn")) {
+        if (!strcasecmp(name, "fn")) {
             json_object_set_new(obj, "name", json_string(propval));
         }
 
-        else if (!strcmp(name, "x-addressbookserver-member")) {
+        else if (!strcasecmp(name, "x-addressbookserver-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             json_array_append_new(contactids, json_string(propval+9));
         }
 
-        else if (!strcmp(name, "x-fm-otheraccount-member")) {
+        else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
             if (!param) continue;
