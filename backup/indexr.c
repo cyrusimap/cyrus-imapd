@@ -782,6 +782,29 @@ EXPORTED struct backup_chunk_list *backup_get_chunks(struct backup *backup)
     return chunk_list;
 }
 
+EXPORTED struct backup_chunk_list *backup_get_live_chunks(struct backup *backup,
+                                                          time_t since)
+{
+    struct backup_chunk_list *chunk_list = xzmalloc(sizeof *chunk_list);
+
+    struct _chunk_row_rock crock = { chunk_list, NULL };
+
+    struct sqldb_bindval bval[] = {
+        { ":since", SQLITE_INTEGER, { .i = since } },
+        { NULL,     SQLITE_NULL,    { .s = NULL  } },
+    };
+
+    int r = sqldb_exec(backup->db, backup_index_chunk_select_live_sql,
+                       bval, _chunk_row_cb, &crock);
+
+    if (r) {
+        backup_chunk_list_free(&chunk_list);
+        return NULL;
+    }
+
+    return chunk_list;
+}
+
 EXPORTED struct backup_chunk *backup_get_latest_chunk(struct backup *backup)
 {
     struct backup_chunk *chunk = NULL;

@@ -120,9 +120,13 @@ void backup_chunk_list_add(struct backup_chunk_list *list,
                            struct backup_chunk *chunk);
 void backup_chunk_list_empty(struct backup_chunk_list *list);
 void backup_chunk_list_free(struct backup_chunk_list **chunk_listp);
+
 struct backup_chunk_list *backup_get_chunks(struct backup *backup);
+struct backup_chunk_list *backup_get_live_chunks(struct backup *backup,
+                                                 time_t since);
 
 struct backup_chunk *backup_get_latest_chunk(struct backup *backup);
+
 void backup_chunk_free(struct backup_chunk **chunkp);
 
 /* reading backup mailbox data */

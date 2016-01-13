@@ -141,6 +141,27 @@ const char backup_index_chunk_select_all_sql[] =
     ";"
 ;
 
+const char backup_index_chunk_select_live_sql[] =
+    "SELECT " CHUNK_SELECT_FIELDS
+    " FROM chunk"
+    " WHERE id IN ("
+    "  SELECT last_chunk_id"
+    "   FROM mailbox"
+    "   WHERE deleted IS NULL OR deleted > :since"
+    "  UNION"
+    "  SELECT last_chunk_id"
+    "   FROM mailbox_message"
+    "   WHERE expunged IS NULL OR expunged > :since"
+    "  UNION"
+    "  SELECT chunk_id"
+    "   FROM message AS m"
+    "   JOIN mailbox_message AS mm"
+    "   ON m.id = mm.message_id"
+    "    AND (mm.expunged IS NULL OR mm.expunged > :since)"
+    " )"
+    ";"
+;
+
 const char backup_index_chunk_select_latest_sql[] =
     "SELECT " CHUNK_SELECT_FIELDS
     " FROM chunk"
