@@ -77,6 +77,7 @@ int backup_open_paths(struct backup **backupp,
                       enum backup_open_create create);
 
 int backup_close(struct backup **backupp); // also ends index/append ops
+int backup_unlink(struct backup **backupp);
 
 
 /* verifying backups */

@@ -437,6 +437,16 @@ EXPORTED int backup_close(struct backup **backupp)
     return r1 ? r1 : r2;
 }
 
+EXPORTED int backup_unlink(struct backup **backupp)
+{
+    struct backup *backup = *backupp;
+
+    unlink(backup->index_fname);
+    unlink(backup->data_fname);
+
+    return backup_close(backupp);
+}
+
 EXPORTED const char *backup_get_data_fname(const struct backup *backup)
 {
     return backup->data_fname;
