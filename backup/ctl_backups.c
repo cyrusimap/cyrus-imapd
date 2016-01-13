@@ -72,6 +72,7 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    %s [options] compact [mode] backup...\n", argv0);
     fprintf(stderr, "    %s [options] list [list_opts] [[mode] backup...]\n", argv0);
     fprintf(stderr, "    %s [options] lock [lock_opts] [mode] backup\n", argv0);
     fprintf(stderr, "    %s [options] reindex [mode] backup...\n", argv0);
@@ -79,6 +80,7 @@ static void usage(void)
 
     fprintf(stderr, "\n%s\n",
             "Commands:\n"
+            "    compact             # compact specified backups\n"
             "    list [list_opts]    # list backups (all if none specified)\n"
             "    lock [lock_opts]    # lock specified backup\n"
             "    reindex             # reindex specified backups\n"
@@ -143,7 +145,7 @@ struct ctlbu_cmd_options {
 
 enum ctlbu_cmd {
     CTLBU_CMD_UNSPECIFIED = 0,
-    CTLBU_CMD_COMPRESS,
+    CTLBU_CMD_COMPACT,
     CTLBU_CMD_DELETE,
     CTLBU_CMD_LIST,
     CTLBU_CMD_LOCK,
@@ -154,9 +156,9 @@ enum ctlbu_cmd {
 };
 
 /* same signature as foreach_cb */
-static int cmd_compress_one(void *rock,
-                            const char *userid, size_t userid_len,
-                            const char *fname, size_t fname_len);
+static int cmd_compact_one(void *rock,
+                           const char *userid, size_t userid_len,
+                           const char *fname, size_t fname_len);
 static int cmd_delete_one(void *rock,
                           const char *userid, size_t userid_len,
                           const char *fname, size_t fname_len);
@@ -178,7 +180,7 @@ static int cmd_verify_one(void *rock,
 
 static foreach_cb *const cmd_func[] = {
     NULL,
-    cmd_compress_one,
+    cmd_compact_one,
     cmd_delete_one,
     cmd_list_one,
     cmd_lock_one,
@@ -194,7 +196,7 @@ static enum ctlbu_cmd parse_cmd_string(const char *cmd)
 
     switch(cmd[0]) {
     case 'c':
-        if (strcmp(cmd, "compress") == 0) return CTLBU_CMD_COMPRESS;
+        if (strcmp(cmd, "compact") == 0) return CTLBU_CMD_COMPACT;
         break;
     case 'd':
         if (strcmp(cmd, "delete") == 0) return CTLBU_CMD_DELETE;
@@ -402,15 +404,31 @@ int main (int argc, char **argv)
     exit(0);
 }
 
-static int cmd_compress_one(void *rock,
-                            const char *userid, size_t userid_len,
-                            const char *fname, size_t fname_len)
+static int cmd_compact_one(void *rock,
+                           const char *key, size_t key_len,
+                           const char *data, size_t data_len)
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
-    (void) options;
-    fprintf(stderr, "unimplemented: %s %s[%zu] %s[%zu]\n", __func__,
-            userid, userid_len, fname, fname_len);
-    return -1;
+    char *userid = NULL;
+    char *fname = NULL;
+    int r = 0;
+
+    /* input args might not be 0-terminated, so make a safe copy */
+    if (key_len)
+        userid = xstrndup(key, key_len);
+    if (data_len)
+        fname = xstrndup(data, data_len);
+
+    r = backup_compact(fname, options->verbose, stdout);
+
+    printf("compact %s: %s\n",
+           userid ? userid : fname,
+           r ? "failed" : "ok");
+
+    if (userid) free(userid);
+    if (fname) free(fname);
+
+    return r;
 }
 
 static int cmd_delete_one(void *rock,
