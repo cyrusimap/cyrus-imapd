@@ -570,11 +570,11 @@ static void write_forwarding_hdrs(struct protstream *pout, hdrcache_t hdrs,
         if (host) prot_printf(pout, ";host=%s", *host);
         if (httpd_remoteip) {
             len = strcspn(httpd_remoteip, ";");
-            prot_printf(pout, ";for=%.*s", len, httpd_remoteip);
+            prot_printf(pout, ";for=%.*s", (int)len, httpd_remoteip);
         }
         if (httpd_localip) {
             len = strcspn(httpd_localip, ";");
-            prot_printf(pout, ";for=%.*s", len, httpd_localip);
+            prot_printf(pout, ";for=%.*s", (int)len, httpd_localip);
         }
         prot_puts(pout, "\r\n");
     }
