@@ -7332,22 +7332,23 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
 
             /* Add CalDAV features */
             node = xmlNewChild(app, NULL, BAD_CAST "features", NULL);
-            xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
-                        BAD_CAST "calendar-access");
+            xmlNewChild(node, ns[NS_CALDAV],
+                        BAD_CAST "calendar-access", NULL);
             if (namespace_calendar.allow & ALLOW_CAL_SCHED)
-                xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
-                            BAD_CAST "calendar-auto-schedule");
+                xmlNewChild(node, ns[NS_CALDAV],
+                            BAD_CAST "calendar-auto-schedule", NULL);
             if (namespace_calendar.allow & ALLOW_CAL_NOTZ)
-                xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
-                            BAD_CAST "calendar-no-timezone");
+                xmlNewChild(node, ns[NS_CALDAV],
+                            BAD_CAST "calendar-no-timezone", NULL);
             if (namespace_calendar.allow & ALLOW_CAL_AVAIL)
-                xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
-                            BAD_CAST "calendar-availability");
+                xmlNewChild(node, ns[NS_CALDAV],
+                            BAD_CAST "calendar-availability", NULL);
             if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
-                xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
-                            BAD_CAST "calendar-managed-attachments");
-                xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
-                            BAD_CAST "calendar-managed-attachments-no-recurrence");
+                xmlNewChild(node, ns[NS_CALDAV],
+                            BAD_CAST "calendar-managed-attachments", NULL);
+                xmlNewChild(node, ns[NS_CALDAV],
+                            BAD_CAST "calendar-managed-attachments-no-recurrence",
+                    NULL);
             }
         }
 
@@ -7358,8 +7359,7 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
 
             /* Add CardDAV features */
             node = xmlNewChild(app, NULL, BAD_CAST "features", NULL);
-            xmlNewChild(node, ns[NS_CARDDAV], BAD_CAST "feature",
-                        BAD_CAST "addressbook");
+            xmlNewChild(node, ns[NS_CARDDAV], BAD_CAST "addressbook", NULL);
         }
 
         /* Dump XML response tree into a text buffer */
