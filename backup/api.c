@@ -109,25 +109,44 @@ HIDDEN int backup_real_open(struct backup **backupp,
     case BACKUP_OPEN_NOCREATE:      break;
     }
 
-    backup->fd = open(backup->data_fname,
+    while (backup->fd == -1) {
+        struct stat sbuf1, sbuf2;
+
+        int fd = open(backup->data_fname,
                       open_flags,
                       S_IRUSR | S_IWUSR);
-    if (backup->fd < 0) {
-        syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
-        r = IMAP_IOERROR;
-        goto error;
-    }
-
-    r = lock_setlock(backup->fd, /*excl*/ 1, nonblock, backup->data_fname);
-    if (r) {
-        if (errno == EWOULDBLOCK || errno == EAGAIN) {
-            r = IMAP_MAILBOX_LOCKED;
-        }
-        else {
-            syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
+        if (fd < 0) {
+            syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
             r = IMAP_IOERROR;
+            goto error;
         }
-        goto error;
+
+        r = lock_setlock(fd, /*excl*/ 1, nonblock, backup->data_fname);
+        if (r) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                r = IMAP_MAILBOX_LOCKED;
+            }
+            else {
+                syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
+                r = IMAP_IOERROR;
+            }
+            goto error;
+        }
+
+        r = fstat(fd, &sbuf1);
+        if (!r) r = stat(backup->data_fname, &sbuf2);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: (f)stat %s: %m", backup->data_fname);
+            r = IMAP_IOERROR;
+            goto error;
+        }
+
+        if (sbuf1.st_ino == sbuf2.st_ino) {
+            backup->fd = fd;
+            break;
+        }
+
+        close(fd);
     }
 
     if (reindex) {
