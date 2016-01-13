@@ -7268,7 +7268,7 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
         time_t compile_time = calc_compile_time(__TIME__, __DATE__);
         struct stat sbuf;
         struct message_guid guid;
-        xmlNodePtr root, node, services, service;
+        xmlNodePtr root, node, apps, app;
         xmlNsPtr ns[NUM_NAMESPACE];
 
         /* Generate token based on compile date/time of this source file,
@@ -7284,7 +7284,7 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
 
         /* Generate link header contents */
         buf_printf(&server_info_link,
-                   "<%s/%s>; rel=\"server-info\"; token=\'%s\"",
+                   "<%s/%s>; rel=\"server-info\"; token=\"%s\"",
                    namespace_principal.prefix, SERVER_INFO,
                    buf_cstring(&server_info_token));
 
@@ -7323,16 +7323,15 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
         xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
                     BAD_CAST "add-member");
 
-        services = xmlNewChild(root, NULL, BAD_CAST "applications", NULL);
+        apps = xmlNewChild(root, NULL, BAD_CAST "applications", NULL);
 
         if (namespace_calendar.enabled) {
-            service = xmlNewChild(services, NULL, BAD_CAST "application", NULL);
-            ensure_ns(ns, NS_CALDAV, service, XML_NS_CALDAV, "C");
-            xmlNewChild(service, ns[NS_CALDAV],
-                        BAD_CAST "name", BAD_CAST "caldav");
+            app = xmlNewChild(apps, NULL, BAD_CAST "application", NULL);
+            ensure_ns(ns, NS_CALDAV, app, XML_NS_CALDAV, "C");
+            xmlNewChild(app, NULL, BAD_CAST "name", BAD_CAST "caldav");
 
             /* Add CalDAV features */
-            node = xmlNewChild(service, NULL, BAD_CAST "features", NULL);
+            node = xmlNewChild(app, NULL, BAD_CAST "features", NULL);
             xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
                         BAD_CAST "calendar-access");
             if (namespace_calendar.allow & ALLOW_CAL_SCHED)
@@ -7353,13 +7352,12 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
         }
 
         if (namespace_addressbook.enabled) {
-            service = xmlNewChild(services, NULL, BAD_CAST "application", NULL);
-            ensure_ns(ns, NS_CARDDAV, service, XML_NS_CARDDAV, "A");
-            xmlNewChild(service, ns[NS_CARDDAV],
-                        BAD_CAST "name", BAD_CAST "carddav");
+            app = xmlNewChild(apps, NULL, BAD_CAST "application", NULL);
+            ensure_ns(ns, NS_CARDDAV, app, XML_NS_CARDDAV, "A");
+            xmlNewChild(app, NULL, BAD_CAST "name", BAD_CAST "carddav");
 
             /* Add CardDAV features */
-            node = xmlNewChild(service, NULL, BAD_CAST "features", NULL);
+            node = xmlNewChild(app, NULL, BAD_CAST "features", NULL);
             xmlNewChild(node, ns[NS_CARDDAV], BAD_CAST "feature",
                         BAD_CAST "addressbook");
         }
