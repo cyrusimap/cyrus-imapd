@@ -7309,19 +7309,14 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
 
         /* Add global DAV features */
         node = xmlNewChild(root, NULL, BAD_CAST "features", NULL);
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "class-1");
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "class-2");
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "class-3");
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
-                    BAD_CAST "access-control");
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
-                    BAD_CAST "extended-mkcol");
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
-                    BAD_CAST "quota");
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
-                    BAD_CAST "sync-collection");
-        xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
-                    BAD_CAST "add-member");
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "class-1", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "class-2", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "class-3", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "access-control", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "extended-mkcol", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "quota", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "sync-collection", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "add-member", NULL);
 
         apps = xmlNewChild(root, NULL, BAD_CAST "applications", NULL);
 
