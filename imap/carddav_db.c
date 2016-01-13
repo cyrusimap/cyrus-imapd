@@ -746,19 +746,19 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcmp(name, "uid")) {
+        if (!strcasecmp(name, "uid")) {
             cdata->vcard_uid = propval;
         }
-        else if (!strcmp(name, "n")) {
+        else if (!strcasecmp(name, "n")) {
             cdata->name = propval;
         }
-        else if (!strcmp(name, "fn")) {
+        else if (!strcasecmp(name, "fn")) {
             cdata->fullname = propval;
         }
-        else if (!strcmp(name, "nickname")) {
+        else if (!strcasecmp(name, "nickname")) {
             cdata->nickname = propval;
         }
-        else if (!strcmp(name, "email")) {
+        else if (!strcasecmp(name, "email")) {
             /* XXX - insert if primary */
             int ispref = 0;
             struct vparse_param *param;
@@ -769,19 +769,19 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
             strarray_append(&emails, propval);
             strarray_append(&emails, ispref ? "1" : "");
         }
-        else if (!strcmp(name, "x-addressbookserver-member")) {
+        else if (!strcasecmp(name, "x-addressbookserver-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             strarray_append(&member_uids, propval+9);
             strarray_append(&member_uids, "");
         }
-        else if (!strcmp(name, "x-fm-otheraccount-member")) {
+        else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
             if (!param) continue;
             strarray_append(&member_uids, propval+9);
             strarray_append(&member_uids, param->value);
         }
-        else if (!strcmp(name, "x-addressbookserver-kind")) {
+        else if (!strcasecmp(name, "x-addressbookserver-kind")) {
             if (!strcasecmp(propval, "group"))
                 cdata->kind = CARDDAV_KIND_GROUP;
             /* default case is CARDDAV_KIND_CONTACT */
