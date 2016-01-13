@@ -608,7 +608,7 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
     if (!initialised_res) {
         r = regcomp(&whitespace_re, "[ \t\r\n]+", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&relike_token_re, "^[ \t]*[A-Za-z0-9]+:", REG_EXTENDED);
+        r = regcomp(&relike_token_re, "^[ \t]*[A-Za-z0-9]+(\\[[0-9]+\\])?:", REG_EXTENDED);
         assert(r == 0);
         r = regcomp(&blob_start_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
         assert(r == 0);

@@ -1311,6 +1311,10 @@ static void test_subject_normalise(void)
              "inter[SEC=UNCLASSIFIED]jection");
     TESTCASE("walks, talks, doesn't quack [SEC=UN",
              "walks,talks,doesn'tquack[SEC=UN");
+    TESTCASE("Re[2]: another reply",
+             "anotherreply");
+    TESTCASE("Re[peat]: another reply",
+             "Re[peat]:anotherreply");
 }
 
 #undef TESTCASE
