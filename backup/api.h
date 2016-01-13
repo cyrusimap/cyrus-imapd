@@ -58,6 +58,7 @@ enum backup_open_nonblock {
 enum backup_open_create {
     BACKUP_OPEN_NOCREATE = 0,
     BACKUP_OPEN_CREATE = 1,
+    BACKUP_OPEN_CREATE_EXCL = 2,
 };
 
 int backup_open(struct backup **backupp,

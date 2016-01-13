@@ -71,6 +71,17 @@ struct backup {
     struct backup_append_state *append_state;
 };
 
+enum backup_open_reindex {
+    BACKUP_OPEN_NOREINDEX = 0,
+    BACKUP_OPEN_REINDEX = 1,
+};
+
+HIDDEN int backup_real_open(struct backup **backupp,
+                            const char *data_fname, const char *index_fname,
+                            enum backup_open_reindex reindex,
+                            enum backup_open_nonblock nonblock,
+                            enum backup_open_create create);
+
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len);
 

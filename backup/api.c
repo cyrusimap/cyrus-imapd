@@ -87,16 +87,11 @@ const char *_sha1_file(int fd, const char *fname, size_t limit,
  *
  * with only one shared case, might as well always lock exclusively...
  */
-enum backup_open_reindex {
-    BACKUP_OPEN_NOREINDEX = 0,
-    BACKUP_OPEN_REINDEX = 1,
-};
-
-static int _open_internal(struct backup **backupp,
-                          const char *data_fname, const char *index_fname,
-                          enum backup_open_reindex reindex,
-                          enum backup_open_nonblock nonblock,
-                          enum backup_open_create create)
+HIDDEN int backup_real_open(struct backup **backupp,
+                            const char *data_fname, const char *index_fname,
+                            enum backup_open_reindex reindex,
+                            enum backup_open_nonblock nonblock,
+                            enum backup_open_create create)
 {
     struct backup *backup = xzmalloc(sizeof *backup);
     int r;
@@ -107,8 +102,13 @@ static int _open_internal(struct backup **backupp,
     backup->index_fname = xstrdup(index_fname);
 
     int open_flags = O_RDWR | O_APPEND;
-    if (create)
-        open_flags |= O_CREAT;
+
+    switch (create) {
+    case BACKUP_OPEN_CREATE_EXCL:   open_flags |= O_EXCL;  /* fall thru */
+    case BACKUP_OPEN_CREATE:        open_flags |= O_CREAT; /*           */
+    case BACKUP_OPEN_NOCREATE:      break;
+    }
+
     backup->fd = open(backup->data_fname,
                       open_flags,
                       S_IRUSR | S_IWUSR);
@@ -203,9 +203,9 @@ EXPORTED int backup_open(struct backup **backupp,
     int r = backup_get_paths(mbname, &data_fname, &index_fname, create);
     if (r) goto done;
 
-    r = _open_internal(backupp,
-                       buf_cstring(&data_fname), buf_cstring(&index_fname),
-                       BACKUP_OPEN_NOREINDEX, nonblock, create);
+    r = backup_real_open(backupp,
+                         buf_cstring(&data_fname), buf_cstring(&index_fname),
+                         BACKUP_OPEN_NOREINDEX, nonblock, create);
     if (r) goto done;
 
     r = backup_verify(*backupp, BACKUP_VERIFY_QUICK, 0, NULL);
@@ -381,13 +381,13 @@ EXPORTED int backup_open_paths(struct backup **backupp,
                                enum backup_open_create create)
 {
     if (index_fname)
-        return _open_internal(backupp, data_fname, index_fname,
-                              BACKUP_OPEN_NOREINDEX, nonblock, create);
+        return backup_real_open(backupp, data_fname, index_fname,
+                                BACKUP_OPEN_NOREINDEX, nonblock, create);
         /* FIXME verify */
 
     char *tmp = strconcat(data_fname, ".index", NULL);
-    int r = _open_internal(backupp, data_fname, tmp,
-                           BACKUP_OPEN_NOREINDEX, nonblock, create);
+    int r = backup_real_open(backupp, data_fname, tmp,
+                             BACKUP_OPEN_NOREINDEX, nonblock, create);
     free(tmp);
     if (r) return r;
 
@@ -782,10 +782,10 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
     buf_printf(&data_fname, "%s", name);
     buf_printf(&index_fname, "%s.index", name);
 
-    r = _open_internal(&backup,
-                       buf_cstring(&data_fname), buf_cstring(&index_fname),
-                       BACKUP_OPEN_REINDEX, BACKUP_OPEN_BLOCK,
-                       BACKUP_OPEN_NOCREATE);
+    r = backup_real_open(&backup,
+                         buf_cstring(&data_fname), buf_cstring(&index_fname),
+                         BACKUP_OPEN_REINDEX, BACKUP_OPEN_BLOCK,
+                         BACKUP_OPEN_NOCREATE);
     buf_free(&index_fname);
     buf_free(&data_fname);
     if (r) return r;
