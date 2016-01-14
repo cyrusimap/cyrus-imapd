@@ -127,6 +127,11 @@ icaltimezone *utc_zone = NULL;
 struct strlist *cua_domains = NULL;
 icalarray *rscale_calendars = NULL;
 
+static struct partial_caldata_t {
+    struct icaltimetype start;
+    struct icaltimetype end;
+} partial_caldata;
+
 static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_fb(struct transaction_t *txn, void *params);
@@ -367,7 +372,7 @@ static const struct prop_entry caldav_props[] = {
 
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN,
-      propfind_caldata, NULL, NULL },
+      propfind_caldata, NULL, &partial_caldata },
     { "calendar-description", NS_CALDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV, PROP_COLLECTION | PROP_PRESCREEN,
@@ -3537,7 +3542,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
 
 /* Append a new busytime period to the busytime array */
-static void add_freebusy(struct icaltimetype *start,
+static void add_freebusy(struct icaltimetype *recurid,
+                         struct icaltimetype *start,
                          struct icaltimetype *end,
                          icalparameter_fbtype fbtype,
                          struct calquery_filter *calfilter)
@@ -3554,6 +3560,10 @@ static void add_freebusy(struct icaltimetype *start,
 
     /* Add new freebusy */
     newfb = &freebusy->fb[freebusy->len++];
+    memset(newfb, 0, sizeof(struct freebusy));
+
+    if (recurid) newfb->recurid = *recurid;
+
     if (icaltime_is_date(*start)) {
         newfb->per.duration = icaltime_subtract(*end, *start);
         newfb->per.end = icaltime_null_time();
@@ -3562,10 +3572,17 @@ static void add_freebusy(struct icaltimetype *start,
     }
     else {
         newfb->per.duration = icaldurationtype_null_duration();
-        newfb->per.end = (icaltime_compare(calfilter->end, *end) < 0) ?
-            calfilter->end : *end;
-        newfb->per.start = (icaltime_compare(calfilter->start, *start) > 0) ?
-            calfilter->start : *start;
+        if ((calfilter->flags & BUSYTIME_QUERY) &&
+            icaltime_compare(calfilter->end, *end) < 0) {
+            newfb->per.end = calfilter->end;
+        }
+        else newfb->per.end = *end;
+
+        if ((calfilter->flags & BUSYTIME_QUERY) &&
+            icaltime_compare(calfilter->start, *start)) {
+            newfb->per.start = calfilter->start;
+        }
+        else newfb->per.start = *start;
     }
     newfb->type = fbtype;
 }
@@ -3577,12 +3594,20 @@ static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
 {
     struct calquery_filter *calfilter = (struct calquery_filter *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    struct icaltimetype start, end;
+    struct icaltimetype start, end, recurid;
     icalparameter_fbtype fbtype;
 
     /* Set start and end times */
     start = icaltime_from_timet_with_zone(span->start, is_date, utc_zone);
     end = icaltime_from_timet_with_zone(span->end, is_date, utc_zone);
+
+    /* Set recurid */
+    recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+    if (icaltime_is_null_time(recurid)) recurid = start;
+    else {
+        recurid = icaltime_convert_to_zone(recurid, utc_zone);
+        recurid.is_date = 0;  /* make DATE-TIME for comparison */
+    }
 
     /* Set FBTYPE */
     switch (icalcomponent_isa(comp)) {
@@ -3628,7 +3653,7 @@ static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
         break;
     }
 
-    add_freebusy(&start, &end, fbtype, calfilter);
+    add_freebusy(&recurid, &start, &end, fbtype, calfilter);
 }
 
 
@@ -3651,13 +3676,13 @@ static int is_busytime(struct calquery_filter *calfilter, icalcomponent *comp)
 }
 
 
-/* Compare recurid to start time of busytime periods -- used for searching */
+/* Compare recurid to recurid of busytime periods -- used for searching */
 static int compare_recurid(const void *key, const void *mem)
 {
     struct icaltimetype *recurid = (struct icaltimetype *) key;
     struct freebusy *fb = (struct freebusy *) mem;
 
-    return icaltime_compare(*recurid, fb->per.start);
+    return icaltime_compare(*recurid, fb->recurid);
 }
 
 
@@ -3675,7 +3700,8 @@ static int compare_freebusy(const void *fb1, const void *fb2)
 }
 
 
-static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
+static int expand_occurrences(icalcomponent *ical, icalcomponent **master,
+                              icalcomponent_kind kind,
                               struct calquery_filter *calfilter)
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
@@ -3698,6 +3724,7 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
          comp &&
              icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
          comp = icalcomponent_get_next_component(ical, kind));
+    if (master) *master = comp;
 
     if (is_busytime(calfilter, comp)) {
         /* Add all recurring busytime in specified time-range */
@@ -3733,7 +3760,7 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
         if (overridden) {
             /* "Remove" the instance
                by setting fbtype to NONE (we ignore these later)
-               NOTE: MUST keep period.start otherwise bsearch() breaks */
+               NOTE: MUST keep recurid otherwise bsearch() breaks */
             /* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
             overridden->type = ICAL_FBTYPE_NONE;
         }
@@ -3800,7 +3827,7 @@ int apply_calfilter(struct propfind_ctx *fctx, void *data)
             kind =
                 icalcomponent_isa(icalcomponent_get_first_real_component(ical));
 
-            match = expand_occurrences(ical, kind, calfilter);
+            match = expand_occurrences(ical, NULL, kind, calfilter);
 
             icalcomponent_free(ical);
         }
@@ -3827,7 +3854,7 @@ int apply_calfilter(struct propfind_ctx *fctx, void *data)
                 fbtype = ICAL_FBTYPE_BUSY; break;
             }
 
-            add_freebusy(&dtstart, &dtend, fbtype, calfilter);
+            add_freebusy(&dtstart, &dtstart, &dtend, fbtype, calfilter);
         }
     }
 
@@ -4101,14 +4128,18 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+static int compare_freebusy_with_type(const void *fb1, const void *fb2);
+
 /* Callback to prescreen/fetch CALDAV:calendar-data */
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop,
                             xmlNodePtr resp __attribute__((unused)),
                             struct propstat propstat[],
-                            void *rock __attribute__((unused)))
+                            void *rock)
 {
+    struct partial_caldata_t *partial = (struct partial_caldata_t *) rock;
+    struct caldav_data *cdata = (struct caldav_data *) fctx->data;
     struct buf buf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
@@ -4119,10 +4150,159 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         mailbox_map_record(fctx->mailbox, fctx->record, &buf);
         data = buf_cstring(&buf) + fctx->record->header_size;
         datalen = buf_len(&buf) - fctx->record->header_size;
+
+        if (!icaltime_is_null_time(partial->start)) {
+            struct calquery_filter calfilter;
+            icalcomponent *ical, *master, *comp, *nextcomp;
+            icalproperty *prop, *nextprop;
+            icalcomponent_kind kind;
+            unsigned i;
+
+            memset(&calfilter, 0, sizeof(struct calquery_filter));
+            calfilter.start = partial->start;
+            calfilter.end = partial->end;
+
+            ical = icalparser_parse_string(data);
+            if (!cdata->comp_flags.tzbyref) {
+                /* Strip all VTIMEZONEs */
+                for (comp = icalcomponent_get_first_component(ical,
+                                                              ICAL_VTIMEZONE_COMPONENT);
+                     comp; comp = nextcomp) {
+                    nextcomp = icalcomponent_get_next_component(ical,
+                                                                ICAL_VTIMEZONE_COMPONENT);
+                    icalcomponent_remove_component(ical, comp);
+                    icalcomponent_free(comp);
+                }
+            }
+
+            kind =
+                icalcomponent_isa(icalcomponent_get_first_real_component(ical));
+
+            expand_occurrences(ical, &master, kind, &calfilter);
+
+            /* Strip unwanted properties from master component */
+            for (prop = icalcomponent_get_first_property(master,
+                                                         ICAL_ANY_PROPERTY);
+                 prop; prop = nextprop) {
+                nextprop = icalcomponent_get_next_property(master,
+                                                           ICAL_ANY_PROPERTY);
+                switch (icalproperty_isa(prop)) {
+                case ICAL_RRULE_PROPERTY:
+                case ICAL_RDATE_PROPERTY:
+                case ICAL_EXDATE_PROPERTY:
+                    icalcomponent_remove_property(master, prop);
+                    icalproperty_free(prop);
+                    break;
+
+                default:
+                    break;
+                }
+            }
+
+            /* Re-sort freebusy periods by start time and type.
+               Overriden instances (FBTYPE=NONE) will have higher ordinal num */
+            qsort(calfilter.freebusy.fb, calfilter.freebusy.len,
+                  sizeof(struct freebusy), compare_freebusy_with_type);
+
+            /* Determine which existing components we want to keep */
+            for (comp = icalcomponent_get_first_component(ical, kind);
+                 comp; comp = nextcomp) {
+                nextcomp = icalcomponent_get_next_component(ical, kind);
+                struct icaltimetype recurid;
+                struct freebusy *found;
+
+                recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+                if (icaltime_is_null_time(recurid)) {
+                    recurid = icalcomponent_get_dtstart(comp);
+                }
+                recurid = icaltime_convert_to_zone(recurid, utc_zone);
+                recurid.is_date = 0;  /* make DATE-TIME for comparison */
+
+                found = bsearch(&recurid, calfilter.freebusy.fb,
+                                calfilter.freebusy.len,
+                                sizeof(struct freebusy), compare_recurid);
+                if (found) {
+                    /* Strip unwanted properties from component */
+
+                    /* Set DTSTART/DTEND/RECURRENCEID to UTC */
+                    icalcomponent_set_dtstart(comp, found->per.start);
+                    icalcomponent_set_dtend(comp, found->per.end);
+
+                    prop = icalcomponent_get_first_property(comp,
+                                                            ICAL_RECURRENCEID_PROPERTY);
+                    if (prop) {
+                        icalproperty_remove_parameter_by_kind(prop,
+                                                              ICAL_TZID_PARAMETER);
+                        icalproperty_set_recurrenceid(prop, recurid);
+                    }
+                    else if (icaltime_compare(recurid, found->per.start)) {
+                        /* Overridden master instance */
+                        icalcomponent_remove_component(ical, comp);
+                    }
+
+                    /* Mark this instance as handled */
+                    found->type = ICAL_FBTYPE_NONE;
+                }
+                else {
+                    /* Remove this component (doesn't overlap expand range) */
+                    icalcomponent_remove_component(ical, comp);
+                    if (comp != master) icalcomponent_free(comp);
+                }
+            }
+
+            /* Create recurrence components for remaining instances */
+            for (i = 0; i < calfilter.freebusy.len; i++) {
+                struct freebusy *fb = &calfilter.freebusy.fb[i];
+
+                if (fb->type == ICAL_FBTYPE_NONE) continue;
+
+                comp = icalcomponent_new_clone(master);
+                icalcomponent_set_dtstart(comp, fb->per.start);
+                icalcomponent_set_dtend(comp, fb->per.end);
+                icalcomponent_set_recurrenceid(comp, fb->recurid);
+                icalcomponent_add_component(ical, comp);
+            }
+
+            /* Create iCalendar data from new ical component */
+            buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
+            data = buf_cstring(&buf);
+            datalen = buf_len(&buf);
+
+            /* Cleanup */
+            icalcomponent_free(ical);
+            if (!icalcomponent_get_parent(master)) icalcomponent_free(master);
+            if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+        }
     }
-    else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
-        /* We want to strip known VTIMEZONEs */
-        fctx->proc_by_resource = &caldav_propfind_by_resource;
+    else {
+        /* Prescreen "property" request */
+        xmlNodePtr node;
+
+        /* Initialize expand to be "empty" */
+        partial->start = icaltime_null_time();
+        partial->end = icaltime_null_time();
+
+        /* Check for and parse child elements of CALDAV:calendar-data */
+        for (node = xmlFirstElementChild(prop); node;
+             node = xmlNextElementSibling(node)) {
+            if (!xmlStrcmp(node->name, BAD_CAST "expand")) {
+                xmlChar *start, *end;
+
+                if ((start = xmlGetProp(node, BAD_CAST "start"))) {
+                    partial->start = icaltime_from_string((char *) start);
+                    xmlFree(start);
+                }
+                if ((end = xmlGetProp(node, BAD_CAST "end"))) {
+                    partial->end = icaltime_from_string((char *) end);
+                    xmlFree(end);
+                }
+            }
+        }
+
+        if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+            /* We want to strip known VTIMEZONEs */
+            fctx->proc_by_resource = &caldav_propfind_by_resource;
+        }
     }
 
     r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
@@ -5490,7 +5670,7 @@ static void combine_vavailability(struct calquery_filter *calfilter)
             }
 
             /* Expand available time occurrences */
-            expand_occurrences(comp, ICAL_XAVAILABLE_COMPONENT, &availfilter);
+            expand_occurrences(comp, NULL, ICAL_XAVAILABLE_COMPONENT, &availfilter);
 
             /* Calculate unavailable periods and add to busytime */
             period.start = availfilter.start;

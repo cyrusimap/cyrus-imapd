@@ -111,6 +111,7 @@ extern void sched_param_free(struct sched_param *sparam);
 
 struct freebusy {
     struct icalperiodtype per;
+    struct icaltimetype recurid;
     icalparameter_fbtype type;
 };
 
