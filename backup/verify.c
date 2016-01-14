@@ -501,7 +501,6 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
         struct dlist *record = NULL;
         struct dlist *di = NULL;
         const char *uniqueid = NULL;
-        int mailbox_removed = 0;
 
         int c = _parse_line(ps, NULL, &cmd, &dl);
         if (c == EOF) {
@@ -529,15 +528,12 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
 
         if (mailbox_list->count) {
             mailbox = (struct backup_mailbox *) hash_lookup(uniqueid, &mailbox_list_index);
-            if (!mailbox)
-                goto next_line;
 
-            if (!mailbox_matches(mailbox, dl))
-                goto next_line;
-
-            backup_mailbox_list_remove(mailbox_list, mailbox);
-            hash_del(uniqueid, &mailbox_list_index);
-            mailbox_removed = 1; /* don't free it yet, need it for record processing */
+            if (mailbox && mailbox_matches(mailbox, dl)) {
+                backup_mailbox_list_remove(mailbox_list, mailbox);
+                hash_del(uniqueid, &mailbox_list_index);
+                backup_mailbox_free(&mailbox);
+            }
         }
 
         if (mailbox_message_list->count) {
@@ -568,8 +564,6 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
         }
 
 next_line:
-        if (mailbox && mailbox_removed)
-            backup_mailbox_free(&mailbox);
         if (dl)
             dlist_free(&dl);
     }
