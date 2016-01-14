@@ -4828,43 +4828,68 @@ static int _wantprop(hash_table *props, const char *name)
     return 0;
 }
 
-/* convert YYYY-MM-DD to separate y,m,d */
-static int _parse_date(const char *date, unsigned *y, unsigned *m, unsigned *d)
+
+/* Extract separate y,m,d from YYYY-MM-DD or (with ignore_hyphens) YYYYMMDD
+ *
+ * This handles birthday/anniversary and BDAY/ANNIVERSARY for JMAP and vCard
+ *
+ * JMAP dates are _always_ YYYY-MM-DD, so use require_hyphens = 1
+ *
+ * For vCard, this handles "date-value" from RFC2426 (which is "date" from
+ * RFC2425), used by BDAY (ANNIVERSARY isn't in vCard 3). vCard 4 says BDAY and
+ * ANNIVERSARY is date-and-or-time, which is far more complicated. I haven't
+ * seen that in the wild yet and hope I never do.
+ */
+static int _parse_date(const char *date, unsigned *y, unsigned *m, unsigned *d, int require_hyphens)
 {
     /* there isn't a convenient libc function that will let us convert parts of
      * a string to integer and only take digit characters, so we just pull it
      * apart ourselves */
 
-    /* format check. no need to strlen() beforehand, it will fall out of this */
-    if (date[0] < '0' || date[0] > '9' ||
-        date[1] < '0' || date[1] > '9' ||
-        date[2] < '0' || date[2] > '9' ||
-        date[3] < '0' || date[3] > '9' ||
-        date[4] != '-' ||
-        date[5] < '0' || date[5] > '9' ||
-        date[6] < '0' || date[6] > '9' ||
-        date[7] != '-' ||
-        date[8] < '0' || date[8] > '9' ||
-        date[9] < '0' || date[9] > '9' ||
-        date[10] != '\0')
+    const char *yp = NULL, *mp = NULL, *dp = NULL;
 
-        return -1;
+    /* getting pointers to the ymd components, skipping hyphens if necessary.
+     * format checking as we go. no need to strlen() beforehand, it will fall
+     * out of the range checks. */
+    yp = date;
+    if (yp[0] < '0' || yp[0] > '9' ||
+        yp[1] < '0' || yp[1] > '9' ||
+        yp[2] < '0' || yp[2] > '9' ||
+        yp[3] < '0' || yp[3] > '9') return -1;
+
+    mp = &yp[4];
+
+    if (*mp == '-') mp++;
+    else if (require_hyphens) return -1;
+
+    if (mp[0] < '0' || mp[0] > '9' ||
+        mp[1] < '0' || mp[1] > '9') return -1;
+
+    dp = &mp[2];
+
+    if (*dp == '-') dp++;
+    else if (require_hyphens) return -1;
+
+    if (dp[0] < '0' || dp[0] > '9' ||
+        dp[1] < '0' || dp[1] > '9') return -1;
+
+    if (dp[2] != '\0') return -1;
 
     /* convert to integer. ascii digits are 0x30-0x37, so we can take bottom
      * four bits and multiply */
     *y =
-        (date[0] & 0xf) * 1000 +
-        (date[1] & 0xf) * 100 +
-        (date[2] & 0xf) * 10 +
-        (date[3] & 0xf);
+        (yp[0] & 0xf) * 1000 +
+        (yp[1] & 0xf) * 100 +
+        (yp[2] & 0xf) * 10 +
+        (yp[3] & 0xf);
 
     *m =
-        (date[5] & 0xf) * 10 +
-        (date[6] & 0xf);
+        (mp[0] & 0xf) * 10 +
+        (mp[1] & 0xf);
 
     *d =
-        (date[8] & 0xf) * 10 +
-        (date[9] & 0xf);
+        (dp[0] & 0xf) * 10 +
+        (dp[1] & 0xf);
 
     return 0;
 }
@@ -4875,7 +4900,7 @@ static void _date_to_jmap(struct vparse_entry *entry, struct buf *buf)
         goto no_date;
 
     unsigned y, m, d;
-    if (_parse_date(entry->v.value, &y, &m, &d))
+    if (_parse_date(entry->v.value, &y, &m, &d, 0))
         goto no_date;
 
     if (y < 1604 || m > 12 || d > 31)
@@ -6174,7 +6199,7 @@ static int _date_to_card(struct vparse_card *card,
 
     /* JMAP dates are always YYYY-MM-DD */
     unsigned y, m, d;
-    if (_parse_date(val, &y, &m, &d))
+    if (_parse_date(val, &y, &m, &d, 1))
         return -1;
 
     /* range checks. month and day just get basic sanity checks because we're
