@@ -699,12 +699,15 @@ EXPORTED int backup_message_foreach(struct backup *backup, int chunk_id,
 EXPORTED void backup_chunk_list_add(struct backup_chunk_list *list,
                                     struct backup_chunk *chunk)
 {
-    /* n.b. always inserts at head */
-    chunk->next = list->head;
-    list->head = chunk;
-    if (!list->tail)
-        list->tail = chunk;
+    chunk->next = NULL;
 
+    if (list->tail)
+        list->tail->next = chunk;
+
+    if (!list->head)
+        list->head = chunk;
+
+    list->tail = chunk;
     list->count++;
 }
 

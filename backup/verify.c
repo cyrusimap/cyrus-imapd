@@ -94,7 +94,7 @@ EXPORTED int backup_verify(struct backup *backup, unsigned level, int verbose, F
     }
 
     if (!r && (level & BACKUP_VERIFY_LAST_CHECKSUM))
-        r = verify_chunk_checksums(backup, chunk_list->head, gzuc, verbose, out);
+        r = verify_chunk_checksums(backup, chunk_list->tail, gzuc, verbose, out);
 
     if (!r && level > BACKUP_VERIFY_LAST_CHECKSUM) {
         struct backup_chunk *chunk = chunk_list->head;
