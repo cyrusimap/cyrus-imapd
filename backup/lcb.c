@@ -422,7 +422,7 @@ EXPORTED int backup_close(struct backup **backupp)
 
     if (backup->append_state) {
         if (backup->append_state->mode != BACKUP_APPEND_INACTIVE)
-            r1 = backup_append_end(backup);
+            r1 = backup_append_end(backup, NULL);
 
         gzfile = backup->append_state->gzfile;
 
@@ -583,7 +583,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
 
             ucase(dl->name);
 
-            r = backup_append(backup, dl, ts, BACKUP_APPEND_NOFLUSH);
+            r = backup_append(backup, dl, &ts, BACKUP_APPEND_NOFLUSH);
             if (r) {
                 // FIXME do something
                 syslog(LOG_ERR, "backup_append returned %d\n", r);

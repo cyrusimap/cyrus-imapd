@@ -173,7 +173,7 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
     struct backup_chunk *chunk = NULL;
     struct gzuncat *gzuc = NULL;
     struct protstream *in = NULL;
-    time_t since;
+    time_t since, chunk_start_time, ts;
     int r;
 
     r = compact_open(name, &original, &compact);
@@ -207,16 +207,14 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
     gzuc = gzuc_new(original->fd);
     if (!gzuc) goto error;
 
-    r = backup_append_start(compact, BACKUP_APPEND_NOFLUSH);
-    if (r) goto error;
-
+    chunk_start_time = -1;
+    ts = 0;
     for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
         gzuc_member_start_from(gzuc, chunk->offset);
 
         in = prot_readcb(_prot_fill_cb, gzuc);
 
         while (1) {
-            time_t ts = 0;
             struct buf cmd = BUF_INITIALIZER;
             struct dlist *dl = NULL;
 
@@ -240,19 +238,23 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
                 break;
             }
 
+            if (chunk_start_time == -1) {
+                r = backup_append_start(compact, &ts, BACKUP_APPEND_NOFLUSH);
+                if (r) goto error;
+                chunk_start_time = ts;
+            }
+
             // XXX if this line is worth keeping
             if (1) {
-                r = backup_append(compact, dl, ts, BACKUP_APPEND_NOFLUSH);
+                r = backup_append(compact, dl, &ts, BACKUP_APPEND_NOFLUSH);
                 if (r) goto error;
             }
         }
 
         // XXX if we're due to start a new chunk
         if (1) {
-            r = backup_append_end(compact);
-
-            if (chunk->next)
-                r = backup_append_start(compact, BACKUP_APPEND_NOFLUSH);
+            r = backup_append_end(compact, &ts);
+            chunk_start_time = -1;
         }
 
         prot_free(in);
@@ -261,7 +263,7 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
     }
 
     if (compact->append_state && compact->append_state->mode)
-        backup_append_end(compact);
+        backup_append_end(compact, &ts);
 
     gzuc_free(&gzuc);
 

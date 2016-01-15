@@ -502,7 +502,7 @@ static int backupd_open_backup(struct open_backup **openp, const mbname_t *mbnam
         int r = backup_open(&backup, mbname,
                             BACKUP_OPEN_BLOCK, BACKUP_OPEN_CREATE);
         if (r) return r;
-        backup_append_start(backup, BACKUP_APPEND_FLUSH); // FIXME error checking
+        backup_append_start(backup, NULL, BACKUP_APPEND_FLUSH); // FIXME error checking
         open = open_backups_list_add(&backupd_open_backups, key, backup);
     }
 
@@ -856,7 +856,7 @@ static int cmd_apply_mailbox(struct dlist *dl)
     mbname_free(&mbname);
 
     if (!r)
-        r = backup_append(open->backup, dl, time(0), BACKUP_APPEND_FLUSH);
+        r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
 
     return r;
 }
@@ -872,7 +872,7 @@ static int cmd_apply_unmailbox(struct dlist *dl)
     mbname_free(&mbname);
 
     if (!r)
-        r = backup_append(open->backup, dl, time(0), BACKUP_APPEND_FLUSH);
+        r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
 
     return r;
 }
@@ -932,7 +932,7 @@ static int cmd_apply_message(struct dlist *dl)
         }
 
         if (want_append) {
-            r = backup_append(open->backup, dl, time(0), BACKUP_APPEND_FLUSH);
+            r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
             if (r) break;
             appended++;
         }
@@ -953,7 +953,7 @@ static int cmd_apply_message(struct dlist *dl)
                    backupd_open_backups.count);
             for (open = backupd_open_backups.head; open; open = open->next) {
                 syslog(LOG_DEBUG, "applying unreserved messages to %s", open->name);
-                r = backup_append(open->backup, dl, time(0), BACKUP_APPEND_FLUSH);
+                r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
                 if (r) break;
             }
         }
@@ -1003,7 +1003,7 @@ static int cmd_apply_reserve(struct dlist *dl)
 
         if (r) return r;  // FIXME continue?
 
-        r = backup_append(open->backup, dl, time(0), BACKUP_APPEND_FLUSH);
+        r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
         if (r) goto done;
 
         for (di = gl->head; di; di = di->next) {
@@ -1069,7 +1069,7 @@ static int cmd_apply_rename(struct dlist *dl)
         struct open_backup *open = NULL;
         r = backupd_open_backup(&open, old);
         if (!r)
-            r = backup_append(open->backup, dl, time(0), BACKUP_APPEND_FLUSH);
+            r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
     }
     else {
         // user name has changed!

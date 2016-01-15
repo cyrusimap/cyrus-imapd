@@ -246,10 +246,14 @@ enum backup_append_flush {
 };
 
 int backup_append_start(struct backup *backup,
+                        const time_t *tsp,
                         enum backup_append_flush flush);
-int backup_append(struct backup *backup, struct dlist *dlist, time_t ts,
+int backup_append(struct backup *backup,
+                  struct dlist *dlist,
+                  const time_t *tsp,
                   enum backup_append_flush flush);
-int backup_append_end(struct backup *backup);
+int backup_append_end(struct backup *backup,
+                      const time_t *tsp);
 int backup_append_abort(struct backup *backup);
 
 

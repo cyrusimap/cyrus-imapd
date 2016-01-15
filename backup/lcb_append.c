@@ -131,17 +131,21 @@ error:
 }
 
 EXPORTED int backup_append_start(struct backup *backup,
+                                 const time_t *tsp,
                                  enum backup_append_flush flush)
 {
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     off_t offset = lseek(backup->fd, 0, SEEK_END);
+    time_t ts = tsp ? *tsp : time(NULL);
 
     _sha1_file(backup->fd, backup->data_fname, SHA1_LIMIT_WHOLE_FILE, file_sha1);
 
-    return backup_real_append_start(backup, time(0), offset, file_sha1, 0, flush);
+    return backup_real_append_start(backup, ts, offset, file_sha1, 0, flush);
 }
 
-EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts,
+EXPORTED int backup_append(struct backup *backup,
+                           struct dlist *dlist,
+                           const time_t *tsp,
                            enum backup_append_flush flush)
 {
     int r;
@@ -150,6 +154,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
 
     off_t start = backup->append_state->wrote;
     size_t len;
+    time_t ts = tsp ? *tsp : time(NULL);
 
     /* build a buffer containing the data to be written */
     struct buf buf = BUF_INITIALIZER, ts_buf = BUF_INITIALIZER;
@@ -260,9 +265,10 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
     return r;
 }
 
-EXPORTED int backup_append_end(struct backup *backup)
+EXPORTED int backup_append_end(struct backup *backup, const time_t *tsp)
 {
-    return backup_real_append_end(backup, time(NULL));
+    time_t ts = tsp ? *tsp : time(NULL);
+    return backup_real_append_end(backup, ts);
 }
 
 EXPORTED int backup_append_abort(struct backup *backup)
