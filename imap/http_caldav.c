@@ -127,9 +127,17 @@ icaltimezone *utc_zone = NULL;
 struct strlist *cua_domains = NULL;
 icalarray *rscale_calendars = NULL;
 
+struct partial_comp_t {
+    icalcomponent_kind kind;
+    arrayu64_t props;
+    struct partial_comp_t *sibling;
+    struct partial_comp_t *child;
+};
+
 static struct partial_caldata_t {
     struct icaltimetype start;
     struct icaltimetype end;
+    struct partial_comp_t *comp;
 } partial_caldata;
 
 static int meth_options_cal(struct transaction_t *txn, void *params);
@@ -371,7 +379,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_sync_token, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN,
+    { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
       propfind_caldata, NULL, &partial_caldata },
     { "calendar-description", NS_CALDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
@@ -4128,6 +4136,92 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+static struct partial_comp_t *parse_partial_comp(xmlNodePtr node)
+{
+    xmlChar *prop;
+    struct partial_comp_t *pcomp;
+
+    prop = xmlGetProp(node, BAD_CAST "name");
+    if (!prop) return NULL;
+
+    pcomp = xzmalloc(sizeof(struct partial_comp_t));
+    pcomp->kind = icalcomponent_string_to_kind((char *) prop);
+    xmlFree(prop);
+
+    for (node = xmlFirstElementChild(node); node;
+         node = xmlNextElementSibling(node)) {
+        if (!xmlStrcmp(node->name, BAD_CAST "allprop")) {
+            arrayu64_add(&pcomp->props, ICAL_ANY_PROPERTY);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+            icalproperty_kind kind = ICAL_NO_PROPERTY;
+
+            prop = xmlGetProp(node, BAD_CAST "name");
+            if (prop) {
+                kind = icalproperty_string_to_kind((char *) prop);
+                xmlFree(prop);
+            }
+            arrayu64_add(&pcomp->props, kind);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "allcomp")) {
+            pcomp->child = xzmalloc(sizeof(struct partial_comp_t));
+            pcomp->child->kind = ICAL_ANY_COMPONENT;
+            break;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
+            struct partial_comp_t *child = parse_partial_comp(node);
+            child->sibling = pcomp->child;
+            pcomp->child = child;
+        }
+    }
+
+    return pcomp;
+}
+
+static void prune_properties(icalcomponent *parent,
+                             struct partial_comp_t *pcomp)
+{
+    icalcomponent *comp, *next;
+
+    if (!arrayu64_size(&pcomp->props) ||
+        arrayu64_nth(&pcomp->props, 0) != ICAL_ANY_PROPERTY) {
+        /* Strip unwanted properties from component */
+        icalproperty *prop, *nextprop;
+
+        for (prop = icalcomponent_get_first_property(parent, ICAL_ANY_PROPERTY);
+             prop; prop = nextprop) {
+            nextprop =
+                icalcomponent_get_next_property(parent, ICAL_ANY_PROPERTY);
+
+            if (arrayu64_find(&pcomp->props,
+                              icalproperty_isa(prop), 0) < 0) {
+                icalcomponent_remove_property(parent, prop);
+                icalproperty_free(prop);
+            }
+        }
+    }
+
+    if (pcomp->child && pcomp->child->kind == ICAL_ANY_COMPONENT) return;
+
+    /* Strip unwanted components from component */
+    for (comp = icalcomponent_get_first_component(parent, ICAL_ANY_COMPONENT);
+         comp; comp = next) {
+        icalcomponent_kind kind = icalcomponent_isa(comp);
+        struct partial_comp_t *child;
+
+        next = icalcomponent_get_next_component(parent, ICAL_ANY_COMPONENT);
+
+        for (child = pcomp->child; child; child = child->sibling) {
+            if (child->kind == kind) break;
+        }
+        if (child) prune_properties(comp, child);
+        else {
+            icalcomponent_remove_component(parent, comp);
+            icalcomponent_free(comp);
+        }
+    }
+}
+
 static int compare_freebusy_with_type(const void *fb1, const void *fb2);
 
 /* Callback to prescreen/fetch CALDAV:calendar-data */
@@ -4146,14 +4240,17 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     int r = 0;
 
     if (propstat) {
+        icalcomponent *ical = NULL;
+
         if (!fctx->record) return HTTP_NOT_FOUND;
         mailbox_map_record(fctx->mailbox, fctx->record, &buf);
         data = buf_cstring(&buf) + fctx->record->header_size;
         datalen = buf_len(&buf) - fctx->record->header_size;
 
         if (!icaltime_is_null_time(partial->start)) {
+            /* Expand recurrences */
             struct calquery_filter calfilter;
-            icalcomponent *ical, *master, *comp, *nextcomp;
+            icalcomponent *master, *comp, *nextcomp;
             icalproperty *prop, *nextprop;
             icalcomponent_kind kind;
             unsigned i;
@@ -4162,7 +4259,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             calfilter.start = partial->start;
             calfilter.end = partial->end;
 
-            ical = icalparser_parse_string(data);
+            if (!ical) ical = icalparser_parse_string(data);
+
             if (!cdata->comp_flags.tzbyref) {
                 /* Strip all VTIMEZONEs */
                 for (comp = icalcomponent_get_first_component(ical,
@@ -4263,38 +4361,55 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                 icalcomponent_add_component(ical, comp);
             }
 
+            /* Cleanup */
+            if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+            if (!icalcomponent_get_parent(master)) icalcomponent_free(master);
+        }
+
+        if (partial->comp) {
+            /* Limit returned properties */
+            if (!ical) ical = icalparser_parse_string(data);
+            prune_properties(ical, partial->comp);
+        }
+
+        if (ical) {
             /* Create iCalendar data from new ical component */
             buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
             data = buf_cstring(&buf);
             datalen = buf_len(&buf);
-
-            /* Cleanup */
             icalcomponent_free(ical);
-            if (!icalcomponent_get_parent(master)) icalcomponent_free(master);
-            if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
         }
     }
-    else {
-        /* Prescreen "property" request */
+    else if (prop) {
+        /* Prescreen "property" request - read partial/expand children */
         xmlNodePtr node;
 
         /* Initialize expand to be "empty" */
         partial->start = icaltime_null_time();
         partial->end = icaltime_null_time();
+        partial->comp = NULL;
 
         /* Check for and parse child elements of CALDAV:calendar-data */
         for (node = xmlFirstElementChild(prop); node;
              node = xmlNextElementSibling(node)) {
-            if (!xmlStrcmp(node->name, BAD_CAST "expand")) {
-                xmlChar *start, *end;
+            xmlChar *prop;
 
-                if ((start = xmlGetProp(node, BAD_CAST "start"))) {
-                    partial->start = icaltime_from_string((char *) start);
-                    xmlFree(start);
-                }
-                if ((end = xmlGetProp(node, BAD_CAST "end"))) {
-                    partial->end = icaltime_from_string((char *) end);
-                    xmlFree(end);
+            if (!xmlStrcmp(node->name, BAD_CAST "expand")) {
+                prop = xmlGetProp(node, BAD_CAST "start");
+                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
+                partial->start = icaltime_from_string((char *) prop);
+                xmlFree(prop);
+
+                prop = xmlGetProp(node, BAD_CAST "end");
+                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
+                partial->end = icaltime_from_string((char *) prop);
+                xmlFree(prop);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
+                partial->comp = parse_partial_comp(node);
+                if (!partial->comp ||
+                    partial->comp->kind != ICAL_VCALENDAR_COMPONENT) {
+                    return (*fctx->ret = HTTP_BAD_REQUEST);
                 }
             }
         }
@@ -4303,6 +4418,22 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             /* We want to strip known VTIMEZONEs */
             fctx->proc_by_resource = &caldav_propfind_by_resource;
         }
+    }
+    else {
+        /* Cleanup "property" request - free partial component structure */
+        struct partial_comp_t *pcomp, *child, *sibling;
+
+        for (pcomp = partial->comp; pcomp; pcomp = child) {
+            child = pcomp->child;
+
+            do {
+                sibling = pcomp->sibling;
+                arrayu64_fini(&pcomp->props);
+                free(pcomp);
+            } while ((pcomp = sibling));
+        }
+
+        return 0;
     }
 
     r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,

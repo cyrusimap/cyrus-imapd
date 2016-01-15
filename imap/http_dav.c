@@ -6883,6 +6883,10 @@ int meth_report(struct transaction_t *txn, void *params)
     while (elist) {
         struct propfind_entry_list *freeme = elist;
         elist = elist->next;
+        if (freeme->flags & PROP_CLEANUP) {
+            freeme->get(freeme->name, NULL, &fctx,
+                        NULL, NULL, NULL, freeme->rock);
+        }
         xmlFree(freeme->name);
         free(freeme);
     }
