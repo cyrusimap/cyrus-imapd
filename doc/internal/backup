@@ -736,7 +736,6 @@ todo list
 ---------
 
 * clean up error handling
-* clean up _sha1_file, stick it in lib/util.c
 * perl tool to anonymise sync proto talk
 * verification step to check entire data stream for errors (even chunks that aren't indexed)
 * prot_fill_cb: extra argument to pass back an error string to prot_fill
