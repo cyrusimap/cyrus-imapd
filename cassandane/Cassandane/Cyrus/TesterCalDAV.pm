@@ -1201,8 +1201,6 @@ implicitxdash/Organizer to Attendee/6 | 1
 implicitxdash/Organizer to Attendee/7 | 1
 implicitxdash/Organizer to Attendee/8 | 1
 json/Freebusy json/2 | 1
-json/Multiget json/3 | 1
-json/Query json/3 | 1
 mkcalendar/MKCALENDAR with body/3 | 1
 nonascii/Non-ascii calendar data/1 | 1
 nonascii/Non-ascii calendar data/2 | 1
