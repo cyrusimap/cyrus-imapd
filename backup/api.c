@@ -536,8 +536,7 @@ static int _append_start(struct backup *backup, time_t ts, off_t offset,
     SHA1_Init(&backup->append_state->sha_ctx);
 
     char header[80];
-    snprintf(header, sizeof(header),
-             "# cyrus backup: chunk start %ld\r\n", (int64_t) ts);
+    snprintf(header, sizeof(header), "# cyrus backup: chunk start\r\n");
 
     if (!index_only) {
         if (!backup->append_state->gzfile) {
