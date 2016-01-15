@@ -53,13 +53,26 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
+static int _column_int(sqlite3_stmt *stmt, int column)
+{
+    assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER ||
+           sqlite3_column_type(stmt, column) == SQLITE_NULL);
+    return sqlite3_column_int(stmt, column);
+}
 
-/* FIXME do this properly */
-int _column_int(sqlite3_stmt *stmt, int column);
-sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column);
-char * _column_text(sqlite3_stmt *stmt, int column);
-/***********************************************/
+static sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column)
+{
+    assert(sqlite3_column_type(stmt, column) == SQLITE_INTEGER ||
+           sqlite3_column_type(stmt, column) == SQLITE_NULL);
+    return sqlite3_column_int64(stmt, column);
+}
 
+static const char * _column_text(sqlite3_stmt *stmt, int column)
+{
+    assert(sqlite3_column_type(stmt, column) == SQLITE_TEXT ||
+           sqlite3_column_type(stmt, column) == SQLITE_NULL);
+    return (const char *) sqlite3_column_text(stmt, column);
+}
 
 static int _get_mailbox_id_cb(sqlite3_stmt *stmt, void *rock) {
     int *idp = (int *) rock;
@@ -235,17 +248,17 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
     int column = 0;
     mailbox_message->id = _column_int(stmt, column++);
     mailbox_message->mailbox_id = _column_int(stmt, column++);
-    mailbox_message->mailbox_uniqueid = _column_text(stmt, column++);
+    mailbox_message->mailbox_uniqueid = xstrdupnull(_column_text(stmt, column++));
     mailbox_message->message_id = _column_int(stmt, column++);
     mailbox_message->last_chunk_id = _column_int(stmt, column++);
     mailbox_message->uid = _column_int(stmt, column++);
     mailbox_message->modseq = _column_int64(stmt, column++);
     mailbox_message->last_updated = _column_int64(stmt, column++);
-    mailbox_message->flags = _column_text(stmt, column++);
+    mailbox_message->flags = xstrdupnull(_column_text(stmt, column++));
     mailbox_message->internaldate = _column_int64(stmt, column++);
-    guid_str = _column_text(stmt, column++);
+    guid_str = xstrdupnull(_column_text(stmt, column++));
     mailbox_message->size = _column_int(stmt, column++);
-    mailbox_message->annotations = _column_text(stmt, column++);
+    mailbox_message->annotations = xstrdupnull(_column_text(stmt, column++));
     mailbox_message->expunged = _column_int(stmt, column++);
 
     message_guid_decode(&mailbox_message->guid, guid_str);
@@ -305,9 +318,9 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
     int column = 0;
     mailbox->id = _column_int(stmt, column++);
     mailbox->last_chunk_id = _column_int(stmt, column++);
-    mailbox->uniqueid = _column_text(stmt, column++);
-    mailbox->mboxname = _column_text(stmt, column++);
-    mailbox->mboxtype = _column_text(stmt, column++);
+    mailbox->uniqueid = xstrdupnull(_column_text(stmt, column++));
+    mailbox->mboxname = xstrdupnull(_column_text(stmt, column++));
+    mailbox->mboxtype = xstrdupnull(_column_text(stmt, column++));
     mailbox->last_uid = _column_int(stmt, column++);
     mailbox->highestmodseq = _column_int64(stmt, column++);
     mailbox->recentuid = _column_int(stmt, column++);
@@ -316,14 +329,14 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
     mailbox->pop3_last_login = _column_int64(stmt, column++);
     mailbox->pop3_show_after = _column_int64(stmt, column++);
     mailbox->uidvalidity = _column_int(stmt, column++);
-    mailbox->partition = _column_text(stmt, column++);
-    mailbox->acl = _column_text(stmt, column++);
-    mailbox->options = _column_text(stmt, column++);
+    mailbox->partition = xstrdupnull(_column_text(stmt, column++));
+    mailbox->acl = xstrdupnull(_column_text(stmt, column++));
+    mailbox->options = xstrdupnull(_column_text(stmt, column++));
     mailbox->sync_crc = _column_int(stmt, column++);
     mailbox->sync_crc_annot = _column_int(stmt, column++);
-    mailbox->quotaroot = _column_text(stmt, column++);
+    mailbox->quotaroot = xstrdupnull(_column_text(stmt, column++));
     mailbox->xconvmodseq = _column_int64(stmt, column++);
-    mailbox->annotations = _column_text(stmt, column++);
+    mailbox->annotations = xstrdupnull(_column_text(stmt, column++));
     mailbox->deleted = _column_int64(stmt, column++);
 
     if (mbrock->want_records) {
@@ -593,8 +606,8 @@ static int _get_message_cb(sqlite3_stmt *stmt, void *rock) {
     int column = 0;
 
     message->id = _column_int(stmt, column++);
-    char *guid_str = _column_text(stmt, column++);
-    message->partition = _column_text(stmt, column++);
+    char *guid_str = xstrdupnull(_column_text(stmt, column++));
+    message->partition = xstrdupnull(_column_text(stmt, column++));
     message->chunk_id = _column_int(stmt, column++);
     message->offset = _column_int64(stmt, column++);
     message->length = _column_int64(stmt, column++);
@@ -658,8 +671,8 @@ static int _message_row_cb(sqlite3_stmt *stmt, void *rock)
     int r = 0;
 
     message.id = _column_int(stmt, column++);
-    char *guid_str = _column_text(stmt, column++);
-    message.partition = _column_text(stmt, column++);
+    char *guid_str = xstrdupnull(_column_text(stmt, column++));
+    message.partition = xstrdupnull(_column_text(stmt, column++));
     message.chunk_id = _column_int(stmt, column++);
     message.offset = _column_int64(stmt, column++);
     message.length = _column_int64(stmt, column++);
@@ -751,8 +764,8 @@ static int _chunk_row_cb(sqlite3_stmt *stmt, void *rock)
     chunk->ts_end = _column_int64(stmt, column++);
     chunk->offset = _column_int64(stmt, column++);
     chunk->length = _column_int64(stmt, column++);
-    chunk->file_sha1 = _column_text(stmt, column++);
-    chunk->data_sha1 = _column_text(stmt, column++);
+    chunk->file_sha1 = xstrdupnull(_column_text(stmt, column++));
+    chunk->data_sha1 = xstrdupnull(_column_text(stmt, column++));
 
     if (crock->save_list) {
         backup_chunk_list_add(crock->save_list, chunk);
