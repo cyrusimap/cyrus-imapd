@@ -54,12 +54,6 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
-/* FIXME make it xsha1_file and do it properly */
-#define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)
-extern const char *_sha1_file(int fd, const char *fname, size_t limit,
-                              char buf[2 * SHA1_DIGEST_LENGTH + 1]);
-/***********************************************/
-
 static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *chunk,
                                   struct gzuncat *gzuc, int verbose,
                                   FILE *out);
@@ -130,7 +124,7 @@ static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *ch
     if (out && verbose > 1)
         fprintf(out, "  checking file checksum...\n");
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    _sha1_file(backup->fd, backup->data_fname, chunk->offset, file_sha1);
+    sha1_file(backup->fd, backup->data_fname, chunk->offset, file_sha1);
     r = strncmp(chunk->file_sha1, file_sha1, sizeof(file_sha1));
     if (r) {
         syslog(LOG_DEBUG, "%s: %s (chunk %d) file checksum mismatch: %s on disk, %s in index\n",

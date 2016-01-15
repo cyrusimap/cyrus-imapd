@@ -41,6 +41,8 @@
  *
  */
 
+#include "lib/xsha1.h"
+
 #ifndef LIBCYRUS_BACKUP_SOURCE
 #error "backup/lcb_internal.h is for internal use by libcyrus_backup ONLY"
 #else
@@ -97,6 +99,11 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
 int parse_backup_line(struct protstream *in, time_t *ts,
                       struct buf *cmd, struct dlist **kin);
 
+/* limit is how much of the file to calculate the sha1 of (in bytes),
+ * or SHA1_LIMIT_WHOLE_FILE for the whole file */
+#define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)
+const char *sha1_file(int fd, const char *fname, size_t limit,
+                      char buf[2 * SHA1_DIGEST_LENGTH + 1]);
 
 struct backup_mailbox *backup_mailbox_list_remove(
     struct backup_mailbox_list *list,

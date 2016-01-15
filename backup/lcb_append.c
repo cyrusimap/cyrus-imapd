@@ -56,12 +56,6 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
-/* FIXME make it xsha1_file and do it properly */
-#define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)
-extern const char *_sha1_file(int fd, const char *fname, size_t limit,
-                              char buf[2 * SHA1_DIGEST_LENGTH + 1]);
-/***********************************************/
-
 HIDDEN int backup_real_append_start(struct backup *backup,
                                     time_t ts, off_t offset,
                                     const char *file_sha1,
@@ -138,7 +132,7 @@ EXPORTED int backup_append_start(struct backup *backup,
     off_t offset = lseek(backup->fd, 0, SEEK_END);
     time_t ts = tsp ? *tsp : time(NULL);
 
-    _sha1_file(backup->fd, backup->data_fname, SHA1_LIMIT_WHOLE_FILE, file_sha1);
+    sha1_file(backup->fd, backup->data_fname, SHA1_LIMIT_WHOLE_FILE, file_sha1);
 
     return backup_real_append_start(backup, ts, offset, file_sha1, 0, flush);
 }

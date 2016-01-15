@@ -70,9 +70,6 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
-const char *_sha1_file(int fd, const char *fname, size_t limit,
-                              char buf[2 * SHA1_DIGEST_LENGTH + 1]);
-
 /*
  * use cases:
  *  - backupd needs to be able to append to data stream and update index (exclusive)
@@ -472,27 +469,6 @@ EXPORTED const char *backup_get_index_fname(const struct backup *backup)
     return backup->index_fname;
 }
 
-/* limit is how much of the file to calculate the sha1 of (in bytes),
- * or SHA1_LIMIT_WHOLE_FILE for the whole file */
-#define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)
-HIDDEN const char *_sha1_file(int fd, const char *fname, size_t limit,
-                              char buf[2 * SHA1_DIGEST_LENGTH + 1])
-{
-    const char *map = NULL;
-    size_t len = 0, calc_len;
-    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
-    int r;
-
-    map_refresh(fd, /*onceonly*/ 1, &map, &len, MAP_UNKNOWN_LEN, fname, NULL);
-    calc_len = limit == SHA1_LIMIT_WHOLE_FILE ? len : MIN(limit, len);
-    xsha1((const unsigned char *) map, calc_len, sha1_raw);
-    map_free(&map, &len);
-    r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, buf, BH_LOWER);
-    assert(r == 2 * SHA1_DIGEST_LENGTH);
-
-    return buf;
-}
-
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
@@ -571,7 +547,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
                 }
                 member_start_ts = ts;
                 char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-                _sha1_file(backup->fd, backup->data_fname, member_offset, file_sha1);
+                sha1_file(backup->fd, backup->data_fname, member_offset, file_sha1);
                 backup_real_append_start(backup, member_start_ts,
                                          member_offset, file_sha1, 1, 0);
             }

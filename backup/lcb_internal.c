@@ -40,8 +40,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+#include <config.h>
+
 #include <assert.h>
 #include <syslog.h>
+
+#include "lib/map.h"
 
 #include "imap/dlist.h"
 #include "imap/imapparse.h"
@@ -97,4 +101,22 @@ fail:
     if (dl) dlist_free(&dl);
     buf_free(&buf);
     return c;
+}
+
+HIDDEN const char *sha1_file(int fd, const char *fname, size_t limit,
+                             char buf[2 * SHA1_DIGEST_LENGTH + 1])
+{
+    const char *map = NULL;
+    size_t len = 0, calc_len;
+    unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
+    int r;
+
+    map_refresh(fd, /*onceonly*/ 1, &map, &len, MAP_UNKNOWN_LEN, fname, NULL);
+    calc_len = limit == SHA1_LIMIT_WHOLE_FILE ? len : MIN(limit, len);
+    xsha1((const unsigned char *) map, calc_len, sha1_raw);
+    map_free(&map, &len);
+    r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, buf, BH_LOWER);
+    assert(r == 2 * SHA1_DIGEST_LENGTH);
+
+    return buf;
 }
