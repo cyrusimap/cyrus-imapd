@@ -4412,6 +4412,16 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                     return (*fctx->ret = HTTP_BAD_REQUEST);
                 }
             }
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit-recurrence-set")) {
+                syslog(LOG_NOTICE,
+                       "Client attempted to use CALDAV:limit-recurrence-set");
+                return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set")) {
+                syslog(LOG_NOTICE,
+                       "Client attempted to use CALDAV:limit-freebusy-set");
+                return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
+            }
         }
 
         if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
