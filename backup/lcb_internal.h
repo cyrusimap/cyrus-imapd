@@ -82,6 +82,14 @@ HIDDEN int backup_real_open(struct backup **backupp,
                             enum backup_open_nonblock nonblock,
                             enum backup_open_create create);
 
+int backup_real_append_start(struct backup *backup,
+                             time_t ts, off_t offset,
+                             const char *file_sha1,
+                             int index_only, int noflush);
+
+int backup_real_append_end(struct backup *backup, time_t ts);
+
+
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len);
 
