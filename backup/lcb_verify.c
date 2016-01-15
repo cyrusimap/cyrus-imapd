@@ -232,7 +232,7 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
 
         struct protstream *ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
         prot_setisclient(ps, 1); /* don't sync literals */
-        r = _parse_line(ps, NULL, NULL, &dl);
+        r = parse_backup_line(ps, NULL, NULL, &dl);
         prot_free(ps);
 
         if (r == EOF) {
@@ -502,7 +502,7 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
         struct dlist *di = NULL;
         const char *uniqueid = NULL;
 
-        int c = _parse_line(ps, NULL, &cmd, &dl);
+        int c = parse_backup_line(ps, NULL, &cmd, &dl);
         if (c == EOF) {
             const char *error = prot_error(ps);
             if (error && 0 != strcmp(error, PROT_EOF_STRING)) {

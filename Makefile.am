@@ -806,6 +806,7 @@ backup_libcyrus_backup_la_SOURCES = \
     backup/lcb_compact.c \
     backup/lcb_indexr.c \
     backup/lcb_indexw.c \
+    backup/lcb_internal.c \
     backup/lcb_internal.h \
     backup/lcb_partlist.c \
     backup/lcb_printinfo.c \

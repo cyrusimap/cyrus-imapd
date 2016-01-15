@@ -63,7 +63,6 @@
 #include "imap/dlist.h"
 #include "imap/global.h"
 #include "imap/imap_err.h"
-#include "imap/imapparse.h"
 
 #include "backup/backup.h"
 
@@ -738,55 +737,6 @@ EXPORTED int backup_append_abort(struct backup *backup)
     return 0;
 }
 
-/* FIXME do this properly */
-HIDDEN int _parse_line(struct protstream *in, time_t *ts,
-                       struct buf *cmd, struct dlist **kin)
-{
-    struct dlist *dl = NULL;
-    struct buf buf = BUF_INITIALIZER;
-    int64_t t;
-    int c;
-
-    c = prot_getc(in);
-    if (c == '#')
-        eatline(in, c);
-    else
-        prot_ungetc(c, in);
-
-    c = getint64(in, &t);
-    if (c == EOF)
-        goto fail;
-
-    c = getword(in, &buf);
-    if (c == EOF)
-        goto fail;
-
-    c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, in);
-
-    if (!dl) {
-        fprintf(stderr, "\ndidn't parse dlist, error %i\n", c);
-        goto fail;
-    }
-
-    if (c == '\r') c = prot_getc(in);
-    if (c != '\n') {
-        fprintf(stderr, "expected newline, got '%c'\n", c);
-        eatline(in, c);
-        goto fail;
-    }
-
-    if (kin) *kin = dl;
-    if (cmd) buf_copy(cmd, &buf);
-    if (ts) *ts = (time_t) t;
-    buf_free(&buf);
-    return c;
-
-fail:
-    if (dl) dlist_free(&dl);
-    buf_free(&buf);
-    return c;
-}
-
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
@@ -841,7 +791,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
             struct buf cmd = BUF_INITIALIZER;
             struct dlist *dl = NULL;
 
-            int c = _parse_line(member, &ts, &cmd, &dl);
+            int c = parse_backup_line(member, &ts, &cmd, &dl);
             if (c == EOF) {
                 const char *error = prot_error(member);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {

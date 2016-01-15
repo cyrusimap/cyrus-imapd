@@ -85,9 +85,10 @@ HIDDEN int backup_real_open(struct backup **backupp,
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len);
 
-/* FIXME do this properly */
-HIDDEN int _parse_line(struct protstream *in, time_t *ts,
-                       struct buf *cmd, struct dlist **kin);
+/* parsing data from backup data stream files */
+int parse_backup_line(struct protstream *in, time_t *ts,
+                      struct buf *cmd, struct dlist **kin);
+
 
 struct backup_mailbox *backup_mailbox_list_remove(
     struct backup_mailbox_list *list,

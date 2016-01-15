@@ -220,7 +220,7 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
             struct buf cmd = BUF_INITIALIZER;
             struct dlist *dl = NULL;
 
-            int c = _parse_line(in, &ts, &cmd, &dl);
+            int c = parse_backup_line(in, &ts, &cmd, &dl);
 
             if (c == EOF) {
                 const char *error = prot_error(in);
