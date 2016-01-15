@@ -42,6 +42,12 @@
 #ifndef GZUNCAT_H
 #define GZUNCAT_H
 
+#include <config.h>
+
+#include <sys/types.h>
+
+#include <stddef.h>
+
 struct gzuncat;
 
 struct gzuncat *gzuc_new(int fd);

@@ -53,7 +53,7 @@
 
 #include "lib/xmalloc.h"
 
-#include "gzuncat.h"
+#include "lib/gzuncat.h"
 
 /*
  * current_offset, next_offset, and member_eof together indicate the state of

@@ -1,4 +1,4 @@
-/* indexw.c -- replication-based backup api - index writing functions
+/* lcb_indexw.c -- replication-based backup api - index writing functions
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,11 +48,11 @@
 #include "imap/dlist.h"
 #include "imap/imap_err.h"
 
-#include "backup/api.h"
-#include "backup/sqlconsts.h"
+#include "backup/backup.h"
 
-#define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
-#include "backup/internal.h"
+#define LIBCYRUS_BACKUP_SOURCE /* this file is part of libcyrus_backup */
+#include "backup/lcb_internal.h"
+#include "backup/lcb_sqlconsts.h"
 
 static int _index_expunge(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset);

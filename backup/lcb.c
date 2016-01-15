@@ -51,6 +51,7 @@
 #include "lib/cyrusdb.h"
 #include "lib/cyr_lock.h"
 #include "lib/exitcodes.h"
+#include "lib/gzuncat.h"
 #include "lib/map.h"
 #include "lib/sqldb.h"
 #include "lib/util.h"
@@ -64,12 +65,11 @@
 #include "imap/imap_err.h"
 #include "imap/imapparse.h"
 
-#include "backup/api.h"
-#include "backup/gzuncat.h"
-#include "backup/sqlconsts.h"
+#include "backup/backup.h"
 
-#define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
-#include "backup/internal.h"
+#define LIBCYRUS_BACKUP_SOURCE /* this file is part of libcyrus_backup */
+#include "backup/lcb_internal.h"
+#include "backup/lcb_sqlconsts.h"
 
 int _column_int(sqlite3_stmt *stmt, int column);
 sqlite3_int64 _column_int64(sqlite3_stmt *stmt, int column);

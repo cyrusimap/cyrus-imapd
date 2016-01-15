@@ -59,7 +59,7 @@
 #include "imap/global.h"
 #include "imap/imap_err.h"
 
-#include "backup/api.h"
+#include "backup/backup.h"
 
 EXPORTED void fatal(const char *error, int code)
 {

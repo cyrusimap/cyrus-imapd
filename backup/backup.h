@@ -1,4 +1,4 @@
-/* api.h -- replication-based backup api
+/* backup.h -- replication-based backup api
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,8 +41,8 @@
  *
  */
 
-#ifndef BACKUP_API_H
-#define BACKUP_API_H
+#ifndef BACKUP_BACKUP_H
+#define BACKUP_BACKUP_H
 
 #include "imap/dlist.h"
 #include "imap/mboxname.h"

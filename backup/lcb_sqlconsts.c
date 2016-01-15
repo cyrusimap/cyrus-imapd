@@ -1,4 +1,4 @@
-/* sqlconsts.c -- backup index sql constants
+/* lcb_sqlconsts.c -- backup index sql constants
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,7 +41,7 @@
  *
  */
 
-#include "backup/sqlconsts.h"
+#include "backup/lcb_sqlconsts.h"
 
 /* n.b. this will collapse internal whitespace, and swallow leading/trailing
  * whitespace.  be careful when concatenating QUOTE()d literals.

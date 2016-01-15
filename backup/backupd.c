@@ -67,7 +67,7 @@
 #include "imap/tls.h"
 #include "imap/version.h"
 
-#include "backup/api.h"
+#include "backup/backup.h"
 
 const int config_need_data = 0;
 static sasl_ssf_t extprops_ssf = 0;

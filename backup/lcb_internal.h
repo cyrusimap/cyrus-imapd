@@ -1,4 +1,4 @@
-/* internal.h -- replication-based backup internals
+/* lcb_internal.h -- replication-based backup internals
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,11 +41,11 @@
  *
  */
 
-#ifndef BACKUP_INTERNAL_SOURCE
-#error "backup/internal.h is for internal use by the backup system ONLY"
+#ifndef LIBCYRUS_BACKUP_SOURCE
+#error "backup/lcb_internal.h is for internal use by libcyrus_backup ONLY"
 #else
-#ifndef BACKUP_INTERNAL_H
-#define BACKUP_INTERNAL_H
+#ifndef BACKUP_LCB_INTERNAL_H
+#define BACKUP_LCB_INTERNAL_H
 
 enum {
     BACKUP_APPEND_INACTIVE  = 0,

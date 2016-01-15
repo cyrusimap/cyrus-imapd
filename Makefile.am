@@ -242,7 +242,7 @@ endif # REPLICATION
 
 if BACKUP
 noinst_LTLIBRARIES += backup/libcyrus_backup.la
-noinst_HEADERS += backup/api.h
+noinst_HEADERS += backup/backup.h
 libexec_PROGRAMS += backup/backupd
 sbin_PROGRAMS += backup/ctl_backups
 endif # BACKUP
@@ -800,18 +800,18 @@ noinst_HEADERS += \
 	lib/xstrlcpy.h
 
 backup_libcyrus_backup_la_SOURCES = \
-    backup/api.c \
-    backup/compact.c \
-    backup/gzuncat.c \
-    backup/gzuncat.h \
-    backup/indexr.c \
-    backup/indexw.c \
-    backup/internal.h \
-    backup/partlist.c \
-    backup/printinfo.c \
-    backup/sqlconsts.c \
-    backup/sqlconsts.h \
-    backup/verify.c
+    lib/gzuncat.c \
+    lib/gzuncat.h \
+    backup/lcb.c \
+    backup/lcb_compact.c \
+    backup/lcb_indexr.c \
+    backup/lcb_indexw.c \
+    backup/lcb_internal.h \
+    backup/lcb_partlist.c \
+    backup/lcb_printinfo.c \
+    backup/lcb_sqlconsts.c \
+    backup/lcb_sqlconsts.h \
+    backup/lcb_verify.c
 
 backup_backupd_SOURCES = \
     imap/mutex_fake.c \

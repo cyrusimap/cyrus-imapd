@@ -1,4 +1,4 @@
-/* indexr.c -- replication-based backup api - index reading functions
+/* lcb_indexr.c -- replication-based backup api - index reading functions
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -47,11 +47,11 @@
 
 #include "lib/xmalloc.h"
 
-#include "backup/api.h"
-#include "backup/sqlconsts.h"
+#include "backup/backup.h"
 
-#define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
-#include "backup/internal.h"
+#define LIBCYRUS_BACKUP_SOURCE /* this file is part of libcyrus_backup */
+#include "backup/lcb_internal.h"
+#include "backup/lcb_sqlconsts.h"
 
 
 /* FIXME do this properly */

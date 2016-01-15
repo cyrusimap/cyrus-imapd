@@ -1,4 +1,4 @@
-/* verify.c -- replication-based backup api - verify functions
+/* lcb_verify.c -- replication-based backup api - verify functions
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,16 +43,16 @@
 #include <assert.h>
 #include <syslog.h>
 
+#include "lib/gzuncat.h"
 #include "lib/hash.h"
 #include "lib/xmalloc.h"
 #include "lib/xsha1.h"
 
-#include "backup/api.h"
-#include "backup/gzuncat.h"
-#include "backup/sqlconsts.h"
+#include "backup/backup.h"
 
-#define BACKUP_INTERNAL_SOURCE /* this file is part of the backup API */
-#include "backup/internal.h"
+#define LIBCYRUS_BACKUP_SOURCE /* this file is part of libcyrus_backup */
+#include "backup/lcb_internal.h"
+#include "backup/lcb_sqlconsts.h"
 
 /* FIXME make it xsha1_file and do it properly */
 #define SHA1_LIMIT_WHOLE_FILE ((size_t) -1)

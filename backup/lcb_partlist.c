@@ -1,6 +1,6 @@
-/* sqlconsts.h -- backup index sql constants
+/* lcb_partlist.c -- replication-based backup api - partlist functions
  *
- * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,44 +40,53 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+#include <config.h>
 
-#ifndef BACKUP_SQLCONSTS_H
-#define BACKUP_SQLCONSTS_H
+#include "lib/libconfig.h"
+#include "lib/xmalloc.h"
 
-#include "lib/sqldb.h"
+#include "imap/partlist.h"
 
-extern const char backup_index_initsql[];
+static partlist_t *partlist_backup = NULL;
 
-extern const struct sqldb_upgrade backup_index_upgrade[];
 
-extern const int backup_index_version;
+static void partlist_backup_init(void)
+{
+    if (partlist_backup) {
+        /* already done */
+        return;
+    }
 
-extern const char backup_index_start_sql[];
-extern const char backup_index_end_sql[];
+    partlist_backup = xzmalloc(sizeof(partlist_t));
+    partlist_initialize(
+        partlist_backup,
+        NULL,
+        "backuppartition-",
+        NULL,
+        config_getstring(IMAPOPT_PARTITION_SELECT_EXCLUDE),
+        partlist_getmode(config_getstring(IMAPOPT_PARTITION_SELECT_MODE)),
+        config_getint(IMAPOPT_PARTITION_SELECT_SOFT_USAGE_LIMIT),
+        config_getint(IMAPOPT_PARTITION_SELECT_USAGE_REINIT)
+    );
+}
 
-extern const char backup_index_chunk_select_all_sql[];
-extern const char backup_index_chunk_select_live_sql[];
-extern const char backup_index_chunk_select_latest_sql[];
 
-extern const char backup_index_mailbox_update_sql[];
-extern const char backup_index_mailbox_rename_sql[];
-extern const char backup_index_mailbox_delete_sql[];
-extern const char backup_index_mailbox_insert_sql[];
-extern const char backup_index_mailbox_select_all_sql[];
-extern const char backup_index_mailbox_select_mboxname_sql[];
-extern const char backup_index_mailbox_select_uniqueid_sql[];
-extern const char backup_index_mailbox_select_chunkid_sql[];
+HIDDEN const char *partlist_backup_select(void)
+{
+    /* lazy loading */
+    if (!partlist_backup) {
+        partlist_backup_init();
+    }
 
-extern const char backup_index_mailbox_message_update_sql[];
-extern const char backup_index_mailbox_message_insert_sql[];
-extern const char backup_index_mailbox_message_select_mailbox_sql[];
-extern const char backup_index_mailbox_message_select_chunkid_sql[];
-extern const char backup_index_mailbox_message_select_all_sql[];
-extern const char backup_index_mailbox_message_expunge_sql[];
+    return (char *)partlist_select_value(partlist_backup);
+}
 
-extern const char backup_index_message_insert_sql[];
-extern const char backup_index_message_select_all_sql[];
-extern const char backup_index_message_select_guid_sql[];
-extern const char backup_index_message_select_chunkid_sql[];
 
-#endif
+EXPORTED void partlist_backup_done(void)
+{
+    if (partlist_backup) {
+        partlist_free(partlist_backup);
+        free(partlist_backup);
+        partlist_backup = NULL;
+    }
+}
