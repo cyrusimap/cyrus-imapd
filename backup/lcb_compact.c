@@ -207,7 +207,7 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
     gzuc = gzuc_new(original->fd);
     if (!gzuc) goto error;
 
-    r = backup_append_start(compact); // FIXME noflush
+    r = backup_append_start(compact, BACKUP_APPEND_NOFLUSH);
     if (r) goto error;
 
     for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
@@ -242,7 +242,7 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
 
             // XXX if this line is worth keeping
             if (1) {
-                r = backup_append(compact, dl, ts);
+                r = backup_append(compact, dl, ts, BACKUP_APPEND_NOFLUSH);
                 if (r) goto error;
             }
         }
@@ -252,7 +252,7 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
             r = backup_append_end(compact);
 
             if (chunk->next)
-                r = backup_append_start(compact); // FIXME noflush
+                r = backup_append_start(compact, BACKUP_APPEND_NOFLUSH);
         }
 
         prot_free(in);

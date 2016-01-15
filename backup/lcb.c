@@ -583,7 +583,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
 
             ucase(dl->name);
 
-            r = backup_append(backup, dl, ts);
+            r = backup_append(backup, dl, ts, BACKUP_APPEND_NOFLUSH);
             if (r) {
                 // FIXME do something
                 syslog(LOG_ERR, "backup_append returned %d\n", r);

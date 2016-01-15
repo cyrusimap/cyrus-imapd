@@ -65,7 +65,8 @@ extern const char *_sha1_file(int fd, const char *fname, size_t limit,
 HIDDEN int backup_real_append_start(struct backup *backup,
                                     time_t ts, off_t offset,
                                     const char *file_sha1,
-                                    int index_only, int noflush)
+                                    int index_only,
+                                    enum backup_append_flush flush)
 {
     if (backup->append_state != NULL
         && backup->append_state->mode != BACKUP_APPEND_INACTIVE) {
@@ -76,7 +77,6 @@ HIDDEN int backup_real_append_start(struct backup *backup,
         backup->append_state = xzmalloc(sizeof(*backup->append_state));
 
     if (index_only) backup->append_state->mode |= BACKUP_APPEND_INDEXONLY;
-    if (noflush) backup->append_state->mode |= BACKUP_APPEND_NOFLUSH;
 
     backup->append_state->wrote = 0;
     SHA1_Init(&backup->append_state->sha_ctx);
@@ -96,7 +96,7 @@ HIDDEN int backup_real_append_start(struct backup *backup,
 
         // FIXME check for error return
         gzwrite(backup->append_state->gzfile, header, strlen(header));
-        if (!noflush)
+        if (flush)
             gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
     }
 
@@ -130,17 +130,19 @@ error:
     return -1;
 }
 
-EXPORTED int backup_append_start(struct backup *backup)
+EXPORTED int backup_append_start(struct backup *backup,
+                                 enum backup_append_flush flush)
 {
     char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
     off_t offset = lseek(backup->fd, 0, SEEK_END);
 
     _sha1_file(backup->fd, backup->data_fname, SHA1_LIMIT_WHOLE_FILE, file_sha1);
 
-    return backup_real_append_start(backup, time(0), offset, file_sha1, 0, 0);
+    return backup_real_append_start(backup, time(0), offset, file_sha1, 0, flush);
 }
 
-EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts)
+EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts,
+                           enum backup_append_flush flush)
 {
     int r;
     if (!backup->append_state || backup->append_state->mode == BACKUP_APPEND_INACTIVE)
@@ -188,7 +190,7 @@ EXPORTED int backup_append(struct backup *backup, struct dlist *dlist, time_t ts
             }
         }
 
-        if (!(backup->append_state->mode & BACKUP_APPEND_NOFLUSH)) {
+        if (flush) {
             r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
             if (r != Z_OK) {
                 syslog(LOG_ERR, "IOERROR: %s gzflush %s: %i %i", __func__, backup->data_fname, r, errno);

@@ -240,8 +240,15 @@ int backup_message_foreach(struct backup *backup, int chunk_id,
 
 
 /* writing backup data */
-int backup_append_start(struct backup *backup);
-int backup_append(struct backup *backup, struct dlist *dlist, time_t ts);
+enum backup_append_flush {
+    BACKUP_APPEND_NOFLUSH = 0,
+    BACKUP_APPEND_FLUSH = 1,
+};
+
+int backup_append_start(struct backup *backup,
+                        enum backup_append_flush flush);
+int backup_append(struct backup *backup, struct dlist *dlist, time_t ts,
+                  enum backup_append_flush flush);
 int backup_append_end(struct backup *backup);
 int backup_append_abort(struct backup *backup);
 

@@ -50,8 +50,7 @@
 enum {
     BACKUP_APPEND_INACTIVE  = 0,
     BACKUP_APPEND_ACTIVE    = 0x0001,
-    BACKUP_APPEND_NOFLUSH   = 0x0002,
-    BACKUP_APPEND_INDEXONLY = 0x0004,
+    BACKUP_APPEND_INDEXONLY = 0x0002,
 };
 
 struct backup_append_state {
@@ -85,7 +84,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
 int backup_real_append_start(struct backup *backup,
                              time_t ts, off_t offset,
                              const char *file_sha1,
-                             int index_only, int noflush);
+                             int index_only,
+                             enum backup_append_flush flush);
 
 int backup_real_append_end(struct backup *backup, time_t ts);
 
