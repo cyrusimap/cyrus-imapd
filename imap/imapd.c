@@ -12380,20 +12380,19 @@ static int perform_output(const char *name, size_t matchlen,
     }
 
     if (name) {
-        mbentry_t *mbentry = NULL;
-        if (!imapd_userisadmin && !mboxlist_lookup(name, &mbentry, NULL)) {
+        if (!imapd_userisadmin) {
+            int mbtype = 0;
             /* skip all non-IMAP folders */
-            int mbtype = mbentry->mbtype;
-
-            mboxlist_entry_free(&mbentry);
-            switch (mbtype) {
-            case MBTYPE_CALENDAR:
-            case MBTYPE_ADDRESSBOOK:
-            case MBTYPE_COLLECTION:
-                if (rock->listargs->sel & LIST_SEL_DAV) break;
-
-            case MBTYPE_NETNEWS:
-                return 0;
+            mbentry_t *mbentry = NULL;
+            if (!mboxlist_lookup(name, &mbentry, NULL)) {
+                mbtype = mbentry->mbtype;
+                mboxlist_entry_free(&mbentry);
+                if (mbtype == MBTYPE_NETNEWS) return 0;
+            }
+            if (!(rock->listargs->sel & LIST_SEL_DAV)) {
+                if (mboxname_iscalendarmailbox(name, mbtype)) return 0;
+                if (mboxname_isaddressbookmailbox(name, mbtype)) return 0;
+                if (mboxname_isdavdrivemailbox(name, mbtype)) return 0;
             }
         }
         rock->last_name = xstrndup(name, matchlen);
