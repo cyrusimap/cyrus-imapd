@@ -608,8 +608,8 @@ on your backup server:
     * compile with --enable-backup configure option and install
     * imapd.conf:
         backuppartition-default: /var/spool/backup
-        backups_db: twoskip
-        backups_db_path: /var/imap/backups.db
+        backup_db: twoskip
+        backup_db_path: /var/imap/backups.db
         backup_retention_days: 7
     * cyrus.conf SERVICES:
         backupd cmd="backupd" listen="csync" prefork=0
