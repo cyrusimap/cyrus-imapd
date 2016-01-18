@@ -488,6 +488,7 @@ usage:
 options:
     -C alt_config       # alternate config file
     -v                  # verbose
+    -w                  # wait for locks (i.e. don't skip locked backups)
 
 mode:
     -A                  # all known backups (not valid for single backup commands)
