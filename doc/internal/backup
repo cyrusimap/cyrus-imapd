@@ -482,11 +482,9 @@ usage:
     ctl_backups [options] compact [mode] backup...          # compact specified backups
     ctl_backups [options] lock [lock_opts] [mode] backup    # lock specified backup
 
-=> option to 'stop on error' for multi-backup commands
-=> option to block and wait for locks
-
 options:
     -C alt_config       # alternate config file
+    -S                  # stop on error
     -v                  # verbose
     -w                  # wait for locks (i.e. don't skip locked backups)
 
