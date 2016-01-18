@@ -1519,6 +1519,8 @@ if test "x$enable_backup" != xno; then
     else
         use_sqlite="yes"
     fi
+
+    AC_DEFINE([ENABLE_BACKUP],[],[Build with backup support])
 fi
 
 dnl

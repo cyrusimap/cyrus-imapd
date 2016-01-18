@@ -84,6 +84,10 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
+#ifdef ENABLE_BACKUP
+#include "backup/backup.h"
+#endif
+
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
 static struct cyrusdb {
@@ -95,6 +99,9 @@ static struct cyrusdb {
     { FNAME_MBOXLIST,           &config_mboxlist_db,    NULL,   1 },
     { FNAME_QUOTADB,            &config_quota_db,       NULL,   1 },
     { FNAME_GLOBALANNOTATIONS,  &config_annotation_db,  NULL,   1 },
+#ifdef ENABLE_BACKUP
+    { FNAME_BACKUPDB,           &config_backup_db,      NULL,   1 },
+#endif
     { FNAME_DELIVERDB,          &config_duplicate_db,   NULL,   0 },
     { FNAME_TLSSESSIONS,        &config_tls_sessions_db,NULL,   0 },
     { FNAME_PTSDB,              &config_ptscache_db,    NULL,   0 },
