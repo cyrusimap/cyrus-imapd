@@ -90,6 +90,7 @@ static void usage(void)
     fprintf(stderr, "%s\n",
             "Options:\n"
             "    -C alt_config       # alternate config file\n"
+            "    -S                  # stop on error\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
             "    -w                  # wait for locks (don't skip locked backups)\n"
     );
@@ -141,6 +142,7 @@ struct ctlbu_cmd_options {
     enum ctlbu_lock_mode lock_mode;
     enum backup_open_nonblock wait;
     int verbose;
+    int stop_on_error;
     int list_stale;
     const char *lock_exec_cmd;
 };
@@ -156,6 +158,8 @@ enum ctlbu_cmd {
     CTLBU_CMD_REINDEX,
     CTLBU_CMD_VERIFY,
 };
+
+static int ctlbu_skips_fails = 0;
 
 /* same signature as foreach_cb */
 static int cmd_compact_one(void *rock,
@@ -235,13 +239,13 @@ int main (int argc, char **argv)
 {
     save_argv0(argv[0]);
 
-    int opt;
+    int opt, r = 0;
     const char *alt_config = NULL;
     enum ctlbu_cmd cmd = CTLBU_CMD_UNSPECIFIED;
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    while ((opt = getopt(argc, argv, ":AC:fmpst:x:uvw")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:Sfmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -249,6 +253,9 @@ int main (int argc, char **argv)
             break;
         case 'C':
             alt_config = optarg;
+            break;
+        case 'S':
+            options.stop_on_error = 1;
             break;
         case 'f':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -384,13 +391,15 @@ int main (int argc, char **argv)
                 buf_setcstr(&fname, argv[i]);
 
             if (cmd_func[cmd])
-                cmd_func[cmd](&options,
-                              buf_cstring(&userid),
-                              buf_len(&userid),
-                              buf_cstring(&fname),
-                              buf_len(&fname));
+                r = cmd_func[cmd](&options,
+                                  buf_cstring(&userid),
+                                  buf_len(&userid),
+                                  buf_cstring(&fname),
+                                  buf_len(&fname));
 
             if (mbname) mbname_free(&mbname);
+
+            if (r) break;
         }
 
         buf_free(&userid);
@@ -398,7 +407,7 @@ int main (int argc, char **argv)
     }
 
     cyrus_done();
-    exit(0);
+    exit(r || ctlbu_skips_fails ? EC_TEMPFAIL : EC_OK);
 }
 
 static int cmd_compact_one(void *rock,
@@ -425,7 +434,9 @@ static int cmd_compact_one(void *rock,
     if (userid) free(userid);
     if (fname) free(fname);
 
-    return r;
+    if (r) ++ctlbu_skips_fails;
+    if (r == IMAP_MAILBOX_LOCKED) r = 0;
+    return options->stop_on_error ? r : 0;
 }
 
 static int cmd_delete_one(void *rock,
@@ -479,7 +490,9 @@ done:
     if (userid) free(userid);
     if (fname) free(fname);
 
-    return r;
+    if (r) ++ctlbu_skips_fails;
+    if (r == IMAP_MAILBOX_LOCKED) r = 0;
+    return options->stop_on_error ? r : 0;
 }
 
 static int lock_run_pipe(const char *userid, const char *fname,
@@ -635,6 +648,8 @@ static int cmd_lock_one(void *rock,
     if (userid) free(userid);
     if (fname) free(fname);
 
+    /* don't care about stop_on_error: lock command only accepts one backup */
+    if (r) ++ctlbu_skips_fails;
     return r;
 }
 
@@ -668,14 +683,25 @@ static int cmd_reindex_one(void *rock,
 
     r = backup_reindex(fname, options->wait, options->verbose, stdout);
 
+    if (r == IMAP_MAILBOX_LOCKED) {
+        printf("reindex %s: locked\n", userid ? userid : fname);
+        goto done;
+    }
+    else if (r) {
+        fprintf(stderr, "error opening %s: %s\n", fname, error_message(r));
+    }
+
     printf("reindex %s: %s\n",
            userid ? userid : fname,
            r ? "failed" : "ok");
 
+done:
     if (userid) free(userid);
     if (fname) free(fname);
 
-    return r;
+    if (r) ++ctlbu_skips_fails;
+    if (r == IMAP_MAILBOX_LOCKED) r = 0;
+    return options->stop_on_error ? r : 0;
 }
 
 static int cmd_verify_one(void *rock,
@@ -701,7 +727,6 @@ static int cmd_verify_one(void *rock,
 
     if (r == IMAP_MAILBOX_LOCKED) {
         printf("verify %s: locked\n", userid ? userid : fname);
-        r = 0;
         goto done;
     }
     else if (r) {
@@ -714,11 +739,12 @@ static int cmd_verify_one(void *rock,
            userid ? userid : fname,
            r ? "failed" : "ok");
 
-    backup_close(&backup);
-
 done:
+    if (backup) backup_close(&backup);
     if (userid) free(userid);
     if (fname) free(fname);
 
-    return r;
+    if (r) ++ctlbu_skips_fails;
+    if (r == IMAP_MAILBOX_LOCKED) r = 0;
+    return options->stop_on_error ? r : 0;
 }
