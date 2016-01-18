@@ -498,8 +498,8 @@ options:
 
 mode:
     -A                  # all known backups (not valid for single backup commands)
-    -P prefix           # backups for all users starting with "prefix" (nvfsbc)
-    -D domain           # backups for all users in domain (nvfsbc)
+    -D                  # specified backups interpreted as domains (nvfsbc)
+    -P                  # specified backups interpreted as userid prefixes (nvfsbc)
     -f                  # specified backups interpreted as filenames
     -m                  # specified backups interpreted as mboxnames
     -u                  # specified backups interpteted as userids (default)
