@@ -49,6 +49,12 @@
 
 struct backup;
 
+
+/* opening the backups database */
+#define FNAME_BACKUPDB "/backups.db"
+int backupdb_open(struct db **backup_dbp, struct txn **tidp);
+
+
 /* opening and closing backups */
 enum backup_open_nonblock {
     BACKUP_OPEN_BLOCK = 0,

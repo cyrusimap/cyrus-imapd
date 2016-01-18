@@ -313,16 +313,11 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                               struct buf *data_fname, struct buf *index_fname,
                               enum backup_open_create create)
 {
-    char *backups_db_fname = xstrdupnull(config_getstring(IMAPOPT_BACKUP_DB_PATH));
-    if (!backups_db_fname)
-        backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
-
     struct db *backups_db = NULL;
     struct txn *tid = NULL;
 
-    int r = cyrusdb_open(config_backup_db, backups_db_fname, CYRUSDB_CREATE,
-                         &backups_db);
-    if (r) goto done;
+    int r = backupdb_open(&backups_db, &tid);
+    if (r) return r;
 
     const char *userid = mbname_userid(mbname);
     const char *backup_path = NULL;
@@ -379,7 +374,6 @@ done:
         if (tid) cyrusdb_abort(backups_db, tid);
         cyrusdb_close(backups_db);
     }
-    free(backups_db_fname);
     return r;
 }
 
@@ -610,6 +604,8 @@ static void _rename_meta_fini(struct _rename_meta *meta)
 
 EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbname)
 {
+    struct db *backups_db = NULL;
+    struct txn *tid = NULL;
     struct _rename_meta old = RENAME_META_INITIALIZER;
     struct _rename_meta new = RENAME_META_INITIALIZER;
     old.userid = mbname_userid(old_mbname);
@@ -623,15 +619,7 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
         return 0;
 
     /* exclusively open backups database */
-    char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
-    if (!backups_db_fname)
-        backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
-
-    struct db *backups_db = NULL;
-    struct txn *tid = NULL;
-
-    r = cyrusdb_lockopen(config_backup_db, backups_db_fname, 0,
-                         &backups_db, &tid);
+    r = backupdb_open(&backups_db, &tid);
     if (r) goto error; // FIXME log
 
     /* make sure new_mbname isn't already in use */
@@ -714,7 +702,6 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     /* clean up and exit */
     _rename_meta_fini(&old);
     _rename_meta_fini(&new);
-    free(backups_db_fname);
     return 0;
 
 error:
@@ -741,6 +728,18 @@ error:
     /* clean up and exit */
     _rename_meta_fini(&old);
     _rename_meta_fini(&new);
-    if (backups_db_fname) free(backups_db_fname);
+    return r;
+}
+
+EXPORTED int backupdb_open(struct db **backup_dbp, struct txn **tidp)
+{
+    char *fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
+
+    if (!fname)
+        fname = strconcat(config_dir, FNAME_BACKUPDB, NULL);
+
+    int r = cyrusdb_lockopen(config_backup_db, fname, 0, backup_dbp, tidp);
+
+    free(fname);
     return r;
 }

@@ -337,18 +337,10 @@ int main (int argc, char **argv)
         // FIXME
     }
     else if (options.mode == CTLBU_MODE_ALL) {
-        // FIXME dedup this or make it api
-        // FIXME transactionality
-        // FIXME error checking
-        char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
-        if (!backups_db_fname)
-            backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
-
         struct db *backups_db = NULL;
         struct txn *tid = NULL;
 
-        int r = cyrusdb_open(config_backup_db, backups_db_fname, CYRUSDB_CREATE,
-                            &backups_db);
+        int r = backupdb_open(&backups_db, &tid);
 
         if (!r)
             r = cyrusdb_foreach(backups_db, NULL, 0, NULL,
@@ -359,7 +351,6 @@ int main (int argc, char **argv)
             if (tid) cyrusdb_abort(backups_db, tid);
             cyrusdb_close(backups_db);
         }
-        free(backups_db_fname);
     }
     else {
         /* loop over backups named on command line */
