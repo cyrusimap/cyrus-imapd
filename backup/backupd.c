@@ -140,6 +140,7 @@ static const char *backupd_response(int r);
 static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
 static void cmd_apply(struct dlist *dl);
+static void cmd_compress(const char *alg);
 static void cmd_get(struct dlist *dl);
 static void cmd_restart(void);
 
@@ -650,8 +651,11 @@ static void cmdloop(void)
 
         case 'C':
             if (!strcmp(cmd.s, "Compress")) {
-                prot_printf(backupd_out, "NO command not implemented\r\n");
-                eatline(backupd_in, c);
+                if (c != ' ') goto missingargs;
+                c = getword(backupd_in, &arg1);
+                if (c == '\r') c = prot_getc(backupd_in);
+                if (c != '\n') goto extraargs;
+                cmd_compress(arg1.s);
                 continue;
             }
             break;
@@ -1132,6 +1136,28 @@ static void cmd_apply(struct dlist *dl)
     syslog(LOG_DEBUG, "sending response to %s: %i (%s)",
            dl->name, r, error_message(r));
     prot_printf(backupd_out, "%s\r\n", backupd_response(r));
+}
+
+static void cmd_compress(const char *alg)
+{
+    if (backupd_compress_done) {
+        prot_printf(backupd_out, "NO Compression already active: %s\r\n", alg);
+        return;
+    }
+    if (strcasecmp(alg, "DEFLATE")) {
+        prot_printf(backupd_out, "NO Unknown compression algorithm: %s\r\n", alg);
+        return;
+    }
+    if (ZLIB_VERSION[0] != zlibVersion()[0]) {
+        prot_printf(backupd_out, "NO Error initializing %s "
+                    "(incompatible zlib version)\r\n", alg);
+        return;
+    }
+    prot_printf(backupd_out, "OK %s active\r\n", alg);
+    prot_flush(backupd_out);
+    prot_setcompress(backupd_in);
+    prot_setcompress(backupd_out);
+    backupd_compress_done = 1;
 }
 
 static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
