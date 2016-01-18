@@ -749,6 +749,7 @@ todo list
 * ctl_backups verify: set level
 * backupd: don't block on locked backups, return mailbox locked -- but sync_client doesn't handle this
 * test multiple backup partitions
+* configure: error if backups requested and we don't have zlib
 
 compact implementation steps:
     1 remove unused chunks, keep everything else as is
