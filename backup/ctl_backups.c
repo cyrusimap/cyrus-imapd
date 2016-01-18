@@ -340,14 +340,14 @@ int main (int argc, char **argv)
         // FIXME dedup this or make it api
         // FIXME transactionality
         // FIXME error checking
-        char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
+        char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
         if (!backups_db_fname)
             backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
 
         struct db *backups_db = NULL;
         struct txn *tid = NULL;
 
-        int r = cyrusdb_open(config_backups_db, backups_db_fname, CYRUSDB_CREATE,
+        int r = cyrusdb_open(config_backup_db, backups_db_fname, CYRUSDB_CREATE,
                             &backups_db);
 
         if (!r)

@@ -444,10 +444,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    from the source.  If set to a negative value or zero, deleted content
    will be kept indefinitely. */
 
-{ "backups_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
+{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the backup locations database. */
 
-{ "backups_db_path", NULL, STRING }
+{ "backup_db_path", NULL, STRING }
 /* The absolute path to the backup db file.  If not specified,
    will be confdir/backups.db */
 

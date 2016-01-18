@@ -313,14 +313,14 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
                               struct buf *data_fname, struct buf *index_fname,
                               enum backup_open_create create)
 {
-    char *backups_db_fname = xstrdupnull(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
+    char *backups_db_fname = xstrdupnull(config_getstring(IMAPOPT_BACKUP_DB_PATH));
     if (!backups_db_fname)
         backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
 
     struct db *backups_db = NULL;
     struct txn *tid = NULL;
 
-    int r = cyrusdb_open(config_backups_db, backups_db_fname, CYRUSDB_CREATE,
+    int r = cyrusdb_open(config_backup_db, backups_db_fname, CYRUSDB_CREATE,
                          &backups_db);
     if (r) goto done;
 
@@ -623,14 +623,14 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
         return 0;
 
     /* exclusively open backups database */
-    char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUPS_DB_PATH));
+    char *backups_db_fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
     if (!backups_db_fname)
         backups_db_fname = strconcat(config_dir, "/backups.db", NULL);
 
     struct db *backups_db = NULL;
     struct txn *tid = NULL;
 
-    r = cyrusdb_lockopen(config_backups_db, backups_db_fname, 0,
+    r = cyrusdb_lockopen(config_backup_db, backups_db_fname, 0,
                          &backups_db, &tid);
     if (r) goto error; // FIXME log
 
