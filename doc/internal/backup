@@ -192,6 +192,14 @@ see an APPLY RENAME for each affected mbox when a recursive rename is occurring.
 there doesn't seem to be anything preventing user/a/foo -> user/b/foo in the
 general (non-INBOX) case.
 
+renames might be a little easier to handle if the index replicated the mailbox
+heirarchy rather than just being a flat structure.  though this adds complexity
+wrt hiersep handling.  something like:
+
+ mailbox:
+    mboxname        # just the name of this mbox
+    parent_id       # fk to parent mailbox
+    full_mboxname   # cached value, parent.full_mboxname + mboxname
 
 locking
 -------
