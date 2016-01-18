@@ -91,6 +91,7 @@ static void usage(void)
             "Options:\n"
             "    -C alt_config       # alternate config file\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
+            "    -w                  # wait for locks (don't skip locked backups)\n"
     );
 
     fprintf(stderr, "%s\n",
@@ -138,6 +139,7 @@ enum ctlbu_lock_mode {
 struct ctlbu_cmd_options {
     enum ctlbu_mode mode;
     enum ctlbu_lock_mode lock_mode;
+    enum backup_open_nonblock wait;
     int verbose;
     int list_stale;
     const char *lock_exec_cmd;
@@ -237,8 +239,9 @@ int main (int argc, char **argv)
     const char *alt_config = NULL;
     enum ctlbu_cmd cmd = CTLBU_CMD_UNSPECIFIED;
     struct ctlbu_cmd_options options = {0};
+    options.wait = BACKUP_OPEN_NONBLOCK;
 
-    while ((opt = getopt(argc, argv, ":AC:fmpst:x:uv")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:fmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -278,6 +281,9 @@ int main (int argc, char **argv)
             if (options.lock_mode != CTLBU_LOCK_MODE_UNSPECIFIED) usage();
             options.lock_mode = CTLBU_LOCK_MODE_EXEC;
             options.lock_exec_cmd = optarg;
+            break;
+        case 'w':
+            options.wait = BACKUP_OPEN_BLOCK;
             break;
         case ':':
             if (optopt == 't') options.list_stale = 24;
@@ -410,7 +416,7 @@ static int cmd_compact_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_compact(fname, options->verbose, stdout);
+    r = backup_compact(fname, options->wait, options->verbose, stdout);
 
     printf("compact %s: %s\n",
            userid ? userid : fname,
@@ -451,7 +457,7 @@ static int cmd_list_one(void *rock,
         fname = xstrndup(data, data_len);
 
     r = backup_open_paths(&backup, fname, NULL,
-                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+                          options->wait, BACKUP_OPEN_NOCREATE);
     if (r) {
         fprintf(stderr, "%s: %s\n", userid ? userid : fname, error_message(r));
         goto done;
@@ -476,15 +482,15 @@ done:
     return r;
 }
 
-static int lock_run_pipe(const char *userid, const char *fname)
+static int lock_run_pipe(const char *userid, const char *fname,
+                         enum backup_open_nonblock nonblock)
 {
     printf("* Trying to obtain lock on %s...\n", userid ? userid : fname);
 
     struct backup *backup = NULL;
     int r;
 
-    r = backup_open_paths(&backup, fname, NULL,
-                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
 
     if (r) {
         printf("NO failed\n");
@@ -504,7 +510,8 @@ static int lock_run_pipe(const char *userid, const char *fname)
     return 0;
 }
 
-static int lock_run_sqlite(const char *userid, const char *fname)
+static int lock_run_sqlite(const char *userid, const char *fname,
+                           enum backup_open_nonblock nonblock)
 {
     fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
 
@@ -513,8 +520,7 @@ static int lock_run_sqlite(const char *userid, const char *fname)
     int r, status;
     pid_t pid;
 
-    r = backup_open_paths(&backup, fname, NULL,
-                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
 
     if (r) {
         fprintf(stderr, "unable to lock %s: %s\n",
@@ -561,15 +567,16 @@ static int lock_run_sqlite(const char *userid, const char *fname)
 static const char data_fname_env[] = "ctl_backups_lock_data_fname";
 static const char index_fname_env[] = "ctl_backups_lock_index_fname";
 
-static int lock_run_exec(const char *userid, const char *fname, const char *cmd)
+static int lock_run_exec(const char *userid, const char *fname,
+                         const char *cmd,
+                         enum backup_open_nonblock nonblock)
 {
     fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
 
     struct backup *backup = NULL;
     int r;
 
-    r = backup_open_paths(&backup, fname, NULL,
-                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
 
     if (r) {
         fprintf(stderr, "unable to lock %s: %s\n",
@@ -615,13 +622,13 @@ static int cmd_lock_one(void *rock,
     switch (options->lock_mode) {
     case CTLBU_LOCK_MODE_UNSPECIFIED:
     case CTLBU_LOCK_MODE_PIPE:
-        r = lock_run_pipe(userid, fname);
+        r = lock_run_pipe(userid, fname, options->wait);
         break;
     case CTLBU_LOCK_MODE_SQL:
-        r = lock_run_sqlite(userid, fname);
+        r = lock_run_sqlite(userid, fname, options->wait);
         break;
     case CTLBU_LOCK_MODE_EXEC:
-        r = lock_run_exec(userid, fname, options->lock_exec_cmd);
+        r = lock_run_exec(userid, fname, options->lock_exec_cmd, options->wait);
         break;
     }
 
@@ -659,7 +666,7 @@ static int cmd_reindex_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_reindex(fname, options->verbose, stdout);
+    r = backup_reindex(fname, options->wait, options->verbose, stdout);
 
     printf("reindex %s: %s\n",
            userid ? userid : fname,
@@ -690,7 +697,7 @@ static int cmd_verify_one(void *rock,
         fname = xstrndup(data, data_len);
 
     r = backup_open_paths(&backup, fname, NULL,
-                          BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+                          options->wait, BACKUP_OPEN_NOCREATE);
 
     if (r == IMAP_MAILBOX_LOCKED) {
         printf("verify %s: locked\n", userid ? userid : fname);
@@ -706,6 +713,8 @@ static int cmd_verify_one(void *rock,
     printf("verify %s: %s\n",
            userid ? userid : fname,
            r ? "failed" : "ok");
+
+    backup_close(&backup);
 
 done:
     if (userid) free(userid);

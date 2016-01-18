@@ -58,7 +58,8 @@
 
 static int compact_open(const char *name,
                         struct backup **originalp,
-                        struct backup **compactp)
+                        struct backup **compactp,
+                        enum backup_open_nonblock nonblock)
 {
     struct backup *original = NULL;
     struct backup *compact = NULL;
@@ -79,7 +80,7 @@ static int compact_open(const char *name,
                          buf_cstring(&original_data_fname),
                          buf_cstring(&original_index_fname),
                          BACKUP_OPEN_NOREINDEX,
-                         BACKUP_OPEN_BLOCK,
+                         nonblock,
                          BACKUP_OPEN_NOCREATE);
     if (r) goto done;
 
@@ -87,7 +88,7 @@ static int compact_open(const char *name,
                          buf_cstring(&compact_data_fname),
                          buf_cstring(&compact_index_fname),
                          BACKUP_OPEN_NOREINDEX,
-                         BACKUP_OPEN_NONBLOCK,
+                         BACKUP_OPEN_NONBLOCK, // FIXME think about this
                          BACKUP_OPEN_CREATE_EXCL);
     if (r) {
         backup_close(&original);
@@ -165,7 +166,9 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     return r;
 }
 
-EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
+EXPORTED int backup_compact(const char *name,
+                            enum backup_open_nonblock nonblock,
+                            int verbose, FILE *out)
 {
     struct backup *original = NULL;
     struct backup *compact = NULL;
@@ -176,7 +179,7 @@ EXPORTED int backup_compact(const char *name, int verbose, FILE *out)
     time_t since, chunk_start_time, ts;
     int r;
 
-    r = compact_open(name, &original, &compact);
+    r = compact_open(name, &original, &compact, nonblock);
     if (r) return r;
 
     /* calculate current time after obtaining locks, in case of a wait */

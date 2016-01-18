@@ -476,7 +476,9 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     return r;
 }
 
-EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
+EXPORTED int backup_reindex(const char *name,
+                            enum backup_open_nonblock nonblock,
+                            int verbose, FILE *out)
 {
     struct buf data_fname = BUF_INITIALIZER;
     struct buf index_fname = BUF_INITIALIZER;
@@ -488,7 +490,7 @@ EXPORTED int backup_reindex(const char *name, int verbose, FILE *out)
 
     r = backup_real_open(&backup,
                          buf_cstring(&data_fname), buf_cstring(&index_fname),
-                         BACKUP_OPEN_REINDEX, BACKUP_OPEN_BLOCK,
+                         BACKUP_OPEN_REINDEX, nonblock,
                          BACKUP_OPEN_NOCREATE);
     buf_free(&index_fname);
     buf_free(&data_fname);
