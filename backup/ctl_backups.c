@@ -196,6 +196,14 @@ static foreach_cb *const cmd_func[] = {
     cmd_verify_one,
 };
 
+static int lock_run_pipe(const char *userid, const char *fname,
+                         enum backup_open_nonblock nonblock);
+static int lock_run_sqlite(const char *userid, const char *fname,
+                           enum backup_open_nonblock nonblock);
+static int lock_run_exec(const char *userid, const char *fname,
+                         const char *cmd,
+                         enum backup_open_nonblock nonblock);
+
 static enum ctlbu_cmd parse_cmd_string(const char *cmd)
 {
     assert(cmd != NULL);
@@ -495,128 +503,6 @@ done:
     return options->stop_on_error ? r : 0;
 }
 
-static int lock_run_pipe(const char *userid, const char *fname,
-                         enum backup_open_nonblock nonblock)
-{
-    printf("* Trying to obtain lock on %s...\n", userid ? userid : fname);
-
-    struct backup *backup = NULL;
-    int r;
-
-    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
-
-    if (r) {
-        printf("NO failed\n");
-        return EC_SOFTWARE; // FIXME would something else be more appropriate?
-    }
-
-    printf("OK locked\n");
-
-    /* wait until stdin closes */
-    char buf[PROT_BUFSIZE] = {0};
-    while (!feof(stdin))
-        fgets(buf, sizeof(buf), stdin);
-
-    r = backup_close(&backup);
-    if (r) fprintf(stderr, "warning: backup_close() returned %i\n", r);
-
-    return 0;
-}
-
-static int lock_run_sqlite(const char *userid, const char *fname,
-                           enum backup_open_nonblock nonblock)
-{
-    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
-
-    struct backup *backup = NULL;
-    const char *index_fname = NULL;
-    int r, status;
-    pid_t pid;
-
-    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
-
-    if (r) {
-        fprintf(stderr, "unable to lock %s: %s\n",
-                userid ? userid : fname,
-                error_message(r));
-        return EC_SOFTWARE;
-    }
-
-    index_fname = backup_get_index_fname(backup);
-
-    /* FIXME probably need to do something with signals here */
-
-    pid = fork();
-
-    switch (pid) {
-    case -1:
-        perror("fork");
-        r = EC_SOFTWARE;
-        break;
-
-    case 0:
-        /* child */
-        fprintf(stderr, "execlp: %s %s\n", "sqlite3", index_fname);
-        execlp("sqlite3", "sqlite3", index_fname, NULL);
-        /* execlp never returns */
-        perror("execlp sqlite3");
-        _exit(EC_SOFTWARE);
-        break;
-
-    default:
-        /* parent */
-        waitpid(pid, &status, 0);
-        if (WIFEXITED(status))
-            r = WEXITSTATUS(status);
-        else
-            r = EC_SOFTWARE;
-        break;
-    }
-
-    backup_close(&backup);
-    return r;
-}
-
-static const char data_fname_env[] = "ctl_backups_lock_data_fname";
-static const char index_fname_env[] = "ctl_backups_lock_index_fname";
-
-static int lock_run_exec(const char *userid, const char *fname,
-                         const char *cmd,
-                         enum backup_open_nonblock nonblock)
-{
-    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
-
-    struct backup *backup = NULL;
-    int r;
-
-    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
-
-    if (r) {
-        fprintf(stderr, "unable to lock %s: %s\n",
-                userid ? userid : fname,
-                error_message(r));
-        return EC_SOFTWARE;
-    }
-
-    setenv(data_fname_env, fname, 1);
-    setenv(index_fname_env, backup_get_index_fname(backup), 1);
-
-    r = system(cmd);
-
-    unsetenv(data_fname_env);
-    unsetenv(index_fname_env);
-
-    if (r == -1)
-        r = EC_SOFTWARE;
-    else if (WIFEXITED(r))
-        r = WEXITSTATUS(r);
-    else
-        r = EC_SOFTWARE;
-
-    backup_close(&backup);
-    return r;
-}
-
 static int cmd_lock_one(void *rock,
                         const char *key, size_t key_len,
                         const char *data, size_t data_len)
@@ -747,4 +633,126 @@ done:
     if (r) ++ctlbu_skips_fails;
     if (r == IMAP_MAILBOX_LOCKED) r = 0;
     return options->stop_on_error ? r : 0;
+}
+
+static int lock_run_pipe(const char *userid, const char *fname,
+                         enum backup_open_nonblock nonblock)
+{
+    printf("* Trying to obtain lock on %s...\n", userid ? userid : fname);
+
+    struct backup *backup = NULL;
+    int r;
+
+    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+
+    if (r) {
+        printf("NO failed\n");
+        return EC_SOFTWARE; // FIXME would something else be more appropriate?
+    }
+
+    printf("OK locked\n");
+
+    /* wait until stdin closes */
+    char buf[PROT_BUFSIZE] = {0};
+    while (!feof(stdin))
+        fgets(buf, sizeof(buf), stdin);
+
+    r = backup_close(&backup);
+    if (r) fprintf(stderr, "warning: backup_close() returned %i\n", r);
+
+    return 0;
+}
+
+static int lock_run_sqlite(const char *userid, const char *fname,
+                           enum backup_open_nonblock nonblock)
+{
+    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
+
+    struct backup *backup = NULL;
+    const char *index_fname = NULL;
+    int r, status;
+    pid_t pid;
+
+    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+
+    if (r) {
+        fprintf(stderr, "unable to lock %s: %s\n",
+                userid ? userid : fname,
+                error_message(r));
+        return EC_SOFTWARE;
+    }
+
+    index_fname = backup_get_index_fname(backup);
+
+    /* FIXME probably need to do something with signals here */
+
+    pid = fork();
+
+    switch (pid) {
+    case -1:
+        perror("fork");
+        r = EC_SOFTWARE;
+        break;
+
+    case 0:
+        /* child */
+        fprintf(stderr, "execlp: %s %s\n", "sqlite3", index_fname);
+        execlp("sqlite3", "sqlite3", index_fname, NULL);
+        /* execlp never returns */
+        perror("execlp sqlite3");
+        _exit(EC_SOFTWARE);
+        break;
+
+    default:
+        /* parent */
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status))
+            r = WEXITSTATUS(status);
+        else
+            r = EC_SOFTWARE;
+        break;
+    }
+
+    backup_close(&backup);
+    return r;
+}
+
+static const char data_fname_env[] = "ctl_backups_lock_data_fname";
+static const char index_fname_env[] = "ctl_backups_lock_index_fname";
+
+static int lock_run_exec(const char *userid, const char *fname,
+                         const char *cmd,
+                         enum backup_open_nonblock nonblock)
+{
+    fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
+
+    struct backup *backup = NULL;
+    int r;
+
+    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+
+    if (r) {
+        fprintf(stderr, "unable to lock %s: %s\n",
+                userid ? userid : fname,
+                error_message(r));
+        return EC_SOFTWARE;
+    }
+
+    setenv(data_fname_env, fname, 1);
+    setenv(index_fname_env, backup_get_index_fname(backup), 1);
+
+    r = system(cmd);
+
+    unsetenv(data_fname_env);
+    unsetenv(index_fname_env);
+
+    if (r == -1)
+        r = EC_SOFTWARE;
+    else if (WIFEXITED(r))
+        r = WEXITSTATUS(r);
+    else
+        r = EC_SOFTWARE;
+
+    backup_close(&backup);
+    return r;
 }
