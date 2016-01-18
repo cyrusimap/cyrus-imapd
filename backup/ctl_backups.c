@@ -234,6 +234,24 @@ static enum ctlbu_cmd parse_cmd_string(const char *cmd)
     return CTLBU_CMD_UNSPECIFIED;
 }
 
+static void print_status(const char *cmd,
+                         const char *userid, const char *fname,
+                         int r)
+{
+    printf("%s %s: ", cmd, userid ? userid : fname);
+    switch(r) {
+        case 0:
+            puts("ok");
+            break;
+        case IMAP_MAILBOX_LOCKED:
+            puts("locked");
+            break;
+        default:
+            printf("failed (%s)\n", error_message(r));
+            break;
+    }
+}
+
 static void save_argv0(const char *s)
 {
     const char *slash = strrchr(s, '/');
@@ -435,9 +453,7 @@ static int cmd_compact_one(void *rock,
 
     r = backup_compact(fname, options->wait, options->verbose, stdout);
 
-    printf("compact %s: %s\n",
-           userid ? userid : fname,
-           r ? "failed" : "ok");
+    print_status("compact", userid, fname, r);
 
     if (userid) free(userid);
     if (fname) free(fname);
@@ -559,8 +575,6 @@ static int cmd_reindex_one(void *rock,
     char *fname = NULL;
     int r;
 
-    (void) options;
-
     /* input args might not be 0-terminated, so make a safe copy */
     if (key_len)
         userid = xstrndup(key, key_len);
@@ -569,19 +583,8 @@ static int cmd_reindex_one(void *rock,
 
     r = backup_reindex(fname, options->wait, options->verbose, stdout);
 
-    if (r == IMAP_MAILBOX_LOCKED) {
-        printf("reindex %s: locked\n", userid ? userid : fname);
-        goto done;
-    }
-    else if (r) {
-        fprintf(stderr, "error opening %s: %s\n", fname, error_message(r));
-    }
+    print_status("reindex", userid, fname, r);
 
-    printf("reindex %s: %s\n",
-           userid ? userid : fname,
-           r ? "failed" : "ok");
-
-done:
     if (userid) free(userid);
     if (fname) free(fname);
 
@@ -600,8 +603,6 @@ static int cmd_verify_one(void *rock,
     char *fname = NULL;
     int r;
 
-    (void) options;  // not currently using this
-
     /* input args might not be 0-terminated, so make a safe copy */
     if (key_len)
         userid = xstrndup(key, key_len);
@@ -611,21 +612,10 @@ static int cmd_verify_one(void *rock,
     r = backup_open_paths(&backup, fname, NULL,
                           options->wait, BACKUP_OPEN_NOCREATE);
 
-    if (r == IMAP_MAILBOX_LOCKED) {
-        printf("verify %s: locked\n", userid ? userid : fname);
-        goto done;
-    }
-    else if (r) {
-        fprintf(stderr, "error opening %s: %s\n", fname, error_message(r));
-    }
-
     if (!r) r = backup_verify(backup, BACKUP_VERIFY_FULL, options->verbose, stdout);
 
-    printf("verify %s: %s\n",
-           userid ? userid : fname,
-           r ? "failed" : "ok");
+    print_status("verify", userid, fname, r);
 
-done:
     if (backup) backup_close(&backup);
     if (userid) free(userid);
     if (fname) free(fname);
