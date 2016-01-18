@@ -110,13 +110,13 @@ static void usage(void)
     fprintf(stderr, "%s\n",
             "Modes:\n"
             "    -A                  # all known backups\n"
-//            "    -P prefix           # backups for all users starting with \"prefix\"\n"
-//            "    -D domain           # backups for all users in domain\n"
+            "    -D                  # specified backups interpreted as domains\n"
+            "    -P                  # specified backups interpreted as userid prefixes\n"
             "    -f                  # specified backups interpreted as filenames\n"
             "    -m                  # specified backups interpreted as mboxnames\n"
             "    -u                  # specified backups interpreted as userids (default)\n"
             "\n"
-            "    Modes -A, -P, -D not available for all commands\n" /* FIXME which */
+            "    Modes -A, -D, -P not available for all commands\n" /* FIXME which */
     );
 
     exit(EC_USAGE);
@@ -127,6 +127,8 @@ enum ctlbu_mode {
     CTLBU_MODE_FILENAME,
     CTLBU_MODE_MBOXNAME,
     CTLBU_MODE_USERNAME,
+    CTLBU_MODE_DOMAIN,
+    CTLBU_MODE_PREFIX,
     CTLBU_MODE_ALL,
 };
 
@@ -145,6 +147,7 @@ struct ctlbu_cmd_options {
     int stop_on_error;
     int list_stale;
     const char *lock_exec_cmd;
+    const char *domain;
 };
 
 enum ctlbu_cmd {
@@ -252,6 +255,35 @@ static void print_status(const char *cmd,
     }
 }
 
+static int domain_filter(void *rock,
+                         const char *key, size_t key_len,
+                         const char *data __attribute__((unused)),
+                         size_t data_len __attribute__((unused)))
+{
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
+    char *userid = NULL;
+    mbname_t *mbname = NULL;
+    const char *domain = NULL;
+    int doit = 0;
+
+    /* input args might not be 0-terminated, so make a safe copy */
+    if (!key_len) return 0;
+    userid = xstrndup(key, key_len);
+
+    mbname = mbname_from_userid(userid);
+    domain = mbname_domain(mbname);
+    if (!domain)
+        domain = config_defdomain;
+
+    if (domain)
+        doit = !strcmp(domain, options->domain);
+
+    mbname_free(&mbname);
+    free(userid);
+
+    return doit;
+}
+
 static void save_argv0(const char *s)
 {
     const char *slash = strrchr(s, '/');
@@ -271,7 +303,7 @@ int main (int argc, char **argv)
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    while ((opt = getopt(argc, argv, ":AC:Sfmpst:x:uvw")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:DPSfmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -279,6 +311,14 @@ int main (int argc, char **argv)
             break;
         case 'C':
             alt_config = optarg;
+            break;
+        case 'D':
+            if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
+            options.mode = CTLBU_MODE_DOMAIN;
+            break;
+        case 'P':
+            if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
+            options.mode = CTLBU_MODE_PREFIX;
             break;
         case 'S':
             options.stop_on_error = 1;
@@ -349,6 +389,8 @@ int main (int argc, char **argv)
     case CTLBU_CMD_MOVE:
     case CTLBU_CMD_DELETE:
         if (options.mode == CTLBU_MODE_ALL) usage();
+        if (options.mode == CTLBU_MODE_DOMAIN) usage();
+        if (options.mode == CTLBU_MODE_PREFIX) usage();
         if (argc - optind > 1) usage();
         break;
 
@@ -376,15 +418,60 @@ int main (int argc, char **argv)
         // FIXME
     }
     else if (options.mode == CTLBU_MODE_ALL) {
+        /* loop over entire backups.db */
         struct db *backups_db = NULL;
         struct txn *tid = NULL;
 
-        int r = backupdb_open(&backups_db, &tid);
+        r = backupdb_open(&backups_db, &tid);
 
         if (!r)
             r = cyrusdb_foreach(backups_db, NULL, 0, NULL,
                                 cmd_func[cmd], &options,
                                 &tid);
+
+        if (backups_db) {
+            if (tid) cyrusdb_abort(backups_db, tid);
+            cyrusdb_close(backups_db);
+        }
+    }
+    else if (options.mode == CTLBU_MODE_DOMAIN) {
+        /* loop over domains named on command line */
+        struct db *backups_db = NULL;
+        struct txn *tid = NULL;
+        int i;
+
+        r = backupdb_open(&backups_db, &tid);
+
+        for (i = optind; i < argc && !r; i++) {
+            options.domain = argv[i];
+
+            r = cyrusdb_foreach(backups_db, NULL, 0,
+                                domain_filter,
+                                cmd_func[cmd], &options,
+                                &tid);
+        }
+
+        if (backups_db) {
+            if (tid) cyrusdb_abort(backups_db, tid);
+            cyrusdb_close(backups_db);
+        }
+
+    }
+    else if (options.mode == CTLBU_MODE_PREFIX) {
+        /* loop over prefixes named on command line */
+        struct db *backups_db = NULL;
+        struct txn *tid = NULL;
+        int i;
+
+        r = backupdb_open(&backups_db, &tid);
+
+        for (i = optind; i < argc && !r; i++) {
+            r = cyrusdb_foreach(backups_db,
+                                argv[i], strlen(argv[i]),
+                                NULL,
+                                cmd_func[cmd], &options,
+                                &tid);
+        }
 
         if (backups_db) {
             if (tid) cyrusdb_abort(backups_db, tid);
