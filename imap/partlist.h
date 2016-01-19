@@ -140,6 +140,18 @@ extern void partlist_free(partlist_t *part_list);
 extern const char *partlist_select_value(partlist_t *part_list);
 
 /**
+ * \brief Iterate items in list
+ *
+ * @param inout part_list   items list structure
+ * @param in proc           callback function, called for each item
+ * @param in rock           argument to pass through to callback function
+ * @return return value from callback function
+ */
+typedef int (*partlist_foreach_cb)(partitem_t *part_item, void *rock);
+extern int partlist_foreach(partlist_t *part_list,
+                            partlist_foreach_cb proc,
+                            void *rock);
+/**
  * \brief Selects local partitions.
  *
  * @return selected partition, according to requested mode, or NULL if none found
