@@ -472,6 +472,23 @@ can we use a recognisable character to delimit the mkstemp suffix?
 
 what if there's multiple backup files for a given userid? precedence?
 
+verify found backups before recording.  reindex?
+
+locking? what if something has a filename and does stuff with it while
+reconstruct runs?
+
+backupd always uses db for opens, so as long as reconstruct keeps the db
+locked while it works, the db won't clash.  but backupd might have backups
+still open from before reconstruct started, which it will write to quite
+happily, even though reconstruct might decide that some other file is the
+correct one for that user...
+
+a backup server would generally be used only for backups, and sync_client
+is quite resilient when the destinatition isn't there, so it's actually
+no problem to just shut down cyrus while reconstruct runs.  no outage to
+user-facing services, just maybe some sync backlog to catch up on once
+cyrus is restarted.
+
 
 ctl_backups
 -------------
