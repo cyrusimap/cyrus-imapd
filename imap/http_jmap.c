@@ -436,6 +436,13 @@ static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
     free(f);
 }
 
+static int JNOTNULL(json_t *item)
+{
+   if (!item) return 0;
+   if (json_is_null(item)) return 0;
+   return 1;
+}
+
 /* Parse the JMAP filter arg. Report any invalid filter arguments in invalid,
  * prefixed by prefix. */
 static jmap_filter *jmap_filter_parse(json_t *arg,
@@ -479,7 +486,7 @@ static jmap_filter *jmap_filter_parse(json_t *arg,
             f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf), invalid, parse);
             buf_reset(&buf);
         }
-    } else if (conds && conds != json_null()) {
+    } else if (JNOTNULL(conds)) {
         buf_printf(&buf, "%s.%s", prefix, "conditions");
         json_array_append_new(invalid, json_string(buf_cstring(&buf)));
         buf_reset(&buf);
@@ -553,7 +560,7 @@ static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) 
 /* Check if state matches the current mailbox state for mailbox type
  * mbtype. Return zero if states match. */
 static int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req) {
-    if (state && state != json_null()) {
+    if (JNOTNULL(state)) {
         const char *s = json_string_value(state);
         if (!s) {
             return -1;
@@ -1077,7 +1084,7 @@ static int getMailboxes(struct jmap_req *req)
     /* Process mailboxes. */
     mailboxes = json_array_get(item, 1);
     json_t *want = json_object_get(req->args, "ids");
-    if (want && want != json_null()) {
+    if (JNOTNULL(want)) {
         size_t i;
         json_t *val, *notFound = json_pack("[]");
         json_array_foreach(want, i, val) {
@@ -1319,7 +1326,7 @@ static int jmap_mailbox_write(char **uid,
     }
 
     /* parentId */
-    if (json_object_get(arg, "parentId") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "parentId"))) {
         pe = jmap_readprop(arg, "parentId", is_create, invalid, "s", &parentId);
         if (pe > 0 && strlen(parentId)) {
             if (strcmp(parentId, req->inbox->uniqueid)) {
@@ -1367,7 +1374,7 @@ static int jmap_mailbox_write(char **uid,
     }
 
     /* role */
-    if (json_object_get(arg, "role") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "role"))) {
         pe = jmap_readprop(arg, "role", is_create, invalid, "s", &role);
         if (pe > 0) {
             if (!strlen(role)) {
@@ -2498,7 +2505,7 @@ static void* message_filter_parse(json_t *arg,
     }
 
     /* before */
-    if (json_object_get(arg, "before") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "before"))) {
         if (jmap_readprop_full(arg, prefix, "before", 0, invalid, "s", &s) > 0) {
             struct tm tm;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
@@ -2511,7 +2518,7 @@ static void* message_filter_parse(json_t *arg,
         }
     }
     /* after */
-    if (json_object_get(arg, "after") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "after"))) {
         if (jmap_readprop_full(arg, prefix, "after", 0, invalid, "s", &s) > 0) {
             struct tm tm;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
@@ -2524,7 +2531,7 @@ static void* message_filter_parse(json_t *arg,
         }
     }
     /* minSize */
-    if (json_object_get(arg, "minSize") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "minSize"))) {
         if (jmap_readprop_full(arg, prefix, "minSize", 0, invalid, "i", &i) > 0) {
             if (i < 0) {
                 buf_printf(&buf, "%s.minSize", prefix);
@@ -2538,7 +2545,7 @@ static void* message_filter_parse(json_t *arg,
         }
     }
     /* maxSize */
-    if (json_object_get(arg, "maxSize") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "maxSize"))) {
         if (jmap_readprop_full(arg, prefix, "maxSize", 0, invalid, "i", &i) > 0) {
             if (i < 0) {
                 buf_printf(&buf, "%s.maxSize", prefix);
@@ -2552,70 +2559,76 @@ static void* message_filter_parse(json_t *arg,
         }
     }
     /* isFlagged */
-    if ((j = json_object_get(arg, "isFlagged")) != json_null()) {
+    j = json_object_get(arg, "isFlagged");
+    if (JNOTNULL(j)) {
         short b;
         if (jmap_readprop_full(arg, prefix, "isFlagged", 0, invalid, "b", &b) > 0) {
             f->isFlagged = j;
         }
     }
     /* isUnread */
-    if ((j = json_object_get(arg, "isUnread")) != json_null()) {
+    j = json_object_get(arg, "isUnread");
+    if (JNOTNULL(j)) {
         short b;
         if (jmap_readprop_full(arg, prefix, "isUnread", 0, invalid, "b", &b) > 0) {
             f->isUnread = j;
         }
     }
     /* isAnswered */
-    if ((j = json_object_get(arg, "isAnswered")) != json_null()) {
+    j = json_object_get(arg, "isAnswered");
+    if (JNOTNULL(j)) {
         short b;
         if (jmap_readprop_full(arg, prefix, "isAnswered", 0, invalid, "b", &b) > 0) {
             f->isAnswered = j;
         }
     }
     /* isDraft */
-    if ((j = json_object_get(arg, "isDraft")) != json_null()) {
+    j = json_object_get(arg, "isDraft");
+    if (JNOTNULL(j)) {
         short b;
         if (jmap_readprop_full(arg, prefix, "isDraft", 0, invalid, "b", &b) > 0) {
             f->isDraft = j;
         }
     }
     /* hasAttachment */
-    if ((j = json_object_get(arg, "hasAttachment")) != json_null()) {
+    j = json_object_get(arg, "hasAttachment");
+    if (JNOTNULL(j)) {
         short b;
         if (jmap_readprop_full(arg, prefix, "hasAttachment", 0, invalid, "b", &b) > 0) {
             f->hasAttachment = j;
         }
     }
     /* text */
-    if (json_object_get(arg, "text") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "text"))) {
         jmap_readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
     }
     /* from */
-    if (json_object_get(arg, "from") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "from"))) {
         jmap_readprop_full(arg, prefix, "from", 0, invalid, "s", &f->from);
     }
     /* to */
-    if (json_object_get(arg, "to") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "to"))) {
         jmap_readprop_full(arg, prefix, "to", 0, invalid, "s", &f->to);
     }
     /* cc */
-    if (json_object_get(arg, "cc") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "cc"))) {
         jmap_readprop_full(arg, prefix, "cc", 0, invalid, "s", &f->cc);
     }
     /* bcc */
-    if (json_object_get(arg, "bcc") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "bcc"))) {
         jmap_readprop_full(arg, prefix, "bcc", 0, invalid, "s", &f->bcc);
     }
     /* subject */
-    if (json_object_get(arg, "subject") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "subject"))) {
         jmap_readprop_full(arg, prefix, "subject", 0, invalid, "s", &f->subject);
     }
     /* body */
-    if (json_object_get(arg, "body") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "body"))) {
         jmap_readprop_full(arg, prefix, "body", 0, invalid, "s", &f->body);
     }
     /* header */
-    if ((j = json_object_get(arg, "header")) != json_null()) {
+    j = json_object_get(arg, "header");
+    if (JNOTNULL(j)) {
         short iserr = 0;
         switch (json_array_size(j)) {
             case 2:
@@ -2713,7 +2726,7 @@ static int getMessageList(struct jmap_req *req)
 
     /* filter */
     filter = json_object_get(req->args, "filter");
-    if (filter && filter != json_null()) {
+    if (JNOTNULL(filter)) {
         rock.filter = jmap_filter_parse(filter, "filter", invalid, message_filter_parse);
     }
 
@@ -3431,7 +3444,7 @@ static void jmap_message_validate(json_t *arg,
         json_array_append_new(invalid, json_string("threadId"));
     }
     prop = json_object_get(arg, "inReplyToMessageId");
-    if (prop && prop != json_null()) {
+    if (JNOTNULL(prop)) {
         inReplyToMessageId = json_string_value(prop);
         if ((sval = json_string_value(prop)) && sval && !strlen(sval)) {
             json_array_append_new(invalid, json_string("inReplyToMessageId"));
@@ -3495,7 +3508,7 @@ static void jmap_message_validate(json_t *arg,
         json_array_append_new(invalid, json_string("headers"));
     }
     prop = json_object_get(arg, "from");
-    if (prop && prop != json_null()) {
+    if (JNOTNULL(prop)) {
         jmap_validate_emailer(prop, "from", validateaddr, invalid);
     }
     prop = json_object_get(arg, "to");
@@ -3507,7 +3520,7 @@ static void jmap_message_validate(json_t *arg,
             jmap_validate_emailer(emailer, buf_cstring(&buf), validateaddr, invalid);
             buf_reset(&buf);
         }
-    } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
+    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
         json_array_append_new(invalid, json_string("to"));
     }
     prop = json_object_get(arg, "cc");
@@ -3519,7 +3532,7 @@ static void jmap_message_validate(json_t *arg,
             jmap_validate_emailer(emailer, buf_cstring(&buf), validateaddr, invalid);
             buf_reset(&buf);
         }
-    } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
+    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
         json_array_append_new(invalid, json_string("cc"));
     }
     prop = json_object_get(arg, "bcc");
@@ -3531,11 +3544,11 @@ static void jmap_message_validate(json_t *arg,
             jmap_validate_emailer(emailer, buf_cstring(&buf), validateaddr, invalid);
             buf_reset(&buf);
         }
-    } else if (prop && prop != json_null() && json_typeof(prop) != JSON_ARRAY) {
+    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
         json_array_append_new(invalid, json_string("bcc"));
     }
     prop = json_object_get(arg, "replyTo");
-    if (prop && prop != json_null()) {
+    if (JNOTNULL(prop)) {
         jmap_validate_emailer(prop, "replyTo", validateaddr, invalid);
     }
     pe = jmap_readprop(arg, "date", 0, invalid, "s", &sval);
@@ -3787,15 +3800,15 @@ static int setMessages(struct jmap_req *req)
             /* XXX Compare immutable message properties. */
             json_t *prop;
             prop = json_object_get(arg, "isFlagged");
-            if (prop && prop != json_null()) {
+            if (JNOTNULL(prop)) {
                 jmap_readprop(arg, "isFlagged", 1, invalid, "b", &flagged);
             }
             prop = json_object_get(arg, "isUnread");
-            if (prop && prop != json_null()) {
+            if (JNOTNULL(prop)) {
                 jmap_readprop(arg, "isUnread", 1, invalid, "b", &unread);
             }
             prop = json_object_get(arg, "isAnswered");
-            if (prop && prop != json_null()) {
+            if (JNOTNULL(prop)) {
                 jmap_readprop(arg, "isAnswered", 1, invalid, "b", &answered);
             }
 
@@ -5478,7 +5491,7 @@ static int contact_filter_match(void *vf, void *rock)
     struct carddav_db *db = cfrock->carddavdb;
 
     /* isFlagged */
-    if (f->isFlagged && f->isFlagged != json_null()) {
+    if (JNOTNULL(f->isFlagged)) {
         json_t *isFlagged = json_object_get(contact, "isFlagged");
         if (f->isFlagged != isFlagged) {
             return 0;
@@ -5642,59 +5655,59 @@ static void *contact_filter_parse(json_t *arg,
     f->isFlagged = json_object_get(arg, "isFlagged");
 
     /* text */
-    if (json_object_get(arg, "text") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "text"))) {
         jmap_readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
     }
     /* prefix */
-    if (json_object_get(arg, "prefix") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "prefix"))) {
         jmap_readprop_full(arg, prefix, "prefix", 0, invalid, "s", &f->prefix);
     }
     /* firstName */
-    if (json_object_get(arg, "firstName") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "firstName"))) {
         jmap_readprop_full(arg, prefix, "firstName", 0, invalid, "s", &f->firstName);
     }
     /* lastName */
-    if (json_object_get(arg, "lastName") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "lastName"))) {
         jmap_readprop_full(arg, prefix, "lastName", 0, invalid, "s", &f->lastName);
     }
     /* suffix */
-    if (json_object_get(arg, "suffix") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "suffix"))) {
         jmap_readprop_full(arg, prefix, "suffix", 0, invalid, "s", &f->suffix);
     }
     /* nickname */
-    if (json_object_get(arg, "nickname") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "nickname"))) {
         jmap_readprop_full(arg, prefix, "nickname", 0, invalid, "s", &f->nickname);
     }
     /* company */
-    if (json_object_get(arg, "company") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "company"))) {
         jmap_readprop_full(arg, prefix, "company", 0, invalid, "s", &f->company);
     }
     /* department */
-    if (json_object_get(arg, "department") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "department"))) {
         jmap_readprop_full(arg, prefix, "department", 0, invalid, "s", &f->department);
     }
     /* jobTitle */
-    if (json_object_get(arg, "jobTitle") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "jobTitle"))) {
         jmap_readprop_full(arg, prefix, "jobTitle", 0, invalid, "s", &f->jobTitle);
     }
     /* email */
-    if (json_object_get(arg, "email") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "email"))) {
         jmap_readprop_full(arg, prefix, "email", 0, invalid, "s", &f->email);
     }
     /* phone */
-    if (json_object_get(arg, "phone") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "phone"))) {
         jmap_readprop_full(arg, prefix, "phone", 0, invalid, "s", &f->phone);
     }
     /* online */
-    if (json_object_get(arg, "online") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "online"))) {
         jmap_readprop_full(arg, prefix, "online", 0, invalid, "s", &f->online);
     }
     /* address */
-    if (json_object_get(arg, "address") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "address"))) {
         jmap_readprop_full(arg, prefix, "address", 0, invalid, "s", &f->address);
     }
     /* notes */
-    if (json_object_get(arg, "notes") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "notes"))) {
         jmap_readprop_full(arg, prefix, "notes", 0, invalid, "s", &f->notes);
     }
 
@@ -5813,13 +5826,13 @@ static int getContactList(struct jmap_req *req)
 
     /* filter */
     filter = json_object_get(req->args, "filter");
-    if (filter && filter != json_null()) {
+    if (JNOTNULL(filter)) {
         rock.filter = jmap_filter_parse(filter, "filter", invalid, contact_filter_parse);
     }
 
     /* position */
     json_int_t pos = 0;
-    if (json_object_get(req->args, "position") != json_null()) {
+    if (JNOTNULL(json_object_get(req->args, "position"))) {
         pe = jmap_readprop(req->args, "position", 0 /*mandatory*/, invalid, "i", &pos);
         if (pe > 0 && pos < 0) {
             json_array_append_new(invalid, json_string("position"));
@@ -5829,7 +5842,7 @@ static int getContactList(struct jmap_req *req)
 
     /* limit */
     json_int_t limit = 0;
-    if (json_object_get(req->args, "limit") != json_null()) {
+    if (JNOTNULL(json_object_get(req->args, "limit"))) {
         pe = jmap_readprop(req->args, "limit", 0 /*mandatory*/, invalid, "i", &limit);
         if (pe > 0 && limit < 0) {
             json_array_append_new(invalid, json_string("limit"));
@@ -5838,7 +5851,7 @@ static int getContactList(struct jmap_req *req)
     rock.limit = limit;
 
     /* fetchContacts */
-    if (json_object_get(req->args, "fetchContacts") != json_null()) {
+    if (JNOTNULL(json_object_get(req->args, "fetchContacts"))) {
         jmap_readprop(req->args, "fetchContacts", 0 /*mandatory*/, invalid, "b", &dofetch);
     }
 
@@ -5972,7 +5985,7 @@ static int _phones_to_card(struct vparse_card *card, json_t *arg, json_t *invali
 
         pe = jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
         pe = jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
-        if (json_object_get(item, "label") != json_null()) {
+        if (JNOTNULL(json_object_get(item, "label"))) {
             pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
         }
 
@@ -6041,7 +6054,7 @@ static int _online_to_card(struct vparse_card *card, json_t *arg, json_t *invali
 
         pe = jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
         pe = jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
-        if (json_object_get(item, "label") != json_null()) {
+        if (JNOTNULL(json_object_get(item, "label"))) {
             pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
         }
 
@@ -6114,7 +6127,7 @@ static int _addresses_to_card(struct vparse_card *card, json_t *arg, json_t *inv
         pe = jmap_readprop_full(item, prefix, "country", 1, invalid, "s", &country);
 
         /* Optional */
-        if (json_object_get(item, "label") != json_null()) {
+        if (JNOTNULL(json_object_get(item, "label"))) {
             pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
         }
 
@@ -8661,7 +8674,7 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     /* alerts */
     if (_wantprop(props, "alerts") && (!exc || jmap_compare_alerts(comp, parent))) {
         json_t *alerts = jmap_alerts_from_ical(comp);
-        if (alerts != json_null() || !exc) {
+        if (JNOTNULL(alerts) || !exc) {
             json_object_set_new(obj, "alerts", alerts);
         }
     }
@@ -8670,10 +8683,10 @@ static json_t* jmap_calendarevent_from_ical(icalcomponent *comp,
     if (_wantprop(props, "organizer") || _wantprop(props, "attendees")) {
         json_t *organizer, *attendees;
         jmap_participants_from_ical(comp, &organizer, &attendees, userid);
-        if (organizer && _wantprop(props, "organizer") && (organizer != json_null() || !exc)) {
+        if (organizer && _wantprop(props, "organizer") && (JNOTNULL(organizer) || !exc)) {
             json_object_set_new(obj, "organizer", organizer);
         }
-        if (attendees && _wantprop(props, "attendees") && (attendees != json_null() || !exc)) {
+        if (attendees && _wantprop(props, "attendees") && (JNOTNULL(attendees) || !exc)) {
             json_object_set_new(obj, "attendees", attendees);
         }
     }
@@ -9028,7 +9041,7 @@ static void jmap_participants_to_ical(icalcomponent *comp,
     hash_table cache;
 
     /* Purge existing ORGANIZER and ATTENDEEs only if instructed to do so. */
-    if (organizer == json_null() && attendees == json_null()) {
+    if (!JNOTNULL(organizer) && !JNOTNULL(attendees)) {
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         icalcomponent_remove_property(comp, prop);
         icalproperty_free(prop);
@@ -9345,7 +9358,7 @@ static void jmap_exceptions_to_ical(icalcomponent *comp,
             continue;
         }
 
-        if (exc != json_null()) {
+        if (JNOTNULL(exc)) {
             json_t *invalidexc = json_pack("[]");
             size_t i;
             json_t *v;
@@ -9472,7 +9485,7 @@ static void jmap_inclusions_to_ical(icalcomponent *comp,
     /* Purge existing RDATEs. */
     jmap_remove_icalproperty(comp, ICAL_RDATE_PROPERTY);
 
-    if (!inclusions || inclusions == json_null()) {
+    if (!JNOTNULL(inclusions)) {
         return;
     }
 
@@ -9558,13 +9571,13 @@ static void jmap_attachments_to_ical(icalcomponent *comp,
                 blobId = NULL;
             }
         }
-        if (json_object_get(attachment, "type") != json_null()) {
+        if (JNOTNULL(json_object_get(attachment, "type"))) {
             jmap_readprop_full(attachment, prefix, "type", 0, invalid, "s", &type);
         }
-        if (json_object_get(attachment, "name") != json_null()) {
+        if (JNOTNULL(json_object_get(attachment, "name"))) {
             jmap_readprop_full(attachment, prefix, "name", 0, invalid, "s", &name);
         }
-        if (json_object_get(attachment, "size") != json_null()) {
+        if (JNOTNULL(json_object_get(attachment, "size"))) {
             pe = jmap_readprop_full(attachment, prefix, "size", 0, invalid, "I", &size);
             if (pe > 0 && size < 0) {
                 buf_printf(&buf, "%s.%s", prefix, "size");
@@ -9659,7 +9672,7 @@ static void jmap_recurrence_to_ical(icalcomponent *comp,
         icalproperty_free(prop);
     }
 
-    if (!recur || recur == json_null()) {
+    if (!JNOTNULL(recur)) {
         return;
     }
 
@@ -9869,7 +9882,7 @@ static void jmap_alerts_to_ical(icalcomponent *comp,
         icalcomponent_free(alarm);
     }
 
-    if (alerts == json_null()) {
+    if (!JNOTNULL(alerts)) {
         return;
     }
 
@@ -10205,7 +10218,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzstart_old = icaltimezone_get_builtin_timezone(tzid);
     /* Read the new timezone, if any. */
-    if (json_object_get(event, "startTimeZone") != json_null()) {
+    if (JNOTNULL(json_object_get(event, "startTimeZone"))) {
         pe = jmap_readprop(event, "startTimeZone", create&&!exc, invalid, "s", &val);
         if (pe > 0) {
             /* Lookup the new timezone. */
@@ -10235,7 +10248,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     tzid = jmap_tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
     if (!tzid) tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzend_old = icaltimezone_get_builtin_timezone(tzid);
-    if (json_object_get(event, "endTimeZone") != json_null()) {
+    if (JNOTNULL(json_object_get(event, "endTimeZone"))) {
         pe = jmap_readprop(event, "endTimeZone", create&&!exc, invalid, "s", &val);
         if (pe > 0) {
             rock->tzend = icaltimezone_get_builtin_timezone(val);
@@ -10370,7 +10383,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
 
     jmap_readprop(event, "organizer", 0, invalid, "o", &organizer);
     jmap_readprop(event, "attendees", 0, invalid, "o", &attendees);
-    if (organizer == json_null() && attendees == json_null()) {
+    if (!JNOTNULL(organizer) && !JNOTNULL(attendees)) {
         /* Remove both organizer and attendees from event. */
         jmap_participants_to_ical(comp, organizer, attendees, rock);
     } else if (organizer && attendees && json_array_size(attendees)) {
@@ -10385,7 +10398,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *alerts = NULL;
     pe = jmap_readprop(event, "alerts", 0, invalid, "o", &alerts);
     if (pe > 0) {
-        if (alerts == json_null() || json_array_size(alerts)) {
+        if (!JNOTNULL(alerts) || json_array_size(alerts)) {
             jmap_alerts_to_ical(comp, alerts, rock);
         } else {
             json_array_append_new(invalid, json_string("alerts"));
@@ -10418,7 +10431,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *inclusions = NULL;
     pe = jmap_readprop(event, "inclusions", 0, invalid, "o", &inclusions);
     if (pe > 0) {
-        if (!exc && (inclusions == json_null() || json_array_size(inclusions))) {
+        if (!exc && (!JNOTNULL(inclusions) || json_array_size(inclusions))) {
             jmap_inclusions_to_ical(comp, inclusions, rock);
         } else {
             json_array_append_new(invalid, json_string("inclusions"));
@@ -10432,7 +10445,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *exceptions = NULL;
     pe = jmap_readprop(event, "exceptions", 0, invalid, "o", &exceptions);
     if (pe > 0) {
-        if (!exc && (exceptions == json_null() || json_object_size(exceptions))) {
+        if (!exc && (!JNOTNULL(exceptions) || json_object_size(exceptions))) {
             jmap_exceptions_to_ical(comp, exceptions, rock);
         } else {
             json_array_append_new(invalid, json_string("exceptions"));
@@ -10450,7 +10463,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *attachments = NULL;
     pe = jmap_readprop(event, "attachments", 0, invalid, "o", &attachments);
     if (pe > 0) {
-        if (!exc && (attachments == json_null() || json_array_size(attachments))) {
+        if (!exc && (!JNOTNULL(attachments) || json_array_size(attachments))) {
             jmap_attachments_to_ical(comp, attachments, rock);
         } else {
             json_array_append_new(invalid, json_string("attachments"));
@@ -11312,14 +11325,14 @@ static void *calevent_filter_parse(json_t *arg,
                 buf_reset(&buf);
             }
         }
-    } else if (cals && cals != json_null()) {
+    } else if (JNOTNULL(cals)) {
         buf_printf(&buf, "%s.%s", prefix, "inCalendars");
         json_array_append_new(invalid, json_string(buf_cstring(&buf)));
         buf_reset(&buf);
     }
 
     /* after */
-    if (json_object_get(arg, "after") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "after"))) {
         pe = jmap_readprop_full(arg, prefix, "after", 0 /*mandatory*/, invalid, "s", &val);
         if (pe > 0) {
             if (jmap_date_to_icaltime(val, &f->after, 0 /*isAllDay*/)) {
@@ -11331,7 +11344,7 @@ static void *calevent_filter_parse(json_t *arg,
     }
 
     /* before */
-    if (json_object_get(arg, "before") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "before"))) {
         pe = jmap_readprop_full(arg, prefix, "before", 0 /*mandatory*/, invalid, "s", &val);
         if (pe > 0) {
             if (jmap_date_to_icaltime(val, &f->before, 0 /*isAllDay*/)) {
@@ -11343,32 +11356,32 @@ static void *calevent_filter_parse(json_t *arg,
     }
 
     /* text */
-    if (json_object_get(arg, "text") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "text"))) {
         pe = jmap_readprop_full(arg, prefix, "text", 0 /*mandatory */, invalid, "s", &f->text);
     }
 
     /* summary */
-    if (json_object_get(arg, "summary") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "summary"))) {
         pe = jmap_readprop_full(arg, prefix, "summary", 0 /*mandatory */, invalid, "s", &f->summary);
     }
 
     /* description */
-    if (json_object_get(arg, "description") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "description"))) {
         pe = jmap_readprop_full(arg, prefix, "description", 0 /*mandatory */, invalid, "s", &f->description);
     }
 
     /* location */
-    if (json_object_get(arg, "location") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "location"))) {
         pe = jmap_readprop_full(arg, prefix, "location", 0 /*mandatory */, invalid, "s", &f->location);
     }
 
     /* organizer */
-    if (json_object_get(arg, "organizer") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "organizer"))) {
         pe = jmap_readprop_full(arg, prefix, "organizer", 0 /*mandatory */, invalid, "s", &f->organizer);
     }
 
     /* attendee */
-    if (json_object_get(arg, "attendee") != json_null()) {
+    if (JNOTNULL(json_object_get(arg, "attendee"))) {
         pe = jmap_readprop_full(arg, prefix, "attendee", 0 /*mandatory */, invalid, "s", &f->attendee);
     }
 
@@ -11465,13 +11478,13 @@ static int getCalendarEventList(struct jmap_req *req)
 
     /* filter */
     filter = json_object_get(req->args, "filter");
-    if (filter && filter != json_null()) {
+    if (JNOTNULL(filter)) {
         rock.filter = jmap_filter_parse(filter, "filter", invalid, calevent_filter_parse);
     }
 
     /* position */
     json_int_t pos = 0;
-    if (json_object_get(req->args, "position") != json_null()) {
+    if (JNOTNULL(json_object_get(req->args, "position"))) {
         pe = jmap_readprop(req->args, "position", 0 /*mandatory*/, invalid, "i", &pos);
         if (pe > 0 && pos < 0) {
             json_array_append_new(invalid, json_string("position"));
@@ -11481,7 +11494,7 @@ static int getCalendarEventList(struct jmap_req *req)
 
     /* limit */
     json_int_t limit = 0;
-    if (json_object_get(req->args, "limit") != json_null()) {
+    if (JNOTNULL(json_object_get(req->args, "limit"))) {
         pe = jmap_readprop(req->args, "limit", 0 /*mandatory*/, invalid, "i", &limit);
         if (pe > 0 && limit < 0) {
             json_array_append_new(invalid, json_string("limit"));
@@ -11490,7 +11503,7 @@ static int getCalendarEventList(struct jmap_req *req)
     rock.limit = limit;
 
     /* fetchCalendarEvents */
-    if (json_object_get(req->args, "fetchCalendarEvents") != json_null()) {
+    if (JNOTNULL(json_object_get(req->args, "fetchCalendarEvents"))) {
         jmap_readprop(req->args, "fetchCalendarEvents", 0 /*mandatory*/, invalid, "b", &dofetch);
     }
 
