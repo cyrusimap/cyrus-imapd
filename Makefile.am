@@ -804,6 +804,7 @@ backup_libcyrus_backup_la_SOURCES = \
     lib/gzuncat.h \
     backup/lcb.c \
     backup/lcb_append.c \
+    backup/lcb_backupdb.c \
     backup/lcb_compact.c \
     backup/lcb_indexr.c \
     backup/lcb_indexw.c \

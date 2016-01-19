@@ -1,4 +1,4 @@
-/* api.c -- replication-based backup api
+/* lcb.c -- replication-based backup api
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -730,18 +730,5 @@ error:
     /* clean up and exit */
     _rename_meta_fini(&old);
     _rename_meta_fini(&new);
-    return r;
-}
-
-EXPORTED int backupdb_open(struct db **backup_dbp, struct txn **tidp)
-{
-    char *fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
-
-    if (!fname)
-        fname = strconcat(config_dir, FNAME_BACKUPDB, NULL);
-
-    int r = cyrusdb_lockopen(config_backup_db, fname, 0, backup_dbp, tidp);
-
-    free(fname);
     return r;
 }
