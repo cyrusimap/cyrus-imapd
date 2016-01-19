@@ -898,13 +898,19 @@ static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
     if (_wantprop(props, "unreadMessages")) {
         json_object_set_new(obj, "unreadMessages", json_integer(sdata.unseen));
     }
-    if (_wantprop(props, "totalThreads")) {
-        /* XXX */
-        json_object_set_new(obj, "totalThreads", json_integer(0));
-    }
-    if (_wantprop(props, "unreadThreads")) {
-        /* XXX */
-        json_object_set_new(obj, "unreadThreads", json_integer(0));
+    if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
+        /* we're always subfolders of INBOX, and we locked above, so this works */
+        conv_status_t xconv = CONV_STATUS_INIT;
+        conversation_getstatus(inbox->local_cstate, mbox->name, &xconv);
+
+        if (_wantprop(props, "totalThreads")) {
+            /* XXX */
+            json_object_set_new(obj, "totalThreads", json_integer(xconv.exists));
+        }
+        if (_wantprop(props, "unreadThreads")) {
+            /* XXX */
+            json_object_set_new(obj, "unreadThreads", json_integer(xconv.unseen));
+        }
     }
     if (_wantprop(props, "mayRename")) {
         int mayRename = rights & ACL_DELETEMBOX && parent_rights & ACL_CREATE;
