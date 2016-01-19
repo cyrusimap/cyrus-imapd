@@ -43,6 +43,8 @@
 
 #include "lib/xsha1.h"
 
+#include "imap/partlist.h"
+
 #ifndef LIBCYRUS_BACKUP_SOURCE
 #error "backup/lcb_internal.h is for internal use by libcyrus_backup ONLY"
 #else
@@ -114,6 +116,7 @@ struct backup_mailbox_message *backup_mailbox_message_list_remove(
     struct backup_mailbox_message *mailbox_message);
 
 const char *partlist_backup_select(void);
+int partlist_backup_foreach(partlist_foreach_cb proc, void *rock);
 void partlist_backup_done(void);
 #endif
 #endif

@@ -82,7 +82,18 @@ HIDDEN const char *partlist_backup_select(void)
 }
 
 
-EXPORTED void partlist_backup_done(void)
+HIDDEN int partlist_backup_foreach(partlist_foreach_cb proc, void *rock)
+{
+    /* lazy loading */
+    if (!partlist_backup) {
+        partlist_backup_init();
+    }
+
+    return partlist_foreach(partlist_backup, proc, rock);
+}
+
+
+HIDDEN void partlist_backup_done(void)
 {
     if (partlist_backup) {
         partlist_free(partlist_backup);
