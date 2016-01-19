@@ -293,6 +293,8 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
                mailbox->name, userid, statusitems);
     }
 
+    r = 0;
+
     /* We always have message count, uidnext,
        uidvalidity, and highestmodseq for cache */
     c_statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |

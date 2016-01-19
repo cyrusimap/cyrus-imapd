@@ -721,6 +721,7 @@ struct getMailboxes_rock {
     hash_table *props;           /* Which properties to fetch. */
     hash_table *roles;           /* Roles that were already reported for another
                                     mailbox during this getMailboxes request. */
+    hash_table *ids;             /* The ids of folders seen so far */
     const struct jmap_req *req;  /* The context of this JMAP request. */
 };
 
