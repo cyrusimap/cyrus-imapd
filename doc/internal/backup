@@ -454,12 +454,23 @@ default run mode as above
 reconstruct
 -----------
 
-* compact/reindex are probably both invocations of a backup reconstruct tool
-  rather than distinct tools
-* functionality for re-ordering a backup whose data is in funky order?
-  it shouldn't be able to get out of order if it's only being written to by
-  backupd but if you've got funky home-grown stuff around the edges, or you're
-  working on the backup system itself, ...
+rebuilding backups.db from on disk files
+
+scan each backup partition for backup files:
+  * skip timestamped files (i.e. backups from compact/reindex)
+  * skip .old files (old backups from reindex)
+  * .index files => skip???
+  * skip unreadable files
+  * skip empty files
+  * skip directories etc
+
+what's the correct procedure for repopulating a cyrus database?
+keep copy of the previous (presumably broken) one?
+
+trim off mkstemp suffix (if any) to find userid
+can we use a recognisable character to delimit the mkstemp suffix?
+
+what if there's multiple backup files for a given userid? precedence?
 
 
 ctl_backups
