@@ -61,6 +61,10 @@ but APPLY SIEVE doesn't take a GUID, it seems to be generated locally?
 the GUID in the response to APPLY SIEVE is generated in the process of
 reading the script from disk (sync_sieve_list_generate)
 
+possibly reduce index size by breaking deleted/expunged values into their
+own tables, such that we only store a deleted value for things that are
+actually deleted.  use left join + is null to find undeleted content
+
 
 messages
 --------
