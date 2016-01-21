@@ -536,6 +536,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    hierarchy will be at the toplevel of the shared namespace.  A
    user's personal storage hierarchy will be a child of their Inbox. */
 
+{ "davnotificationsprefix", "#notifications", STRING }
+/* The prefix for the DAV notifications hierarchy.  The hierarchy
+   delimiter will be automatically appended.  The public notifications
+   hierarchy will be at the toplevel of the shared namespace.  A
+   user's personal notifications hierarchy will be a child of their Inbox. */
+
 { "dav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of generic DAV
    resources (principals).  If not set (the default), the value of the

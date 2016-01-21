@@ -375,7 +375,8 @@ static int webdav_parse_path(const char *path,
         return HTTP_FORBIDDEN;
     }
 
-    tgt->prefix = namespace_drive.prefix;
+    tgt->urlprefix = namespace_drive.prefix;
+    tgt->mboxprefix = config_getstring(IMAPOPT_DAVDRIVEPREFIX);
 
     /* Skip namespace */
     p += len;

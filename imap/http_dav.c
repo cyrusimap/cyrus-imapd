@@ -67,6 +67,8 @@
 #include "acl.h"
 #include "append.h"
 #include "caldav_db.h"
+#include "dlist.h"
+#include "exitcodes.h"
 #include "global.h"
 #include "http_proxy.h"
 #include "index.h"
@@ -77,6 +79,7 @@
 #include "tok.h"
 #include "util.h"
 #include "version.h"
+#include "webdav_db.h"
 #include "xmalloc.h"
 #include "xml_support.h"
 #include "xstrlcat.h"
@@ -109,9 +112,13 @@ static int server_info_size = 0;
 static time_t server_info_lastmod = 0;
 static struct buf server_info_token = BUF_INITIALIZER;
 static struct buf server_info_link = BUF_INITIALIZER;
+static struct webdav_db *auth_webdavdb = NULL;
 
+static void my_dav_init(struct buf *serverinfo);
 static void my_dav_auth(const char *userid);
+static void my_dav_reset(void);
 static void my_dav_shutdown(void);
+
 static int get_server_info(struct transaction_t *txn);
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
@@ -124,6 +131,10 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             xmlNodePtr prop, xmlNodePtr resp,
                             struct propstat propstat[], void *rock);
 static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
+                              struct propfind_ctx *fctx,
+                              xmlNodePtr prop, xmlNodePtr resp,
+                              struct propstat propstat[], void *rock);
+static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop, xmlNodePtr resp,
                               struct propstat propstat[], void *rock);
@@ -217,8 +228,13 @@ static const struct prop_entry principal_props[] = {
     { "addressbook-home-set", NS_CARDDAV, PROP_COLLECTION,
       propfind_abookhome, NULL, NULL },
 
+    /* WebDAV Notifications (draft-pot-webdav-notifications) properties */
+    { "notifications-URL", NS_DAV, PROP_COLLECTION,
+      propfind_notifyurl, NULL, NULL },
+
     /* Apple Calendar Server properties */
-    { "getctag", NS_CS, PROP_ALLPROP, NULL, NULL, NULL },
+    { "notifications-URL", NS_CS, PROP_COLLECTION,
+      propfind_notifyurl, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -235,7 +251,7 @@ struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "/dav/principals", NULL, 1 /* auth */,
     /*mbtype */ 0,
     ALLOW_READ | ALLOW_DAV,
-    NULL, &my_dav_auth, NULL, &my_dav_shutdown, &dav_premethod,
+    &my_dav_init, &my_dav_auth, &my_dav_reset, &my_dav_shutdown, &dav_premethod,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -421,7 +437,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         return HTTP_FORBIDDEN;
     }
 
-    tgt->prefix = namespace_principal.prefix;
+    tgt->urlprefix = namespace_principal.prefix;
 
     /* Skip namespace */
     p += len;
@@ -1326,10 +1342,18 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->req_tgt->userid)
-        xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
-    else
+    if (fctx->req_tgt->namespace == URL_NS_PRINCIPAL) {
+        if (fctx->req_tgt->userid)
+            xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
+        else
+            xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
+    }
+    else if (!fctx->record) {
         xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
+
+        if (fctx->req_tgt->userid)
+            xmlNewChild(node, NULL, BAD_CAST "notifications", NULL);
+    }
 
     return 0;
 }
@@ -3208,7 +3232,7 @@ struct move_rock {
     int omlen;
     int nmlen;
     struct buf newname;
-    const char *prefix;
+    const char *urlprefix;
     xmlNodePtr root;
     xmlNsPtr ns[NUM_NAMESPACE];
 };
@@ -3257,7 +3281,7 @@ static int move_collection(const mbentry_t *mbentry, void *rock)
         /* Generate href for destination collection */
         mbname = mbname_from_intname(buf_cstring(&mrock->newname));
 
-        buf_setcstr(&href, mrock->prefix);
+        buf_setcstr(&href, mrock->urlprefix);
 
         if (mbname_localpart(mbname)) {
             const char *domain =
@@ -3453,7 +3477,7 @@ static int dav_move_collection(struct transaction_t *txn,
     if (!r && recursive) {
         char ombn[MAX_MAILBOX_BUFFER];
         struct move_rock mrock =
-            { ++omlen, ++nmlen, BUF_INITIALIZER, dest_tgt->prefix, NULL, {0} };
+            { ++omlen, ++nmlen, BUF_INITIALIZER, dest_tgt->urlprefix, NULL, {0} };
 
         strcpy(ombn, oldmailboxname);
         strcat(ombn, ".");
@@ -4865,6 +4889,9 @@ int propfind_by_collection(const char *mboxname, int matchlen,
             /* and while we're at it, reject the fricking top-level folders too.
              * XXX - this is evil and bad and wrong */
             if (*p == '#') goto done;
+
+            /* reject folders in wrong hierarchy */
+            if (!strstr(p, fctx->req_tgt->mboxprefix)) goto done;
             break;
         }
 
@@ -4889,7 +4916,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
 
         mbname = mbname_from_intname(mboxname);
 
-        buf_setcstr(&writebuf, fctx->req_tgt->prefix);
+        buf_setcstr(&writebuf, fctx->req_tgt->urlprefix);
 
         if (mbname_localpart(mbname)) {
             const char *domain =
@@ -5181,11 +5208,9 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
             if (!fctx.req_tgt->resource) xml_add_response(&fctx, 0, 0);
 
-            if (txn->req_tgt.namespace == URL_NS_DRIVE) {
-                /* Resource(s) */
-                r = propfind_by_resources(&fctx);
-                if (r) ret = r;
-            }
+            /* Resource(s) */
+            r = propfind_by_resources(&fctx);
+            if (r) ret = r;
 
             mailbox_close(&fctx.mailbox);
         }
@@ -5206,7 +5231,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
                 if (txn->req_tgt.flags == TGT_DRIVE_ROOT) {
                     /* Add a response for 'user' hierarchy */
-                    buf_setcstr(&fctx.buf, txn->req_tgt.prefix);
+                    buf_setcstr(&fctx.buf, txn->req_tgt.urlprefix);
                     buf_printf(&fctx.buf, "/%s/", USER_COLLECTION_PREFIX);
                     strlcpy(fctx.req_tgt->path,
                             buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
@@ -7266,8 +7291,78 @@ int dav_store_resource(struct transaction_t *txn,
 }
 
 
+static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
+{
+    if (!namespace_principal.enabled) return;
+
+    if (!config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX)) {
+        fatal("Required 'davnotificationsprefix' option is not set", EC_CONFIG);
+    }
+
+    namespace_notify.enabled = 1;
+
+    webdav_init();
+}
+
+
+static int dav_create_notifications(const char *userid) {
+    /* notifications collection */
+    mbname_t *mbname = mbname_from_userid(userid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX));
+    int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        if (config_mupdate_server) {
+            /* Find location of INBOX */
+            char *inboxname = mboxname_user_mbox(userid, NULL);
+            mbentry_t *mbentry = NULL;
+
+            r = http_mlookup(inboxname, &mbentry, NULL);
+            free(inboxname);
+            if (!r && mbentry->server) {
+                proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
+                                 &backend_cached, NULL, NULL, httpd_in);
+                mboxlist_entry_free(&mbentry);
+                goto done;
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+        else r = 0;
+
+        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
+                                   NULL, 0,
+                                   userid, httpd_authstate,
+                                   0, 0, 0, 0, NULL);
+        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                      mbname_intname(mbname), error_message(r));
+    }
+
+ done:
+    mbname_free(&mbname);
+    return r;
+}
+
+
 static void my_dav_auth(const char *userid __attribute__((unused)))
 {
+    if (httpd_userisadmin || httpd_userisanonymous ||
+        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
+        /* admin, anonymous, or proxy from frontend - won't have DAV database */
+        return;
+    }
+    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* proxy-only server - won't have DAV databases */
+    }
+    else {
+        /* Open CardDAV DB for 'userid' */
+        my_dav_reset();
+        auth_webdavdb = webdav_open_userid(userid);
+        if (!auth_webdavdb) fatal("Unable to open WebDAV DB", EC_IOERR);
+    }
+
+    /* Auto-provision a notifications collection for 'userid' */
+    dav_create_notifications(userid);
+
+
     if (!server_info) {
         time_t compile_time = calc_compile_time(__TIME__, __DATE__);
         struct stat sbuf;
@@ -7372,8 +7467,19 @@ static void my_dav_auth(const char *userid __attribute__((unused)))
     }
 }
 
+
+static void my_dav_reset(void)
+{
+    if (auth_webdavdb) webdav_close(auth_webdavdb);
+    auth_webdavdb = NULL;
+}
+
+
 static void my_dav_shutdown(void)
 {
+    my_dav_reset();
+    webdav_done();
+
     if (server_info) xmlFree(server_info);
     buf_free(&server_info_token);
     buf_free(&server_info_link);
@@ -7418,6 +7524,499 @@ static int get_server_info(struct transaction_t *txn)
     /* Output the XML response */
     txn->resp_body.type = "application/server-info+xml; charset=utf-8";
     write_body(precond, txn, (char *) server_info, server_info_size);
+
+    return 0;
+}
+
+
+static int notify_parse_path(const char *path,
+                             struct request_target_t *tgt, const char **errstr);
+
+static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
+                      struct index_record *record, void *data);
+static int notify_put(struct transaction_t *txn, void *obj,
+                      struct mailbox *mailbox, const char *resource,
+                      void *davdb);
+
+static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
+                               struct propfind_ctx *fctx,
+                               xmlNodePtr prop, xmlNodePtr resp,
+                               struct propstat propstat[], void *rock);
+
+static struct buf *from_xml(xmlDocPtr doc)
+{
+    struct buf *buf = buf_new();
+    xmlChar *xml = NULL;
+    int len;
+
+    /* Dump XML response tree into a text buffer */
+    xmlDocDumpFormatMemoryEnc(doc, &xml, &len, "utf-8",
+                              config_httpprettytelemetry);
+    if (xml) buf_initm(buf, (char *) xml, len);
+    else buf_init(buf);
+
+    return buf;
+}
+
+static xmlDocPtr to_xml(const struct buf *buf)
+{
+    xmlParserCtxtPtr ctxt;
+    xmlDocPtr doc = NULL;
+
+    ctxt = xmlNewParserCtxt();
+    if (ctxt) {
+        doc = xmlCtxtReadMemory(ctxt, buf_cstring(buf),
+                                buf_len(buf), NULL, NULL,
+                                XML_PARSE_NOWARNING);
+        xmlFreeParserCtxt(ctxt);
+    }
+
+    return doc;
+}
+
+static struct mime_type_t notify_mime_types[] = {
+    /* First item MUST be the default type and storage format */
+    { "application/davnotification+xml", NULL, "xml",
+      (struct buf* (*)(void *)) &from_xml,
+      (void * (*)(const struct buf*)) &to_xml,
+      (void (*)(void *)) &xmlFreeDoc,
+      NULL, NULL
+    },
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+};
+
+/* Array of supported REPORTs */
+static const struct report_type_t notify_reports[] = {
+
+    /* WebDAV Versioning (RFC 3253) REPORTs */
+    { "expand-property", NS_DAV, "multistatus", &report_expand_prop,
+      DACL_READ, 0 },
+
+    /* WebDAV ACL (RFC 3744) REPORTs */
+    { "acl-principal-prop-set", NS_DAV, "multistatus", &report_acl_prin_prop,
+      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_DEPTH_ZERO },
+
+    /* WebDAV Sync (RFC 6578) REPORTs */
+    { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
+      DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
+
+    { NULL, 0, NULL, NULL, 0, 0 }
+};
+
+/* Array of known "live" properties */
+static const struct prop_entry notify_props[] = {
+
+    /* WebDAV (RFC 4918) properties */
+    { "creationdate", NS_DAV,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      propfind_creationdate, NULL, NULL },
+    { "displayname", NS_DAV,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      propfind_fromdb, proppatch_todb, NULL },
+    { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+      propfind_fromhdr, NULL, "Content-Language" },
+    { "getcontentlength", NS_DAV,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      propfind_getlength, NULL, NULL },
+    { "getcontenttype", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+      propfind_fromhdr, NULL, "Content-Type" },
+    { "getetag", NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      propfind_getetag, NULL, NULL },
+    { "getlastmodified", NS_DAV,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      propfind_getlastmod, NULL, NULL },
+    { "resourcetype", NS_DAV,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      propfind_restype, NULL, NULL },
+
+    /* WebDAV Versioning (RFC 3253) properties */
+    { "supported-report-set", NS_DAV, PROP_COLLECTION,
+      propfind_reportset, NULL, (void *) notify_reports },
+
+    /* WebDAV ACL (RFC 3744) properties */
+    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+      propfind_owner, NULL, NULL },
+    { "group", NS_DAV, 0, NULL, NULL, NULL },
+    { "supported-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+      propfind_supprivset, NULL, NULL },
+    { "current-user-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+      propfind_curprivset, NULL, NULL },
+    { "acl", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+      propfind_acl, NULL, NULL },
+    { "acl-restrictions", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+      propfind_aclrestrict, NULL, NULL },
+    { "inherited-acl-set", NS_DAV, 0, NULL, NULL, NULL },
+    { "principal-collection-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+      propfind_princolset, NULL, NULL },
+
+    /* WebDAV Current Principal (RFC 5397) properties */
+    { "current-user-principal", NS_DAV,
+      PROP_COLLECTION | PROP_RESOURCE,
+      propfind_curprin, NULL, NULL },
+
+    /* WebDAV Sync (RFC 6578) properties */
+    { "sync-token", NS_DAV, PROP_COLLECTION,
+      propfind_sync_token, NULL, NULL },
+
+    /* WebDAV Notifications (draft-pot-webdav-notifications) properties */
+    { "notificationtype", NS_DAV, PROP_RESOURCE,
+      propfind_notifytype, NULL, NULL },
+
+    /* Apple Calendar Server properties */
+    { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
+      propfind_sync_token, NULL, NULL },
+
+    { NULL, 0, 0, NULL, NULL, NULL }
+};
+
+struct meth_params notify_params = {
+    notify_mime_types,
+    &notify_parse_path,
+    &dav_check_precond,
+    { (db_open_proc_t) &webdav_open_mailbox,
+      (db_close_proc_t) &webdav_close,
+      (db_proc_t) &webdav_begin,
+      (db_proc_t) &webdav_commit,
+      (db_proc_t) &webdav_abort,
+      (db_lookup_proc_t) &webdav_lookup_resource,
+      (db_foreach_proc_t) &webdav_foreach,
+      (db_write_proc_t) &webdav_write,
+      (db_delete_proc_t) &webdav_delete },
+    NULL,                                       /* No ACL extensions */
+    { 0, &notify_put },
+    NULL,                                       /* No special DELETE handling */
+    &notify_get,
+    { 0, MBTYPE_COLLECTION },                   /* Allow any location */
+    NULL,                                       /* No PATCH handling */
+    NULL,                                       /* No special POST handling */
+    { 0, &notify_put },
+    { DAV_FINITE_DEPTH, notify_props},
+    notify_reports
+};
+
+
+/* Namespace for WebDAV notifcation collections */
+struct namespace_t namespace_notify = {
+    URL_NS_NOTIFY, 0, "/dav/notifications", NULL, 1 /* auth */,
+    MBTYPE_COLLECTION,
+//    (ALLOW_READ | ALLOW_DELETE | ALLOW_DAV),
+    (ALLOW_READ | ALLOW_DELETE | ALLOW_DAV | ALLOW_WRITE),
+    NULL, NULL, NULL, NULL,
+    &dav_premethod,
+    {
+        { &meth_acl,            &notify_params },      /* ACL          */
+        { NULL,                 NULL },                /* BIND         */
+        { NULL,                 NULL },                /* COPY         */
+        { &meth_delete,         &notify_params },      /* DELETE       */
+        { &meth_get_head,       &notify_params },      /* GET          */
+        { &meth_get_head,       &notify_params },      /* HEAD         */
+        { NULL,                 NULL },                /* LOCK         */
+        { NULL,                 NULL },                /* MKCALENDAR   */
+        { NULL,                 NULL },                /* MKCOL        */
+        { NULL,                 NULL },                /* MOVE         */
+        { &meth_options,        &notify_parse_path },  /* OPTIONS      */
+        { NULL,                 NULL },                /* PATCH        */
+        { NULL,                 NULL },                /* POST         */
+        { &meth_propfind,       &notify_params },      /* PROPFIND     */
+        { NULL,                 NULL },                /* PROPPATCH    */
+//        { NULL,                 NULL },                /* PUT          */
+        { &meth_put,            &notify_params },      /* ACL          */
+        { &meth_report,         &notify_params },      /* REPORT       */
+        { &meth_trace,          &notify_parse_path },  /* TRACE        */
+        { NULL,                 NULL },                /* UNBIND       */
+        { NULL,                 NULL },                /* UNLOCK       */
+    }
+};
+
+
+/* Perform a GET/HEAD request on a WebDAV resource */
+static int notify_get(struct transaction_t *txn,
+                      struct mailbox *mailbox __attribute__((unused)),
+                      struct index_record *record, void *data)
+{
+    if (record && record->uid) {
+        /* GET on a resource */
+        struct webdav_data *wdata = (struct webdav_data *) data;
+
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s", wdata->type, wdata->subtype);
+        txn->resp_body.type = buf_cstring(&txn->buf);
+        return 0;
+    }
+
+    /* Get on a user/collection */
+    return HTTP_NO_CONTENT;
+}
+
+
+/* Perform a PUT request on a WebDAV resource */
+static int notify_put(struct transaction_t *txn, void *obj,
+                      struct mailbox *mailbox, const char *resource,
+                      void *destdb)
+{
+    struct webdav_db *db = (struct webdav_db *)destdb;
+    xmlDocPtr doc = (xmlDocPtr) obj;
+    xmlNodePtr root, dtstamp, type = NULL;
+    struct webdav_data *wdata;
+    struct index_record *oldrecord = NULL, record;
+    struct buf *xmlbuf;
+    int r;
+
+    /* Validate the data */
+    if (!doc) return HTTP_FORBIDDEN;
+
+    /* Dump XML response tree into a text buffer */
+    xmlbuf = from_xml(doc);
+    if (!buf_len(xmlbuf)) {
+        buf_destroy(xmlbuf);
+        return HTTP_SERVER_ERROR;
+    }
+
+    /* Find message UID for the resource */
+    webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
+
+    if (wdata->dav.imap_uid) {
+        /* Fetch index record for the resource */
+        oldrecord = &record;
+        mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
+    }
+
+    /* Get type of notification */
+    if ((root = xmlDocGetRootElement(doc)) &&
+        (dtstamp = xmlFirstElementChild(root))) {
+        type = xmlNextElementSibling(dtstamp);
+    }
+
+    /* Create and cache RFC 5322 header fields for resource */
+    if (type) {
+        struct buf buf = BUF_INITIALIZER;
+        struct dlist *dl, *al;
+        xmlAttrPtr attr;
+
+        spool_replace_header(xstrdup("Subject"),
+                             xstrdup((char *) type->name), txn->req_hdrs);
+
+        /* Create a dlist representing type, namespace, and attribute(s) */
+        dl = dlist_newlist(NULL, "notificationtype");
+        dlist_setatom(dl, "type", (char *) type->name);
+        dlist_setatom(dl, "ns-href", (char *) type->ns->href);
+        al = dlist_newkvlist(dl, NULL);
+        for (attr = type->properties; attr; attr = attr->next) {
+            xmlChar *value = xmlNodeGetContent((xmlNodePtr) attr);
+            dlist_setmap(al, (char *) attr->name,
+                         (char *) value, xmlStrlen(value));
+            xmlFree(value);
+        }
+        dlist_printbuf(dl, 0, &buf);
+        dlist_free(&dl);
+        spool_replace_header(xstrdup("Content-Description"),
+                             buf_release(&buf), txn->req_hdrs);
+    }
+
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "<%s@%s>", resource, config_servername);
+    spool_replace_header(xstrdup("Message-ID"),
+                         buf_release(&txn->buf), txn->req_hdrs);
+
+    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
+    spool_replace_header(xstrdup("Content-Disposition"),
+                         buf_release(&txn->buf), txn->req_hdrs);
+
+    /* Store the resource */
+    r = dav_store_resource(txn, buf_cstring(xmlbuf), buf_len(xmlbuf),
+                           mailbox, oldrecord, NULL);
+
+    buf_destroy(xmlbuf);
+
+    return r;
+}
+
+
+/* Callback to fetch DAV:notifications-URL */
+static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
+                              struct propfind_ctx *fctx,
+                              xmlNodePtr prop,
+                              xmlNodePtr resp __attribute__((unused)),
+                              struct propstat propstat[],
+                              void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    if (!(namespace_principal.enabled && fctx->req_tgt->userid))
+        return HTTP_NOT_FOUND;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                        name, ns, NULL, 0);
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%s/%s/%s/", namespace_notify.prefix,
+               USER_COLLECTION_PREFIX, fctx->req_tgt->userid);
+
+    if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
+        /* Return properties for this URL */
+        expand_property(prop, fctx, buf_cstring(&fctx->buf),
+                        &notify_parse_path, notify_props, node, 0);
+
+    }
+    else {
+        /* Return just the URL */
+        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:notificationtype */
+static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
+                               struct propfind_ctx *fctx,
+                               xmlNodePtr prop __attribute__((unused)),
+                               xmlNodePtr resp __attribute__((unused)),
+                               struct propstat propstat[],
+                               void *rock __attribute__((unused)))
+{
+    struct webdav_data *wdata = (struct webdav_data *) fctx->data;
+    xmlNodePtr node;
+    xmlNsPtr type_ns;
+    struct dlist *dl = NULL, *al, *item;
+    const char *ns_href, *type;
+    int i;
+
+    if (!wdata->filename) return HTTP_NOT_FOUND;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                        name, ns, NULL, 0);
+
+    /* Parse dlist representing notification type, namespace, and attributes */
+    dlist_parsemap(&dl, 0, wdata->filename, strlen(wdata->filename));
+    type = dlist_cstring(dlist_getchildn(dl, 0));
+    ns_href = dlist_cstring(dlist_getchildn(dl, 1));
+    al = dlist_getchildn(dl, 2);
+
+    /* Check if we already have this ns-href, otherwise create a new one */
+    type_ns = xmlSearchNsByHref(node->doc, node, BAD_CAST ns_href);
+    if (!type_ns) {
+        char prefix[20];
+        snprintf(prefix, sizeof(prefix), "X%X", strhash(ns_href) & 0xffff);
+        type_ns = xmlNewNs(node, BAD_CAST ns_href, BAD_CAST prefix);
+    }
+
+    /* Create node for type */
+    node = xmlNewChild(node, type_ns, BAD_CAST type, NULL);
+
+    /* Add attributes */
+    for (i = 0; (item = dlist_getchildn(al, i)); i++) {
+        xmlNewProp(node, BAD_CAST item->name, BAD_CAST dlist_cstring(item));
+    }
+
+    dlist_free(&dl);
+
+    return 0;
+}
+
+
+/* Parse request-target path in DAV notifications namespace */
+static int notify_parse_path(const char *path, struct request_target_t *tgt,
+                             const char **errstr)
+{
+    char *p;
+    size_t len;
+    mbname_t *mbname = NULL;
+
+    /* Make a working copy of target path */
+    strlcpy(tgt->path, path, sizeof(tgt->path));
+    tgt->tail = tgt->path + strlen(tgt->path);
+
+    p = tgt->path;
+
+    /* Sanity check namespace */
+    len = strlen(namespace_notify.prefix);
+    if (strlen(p) < len ||
+        strncmp(namespace_notify.prefix, p, len) ||
+        (path[len] && path[len] != '/')) {
+        *errstr = "Namespace mismatch request target path";
+        return HTTP_FORBIDDEN;
+    }
+
+    tgt->urlprefix = namespace_notify.prefix;
+    tgt->mboxprefix = config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX);
+
+    /* Skip namespace */
+    p += len;
+    if (!*p || !*++p) return 0;
+
+    /* Check if we're in user space */
+    len = strcspn(p, "/");
+    if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
+        p += len;
+        if (!*p || !*++p) return 0;
+
+        /* Get user id */
+        len = strcspn(p, "/");
+        tgt->userid = xstrndup(p, len);
+
+        if (httpd_extradomain) {
+            char *at = strchr(tgt->userid, '@');
+            if (at && !strcmp(at+1, httpd_extradomain))
+                *at = 0;
+        }
+
+        p += len;
+        if (!*p || !*++p) goto done;
+    }
+    else return HTTP_NOT_FOUND;  /* need to specify a userid */
+
+
+    /* Get resource */
+    len = strcspn(p, "/");
+    tgt->resource = p;
+    tgt->reslen = len;
+
+    p += len;
+
+    if (*p) {
+//      *errstr = "Too many segments in request target path";
+        return HTTP_NOT_FOUND;
+    }
+
+  done:
+    /* Set proper Allow bits based on path components */
+    if (!tgt->resource) tgt->allow &= ~ALLOW_DELETE;
+
+    /* Create mailbox name from the parsed path */
+
+    mbname = mbname_from_userid(tgt->userid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX));
+
+    /* XXX - hack to allow @domain parts for non-domain-split users */
+    if (httpd_extradomain) {
+        /* not allowed to be cross domain */
+        if (mbname_localpart(mbname) &&
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+            return HTTP_NOT_FOUND;
+        mbname_set_domain(mbname, NULL);
+    }
+
+    const char *mboxname = mbname_intname(mbname);
+
+    if (*mboxname) {
+        /* Locate the mailbox */
+        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        if (r) {
+            syslog(LOG_ERR, "mlookup(%s) failed: %s",
+                   mboxname, error_message(r));
+            *errstr = error_message(r);
+            mbname_free(&mbname);
+
+            switch (r) {
+            case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+            case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+            default: return HTTP_SERVER_ERROR;
+            }
+        }
+    }
+
+    mbname_free(&mbname);
 
     return 0;
 }

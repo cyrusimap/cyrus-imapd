@@ -289,23 +289,22 @@ struct namespace_t namespace_default = {
 
 /* Array of different namespaces and features supported by the server */
 struct namespace_t *namespaces[] = {
-#ifdef WITH_DAV
 #ifdef WITH_JSON
+    &namespace_jmap,
     &namespace_tzdist,          /* MUST be before namespace_calendar!! */
 #endif /* WITH_JSON */
-    &namespace_principal,
+#ifdef WITH_DAV
     &namespace_calendar,
     &namespace_freebusy,
     &namespace_addressbook,
     &namespace_drive,
+    &namespace_principal,       /* MUST be after namespace_cal & addr & drive */
+    &namespace_notify,          /* MUST be after namespace_principal */
 #ifdef HAVE_IANA_PARAMS
     &namespace_ischedule,
     &namespace_domainkey,
 #endif /* HAVE_IANA_PARAMS */
 #endif /* WITH_DAV */
-#ifdef WITH_JSON
-    &namespace_jmap,
-#endif /* WITH_JSON */
     &namespace_rss,
     &namespace_dblookup,
     &namespace_admin,

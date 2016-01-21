@@ -822,7 +822,8 @@ static int caldav_parse_path(const char *path,
         return HTTP_FORBIDDEN;
     }
 
-    tgt->prefix = namespace_calendar.prefix;
+    tgt->urlprefix = namespace_calendar.prefix;
+    tgt->mboxprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
 
     /* Default to bare-bones Allow bits for toplevel collections */
     tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE|ALLOW_PATCH);

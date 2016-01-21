@@ -118,6 +118,7 @@ enum {
 enum {
     URL_NS_DEFAULT = 0,
     URL_NS_PRINCIPAL,
+    URL_NS_NOTIFY,
     URL_NS_CALENDAR,
     URL_NS_FREEBUSY,
     URL_NS_ADDRESSBOOK,
@@ -206,7 +207,8 @@ struct request_target_t {
     unsigned long allow;        /* bitmask of allowed features/methods */
     int mboxtype;               /* mailbox types to match on findall */
     mbentry_t *mbentry;         /* mboxlist entry of target collection */
-    const char *prefix;         /* namespace prefix */
+    const char *urlprefix;      /* namespace prefix */
+    const char *mboxprefix;     /* mailbox prefix */
 };
 
 /* Request target flags */
@@ -403,6 +405,7 @@ struct accept {
 
 extern struct namespace_t namespace_default;
 extern struct namespace_t namespace_principal;
+extern struct namespace_t namespace_notify;
 extern struct namespace_t namespace_calendar;
 extern struct namespace_t namespace_freebusy;
 extern struct namespace_t namespace_addressbook;

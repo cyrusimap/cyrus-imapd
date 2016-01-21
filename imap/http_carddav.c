@@ -479,7 +479,8 @@ static int carddav_parse_path(const char *path,
         return HTTP_FORBIDDEN;
     }
 
-    tgt->prefix = namespace_addressbook.prefix;
+    tgt->urlprefix = namespace_addressbook.prefix;
+    tgt->mboxprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
 
     /* Default to bare-bones Allow bits for toplevel collections */
     tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
