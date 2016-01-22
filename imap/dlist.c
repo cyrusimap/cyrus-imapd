@@ -723,6 +723,132 @@ EXPORTED void dlist_free(struct dlist **dlp)
     *dlp = NULL;
 }
 
+struct dlist_stack_node {
+    const struct dlist *dl;
+    int printkeys;
+    struct dlist_stack_node *next;
+};
+
+struct dlist_print_iter {
+    int printkeys;
+    struct dlist_stack_node *parent;
+    const struct dlist *next;
+};
+
+EXPORTED struct dlist_print_iter *dlist_print_iter_new(const struct dlist *dl, int printkeys)
+{
+    struct dlist_print_iter *iter = xzmalloc(sizeof *iter);
+    iter->printkeys = printkeys;
+    iter->next = dl;
+
+    return iter;
+}
+
+EXPORTED const char *dlist_print_iter_step(struct dlist_print_iter *iter, struct buf *outbuf)
+{
+    /* already finished */
+    if (!iter->next) return NULL;
+
+    buf_reset(outbuf);
+
+    /* Bundle short steps together to minimise call overhead.
+     * Note that outbuf can grow significantly longer than this limit, if a
+     * single item in the dlist is very long (e.g. a message), but then it
+     * won't bundle up more than that.
+     */
+    while (iter->next != NULL && buf_len(outbuf) < 1024) {
+        const struct dlist *curr = iter->next;
+        struct dlist_stack_node *parent = NULL;
+        int descend = 0;
+
+        /* output */
+        switch (curr->type) {
+        case DL_KVLIST:
+        case DL_ATOMLIST:
+            // XXX should use equiv to "prot_printastring" for curr->name
+            if (iter->printkeys)
+                buf_printf(outbuf, "%s ", curr->name);
+
+            buf_appendcstr(outbuf, curr->type == DL_KVLIST ? "%(" : "(");
+
+            if (curr->head) {
+                descend = 1;
+            }
+            else {
+                buf_putc(outbuf, ')');
+                if (curr->next)
+                    buf_putc(outbuf, ' ');
+            }
+            break;
+
+        default:
+            dlist_printbuf(curr, iter->printkeys, outbuf);
+            if (curr->next)
+                buf_putc(outbuf, ' ');
+            break;
+        }
+
+        /* increment */
+        if (descend) {
+            parent = xmalloc(sizeof *parent);
+            parent->printkeys = iter->printkeys;
+            parent->dl = curr;
+            parent->next = iter->parent;
+            iter->parent = parent;
+            iter->next = curr->head;
+            // XXX can this always be 1? we know an atom list here is non-empty
+            iter->printkeys = curr->type == DL_KVLIST ? 1 : curr->nval;
+        }
+        else if (curr->next) {
+            iter->next = curr->next;
+        }
+        else if (iter->parent) {
+            /* multiple parents might be ending at the same point
+             * don't mistake one parent ending for end of entire tree
+             */
+            do {
+                buf_putc(outbuf, ')');
+
+                parent = iter->parent;
+
+                iter->parent = iter->parent->next;
+                iter->next = parent->dl->next;
+                iter->printkeys = parent->printkeys;
+
+                free(parent);
+
+                if (iter->next) {
+                    /* found an unfinished dlist, stop closing parents */
+                    buf_putc(outbuf, ' ');
+                    break;
+                }
+            } while (iter->parent);
+        }
+        else {
+            iter->next = NULL;
+        }
+    }
+
+    /* and return */
+    return buf_cstringnull(outbuf);
+}
+
+EXPORTED void dlist_print_iter_free(struct dlist_print_iter **iterp)
+{
+    struct dlist_print_iter *iter = *iterp;
+    struct dlist_stack_node *tmp = NULL;
+
+    *iterp = NULL;
+
+    while (iter->parent) {
+        tmp = iter->parent;
+        iter->parent = iter->parent->next;
+        free(tmp);
+    }
+
+    free(iter);
+}
+
 struct dlistsax_state {
     const char *base;
     const char *p;

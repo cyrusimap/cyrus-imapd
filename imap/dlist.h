@@ -257,4 +257,13 @@ struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
 
 const char *dlist_lastkey(void);
 
+/* print a dlist iteratively rather than recursively */
+struct dlist_print_iter;
+
+struct dlist_print_iter *dlist_print_iter_new(const struct dlist *dl,
+                                              int printkeys);
+const char *dlist_print_iter_step(struct dlist_print_iter *iter,
+                                  struct buf *outbuf);
+void dlist_print_iter_free(struct dlist_print_iter **iterp);
+
 #endif /* INCLUDED_DLIST_H */
