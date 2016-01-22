@@ -944,9 +944,14 @@ struct ffrock {
 #define K2 "cubist"
 #define K3 "eulogy"
 #define K4 "kidding"
-#define K4A "notice"
-#define K5 "penguin"
-#define K6 "zebra"
+#define K4A "llama"
+#define K5 "monkey"
+#define K6 "notice"
+#define K7 "octopus"
+#define K7D "opossum"
+#define K7A "possum"
+#define K7B "quine"
+#define K8 "rooster"
 
 static int ffstatemachine(void *rockp,
                           const char *key, size_t keylen,
@@ -994,12 +999,41 @@ static int ffstatemachine(void *rockp,
         /* didn't repeat after replacing */
         CU_ASSERT_STRING_EQUAL(kcopy, K5);
         r = cyrusdb_delete(fr->db, K5, strlen(K5), fr->tid, /*force*/1);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
         fr->state = 6;
         break;
     case 6:
         /* moved on after deleting */
         CU_ASSERT_STRING_EQUAL(kcopy, K6);
         fr->state = 7;
+        break;
+    case 7:
+        CU_ASSERT_STRING_EQUAL(kcopy, K7);
+        /* we're going to replace this one,
+            add two more, then delete the next */
+        r = cyrusdb_store(fr->db, K7, strlen(K7), "newval", 6, fr->tid);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        r = cyrusdb_store(fr->db, K7D, strlen(K7D), "val", 3, fr->tid);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        r = cyrusdb_store(fr->db, K7B, strlen(K7B), "bval", 4, fr->tid);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        r = cyrusdb_store(fr->db, K7A, strlen(K7A), "aval", 4, fr->tid);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        r = cyrusdb_delete(fr->db, K7D, strlen(K7D), fr->tid, /*force*/1);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+        fr->state = 8;
+        break;
+    case 8:
+        CU_ASSERT_STRING_EQUAL(kcopy, K7A);
+        fr->state = 9;
+        break;
+    case 9:
+        CU_ASSERT_STRING_EQUAL(kcopy, K7B);
+        fr->state = 10;
+        break;
+    case 10:
+        CU_ASSERT_STRING_EQUAL(kcopy, K8);
+        fr->state = 11;
         break;
     default:
         CU_ASSERT(0); /* bogus state found */
