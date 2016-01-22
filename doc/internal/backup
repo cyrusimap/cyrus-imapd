@@ -377,6 +377,12 @@ settings:
 * backup retention period
 * chunk combination size (byte length or elapsed time)
 
+combining chunks:
+* size threshold below which adjacent chunks can be joined
+* size threshold above which chunks should be split
+* duration threshold below which adjacent chunks can be joined
+* duration threshold above which chunks should be split
+
 data we absolutely need to keep:
 
 * the most recent APPLY MAILBOX for each mailbox we're keeping (mailbox state)
