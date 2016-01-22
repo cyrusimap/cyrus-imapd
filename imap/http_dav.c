@@ -7699,8 +7699,7 @@ struct meth_params notify_params = {
 struct namespace_t namespace_notify = {
     URL_NS_NOTIFY, 0, "/dav/notifications", NULL, 1 /* auth */,
     MBTYPE_COLLECTION,
-//    (ALLOW_READ | ALLOW_DELETE | ALLOW_DAV),
-    (ALLOW_READ | ALLOW_DELETE | ALLOW_DAV | ALLOW_WRITE),
+    (ALLOW_READ | ALLOW_DELETE | ALLOW_DAV),
     NULL, NULL, NULL, NULL,
     &dav_premethod,
     {
@@ -7719,8 +7718,7 @@ struct namespace_t namespace_notify = {
         { NULL,                 NULL },                /* POST         */
         { &meth_propfind,       &notify_params },      /* PROPFIND     */
         { NULL,                 NULL },                /* PROPPATCH    */
-//        { NULL,                 NULL },                /* PUT          */
-        { &meth_put,            &notify_params },      /* ACL          */
+        { NULL,                 NULL },                /* PUT          */
         { &meth_report,         &notify_params },      /* REPORT       */
         { &meth_trace,          &notify_parse_path },  /* TRACE        */
         { NULL,                 NULL },                /* UNBIND       */
