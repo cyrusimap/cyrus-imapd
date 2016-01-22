@@ -1478,10 +1478,7 @@ struct list_cal_rock {
     unsigned alloc;
 };
 
-static int list_cal_cb(const char *name,
-                       int matchlen __attribute__((unused)),
-                       int maycreate __attribute__((unused)),
-                       void *rock)
+static int list_cal_cb(const mbentry_t *mbentry, void *rock)
 {
     struct list_cal_rock *lrock = (struct list_cal_rock *) rock;
     struct cal_info *cal;
@@ -1489,7 +1486,6 @@ static int list_cal_cb(const char *name,
     static size_t outboxlen = 0;
     static size_t defaultlen = 0;
     char *shortname;
-    mbentry_t *mbentry = NULL;
     size_t len;
     int r, rights, any_rights = 0;
     static const char *displayname_annot =
@@ -1502,16 +1498,6 @@ static int list_cal_cb(const char *name,
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
     if (!defaultlen) defaultlen = strlen(SCHED_DEFAULT) - 1;
 
-    shortname = strrchr(name, '.') + 1;
-    len = strlen(shortname);
-
-    /* Don't list deleted mailboxes */
-    if (mboxname_isdeletedmailbox(name, 0)) goto done;
-
-    /* Lookup the mailbox */
-    r = http_mlookup(name, &mbentry, NULL);
-    if (r) goto done;
-
     /* Make sure its a calendar */
     if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
 
@@ -1520,12 +1506,15 @@ static int list_cal_cb(const char *name,
     if ((rights & DACL_READ) != DACL_READ) goto done;
 
     /* Don't list scheduling Inbox/Outbox */
+    shortname = strrchr(mbentry->name, '.') + 1;
+    len = strlen(shortname);
+
     if ((len == inboxlen && !strncmp(shortname, SCHED_INBOX, inboxlen)) ||
         (len == outboxlen && !strncmp(shortname, SCHED_OUTBOX, outboxlen)))
         goto done;
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(name, displayname_annot,
+    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
                                 httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
@@ -1570,7 +1559,7 @@ static int list_cal_cb(const char *name,
     }
 
     /* Is this calendar transparent? */
-    r = annotatemore_lookupmask(name, schedtransp_annot,
+    r = annotatemore_lookupmask(mbentry->name, schedtransp_annot,
                                 httpd_userid, &schedtransp);
     if (!r && !strcmp(buf_cstring(&schedtransp), "transparent")) {
         cal->flags |= CAL_IS_TRANSP;
@@ -1581,7 +1570,6 @@ static int list_cal_cb(const char *name,
 
 done:
     buf_free(&displayname);
-    mboxlist_entry_free(&mbentry);
 
     return 0;
 }
@@ -1711,9 +1699,8 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     memset(&lrock, 0, sizeof(struct list_cal_rock));
-    int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-    mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
-                     httpd_authstate, list_cal_cb, &lrock);
+    mboxlist_mboxtree(txn->req_tgt.mbentry->name,
+                      list_cal_cb, &lrock, MBOXTREE_SKIP_ROOT);
 
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
