@@ -1996,17 +1996,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
             if (txn->req_tgt.allow & ALLOW_DAV) {
                 /* Construct DAV header(s) based on namespace of request URL */
-                prot_printf(httpd_out,
-                            "DAV: 1,%s 3, access-control%s\r\n",
-                            (txn->req_tgt.allow & ALLOW_WRITE) ? " 2," : "",
-                            (txn->req_tgt.allow & ALLOW_WRITECOL) ?
-                            ", extended-mkcol" : "");
+                prot_puts(httpd_out,
+                          "DAV: 1, 2, 3, access-control, extended-mkcol\r\n");
                 if (txn->req_tgt.allow & ALLOW_CAL) {
                     prot_printf(httpd_out, "DAV: calendar-access%s%s%s\r\n",
-                                (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
-                                ", calendar-availability" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
                                 ", calendar-auto-schedule" : "",
+                                (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
+                                ", calendar-availability" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
                                 ", calendar-no-timezone" : "");
                     if (txn->req_tgt.allow & ALLOW_CAL_ATTACH) {
@@ -2034,13 +2031,15 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 /* Access-Control-Allow-Methods supersedes Allow */
                 break;
             }
-            else goto allow;
+            else {
+                /* Construct Allow header(s) */
+                allow_hdr("Allow", txn->req_tgt.allow);
+            }
         }
         goto authorized;
 
     case HTTP_NOT_ALLOWED:
-    allow:
-        /* Construct Allow header(s) for OPTIONS and 405 response */
+        /* Construct Allow header(s) for 405 response */
         allow_hdr("Allow", txn->req_tgt.allow);
         goto authorized;
 
