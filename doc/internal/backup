@@ -382,6 +382,11 @@ combining chunks:
 * size threshold above which chunks should be split
 * duration threshold below which adjacent chunks can be joined
 * duration threshold above which chunks should be split
+backup_min_chunk_size: 0 for no minimum
+backup_max_chunk_size: 0 for no maximum
+backup_min_chunk_duration: 0 for no minimum
+backup_max_chunk_duration: 0 for no maximum
+priority: size or duration??
 
 data we absolutely need to keep:
 
