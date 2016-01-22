@@ -4857,6 +4857,9 @@ int propfind_by_collection(const char *mboxname, int matchlen,
         /* if finding all, we only match known types */
         if (!(mbentry->mbtype & fctx->req_tgt->mboxtype)) goto done;
 
+        /* reject folders in wrong hierarchy */
+        if (!strstr(mboxname, fctx->req_tgt->mboxprefix)) goto done;
+
         p = strrchr(mboxname, '.');
         if (!p) goto done;
         p++; /* skip dot */
@@ -4889,9 +4892,6 @@ int propfind_by_collection(const char *mboxname, int matchlen,
             /* and while we're at it, reject the fricking top-level folders too.
              * XXX - this is evil and bad and wrong */
             if (*p == '#') goto done;
-
-            /* reject folders in wrong hierarchy */
-            if (!strstr(p, fctx->req_tgt->mboxprefix)) goto done;
             break;
         }
 
