@@ -4134,17 +4134,22 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
         if (fctx->req_tgt->collection &&
             fctx->mailbox->mbtype == MBTYPE_CALENDAR) {
             ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-            if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
+
+            switch (fctx->req_tgt->flags) {
+            case TGT_SCHED_INBOX:
                 xmlNewChild(node, fctx->ns[NS_CALDAV],
                             BAD_CAST "schedule-inbox", NULL);
-            }
-            else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
+                break;
+
+            case TGT_SCHED_OUTBOX:
                 xmlNewChild(node, fctx->ns[NS_CALDAV],
                             BAD_CAST "schedule-outbox", NULL);
-            }
-            else {
+                break;
+
+            default:
                 xmlNewChild(node, fctx->ns[NS_CALDAV],
                             BAD_CAST "calendar", NULL);
+                break;
             }
         }
     }
