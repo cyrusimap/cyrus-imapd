@@ -590,13 +590,14 @@ EXPORTED int backup_get_message_id(struct backup *backup, const char *guid)
         { NULL,     SQLITE_NULL,    { .s = NULL } },
     };
 
-    // FIXME distinguish between error and not found
-    int id = -1;
+    int id = 0;
 
     int r = sqldb_exec(backup->db, backup_index_message_select_guid_sql, bval,
                        _get_message_id_cb, &id);
-    if (r)
+    if (r) {
         fprintf(stderr, "%s: something went wrong: %i %s\n", __func__, r, guid);
+        return -1;
+    }
 
     return id;
 }

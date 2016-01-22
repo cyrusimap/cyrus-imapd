@@ -249,6 +249,9 @@ EXPORTED int backup_compact(const char *name,
 
             // XXX if this line is worth keeping
             if (1) {
+                // FIXME if message is removed due to unneeded chunk,
+                // subsequent mailbox lines for it will fail here
+                // so we need to be able to tell which lines apply to messages we don't want anymore
                 r = backup_append(compact, dl, &ts, BACKUP_APPEND_NOFLUSH);
                 if (r) goto error;
             }

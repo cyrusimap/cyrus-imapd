@@ -300,6 +300,22 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             if (!dlist_getatom(ki, "GUID", &guid))
                 goto error;
 
+            // FIXME should this search for guid+size rather than just guid?
+            message_id = backup_get_message_id(backup, guid);
+            if (message_id == -1) {
+                // FIXME handle this sensibly
+                syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n", __func__, r, mboxname, guid);
+                goto error;
+            }
+            if (message_id == 0) {
+                /* can't link this record, we don't have a message */
+                /* possibly we're in compact, and have deleted it? */
+                /* XXX this should probably be an error too, but can't be until compact is smarter */
+                syslog(LOG_DEBUG, "%s: skipping %s record for %s: message not found\n",
+                       __func__, mboxname, guid);
+                continue;
+            }
+
             dlist_getlist(ki, "FLAGS", &flags);
             if (flags) {
                 int is_expunged = 0;
@@ -318,14 +334,6 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             dlist_getlist(ki, "ANNOTATIONS", &annotations);
             if (annotations) {
                 dlist_printbuf(annotations, 0, &annotations_buf);
-            }
-
-            // FIXME should this search for guid+size rather than just guid?
-            message_id = backup_get_message_id(backup, guid);
-            if (message_id == -1) {
-                // FIXME handle this sensibly
-                syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n", __func__, r, mboxname, guid);
-                goto error;
             }
 
             struct sqldb_bindval record_bval[] = {
