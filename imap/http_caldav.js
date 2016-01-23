@@ -135,48 +135,27 @@ function createCalendar(url) {
 
 // [Un]share a calendar collection ([un]readable by 'anyone')
 function shareCalendar(url, share) {
-    // Build ACL document
-    var doc = document.implementation.createDocument(XML_DAV_NS, "D:acl", null);
-    var acl = doc.documentElement;
-    acl.setAttribute("mode", "modify");
+    // Build DAV sharing document
+    var doc = document.implementation.createDocument(XML_DAV_NS,
+                                                     "D:share-resource", null);
+    var root = doc.documentElement;
 
-    var ace = doc.createElementNS(XML_DAV_NS, "D:ace");
-    acl.appendChild(ace);
+    var sharee = doc.createElementNS(XML_DAV_NS, "D:sharee");
+    root.appendChild(sharee);
 
-    var prin = doc.createElementNS(XML_DAV_NS, "D:principal");
-    prin.appendChild(doc.createElementNS(XML_DAV_NS, "D:all"));
-    ace.appendChild(prin);
+    var href = doc.createElementNS(XML_DAV_NS, "D:href");
+    href.appendChild(doc.createTextNode("DAV:all"));
+    sharee.appendChild(href);
 
-    var grant = doc.createElementNS(XML_DAV_NS, "D:grant");
+    var access = doc.createElementNS(XML_DAV_NS, "D:share-access");
+    access.appendChild(doc.createElementNS(XML_DAV_NS,
+                                           share ? "D:read" : "D:no-access"));
+    sharee.appendChild(access);
 
-    var priv = doc.createElementNS(XML_DAV_NS, "D:privilege");
-    priv.appendChild(doc.createElementNS(XML_DAV_NS, "D:read"));
-    grant.appendChild(priv);
-
-    if (share) {
-        grant.setAttribute("mode", "add");
-        ace.appendChild(grant);
-    }
-    else {
-        var ace2 = ace.cloneNode(true);
-        acl.appendChild(ace2);
-
-        grant.setAttribute("mode", "remove");
-        ace.appendChild(grant);
-
-        grant = doc.createElementNS(XML_DAV_NS, "D:grant");
-        grant.setAttribute("mode", "add");
-        ace2.appendChild(grant);
-
-        priv = doc.createElementNS(XML_DAV_NS, "D:privilege");
-        priv.appendChild(doc.createElementNS(XML_CALDAV_NS,
-                                             "C:read-free-busy"));
-        grant.appendChild(priv);
-    }
-
-    // Send ACL request (non-overwrite mode)
+    // Send POST request
     var req = new XMLHttpRequest();
-    req.open('ACL', url);
+    req.open('POST', url);
+    req.setRequestHeader('Content-Type', 'application/davsharing+xml');
     req.send(doc);
 }
 

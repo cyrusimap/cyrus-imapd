@@ -530,7 +530,8 @@ int dav_premethod(struct transaction_t *txn);
 unsigned get_preferences(struct transaction_t *txn);
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
 
-int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
+int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
+                   const char *mimetype);
 
 /* Initialize an XML tree */
 xmlNodePtr init_xml_response(const char *resp, int ns,

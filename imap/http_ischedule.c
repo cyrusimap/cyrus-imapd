@@ -760,7 +760,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     if (!r) {
         switch (code) {
         case 200:  /* Successful */
-            r = parse_xml_body(&txn, xml);
+            r = parse_xml_body(&txn, xml, NULL);
             break;
 
         case 301:

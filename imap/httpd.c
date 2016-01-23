@@ -1996,8 +1996,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
             if (txn->req_tgt.allow & ALLOW_DAV) {
                 /* Construct DAV header(s) based on namespace of request URL */
-                prot_puts(httpd_out,
-                          "DAV: 1, 2, 3, access-control, extended-mkcol\r\n");
+                prot_puts(httpd_out, "DAV: 1, 2, 3, access-control,"
+                          " extended-mkcol, resource-sharing\r\n");
                 if (txn->req_tgt.allow & ALLOW_CAL) {
                     prot_printf(httpd_out, "DAV: calendar-access%s%s%s\r\n",
                                 (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
@@ -2012,14 +2012,15 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                                   "calendar-managed-attachments-no-recurrence\r\n");
                     }
 
-                    /* Backwards compatibility with older Apple VAV clients */
-                    if ((txn->req_tgt.allow &
-                         (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
-                        (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) {
-                        if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))
-                            && strstr(hdr[0], "CalendarAgent/")) {
-                            prot_puts(httpd_out, "DAV: inbox-availability\r\n");
-                        }
+                    /* Backwards compatibility with older Apple clients */
+                    if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))
+                        && strstr(hdr[0], "CalendarAgent/")) {
+                        prot_printf(httpd_out,
+                                    "DAV: calendarserver-sharing%s\r\n",
+                                    (txn->req_tgt.allow &
+                                     (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
+                                    (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED) ?
+                                    ", inbox-availability" : "");
                     }
                 }
                 if (txn->req_tgt.allow & ALLOW_CARD) {

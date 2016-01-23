@@ -233,7 +233,7 @@ static const struct prop_entry principal_props[] = {
       propfind_notifyurl, NULL, NULL },
 
     /* Apple Calendar Server properties */
-    { "notifications-URL", NS_CS, PROP_COLLECTION,
+    { "notification-URL", NS_CS, PROP_COLLECTION,
       propfind_notifyurl, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
@@ -2745,7 +2745,8 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 
 
 /* Parse an XML body into a tree */
-int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
+int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
+                   const char *spec_type)
 {
     const char **hdr;
     xmlParserCtxtPtr ctxt;
@@ -2768,7 +2769,8 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
         (!is_mediatype("text/xml", hdr[0]) &&
-         !is_mediatype("application/xml", hdr[0]))) {
+         !is_mediatype("application/xml", hdr[0]) &&
+         !(spec_type && is_mediatype(spec_type, hdr[0])))) {
         txn->error.desc = "This method requires an XML body\r\n";
         return HTTP_BAD_MEDIATYPE;
     }
@@ -2891,7 +2893,7 @@ int meth_acl(struct transaction_t *txn, void *params)
     /* Local Mailbox */
 
     /* Parse the ACL body */
-    ret = parse_xml_body(txn, &root);
+    ret = parse_xml_body(txn, &root, NULL);
     if (!ret && !root) {
         txn->error.desc = "Missing request body\r\n";
         ret = HTTP_BAD_REQUEST;
@@ -4446,7 +4448,7 @@ int meth_lock(struct transaction_t *txn, void *params)
         unsigned owner_is_href = 0;
 
         /* Parse the required body */
-        ret = parse_xml_body(txn, &root);
+        ret = parse_xml_body(txn, &root, NULL);
         if (!ret && !root) {
             txn->error.desc = "Missing request body";
             ret = HTTP_BAD_REQUEST;
@@ -4632,7 +4634,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     /* Local Mailbox */
 
     /* Parse the MKCOL/MKCALENDAR body, if exists */
-    ret = parse_xml_body(txn, &root);
+    ret = parse_xml_body(txn, &root, NULL);
     if (ret) goto done;
 
     if (root) {
@@ -5048,7 +5050,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Principal or Local Mailbox */
 
     /* Parse the PROPFIND body, if exists */
-    ret = parse_xml_body(txn, &root);
+    ret = parse_xml_body(txn, &root, NULL);
     if (ret) goto done;
 
     if (!root) {
@@ -5339,7 +5341,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     }
 
     /* Parse the PROPPATCH body */
-    ret = parse_xml_body(txn, &root);
+    ret = parse_xml_body(txn, &root, NULL);
     if (!ret && !root) {
         txn->error.desc = "Missing request body\r\n";
         ret = HTTP_BAD_REQUEST;
@@ -5429,6 +5431,189 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 }
 
 
+enum {
+    SHARE_NONE,
+    SHARE_READONLY,
+    SHARE_READWRITE
+};
+
+static int set_share_access(const char *mboxname,
+                            const char *userid, int access)
+{
+    char r, rightstr[100];
+
+    /* Set access rights */
+    rightstr[0] = (access == SHARE_READWRITE) ? '+' : '-';
+
+    cyrus_acl_masktostr(DACL_READ|DACL_WRITE, rightstr+1);
+    r = mboxlist_setacl(&httpd_namespace, mboxname, userid, rightstr,
+                        httpd_userisadmin || httpd_userisproxyadmin,
+                        httpd_userid, httpd_authstate);
+    if (!r && access == SHARE_READONLY) {
+        rightstr[0] = '+';
+        cyrus_acl_masktostr(DACL_READ|DACL_WRITEPROPS, rightstr+1);
+        r = mboxlist_setacl(&httpd_namespace, mboxname, userid, rightstr,
+                            httpd_userisadmin || httpd_userisproxyadmin,
+                            httpd_userid, httpd_authstate);
+    }
+
+    return r;
+}
+
+
+static int dav_post_share(struct transaction_t *txn)
+{
+    xmlDocPtr doc = NULL;
+    xmlNodePtr root, sharee;
+    int rights, ret, legacy = 0;
+
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    if (!(rights & DACL_ADMIN)) {
+        /* DAV:need-privileges */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = DACL_ADMIN;
+        return HTTP_NO_PRIVS;
+    }
+
+    if (txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local mailbox */
+
+    /* Read body */
+    ret = parse_xml_body(txn, &root, "application/davsharing+xml");
+    if (!ret && !root) {
+        txn->error.desc = "Missing request body";
+        ret = HTTP_BAD_REQUEST;
+    }
+    if (ret) goto done;
+
+    doc = root->doc;
+
+    /* Make sure its a share-resource element */
+    if (!xmlStrcmp(root->name, BAD_CAST "share")) legacy = 1;
+    else if (xmlStrcmp(root->name, BAD_CAST "share-resource")) {
+        txn->error.desc =
+            "Missing share-resource element in POST request";
+        ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    for (sharee = xmlFirstElementChild(root); sharee;
+         sharee = xmlNextElementSibling(sharee)) {
+        xmlNodePtr node;
+        xmlChar *href = NULL;
+        int access = SHARE_READONLY;
+
+        if (legacy) {
+            if (!xmlStrcmp(sharee->name, BAD_CAST "remove")) {
+                access = SHARE_NONE;
+            }
+            else if (xmlStrcmp(sharee->name, BAD_CAST "set")) continue;
+        }
+        else if (xmlStrcmp(sharee->name, BAD_CAST "sharee")) continue;
+
+        for (node = xmlFirstElementChild(sharee); node;
+             node = xmlNextElementSibling(node)) {
+            if (!xmlStrcmp(node->name, BAD_CAST "href")) {
+                href = xmlNodeGetContent(node);
+                if (access == SHARE_NONE) break;
+            }
+
+            if (legacy) {
+                if (!xmlStrcmp(node->name, BAD_CAST "read-write")) {
+                    access = SHARE_READWRITE;
+                }
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "share-access")) {
+                xmlNodePtr share = xmlFirstElementChild(node);
+
+                if (!xmlStrcmp(share->name, BAD_CAST "no-access")) {
+                    access = SHARE_NONE;
+                }
+                else if (!xmlStrcmp(share->name, BAD_CAST "read-write")) {
+                    access = SHARE_READWRITE;
+                }
+            }
+        }
+
+        if (href) {
+            char *userid = NULL, *at;
+            int r;
+
+            if (!xmlStrncmp(href, BAD_CAST "mailto:", 7)) {
+                userid = xstrdup((char *) href + 7);
+                if ((at = strchr(userid, '@'))) {
+                    if (!config_virtdomains || !strcmp(at+1, config_defdomain)){
+                        *at = '\0';
+                    }
+                }
+            }
+            else if (!xmlStrncmp(href, BAD_CAST "DAV:", 4)) {
+                if (!xmlStrcmp(href + 4, BAD_CAST "all")) {
+                    userid = xstrdup("anyone");
+                }
+                else if (!xmlStrcmp(href + 4, BAD_CAST "unauthenticated")) {
+                    userid = xstrdup("anonymous");
+                }
+                else if (!xmlStrcmp(href + 4, BAD_CAST "authenticated")) {
+                    /* This needs to be done as anyone - anonymous */
+                    r = set_share_access(txn->req_tgt.mbentry->name,
+                                         "anyone", access);
+                    if (r) {
+                        syslog(LOG_NOTICE,
+                               "failed to set share access for"
+                               " 'anyone' on '%s': %s",
+                               txn->req_tgt.mbentry->name, error_message(r));
+                    }
+                    else userid = xstrdup("-anonymous");
+                }
+            }
+            else {
+                /* XXX  what other URIs will we see?  principal URL? */
+            }
+
+            if (userid) {
+                /* Set access rights */
+                r = set_share_access(txn->req_tgt.mbentry->name,
+                                     userid, access);
+                if (r) {
+                    syslog(LOG_NOTICE,
+                           "failed to set share access for '%s' on '%s': %s",
+                           userid, txn->req_tgt.mbentry->name,
+                           error_message(r));
+                }
+                else {
+                    /* Notify sharee */
+                }
+
+                free(userid);
+            }
+
+            xmlFree(href);
+        }
+
+        ret = HTTP_OK;
+    }
+
+  done:
+    if (doc) xmlFreeDoc(doc);
+
+    return ret;
+}
+
+
 /* Perform a POST request */
 int meth_post(struct transaction_t *txn, void *params)
 {
@@ -5454,9 +5639,13 @@ int meth_post(struct transaction_t *txn, void *params)
         if (ret != HTTP_CONTINUE) return ret;
     }
 
+    /* Check for query params */
     action = hash_lookup("action", &txn->req_qparams);
-    if (!action || action->next || strcmp(action->s, "add-member"))
-        return HTTP_FORBIDDEN;
+    if (!action) return dav_post_share(txn);
+
+    if (action->next || strcmp(action->s, "add-member")) {
+        return HTTP_BAD_REQUEST;
+    }
 
     /* POST add-member to regular collection */
 
@@ -6745,7 +6934,7 @@ int meth_report(struct transaction_t *txn, void *params)
     }
 
     /* Parse the REPORT body */
-    ret = parse_xml_body(txn, &inroot);
+    ret = parse_xml_body(txn, &inroot, NULL);
     if (!ret && !inroot) {
         txn->error.desc = "Missing request body\r\n";
         return HTTP_BAD_REQUEST;
@@ -7830,7 +8019,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
 }
 
 
-/* Callback to fetch DAV:notifications-URL */
+/* Callback to fetch DAV:notifications-URL and CS:notification-URL */
 static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop,

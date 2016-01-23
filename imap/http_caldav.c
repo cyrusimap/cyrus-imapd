@@ -245,6 +245,10 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop, xmlNodePtr resp,
                               struct propstat propstat[], void *rock);
+static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop, xmlNodePtr resp,
+                                 struct propstat propstat[], void *rock);
 
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams,
@@ -431,6 +435,8 @@ static const struct prop_entry caldav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
+    { "allowed-sharing-modes", NS_CS, PROP_COLLECTION,
+      propfind_sharingmodes, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -5480,6 +5486,26 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
     }
 
     return HTTP_NOT_FOUND;
+}
+
+
+/* Callback to fetch CS:allowed-sharing-modes */
+static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop __attribute__((unused)),
+                                 xmlNodePtr resp __attribute__((unused)),
+                                 struct propstat propstat[],
+                                 void *rock __attribute__((unused)))
+{
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                                   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    if (!fctx->req_tgt->resource && !fctx->req_tgt->flags) {
+        xmlNewChild(node, NULL, BAD_CAST "can-be-shared", NULL);
+        xmlNewChild(node, NULL, BAD_CAST "can-be-published", NULL);
+    }
+
+    return 0;
 }
 
 
