@@ -157,6 +157,9 @@ struct backend *backend_current = NULL;
 /* our cached connections */
 struct backend **backend_cached = NULL;
 
+/* cached connection to mupdate master (for multiple XFER and MUPDATEPUSH) */
+static mupdate_handle *mupdate_h = NULL;
+
 /* are we doing virtdomains with multiple IPs? */
 static int disable_referrals;
 
@@ -725,6 +728,8 @@ static void imapd_reset(void)
     if (backend_cached) free(backend_cached);
     backend_cached = NULL;
     backend_inbox = backend_current = NULL;
+    if (mupdate_h) mupdate_disconnect(&mupdate_h);
+    mupdate_h = NULL;
     proxy_cmdcnt = 0;
     disable_referrals = 0;
     supports_referrals = 0;
@@ -1077,6 +1082,7 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
+    if (mupdate_h) mupdate_disconnect(&mupdate_h);
 
     if (idling)
         idle_stop(index_mboxname(imapd_index));
@@ -10347,7 +10353,6 @@ struct xfer_item {
 };
 
 struct xfer_header {
-    mupdate_handle *mupdate_h;
     struct backend *be;
     int remoteversion;
     unsigned long use_replication;
@@ -10359,7 +10364,7 @@ struct xfer_header {
     struct xfer_item *items;
 };
 
-static int xfer_mupdate(struct xfer_header *xfer, int isactivate,
+static int xfer_mupdate(int isactivate,
                         const char *mboxname, const char *part,
                         const char *servername, const char *acl)
 {
@@ -10368,25 +10373,29 @@ static int xfer_mupdate(struct xfer_header *xfer, int isactivate,
     int r = 0;
 
     /* no mupdate handle */
-    if (!xfer->mupdate_h)
-        return 0;
+    if (!mupdate_h) return 0;
 
     snprintf(buf, sizeof(buf), "%s!%s", servername, part);
 
 retry:
     /* make the change */
     if (isactivate)
-        r = mupdate_activate(xfer->mupdate_h, mboxname, buf, acl);
+        r = mupdate_activate(mupdate_h, mboxname, buf, acl);
     else
-        r = mupdate_deactivate(xfer->mupdate_h, mboxname, buf);
+        r = mupdate_deactivate(mupdate_h, mboxname, buf);
 
     if (r && !retry) {
         syslog(LOG_INFO, "MUPDATE: lost connection, retrying");
-        mupdate_disconnect(&xfer->mupdate_h);
-        r = mupdate_connect(config_mupdate_server, NULL,
-                            &xfer->mupdate_h, NULL);
-        retry = 1;
-        goto retry;
+        mupdate_disconnect(&mupdate_h);
+        r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+        if (r) {
+            syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
+                   config_mupdate_server);
+        }
+        else {
+            retry = 1;
+            goto retry;
+        }
     }
 
     return r;
@@ -10421,9 +10430,6 @@ static void xfer_done(struct xfer_header **xferptr)
 
     syslog(LOG_INFO, "XFER: disconnecting from servers");
 
-    /* disconnect */
-    if (xfer->mupdate_h) mupdate_disconnect(&xfer->mupdate_h);
-    if (xfer->be) backend_disconnect(xfer->be);
     free(xfer->toserver);
 
     buf_free(&xfer->tagbuf);
@@ -10502,8 +10508,8 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     syslog(LOG_INFO, "XFER: connecting to server '%s'", toserver);
 
     /* Get a connection to the remote backend */
-    xfer->be = backend_connect(NULL, toserver, &imap_protocol,
-                               "", NULL, NULL, -1);
+    xfer->be = proxy_findserver(toserver, &imap_protocol, "", &backend_cached,
+                                NULL, NULL, imapd_in);
     if (!xfer->be) {
         syslog(LOG_ERR, "Failed to connect to server '%s'", toserver);
         r = IMAP_SERVER_UNAVAILABLE;
@@ -10524,12 +10530,11 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     xfer->seendb = NULL;
 
     /* connect to mupdate server if configured */
-    if (config_mupdate_server) {
+    if (config_mupdate_server && !mupdate_h) {
         syslog(LOG_INFO, "XFER: connecting to mupdate '%s'",
                config_mupdate_server);
 
-        r = mupdate_connect(config_mupdate_server, NULL,
-                            &xfer->mupdate_h, NULL);
+        r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
             syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
                    config_mupdate_server);
@@ -10619,7 +10624,7 @@ static int xfer_deactivate(struct xfer_header *xfer)
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     for (item = xfer->items; item; item = item->next) {
-        r = xfer_mupdate(xfer, 0, item->mbentry->name, item->mbentry->partition,
+        r = xfer_mupdate(0, item->mbentry->name, item->mbentry->partition,
                          config_servername, item->mbentry->acl);
         if (r) {
             syslog(LOG_ERR,
@@ -11061,7 +11066,7 @@ static int xfer_reactivate(struct xfer_header *xfer)
 
     syslog(LOG_INFO, "XFER: reactivating mailboxes");
 
-    if (!xfer->mupdate_h) return 0;
+    if (!mupdate_h) return 0;
 
     /* 6.5) Kick remote server to correct mupdate entry */
     for (item = xfer->items; item; item = item->next) {
@@ -11162,7 +11167,7 @@ static void xfer_recover(struct xfer_header *xfer)
 
         case XFER_DEACTIVATED:
             /* Tell murder it's back here and active */
-            r = xfer_mupdate(xfer, 1, item->mbentry->name, item->mbentry->partition,
+            r = xfer_mupdate(1, item->mbentry->name, item->mbentry->partition,
                              config_servername, item->mbentry->acl);
             if (r) {
                 syslog(LOG_ERR,
@@ -12846,9 +12851,8 @@ static int reset_saslconn(sasl_conn_t **conn)
 
 static void cmd_mupdatepush(char *tag, char *name)
 {
-    int r = 0;
+    int r = 0, retry = 0;
     mbentry_t *mbentry = NULL;
-    mupdate_handle *mupdate_h = NULL;
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
@@ -12865,15 +12869,37 @@ static void cmd_mupdatepush(char *tag, char *name)
     if (r) goto done;
 
     /* Push mailbox to mupdate server */
-    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-    if (r) goto done;
+    if (!mupdate_h) {
+        syslog(LOG_INFO, "XFER: connecting to mupdate '%s'",
+               config_mupdate_server);
+
+        r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+        retry = 1;
+        if (r) {
+            syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
+                   config_mupdate_server);
+            goto done;
+        }
+    }
 
     snprintf(buf, sizeof(buf), "%s!%s",
              config_servername, mbentry->partition);
+
+  retry:
     r = mupdate_activate(mupdate_h, intname, buf, mbentry->acl);
 
-    if (mupdate_h) {
+    if (r && !retry) {
+        syslog(LOG_INFO, "MUPDATE: lost connection, retrying");
         mupdate_disconnect(&mupdate_h);
+        r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+        if (r) {
+            syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
+                   config_mupdate_server);
+        }
+        else {
+            retry = 1;
+            goto retry;
+        }
     }
 
 done:
