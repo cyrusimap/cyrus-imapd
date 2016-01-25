@@ -137,70 +137,94 @@ EXPORTED int backup_append_start(struct backup *backup,
     return backup_real_append_start(backup, ts, offset, file_sha1, 0, flush);
 }
 
+static int _append(gzFile gzfile, const char *fname, const struct buf *buf)
+{
+    /* gzprintf's internal buffer is limited to about 8K, which a dlist will
+     * exceed if there's a message in it, so use gzwrite rather than gzprintf
+     * for writing the dlist contents.
+     */
+    const char *p = buf_cstring(buf);
+    size_t left = buf_len(buf);
+
+    while (left) {
+        int n = MIN(left, INT32_MAX);
+        int wrote = gzwrite(gzfile, p, n);
+        if (wrote > 0) {
+            left -= wrote;
+            p += wrote;
+        }
+        else {
+            int r;
+            const char *err = gzerror(gzfile, &r);
+            syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, fname, err);
+
+            if (r == Z_STREAM_ERROR)
+                fatal("gzwrite: invalid stream", EC_IOERR);
+            else if (r == Z_MEM_ERROR)
+                fatal("gzwrite: out of memory", EC_TEMPFAIL);
+
+            return r;
+        }
+    }
+
+    return 0;
+}
+
 EXPORTED int backup_append(struct backup *backup,
                            struct dlist *dlist,
                            const time_t *tsp,
                            enum backup_append_flush flush)
 {
-    int r;
     if (!backup->append_state || backup->append_state->mode == BACKUP_APPEND_INACTIVE)
         fatal("backup append not started", EC_SOFTWARE);
 
     off_t start = backup->append_state->wrote;
-    size_t len;
+    size_t len = 0;
     time_t ts = tsp ? *tsp : time(NULL);
+    struct buf buf = BUF_INITIALIZER;
+    struct dlist_print_iter *iter = NULL;
+    const int index_only = backup->append_state->mode & BACKUP_APPEND_INDEXONLY;
+    int r;
 
-    /* build a buffer containing the data to be written */
-    struct buf buf = BUF_INITIALIZER, ts_buf = BUF_INITIALIZER;
-    dlist_printbuf(dlist, 1, &buf);
-    buf_printf(&ts_buf, "%ld APPLY ", (int64_t) ts);
-    buf_insert(&buf, 0, &ts_buf);
-    buf_appendcstr(&buf, "\r\n");
+    /* preload buffer with timestamp preamble */
+    buf_printf(&buf, "%ld APPLY ", (int64_t) ts);
 
-    /* track the sha1sum */
-    SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
+    /* iterate over the dlist */
+    iter = dlist_print_iter_new(dlist, 1);
+    do {
+        /* track the sha1sum */
+        SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
 
-    /* if we're not in index-only mode, write the data out */
-    if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
-        /* gzprintf's internal buffer is limited to about 8K, which
-         * dlist will exceed if there's a message in it, so use gzwrite
-         * rather than gzprintf for writing the dlist contents.
-         */
-        const char *p = buf_cstring(&buf);
-        size_t left = buf_len(&buf);
-
-        while (left) {
-            int n = MIN(left, INT32_MAX);
-            int wrote = gzwrite(backup->append_state->gzfile, p, n);
-            if (wrote > 0) {
-                left -= wrote;
-                p += wrote;
-            }
-            else {
-                const char *err = gzerror(backup->append_state->gzfile, &r);
-                syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, backup->data_fname, err);
-
-                if (r == Z_STREAM_ERROR)
-                    fatal("gzwrite: invalid stream", EC_IOERR);
-                else if (r == Z_MEM_ERROR)
-                    fatal("gzwrite: out of memory", EC_TEMPFAIL);
-
-                goto error;
-            }
+        /* if we're not in index-only mode, write the data out */
+        if (!index_only) {
+            r = _append(backup->append_state->gzfile, backup->data_fname, &buf);
+            if (r) goto error;
         }
 
-        if (flush) {
-            r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
-            if (r != Z_OK) {
-                syslog(LOG_ERR, "IOERROR: %s gzflush %s: %i %i", __func__, backup->data_fname, r, errno);
-                goto error;
-            }
+        /* count the written bytes */
+        len += buf_len(&buf);
+        backup->append_state->wrote += buf_len(&buf);
+    } while (dlist_print_iter_step(iter, &buf));
+    dlist_print_iter_free(&iter);
+
+    /* finally, end with "\r\n" */
+    buf_setcstr(&buf, "\r\n");
+    SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
+    if (!index_only) {
+        r = _append(backup->append_state->gzfile, backup->data_fname, &buf);
+        if (r) goto error;
+    }
+    len += buf_len(&buf);
+    backup->append_state->wrote += buf_len(&buf);
+
+    /* flush if necessary */
+    if (flush && !index_only) {
+        r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
+        if (r != Z_OK) {
+            syslog(LOG_ERR, "IOERROR: %s gzflush %s: %i %i", __func__, backup->data_fname, r, errno);
+            goto error;
         }
     }
-
-    /* count the written bytes */
-    len = buf_len(&buf);
-    backup->append_state->wrote += buf_len(&buf);
 
     buf_free(&buf);
 
