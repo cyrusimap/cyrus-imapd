@@ -2821,36 +2821,15 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
  *   <all> == IMAP "anyone"
  *   <unauthenticated> == IMAP "anonymous"
  *   <authenticated> == IMAP "anyone -anonymous"
- *
- * We have extended the ACL method here to be able to encapsulate "IMAP-like"
- * semantics where rights for individual identifiers in the ACL can be modified 
- * without forcing the client to download the entire ACL, make changes to it,
- * and push it back to the server.
- *
- * This optional behavior is enabled by the client by including a mode="modify"
- * attribute on the <acl> element in the request body.  Once enabled, each <ace>
- * element is handled separately as being added/modified/deleted from the
- * existing ACL (rather than a part of a completely new ACL) with this
- * functionality being triggered as follows:
- *
- *   - An empty <grant> or <deny> element will cause the identifer
- *     to be deleted from the ACL
- *   - A mode="add" atribute on a <grant> or <deny> element will cause the
- *     <privilege>s to be added (+) to the existing set on the identifer
- *   - A mode="remove" atribute on a <grant> or <deny> element will cause the
- *     <privilege>s to be removed (-) from the existing set on the identifer
- *   - Otherwise, the <privilege>s replace the existing set on the identifier
  */
 int meth_acl(struct transaction_t *txn, void *params)
 {
     struct meth_params *aparams = (struct meth_params *) params;
-    int ret = 0, r, rights, modify = 0;
+    int ret = 0, r, rights;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
-    xmlChar *mode;
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
-    struct buf userbuf = BUF_INITIALIZER;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2909,19 +2888,14 @@ int meth_acl(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    /* Check for "IMAP" (modify) mode */
-    mode = xmlGetProp(root, BAD_CAST "mode");
-    if (mode && !xmlStrcmp(mode, BAD_CAST "modify")) modify = 1;
-    else {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
-        if (r) {
-            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
+    /* Open mailbox for writing */
+    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     /* Parse the DAV:ace elements */
@@ -2934,7 +2908,6 @@ int meth_acl(struct transaction_t *txn, void *params)
             char rightstr[100];
             struct request_target_t tgt;
 
-            mode = NULL;
             for (child = ace->children; child; child = child->next) {
                 if (child->type == XML_ELEMENT_NODE) {
                     if (!xmlStrcmp(child->name, BAD_CAST "principal")) {
@@ -2956,7 +2929,6 @@ int meth_acl(struct transaction_t *txn, void *params)
 
                         for (privs = child->children; privs &&
                              privs->type != XML_ELEMENT_NODE; privs = privs->next);
-                        if (modify) mode = xmlGetProp(child, BAD_CAST "mode");
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
                         if (privs) {
@@ -2968,7 +2940,6 @@ int meth_acl(struct transaction_t *txn, void *params)
                         for (privs = child->children; privs &&
                              privs->type != XML_ELEMENT_NODE; privs = privs->next);
                         deny = 1;
-                        if (modify) mode = xmlGetProp(child, BAD_CAST "mode");
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
                         /* DAV:no-invert */
@@ -3146,50 +3117,9 @@ int meth_acl(struct transaction_t *txn, void *params)
                 }
             }
 
-            cyrus_acl_masktostr(rights, rightstr);
-            if (modify) {
-                buf_reset(&acl);
-                if (mode) {
-                    if (!xmlStrcmp(mode, BAD_CAST "add"))
-                        buf_putc(&acl, '+');
-                    else if (!xmlStrcmp(mode, BAD_CAST "remove"))
-                        buf_putc(&acl, '-');
-                }
-                buf_appendcstr(&acl, rightstr);
-
-                if (*userid == '\a') {
-                    /* authenticated = "anyone -anonymous" */
-                    userid = "anyone";
-                    r = mboxlist_setacl(&httpd_namespace,
-                                        txn->req_tgt.mbentry->name,
-                                        userid, buf_cstring(&acl),
-                                        httpd_userisadmin
-                                        || httpd_userisproxyadmin,
-                                        httpd_userid, httpd_authstate);
-                    userid = "-anonymous";
-                }
-                else if (deny) {
-                    buf_reset(&userbuf);
-                    buf_printf(&userbuf, "-%s", userid);
-                    userid = buf_cstring(&userbuf);
-                }
-
-                if (!r) r = mboxlist_setacl(&httpd_namespace,
-                                            txn->req_tgt.mbentry->name,
-                                            userid, buf_cstring(&acl),
-                                            httpd_userisadmin
-                                            || httpd_userisproxyadmin,
-                                            httpd_userid, httpd_authstate);
-                if (r) {
-                    syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
-                           txn->req_tgt.mbentry->name, error_message(r));
-                    txn->error.desc = error_message(r);
-                    ret = HTTP_SERVER_ERROR;
-                    goto done;
-                }
-            }
             /* gotta have something to do! */
-            else if (rights) {
+            if (rights) {
+                cyrus_acl_masktostr(rights, rightstr);
 
                 if (*userid == '\a') {
                     /* authenticated = "anyone -anonymous" */
@@ -3206,24 +3136,20 @@ int meth_acl(struct transaction_t *txn, void *params)
         }
     }
 
-    if (mailbox) {
-        mailbox_set_acl(mailbox, buf_cstring(&acl), 1);
-        r = mboxlist_sync_setacls(txn->req_tgt.mbentry->name,
-                                  buf_cstring(&acl));
-        if (r) {
-            syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
+    mailbox_set_acl(mailbox, buf_cstring(&acl), 1);
+    r = mboxlist_sync_setacls(txn->req_tgt.mbentry->name, buf_cstring(&acl));
+    if (r) {
+        syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     response_header(HTTP_OK, txn);
 
   done:
     buf_free(&acl);
-    buf_free(&userbuf);
     if (indoc) xmlFreeDoc(indoc);
     mailbox_close(&mailbox);
     return ret;
