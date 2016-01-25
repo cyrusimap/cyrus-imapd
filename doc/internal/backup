@@ -793,8 +793,8 @@ todo list
 * backupd: don't block on locked backups, return mailbox locked -- but sync_client doesn't handle this
 * test multiple backup partitions
 * configure: error if backups requested and we don't have zlib
-* backup_append is going to run out of memory on initial APPLY MESSAGE for big mailbox...
-  => need a way to iteratively print a dlist one sane bufsize at a time
+* backup_append might run out of memory on initial APPLY MESSAGE for big mailbox...
+  => need something other than DLIST_SFILE for holding message data, since we may get GBs at once
 
 compact implementation steps:
     1 remove unused chunks, keep everything else as is
