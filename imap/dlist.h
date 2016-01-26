@@ -232,7 +232,7 @@ void dlist_print(const struct dlist *dl, int printkeys,
 void dlist_printbuf(const struct dlist *dl, int printkeys,
                     struct buf *outbuf);
 char dlist_parse(struct dlist **dlp, unsigned int flags,
-                 struct protstream *in);
+                 struct protstream *in, const char *alt_reserve_base);
 char dlist_parse_asatomlist(struct dlist **dlp, unsigned int flags,
                             struct protstream *in);
 int dlist_parsemap(struct dlist **dlp, unsigned int flags,

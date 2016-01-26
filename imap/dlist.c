@@ -174,16 +174,29 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive,
                                         const struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
-    const char *base = isarchive ? config_archivepartitiondir(part)
-                                 : config_partitiondir(part);
+    const char *base;
+
+    /* part can be either a configured partition name, or a path */
+    if (strchr(part, '/')) {
+        base = part;
+    }
+    else {
+        base = isarchive ? config_archivepartitiondir(part)
+                         : config_partitiondir(part);
+    }
+
+    /* we expect to have a base at this point, so let's assert that */
+    assert(base != NULL);
+
     snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu/%s",
                   base, (unsigned long)getpid(),
                   message_guid_encode(guid));
+
     /* gotta make sure we can create files */
     if (cyrus_mkdir(buf, 0755)) {
         /* it's going to fail later, but at least this will help */
-        syslog(LOG_ERR, "IOERROR: failed to create %s/%lu/ for reserve: %m",
-               config_partitiondir(part), (unsigned long)getpid());
+        syslog(LOG_ERR, "IOERROR: failed to create %s/sync./%lu/ for reserve: %m",
+                        base, (unsigned long)getpid());
     }
     return buf;
 }
@@ -1040,7 +1053,8 @@ static char next_nonspace(struct protstream *in, char c)
     return c;
 }
 
-EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstream *in)
+EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags,
+                          struct protstream *in, const char *alt_reserve_base)
 {
     struct dlist *dl = NULL;
     static struct buf kbuf;
@@ -1067,7 +1081,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstr
         while (c != ')') {
             struct dlist *di = NULL;
             prot_ungetc(c, in);
-            c = dlist_parse(&di, (flags & ~DLIST_PARSEKEY), in);
+            c = dlist_parse(&di, (flags & ~DLIST_PARSEKEY), in, alt_reserve_base);
             if (di) dlist_stitch(dl, di);
             c = next_nonspace(in, c);
             if (c == EOF) goto fail;
@@ -1083,7 +1097,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstr
             while (c != ')') {
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
-                c = dlist_parse(&di, (flags | DLIST_PARSEKEY), in);
+                c = dlist_parse(&di, (flags | DLIST_PARSEKEY), in, alt_reserve_base);
                 if (di) dlist_stitch(dl, di);
                 c = next_nonspace(in, c);
                 if (c == EOF) goto fail;
@@ -1114,7 +1128,8 @@ EXPORTED char dlist_parse(struct dlist **dlp, unsigned int flags, struct protstr
                 dl = dlist_setsfile(NULL, kbuf.s, pbuf.s, &tmp_guid, sbuf.s, sbuf.len);
             }
             else {
-                if (reservefile(in, pbuf.s, &tmp_guid, size, &fname)) goto fail;
+                const char *part = alt_reserve_base ? alt_reserve_base : pbuf.s;
+                if (reservefile(in, part, &tmp_guid, size, &fname)) goto fail;
                 dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
             }
             /* file literal */
@@ -1154,7 +1169,7 @@ fail:
 EXPORTED char dlist_parse_asatomlist(struct dlist **dlp, unsigned int flags,
                             struct protstream *in)
 {
-    char c = dlist_parse(dlp, flags, in);
+    char c = dlist_parse(dlp, flags, in, NULL);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -1175,7 +1190,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, unsigned int flags,
 
     stream = prot_readmap(base, len);
     prot_setisclient(stream, 1); /* don't sync literals */
-    c = dlist_parse(&dl, flags, stream);
+    c = dlist_parse(&dl, flags, stream, NULL);
     prot_free(stream);
 
     if (c != EOF) {
