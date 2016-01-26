@@ -7457,7 +7457,7 @@ static int dav_create_notifications(const char *userid) {
 }
 
 
-static void my_dav_auth(const char *userid __attribute__((unused)))
+static void my_dav_auth(const char *userid)
 {
     if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
