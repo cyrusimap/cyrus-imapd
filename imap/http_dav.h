@@ -99,7 +99,8 @@ enum {
 #define DACL_RMRES      (ACL_DELETEMSG\
                          |ACL_EXPUNGE)  /* CY:remove-resource */
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
-                                           DAV:read-acl, write-acl, unlock) */
+                                           DAV:read-acl, DAV:write-acl,
+                                           DAV:unlock and DAV:share) */
 
 /* WebDAV (RFC 3744) privileges */
 #define DACL_READ       (ACL_READ\

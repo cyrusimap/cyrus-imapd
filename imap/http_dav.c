@@ -1594,6 +1594,7 @@ int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
     add_suppriv(agg, "read-acl", NULL, 1, "Read ACL");
     add_suppriv(agg, "write-acl", NULL, 1, "Write ACL");
     add_suppriv(agg, "unlock", NULL, 1, "Unlock resource");
+    add_suppriv(agg, "share", NULL, 1, "Share resource");
 
     if (tgt_flags == TGT_SCHED_INBOX) {
         agg = add_suppriv(all, "schedule-deliver", fctx->ns[NS_CALDAV], 0,
@@ -3078,7 +3079,9 @@ int meth_acl(struct transaction_t *txn, void *params)
                                  || !xmlStrcmp(priv->name,
                                                BAD_CAST "write-acl")
                                  || !xmlStrcmp(priv->name,
-                                               BAD_CAST "unlock")) {
+                                               BAD_CAST "unlock")
+                                 || !xmlStrcmp(priv->name,
+                                               BAD_CAST "share")) {
                             /* DAV:no-abstract */
                             txn->error.precond = DAV_NO_ABSTRACT;
                             ret = HTTP_FORBIDDEN;
