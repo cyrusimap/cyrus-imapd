@@ -1797,12 +1797,15 @@ EXPORTED void allow_hdr(const char *hdr, unsigned allow)
     comma_list_hdr(hdr, meths, allow);
 
     if (allow & ALLOW_DAV) {
-        prot_printf(httpd_out, "%s: PROPFIND, REPORT", hdr);
-        if (allow & ALLOW_WRITE) {
-            prot_puts(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
+        if (allow & ALLOW_READ) {
+            prot_printf(httpd_out, "%s: PROPFIND, REPORT, COPY", hdr);
+            if (allow & ALLOW_DELETE) prot_puts(httpd_out, ", MOVE");
         }
-        if (allow & ALLOW_WRITECOL) {
-            prot_puts(httpd_out, ", PROPPATCH, MKCOL, ACL");
+        if (allow & ALLOW_PROPPATCH) prot_puts(httpd_out, ", PROPPATCH");
+        if (allow & ALLOW_WRITE) prot_puts(httpd_out, ", LOCK, UNLOCK");
+        if (allow & ALLOW_ACL) prot_puts(httpd_out, ", ACL");
+        if (allow & ALLOW_MKCOL) {
+            prot_puts(httpd_out, ", MKCOL");
             if (allow & ALLOW_CAL) {
                 prot_printf(httpd_out, "\r\n%s: MKCALENDAR", hdr);
             }

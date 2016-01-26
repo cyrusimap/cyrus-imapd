@@ -476,7 +476,7 @@ struct namespace_t namespace_calendar = {
 #ifdef HAVE_VAVAILABILITY
      ALLOW_CAL_AVAIL |
 #endif
-     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CAL ),
+     ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     &dav_premethod,
     {
@@ -738,7 +738,7 @@ int caldav_create_defaultcalendars(const char *userid)
         /* Managed Attachment Collection */
         mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
         r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION,
-                            ACL_ALL | DACL_SCHED, ACL_READ);
+                            ACL_ALL, ACL_READ);
         free(mailboxname);
         if (r) goto done;
     }
@@ -806,6 +806,7 @@ static int caldav_parse_path(const char *path,
     size_t len;
     const char *nameprefix;
     mbname_t *mbname = NULL;
+    int rights;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -831,8 +832,8 @@ static int caldav_parse_path(const char *path,
     tgt->urlprefix = namespace_calendar.prefix;
     tgt->mboxprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
 
-    /* Default to bare-bones Allow bits for toplevel collections */
-    tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE|ALLOW_PATCH);
+    /* Default to bare-bones Allow bits */
+    tgt->allow &= ALLOW_READ_MASK;
 
     /* Skip namespace */
     p += len;
@@ -882,34 +883,6 @@ static int caldav_parse_path(const char *path,
     }
 
   done:
-    /* Set proper Allow bits and flags based on path components */
-    if (tgt->collection) {
-        if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX)))
-            tgt->flags = TGT_SCHED_INBOX;
-        else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX)))
-            tgt->flags = TGT_SCHED_OUTBOX;
-        else if (!strncmp(tgt->collection,
-                          MANAGED_ATTACH, strlen(MANAGED_ATTACH)))
-            tgt->flags = TGT_MANAGED_ATTACH;
-
-        if (tgt->flags == TGT_MANAGED_ATTACH) {
-            /* Read-only non-calendar collection */
-            tgt->allow &= ~(ALLOW_WRITECOL|ALLOW_CAL);
-        }
-        else if (tgt->resource) {
-            if (!tgt->flags) tgt->allow |= ALLOW_WRITE|ALLOW_POST|ALLOW_PATCH;
-            tgt->allow |= ALLOW_DELETE;
-            tgt->allow &= ~ALLOW_WRITECOL;
-        }
-        else if (tgt->flags != TGT_SCHED_INBOX) {
-            tgt->allow |= ALLOW_POST;
-            tgt->allow |= ALLOW_DELETE;
-        }
-        else
-            tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
-    }
-    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
-
     /* Create mailbox name from the parsed path */
 
     mbname = mbname_from_userid(tgt->userid);
@@ -954,6 +927,59 @@ static int caldav_parse_path(const char *path,
     }
 
     mbname_free(&mbname);
+
+    /* Set proper Allow bits based on path components and ACL of current user */
+    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
+
+    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
+
+    if (tgt->collection) {
+        if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
+            /* Read-only non-calendar collection */
+            tgt->allow = ALLOW_READ;
+
+            tgt->flags = TGT_MANAGED_ATTACH;
+        }
+        else if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX))) {
+            /* Can only read and DELETE resources from this collection */
+            if (tgt->resource && (rights & DACL_RMRES) == DACL_RMRES)
+                tgt->allow |= ALLOW_DELETE;
+
+            tgt->flags = TGT_SCHED_INBOX;
+        }
+        else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX))){
+            /* Can only POST to this collection (free/busy request) */
+            if (!tgt->resource && (rights & DACL_ADDRES))
+                tgt->allow |= ALLOW_POST;
+
+            tgt->flags = TGT_SCHED_OUTBOX;
+        }
+        else {
+            /* Regular calendar collection */
+            if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
+
+            if (tgt->resource) {
+                if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_PATCH;
+                if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
+                if ((rights & DACL_RMRES) == DACL_RMRES)
+                    tgt->allow |= ALLOW_DELETE;
+
+                if ((tgt->allow & (ALLOW_WRITE|ALLOW_CAL_ATTACH)) ==
+                    (ALLOW_WRITE|ALLOW_CAL_ATTACH)) {
+                    tgt->allow |= ALLOW_POST;
+                }
+            }
+            else {
+                if (rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
+                if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+                if (rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
+            }
+        }
+    }
+    else if (tgt->userid) {
+        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+        if (rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
+    }
 
     return 0;
 }

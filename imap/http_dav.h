@@ -91,10 +91,13 @@ enum {
 #define NUM_NAMESPACE 6
 
 /* Cyrus-specific privileges */
+#define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
+#define DACL_PROPRES    ACL_ANNOTATEMSG /* CY:write-properties-resource */
 #define DACL_MKCOL      ACL_CREATE      /* CY:make-collection */
-#define DACL_ADDRSRC    ACL_POST        /* CY:add-resource */
+#define DACL_ADDRES     ACL_POST        /* CY:add-resource */
 #define DACL_RMCOL      ACL_DELETEMBOX  /* CY:remove-collection */
-#define DACL_RMRSRC     (ACL_DELETEMSG|ACL_EXPUNGE)     /* CY:remove-resource */
+#define DACL_RMRES      (ACL_DELETEMSG\
+                         |ACL_EXPUNGE)  /* CY:remove-resource */
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
                                            DAV:read-acl, write-acl, unlock) */
 
@@ -104,12 +107,12 @@ enum {
                                            DAV:read-current-user-privilege-set
                                            and CALDAV:read-free-busy) */
 #define DACL_WRITECONT  ACL_INSERT      /* DAV:write-content */
-#define DACL_WRITEPROPS (ACL_WRITE\
-                         |ACL_ANNOTATEMSG)      /* DAV:write-properties */
+#define DACL_WRITEPROPS (DACL_PROPCOL\
+                         |DACL_PROPRES) /* DAV:write-properties */
 #define DACL_BIND       (DACL_MKCOL\
-                         |DACL_ADDRSRC) /* DAV:bind */
+                         |DACL_ADDRES)  /* DAV:bind */
 #define DACL_UNBIND     (DACL_RMCOL\
-                         |DACL_RMRSRC)  /* DAV:unbind */
+                         |DACL_RMRES)   /* DAV:unbind */
 #define DACL_WRITE      (DACL_WRITECONT\
                          |DACL_WRITEPROPS\
                          |DACL_BIND\
@@ -169,7 +172,7 @@ enum {
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     DAV_SUPP_REPORT,
-    DAV_RSRC_EXISTS,
+    DAV_RES_EXISTS,
 
     /* WebDAV ACL (RFC 3744) preconditions */
     DAV_NEED_PRIVS,

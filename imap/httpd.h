@@ -140,16 +140,26 @@ enum {
     ALLOW_PATCH =       (1<<3), /* Patch resources */
     ALLOW_DELETE =      (1<<4), /* Delete resources/collections */
     ALLOW_TRACE =       (1<<5), /* TRACE a request */
-    ALLOW_DAV =         (1<<6), /* WebDAV specific methods/features */
-    ALLOW_WRITECOL =    (1<<7), /* Create/modify collections */
-    ALLOW_CAL =         (1<<8), /* CalDAV specific methods/features */
-    ALLOW_CAL_AVAIL =   (1<<9), /* CalDAV Availability specific features */
-    ALLOW_CAL_SCHED =   (1<<10),/* CalDAV Scheduling specific features */
-    ALLOW_CAL_NOTZ =    (1<<11),/* CalDAV TZ by Ref specific features */
-    ALLOW_CAL_ATTACH =  (1<<12),/* CalDAV Managed Attachments features */
-    ALLOW_CARD =        (1<<13),/* CardDAV specific methods/features */
-    ALLOW_ISCHEDULE =   (1<<14) /* iSchedule specific methods/features */
+
+    ALLOW_DAV =         (1<<8), /* WebDAV specific methods/features */
+    ALLOW_PROPPATCH  =  (1<<9), /* Modify properties */
+    ALLOW_MKCOL =       (1<<10),/* Create collections */
+    ALLOW_ACL =         (1<<11),/* Modify access control list */
+
+    ALLOW_CAL =         (1<<16),/* CalDAV specific methods/features */
+    ALLOW_CAL_SCHED =   (1<<17),/* CalDAV Scheduling specific features */
+    ALLOW_CAL_AVAIL =   (1<<18),/* CalDAV Availability specific features */
+    ALLOW_CAL_NOTZ =    (1<<19),/* CalDAV TZ by Ref specific features */
+    ALLOW_CAL_ATTACH =  (1<<20),/* CalDAV Managed Attachments features */
+
+    ALLOW_CARD =        (1<<24),/* CardDAV specific methods/features */
+
+    ALLOW_ISCHEDULE =   (1<<31) /* iSchedule specific methods/features */
 };
+
+#define ALLOW_READ_MASK ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE|ALLOW_PATCH\
+                          |ALLOW_PROPPATCH|ALLOW_MKCOL|ALLOW_ACL)
+
 
 struct auth_scheme_t {
     unsigned idx;               /* Index value of the scheme */

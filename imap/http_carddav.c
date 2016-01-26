@@ -313,13 +313,11 @@ static struct meth_params carddav_params = {
 struct namespace_t namespace_addressbook = {
     URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav", 1 /* auth */,
     MBTYPE_ADDRESSBOOK,
-#if 0 /* Until Apple Contacts fixes their add-member implementation */
-    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
-     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
-#else
     (ALLOW_READ | ALLOW_WRITE | ALLOW_DELETE |
-     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
+#if 0 /* Until Apple Contacts fixes their add-member implementation */
+     ALLOW_POST |
 #endif
+     ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CARD),
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
     &dav_premethod,
     {
@@ -335,11 +333,7 @@ struct namespace_t namespace_addressbook = {
         { &meth_copy_move,      &carddav_params },      /* MOVE         */
         { &meth_options,        &carddav_parse_path },  /* OPTIONS      */
         { NULL,                 NULL },                 /* PATCH        */
-#if 0 /* Until Apple Contacts fixes their add-member implementation */
         { &meth_post,           &carddav_params },      /* POST         */
-#else
-        { NULL,                 NULL },                 /* POST         */
-#endif
         { &meth_propfind,       &carddav_params },      /* PROPFIND     */
         { &meth_proppatch,      &carddav_params },      /* PROPPATCH    */
         { &meth_put,            &carddav_params },      /* PUT          */
@@ -463,6 +457,7 @@ static int carddav_parse_path(const char *path,
     char *p;
     size_t len;
     mbname_t *mbname = NULL;
+    int rights;
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -482,8 +477,8 @@ static int carddav_parse_path(const char *path,
     tgt->urlprefix = namespace_addressbook.prefix;
     tgt->mboxprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
 
-    /* Default to bare-bones Allow bits for toplevel collections */
-    tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
+    /* Default to bare-bones Allow bits */
+    tgt->allow &= ALLOW_READ_MASK;
 
     /* Skip namespace */
     p += len;
@@ -529,21 +524,6 @@ static int carddav_parse_path(const char *path,
     }
 
   done:
-    /* Set proper Allow bits based on path components */
-    if (tgt->collection) {
-        if (tgt->resource) {
-            tgt->allow &= ~ALLOW_WRITECOL;
-            tgt->allow |= (ALLOW_WRITE|ALLOW_DELETE);
-        }
-#if 0 /* Until Apple Contacts fixes their add-member implementation */
-        else tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
-#else
-        else tgt->allow |= ALLOW_DELETE;
-#endif
-    }
-    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
-
-
     /* Create mailbox name from the parsed path */
 
     mbname = mbname_from_userid(tgt->userid);
@@ -588,6 +568,31 @@ static int carddav_parse_path(const char *path,
     }
 
     mbname_free(&mbname);
+
+    /* Set proper Allow bits based on path components and ACL of current user */
+    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
+
+    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
+
+    if (tgt->collection) {
+        if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
+
+        if (tgt->resource) {
+            if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
+            if ((rights & DACL_RMRES) == DACL_RMRES) tgt->allow |= ALLOW_DELETE;
+        }
+        else {
+#if 0 /* Until Apple Contacts fixes their add-member implementation */
+            if (rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
+#endif
+            if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+            if (rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
+        }
+    }
+    else if (tgt->userid) {
+        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+        if (rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
+    }
 
     return 0;
 }
