@@ -212,13 +212,13 @@ EXPORTED int backup_compact(const char *name,
 
     chunk_start_time = -1;
     ts = 0;
+    struct buf cmd = BUF_INITIALIZER;
     for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
         gzuc_member_start_from(gzuc, chunk->offset);
 
         in = prot_readcb(_prot_fill_cb, gzuc);
 
         while (1) {
-            struct buf cmd = BUF_INITIALIZER;
             struct dlist *dl = NULL;
 
             int c = parse_backup_line(in, &ts, &cmd, &dl);
@@ -270,6 +270,7 @@ EXPORTED int backup_compact(const char *name,
         in = NULL;
         gzuc_member_end(gzuc, NULL);
     }
+    buf_free(&cmd);
 
     if (compact->append_state && compact->append_state->mode)
         backup_append_end(compact, &ts);

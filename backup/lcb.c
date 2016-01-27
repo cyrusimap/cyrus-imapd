@@ -463,7 +463,6 @@ EXPORTED int backup_close(struct backup **backupp)
 
     if (r2 && backup->oldindex_fname) {
         rename(backup->oldindex_fname, backup->index_fname);
-        free(backup->oldindex_fname);
     }
 
     if (backup->fd >= 0) {
@@ -476,6 +475,7 @@ EXPORTED int backup_close(struct backup **backupp)
 
     if (backup->index_fname) free(backup->index_fname);
     if (backup->data_fname) free(backup->data_fname);
+    if (backup->oldindex_fname) free(backup->oldindex_fname);
 
     free(backup);
     return r1 ? r1 : r2;
@@ -538,6 +538,7 @@ EXPORTED int backup_reindex(const char *name,
 
     time_t prev_member_ts = -1;
 
+    struct buf cmd = BUF_INITIALIZER;
     while (gzuc && !gzuc_eof(gzuc)) {
         gzuc_member_start(gzuc);
         off_t member_offset = gzuc_member_offset(gzuc);
@@ -554,7 +555,6 @@ EXPORTED int backup_reindex(const char *name,
         time_t ts = -1;
 
         while (1) {
-            struct buf cmd = BUF_INITIALIZER;
             struct dlist *dl = NULL;
 
             int c = parse_backup_line(member, &ts, &cmd, &dl);
@@ -614,6 +614,7 @@ EXPORTED int backup_reindex(const char *name,
 
         prev_member_ts = member_start_ts;
     }
+    buf_free(&cmd);
 
     if (verbose)
         fprintf(out, "reached end of file\n");

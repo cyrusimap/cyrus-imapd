@@ -515,8 +515,8 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
     struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
     prot_setisclient(ps, 1); /* don't sync literals */
 
+    struct buf cmd = BUF_INITIALIZER;
     while (1) {
-        struct buf cmd = BUF_INITIALIZER;
         struct dlist *dl = NULL;
         struct dlist *record = NULL;
         struct dlist *di = NULL;
@@ -589,6 +589,7 @@ next_line:
             dlist_free(&dl);
         }
     }
+    buf_free(&cmd);
 
     prot_free(ps);
     gzuc_member_end(gzuc, NULL);
