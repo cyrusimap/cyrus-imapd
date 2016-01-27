@@ -996,6 +996,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     struct dlist *ml = NULL;
     struct dlist *gl = NULL;
     struct dlist *di;
+    strarray_t userids = STRARRAY_INITIALIZER;
     int i, r;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
@@ -1003,7 +1004,6 @@ static int cmd_apply_reserve(struct dlist *dl)
     if (!dlist_getlist(dl, "GUID", &gl)) return IMAP_PROTOCOL_ERROR;
 
     /* find the list of users this reserve applies to */
-    strarray_t userids = STRARRAY_INITIALIZER;
     for (di = ml->head; di; di = di->next) {
         mbname_t *mbname = mbname_from_intname(di->sval);
         strarray_append(&userids, mbname_userid(mbname));
@@ -1069,6 +1069,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     }
 
 done:
+    strarray_fini(&userids);
     sync_msgid_list_free(&missing);
     return r;
 }
