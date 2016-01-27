@@ -49,6 +49,8 @@
 
 struct backup;
 
+const char *backup_get_staging_path(void);
+void backup_cleanup_staging_path(void);
 
 /* opening the backups database */
 #define FNAME_BACKUPDB "/backups.db"

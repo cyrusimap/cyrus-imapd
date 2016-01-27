@@ -70,6 +70,44 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
+static const char *staging_path = NULL;
+
+EXPORTED const char *backup_get_staging_path(void)
+{
+    if (staging_path) return staging_path;
+
+    staging_path = config_getstring(IMAPOPT_BACKUP_STAGING_PATH);
+
+    if (!staging_path)
+        staging_path = strconcat(config_getstring(IMAPOPT_TEMP_PATH),
+                                 "/backup", NULL);
+
+    return staging_path;
+}
+
+/* remove this process's staging directory.
+ * will warn in syslog if the path couldn't be removed
+ * (e.g. if it still has files in it)
+ */
+EXPORTED void backup_cleanup_staging_path(void)
+{
+    char buf[MAX_MAILBOX_PATH];
+    const char *base = backup_get_staging_path();
+    int r;
+
+    r = snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                      base, (unsigned long) getpid());
+    if (r >= MAX_MAILBOX_PATH) {
+        /* path was truncated, don't try to delete it */
+        return;
+    }
+
+    r = rmdir(buf);
+
+    if (r && errno != ENOENT)
+        syslog(LOG_WARNING, "%s rmdir %s: %m", __func__, buf);
+}
+
 /*
  * use cases:
  *  - backupd needs to be able to append to data stream and update index (exclusive)
