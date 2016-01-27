@@ -421,19 +421,19 @@ static int _index_message(struct backup *backup, struct dlist *dl,
     syslog(LOG_DEBUG, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
     (void) ts;
 
-    struct dlist *ki;
+    struct dlist *di;
 
     /* n.b. APPLY MESSAGE contains a list of messages, not just one */
-    for (ki = dl->head; ki; ki = ki->next) {
-        if (ki->type != DL_SFILE)
+    for (di = dl->head; di; di = di->next) {
+        struct message_guid *guid = NULL;
+        const char *partition = NULL;
+        unsigned long size = 0;
+
+        if (!dlist_tofile(di, &partition, &guid, &size, NULL))
             continue;
 
-        char *guid = xstrdup(message_guid_encode(ki->gval));
-        char *partition = ki->part;
-        size_t size = ki->nval;
-
         struct sqldb_bindval bval[] = {
-            { ":guid",      SQLITE_TEXT,    { .s = guid      } },
+            { ":guid",      SQLITE_TEXT,    { .s = message_guid_encode(guid) } },
             { ":partition", SQLITE_TEXT,    { .s = partition } },
             { ":chunk_id",  SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
             { ":offset",    SQLITE_INTEGER, { .i = dl_offset } },
@@ -445,10 +445,9 @@ static int _index_message(struct backup *backup, struct dlist *dl,
                            NULL);
         if (r) {
             // FIXME handle this sensibly
-            syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n", __func__, r, guid);
+            syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n",
+                   __func__, r, message_guid_encode(guid));
         }
-
-        free(guid);
     }
 
     return 0;

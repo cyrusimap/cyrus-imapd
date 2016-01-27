@@ -519,6 +519,7 @@ int main (int argc, char **argv)
         buf_free(&fname);
     }
 
+    backup_cleanup_staging_path();
     cyrus_done();
     exit(r || ctlbu_skips_fails ? EC_TEMPFAIL : EC_OK);
 }

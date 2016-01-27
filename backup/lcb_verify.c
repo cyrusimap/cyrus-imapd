@@ -45,6 +45,7 @@
 
 #include "lib/gzuncat.h"
 #include "lib/hash.h"
+#include "lib/map.h"
 #include "lib/xmalloc.h"
 #include "lib/xsha1.h"
 
@@ -218,8 +219,10 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
      * cause expensive reverse seeks in decompression stream
      */
     if (!vmrock->cached_dlist || vmrock->cached_offset != message->offset) {
-        if (vmrock->cached_dlist)
+        if (vmrock->cached_dlist) {
+            dlist_unlink_files(vmrock->cached_dlist);
             dlist_free(&vmrock->cached_dlist);
+        }
 
         r = gzuc_seekto(vmrock->gzuc, message->offset);
         if (r) return r;
@@ -254,17 +257,38 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
 
     r = -1;
     for (di = dl->head; di; di = di->next) {
-        if (di->type != DL_SFILE)
+        struct message_guid *guid = NULL;
+        const char *fname = NULL;
+
+        if (!dlist_tofile(di, NULL, &guid, NULL, &fname))
             continue;
 
-        r = message_guid_cmp(di->gval, message->guid);
+        r = message_guid_cmp(guid, message->guid);
         if (!r) {
             if (vmrock->verify_guid) {
-                struct message_guid guid;
-                message_guid_generate(&guid, di->sval, di->nval);
-                r = message_guid_cmp(&guid, message->guid);
-                if (r && out)
-                    fprintf(out, "guid mismatch for message %i\n", message->id);
+                const char *msg_base = NULL;
+                size_t msg_len = 0;
+                struct message_guid computed_guid;
+                int fd;
+
+                fd = open(fname, O_RDWR);
+                if (fd != -1) {
+                    map_refresh(fd, 1, &msg_base, &msg_len, MAP_UNKNOWN_LEN, fname, NULL);
+
+                    message_guid_generate(&computed_guid, msg_base, msg_len);
+                    r = message_guid_cmp(&computed_guid, message->guid);
+                    if (r && out)
+                        fprintf(out, "guid mismatch for message %i\n", message->id);
+
+                    map_free(&msg_base, &msg_len);
+                    close(fd);
+                }
+                else {
+                    syslog(LOG_ERR, "IOERROR: %s open %s: %m", __func__, fname);
+                    if (out)
+                        fprintf(out, "error reading staging file for message %i\n", message->id);
+                    r = -1;
+                }
             }
             break;
         }
@@ -298,8 +322,10 @@ static int verify_chunk_messages(struct backup *backup, struct backup_chunk *chu
 
     gzuc_member_end(gzuc, NULL);
 
-    if (vmrock.cached_dlist)
+    if (vmrock.cached_dlist) {
+        dlist_unlink_files(vmrock.cached_dlist);
         dlist_free(&vmrock.cached_dlist);
+    }
 
     syslog(LOG_DEBUG, "%s: chunk %d %s!\n", __func__, chunk->id,
             r ? "failed" : "passed");
@@ -558,8 +584,10 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
         }
 
 next_line:
-        if (dl)
+        if (dl) {
+            dlist_unlink_files(dl);
             dlist_free(&dl);
+        }
     }
 
     prot_free(ps);

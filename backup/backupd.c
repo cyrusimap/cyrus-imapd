@@ -55,6 +55,7 @@
 #include "lib/bsearch.h"
 #include "lib/exitcodes.h"
 #include "lib/imparse.h"
+#include "lib/map.h"
 #include "lib/signals.h"
 #include "lib/strarray.h"
 #include "lib/xmalloc.h"
@@ -364,6 +365,8 @@ static void backupd_reset(void)
        saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
+
+    backup_cleanup_staging_path();
 }
 
 static void dobanner(void)
@@ -639,11 +642,13 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, backupd_in, NULL); // FIXME
+                c = dlist_parse(&dl, DLIST_PARSEKEY, backupd_in,
+                                backup_get_staging_path());
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);
                 if (c != '\n') goto extraargs;
                 cmd_apply(dl);
+                dlist_unlink_files(dl);
                 dlist_free(&dl);
                 continue;
             }
@@ -674,11 +679,13 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, backupd_in, NULL); // FIXME
+                c = dlist_parse(&dl, DLIST_PARSEKEY, backupd_in,
+                                backup_get_staging_path());
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);
                 if (c != '\n') goto extraargs;
                 cmd_get(dl);
+                dlist_unlink_files(dl);
                 dlist_free(&dl);
                 continue;
             }
@@ -884,33 +891,43 @@ static int cmd_apply_unmailbox(struct dlist *dl)
 static int cmd_apply_message(struct dlist *dl)
 {
     struct sync_msgid_list *guids = sync_msgid_list_create(0);
-    struct dlist *ki;
+    struct dlist *di;
     int r = 0;
 
     /* dig out each guid */
-    for (ki = dl->head; ki; ki = ki->next) {
-        if (ki->type != DL_SFILE)
+    for (di = dl->head; di; di = di->next) {
+        struct message_guid computed_guid, *guid = NULL;
+        const char *fname = NULL;
+        const char *msg_base = NULL;
+        size_t msg_len = 0;
+        int fd;
+
+        if (!dlist_tofile(di, NULL, &guid, NULL, &fname))
             continue;
 
         /* bail out if it doesn't match the data */
-        struct message_guid guid;
-        message_guid_generate(&guid, ki->sval, ki->nval);
+        fd = open(fname, O_RDWR);
+        if (fd != -1) {
+            map_refresh(fd, 1, &msg_base, &msg_len, MAP_UNKNOWN_LEN, fname, NULL);
 
-        if (!message_guid_equal(&guid, ki->gval)) {
-            char *header = xstrdup(message_guid_encode(ki->gval));
-            char *derived = xstrdup(message_guid_encode(&guid));
+            message_guid_generate(&computed_guid, msg_base, msg_len);
+            if (!message_guid_equal(guid, &computed_guid)) {
+                syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s\n",
+                    __func__, message_guid_encode(guid),
+                    message_guid_encode(&computed_guid));
+                r = IMAP_PROTOCOL_ERROR;
+            }
 
-            syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s\n",
-                   __func__, header, derived);
-
-            free(derived);
-            free(header);
-
-            r = IMAP_PROTOCOL_ERROR;
-            goto done;
+            map_free(&msg_base, &msg_len);
+            close(fd);
+        }
+        else {
+            syslog(LOG_ERR, "IOERROR: %s open %s: %m", __func__, fname);
+            r = IMAP_IOERROR;
         }
 
-        sync_msgid_insert(guids, ki->gval);
+        if (r) goto done;
+        sync_msgid_insert(guids, guid);
     }
 
     /* bail out if there's no messages */

@@ -255,6 +255,9 @@ EXPORTED int backup_compact(const char *name,
                 r = backup_append(compact, dl, &ts, BACKUP_APPEND_NOFLUSH);
                 if (r) goto error;
             }
+
+            dlist_unlink_files(dl);
+            dlist_free(&dl);
         }
 
         // XXX if we're due to start a new chunk

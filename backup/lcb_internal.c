@@ -77,7 +77,7 @@ HIDDEN int parse_backup_line(struct protstream *in, time_t *ts,
     if (c == EOF)
         goto fail;
 
-    c = dlist_parse(&dl, DLIST_SFILE | DLIST_PARSEKEY, in, NULL);  // FIXME
+    c = dlist_parse(&dl, DLIST_PARSEKEY, in, backup_get_staging_path());
 
     if (!dl) {
         fprintf(stderr, "\ndidn't parse dlist, error %i\n", c);

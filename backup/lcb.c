@@ -588,8 +588,11 @@ EXPORTED int backup_reindex(const char *name,
             else if (member_start_ts > ts)
                 fatal("line timestamp older than previous", EC_DATAERR);
 
-            if (strcmp(buf_cstring(&cmd), "APPLY") != 0)
+            if (strcmp(buf_cstring(&cmd), "APPLY") != 0) {
+                dlist_unlink_files(dl);
+                dlist_free(&dl);
                 continue;
+            }
 
             ucase(dl->name);
 
@@ -599,6 +602,9 @@ EXPORTED int backup_reindex(const char *name,
                 syslog(LOG_ERR, "backup_append returned %d\n", r);
                 fprintf(out, "backup_append returned %d\n", r);
             }
+
+            dlist_unlink_files(dl);
+            dlist_free(&dl);
         }
 
         if (backup->append_state && backup->append_state->mode)
