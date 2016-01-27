@@ -727,6 +727,24 @@ EXPORTED void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *
     prot_free(outstream);
 }
 
+EXPORTED void dlist_unlink_files(struct dlist *dl)
+{
+    struct dlist *i;
+
+    if (!dl) return;
+
+    for (i = dl->head; i; i = i->next) {
+        dlist_unlink_files(i);
+    }
+
+    if (dl->type != DL_FILE) return;
+
+    if (!dl->sval) return;
+
+    syslog(LOG_DEBUG, "%s: unlinking %s", __func__, dl->sval);
+    unlink(dl->sval);
+}
+
 EXPORTED void dlist_free(struct dlist **dlp)
 {
     if (!*dlp) return;

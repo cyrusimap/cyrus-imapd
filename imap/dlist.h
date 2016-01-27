@@ -225,6 +225,7 @@ int dlist_getfile(struct dlist *parent, const char *name,
                   const char **partp, struct message_guid **guidp,
                   unsigned long *sizep, const char **fnamep);
 
+void dlist_unlink_files(struct dlist *dl);
 void dlist_free(struct dlist **dlp);
 
 void dlist_print(const struct dlist *dl, int printkeys,
