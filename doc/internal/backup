@@ -657,9 +657,10 @@ exist.  but this is, approximately, where things are heading.)
 on your backup server:
     * compile with --enable-backup configure option and install
     * imapd.conf:
-        backuppartition-default: /var/spool/backup
+        backuppartition-default: /var/spool/backup  # FIXME better example
         backup_db: twoskip
         backup_db_path: /var/imap/backups.db
+        backup_staging_path: /var/spool/backup
         backup_retention_days: 7
     * cyrus.conf SERVICES:
         backupd cmd="backupd" listen="csync" prefork=0
@@ -795,6 +796,7 @@ todo list
 * configure: error if backups requested and we don't have zlib
 * backup_append might run out of memory on initial APPLY MESSAGE for big mailbox...
   => need something other than DLIST_SFILE for holding message data, since we may get GBs at once
+* valgrind
 
 compact implementation steps:
     1 remove unused chunks, keep everything else as is
