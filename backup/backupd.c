@@ -642,7 +642,7 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, DLIST_PARSEKEY, backupd_in,
+                c = dlist_parse(&dl, /*parsekeys*/ 1, backupd_in,
                                 backup_get_staging_path());
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);
@@ -679,7 +679,7 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, DLIST_PARSEKEY, backupd_in,
+                c = dlist_parse(&dl, /*parsekeys*/ 1, backupd_in,
                                 backup_get_staging_path());
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);

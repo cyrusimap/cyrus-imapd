@@ -81,14 +81,7 @@ enum dlist_t {
     DL_GUID,
     DL_FILE,
     DL_KVLIST,
-    DL_ATOMLIST,
-    DL_SFILE
-};
-
-/* bit field of flags for dlist_parse and friends */
-enum {
-    DLIST_PARSEKEY = (1 << 0),
-    DLIST_SFILE    = (1 << 1),
+    DL_ATOMLIST
 };
 
 struct dlist {
@@ -117,9 +110,6 @@ void dlist_makeguid(struct dlist *dl, const struct message_guid *guid);
 void dlist_makefile(struct dlist *dl,
                     const char *part, const struct message_guid *guid,
                     unsigned long size, const char *fname);
-void dlist_makesfile(struct dlist *dl,
-                     const char *part, const struct message_guid *guid,
-                     const char *contents, unsigned long size);
 
 /* parse fields */
 int dlist_toatom(struct dlist *dl, const char **valp);
@@ -141,7 +131,6 @@ int dlist_tofile(struct dlist *dl,
 int dlist_isatomlist(const struct dlist *dl);
 int dlist_iskvlist(const struct dlist *dl);
 int dlist_isfile(const struct dlist *dl);
-int dlist_issfile(const struct dlist *dl);
 /* XXX - these two aren't const, they can fiddle internals */
 int dlist_isnum(struct dlist *dl);
 int dlist_ishex64(struct dlist *dl);
@@ -175,9 +164,6 @@ struct dlist *dlist_setguid(struct dlist *parent, const char *name,
 struct dlist *dlist_setfile(struct dlist *parent, const char *name,
                             const char *part, const struct message_guid *guid,
                             size_t size, const char *fname);
-struct dlist *dlist_setsfile(struct dlist *parent, const char *name,
-                             const char *part, const struct message_guid *guid,
-                             const char *contents, size_t size);
 
 struct dlist *dlist_updateatom(struct dlist *parent, const char *name,
                                const char *val);
@@ -232,11 +218,11 @@ void dlist_print(const struct dlist *dl, int printkeys,
                  struct protstream *out);
 void dlist_printbuf(const struct dlist *dl, int printkeys,
                     struct buf *outbuf);
-char dlist_parse(struct dlist **dlp, unsigned int flags,
+char dlist_parse(struct dlist **dlp, int parsekeys,
                  struct protstream *in, const char *alt_reserve_base);
-char dlist_parse_asatomlist(struct dlist **dlp, unsigned int flags,
+char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in);
-int dlist_parsemap(struct dlist **dlp, unsigned int flags,
+int dlist_parsemap(struct dlist **dlp, int parsekeys,
                    const char *base, unsigned len);
 
 typedef int dlistsax_cb_t(int type, struct dlistsax_data *data);

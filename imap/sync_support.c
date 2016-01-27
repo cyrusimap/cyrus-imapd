@@ -1311,7 +1311,7 @@ struct dlist *sync_parseline(struct protstream *in)
     struct dlist *dl = NULL;
     char c;
 
-    c = dlist_parse(&dl, DLIST_PARSEKEY, in, NULL);
+    c = dlist_parse(&dl, 1, in, NULL);
 
     /* end line - or fail */
     if (c == '\r') c = prot_getc(in);
