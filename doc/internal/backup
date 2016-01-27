@@ -70,8 +70,10 @@ messages
 --------
 
 APPLY MESSAGE is a list of messages, not necessarily only one message.
-
->>> hmm. it might be a list of messages for -multiple users-...
+Actually, it's a list of messages for potentially multiple users, but we avoid
+this by rejecting GET MESSAGES requests that span multiple users (so that
+sync_client retries at USER level, and so we only see APPLY MESSAGE requests
+for a single user).
 
 Cheap first implementation is to index the start/end of the entire APPLY
 MESSAGE command identically for each message within it, and at restore time
@@ -81,43 +83,15 @@ Ideal implementation would be to index the offset and length of each message
 exactly (even excluding the dlist wrapper), but this is rather complicated
 by the dlist API.
 
-DL_SFILE type within dlist will have the correct offset/size when parsed from
-an existing dlist out of a backup file (i.e. for reindex).  But for actually
-creating the backup, the offset it will obtain is the offset in the connection
-from the sync_client, which is not useful to us -- we need the offset within
-the gzip stream that we are producing.
+For now, we just index the offset of the dlist entry for the message,
+and we can parse the pure message data back out later from that, when
+we need to.  Slightly less efficient on reads, but works->good->fast.  We
+need to loop over the entries in the MESSAGE dlist to find the one with the
+desired GUID.
 
-Compressing will need to consider this too...
-
-backup_append now tracks where it's up to, so i don't think DLIST_SFILE even
-needs to care about the offset anymore.  reindex never used it...
-
-we just index the offset and length of the dlist entry for the message, and
-we can parse the pure message data back out later from that, when we need to.
-slightly less efficient on reads, but works->good->fast.  but this is
-forgetting that a MESSAGE dlist has many messages, not just one...
-
-what if a DL_SFILE's offset was the byte offset within the entire dlist
-structure?  not the offset within the stream that produced it, but just within
-the dlist it's part of?  then the message offset in the data stream would be the
-dlist's offset in the stream plus the DL_SFILE's offset within the dlist
-
-... nah, short of changing the data format i think it's best to index the
-APPLY MESSAGE command, and search it by GUID for the message in question if/when
-the message content is needed.  this cooperates nicely with reserve/message's
-multiplicity and makes compact easier to implement.
-
-the indexed length needs to be the length of the message, not the length of the
+The indexed length needs to be the length of the message, not the length of the
 dlist wrapper, because we need to know this cheaply to supply RECORDs in
 MAILBOX responses.
-
-we can possibly solve the problem where we need to append the entire APPLY
-MESSAGE dlist to every backup file it touches (even though most of the
-contained messages belong to only one of those users) by simply rejecting
-"GET MAILBOXES" requests.  i think the sync_client will promote those to USER
-and retry, which always looks at a single user at a time and always restarts
-between each user.  or maybe just reject "GET MAILBOXES" requests that request
-mailboxes belonging to >1 user.
 
 
 renames
@@ -204,6 +178,7 @@ wrt hiersep handling.  something like:
     mboxname        # just the name of this mbox
     parent_id       # fk to parent mailbox
     full_mboxname   # cached value, parent.full_mboxname + mboxname
+
 
 locking
 -------
