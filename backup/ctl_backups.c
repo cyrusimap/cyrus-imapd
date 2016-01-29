@@ -581,6 +581,9 @@ static int cmd_list_one(void *rock,
 
     r = backup_open_paths(&backup, fname, NULL,
                           options->wait, BACKUP_OPEN_NOCREATE);
+    if (!r)
+        r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
+
     if (r) {
         fprintf(stderr, "%s: %s\n", userid ? userid : fname, error_message(r));
         goto done;
@@ -723,6 +726,9 @@ static int lock_run_pipe(const char *userid, const char *fname,
 
     r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
 
+    if (!r)
+        r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
+
     if (r) {
         printf("NO failed\n");
         return EC_SOFTWARE; // FIXME would something else be more appropriate?
@@ -752,6 +758,9 @@ static int lock_run_sqlite(const char *userid, const char *fname,
     pid_t pid;
 
     r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+
+    if (!r)
+        r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
 
     if (r) {
         fprintf(stderr, "unable to lock %s: %s\n",
@@ -808,6 +817,9 @@ static int lock_run_exec(const char *userid, const char *fname,
     int r;
 
     r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+
+    if (!r)
+        r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
 
     if (r) {
         fprintf(stderr, "unable to lock %s: %s\n",
