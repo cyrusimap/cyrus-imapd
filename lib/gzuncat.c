@@ -135,8 +135,10 @@ static int _inflate_init(z_stream *strm, unsigned char *in_buf)
 
 EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
 {
-    if (gz->current_offset >= 0) return -1;
-    if (offset < 0) return -1;
+    if (gz->current_offset >= 0 || offset < 0) {
+        errno = EINVAL;
+        return Z_ERRNO;
+    }
 
     if (!gz->in_buf)
         gz->in_buf = xmalloc(gz->in_buf_size);
@@ -144,7 +146,7 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
     memset(gz->in_buf, 0, gz->in_buf_size);
 
     int r = lseek(gz->fd, offset, SEEK_SET);
-    if (r < 0) return -1;
+    if (r < 0) return Z_ERRNO;
 
     r = _inflate_init(&gz->strm, gz->in_buf);
     if (r) return r;
