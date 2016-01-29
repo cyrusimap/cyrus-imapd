@@ -510,6 +510,7 @@ usage:
 
 options:
     -C alt_config       # alternate config file
+    -F                  # force (run command even if not needed)
     -S                  # stop on error
     -v                  # verbose
     -w                  # wait for locks (i.e. don't skip locked backups)
