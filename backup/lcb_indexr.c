@@ -340,8 +340,7 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
     mailbox->deleted = _column_int64(stmt, column++);
 
     if (mbrock->want_records) {
-        struct backup_mailbox_message_list *records =
-            xzmalloc(sizeof *mailbox->records);
+        mailbox->records = xzmalloc(sizeof *mailbox->records);
 
         struct sqldb_bindval bval[] = {
             { ":mailbox_id",    SQLITE_INTEGER, { .i = mailbox->id } },
@@ -353,15 +352,7 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
                        bval,
                        _mailbox_message_row_cb, mailbox->records);
 
-        if (r) {
-            backup_mailbox_message_list_empty(records);
-            free(records);
-        }
-        else {
-            mailbox->records = records;
-        }
-
-        // FIXME sensible error handling
+        if (r) goto error;
     }
 
     if (mbrock->proc)
@@ -375,6 +366,10 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
         backup_mailbox_free(&mailbox);
 
     return r;
+
+error:
+    if (mailbox) backup_mailbox_free(&mailbox);
+    return -1;
 }
 
 EXPORTED int backup_mailbox_foreach(struct backup *backup,
