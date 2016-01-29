@@ -286,11 +286,6 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 
     prot_setflushonread(backupd_in, backupd_out);
 
-//  FIXME sync logging?
-//    sync_log_init();
-//    if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
-//        sync_log_suppress();
-
     dobanner();
 
     cmdloop();
@@ -475,7 +470,12 @@ static struct open_backup *open_backups_list_add(struct open_backups_list *list,
     open->name = xstrdup(name);
     open->backup = backup;
     open->timestamp = time(0);
-    open->reserved_guids = sync_msgid_list_create(0);  // FIXME non-default hash size? meh
+
+    /* XXX pick a suitable msgid list hash size:
+     *   0 (default) => 256
+     *   SYNC_MSGID_LIST_HASH_SIZE (used by sync_server) => 65536
+     */
+    open->reserved_guids = sync_msgid_list_create(0);
 
     return open;
 }
@@ -506,7 +506,13 @@ static int backupd_open_backup(struct open_backup **openp, const mbname_t *mbnam
         int r = backup_open(&backup, mbname,
                             BACKUP_OPEN_BLOCK, BACKUP_OPEN_CREATE);
         if (r) return r;
-        backup_append_start(backup, NULL, BACKUP_APPEND_FLUSH); // FIXME error checking
+
+        r = backup_append_start(backup, NULL, BACKUP_APPEND_FLUSH);
+        if (r) {
+            backup_close(&backup);
+            return r;
+        }
+
         open = open_backups_list_add(&backupd_open_backups, key, backup);
     }
 
@@ -964,7 +970,7 @@ static int cmd_apply_message(struct dlist *dl)
      * which means none of the open backups will accept the message. if
      * we get here and haven't appended the line to any backup, then
      * we've found this case.  so append it to all of the open backups,
-     * and let compress sort it out.
+     * and let compact sort it out.
      */
     if (!r && appended == 0) {
         if (backupd_open_backups.count) {
@@ -1022,7 +1028,7 @@ static int cmd_apply_reserve(struct dlist *dl)
         r = backupd_open_backup(&open, mbname);
         mbname_free(&mbname);
 
-        if (r) return r;  // FIXME continue?
+        if (r) goto done;
 
         r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
         if (r) goto done;
@@ -1055,10 +1061,6 @@ static int cmd_apply_reserve(struct dlist *dl)
         struct sync_msgid *msgid;
 
         for (msgid = missing->head; msgid; msgid = msgid->next) {
-            /* FIXME this looks like how sync_apply_reserve does it
-             * but something about this is irking me...
-             * but that might just be me getting confused by the dlist api
-             */
             dlist_setguid(kout, "GUID", &msgid->guid);
         }
 
@@ -1146,7 +1148,6 @@ static void cmd_apply(struct dlist *dl)
         /* ignore and succeed */
         r = 0;
     }
-    // FIXME support other commands
     else {
         r = IMAP_PROTOCOL_ERROR;
     }
@@ -1204,7 +1205,7 @@ static const char *backupd_response(int r)
     case IMAP_MAILBOX_NONEXISTENT:
         return "NO IMAP_MAILBOX_NONEXISTENT No Such Mailbox";
     case IMAP_PROTOCOL_ERROR:
-        return "NO IMAP_PROTOCOL_ERROR protocol error FIXME";
+        return "NO IMAP_PROTOCOL_ERROR Protocol error";
     case IMAP_PROTOCOL_BAD_PARAMETERS:
         return "NO IMAP_PROTOCOL_BAD_PARAMETERS Bad parameters";
     default:
@@ -1302,7 +1303,6 @@ static void cmd_get(struct dlist *dl)
     else if (strcmp(dl->name, "FULLMAILBOX") == 0) {
         r = cmd_get_mailbox(dl, 1);
     }
-    // FIXME implement other commands
     else {
         r = IMAP_PROTOCOL_ERROR;
     }
