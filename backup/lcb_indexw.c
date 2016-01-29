@@ -68,11 +68,9 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len)
 {
-    int r;
+    int r = IMAP_PROTOCOL_ERROR;
 
-    if (0) { }
-
-    else if (strcmp(dlist->name, "EXPUNGE") == 0)
+    if (strcmp(dlist->name, "EXPUNGE") == 0)
         r = _index_expunge(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "MAILBOX") == 0)
         r = _index_mailbox(backup, dlist, ts, start);
@@ -84,11 +82,8 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_rename(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "RESERVE") == 0)
         r = 0; /* nothing to index for a reserve, just return success */
-
-    else {
+    else
         syslog(LOG_DEBUG, "ignoring unrecognised dlist name: %s\n", dlist->name);
-        r = -1; // FIXME
-    }
 
     return r;
 }
@@ -103,6 +98,7 @@ static int _index_expunge(struct backup *backup, struct dlist *dl,
     struct dlist *uidl;
     struct dlist *di;
     struct backup_mailbox *mailbox = NULL;
+    int r = 0;
 
     if (!dlist_getatom(dl, "MBOXNAME", &mboxname))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -114,24 +110,31 @@ static int _index_expunge(struct backup *backup, struct dlist *dl,
     mbname_t *mbname = mbname_from_intname(mboxname);
     mailbox = backup_get_mailbox_by_name(backup, mbname, 0);
     mbname_free(&mbname);
-    // FIXME verify uniqueid
 
-    // FIXME transaction ??
+    if (!mailbox)
+        return IMAP_MAILBOX_NONEXISTENT;
 
-    for (di = uidl->head; di; di = di->next) {
-        struct sqldb_bindval uid_bval[] = {
+    /* verify that uniqueid matches */
+    if (strcmp(mailbox->uniqueid, uniqueid) != 0) {
+        syslog(LOG_ERR, "%s: uniqueid mismatch for %s: %s on wire, %s in index",
+                        __func__, mboxname, uniqueid, mailbox->uniqueid);
+        r = IMAP_PROTOCOL_BAD_PARAMETERS;
+    }
+
+    for (di = uidl->head; di && !r; di = di->next) {
+        struct sqldb_bindval bval[] = {
             { ":mailbox_id",    SQLITE_INTEGER, { .i = mailbox->id } },
             { ":uid",           SQLITE_INTEGER, { .i = dlist_num(di) } },
             { ":expunged",      SQLITE_INTEGER, { .i = ts } },
         };
 
-        sqldb_exec(backup->db, backup_index_mailbox_message_expunge_sql,
-                   uid_bval, NULL, NULL);
-
-        // FIXME handle failure?
+        r = sqldb_exec(backup->db, backup_index_mailbox_message_expunge_sql,
+                       bval, NULL, NULL);
+        if (r) r = IMAP_INTERNAL;
     }
 
-    return 0;
+    backup_mailbox_free(&mailbox);
+    return r;
 }
 
 static int _get_magic_flags(struct dlist *flags, int *is_expunged)
@@ -183,6 +186,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
     struct dlist *annotations = NULL;
     struct buf annotations_buf = BUF_INITIALIZER;
     struct dlist *record = NULL;
+    int r;
 
     if (!dlist_getatom(dl, "UNIQUEID", &uniqueid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -221,6 +225,10 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
     dlist_getnum32(dl, "SYNC_CRC", &synccrcs.basic);
     dlist_getnum32(dl, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
+    /* if we can't start a transaction, bail out before allocating anything else */
+    r = sqldb_begin(backup->db, __func__);
+    if (r) return IMAP_INTERNAL;
+
     if (annotations) {
         dlist_printbuf(annotations, 0, &annotations_buf);
     }
@@ -250,22 +258,20 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         { NULL,                 SQLITE_NULL,    { .s = NULL      } },
     };
 
-    sqldb_begin(backup->db, __func__); // FIXME what if this fails
-
-    int r = sqldb_exec(backup->db, backup_index_mailbox_update_sql,
-                       mbox_bval, NULL, NULL);
+    r = sqldb_exec(backup->db, backup_index_mailbox_update_sql,
+                   mbox_bval, NULL, NULL);
 
     if (!r && sqldb_changes(backup->db) == 0) {
         r = sqldb_exec(backup->db, backup_index_mailbox_insert_sql,
                        mbox_bval, NULL, NULL);
         if (r) {
-            // FIXME handle this sensibly
-            syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s\n", __func__, r, mboxname);
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s\n",
+                              __func__, r, mboxname);
         }
     }
     else if (r) {
-        // FIXME handle this sensibly
-        syslog(LOG_DEBUG, "%s: something went wrong: %i update %s\n", __func__, r, mboxname);
+        syslog(LOG_DEBUG, "%s: something went wrong: %i update %s\n",
+                          __func__, r, mboxname);
     }
 
     buf_free(&annotations_buf);
@@ -300,11 +306,11 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             if (!dlist_getatom(ki, "GUID", &guid))
                 goto error;
 
-            // FIXME should this search for guid+size rather than just guid?
+            /* XXX should this search for guid+size rather than just guid? */
             message_id = backup_get_message_id(backup, guid);
             if (message_id == -1) {
-                // FIXME handle this sensibly
-                syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n", __func__, r, mboxname, guid);
+                syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n",
+                                  __func__, r, mboxname, guid);
                 goto error;
             }
             if (message_id == 0) {
@@ -312,7 +318,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                 /* possibly we're in compact, and have deleted it? */
                 /* XXX this should probably be an error too, but can't be until compact is smarter */
                 syslog(LOG_DEBUG, "%s: skipping %s record for %s: message not found\n",
-                       __func__, mboxname, guid);
+                                  __func__, mboxname, guid);
                 continue;
             }
 
@@ -323,12 +329,14 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                 _get_magic_flags(flags, &is_expunged);
 
                 if (is_expunged) {
-                    syslog(LOG_DEBUG, "%s: found expunge flag for message %s\n", __func__, guid);
+                    syslog(LOG_DEBUG, "%s: found expunge flag for message %s\n",
+                                      __func__, guid);
                     expunged = ts;
                 }
 
                 dlist_printbuf(flags, 0, &flags_buf);
-                syslog(LOG_DEBUG, "%s: found flags for message %s: %s\n", __func__, guid, buf_cstring(&flags_buf));
+                syslog(LOG_DEBUG, "%s: found flags for message %s: %s\n",
+                                  __func__, guid, buf_cstring(&flags_buf));
             }
 
             dlist_getlist(ki, "ANNOTATIONS", &annotations);
@@ -359,19 +367,19 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             }
 
             r = sqldb_exec(backup->db, backup_index_mailbox_message_update_sql,
-                        record_bval, NULL, NULL);
+                           record_bval, NULL, NULL);
 
             if (!r && sqldb_changes(backup->db) == 0) {
                 r = sqldb_exec(backup->db, backup_index_mailbox_message_insert_sql,
-                            record_bval, NULL, NULL);
+                               record_bval, NULL, NULL);
                 if (r) {
-                    // FIXME handle this sensibly
-                    syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s\n", __func__, r, mboxname, guid);
+                    syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s\n",
+                                      __func__, r, mboxname, guid);
                 }
             }
             else if (r) {
-                // FIXME handle this sensibly
-                syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n", __func__, r, mboxname, guid);
+                syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n",
+                                  __func__, r, mboxname, guid);
             }
 
             buf_free(&annotations_buf);
@@ -389,7 +397,7 @@ error:
     syslog(LOG_DEBUG, "%s: rolling back index change: %s\n", __func__, mboxname);
     sqldb_rollback(backup->db, __func__);
 
-    return -1;
+    return IMAP_INTERNAL;
 }
 
 static int _index_unmailbox(struct backup *backup, struct dlist *dl,
@@ -408,8 +416,8 @@ static int _index_unmailbox(struct backup *backup, struct dlist *dl,
     int r = sqldb_exec(backup->db, backup_index_mailbox_delete_sql, bval, NULL,
                         NULL);
     if (r) {
-        // FIXME handle this sensibly
-        syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n", __func__, r, mboxname);
+        syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n",
+                          __func__, r, mboxname);
     }
 
     return r ? IMAP_INTERNAL : 0;
@@ -422,9 +430,10 @@ static int _index_message(struct backup *backup, struct dlist *dl,
     (void) ts;
 
     struct dlist *di;
+    int r = 0;
 
     /* n.b. APPLY MESSAGE contains a list of messages, not just one */
-    for (di = dl->head; di; di = di->next) {
+    for (di = dl->head; di && !r; di = di->next) {
         struct message_guid *guid = NULL;
         const char *partition = NULL;
         unsigned long size = 0;
@@ -444,13 +453,12 @@ static int _index_message(struct backup *backup, struct dlist *dl,
         int r = sqldb_exec(backup->db, backup_index_message_insert_sql, bval, NULL,
                            NULL);
         if (r) {
-            // FIXME handle this sensibly
             syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n",
                    __func__, r, message_guid_encode(guid));
         }
     }
 
-    return 0;
+    return r ? IMAP_INTERNAL : 0;
 }
 
 static int _index_rename(struct backup *backup, struct dlist *dl,
@@ -464,6 +472,7 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
     const char *newmboxname = NULL;
     const char *partition = NULL;
     uint32_t uidvalidity = 0;
+    int r = 0;
 
     /* XXX use uniqueid once sync proto includes it (D73) */
     dlist_getatom(dl, "UNIQUEID", &uniqueid);
@@ -487,11 +496,10 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
         { NULL,                 SQLITE_NULL,    { .s = NULL      } },
     };
 
-    int r = sqldb_exec(backup->db, backup_index_mailbox_rename_sql,
+    r = sqldb_exec(backup->db, backup_index_mailbox_rename_sql,
                        mbox_bval, NULL, NULL);
 
     if (r) {
-        // FIXME handle this sensibly
         syslog(LOG_DEBUG, "%s: something went wrong: %i rename %s => %s\n",
                __func__, r, oldmboxname, newmboxname);
     }
