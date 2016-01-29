@@ -93,8 +93,10 @@ EXPORTED int backup_get_mailbox_id(struct backup *backup, const char *uniqueid)
 
     int r = sqldb_exec(backup->db, backup_index_mailbox_select_uniqueid_sql,
                        bval, _get_mailbox_id_cb, &id);
-    if (r)
-        fprintf(stderr, "%s: something went wrong: %i %s\n", __func__, r, uniqueid);
+    if (r) {
+        syslog(LOG_ERR, "%s: something went wrong: %i %s\n",
+                        __func__, r, uniqueid);
+    }
 
     return id;
 }
@@ -453,7 +455,6 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
     const struct backup_mailbox *mailbox)
 {
     struct dlist *dl = dlist_newkvlist(NULL, "MAILBOX");
-    int r;
 
     dlist_setatom(dl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(dl, "MBOXNAME", mailbox->mboxname);
@@ -474,11 +475,14 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
     dlist_setatom(dl, "QUOTAROOT", mailbox->quotaroot);
     dlist_setnum64(dl, "XCONVMODSEQ", mailbox->xconvmodseq);
 
+    /* if any flags or annotations from the index can't be parsed into dlist
+     * format, we just quietly leave them out, and trust sync_client to notice
+     * the difference and send updates to fix them */
+
     if (mailbox->annotations) {
         struct dlist *annots = NULL;
-        r = dlist_parsemap(&annots, 0, mailbox->annotations,
-                           strlen(mailbox->annotations));
-        // FIXME handle error sanely
+        dlist_parsemap(&annots, 0, mailbox->annotations,
+                       strlen(mailbox->annotations));
         if (annots) {
             annots->name = xstrdup("ANNOTATIONS");
             dlist_stitch(dl, annots);
@@ -501,9 +505,8 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
             if (mailbox_message->flags) {
                 struct dlist *flags = NULL;
-                r = dlist_parsemap(&flags, 0, mailbox_message->flags,
-                                   strlen(mailbox_message->flags));
-                // FIXME handle error sanely
+                dlist_parsemap(&flags, 0, mailbox_message->flags,
+                               strlen(mailbox_message->flags));
                 if (flags) {
                     flags->name = xstrdup("FLAGS");
                     if (mailbox_message->expunged)
@@ -514,9 +517,8 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
             if (mailbox_message->annotations) {
                 struct dlist *annots = NULL;
-                r = dlist_parsemap(&annots, 0, mailbox_message->annotations,
-                                   strlen(mailbox_message->annotations));
-                // FIXME handle error sanely
+                dlist_parsemap(&annots, 0, mailbox_message->annotations,
+                               strlen(mailbox_message->annotations));
                 if (annots)  {
                     annots->name = xstrdup("ANNOTATIONS");
                     dlist_stitch(record, annots);
@@ -528,9 +530,6 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
         dlist_stitch(dl, records);
     }
-
-    // FIXME check for error
-    (void) r;
 
     return dl;
 }
@@ -590,7 +589,8 @@ EXPORTED int backup_get_message_id(struct backup *backup, const char *guid)
     int r = sqldb_exec(backup->db, backup_index_message_select_guid_sql, bval,
                        _get_message_id_cb, &id);
     if (r) {
-        fprintf(stderr, "%s: something went wrong: %i %s\n", __func__, r, guid);
+        syslog(LOG_ERR, "%s: something went wrong: %i %s\n",
+                        __func__, r, guid);
         return -1;
     }
 
