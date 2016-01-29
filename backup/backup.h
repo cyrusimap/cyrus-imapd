@@ -274,6 +274,6 @@ int backup_printinfo(struct backup *backup, const char *userid,
                      FILE *out, int detail);
 int backup_compact(const char *name,
                    enum backup_open_nonblock nonblock,
-                   int verbose, FILE *out);
+                   int force, int verbose, FILE *out);
 
 #endif

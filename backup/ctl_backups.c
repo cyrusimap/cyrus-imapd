@@ -539,7 +539,7 @@ static int cmd_compact_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_compact(fname, options->wait, options->verbose, stdout);
+    r = backup_compact(fname, options->wait, 0, options->verbose, stdout);
 
     print_status("compact", userid, fname, r);
 

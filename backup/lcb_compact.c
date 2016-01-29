@@ -153,6 +153,13 @@ done:
     return r;
 }
 
+static int compact_required(struct backup_chunk_list *chunk_list)
+{
+    /* FIXME look for chunks that would benefit from compaction */
+    (void) chunk_list;
+    return 1;
+}
+
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
@@ -166,9 +173,14 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     return r;
 }
 
+/* returns:
+ *   0 on success
+ *   1 if compact was not needed
+ *   negative on error
+ */
 EXPORTED int backup_compact(const char *name,
                             enum backup_open_nonblock nonblock,
-                            int verbose, FILE *out)
+                            int force, int verbose, FILE *out)
 {
     struct backup *original = NULL;
     struct backup *compact = NULL;
@@ -196,6 +208,14 @@ EXPORTED int backup_compact(const char *name,
 
     keep_chunks = backup_get_live_chunks(original, since);
     if (!keep_chunks) goto error;
+
+    if (!force && !compact_required(keep_chunks)) {
+        /* nothing to do */
+        backup_chunk_list_free(&keep_chunks);
+        backup_unlink(&compact);
+        backup_close(&original);
+        return 1;
+    }
 
     if (verbose) {
         fprintf(out, "keeping " SIZE_T_FMT " chunks:\n", keep_chunks->count);
