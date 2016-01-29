@@ -78,6 +78,8 @@
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"
 
+#define SHARED_COLLECTION_DELIM '.'
+
 /* Index into known namespace array */
 enum {
     NS_REQ_ROOT = -1,   /* special case: ns of request root (not an index) */
@@ -524,6 +526,9 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 
+int dav_parse_path(const char *path, struct request_target_t *tgt,
+                   const char *urlprefix, const char *mboxprefix,
+                   const char **errstr);
 int dav_check_precond(struct transaction_t *txn, const void *data,
                       const char *etag, time_t lastmod);
 int dav_store_resource(struct transaction_t *txn,

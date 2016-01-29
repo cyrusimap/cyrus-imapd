@@ -491,6 +491,147 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 }
 
 
+/* Parse request-target path in Cal/CardDAV namespace */
+EXPORTED int dav_parse_path(const char *path, struct request_target_t *tgt,
+                            const char *urlprefix, const char *mboxprefix,
+                            const char **errstr)
+{
+    char *p, *owner = NULL, *collection = NULL, *freeme = NULL;
+    size_t len;
+    const char *mboxname;
+    mbname_t *mbname = NULL;
+
+    if (*tgt->path) return 0;  /* Already parsed */
+
+    /* Make a working copy of target path */
+    strlcpy(tgt->path, path, sizeof(tgt->path));
+    tgt->tail = tgt->path + strlen(tgt->path);
+
+    p = tgt->path;
+
+    /* Sanity check namespace */
+    len = strlen(urlprefix);
+    if (strlen(p) < len ||
+        strncmp(urlprefix, p, len) || (path[len] && path[len] != '/')) {
+        *errstr = "Namespace mismatch request target path";
+        return HTTP_FORBIDDEN;
+    }
+
+    tgt->urlprefix = urlprefix;
+    tgt->mboxprefix = mboxprefix;
+
+    /* Default to bare-bones Allow bits */
+    tgt->allow &= ALLOW_READ_MASK;
+
+    /* Skip namespace */
+    p += len;
+    if (!*p || !*++p) return HTTP_NOT_FOUND;
+
+    /* Check if we're in user space */
+    len = strcspn(p, "/");
+    if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
+        p += len;
+        if (!*p || !*++p) return HTTP_NOT_FOUND;
+
+        /* Get user id */
+        len = strcspn(p, "/");
+        tgt->userid = xstrndup(p, len);
+
+        p += len;
+        if (!*p || !*++p) {
+            /* Make sure home-set is terminated with '/' */
+            if (p[-1] != '/') *p++ = '/';
+            goto done;
+        }
+
+        len = strcspn(p, "/");
+    }
+
+    /* Get collection */
+    tgt->collection = p;
+    tgt->collen = len;
+
+    p += len;
+    if (!*p || !*++p) {
+        /* Make sure collection is terminated with '/' */
+        if (p[-1] != '/') *p++ = '/';
+        goto done;
+    }
+
+    /* Get resource */
+    len = strcspn(p, "/");
+    tgt->resource = p;
+    tgt->reslen = len;
+
+    p += len;
+
+    if (*p) {
+//      *errstr = "Too many segments in request target path";
+        return HTTP_NOT_FOUND;
+    }
+
+  done:
+    /* Create mailbox name from the parsed path */
+
+    owner = tgt->userid;
+    if (tgt->collen) {
+        collection = freeme = xstrndup(tgt->collection, tgt->collen);
+
+        /* Shared collection encoded as: <owner> "." <mboxname> */
+        if (!tgt->mbentry &&  /* Not MKCOL or COPY/MOVE destination */
+            (p = strrchr(collection, SHARED_COLLECTION_DELIM))) {
+            owner = collection;
+            *p++ = '\0';
+            collection = p;
+        }
+    }
+
+    mbname = mbname_from_userid(owner);
+
+    mbname_push_boxes(mbname, mboxprefix);
+    if (collection) {
+        mbname_push_boxes(mbname, collection);
+        free(freeme);
+    }
+
+    /* XXX - hack to allow @domain parts for non-domain-split users */
+    if (httpd_extradomain) {
+        /* not allowed to be cross domain */
+        if (mbname_localpart(mbname) &&
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+            return HTTP_NOT_FOUND;
+        mbname_set_domain(mbname, NULL);
+    }
+
+    mboxname = mbname_intname(mbname);
+
+    if (tgt->mbentry) {
+        /* Just return the mboxname (MKCOL or COPY/MOVE destination) */
+        tgt->mbentry->name = xstrdup(mboxname);
+    }
+    else if (*mboxname) {
+        /* Locate the mailbox */
+        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        if (r) {
+            syslog(LOG_ERR, "mlookup(%s) failed: %s",
+                   mboxname, error_message(r));
+            *errstr = error_message(r);
+            mbname_free(&mbname);
+
+            switch (r) {
+            case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+            case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+            default: return HTTP_SERVER_ERROR;
+            }
+        }
+    }
+
+    mbname_free(&mbname);
+
+    return 0;
+}
+
+
 /* Evaluate If header.  Note that we can't short-circuit any of the tests
    because we need to check for a lock-token anywhere in the header */
 static int eval_if(const char *hdr, const char *etag, const char *lock_token,
@@ -4878,20 +5019,31 @@ int propfind_by_collection(const char *mboxname, int matchlen,
 
         mbname = mbname_from_intname(mboxname);
 
-        buf_setcstr(&writebuf, fctx->req_tgt->urlprefix);
+        buf_printf(&writebuf, "%s/", fctx->req_tgt->urlprefix);
 
-        if (mbname_localpart(mbname)) {
-            const char *domain =
-                mbname_domain(mbname) ? mbname_domain(mbname) :
-                httpd_extradomain;
+        if (fctx->req_tgt->userid) {
+            const char *owner;
 
-            buf_printf(&writebuf, "/%s/%s",
-                       USER_COLLECTION_PREFIX, mbname_localpart(mbname));
-            if (domain) buf_printf(&writebuf, "@%s", domain);
+            buf_printf(&writebuf, "%s/", USER_COLLECTION_PREFIX);
+
+            if (!mbname_domain(mbname))
+                mbname_set_domain(mbname, httpd_extradomain);
+            owner = mbname_userid(mbname);
+            if (!owner) owner = "";
+
+            if (*fctx->req_tgt->userid) {
+                buf_printf(&writebuf, "%s/", fctx->req_tgt->userid);
+
+                if (strcmp(owner, fctx->req_tgt->userid)) {
+                    /* Encode shared collection as: <owner> "." <mboxname> */
+                    buf_printf(&writebuf, "%s%c",
+                               owner, SHARED_COLLECTION_DELIM);
+                }
+            }
+            else buf_printf(&writebuf, "%s/", owner);
         }
-        buf_putc(&writebuf, '/');
 
-        len = writebuf.len;
+        len = buf_len(&writebuf);
 
         /* add collection(s) to path */
         boxes = mbname_boxes(mbname);
