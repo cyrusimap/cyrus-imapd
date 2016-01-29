@@ -1220,6 +1220,8 @@ static int cmd_get_mailbox(struct dlist *dl, int want_records)
     mbname_t *mbname = NULL;
     int r;
 
+    if (!dl->sval) return IMAP_PROTOCOL_BAD_PARAMETERS;
+
     mbname = mbname_from_intname(dl->sval);
     if (!mbname) return IMAP_INTERNAL;
 
@@ -1248,6 +1250,8 @@ static int is_mailboxes_single_user(struct dlist *dl)
     struct dlist *di;
 
     for (di = dl->head; di; di = di->next) {
+        if (!di->sval) continue;
+
         mbname_t *mbname = mbname_from_intname(di->sval);
 
         if (!userid) {
@@ -1276,11 +1280,16 @@ static void cmd_get(struct dlist *dl)
     if (strcmp(dl->name, "USER") == 0) {
         struct open_backup *open = NULL;
 
-        mbname = mbname_from_userid(dl->sval);
-        r = backupd_open_backup(&open, mbname);
-        if (!r)
-            r = backup_mailbox_foreach(open->backup, 0, 0,
-                                       backupd_print_mailbox, NULL);
+        if (dl->sval) {
+            mbname = mbname_from_userid(dl->sval);
+            r = backupd_open_backup(&open, mbname);
+            if (!r)
+                r = backup_mailbox_foreach(open->backup, 0, 0,
+                                        backupd_print_mailbox, NULL);
+        }
+        else {
+            r = IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
     }
     else if (strcmp(dl->name, "MAILBOXES") == 0) {
         struct dlist *di;
