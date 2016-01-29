@@ -90,6 +90,7 @@ static void usage(void)
     fprintf(stderr, "%s\n",
             "Options:\n"
             "    -C alt_config       # alternate config file\n"
+            "    -F                  # force (run command even if not needed)\n"
             "    -S                  # stop on error\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
             "    -w                  # wait for locks (don't skip locked backups)\n"
@@ -146,6 +147,7 @@ struct ctlbu_cmd_options {
     int verbose;
     int stop_on_error;
     int list_stale;
+    int force;
     const char *lock_exec_cmd;
     const char *domain;
 };
@@ -243,6 +245,9 @@ static void print_status(const char *cmd,
 {
     printf("%s %s: ", cmd, userid ? userid : fname);
     switch(r) {
+        case 1:
+            puts("skipped");
+            break;
         case 0:
             puts("ok");
             break;
@@ -303,7 +308,7 @@ int main (int argc, char **argv)
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    while ((opt = getopt(argc, argv, ":AC:DPSfmpst:x:uvw")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:DFPSfmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -315,6 +320,9 @@ int main (int argc, char **argv)
         case 'D':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
             options.mode = CTLBU_MODE_DOMAIN;
+            break;
+        case 'F':
+            options.force = 1;
             break;
         case 'P':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -539,7 +547,8 @@ static int cmd_compact_one(void *rock,
     if (data_len)
         fname = xstrndup(data, data_len);
 
-    r = backup_compact(fname, options->wait, 0, options->verbose, stdout);
+    r = backup_compact(fname, options->wait, options->force,
+                       options->verbose, stdout);
 
     print_status("compact", userid, fname, r);
 
