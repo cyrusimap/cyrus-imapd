@@ -56,12 +56,47 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
+static int retry_gzwrite(gzFile gzfile, const char *str, size_t len, const char *fname)
+{
+    /* gzprintf's internal buffer is limited to about 8K, which a dlist will
+     * exceed if there's a message in it, so use gzwrite rather than gzprintf
+     * for writing dlist contents.
+     */
+    const char *p = str;
+    size_t left = len;
+
+    while (left) {
+        int n = MIN(left, INT32_MAX);
+        int wrote = gzwrite(gzfile, p, n);
+        if (wrote > 0) {
+            left -= wrote;
+            p += wrote;
+        }
+        else {
+            int r;
+            const char *err = gzerror(gzfile, &r);
+            syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, fname, err);
+
+            if (r == Z_STREAM_ERROR)
+                fatal("gzwrite: invalid stream", EC_IOERR);
+            else if (r == Z_MEM_ERROR)
+                fatal("gzwrite: out of memory", EC_TEMPFAIL);
+
+            return r;
+        }
+    }
+
+    return 0;
+}
+
 HIDDEN int backup_real_append_start(struct backup *backup,
                                     time_t ts, off_t offset,
                                     const char *file_sha1,
                                     int index_only,
                                     enum backup_append_flush flush)
 {
+    int r;
+
     if (backup->append_state != NULL
         && backup->append_state->mode != BACKUP_APPEND_INACTIVE) {
         fatal("backup append already started", EC_SOFTWARE);
@@ -88,10 +123,12 @@ HIDDEN int backup_real_append_start(struct backup *backup,
             }
         }
 
-        // FIXME check for error return
-        gzwrite(backup->append_state->gzfile, header, strlen(header));
-        if (flush)
-            gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
+        r = retry_gzwrite(backup->append_state->gzfile,
+                          header, strlen(header), backup->data_fname);
+        if (!r && flush)
+            r = gzflush(backup->append_state->gzfile, Z_FULL_FLUSH);
+
+        if (r) goto error;
     }
 
     SHA1_Update(&backup->append_state->sha_ctx, header, strlen(header));
@@ -104,12 +141,12 @@ HIDDEN int backup_real_append_start(struct backup *backup,
         { NULL,         SQLITE_NULL,    { .s = NULL         } },
     };
 
-    sqldb_begin(backup->db, "backup_append"); // FIXME what if this fails
+    r = sqldb_begin(backup->db, "backup_append");
+    if (r) goto error;
 
-    int r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
+    r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
     if (r) {
-        // FIXME handle this sensibly
-        fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
         goto error;
     }
@@ -135,39 +172,6 @@ EXPORTED int backup_append_start(struct backup *backup,
     sha1_file(backup->fd, backup->data_fname, SHA1_LIMIT_WHOLE_FILE, file_sha1);
 
     return backup_real_append_start(backup, ts, offset, file_sha1, 0, flush);
-}
-
-static int _append(gzFile gzfile, const char *fname, const struct buf *buf)
-{
-    /* gzprintf's internal buffer is limited to about 8K, which a dlist will
-     * exceed if there's a message in it, so use gzwrite rather than gzprintf
-     * for writing the dlist contents.
-     */
-    const char *p = buf_cstring(buf);
-    size_t left = buf_len(buf);
-
-    while (left) {
-        int n = MIN(left, INT32_MAX);
-        int wrote = gzwrite(gzfile, p, n);
-        if (wrote > 0) {
-            left -= wrote;
-            p += wrote;
-        }
-        else {
-            int r;
-            const char *err = gzerror(gzfile, &r);
-            syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, fname, err);
-
-            if (r == Z_STREAM_ERROR)
-                fatal("gzwrite: invalid stream", EC_IOERR);
-            else if (r == Z_MEM_ERROR)
-                fatal("gzwrite: out of memory", EC_TEMPFAIL);
-
-            return r;
-        }
-    }
-
-    return 0;
 }
 
 EXPORTED int backup_append(struct backup *backup,
@@ -197,7 +201,9 @@ EXPORTED int backup_append(struct backup *backup,
 
         /* if we're not in index-only mode, write the data out */
         if (!index_only) {
-            r = _append(backup->append_state->gzfile, backup->data_fname, &buf);
+            r = retry_gzwrite(backup->append_state->gzfile,
+                              buf_cstring(&buf), buf_len(&buf),
+                              backup->data_fname);
             if (r) goto error;
         }
 
@@ -211,7 +217,9 @@ EXPORTED int backup_append(struct backup *backup,
     buf_setcstr(&buf, "\r\n");
     SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
     if (!index_only) {
-        r = _append(backup->append_state->gzfile, backup->data_fname, &buf);
+        r = retry_gzwrite(backup->append_state->gzfile,
+                          buf_cstring(&buf), buf_len(&buf),
+                          backup->data_fname);
         if (r) goto error;
     }
     len += buf_len(&buf);
@@ -248,8 +256,10 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
     if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         r = gzflush(backup->append_state->gzfile, Z_FINISH);
         if (r != Z_OK) {
-            fprintf(stderr, "%s: gzflush failed: %i\n", __func__, r);
-            // FIXME handle this sensibly
+            syslog(LOG_ERR, "IOERROR: gzflush %s failed: %i\n",
+                            backup->data_fname, r);
+            sqldb_rollback(backup->db, "backup_append");
+            goto done;
         }
     }
 
@@ -269,14 +279,14 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
 
     r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
     if (r) {
-        // FIXME handle this sensibly
-        fprintf(stderr, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
     }
     else {
         sqldb_commit(backup->db, "backup_append");
     }
 
+done:
     backup->append_state->mode = BACKUP_APPEND_INACTIVE;
     backup->append_state->wrote = 0;
 
