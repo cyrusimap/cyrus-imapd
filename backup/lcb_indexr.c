@@ -602,52 +602,6 @@ EXPORTED int backup_get_message_id(struct backup *backup, const char *guid)
     return id;
 }
 
-static int _get_message_cb(sqlite3_stmt *stmt, void *rock) {
-    struct backup_message *message = (struct backup_message *) rock;
-    int column = 0;
-
-    message->id = _column_int(stmt, column++);
-    char *guid_str = xstrdupnull(_column_text(stmt, column++));
-    message->partition = xstrdupnull(_column_text(stmt, column++));
-    message->chunk_id = _column_int(stmt, column++);
-    message->offset = _column_int64(stmt, column++);
-    message->length = _column_int64(stmt, column++);
-
-    struct message_guid *guid = xzmalloc(sizeof *guid);
-    if (!message_guid_decode(guid, guid_str)) goto error;
-    message->guid = guid;
-    free(guid_str);
-
-    return 0;
-
-error:
-    if (guid && !message->guid) free(guid);
-    if (guid_str) free(guid_str);
-    return -1;
-}
-
-EXPORTED struct backup_message *backup_get_message(struct backup *backup,
-                                                   const struct message_guid *guid)
-{
-    struct sqldb_bindval bval[] = {
-        { ":guid",  SQLITE_TEXT,    { .s = message_guid_encode(guid) } },
-        { NULL,     SQLITE_NULL,    { .s = NULL } },
-    };
-
-    struct backup_message *bm = xzmalloc(sizeof *bm);
-
-    int r = sqldb_exec(backup->db, backup_index_message_select_guid_sql, bval,
-                       _get_message_cb, bm);
-    if (r) goto error;
-
-    return bm;
-
-error:
-    fprintf(stderr, "%s: something went wrong: %i %s\n", __func__, r, message_guid_encode(guid));
-    if (bm) backup_message_free(&bm);
-    return NULL;
-}
-
 EXPORTED void backup_message_free(struct backup_message **messagep)
 {
     struct backup_message *message = *messagep;
@@ -662,35 +616,64 @@ EXPORTED void backup_message_free(struct backup_message **messagep)
 struct message_row_rock {
     backup_message_foreach_cb proc;
     void *rock;
+    struct backup_message **save_one;
 };
 
 static int _message_row_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct message_row_rock *mrock = (struct message_row_rock *) rock;
-    struct backup_message message = {0};
+    struct backup_message *message = xzmalloc(sizeof *message);
+    const char *guid_str = NULL;
     int column = 0;
     int r = 0;
 
-    message.id = _column_int(stmt, column++);
-    char *guid_str = xstrdupnull(_column_text(stmt, column++));
-    message.partition = xstrdupnull(_column_text(stmt, column++));
-    message.chunk_id = _column_int(stmt, column++);
-    message.offset = _column_int64(stmt, column++);
-    message.length = _column_int64(stmt, column++);
+    message->id = _column_int(stmt, column++);
+    guid_str = _column_text(stmt, column++);
+    message->partition = xstrdupnull(_column_text(stmt, column++));
+    message->chunk_id = _column_int(stmt, column++);
+    message->offset = _column_int64(stmt, column++);
+    message->length = _column_int64(stmt, column++);
 
-    message.guid = xzmalloc(sizeof *message.guid);
-    if (!message_guid_decode(message.guid, guid_str))
-        r = -1;
-    free(guid_str);
+    message->guid = xzmalloc(sizeof *message->guid);
+    if (!message_guid_decode(message->guid, guid_str)) goto error;
 
-    if (!r)
-        r = mrock->proc(&message, mrock->rock);
+    if (mrock->proc)
+        r = mrock->proc(message, mrock->rock);
 
-    if (message.guid) free(message.guid);
-    if (message.partition) free(message.partition);
-    memset(&message, 0, sizeof message);
+    if (mrock->save_one)
+        *mrock->save_one = message;
+    else
+        backup_message_free(&message);
 
     return r;
+
+error:
+    if (message) backup_message_free(&message);
+    return -1;
+}
+
+EXPORTED struct backup_message *backup_get_message(struct backup *backup,
+                                                   const struct message_guid *guid)
+{
+    struct sqldb_bindval bval[] = {
+        { ":guid",  SQLITE_TEXT,    { .s = message_guid_encode(guid) } },
+        { NULL,     SQLITE_NULL,    { .s = NULL } },
+    };
+
+    struct backup_message *bm = NULL;
+
+    struct message_row_rock mrock = { NULL, NULL, &bm };
+
+    int r = sqldb_exec(backup->db, backup_index_message_select_guid_sql, bval,
+                       _message_row_cb, &mrock);
+    if (r) {
+        syslog(LOG_ERR, "%s: something went wrong: %i %s\n",
+                        __func__, r, message_guid_encode(guid));
+        if (bm) backup_message_free(&bm);
+        return NULL;
+    }
+
+    return bm;
 }
 
 EXPORTED int backup_message_foreach(struct backup *backup, int chunk_id,
@@ -701,7 +684,7 @@ EXPORTED int backup_message_foreach(struct backup *backup, int chunk_id,
         { NULL,         SQLITE_NULL,    { .s = NULL } },
     };
 
-    struct message_row_rock mrock = { cb, rock };
+    struct message_row_rock mrock = { cb, rock, NULL };
 
     const char *sql = chunk_id ?
         backup_index_message_select_chunkid_sql :
