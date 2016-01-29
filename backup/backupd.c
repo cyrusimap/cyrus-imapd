@@ -507,7 +507,11 @@ static int backupd_open_backup(struct open_backup **openp, const mbname_t *mbnam
                             BACKUP_OPEN_BLOCK, BACKUP_OPEN_CREATE);
         if (r) return r;
 
-        r = backup_append_start(backup, NULL, BACKUP_APPEND_FLUSH);
+        r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
+
+        if (!r)
+            r = backup_append_start(backup, NULL, BACKUP_APPEND_FLUSH);
+
         if (r) {
             backup_close(&backup);
             return r;
