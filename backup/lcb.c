@@ -217,7 +217,7 @@ HIDDEN int backup_real_open(struct backup **backupp,
 
             if ((r && errno == ENOENT) || index_statbuf.st_size == 0) {
                 syslog(LOG_ERR, "reindex needed: %s", backup->index_fname);
-                r = IMAP_MAILBOX_BADFORMAT; // FIXME define special error code for this?
+                r = IMAP_MAILBOX_BADFORMAT;
                 goto error;
             }
         }
@@ -229,9 +229,6 @@ HIDDEN int backup_real_open(struct backup **backupp,
         r = IMAP_INTERNAL; // FIXME what does it mean to error here?
         goto error;
     }
-
-    // FIXME detect when last append didn't end correctly (no length/data_sha1)
-    // and insist on reindex (can this happen with txns?)
 
     *backupp = backup;
     return 0;
@@ -257,9 +254,6 @@ EXPORTED int backup_open(struct backup **backupp,
                          buf_cstring(&data_fname), buf_cstring(&index_fname),
                          BACKUP_OPEN_NOREINDEX, nonblock, create);
     if (r) goto done;
-
-    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK, 0, NULL);
-    if (r) backup_close(backupp);
 
 done:
     buf_free(&data_fname);
@@ -427,16 +421,11 @@ EXPORTED int backup_open_paths(struct backup **backupp,
     if (index_fname)
         return backup_real_open(backupp, data_fname, index_fname,
                                 BACKUP_OPEN_NOREINDEX, nonblock, create);
-        /* FIXME verify */
 
     char *tmp = strconcat(data_fname, ".index", NULL);
     int r = backup_real_open(backupp, data_fname, tmp,
                              BACKUP_OPEN_NOREINDEX, nonblock, create);
     free(tmp);
-    if (r) return r;
-
-    r = backup_verify(*backupp, BACKUP_VERIFY_QUICK, 0, NULL);
-    if (r) backup_close(backupp);
 
     return r;
 }
