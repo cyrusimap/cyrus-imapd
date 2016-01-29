@@ -302,6 +302,8 @@ static int verify_chunk_messages(struct backup *backup, struct backup_chunk *chu
                                  struct gzuncat *gzuc, unsigned level,
                                  int verbose, FILE *out)
 {
+    int r;
+
     struct verify_message_rock vmrock = {
         gzuc,
         (level & BACKUP_VERIFY_MESSAGE_GUIDS),
@@ -314,13 +316,12 @@ static int verify_chunk_messages(struct backup *backup, struct backup_chunk *chu
     if (out && verbose)
         fprintf(out, "checking chunk %d messages...\n", chunk->id);
 
-    /* FIXME this is a mess */
-    int r = gzuc_member_start_from(gzuc, chunk->offset);
-
-    if (!r) r = backup_message_foreach(backup, chunk->id, _verify_message_cb,
-                                       &vmrock);
-
-    gzuc_member_end(gzuc, NULL);
+    r = gzuc_member_start_from(gzuc, chunk->offset);
+    if (!r) {
+        r = backup_message_foreach(backup, chunk->id, _verify_message_cb,
+                                   &vmrock);
+        gzuc_member_end(gzuc, NULL);
+    }
 
     if (vmrock.cached_dlist) {
         dlist_unlink_files(vmrock.cached_dlist);
@@ -331,6 +332,7 @@ static int verify_chunk_messages(struct backup *backup, struct backup_chunk *chu
             r ? "failed" : "passed");
     if (out && verbose)
         fprintf(out, "%s\n", r ? "error" : "ok");
+
     return r;
 }
 
@@ -487,9 +489,11 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
         return 0;
     }
 
+    /* XXX consider whether the two hashes should use pools */
+
     if (mailbox_list->count) {
         /* build an index of the mailbox list */
-        construct_hash_table(&mailbox_list_index, mailbox_list->count, 0); // FIXME pool?
+        construct_hash_table(&mailbox_list_index, mailbox_list->count, 0);
         mailbox = mailbox_list->head;
         while (mailbox) {
             hash_insert(mailbox->uniqueid, mailbox, &mailbox_list_index);
@@ -500,7 +504,7 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
     if (mailbox_message_list->count) {
         /* build an index of the mailbox message list */
         construct_hash_table(&mailbox_message_list_index,
-                             mailbox_message_list->count, 0); // FIXME pool?
+                             mailbox_message_list->count, 0);
         mailbox_message = mailbox_message_list->head;
         while (mailbox_message) {
             char keybuf[1024]; // FIXME whatever
@@ -511,7 +515,15 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
         }
     }
 
-    r = gzuc_member_start_from(gzuc, chunk->offset); // FIXME error handling
+    r = gzuc_member_start_from(gzuc, chunk->offset);
+    if (r) {
+        syslog(LOG_ERR, "%s: error reading chunk %i at offset %jd: %s",
+                        __func__, chunk->id, chunk->offset, zError(r));
+        if (out)
+            fprintf(out, "error reading chunk %i at offset %jd: %s",
+                    chunk->id, chunk->offset, zError(r));
+        goto done;
+    }
     struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
     prot_setisclient(ps, 1); /* don't sync literals */
 
@@ -619,6 +631,7 @@ next_line:
 
     if (!r) r = mailbox_list->count || mailbox_message_list->count ? -1 : 0;
 
+done:
     free_hash_table(&mailbox_list_index, NULL);
     free_hash_table(&mailbox_message_list_index, NULL);
 
