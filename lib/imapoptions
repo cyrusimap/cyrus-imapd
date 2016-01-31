@@ -451,6 +451,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    Setting this value to zero or negative disables splitting of chunks. */
 
+{ "backup_compact_work_threshold", 1, INT }
+/* The number of chunks that must obviously need compaction before the compact
+   tool will go ahead with the compaction.  If set to less than one, the value
+   is treated as being one. */
+
 { "backup_staging_path", NULL, STRING }
 /* The absolute path of the backup staging area.  If not specified,
    will be temp_path/backup */
