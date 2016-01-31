@@ -439,6 +439,18 @@ Blank lines and lines beginning with ``#'' are ignored.
    partition pathname MUST be specified if backups are in use.  Note that
    there is no relationship between spool partitions and backup partitions. */
 
+{ "backup_compact_minsize", 0, INT }
+/* The minimum size in kilobytes of chunks in each backup.  The compact tool
+   will try to combine adjacent chunks that are smaller than this.
+.PP
+   Setting this value to zero or negative disables combining of chunks. */
+
+{ "backup_compact_maxsize", 0, INT }
+/* The maximum size in kilobytes of chunks in each backup.  The compact tool
+   will try to split chunks larger than this into smaller chunks.
+.PP
+   Setting this value to zero or negative disables splitting of chunks. */
+
 { "backup_staging_path", NULL, STRING }
 /* The absolute path of the backup staging area.  If not specified,
    will be temp_path/backup */
