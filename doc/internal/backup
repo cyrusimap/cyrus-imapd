@@ -344,7 +344,9 @@ remember: a single APPLY MESSAGE line can contain many messages!
 
 thoughts:
 * need a heuristic for quickly determining whether a backup needs to be compacted
-    -> maybe threshold for proportion of chunks that are smaller than chunk combine size?
+    -> sum(chunks to discard, chunks to combine, chunks to split) > threshold
+    -> can we detect chunks that are going to significantly reduce in size as
+       result of discarding individual lines?
 * "quick" vs "full" compaction
 
 settings:
