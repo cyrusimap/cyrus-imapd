@@ -485,7 +485,7 @@ cyrus is restarted.
 ctl_backups
 -------------
 
-sbin tool for dealing with backups, their indexes, and the main database
+sbin tool for mass backup/index/database operations
 
 needs:
     * rebuild backups.db from disk contents
@@ -532,6 +532,46 @@ lock_opts:
 
 list_opts:
     -t [hours]          # "stale" (no update in hours) backups only (default: 24)
+
+
+cyr_backup
+------
+
+sbin tool for inspecting backups
+
+needs:
+    * better name?
+    * list stuff
+    * show stuff
+    * dump stuff
+    * restore?
+
+* should lock/move/delete (single backup commands) from ctl_backups be moved here?
+
+usage:
+    cyr_backup [options] [mode] backup list [all | chunks | mailboxes | messages]...
+    cyr_backup [options] [mode] backup show chunks [id...]
+    cyr_backup [options] [mode] backup show messages [guid...]
+    cyr_backup [options] [mode] backup show mailboxes [mboxname | uniqueid]...
+    cyr_backup [options] [mode] backup dump [dump_opts] chunk id
+    cyr_backup [options] [mode] backup dump [dump_opts] message guid
+
+options:
+    -C alt_config       # alternate config file
+    -v                  # verbose
+
+mode:
+    -f                  # backup interpreted as filename
+    -m                  # backup interpreted as mboxname
+    -u                  # backup interpteted as userid (default)
+
+commands:
+    list: table of contents, one per line
+    show: indexed details of listed items, one per paragraph, detail per line
+    dump: relevant contents from backup stream
+
+dump options:
+    -o filename         # dump to named file instead of stdout
 
 
 partitions
