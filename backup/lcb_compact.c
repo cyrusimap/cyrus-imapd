@@ -56,6 +56,29 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
+static size_t compact_minsize = 0;
+static size_t compact_maxsize = 0;
+static int compact_work_threshold = 0;
+
+static void compact_readconfig(void)
+{
+    /* read and normalise config values */
+    if (compact_minsize == 0) {
+        compact_minsize = (size_t)
+            MAX(0, 1024 * config_getint(IMAPOPT_BACKUP_COMPACT_MINSIZE));
+    }
+
+    if (compact_maxsize == 0) {
+        compact_maxsize = (size_t)
+            MAX(0, 1024 * config_getint(IMAPOPT_BACKUP_COMPACT_MAXSIZE));
+    }
+
+    if (compact_work_threshold == 0) {
+        compact_work_threshold =
+            MAX(1, config_getint(IMAPOPT_BACKUP_COMPACT_WORK_THRESHOLD));
+    }
+}
+
 static int compact_open(const char *name,
                         struct backup **originalp,
                         struct backup **compactp,
@@ -153,11 +176,56 @@ done:
     return r;
 }
 
-static int compact_required(struct backup_chunk_list *chunk_list)
+static int compact_required(struct backup_chunk_list *all_chunks,
+                            struct backup_chunk_list *keep_chunks)
 {
-    /* FIXME look for chunks that would benefit from compaction */
-    (void) chunk_list;
-    return 1;
+    struct backup_chunk *chunk;
+    int to_be_compacted = 0;
+
+    compact_readconfig();
+
+    /* count chunks to be discarded */
+    if (all_chunks->count > keep_chunks->count)
+        to_be_compacted += all_chunks->count - keep_chunks->count;
+
+    if (to_be_compacted >= compact_work_threshold)
+        return 1;
+
+    /* nothing more to do if there are no boundaries defined */
+    if (!compact_minsize && !compact_maxsize)
+        return 0;
+
+    /* nothing more to do if the boundaries are contradictory */
+    if (compact_minsize && compact_maxsize
+        && compact_minsize >= compact_maxsize)
+        return 0;
+
+    /* count chunks to be combined/split */
+    for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
+        /* a small chunk is candidate for combining with the next
+         * if the sum of their lengths is smaller than max_chunksize */
+        if (compact_minsize && chunk->next != NULL) {
+            if (chunk->length < compact_minsize) {
+                size_t len = chunk->length + chunk->next->length;
+                if (!compact_maxsize || len < compact_maxsize) {
+                    to_be_compacted++;
+                }
+            }
+        }
+
+        /* a large chunk is candidate for splitting if doing so won't
+         * result in a new chunk smaller than min_chunksize */
+        if (compact_maxsize) {
+            if (chunk->length > compact_maxsize + compact_minsize) {
+                to_be_compacted++;
+            }
+        }
+
+        if (to_be_compacted >= compact_work_threshold)
+            return 1;
+    }
+
+    return 0;
 }
 
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
@@ -184,6 +252,7 @@ EXPORTED int backup_compact(const char *name,
 {
     struct backup *original = NULL;
     struct backup *compact = NULL;
+    struct backup_chunk_list *all_chunks = NULL;
     struct backup_chunk_list *keep_chunks = NULL;
     struct backup_chunk *chunk = NULL;
     struct gzuncat *gzuc = NULL;
@@ -206,11 +275,15 @@ EXPORTED int backup_compact(const char *name,
         since = -1;
     }
 
+    all_chunks = backup_get_chunks(original);
+    if (!all_chunks) goto error;
+
     keep_chunks = backup_get_live_chunks(original, since);
     if (!keep_chunks) goto error;
 
-    if (!force && !compact_required(keep_chunks)) {
+    if (!force && !compact_required(all_chunks, keep_chunks)) {
         /* nothing to do */
+        backup_chunk_list_free(&all_chunks);
         backup_chunk_list_free(&keep_chunks);
         backup_unlink(&compact);
         backup_close(&original);
@@ -308,6 +381,7 @@ EXPORTED int backup_compact(const char *name,
 error:
     if (in) prot_free(in);
     if (gzuc) gzuc_free(&gzuc);
+    if (all_chunks) backup_chunk_list_free(&all_chunks);
     if (keep_chunks) backup_chunk_list_free(&keep_chunks);
     if (compact) backup_unlink(&compact);
     if (original) backup_close(&original);
