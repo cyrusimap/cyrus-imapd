@@ -201,6 +201,39 @@ static int want_combine(size_t length, const struct backup_chunk *next_chunk)
     return 1;
 }
 
+/* a large chunk is candidate for splitting
+ * if it won't create a new too-small chunk
+ */
+static int want_split(const struct backup_chunk *chunk, const size_t *wrotep)
+{
+    /* don't split if there's no maximum size */
+    if (!compact_maxsize)
+        return 0;
+
+    /* don't split if we're writing and haven't written enough */
+    if (wrotep && *wrotep < compact_maxsize)
+        return 0;
+
+    /* don't split if the chunk isn't long enough */
+    if (chunk->length < compact_maxsize + compact_minsize)
+        return 0;
+
+    /* if we're not writing, we're done */
+    if (!wrotep)
+        return 1;
+
+    /* we might have written past the desirable split boundary due to a big
+     * dlist, so check whether the remainder is worth splitting for */
+    size_t new_chunk_size = chunk->length - *wrotep;
+
+    /* split if what's left is big enough to be its own chunk */
+    if (new_chunk_size > compact_minsize)
+        return 1;
+
+    /* don't split it */
+    return 0;
+}
+
 static int compact_required(struct backup_chunk_list *all_chunks,
                             struct backup_chunk_list *keep_chunks)
 {
@@ -230,13 +263,8 @@ static int compact_required(struct backup_chunk_list *all_chunks,
         if (want_combine(chunk->length, chunk->next))
             to_be_compacted++;
 
-        /* a large chunk is candidate for splitting if doing so won't
-         * result in a new chunk smaller than min_chunksize */
-        if (compact_maxsize) {
-            if (chunk->length > compact_maxsize + compact_minsize) {
-                to_be_compacted++;
-            }
-        }
+        if (want_split(chunk, NULL))
+            to_be_compacted++;
 
         if (to_be_compacted >= compact_work_threshold)
             return 1;
@@ -370,16 +398,28 @@ EXPORTED int backup_compact(const char *name,
 
             dlist_unlink_files(dl);
             dlist_free(&dl);
+
+            // if this line put us over compact_maxsize
+            if (want_split(chunk, &compact->append_state->wrote)) {
+                r = backup_append_end(compact, &ts);
+                chunk_start_time = -1;
+
+                if (verbose) {
+                    fprintf(out, "splitting chunk %d\n", chunk->id);
+                }
+            }
         }
 
         // if we're due to start a new chunk
-        if (!want_combine(compact->append_state->wrote, chunk->next)) {
-            r = backup_append_end(compact, &ts);
-            chunk_start_time = -1;
-        }
-        else if (verbose) {
-            fprintf(out, "combining chunks %d and %d\n",
-                         chunk->id, chunk->next->id);
+        if (compact->append_state && compact->append_state->mode) {
+            if (!want_combine(compact->append_state->wrote, chunk->next)) {
+                r = backup_append_end(compact, &ts);
+                chunk_start_time = -1;
+            }
+            else if (verbose) {
+                fprintf(out, "combining chunks %d and %d\n",
+                             chunk->id, chunk->next->id);
+            }
         }
 
         prot_free(in);
