@@ -869,13 +869,18 @@ static int report_card_query(struct transaction_t *txn,
         /* Addressbook collection(s) */
         if (txn->req_tgt.collection) {
             /* Add response for target addressbook collection */
-            propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, fctx);
+            propfind_by_collection(txn->req_tgt.mbentry, fctx);
         }
         else {
             /* Add responses for all contained addressbook collections */
-            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-            mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
-                             httpd_authstate, propfind_by_collection, fctx);
+            mboxlist_mboxtree(txn->req_tgt.mbentry->name,
+                              propfind_by_collection, fctx,
+                              MBOXTREE_SKIP_ROOT);
+
+            /* Add responses for all shared addressbook collections */
+            mboxlist_usersubs(txn->req_tgt.userid,
+                              propfind_by_collection, fctx,
+                              MBOXTREE_SKIP_PERSONAL);
         }
 
         ret = *fctx->ret;

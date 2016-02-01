@@ -4926,80 +4926,56 @@ static int propfind_by_resources(struct propfind_ctx *fctx)
 
 
 /* mboxlist_findall() callback to find props on a collection */
-int propfind_by_collection(const char *mboxname, int matchlen,
-                           int maycreate __attribute__((unused)),
-                           void *rock)
+int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    mbentry_t *mbentry = NULL;
+    const char *mboxname = mbentry->name;
     struct buf writebuf = BUF_INITIALIZER;
     mbname_t *mbname = NULL;
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
-    int r = 0, rights, root = 1;
+    int r = 0, rights;
 
     /* Check ACL on mailbox for current user */
-    r = mboxlist_lookup(mboxname, &mbentry, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
-    if (r) {
-        syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-               mboxname, error_message(r));
-        fctx->err->desc = error_message(r);
-        *fctx->ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
-    /* If this function is called outside of mboxlist_findall()
-     * with matchlen == 0, this is the root resource of the PROPFIND,
-     * otherwise it's just one of many found. */
-    if (matchlen) {
-        /* if finding all, we only match known types */
-        if (!(mbentry->mbtype & fctx->req_tgt->mboxtype)) goto done;
+    /* We only match known types */
+    if (!(mbentry->mbtype & fctx->req_tgt->mboxtype)) goto done;
 
-        /* reject folders in wrong hierarchy */
-        if (!strstr(mboxname, fctx->req_tgt->mboxprefix)) goto done;
+    p = strrchr(mboxname, '.');
+    if (!p) goto done;
+    p++; /* skip dot */
 
-        p = strrchr(mboxname, '.');
-        if (!p) goto done;
-        p++; /* skip dot */
-
-        switch (fctx->req_tgt->namespace) {
-        case URL_NS_DRIVE:
-            /* Reject folders that are not children of target URL
-               or are more than one level deep */
-            if (!fctx->req_tgt->mbentry) goto done;
-            len = strlen(fctx->req_tgt->mbentry->name);
-            if (strlen(mboxname) < len) goto done;
-            if (strncmp(mboxname, fctx->req_tgt->mbentry->name, len)) goto done;
-            p = (char *) mboxname + len;
-            if (fctx->req_tgt->flags == TGT_DRIVE_USER) {
-                /* Special case of listing users with DAV #drives */
-                p = strchr(mboxname+5, '.');
-            }
+    switch (fctx->req_tgt->namespace) {
+    case URL_NS_DRIVE:
+        if (fctx->req_tgt->flags == TGT_DRIVE_USER) {
+            /* Special case of listing users with DAV #drives */
+            p = strchr(mboxname+5, '.') + 1;  /* skip "user.XXX." */
+            if (strcmp(p, fctx->req_tgt->mboxprefix)) goto done;
+        }
+        else {
+            /* Reject folders that are more than one level deep */
+            p = (char *) mboxname + strlen(fctx->req_tgt->mbentry->name);
             if (*p && (*p != '.' || strchr(++p, '.'))) goto done;
-            break;
+        }
+        break;
 
-        case URL_NS_CALENDAR:
-            /*  Inbox and Outbox can't appear unless they are the root */
+    case URL_NS_CALENDAR:
+        /*  Inbox and Outbox can't appear unless they are the target */
+        if (!fctx->req_tgt->flags) {
             if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
             if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
-            /* fall through */
-
-        default:
-            /* magic folder filter */
-            if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
-            /* and while we're at it, reject the fricking top-level folders too.
-             * XXX - this is evil and bad and wrong */
-            if (*p == '#') goto done;
-            break;
         }
+        /* fall through */
 
-        root = 0;
+    default:
+        /* Magic folder filter */
+        if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
+        break;
     }
+
 
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
@@ -5063,8 +5039,7 @@ int propfind_by_collection(const char *mboxname, int matchlen,
 
         /* If not filtering by calendar resource, and not excluding root,
            add response for collection */
-        if (!fctx->filter_crit &&
-            (!root || (fctx->depth == 1) || !(fctx->prefer & PREFER_NOROOT)) &&
+        if (!fctx->filter_crit && !(fctx->prefer & PREFER_NOROOT) &&
             (r = xml_add_response(fctx, 0, 0))) goto done;
     }
 
@@ -5076,7 +5051,6 @@ int propfind_by_collection(const char *mboxname, int matchlen,
   done:
     buf_free(&writebuf);
     mbname_free(&mbname);
-    mboxlist_entry_free(&mbentry);
     if (mailbox) mailbox_close(&mailbox);
 
     return r;
@@ -5330,27 +5304,39 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         }
 
         if (depth > 0) {
-            /* Calendar collection(s) */
+            /* Collection(s) */
 
             if (txn->req_tgt.collection) {
-                /* Add response for target calendar collection */
-                propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, &fctx);
+                /* Add response for target collection */
+                propfind_by_collection(txn->req_tgt.mbentry, &fctx);
             }
             else {
-                /* Add responses for all calendar collections */
-                int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-                r = mboxlist_findall(&httpd_namespace, "*", isadmin,
-                                     httpd_userid, httpd_authstate,
-                                     propfind_by_collection, &fctx);
+                /* Add responses for all contained collections */
+                fctx.prefer &= ~PREFER_NOROOT;
+                mboxlist_mboxtree(txn->req_tgt.mbentry->name,
+                                  propfind_by_collection, &fctx,
+                                  MBOXTREE_SKIP_ROOT);
 
-                if (txn->req_tgt.flags == TGT_DRIVE_ROOT) {
-                    /* Add a response for 'user' hierarchy */
-                    buf_setcstr(&fctx.buf, txn->req_tgt.urlprefix);
-                    buf_printf(&fctx.buf, "/%s/", USER_COLLECTION_PREFIX);
-                    strlcpy(fctx.req_tgt->path,
-                            buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
-                    fctx.mailbox = NULL;
-                    r = xml_add_response(&fctx, 0, 0);
+                switch (txn->req_tgt.namespace) {
+                case URL_NS_DRIVE:
+                    if (txn->req_tgt.flags == TGT_DRIVE_ROOT) {
+                        /* Add a response for 'user' hierarchy */
+                        buf_setcstr(&fctx.buf, txn->req_tgt.urlprefix);
+                        buf_printf(&fctx.buf, "/%s/", USER_COLLECTION_PREFIX);
+                        strlcpy(fctx.req_tgt->path,
+                                buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
+                        fctx.mailbox = NULL;
+                        r = xml_add_response(&fctx, 0, 0);
+                    }
+                    break;
+
+                case URL_NS_CALENDAR:
+                case URL_NS_ADDRESSBOOK:
+                    /* Add responses for shared collections */
+                    mboxlist_usersubs(txn->req_tgt.userid,
+                                      propfind_by_collection, &fctx,
+                                      MBOXTREE_SKIP_PERSONAL);
+                    break;
                 }
             }
 
@@ -6622,6 +6608,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     memset(&req_tgt, 0, sizeof(struct request_target_t));
 
     fctx->mode = PROPFIND_EXPAND;
+    fctx->prefer &= ~PREFER_NOROOT;
     if (href) {
         /* Parse the URL */
         parse_path(href, &req_tgt, &fctx->err->desc);
@@ -6659,17 +6646,27 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     }
 
     if (fctx->depth > 0) {
-        /* Calendar collection(s) */
+        /* Collection(s) */
 
         if (fctx->req_tgt->collection) {
-            /* Add response for target calendar collection */
-            propfind_by_collection(fctx->req_tgt->mbentry->name, 0, 0, fctx);
+            /* Add response for target collection */
+            propfind_by_collection(fctx->req_tgt->mbentry, fctx);
         }
         else {
-            /* Add responses for all calendar collections */
-            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-            r = mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
-                                 httpd_authstate, propfind_by_collection, fctx);
+            /* Add responses for all contained collections */
+            mboxlist_mboxtree(fctx->req_tgt->mbentry->name,
+                              propfind_by_collection, fctx,
+                              MBOXTREE_SKIP_ROOT);
+
+            switch (fctx->req_tgt->namespace) {
+            case URL_NS_CALENDAR:
+            case URL_NS_ADDRESSBOOK:
+                /* Add responses for shared collections */
+                mboxlist_usersubs(fctx->req_tgt->userid,
+                                  propfind_by_collection, fctx,
+                                  MBOXTREE_SKIP_PERSONAL);
+                break;
+            }
         }
 
         if (fctx->davdb) fctx->close_db(fctx->davdb);
@@ -6694,6 +6691,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     fctx->elist = prev_ctx.elist;
     fctx->lprops = prev_ctx.lprops;
     fctx->req_tgt = prev_ctx.req_tgt;
+    fctx->prefer = prev_ctx.prefer;
 
     if (root != fctx->root) {
         /* Move any defined namespaces up to the previous parent */

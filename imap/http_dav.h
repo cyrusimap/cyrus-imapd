@@ -559,8 +559,7 @@ int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
 
 int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond);
 int propfind_by_resource(void *rock, void *data);
-int propfind_by_collection(const char *mboxname, int matchlen,
-                           int maycreate, void *rock);
+int propfind_by_collection(const mbentry_t *mbentry, void *rock);
 int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
                     const char *href, parse_path_t parse_path,
                     const struct prop_entry *lprops,

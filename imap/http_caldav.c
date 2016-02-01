@@ -5480,13 +5480,18 @@ static int report_cal_query(struct transaction_t *txn,
         /* Calendar collection(s) */
         if (txn->req_tgt.collection) {
             /* Add response for target calendar collection */
-            propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, fctx);
+            propfind_by_collection(txn->req_tgt.mbentry, fctx);
         }
         else {
             /* Add responses for all contained calendar collections */
-            int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-            mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
-                             httpd_authstate, propfind_by_collection, fctx);
+            mboxlist_mboxtree(txn->req_tgt.mbentry->name,
+                              propfind_by_collection, fctx,
+                              MBOXTREE_SKIP_ROOT);
+
+            /* Add responses for all shared calendar collections */
+            mboxlist_usersubs(txn->req_tgt.userid,
+                              propfind_by_collection, fctx,
+                              MBOXTREE_SKIP_PERSONAL);
         }
 
         ret = *fctx->ret;
@@ -5615,7 +5620,7 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
         }
     }
 
-    return propfind_by_collection(mboxname, strlen(mboxname), 0, rock);
+    return propfind_by_collection(mbentry, rock);
 }
 
 
@@ -5824,7 +5829,10 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
         }
         else {
             /* Get busytime for all contained calendar collections */
-            mboxlist_allmbox(mailboxname, busytime_by_collection, fctx, 0);
+            mboxlist_mboxtree(mailboxname, busytime_by_collection,
+                              fctx, MBOXTREE_SKIP_ROOT);
+
+            /* XXX  Get busytime for all shared calendar collections? */
         }
 
         if (fctx->davdb) caldav_close(fctx->davdb);
