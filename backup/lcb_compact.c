@@ -176,6 +176,31 @@ done:
     return r;
 }
 
+/* a small chunk is candidate for combining with the next
+ * if the sum of their lengths is smaller than max_chunksize
+ */
+static int want_combine(size_t length, const struct backup_chunk *next_chunk)
+{
+    /* can't combine if there's no subsequent chunk */
+    if (!next_chunk)
+        return 0;
+
+    /* don't combine if the chunks are both big enough already */
+    if (length >= compact_minsize && next_chunk->length >= compact_minsize)
+        return 0;
+
+    /* no upper size limit, so combine them */
+    if (!compact_maxsize)
+        return 1;
+
+    /* don't combine if upper size limit may be exceeded */
+    if (length + next_chunk->length > compact_maxsize)
+        return 0;
+
+    /* combine */
+    return 1;
+}
+
 static int compact_required(struct backup_chunk_list *all_chunks,
                             struct backup_chunk_list *keep_chunks)
 {
@@ -202,16 +227,8 @@ static int compact_required(struct backup_chunk_list *all_chunks,
 
     /* count chunks to be combined/split */
     for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
-        /* a small chunk is candidate for combining with the next
-         * if the sum of their lengths is smaller than max_chunksize */
-        if (compact_minsize && chunk->next != NULL) {
-            if (chunk->length < compact_minsize) {
-                size_t len = chunk->length + chunk->next->length;
-                if (!compact_maxsize || len < compact_maxsize) {
-                    to_be_compacted++;
-                }
-            }
-        }
+        if (want_combine(chunk->length, chunk->next))
+            to_be_compacted++;
 
         /* a large chunk is candidate for splitting if doing so won't
          * result in a new chunk smaller than min_chunksize */
@@ -259,6 +276,8 @@ EXPORTED int backup_compact(const char *name,
     struct protstream *in = NULL;
     time_t since, chunk_start_time, ts;
     int r;
+
+    compact_readconfig();
 
     r = compact_open(name, &original, &compact, nonblock);
     if (r) return r;
@@ -353,10 +372,14 @@ EXPORTED int backup_compact(const char *name,
             dlist_free(&dl);
         }
 
-        // XXX if we're due to start a new chunk
-        if (1) {
+        // if we're due to start a new chunk
+        if (!want_combine(compact->append_state->wrote, chunk->next)) {
             r = backup_append_end(compact, &ts);
             chunk_start_time = -1;
+        }
+        else if (verbose) {
+            fprintf(out, "combining chunks %d and %d\n",
+                         chunk->id, chunk->next->id);
         }
 
         prot_free(in);
