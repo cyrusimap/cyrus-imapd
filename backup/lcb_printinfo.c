@@ -53,10 +53,12 @@ typedef int (*detail_fn)(struct backup *, const char *, FILE *);
 
 static int detail0(struct backup *backup, const char *userid, FILE *out);
 static int detail_sz_ts(struct backup *backup, const char *userid, FILE *out);
+static int detail_full(struct backup *backup, const char *userid, FILE *out);
 
 static const detail_fn detail_funcs[] = {
     detail0,
     detail_sz_ts,
+    detail_full,
 };
 
 static const size_t n_detail_funcs = sizeof(detail_funcs) / sizeof(detail_funcs[0]);
@@ -105,6 +107,87 @@ static int detail_sz_ts(struct backup *backup, const char *userid, FILE *out)
             stat_buf.st_size,
             timestamp,
             backup->data_fname);
+
+    return r;
+}
+
+static int detail_full(struct backup *backup, const char *userid, FILE *out)
+{
+    struct backup_chunk_list *all_chunks = NULL;
+    struct backup_chunk *chunk = NULL;
+    struct stat data_stat_buf, index_stat_buf;
+    char data_timestamp[32] = "[unknown]";
+    char index_timestamp[32] = "[unknown]";
+    int r = 0;
+
+    r = fstat(backup->fd, &data_stat_buf);
+    if (r) {
+        fprintf(stderr, "fstat %s: %s\n", backup->data_fname, strerror(errno));
+        data_stat_buf.st_size = -1;
+    }
+
+    r = stat(backup->index_fname, &index_stat_buf);
+    if (r) {
+        fprintf(stderr, "stat %s: %s\n", backup->index_fname, strerror(errno));
+        index_stat_buf.st_size = -1;
+    }
+
+    strftime(data_timestamp, sizeof(data_timestamp), "%F %T",
+             localtime(&data_stat_buf.st_mtime));
+    strftime(index_timestamp, sizeof(index_timestamp), "%F %T",
+             localtime(&index_stat_buf.st_mtime));
+
+    fprintf(out, "userid: %s\n", userid);
+    fprintf(out, "  data: %s\n", backup->data_fname);
+    fprintf(out, "        " OFF_T_FMT "\tmodified: %s\n",
+                 data_stat_buf.st_size, data_timestamp);
+    fprintf(out, " index: %s\n", backup->index_fname);
+    fprintf(out, "        " OFF_T_FMT "\tmodified: %s\n",
+                 index_stat_buf.st_size, index_timestamp);
+
+    all_chunks = backup_get_chunks(backup);
+
+    if (all_chunks) {
+        double total_length = 0.0;
+
+        fprintf(out, "chunks: " SIZE_T_FMT "\n", all_chunks->count);
+        fprintf(out, "     id offset\tlength\tratio%%\tstart time           end time\n");
+
+        for (chunk = all_chunks->head; chunk; chunk = chunk->next) {
+            char ts_start[32] = "[unknown]";
+            char ts_end[32] = "[unknown]";
+            double ratio;
+
+            strftime(ts_start, sizeof(ts_start), "%F %T",
+                    localtime(&chunk->ts_start));
+            strftime(ts_end, sizeof(ts_end), "%F %T",
+                    localtime(&chunk->ts_end));
+
+            if (chunk->next) {
+                ratio = 100.0 * (chunk->next->offset - chunk->offset) / chunk->length;
+            }
+            else {
+                ratio = 100.0 * (data_stat_buf.st_size - chunk->offset) / chunk->length;
+            }
+
+            total_length += chunk->length;
+
+            fprintf(out, "%7d " OFF_T_FMT "\t" SIZE_T_FMT "\t%6.1f\t%s  %s\n",
+                        chunk->id,
+                        chunk->offset,
+                        chunk->length,
+                        ratio,
+                        ts_start,
+                        ts_end);
+        }
+
+        fprintf(out, "overall compression: %.1f%%\n",
+                     100.0 * data_stat_buf.st_size / total_length);
+
+        backup_chunk_list_free(&all_chunks);
+    }
+
+    fprintf(out, "\n");
 
     return r;
 }
