@@ -731,16 +731,24 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
                        void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
+    // XXX - should we be using httpd_userid here?
+    const char *userid = fctx->req_tgt->userid;
 
-    if (!(namespace_addressbook.enabled && fctx->req_tgt->userid))
+    if (!(namespace_addressbook.enabled && userid))
         return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                         name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/%s/%s/", namespace_addressbook.prefix,
-               USER_COLLECTION_PREFIX, fctx->req_tgt->userid);
+    if (strchr(userid, '@') || !httpd_extradomain) {
+        buf_printf(&fctx->buf, "%s/%s/%s/", namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX, userid);
+    }
+    else {
+        buf_printf(&fctx->buf, "%s/%s/%s@%s/", namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX, userid, httpd_extradomain);
+    }
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
         /* Return properties for this URL */
