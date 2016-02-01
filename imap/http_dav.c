@@ -4955,10 +4955,9 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
             p = strchr(mboxname+5, '.') + 1;  /* skip "user.XXX." */
             if (strcmp(p, fctx->req_tgt->mboxprefix)) goto done;
         }
-        else {
+        else if (p - mboxname > 1 + (int) strlen(fctx->req_tgt->mbentry->name)) {
             /* Reject folders that are more than one level deep */
-            p = (char *) mboxname + strlen(fctx->req_tgt->mbentry->name);
-            if (*p && (*p != '.' || strchr(++p, '.'))) goto done;
+            goto done;
         }
         break;
 
