@@ -49,6 +49,7 @@
 #include "lib/libconfig.h"
 
 #include "imap/imap_err.h"
+#include "imap/sync_support.h"
 
 #include "backup/backup.h"
 
@@ -273,6 +274,43 @@ static int compact_required(struct backup_chunk_list *all_chunks,
     return 0;
 }
 
+static int want_append(struct dlist *dlist,
+                       struct sync_msgid_list *keep_message_guids)
+{
+    if (strcmp(dlist->name, "MESSAGE") == 0) {
+        struct dlist *di, *next;
+
+        for (di = dlist->head; di; di = next) {
+            struct message_guid *guid = NULL;
+
+            /* save next pointer now in case we need to unstitch */
+            next = di->next;
+
+            if (!dlist_tofile(di, NULL, &guid, NULL, NULL))
+                continue;
+
+            if (!sync_msgid_lookup(keep_message_guids, guid)) {
+                syslog(LOG_DEBUG, "%s: MESSAGE no longer needed: %s",
+                                  __func__, message_guid_encode(guid));
+                dlist_unstitch(dlist, di);
+                dlist_unlink_files(di);
+                dlist_free(&di);
+            }
+        }
+
+        if (dlist->head) {
+            syslog(LOG_DEBUG, "%s: keeping MESSAGE line", __func__);
+            return 1;
+        }
+
+        syslog(LOG_DEBUG, "%s: MESSAGE line has no more messages", __func__);
+        return 0;
+    }
+    else {
+        return 1;
+    }
+}
+
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
@@ -284,6 +322,14 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
         errno = EIO;
 
     return r;
+}
+
+static int _keep_message_guids_cb(const struct backup_message *message,
+                                  void *rock)
+{
+    struct sync_msgid_list *list = (struct sync_msgid_list *) rock;
+    sync_msgid_insert(list, message->guid);
+    return 0;
 }
 
 /* returns:
@@ -300,6 +346,7 @@ EXPORTED int backup_compact(const char *name,
     struct backup_chunk_list *all_chunks = NULL;
     struct backup_chunk_list *keep_chunks = NULL;
     struct backup_chunk *chunk = NULL;
+    struct sync_msgid_list *keep_message_guids = NULL;
     struct gzuncat *gzuc = NULL;
     struct protstream *in = NULL;
     time_t since, chunk_start_time, ts;
@@ -354,6 +401,11 @@ EXPORTED int backup_compact(const char *name,
     ts = 0;
     struct buf cmd = BUF_INITIALIZER;
     for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
+        keep_message_guids = sync_msgid_list_create(0);
+        r = backup_message_foreach(original, chunk->id, &since,
+                                   _keep_message_guids_cb, keep_message_guids);
+        if (r) goto error;
+
         gzuc_member_start_from(gzuc, chunk->offset);
 
         in = prot_readcb(_prot_fill_cb, gzuc);
@@ -388,7 +440,7 @@ EXPORTED int backup_compact(const char *name,
             }
 
             // XXX if this line is worth keeping
-            if (1) {
+            if (want_append(dl, keep_message_guids)) {
                 // FIXME if message is removed due to unneeded chunk,
                 // subsequent mailbox lines for it will fail here
                 // so we need to be able to tell which lines apply to messages we don't want anymore
@@ -425,6 +477,8 @@ EXPORTED int backup_compact(const char *name,
         prot_free(in);
         in = NULL;
         gzuc_member_end(gzuc, NULL);
+
+        sync_msgid_list_free(&keep_message_guids);
     }
     buf_free(&cmd);
 
@@ -444,6 +498,7 @@ EXPORTED int backup_compact(const char *name,
 error:
     if (in) prot_free(in);
     if (gzuc) gzuc_free(&gzuc);
+    if (keep_message_guids) sync_msgid_list_free(&keep_message_guids);
     if (all_chunks) backup_chunk_list_free(&all_chunks);
     if (keep_chunks) backup_chunk_list_free(&keep_chunks);
     if (compact) backup_unlink(&compact);
