@@ -818,6 +818,6 @@ todo list
 
 compact implementation steps:
     1 remove unused chunks, keep everything else as is
-    2 join adjacent chunks if small enough
-    3 discard old message/mailbox lines
-    4 parse/rebuild message lines
+    2 join adjacent chunks if small enough, split large chunks
+    3 parse/rebuild message lines
+    4 discard unused mailbox lines
