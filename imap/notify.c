@@ -55,10 +55,15 @@
 # include <unistd.h>
 #endif
 
+#include "append.h"
 #include "global.h"
 #include "notify.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "mailbox.h"
+#include "util.h"
+#include "imap_err.h"
+#include "times.h"
 
 #define FNAME_NOTIFY_SOCK "/socket/notify"
 
@@ -109,12 +114,12 @@ static void notify_dlist(const char *sockpath, const char *method,
 
     soc = socket(PF_UNIX, SOCK_STREAM, 0);
     if (soc < 0) {
-        syslog(LOG_ERR, "unable to create notify socket(): %m");
+        syslog(LOG_ERR, "NOTIFY: unable to create notify socket(): %m");
         goto out;
     }
 
     if (connect(soc, (struct sockaddr *)&sun_data, sizeof(sun_data)) < 0) {
-        syslog(LOG_ERR, "failed to connect to %s: %m", sockpath);
+        syslog(LOG_ERR, "NOTIFY: failed to connect to %s: %m", sockpath);
         goto out;
     }
 
@@ -144,6 +149,77 @@ out:
     if (soc >= 0) close(soc);
     dlist_free(&dl);
     dlist_free(&res);
+}
+
+EXPORTED int notify_at(time_t when, const char *method,
+            const char *class, const char *priority,
+            const char *user, const char *mboxname,
+            int nopt, const char **options,
+            const char *message)
+{
+    struct mailbox *mailbox = NULL;
+    char datestr[RFC822_DATETIME_MAX+1];
+    int i;
+    int r = mailbox_open_iwl("#events", &mailbox);
+    struct buf buf = BUF_INITIALIZER;
+
+    FILE *f;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    struct appendstate as;
+    struct stagemsg *stage;
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = mboxlist_createmailbox("#events", 0, config_defpartition, 1,
+                                   "cyrus", NULL, 0, 0, 0, 0, NULL);
+        if (!r) r = mailbox_open_iwl("#events", &mailbox);
+    }
+    if (r) goto done;
+
+    /* Prepare to stage the message */
+    f = append_newstage(mailbox->name, when, 0, &stage);
+    if (!f) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    syslog(LOG_NOTICE, "APPENDING TO STAGE: %s (%u)", mailbox->name, (unsigned)when);
+    time_to_rfc822(when, datestr, sizeof(datestr));
+    fprintf(f, "Date: %s\r\n", datestr);
+    fprintf(f, "Method: %s\r\n", charset_encode_mimeheader(method, 0));
+    fprintf(f, "Class: %s\r\n", charset_encode_mimeheader(class, 0));
+    fprintf(f, "Priority: %s\r\n", charset_encode_mimeheader(priority, 0));
+    fprintf(f, "User: %s\r\n", charset_encode_mimeheader(user, 0));
+    fprintf(f, "Mailbox: %s\r\n", charset_encode_mimeheader(mboxname, 0));
+    for (i = 0; i < nopt; i++)
+        fprintf(f, "Option: %s\r\n", charset_encode_mimeheader(options[i], 0));
+    fprintf(f, "Message: %s\r\n", charset_encode_mimeheader(message, 0));
+    fprintf(f, "\r\n");
+
+    fclose(f);
+    f = NULL;
+
+    r = append_setup_mbox(&as, mailbox, "cyrus", NULL,
+                          0, qdiffs, 0, 0, 0);
+    if (r) goto done;
+
+    struct body *body = NULL;
+    r = append_fromstage(&as, &body, stage, when, 0, 0, 0);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    if (r) goto done;
+
+    r = append_commit(&as);
+    if (r) goto done;
+
+done:
+    append_abort(&as);
+    mailbox_close(&mailbox);
+    buf_free(&buf);
+    if (f) fclose(f);
+
+    return r;
 }
 
 EXPORTED void notify(const char *method,

@@ -78,6 +78,7 @@
 struct sched_data {
     unsigned ischedule;
     unsigned is_reply;
+    unsigned is_update;
     icalcomponent *itip;
     icalcomponent *master;
     unsigned comp_mask;
@@ -96,16 +97,21 @@ struct proplist {
 };
 
 /* Each calendar user address has the following scheduling protocol params */
+/* All memory must be freed with sched_param_free. */
 struct sched_param {
     char *userid;       /* Userid corresponding to calendar address */
     char *server;       /* Remote server user lives on */
     unsigned port;      /* Remote server port, default = 80 */
     unsigned flags;     /* Flags dictating protocol to use for scheduling */
+    unsigned isyou;     /* true if the user is the same as the authenticated user */
     struct proplist *props; /* List of attendee iCal properties */
 };
 
+extern void sched_param_free(struct sched_param *sparam);
+
 struct freebusy {
     struct icalperiodtype per;
+    struct icaltimetype recurid;
     icalparameter_fbtype type;
 };
 
@@ -168,7 +174,7 @@ extern int isched_send(struct sched_param *sparam, const char *recipient,
 
 extern int sched_busytime_query(struct transaction_t *txn,
                                 struct mime_type_t *mime, icalcomponent *comp);
-extern void sched_request(const char *organizer, struct sched_param *sparam,
+extern void sched_request(const char *userid, const char *organizer, struct sched_param *sparam,
                           icalcomponent *oldical, icalcomponent *newical,
                           const char *att_update);
 extern void sched_reply(const char *userid,
@@ -176,6 +182,8 @@ extern void sched_reply(const char *userid,
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
-extern int caladdress_lookup(const char *addr, struct sched_param *param);
+extern int caladdress_lookup(const char *addr, struct sched_param *param,
+                             const char *myuserid);
+
 
 #endif /* HTTP_CALDAV_SCHED_H */

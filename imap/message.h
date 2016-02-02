@@ -89,6 +89,8 @@ struct body {
     int numparts;               /* For multipart types */
     struct body *subpart;       /* For message/rfc822 and multipart types */
 
+    size_t filesize;            /* to make sure that things match up! */
+
     /*
      * Other header information.
      * Only meaningful for body-parts at top level or
@@ -267,6 +269,7 @@ extern int message_get_mailbox(message_t *m, struct mailbox **);
 extern int message_get_uid(message_t *m, uint32_t *uidp);
 extern int message_get_cid(message_t *m, conversation_id_t *cidp);
 extern int message_get_internaldate(message_t *m, time_t *);
+extern int message_get_spamscore(message_t *m, uint32_t *scorep);
 extern int message_get_sentdate(message_t *m, time_t *);
 extern int message_get_modseq(message_t *m, modseq_t *modseqp);
 extern int message_get_systemflags(message_t *m, uint32_t *);

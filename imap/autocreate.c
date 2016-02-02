@@ -114,7 +114,6 @@ static const char *get_script_name(const char *filename)
 static int autocreate_sieve(const char *userid, const char *source_script)
 {
     /* XXX - this is really ugly, but too much work to tidy up right now -- Bron */
-    const char *sieve_dir = NULL;
     sieve_script_t *s = NULL;
     bytecode_info_t *bc = NULL;
     char *err = NULL;
@@ -123,8 +122,8 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     int do_compile = 0;
     const char *compiled_source_script = NULL;
     const char *sievename = get_script_name(source_script);
+    const char *sieve_script_dir = NULL;
     char sieve_script_name[MAX_FILENAME];
-    char sieve_script_dir[MAX_FILENAME];
     char sieve_bcscript_name[MAX_FILENAME];
     char sieve_default[MAX_FILENAME];
     char sieve_tmpname[MAX_FILENAME];
@@ -141,7 +140,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     }
 
     /* Check if sievedir is defined in imapd.conf */
-    if(!(sieve_dir = config_getstring(IMAPOPT_SIEVEDIR))) {
+    if(!config_getstring(IMAPOPT_SIEVEDIR)) {
         syslog(LOG_WARNING, "autocreate_sieve: sievedir option is not defined. Check imapd.conf");
         return 1;
     }
@@ -152,28 +151,34 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         do_compile = 1;
     }
 
-    if(snprintf(sieve_tmpname, MAX_FILENAME, "%s%s.script.NEW",sieve_script_dir, sievename) >= MAX_FILENAME) {
-        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_dir, sievename, userid);
+    if (!(sieve_script_dir = user_sieve_path(userid))) {
+        syslog(LOG_WARNING, "autocreate_sieve: unable to determine sieve directory for user %s", userid);
         return 1;
     }
-    if(snprintf(sieve_bctmpname, MAX_FILENAME, "%s%s.bc.NEW",sieve_script_dir, sievename) >= MAX_FILENAME) {
-        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_dir, sievename, userid);
+
+    if(snprintf(sieve_tmpname, MAX_FILENAME, "%s/%s.script.NEW",sieve_script_dir, sievename) >= MAX_FILENAME) {
+        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
         return 1;
     }
-    if(snprintf(sieve_script_name, MAX_FILENAME, "%s%s.script",sieve_script_dir, sievename) >= MAX_FILENAME) {
-        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_dir, sievename, userid);
+    if(snprintf(sieve_bctmpname, MAX_FILENAME, "%s/%s.bc.NEW",sieve_script_dir, sievename) >= MAX_FILENAME) {
+        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
         return 1;
     }
-    if(snprintf(sieve_bcscript_name, MAX_FILENAME, "%s%s.bc",sieve_script_dir, sievename) >= MAX_FILENAME) {
-        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_dir, sievename, userid);
+    if(snprintf(sieve_script_name, MAX_FILENAME, "%s/%s.script",sieve_script_dir, sievename) >= MAX_FILENAME) {
+        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
         return 1;
     }
-    if(snprintf(sieve_default, MAX_FILENAME, "%s%s",sieve_script_dir,"defaultbc") >= MAX_FILENAME) {
-        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_dir, sievename, userid);
+    if(snprintf(sieve_bcscript_name, MAX_FILENAME, "%s/%s.bc",sieve_script_dir, sievename) >= MAX_FILENAME) {
+        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
         return 1;
     }
+    if(snprintf(sieve_default, MAX_FILENAME, "%s/%s",sieve_script_dir,"defaultbc") >= MAX_FILENAME) {
+        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
+        return 1;
+    }
+    /* XXX no directory? umm */
     if(snprintf(sieve_bclink_name, MAX_FILENAME, "%s.bc", sievename) >= MAX_FILENAME) {
-        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_dir, sievename, userid);
+        syslog(LOG_WARNING, "autocreate_sieve: Invalid sieve path %s, %s, %s", sieve_script_dir, sievename, userid);
         return 1;
     }
 
@@ -195,10 +200,9 @@ static int autocreate_sieve(const char *userid, const char *source_script)
      */
 
     /* Create the directory where the sieve scripts will reside */
-    r = cyrus_mkdir(sieve_script_dir, 0755);
+    r = cyrus_mkdir(sieve_bctmpname, 0755);
     if(r == -1) {
         /* If this fails we just leave */
-        syslog(LOG_WARNING,"autocreate_sieve: Unable to create directory %s. Check permissions",sieve_script_name);
         fclose(in_stream);
         return 1;
     }
@@ -217,7 +221,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
             fclose(in_stream);
             return 1;
         } else {
-            syslog(LOG_WARNING,"autocreate_sieve: Unable to create %s. Unknown error",sieve_bctmpname);
+            syslog(LOG_WARNING,"autocreate_sieve: Unable to create %s: %m",sieve_bctmpname);
             fclose(in_stream);
             return 1;
         }
@@ -226,7 +230,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     if(!do_compile && compiled_source_script && (in_fd = open(compiled_source_script, O_RDONLY)) != -1) {
         while((r = read(in_fd, buf, sizeof(buf))) > 0) {
             if((k=write(out_fd, buf,r)) < 0) {
-                syslog(LOG_WARNING, "autocreate_sieve: Error writing to file: %s, error: %d", sieve_bctmpname, errno);
+                syslog(LOG_WARNING, "autocreate_sieve: Error writing to file %s: %m", sieve_bctmpname);
                 close(out_fd);
                 close(in_fd);
                 fclose(in_stream);
@@ -239,12 +243,12 @@ static int autocreate_sieve(const char *userid, const char *source_script)
             xclose(out_fd);
             xclose(in_fd);
         } else if (r < 0) {
-            syslog(LOG_WARNING, "autocreate_sieve: Error reading compiled script file: %s. Will try to compile it",
+            syslog(LOG_WARNING, "autocreate_sieve: Error reading compiled script file %s: %m. Will try to compile it",
                            compiled_source_script);
             xclose(in_fd);
             do_compile = 1;
             if(lseek(out_fd, 0, SEEK_SET)) {
-                syslog(LOG_WARNING, "autocreate_sieve: Major IO problem. Aborting");
+                syslog(LOG_WARNING, "autocreate_sieve: Major IO problem (lseek: %m). Aborting");
                 xclose(out_fd);
                 return 1;
             }
@@ -305,7 +309,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     /* Copy the initial script */
     oldmask = umask(077);
     if((out_fp = fopen(sieve_tmpname, "w")) == NULL) {
-        syslog(LOG_WARNING,"autocreate_sieve: Unable to open %s destination sieve script", sieve_tmpname);
+        syslog(LOG_WARNING,"autocreate_sieve: Unable to open destination sieve script %s: %m", sieve_tmpname);
         unlink(sieve_bctmpname);
         umask(oldmask);
         fclose(in_stream);
@@ -315,7 +319,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
     while((r = fread(buf,sizeof(char), sizeof(buf), in_stream)) > 0) {
         if( fwrite(buf,sizeof(char), r, out_fp) != (unsigned)r) {
-            syslog(LOG_WARNING,"autocreate_sieve: Problem writing to sieve script file: %s",sieve_tmpname);
+            syslog(LOG_WARNING,"autocreate_sieve: Problem writing to sieve script file %s: %m",sieve_tmpname);
             fclose(out_fp);
             unlink(sieve_tmpname);
             unlink(sieve_bctmpname);
@@ -351,7 +355,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     /* end now with the symlink */
     if(symlink(sieve_bclink_name, sieve_default)) {
         if(errno != EEXIST) {
-            syslog(LOG_WARNING, "autocreate_sieve: problem making the default link.");
+            syslog(LOG_WARNING, "autocreate_sieve: problem making the default link (symlink: %m).");
             /* Lets delete the files */
             unlink(sieve_script_name);
             unlink(sieve_bcscript_name);
@@ -391,7 +395,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                 close(in_fd);
                 return 0;
             } else {
-                syslog(LOG_WARNING,"autocreate_sieve: Unable to create %s",sieve_tmpname);
+                syslog(LOG_WARNING,"autocreate_sieve: Unable to create %s: %m",sieve_tmpname);
                 close(in_fd);
                 return 0;
             }
@@ -399,7 +403,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
         while((r = read(in_fd, buf, sizeof(buf))) > 0) {
             if((k = write(out_fd,buf,r)) < 0) {
-                syslog(LOG_WARNING, "autocreate_sieve: Error writing to file: %s, error: %d", sieve_tmpname, errno);
+                syslog(LOG_WARNING, "autocreate_sieve: Error writing to file: %s: %m", sieve_tmpname);
                 close(out_fd);
                 close(in_fd);
                 unlink(sieve_tmpname);
@@ -411,7 +415,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
             xclose(out_fd);
             xclose(in_fd);
         } else if (r < 0) {
-                syslog(LOG_WARNING, "autocreate_sieve: Error writing to file: %s, error: %d", sieve_tmpname, errno);
+                syslog(LOG_WARNING, "autocreate_sieve: Error reading file: %s: %m", sieve_bcscript_name);
                 xclose(out_fd);
                 xclose(in_fd);
                 unlink(sieve_tmpname);
@@ -726,13 +730,6 @@ int autocreate_user(struct namespace *namespace,
 
     create = strarray_split(config_getstring(IMAPOPT_AUTOCREATE_INBOX_FOLDERS), SEP, STRARRAY_TRIM);
     subscribe = strarray_split(config_getstring(IMAPOPT_AUTOCREATE_SUBSCRIBE_FOLDERS), SEP, STRARRAY_TRIM);
-
-    /* need to convert all names to internal namespace first */
-    for (n = 0; n < create->count; n++)
-        mboxname_hiersep_tointernal(namespace, create->data[n], 0);
-
-    for (n = 0; n < subscribe->count; n++)
-        mboxname_hiersep_tointernal(namespace, subscribe->data[n], 0);
 
     for (n = 0; n < create->count; n++) {
         const char *name = strarray_nth(create, n);

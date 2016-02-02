@@ -131,15 +131,15 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
-char *httpd_userid = NULL, *proxy_userid = NULL;
+char *httpd_userid = NULL;
+char *httpd_extrafolder = NULL;
 char *httpd_extradomain = NULL;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
 int httpd_userisanonymous = 1;
-struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
-int httpd_haveaddr = 0;
-char httpd_clienthost[NI_MAXHOST*2+1] = "[local]";
+static const char *httpd_clienthost = "[local]";
+const char *httpd_localip = NULL, *httpd_remoteip = NULL;
 struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
 struct protgroup *protin = NULL;
@@ -213,7 +213,6 @@ static int parse_ranges(const char *hdr, unsigned long len,
 static int proxy_authz(const char **authzid, struct transaction_t *txn);
 static void auth_success(struct transaction_t *txn);
 static int http_auth(const char *creds, struct transaction_t *txn);
-static void keep_alive(int sig);
 
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
@@ -236,6 +235,7 @@ static struct sasl_callback mysasl_cb[] = {
 /* Array of HTTP methods known by our server. */
 const struct known_meth_t http_methods[] = {
     { "ACL",            0 },
+    { "BIND",           0 },
     { "COPY",           METH_NOBODY },
     { "DELETE",         METH_NOBODY },
     { "GET",            METH_NOBODY },
@@ -245,12 +245,14 @@ const struct known_meth_t http_methods[] = {
     { "MKCOL",          0 },
     { "MOVE",           METH_NOBODY },
     { "OPTIONS",        METH_NOBODY },
+    { "PATCH",          0 },
     { "POST",           0 },
     { "PROPFIND",       0 },
     { "PROPPATCH",      0 },
     { "PUT",            0 },
     { "REPORT",         0 },
     { "TRACE",          METH_NOBODY },
+    { "UNBIND",         0 },
     { "UNLOCK",         METH_NOBODY },
     { NULL,             0 }
 };
@@ -260,9 +262,10 @@ struct namespace_t namespace_default = {
     URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get,            NULL },                 /* GET          */
@@ -272,34 +275,36 @@ struct namespace_t namespace_default = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { &meth_propfind_root,  NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL },                 /* UNLOCK       */
     }
 };
 
 /* Array of different namespaces and features supported by the server */
 struct namespace_t *namespaces[] = {
-#ifdef WITH_DAV
 #ifdef WITH_JSON
+    &namespace_jmap,
     &namespace_tzdist,          /* MUST be before namespace_calendar!! */
 #endif /* WITH_JSON */
-    &namespace_principal,
+#ifdef WITH_DAV
     &namespace_calendar,
     &namespace_freebusy,
     &namespace_addressbook,
+    &namespace_drive,
+    &namespace_principal,       /* MUST be after namespace_cal & addr & drive */
+    &namespace_notify,          /* MUST be after namespace_principal */
 #ifdef HAVE_IANA_PARAMS
     &namespace_ischedule,
     &namespace_domainkey,
 #endif /* HAVE_IANA_PARAMS */
 #endif /* WITH_DAV */
-#ifdef WITH_JSON
-    &namespace_jmap,
-#endif /* WITH_JSON */
     &namespace_rss,
     &namespace_dblookup,
     &namespace_admin,
@@ -366,7 +371,7 @@ static void httpd_reset(void)
 
     cyrus_reset_stdio();
 
-    strcpy(httpd_clienthost, "[local]");
+    httpd_clienthost = "[local]";
     if (httpd_logfd != -1) {
         close(httpd_logfd);
         httpd_logfd = -1;
@@ -376,13 +381,13 @@ static void httpd_reset(void)
         httpd_userid = NULL;
     }
     httpd_userisanonymous = 1;
+    if (httpd_extrafolder != NULL) {
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
+    }
     if (httpd_extradomain != NULL) {
         free(httpd_extradomain);
         httpd_extradomain = NULL;
-    }
-    if (proxy_userid != NULL) {
-        free(proxy_userid);
-        proxy_userid = NULL;
     }
     if (httpd_authstate) {
         auth_freestate(httpd_authstate);
@@ -456,8 +461,6 @@ int service_init(int argc __attribute__((unused)),
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EC_CONFIG);
     }
-    /* External names are in URIs (UNIX sep) */
-    httpd_namespace.hier_sep = '/';
 
     /* open the mboxevent system */
     mboxevent_init();
@@ -524,6 +527,14 @@ int service_init(int argc __attribute__((unused)),
 }
 
 
+static volatile sig_atomic_t gotsigalrm = 0;
+
+static void sigalrm_handler(int sig __attribute__((unused)))
+{
+    gotsigalrm = 1;
+}
+
+
 /*
  * run for each accepted connection
  */
@@ -531,10 +542,6 @@ int service_main(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
-    socklen_t salen;
-    char hbuf[NI_MAXHOST];
-    char localip[60], remoteip[60];
-    int niflags;
     sasl_security_properties_t *secprops=NULL;
     const char *mechlist, *mech;
     int mechcount = 0;
@@ -552,36 +559,7 @@ int service_main(int argc __attribute__((unused)),
     protgroup_insert(protin, httpd_in);
 
     /* Find out name of client host */
-    salen = sizeof(httpd_remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&httpd_remoteaddr, &salen) == 0 &&
-        (httpd_remoteaddr.ss_family == AF_INET ||
-         httpd_remoteaddr.ss_family == AF_INET6)) {
-        if (getnameinfo((struct sockaddr *)&httpd_remoteaddr, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-            strncpy(httpd_clienthost, hbuf, sizeof(hbuf));
-            strlcat(httpd_clienthost, " ", sizeof(httpd_clienthost));
-        } else {
-            httpd_clienthost[0] = '\0';
-        }
-        niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-        if (((struct sockaddr *)&httpd_remoteaddr)->sa_family == AF_INET6)
-            niflags |= NI_WITHSCOPEID;
-#endif
-        if (getnameinfo((struct sockaddr *)&httpd_remoteaddr, salen, hbuf,
-                        sizeof(hbuf), NULL, 0, niflags) != 0)
-            strlcpy(hbuf, "unknown", sizeof(hbuf));
-        strlcat(httpd_clienthost, "[", sizeof(httpd_clienthost));
-        strlcat(httpd_clienthost, hbuf, sizeof(httpd_clienthost));
-        strlcat(httpd_clienthost, "]", sizeof(httpd_clienthost));
-        salen = sizeof(httpd_localaddr);
-        if (getsockname(0, (struct sockaddr *)&httpd_localaddr, &salen) == 0) {
-            httpd_haveaddr = 1;
-        }
-
-        /* Create pre-authentication telemetry log based on client IP */
-        httpd_logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
-    }
+    httpd_clienthost = get_clienthost(0, &httpd_localip, &httpd_remoteip);
 
     /* other params should be filled in */
     if (sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
@@ -599,16 +577,21 @@ int service_main(int argc __attribute__((unused)),
     if (sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
         fatal("Failed to set SASL property", EC_TEMPFAIL);
 
-    if(iptostring((struct sockaddr *)&httpd_localaddr,
-                  salen, localip, 60) == 0) {
-        sasl_setprop(httpd_saslconn, SASL_IPLOCALPORT, localip);
-        saslprops.iplocalport = xstrdup(localip);
+    if (httpd_localip) {
+        sasl_setprop(httpd_saslconn, SASL_IPLOCALPORT, httpd_localip);
+        saslprops.iplocalport = xstrdup(httpd_localip);
     }
 
-    if(iptostring((struct sockaddr *)&httpd_remoteaddr,
-                  salen, remoteip, 60) == 0) {
-        sasl_setprop(httpd_saslconn, SASL_IPREMOTEPORT, remoteip);
-        saslprops.ipremoteport = xstrdup(remoteip);
+    if (httpd_remoteip) {
+        char hbuf[NI_MAXHOST], *p;
+
+        sasl_setprop(httpd_saslconn, SASL_IPREMOTEPORT, httpd_remoteip);
+        saslprops.ipremoteport = xstrdup(httpd_remoteip);
+
+        /* Create pre-authentication telemetry log based on client IP */
+        strlcpy(hbuf, httpd_remoteip, NI_MAXHOST);
+        if ((p = strchr(hbuf, ';'))) *p = '\0';
+        httpd_logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
     }
 
     /* See which auth schemes are available to us */
@@ -653,7 +636,7 @@ int service_main(int argc __attribute__((unused)),
 #ifdef SA_RESTART
         action.sa_flags |= SA_RESTART;
 #endif
-        action.sa_handler = keep_alive;
+        action.sa_handler = sigalrm_handler;
         if (sigaction(SIGALRM, &action, NULL) < 0) {
             syslog(LOG_ERR, "unable to install signal handler for %d: %m", SIGALRM);
             httpd_keepalive = 0;
@@ -984,8 +967,6 @@ static void cmdloop(void)
             ret = HTTP_SERVER_ERROR;
         }
 
-        proc_register(config_ident, httpd_clienthost, httpd_userid, NULL, NULL);
-
       req_line:
         do {
             /* Flush any buffered output */
@@ -1306,7 +1287,6 @@ static void cmdloop(void)
         switch (txn.meth) {
         case METH_GET:
         case METH_HEAD:
-        case METH_OPTIONS:
             /* Let method processing function decide if auth is needed */
             break;
 
@@ -1435,7 +1415,8 @@ static void cmdloop(void)
         if (!txn.flags.ver1_0) alarm(httpd_keepalive);
 
         /* Process the requested method */
-        ret = (*meth_t->proc)(&txn, meth_t->params);
+        if (namespace->premethod) ret = namespace->premethod(&txn);
+        if (!ret) ret = (*meth_t->proc)(&txn, meth_t->params);
 
       need_auth:
         if (ret == HTTP_UNAUTHORIZED) {
@@ -1810,18 +1791,21 @@ EXPORTED void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags
 EXPORTED void allow_hdr(const char *hdr, unsigned allow)
 {
     const char *meths[] = {
-        "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
+        "OPTIONS, GET, HEAD", "POST", "PUT", "PATCH", "DELETE", "TRACE", NULL
     };
 
     comma_list_hdr(hdr, meths, allow);
 
     if (allow & ALLOW_DAV) {
-        prot_printf(httpd_out, "%s: PROPFIND, REPORT", hdr);
-        if (allow & ALLOW_WRITE) {
-            prot_puts(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
+        if (allow & ALLOW_READ) {
+            prot_printf(httpd_out, "%s: PROPFIND, REPORT, COPY", hdr);
+            if (allow & ALLOW_DELETE) prot_puts(httpd_out, ", MOVE");
         }
-        if (allow & ALLOW_WRITECOL) {
-            prot_puts(httpd_out, ", PROPPATCH, MKCOL, ACL");
+        if (allow & ALLOW_PROPPATCH) prot_puts(httpd_out, ", PROPPATCH");
+        if (allow & ALLOW_WRITE) prot_puts(httpd_out, ", LOCK, UNLOCK");
+        if (allow & ALLOW_ACL) prot_puts(httpd_out, ", ACL");
+        if (allow & ALLOW_MKCOL) {
+            prot_puts(httpd_out, ", MKCOL");
             if (allow & ALLOW_CAL) {
                 prot_printf(httpd_out, "\r\n%s: MKCALENDAR", hdr);
             }
@@ -1846,14 +1830,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 {
     time_t now;
     char datestr[30];
-    unsigned keepalive;
     const char **hdr;
     struct auth_challenge_t *auth_chal;
     struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
 
     /* Stop method processing alarm */
-    keepalive = alarm(0);
+    alarm(0);
+    gotsigalrm = 0;
 
 
     /* Status-Line */
@@ -1863,8 +1847,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     /* Connection Management */
     switch (code) {
     case HTTP_SWITCH_PROT:
-        keepalive = 0;  /* No alarm during TLS negotiation */
-
+        /* Tell client to start TLS negotiation */
         prot_printf(httpd_out, "Upgrade: %s\r\n", TLS_VERSION);
         prot_puts(httpd_out, "Connection: Upgrade\r\n");
 
@@ -1879,9 +1862,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
         /* Force the response to the client immediately */
         prot_flush(httpd_out);
-
-        /* Reset method processing alarm */
-        alarm(keepalive);
 
         return;
 
@@ -1986,6 +1966,20 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
         if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
     }
+    if (resp_body->patch) {
+        const char *sep = "";
+        int i;
+
+        prot_puts(httpd_out, "Accept-Patch: ");
+        for (i = 0; resp_body->patch[i].format; i++) {
+            prot_printf(httpd_out, "%s%s", sep, resp_body->patch[i].format);
+            sep = ", ";
+        }
+        prot_puts(httpd_out, "\r\n");
+    }
+    if (resp_body->link) {
+        prot_printf(httpd_out, "Link: %s\r\n", resp_body->link);
+    }
 
     switch (code) {
     case HTTP_OK:
@@ -2005,17 +1999,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
             if (txn->req_tgt.allow & ALLOW_DAV) {
                 /* Construct DAV header(s) based on namespace of request URL */
-                prot_printf(httpd_out,
-                            "DAV: 1,%s 3, access-control%s, server-info\r\n",
-                            (txn->req_tgt.allow & ALLOW_WRITE) ? " 2," : "",
-                            (txn->req_tgt.allow & ALLOW_WRITECOL) ?
-                            ", extended-mkcol" : "");
+                prot_puts(httpd_out, "DAV: 1, 2, 3, access-control,"
+                          " extended-mkcol, resource-sharing\r\n");
                 if (txn->req_tgt.allow & ALLOW_CAL) {
                     prot_printf(httpd_out, "DAV: calendar-access%s%s%s\r\n",
-                                (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
-                                ", calendar-availability" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
                                 ", calendar-auto-schedule" : "",
+                                (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
+                                ", calendar-availability" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
                                 ", calendar-no-timezone" : "");
                     if (txn->req_tgt.allow & ALLOW_CAL_ATTACH) {
@@ -2024,14 +2015,15 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                                   "calendar-managed-attachments-no-recurrence\r\n");
                     }
 
-                    /* Backwards compatibility with older Apple VAV clients */
-                    if ((txn->req_tgt.allow &
-                         (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
-                        (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) {
-                        if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))
-                            && strstr(hdr[0], "CalendarAgent/")) {
-                            prot_puts(httpd_out, "DAV: inbox-availability\r\n");
-                        }
+                    /* Backwards compatibility with older Apple clients */
+                    if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))
+                        && strstr(hdr[0], "CalendarAgent/")) {
+                        prot_printf(httpd_out,
+                                    "DAV: calendarserver-sharing%s\r\n",
+                                    (txn->req_tgt.allow &
+                                     (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
+                                    (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED) ?
+                                    ", inbox-availability" : "");
                     }
                 }
                 if (txn->req_tgt.allow & ALLOW_CARD) {
@@ -2043,22 +2035,24 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 /* Access-Control-Allow-Methods supersedes Allow */
                 break;
             }
-            else goto allow;
+            else {
+                /* Construct Allow header(s) */
+                allow_hdr("Allow", txn->req_tgt.allow);
+            }
         }
         goto authorized;
 
     case HTTP_NOT_ALLOWED:
-    allow:
-        /* Construct Allow header(s) for OPTIONS and 405 response */
+        /* Construct Allow header(s) for 405 response */
         allow_hdr("Allow", txn->req_tgt.allow);
         goto authorized;
 
     case HTTP_BAD_CE:
-        /* Construct Allow-Encoding header for 415 response */
+        /* Construct Accept-Encoding header for 415 response */
 #ifdef HAVE_ZLIB
-        prot_puts(httpd_out, "Allow-Encoding: gzip, deflate\r\n");
+        prot_puts(httpd_out, "Accept-Encoding: gzip, deflate\r\n");
 #else
-        prot_puts(httpd_out, "Allow-Encoding: identity\r\n");
+        prot_puts(httpd_out, "Accept-Encoding: identity\r\n");
 #endif
         goto authorized;
 
@@ -2223,7 +2217,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     buf_reset(&log);
     /* Add client data */
     buf_printf(&log, "%s", httpd_clienthost);
-    if (proxy_userid) buf_printf(&log, " as \"%s\"", proxy_userid);
+    if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
     if (txn->req_hdrs &&
         (hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
         buf_printf(&log, " with \"%s\"", hdr[0]);
@@ -2294,9 +2288,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 }
 
 
-static void keep_alive(int sig)
+EXPORTED void keepalive_response(void)
 {
-    if (sig == SIGALRM) {
+    if (gotsigalrm) {
         response_header(HTTP_CONTINUE, NULL);
         alarm(httpd_keepalive);
     }
@@ -2753,6 +2747,10 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
         free(httpd_userid);
         httpd_userid = NULL;
     }
+    if (httpd_extrafolder) {
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
+    }
     if (httpd_extradomain) {
         free(httpd_extradomain);
         httpd_extradomain = NULL;
@@ -2852,16 +2850,14 @@ static void auth_success(struct transaction_t *txn)
         ftruncate(httpd_logfd, end - buf_len(&txn->buf));
     }
 
-    if (!proxy_userid || strcmp(proxy_userid, httpd_userid)) {
-        /* Close existing telemetry log */
-        close(httpd_logfd);
+    /* Close existing telemetry log */
+    close(httpd_logfd);
 
-        prot_setlog(httpd_in, PROT_NO_FD);
-        prot_setlog(httpd_out, PROT_NO_FD);
+    prot_setlog(httpd_in, PROT_NO_FD);
+    prot_setlog(httpd_out, PROT_NO_FD);
 
-        /* Create telemetry log based on new userid */
-        httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
-    }
+    /* Create telemetry log based on new userid */
+    httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
 
     if (httpd_logfd != -1) {
         /* Log credential-redacted request */
@@ -2869,15 +2865,6 @@ static void auth_success(struct transaction_t *txn)
     }
 
     buf_reset(&txn->buf);
-
-    /* Make a copy of the external userid for use in proxying */
-    if (proxy_userid) free(proxy_userid);
-    proxy_userid = xstrdup(httpd_userid);
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&httpd_namespace, httpd_userid,
-                                config_virtdomains ?
-                                strcspn(httpd_userid, "@") : 0);
 
     /* Do any namespace specific post-auth processing */
     for (i = 0; namespaces[i]; i++) {
@@ -2918,6 +2905,10 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     if (httpd_userid) {
         free(httpd_userid);
         httpd_userid = NULL;
+    }
+    if (httpd_extrafolder) {
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
     }
     if (httpd_extradomain) {
         free(httpd_extradomain);
@@ -3014,6 +3005,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Basic (plaintext) authentication */
         char *pass;
         char *extra;
+        char *plus;
+        char *domain;
 
         if (!clientin) {
             /* Create initial challenge (base64 buffer is static) */
@@ -3033,28 +3026,31 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             return SASL_BADPARAM;
         }
         *pass++ = '\0';
+        domain = strchr(user, '@');
+        if (domain) *domain++ = '\0';
         extra = strchr(user, '%');
         if (extra) *extra++ = '\0';
-        else{
-            extra = strchr(user, '@');
-            if (extra) extra++ ;
-        }
-
+        plus = strchr(user, '+');
+        if (plus) *plus++ = '\0';
         /* Verify the password */
-        status = sasl_checkpass(httpd_saslconn, user, strlen(user),
+        char *realuser = domain ? strconcat(user, "@", domain, (char *)NULL) : xstrdup(user);
+        status = sasl_checkpass(httpd_saslconn, realuser, strlen(realuser),
                                 pass, strlen(pass));
         memset(pass, 0, strlen(pass));          /* erase plaintext password */
 
         if (status) {
             syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
-                   httpd_clienthost, user, sasl_errdetail(httpd_saslconn));
+                   httpd_clienthost, realuser, sasl_errdetail(httpd_saslconn));
+            free(realuser);
 
             /* Don't allow user probing */
             if (status == SASL_NOUSER) status = SASL_BADAUTH;
             return status;
         }
+        free(realuser);
 
         /* Successful authentication - fall through */
+        httpd_extrafolder = xstrdupnull(plus);
         httpd_extradomain = xstrdupnull(extra);
     }
     else {
@@ -3263,7 +3259,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
 {
     hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
-    time_t since;
+    time_t since = 0;
 
     /* Step 1 */
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
@@ -3274,10 +3270,9 @@ EXPORTED int check_precond(struct transaction_t *txn,
 
     /* Step 2 */
     else if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
-        if (time_from_rfc822(hdr[0], &since))
-            return HTTP_BAD_REQUEST;
+        if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
 
-        if (since && (lastmod > since)) return HTTP_PRECOND_FAILED;
+        if (lastmod > since) return HTTP_PRECOND_FAILED;
 
         /* Continue to step 3 */
     }
@@ -3297,8 +3292,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
     /* Step 4 */
     else if ((txn->meth == METH_GET || txn->meth == METH_HEAD) &&
              (hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
-        if (time_from_rfc822(hdr[0], &since))
-            return HTTP_BAD_REQUEST;
+        if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
 
         if (lastmod <= since) return HTTP_NOT_MODIFIED;
 
@@ -3494,7 +3488,7 @@ static int meth_get(struct transaction_t *txn,
         /* Remote content */
         struct backend *be;
 
-        be = proxy_findserver(prefix, &http_protocol, proxy_userid,
+        be = proxy_findserver(prefix, &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -3675,7 +3669,7 @@ static int meth_propfind_root(struct transaction_t *txn,
         };
 
         struct meth_params root_params = {
-            .lprops = root_props
+            .propfind = { DAV_FINITE_DEPTH, root_props }
         };
 
         /* Make a working copy of target path */
@@ -3738,7 +3732,7 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
             struct backend *be;
 
             be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                  &http_protocol, proxy_userid,
+                                  &http_protocol, httpd_userid,
                                   &backend_cached, NULL, NULL, httpd_in);
             if (!be) return HTTP_UNAVAILABLE;
 

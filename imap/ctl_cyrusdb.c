@@ -118,7 +118,7 @@ static void usage(void)
     exit(-1);
 }
 
-/* Callback for use by recover_reserved */
+/* Callback for use by process_mboxlist */
 static int fixmbox(const mbentry_t *mbentry,
                    void *rock __attribute__((unused)))
 {
@@ -159,7 +159,7 @@ static int fixmbox(const mbentry_t *mbentry,
     return 0;
 }
 
-static void recover_reserved(void)
+static void process_mboxlist(void)
 {
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -175,6 +175,9 @@ static void recover_reserved(void)
 
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_allmbox(NULL, fixmbox, NULL, 0);
+
+    /* enable or disable RACLs per config */
+    mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
 
     quotadb_close();
     quotadb_done();
@@ -377,7 +380,7 @@ int main(int argc, char *argv[])
     strarray_fini(&files);
 
     if(op == RECOVER && reserve_flag)
-        recover_reserved();
+        process_mboxlist();
 
     free(dirname);
     free(backup1);

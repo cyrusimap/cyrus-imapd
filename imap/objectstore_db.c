@@ -118,9 +118,18 @@ static char** delete_element_in_array(char** src, int *size, char *newData, int 
     return tmp ;
 }
 
-static int callback(void *data, int argc, char **argv, char **azColName) {  return 0; }
+static int callback(void *data __attribute__((unused)),
+                    int argc __attribute__((unused)),
+                    char **argv __attribute__((unused)),
+                    char **azColName __attribute__((unused)))
+{
+    return 0;
+}
 
-static int get_mailboxes_callback(void *data, int argc, char **argv, char **azColName){
+static int get_mailboxes_callback(void *data __attribute__((unused)),
+                                  int argc, char **argv,
+                                  char **azColName __attribute__((unused)))
+{
     if (argc == 1){
         char *str = argv[0] ;
         char *ret = NULL ;

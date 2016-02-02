@@ -53,6 +53,22 @@ static void test_noname(void)
 
 }
 
+static void test_invalid(void)
+{
+    struct address *a;
+
+    a = NULL;
+    parseaddr_list("a@bad@domain@acme.local", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "a");
+    CU_ASSERT_STRING_EQUAL(a->domain, "bad@domain@acme.local");
+    CU_ASSERT(a->invalid);
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+}
+
 static void test_single_append(void)
 {
     struct address *a;

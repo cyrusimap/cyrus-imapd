@@ -293,7 +293,10 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 
 
 #define CMD_SELMBOX CMD_GETFIELDS \
-    " WHERE mailbox = :mailbox AND alive = 1;"
+    " WHERE mailbox = :mailbox AND alive = 1 ORDER BY modseq DESC;"
+
+#define CMD_SELALIVE CMD_GETFIELDS \
+    " WHERE alive = 1 ORDER BY modseq DESC;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
                    int (*cb)(void *rock, struct carddav_data *data),
@@ -305,7 +308,11 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
     struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
 
-    return sqldb_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
+    if (mailbox) {
+        return sqldb_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
+    } else {
+        return sqldb_exec(carddavdb->db, CMD_SELALIVE, bval, &read_cb, &rrock);
+    }
 }
 
 #define CMD_GETUID_GROUPS \
@@ -709,7 +716,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
         { NULL,       SQLITE_NULL,    { .s = NULL      } }
     };
     static struct carddav_data cdata;
-    struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
+    struct read_rock rrock = { carddavdb, &cdata, 1 /* tombstones */, cb, rock };
     int r;
 
     if (mboxname)
@@ -739,19 +746,19 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcmp(name, "uid")) {
+        if (!strcasecmp(name, "uid")) {
             cdata->vcard_uid = propval;
         }
-        else if (!strcmp(name, "n")) {
+        else if (!strcasecmp(name, "n")) {
             cdata->name = propval;
         }
-        else if (!strcmp(name, "fn")) {
+        else if (!strcasecmp(name, "fn")) {
             cdata->fullname = propval;
         }
-        else if (!strcmp(name, "nickname")) {
+        else if (!strcasecmp(name, "nickname")) {
             cdata->nickname = propval;
         }
-        else if (!strcmp(name, "email")) {
+        else if (!strcasecmp(name, "email")) {
             /* XXX - insert if primary */
             int ispref = 0;
             struct vparse_param *param;
@@ -762,18 +769,19 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
             strarray_append(&emails, propval);
             strarray_append(&emails, ispref ? "1" : "");
         }
-        else if (!strcmp(name, "x-addressbookserver-member")) {
+        else if (!strcasecmp(name, "x-addressbookserver-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             strarray_append(&member_uids, propval+9);
             strarray_append(&member_uids, "");
         }
-        else if (!strcmp(name, "x-fm-otheraccount-member")) {
+        else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
+            if (!param) continue;
             strarray_append(&member_uids, propval+9);
             strarray_append(&member_uids, param->value);
         }
-        else if (!strcmp(name, "x-addressbookserver-kind")) {
+        else if (!strcasecmp(name, "x-addressbookserver-kind")) {
             if (!strcasecmp(propval, "group"))
                 cdata->kind = CARDDAV_KIND_GROUP;
             /* default case is CARDDAV_KIND_CONTACT */

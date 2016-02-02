@@ -1900,6 +1900,21 @@ static int search_uint32_unserialise(struct protstream *prot, union search_value
     return c;
 }
 
+static void search_percent_serialise(struct buf *b, const union search_value *v)
+{
+    buf_printf(b, "%0.2f", ((float)v->u / 100));
+}
+
+static int search_percent_unserialise(struct protstream *prot, union search_value *v)
+{
+    int c;
+    char tmp[32];
+
+    c = getseword(prot, tmp, sizeof(tmp));
+    v->u = (int)((atof(tmp) * 100) + 0.5);
+    return c;
+}
+
 /* ====================================================================== */
 
 /*
@@ -2284,6 +2299,20 @@ EXPORTED void search_attr_init(void)
             /*duplicate*/NULL,
             /*free*/NULL,
             (void *)message_get_sentdate
+        },{
+            "spamscore",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_uint32_cmp,
+            search_uint32_match,
+            search_percent_serialise,
+            search_percent_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_spamscore
         },{
             "body",
             SEA_FUZZABLE,

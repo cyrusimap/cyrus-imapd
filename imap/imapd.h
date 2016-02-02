@@ -255,7 +255,8 @@ enum {
     SORT_CONVSIZE,      /* nonstandard */
     SORT_HASCONVFLAG,   /* nonstandard */
     SORT_FOLDER,        /* nonstandard */
-    SORT_RELEVANCY      /* RFC 6203 */
+    SORT_RELEVANCY,     /* RFC 6203 */
+    SORT_SPAMSCORE      /* nonstandard */
     /* values > 255 are reserved for internal use */
 };
 

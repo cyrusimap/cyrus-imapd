@@ -53,6 +53,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "xmalloc.h"
+
 #ifdef ENABLE_REGEX
 # ifdef HAVE_PCREPOSIX_H
 #  include <pcre.h>
@@ -243,12 +245,14 @@ struct buf {
 };
 #define BUF_INITIALIZER { NULL, 0, 0, 0 }
 
+#define buf_new() xmalloc(sizeof(struct buf))
+#define buf_destroy(b) do { buf_free((b)); free((b)); } while (0)
 #define buf_ensure(b, n) do { if ((b)->alloc < (b)->len + (n)) _buf_ensure((b), (n)); } while (0)
 #define buf_putc(b, c) do { buf_ensure((b), 1); (b)->s[(b)->len++] = (c); } while (0)
 
 void _buf_ensure(struct buf *buf, size_t len);
-const char *buf_cstring(struct buf *buf);
-const char *buf_cstringnull(struct buf *buf);
+const char *buf_cstring(const struct buf *buf);
+const char *buf_cstringnull(const struct buf *buf);
 char *buf_release(struct buf *buf);
 char *buf_newcstring(struct buf *buf);
 char *buf_releasenull(struct buf *buf);
@@ -264,6 +268,7 @@ void buf_copy(struct buf *dst, const struct buf *src);
 void buf_append(struct buf *dst, const struct buf *src);
 void buf_appendcstr(struct buf *buf, const char *str);
 void buf_appendbit32(struct buf *buf, bit32 num);
+void buf_appendbit64(struct buf *buf, bit64 num);
 void buf_appendmap(struct buf *buf, const char *base, size_t len);
 void buf_cowappendmap(struct buf *buf, const char *base, unsigned int len);
 void buf_cowappendfree(struct buf *buf, char *base, unsigned int len);

@@ -98,7 +98,7 @@ static char *auth_map_krbid (const char *real_aname, const char *real_inst,
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-static int mymemberof(struct auth_state *auth_state, const char *identifier)
+static int mymemberof(const struct auth_state *auth_state, const char *identifier)
 {
     char aname[ANAME_SZ];
     char inst[INST_SZ];
@@ -333,7 +333,7 @@ static void myfreestate(struct auth_state *auth_state)
 #else /* HAVE_KRB */
 
 static int mymemberof(
-    struct auth_state *auth_state __attribute__((unused)),
+    const struct auth_state *auth_state __attribute__((unused)),
     const char *identifier __attribute__((unused)))
 {
         fatal("Authentication mechanism (krb) not compiled in", EC_CONFIG);

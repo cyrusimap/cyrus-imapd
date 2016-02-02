@@ -59,9 +59,10 @@ struct namespace_t namespace_dblookup = {
     URL_NS_DBLOOKUP, /*enabled*/1, "/dblookup", NULL, 0 /* auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get_db,         NULL },                 /* GET          */
@@ -71,12 +72,14 @@ struct namespace_t namespace_dblookup = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { NULL,                 NULL },                 /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { NULL,                 NULL },                 /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };

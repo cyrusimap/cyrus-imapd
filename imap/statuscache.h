@@ -65,6 +65,8 @@ extern void statuscache_fill(struct statusdata *sdata, const char *userid,
 /* lookup a single statuscache entry or open the mailbox and caluclate it */
 extern int status_lookup(const char *mboxname, const char *userid,
                          unsigned statusitems, struct statusdata *sdata);
+extern int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
+                         unsigned statusitems, struct statusdata *sdata);
 
 /* lookup a single statuscache entry and return result, or error if it
    doesn't exist or doesn't have the fields we need */

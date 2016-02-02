@@ -94,9 +94,10 @@ struct namespace_t namespace_admin = {
     URL_NS_ADMIN, 1, "/admin", NULL, 1 /* auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    admin_init, NULL, NULL, NULL,
+    admin_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get,            NULL },                 /* GET          */
@@ -106,12 +107,14 @@ struct namespace_t namespace_admin = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* POST */
+        { NULL,                 NULL },                 /* PATCH        */
+        { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
@@ -196,7 +199,7 @@ static int meth_get(struct transaction_t *txn,
         struct backend *be;
 
         be = proxy_findserver(tgt->userid,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 

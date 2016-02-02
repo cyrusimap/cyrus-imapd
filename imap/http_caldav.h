@@ -1,4 +1,4 @@
-/* lock_file.h -- module for use of dedicated lock files
+/* http_caldav.h -- Routines for dealing with CALDAV in httpd
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -38,58 +38,14 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
  */
-#ifndef LIB_LOCK_FILE_H
-#define LIB_LOCK_FILE_H
 
-struct lockf;
+#ifndef HTTP_CALDAV_H
+#define HTTP_CALDAV_H
 
-/*
- * Obtain a lock by exclusively creating named file.  If the named file
- * already exists, retries for up to 15 seconds before timing out.
- *
- * Warns to syslog upon timeout, and upon detection of existing stale lock
- * file.
- *
- * Returns a struct lockf handle, or NULL if the lock could not be obtained.
- */
-struct lockf *lf_lock(const char *filename);
+/* Create the calendar home, default calendars and scheduling
+ * boxes for userid, if they don't already exist. */
+extern int caldav_create_defaultcalendars(const char *userid);
 
-/*
- * Verify if the struct lockf handle is still valid (i.e. that the underlying
- * lock file has not been trampled on by some other process).
- *
- * Returns true (1) if so, false (0) otherwise.
- */
-int lf_ismine(struct lockf *lf);
-
-/*
- * Refresh the timestamp on the provided handle.  Call this periodically
- * during long operations.
- *
- * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
- * check lf_ismine() before invocation.
- */
-int lf_touch(struct lockf *lf);
-
-/*
- * Returns the number of seconds since the provided handle was opened or last
- * lf_touch()ed.
- *
- * If agep is non-NULL, also sets the value in the pointed-to struct timespec.
- * (XXX This is currently only accurate to nearest whole second.)
- *
- * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
- * check lf_ismine() before invocation.
- */
-time_t lf_age(struct lockf *lf, struct timespec *agep);
-
-/*
- * Release the provided handle and unlink its corresponding file.
- *
- * Calls fatal() if the handle is no longer valid.  To (mostly) avoid this,
- * check lf_ismine() before invocation.
- */
-int lf_unlock(struct lockf **lf);
-
-#endif
+#endif /* HTTP_CALDAV_H */

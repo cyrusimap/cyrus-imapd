@@ -67,6 +67,7 @@
 
 #include <sys/socket.h>
 
+#include "byteorder64.h"
 #include "exitcodes.h"
 #include "map.h"
 #include "retry.h"
@@ -590,9 +591,10 @@ static int cap_setuid(int uid, int is_master)
 EXPORTED int become_cyrus(int is_master)
 {
     struct passwd *p;
-    int newuid, newgid;
+    uid_t newuid;
+    gid_t newgid;
     int result;
-    static int uid = 0;
+    static uid_t uid = 0;
 
     if (uid) return cap_setuid(uid, is_master);
 
@@ -606,10 +608,10 @@ EXPORTED int become_cyrus(int is_master)
     newuid = p->pw_uid;
     newgid = p->pw_gid;
 
-    if (newuid == (int)geteuid() &&
-        newuid == (int)getuid() &&
-        newgid == (int)getegid() &&
-        newgid == (int)getgid()) {
+    if (newuid == geteuid() &&
+        newuid == getuid() &&
+        newgid == getegid() &&
+        newgid == getgid()) {
         /* already the Cyrus user, stop trying */
         uid = newuid;
         set_caps(AFTER_SETUID, is_master);
@@ -830,7 +832,9 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 
 /* buffer handling functions */
 
-static size_t roundup(size_t size)
+static inline size_t roundup(size_t size)
+    __attribute__((pure, always_inline, optimize("-O3")));
+static inline size_t roundup(size_t size)
 {
     if (size < 32)
         return 32;
@@ -882,10 +886,11 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
     }
 }
 
-EXPORTED const char *buf_cstring(struct buf *buf)
+EXPORTED const char *buf_cstring(const struct buf *buf)
 {
-    buf_ensure(buf, 1);
-    buf->s[buf->len] = '\0';
+    struct buf *backdoor = (struct buf*)buf;
+    buf_ensure(backdoor, 1);
+    backdoor->s[backdoor->len] = '\0';
     return buf->s;
 }
 
@@ -903,7 +908,7 @@ EXPORTED char *buf_release(struct buf *buf)
     return ret;
 }
 
-EXPORTED const char *buf_cstringnull(struct buf *buf)
+EXPORTED const char *buf_cstringnull(const struct buf *buf)
 {
     if (!buf->s) return NULL;
     return buf_cstring(buf);
@@ -946,12 +951,16 @@ EXPORTED int buf_getline(struct buf *buf, FILE *fp)
     return (!(buf->len == 0 && c == EOF));
 }
 
-EXPORTED size_t buf_len(const struct buf *buf)
+EXPORTED inline size_t buf_len(const struct buf *buf)
+    __attribute__((always_inline, optimize("-O3")));
+EXPORTED inline size_t buf_len(const struct buf *buf)
 {
     return buf->len;
 }
 
-EXPORTED const char *buf_base(const struct buf *buf)
+EXPORTED inline const char *buf_base(const struct buf *buf)
+    __attribute__((always_inline, optimize("-O3")));
+EXPORTED inline const char *buf_base(const struct buf *buf)
 {
     return buf->s;
 }
@@ -1013,6 +1022,12 @@ EXPORTED void buf_appendbit32(struct buf *buf, bit32 num)
 {
     bit32 item = htonl(num);
     buf_appendmap(buf, (char *)&item, 4);
+}
+
+EXPORTED void buf_appendbit64(struct buf *buf, bit64 num)
+{
+    bit64 item = htonll(num);
+    buf_appendmap(buf, (char *)&item, 8);
 }
 
 EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)

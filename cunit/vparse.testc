@@ -1,0 +1,14 @@
+#include "cunit/cunit.h"
+#include "xmalloc.h"
+#include "vparse.h"
+
+static void test_double_end(void)
+{
+    char card[] = "BEGIN:VCARD\nEND:VCARD\nEND:VCARD";
+    struct vparse_state vparser;
+    memset(&vparser, 0, sizeof(struct vparse_state));
+    vparser.base = card;
+    int vr = vparse_parse(&vparser, 0);
+    CU_ASSERT_EQUAL(vr, PE_MISMATCHED_CARD);
+}
+

@@ -161,6 +161,8 @@ typedef struct msgdata {
     uint32_t convsize;          /* total size of messages in conversation */
     bit32 hasconvflag;          /* hasconvflag values (up to 32 of them) */
 
+    uint32_t spamscore;         /* x-spam-score header */
+
     /* items from the cache record */
     char *msgid;                /* message ID */
     char *listid;               /* List-Id and Mailing-List fields */

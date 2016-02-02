@@ -111,9 +111,10 @@ struct namespace_t namespace_rss = {
     URL_NS_RSS, 0, "/rss", NULL, 1 /* auth */,
     /*mbtype*/0,
     ALLOW_READ,
-    rss_init, NULL, NULL, NULL,
+    rss_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get,            NULL },                 /* GET          */
@@ -123,12 +124,14 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        &rss_parse_path },      /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          &rss_parse_path },      /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
@@ -176,7 +179,7 @@ static int meth_get(struct transaction_t *txn,
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -345,8 +348,6 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
     strncpy(mboxname, start, len);
     mboxname[len] = '\0';
 
-    mboxname_hiersep_tointernal(&httpd_namespace, mboxname, len);
-
     /* Locate the mailbox */
     if (*mboxname) {
         int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
@@ -481,12 +482,10 @@ static int list_cb(const char *name, int matchlen, int maycreate, void *rock)
 
         /* Translate short mailbox name to external form */
         strlcpy(shortname, cp, sizeof(shortname));
-        mboxname_hiersep_toexternal(&httpd_namespace, shortname, 0);
 
         if (href) {
             /* Add selectable feed with link */
             snprintf(path, sizeof(path), ".rss.%s", node->name);
-            mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
             buf_printf(buf, "<li><a href=\"%s\">%s</a>",
                        href, shortname);
         }
@@ -847,7 +846,6 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Translate mailbox name to external form */
     strlcpy(mboxname, mailbox->name, sizeof(mboxname));
-    mboxname_hiersep_toexternal(&httpd_namespace, mboxname, 0);
 
     /* Construct base URL */
     http_proto_host(txn->req_hdrs, &proto, &host);

@@ -178,10 +178,11 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     switch (d->op) {
     case DUMP:
         if (!d->partition || !strcmpsafe(d->partition, mbentry->partition)) {
-            printf("%s\t%d %s %s\n", mbentry->name, mbentry->mbtype,
-                                     mbentry->partition, mbentry->acl);
+            printf("%s\t%d ", mbentry->name, mbentry->mbtype);
+            if (mbentry->server) printf("%s!", mbentry->server);
+            printf("%s %s\n", mbentry->partition, mbentry->acl);
             if (d->purge) {
-                mboxlist_delete(mbentry->name, 0);
+                mboxlist_delete(mbentry->name);
             }
         }
         break;
@@ -213,6 +214,8 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
             /* (and later also force an mupdate push) */
             if (mbentry->mbtype & MBTYPE_MOVING) {
                 struct mb_node *next;
+
+                syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
 
                 if (warn_only) {
                     printf("Remove remote flag on: %s\n", mbentry->name);
@@ -285,6 +288,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
                 if (config_mupdate_config !=
                     IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
                     /* But not for a unified configuration */
+
+                    syslog(LOG_WARNING, "Remove Local Mailbox: %s", mbentry->name);
+
                     if (warn_only) {
                         printf("Remove Local Mailbox: %s\n", mbentry->name);
                     } else {
@@ -302,6 +308,8 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
                     /* it's flagged moving, we'll fix it later (and
                      * push it then too) */
                     struct mb_node *next;
+
+                    syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
 
                     if (warn_only) {
                         printf("Remove remote flag on: %s\n", mbentry->name);
@@ -323,6 +331,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
             free(realpart);
             break;
         }
+
+        syslog(LOG_WARNING, "Force Activate: %s", mbentry->name);
+
         if (warn_only) {
             printf("Force Activate: %s\n", mbentry->name);
             free(realpart);
@@ -430,6 +441,8 @@ static void do_dump(enum mboxop op, const char *part, int purge)
         while (del_head) {
             struct mb_node *me = del_head;
             del_head = del_head->next;
+
+            syslog(LOG_WARNING, "Remove from MUPDATE: %s", me->mailbox);
 
             if (warn_only) {
                 printf("Remove from MUPDATE: %s\n", me->mailbox);
@@ -547,6 +560,7 @@ static void do_undump(void)
 
     while (fgets(buf, sizeof(buf), stdin)) {
         mbentry_t *newmbentry = NULL;
+        const char *server = NULL;
 
         line++;
 
@@ -566,7 +580,13 @@ static void do_undump(void)
         else mbtype = 0;
 
         partition = p;
-        for (; *p && (*p != ' ') && (*p != '\t'); p++) ;
+        for (; *p && (*p != ' ') && (*p != '\t'); p++) {
+            if (*p == '!') {
+                *p++ = '\0';
+                server = partition;
+                partition = p;
+            }
+        }
         if (!*p) {
             fprintf(stderr, "line %d: no acl found\n", line);
             continue;
@@ -590,6 +610,7 @@ static void do_undump(void)
         newmbentry = mboxlist_entry_create();
         newmbentry->name = xstrdup(name);
         newmbentry->mbtype = mbtype;
+        newmbentry->server = xstrdupnull(server);
         newmbentry->partition = xstrdupnull(partition);
         newmbentry->acl = xstrdupnull(acl);
         /* XXX - still missing all the new fields */
@@ -979,10 +1000,13 @@ int main(int argc, char *argv[])
         syslog(LOG_NOTICE, "checkpointing mboxlist");
         mboxlist_init(MBOXLIST_SYNC);
         mboxlist_done();
+        syslog(LOG_NOTICE, "done checkpointing mboxlist");
         break;
 
-    case DUMP:
     case M_POPULATE:
+        syslog(LOG_NOTICE, "%spopulating mupdate", warn_only ? "test " : "");
+
+    case DUMP:
         mboxlist_init(0);
         mboxlist_open(mboxdb_fname);
 
@@ -1002,6 +1026,11 @@ int main(int argc, char *argv[])
 
         mboxlist_close();
         mboxlist_done();
+
+        if (op == M_POPULATE) {
+            syslog(LOG_NOTICE,
+                   "done %spopulating mupdate", warn_only ? "test " : "");
+        }
         break;
 
     case UNDUMP:

@@ -168,7 +168,7 @@ static void list_expunged(const char *mboxname)
 
 static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
                      unsigned nuids, time_t time_since, unsigned *numrestored,
-                     const char *mboxname)
+                     const char *extname)
 {
     const struct index_record *record;
     struct index_record newrecord;
@@ -246,7 +246,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 
         if (verbose)
             printf("Unexpunged %s: %u => %u\n",
-                   mboxname, record->uid, newrecord.uid);
+                   extname, record->uid, newrecord.uid);
 
         /* mark the old one unlinked so we don't see it again */
         struct index_record oldrecord = *record;
@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
 {
     extern char *optarg;
     int opt, r = 0;
-    char *alt_config = NULL;
+    char *alt_config = NULL, *intname = NULL, *extname = NULL;
     struct mailbox *mailbox = NULL;
     int mode = MODE_UNKNOWN;
     unsigned numrestored = 0;
@@ -279,7 +279,6 @@ int main(int argc, char *argv[])
     int len, secs = 0;
     unsigned long *uids = NULL;
     unsigned nuids = 0;
-    char *mboxname = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
@@ -377,7 +376,7 @@ int main(int argc, char *argv[])
     }
 
     /* Translate mailboxname */
-    char *intname = mboxname_from_external(argv[optind], &unex_namespace, NULL);
+    intname = mboxname_from_external(argv[optind], &unex_namespace, NULL);
 
     if (mode == MODE_LIST) {
         list_expunged(intname);
@@ -404,26 +403,26 @@ int main(int argc, char *argv[])
         qsort(uids, nuids, sizeof(unsigned long), compare_uid);
     }
 
-    mboxname = xstrdup(mailbox->name);
-    mboxname_hiersep_toexternal(&unex_namespace, mboxname, 0);
+    extname = mboxname_to_external(intname, &unex_namespace, NULL);
 
     printf("restoring %sexpunged messages in mailbox '%s'\n",
-            mode == MODE_ALL ? "all " : "", mboxname);
+            mode == MODE_ALL ? "all " : "", extname);
 
-    r = restore_expunged(mailbox, mode, uids, nuids, time_since, &numrestored, mboxname);
+    r = restore_expunged(mailbox, mode, uids, nuids, time_since, &numrestored, extname);
 
     if (!r) {
         printf("restored %u expunged messages\n",
                 numrestored);
         syslog(LOG_NOTICE,
                "restored %u expunged messages in mailbox '%s'",
-               numrestored, mboxname);
+               numrestored, extname);
     }
 
     mailbox_close(&mailbox);
 
 done:
     free(intname);
+    free(extname);
     sync_log_done();
 
     quotadb_close();

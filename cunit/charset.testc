@@ -95,6 +95,56 @@ static void test_to_utf8(void)
     free(s);
 }
 
+static void test_to_imaputf7(void)
+{
+    int csu8 = charset_lookupname("utf-8");
+    CU_ASSERT(csu8 >= 0);
+    int csu7 = charset_lookupname("imap-utf-7");
+    CU_ASSERT(csu7 >= 0);
+
+#define TESTCASE(in, want) \
+    { \
+        char *s; \
+        char *q; \
+        static const char _in[] = (in); \
+        static const char _want[] = (want); \
+        s = charset_to_imaputf7(_in, strlen(_in), csu8, ENCODING_NONE); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _want); \
+        q = charset_to_utf8(s, strlen(s), csu7, ENCODING_NONE); \
+        CU_ASSERT_PTR_NOT_NULL(q); \
+        CU_ASSERT_STRING_EQUAL(q, _in); \
+        free(q); \
+        free(s); \
+    }
+
+    /* Plain IMAP UTF-7 */
+    TESTCASE("Hello, World", "Hello, World");
+
+    /* Escaped ampersand */
+    TESTCASE("Laurel&Hardy", "Laurel&-Hardy");
+
+    /* LATIN SMALL LETTER O WITH DIAERESIS (U+00F6) */
+    TESTCASE("Tr""\xC3\xB6""del", "Tr&APY-del");
+
+    /* LATIN SMALL LETTER E WITH ACUTE (U+00E9) */
+    TESTCASE("R""\xC3\xA9""pertoire", "R&AOk-pertoire");
+
+    /* WHITE SMILING FACE' (U+263A) */
+    TESTCASE("Hi Mom \xE2\x98\xBA!", "Hi Mom &Jjo-!");
+
+    /* WHITE SMILING FACE' (U+263A) at end */
+    TESTCASE("Hi Mom \xE2\x98\xBA", "Hi Mom &Jjo-");
+
+    /* DESERET SMALL LETTER YEE (U+10437) & HAN Character (U+24B62) */
+    TESTCASE("\xF0\x90\x90\xB7""&""\xF0\xA4\xAD\xA2", "&2AHcNw-&-&2FLfYg-");
+
+    /* CARRIAGE RETURN (CR) (U+000D) LINE FEED (LF) (U+000A) */
+    TESTCASE("\x0D\x0A", "&AA0ACg-");
+
+#undef TESTCASE
+}
+
 static void test_qp(void)
 {
     /* corner cases in Quoted-Printable */
@@ -241,6 +291,47 @@ static void test_mimeheader_badcharset(void)
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, SEARCH_1);
     free(s);
+}
+
+static void test_unfold(void)
+{
+#define TESTCASE(in, wantSkip, wantKeep) \
+    { \
+        char *s; \
+        char *k; \
+        static const char _in[] = (in); \
+        static const char _wantSkip[] = (wantSkip); \
+        static const char _wantKeep[] = (wantKeep); \
+        s = charset_unfold(_in, strlen(_in), CHARSET_UNFOLD_SKIPWS); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _wantSkip); \
+        k = charset_unfold(_in, strlen(_in), 0); \
+        CU_ASSERT_PTR_NOT_NULL(k); \
+        CU_ASSERT_STRING_EQUAL(k, _wantKeep); \
+        free(k); \
+        free(s); \
+    }
+
+    /* Single line */
+    TESTCASE("abcdef", "abcdef", "abcdef");
+
+    /* Single line, ending in CRLF */
+    TESTCASE("abcdef\r\n", "abcdef", "abcdef");
+
+    /* Two lines */
+    TESTCASE("abc\r\ndef", "abc\r\ndef", "abc\r\ndef");
+
+    /* Two lines, first with continuation line */
+    TESTCASE("ab\r\n c\r\ndef", "abc\r\ndef", "ab c\r\ndef");
+
+    /* Two lines, both with continuation lines */
+    TESTCASE("a\r\n\t\r\n b\r\n c\r\nd\r\n ef", "abc\r\ndef", "a\t b c\r\nd ef");
+
+    /* One long, empty continuation line */
+    /* Typically, RFCs using unfolding forbid this case. */
+    TESTCASE("\r\n\t\r\n \r\n \r\n", "", "\t  ");
+
+#undef TESTCASE
 }
 
 static void test_mime_unfold(void)

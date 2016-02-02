@@ -96,6 +96,10 @@
 
 #include "iostat.h"
 
+#ifndef MAXHOSTNAMELEN
+#define MAXHOSTNAMELEN 256
+#endif
+
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
 #define DES_DEFS
@@ -121,7 +125,6 @@ static sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
 static int popd_timeout;
 static char *popd_userid = 0, *popd_subfolder = 0;
-static char *proxy_userid = 0;
 static struct mailbox *popd_mailbox = NULL;
 static struct auth_state *popd_authstate = 0;
 static int config_popuseacl, config_popuseimapflags;
@@ -386,10 +389,6 @@ static void popd_reset(void)
     if (popd_userid != NULL) {
         free(popd_userid);
         popd_userid = NULL;
-    }
-    if (proxy_userid != NULL) {
-        free(proxy_userid);
-        proxy_userid = NULL;
     }
     if (popd_subfolder != NULL) {
         free(popd_subfolder);
@@ -1243,10 +1242,34 @@ int msg_exists_or_err(uint32_t msgno)
 void uidl_msg(uint32_t msgno)
 {
     if (popd_mailbox->i.options & OPT_POP3_NEW_UIDL) {
-        prot_printf(popd_out, "%u %u.%u\r\n", msgno,
-                    popd_mailbox->i.uidvalidity,
-                    popd_map[msgno-1].uid);
-    } else {
+        switch (config_getenum(IMAPOPT_UIDL_FORMAT)) {
+        case IMAP_ENUM_UIDL_FORMAT_UIDONLY:
+            prot_printf(popd_out, "%u %u\r\n", msgno,
+                        popd_map[msgno-1].uid);
+            break;
+        case IMAP_ENUM_UIDL_FORMAT_CYRUS:
+            prot_printf(popd_out, "%u %u.%u\r\n", msgno,
+                        popd_mailbox->i.uidvalidity,
+                        popd_map[msgno-1].uid);
+            break;
+        case IMAP_ENUM_UIDL_FORMAT_DOVECOT: {
+            char uidl[100];
+            snprintf(uidl, 100, "%08x%08x",
+                     popd_map[msgno-1].uid,
+                     popd_mailbox->i.uidvalidity);
+            prot_printf(popd_out, "%u %s\r\n", msgno, uidl);
+            }
+            break;
+        case IMAP_ENUM_UIDL_FORMAT_COURIER:
+            prot_printf(popd_out, "%u %u-%u\r\n", msgno,
+                        popd_mailbox->i.uidvalidity,
+                        popd_map[msgno-1].uid);
+            break;
+        default:
+            abort();
+        }
+    }
+    else {
         prot_printf(popd_out, "%u %u\r\n", msgno,
                     popd_map[msgno-1].uid);
     }
@@ -1555,7 +1578,8 @@ static void cmd_pass(char *pass)
                popd_userid, popd_subfolder ? popd_subfolder : "",
                popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
-        if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
+        if ((!popd_starttls_done) &&
+            (plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
              != 0) {
             sleep(plaintextloginpause);
         }
@@ -1786,7 +1810,6 @@ static void cmd_auth(char *arg)
  */
 int openinbox(void)
 {
-    char *inboxname;
     int myrights = 0;
     int r, log_level = LOG_ERR;
     const char *statusline = NULL;
@@ -1794,14 +1817,6 @@ int openinbox(void)
     struct statusdata sdata = STATUSDATA_INIT;
     struct proc_limits limits;
     struct mboxevent *mboxevent;
-
-    /* Make a copy of the external userid for use in proxying */
-    proxy_userid = xstrdup(popd_userid);
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&popd_namespace, popd_userid,
-                                config_virtdomains ?
-                                strcspn(popd_userid, "@") : 0);
 
     /* send a Login event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGIN))) {
@@ -1812,18 +1827,10 @@ int openinbox(void)
         mboxevent_free(&mboxevent);
     }
 
-    if (popd_subfolder) {
-        /* we need to convert to internal namespace dammit */
-        char *internal_subfolder = xstrdup(popd_subfolder+1); /* remove + */
-        mboxname_hiersep_tointernal(&popd_namespace, internal_subfolder, 0);
-        inboxname = mboxname_user_mbox(popd_userid, internal_subfolder);
-        free(internal_subfolder);
-    }
-    else {
-        inboxname = mboxname_user_mbox(popd_userid, NULL);
-    }
+    const char *subfolder = popd_subfolder ? popd_subfolder + 1 : NULL;
+    mbname_t *mbname = mbname_from_extsub(subfolder, &popd_namespace, popd_userid);
 
-    r = mboxlist_lookup(inboxname, &mbentry, NULL);
+    r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
 
 #ifdef USE_AUTOCREATE
     /* Try once again after autocreate_inbox */
@@ -1831,7 +1838,7 @@ int openinbox(void)
         /* NOTE - if we have a subfolder, autocreateinbox should still create
          * it if it's an autocreate folder - otherwise tough luck */
         r = autocreate_user(&popd_namespace, popd_userid);
-        if (!r) r = mboxlist_lookup(inboxname, &mbentry, NULL);
+        if (!r) r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
     }
 #endif
 
@@ -1854,7 +1861,7 @@ int openinbox(void)
         sleep(3);
         log_level = LOG_INFO;
         syslog(log_level, "Unable to open maildrop %s: %s",
-               inboxname, error_message(r));
+               mbname_intname(mbname), error_message(r));
         prot_printf(popd_out,
                     "-ERR [SYS/TEMP] Unable to open maildrop: %s\r\n",
                     error_message(r));
@@ -1866,7 +1873,7 @@ int openinbox(void)
         char userid[MAX_MAILBOX_NAME];
 
         /* Make a working copy of userid in case we need to alter it */
-        strlcpy(userid, proxy_userid, sizeof(userid));
+        strlcpy(userid, popd_userid, sizeof(userid));
 
         if (popd_subfolder) {
             /* Add the subfolder back to the userid for proxying */
@@ -1891,10 +1898,10 @@ int openinbox(void)
         }
     }
     else if (config_getswitch(IMAPOPT_STATUSCACHE) &&
-             !(r = statuscache_lookup(inboxname, popd_userid, STATUS_MESSAGES, &sdata)) &&
+             !(r = statuscache_lookup(mbname_intname(mbname), popd_userid, STATUS_MESSAGES, &sdata)) &&
              !sdata.messages) {
         /* local mailbox (empty) -- don't bother opening the mailbox */
-        syslog(LOG_INFO, "optimized mode for empty maildrop: %s", proxy_userid);
+        syslog(LOG_INFO, "optimized mode for empty maildrop: %s", popd_userid);
     }
     else {
         /* local mailbox */
@@ -1904,11 +1911,11 @@ int openinbox(void)
 
         popd_login_time = time(0);
 
-        r = mailbox_open_iwl(inboxname, &popd_mailbox);
+        r = mailbox_open_iwl(mbname_intname(mbname), &popd_mailbox);
         if (r) {
             sleep(3);
             syslog(log_level, "Unable to open maildrop %s: %s",
-                   inboxname, error_message(r));
+                   mbname_intname(mbname), error_message(r));
             prot_printf(popd_out,
                         "-ERR [SYS/PERM] Unable to open maildrop: %s\r\n",
                         error_message(r));
@@ -1924,7 +1931,7 @@ int openinbox(void)
         if (r) {
             mailbox_close(&popd_mailbox);
             syslog(LOG_ERR, "Unable to lock maildrop %s: %s",
-                   inboxname, error_message(r));
+                   mbname_intname(mbname), error_message(r));
             prot_printf(popd_out,
                         "-ERR [IN-USE] Unable to lock maildrop: %s\r\n",
                         error_message(r));
@@ -1979,7 +1986,7 @@ int openinbox(void)
 
     limits.procname = "pop3d";
     limits.clienthost = popd_clienthost;
-    limits.userid = proxy_userid;
+    limits.userid = popd_userid;
     if (proc_checklimits(&limits)) {
         const char *sep = "";
         prot_printf(popd_out,
@@ -1991,7 +1998,7 @@ int openinbox(void)
         }
         if (limits.maxuser) {
             prot_printf(popd_out, "%s%d of %d for %s", sep,
-                        limits.user, limits.maxuser, proxy_userid);
+                        limits.user, limits.maxuser, popd_userid);
         }
         prot_printf(popd_out, ")\r\n");
         mailbox_close(&popd_mailbox);
@@ -1999,10 +2006,10 @@ int openinbox(void)
     }
 
     /* Create telemetry log */
-    popd_logfd = telemetry_log(proxy_userid, popd_in, popd_out, 0);
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
 
     mboxlist_entry_free(&mbentry);
-    free(inboxname);
+    mbname_free(&mbname);
 
     if (statusline)
         prot_printf(popd_out, "+OK%s", statusline);
@@ -2015,11 +2022,9 @@ int openinbox(void)
 
   fail:
     mboxlist_entry_free(&mbentry);
-    free(inboxname);
+    mbname_free(&mbname);
     free(popd_userid);
     popd_userid = 0;
-    free(proxy_userid);
-    proxy_userid = 0;
     if (popd_subfolder) {
         free(popd_subfolder);
         popd_subfolder = 0;

@@ -50,8 +50,8 @@
 
 #include "util.h"
 
-extern char *icalcomponent_as_jcal_string(icalcomponent* comp);
-extern icalcomponent *jcal_string_as_icalcomponent(const char *str);
+extern struct buf *icalcomponent_as_jcal_string(icalcomponent* comp);
+extern icalcomponent *jcal_string_as_icalcomponent(const struct buf *);
 extern const char *begin_jcal(struct buf *buf);
 extern void end_jcal(struct buf *buf);
 

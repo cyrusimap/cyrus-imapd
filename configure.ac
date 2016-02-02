@@ -220,7 +220,7 @@ dnl parameters: backend name, variable to set, withval
 
 dnl SQL DB Detection
 
-HAVE_SQL=0
+HAVE_CYRUSDB_SQL=0
 
 dnl MySQL Detection
 
@@ -261,7 +261,7 @@ esac
 if test "$with_mysql" != "no"; then
     MYSQL_LIBADD=`$mysql_config --libs`
     MYSQL_INCADD=`$mysql_config --cflags`
-    HAVE_SQL=1
+    HAVE_CYRUSDB_SQL=1
     LIBS="${LIBS} ${MYSQL_LIBADD}"
     CPPFLAGS="${MYSQL_INCADD} ${CPPFLAGS}"
     AC_DEFINE(HAVE_MYSQL,[],[Build in MySQL support?])
@@ -381,7 +381,7 @@ if test "$use_pgsql" != "no"; then
     AC_MSG_ERROR([PgSQL was not found.  You may need to supply the
     --with-pgsql-libdir or --with-pgsql-incdir configure options.])
   else
-    HAVE_SQL=1
+    HAVE_CYRUSDB_SQL=1
   fi
 
   if test "$with_pgsql_lib" != "none"; then
@@ -398,9 +398,14 @@ dnl End PgSQL Detection
 
 
 dnl SQLite Detection
+dnl XXX this is a bit gross... the same option for specifying WHERE sqlite is
+dnl (--with-sqlite) is also the option for enabling it as a cyrusdb backend,
+dnl which means if your sqlite is in a non-default location and you need httpd
+dnl or object storage etc, you're suddenly also supporting it as a cyrusdb
+dnl backend, possibly unexpectedly.
 AC_ARG_WITH(sqlite,
         [AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
-        with_sqlite=$withval, with_sqlite=no)
+        with_sqlite=$withval, with_sqlite=check)
 
 case "$with_sqlite" in
   no)
@@ -408,6 +413,11 @@ case "$with_sqlite" in
         ;;
   yes)
         use_sqlite="yes"
+        with_sqlite_lib=none
+        with_sqlite_inc=none
+        ;;
+  check)
+        use_sqlite="check"
         with_sqlite_lib=none
         with_sqlite_inc=none
         ;;
@@ -421,27 +431,152 @@ esac
 if test "$use_sqlite" != "no"; then
   CYRUS_SQLITE_CHK()
 
-  if test "$sqlitelib" = "no"; then
-    AC_MSG_ERROR([Sqlite was not found.  You may need to supply the
-    --with-sqlite-libdir or --with-sqlite-incdir configure options.])
+  if test "$use_sqlite" = "yes"; then
+    dnl sqlite specifically requested: not found is a failure
+    if test "$sqlitelib" = "no"; then
+        AC_MSG_ERROR([Sqlite was not found.  You may need to supply the
+        --with-sqlite-libdir or --with-sqlite-incdir configure options.])
+    else
+        HAVE_CYRUSDB_SQL=1
+        HAVE_SQLITE=1
+    fi
   else
-    HAVE_SQL=1
+    dnl sqlite not specifically requested: not found isn't a failure (yet)
+    use_sqlite="no"
+    if test "$sqlitelib" = "no"; then
+        AC_MSG_NOTICE([sqlite was not found, will try to build without it])
+    else
+        HAVE_SQLITE=1
+    fi
   fi
 
-  if test "$with_sqlite_lib" != "none"; then
-    CMU_ADD_LIBPATH($with_sqlite_lib)
-  fi
-
-  LIBS="${LIBS} ${SQLITE_LIBADD}"
-  CPPFLAGS="${SQLITE_INCADD} ${CPPFLAGS}"
-
-  AC_DEFINE(HAVE_SQLITE,[],[Build in SQLite support?])
+  dnl other modules might yet need to link against sqlite.
+  dnl we will update LIBS/CPPFLAGS etc later, once their checks have run.
+  dnl for now:
+  dnl   * $use_sqlite = "yes" if we definitely need it
+  dnl   * $HAVE_SQLITE = 1 if we have it available
 fi
 
 dnl End SQLite Detection
 
-AM_CONDITIONAL([USE_SQL], [test $HAVE_SQL = 1])
+if test "x$HAVE_CYRUSDB_SQL" = x1; then
+    AC_DEFINE([USE_CYRUSDB_SQL],[],[Build in cyrusdb_sql support?])
+fi
+AM_CONDITIONAL([USE_CYRUSDB_SQL], [test $HAVE_CYRUSDB_SQL = 1])
 dnl End SQL DB Detection
+
+
+dnl
+dnl Object Store support
+dnl
+
+dnl Caringo object store backend
+AC_MSG_CHECKING([whether to use Caringo])
+AC_ARG_WITH(caringo,
+        [AS_HELP_STRING([--with-caringo], [use Caringo ("yes" or "no")])],,with_caringo="no")
+case "$with_caringo" in
+  yes)
+	LDFLAGS="$LDFLAGS -lCastorSDK"
+  ;;
+esac
+AC_MSG_RESULT([$with_caringo])
+
+dnl OpenIO object store backend
+dnl deps: metautils gridclient oiosds curl
+AC_MSG_CHECKING([whether to use OpenIO])
+AC_ARG_WITH(openio,
+        [AS_HELP_STRING([--with-openio=yes|no], [use OpenIO ("yes" or "no")])],
+        with_openio=$withval, with_openio="no")
+
+case "$with_openio" in
+  no)
+	use_openio="no"
+	;;
+  yes)
+	use_openio="yes"
+	with_openio_lib=none
+	with_openio_inc=none
+	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+	;;
+  *)
+	use_openio="yes"
+	with_openio_lib="$with_openio/lib64"
+	with_openio_inc="$with_openio/include"
+	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+	;;
+esac
+
+AC_ARG_WITH(openio-libdir,
+        [AS_HELP_STRING([--with-openio-libdir=DIR], [OpenIO lib files are in DIR])],
+        with_openio_lib=$withval,
+        [ test "${with_openio_lib+set}" = set || with_openio_lib=none])
+AC_ARG_WITH(openio-incdir,
+        [AS_HELP_STRING([--with-openio-incdir=DIR], [OpenIO include files are in DIR])],
+        with_openio_inc=$withval,
+        [ test "${with_openio_inc+set}" = set || with_openio_inc=none ])
+
+if test "$use_openio" = "yes"; then
+	if test ! -d "$with_openio_lib"; then
+		AC_MSG_ERROR([OpenIO library directory '$with_openio_lib' does not exist.])
+	fi
+	if test ! -d "$with_openio_inc"; then
+		AC_MSG_ERROR([OpenIO include directory '$with_openio_inc' does not exist.])
+	fi
+
+	LDFLAGS="$LDFLAGS -L$with_openio_lib"
+	CFLAGS="$CFLAGS -I$with_openio_inc"
+	openio_headers="oio_sds.h core/oiourl.h"
+	for h in $openio_headers; do
+		AC_CHECK_HEADER($h,[],[
+			AC_MSG_ERROR([Header $h is missing.])
+		])
+	done
+	AC_CHECK_LIB([oiosds],[oio_error_free],[],[AC_MSG_ERROR([Library oiosds not found.])])
+	AC_CHECK_LIB([oiocore],[oio_url_empty],[],[AC_MSG_ERROR([Library oiocore not found.])])
+	AC_CHECK_LIB([curl],[curl_version],[],[AC_MSG_ERROR([Library curl not found.])])
+	AC_CHECK_LIB([json-c],[json_tokener_parse_ex],[],[AC_MSG_ERROR([Library json-c not found.])])
+
+	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
+fi
+AC_MSG_RESULT([$use_openio])
+
+dnl enable object store
+AC_MSG_CHECKING([whether to enable object store])
+AC_ARG_ENABLE(objectstore,
+    [AS_HELP_STRING([--enable-objectstore],
+        [enable IMAP objectstore support. Use --with-caringo or --with-openio to choose a backend])],
+    [],
+    [enable_objectstore=no])
+
+with_objectstore_dummy=no
+if test "x$enable_objectstore" != xno ; then
+    dnl we need sqlite for the objectstore database
+    if test "x$HAVE_SQLITE" != x1; then
+        AC_MSG_ERROR([Need sqlite3 for objectstore])
+    else
+        use_sqlite="yes"
+    fi
+
+    dnl arbitrarily prioritise OpenIO over Caringo if both are requested
+    AS_IF(
+        [test "x$with_openio" != xno -a "x$with_caringo" != xno],
+            [AC_MSG_WARN([both --with-openio and --with-caringo requested: using OpenIO])
+             enable_objectstore="openio"
+             with_caringo = "no"],
+        [test "x$with_openio" != xno],
+            [enable_objectstore="openio"],
+        [test "x$with_caringo" != xno],
+            [enable_objectstore="caringo"],
+        [enable_objectstore="dummy"
+         with_objectstore_dummy="yes"])
+    AC_DEFINE([ENABLE_OBJECTSTORE],[],[Build with Object Store support])
+fi
+AC_MSG_RESULT([$enable_objectstore])
+AM_CONDITIONAL([OBJECTSTORE], [test "x$enable_objectstore" != xno])
+AM_CONDITIONAL([WITH_CARINGO], [test "x$with_caringo" != xno])
+AM_CONDITIONAL([WITH_OPENIO], [test "x$use_openio" != xno])
+AM_CONDITIONAL([WITH_OBJSTR_DUMMY], [test "x$with_objectstore_dummy" != xno])
+
 
 dnl
 dnl Search engines - SQUAT
@@ -459,7 +594,7 @@ dnl
 dnl Search engines - Sphinx
 dnl
 
-enable_squat=no
+enable_sphinx=no
 AC_ARG_ENABLE(sphinx,
         [  --enable-sphinx         disable Sphinx support],[
             enable_sphinx=$enableval
@@ -619,16 +754,15 @@ if test "$spt_type" = ""; then
 fi
 if test "$spt_type" = ""; then
         AC_MSG_CHECKING(for PS_STRINGS)
-        AC_CACHE_VAL(cyrus_cv_sys_psstrings, AC_TRY_CPP([
+        AC_CACHE_VAL(cyrus_cv_sys_psstrings, AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 #include <machine/vmparam.h>
 #include <sys/exec.h>
-#ifndef PS_STRINGS
-#include </nonexistent>
-#endif],cyrus_cv_sys_psstrings=yes,cyrus_cv_sys_psstrings=no))
-        if test $cyrus_cv_sys_psstrings = yes; then
-                spt_type=SPT_PSSTRINGS
-        fi
-        AC_MSG_RESULT($cyrus_cv_sys_psstrings)
+void *p = PS_STRINGS;
+])],cyrus_cv_sys_psstrings=yes,cyrus_cv_sys_psstrings=no))
+         if test $cyrus_cv_sys_psstrings = yes; then
+                 spt_type=SPT_PSSTRINGS
+         fi
+         AC_MSG_RESULT($cyrus_cv_sys_psstrings)
 fi
 if test "$spt_type" = ""; then
         AC_MSG_CHECKING(for SCO)
@@ -1364,6 +1498,13 @@ if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
 dnl
+        if test "x$HAVE_SQLITE" != x1; then
+            AC_MSG_ERROR([Need sqlite3 for http])
+        else
+            use_sqlite="yes"
+            AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?])
+        fi
+
         PKG_CHECK_MODULES([XML2], [libxml-2.0],
                 LIBS="$LIBS ${XML2_LIBS}",
                 AC_MSG_ERROR([Need libxml-2.0 for http]))
@@ -1377,15 +1518,14 @@ dnl
                                 [Do we have support for xmlBufferDetach()?]))
                 ])
 
-        PKG_CHECK_MODULES([SQLITE3], [sqlite3],
-                AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),
-                AC_MSG_ERROR([Need sqlite3 for http]))
-
         PKG_CHECK_MODULES([ICAL], [libical], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
                 LIBS="$LIBS ${ICAL_LIBS}"
                 ],
                 AC_MSG_ERROR([Need libical for http]))
+
+        AC_CHECK_DECLS([icalrecur_freq_to_string, icalrecur_weekday_to_string],
+                [], [], [[#include <libical/ical.h>]])
 
         AC_CHECK_LIB(ical, icalparameter_new_iana, [
                 AC_DEFINE(HAVE_IANA_PARAMS,[],
@@ -1716,10 +1856,57 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl installed.
     AC_CHECK_HEADERS([valgrind/valgrind.h])
 
+    dnl We depend on some data files, which exist in the source directory,
+    dnl but need to be found at runtime by the built unit tests.
+    dnl Under VPATH builds the source and build directories are not the same,
+    dnl so the built unit tests can't easily find their data files.
+    dnl Solution: just link them into the build directory at the same path.
+    AC_CONFIG_LINKS([cunit/cacert.pem:cunit/cacert.pem])
+    AC_CONFIG_LINKS([cunit/cert.pem:cunit/cert.pem])
+    AC_CONFIG_LINKS([cunit/key.pem:cunit/key.pem])
+
     USE_MAINTAINER_MODE=yes
 fi
 
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
+
+dnl Finally, now that we've checked everything else, we can see whether to link
+dnl in SQLite or not.
+dnl
+if test "x$use_sqlite" = xyes; then
+  if test "x$HAVE_SQLITE" = x1; then
+    if test "x$with_sqlite_lib" != xnone; then
+        CMU_ADD_LIBPATH($with_sqlite_lib)
+    fi
+
+    LIBS="${LIBS} ${SQLITE_LIBADD}"
+    CPPFLAGS="${SQLITE_INCADD} ${CPPFLAGS}"
+    AC_DEFINE(HAVE_SQLITE,[],[Build in SQLite support?])
+  else
+    AC_MSG_ERROR([SQLite required but not found])
+  fi
+fi
+AM_CONDITIONAL([USE_SQLITE], [test "x$use_sqlite" = xyes])
+
+
+dnl CRC32 optimisations
+
+dnl if the compiler has support for SSE4.2 then we can compile a hardware
+dnl implementation of CRC32C
+AC_MSG_CHECKING(for compiler support for SSE4.2 instruction)
+AC_CACHE_VAL(cyrus_cv_sse42, AC_TRY_COMPILE([
+    #include <stdint.h>
+],[
+    uint64_t a = 0, b = 1;
+    __asm__("crc32q\t" "(%1), %0"
+            : "=r"(b)
+            : "r"(b), "0"(a));
+    return b;
+], cyrus_cv_sse42=yes, cyrus_cv_sse42=no))
+if test "$cyrus_cv_sse42" = "yes" ; then
+    AC_DEFINE(HAVE_SSE42,1,"Compiler has support for SSE4.2 extensions")
+fi
+AC_MSG_RESULT($cyrus_cv_sse42)
 
 AH_TOP([
 /*
@@ -1964,9 +2151,7 @@ Cyrus Server configured components
    replication:        $enable_replication
    sieve:              $enable_sieve
    calalarmd:          $enable_calalarmd
-   openio:             $use_openio
-   dummy_objstore:     $enable_dummy_objstore
-   caringo:            $with_caringo
+   objectstore:        $enable_objectstore
 
 External dependencies:
    ldap:               $have_ldap
@@ -1983,4 +2168,7 @@ Search engine:
    squat:              $enable_squat
    sphinx:             $enable_sphinx
    xapian:             $enable_xapian
+
+Hardware support:
+    SSE4.2:            $cyrus_cv_sse42
 "

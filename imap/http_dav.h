@@ -75,6 +75,11 @@
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
 
+#define USER_COLLECTION_PREFIX  "user"
+#define GROUP_COLLECTION_PREFIX "group"
+
+#define SHARED_COLLECTION_DELIM '.'
+
 /* Index into known namespace array */
 enum {
     NS_REQ_ROOT = -1,   /* special case: ns of request root (not an index) */
@@ -88,12 +93,16 @@ enum {
 #define NUM_NAMESPACE 6
 
 /* Cyrus-specific privileges */
+#define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
+#define DACL_PROPRES    ACL_ANNOTATEMSG /* CY:write-properties-resource */
 #define DACL_MKCOL      ACL_CREATE      /* CY:make-collection */
-#define DACL_ADDRSRC    ACL_POST        /* CY:add-resource */
+#define DACL_ADDRES     ACL_POST        /* CY:add-resource */
 #define DACL_RMCOL      ACL_DELETEMBOX  /* CY:remove-collection */
-#define DACL_RMRSRC     (ACL_DELETEMSG|ACL_EXPUNGE)     /* CY:remove-resource */
+#define DACL_RMRES      (ACL_DELETEMSG\
+                         |ACL_EXPUNGE)  /* CY:remove-resource */
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
-                                           DAV:read-acl, write-acl, unlock) */
+                                           DAV:read-acl, DAV:write-acl,
+                                           DAV:unlock and DAV:share) */
 
 /* WebDAV (RFC 3744) privileges */
 #define DACL_READ       (ACL_READ\
@@ -101,12 +110,12 @@ enum {
                                            DAV:read-current-user-privilege-set
                                            and CALDAV:read-free-busy) */
 #define DACL_WRITECONT  ACL_INSERT      /* DAV:write-content */
-#define DACL_WRITEPROPS (ACL_WRITE\
-                         |ACL_ANNOTATEMSG)      /* DAV:write-properties */
+#define DACL_WRITEPROPS (DACL_PROPCOL\
+                         |DACL_PROPRES) /* DAV:write-properties */
 #define DACL_BIND       (DACL_MKCOL\
-                         |DACL_ADDRSRC) /* DAV:bind */
+                         |DACL_ADDRES)  /* DAV:bind */
 #define DACL_UNBIND     (DACL_RMCOL\
-                         |DACL_RMRSRC)  /* DAV:unbind */
+                         |DACL_RMRES)   /* DAV:unbind */
 #define DACL_WRITE      (DACL_WRITECONT\
                          |DACL_WRITEPROPS\
                          |DACL_BIND\
@@ -162,10 +171,11 @@ enum {
     DAV_BAD_LOCK_TOKEN,
     DAV_NEED_LOCK_TOKEN,
     DAV_LOCKED,
+    DAV_FINITE_DEPTH,
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     DAV_SUPP_REPORT,
-    DAV_RSRC_EXISTS,
+    DAV_RES_EXISTS,
 
     /* WebDAV ACL (RFC 3744) preconditions */
     DAV_NEED_PRIVS,
@@ -367,7 +377,8 @@ enum {
     PROP_ALLPROP =      (1<<0),         /* Returned in <allprop> request */
     PROP_COLLECTION =   (1<<1),         /* Returned for collection */
     PROP_RESOURCE =     (1<<2),         /* Returned for resource */
-    PROP_PRESCREEN =    (1<<3)          /* Prescreen property using callback */
+    PROP_PRESCREEN =    (1<<3),         /* Prescreen property using callback */
+    PROP_CLEANUP =      (1<<4)          /* Cleanup property using callback */
 };
 
 
@@ -380,9 +391,6 @@ typedef int (*db_write_proc_t)(void *davdb, void *data);
 
 /* Function to delete resource in 'rowid' */
 typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid);
-
-/* Function to delete all entries in 'mailbox' */
-typedef int (*db_delmbox_proc_t)(void *davdb, const char *mailbox);
 
 typedef int (*db_proc_t)(void *davdb);
 
@@ -398,7 +406,6 @@ struct davdb_params {
      * we need to go via mailbox.c for replication support */
     db_write_proc_t write_resourceLOCKONLY;     /* write a specific resource */
     db_delete_proc_t delete_resourceLOCKONLY;   /* delete a specific resource */
-    db_delmbox_proc_t delete_mboxDONTUSE;       /* delete all resources in mailbox */
 };
 
 /*
@@ -422,11 +429,16 @@ struct mime_type_t {
     const char *content_type;
     const char *version;
     const char *file_ext;
-    char* (*to_string)(void *);
-    void* (*from_string)(const char *);
+    struct buf* (*from_object)(void *);
+    void* (*to_object)(const struct buf *);
     void (*free)(void *);
     const char* (*begin_stream)(struct buf *);
     void (*end_stream)(struct buf *);
+};
+
+struct mkcol_params {
+    unsigned location_precond;          /* precond code for bad location */
+    uint32_t mbtype;                    /* mailbox type collection */
 };
 
 /*
@@ -441,9 +453,19 @@ typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
                           struct mailbox *mailbox, const char *resource,
                           void *davdb);
 
+struct copy_params {
+    unsigned uid_conf_precond;          /* precond code for UID conflict */
+    put_proc_t proc;                    /* function to process & COPY a rsrc */
+};
+
 struct put_params {
     unsigned supp_data_precond;         /* precond code for unsupported data */
     put_proc_t proc;                    /* function to process & PUT a rsrc */
+};
+
+struct propfind_params {
+    unsigned finite_depth_precond;      /* precond code for finite depth */
+    const struct prop_entry *lprops;    /* array of "live" properties */
 };
 
 /* meth_report() parameters */
@@ -481,13 +503,14 @@ struct meth_params {
     check_precond_t check_precond;      /* check headers for preconditions */
     struct davdb_params davdb;          /* DAV DB access functions */
     acl_proc_t acl_ext;                 /* special ACL handling (extensions) */
-    put_proc_t copy;                    /* function to process & COPY a rsrc */
+    struct copy_params copy;            /* params for copying a resource */
     delete_proc_t delete;               /* special DELETE handling (optional) */
     get_proc_t get;                     /* special GET handling (optional) */
-    uint32_t mkcol_mbtype;              /* mbtype for MKCOL/MKCALENDAR */
+    struct mkcol_params mkcol;          /* params for creating new collection */
+    struct patch_doc_t *patch_docs;     /* array of patch docs & funcs (opt) */
     post_proc_t post;                   /* special POST handling (optional) */
     struct put_params put;              /* params for putting a resource */
-    const struct prop_entry *lprops;    /* array of "live" properties */
+    struct propfind_params propfind;    /* params for finding properties */
     const struct report_type_t *reports;/* array of reports & proc functions */
 };
 
@@ -503,17 +526,21 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 
+int dav_parse_path(const char *path, struct request_target_t *tgt,
+                   const char *urlprefix, const char *mboxprefix,
+                   const char **errstr);
 int dav_check_precond(struct transaction_t *txn, const void *data,
                       const char *etag, time_t lastmod);
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
                        strarray_t *imapflags);
-int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
+int dav_premethod(struct transaction_t *txn);
 unsigned get_preferences(struct transaction_t *txn);
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
 
-int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
+int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
+                   const char *mimetype);
 
 /* Initialize an XML tree */
 xmlNodePtr init_xml_response(const char *resp, int ns,
@@ -548,6 +575,7 @@ int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);
 int meth_proppatch(struct transaction_t *txn, void *params);
+int meth_patch(struct transaction_t *txn, void *params);
 int meth_post(struct transaction_t *txn, void *params);
 int meth_put(struct transaction_t *txn, void *params);
 int meth_report(struct transaction_t *txn, void *params);

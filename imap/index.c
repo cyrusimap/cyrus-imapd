@@ -370,13 +370,10 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     r = index_lock(state);
     if (r) return r;
 
-    /* XXX - earlier list if the sequence names UIDs that don't exist? */
+    /* XXX - check if not mailbox->i.deleted count and need_deleted */
     seq = _parse_sequence(state, sequence, 1);
 
-    /* don't notify for messages that don't need \Deleted flag because
-     * a notification should be already send (eg. MessageMove) */
-    if (need_deleted)
-        mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+    mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
         im = &state->map[msgno-1];
@@ -4139,7 +4136,8 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     const char *data;
     size_t size;
     int32_t skip = 0;
-    int n, r = 0;
+    unsigned long n;
+    int r = 0;
     char *decbuf = NULL;
     struct index_record record;
 
@@ -4243,7 +4241,8 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         size_t section_offset = CACHE_ITEM_BIT32(cacheitem);
         size_t section_size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
 
-        if (section_offset + section_size > size) {
+        if (section_offset + section_size < section_offset
+            || section_offset + section_size > size) {
             r = IMAP_INTERNAL;
             goto done;
         }
@@ -4286,7 +4285,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         start_octet = size;
         n = 0;
     }
-    else if (start_octet + n > size) {
+    else if (start_octet + n < start_octet || start_octet + n > size) {
         n = size - start_octet;
     }
 
@@ -4298,10 +4297,10 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
         if (domain == DOMAIN_BINARY) {
             /* Write size of literal8 */
-            prot_printf(pout, " ~{%u}\r\n", n);
+            prot_printf(pout, " ~{%lu}\r\n", n);
         } else {
             /* Write size of literal */
-            prot_printf(pout, " {%u}\r\n", n);
+            prot_printf(pout, " {%lu}\r\n", n);
         }
     }
 
@@ -4803,7 +4802,8 @@ MsgData **index_msgdata_load(struct index_state *state,
             if ((label == SORT_CC || label == SORT_DATE ||
                  label == SORT_FROM || label == SORT_SUBJECT ||
                  label == SORT_TO || label == LOAD_IDS ||
-                 label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO) &&
+                 label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO ||
+                 label == SORT_SPAMSCORE) &&
                 !did_cache) {
 
                 /* fetch cached info */
@@ -4895,6 +4895,12 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->displayto = get_displayname(
                                  cacheitem_base(&record, CACHE_TO));
                 break;
+            case SORT_SPAMSCORE: {
+                const char *score = index_getheader(state, cur->msgno, "X-Spam-score");
+                /* multiply by 100 to give an integer score */
+                cur->spamscore = (int)((atof(score) * 100) + 0.5);
+                break;
+            }
             case SORT_HASFLAG: {
                 const char *name = sortcrit[j].args.flag.name;
                 if (mailbox_record_hasflag(mailbox, &record, name))
@@ -5280,6 +5286,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             break;
         case SORT_CONVSIZE:
             ret = numcmp(md1->convsize, md2->convsize);
+            break;
+        case SORT_SPAMSCORE:
+            ret = numcmp(md1->spamscore, md2->spamscore);
             break;
         case SORT_HASFLAG:
             if (i < 31)
@@ -6218,7 +6227,7 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
     static int envsize = 0, fromsize = 0, hdrsize = 0;
     int size;
     char *envtokens[NUMENVTOKENS];
-    struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL };
+    struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL, 0 };
     strarray_t refhdr = STRARRAY_INITIALIZER;
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;

@@ -350,7 +350,7 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
     int r = 0;
 
     if (mboxname_list->count) {
-        r = sync_do_mailboxes(mboxname_list, sync_backend, flags);
+        r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, flags);
         if (r) {
             /* promote failed personal mailboxes to USER */
             int nonuser = 0;
@@ -388,17 +388,8 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
 
 static int do_restart()
 {
-    static int restartcnt = 0;
+    sync_send_restart(sync_out);
 
-    if (sync_out->userdata) {
-        /* IMAP flavor (w/ tag) */
-        struct buf *tag = (struct buf *) sync_out->userdata;
-        buf_reset(tag);
-        buf_printf(tag, "R%d", restartcnt++);
-        prot_printf(sync_out, "%s SYNC", buf_cstring(tag));
-    }
-    prot_printf(sync_out, "RESTART\r\n");
-    prot_flush(sync_out);
     return sync_parse_response("RESTART", sync_in, NULL);
 }
 
@@ -523,8 +514,8 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
 
         if (sync_do_seen(action->user, action->name, sync_backend, flags)) {
-            char *userid = mboxname_isusermailbox(action->name, 1);
-            if (userid && !strcmp(userid, action->user)) {
+            char *userid = mboxname_to_userid(action->name);
+            if (userid && mboxname_isusermailbox(action->name, 1) && !strcmp(userid, action->user)) {
                 sync_action_list_add(user_list, NULL, action->user);
                 if (verbose) {
                     printf("  Promoting: SEEN %s %s -> USER %s\n",
@@ -545,6 +536,7 @@ static int do_sync(sync_log_reader_t *slr)
                            action->user, action->name, action->user);
                 }
             }
+            free(userid);
         }
     }
 
@@ -617,7 +609,7 @@ static int do_sync(sync_log_reader_t *slr)
     for (action = user_list->head; action; action = action->next) {
         if (!action->active)
             continue;
-        r = sync_do_user(action->user, sync_backend, flags);
+        r = sync_do_user(action->user, NULL, sync_backend, flags);
         if (r) goto cleanup;
         r = do_restart();
         if (r) goto cleanup;
@@ -997,7 +989,7 @@ static int do_mailbox(const char *mboxname, unsigned flags)
 
     sync_name_list_add(list, mboxname);
 
-    r = sync_do_mailboxes(list, sync_backend, flags);
+    r = sync_do_mailboxes(list, NULL, sync_backend, flags);
 
     sync_name_list_free(&list);
 
@@ -1018,8 +1010,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
 
         /* only sync if we haven't just done the user */
         if (strcmpsafe(userid, prev_userid)) {
-            printf("USER: %s\n", userid);
-            r = sync_do_user(userid, sync_backend, flags);
+            r = sync_do_user(userid, NULL, sync_backend, flags);
             if (r) {
                 if (verbose)
                     fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
@@ -1077,10 +1068,10 @@ int main(int argc, char **argv)
     int   min_delta = 0;
     const char *channel = NULL;
     const char *sync_shutdown_file = NULL;
+    const char *partition = NULL;
     char buf[512];
     FILE *file;
     int len;
-    int config_virtdomains;
     struct sync_name_list *mboxname_list;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
@@ -1089,7 +1080,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOA")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOAp:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -1187,6 +1178,10 @@ int main(int argc, char **argv)
             no_copyback = 1;
             break;
 
+        case 'p':
+            partition = optarg;
+            break;
+
         default:
             usage("sync_client");
         }
@@ -1231,7 +1226,6 @@ int main(int argc, char **argv)
     }
 
     /* Set namespace -- force standard (internal) */
-    config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
         fatal(error_message(r), EC_CONFIG);
     }
@@ -1272,10 +1266,7 @@ int main(int argc, char **argv)
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
 
-                mboxname_hiersep_tointernal(&sync_namespace, buf,
-                                            config_virtdomains ?
-                                            strcspn(buf, "@") : 0);
-                if (sync_do_user(buf, sync_backend, flags)) {
+                if (sync_do_user(buf, partition, sync_backend, flags)) {
                     if (verbose)
                         fprintf(stderr,
                                 "Error from sync_do_user(%s): bailing out!\n",
@@ -1287,10 +1278,7 @@ int main(int argc, char **argv)
             }
             fclose(file);
         } else for (i = optind; !r && i < argc; i++) {
-            mboxname_hiersep_tointernal(&sync_namespace, argv[i],
-                                        config_virtdomains ?
-                                        strcspn(argv[i], "@") : 0);
-            if (sync_do_user(argv[i], sync_backend, flags)) {
+            if (sync_do_user(argv[i], partition, sync_backend, flags)) {
                 if (verbose)
                     fprintf(stderr, "Error from sync_do_user(%s): bailing out!\n",
                             argv[i]);
@@ -1343,7 +1331,7 @@ int main(int argc, char **argv)
             free(intname);
         }
 
-        if (sync_do_mailboxes(mboxname_list, sync_backend, flags)) {
+        if (sync_do_mailboxes(mboxname_list, partition, sync_backend, flags)) {
             if (verbose) {
                 fprintf(stderr,
                         "Error from sync_do_mailboxes(): bailing out!\n");
@@ -1361,9 +1349,6 @@ int main(int argc, char **argv)
         replica_connect(channel);
 
         for (i = optind; i < argc; i++) {
-            mboxname_hiersep_tointernal(&sync_namespace, argv[i],
-                                        config_virtdomains ?
-                                        strcspn(argv[i], "@") : 0);
             if (sync_do_meta(argv[i], sync_backend, flags)) {
                 if (verbose) {
                     fprintf(stderr,

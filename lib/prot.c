@@ -633,6 +633,7 @@ EXPORTED int prot_fill(struct protstream *s)
         if (s->zstrm && s->zstrm->avail_in) {
             /* Decompress the data */
             int zr = Z_OK;
+            unsigned in = s->zstrm->avail_in;
 
             s->zstrm->next_out = s->zbuf;
             s->zstrm->avail_out = s->zbuf_size;
@@ -648,6 +649,8 @@ EXPORTED int prot_fill(struct protstream *s)
                 /* inflated some data */
                 s->ptr = s->zbuf;
                 s->cnt = s->zbuf_size - s->zstrm->avail_out;
+
+                syslog(LOG_DEBUG, "decompressed %u -> %u bytes", in, s->cnt);
 
                 /* drop straight to logging and returning the first char */
                 break;
@@ -888,6 +891,7 @@ static int prot_flush_encode(struct protstream *s,
     if (s->zstrm) {
         /* Compress the data */
         int zr = Z_OK;
+        unsigned in = left;
 
         s->zstrm->next_in = ptr;
         s->zstrm->avail_in = left;
@@ -925,6 +929,8 @@ static int prot_flush_encode(struct protstream *s,
 
         ptr = s->zbuf;
         left = s->zbuf_size - s->zstrm->avail_out;
+
+        syslog(LOG_DEBUG, "compressed %u -> %u bytes", in, left);
     }
 #endif /* HAVE_ZLIB */
 
@@ -1260,10 +1266,7 @@ EXPORTED int prot_puts(struct protstream *s, const char *str)
 }
 
 /*
- * Stripped-down version of printf() that works on protection streams
- * Only understands '%lld', '%llu', '%llx', '%ld', '%lu', '%lx',
- * '%d', %u', '%x', '%s', '%tu', '%td', '%c', and '%%'
- * in the format string.
+ * Version of printf() that works on protection streams.
  */
 EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 {
@@ -1279,159 +1282,14 @@ EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 
 EXPORTED int prot_vprintf(struct protstream *s, const char *fmt, va_list pvar)
 {
-    char *percent, *p;
-    long l;
-    unsigned long ul;
-    int i;
-    unsigned u;
-    char buf[30];
+    struct buf buf = BUF_INITIALIZER;
 
     assert(s->write);
 
-    while ((percent = strchr(fmt, '%')) != 0) {
-        prot_write(s, fmt, percent-fmt);
-        switch (*++percent) {
-        case '%':
-            (void)prot_putc('%', s);
-            break;
+    buf_vprintf(&buf, fmt, pvar);
+    prot_puts(s, buf_cstring(&buf));
+    buf_free(&buf);
 
-        case 'l':
-            switch (*++percent) {
-            case 'd':
-                l = va_arg(pvar, long);
-                snprintf(buf, sizeof(buf), "%ld", l);
-                prot_write(s, buf, strlen(buf));
-                break;
-
-            case 'u':
-                ul = va_arg(pvar, long);
-                snprintf(buf, sizeof(buf), "%lu", ul);
-                prot_write(s, buf, strlen(buf));
-                break;
-
-            case 'x':
-                l = va_arg(pvar, long);
-                snprintf(buf, sizeof(buf), "%lx", l);
-                prot_write(s, buf, strlen(buf));
-                break;
-
-            case 'l': {
-                long long int ll;
-                unsigned long long int ull;
-
-                switch (*++percent) {
-                case 'd':
-                    ll = va_arg(pvar, long long int);
-                    snprintf(buf, sizeof(buf), "%lld", ll);
-                    prot_write(s, buf, strlen(buf));
-                    break;
-
-                case 'u':
-                    ull = va_arg(pvar, unsigned long long int);
-                    snprintf(buf, sizeof(buf), "%llu", ull);
-                    prot_write(s, buf, strlen(buf));
-                    break;
-
-                case 'x':
-                    ll = va_arg(pvar, long long int);
-                    snprintf(buf, sizeof(buf), "%llx", ll);
-                    prot_write(s, buf, strlen(buf));
-                    break;
-
-                default:
-                    abort();
-                }
-                break;
-            }
-
-            default:
-                abort();
-            }
-            break;
-
-        case 'd':
-            i = va_arg(pvar, int);
-            snprintf(buf, sizeof(buf), "%d", i);
-            prot_write(s, buf, strlen(buf));
-            break;
-
-        case 'u':
-            u = va_arg(pvar, unsigned);
-            snprintf(buf, sizeof(buf), "%u", u);
-            prot_write(s, buf, strlen(buf));
-            break;
-
-        case 'x':
-            i = va_arg(pvar, int);
-            snprintf(buf, sizeof(buf), "%x", i);
-            prot_write(s, buf, strlen(buf));
-            break;
-
-        /* according to linux 'man 3 printf' this is supposed to be
-         * of type "ptrdiff_t", not "size_t" - but don't want to break
-         * running code! */
-        case 't': {
-            size_t tu;
-            ssize_t td;
-
-            switch (*++percent) {
-            case 'u':
-                tu = va_arg(pvar, size_t);
-                snprintf(buf, sizeof(buf), "%tu", tu);
-                prot_write(s, buf, strlen(buf));
-                break;
-
-            case 'd':
-                td = va_arg(pvar, ssize_t);
-                snprintf(buf, sizeof(buf), "%td", td);
-                prot_write(s, buf, strlen(buf));
-                break;
-
-            default:
-                abort();
-            }
-            break;
-        }
-
-        case 's':
-            p = va_arg(pvar, char *);
-            prot_write(s, p, strlen(p));
-            break;
-
-        case 'c':
-            i = va_arg(pvar, int);
-            (void)prot_putc(i, s);
-            break;
-
-        case 'z': {
-            size_t zu;
-            ssize_t zd;
-
-            switch (*++percent) {
-            case 'u':
-                zu = va_arg(pvar, size_t);
-                snprintf(buf, sizeof(buf), "%zu", zu);
-                prot_write(s, buf, strlen(buf));
-                break;
-
-            case 'd':
-                zd = va_arg(pvar, ssize_t);
-                snprintf(buf, sizeof(buf), "%zd", zd);
-                prot_write(s, buf, strlen(buf));
-                break;
-
-            default:
-                abort();
-            }
-            break;
-        }
-
-        default:
-            abort();
-        }
-        fmt = percent+1;
-    }
-    prot_write(s, fmt, strlen(fmt));
     if (s->error || s->eof) return EOF;
     return 0;
 }
@@ -1769,7 +1627,6 @@ EXPORTED char *prot_fgets(char *buf, unsigned size, struct protstream *s)
     while (size && (c = prot_getc(s)) != EOF) {
         size--;
         *p++ = c;
-        s->bytes_in++;
         if (c == '\n') break;
     }
     if (p == buf) return 0;
@@ -1878,7 +1735,9 @@ EXPORTED struct protstream *protgroup_getelement(struct protgroup *group,
     return group->group[element];
 }
 
-EXPORTED int prot_getc(struct protstream *s)
+EXPORTED inline int prot_getc(struct protstream *s)
+    __attribute__((always_inline,optimize("-O3")));
+EXPORTED inline int prot_getc(struct protstream *s)
 {
     assert(!s->write);
 

@@ -89,12 +89,12 @@ int annotate_state_commit(annotate_state_t **statep);
 void annotate_state_begin(annotate_state_t *state);
 void annotate_state_set_auth(annotate_state_t *state,
                              int isadmin, const char *userid,
-                             struct auth_state *auth_state);
+                             const struct auth_state *auth_state);
 int annotate_state_set_server(annotate_state_t *state);
 int annotate_state_set_mailbox(annotate_state_t *state,
                                struct mailbox *mailbox);
 int annotate_state_set_mailbox_mbe(annotate_state_t *state,
-                                   mbentry_t *);
+                                   const mbentry_t *);
 int annotate_state_set_message(annotate_state_t *state,
                                struct mailbox *mailbox,
                                unsigned int uid);
@@ -252,6 +252,6 @@ int annotate_getdb(const char *mboxname, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
 
 /* Maybe this isn't the right place - move later */
-int specialuse_validate(const char *src, struct buf *dest);
+int specialuse_validate(const char *userid, const char *src, struct buf *dest);
 
 #endif /* ANNOTATE_H */

@@ -65,7 +65,6 @@ struct conversations_state {
     strarray_t *counted_flags;
     strarray_t *folder_names;
     hash_table folderstatus;
-    struct hashu64_table cidrenames;
     char *path;
 };
 
@@ -223,13 +222,6 @@ extern int conversations_truncate(struct conversations_state *);
 
 extern const char *conversation_id_encode(conversation_id_t cid);
 extern int conversation_id_decode(conversation_id_t *cid, const char *text);
-
-extern void conversations_rename_cid(struct conversations_state *state,
-                                     conversation_id_t from_cid,
-                                     conversation_id_t to_cid);
-extern void conversations_rename_cidentry(struct conversations_state *state,
-                                          conversation_id_t from,
-                                          conversation_id_t to);
 
 
 extern int conversations_zero_counts(struct conversations_state *state);

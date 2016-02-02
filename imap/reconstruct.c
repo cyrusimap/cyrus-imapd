@@ -81,6 +81,7 @@
 #ifdef WITH_DAV
 #include "caldav_db.h"
 #include "carddav_db.h"
+#include "webdav_db.h"
 #endif
 #include "crc32.h"
 #include "hash.h"
@@ -257,6 +258,7 @@ int main(int argc, char **argv)
 #ifdef WITH_DAV
     caldav_init();
     carddav_init();
+    webdav_init();
 #endif
 
     /* Deal with nonexistent mailboxes */
@@ -333,10 +335,6 @@ int main(int argc, char **argv)
         if (config_virtdomains) domain = strchr(argv[i], '@');
 
         strlcpy(buf, argv[i], sizeof(buf));
-        /* Translate any separators in mailboxname */
-        mboxname_hiersep_tointernal(&recon_namespace, buf,
-                                    config_virtdomains ?
-                                    strcspn(buf, "@") : 0);
 
         /* reconstruct the first mailbox/pattern */
         mboxlist_findall(&recon_namespace, buf, 1, 0,
@@ -391,6 +389,7 @@ int main(int argc, char **argv)
 
     partlist_local_done();
 #ifdef WITH_DAV
+    webdav_done();
     carddav_done();
     caldav_done();
 #endif

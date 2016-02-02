@@ -83,7 +83,7 @@ static struct auth_mech *auth_fromname(void)
     return auth;
 }
 
-EXPORTED int auth_memberof(struct auth_state *auth_state, const char *identifier)
+EXPORTED int auth_memberof(const struct auth_state *auth_state, const char *identifier)
 {
     struct auth_mech *auth = auth_fromname();
 

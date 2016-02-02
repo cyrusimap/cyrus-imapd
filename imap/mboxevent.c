@@ -250,7 +250,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
     int i = 0;
     int r = 0;
 
-    if (!enable_subfolder && (mboxname_isusermailbox(mailbox->name, 1)) == NULL) {
+    if (!enable_subfolder && !mboxname_isusermailbox(mailbox->name, 1)) {
         enabled = 0;
         goto done;
     }
@@ -759,7 +759,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     imapurl.server = config_servername;
 
     mbname_t *mbname = mbname_from_intname(mailboxname);
-    imapurl.mailbox = xstrdupnull(mbname_extname(mbname, &namespace, NULL));
+    char *extname = xstrdupnull(mbname_extname(mbname, &namespace, NULL));
+    imapurl.mailbox = extname;
     mbname_free(&mbname);
 
     imapurl_toURL(url, &imapurl);
@@ -774,8 +775,14 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     if (mailboxname) {
         mbentry_t *mbentry = NULL;
         r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-        if (!r && mbentry->uniqueid)
+        if (!r && mbentry->uniqueid) {
+            /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_ID,
+             * so make sure to deallocate its previous value */
+            if (event->params[EVENT_MAILBOX_ID].filled) {
+                free(event->params[EVENT_MAILBOX_ID].value.s);
+            }
             FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+        }
         mboxlist_entry_free(&mbentry);
     }
 
@@ -788,12 +795,10 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     }
 
     if (userid && mboxevent_expected_param(event->type, EVENT_USER)) {
-        /* translate any separators in user */
-        char *user = xstrdup(userid);
-        mboxname_hiersep_toexternal(&namespace, user,
-                                    config_virtdomains ? strcspn(user, "@") : 0);
-        FILL_STRING_PARAM(event, EVENT_USER, user); /* note, absorbs the user */
+        FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
     }
+
+    free(extname);
 }
 
 EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
@@ -1178,10 +1183,12 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         struct buf value = BUF_INITIALIZER;
 
         int r = mboxname_read_counters(mailbox->name, &counters);
-        if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %u",
+        if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
                            counters.version, counters.highestmodseq,
                            counters.mailmodseq, counters.caldavmodseq,
                            counters.carddavmodseq, counters.notesmodseq,
+                           counters.mailfoldersmodseq, counters.caldavfoldersmodseq,
+                           counters.carddavfoldersmodseq, counters.notesfoldersmodseq,
                            counters.uidvalidity);
 
         FILL_STRING_PARAM(event, EVENT_COUNTERS, buf_release(&value));
@@ -1230,11 +1237,7 @@ EXPORTED void mboxevent_set_applepushservice(struct mboxevent *event,
     FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_SUBTOPIC,     (char *) buf_cstring(&applepushserviceargs->aps_subtopic));
     FILL_ARRAY_PARAM(event,    EVENT_APPLEPUSHSERVICE_MAILBOXES,    mailboxes);
 
-    /* translate any separators in user */
-    char *user = xstrdup(userid);
-    mboxname_hiersep_toexternal(&namespace, user,
-                                config_virtdomains ? strcspn(user, "@") : 0);
-    FILL_STRING_PARAM(event, EVENT_USER, user); /* note, absorbs the user */
+    FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
 }
 #endif
 

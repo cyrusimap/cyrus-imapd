@@ -97,7 +97,7 @@ are listed with ``<none>''.
 /* The prefix for the addressbook mailboxes hierarchies.  The hierarchy
    delimiter will be automatically appended.  The public addressbook
    hierarchy will be at the toplevel of the shared namespace.  A
-   user's personal calendar hierarchy will be a child of their Inbox. */
+   user's personal addressbook hierarchy will be a child of their Inbox. */
 
 { "admins", "", STRING }
 /* The list of userids with administrative rights.  Separate each userid
@@ -526,6 +526,22 @@ Blank lines and lines beginning with ``#'' are ignored.
    information needed for receiving new messages in existing
    conversations, in days. */
 
+{ "crossdomains", 0, SWITCH }
+/* Enable cross domain sharing.  This works best with alt namespace and
+   unix hierarchy separators on, so you get Other Users/foo@example.com/... */
+
+{ "davdriveprefix", "#drive", STRING }
+/* The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
+   delimiter will be automatically appended.  The public storage
+   hierarchy will be at the toplevel of the shared namespace.  A
+   user's personal storage hierarchy will be a child of their Inbox. */
+
+{ "davnotificationsprefix", "#notifications", STRING }
+/* The prefix for the DAV notifications hierarchy.  The hierarchy
+   delimiter will be automatically appended.  The public notifications
+   hierarchy will be at the toplevel of the shared namespace.  A
+   user's personal notifications hierarchy will be a child of their Inbox. */
+
 { "dav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of generic DAV
    resources (principals).  If not set (the default), the value of the
@@ -541,7 +557,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The Access Control List (ACL) placed on a newly-created (non-user)
    mailbox that does not have a parent mailbox. */
 
-{ "defaultdomain", NULL, STRING }
+{ "defaultdomain", "internal", STRING }
 /* The default domain for virtual domain support */
 
 { "defaultpartition", NULL, STRING }
@@ -770,7 +786,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist") }
+{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist", "webdav") }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical).
@@ -815,6 +831,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    Using userid+ (with an empty namespace) will list only subscribed
    mailboxes. */
 
+{ "imipnotifier", NULL, STRING }
+/* Notifyd(8) method to use for "IMIP" notifications which are based on
+   the RFC 6047.  If not set, "IMIP" notifications are disabled. */
+
 { "implicit_owner_rights", "lkxa", STRING }
 /* The implicit Access Control List (ACL) for the owner of a mailbox. */
 
@@ -841,6 +861,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    "standard" uses time() when delivering a message, mtime on reconstruct.
    "receivedheader" looks at the top most Received header
    or time/mtime otherwise */
+
+{ "jmap_preview_annot", NULL, STRING }
+/* The name of the per-message annotation, if any, to store message
+   previews. */
+
+{ "jmap_preview_length", 64, INT }
+/* The maximum byte length of dynamically generated message previews. Previews
+   stored in jmap_preview_annot take precedence. */
 
 { "iolog", 0, SWITCH }
 /* Should cyrus output I/O log entries */
@@ -1327,6 +1355,9 @@ And the notification message will be available on \fIstdin\fR.
    value of the \fBdefaultpartion\fR option is \fBdefault\fR, then the
    \fBpartition-default\fR field is required. */
 
+{ "outbox_sendlater", 0, SWITCH }
+/* If enabled, any message with a \Draft flag will be sent at the time of its INTERNALDATE */
+
 { "partition_select_mode", "freespace-most", STRINGLIST("random", "freespace-most", "freespace-percent-most", "freespace-percent-weighted", "freespace-percent-weighted-delta") }
 /* Partition selection mode.
 .PP
@@ -1541,6 +1572,10 @@ If all partitions are over that limit, this feature is not used anymore.
 { "reject8bit", 0, SWITCH }
 /* If enabled, lmtpd rejects messages with 8-bit characters in the
    headers. */
+
+{ "reverseacls", 0, SWITCH }
+/* At startup time, ctl_cyrusdb -r will check this value and it
+   will either add or remove reverse ACL pointers from mailboxes.db */
 
 { "rfc2046_strict", 0, SWITCH }
 /* If enabled, imapd will be strict (per RFC 2046) when matching MIME
@@ -2024,9 +2059,6 @@ product version in the capabilities */
    certificate. A value of "disabled" will disable this server's use
    of certificate-based authentication. */
 
-{ "tls_compression", 0, SWITCH }
-/* Deactivate TLS compression by default. */
-
 { "tls_eccurve", "prime256v1", STRING }
 /* The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
    See 'openssl ecparam -list_curves' for possible values. */
@@ -2075,6 +2107,12 @@ product version in the capabilities */
    with all protocols, and substracts protocols not in this list. Newer
    versions of SSL/TLS will need to be added here to allow them to get
    disabled. */
+
+{ "uidl_format", "cyrus", ENUM("uidonly", "cyrus", "dovecot", "courier") }
+/* Choose the format for UIDLs in pop3.  Possible values are "uidonly",
+   "cyrus", "dovecot" and "courier".  "uidonly" forces the old default
+   of UID, "cyrus" is UIDVALIDITY.UID.  Dovecot is 8 digits of leading
+   hex (lower case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID. */
 
 { "umask", "077", STRING }
 /* The umask value used by various Cyrus IMAP programs. */

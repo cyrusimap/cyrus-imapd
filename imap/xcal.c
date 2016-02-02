@@ -552,8 +552,9 @@ static xmlNodePtr icalcomponent_as_xml_element(icalcomponent *comp)
 /*
  * Construct a xcal string for an iCalendar component.
  */
-char *icalcomponent_as_xcal_string(icalcomponent *ical)
+struct buf *icalcomponent_as_xcal_string(icalcomponent *ical)
 {
+    struct buf *ret;
     xmlDocPtr doc;
     xmlNodePtr root, xcomp;
     xmlChar *buf;
@@ -587,7 +588,10 @@ char *icalcomponent_as_xcal_string(icalcomponent *ical)
 
     xmlFreeDoc(doc);
 
-    return (char *) buf;
+    ret = buf_new();
+    buf_initm(ret, (char *) buf, bufsiz);
+
+    return ret;
 }
 
 
@@ -1048,12 +1052,13 @@ static icalcomponent *xml_element_to_icalcomponent(xmlNodePtr xcomp)
 /*
  * Construct an iCalendar component from an xCal string.
  */
-icalcomponent *xcal_string_as_icalcomponent(const char *str)
+icalcomponent *xcal_string_as_icalcomponent(const struct buf *buf)
 {
     xmlParserCtxtPtr ctxt;
     xmlDocPtr doc = NULL;
     xmlNodePtr root;
     icalcomponent *ical = NULL;
+    const char *str = buf_cstring(buf);
 
     if (!str) return NULL;
 

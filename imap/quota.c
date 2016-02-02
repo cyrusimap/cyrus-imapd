@@ -385,8 +385,7 @@ int buildquotalist(char *domain, char **roots, int nroots)
      */
     for (i = 0; i < nroots; i++) {
         strlcpy(tail, roots[i], sizeof(buf) - domainlen);
-        /* change the separator to internal namespace */
-        mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
+        /* XXX - namespace fixes here */
 
         r = quota_foreach(buf, fixquota_addroot, buf, NULL);
         if (r) {
@@ -631,8 +630,6 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
      */
     for (i = 0; i < nroots; i++) {
         strlcpy(tail, roots[i], sizeof(buf) - domainlen);
-        /* change the separator to internal namespace */
-        mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
         r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
         if (r) {

@@ -101,6 +101,7 @@ int sqldb_writecommit(sqldb_t *open);
 int sqldb_writeabort(sqldb_t *open);
 
 int sqldb_lastid(sqldb_t *open);
+int sqldb_changes(sqldb_t *open);
 
 int sqldb_close(sqldb_t **openp);
 

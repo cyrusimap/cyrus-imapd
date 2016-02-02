@@ -63,6 +63,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
@@ -490,12 +491,19 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
         return IMTEST_FAIL;
     }
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+    tls_ctx = SSL_CTX_new(TLS_client_method());
+#else
     tls_ctx = SSL_CTX_new(SSLv23_client_method());
+#endif
     if (tls_ctx == NULL) {
         return IMTEST_FAIL;
     };
 
-    off |= SSL_OP_ALL;          /* Work around all known bugs */
+    off |= SSL_OP_ALL;            /* Work around all known bugs */
+    off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
+    off |= SSL_OP_NO_SSLv3;       /* Disable insecure SSLv3 */
+    off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
     SSL_CTX_set_options(tls_ctx, off);
     SSL_CTX_set_info_callback(tls_ctx, apps_ssl_info_callback);
 
@@ -525,7 +533,7 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
 
     if (c_cert_file || c_key_file)
         if (!set_cert_stuff(tls_ctx, c_cert_file, c_key_file)) {
-            printf("TLS engine: cannot load cert/key data\n");
+            printf("TLS engine: cannot load cert/key data, may be a cert/key mismatch?\n");
             return IMTEST_FAIL;
         }
     SSL_CTX_set_tmp_rsa_callback(tls_ctx, tmp_rsa_cb);
@@ -1227,7 +1235,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
         /* can't have this and a file for input */
         sunsock.sun_family = AF_UNIX;
-        strcpy(sunsock.sun_path, output_socket);
+        strlcpy(sunsock.sun_path, output_socket, sizeof(sunsock.sun_path));
         unlink(output_socket);
 
         listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -2247,10 +2255,10 @@ static void usage(char *prog, char *prot)
                "             (specify \"\" to not use TLS for authentication)\n");
 #endif /* HAVE_SSL */
 #ifdef HAVE_ZLIB
-    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "mupdate") ||
-        !strcasecmp(prot, "csync")) {
-        printf("  -q       : Enable %s COMPRESSion"
-               " (before last authentication attempt)\n", prot);
+    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "nntp") ||
+        !strcasecmp(prot, "mupdate") || !strcasecmp(prot, "csync")) {
+        printf("  -q       : Enable %s COMPRESSion (after authentication)\n",
+               prot);
     }
 #endif /* HAVE_ZLIB */
     printf("  -c       : enable challenge prompt callbacks\n"
@@ -2286,11 +2294,12 @@ static struct protocol_t protocols[] = {
     },
     { "nntp", "nntps", "nntp", 0,  /* AUTHINFO USER unavail until advertised */
       { 0, "20", NULL },
-      { "CAPABILITIES", ".", "STARTTLS", "AUTHINFO USER", "SASL ", NULL, NULL },
+      { "CAPABILITIES", ".", "STARTTLS", "AUTHINFO USER", "SASL ",
+        "COMPRESS DEFLATE", NULL },
       { "STARTTLS", "382", "580", 0 },
       { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*",
         &nntp_parse_success, 0 },
-      { NULL, NULL, NULL, },
+      { "COMPRESS DEFLATE", "206", "403", },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp", 0,
@@ -2680,24 +2689,6 @@ int main(int argc, char **argv)
         }
 #endif /* HAVE_SSL */
 
-#ifdef HAVE_ZLIB
-        if ((reauth == 1) && (docompress==1) && (capabilities & CAPA_COMPRESS)) {
-        char *resp;
-
-        printf("C: %s\r\n", protocol->compress_cmd.cmd);
-        prot_printf(pout, "%s\r\n", protocol->compress_cmd.cmd);
-        prot_flush(pout);
-
-        resp = waitfor(protocol->compress_cmd.ok, protocol->compress_cmd.fail, 1);
-
-        if (!strncasecmp(resp, protocol->compress_cmd.ok,
-                         strlen(protocol->compress_cmd.ok))) {
-            prot_setcompress(pin);
-            prot_setcompress(pout);
-        }
-    }
-#endif /* HAVE_ZLIB */
-
         if (noinitresp) {
             /* don't use an initial response, even if its supported */
             protocol->sasl_cmd.maxlen = 0;
@@ -2775,6 +2766,24 @@ int main(int argc, char **argv)
         if (mechlist) free(mechlist);
 
     } while (--reauth);
+
+#ifdef HAVE_ZLIB
+    if ((docompress==1) && (capabilities & CAPA_COMPRESS)) {
+        char *resp;
+
+        printf("C: %s\r\n", protocol->compress_cmd.cmd);
+        prot_printf(pout, "%s\r\n", protocol->compress_cmd.cmd);
+        prot_flush(pout);
+
+        resp = waitfor(protocol->compress_cmd.ok, protocol->compress_cmd.fail, 1);
+
+        if (!strncasecmp(resp, protocol->compress_cmd.ok,
+                         strlen(protocol->compress_cmd.ok))) {
+            prot_setcompress(pin);
+            prot_setcompress(pout);
+        }
+    }
+#endif /* HAVE_ZLIB */
 
     if (run_stress_test == 1) {
         send_recv_test();

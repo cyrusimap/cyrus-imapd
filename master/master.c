@@ -69,6 +69,11 @@
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
+#include <inttypes.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #ifndef INADDR_NONE
 #define INADDR_NONE 0xffffffff
@@ -135,7 +140,8 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 #define SERVICE_MAX  INT_MAX-10
 #define SERVICEPARAM(x) ((x) ? x : "unknown")
 
-#define MAX_READY_FAILS     5
+#define MAX_READY_FAILS              5
+#define MAX_READY_FAIL_INTERVAL     10  /* 10 seconds */
 
 struct service *Services = NULL;
 static int allocservices = 0;
@@ -223,22 +229,38 @@ static void event_free(struct event *a)
     free(a);
 }
 
-static void get_daemon(char *path, unsigned size, const strarray_t *cmd)
+static void get_daemon(char *path, size_t size, const strarray_t *cmd)
 {
+    if (!size) return;
     if (cmd->data[0][0] == '/') {
         /* master lacks strlcpy, due to no libcyrus */
-        snprintf(path, size, "%s", cmd->data[0]);
+        strncpy(path, cmd->data[0], size - 1);
     }
     else snprintf(path, size, "%s/%s", LIBEXEC_DIR, cmd->data[0]);
+    path[size-1] = '\0';
 }
 
-static void get_prog(char *path, unsigned size, const strarray_t *cmd)
+static void get_prog(char *path, size_t size, const strarray_t *cmd)
 {
+    if (!size) return;
     if (cmd->data[0][0] == '/') {
         /* master lacks strlcpy, due to no libcyrus */
-        snprintf(path, size, "%s", cmd->data[0]);
+        strncpy(path, cmd->data[0], size - 1);
     }
     else snprintf(path, size, "%s/%s", SBIN_DIR, cmd->data[0]);
+    path[size-1] = '\0';
+}
+
+static void get_executable(char *path, size_t size, const strarray_t *cmd)
+{
+    struct stat statbuf;
+
+    if (!size) return;
+    get_daemon(path, size, cmd);
+    if (!stat(path, &statbuf)) return;
+    get_prog(path, size, cmd);
+    if (!stat(path, &statbuf)) return;
+    /* XXX - abort? */
 }
 
 static void get_statsock(int filedes[2])
@@ -411,7 +433,7 @@ static int verify_service_file(const strarray_t *filename)
     char path[PATH_MAX];
     struct stat statbuf;
 
-    get_daemon(path, sizeof(path), filename);
+    get_executable(path, sizeof(path), filename);
     if (stat(path, &statbuf)) return 0;
     if (! S_ISREG(statbuf.st_mode)) return 0;
     return statbuf.st_mode & S_IXUSR;
@@ -696,7 +718,7 @@ static void run_startup(const char *name, const strarray_t *cmd)
     struct centry *c;
     char path[PATH_MAX];
 
-    get_prog(path, sizeof(path), cmd);
+    get_executable(path, sizeof(path), cmd);
 
     switch (pid = fork()) {
     case -1:
@@ -809,7 +831,7 @@ static void spawn_service(int si)
     if (service_is_fork_limited(s))
         return;
 
-    get_daemon(path, sizeof(path), s->exec);
+    get_executable(path, sizeof(path), s->exec);
 
     switch (p = fork()) {
     case -1:
@@ -935,7 +957,7 @@ static void spawn_schedule(struct timeval now)
         /* if a->exec is NULL, we just used the event to wake up,
          * so we actually don't need to exec anything at the moment */
         if(a->exec) {
-            get_prog(path, sizeof(path), a->exec);
+            get_executable(path, sizeof(path), a->exec);
             switch (p = fork()) {
             case -1:
                 syslog(LOG_CRIT,
@@ -1052,11 +1074,17 @@ static void reap_child(void)
                     s->nactive--;
                     s->ready_workers--;
                     if (!in_shutdown && failed) {
+                        time_t now = time(NULL);
+
                         syslog(LOG_WARNING,
                                "service %s/%s pid %d in READY state: "
                                "terminated abnormally",
                                SERVICEPARAM(s->name),
                                SERVICEPARAM(s->familyname), pid);
+                        if (now - s->lastreadyfail > MAX_READY_FAIL_INTERVAL) {
+                            s->nreadyfails = 0;
+                        }
+                        s->lastreadyfail = now;
                         if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
                             syslog(LOG_ERR, "too many failures for "
                                    "service %s/%s, disabling until next SIGHUP",
@@ -1890,6 +1918,11 @@ static void limit_fds(rlim_t x)
 
 #ifdef HAVE_GETRLIMIT
     if (!getrlimit(RLIMIT_NUMFDS, &rl)) {
+        if (x != RLIM_INFINITY && rl.rlim_max != RLIM_INFINITY && x > rl.rlim_max) {
+            syslog(LOG_WARNING,
+                   "limit_fds: requested %" PRIu64 ", but capped to %" PRIu64,
+                   (uint64_t) x, (uint64_t) rl.rlim_max);
+        }
         rl.rlim_cur = (x == RLIM_INFINITY || x > rl.rlim_max) ? rl.rlim_max : x;
     }
     else
@@ -2206,7 +2239,7 @@ int main(int argc, char **argv)
         }
     }
 
-    limit_fds(RLIM_INFINITY);
+    limit_fds(1024);
 
     /* Write out the pidfile */
     pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);

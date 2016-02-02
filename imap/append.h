@@ -59,6 +59,7 @@ struct appendstate {
     struct mailbox *mailbox;
     /* do we own it? */
     int close_mailbox_when_done:1;
+    int isoutbox:1;
     int myrights;
     char userid[MAX_MAILBOX_BUFFER];
 
@@ -74,8 +75,8 @@ struct appendstate {
     struct seqset *seen_seq;
 
     /* for annotations */
-    struct namespace *namespace;
-    struct auth_state *auth_state;
+    const struct namespace *namespace;
+    const struct auth_state *auth_state;
     int isadmin;
 
     /* one event notification to send per appended message */
@@ -94,16 +95,16 @@ extern int append_check(const char *name,
 
 /* appendstate must be allocated by client */
 extern int append_setup(struct appendstate *as, const char *name,
-                        const char *userid, struct auth_state *auth_state,
+                        const char *userid, const struct auth_state *auth_state,
                         long aclcheck,
                         const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                        struct namespace *, int isadmin, enum event_type event_type);
+                        const struct namespace *, int isadmin, enum event_type event_type);
 extern int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
                              const char *userid,
-                             struct auth_state *auth_state,
+                             const struct auth_state *auth_state,
                              long aclcheck,
                              const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                             struct namespace *namespace,
+                             const struct namespace *namespace,
                              int isadmin, enum event_type event_type);
 
 extern uint32_t append_uidvalidity(struct appendstate *as);

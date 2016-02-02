@@ -164,6 +164,8 @@ static sasl_ssf_t extprops_ssf = 0;
 static int nntps = 0;
 static int nntp_starttls_done = 0;
 static int nntp_tls_required = 0;
+static void *nntp_tls_comp = NULL; /* TLS compression method, if any */
+static int nntp_compress_done = 0; /* have we done a successful compress? */
 
 /* the sasl proxy policy context */
 static struct proxy_context nntp_proxyctx = {
@@ -222,6 +224,7 @@ static void cmd_newnews(char *wild, time_t tstamp);
 static void cmd_over(char *msgid, unsigned long uid, unsigned long last);
 static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
+static void cmd_compress(char *alg);
 static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -402,6 +405,8 @@ static void nntp_reset(void)
         sasl_dispose(&nntp_saslconn);
         nntp_saslconn = NULL;
     }
+    nntp_compress_done = 0;
+    nntp_tls_comp = NULL;
     nntp_starttls_done = 0;
 
     if(saslprops.iplocalport) {
@@ -986,6 +991,17 @@ static void cmdloop(void)
 
                 cmd_capabilities(arg1.s);
             }
+#ifdef HAVE_ZLIB
+            else if (!strcmp(cmd.s, "Compress")) {
+                if (c != ' ') goto missingargs;
+                c = getword(nntp_in, &arg1);
+                if (c == EOF) goto missingargs;
+                if (c == '\r') c = prot_getc(nntp_in);
+                if (c != '\n') goto extraargs;
+
+                cmd_compress(arg1.s);
+            }
+#endif /* HAVE_ZLIB */
             else if (!(nntp_capa & MODE_FEED)) goto noperm;
             else if (!strcmp(cmd.s, "Check")) {
                 mode = POST_CHECK;
@@ -1832,6 +1848,13 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
         /* add the SASL mechs */
         if (mechcount) prot_printf(nntp_out, "%s", mechlist);
     }
+
+#ifdef HAVE_ZLIB
+    /* add COMPRESS */
+    if (!nntp_compress_done && !nntp_tls_comp) {
+        prot_printf(nntp_out, "COMPRESS DEFLATE\r\n");
+    }
+#endif
 
     /* add the reader capabilities/extensions */
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
@@ -4165,6 +4188,10 @@ static void cmd_starttls(int nntps)
     nntp_starttls_done = 1;
     nntp_tls_required = 0;
 
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    nntp_tls_comp = (void *) SSL_get_current_compression(tls_conn);
+#endif
+
     /* close any selected group */
     if (group_state)
         index_close(&group_state);
@@ -4180,3 +4207,39 @@ static void cmd_starttls(int nntps __attribute__((unused)))
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
+
+#ifdef HAVE_ZLIB
+static void cmd_compress(char *alg)
+{
+    if (nntp_compress_done) {
+        prot_printf(nntp_out,
+                    "502 DEFLATE compression already active via COMPRESS\r\n");
+    }
+#if defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    else if (nntp_tls_comp) {
+        prot_printf(nntp_out,
+                    "502 %s compression already active via TLS\r\n",
+                    SSL_COMP_get_name(nntp_tls_comp));
+    }
+#endif // defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    else if (strcasecmp(alg, "DEFLATE")) {
+        prot_printf(nntp_out,
+                    "502 Unknown COMPRESS algorithm: %s\r\n", alg);
+    }
+    else if (ZLIB_VERSION[0] != zlibVersion()[0]) {
+        prot_printf(nntp_out,
+                    "403 Error initializing %s (incompatible zlib version)\r\n",
+                    alg);
+    }
+    else {
+        prot_printf(nntp_out,
+                    "206 %s compression active\r\n", alg);
+
+        /* enable (de)compression for the prot layer */
+        prot_setcompress(nntp_in);
+        prot_setcompress(nntp_out);
+
+        nntp_compress_done = 1;
+    }
+}
+#endif /* HAVE_ZLIB */

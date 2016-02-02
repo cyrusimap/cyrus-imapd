@@ -49,4 +49,10 @@ void notify(const char *method,
             int nopt, const char **options,
             const char *message, const char *fname);
 
+int notify_at(time_t when, const char *method,
+            const char *class, const char *priority,
+            const char *user, const char *mboxname,
+            int nopt, const char **options,
+            const char *message);
+
 #endif /* NOTIFY_H */

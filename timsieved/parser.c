@@ -747,19 +747,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
   if (!verify_only) {
       /* Check for a remote mailbox (should we setup a redirect?) */
-      struct namespace sieved_namespace;
       int r;
-
-      /* Set namespace */
-      if ((r = mboxname_init_namespace(&sieved_namespace, 0)) != 0) {
-          syslog(LOG_ERR, "%s", error_message(r));
-          fatal(error_message(r), EC_CONFIG);
-      }
-
-      /* Translate any separators in userid */
-      mboxname_hiersep_tointernal(&sieved_namespace, username,
-                                  config_virtdomains ?
-                                  strcspn(username, "@") : 0);
 
       char *inbox = mboxname_user_mbox(username, NULL);
       r = mboxlist_lookup(inbox, &mbentry, NULL);

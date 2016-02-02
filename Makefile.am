@@ -116,6 +116,8 @@ EXTRA_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
+noinst_HEADERS =
+noinst_LTLIBRARIES =
 CLEANFILES =
 EXTRA_DIST = \
 	$(wildcard tools/vzic/*)
@@ -199,7 +201,7 @@ endif # NNTPD
 libexec_PROGRAMS += imap/fud
 
 if IDLED
-sbin_PROGRAMS += imap/idled
+libexec_PROGRAMS += imap/idled
 endif # IDLED
 
 if MURDER
@@ -281,14 +283,14 @@ endif # PTCLIENT
 
 if PERL
 SUBDIRS += perl/annotator perl/imap
-noinst_LTLIBRARIES = perl/libcyrus.la perl/libcyrus_min.la
+noinst_LTLIBRARIES += perl/libcyrus.la perl/libcyrus_min.la
 endif # PERL
 
 if SIEVE
 
 if PERL
 SUBDIRS += perl/sieve/managesieve
-noinst_LIBRARIES = perl/sieve/lib/libisieve.a
+noinst_LTLIBRARIES += perl/sieve/lib/libisieve.la
 endif # PERL
 
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
@@ -643,7 +645,6 @@ cunit_TESTS = \
 	cunit/guid.testc \
 	cunit/hash.testc \
 	cunit/imapurl.testc \
-	cunit/lock_file.testc \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
 	cunit/message.testc \
@@ -667,7 +668,8 @@ cunit_TESTS += \
 	cunit/strarray.testc \
 	cunit/strconcat.testc \
 	cunit/times.testc \
-	cunit/tok.testc
+	cunit/tok.testc \
+	cunit/vparse.testc
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
@@ -738,6 +740,7 @@ include_HEADERS = \
 	lib/chartable.h \
 	lib/command.h \
 	lib/crc32.h \
+	lib/crc32c.h \
 	lib/cyr_lock.h \
 	lib/cyrusdb.h \
 	lib/exitcodes.h \
@@ -752,7 +755,6 @@ include_HEADERS = \
 	lib/iostat.h \
 	lib/iptostring.h \
 	lib/libcyr_cfg.h \
-	lib/lock_file.h \
 	lib/lsort.h \
 	lib/map.h \
 	lib/mappedfile.h \
@@ -777,7 +779,7 @@ include_HEADERS = \
 nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
-noinst_HEADERS = \
+noinst_HEADERS += \
 	lib/byteorder64.h \
 	lib/gai.h \
 	lib/libconfig.h \
@@ -785,6 +787,7 @@ noinst_HEADERS = \
 	lib/prot.h \
 	lib/ptrarray.h \
 	lib/util.h \
+	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h
 
@@ -836,28 +839,14 @@ imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
-if USE_SPHINX
 imap_cyr_sphinxmgr_SOURCES = imap/cli_fatal.c imap/cyr_sphinxmgr.c imap/mutex_fake.c
 imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
-endif
 
-if HAVE_CLAMAV
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
-else # HAVE_CLAMAV
-EXTRA_DIST += \
-	imap/cyr_virusscan.c
 
-endif # HAVE_CLAMAV
-
-if HTTPD
 imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
 imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
-else # HTTPD
-EXTRA_DIST += \
-	imap/ctl_zoneinfo.c
-
-endif # HTTPD
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
@@ -878,12 +867,8 @@ imap_fud_LDADD = $(LD_SERVER_ADD)
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
-if CALALARMD
 imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
 imap_calalarmd_LDADD = $(LD_SERVER_ADD) -lm
-else
-EXTRA_DIST += imap/calalarmd.c
-endif # CALALARMD
 
 imap_imapd_SOURCES = \
 	imap/imap_proxy.c \
@@ -952,7 +937,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/imapparse.h \
 	imap/index.c \
 	imap/index.h \
-        imap/mailbox.c \
+	imap/mailbox.c \
 	imap/mailbox.h \
 	imap/mbdump.c \
 	imap/mbdump.h \
@@ -1016,26 +1001,20 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/xstats.h \
 	imap/xstats_metrics.h
 
-if WITH_OPENIO
+if OBJECTSTORE
 imap_libcyrus_imap_la_SOURCES += \
-        imap/objectstore_db.c \
-        imap/objectstore_db.h \
-	imap/objectstore_openio.c \
-        imap/objectstore.h 
+    imap/objectstore_db.c \
+    imap/objectstore_db.h \
+    imap/objectstore.h
+if WITH_OPENIO
+imap_libcyrus_imap_la_SOURCES += imap/objectstore_openio.c
 else
 if WITH_CARINGO
-imap_libcyrus_imap_la_SOURCES += \
-        imap/objectstore_db.c \
-        imap/objectstore_db.h \
-        imap/objectstore_caringo.c \
-        imap/objectstore.h 
+imap_libcyrus_imap_la_SOURCES += imap/objectstore_caringo.c
 else
-if DUMMY_OBJSTORE
-imap_libcyrus_imap_la_SOURCES += \
-        imap/objectstore_db.c \
-        imap/objectstore_db.h \
-        imap/objectstore_dummy.c \
-        imap/objectstore.h 
+if WITH_OBJSTR_DUMMY
+imap_libcyrus_imap_la_SOURCES += imap/objectstore_dummy.c
+endif
 endif
 endif
 endif
@@ -1247,7 +1226,6 @@ imap_squatter_LDADD = $(LD_UTILITY_ADD)
 imap_squat_dump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squat_dump.c
 imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
 
-if REPLICATION
 imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c imap/sync_support.h
 imap_sync_client_LDADD = $(LD_UTILITY_ADD)
 
@@ -1256,15 +1234,6 @@ imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c
 imap_sync_server_LDADD = $(LD_SERVER_ADD)
-else
-EXTRA_DIST += \
-	imap/sync_client.c \
-	imap/sync_reset.c \
-	imap/sync_server.c \
-	imap/sync_support.c \
-	imap/sync_support.h
-
-endif # REPLICATION
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
@@ -1326,7 +1295,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/byteorder64.c \
 	lib/charset.c \
 	lib/command.c \
-	lib/crc32.c \
 	lib/cyrusdb.c \
 	lib/cyrusdb_flat.c \
 	lib/cyrusdb_quotalegacy.c \
@@ -1353,10 +1321,10 @@ lib_libcyrus_la_SOURCES = \
 	lib/times.c \
 	lib/tok.c \
 	lib/wildmat.c
-if USE_SQL
+if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif
-if HTTPD
+if USE_SQLITE
 lib_libcyrus_la_SOURCES += lib/sqldb.c
 endif
 if GMTOFF_TM
@@ -1369,8 +1337,12 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
+lib_libcyrus_la_LIBADD = libcrc32.a $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+
+noinst_LIBRARIES = libcrc32.a
+libcrc32_a_SOURCES = lib/crc32.c lib/crc32c.c
+libcrc32_a_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib_libcyrus_min_la_SOURCES = \
 	lib/arrayu64.c \
@@ -1380,7 +1352,6 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/imapopts.c \
 	lib/libconfig.c \
-	lib/lock_file.c \
 	lib/mpool.c \
 	lib/retry.c \
 	lib/strarray.c \
@@ -1390,6 +1361,9 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/xmalloc.c \
 	lib/xstrlcat.c \
 	lib/xstrlcpy.c
+if !HAVE_SSL
+lib_libcyrus_min_la_SOURCES += lib/xsha1.c
+endif
 if IPV6_noGETADDRINFO
 lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
@@ -1567,7 +1541,7 @@ perl_libcyrus_la_LIBADD = $(lib_libcyrus_la_LIBADD)
 perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
 perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 
-perl_sieve_lib_libisieve_a_SOURCES = \
+perl_sieve_lib_libisieve_la_SOURCES = \
 	perl/sieve/lib/codes.h \
 	perl/sieve/lib/isieve.c \
 	perl/sieve/lib/isieve.h \

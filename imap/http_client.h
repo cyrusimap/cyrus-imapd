@@ -91,6 +91,7 @@ enum {
 /* Index into known HTTP methods - needs to stay in sync with array */
 enum {
     METH_ACL = 0,
+    METH_BIND,
     METH_COPY,
     METH_DELETE,
     METH_GET,
@@ -100,12 +101,14 @@ enum {
     METH_MKCOL,
     METH_MOVE,
     METH_OPTIONS,
+    METH_PATCH,
     METH_POST,
     METH_PROPFIND,
     METH_PROPPATCH,
     METH_PUT,
     METH_REPORT,
     METH_TRACE,
+    METH_UNBIND,
     METH_UNLOCK,
 
     METH_UNKNOWN,  /* MUST be last */

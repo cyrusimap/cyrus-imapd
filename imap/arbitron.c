@@ -506,22 +506,19 @@ static void long_report_users(struct user_list *u, const char *mbox, char type)
 static void make_report(const char *key, void *data, void *rock __attribute__((unused)))
 {
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *)data;
-    char *extkey;
 
     /* Skip underread user mailboxes */
     if(!strncasecmp(key, "user.", 5) && mbox->nreaders <= 1)
         return;
 
-    extkey = xstrdup(key);
-    mboxname_hiersep_toexternal(&arb_namespace, extkey, 0);
-    key = extkey;
+    char *extname = mboxname_to_external(key, &arb_namespace, NULL);
 
     if (long_report) {
-        long_report_users(mbox->readers, key, 'r');
-        long_report_users(mbox->subscribers, key, 's');
+        long_report_users(mbox->readers, extname, 'r');
+        long_report_users(mbox->subscribers, extname, 's');
     }
     else {
-        printf("%s %d", key, mbox->nreaders);
+        printf("%s %d", extname, mbox->nreaders);
         if (dousers) report_users(mbox->readers);
         if (dosubs) {
             printf(" %d", mbox->nsubscribers);
@@ -529,5 +526,5 @@ static void make_report(const char *key, void *data, void *rock __attribute__((u
         }
         printf("\n");
     }
-    free(extkey);
+    free(extname);
 }

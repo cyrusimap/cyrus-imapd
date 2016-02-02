@@ -71,6 +71,7 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
+#include "http_caldav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
@@ -126,6 +127,20 @@ icaltimezone *utc_zone = NULL;
 struct strlist *cua_domains = NULL;
 icalarray *rscale_calendars = NULL;
 
+struct partial_comp_t {
+    icalcomponent_kind kind;
+    arrayu64_t props;
+    struct partial_comp_t *sibling;
+    struct partial_comp_t *child;
+};
+
+static struct partial_caldata_t {
+    struct icaltimetype start;
+    struct icaltimetype end;
+    struct partial_comp_t *comp;
+} partial_caldata;
+
+static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_fb(struct transaction_t *txn, void *params);
 
@@ -150,6 +165,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data);
 static int caldav_post(struct transaction_t *txn);
+static int caldav_patch(struct transaction_t *txn, void *obj);
 static int caldav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *destdb);
@@ -229,6 +245,10 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop, xmlNodePtr resp,
                               struct propstat propstat[], void *rock);
+static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop, xmlNodePtr resp,
+                                 struct propstat propstat[], void *rock);
 
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams,
@@ -243,23 +263,28 @@ static void end_icalendar(struct buf *buf);
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
-      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
-      (void * (*)(const char*)) &icalparser_parse_string,
+      (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
+      (void * (*)(const struct buf*)) &ical_string_as_icalcomponent,
       (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (char* (*)(void *)) &icalcomponent_as_xcal_string,
-      (void * (*)(const char*)) &xcal_string_as_icalcomponent,
+      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
+      (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
       NULL, &begin_xcal, &end_xcal
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
-      (char* (*)(void *)) &icalcomponent_as_jcal_string,
-      (void * (*)(const char*)) &jcal_string_as_icalcomponent,
+      (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
+      (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
 #endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+};
+
+static struct patch_doc_t caldav_patch_docs[] = {
+    { "application/calendar-patch; charset=utf-8", &caldav_patch },
+    { NULL, NULL }
 };
 
 /* Array of supported REPORTs */
@@ -357,13 +382,9 @@ static const struct prop_entry caldav_props[] = {
     { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
-    /* draft-douglass-server-info */
-    { "server-info-href", NS_DAV, PROP_COLLECTION,
-      propfind_serverinfo, NULL, NULL },
-
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN,
-      propfind_caldata, NULL, NULL },
+    { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
+      propfind_caldata, NULL, &partial_caldata },
     { "calendar-description", NS_CALDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV, PROP_COLLECTION | PROP_PRESCREEN,
@@ -414,6 +435,8 @@ static const struct prop_entry caldav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
+    { "allowed-sharing-modes", NS_CS, PROP_COLLECTION,
+      propfind_sharingmodes, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -431,16 +454,16 @@ static struct meth_params caldav_params = {
       (db_lookup_proc_t) &caldav_lookup_resource,
       (db_foreach_proc_t) &caldav_foreach,
       (db_write_proc_t) &caldav_write,
-      (db_delete_proc_t) &caldav_delete,
-      (db_delmbox_proc_t) &caldav_delmbox },
+      (db_delete_proc_t) &caldav_delete },
     &caldav_acl,
-    &caldav_copy,
+    { CALDAV_UID_CONFLICT, &caldav_copy },
     &caldav_delete_cal,
     &caldav_get,
-    MBTYPE_CALENDAR,
+    { CALDAV_LOCATION_OK, MBTYPE_CALENDAR },
+    caldav_patch_docs,
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
-    caldav_props,
+    { 0, caldav_props },                        /* Allow infinite depth */
     caldav_reports
 };
 
@@ -449,14 +472,16 @@ static struct meth_params caldav_params = {
 struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav", 1 /* auth */,
     MBTYPE_CALENDAR,
-    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
+    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE | ALLOW_PATCH |
 #ifdef HAVE_VAVAILABILITY
      ALLOW_CAL_AVAIL |
 #endif
-     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CAL ),
+     ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
+    &dav_premethod,
     {
         { &meth_acl,            &caldav_params },       /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { &meth_copy_move,      &caldav_params },       /* COPY         */
         { &meth_delete,         &caldav_params },       /* DELETE       */
         { &meth_get_head_cal,   NULL },                 /* GET          */
@@ -465,13 +490,15 @@ struct namespace_t namespace_calendar = {
         { &meth_mkcol,          &caldav_params },       /* MKCALENDAR   */
         { &meth_mkcol,          &caldav_params },       /* MKCOL        */
         { &meth_copy_move,      &caldav_params },       /* MOVE         */
-        { &meth_options,        &caldav_parse_path },   /* OPTIONS      */
+        { &meth_options_cal,    &caldav_parse_path },   /* OPTIONS      */
+        { &meth_patch,          &caldav_params },       /* PATCH        */
         { &meth_post,           &caldav_params },       /* POST         */
         { &meth_propfind,       &caldav_params },       /* PROPFIND     */
         { &meth_proppatch,      &caldav_params },       /* PROPPATCH    */
         { &meth_put,            &caldav_params },       /* PUT          */
         { &meth_report,         &caldav_params },       /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { &meth_unlock,         &caldav_params }        /* UNLOCK       */
     }
 };
@@ -482,9 +509,10 @@ struct namespace_t namespace_freebusy = {
     URL_NS_FREEBUSY, 0, "/freebusy", NULL, 1 /* auth */,
     MBTYPE_CALENDAR,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get_head_fb,    NULL },                 /* GET          */
@@ -494,12 +522,14 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
         { &meth_options,        &caldav_parse_path },   /* OPTIONS      */
+        { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
@@ -553,9 +583,6 @@ static void my_caldav_init(struct buf *serverinfo)
         fatal("Required 'calendarprefix' option is not set", EC_CONFIG);
     }
 
-    caldav_init();
-    webdav_init();
-
 #ifdef HAVE_IANA_PARAMS
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {
@@ -574,6 +601,8 @@ static void my_caldav_init(struct buf *serverinfo)
 
 #ifdef HAVE_TZ_BY_REF
     if (namespace_tzdist.enabled) {
+        /* Tell libical to use our builtin TZ */
+        /* XXX  MUST be done before any use of libical, e.g caldav_init() */
         char zonedir[MAX_MAILBOX_PATH+1];
 
         snprintf(zonedir, MAX_MAILBOX_PATH, "%s%s",
@@ -585,6 +614,9 @@ static void my_caldav_init(struct buf *serverinfo)
         namespace_calendar.allow |= ALLOW_CAL_NOTZ;
     }
 #endif
+
+    caldav_init();
+    webdav_init();
 
     namespace_principal.enabled = 1;
     /* Apple clients check principal resources for these DAV tokens */
@@ -612,12 +644,113 @@ static void my_caldav_init(struct buf *serverinfo)
     utc_zone = icaltimezone_get_utc_timezone();
 }
 
+static int _create_mailbox(const char *userid, const char *mailboxname, int type, int useracl, int anyoneacl)
+{
+    int r = 0;
+    char rights[100];
+
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    if (!r) return 0;
+    if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+
+    /* Create locally */
+    r = mboxlist_createmailbox(mailboxname, type,
+                               NULL, 0,
+                               userid, httpd_authstate,
+                               0, 0, 0, 0, NULL);
+    if (!r && useracl) {
+        cyrus_acl_masktostr(useracl, rights);
+        r = mboxlist_setacl(&httpd_namespace, mailboxname, userid, rights,
+                            1, httpd_userid, httpd_authstate);
+    }
+    if (!r && anyoneacl) {
+        cyrus_acl_masktostr(anyoneacl, rights);
+        r = mboxlist_setacl(&httpd_namespace, mailboxname, "anyone", rights,
+                            1, httpd_userid, httpd_authstate);
+    }
+
+    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                  mailboxname, error_message(r));
+    return r;
+}
+
+int caldav_create_defaultcalendars(const char *userid)
+{
+    int r;
+    char *mailboxname;
+    struct buf acl = BUF_INITIALIZER;
+
+    /* calendar-home-set */
+    mailboxname = caldav_mboxname(userid, NULL);
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        if (config_mupdate_server) {
+            /* Find location of INBOX */
+            char *inboxname = mboxname_user_mbox(userid, NULL);
+            mbentry_t *mbentry = NULL;
+
+            r = http_mlookup(inboxname, &mbentry, NULL);
+            free(inboxname);
+            if (!r && mbentry->server) {
+                proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
+                                 &backend_cached, NULL, NULL, httpd_in);
+                mboxlist_entry_free(&mbentry);
+                free(mailboxname);
+                return r;
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                            ACL_ALL | DACL_READFB, DACL_READFB);
+    }
+
+    free(mailboxname);
+    if (r) goto done;
+
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
+        /* Default calendar */
+        mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                            ACL_ALL | DACL_READFB, DACL_READFB);
+        free(mailboxname);
+        if (r) goto done;
+    }
+
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_SCHED) &&
+        namespace_calendar.allow & ALLOW_CAL_SCHED) {
+        /* Scheduling Inbox */
+        mailboxname = caldav_mboxname(userid, SCHED_INBOX);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                            ACL_ALL | DACL_SCHED, DACL_SCHED);
+        free(mailboxname);
+        if (r) goto done;
+
+        /* Scheduling Outbox */
+        mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                            ACL_ALL | DACL_SCHED, 0);
+        free(mailboxname);
+        if (r) goto done;
+    }
+
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_ATTACH) &&
+        namespace_calendar.allow & ALLOW_CAL_ATTACH) {
+        /* Managed Attachment Collection */
+        mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION,
+                            ACL_ALL, ACL_READ);
+        free(mailboxname);
+        if (r) goto done;
+    }
+
+  done:
+    buf_free(&acl);
+    return r;
+}
 
 static void my_caldav_auth(const char *userid)
 {
     int r;
-    char *mailboxname, ident[MAX_MAILBOX_NAME], rights[100];
-    struct buf acl = BUF_INITIALIZER;
 
     if (httpd_userisadmin ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -636,151 +769,18 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Auto-provision calendars for 'userid' */
-
-    strlcpy(ident, userid, sizeof(ident));
-
-    /* calendar-home-set */
-    mailboxname = caldav_mboxname(userid, NULL);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (config_mupdate_server) {
-            /* Find location of INBOX */
-            char *inboxname = mboxname_user_mbox(userid, NULL);
-            mbentry_t *mbentry = NULL;
-
-            r = http_mlookup(inboxname, &mbentry, NULL);
-            free(inboxname);
-            if (!r && mbentry->server) {
-                proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
-                                 &backend_cached, NULL, NULL, httpd_in);
-                mboxlist_entry_free(&mbentry);
-                free(mailboxname);
-                return;
-            }
-            mboxlist_entry_free(&mbentry);
-        }
-
-        /* Create locally */
-        buf_reset(&acl);
-        cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-        buf_printf(&acl, "%s\t%s\t", ident, rights);
-        cyrus_acl_masktostr(DACL_READFB, rights);
-        buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-        r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
-                                NULL /* partition */,
-                                userid, httpd_authstate,
-                                0 /* options */, 0 /* uidvalidity */,
-                                0 /* highestmodseq */, buf_cstring(&acl),
-                                NULL /* uniqueid */, 0 /* local_only */,
-                                NULL /* mboxptr */);
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      mailboxname, error_message(r));
+    r = caldav_create_defaultcalendars(userid);
+    if (r) {
+        syslog(LOG_ERR, "could not autoprovision calendars for userid %s: %s",
+                userid, error_message(r));
     }
-
-    free(mailboxname);
-    if (r) goto done;
-
-    if (config_getswitch(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
-        /* Default calendar */
-        mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
-            cyrus_acl_masktostr(DACL_READFB, rights);
-            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                        mailboxname, error_message(r));
-        }
-        free(mailboxname);
-    }
-
-    if (config_getswitch(IMAPOPT_CALDAV_CREATE_SCHED) &&
-        namespace_calendar.allow & ALLOW_CAL_SCHED) {
-        /* Scheduling Inbox */
-        mailboxname = caldav_mboxname(userid, SCHED_INBOX);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
-            cyrus_acl_masktostr(DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mailboxname, error_message(r));
-        }
-        free(mailboxname);
-
-        /* Scheduling Outbox */
-        mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_CALENDAR,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mailboxname, error_message(r));
-        }
-        free(mailboxname);
-    }
-
-    if (config_getswitch(IMAPOPT_CALDAV_CREATE_ATTACH) &&
-        namespace_calendar.allow & ALLOW_CAL_ATTACH) {
-        /* Managed Attachment Collection */
-        mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            buf_reset(&acl);
-            cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-            buf_printf(&acl, "%s\t%s\t", ident, rights);
-            cyrus_acl_masktostr(ACL_READ, rights);
-            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-            r = mboxlist_createsync(mailboxname, MBTYPE_COLLECTION,
-                                    NULL /* partition */,
-                                    userid, httpd_authstate,
-                                    0 /* options */, 0 /* uidvalidity */,
-                                    0 /* highestmodseq */, buf_cstring(&acl),
-                                    NULL /* uniqueid */, 0 /* local_only */,
-                                    NULL /* mboxptr */);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mailboxname, error_message(r));
-        }
-        free(mailboxname);
-    }
-
-  done:
-    buf_free(&acl);
 }
-
 
 static void my_caldav_reset(void)
 {
     if (auth_caldavdb) caldav_close(auth_caldavdb);
     auth_caldavdb = NULL;
 }
-
 
 static void my_caldav_shutdown(void)
 {
@@ -802,163 +802,65 @@ static void my_caldav_shutdown(void)
 static int caldav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr)
 {
-    char *p;
-    size_t len;
-    const char *nameprefix;
-    mbname_t *mbname = NULL;
-    const char *defaul_domain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
+    int r, rights;
 
-    if (*tgt->path) return 0;  /* Already parsed */
+    r = dav_parse_path(path, tgt, (tgt->namespace == URL_NS_FREEBUSY) ?
+                       namespace_freebusy.prefix : namespace_calendar.prefix,
+                       config_getstring(IMAPOPT_CALENDARPREFIX), errstr);
+    if (r) return r;
 
-    /* Make a working copy of target path */
-    strlcpy(tgt->path, path, sizeof(tgt->path));
-    tgt->tail = tgt->path + strlen(tgt->path);
+    /* Set proper Allow bits based on path components and ACL of current user */
+    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
 
-    p = tgt->path;
+    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
 
-    /* Sanity check namespace */
-    if (tgt->namespace == URL_NS_FREEBUSY)
-        nameprefix = namespace_freebusy.prefix;
-    else
-        nameprefix = namespace_calendar.prefix;
-
-    len = strlen(nameprefix);
-    if (strlen(p) < len ||
-        strncmp(nameprefix, p, len) || (path[len] && path[len] != '/')) {
-        *errstr = "Namespace mismatch request target path";
-        return HTTP_FORBIDDEN;
-    }
-
-    tgt->prefix = namespace_calendar.prefix;
-
-    /* Default to bare-bones Allow bits for toplevel collections */
-    tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
-
-    /* Skip namespace */
-    p += len;
-    if (!*p || !*++p) return 0;
-
-    /* Check if we're in user space */
-    len = strcspn(p, "/");
-    if (!strncmp(p, "user", len)) {
-        p += len;
-        if (!*p || !*++p) return 0;
-
-        /* Get user id */
-        if (strstr(p, defaul_domain)){
-           len = strcspn(p, "@");
-           tgt->userid = xstrndup(p, len);
-           len = strcspn(p, "/");
-        }
-        else{
-            len = strcspn(p, "/");
-            tgt->userid = xstrndup(p, len);
-        }
-
-        p += len;
-        if (!*p || !*++p) {
-            /* Make sure calendar-home-set is terminated with '/' */
-            if (p[-1] != '/') *p++ = '/';
-            goto done;
-        }
-
-        len = strcspn(p, "/");
-    }
-
-    /* Get collection */
-    tgt->collection = p;
-    tgt->collen = len;
-
-    p += len;
-    if (!*p || !*++p) {
-        /* Make sure collection is terminated with '/' */
-        if (p[-1] != '/') *p++ = '/';
-        goto done;
-    }
-
-    /* Get resource */
-    len = strcspn(p, "/");
-    tgt->resource = p;
-    tgt->reslen = len;
-
-    p += len;
-
-    if (*p) {
-//      *errstr = "Too many segments in request target path";
-        return HTTP_NOT_FOUND;
-    }
-
-  done:
-    /* Set proper Allow bits and flags based on path components */
     if (tgt->collection) {
-        if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX)))
-            tgt->flags = TGT_SCHED_INBOX;
-        else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX)))
-            tgt->flags = TGT_SCHED_OUTBOX;
-        else if (!strncmp(tgt->collection,
-                          MANAGED_ATTACH, strlen(MANAGED_ATTACH)))
-            tgt->flags = TGT_MANAGED_ATTACH;
-
-        if (tgt->flags == TGT_MANAGED_ATTACH) {
+        if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
             /* Read-only non-calendar collection */
-            tgt->allow &= ~(ALLOW_WRITECOL|ALLOW_CAL);
+            tgt->allow = ALLOW_READ;
+
+            tgt->flags = TGT_MANAGED_ATTACH;
         }
-        else if (tgt->resource) {
-            if (!tgt->flags) tgt->allow |= ALLOW_WRITE|ALLOW_POST;
-            tgt->allow |= ALLOW_DELETE;
-            tgt->allow &= ~ALLOW_WRITECOL;
+        else if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX))) {
+            /* Can only read and DELETE resources from this collection */
+            if (tgt->resource && (rights & DACL_RMRES) == DACL_RMRES)
+                tgt->allow |= ALLOW_DELETE;
+
+            tgt->flags = TGT_SCHED_INBOX;
         }
-        else if (tgt->flags != TGT_SCHED_INBOX) {
-            tgt->allow |= ALLOW_POST;
-            tgt->allow |= ALLOW_DELETE;
+        else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX))){
+            /* Can only POST to this collection (free/busy request) */
+            if (!tgt->resource && (rights & DACL_ADDRES))
+                tgt->allow |= ALLOW_POST;
+
+            tgt->flags = TGT_SCHED_OUTBOX;
         }
-        else
-            tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
-    }
-    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
+        else {
+            /* Regular calendar collection */
+            if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
 
-    /* Create mailbox name from the parsed path */
+            if (tgt->resource) {
+                if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_PATCH;
+                if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
+                if ((rights & DACL_RMRES) == DACL_RMRES)
+                    tgt->allow |= ALLOW_DELETE;
 
-    mbname = mbname_from_userid(tgt->userid);
-
-    mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
-    if (tgt->collen) {
-        char *item = xstrndup(tgt->collection, tgt->collen);
-        mbname_push_boxes(mbname, item); /* be nice to use pushm, but meh */
-        free(item);
-    }
-
-    /* XXX - hack to allow @domain parts for non-domain-split users */
-    if (httpd_extradomain) {
-        /* not allowed to be cross domain */
-        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
-            return HTTP_NOT_FOUND;
-    }
-
-    const char *mboxname = mbname_intname(mbname);
-
-    if (tgt->mbentry) {
-        /* Just return the mboxname */
-        tgt->mbentry->name = xstrdup(mboxname);
-    }
-    else if (*mboxname) {
-        /* Locate the mailbox */
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
-        if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   mboxname, error_message(r));
-            *errstr = error_message(r);
-            mbname_free(&mbname);
-
-            switch (r) {
-            case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-            case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-            default: return HTTP_SERVER_ERROR;
+                if ((tgt->allow & (ALLOW_WRITE|ALLOW_CAL_ATTACH)) ==
+                    (ALLOW_WRITE|ALLOW_CAL_ATTACH)) {
+                    tgt->allow |= ALLOW_POST;
+                }
+            }
+            else {
+                if (rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
+                if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+                if (rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
             }
         }
     }
-
-    mbname_free(&mbname);
+    else if (tgt->userid) {
+        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+        if (rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
+    }
 
     return 0;
 }
@@ -1082,6 +984,29 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
     return 0;
 }
 
+static int _scheduling_enabled(struct transaction_t *txn, const struct mailbox *mailbox)
+{
+    if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
+
+    const char *entry = DAV_ANNOT_NS "<" XML_NS_CYRUS ">scheduling-enabled";
+    struct buf buf = BUF_INITIALIZER;
+    int is_enabled = 1;
+
+    annotatemore_lookupmask(mailbox->name, entry, httpd_userid, &buf);
+    /* legacy */
+    if (!strcasecmp(buf_cstring(&buf), "no"))
+        is_enabled = 0;
+    if (!strcasecmp(buf_cstring(&buf), "F"))
+        is_enabled = 0;
+
+    const char **hdr = spool_getheader(txn->req_hdrs, "Scheduling-Enabled");
+    if (hdr && !strcasecmp(hdr[0], "F"))
+        is_enabled = 0;
+
+    buf_free(&buf);
+    return is_enabled;
+}
+
 /* Perform a COPY/MOVE request
  *
  * preconditions:
@@ -1114,7 +1039,7 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
         return HTTP_FORBIDDEN;
     }
 
-    if (namespace_calendar.allow & ALLOW_CAL_SCHED) {
+    if (_scheduling_enabled(txn, dest_mbox)) {
         comp = icalcomponent_get_first_real_component(ical);
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (prop) organizer = icalproperty_get_organizer(prop);
@@ -1201,9 +1126,18 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
         webdav_close(webdavdb);
         mailbox_close(&attachments);
+
+        /* XXX  Relock index so that delete of calendar resource will succeed.
+           Remove this call when mailbox_unlock_index() above is removed. */
+        r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+        if (r) {
+            syslog(LOG_ERR, "relock index(%s) failed: %s",
+                   mailbox->name, error_message(r));
+            goto done;
+        }
     }
 
-    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && cdata->organizer) {
+    if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
         /* Scheduling object resource */
         const char *organizer, **hdr;
         struct sched_param sparam;
@@ -1226,7 +1160,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         organizer = icalproperty_get_organizer(prop);
 
-        r = caladdress_lookup(organizer, &sparam);
+        r = caladdress_lookup(organizer, &sparam, userid);
         if (r == HTTP_NOT_FOUND) {
             r = 0;
             goto done;
@@ -1241,12 +1175,12 @@ static int caldav_delete_cal(struct transaction_t *txn,
             goto done;
         }
 
-        if (!strcmpsafe(sparam.userid, userid)) {
+        if (sparam.isyou) {
             /* Organizer scheduling object resource */
-            sched_request(organizer, &sparam, ical, NULL, 0);
+            sched_request(userid, organizer, &sparam, ical, NULL, 0);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
-                 strcmp(hdr[0], "F")) {
+                 strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             sched_reply(userid, ical, NULL);
         }
@@ -1384,7 +1318,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
                  comp;
                  comp = icalcomponent_get_next_component(ical,
                                                          ICAL_ANY_COMPONENT)) {
-                char *cal_str;
+                struct buf *cal_str;
                 icalcomponent_kind kind = icalcomponent_isa(comp);
 
                 /* Don't duplicate any TZIDs in our iCalendar */
@@ -1405,9 +1339,9 @@ static int dump_calendar(struct transaction_t *txn, int rights)
                     buf_printf_markup(buf, 0, sep);
                     write_body(0, txn, buf_cstring(buf), buf_len(buf));
                 }
-                cal_str = mime->to_string(comp);
-                write_body(0, txn, cal_str, strlen(cal_str));
-                free(cal_str);
+                cal_str = mime->from_object(comp);
+                write_body(0, txn, buf_base(cal_str), buf_len(cal_str));
+                buf_destroy(cal_str);
             }
 
             icalcomponent_free(ical);
@@ -1457,10 +1391,7 @@ struct list_cal_rock {
     unsigned alloc;
 };
 
-static int list_cal_cb(const char *name,
-                       int matchlen __attribute__((unused)),
-                       int maycreate __attribute__((unused)),
-                       void *rock)
+static int list_cal_cb(const mbentry_t *mbentry, void *rock)
 {
     struct list_cal_rock *lrock = (struct list_cal_rock *) rock;
     struct cal_info *cal;
@@ -1468,7 +1399,6 @@ static int list_cal_cb(const char *name,
     static size_t outboxlen = 0;
     static size_t defaultlen = 0;
     char *shortname;
-    mbentry_t *mbentry = NULL;
     size_t len;
     int r, rights, any_rights = 0;
     static const char *displayname_annot =
@@ -1481,16 +1411,6 @@ static int list_cal_cb(const char *name,
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
     if (!defaultlen) defaultlen = strlen(SCHED_DEFAULT) - 1;
 
-    shortname = strrchr(name, '.') + 1;
-    len = strlen(shortname);
-
-    /* Don't list deleted mailboxes */
-    if (mboxname_isdeletedmailbox(name, 0)) goto done;
-
-    /* Lookup the mailbox */
-    r = http_mlookup(name, &mbentry, NULL);
-    if (r) goto done;
-
     /* Make sure its a calendar */
     if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
 
@@ -1499,12 +1419,15 @@ static int list_cal_cb(const char *name,
     if ((rights & DACL_READ) != DACL_READ) goto done;
 
     /* Don't list scheduling Inbox/Outbox */
+    shortname = strrchr(mbentry->name, '.') + 1;
+    len = strlen(shortname);
+
     if ((len == inboxlen && !strncmp(shortname, SCHED_INBOX, inboxlen)) ||
         (len == outboxlen && !strncmp(shortname, SCHED_OUTBOX, outboxlen)))
         goto done;
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(name, displayname_annot,
+    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
                                 httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
@@ -1549,7 +1472,7 @@ static int list_cal_cb(const char *name,
     }
 
     /* Is this calendar transparent? */
-    r = annotatemore_lookupmask(name, schedtransp_annot,
+    r = annotatemore_lookupmask(mbentry->name, schedtransp_annot,
                                 httpd_userid, &schedtransp);
     if (!r && !strcmp(buf_cstring(&schedtransp), "transparent")) {
         cal->flags |= CAL_IS_TRANSP;
@@ -1560,7 +1483,6 @@ static int list_cal_cb(const char *name,
 
 done:
     buf_free(&displayname);
-    mboxlist_entry_free(&mbentry);
 
     return 0;
 }
@@ -1690,9 +1612,8 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     memset(&lrock, 0, sizeof(struct list_cal_rock));
-    int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-    mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
-                     httpd_authstate, list_cal_cb, &lrock);
+    mboxlist_mboxtree(txn->req_tgt.mbentry->name,
+                      list_cal_cb, &lrock, MBOXTREE_SKIP_ROOT);
 
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
@@ -1946,7 +1867,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -2265,8 +2186,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
             assert(!buf_len(&txn->buf));
             http_proto_host(txn->req_hdrs, &proto, &host);
-            buf_printf(&txn->buf, "%s://%s%s/user/%s/%s%s",
+            buf_printf(&txn->buf, "%s://%s%s/%s/%s/%s%s",
                        proto, host, namespace_calendar.prefix,
+                       USER_COLLECTION_PREFIX,
                        txn->req_tgt.userid, MANAGED_ATTACH, uid);
             attach = icalattach_new_from_url(buf_cstring(&txn->buf));
             buf_reset(&txn->buf);
@@ -2362,17 +2284,17 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                                 txn->req_tgt.resource, caldavdb, 0);
 
     if (ret == HTTP_NO_CONTENT && return_rep) {
-        char *data;
+        struct buf *data;
 
         ret = (op == ATTACH_ADD) ? HTTP_CREATED : HTTP_OK;
 
       return_rep:
         /* Convert into requested MIME type */
-        data = mime->to_string(ical);
+        data = mime->from_object(ical);
 
         /* Fill in Content-Type, Content-Length */
         resp_body->type = mime->content_type;
-        resp_body->len = strlen(data);
+        resp_body->len = buf_len(data);
 
         /* Fill in Content-Location */
         resp_body->loc = txn->req_tgt.path;
@@ -2384,9 +2306,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             | CC_NOTRANSFORM;           /* don't alter iCal data */
 
         /* Output current representation */
-        write_body(ret, txn, data, resp_body->len);
+        write_body(ret, txn, buf_base(data), buf_len(data));
 
-        free(data);
+        buf_destroy(data);
         ret = 0;
     }
 
@@ -2405,7 +2327,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 static int caldav_post_outbox(struct transaction_t *txn, int rights)
 {
     int ret = 0, r;
-    char orgid[MAX_MAILBOX_NAME+1] = "";
     const char **hdr;
     struct mime_type_t *mime = NULL;
     icalcomponent *ical = NULL, *comp;
@@ -2442,7 +2363,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     }
 
     /* Parse the iCal data for important properties */
-    ical = mime->from_string(buf_cstring(&txn->req_body.payload));
+    ical = mime->to_object(&txn->req_body.payload);
     if (!ical || !icalrestriction_check(ical)) {
         txn->error.precond = CALDAV_VALID_DATA;
         ret = HTTP_BAD_REQUEST;
@@ -2466,19 +2387,24 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 
     /* Organizer MUST be local to use CalDAV Scheduling */
     organizer = icalproperty_get_organizer(prop);
-    if (organizer) {
-        if (!caladdress_lookup(organizer, &sparam) &&
-            !(sparam.flags & SCHEDTYPE_REMOTE)) {
-            strlcpy(orgid, sparam.userid, sizeof(orgid));
-            mboxname_hiersep_toexternal(&httpd_namespace, orgid, 0);
-        }
-    }
-
-    if (strcasecmp(orgid, txn->req_tgt.userid)) {
+    if (!organizer) {
         txn->error.precond = CALDAV_VALID_ORGANIZER;
         ret = HTTP_FORBIDDEN;
         goto done;
     }
+    r = caladdress_lookup(organizer, &sparam, txn->req_tgt.userid);
+    if (r) {
+        txn->error.precond = CALDAV_VALID_ORGANIZER;
+        ret = HTTP_FORBIDDEN;
+        goto done;
+    }
+    if (!sparam.isyou) {
+        sched_param_free(&sparam);
+        txn->error.precond = CALDAV_VALID_ORGANIZER;
+        ret = HTTP_FORBIDDEN;
+        goto done;
+    }
+    sched_param_free(&sparam);
 
     switch (kind) {
     case ICAL_VFREEBUSY_COMPONENT:
@@ -2527,7 +2453,7 @@ static int caldav_post(struct transaction_t *txn)
             struct backend *be;
 
             be = proxy_findserver(txn->req_tgt.mbentry->server,
-                                  &http_protocol, proxy_userid,
+                                  &http_protocol, httpd_userid,
                                   &backend_cached, NULL, NULL, httpd_in);
             if (!be) ret = HTTP_UNAVAILABLE;
             else ret = http_pipe_req_resp(be, txn);
@@ -2537,8 +2463,7 @@ static int caldav_post(struct transaction_t *txn)
             ret = caldav_post_attach(txn, rights);
         }
     }
-    else if ((namespace_calendar.allow & ALLOW_CAL_SCHED) &&
-             txn->req_tgt.flags == TGT_SCHED_OUTBOX) {
+    else if (txn->req_tgt.flags == TGT_SCHED_OUTBOX) {
         /* POST to schedule-outbox */
         ret = caldav_post_outbox(txn, rights);
     }
@@ -2552,6 +2477,626 @@ static int caldav_post(struct transaction_t *txn)
     }
 
     return ret;
+}
+
+
+enum {
+    ACTION_CREATE = 1,
+    ACTION_UPDATE,
+    ACTION_DELETE,
+    ACTION_ADD,
+    ACTION_REMOVE
+};
+
+enum {
+    SEGMENT_COMP = 1,
+    SEGMENT_PROP,
+    SEGMENT_PARAM
+};
+
+struct path_segment_t {
+    unsigned type;                    /* Is it comp, prop, or param segment? */
+    unsigned kind;                    /* ical kind of comp, prop, or param */
+    void *data;                       /* type depends on 'type' */
+    union {
+        struct {
+            const char *uid;
+            struct icaltimetype recurid;
+        } comp;
+        struct {
+            unsigned not:1;
+            strarray_t values;
+        } prop;
+    } match;
+
+    struct path_segment_t *next;
+};
+
+static void create_override(icalcomponent *master, struct icaltime_span *span,
+                            void *rock)
+{
+    icalcomponent *new;
+    icalproperty *prop;
+    struct icaltimetype dtstart, now;
+    const icaltimezone *tz;
+    const char *tzid;
+    int is_date;
+
+    new = icalcomponent_new_clone(master);
+
+    dtstart = icalcomponent_get_dtstart(new);
+    tz = icaltime_get_timezone(dtstart);
+    is_date = icaltime_is_date(dtstart);
+
+    dtstart = icaltime_from_timet_with_zone(span->start, is_date, tz);
+    icaltime_set_timezone(&dtstart, tz);
+    icalcomponent_set_dtstart(new, dtstart);
+
+    prop = icalcomponent_get_first_property(new, ICAL_DTEND_PROPERTY);
+    if (prop) {
+        struct icaltimetype dtend =
+            icaltime_from_timet_with_zone(span->end, is_date, tz);
+
+        icaltime_set_timezone(&dtend, tz);
+        icalproperty_set_dtend(prop, dtend);
+    }
+
+    prop = icalproperty_new_recurrenceid(dtstart);
+    icalcomponent_add_property(new, prop);
+    tzid = icaltimezone_get_tzid((icaltimezone *) tz);
+    if (tzid) icalproperty_add_parameter(prop, icalparameter_new_tzid(tzid));
+
+    prop = icalcomponent_get_first_property(new, ICAL_RRULE_PROPERTY);
+    icalcomponent_remove_property(new, prop);
+    icalproperty_free(prop);
+
+    now = icaltime_current_time_with_zone(utc_zone);
+    icalproperty_set_dtstamp(prop, now);
+
+    prop = icalcomponent_get_first_property(new, ICAL_CREATED_PROPERTY);
+    if (prop) icalproperty_set_created(prop, now);
+
+    prop = icalcomponent_get_first_property(new, ICAL_LASTMODIFIED_PROPERTY);
+    if (prop) icalproperty_set_lastmodified(prop, now);
+
+    *((icalcomponent **) rock) = new;
+}
+
+/* Apply a patch action to a target segment */
+static void apply_patch_action(struct path_segment_t *path_seg,
+                               void *parent, unsigned action, int *num_changes)
+{
+    switch (path_seg->type) {
+    case SEGMENT_COMP: {
+        /* Iterate through each component */
+        icalcomponent *comp, *next, *master = NULL;
+
+        if (path_seg->kind == ICAL_VCALENDAR_COMPONENT)
+            comp = parent;
+        else
+            comp = icalcomponent_get_first_component(parent, path_seg->kind);
+
+        for (; comp; comp = next) {
+            next = icalcomponent_get_next_component(parent, path_seg->kind);
+
+            /* Check component-match */
+            if (path_seg->match.comp.uid) {
+                if (strcmp(path_seg->match.comp.uid,
+                           icalcomponent_get_uid(comp)))
+                    continue;  /* UID doesn't match */
+
+                if (icaltime_is_valid_time(path_seg->match.comp.recurid)) {
+                    icaltimetype recurid =
+                        icalcomponent_get_recurrenceid_with_zone(comp);
+
+                    if (icaltime_is_null_time(recurid)) master = comp;
+                    if (icaltime_compare(recurid,
+                                         path_seg->match.comp.recurid)) {
+                        if (!next && master) {
+                            /* Possibly add an override recurrence.
+                               Set start and end to coincide with recurrence */
+                            icalcomponent *override = NULL;
+                            struct icaltimetype start =
+                                path_seg->match.comp.recurid;
+                            struct icaltimetype end =
+                                icaltime_add(start,
+                                             icalcomponent_get_duration(master));
+                            icalcomponent_foreach_recurrence(master,
+                                                             start, end,
+                                                             &create_override,
+                                                             &override);
+                            if (!override) break;  /* Can't override - done */
+
+                            /* Act on new overridden component */
+                            icalcomponent_add_component(parent, override);
+                            comp = override;
+                        }
+                        else continue;  /* RECURRENCE-ID doesn't match */
+                    }
+                }
+            }
+
+            if (path_seg->next) {
+                /* Recurse into next segment */
+                apply_patch_action(path_seg->next, comp, action, num_changes);
+            }
+            else {
+                /* Act on this component */
+                icalcomponent *new = (icalcomponent *) path_seg->data;
+
+                switch (action) {
+                case ACTION_CREATE:
+                    *num_changes += 1;
+                    parent = comp;
+                    comp = NULL;
+
+                    /* Fall through and create new component */
+
+                case ACTION_UPDATE:
+                    icalcomponent_add_component(parent,
+                                                icalcomponent_new_clone(new));
+
+                    /* Fall through and delete existing component */
+
+                case ACTION_DELETE:
+                    if (comp) {
+                        *num_changes += 1;
+                        icalcomponent_remove_component(parent, comp);
+                        icalcomponent_free(comp);
+                    }
+                    break;
+                }
+            }
+        }
+
+        break;
+    }
+
+    case SEGMENT_PROP: {
+        /* Iterate through each property */
+        icalproperty *prop, *next;
+
+        prop = icalcomponent_get_first_property(parent, path_seg->kind);
+        do {
+            int n;
+
+            next = icalcomponent_get_next_property(parent, path_seg->kind);
+
+            /* Check property-match */
+            if ((n = strarray_size(&path_seg->match.prop.values))) {
+                const char *prop_val = icalproperty_get_value_as_string(prop);
+                strarray_t *values = &path_seg->match.prop.values;
+                int i, match = 0;
+
+                for (i = 0; i < n; i++) {
+                    match = !strcmp(strarray_nth(values, i), prop_val);
+                    if (path_seg->match.prop.not) match = !match;  /* invert */
+                    if (match) {
+                        break;  /* found a match */
+                    }
+                }
+                if (!match) continue;  /* property value doesn't match */
+            }
+
+            if (path_seg->next) {
+                /* Recurse into next segment */
+                apply_patch_action(path_seg->next, prop, action, num_changes);
+            }
+            else {
+                /* Act on this property */
+                icalcomponent *props = (icalcomponent *) path_seg->data;
+                icalproperty *new;
+
+                switch (action) {
+                case ACTION_ADD:
+                case ACTION_CREATE:
+                    prop = NULL;
+
+                    /* Fall through and create new property(s) */
+
+                case ACTION_UPDATE:
+                    *num_changes += 1;
+                    for (new =
+                             icalcomponent_get_first_property(props,
+                                                              ICAL_ANY_PROPERTY);
+                         new;
+                         new =
+                             icalcomponent_get_next_property(props,
+                                                             ICAL_ANY_PROPERTY)) {
+                        icalcomponent_add_property(parent,
+                                                   icalproperty_new_clone(new));
+                    }
+
+                    /* Fall through and delete existing property */
+
+                case ACTION_DELETE:
+                case ACTION_REMOVE:
+                    if (prop) {
+                        *num_changes += 1;
+                        icalcomponent_remove_property(parent, prop);
+                        icalproperty_free(prop);
+                    }
+                    break;
+                }
+            }
+
+        } while ((prop = next));
+
+        break;
+    }
+
+    case SEGMENT_PARAM:
+        /* Act on this parameter */
+        *num_changes += 1;
+
+        switch (action) {
+        case ACTION_CREATE:
+            icalproperty_add_parameter(parent,
+                                       icalparameter_new_clone(path_seg->data));
+            break;
+
+        case ACTION_UPDATE:
+            icalproperty_set_parameter(parent,
+                                       icalparameter_new_clone(path_seg->data));
+            break;
+
+        case ACTION_DELETE:
+            icalproperty_remove_parameter_by_kind(parent, path_seg->kind);
+            break;
+
+        case ACTION_ADD:
+        case ACTION_REMOVE:
+            break;
+        }
+
+        break;
+    }
+}
+
+/* Perform a PATCH request
+ *
+ * preconditions:
+ */
+static int caldav_patch(struct transaction_t *txn, void *obj)
+{
+    icalcomponent *ical = (icalcomponent *) obj;
+    char *line = (char *) buf_cstring(&txn->req_body.payload);
+    char *end = line + buf_len(&txn->req_body.payload);
+    int num_changes = 0;
+
+    /* Process each line of the patch document */
+    while (line < end) {
+        char *command = NULL, *path = NULL, *data = NULL, *p, sep;
+        struct path_segment_t *path_seg = NULL, *tail = NULL, *new, *next;
+        int r = 0, action = 0;
+
+        if (isspace(*line)) {
+            /* Skip blank lines */
+            path = line;
+        }
+        else {
+            /* Split command and path */
+            command = line;
+            path = strchr(line, ' ');
+            if (!path) {
+                txn->error.desc = "Missing patch path";
+                return HTTP_BAD_REQUEST;
+            }
+            *path++ = '\0';
+        }
+
+        /* Trim CRLF and find start of next line */
+        for (p = path; *p; p++) {
+            if (*p == '\r' || *p == '\n') {
+                *p++ = '\0';
+                if (*p == '\r' || *p == '\n') *p++ = '\0';
+                break;
+            }
+        }
+        line = p;
+
+        /* Sanity check the command */
+        if (!command) continue;
+        else if (!strcmp(command, "version")) {
+            if (atoi(path) != 1) {
+                txn->error.desc = "Bad patch version";
+                return HTTP_BAD_REQUEST;
+            }
+        }
+        else if (!strcmp(command, "create")) {
+            action = ACTION_CREATE;
+        }
+        else if (!strcmp(command, "update")) {
+            action = ACTION_UPDATE;
+        }
+        else if (!strcmp(command, "delete")) {
+            action = ACTION_DELETE;
+        }
+        else if (!strcmp(command, "add")) {
+            action = ACTION_ADD;
+        }
+        else if (!strcmp(command, "remove")) {
+            action = ACTION_REMOVE;
+        }
+        else {
+            txn->error.desc = "Bad patch action";
+            return HTTP_BAD_REQUEST;
+        }
+
+        if (action != ACTION_DELETE) {
+            /* Mark end of command data and find start of next line */
+            data = line;
+
+            p = strstr(data, "\r\n.\r\n");
+            if (!p) {
+                txn->error.desc = "Improperly terminated patch data";
+                return HTTP_BAD_REQUEST;
+            }
+
+            p[2] = '\0';
+            line = p + 5;
+        }
+
+        /* Parse component-segment(s) and create a linked list */
+        for (sep = *path++; sep == '/';) {
+            p = path + strcspn(path, "[/#");
+            if ((sep = *p)) *p++ = '\0';
+
+            new = xzmalloc(sizeof(struct path_segment_t));
+            new->type = SEGMENT_COMP;
+            new->kind = icalcomponent_string_to_kind(path);
+            if (!path_seg) path_seg = new;
+            else tail->next = new;
+            tail = new;
+
+            path = p;
+
+            if (sep == '[') {
+                /* Parse uid-match */
+                const char *prefix = "UID=";
+                size_t prefix_len = strlen(prefix);
+
+                if (strncmp(path, prefix, prefix_len) ||
+                    !(p = strchr(path, ']'))) {
+                    txn->error.desc = "Badly formatted uid-match";
+                    r = HTTP_BAD_REQUEST;
+                    goto done;
+                }
+
+                tail->match.comp.uid = path + prefix_len;
+                *p++ = '\0';
+                sep = *p++;
+                path = p;
+
+                if (sep == '[') {
+                    /* Parse rid-match */
+                    prefix = "RECURRENCE-ID=";
+                    prefix_len = strlen(prefix);
+
+                    if (strncmp(path, prefix, prefix_len) ||
+                        !(p = strchr(path, ']'))) {
+                        txn->error.desc = "Badly formatted rid-match";
+                        r = HTTP_BAD_REQUEST;
+                        goto done;
+                    }
+
+                    path += prefix_len;
+                    *p++ = '\0';
+                    if (*path) {
+                        tail->match.comp.recurid = icaltime_from_string(path);
+                        if (icaltime_is_null_time(tail->match.comp.recurid)) {
+                            txn->error.desc = "Invalid recurrence-id";
+                            r = HTTP_BAD_REQUEST;
+                            goto done;
+                        }
+                    }
+                    sep = *p++;
+                    path = p;
+                }
+                else {
+                    /* No recurid: flag time as invalid rather than NULL since
+                       NULL time is used for empty recurid (master component) */
+                    tail->match.comp.recurid.year = -1;
+                }
+            }
+        }
+
+        if (!path_seg || path_seg->match.comp.uid ||
+            path_seg->kind != ICAL_VCALENDAR_COMPONENT) {
+            txn->error.desc =
+                "Initial component-segment MUST be an unmatched VCALENDAR";
+            r = HTTP_BAD_REQUEST;
+            goto done;
+        }
+
+        if (sep == '\0') {
+            /* Action is on a component */
+            switch (action) {
+            case ACTION_UPDATE:
+                if (!path_seg->next) {
+                    txn->error.desc = "Can't update VCALENDAR";
+                    r = HTTP_CONFLICT;
+                    goto done;
+                }
+
+                /* Fall through */
+
+            case ACTION_CREATE:
+                /* Parse new/replacement component data */
+                if (!(tail->data = icalcomponent_new_from_string(data))) {
+                    txn->error.desc = "Invalid component data";
+                    r = HTTP_BAD_REQUEST;
+                    goto done;
+                }
+                break;
+
+            case ACTION_DELETE:
+                if (!path_seg->next) {
+                    txn->error.desc = "Can't delete VCALENDAR";
+                    r = HTTP_CONFLICT;
+                    goto done;
+                }
+                break;
+
+            default:
+                txn->error.desc = "ADD/REMOVE not allowed on a component";
+                r = HTTP_BAD_REQUEST;
+                goto done;
+            }
+        }
+        else if (sep == '#') {
+            /* Parse property-segment */
+            p = path + strcspn(path, "[;");
+            if ((sep = *p)) *p++ = '\0';
+
+            new = xzmalloc(sizeof(struct path_segment_t));
+            tail->next = new;
+            tail = new;
+            tail->type = SEGMENT_PROP;
+            tail->kind = icalproperty_string_to_kind(path);
+
+            path = p;
+
+            if (sep == '[') {
+                /* Parse property-match (MUST start with '=' or '!') */
+                if (strspn(path, "=!") != 1 || !(p = strchr(path, ']'))) {
+                    txn->error.desc = "Badly formatted property-match";
+                    r = HTTP_BAD_REQUEST;
+                    goto done;
+                }
+
+                *p++ = '\0';
+                if (*path++ == '!') tail->match.prop.not = 1;
+                strarray_append(&tail->match.prop.values, path);
+                sep = *p++;
+                path = p;
+            }
+
+            if (sep == ';') {
+                /* Parse parameter-segment */
+                new = xzmalloc(sizeof(struct path_segment_t));
+                tail->next = new;
+                tail = new;
+                tail->type = SEGMENT_PARAM;
+                tail->kind = icalparameter_string_to_kind(path);
+
+                if (data) {
+                    /* Skip leading ';' and trim trailing CRLF */
+                    data++;
+                    p = data + strcspn(data, "\r\n");
+                    *p = '\0';
+
+                    /* Parse new/replacement parameter data */
+                    if (!(tail->data =
+                          icalparameter_new_from_string(data))) {
+                        txn->error.desc = "Invalid parameter data";
+                        r = HTTP_BAD_REQUEST;
+                        goto done;
+                    }
+                }
+            }
+            else if (sep != '\0') {
+                txn->error.desc =
+                    "Invalid separator following property-segment";
+                r = HTTP_BAD_REQUEST;
+                goto done;
+            }
+            else if (data) {
+                /* Parse new/replacement property data */
+                struct buf buf = BUF_INITIALIZER;
+
+                switch (action) {
+                case ACTION_ADD:
+                case ACTION_CREATE:
+                case ACTION_UPDATE:
+                    /* XXX  This is the same hack that
+                       icalproperty_new_from_string() does for a single prop.
+                       We do it ourselves because we may have multiple props,
+                       and we would only get the first of a multi-valued prop.
+                    */
+                    buf_setcstr(&buf, "BEGIN:VCALENDAR\r\n");
+                    if (action == ACTION_ADD) {
+                        const char *propname =
+                            icalproperty_kind_to_string(tail->kind);
+                        do {
+                            /* Skip leading '=' */
+                            data++;
+                            p = data + strcspn(data, "=");
+                            buf_printf(&buf, "%s:%.*s",
+                                       propname, (int) (p - data), data);
+                            data = p;
+                        } while (*data);
+                    }
+                    else buf_appendcstr(&buf, data);
+                    buf_appendcstr(&buf, "END:VCALENDAR\r\n");
+
+                    tail->data =
+                        icalcomponent_new_from_string(buf_cstring(&buf));
+                    buf_free(&buf);
+                    if (!tail->data) {
+                        txn->error.desc = "Invalid property data";
+                        r = HTTP_BAD_REQUEST;
+                        goto done;
+                    }
+                    break;
+
+                case ACTION_REMOVE:
+                    /* Parse property value(s) into property-match value(s) */
+                    do {
+                        /* Skip leading '=' */
+                        data++;
+                        p = data + strcspn(data, "=");
+
+                        /* Trim trailing CRLF */
+                        if (p[-1] == '\n') p[-1] = '\0';
+                        if (p[-2] == '\r') p[-2] = '\0';
+
+                        strarray_append(&tail->match.prop.values, data);
+                        data = p;
+                    } while (*data);
+                    break;
+                }
+            }
+        }
+        else {
+            txn->error.desc = "Invalid separator following component-segment";
+            r = HTTP_BAD_REQUEST;
+            goto done;
+        }
+
+        /* Apply this action to the target segment */
+        apply_patch_action(path_seg, ical, action, &num_changes);
+
+
+      done:
+        /* Cleanup path segment(s) */
+        for (; path_seg; path_seg = next) {
+            next = path_seg->next;
+
+            switch (path_seg->type) {
+            case SEGMENT_PROP:
+                strarray_fini(&path_seg->match.prop.values);
+
+                /* Fall through */
+
+            case SEGMENT_COMP:
+                if (path_seg->data) icalcomponent_free(path_seg->data);
+                break;
+
+            case SEGMENT_PARAM:
+                if (path_seg->data) icalparameter_free(path_seg->data);
+                break;
+            }
+
+            free(path_seg);
+        }
+
+        if (r) return r;
+    }
+
+    /* If no changes are made,
+       return HTTP_NO_CONTENT to suppress storing of resource */
+    return (!num_changes ? HTTP_NO_CONTENT : 0);
 }
 
 
@@ -2661,6 +3206,22 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
     }
 
+    /* Check for changed UID */
+    caldav_lookup_resource(db, mailbox->name, resource, &cdata, 0);
+    if (cdata->dav.imap_uid && strcmpsafe(cdata->ical_uid, uid)) {
+        /* CALDAV:no-uid-conflict */
+        char *owner = mboxname_to_userid(cdata->dav.mailbox);
+
+        txn->error.precond = CALDAV_UID_CONFLICT;
+        buf_reset(&txn->buf);
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
+                   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
+        txn->error.resource = buf_cstring(&txn->buf);
+        free(owner);
+        return HTTP_FORBIDDEN;
+    }
+
     /* Check for duplicate iCalendar UID */
     caldav_lookup_uid(db, uid, &cdata);
     if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
@@ -2670,8 +3231,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         txn->error.precond = CALDAV_UID_CONFLICT;
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-                   namespace_calendar.prefix, owner,
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
                    strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
         free(owner);
@@ -2682,9 +3243,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
     case ICAL_VPOLL_COMPONENT:
-        if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer
+        if (organizer && _scheduling_enabled(txn, mailbox) &&
             /* XXX  Hack for Outlook */
-            && icalcomponent_get_first_invitee(comp)) {
+            icalcomponent_get_first_invitee(comp)) {
             /* Scheduling object resource */
             struct sched_param sparam;
             int r;
@@ -2693,9 +3254,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             userid = mboxname_to_userid(mailbox->name);
 
             /* Lookup the organizer */
-            r = caladdress_lookup(organizer, &sparam);
-            if (r == HTTP_NOT_FOUND)
+            r = caladdress_lookup(organizer, &sparam, userid);
+            if (r == HTTP_NOT_FOUND) {
                 break;  /* not a local organiser?  Just skip it */
+            }
             if (r) {
                 syslog(LOG_ERR,
                        "meth_put: failed to process scheduling message in %s"
@@ -2715,6 +3277,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 if (r) {
                     txn->error.desc = "Failed to read record \r\n";
                     ret = HTTP_SERVER_ERROR;
+                    sched_param_free(&sparam);
                     goto done;
                 }
                 oldical = record_to_ical(mailbox, &record);
@@ -2731,18 +3294,20 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
             }
 
-            if (!strcmpsafe(sparam.userid, userid)) {
+            if (sparam.isyou) {
                 /* Organizer scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
+                    sched_param_free(&sparam);
                     goto done;
                 }
-                sched_request(organizer, &sparam, oldical, ical, 0);
+                sched_request(userid, organizer, &sparam, oldical, ical, 0);
             }
             else {
                 /* Attendee scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ATT_CHANGE;
+                    sched_param_free(&sparam);
                     goto done;
                 }
 #if 0
@@ -2756,6 +3321,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 sched_reply(userid, oldical, ical);
             }
+            sched_param_free(&sparam);
 
             flags |= NEW_STAG;
         }
@@ -2901,7 +3467,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
 
 /* Append a new busytime period to the busytime array */
-static void add_freebusy(struct icaltimetype *start,
+static void add_freebusy(struct icaltimetype *recurid,
+                         struct icaltimetype *start,
                          struct icaltimetype *end,
                          icalparameter_fbtype fbtype,
                          struct calquery_filter *calfilter)
@@ -2918,6 +3485,10 @@ static void add_freebusy(struct icaltimetype *start,
 
     /* Add new freebusy */
     newfb = &freebusy->fb[freebusy->len++];
+    memset(newfb, 0, sizeof(struct freebusy));
+
+    if (recurid) newfb->recurid = *recurid;
+
     if (icaltime_is_date(*start)) {
         newfb->per.duration = icaltime_subtract(*end, *start);
         newfb->per.end = icaltime_null_time();
@@ -2926,10 +3497,17 @@ static void add_freebusy(struct icaltimetype *start,
     }
     else {
         newfb->per.duration = icaldurationtype_null_duration();
-        newfb->per.end = (icaltime_compare(calfilter->end, *end) < 0) ?
-            calfilter->end : *end;
-        newfb->per.start = (icaltime_compare(calfilter->start, *start) > 0) ?
-            calfilter->start : *start;
+        if ((calfilter->flags & BUSYTIME_QUERY) &&
+            icaltime_compare(calfilter->end, *end) < 0) {
+            newfb->per.end = calfilter->end;
+        }
+        else newfb->per.end = *end;
+
+        if ((calfilter->flags & BUSYTIME_QUERY) &&
+            icaltime_compare(calfilter->start, *start)) {
+            newfb->per.start = calfilter->start;
+        }
+        else newfb->per.start = *start;
     }
     newfb->type = fbtype;
 }
@@ -2941,12 +3519,20 @@ static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
 {
     struct calquery_filter *calfilter = (struct calquery_filter *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    struct icaltimetype start, end;
+    struct icaltimetype start, end, recurid;
     icalparameter_fbtype fbtype;
 
     /* Set start and end times */
     start = icaltime_from_timet_with_zone(span->start, is_date, utc_zone);
     end = icaltime_from_timet_with_zone(span->end, is_date, utc_zone);
+
+    /* Set recurid */
+    recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+    if (icaltime_is_null_time(recurid)) recurid = start;
+    else {
+        recurid = icaltime_convert_to_zone(recurid, utc_zone);
+        recurid.is_date = 0;  /* make DATE-TIME for comparison */
+    }
 
     /* Set FBTYPE */
     switch (icalcomponent_isa(comp)) {
@@ -2992,7 +3578,7 @@ static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
         break;
     }
 
-    add_freebusy(&start, &end, fbtype, calfilter);
+    add_freebusy(&recurid, &start, &end, fbtype, calfilter);
 }
 
 
@@ -3015,13 +3601,13 @@ static int is_busytime(struct calquery_filter *calfilter, icalcomponent *comp)
 }
 
 
-/* Compare recurid to start time of busytime periods -- used for searching */
+/* Compare recurid to recurid of busytime periods -- used for searching */
 static int compare_recurid(const void *key, const void *mem)
 {
     struct icaltimetype *recurid = (struct icaltimetype *) key;
     struct freebusy *fb = (struct freebusy *) mem;
 
-    return icaltime_compare(*recurid, fb->per.start);
+    return icaltime_compare(*recurid, fb->recurid);
 }
 
 
@@ -3039,7 +3625,8 @@ static int compare_freebusy(const void *fb1, const void *fb2)
 }
 
 
-static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
+static int expand_occurrences(icalcomponent *ical, icalcomponent **master,
+                              icalcomponent_kind kind,
                               struct calquery_filter *calfilter)
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
@@ -3062,6 +3649,7 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
          comp &&
              icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
          comp = icalcomponent_get_next_component(ical, kind));
+    if (master) *master = comp;
 
     if (is_busytime(calfilter, comp)) {
         /* Add all recurring busytime in specified time-range */
@@ -3081,31 +3669,12 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
     /* Handle overridden recurrences */
     for (comp = icalcomponent_get_first_component(ical, kind);
          comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        icalproperty *prop;
         struct icaltimetype recurid;
-        icalparameter *param;
         struct freebusy *overridden;
         icaltime_span recurspan;
 
-        /* The *_get_recurrenceid() functions don't appear
-           to deal with timezones properly, so we do it ourselves */
-        prop =
-            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (!prop) continue;
-
-        recurid = icalproperty_get_recurrenceid(prop);
-        param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-
-        if (param) {
-            const char *tzid = icalparameter_get_tzid(param);
-            icaltimezone *tz = NULL;
-
-            tz = icalcomponent_get_timezone(ical, tzid);
-            if (!tz) {
-                tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
-            }
-            if (tz) icaltime_set_timezone(&recurid, tz);
-        }
+        recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+        if (icaltime_is_null_time(recurid)) continue;
 
         recurid = icaltime_convert_to_zone(recurid, utc_zone);
         recurid.is_date = 0;  /* make DATE-TIME for comparison */
@@ -3116,7 +3685,7 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
         if (overridden) {
             /* "Remove" the instance
                by setting fbtype to NONE (we ignore these later)
-               NOTE: MUST keep period.start otherwise bsearch() breaks */
+               NOTE: MUST keep recurid otherwise bsearch() breaks */
             /* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
             overridden->type = ICAL_FBTYPE_NONE;
         }
@@ -3183,7 +3752,7 @@ int apply_calfilter(struct propfind_ctx *fctx, void *data)
             kind =
                 icalcomponent_isa(icalcomponent_get_first_real_component(ical));
 
-            match = expand_occurrences(ical, kind, calfilter);
+            match = expand_occurrences(ical, NULL, kind, calfilter);
 
             icalcomponent_free(ical);
         }
@@ -3210,7 +3779,7 @@ int apply_calfilter(struct propfind_ctx *fctx, void *data)
                 fbtype = ICAL_FBTYPE_BUSY; break;
             }
 
-            add_freebusy(&dtstart, &dtend, fbtype, calfilter);
+            add_freebusy(&dtstart, &dtstart, &dtend, fbtype, calfilter);
         }
     }
 
@@ -3377,12 +3946,12 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
         if (fctx->record) mailbox_map_record(fctx->mailbox, fctx->record, &msg_buf);
 
-        if (buf_base(&msg_buf)) {
+        if (buf_len(&msg_buf)) {
             /* Parse the resource and re-store it */
             struct transaction_t txn;
             icalcomponent *ical;
 
-            ical = icalparser_parse_string(buf_base(&msg_buf)
+            ical = icalparser_parse_string(buf_cstring(&msg_buf)
                                            + fctx->record->header_size);
             buf_free(&msg_buf);
             if (!ical) {
@@ -3484,28 +4053,314 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+static struct partial_comp_t *parse_partial_comp(xmlNodePtr node)
+{
+    xmlChar *prop;
+    struct partial_comp_t *pcomp;
+
+    prop = xmlGetProp(node, BAD_CAST "name");
+    if (!prop) return NULL;
+
+    pcomp = xzmalloc(sizeof(struct partial_comp_t));
+    pcomp->kind = icalcomponent_string_to_kind((char *) prop);
+    xmlFree(prop);
+
+    for (node = xmlFirstElementChild(node); node;
+         node = xmlNextElementSibling(node)) {
+        if (!xmlStrcmp(node->name, BAD_CAST "allprop")) {
+            arrayu64_add(&pcomp->props, ICAL_ANY_PROPERTY);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+            icalproperty_kind kind = ICAL_NO_PROPERTY;
+
+            prop = xmlGetProp(node, BAD_CAST "name");
+            if (prop) {
+                kind = icalproperty_string_to_kind((char *) prop);
+                xmlFree(prop);
+            }
+            arrayu64_add(&pcomp->props, kind);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "allcomp")) {
+            pcomp->child = xzmalloc(sizeof(struct partial_comp_t));
+            pcomp->child->kind = ICAL_ANY_COMPONENT;
+            break;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
+            struct partial_comp_t *child = parse_partial_comp(node);
+            child->sibling = pcomp->child;
+            pcomp->child = child;
+        }
+    }
+
+    return pcomp;
+}
+
+static void prune_properties(icalcomponent *parent,
+                             struct partial_comp_t *pcomp)
+{
+    icalcomponent *comp, *next;
+
+    if (!arrayu64_size(&pcomp->props) ||
+        arrayu64_nth(&pcomp->props, 0) != ICAL_ANY_PROPERTY) {
+        /* Strip unwanted properties from component */
+        icalproperty *prop, *nextprop;
+
+        for (prop = icalcomponent_get_first_property(parent, ICAL_ANY_PROPERTY);
+             prop; prop = nextprop) {
+            nextprop =
+                icalcomponent_get_next_property(parent, ICAL_ANY_PROPERTY);
+
+            if (arrayu64_find(&pcomp->props,
+                              icalproperty_isa(prop), 0) < 0) {
+                icalcomponent_remove_property(parent, prop);
+                icalproperty_free(prop);
+            }
+        }
+    }
+
+    if (pcomp->child && pcomp->child->kind == ICAL_ANY_COMPONENT) return;
+
+    /* Strip unwanted components from component */
+    for (comp = icalcomponent_get_first_component(parent, ICAL_ANY_COMPONENT);
+         comp; comp = next) {
+        icalcomponent_kind kind = icalcomponent_isa(comp);
+        struct partial_comp_t *child;
+
+        next = icalcomponent_get_next_component(parent, ICAL_ANY_COMPONENT);
+
+        for (child = pcomp->child; child; child = child->sibling) {
+            if (child->kind == kind) break;
+        }
+        if (child) prune_properties(comp, child);
+        else {
+            icalcomponent_remove_component(parent, comp);
+            icalcomponent_free(comp);
+        }
+    }
+}
+
+static int compare_freebusy_with_type(const void *fb1, const void *fb2);
+
 /* Callback to prescreen/fetch CALDAV:calendar-data */
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop,
                             xmlNodePtr resp __attribute__((unused)),
                             struct propstat propstat[],
-                            void *rock __attribute__((unused)))
+                            void *rock)
 {
+    struct partial_caldata_t *partial = (struct partial_caldata_t *) rock;
+    struct caldav_data *cdata = (struct caldav_data *) fctx->data;
     struct buf buf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
     int r = 0;
 
     if (propstat) {
+        icalcomponent *ical = NULL;
+
         if (!fctx->record) return HTTP_NOT_FOUND;
         mailbox_map_record(fctx->mailbox, fctx->record, &buf);
         data = buf_cstring(&buf) + fctx->record->header_size;
         datalen = buf_len(&buf) - fctx->record->header_size;
+
+        if (!icaltime_is_null_time(partial->start)) {
+            /* Expand recurrences */
+            struct calquery_filter calfilter;
+            icalcomponent *master, *comp, *nextcomp;
+            icalproperty *prop, *nextprop;
+            icalcomponent_kind kind;
+            unsigned i;
+
+            memset(&calfilter, 0, sizeof(struct calquery_filter));
+            calfilter.start = partial->start;
+            calfilter.end = partial->end;
+
+            if (!ical) ical = icalparser_parse_string(data);
+
+            if (!cdata->comp_flags.tzbyref) {
+                /* Strip all VTIMEZONEs */
+                for (comp = icalcomponent_get_first_component(ical,
+                                                              ICAL_VTIMEZONE_COMPONENT);
+                     comp; comp = nextcomp) {
+                    nextcomp = icalcomponent_get_next_component(ical,
+                                                                ICAL_VTIMEZONE_COMPONENT);
+                    icalcomponent_remove_component(ical, comp);
+                    icalcomponent_free(comp);
+                }
+            }
+
+            kind =
+                icalcomponent_isa(icalcomponent_get_first_real_component(ical));
+
+            expand_occurrences(ical, &master, kind, &calfilter);
+
+            /* Strip unwanted properties from master component */
+            for (prop = icalcomponent_get_first_property(master,
+                                                         ICAL_ANY_PROPERTY);
+                 prop; prop = nextprop) {
+                nextprop = icalcomponent_get_next_property(master,
+                                                           ICAL_ANY_PROPERTY);
+                switch (icalproperty_isa(prop)) {
+                case ICAL_RRULE_PROPERTY:
+                case ICAL_RDATE_PROPERTY:
+                case ICAL_EXDATE_PROPERTY:
+                    icalcomponent_remove_property(master, prop);
+                    icalproperty_free(prop);
+                    break;
+
+                default:
+                    break;
+                }
+            }
+
+            /* Re-sort freebusy periods by start time and type.
+               Overriden instances (FBTYPE=NONE) will have higher ordinal num */
+            qsort(calfilter.freebusy.fb, calfilter.freebusy.len,
+                  sizeof(struct freebusy), compare_freebusy_with_type);
+
+            /* Determine which existing components we want to keep */
+            for (comp = icalcomponent_get_first_component(ical, kind);
+                 comp; comp = nextcomp) {
+                nextcomp = icalcomponent_get_next_component(ical, kind);
+                struct icaltimetype recurid;
+                struct freebusy *found;
+
+                recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+                if (icaltime_is_null_time(recurid)) {
+                    recurid = icalcomponent_get_dtstart(comp);
+                }
+                recurid = icaltime_convert_to_zone(recurid, utc_zone);
+                recurid.is_date = 0;  /* make DATE-TIME for comparison */
+
+                found = bsearch(&recurid, calfilter.freebusy.fb,
+                                calfilter.freebusy.len,
+                                sizeof(struct freebusy), compare_recurid);
+                if (found) {
+                    /* Strip unwanted properties from component */
+
+                    /* Set DTSTART/DTEND/RECURRENCEID to UTC */
+                    icalcomponent_set_dtstart(comp, found->per.start);
+                    icalcomponent_set_dtend(comp, found->per.end);
+
+                    prop = icalcomponent_get_first_property(comp,
+                                                            ICAL_RECURRENCEID_PROPERTY);
+                    if (prop) {
+                        icalproperty_remove_parameter_by_kind(prop,
+                                                              ICAL_TZID_PARAMETER);
+                        icalproperty_set_recurrenceid(prop, recurid);
+                    }
+                    else if (icaltime_compare(recurid, found->per.start)) {
+                        /* Overridden master instance */
+                        icalcomponent_remove_component(ical, comp);
+                    }
+
+                    /* Mark this instance as handled */
+                    found->type = ICAL_FBTYPE_NONE;
+                }
+                else {
+                    /* Remove this component (doesn't overlap expand range) */
+                    icalcomponent_remove_component(ical, comp);
+                    if (comp != master) icalcomponent_free(comp);
+                }
+            }
+
+            /* Create recurrence components for remaining instances */
+            for (i = 0; i < calfilter.freebusy.len; i++) {
+                struct freebusy *fb = &calfilter.freebusy.fb[i];
+
+                if (fb->type == ICAL_FBTYPE_NONE) continue;
+
+                comp = icalcomponent_new_clone(master);
+                icalcomponent_set_dtstart(comp, fb->per.start);
+                icalcomponent_set_dtend(comp, fb->per.end);
+                icalcomponent_set_recurrenceid(comp, fb->recurid);
+                icalcomponent_add_component(ical, comp);
+            }
+
+            /* Cleanup */
+            if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+            if (!icalcomponent_get_parent(master)) icalcomponent_free(master);
+        }
+
+        if (partial->comp) {
+            /* Limit returned properties */
+            if (!ical) ical = icalparser_parse_string(data);
+            prune_properties(ical, partial->comp);
+        }
+
+        if (ical) {
+            /* Create iCalendar data from new ical component */
+            buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
+            data = buf_cstring(&buf);
+            datalen = buf_len(&buf);
+            icalcomponent_free(ical);
+        }
     }
-    else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
-        /* We want to strip known VTIMEZONEs */
-        fctx->proc_by_resource = &caldav_propfind_by_resource;
+    else if (prop) {
+        /* Prescreen "property" request - read partial/expand children */
+        xmlNodePtr node;
+
+        /* Initialize expand to be "empty" */
+        partial->start = icaltime_null_time();
+        partial->end = icaltime_null_time();
+        partial->comp = NULL;
+
+        /* Check for and parse child elements of CALDAV:calendar-data */
+        for (node = xmlFirstElementChild(prop); node;
+             node = xmlNextElementSibling(node)) {
+            xmlChar *prop;
+
+            if (!xmlStrcmp(node->name, BAD_CAST "expand")) {
+                prop = xmlGetProp(node, BAD_CAST "start");
+                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
+                partial->start = icaltime_from_string((char *) prop);
+                xmlFree(prop);
+
+                prop = xmlGetProp(node, BAD_CAST "end");
+                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
+                partial->end = icaltime_from_string((char *) prop);
+                xmlFree(prop);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
+                partial->comp = parse_partial_comp(node);
+                if (!partial->comp ||
+                    partial->comp->kind != ICAL_VCALENDAR_COMPONENT) {
+                    return (*fctx->ret = HTTP_BAD_REQUEST);
+                }
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit-recurrence-set")) {
+                syslog(LOG_NOTICE,
+                       "Client attempted to use CALDAV:limit-recurrence-set");
+                return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set")) {
+                syslog(LOG_NOTICE,
+                       "Client attempted to use CALDAV:limit-freebusy-set");
+                return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
+            }
+        }
+
+        if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+            /* We want to strip known VTIMEZONEs */
+            fctx->proc_by_resource = &caldav_propfind_by_resource;
+        }
+    }
+    else {
+        /* Cleanup "property" request - free partial component structure */
+        struct partial_comp_t *pcomp, *child, *sibling;
+
+        for (pcomp = partial->comp; pcomp; pcomp = child) {
+            child = pcomp->child;
+
+            do {
+                sibling = pcomp->sibling;
+                arrayu64_fini(&pcomp->props);
+                free(pcomp);
+            } while ((pcomp = sibling));
+        }
+
+        return 0;
     }
 
     r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
@@ -3529,23 +4384,20 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 {
     const char *cal = (const char *) rock;
     xmlNodePtr node;
+    /* NOTE: calbuf needs to stay in scope until 'cal' is finished with */
     struct buf calbuf = BUF_INITIALIZER;
     int ret = HTTP_NOT_FOUND; /* error condition if we bail early */
 
-    if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
+    if (!(namespace_calendar.enabled && httpd_userid))
         goto done;
 
     if (cal) {
-        const char *annotname = NULL;
-        char *mailboxname;
-        int r;
-
         /* named calendars are only used for scheduling */
         if (!(namespace_calendar.allow & ALLOW_CAL_SCHED))
             goto done;
 
         /* check for renamed calendars - property on the homeset */
-        mailboxname = caldav_mboxname(httpd_userid, NULL);
+        const char *annotname = NULL;
         if (!strcmp(cal, SCHED_DEFAULT))
             annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
         else if (!strcmp(cal, SCHED_INBOX))
@@ -3554,38 +4406,29 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
             annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
 
         if (annotname) {
-            r = annotatemore_lookupmask(mailboxname, annotname,
-                                        fctx->req_tgt->userid, &calbuf);
+            char *mailboxname = caldav_mboxname(httpd_userid, NULL);
+            int r = annotatemore_lookupmask(mailboxname, annotname,
+                                            httpd_userid, &calbuf);
+            free(mailboxname);
             if (!r && calbuf.len) {
                 buf_putc(&calbuf, '/');
                 cal = buf_cstring(&calbuf);
             }
         }
-        free(mailboxname);
-
-        /* make sure the mailbox exists */
-        mailboxname = caldav_mboxname(fctx->req_tgt->userid, cal);
-        r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
-            r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-                                       NULL, 0,
-                                       fctx->req_tgt->userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                       mailboxname, error_message(r));
-                goto done;
-            }
-        }
-        free(mailboxname);
     }
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                         name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/", namespace_calendar.prefix,
-               fctx->req_tgt->userid);
+    if (strchr(httpd_userid, '@') || !httpd_extradomain) {
+        buf_printf(&fctx->buf, "%s/%s/%s/", namespace_calendar.prefix,
+                   USER_COLLECTION_PREFIX, httpd_userid);
+    }
+    else {
+        buf_printf(&fctx->buf, "%s/%s/%s@%s/", namespace_calendar.prefix,
+                   USER_COLLECTION_PREFIX, httpd_userid, httpd_extradomain);
+    }
     if (cal) buf_appendcstr(&fctx->buf, cal);
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
@@ -3870,6 +4713,17 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                         name, ns, NULL, 0);
 
+    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+    char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
+    buf_reset(&fctx->buf);
+    int r = annotatemore_lookupmask(mailboxname, annotname,
+                                    fctx->req_tgt->userid, &fctx->buf);
+    free(mailboxname);
+    if (!r && fctx->buf.len) {
+        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        return 0;
+    }
+
     /* XXX  This needs to be done via an LDAP/DB lookup */
     if (strchr(fctx->req_tgt->userid, '@')) {
         buf_reset(&fctx->buf);
@@ -3905,9 +4759,9 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
                          struct propstat propstat[],
                          void *rock __attribute__((unused)))
 {
-    const char *type = fctx->req_tgt->userid ? "INDIVIDUAL" : "UNKNOWN";
+    const char *type = fctx->req_tgt->userid ? "INDIVIDUAL" : NULL;
 
-    if (!namespace_calendar.enabled) return HTTP_NOT_FOUND;
+    if (!namespace_calendar.enabled || !type) return HTTP_NOT_FOUND;
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST type, 0);
@@ -4121,12 +4975,14 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
         }
         else if (set) {
             icalcomponent *ical = NULL;
+            struct buf buf;
 
             freeme = xmlNodeGetContent(prop);
             tz = (const char *) freeme;
 
             /* Parse and validate the iCal data */
-            ical = mime->from_string(tz);
+            buf_init_ro_cstr(&buf, tz);
+            ical = mime->to_object(&buf);
             if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
                 xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                              &propstat[PROPSTAT_FORBID],
@@ -4280,12 +5136,14 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
         }
         else if (set) {
             icalcomponent *ical = NULL;
+            struct buf buf;
 
             freeme = xmlNodeGetContent(prop);
             avail = (const char *) freeme;
 
             /* Parse and validate the iCal data */
-            ical = mime->from_string(avail);
+            buf_init_ro_cstr(&buf, avail);
+            ical = mime->to_object(&buf);
             if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
                 xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                              &propstat[PROPSTAT_FORBID],
@@ -4533,6 +5391,26 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+/* Callback to fetch CS:allowed-sharing-modes */
+static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
+                                 struct propfind_ctx *fctx,
+                                 xmlNodePtr prop __attribute__((unused)),
+                                 xmlNodePtr resp __attribute__((unused)),
+                                 struct propstat propstat[],
+                                 void *rock __attribute__((unused)))
+{
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                                   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    if (!fctx->req_tgt->resource && !fctx->req_tgt->flags) {
+        xmlNewChild(node, NULL, BAD_CAST "can-be-shared", NULL);
+        xmlNewChild(node, NULL, BAD_CAST "can-be-published", NULL);
+    }
+
+    return 0;
+}
+
+
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams __attribute__((unused)),
                             xmlNodePtr inroot, struct propfind_ctx *fctx)
@@ -4566,7 +5444,7 @@ static int report_cal_query(struct transaction_t *txn,
                 /* XXX  Need to do pass this to query for floating time */
                 syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
                 tzdata = xmlNodeGetContent(node);
-                ical = icalparser_parse_string((const char *) tz);
+                ical = icalparser_parse_string((const char *) tzdata);
                 if (ical) tz = icalcomponent_get_first_component(ical,
                                                                  ICAL_VTIMEZONE_COMPONENT);
                 if (!tz || icalcomponent_get_first_real_component(ical)) {
@@ -4683,6 +5561,8 @@ static int busytime_by_resource(void *rock, void *data)
     struct index_record record;
     int r;
 
+    keepalive_response();
+
     if (!cdata->dav.imap_uid) return 0;
 
     /* Fetch index record for the resource */
@@ -4713,9 +5593,9 @@ static int busytime_by_resource(void *rock, void *data)
 
 
 /* mboxlist_findall() callback to find busytime of a collection */
-static int busytime_by_collection(const char *mboxname, int matchlen,
-                                  int maycreate, void *rock)
+static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 {
+    const char *mboxname = mbentry->name;
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct calquery_filter *calfilter =
         (struct calquery_filter *) fctx->filter_crit;
@@ -4735,7 +5615,7 @@ static int busytime_by_collection(const char *mboxname, int matchlen,
         }
     }
 
-    return propfind_by_collection(mboxname, matchlen, maycreate, rock);
+    return propfind_by_collection(mboxname, strlen(mboxname), 0, rock);
 }
 
 
@@ -4868,7 +5748,7 @@ static void combine_vavailability(struct calquery_filter *calfilter)
             }
 
             /* Expand available time occurrences */
-            expand_occurrences(comp, ICAL_XAVAILABLE_COMPONENT, &availfilter);
+            expand_occurrences(comp, NULL, ICAL_XAVAILABLE_COMPONENT, &availfilter);
 
             /* Calculate unavailable periods and add to busytime */
             period.start = availfilter.start;
@@ -4940,14 +5820,11 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
 
         if (txn->req_tgt.collection) {
             /* Get busytime for target calendar collection */
-            busytime_by_collection(mailboxname, 0, 0, fctx);
+            busytime_by_collection(txn->req_tgt.mbentry, fctx);
         }
         else {
             /* Get busytime for all contained calendar collections */
-            char mboxpat[MAX_MAILBOX_BUFFER+1];
-            snprintf(mboxpat, sizeof(mboxpat), "%s.%%", mailboxname);
-            mboxlist_findall(NULL, mboxpat, 1 /*admin*/, httpd_userid,
-                             httpd_authstate, busytime_by_collection, fctx);
+            mboxlist_allmbox(mailboxname, busytime_by_collection, fctx, 0);
         }
 
         if (fctx->davdb) caldav_close(fctx->davdb);
@@ -4962,8 +5839,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
         char *userid = mboxname_to_userid(mailboxname);
         const char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
-        if (!annotatemore_lookup(mboxname, prop_annot,
-                                 /* shared */ "", &attrib) && attrib.len) {
+        if (!annotatemore_lookupmask(mboxname, prop_annot,
+                                     httpd_userid, &attrib) && attrib.len) {
             add_vavailability(vavail, icalparser_parse_string(buf_cstring(&attrib)));
         }
         free(userid);
@@ -5138,7 +6015,7 @@ static int report_fb_query(struct transaction_t *txn,
 
     if (cal) {
         /* Output the iCalendar object as text/calendar */
-        char *cal_str = mime->to_string(cal);
+        struct buf *cal_str = mime->from_object(cal);
         icalcomponent_free(cal);
 
         txn->resp_body.type = mime->content_type;
@@ -5146,8 +6023,8 @@ static int report_fb_query(struct transaction_t *txn,
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
 
-        write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
-        free(cal_str);
+        write_body(HTTP_OK, txn, buf_base(cal_str), buf_len(cal_str));
+        buf_destroy(cal_str);
     }
     else ret = HTTP_NOT_FOUND;
 
@@ -5340,16 +6217,16 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 static struct mime_type_t freebusy_mime_types[] = {
     /* First item MUST be the default type */
     { "text/calendar; charset=utf-8", "2.0", "ifb",
-      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
+      (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
       NULL, NULL, NULL, NULL
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xfb",
-      (char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jfb",
-      (char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       NULL, NULL, NULL, NULL
     },
 #endif
@@ -5399,7 +6276,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, proxy_userid,
+                              &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
         if (!be) return HTTP_UNAVAILABLE;
 
@@ -5481,7 +6358,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
-    fctx.userid = proxy_userid;
+    fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
@@ -5500,7 +6377,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
         const char *proto, *host;
         icalcomponent *fb;
         icalproperty *url;
-        char *cal_str;
+        struct buf *cal_str;
 
         /* Construct URL */
         buf_reset(&txn->buf);
@@ -5527,13 +6404,30 @@ static int meth_get_head_fb(struct transaction_t *txn,
         txn->flags.cc |= CC_NOTRANSFORM;
 
         /* Output the iCalendar object */
-        cal_str = mime->to_string(cal);
+        cal_str = mime->from_object(cal);
         icalcomponent_free(cal);
 
-        write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
-        free(cal_str);
+        write_body(HTTP_OK, txn, buf_base(cal_str), buf_len(cal_str));
+        buf_destroy(cal_str);
     }
     else ret = HTTP_NOT_FOUND;
 
     return ret;
+}
+
+
+static int meth_options_cal(struct transaction_t *txn, void *params)
+{
+    int r;
+
+    /* Parse the path */
+    if ((r = caldav_parse_path(txn->req_uri->path,
+                               &txn->req_tgt, &txn->error.desc))) return r;
+
+    if (txn->req_tgt.allow & ALLOW_PATCH) {
+        /* Add Accept-Patch formats to response */
+        txn->resp_body.patch = caldav_patch_docs;
+    }
+
+    return meth_options(txn, params);
 }

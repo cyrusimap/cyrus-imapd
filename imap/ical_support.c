@@ -51,6 +51,21 @@
 
 #ifdef HAVE_ICAL
 
+icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
+{
+    return icalparser_parse_string(buf_cstring(buf));
+}
+
+struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
+{
+    char *str = icalcomponent_as_ical_string_r(comp);
+    struct buf *ret = buf_new();
+
+    buf_initm(ret, str, strlen(str));
+
+    return ret;
+}
+
 icalcomponent *record_to_ical(struct mailbox *mailbox,
                               const struct index_record *record)
 {
@@ -92,6 +107,7 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
                     if (!strcasecmp(propname, "LOCATION")) continue;
                     if (!strcasecmp(propname, "COMMENT")) continue;
                     if (!strcasecmp(propname, "DESCRIPTION")) continue;
+                    if (!strcasecmp(propname, "SUMMARY")) continue;
                 }
                 else {
                     /* Ignore unknown property errors */
@@ -173,6 +189,47 @@ const char *icalproperty_get_invitee(icalproperty *prop)
     return recip;
 }
 
+
+icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
+{
+    icalcomponent *inner;
+    icalproperty *prop;
+    icalparameter *param;
+    struct icaltimetype ret = icaltime_null_time();
+
+    if (!comp) {
+        icalerror_set_errno(ICAL_BADARG_ERROR);
+        return ret;
+    }
+
+    inner = icalcomponent_get_inner(comp);
+    if (!inner) {
+        icalerror_set_errno(ICAL_MALFORMEDDATA_ERROR);
+        return ret;
+    }
+
+    prop = icalcomponent_get_first_property(inner, ICAL_RECURRENCEID_PROPERTY);
+    if (!prop) return ret;
+
+    ret = icalproperty_get_recurrenceid(prop);
+
+    if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER))) {
+        const char *tzid = icalparameter_get_tzid(param);
+        icaltimezone *tz = NULL;
+        icalcomponent *c;
+
+        for (c = comp; c; c = icalcomponent_get_parent(c)) {
+            tz = icalcomponent_get_timezone(c, tzid);
+            if (tz) break;
+        }
+
+        if (!tz) tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+
+        if (tz) ret = icaltime_set_timezone(&ret, tz);
+    }
+
+    return ret;
+}
 
 #ifndef HAVE_TZDIST_PROPS
 
@@ -256,6 +313,11 @@ icalparameter *icalparameter_new_size(const char *sz)
     icalparameter_set_iana_value(param, sz);
 
     return param;
+}
+
+const char *icalparameter_get_size(icalparameter *param)
+{
+    return icalparameter_get_iana_value(param);
 }
 
 void icalparameter_set_size(icalparameter *param, const char *sz)

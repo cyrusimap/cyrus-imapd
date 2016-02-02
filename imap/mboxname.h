@@ -87,17 +87,23 @@ const char *mbname_domain(const mbname_t *mbname);
 const char *mbname_localpart(const mbname_t *mbname);
 const strarray_t *mbname_boxes(const mbname_t *mbname);
 time_t mbname_isdeleted(const mbname_t *mbname);
+const char *mbname_recipient(const mbname_t *mbname, const struct namespace *ns);
 
 mbname_t *mbname_from_userid(const char *userid);
 mbname_t *mbname_from_localdom(const char *localpart, const char *domain);
 mbname_t *mbname_from_intname(const char *intname);
 mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid);
+mbname_t *mbname_from_extsub(const char *extsub, const struct namespace *ns, const char *userid);
+mbname_t *mbname_from_recipient(const char *recip, const struct namespace *ns);
+mbname_t *mbname_dup(const mbname_t *mbname);
 
+void mbname_downcaseuser(mbname_t *mbname);
 void mbname_set_localpart(mbname_t *mbname, const char *localpart);
 void mbname_set_domain(mbname_t *mbname, const char *domain);
 void mbname_set_isdeleted(mbname_t *mbname, time_t del);
+void mbname_set_boxes(mbname_t *mbname, const strarray_t *boxes);
 void mbname_push_boxes(mbname_t *mbname, const char *item);
-char *mbname_pop_box(mbname_t *mbname); /* free it yourself punk */
+char *mbname_pop_boxes(mbname_t *mbname); /* free it yourself punk */
 void mbname_truncate_boxes(mbname_t *mbname, size_t len);
 void mbname_free(mbname_t **mbnamep);
 
@@ -114,32 +120,14 @@ int mboxname_init_namespace(struct namespace *namespace, int isadmin);
 
 struct namespace *mboxname_get_adminnamespace();
 
-/*
- * Translate separator charactors in a mailboxname from its external
- * representation to its internal representation '.'.
- * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
- * length is the length of the string to translate (0 = strlen(name)).
- */
-char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
-                                  int length);
-
-/*
- * Translate separator charactors in a mailboxname from its internal
- * representation '.' to its external representation.
- * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
- * length is the length of the string to translate (0 = strlen(name)).
- */
-char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
-                                  int length);
-
 /* Return nonzero if 'userid' owns the (internal) mailbox 'name'. */
 int mboxname_userownsmailbox(const char *userid, const char *name);
 
 /*
  * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
- * returns a pointer to the userid, otherwise returns NULL.
+ * returns 1, otherwise returns 0.
  */
-char *mboxname_isusermailbox(const char *name, int isinbox);
+int mboxname_isusermailbox(const char *name, int isinbox);
 
 /*
  * If (internal) mailbox 'name' is in the DELETED namespace.
@@ -161,10 +149,21 @@ int mboxname_iscalendarmailbox(const char *name, int mbtype);
  */
 int mboxname_isaddressbookmailbox(const char *name, int mbtype);
 
+/*
+ * If (internal) mailbox 'name' is a DAVDRIVE mailbox
+ * returns boolean
+ */
+int mboxname_isdavdrivemailbox(const char *name, int mbtype);
+
 /* If (internal) mailbox is a user's top-level Notes mailbox,
  * returns boolean
  */
 int mboxname_isnotesmailbox(const char *name, int mbtype);
+
+/* If (internal) mailbox is a user's mail outbox,
+ * returns boolean
+ */
+int mboxname_isoutbox(const char *name);
 
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
@@ -180,6 +179,7 @@ void mboxname_hash(char *buf, size_t buf_len,
 /* returns a malloc'd mailbox */
 char *mboxname_to_userid(const char *mboxname);
 char *mboxname_user_mbox(const char *userid, const char *subfolder);
+char *mboxname_user_mbox_external(const char *userid, const char *extsubfolder);
 char *mboxname_abook(const char *userid, const char *collection);
 char *mboxname_cal(const char *userid, const char *collection);
 
@@ -241,15 +241,19 @@ struct mboxname_counters {
     modseq_t caldavmodseq;
     modseq_t carddavmodseq;
     modseq_t notesmodseq;
+    modseq_t mailfoldersmodseq;
+    modseq_t caldavfoldersmodseq;
+    modseq_t carddavfoldersmodseq;
+    modseq_t notesfoldersmodseq;
     uint32_t uidvalidity;
 };
 
 int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals);
 modseq_t mboxname_readmodseq(const char *mboxname);
-modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype);
-modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype);
+modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder);
+modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype, int dofolder);
 uint32_t mboxname_readuidvalidity(const char *mboxname);
-uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, int mbtype);
-uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val, int mbtype);
+uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last);
+uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val);
 
 #endif

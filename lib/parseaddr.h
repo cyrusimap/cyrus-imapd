@@ -50,6 +50,8 @@ struct address {
     const char *domain;
     struct address *next;
     char *freeme;               /* If non-nil, free */
+    int invalid;                /* If non-zero, this mail address is known to
+                                   be invalid. */
 };
 
 struct address_itr {

@@ -9,21 +9,12 @@
 #include "vparse.h"
 #include "xmalloc.h"
 
-#define LC(s) do { char *p; for (p = s; *p; p++) if (*p >= 'A' && *p <= 'Z') *p += ('a' - 'A'); } while (0)
-
 static char *buf_dup_cstring(struct buf *buf)
 {
     char *ret = xstrndup(buf->s, buf->len);
     /* more space efficient than returning overlength buffers, and
      * you would just wind up mallocing another buffer anyway */
     buf->len = 0;
-    return ret;
-}
-
-static char *buf_dup_lcstring(struct buf *buf)
-{
-    char *ret = buf_dup_cstring(buf);
-    LC(ret);
     return ret;
 }
 
@@ -121,7 +112,7 @@ static int _parse_param_key(struct vparse_state *state, int *haseq)
     while (*state->p) {
         switch (*state->p) {
         case '=':
-            state->param->name = buf_dup_lcstring(&state->buf);
+            state->param->name = buf_dup_cstring(&state->buf);
             *haseq = 1;
             INC(1);
             return 0;
@@ -129,7 +120,7 @@ static int _parse_param_key(struct vparse_state *state, int *haseq)
         case ';': /* vcard 2.1 parameter with no value */
         case ':':
             if (state->barekeys) {
-                state->param->name = buf_dup_lcstring(&state->buf);
+                state->param->name = buf_dup_cstring(&state->buf);
             }
             else {
                 state->param->name = strdup("type");
@@ -299,19 +290,19 @@ static int _parse_entry_key(struct vparse_state *state)
     while (*state->p) {
         switch (*state->p) {
         case ':':
-            state->entry->name = buf_dup_lcstring(&state->buf);
+            state->entry->name = buf_dup_cstring(&state->buf);
             INC(1);
             return 0;
 
         case ';':
-            state->entry->name = buf_dup_lcstring(&state->buf);
+            state->entry->name = buf_dup_cstring(&state->buf);
             INC(1);
             return _parse_entry_params(state);
 
         case '.':
             if (state->entry->group)
                 return PE_ENTRY_MULTIGROUP;
-            state->entry->group = buf_dup_lcstring(&state->buf);
+            state->entry->group = buf_dup_cstring(&state->buf);
             INC(1);
             break;
 
@@ -397,7 +388,7 @@ out:
 
 static int _parse_entry_value(struct vparse_state *state)
 {
-    if (state->multival && strarray_find(state->multival, state->entry->name, 0) >= 0)
+    if (state->multival && strarray_find_case(state->multival, state->entry->name, 0) >= 0)
         return _parse_entry_multivalue(state);
 
     NOTESTART();
@@ -535,7 +526,7 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
         r = _parse_entry(state);
         if (r) return r;
 
-        if (!strcmp(state->entry->name, "begin")) {
+        if (!strcasecmp(state->entry->name, "begin")) {
             /* shouldn't be any params */
             if (state->entry->params) {
                 state->itemstart = entrystart;
@@ -550,7 +541,6 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
 
             MAKE(sub, vparse_card);
             sub->type = strdup(state->entry->v.value);
-            LC(sub->type);
             _free_entry(state->entry);
             state->entry = NULL;
             /* we must stitch it in first, because state won't hold it */
@@ -560,7 +550,7 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
             if (r) return r;
             if (only_one) return 0;
         }
-        else if (!strcmp(state->entry->name, "end")) {
+        else if (!strcasecmp(state->entry->name, "end")) {
             /* shouldn't be any params */
             if (state->entry->params) {
                 state->itemstart = entrystart;
@@ -571,6 +561,12 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
             if (state->entry->multivalue) {
                 state->itemstart = entrystart;
                 return PE_BEGIN_PARAMS;
+            }
+
+            if (!card->type) {
+                /* no type means we're at the top level, haven't seen a BEGIN! */
+                state->itemstart = cardstart;
+                return PE_MISMATCHED_CARD;
             }
 
             if (strcasecmp(state->entry->v.value, card->type)) {
@@ -741,7 +737,7 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
     buf_putc(tgt->buf, ' ');
 }
 
-static void _value_to_tgt(const char *value, struct vparse_target *tgt)
+static void _value_to_tgt(const char *value, struct vparse_target *tgt, int is_multival)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
@@ -754,13 +750,15 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt)
             buf_putc(tgt->buf, 'n');
             break;
         case ';':
+            if (is_multival) break;
+            /* or fall through */
         case ',':
         case '\\':
             buf_putc(tgt->buf, '\\');
-            buf_putc(tgt->buf, *value);
-            break;
+            /* fall through */
         default:
             buf_putc(tgt->buf, *value);
+            break;
         }
     }
 }
@@ -795,7 +793,8 @@ static void _key_to_tgt(const char *key, struct vparse_target *tgt)
     /* uppercase keys */
     for (; *key; key++) {
         _checkwrap(*key, tgt);
-        buf_putc(tgt->buf, toupper(*key));
+        //buf_putc(tgt->buf, toupper(*key));
+        buf_putc(tgt->buf, *key);
     }
 }
 
@@ -847,11 +846,11 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         int i;
         for (i = 0; i < entry->v.values->count; i++) {
             if (i) buf_putc(tgt->buf, ';');
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, 1);
         }
     }
     else {
-        _value_to_tgt(entry->v.value, tgt);
+        _value_to_tgt(entry->v.value, tgt, 0);
     }
 
     _endline(tgt);

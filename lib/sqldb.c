@@ -266,8 +266,8 @@ static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd)
     /* prepare new statement */
     int rc = sqlite3_prepare_v2(open->db, cmd, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
-        syslog(LOG_ERR, "sqldb_exec(%s) prepare: %s",
-               open->fname, sqlite3_errmsg(open->db));
+        syslog(LOG_ERR, "sqldb_exec(%s) prepare <%s>: %s",
+               open->fname, cmd, sqlite3_errmsg(open->db));
         return NULL;
     }
     ptrarray_append(&open->stmts, stmt);
@@ -393,6 +393,11 @@ EXPORTED int sqldb_writeabort(sqldb_t *open)
 EXPORTED int sqldb_lastid(sqldb_t *open)
 {
     return sqlite3_last_insert_rowid(open->db);
+}
+
+EXPORTED int sqldb_changes(sqldb_t *open)
+{
+    return sqlite3_changes(open->db);
 }
 
 EXPORTED int sqldb_close(sqldb_t **dbp)

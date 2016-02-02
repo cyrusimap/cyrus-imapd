@@ -129,20 +129,22 @@ static int report_card_query(struct transaction_t *txn,
                              struct meth_params *rparams,
                              xmlNodePtr inroot, struct propfind_ctx *fctx);
 
-static char *vparser_as_vcard_string_r(struct vparse_state *vparser)
+static struct buf *vparser_as_vcard_string_r(struct vparse_state *vparser)
 {
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vparser->card, &buf);
-    return buf_release(&buf);
+    struct buf *buf = buf_new();
+
+    vparse_tobuf(vparser->card, buf);
+
+    return buf;
 }
 
-static struct vparse_state *vcard_string_as_vparser(const char *str)
+static struct vparse_state *vcard_string_as_vparser(const struct buf *buf)
 {
     struct vparse_state *vparser;
     int vr;
 
     vparser = (struct vparse_state *) xzmalloc(sizeof(struct vparse_state));
-    vparser->base = str;
+    vparser->base = buf_cstring(buf);
     vparse_set_multival(vparser, "adr");
     vparse_set_multival(vparser, "org");
     vparse_set_multival(vparser, "n");
@@ -160,8 +162,8 @@ static void free_vparser(void *vparser) {
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
-      (char* (*)(void *)) &vparser_as_vcard_string_r,
-      (void * (*)(const char*)) &vcard_string_as_vparser,
+      (struct buf* (*)(void *)) &vparser_as_vcard_string_r,
+      (void * (*)(const struct buf*)) &vcard_string_as_vparser,
       (void (*)(void *)) &free_vparser, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
@@ -261,10 +263,6 @@ static const struct prop_entry carddav_props[] = {
     { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
-    /* draft-douglass-server-info */
-    { "server-info-href", NS_DAV, PROP_COLLECTION,
-      propfind_serverinfo, NULL, NULL },
-
     /* CardDAV (RFC 6352) properties */
     { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_PRESCREEN,
       propfind_addrdata, NULL, NULL },
@@ -297,16 +295,16 @@ static struct meth_params carddav_params = {
       (db_lookup_proc_t) &carddav_lookup_resource,
       (db_foreach_proc_t) &carddav_foreach,
       (db_write_proc_t) &carddav_write,
-      (db_delete_proc_t) &carddav_delete,
-      (db_delmbox_proc_t) &carddav_delmbox },
+      (db_delete_proc_t) &carddav_delete },
     NULL,                                       /* No ACL extensions */
-    &carddav_copy,
+    { CARDDAV_UID_CONFLICT, &carddav_copy },
     NULL,                                       /* No special DELETE handling */
     NULL,                                       /* No special GET handling */
-    MBTYPE_ADDRESSBOOK,
+    { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
+    NULL,                                       /* No PATCH handling */
     NULL,                                       /* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
-    carddav_props,
+    { DAV_FINITE_DEPTH, carddav_props },                       /* Disable infinite depth */
     carddav_reports
 };
 
@@ -315,16 +313,16 @@ static struct meth_params carddav_params = {
 struct namespace_t namespace_addressbook = {
     URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav", 1 /* auth */,
     MBTYPE_ADDRESSBOOK,
-#if 0 /* Until Apple Contacts fixes their add-member implementation */
-    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
-     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
-#else
     (ALLOW_READ | ALLOW_WRITE | ALLOW_DELETE |
-     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
+#if 0 /* Until Apple Contacts fixes their add-member implementation */
+     ALLOW_POST |
 #endif
+     ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CARD),
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
+    &dav_premethod,
     {
         { &meth_acl,            &carddav_params },      /* ACL          */
+        { NULL,                 NULL },                 /* BIND         */
         { &meth_copy_move,      &carddav_params },      /* COPY         */
         { &meth_delete,         &carddav_params },      /* DELETE       */
         { &meth_get_head,       &carddav_params },      /* GET          */
@@ -334,16 +332,14 @@ struct namespace_t namespace_addressbook = {
         { &meth_mkcol,          &carddav_params },      /* MKCOL        */
         { &meth_copy_move,      &carddav_params },      /* MOVE         */
         { &meth_options,        &carddav_parse_path },  /* OPTIONS      */
-#if 0 /* Until Apple Contacts fixes their add-member implementation */
+        { NULL,                 NULL },                 /* PATCH        */
         { &meth_post,           &carddav_params },      /* POST         */
-#else
-        { NULL,                 NULL },                 /* POST         */
-#endif
         { &meth_propfind,       &carddav_params },      /* PROPFIND     */
         { &meth_proppatch,      &carddav_params },      /* PROPPATCH    */
         { &meth_put,            &carddav_params },      /* PUT          */
         { &meth_report,         &carddav_params },      /* REPORT       */
         { &meth_trace,          &carddav_parse_path },  /* TRACE        */
+        { NULL,                 NULL },                 /* UNBIND       */
         { &meth_unlock,         &carddav_params }       /* UNLOCK       */
     }
 };
@@ -369,31 +365,11 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 
 #define DEFAULT_ADDRBOOK "Default"
 
-static void my_carddav_auth(const char *userid)
-{
-    int r;
-
-    if (httpd_userisadmin ||
-        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
-        /* admin or proxy from frontend - won't have DAV database */
-        return;
-    }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* proxy-only server - won't have DAV databases */
-    }
-    else {
-        /* Open CardDAV DB for 'userid' */
-        my_carddav_reset();
-        auth_carddavdb = carddav_open_userid(userid);
-        if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
-    }
-
-    /* Auto-provision an addressbook for 'userid' */
-
+EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     /* addressbook-home-set */
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+    int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (config_mupdate_server) {
             /* Find location of INBOX */
@@ -403,7 +379,7 @@ static void my_carddav_auth(const char *userid)
             r = http_mlookup(inboxname, &mbentry, NULL);
             free(inboxname);
             if (!r && mbentry->server) {
-                proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+                proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                                  &backend_cached, NULL, NULL, httpd_in);
                 mboxlist_entry_free(&mbentry);
                 goto done;
@@ -412,7 +388,7 @@ static void my_carddav_auth(const char *userid)
         }
         else r = 0;
 
-        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
+        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_ADDRESSBOOK,
                                    NULL, 0,
                                    userid, httpd_authstate,
                                    0, 0, 0, 0, NULL);
@@ -435,6 +411,28 @@ static void my_carddav_auth(const char *userid)
 
  done:
     mbname_free(&mbname);
+    return r;
+}
+
+static void my_carddav_auth(const char *userid)
+{
+    if (httpd_userisadmin || httpd_userisanonymous ||
+        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
+        /* admin, anonymous, or proxy from frontend - won't have DAV database */
+        return;
+    }
+    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* proxy-only server - won't have DAV databases */
+    }
+    else {
+        /* Open CardDAV DB for 'userid' */
+        my_carddav_reset();
+        auth_carddavdb = carddav_open_userid(userid);
+        if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
+    }
+
+    /* Auto-provision an addressbook for 'userid' */
+    carddav_create_defaultaddressbook(userid);
 }
 
 
@@ -456,140 +454,36 @@ static void my_carddav_shutdown(void)
 static int carddav_parse_path(const char *path,
                               struct request_target_t *tgt, const char **errstr)
 {
-    char *p;
-    size_t len;
-    mbname_t *mbname = NULL;
-    const char *defaul_domain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
+    int r, rights;
 
-    /* Make a working copy of target path */
-    strlcpy(tgt->path, path, sizeof(tgt->path));
-    tgt->tail = tgt->path + strlen(tgt->path);
+    r = dav_parse_path(path, tgt, namespace_addressbook.prefix,
+                       config_getstring(IMAPOPT_ADDRESSBOOKPREFIX), errstr);
+    if (r) return r;
 
-    p = tgt->path;
+    /* Set proper Allow bits based on path components and ACL of current user */
+    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
 
-    /* Sanity check namespace */
-    len = strlen(namespace_addressbook.prefix);
-    if (strlen(p) < len ||
-        strncmp(namespace_addressbook.prefix, p, len) ||
-        (path[len] && path[len] != '/')) {
-        *errstr = "Namespace mismatch request target path";
-        return HTTP_FORBIDDEN;
-    }
+    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
 
-    tgt->prefix = namespace_addressbook.prefix;
-
-    /* Default to bare-bones Allow bits for toplevel collections */
-    tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
-
-    /* Skip namespace */
-    p += len;
-    if (!*p || !*++p) return 0;
-
-    /* Check if we're in user space */
-    len = strcspn(p, "/");
-    if (!strncmp(p, "user", len)) {
-        p += len;
-        if (!*p || !*++p) return 0;
-
-        /* Get user id */
-        if (strstr(p, defaul_domain)){
-           len = strcspn(p, "@");
-           tgt->userid = xstrndup(p, len);
-           len = strcspn(p, "/");
-        }
-        else{
-            len = strcspn(p, "/");
-            tgt->userid = xstrndup(p, len);
-        }
-
-        p += len;
-        if (!*p || !*++p) goto done;
-
-        len = strcspn(p, "/");
-    }
-
-    /* Get collection */
-    tgt->collection = p;
-    tgt->collen = len;
-
-    p += len;
-    if (!*p || !*++p) {
-        /* Make sure collection is terminated with '/' */
-        if (p[-1] != '/') *p++ = '/';
-        goto done;
-    }
-
-    /* Get resource */
-    len = strcspn(p, "/");
-    tgt->resource = p;
-    tgt->reslen = len;
-
-    p += len;
-
-    if (*p) {
-//      *errstr = "Too many segments in request target path";
-        return HTTP_NOT_FOUND;
-    }
-
-  done:
-    /* Set proper Allow bits based on path components */
     if (tgt->collection) {
+        if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
+
         if (tgt->resource) {
-            tgt->allow &= ~ALLOW_WRITECOL;
-            tgt->allow |= (ALLOW_WRITE|ALLOW_DELETE);
+            if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
+            if ((rights & DACL_RMRES) == DACL_RMRES) tgt->allow |= ALLOW_DELETE;
         }
+        else {
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
-        else tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
-#else
-        else tgt->allow |= ALLOW_DELETE;
+            if (rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
 #endif
-    }
-    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
-
-
-    /* Create mailbox name from the parsed path */
-
-    mbname = mbname_from_userid(tgt->userid);
-    mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-
-    if (tgt->collen) {
-        char *val = xstrndup(tgt->collection, tgt->collen);
-        mbname_push_boxes(mbname, val);
-        free(val);
-    }
-
-    /* XXX - hack to allow @domain parts for non-domain-split users */
-    if (httpd_extradomain) {
-        /* not allowed to be cross domain */
-        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
-            return HTTP_NOT_FOUND;
-        mbname_set_domain(mbname, NULL);
-    }
-
-    const char *mboxname = mbname_intname(mbname);
-
-    if (tgt->mbentry) {
-        /* Just return the mboxname */
-        tgt->mbentry->name = xstrdup(mboxname);
-    }
-    else if (*mboxname) {
-        /* Locate the mailbox */
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
-        if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   mboxname, error_message(r));
-            *errstr = error_message(r);
-            mbname_free(&mbname);
-
-            switch (r) {
-            case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-            case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-            default: return HTTP_SERVER_ERROR;
-            }
+            if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+            if (rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
         }
     }
-
-    mbname_free(&mbname);
+    else if (tgt->userid) {
+        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+        if (rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
+    }
 
     return 0;
 }
@@ -617,7 +511,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
         !(vcard = vparser->card) ||
         !vcard->objects ||
         !vcard->objects->type ||
-        strcmp(vcard->objects->type, "vcard")) {
+        strcasecmp(vcard->objects->type, "vcard")) {
         txn->error.precond = CARDDAV_VALID_DATA;
         return HTTP_FORBIDDEN;
     }
@@ -630,7 +524,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcmp(name, "version")) {
+        if (!strcasecmp(name, "version")) {
             version = propval;
             if (strcmp(version, "3.0")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
@@ -638,10 +532,10 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
             }
         }
 
-        else if (!strcmp(name, "uid"))
+        else if (!strcasecmp(name, "uid"))
             uid = propval;
 
-        else if (!strcmp(name, "fn"))
+        else if (!strcasecmp(name, "fn"))
             fullname = propval;
     }
 
@@ -651,31 +545,44 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
         return HTTP_FORBIDDEN;
     }
 
+    /* Check for changed UID on existing resource */
+    carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
+    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
+        char *owner = mboxname_to_userid(cdata->dav.mailbox);
+
+        txn->error.precond = CARDDAV_UID_CONFLICT;
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX, owner,
+                   strrchr(cdata->dav.mailbox, '.')+1,
+                   cdata->dav.resource);
+        txn->error.resource = buf_cstring(&txn->buf);
+        free(owner);
+        return HTTP_FORBIDDEN;
+    }
+
     if (dupcheck) {
-        /* Check for existing vCard UID */
+        /* Check for different resource with same UID */
         carddav_lookup_uid(davdb, uid, &cdata);
+        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
+                                    strcmp(cdata->dav.resource, resource))) {
+            /* CARDDAV:no-uid-conflict */
+            char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
-        if (cdata->dav.imap_uid) {
-            /* is it the same one? */
-            if (strcmp(cdata->dav.mailbox, mailbox->name) || strcmp(cdata->dav.resource, resource)) {
-                /* CARDDAV:no-uid-conflict */
-                char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
-                txn->error.precond = CARDDAV_UID_CONFLICT;
-                assert(!buf_len(&txn->buf));
-                buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-                           namespace_addressbook.prefix, owner,
-                           strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
-                txn->error.resource = buf_cstring(&txn->buf);
-                free(owner);
-                return HTTP_FORBIDDEN;
-            }
+            txn->error.precond = CARDDAV_UID_CONFLICT;
+            assert(!buf_len(&txn->buf));
+            buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                       namespace_addressbook.prefix,
+                       USER_COLLECTION_PREFIX, owner,
+                       strrchr(cdata->dav.mailbox, '.')+1,
+                       cdata->dav.resource);
+            txn->error.resource = buf_cstring(&txn->buf);
+            free(owner);
+            return HTTP_FORBIDDEN;
         }
     }
-    else {
-        /* Check for existing vCard UID */
-        carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
-    }
+
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
         oldrecord = &record;
@@ -824,8 +731,8 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
                         name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/", namespace_addressbook.prefix,
-               fctx->req_tgt->userid);
+    buf_printf(&fctx->buf, "%s/%s/%s/", namespace_addressbook.prefix,
+               USER_COLLECTION_PREFIX, fctx->req_tgt->userid);
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
         /* Return properties for this URL */

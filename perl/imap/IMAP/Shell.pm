@@ -89,7 +89,7 @@ my %builtins = (exit =>
                 connect => 'server',
                 authenticate =>
                   [\&_sc_auth,
-                   '[-minssf N] [-maxssf N] [-mechanisms list] [user]',
+                   '[-minssf N] [-maxssf N] [-mechanisms list] [-service name] [-tlskey keyfile] [-notls] [-cafile cacertfile] [-capath cacertdir] [user]',
                    'authenticate to server'],
                 auth => 'authenticate',
                 login => 'authenticate',
@@ -460,6 +460,7 @@ sub shell {
              'notls' => \$notls,
              'cafile=s' => \$cacert,
              'cadir=s' => \$capath,
+             'capath=s' => \$capath,
              'help|h' => sub { cyradm_usage(); exit(0); },
              'version|v' => sub { cyradm_version(); exit(0); }
             );
@@ -481,7 +482,7 @@ sub shell {
     $cyradm->authenticate(-authz => $authz, -user => $auth,
                           -mechanism => $mech, -password => $pw,
                           -tlskey => $tlskey, -notls => $notls,
-                          -cafile => $cacert, -cadir => $capath)
+                          -cafile => $cacert, -capath => $capath)
       or die "cyradm: cannot authenticate to server with $mech as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];
@@ -847,13 +848,17 @@ sub _sc_auth {
         next;
       }
       if ($opt ne '' && '-cadir' =~ /^\Q$opt/ || $opt eq '--cadir') {
-        $want = '-cadir';
+        $want = '-capath';
+        next;
+      }
+      if ($opt ne '' && '-capath' =~ /^\Q$opt/ || $opt eq '--capath') {
+        $want = '-capath';
         next;
       }
       if ($opt =~ /^-/) {
         die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
-            "                    [-service name] [-tlskey keyfile] [-notls] [user]\n".
-            "                    [-cafile cacertfile] [-cadir cacertdir]\n".
+            "                    [-service name] [-tlskey keyfile] [-notls]\n".
+            "                    [-cafile cacertfile] [-capath cacertdir]\n".
             "                    [user]\n";
       }
     }
@@ -870,8 +875,8 @@ sub _sc_auth {
   if (@nargv > 1) {
     if (Cyrus::IMAP::havetls()) {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
-          "                    [-service name] [-tlskey keyfile] [-notls] [user]\n".
-          "                    [-cafile cacertfile] [-cadir cacertdir]\n".
+          "                    [-service name] [-tlskey keyfile] [-notls]\n".
+          "                    [-cafile cacertfile] [-capath cacertdir]\n".
           "                    [user]\n";
     } else {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
@@ -1734,11 +1739,11 @@ forms and GNU-style long option forms.
 
 =over 4
 
-=item C<authenticate> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [I<user>]
+=item C<authenticate> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [C<--service> I<name>] [C<--tlskey> I<keyfile>] [C<--notls>] [C<--cafile> I<cacertfile>] [C<--capath> I<cacertdir>] [I<user>]
 
-=item C<auth> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [I<user>]
+=item C<auth> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [C<--service> I<name>] [C<--tlskey> I<keyfile>] [C<--notls>] [C<--cafile> I<cacertfile>] [C<--capath> I<cacertdir>] [I<user>]
 
-=item C<login> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [I<user>]
+=item C<login> [C<--minssf> I<N>] [C<--maxssf> I<N>] [C<--mechanisms> I<list>] [C<--service> I<name>] [C<--tlskey> I<keyfile>] [C<--notls>] [C<--cafile> I<cacertfile>] [C<--capath> I<cacertdir>] [I<user>]
 
 Authenticate to server.  You must already be connected to a server and
 Cyrus imapd will refuse to allow you to re-authenticate once you have

@@ -58,6 +58,7 @@
 #include "acl.h"
 #include "assert.h"
 #include "mailbox.h"
+#include "notify.h"
 #include "message.h"
 #include "append.h"
 #include "global.h"
@@ -79,7 +80,10 @@
 #include "message_guid.h"
 #include "strarray.h"
 #include "conversations.h"
+
+#if defined ENABLE_OBJECTSTORE
 #include "objectstore.h"
+#endif
 
 struct stagemsg {
     char fname[1024];
@@ -152,9 +156,9 @@ done:
  * when you commit or abort, the mailbox is closed
  */
 EXPORTED int append_setup(struct appendstate *as, const char *name,
-                 const char *userid, struct auth_state *auth_state,
+                 const char *userid, const struct auth_state *auth_state,
                  long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                 struct namespace *namespace, int isadmin, enum event_type  event_type)
+                 const struct namespace *namespace, int isadmin, enum event_type  event_type)
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -177,9 +181,9 @@ EXPORTED int append_setup(struct appendstate *as, const char *name,
  * Requires as write locked mailbox (of course)
  */
 EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
-                               const char *userid, struct auth_state *auth_state,
+                               const char *userid, const struct auth_state *auth_state,
                                long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                               struct namespace *namespace, int isadmin,
+                               const struct namespace *namespace, int isadmin,
                                enum event_type event_type)
 {
     int r;
@@ -221,6 +225,10 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     as->mboxevents = NULL;
 
     as->mailbox = mailbox;
+
+    if (config_getswitch(IMAPOPT_OUTBOX_SENDLATER)) {
+        as->isoutbox = mboxname_isoutbox(mailbox->name);
+    }
 
     return 0;
 }
@@ -834,10 +842,12 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     struct index_record record;
     const char *fname;
     int i, r;
-    int in_object_storage = 0;
     strarray_t *newflags = NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
+#if defined ENABLE_OBJECTSTORE
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -920,9 +930,8 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     /* should we archive it straight away? */
-    if (mailbox_should_archive(mailbox, &record, NULL)) {
+    if (mailbox_should_archive(mailbox, &record, NULL))
         record.system_flags |= FLAG_ARCHIVED;
-    }
 
     /* Create message file */
     as->nummsg++;
@@ -956,23 +965,38 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         flags = newflags;
     }
 
-    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)) {
     /* straight to archive? */
+    int in_object_storage = 0;
+#if defined ENABLE_OBJECTSTORE
+    if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED)
+    {
         if (!record.internaldate)
             record.internaldate = time(NULL);
-        if (mailbox_should_archive(mailbox, &record, NULL)){
-            r = objectstore_put(mailbox, &record, fname) ;
-            if (!r){
-                // file in object store now; must delete local copy
-                record.system_flags |= FLAG_ARCHIVED;
-                in_object_storage = 1 ;
-            }
+        r = objectstore_put(mailbox, &record, fname);
+        if (!r) {
+            // file in object store now; must delete local copy
+            in_object_storage = 1;
+        }
+        else {
+            // didn't manage to store it, so remove the ARCHIVED flag
+            record.system_flags &= ~FLAG_ARCHIVED;
         }
     }
+#endif
 
     /* Handle flags the user wants to set in the message */
     if (flags) {
         r = append_apply_flags(as, mboxevent, &record, flags);
+        if (r) {
+            syslog(LOG_ERR, "Annotation callout failed to apply flags %s", error_message(r));
+            goto out;
+        }
+    }
+
+    if (as->isoutbox) {
+        char num[10];
+        snprintf(num, 10, "%u", record.uid);
+        r = notify_at(record.internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
         if (r) goto out;
     }
 
@@ -980,9 +1004,8 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     r = mailbox_append_index_record(mailbox, &record);
     if (r) goto out;
 
-
-    if (in_object_storage){  // must delete local file
-        if (unlink(fname) != 0) // unlink shoud do it.
+    if (in_object_storage) {  // must delete local file
+        if (unlink(fname) != 0) // unlink should do it.
             if (!remove (fname))  // we must insist
                 syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
     }
@@ -997,14 +1020,20 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
                                     as->userid, as->auth_state);
             r = annotate_state_store(astate, user_annots);
         }
-        if (r) goto out;
+        if (r) {
+            syslog(LOG_ERR, "Annotation callout failed to apply user annots %s", error_message(r));
+            goto out;
+        }
         if (system_annots) {
             /* pretend to be admin to avoid ACL checks */
             annotate_state_set_auth(astate, /*isadmin*/1,
                                     as->userid, as->auth_state);
             r = annotate_state_store(astate, system_annots);
         }
-        if (r) goto out;
+        if (r) {
+            syslog(LOG_ERR, "Annotation callout failed to apply system annots %s", error_message(r));
+            goto out;
+        }
     }
 out:
     if (newflags)
@@ -1179,7 +1208,12 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     record->system_flags &= (FLAG_SEEN | FLAGS_INTERNAL);
     memset(&record->user_flags, 0, sizeof(record->user_flags));
     r = append_apply_flags(as, NULL, record, flags);
-    if (r) goto out;
+    if (r) {
+        syslog(LOG_ERR, "Setting flags from annotator "
+                        "callout failed (%s)",
+                        error_message(r));
+        goto out;
+    }
 
     r = mailbox_get_annotate_state(as->mailbox, record->uid, &astate);
     if (r) goto out;
@@ -1187,7 +1221,12 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         annotate_state_set_auth(astate, as->isadmin,
                                 as->userid, as->auth_state);
         r = annotate_state_store(astate, user_annots);
-        if (r) goto out;
+        if (r) {
+            syslog(LOG_ERR, "Setting user annnotations from annotator "
+                            "callout failed (%s)",
+                            error_message(r));
+            goto out;
+        }
     }
     if (system_annots) {
         /* pretend to be admin to avoid ACL checks */
@@ -1195,7 +1234,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
                                 as->userid, as->auth_state);
         r = annotate_state_store(astate, system_annots);
         if (r) {
-            syslog(LOG_ERR, "Setting annnotations from annotator "
+            syslog(LOG_ERR, "Setting system annnotations from annotator "
                             "callout failed (%s)",
                             error_message(r));
             goto out;
@@ -1229,7 +1268,10 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     struct index_record record;
     char *srcfname = NULL;
     char *destfname = NULL;
-    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+    int object_storage_enabled = 0 ;
+#if defined ENABLE_OBJECTSTORE
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
     int r = 0;
     int userflag;
     int i;
@@ -1307,14 +1349,18 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         srcfname = xstrdup(mailbox_record_fname(mailbox, &records[msg]));
         destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
 
-
         if (!(object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED))   // if object storage do not move file
            r = mailbox_copyfile(srcfname, destfname, nolink);
 
         if (r) goto out;
 
-        if (object_storage_enabled) {
+        if (object_storage_enabled)
             r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
+
+        if (as->isoutbox) {
+            char num[10];
+            snprintf(num, 10, "%u", record.uid);
+            r = notify_at(record.internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
             if (r) goto out;
         }
 

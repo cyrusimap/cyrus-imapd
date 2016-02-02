@@ -81,7 +81,7 @@ char TZIDPrefixExpanded[1024];
    since otherwise RDATEs are more efficient. Actually, I've set this high
    so we only use RRULEs for infinite recurrences. Since expanding RRULEs is
    very time-consuming, this seems sensible. */
-#define MIN_RRULE_OCCURRENCES   3
+#define MIN_RRULE_OCCURRENCES   2
 
 
 /* The year we go up to when dumping the list of timezone changes (used
@@ -681,6 +681,8 @@ output_zone_to_files            (ZoneData       *zone,
   for (i = 0; i < zone->zone_line_data->len; i++) {
     zone_line = &g_array_index (zone->zone_line_data, ZoneLineData, i);
 
+    if (i == 0) start.is_infinite = (zone_line->rules == NULL);
+
     /* This is the local standard time offset from GMT for this period. */
     start.stdoff = stdoff = zone_line->stdoff_seconds;
     start.walloff = walloff = stdoff + zone_line->save_seconds;
@@ -830,6 +832,8 @@ add_rule_changes                        (ZoneLineData   *zone_line,
 
 
   for (i = 0; i < rule_array->len; i++) {
+    int r;
+
     rule = &g_array_index (rule_array, RuleData, i);
 
     is_daylight = rule->save_seconds != 0 ? TRUE : FALSE;
@@ -847,8 +851,9 @@ add_rule_changes                        (ZoneLineData   *zone_line,
     vzictime.is_infinite = (rule->to_year == YEAR_MAXIMUM) ? TRUE : FALSE;
 
     /* If the rule time is before or on the given start time, skip it. */
-    if (compare_times (&vzictime, stdoff, walloff,
-                       start, prev_stdoff, prev_walloff) <= 0) {
+    r = compare_times (&vzictime, stdoff, walloff,
+                       start, prev_stdoff, prev_walloff);
+    if (r <= 0) {
       /* Our next rule may start while this one is in effect
          so we keep track of its name.
 
@@ -857,7 +862,20 @@ add_rule_changes                        (ZoneLineData   *zone_line,
       found_start_letter_s = TRUE;
       *start_letter_s = rule->letter_s;
 
-      continue;
+      if (r == 0 && vzictime.time_code != start->time_code) {
+        /* Rule time is on the given start time.
+           We want to keep the rule time (for the time_code) but we need to
+           adjust the time to be based on the last change before this period */
+        if (vzictime.time_code == TIME_WALL) {
+          /* Adjust for rule possibly starting during DST */
+          vzictime.time_seconds += prev_walloff - walloff;
+        }
+        else if (vzictime.time_code == TIME_STANDARD) {
+          /* Adjust for rule possibly starting at UTC change */
+          vzictime.time_seconds += prev_stdoff - stdoff;
+        }
+      }
+      else continue;
     }
 
     /* If the previous Rule was a daylight Rule, then we may want to use the
@@ -900,6 +918,13 @@ add_rule_changes                        (ZoneLineData   *zone_line,
     /* Now that we have added the Rule, the new walloff comes into effect
        for any following Rules. */
     walloff = vzictime.walloff;
+  }
+
+  /* If last Rule is terminating, flag it */
+  if (end->year == YEAR_MAXIMUM &&
+      rule->to_year >= 2037 && rule->to_year < YEAR_MAXIMUM) {
+    VzicTime *v = &g_array_index (changes, VzicTime, changes->len - 1);
+    v->until = v;
   }
 
   return found_start_letter_s;
@@ -1126,6 +1151,20 @@ output_zone_components                  (FILE           *fp,
 
   fprintf (fp, "BEGIN:VTIMEZONE\r\nTZID:%s%s\r\n", TZIDPrefixExpanded, name);
 
+  vzictime = &g_array_index (changes, VzicTime, changes->len - 1);
+  if (vzictime->until) {
+    /* Add TZUNTIL */
+    VzicTime until = *vzictime->until;
+
+    until.time_seconds++;  /* TZUNTIL is exclusive */
+    calculate_actual_time(&until, TIME_UNIVERSAL,
+                          until.prev_stdoff, until.prev_walloff);
+    fprintf (fp, "TZUNTIL:%sZ\r\n", format_time(until.year, until.month,
+                                                until.day_number,
+                                                until.time_seconds));
+    vzictime->until = NULL;
+  }
+
   if (zone_desc) {
     /* Add COMMENT */
     fprintf (fp, "COMMENT:[%.2s] ", zone_desc->country_code);
@@ -1166,8 +1205,11 @@ output_zone_components                  (FILE           *fp,
 
   /* We use an 'X-' property to place the proleptic tzname in. */
   vzictime = &g_array_index (changes, VzicTime, 0);
-  if (vzictime->tzname)
-    fprintf( fp, "X-PROLEPTIC-TZNAME:%s\r\n", vzictime->tzname);
+  if (vzictime->tzname) {
+    fputs("X-PROLEPTIC-TZNAME", fp);
+    if (!vzictime->is_infinite) fputs(";X-NO-BIG-BANG=TRUE", fp);
+    fprintf(fp, ":%s\r\n", vzictime->tzname);
+  }
 
   /* We try to find any recurring components first, or they may get output
      as lots of RDATES instead. */
@@ -1340,6 +1382,7 @@ set_previous_offsets            (GArray         *changes)
 
     if (vzictime->stdoff == prev_vzictime->stdoff &&
         vzictime->walloff == prev_vzictime->walloff &&
+        vzictime->time_code == prev_vzictime->time_code &&
         !strcmp(vzictime->tzname, prev_vzictime->tzname)) {
       /* Ignore no-op transitions */
       vzictime->output = TRUE;
@@ -1552,10 +1595,15 @@ check_for_rdates                (FILE           *fp,
     calculate_actual_time (&tmp_vzictime, TIME_WALL, vzictime->prev_stdoff,
                            vzictime->prev_walloff);
 
-    fprintf (fp, "RDATE:%s\r\n", format_time (tmp_vzictime.year,
-                                            tmp_vzictime.month,
-                                            tmp_vzictime.day_number,
-                                            tmp_vzictime.time_seconds));
+    fputs ("RDATE", fp);
+    if (vzictime->time_code != TIME_WALL) {
+      fprintf (fp, ";X-OBSERVED-AT=%c",
+               vzictime->time_code == TIME_UNIVERSAL ? 'Z' : 'S');
+    }
+    fprintf (fp, ":%s\r\n", format_time (tmp_vzictime.year,
+                                         tmp_vzictime.month,
+                                         tmp_vzictime.day_number,
+                                         tmp_vzictime.time_seconds));
 
     vzictime->output = TRUE;
   }
@@ -1591,7 +1639,7 @@ output_component_start                  (char           *buffer,
   char line1[1024], line2[1024], line3[1024];
   char line4[1024], line5[1024], line6[1024];
   VzicTime tmp_vzictime;
-  int prev_walloff;
+  int prev_walloff, n;
 
   is_daylight = (vzictime->stdoff != vzictime->walloff) ? TRUE : FALSE;
 
@@ -1624,7 +1672,12 @@ output_component_start                  (char           *buffer,
   formatted_time = format_time (tmp_vzictime.year, tmp_vzictime.month,
                                 tmp_vzictime.day_number,
                                 tmp_vzictime.time_seconds);
-  sprintf (line5, "DTSTART:%s\r\n", formatted_time);
+  n = sprintf (line5, "DTSTART");
+  if (vzictime->time_code != TIME_WALL) {
+    n += sprintf (line5+n, ";X-OBSERVED-AT=%c",
+                  vzictime->time_code == TIME_UNIVERSAL ? 'Z' : 'S');
+  }
+  sprintf (line5+n, ":%s\r\n", formatted_time);
 #if 0  /* The RDATE matching DTSTART is unnecessary */
   if (output_rdate)
     sprintf (line6, "RDATE:%s\r\n", formatted_time);
@@ -1729,7 +1782,12 @@ calculate_actual_time           (VzicTime       *vzictime,
 
     vzictime->day_code = DAY_SIMPLE;
 
-    if (vzictime->day_number <= 0 || vzictime->day_number > days_in_month) {
+    if (vzictime->day_number > days_in_month) {
+      vzictime->month++;
+      vzictime->day_number -= days_in_month;
+    }
+
+    if (vzictime->day_number <= 0) {
       fprintf (stderr, "Day overflow: %i\n", vzictime->day_number);
       exit (1);
     }
