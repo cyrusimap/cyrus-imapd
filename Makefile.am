@@ -244,7 +244,7 @@ if BACKUP
 noinst_LTLIBRARIES += backup/libcyrus_backup.la
 noinst_HEADERS += backup/backup.h
 libexec_PROGRAMS += backup/backupd
-sbin_PROGRAMS += backup/ctl_backups
+sbin_PROGRAMS += backup/ctl_backups backup/cyr_backup
 endif # BACKUP
 
 if HAVE_SSL
@@ -830,6 +830,11 @@ backup_ctl_backups_SOURCES = \
     imap/sync_support.h \
     backup/ctl_backups.c
 backup_ctl_backups_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+
+backup_cyr_backup_SOURCES = \
+    imap/mutex_fake.c \
+    backup/cyr_backup.c
+backup_cyr_backup_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
