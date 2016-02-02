@@ -343,26 +343,36 @@ const char backup_index_message_insert_sql[] = QUOTE(
 );
 
 #define MESSAGE_SELECT_FIELDS QUOTE(                    \
-    id, guid, partition, chunk_id, offset, size         \
+    m.id, guid, partition, chunk_id, offset, size       \
 )
 
 const char backup_index_message_select_all_sql[] =
     "SELECT " MESSAGE_SELECT_FIELDS
-    " FROM message"
+    " FROM message AS m"
     " ORDER BY id"
     ";"
 ;
 
 const char backup_index_message_select_guid_sql[] =
     "SELECT " MESSAGE_SELECT_FIELDS
-    " FROM message"
+    " FROM message AS m"
     " WHERE guid = :guid"
     ";"
 ;
 
 const char backup_index_message_select_chunkid_sql[] =
     "SELECT " MESSAGE_SELECT_FIELDS
-    " FROM message"
+    " FROM message AS m"
+    " WHERE chunk_id = :chunk_id"
+    ";"
+;
+
+const char backup_index_message_select_live_chunkid_sql[] =
+    "SELECT " MESSAGE_SELECT_FIELDS
+    " FROM message AS m"
+    " JOIN mailbox_message AS mm"
+    " ON m.id = mm.message_id"
+    "  AND (mm.expunged IS NULL OR mm.expunged > :since)"
     " WHERE chunk_id = :chunk_id"
     ";"
 ;

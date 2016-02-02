@@ -243,7 +243,8 @@ void backup_message_free(struct backup_message **message);
 
 typedef int (*backup_message_foreach_cb)(const struct backup_message *message,
                                          void *rock);
-int backup_message_foreach(struct backup *backup, int chunk_id,
+int backup_message_foreach(struct backup *backup,
+                           int chunk_id, const time_t *sincep,
                            backup_message_foreach_cb cb, void *rock);
 
 

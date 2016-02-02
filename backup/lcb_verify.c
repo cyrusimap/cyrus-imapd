@@ -318,8 +318,8 @@ static int verify_chunk_messages(struct backup *backup, struct backup_chunk *chu
 
     r = gzuc_member_start_from(gzuc, chunk->offset);
     if (!r) {
-        r = backup_message_foreach(backup, chunk->id, _verify_message_cb,
-                                   &vmrock);
+        r = backup_message_foreach(backup, chunk->id, NULL,
+                                   _verify_message_cb, &vmrock);
         gzuc_member_end(gzuc, NULL);
     }
 

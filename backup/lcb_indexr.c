@@ -671,19 +671,35 @@ EXPORTED struct backup_message *backup_get_message(struct backup *backup,
     return bm;
 }
 
-EXPORTED int backup_message_foreach(struct backup *backup, int chunk_id,
+EXPORTED int backup_message_foreach(struct backup *backup,
+                                    int chunk_id, const time_t *sincep,
                                     backup_message_foreach_cb cb, void *rock)
 {
+    const char *sql = NULL;
+
     struct sqldb_bindval bval[] = {
         { ":chunk_id",  SQLITE_INTEGER, { .i = chunk_id } },
+        { ":since",     SQLITE_NULL,    { .s = NULL } },
         { NULL,         SQLITE_NULL,    { .s = NULL } },
     };
 
     struct message_row_rock mrock = { cb, rock, NULL };
 
-    const char *sql = chunk_id ?
-        backup_index_message_select_chunkid_sql :
-        backup_index_message_select_all_sql;
+    if (chunk_id) {
+        if (sincep) {
+            struct sqldb_bindval *since_bval = &bval[1];
+            assert(strcmp(since_bval->name, ":since") == 0);
+            since_bval->type = SQLITE_INTEGER;
+            since_bval->val.i = *sincep;
+            sql = backup_index_message_select_live_chunkid_sql;
+        }
+        else {
+            sql = backup_index_message_select_chunkid_sql;
+        }
+    }
+    else {
+        sql = backup_index_message_select_all_sql;
+    }
 
     return sqldb_exec(backup->db, sql, bval, _message_row_cb, &mrock);
 }
