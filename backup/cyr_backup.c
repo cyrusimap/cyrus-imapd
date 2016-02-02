@@ -193,6 +193,8 @@ int main(int argc, char **argv)
     const char *backup_name = NULL;
     const char *command = NULL;
     const char *subcommand = NULL;
+    struct backup *backup = NULL;
+    mbname_t *mbname = NULL;
     int i, opt, r = 0;
 
     while ((opt = getopt(argc, argv, "C:fmuv")) != EOF) {
@@ -276,14 +278,41 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "cyr_backup", 0, 0);
 
-    // FIXME open backup
-    (void) backup_name;
+    /* open backup */
+    switch (mode) {
+    case CYRBU_MODE_FILENAME:
+        r = backup_open_paths(&backup, backup_name, NULL,
+                              BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+        break;
+    case CYRBU_MODE_MBOXNAME:
+        mbname = mbname_from_intname(backup_name);
+        if (!mbname) usage();
+        r = backup_open(&backup, mbname,
+                        BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+        break;
+    case CYRBU_MODE_USERNAME:
+        mbname = mbname_from_userid(backup_name);
+        if (!mbname) usage();
+        r = backup_open(&backup, mbname,
+                        BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+        break;
+    default:
+        usage();
+        break;
+    }
 
-    if (cmd_func[cmd])
-        r = cmd_func[cmd](NULL, &options);
+    /* run command */
+    if (!r && cmd_func[cmd])
+        r = cmd_func[cmd](backup, &options);
 
-    // FIXME close backup
+    if (r)
+        fprintf(stderr, "%s: %s\n", backup_name, error_message(r));
 
+    /* close backup */
+    if (backup)
+        backup_close(&backup);
+
+    /* clean up and exit */
     backup_cleanup_staging_path();
     cyrus_done();
 
@@ -309,11 +338,45 @@ static int cmd_list_all(struct backup *backup,
 static int cmd_list_chunks(struct backup *backup,
                            const struct cyrbu_cmd_options *options)
 {
-    // FIXME
-    (void) backup;
+    struct backup_chunk_list *chunk_list = NULL;
+    struct backup_chunk *chunk;
+
     (void) options;
-    fprintf(stderr, "%s: unimplemented\n", __func__);
-    return -1;
+
+    chunk_list = backup_get_chunks(backup);
+    if (!chunk_list) return -1;
+
+    // FIXME dedup this with lcb_printinfo.c:detail_full()
+    fprintf(stdout, "     id offset\tlength\tratio%%\tstart time           end time\n");
+    for (chunk = chunk_list->head; chunk; chunk = chunk->next) {
+        char ts_start[32] = "[unknown]";
+        char ts_end[32] = "[unknown]";
+        double ratio;
+
+        strftime(ts_start, sizeof(ts_start), "%F %T",
+                localtime(&chunk->ts_start));
+        strftime(ts_end, sizeof(ts_end), "%F %T",
+                localtime(&chunk->ts_end));
+
+        if (chunk->next) {
+            ratio = 100.0 * (chunk->next->offset - chunk->offset) / chunk->length;
+        }
+        else {
+            // FIXME need to stat the underlying file to see disk size of last chunk
+            ratio = 0.0;
+        }
+
+        fprintf(stdout, "%7d " OFF_T_FMT "\t" SIZE_T_FMT "\t%6.1f\t%s  %s\n",
+                        chunk->id,
+                        chunk->offset,
+                        chunk->length,
+                        ratio,
+                        ts_start,
+                        ts_end);
+    }
+
+    backup_chunk_list_free(&chunk_list);
+    return 0;
 }
 
 static int cmd_list_mailboxes(struct backup *backup,
