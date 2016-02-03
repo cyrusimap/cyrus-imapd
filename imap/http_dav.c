@@ -3966,13 +3966,6 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     return ret;
 }
 
-/* this is when a user tries to delete a mailbox that they don't own, and don't
- * have permission to delete */
-static int remove_user_acl(const char *userid, const char *mboxname)
-{
-    return mboxlist_setacl(&httpd_namespace, mboxname, userid, /*rights*/NULL,
-                           /*isadmin*/1, httpd_userid, httpd_authstate);
-}
 
 struct delete_rock {
     struct transaction_t *txn;
@@ -4028,31 +4021,55 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
 
+    /* Special case of deleting a shared collection */
+    if (!txn->req_tgt.resource && (txn->req_tgt.flags == TGT_DAV_SHARED)) {
+        char *inboxname = mboxname_user_mbox(txn->req_tgt.userid, NULL);
+        mbentry_t *mbentry = NULL;
+
+        r = http_mlookup(inboxname, &mbentry, NULL);
+        if (r) {
+            syslog(LOG_ERR, "mlookup(%s) failed: %s",
+                   inboxname, error_message(r));
+            ret = HTTP_NOT_FOUND;
+        }
+        else if (mbentry->server) {
+            /* Remote mailbox */
+            struct backend *be;
+
+            be = proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
+                                  &backend_cached, NULL, NULL, httpd_in);
+            if (!be) ret = HTTP_UNAVAILABLE;
+            else ret = http_pipe_req_resp(be, txn);
+        }
+        else {
+            /* Local Mailbox */
+            r = mboxlist_changesub(txn->req_tgt.mbentry->name,
+                                   txn->req_tgt.userid,
+                                   httpd_authstate, 0 /* remove */, 0, 0);
+            if (r) {
+                syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
+                       txn->req_tgt.mbentry->name, txn->req_tgt.userid,
+                       error_message(r));
+                txn->error.desc = error_message(r);
+                ret = HTTP_SERVER_ERROR;
+            }
+            else ret = HTTP_NO_CONTENT;
+        }
+
+        mboxlist_entry_free(&mbentry);
+        free(inboxname);
+
+        return ret;
+    }
+
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     needrights = txn->req_tgt.resource ? DACL_RMRES : DACL_RMCOL;
-
-    if (!(rights & ACL_LOOKUP)) {
-        return HTTP_NOT_FOUND;
-    }
-
-    /* special case delete mailbox where not the owner */
-    if (!txn->req_tgt.resource &&
-        !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
-        r = remove_user_acl(httpd_userid, txn->req_tgt.mbentry->name);
-        if (r) {
-            syslog(LOG_ERR, "meth_delete(%s) failed to remove acl: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
-            txn->error.desc = error_message(r);
-            return HTTP_SERVER_ERROR;
-        }
-        return HTTP_OK;
-    }
-
     if (!(rights & needrights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = needrights;
         return HTTP_NO_PRIVS;
     }
 
