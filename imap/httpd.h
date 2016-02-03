@@ -224,6 +224,7 @@ struct request_target_t {
 /* Request target flags */
 enum {
     TGT_SERVER_INFO = 1,
+    TGT_DAV_SHARED,
     TGT_SCHED_INBOX,
     TGT_SCHED_OUTBOX,
     TGT_MANAGED_ATTACH,

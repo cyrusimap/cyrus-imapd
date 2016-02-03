@@ -583,6 +583,9 @@ EXPORTED int dav_parse_path(const char *path, struct request_target_t *tgt,
             owner = collection;
             *p++ = '\0';
             collection = p;
+
+            tgt->flags = TGT_DAV_SHARED;
+            tgt->allow |= ALLOW_DELETE;
         }
     }
 
