@@ -196,6 +196,9 @@ magic(Admin => sub {
 magic(AllowMoves => sub {
     shift->config_set('allowusermoves' => 'yes');
 });
+magic(DisconnectOnVanished => sub {
+    shift->config_set('disconnect_on_vanished_mailbox' => 'yes');
+});
 
 
 # Run any magic handlers indicated by the test name or attributes

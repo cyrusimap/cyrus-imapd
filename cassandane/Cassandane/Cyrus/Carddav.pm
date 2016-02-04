@@ -192,4 +192,22 @@ EOF
     $CardDAV->NewContact($Id, $VCard);
 }
 
+sub test_homeset_extradomain
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $talk = Net::CardDAVTalk->new(
+	user => 'cassandane%extradomain.com',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    $self->assert_str_equals("/dav/addressbooks/user/cassandane\@extradomain.com/", $talk->{basepath});
+}
+
 1;
