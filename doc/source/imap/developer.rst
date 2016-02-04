@@ -15,12 +15,12 @@ Getting Started
     developer/developer-testing
     developer/process
     developer/architecture
+    Contributing to documentation <developer/documentation>
 
 .. toctree::    
     :hidden:
     
     developer/developer-tips
-    developer/documentation
     
 Resources
 =========

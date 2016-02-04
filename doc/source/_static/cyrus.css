@@ -114,13 +114,18 @@ div.related {
 }
 
 div.related ul li a {
-    color: #1F8FC0;
+    color: white;
 }
 
 
 div.sphinxsidebar h3, div.sphinxsidebar h4 {
     background-color: #002e50;
     border: 1px solid white;
+    color: white;
+}
+
+div.sphinxsidebar h3 a {
+    color: white;
 }
 
 ol.arabic li {
@@ -176,4 +181,29 @@ p.caption {
     background-color: #f9f9f0;
     color: #0a507a;
     text-shadow: none;
+}
+
+.wy-nav-content {
+    max-width: 100%
+}
+
+.wy-nav-side {
+    background-color: #2d9dcb;
+    color: white;
+}
+
+.wy-nav-side li a {
+    color: white;
+}
+
+.wy-side-nav-search {
+    background-color: #2d9dcb;
+}
+
+
+.wy-side-nav-search img {
+    border-radius: initial;
+    width: 80%;
+    height: 80%;
+    background-color: #2d9dcb;
 }
