@@ -553,42 +553,26 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
-sub test_header_comparator_ascii_casemap
+sub test_rfc5490_create
 {
     my ($self) = @_;
 
-    xlog "Testing the \"header :comparator\" syntax";
+    xlog "Testing the \"fileinto :create\" syntax";
 
     my $talk = $self->{store}->get_client();
-    $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Create the target folder";
-    my $hitfolder = "INBOX.hit";
-    my $missfolder = "INBOX.miss";
-    $talk->create($hitfolder)
-	or die "Cannot create folder \"$hitfolder\": $@";
-    $talk->create($missfolder)
-	or die "Cannot create folder \"$missfolder\": $@";
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
-    my $scriptname = 'cosbySweater';
+    my $scriptname = 'lazySusan';
     $self->install_sieve_script(<<EOF
-require ["fileinto"];
+require ["fileinto", "mailbox"];
 if header :comparator "i;ascii-casemap" :is "Subject" "quinoa"  {
-    fileinto "$hitfolder";
-}
-else {
-    fileinto "$missfolder";
+    fileinto :create "$hitfolder";
 }
 EOF
     );
-
-    my %exp;
-    $exp{$hitfolder} = {};
-    $exp{$missfolder} = {};
-    $exp{INBOX} = {};
-    my %uid;
-    map { $uid{$_} = 1; } keys %exp;
 
     my @cases = (
 	{ subject => 'quinoa', filedto => $hitfolder },
@@ -599,6 +583,8 @@ EOF
 	{ subject => 'selvage', filedto => $missfolder },
     );
 
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
     foreach my $case (@cases)
     {
 	xlog "Deliver a message with subject \"$case->{subject}\"";
@@ -606,16 +592,15 @@ EOF
 	$msg->set_attribute(uid => $uid{$case->{filedto}});
 	$uid{$case->{filedto}}++;
 	$self->{instance}->deliver($msg);
+        $exp{$case->{filedto}}->{$case->{subject}} = $msg;
+    }
 
-	xlog "Check that the message made it";
-	$exp{$case->{filedto}}->{$case->{subject}} = $msg;
-	foreach my $folder (keys %exp)
-	{
-	    $self->{store}->set_folder($folder);
-	    $self->check_messages($exp{$folder}, check_guid => 0);
-	}
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
-
 
 1;
