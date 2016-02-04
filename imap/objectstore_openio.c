@@ -150,18 +150,18 @@ static const char *mailbox_record_blobname(struct mailbox *mailbox,
     return message_guid_encode(&record->guid);
 }
 
-static struct hc_url_s *
+static struct oio_url_s *
 mailbox_openio_name (struct mailbox *mailbox, const struct index_record *record)
 {
-    struct hc_url_s *url;
+    struct oio_url_s *url;
     const char *filename = mailbox_record_blobname(mailbox, record) ;
 
-    url = hc_url_empty ();
-    hc_url_set (url, HCURL_NS, namespace);
+    url = oio_url_empty ();
+    oio_url_set (url, OIOURL_NS, namespace);
     if (account)
-        hc_url_set (url, HCURL_ACCOUNT, account);
-    hc_url_set (url, HCURL_USER, mboxname_to_userid(mailbox->name));
-    hc_url_set (url, HCURL_PATH, filename);
+        oio_url_set (url, OIOURL_ACCOUNT, account);
+    oio_url_set (url, OIOURL_USER, mboxname_to_userid(mailbox->name));
+    oio_url_set (url, OIOURL_PATH, filename);
     return url;
 }
 
@@ -169,7 +169,7 @@ int objectstore_put (struct mailbox *mailbox,
         const struct index_record *record, const char *fname)
 {
     struct oio_error_s *err = NULL;
-    struct hc_url_s *url = NULL;
+    struct oio_url_s *url = NULL;
     int rc, already_saved = 0;
 
     rc = openio_sds_lazy_init ();
@@ -183,25 +183,24 @@ int objectstore_put (struct mailbox *mailbox,
     url = mailbox_openio_name (mailbox, record);
     if (already_saved) {
         syslog(LOG_DEBUG, "OIOSDS: blob %s already uploaded for %u",
-                hc_url_get(url, HCURL_WHOLE), record->uid);
-        hc_url_pclean (&url);
+                oio_url_get(url, OIOURL_WHOLE), record->uid);
+        oio_url_pclean (&url);
         return 0;
     }
 
-    struct oio_source_s src = {
-        .autocreate = config_getswitch(IMAPOPT_OPENIO_AUTOCREATE),
-        .type = OIO_SRC_FILE,
-        .data.path = fname,
+    /* Then upload it */
+    struct oio_sds_ul_dst_s ul_dst = {
+    .url = url, .autocreate = 1, .out_size = 0, .content_id = 0,
     };
+    err = oio_sds_upload_from_file (sds, &ul_dst, fname, 0, 0);
 
-    err = oio_sds_upload_from_source (sds, url, &src);
     if (!err) {
         syslog(LOG_INFO, "OIOSDS: blob %s uploaded for %u",
-                hc_url_get(url, HCURL_WHOLE), record->uid);
+                oio_url_get(url, OIOURL_WHOLE), record->uid);
         rc = 0;
     } else {
         syslog(LOG_ERR, "OIOSDS: blob %s upload error for %u: (%d) %s",
-                hc_url_get(url, HCURL_WHOLE), record->uid,
+                oio_url_get(url, OIOURL_WHOLE), record->uid,
                 oio_error_code(err), oio_error_message(err));
         oio_error_pfree(&err);
         rc = EAGAIN;
@@ -211,7 +210,7 @@ int objectstore_put (struct mailbox *mailbox,
         delete_message_guid (mailbox, record, &count) ;
     }
 
-    hc_url_pclean (&url);
+    oio_url_pclean (&url);
     return rc;
 }
 
@@ -219,7 +218,7 @@ int objectstore_get (struct mailbox *mailbox,
         const struct index_record *record, const char *fname)
 {
     struct oio_error_s *err = NULL;
-    struct hc_url_s *url;
+    struct oio_url_s *url;
     int rc;
 
     rc = openio_sds_lazy_init ();
@@ -230,17 +229,17 @@ int objectstore_get (struct mailbox *mailbox,
     err = oio_sds_download_to_file (sds, url, fname);
     if (!err) {
         syslog(LOG_INFO, "OIOSDS: blob %s downloaded for %u",
-                hc_url_get(url, HCURL_WHOLE), record->uid);
+                oio_url_get(url, OIOURL_WHOLE), record->uid);
         rc = 0;
     } else {
         syslog(LOG_ERR, "OIOSDS: blob %s download error for %u : (%d) %s",
-                hc_url_get(url, HCURL_WHOLE), record->uid,
+                oio_url_get(url, OIOURL_WHOLE), record->uid,
                 oio_error_code(err), oio_error_message(err));
         oio_error_pfree (&err);
         rc = EAGAIN;
     }
 
-    hc_url_pclean (&url);
+    oio_url_pclean (&url);
     return rc;
 }
 
@@ -248,7 +247,7 @@ int objectstore_delete (struct mailbox *mailbox,
     const struct index_record *record)
 {
     struct oio_error_s *err;
-    struct hc_url_s *url;
+    struct oio_url_s *url;
     int rc;
 
     rc = openio_sds_lazy_init ();
@@ -261,18 +260,18 @@ int objectstore_delete (struct mailbox *mailbox,
     if (!count){
         err = oio_sds_delete (sds, url);
         if (!err) {
-            syslog(LOG_INFO, "OIOSDS: blob %s deleted for %u", hc_url_get(url, HCURL_WHOLE), record->uid);
+            syslog(LOG_INFO, "OIOSDS: blob %s deleted for %u", oio_url_get(url, OIOURL_WHOLE), record->uid);
             rc = 0;
         } else {
             syslog(LOG_ERR, "OIOSDS: blob %s delete error : [record:%u] (%d) %s",
-                    hc_url_get(url, HCURL_WHOLE), record->uid,
+                    oio_url_get(url, OIOURL_WHOLE), record->uid,
                     oio_error_code(err), oio_error_message(err));
             oio_error_pfree (&err);
             rc = EAGAIN;
         }
     }
 
-    hc_url_pclean(&url);
+    oio_url_pclean(&url);
     return rc;
 }
 
@@ -280,7 +279,7 @@ int objectstore_is_filename_in_container (struct mailbox *mailbox,
         const struct index_record *record, int *phas)
 {
     struct oio_error_s *err;
-    struct hc_url_s *url;
+    struct oio_url_s *url;
     int rc, has;
 
     assert (phas != NULL);
@@ -297,13 +296,13 @@ int objectstore_is_filename_in_container (struct mailbox *mailbox,
         *phas = has;
     } else {
         syslog(LOG_ERR, "OIOSDS: blob %s check error : [record:%u] (%d) %s",
-                hc_url_get(url, HCURL_WHOLE), record->uid,
+                oio_url_get(url, OIOURL_WHOLE), record->uid,
                 oio_error_code(err), oio_error_message(err));
         oio_error_pfree (&err);
         rc = EAGAIN;
     }
 
-    hc_url_pclean(&url);
+    oio_url_pclean(&url);
     return rc;
 }
 
