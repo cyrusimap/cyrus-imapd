@@ -3518,7 +3518,7 @@ static void add_freebusy(struct icaltimetype *recurid,
         else newfb->per.end = *end;
 
         if ((calfilter->flags & BUSYTIME_QUERY) &&
-            icaltime_compare(calfilter->start, *start)) {
+            icaltime_compare(calfilter->start, *start) > 0) {
             newfb->per.start = calfilter->start;
         }
         else newfb->per.start = *start;
