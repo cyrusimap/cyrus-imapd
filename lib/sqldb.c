@@ -155,6 +155,18 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
         return NULL;
     }
 
+    /* <http://stackoverflow.com/questions/19530419/
+     *  sqlite-efficient-way-to-drop-lots-of-rows/19536232#19536232>
+     * it's expensive and not needed here
+     */
+    rc = sqlite3_exec(open->db, "PRAGMA secure_delete = OFF;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+        syslog(LOG_ERR, "sqldb_open(%s) disable secure_delete: %s",
+               open->fname, sqlite3_errmsg(open->db));
+        _free_open(open);
+        return NULL;
+    }
+
     rc = sqlite3_exec(open->db, "PRAGMA user_version;", _version_cb, &open->version, NULL);
     if (rc != SQLITE_OK) {
         syslog(LOG_ERR, "sqldb_open(%s) get user_version: %s",
