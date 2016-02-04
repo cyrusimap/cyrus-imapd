@@ -2,7 +2,7 @@
 /* sieve.l -- sieve lexer
  * Larry Greenfield
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -179,6 +179,12 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>:zone          return ZONE;
 <INITIAL>:originalzone  return ORIGINALZONE;
 <INITIAL>:flags         return FLAGS;
+<INITIAL>mailboxexists  return MAILBOXEXISTS; /* RFC 5490 */
+<INITIAL>:create        return CREATE;
+<INITIAL>metadata       return METADATA;
+<INITIAL>metadataexists return METADATAEXISTS;
+<INITIAL>servermetadata       return SERVERMETADATA;
+<INITIAL>servermetadataexists return SERVERMETADATAEXISTS;
 <INITIAL>[ \t\n\r] ;    /* ignore whitespace */
 <INITIAL>#.* ;          /* ignore hash comments */
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracket comments */

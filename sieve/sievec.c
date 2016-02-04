@@ -195,6 +195,8 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
     sieve_register_keep(i, (sieve_callback *) &foo);
     sieve_register_imapflags(i, NULL);
     sieve_register_size(i, (sieve_get_size *) &foo);
+    sieve_register_mailboxexists(i, (sieve_get_mailboxexists *) &foo);
+    sieve_register_metadata(i, (sieve_get_metadata *) &foo);
     sieve_register_header(i, (sieve_get_header *) &foo);
     sieve_register_envelope(i, (sieve_get_envelope *) &foo);
     sieve_register_body(i, (sieve_get_body *) &foo);

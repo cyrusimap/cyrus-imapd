@@ -105,8 +105,9 @@ typedef union
  * version 0x07 scripts implemented updated INCLUDE (:once and :optional)
  * version 0x08 scripts implemented DATE and INDEX extensions
  * version 0x09 scripts implemented IMAP4FLAGS extension
+ * version 0x10 scripts implemented Mailbox and Metadata (RFC5490)
  */
-#define BYTECODE_VERSION 0x09
+#define BYTECODE_VERSION 0x10
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -149,7 +150,8 @@ enum bytecode {
     B_VACATION,         /* require vacation */
 
     B_KEEP,
-    B_FILEINTO          /* require fileinto */
+    B_FILEINTO_FLAGS,   /* legacy fileinto w/o support for :create */
+    B_FILEINTO          /* require mailbox, imap4flags, copy */
 };
 
 enum bytecode_comps {
@@ -168,7 +170,12 @@ enum bytecode_comps {
     BC_CURRENTDATE,     /* require date */
     BC_ADDRESS,
     BC_HEADER,
-    BC_HASFLAG          /* require imap4flags */
+    BC_HASFLAG,         /* require imap4flags */
+    BC_MAILBOXEXISTS,   /* require mailbox */
+    BC_METADATA,        /* require mboxmetadata */
+    BC_METADATAEXISTS,
+    BC_SERVERMETADATA,  /* require servermetadata */
+    BC_SERVERMETADATAEXISTS
 };
 
 /* currently one enum so as to help determine where values are being misused.

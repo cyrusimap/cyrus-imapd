@@ -215,6 +215,16 @@ EXPORTED void sieve_register_size(sieve_interp_t *interp, sieve_get_size *f)
     interp->getsize = f;
 }
 
+EXPORTED void sieve_register_mailboxexists(sieve_interp_t *interp, sieve_get_mailboxexists *f)
+{
+    interp->getmailboxexists = f;
+}
+
+EXPORTED void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata *f)
+{
+    interp->getmetadata = f;
+}
+
 EXPORTED void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
 {
     interp->getheader = f;

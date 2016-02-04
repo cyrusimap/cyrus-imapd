@@ -102,6 +102,8 @@ int build_sieve_interp(void)
     sieve_register_keep(interp, (sieve_callback *) &foo);
     sieve_register_imapflags(interp, NULL);
     sieve_register_size(interp, (sieve_get_size *) &foo);
+    sieve_register_mailboxexists(interp, (sieve_get_mailboxexists *) &foo);
+    sieve_register_metadata(interp, (sieve_get_metadata *) &foo);
     sieve_register_header(interp, (sieve_get_header *) &foo);
     sieve_register_envelope(interp, (sieve_get_envelope *) &foo);
     sieve_register_body(interp, (sieve_get_body *) &foo);

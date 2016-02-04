@@ -553,6 +553,76 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         if (codep == -1) return -1;
 
         break;
+
+    case MAILBOXEXISTS:
+        if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep++].op = BC_MAILBOXEXISTS;
+        /* XXX ops ? */
+        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        if (codep == -1) return -1;
+
+        break;
+
+    case METADATA:
+        if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep++].op = BC_METADATA;
+
+        /* comparator */
+        codep = bc_comparator_generate(codep, retval,
+                                       t->u.mbx.comptag,
+                                       t->u.mbx.relation,
+                                       t->u.mbx.comparator);
+        if (codep == -1) return -1;
+
+        if (!atleast(retval, codep+4)) return -1;
+        retval->data[codep++].len = t->u.mbx.extname ? (int)strlen(t->u.mbx.extname) : -1;
+        retval->data[codep++].str = t->u.mbx.extname;
+        retval->data[codep++].len = t->u.mbx.keyname ? (int)strlen(t->u.mbx.keyname) : -1;
+        retval->data[codep++].str = t->u.mbx.keyname;
+
+        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        if (codep == -1) return -1;
+
+        break;
+
+    case METADATAEXISTS:
+        if (!atleast(retval, codep+3)) return -1;
+        retval->data[codep++].op = BC_METADATAEXISTS;
+        retval->data[codep++].len = t->u.mbx.extname ? (int)strlen(t->u.mbx.extname) : -1;
+        retval->data[codep++].str = t->u.mbx.extname;
+        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        if (codep == -1) return -1;
+
+        break;
+
+    case SERVERMETADATA:
+        if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep++].op = BC_SERVERMETADATA;
+
+        /* comparator */
+        codep = bc_comparator_generate(codep, retval,
+                                       t->u.mbx.comptag,
+                                       t->u.mbx.relation,
+                                       t->u.mbx.comparator);
+        if (codep == -1) return -1;
+
+        if (!atleast(retval, codep+2)) return -1;
+        retval->data[codep++].len = t->u.mbx.keyname ? (int)strlen(t->u.mbx.keyname) : -1;
+        retval->data[codep++].str = t->u.mbx.keyname;
+
+        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        if (codep == -1) return -1;
+
+        break;
+
+    case SERVERMETADATAEXISTS:
+        if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep++].op = BC_SERVERMETADATAEXISTS;
+        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        if (codep == -1) return -1;
+
+        break;
+
     default:
         return -1;
 
@@ -687,12 +757,14 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
             case FILEINTO:
                 /* FILEINTO
+                   VALUE create
                    STRINGLIST flags
                    VALUE copy
                    STRING folder
                 */
-                if (!atleast(retval, codep+1)) return -1;
+                if (!atleast(retval, codep+2)) return -1;
                 retval->data[codep++].op = B_FILEINTO;
+                retval->data[codep++].value = c->u.f.create;
                 codep = bc_stringlist_generate(codep, retval, c->u.f.flags);
                 if(codep == -1) return -1;
                 if (!atleast(retval, codep+3)) return -1;
@@ -753,16 +825,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].len = strlen(c->u.n.method);
                 retval->data[codep++].str = c->u.n.method;
 
-                if (c->u.n.id)
-                {
-                    retval->data[codep++].len = strlen(c->u.n.id);
-                    retval->data[codep++].str = c->u.n.id;
-                }
-                else
-                {
-                    retval->data[codep++].len = -1;
-                    retval->data[codep++].str = NULL;
-                }
+                retval->data[codep++].len = c->u.n.id ? (int)strlen(c->u.n.id) : -1;
+                retval->data[codep++].str = c->u.n.id;
 
                 codep = bc_stringlist_generate(codep,retval,c->u.n.options);
                 if (codep == -1) return -1;

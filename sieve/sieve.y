@@ -89,6 +89,12 @@ struct htags {
     int relation;
 };
 
+struct mtags {
+    char *comparator;
+    int comptag;
+    int relation;
+};
+
 struct aetags {
     int index;
     int addrtag;
@@ -140,6 +146,7 @@ struct dttags {
 static char *check_reqs(sieve_script_t *script, strarray_t *sl);
 struct ftags {
     int copy;
+    int create;
     strarray_t *flags;
 };
 
@@ -151,6 +158,8 @@ static test_t *build_body(int t, struct btags *b, strarray_t *pl);
 static test_t *build_date(int t, struct dttags *dt, char *hn, strarray_t *kl);
 static test_t *build_hasflag(int t, struct htags *h,
                             strarray_t *pl);
+static test_t *build_mailboxtest(int t, struct mtags *m, const char *extname, const char *keyname, strarray_t *keylist);
+
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
 static commandlist_t *build_notify(int t, struct ntags *n);
 static commandlist_t *build_denotify(int t, struct dtags *n);
@@ -183,6 +192,9 @@ static void free_dttags(struct dttags *b);
 static struct ftags *new_ftags(void);
 static struct ftags *canon_ftags(struct ftags *f);
 static void free_ftags(struct ftags *f);
+static struct mtags *new_mtags(void);
+static struct mtags *canon_mtags(struct mtags *h);
+static void free_mtags(struct mtags *h);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl, int (*verify)(sieve_script_t*, char *));
 static int verify_mailbox(sieve_script_t*, char *s);
@@ -220,6 +232,7 @@ extern void sieverestart(FILE *f);
     struct vtags *vtag;
     struct aetags *aetag;
     struct htags *htag;
+    struct mtags *mtag;
     struct btags *btag;
     struct ntags *ntag;
     struct dtags *dtag;
@@ -244,14 +257,18 @@ extern void sieverestart(FILE *f);
 %token INCLUDE PERSONAL GLOBAL RETURN OPTIONAL ONCE
 %token COPY
 %token DATE CURRENTDATE INDEX LAST ZONE ORIGINALZONE
+%token MAILBOXEXISTS CREATE
+%token METADATA METADATAEXISTS
+%token SERVERMETADATA SERVERMETADATAEXISTS
 %token YEAR MONTH DAY JULIAN HOUR MINUTE SECOND TIME ISO8601 STD11 WEEKDAY
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
 %type <test> test
-%type <nval> comptag relcomp sizetag addrparttag addrorenv copy rtags
+%type <nval> comptag relcomp sizetag addrparttag addrorenv copy rtags creat
 %type <testl> testlist tests
 %type <htag> htags
+%type <mtag> mtags
 %type <aetag> aetags
 %type <btag> btags
 %type <vtag> vtags
@@ -690,6 +707,46 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      yyerror(parse_script, "unable to find a compatible comparator");
                                      YYERROR; }
                                  }
+        | MAILBOXEXISTS stringlist   {if (!parse_script->support.mailbox)
+                                     { yyerror(parse_script, "mailbox MUST be enabled with \"require\"");
+                                       YYERROR; }
+                                   $$ = build_mailboxtest(MAILBOXEXISTS, NULL, NULL, NULL, $2);
+                                   if ($$ == NULL) {
+                                     yyerror(parse_script, "unable to build mailbox test");
+                                     YYERROR; }
+                                 }
+        | METADATA mtags STRING STRING stringlist   {if (!parse_script->support.mboxmetadata)
+                                     { yyerror(parse_script, "mboxmetadata MUST be enabled with \"require\"");
+                                       YYERROR; }
+                                   $$ = build_mailboxtest(METADATA, $2, $3, $4, $5);
+                                   if ($$ == NULL) {
+                                     yyerror(parse_script, "unable to build metadata test");
+                                     YYERROR; }
+                                 }
+        | METADATAEXISTS STRING stringlist   {if (!parse_script->support.mboxmetadata)
+                                     { yyerror(parse_script, "mboxmetadata MUST be enabled with \"require\"");
+                                       YYERROR; }
+                                   $$ = build_mailboxtest(METADATAEXISTS, NULL, $2, NULL, $3);
+                                   if ($$ == NULL) {
+                                     yyerror(parse_script, "unable to build metadataexists test");
+                                     YYERROR; }
+                                 }
+        | SERVERMETADATA mtags STRING stringlist   {if (!parse_script->support.servermetadata)
+                                     { yyerror(parse_script, "servermetadata MUST be enabled with \"require\"");
+                                       YYERROR; }
+                                   $$ = build_mailboxtest(SERVERMETADATA, $2, NULL, $3, $4);
+                                   if ($$ == NULL) {
+                                     yyerror(parse_script, "unable to build servermetadata test");
+                                     YYERROR; }
+                                 }
+        | SERVERMETADATAEXISTS stringlist   {if (!parse_script->support.servermetadata)
+                                     { yyerror(parse_script, "servermetadata MUST be enabled with \"require\"");
+                                       YYERROR; }
+                                   $$ = build_mailboxtest(SERVERMETADATAEXISTS, NULL, NULL, NULL, $2);
+                                   if ($$ == NULL) {
+                                     yyerror(parse_script, "unable to build servermetadataexists test");
+                                     YYERROR; }
+                                 }
         | error                  { $$ = NULL; }
         ;
 
@@ -786,6 +843,29 @@ htags: /* empty */               { $$ = new_htags(); }
                                    else if ($$->index < 0) {
                                      yyerror(parse_script, "duplicate last argument"); YYERROR; }
                                    else { $$->index *= -1; } }
+        ;
+
+mtags: /* empty */               { $$ = new_mtags(); }
+        | mtags comptag          { $$ = $1;
+                                   if ($$->comptag != -1) {
+                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
+                                   else { $$->comptag = $2; } }
+        | mtags relcomp STRING { $$ = $1;
+                                   if ($$->comptag != -1) {
+                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
+                                   else { $$->comptag = $2;
+                                   $$->relation = verify_relat(parse_script, $3);
+                                   if ($$->relation==-1)
+                                     {YYERROR; /*vr called yyerror()*/ }
+                                   } }
+        | mtags COMPARATOR STRING { $$ = $1;
+                                   if ($$->comparator != NULL) {
+                         yyerror(parse_script, "duplicate comparator tag"); YYERROR; }
+                                   else if (!strcmp($3, "i;ascii-numeric") &&
+                                            !parse_script->support.i_ascii_numeric) {
+                         yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
+                                   else {
+                                     $$->comparator = $3; } }
         ;
 
 btags: /* empty */               { $$ = new_btags(); }
@@ -935,11 +1015,22 @@ copy: COPY                       { if (!parse_script->support.copy) {
                                    $$ = 1; }
         ;
 
+creat:  CREATE                   { if (!parse_script->support.mailbox) {
+                                     yyerror(parse_script, "mailbox MUST be enabled with \"require\"");
+                                     YYERROR;
+                                   }
+                                   $$ = 1; }
+        ;
+
 ftags: /* empty */               { $$ = new_ftags(); }
         | ftags copy             { $$ = $1;
                                    if ($$->copy) {
                         yyerror(parse_script, "duplicate copy tag"); YYERROR; }
                                    else { $$->copy = $2; } }
+        | ftags creat            { $$ = $1;
+                                   if ($$->create) {
+                        yyerror(parse_script, "duplicate create tag"); YYERROR; }
+                                   else { $$->create = $2; } }
         | ftags FLAGS stringlist { if (!parse_script->support.imap4flags) {
                                      yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
                                      YYERROR;
@@ -1072,6 +1163,28 @@ static test_t *build_body(int t, struct btags *b, strarray_t *pl)
     return ret;
 }
 
+static test_t *build_mailboxtest(int t, struct mtags *m,
+                                 const char *extname, const char *keyname,
+                                 strarray_t *keylist)
+{
+    test_t *ret = new_test(t);
+
+    if (ret) {
+        ret->u.mbx.extname = xstrdupnull(extname);
+        ret->u.mbx.keyname = xstrdupnull(keyname);
+        ret->u.mbx.keylist = keylist;
+        if (m) {
+            canon_mtags(m);
+            ret->u.mbx.comptag = m->comptag;
+            ret->u.mbx.relation = m->relation;
+            ret->u.mbx.comparator = xstrdup(m->comparator);
+            free_mtags(m);
+        }
+    }
+
+    return ret;
+}
+
 static commandlist_t *build_vacation(int t, struct vtags *v, char *reason)
 {
     commandlist_t *ret = new_command(t);
@@ -1145,6 +1258,7 @@ static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder)
 
     if (ret) {
         ret->u.f.copy = f->copy;
+        ret->u.f.create = f->create;
         ret->u.f.flags = f->flags; f->flags = NULL;
         if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
             ret->u.f.folder = xmalloc(5 * strlen(folder) + 1);
@@ -1239,6 +1353,32 @@ static void free_aetags(struct aetags *ae)
 {
     free(ae->comparator);
      free(ae);
+}
+
+static struct mtags *new_mtags(void)
+{
+    struct mtags *m = (struct mtags *) xmalloc(sizeof(struct mtags));
+
+    m->comptag = m->relation= -1;
+
+    m->comparator = NULL;
+
+    return m;
+}
+
+static struct mtags *canon_mtags(struct mtags *m)
+{
+    if (m->comparator == NULL) {
+        m->comparator = xstrdup("i;ascii-casemap");
+    }
+    if (m->comptag == -1) { m->comptag = IS; }
+    return m;
+}
+
+static void free_mtags(struct mtags *m)
+{
+    free(m->comparator);
+    free(m);
 }
 
 static struct htags *new_htags(void)
@@ -1459,6 +1599,7 @@ static struct ftags *new_ftags(void)
     struct ftags *f = (struct ftags *) xmalloc(sizeof(struct ftags));
 
     f->copy = 0;
+    f->create = 0;
     f->flags  = NULL;
 
     return f;

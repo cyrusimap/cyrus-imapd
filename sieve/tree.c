@@ -169,6 +169,16 @@ void free_test(test_t *t)
         free(t->u.dt.zone);
         strarray_free(t->u.dt.kl);
         break;
+
+    case MAILBOXEXISTS:
+    case METADATA:
+    case METADATAEXISTS:
+    case SERVERMETADATA:
+    case SERVERMETADATAEXISTS:
+        free(t->u.mbx.extname);
+        free(t->u.mbx.keyname);
+        if (t->u.mbx.keylist) strarray_free(t->u.mbx.keylist);
+        break;
     }
 
     free(t);

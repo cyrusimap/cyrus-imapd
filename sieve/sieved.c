@@ -556,6 +556,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
     {
         int op;
         int copy = 0;
+        int create = 0;
 
         printf("%d: ",i);
 
@@ -585,13 +586,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("REJECT {%d}%s\n", len, data);
             break;
 
-        case B_FILEINTO:/*23*/
+        case B_FILEINTO: /*24*/
+            create = ntohl(d[i++].value);
+            /* fall through */
+        case B_FILEINTO_FLAGS:/*23*/
             printf("FILEINTO FLAGS {%d}\n", ntohl(d[i].listlen));
             i=write_list(ntohl(d[i].listlen), i+1, d);
             copy = ntohl(d[i++].value);
             i = unwrap_string(d, i, &data, &len);
-            printf("              COPY(%d) FOLDER({%d}%s)\n",
-                    copy, len, data);
+            printf("              CREATE(%d) COPY(%d) FOLDER({%d}%s)\n",
+                    create, copy, len, data);
             break;
 
         case B_FILEINTO_COPY : /*19*/
@@ -599,7 +603,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
             /* fall through */
         case B_FILEINTO_ORIG: /*4*/
             i = unwrap_string(d, i, &data, &len);
-            printf("FILEINTO COPY(%d) FOLDER({%d}%s)\n",copy,len,data);
+            printf("FILEINTO COPY(%d) CREATE(%d) FOLDER({%d}%s)\n",copy,create,len,data);
             break;
 
         case B_REDIRECT: /*20*/

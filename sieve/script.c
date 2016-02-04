@@ -193,7 +193,20 @@ int script_require(sieve_script_t *s, char *req)
                (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)) {
         s->support.index = 1;
         return 1;
+    } else if (!strcmp("mailbox", req) &&
+               (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)) {
+        s->support.mailbox = 1;
+        return 1;
+    } else if (!strcmp("mboxmetadata", req) &&
+               (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)) {
+        s->support.mboxmetadata = 1;
+        return 1;
+    } else if (!strcmp("servermetadata", req) &&
+               (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)) {
+        s->support.servermetadata = 1;
+        return 1;
     }
+
     return 0;
 }
 

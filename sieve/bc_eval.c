@@ -343,7 +343,7 @@ out:
 }
 
 /* Evaluate a bytecode test */
-static int eval_bc_test(sieve_interp_t *interp, void* m,
+static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         bytecode_input_t * bc, int * ip,
                         strarray_t *workingflags, int version)
 {
@@ -370,7 +370,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 
     case BC_NOT:/*2*/
         i+=1;
-        res = eval_bc_test(interp, m, bc, &i, workingflags, version);
+        res = eval_bc_test(interp, m, sc, bc, &i, workingflags, version);
         if(res >= 0) res = !res; /* Only invert in non-error case */
         break;
 
@@ -429,7 +429,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
          * in the right place */
         for (x=0; x<list_len && !res; x++) {
             int tmp;
-            tmp = eval_bc_test(interp, m, bc, &i, workingflags, version);
+            tmp = eval_bc_test(interp, m, sc, bc, &i, workingflags, version);
             if(tmp < 0) {
                 res = tmp;
                 break;
@@ -449,7 +449,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
         /* return 1 unless you find one that isn't true, then return 0 */
         for (x=0; x<list_len && res; x++) {
             int tmp;
-            tmp = eval_bc_test(interp, m, bc, &i, workingflags, version);
+            tmp = eval_bc_test(interp, m, sc, bc, &i, workingflags, version);
             if(tmp < 0) {
                 res = tmp;
                 break;
@@ -1381,6 +1381,243 @@ envelope_err:
         free(keylist);
         break;
     }
+    case BC_MAILBOXEXISTS:/*16*/
+        res = 0;
+        i++;
+        list_len=ntohl(bc[i++].len);
+        list_end=ntohl(bc[i++].len)/4;
+
+        /* need to process all of them, to ensure our instruction pointer stays
+         * in the right place */
+        for (x=0; x<list_len && !res; x++) {
+            const char *extname;
+
+            /* this is a mailbox name in external namespace */
+            i = unwrap_string(bc, i, &extname, NULL);
+            res = interp->getmailboxexists(sc, extname);
+            if (res) break;
+        }
+
+        i = list_end; /* handle short-circuting */
+        break;
+
+    case BC_METADATA:/*17*/
+    {
+        res = 0;
+        const char *extname = NULL;
+        const char *keyname = NULL;
+        char *val = NULL;
+        i++;
+        int match=ntohl(bc[i++].value);
+        int relation=ntohl(bc[i++].value);
+        int comparator=ntohl(bc[i++].value);
+        int isReg = (match==B_REGEX);
+        int ctag = 0;
+        regex_t *reg;
+        char errbuf[100]; /* Basically unused, regexps tested at compile */
+
+        /* set up variables needed for compiling regex */
+        if (isReg)
+        {
+            if (comparator== B_ASCIICASEMAP)
+            {
+                ctag= REG_EXTENDED | REG_NOSUB | REG_ICASE;
+            }
+            else
+            {
+                ctag= REG_EXTENDED | REG_NOSUB;
+            }
+
+        }
+
+        /*find the correct comparator fcn*/
+        comp=lookup_comp(comparator, match, relation, &comprock);
+
+        if(!comp) {
+            res = SIEVE_RUN_ERROR;
+            break;
+        }
+
+        i = unwrap_string(bc, i, &extname, NULL);
+        i = unwrap_string(bc, i, &keyname, NULL);
+        /* unpack the world */
+        list_len=ntohl(bc[i++].len);
+        list_end=ntohl(bc[i++].len)/4;
+
+        interp->getmetadata(sc, extname, keyname, &val);
+
+        /* need to process all of them, to ensure our instruction pointer stays
+         * in the right place */
+        for (x=0; val && x<list_len; x++) {
+            const char *testval;
+
+            /* this is a mailbox name in external namespace */
+            i = unwrap_string(bc, i, &testval, NULL);
+
+            if (isReg) {
+                reg = bc_compile_regex(testval, ctag,
+                                       errbuf, sizeof(errbuf));
+                if (!reg) {
+                    /* Oops */
+                    free(val);
+                    res=-1;
+                    goto alldone;
+                }
+
+                res |= comp(val, strlen(val),
+                            (const char *)reg, comprock);
+                free(reg);
+            } else {
+#if VERBOSE
+                printf("%s compared to %s(from script)\n",
+                       val, testval);
+#endif
+                res |= comp(val, strlen(val),
+                            testval, comprock);
+            }
+            if (res) break;
+        }
+
+        i = list_end; /* handle short-circuting */
+        free(val);
+        break;
+    }
+
+    case BC_METADATAEXISTS:/*18*/
+    {
+        res = 1;
+        const char *extname = NULL;
+        i++;
+        i = unwrap_string(bc, i, &extname, NULL);
+        /* unpack the world */
+        list_len=ntohl(bc[i++].len);
+        list_end=ntohl(bc[i++].len)/4;
+
+        /* need to process all of them, to ensure our instruction pointer stays
+         * in the right place */
+        for (x=0; x<list_len; x++) {
+            const char *keyname = NULL;
+            char *val = NULL;
+
+            /* this is an annotation name */
+            i = unwrap_string(bc, i, &keyname, NULL);
+
+            interp->getmetadata(sc, extname, keyname, &val);
+            if (!val) res = 0;
+            free(val);
+            if (!res) break;
+        }
+
+        i = list_end; /* handle short-circuting */
+        break;
+    }
+
+    case BC_SERVERMETADATA:/*19*/
+    {
+        res = 0;
+        const char *keyname = NULL;
+        char *val = NULL;
+        i++;
+        int match=ntohl(bc[i++].value);
+        int relation=ntohl(bc[i++].value);
+        int comparator=ntohl(bc[i++].value);
+        int isReg = (match==B_REGEX);
+        int ctag = 0;
+        regex_t *reg;
+        char errbuf[100]; /* Basically unused, regexps tested at compile */
+
+        /* set up variables needed for compiling regex */
+        if (isReg)
+        {
+            if (comparator== B_ASCIICASEMAP)
+            {
+                ctag= REG_EXTENDED | REG_NOSUB | REG_ICASE;
+            }
+            else
+            {
+                ctag= REG_EXTENDED | REG_NOSUB;
+            }
+
+        }
+
+        /*find the correct comparator fcn*/
+        comp=lookup_comp(comparator, match, relation, &comprock);
+
+        if(!comp) {
+            res = SIEVE_RUN_ERROR;
+            break;
+        }
+        i = unwrap_string(bc, i, &keyname, NULL);
+        /* unpack the world */
+        list_len=ntohl(bc[i++].len);
+        list_end=ntohl(bc[i++].len)/4;
+
+        interp->getmetadata(sc, NULL, keyname, &val);
+
+        /* need to process all of them, to ensure our instruction pointer stays
+         * in the right place */
+        for (x=0; val && x<list_len; x++) {
+            const char *testval;
+
+            /* this is a mailbox name in external namespace */
+            i = unwrap_string(bc, i, &testval, NULL);
+
+            if (isReg) {
+                reg = bc_compile_regex(testval, ctag,
+                                       errbuf, sizeof(errbuf));
+                if (!reg) {
+                    /* Oops */
+                    free(val);
+                    res=-1;
+                    goto alldone;
+                }
+
+                res |= comp(val, strlen(val),
+                            (const char *)reg, comprock);
+                free(reg);
+            } else {
+#if VERBOSE
+                printf("%s compared to %s(from script)\n",
+                       val, testval);
+#endif
+                res |= comp(val, strlen(val),
+                            testval, comprock);
+            }
+            if (res) break;
+        }
+
+        i = list_end; /* handle short-circuting */
+        free(val);
+        break;
+    }
+
+    case BC_SERVERMETADATAEXISTS:/*20*/
+    {
+        res = 1;
+        /* unpack the world */
+        i++;
+        list_len=ntohl(bc[i++].len);
+        list_end=ntohl(bc[i++].len)/4;
+
+        /* need to process all of them, to ensure our instruction pointer stays
+         * in the right place */
+        for (x=0; x<list_len; x++) {
+            const char *keyname = NULL;
+            char *val = NULL;
+
+            /* this is an annotation name */
+            i = unwrap_string(bc, i, &keyname, NULL);
+
+            interp->getmetadata(sc, NULL, keyname, &val);
+            if (!val) res = 0;
+            free(val);
+            if (!res) break;
+        }
+
+        i = list_end; /* handle short-circuting */
+        break;
+    }
+
     default:
 #if VERBOSE
         printf("WERT, can't evaluate if statement. %d is not a valid command",
@@ -1470,6 +1707,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
          * require only a minimal set of changes to support any new extension.
          */
         int copy = 0;
+        int create = 0;
         strarray_t *actionflags = NULL;
 
         op=ntohl(bc[ip++].op);
@@ -1520,7 +1758,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             break;
 
-        case B_FILEINTO:/*23*/
+        case B_FILEINTO:/*24*/
+            create = ntohl(bc[ip].value);
+            ip+=1;
+
+            /* fall through */
+        case B_FILEINTO_FLAGS:/*23*/
         {
             int x;
             int list_len=ntohl(bc[ip].len);
@@ -1548,7 +1791,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         {
             ip = unwrap_string(bc, ip, &data, NULL);
 
-            res = do_fileinto(actions, data, !copy,
+            res = do_fileinto(actions, data, !copy, create,
                     actionflags ? actionflags : flagvars->var);
 
             if (res == SIEVE_RUN_ERROR)
@@ -1581,7 +1824,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             int result;
 
             ip+=1;
-            result=eval_bc_test(i, m, bc, &ip, workingvars->var, version);
+            result=eval_bc_test(i, m, sc, bc, &ip, workingvars->var, version);
 
             if (result<0) {
                 *errmsg = "Invalid test";

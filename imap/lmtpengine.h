@@ -108,7 +108,7 @@ struct addheader {
 
 struct lmtp_func {
     int (*deliver)(message_data_t *m,
-                   char *authuser, struct auth_state *authstate);
+                   char *authuser, const struct auth_state *authstate, const struct namespace *ns);
     int (*verify_user)(const mbname_t *mbname,
                        quota_t quotastorage_check, /* user must have this much storage quota left
                                            (-1 means don't care about quota) */

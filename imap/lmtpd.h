@@ -62,9 +62,8 @@ typedef struct deliver_data {
     const char *temp[2];        /* used to avoid extra indirection in
                                    getenvelope() */
 
-    const struct namespace *ns;
-
     char *authuser;             /* user who submitted message */
+    const struct namespace *ns;
     const struct auth_state *authstate;
 } deliver_data_t;
 

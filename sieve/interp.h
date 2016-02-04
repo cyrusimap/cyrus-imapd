@@ -58,6 +58,8 @@ struct sieve_interp {
     sieve_get_body *getbody;
     sieve_get_include *getinclude;
     sieve_get_fname *getfname;
+    sieve_get_mailboxexists *getmailboxexists;
+    sieve_get_metadata *getmetadata;
 
     sieve_parse_error *err;
 

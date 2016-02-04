@@ -114,6 +114,14 @@ struct Test {
             char *header_name;
             strarray_t *kl;
         } dt;
+        struct { /* it's one of the mailbox type tests */
+            char *extname;
+            char *keyname;
+            strarray_t *keylist;
+            int comptag;
+            int relation;
+            char *comparator;
+        } mbx;
     } u;
 };
 
@@ -145,6 +153,7 @@ struct Commandlist {
         struct { /* it's a fileinto action */
             char *folder;
             int copy;
+            int create;
             strarray_t *flags;
         } f;
         struct { /* it's a redirect action */

@@ -117,7 +117,7 @@ static sieve_interp_t *sieve_interp = NULL;
 
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
-                   struct auth_state *authstate);
+                   const struct auth_state *authstate, const struct namespace *ns);
 static int verify_user(const mbname_t *mbname,
                        quota_t quotastorage_check, quota_t quotamessage_check,
                        struct auth_state *authstate);
@@ -744,7 +744,7 @@ EXPORTED int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
 }
 
 int deliver(message_data_t *msgdata, char *authuser,
-            struct auth_state *authstate)
+            const struct auth_state *authstate, const struct namespace *ns)
 {
     int n, nrcpts;
     struct dest *dlist = NULL;
@@ -767,7 +767,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.content = &content;
     mydata.stage = stage;
     mydata.notifyheader = notifyheader;
-    mydata.ns = &lmtpd_namespace;
+    mydata.ns = ns;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
 

@@ -363,6 +363,145 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
         break;
     }
 
+    case BC_MAILBOXEXISTS:
+    {
+        int ret;
+
+        /* drop keylist */
+        ret = bc_stringlist_emit(fd, codep, bc);
+        if(ret < 0) return -1;
+        wrote+=ret;
+
+        break;
+    }
+    case BC_METADATA:
+    {
+        int ret;
+        int datalen;
+
+        /* Drop match type */
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+        /*now drop relation*/
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+        /*drop comparator */
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+
+        /* drop extname */
+        datalen = bc->data[(*codep)++].len;
+
+        if(write_int(fd, datalen) == -1) return -1;
+        wrote += sizeof(int);
+
+        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+        wrote += datalen;
+        ret = align_string(fd,datalen);
+        if(ret == -1) return -1;
+        wrote+=ret;
+
+        /* drop keyname */
+        datalen = bc->data[(*codep)++].len;
+
+        if(write_int(fd, datalen) == -1) return -1;
+        wrote += sizeof(int);
+
+        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+        wrote += datalen;
+        ret = align_string(fd,datalen);
+        if(ret == -1) return -1;
+        wrote+=ret;
+
+        /* drop keylist */
+        ret = bc_stringlist_emit(fd, codep, bc);
+        if(ret < 0) return -1;
+        wrote+=ret;
+
+        break;
+    }
+    case BC_METADATAEXISTS:
+    {
+        int ret;
+        int datalen;
+
+        /* drop extname */
+        datalen = bc->data[(*codep)++].len;
+
+        if(write_int(fd, datalen) == -1) return -1;
+        wrote += sizeof(int);
+
+        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+        wrote += datalen;
+        ret = align_string(fd,datalen);
+        if(ret == -1) return -1;
+        wrote+=ret;
+
+        /* drop keylist */
+        ret = bc_stringlist_emit(fd, codep, bc);
+        if(ret < 0) return -1;
+        wrote+=ret;
+
+        break;
+    }
+    case BC_SERVERMETADATA:
+    {
+        int ret;
+        int datalen;
+
+        /* Drop match type */
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+        /*now drop relation*/
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+        /*drop comparator */
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+
+        /* drop keyname */
+        datalen = bc->data[(*codep)++].len;
+
+        if(write_int(fd, datalen) == -1) return -1;
+        wrote += sizeof(int);
+
+        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+        wrote += datalen;
+        ret = align_string(fd,datalen);
+        if(ret == -1) return -1;
+        wrote+=ret;
+
+        /* drop keylist */
+        ret = bc_stringlist_emit(fd, codep, bc);
+        if(ret < 0) return -1;
+        wrote+=ret;
+
+        break;
+    }
+    case BC_SERVERMETADATAEXISTS:
+    {
+        int ret;
+
+        /* drop keylist */
+        ret = bc_stringlist_emit(fd, codep, bc);
+        if(ret < 0) return -1;
+        wrote+=ret;
+
+        break;
+    }
+
     case BC_DATE:
     case BC_CURRENTDATE:
     {
@@ -611,7 +750,12 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             break;
 
         case B_FILEINTO:
-            /* Flags Stringlist, Copy (word), Folder String */
+            /* Create (word), Flags Stringlist, Copy (word), Folder String */
+
+            /* Write create */
+            if(write_int(fd,bc->data[codep++].value) == -1)
+                return -1;
+            filelen += sizeof(int);
 
             /* Dump a stringlist of flags */
             ret = bc_stringlist_emit(fd, &codep, bc);
@@ -622,7 +766,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             /* Write Copy */
             if(write_int(fd,bc->data[codep++].value) == -1)
                 return -1;
-
             filelen += sizeof(int);
 
             /* Write string length of Folder */
