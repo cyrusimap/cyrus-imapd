@@ -8,7 +8,7 @@
     :version: 0.1
     :author: Nic Bernstein <nic@onlight.com>
 
-    :copyright: Copyright 2007-2014 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
