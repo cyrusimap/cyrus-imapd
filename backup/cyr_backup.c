@@ -354,9 +354,9 @@ static int cmd_list_chunks(struct backup *backup,
         double ratio;
 
         strftime(ts_start, sizeof(ts_start), "%F %T",
-                localtime(&chunk->ts_start));
+                 localtime(&chunk->ts_start));
         strftime(ts_end, sizeof(ts_end), "%F %T",
-                localtime(&chunk->ts_end));
+                 localtime(&chunk->ts_end));
 
         if (chunk->next) {
             ratio = 100.0 * (chunk->next->offset - chunk->offset) / chunk->length;
@@ -379,14 +379,36 @@ static int cmd_list_chunks(struct backup *backup,
     return 0;
 }
 
+static int list_mailbox_cb(const struct backup_mailbox *mailbox,
+                           void *rock)
+{
+    const struct cyrbu_cmd_options *options =
+        (const struct cyrbu_cmd_options *) rock;
+    char ts_last_appenddate[32] = "[unknown]";
+
+    (void) options;
+
+    strftime(ts_last_appenddate, sizeof(ts_last_appenddate), "%F %T",
+             localtime(&mailbox->last_appenddate));
+
+    fprintf(stdout, "%s  %s  %s\n",
+                    mailbox->uniqueid,
+                    ts_last_appenddate,
+                    mailbox->mboxname);
+
+    return 0;
+}
+
 static int cmd_list_mailboxes(struct backup *backup,
                               const struct cyrbu_cmd_options *options)
 {
-    // FIXME
-    (void) backup;
-    (void) options;
-    fprintf(stderr, "%s: unimplemented\n", __func__);
-    return -1;
+    fprintf(stdout, "%-36s  %-19s  %s\n",
+                    "uniqueid",
+                    "last append date",
+                    "mboxname");
+
+    return backup_mailbox_foreach(backup, 0, 0,
+                                  list_mailbox_cb, (void *) options);
 }
 
 static int cmd_list_messages(struct backup *backup,
