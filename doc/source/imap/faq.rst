@@ -1,8 +1,8 @@
 .. _imap-faq:
 
-==========================
-Frequently Asked Questions
-==========================
+===============================
+IMAP Frequently Asked Questions
+===============================
 
 Features
 ========

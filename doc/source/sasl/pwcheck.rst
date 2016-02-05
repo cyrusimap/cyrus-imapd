@@ -1,5 +1,5 @@
-Pwcheck
-=======
+SASL Pwcheck
+============
 
 Auxprop
 -------

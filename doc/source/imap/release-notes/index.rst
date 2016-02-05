@@ -1,6 +1,6 @@
-=========================================
-Release Notes for All Cyrus IMAP Versions
-=========================================
+==================
+IMAP Release Notes 
+==================
 
 Currently Supported Versions
 ============================

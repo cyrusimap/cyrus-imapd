@@ -1,5 +1,5 @@
-Deployment Guide
-================
+IMAP Deployment Guide
+=====================
 
 A Guide to Planning a Cyrus IMAP Deployment
 -------------------------------------------

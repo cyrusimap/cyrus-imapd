@@ -1,8 +1,8 @@
 .. _imap-admin:
 
-==============================
-Cyrus IMAP Administrator Guide
-==============================
+========================
+IMAP Administrator Guide
+========================
 
 
 

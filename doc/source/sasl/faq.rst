@@ -1,7 +1,7 @@
 .. _sasl-faq:
 
-Frequently Asked Questions
-==========================
+SASL Frequently Asked Questions
+===============================
 
 .. toctree::
     :maxdepth: 2  

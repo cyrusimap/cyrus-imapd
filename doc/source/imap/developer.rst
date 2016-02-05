@@ -1,8 +1,8 @@
 .. _imap-developer:
 
-===============
-Developer Guide
-===============
+====================
+IMAP Developer Guide
+====================
 
 Getting Started
 ================

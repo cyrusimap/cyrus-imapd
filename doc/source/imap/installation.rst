@@ -1,8 +1,8 @@
 .. _installguide:
 
-==================
-Installation Guide
-==================
+=======================
+IMAP Installation Guide
+=======================
 
 Cyrus IMAP packages are shipped with every major distribution, including
 but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific
