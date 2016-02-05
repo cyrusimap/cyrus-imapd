@@ -169,6 +169,13 @@ const char backup_index_chunk_select_latest_sql[] =
     ";"
 ;
 
+const char backup_index_chunk_select_id_sql[] =
+    "SELECT " CHUNK_SELECT_FIELDS
+    " FROM chunk"
+    " WHERE id = :id"
+    ";"
+;
+
 const char backup_index_mailbox_update_sql[] = QUOTE(
     UPDATE mailbox SET
         last_chunk_id = :last_chunk_id,

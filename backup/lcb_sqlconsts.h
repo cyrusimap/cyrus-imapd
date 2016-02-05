@@ -58,6 +58,7 @@ extern const char backup_index_end_sql[];
 extern const char backup_index_chunk_select_all_sql[];
 extern const char backup_index_chunk_select_live_sql[];
 extern const char backup_index_chunk_select_latest_sql[];
+extern const char backup_index_chunk_select_id_sql[];
 
 extern const char backup_index_mailbox_update_sql[];
 extern const char backup_index_mailbox_rename_sql[];

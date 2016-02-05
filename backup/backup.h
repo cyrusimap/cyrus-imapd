@@ -134,6 +134,7 @@ struct backup_chunk_list *backup_get_chunks(struct backup *backup);
 struct backup_chunk_list *backup_get_live_chunks(struct backup *backup,
                                                  time_t since);
 
+struct backup_chunk *backup_get_chunk(struct backup *backup, int chunk_id);
 struct backup_chunk *backup_get_latest_chunk(struct backup *backup);
 
 void backup_chunk_free(struct backup_chunk **chunkp);

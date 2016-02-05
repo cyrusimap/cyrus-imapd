@@ -816,6 +816,28 @@ EXPORTED struct backup_chunk_list *backup_get_live_chunks(struct backup *backup,
     return chunk_list;
 }
 
+EXPORTED struct backup_chunk *backup_get_chunk(struct backup *backup,
+                                               int chunk_id)
+{
+    struct backup_chunk *chunk = NULL;
+    struct _chunk_row_rock crock = { NULL, &chunk };
+
+    struct sqldb_bindval bval[] = {
+        { ":id",    SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,     SQLITE_NULL,    { .s = NULL     } },
+    };
+
+    int r = sqldb_exec(backup->db, backup_index_chunk_select_id_sql,
+                       bval, _chunk_row_cb, &crock);
+
+    if (r) {
+        if (chunk) backup_chunk_free(&chunk);
+        return NULL;
+    }
+
+    return chunk;
+}
+
 EXPORTED struct backup_chunk *backup_get_latest_chunk(struct backup *backup)
 {
     struct backup_chunk *chunk = NULL;
