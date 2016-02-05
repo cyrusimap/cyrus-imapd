@@ -194,7 +194,7 @@ static int reservefile(struct protstream *in, const char *part,
 {
     FILE *file;
     char buf[8192+1];
-    int r = 0, n;
+    int r = 0;
 
     /* XXX - write to a temporary file then move in to place! */
     *fname = dlist_reserve_path(part, /*isarchive*/0, guid);
@@ -204,7 +204,8 @@ static int reservefile(struct protstream *in, const char *part,
 
     file = fopen(*fname, "w+");
     if (!file) {
-        syslog(LOG_ERR, "IOERROR: failed to upload file %s", message_guid_encode(guid));
+        syslog(LOG_ERR,
+               "IOERROR: failed to upload file %s", message_guid_encode(guid));
         r = IMAP_IOERROR;
         /* Note: we still read the file's data from the wire,
          * to avoid losing protocol sync */
@@ -212,7 +213,7 @@ static int reservefile(struct protstream *in, const char *part,
 
     /* XXX - calculate sha1 on the fly? */
     while (size) {
-        n = prot_read(in, buf, size > 8192 ? 8192 : size);
+        size_t n = prot_read(in, buf, size > 8192 ? 8192 : size);
         if (!n) {
             syslog(LOG_ERR,
                 "IOERROR: reading message: unexpected end of file");
@@ -220,7 +221,11 @@ static int reservefile(struct protstream *in, const char *part,
             break;
         }
         size -= n;
-        if (!r) fwrite(buf, 1, n, file);
+        if (fwrite(buf, 1, n, file) != n) {
+            syslog(LOG_ERR, "IOERROR: writing to file '%s': %m", *fname);
+            r = IMAP_IOERROR;
+            break;
+        }
     }
 
     if (r)
@@ -234,6 +239,7 @@ static int reservefile(struct protstream *in, const char *part,
     }
 
     if (fsync(fileno(file)) < 0) {
+        syslog(LOG_ERR, "IOERROR: fsyncing file '%s': %m", *fname);
         r = IMAP_IOERROR;
         goto error;
     }
