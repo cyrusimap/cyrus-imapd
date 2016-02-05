@@ -56,6 +56,7 @@
 #include "lib/cyrusdb.h"
 #include "lib/exitcodes.h"
 #include "lib/gzuncat.h"
+#include "lib/map.h"
 #include "lib/strarray.h"
 
 #include "imap/global.h"
@@ -452,6 +453,13 @@ static int cmd_show_messages(struct backup *backup,
     return -1;
 }
 
+static int dump_buf(const struct buf *buf, void *rock)
+{
+    FILE *out = (FILE *) rock;
+    int r = fputs(buf_cstring(buf), out);
+    return r < 0 ? r : 0;
+}
+
 static int cmd_dump_chunk(struct backup *backup,
                           const struct cyrbu_cmd_options *options)
 {
@@ -496,9 +504,20 @@ static int cmd_dump_mailbox(struct backup *backup,
 static int cmd_dump_message(struct backup *backup,
                             const struct cyrbu_cmd_options *options)
 {
-    // FIXME
-    (void) backup;
-    (void) options;
-    fprintf(stderr, "%s: unimplemented\n", __func__);
-    return -1;
+    struct backup_message *message = NULL;
+    struct message_guid want_guid;
+    int r;
+
+    if (!message_guid_decode(&want_guid, strarray_nth(options->argv, 0)))
+        return IMAP_NOTFOUND;
+
+    message = backup_get_message(backup, &want_guid);
+    if (!message)
+        return IMAP_NOTFOUND;
+
+    r = backup_read_message_data(backup, message, dump_buf, stdout);
+
+    backup_message_free(&message);
+
+    return r;
 }
