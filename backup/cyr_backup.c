@@ -55,6 +55,7 @@
 
 #include "lib/cyrusdb.h"
 #include "lib/exitcodes.h"
+#include "lib/gzuncat.h"
 #include "lib/strarray.h"
 
 #include "imap/global.h"
@@ -454,11 +455,32 @@ static int cmd_show_messages(struct backup *backup,
 static int cmd_dump_chunk(struct backup *backup,
                           const struct cyrbu_cmd_options *options)
 {
-    // FIXME
-    (void) backup;
-    (void) options;
-    fprintf(stderr, "%s: unimplemented\n", __func__);
-    return -1;
+    struct backup_chunk *chunk = NULL;
+    struct gzuncat *gzuc = NULL;
+    int chunk_id;
+
+    chunk_id = atoi(strarray_nth(options->argv, 0));
+    if (chunk_id <= 0) return -1;
+
+    chunk = backup_get_chunk(backup, chunk_id);
+    if (!chunk) return -1;
+
+    gzuc = backup_read_start(backup);
+
+    gzuc_member_start_from(gzuc, chunk->offset);
+    while (!gzuc_member_eof(gzuc)) {
+        char buf[8192]; /* FIXME whatever */
+        ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
+        if (n <= 0)
+            break;
+
+        fwrite(buf, n, 1, stdout);
+    }
+    gzuc_member_end(gzuc, NULL);
+
+    gzuc_free(&gzuc);
+    backup_chunk_free(&chunk);
+    return 0;
 }
 
 static int cmd_dump_mailbox(struct backup *backup,
