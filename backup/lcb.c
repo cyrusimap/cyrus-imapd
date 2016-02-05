@@ -490,6 +490,11 @@ EXPORTED const char *backup_get_index_fname(const struct backup *backup)
     return backup->index_fname;
 }
 
+EXPORTED struct gzuncat *backup_read_start(struct backup *backup)
+{
+    return gzuc_new(backup->fd);
+}
+
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;

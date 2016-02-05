@@ -47,6 +47,8 @@
 #include "imap/dlist.h"
 #include "imap/mboxname.h"
 
+#include "lib/gzuncat.h"
+
 struct backup;
 
 const char *backup_get_staging_path(void);
@@ -265,6 +267,10 @@ int backup_append(struct backup *backup,
 int backup_append_end(struct backup *backup,
                       const time_t *tsp);
 int backup_append_abort(struct backup *backup);
+
+
+/* reading backup data */
+struct gzuncat *backup_read_start(struct backup *backup);
 
 
 /* miscellaneous */
