@@ -120,6 +120,13 @@ static void my_dav_reset(void);
 static void my_dav_shutdown(void);
 
 static int get_server_info(struct transaction_t *txn);
+
+static int create_notify_collection(const char *userid,
+                                    struct mailbox **mailbox);
+static int notify_put(struct transaction_t *txn, void *obj,
+                      struct mailbox *mailbox, const char *resource,
+                      void *davdb);
+
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
@@ -2515,14 +2522,14 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
                (const char *) ns->href, name);
 
-    if (fctx->mailbox && !fctx->record &&
-        !(r = annotatemore_lookupmask(fctx->mailbox->name,
+    if (fctx->req_tgt->mbentry && !fctx->record &&
+        !(r = annotatemore_lookupmask(fctx->req_tgt->mbentry->name,
                                       buf_cstring(&fctx->buf),
                                       httpd_userid, &attrib))) {
         if (!buf_len(&attrib) &&
             !xmlStrcmp(name, BAD_CAST "displayname")) {
             /* Special case empty displayname -- use last segment of path */
-            buf_setcstr(&attrib, strrchr(fctx->mailbox->name, '.') + 1);
+            buf_setcstr(&attrib, strrchr(fctx->req_tgt->mbentry->name, '.') + 1);
         }
     }
 
@@ -5549,10 +5556,12 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
 
 enum {
-    SHARE_NONE,
+    SHARE_NONE = 0,
     SHARE_READONLY,
     SHARE_READWRITE
 };
+
+static const char *access_types[] = { "no-access", "read", "read_write" };
 
 static int set_share_access(const char *mboxname,
                             const char *userid, int access)
@@ -5578,11 +5587,108 @@ static int set_share_access(const char *mboxname,
 }
 
 
-static int dav_post_share(struct transaction_t *txn)
+static xmlNodePtr get_props(struct request_target_t *req_tgt,
+                            const char *prop_names[],
+                            xmlNodePtr root, xmlNsPtr ns[],
+                            const struct prop_entry prop_list[])
 {
-    xmlDocPtr doc = NULL;
-    xmlNodePtr root, sharee;
+    struct propstat propstat = { NULL, 0, 0 };
+    struct propfind_ctx fctx;
+    const struct prop_entry *prop;
+    const char **name;
+    xmlNodePtr node;
+
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
+    fctx.req_tgt = req_tgt;
+    fctx.root = root;
+    fctx.ns = ns;
+
+    for (prop = prop_list; prop->name; prop++) {
+        for (name = prop_names; *name; name++) {
+            if (!strcmp(*name, prop->name)) {
+                prop->get(BAD_CAST prop->name, ns[NS_DAV],
+                          &fctx, NULL, NULL, &propstat, NULL);
+            }
+        }
+    }
+
+    buf_free(&fctx.buf);
+
+    node = propstat.root->children;
+    xmlUnlinkNode(node);
+    xmlFreeNode(propstat.root);
+
+    return node;
+}
+
+
+static int send_notification(xmlDocPtr doc,
+                             const char *userid, const char *resource)
+{
+    struct mailbox *mailbox = NULL;
+    struct webdav_db *webdavdb = NULL;
+    struct transaction_t txn;
+    int r;
+
+    /* XXX  Need to find location of user.
+       If remote need to do a PUT or possibly email */
+
+    /* Open notifications collection for writing */
+    r = create_notify_collection(userid, &mailbox);
+    if (r) {
+        syslog(LOG_ERR,
+               "send_notification: create_notify_collection(%s) failed: %s",
+               userid, error_message(r));
+        return r;
+    }
+
+    /* Open the WebDAV DB corresponding to collection */
+    webdavdb = webdav_open_mailbox(mailbox);
+    if (!webdavdb) {
+        syslog(LOG_ERR, "send_notification: unable to open WebDAV DB (%s)",
+               mailbox->name);
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Start with an empty (clean) transaction */
+    memset(&txn, 0, sizeof(struct transaction_t));
+
+    /* Create header cache */
+    if (!(txn.req_hdrs = spool_new_hdrcache())) {
+        syslog(LOG_ERR, "send_notification: unable to create header cache");
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    r = notify_put(&txn, doc, mailbox, resource, webdavdb);
+    if (r != HTTP_CREATED) {
+        syslog(LOG_ERR,
+               "send_notification: notify_put(%s, %s) failed: %s",
+               mailbox->name, resource, error_message(r));
+    }
+
+  done:
+    spool_free_hdrcache(txn.req_hdrs);
+    buf_free(&txn.buf);
+    webdav_close(webdavdb);
+    mailbox_close(&mailbox);
+
+    return r;
+}
+
+
+static int dav_post_share(struct transaction_t *txn,
+                          struct meth_params *pparams)
+{
+    xmlNodePtr root = NULL, node, sharee;
     int rights, ret, legacy = 0;
+    const char *notify_type = "share-invite-notification";
+    struct buf resource = BUF_INITIALIZER;
+    char dtstamp[RFC3339_DATETIME_MAX];
+    xmlNodePtr notify = NULL, type, resp, share;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    const char *invite_props[] = { "resourcetype", "displayname", NULL };
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
@@ -5616,8 +5722,6 @@ static int dav_post_share(struct transaction_t *txn)
     }
     if (ret) goto done;
 
-    doc = root->doc;
-
     /* Make sure its a share-resource element */
     if (!xmlStrcmp(root->name, BAD_CAST "share")) legacy = 1;
     else if (xmlStrcmp(root->name, BAD_CAST "share-resource")) {
@@ -5627,9 +5731,42 @@ static int dav_post_share(struct transaction_t *txn)
         goto done;
     }
 
+    /* Create share-invite-notification -
+       response and share-access will be replaced for each sharee */
+    notify = init_xml_response("notification", NS_DAV, NULL, ns);
+
+    time_to_rfc3339(time(0), dtstamp, RFC3339_DATETIME_MAX);
+    xmlNewChild(notify, NULL, BAD_CAST "dtstamp", BAD_CAST dtstamp);
+
+    type = xmlNewChild(notify, NULL, BAD_CAST notify_type, NULL);
+
+    node = xmlNewChild(type, NULL, BAD_CAST "principal", NULL);
+    buf_printf(&resource, "%s/%s/%s/", namespace_principal.prefix,
+               USER_COLLECTION_PREFIX, txn->req_tgt.userid);
+    xml_add_href(node, NULL, buf_cstring(&resource));
+
+    resp = xmlNewChild(type, NULL, NULL, NULL);
+
+    node = xmlNewChild(type, NULL, BAD_CAST "sharer-resource-uri", NULL);
+    xml_add_href(node, NULL, txn->req_tgt.path);
+
+    node = xmlNewChild(type, NULL, BAD_CAST "share-access", NULL);
+    share = xmlNewChild(node, NULL, NULL, NULL);
+
+    node = get_props(&txn->req_tgt, invite_props,
+                     notify, ns, pparams->propfind.lprops);
+    xmlAddChild(type, node);
+
+    /* Create a resource name for the notifications -
+       We use a consistent naming scheme so that multiple notifications
+       of the same type for the same resource are coalesced (overwritten) */
+    buf_reset(&resource);
+    buf_printf(&resource, "%x-%x-%x", strhash(txn->req_tgt.mbentry->name),
+               strhash(XML_NS_DAV), strhash(notify_type));
+
+    /* Process each sharee */
     for (sharee = xmlFirstElementChild(root); sharee;
          sharee = xmlNextElementSibling(sharee)) {
-        xmlNodePtr node;
         xmlChar *href = NULL;
         int access = SHARE_READONLY;
 
@@ -5712,7 +5849,21 @@ static int dav_post_share(struct transaction_t *txn)
                            error_message(r));
                 }
                 else {
-                    /* Notify sharee */
+                    /* Notify sharee - patch in response and share-access */
+
+                    /* XXX  Check for existing response */
+                    node = xmlNewNode(ns[NS_DAV], BAD_CAST "invite-noresponse");
+                    resp = xmlReplaceNode(resp, node);
+                    xmlFreeNode(resp);
+                    resp = node;
+
+                    node = xmlNewNode(ns[NS_DAV], BAD_CAST access_types[access]);
+                    share = xmlReplaceNode(share, node);
+                    xmlFreeNode(share);
+                    share = node;
+
+                    r = send_notification(notify->doc,
+                                          userid, buf_cstring(&resource));
                 }
 
                 free(userid);
@@ -5725,7 +5876,9 @@ static int dav_post_share(struct transaction_t *txn)
     }
 
   done:
-    if (doc) xmlFreeDoc(doc);
+    if (root) xmlFreeDoc(root->doc);
+    if (notify) xmlFreeDoc(notify->doc);
+    buf_free(&resource);
 
     return ret;
 }
@@ -5758,7 +5911,7 @@ int meth_post(struct transaction_t *txn, void *params)
 
     /* Check for query params */
     action = hash_lookup("action", &txn->req_qparams);
-    if (!action) return dav_post_share(txn);
+    if (!action) return dav_post_share(txn, pparams);
 
     if (action->next || strcmp(action->s, "add-member")) {
         return HTTP_BAD_REQUEST;
@@ -7623,7 +7776,8 @@ static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 
-static int dav_create_notifications(const char *userid) {
+static int create_notify_collection(const char *userid, struct mailbox **mailbox)
+{
     /* notifications collection */
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX));
@@ -7647,11 +7801,18 @@ static int dav_create_notifications(const char *userid) {
         else r = 0;
 
         r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
-                                   NULL, 0,
-                                   userid, httpd_authstate,
-                                   0, 0, 0, 0, NULL);
+                                   NULL, 1 /* admin */, userid, NULL,
+                                   0, 0, 0, 0, mailbox);
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mbname_intname(mbname), error_message(r));
+    }
+    else if (mailbox) {
+        /* Open mailbox for writing */
+        r = mailbox_open_iwl(mbname_intname(mbname), mailbox);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   mbname_intname(mbname), error_message(r));
+        }
     }
 
  done:
@@ -7671,14 +7832,14 @@ static void my_dav_auth(const char *userid)
         /* proxy-only server - won't have DAV databases */
     }
     else {
-        /* Open CardDAV DB for 'userid' */
+        /* Open WebDAV DB for 'userid' */
         my_dav_reset();
         auth_webdavdb = webdav_open_userid(userid);
         if (!auth_webdavdb) fatal("Unable to open WebDAV DB", EC_IOERR);
     }
 
     /* Auto-provision a notifications collection for 'userid' */
-    dav_create_notifications(userid);
+    create_notify_collection(userid, NULL);
 
 
     if (!server_info) {
@@ -7852,9 +8013,6 @@ static int notify_parse_path(const char *path,
 
 static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data);
-static int notify_put(struct transaction_t *txn, void *obj,
-                      struct mailbox *mailbox, const char *resource,
-                      void *davdb);
 
 static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
                                struct propfind_ctx *fctx,
@@ -8131,7 +8289,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
     }
 
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "<%s@%s>", resource, config_servername);
+    buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
     spool_replace_header(xstrdup("Message-ID"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
