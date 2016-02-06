@@ -3383,7 +3383,8 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
     return mbrock->proc(mbrock->mbentry, mbrock->rock);
 }
 
-EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc, void *rock, int flags)
+EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc,
+                               void *rock, int flags)
 {
     struct db *subs = NULL;
     struct submb_rock mbrock = { NULL, userid, flags, proc, rock };
@@ -3395,6 +3396,8 @@ EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc, void *rock
 
     /* faster to do it all in a single slurp! */
     r = cyrusdb_foreach(subs, "", 0, NULL, usersubs_cb, &mbrock, 0);
+
+    mboxlist_entry_free(&mbrock.mbentry);
 
     mboxlist_closesubs(subs);
 
