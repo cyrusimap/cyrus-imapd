@@ -1582,7 +1582,6 @@ sieve_libcyrus_sieve_la_SOURCES = \
 	sieve/bytecode.h \
 	sieve/addr.y \
 	sieve/addr-lex.l \
-	sieve/bc_dump.c \
 	sieve/bc_emit.c \
 	sieve/bc_eval.c \
 	sieve/bc_generate.c \
