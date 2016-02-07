@@ -160,6 +160,9 @@ sub config_set
 }
 
 magic(replication => sub { shift->want('replica'); });
+magic(AnnotationAllowUndefined => sub {
+    shift->config_set(annotation_allow_undefined => 1);
+});
 magic(ImmediateDelete => sub {
     shift->config_set(delete_mode => 'immediate');
 });

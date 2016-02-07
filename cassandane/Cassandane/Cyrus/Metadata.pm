@@ -48,10 +48,6 @@ use File::Temp qw(:POSIX);
 use Config;
 use Cassandane::Util::Log;
 
-Cassandane::Cyrus::TestCase::magic(AnnotationAllowUndefined => sub {
-    shift->config_set(annotation_allow_undefined => 1);
-});
-
 sub new
 {
     my ($class, @args) = @_;
