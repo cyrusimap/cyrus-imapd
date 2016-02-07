@@ -73,32 +73,39 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
     my $service = $self->{instance}->get_service("http");
-    $self->{carddav} = Net::CardDAVTalk->new(
-	user => 'cassandane',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
-    );
-    $self->{caldav} = Net::CalDAVTalk->new(
-	user => 'cassandane',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
-    );
-    $self->{jmap} = Mail::JMAPTalk->new(
-	user => 'cassandane',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/jmap',
-    );
+    eval {
+	$self->{carddav} = Net::CardDAVTalk->new(
+	    user => 'cassandane',
+	    password => 'pass',
+	    host => $service->host(),
+	    port => $service->port(),
+	    scheme => 'http',
+	    url => '/',
+	    expandurl => 1,
+	);
+	$self->{caldav} = Net::CalDAVTalk->new(
+	    user => 'cassandane',
+	    password => 'pass',
+	    host => $service->host(),
+	    port => $service->port(),
+	    scheme => 'http',
+	    url => '/',
+	    expandurl => 1,
+	);
+	$self->{jmap} = Mail::JMAPTalk->new(
+	    user => 'cassandane',
+	    password => 'pass',
+	    host => $service->host(),
+	    port => $service->port(),
+	    scheme => 'http',
+	    url => '/jmap',
+	);
+    };
+    if ($@) {
+	my $e = $@;
+	$self->tear_down();
+	die $e;
+    }
 }
 
 sub tear_down
