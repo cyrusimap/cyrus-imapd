@@ -236,10 +236,10 @@ static const struct prop_entry principal_props[] = {
       propfind_abookhome, NULL, NULL },
 
     /* WebDAV Notifications (draft-pot-webdav-notifications) properties */
-    { "notifications-URL", NS_DAV, PROP_COLLECTION,
+    { "notification-URL", NS_DAV, PROP_COLLECTION,
       propfind_notifyurl, NULL, NULL },
 
-    /* Apple Calendar Server properties */
+    /* Backwards compatibility with Apple notifications clients */
     { "notification-URL", NS_CS, PROP_COLLECTION,
       propfind_notifyurl, NULL, NULL },
 
@@ -8307,7 +8307,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
 }
 
 
-/* Callback to fetch DAV:notifications-URL and CS:notification-URL */
+/* Callback to fetch DAV:notification-URL and CS:notification-URL */
 static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop,
@@ -8337,6 +8337,56 @@ static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
         /* Return just the URL */
         xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
     }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:sharer-resource-uri and CS:shared-url */
+int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
+                       struct propfind_ctx *fctx,
+                       xmlNodePtr prop __attribute__((unused)),
+                       xmlNodePtr resp __attribute__((unused)),
+                       struct propstat propstat[],
+                       void *rock __attribute__((unused)))
+{
+    mbname_t *mbname;
+    const strarray_t *boxes;
+    int n, size;
+    xmlNodePtr node;
+
+    mbname = mbname_from_intname(fctx->mailbox->name);
+
+    if (!strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid)) {
+        mbname_free(&mbname);
+        return HTTP_NOT_FOUND;
+    }
+
+    buf_setcstr(&fctx->buf, fctx->req_tgt->urlprefix);
+
+    if (mbname_localpart(mbname)) {
+        const char *domain =
+            mbname_domain(mbname) ? mbname_domain(mbname) : httpd_extradomain;
+
+        buf_printf(&fctx->buf, "/%s/%s",
+                   USER_COLLECTION_PREFIX, mbname_localpart(mbname));
+        if (domain) buf_printf(&fctx->buf, "@%s", domain);
+    }
+    buf_putc(&fctx->buf, '/');
+
+    boxes = mbname_boxes(mbname);
+    size = strarray_size(boxes);
+    for (n = 1; n < size; n++) {
+        buf_appendcstr(&fctx->buf, strarray_nth(boxes, n));
+        buf_putc(&fctx->buf, '/');
+    }
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                        &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+
+    mbname_free(&mbname);
 
     return 0;
 }

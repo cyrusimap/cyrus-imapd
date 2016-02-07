@@ -382,6 +382,22 @@ static const struct prop_entry caldav_props[] = {
     { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
+    /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
+    { "share-access", NS_DAV, PROP_COLLECTION,
+      NULL, NULL, NULL },
+    { "invite", NS_DAV, PROP_COLLECTION,
+      NULL, NULL, NULL },
+    { "sharer-resource-uri", NS_DAV, PROP_COLLECTION,
+      propfind_sharedurl, NULL, NULL },
+
+    /* Backwards compatibility with Apple calendar sharing clients */
+    { "invite", NS_CS, PROP_COLLECTION,
+      NULL, NULL, NULL },
+    { "allowed-sharing-modes", NS_CS, PROP_COLLECTION,
+      propfind_sharingmodes, NULL, NULL },
+    { "shared-url", NS_CS, PROP_COLLECTION,
+      propfind_sharedurl, NULL, NULL },
+
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
       propfind_caldata, NULL, &partial_caldata },
@@ -435,8 +451,6 @@ static const struct prop_entry caldav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
-    { "allowed-sharing-modes", NS_CS, PROP_COLLECTION,
-      propfind_sharingmodes, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };

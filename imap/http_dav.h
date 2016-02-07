@@ -692,6 +692,11 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
                        xmlNodePtr prop, xmlNodePtr resp,
                        struct propstat propstat[], void *rock);
 
+int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
+                       struct propfind_ctx *fctx,
+                       xmlNodePtr prop, xmlNodePtr resp,
+                       struct propstat propstat[], void *rock);
+
 /* PROPPATCH callbacks */
 int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                    struct propstat propstat[], void *rock);

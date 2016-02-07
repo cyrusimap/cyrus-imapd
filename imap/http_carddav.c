@@ -263,6 +263,14 @@ static const struct prop_entry carddav_props[] = {
     { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
+    /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
+    { "share-access", NS_DAV, PROP_COLLECTION,
+      NULL, NULL, NULL },
+    { "invite", NS_DAV, PROP_COLLECTION,
+      NULL, NULL, NULL },
+    { "sharer-resource-uri", NS_DAV, PROP_COLLECTION,
+      propfind_sharedurl, NULL, NULL },
+
     /* CardDAV (RFC 6352) properties */
     { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_PRESCREEN,
       propfind_addrdata, NULL, NULL },
