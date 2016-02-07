@@ -2522,14 +2522,14 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
                (const char *) ns->href, name);
 
-    if (fctx->req_tgt->mbentry && !fctx->record &&
-        !(r = annotatemore_lookupmask(fctx->req_tgt->mbentry->name,
+    if (fctx->mbentry && !fctx->record &&
+        !(r = annotatemore_lookupmask(fctx->mbentry->name,
                                       buf_cstring(&fctx->buf),
                                       httpd_userid, &attrib))) {
         if (!buf_len(&attrib) &&
             !xmlStrcmp(name, BAD_CAST "displayname")) {
             /* Special case empty displayname -- use last segment of path */
-            buf_setcstr(&attrib, strrchr(fctx->req_tgt->mbentry->name, '.') + 1);
+            buf_setcstr(&attrib, strrchr(fctx->mbentry->name, '.') + 1);
         }
     }
 
@@ -5012,6 +5012,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
         goto done;
     }
 
+    fctx->mbentry = mbentry;
     fctx->mailbox = mailbox;
     fctx->record = NULL;
 
@@ -5243,6 +5244,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
+    fctx.mbentry = NULL;
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = DACL_READ;
@@ -5351,6 +5353,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                         buf_printf(&fctx.buf, "/%s/", USER_COLLECTION_PREFIX);
                         strlcpy(fctx.req_tgt->path,
                                 buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
+                        fctx.mbentry = NULL;
                         fctx.mailbox = NULL;
                         r = xml_add_response(&fctx, 0, 0);
                     }
@@ -5600,6 +5603,7 @@ static xmlNodePtr get_props(struct request_target_t *req_tgt,
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = req_tgt;
+    fctx.mbentry = req_tgt->mbentry;
     fctx.root = root;
     fctx.ns = ns;
 
@@ -6452,6 +6456,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             }
 
             fctx->req_tgt = &tgt;
+            fctx->mbentry = tgt.mbentry;
 
             /* Check if we already have this mailbox open */
             if (!mailbox || strcmp(mailbox->name, tgt.mbentry->name)) {
@@ -6538,6 +6543,7 @@ int report_sync_col(struct transaction_t *txn,
         goto done;
     }
 
+    fctx->mbentry = txn->req_tgt.mbentry;
     fctx->mailbox = mailbox;
 
     highestmodseq = mailbox->i.highestmodseq;
@@ -6791,6 +6797,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     fctx->elist = NULL;
     fctx->root = root;
     fctx->depth = depth;
+    fctx->mbentry = NULL;
     fctx->mailbox = NULL;
 
     ret = preload_proplist(inroot->children, fctx);
@@ -6809,6 +6816,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
                 ret = HTTP_SERVER_ERROR;
                 goto done;
             }
+            fctx->mbentry = fctx->req_tgt->mbentry;
             fctx->mailbox = mailbox;
         }
 
@@ -6857,6 +6865,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
     free(req_tgt.userid);
 
+    fctx->mbentry = prev_ctx.mbentry;
     fctx->mailbox = prev_ctx.mailbox;
     fctx->depth = prev_ctx.depth;
     fctx->root = prev_ctx.root;
@@ -7334,6 +7343,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
+    fctx.mbentry = NULL;
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = report->reqd_privs;

@@ -4046,7 +4046,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
         xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
         if (fctx->req_tgt->collection &&
-            fctx->req_tgt->mbentry->mbtype == MBTYPE_CALENDAR) {
+            fctx->mbentry->mbtype == MBTYPE_CALENDAR) {
             ensure_ns(fctx->ns, NS_CALDAV,
                       resp ? resp->parent : node, XML_NS_CALDAV, "C");
             if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
