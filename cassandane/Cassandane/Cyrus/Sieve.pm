@@ -53,6 +53,7 @@ sub new
     return $class->SUPER::new({
 	    deliver => 1,
 	    services => [ 'imap', 'sieve' ],
+            adminstore => 1,
     }, @_);
 }
 
@@ -593,6 +594,338 @@ EOF
 	$uid{$case->{filedto}}++;
 	$self->{instance}->deliver($msg);
         $exp{$case->{filedto}}->{$case->{subject}} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_rfc5490_mailboxexists
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"mailboxexists\" test";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $testfolder = "INBOX.testfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->install_sieve_script(<<EOF
+require ["fileinto", "mailbox"];
+if mailboxexists "$testfolder"  {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the test folder";
+    $talk->create($testfolder);
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_rfc5490_metadata
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"metadata\" test";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    $self->install_sieve_script(<<EOF
+require ["fileinto", "mboxmetadata"];
+if metadata "INBOX" "/private/comment" "awesome" {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the annotation";
+    $talk->setmetadata("INBOX", "/private/comment", "awesome");
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_rfc5490_metadata_matches
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"metadata\" test";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    $self->install_sieve_script(<<EOF
+require ["fileinto", "mboxmetadata"];
+if metadata :contains "INBOX" "/private/comment" "awesome" {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    xlog "Set the initial annotation";
+    $talk->setmetadata("INBOX", "/private/comment", "awesomesauce");
+
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the annotation";
+    $talk->setmetadata("INBOX", "/private/comment", "awesome");
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_rfc5490_metadataexists
+    :AnnotationAllowUndefined
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"metadataexists\" test";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    $self->install_sieve_script(<<EOF
+require ["fileinto", "mboxmetadata"];
+if metadataexists "INBOX" "/private/magic" {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the annotation";
+    $talk->setmetadata("INBOX", "/private/magic", "hello");
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_rfc5490_servermetadata
+    :AnnotationAllowUndefined
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"metadata\" test";
+
+    my $talk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    $self->install_sieve_script(<<EOF
+require ["fileinto", "servermetadata"];
+if servermetadata "/shared/magic" "awesome" {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    $talk->create($hitfolder);
+
+    # have a value
+    $admintalk->setmetadata("", "/shared/magic", "awesomesauce");
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the annotation";
+    $admintalk->setmetadata("", "/shared/magic", "awesome");
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_rfc5490_servermetadataexists
+    :AnnotationAllowUndefined
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"servermetadataexists\" test";
+
+    my $talk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    $self->install_sieve_script(<<EOF
+require ["fileinto", "servermetadata"];
+if servermetadataexists ["/shared/magic", "/shared/moo"] {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    $admintalk->setmetadata("", "/shared/magic", "foo");
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the annotation";
+    $admintalk->setmetadata("", "/shared/moo", "hello");
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
     xlog "Check that the messages made it";
