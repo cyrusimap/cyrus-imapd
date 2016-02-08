@@ -60,6 +60,37 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     return gzuc_read(gzuc, buf, len);
 }
 
+EXPORTED int backup_read_chunk_data(struct backup *backup,
+                                    const struct backup_chunk *chunk,
+                                    backup_read_data_cb proc, void *rock)
+{
+    struct gzuncat *gzuc = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
+
+    gzuc = gzuc_new(backup->fd);
+
+    gzuc_member_start_from(gzuc, chunk->offset);
+
+    while (!gzuc_member_eof(gzuc)) {
+        char tmp[8192]; /* FIXME whatever */
+        ssize_t n = gzuc_read(gzuc, tmp, sizeof(tmp));
+        if (n <= 0)
+            break;
+
+        buf_setmap(&buf, tmp, n);
+
+        r = proc(&buf, rock);
+
+        buf_reset(&buf);
+    }
+    gzuc_member_end(gzuc, NULL);
+
+    gzuc_free(&gzuc);
+    buf_free(&buf);
+    return r;
+}
+
 EXPORTED int backup_read_message_data(struct backup *backup,
                                       const struct backup_message *message,
                                       backup_read_data_cb proc, void *rock)

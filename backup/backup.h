@@ -273,6 +273,9 @@ int backup_append_abort(struct backup *backup);
 struct gzuncat *backup_read_start(struct backup *backup);
 typedef int (*backup_read_data_cb)(const struct buf *buf, void *rock);
 
+int backup_read_chunk_data(struct backup *backup,
+                           const struct backup_chunk *chunk,
+                           backup_read_data_cb proc, void *rock);
 int backup_read_message_data(struct backup *backup,
                              const struct backup_message *message,
                              backup_read_data_cb proc, void *rock);
