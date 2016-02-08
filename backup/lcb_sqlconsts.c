@@ -234,37 +234,48 @@ const char backup_index_mailbox_insert_sql[] = QUOTE(
 );
 
 #define MAILBOX_SELECT_FIELDS QUOTE(                                \
-    id, last_chunk_id, uniqueid, mboxname, mboxtype, last_uid,      \
+    m.id, m.last_chunk_id, uniqueid, mboxname, mboxtype, last_uid,  \
     highestmodseq, recentuid, recenttime, last_appenddate,          \
-    pop3_last_login, pop3_show_after, uidvalidity, partition, acl,  \
+    pop3_last_login, pop3_show_after, uidvalidity, m.partition, acl,\
     options, sync_crc, sync_crc_annot, quotaroot, xconvmodseq,      \
-    annotations, deleted                                            \
+    m.annotations, deleted                                          \
 )
 
 const char backup_index_mailbox_select_all_sql[] =
     "SELECT " MAILBOX_SELECT_FIELDS
-    " FROM mailbox"
+    " FROM mailbox AS m"
     ";"
 ;
 
 const char backup_index_mailbox_select_mboxname_sql[] =
     "SELECT " MAILBOX_SELECT_FIELDS
-    " FROM mailbox"
+    " FROM mailbox AS m"
     " WHERE mboxname = :mboxname"
     ";"
 ;
 
 const char backup_index_mailbox_select_uniqueid_sql[] =
     "SELECT " MAILBOX_SELECT_FIELDS
-    " FROM mailbox"
+    " FROM mailbox AS m"
     " WHERE uniqueid = :uniqueid"
     ";"
 ;
 
 const char backup_index_mailbox_select_chunkid_sql[] =
     "SELECT " MAILBOX_SELECT_FIELDS
-    " FROM mailbox"
+    " FROM mailbox AS m"
     " WHERE last_chunk_id = :last_chunk_id"
+    ";"
+;
+
+const char backup_index_mailbox_select_message_guid_sql[] =
+    "SELECT " MAILBOX_SELECT_FIELDS
+    " FROM mailbox AS m"
+    " JOIN mailbox_message AS mm"
+    " ON mm.mailbox_id = m.id"
+    " JOIN message AS msg"
+    " ON mm.message_id = msg.id"
+    " WHERE msg.guid = :guid"
     ";"
 ;
 

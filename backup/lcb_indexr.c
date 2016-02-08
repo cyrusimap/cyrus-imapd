@@ -426,6 +426,36 @@ EXPORTED struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
     return mailbox_list;
 }
 
+EXPORTED struct backup_mailbox_list *backup_get_mailboxes_by_message(
+                                        struct backup *backup,
+                                        const struct backup_message *message,
+                                        int want_records)
+{
+    char *guid = xstrdup(message_guid_encode(message->guid));
+    struct backup_mailbox_list *mailbox_list = xzmalloc(sizeof *mailbox_list);
+
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+                                        mailbox_list, NULL, want_records };
+
+    struct sqldb_bindval bval[] = {
+        { ":guid", SQLITE_TEXT, { .s = guid } },
+        { NULL,    SQLITE_NULL, { .s = NULL } },
+    };
+
+    int r = sqldb_exec(backup->db, backup_index_mailbox_select_message_guid_sql,
+                       bval, _mailbox_row_cb, &mbrock);
+
+    free(guid);
+
+    if (r) {
+        backup_mailbox_list_empty(mailbox_list);
+        free(mailbox_list);
+        return NULL;
+    }
+
+    return mailbox_list;
+}
+
 EXPORTED struct backup_mailbox *backup_get_mailbox_by_uniqueid(struct backup *backup,
                                                       const char *uniqueid,
                                                       int want_records)

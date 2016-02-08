@@ -211,6 +211,12 @@ struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
                                                  int chunk_id,
                                                  int want_records);
 
+struct backup_message;
+struct backup_mailbox_list *backup_get_mailboxes_by_message(
+                                struct backup *backup,
+                                const struct backup_message *message,
+                                int want_records);
+
 struct backup_mailbox *backup_get_mailbox_by_uniqueid(struct backup *backup,
                                                       const char *uniqueid,
                                                       int want_records);
