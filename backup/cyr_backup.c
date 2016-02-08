@@ -511,7 +511,7 @@ static int show_message_headers(const struct buf *buf, void *rock)
     if (!end) return -1;
 
     fwrite(start, 1, end - start, out);
-    fputs("\r\n\r\n", out);
+    fputs("\r\n", out);
 
     return 0;
 }
@@ -520,6 +520,8 @@ static int cmd_show_messages(struct backup *backup,
                              const struct cyrbu_cmd_options *options)
 {
     struct backup_message *message = NULL;
+    struct backup_mailbox_list *mailboxes = NULL;
+    struct backup_mailbox *mailbox;
     struct message_guid want_guid;
     int i;
 
@@ -531,9 +533,26 @@ static int cmd_show_messages(struct backup *backup,
         if (!message)
             continue;
 
+        fprintf(stdout, "guid:\t%s\n", message_guid_encode(message->guid));
+
+        mailboxes = backup_get_mailboxes_by_message(backup, message, 0);
+        if (mailboxes) {
+            fprintf(stdout, "mailboxes:\n");
+            for (mailbox = mailboxes->head; mailbox; mailbox = mailbox->next) {
+                fprintf(stdout, "\t%s\t%s\n",
+                                mailbox->uniqueid,
+                                mailbox->mboxname);
+            }
+
+            backup_mailbox_list_empty(mailboxes);
+            free(mailboxes);
+        }
+
+        fprintf(stdout, "headers:\n");
         backup_read_message_data(backup, message,
                                  show_message_headers, stdout);
 
+        fprintf(stdout, "\n");
         backup_message_free(&message);
     }
 
