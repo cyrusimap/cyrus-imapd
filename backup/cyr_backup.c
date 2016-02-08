@@ -445,11 +445,60 @@ static int cmd_show_chunks(struct backup *backup,
 static int cmd_show_mailboxes(struct backup *backup,
                               const struct cyrbu_cmd_options *options)
 {
-    // FIXME
-    (void) backup;
-    (void) options;
-    fprintf(stderr, "%s: unimplemented\n", __func__);
-    return -1;
+    struct backup_mailbox *mailbox = NULL;
+    struct backup_mailbox_message *record = NULL;
+    int i;
+
+    for (i = 0; i < strarray_size(options->argv); i++) {
+        char ts_deleted[32] = "";
+        const char *arg = strarray_nth(options->argv, i);
+
+        /* argument could be a uniqueid */
+        mailbox = backup_get_mailbox_by_uniqueid(backup, arg, 1);
+
+        /* or it could be an mboxname */
+        if (!mailbox) {
+            mbname_t *mbname = mbname_from_intname(arg);
+            if (!mbname) continue;
+            mailbox = backup_get_mailbox_by_name(backup, mbname, 1);
+            mbname_free(&mbname);
+        }
+
+        /* or it could be junk */
+        if (!mailbox) continue;
+
+        fprintf(stdout, "mboxname: %s\n", mailbox->mboxname);
+        fprintf(stdout, "uniqueid: %s\n", mailbox->uniqueid);
+
+        if (mailbox->deleted) {
+            strftime(ts_deleted, sizeof(ts_deleted), "%F %T",
+                     localtime(&mailbox->deleted));
+
+            fprintf(stdout, "deleted:  %s\n", ts_deleted);
+        }
+
+        fprintf(stdout, "messages:\n");
+        fprintf(stdout, "       uid  expunged time        guid\n");
+
+        for (record = mailbox->records->head; record; record = record->next) {
+            char ts_expunged[32] = "                   ";
+
+            if (record->expunged)
+                strftime(ts_expunged, sizeof(ts_expunged), "%F %T",
+                         localtime(&record->expunged));
+
+            fprintf(stdout, "%10d  %s  %s\n",
+                            record->uid,
+                            ts_expunged,
+                            message_guid_encode(&record->guid));
+        }
+
+        fprintf(stdout, "\n");
+
+        backup_mailbox_free(&mailbox);
+    }
+
+    return 0;
 }
 
 static int show_message_headers(const struct buf *buf, void *rock)
