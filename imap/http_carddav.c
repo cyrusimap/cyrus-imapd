@@ -466,7 +466,7 @@ static int carddav_parse_path(const char *path,
 
     r = dav_parse_path(path, tgt, namespace_addressbook.prefix,
                        config_getstring(IMAPOPT_ADDRESSBOOKPREFIX), errstr);
-    if (r) return r;
+    if (r || !tgt->mbentry) return r;
 
     /* Set proper Allow bits based on path components and ACL of current user */
     rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);

@@ -532,13 +532,13 @@ EXPORTED int dav_parse_path(const char *path, struct request_target_t *tgt,
 
     /* Skip namespace */
     p += len;
-    if (!*p || !*++p) return HTTP_NOT_FOUND;
+    if (!*p || !*++p) return 0;
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
     if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
         p += len;
-        if (!*p || !*++p) return HTTP_NOT_FOUND;
+        if (!*p || !*++p) return 0;
 
         /* Get user id */
         len = strcspn(p, "/");
@@ -5338,7 +5338,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                 /* Add response for target collection */
                 propfind_by_collection(txn->req_tgt.mbentry, &fctx);
             }
-            else {
+            else if (txn->req_tgt.mbentry) {
                 /* Add responses for all contained collections */
                 fctx.prefer &= ~PREFER_NOROOT;
                 mboxlist_mboxtree(txn->req_tgt.mbentry->name,

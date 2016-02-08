@@ -821,7 +821,7 @@ static int caldav_parse_path(const char *path,
     r = dav_parse_path(path, tgt, (tgt->namespace == URL_NS_FREEBUSY) ?
                        namespace_freebusy.prefix : namespace_calendar.prefix,
                        config_getstring(IMAPOPT_CALENDARPREFIX), errstr);
-    if (r) return r;
+    if (r || !tgt->mbentry) return r;
 
     /* Set proper Allow bits based on path components and ACL of current user */
     rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
