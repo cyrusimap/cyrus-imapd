@@ -271,7 +271,11 @@ int backup_append_abort(struct backup *backup);
 
 /* reading backup data */
 struct gzuncat *backup_read_start(struct backup *backup);
+typedef int (*backup_read_data_cb)(const struct buf *buf, void *rock);
 
+int backup_read_message_data(struct backup *backup,
+                             const struct backup_message *message,
+                             backup_read_data_cb proc, void *rock);
 
 /* miscellaneous */
 int backup_reindex(const char *name,
