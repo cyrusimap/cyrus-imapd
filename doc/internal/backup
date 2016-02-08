@@ -815,7 +815,7 @@ todo list
 * valgrind
 * finish reconstruct
 * compact: split before append?
-* need a coherent read api
+* lock/etc: explicit create_excl option
 
 compact implementation steps:
     1 remove unused chunks, keep everything else as is
