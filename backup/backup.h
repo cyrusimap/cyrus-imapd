@@ -210,6 +210,11 @@ int backup_mailbox_foreach(struct backup *backup, int chunk_id,
 struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
                                                  int chunk_id,
                                                  int want_records);
+
+struct backup_mailbox *backup_get_mailbox_by_uniqueid(struct backup *backup,
+                                                      const char *uniqueid,
+                                                      int want_records);
+
 struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
                                                   const mbname_t *mbname,
                                                   int want_records);

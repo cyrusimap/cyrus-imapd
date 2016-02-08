@@ -426,6 +426,31 @@ EXPORTED struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
     return mailbox_list;
 }
 
+EXPORTED struct backup_mailbox *backup_get_mailbox_by_uniqueid(struct backup *backup,
+                                                      const char *uniqueid,
+                                                      int want_records)
+{
+    struct backup_mailbox *mailbox = NULL;
+
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+                                        NULL, &mailbox, want_records };
+
+    struct sqldb_bindval bval[] = {
+        { ":uniqueid",  SQLITE_TEXT,    { .s = uniqueid } },
+        { NULL,         SQLITE_NULL,    { .s = NULL } },
+    };
+
+    int r = sqldb_exec(backup->db, backup_index_mailbox_select_uniqueid_sql,
+                       bval, _mailbox_row_cb, &mbrock);
+
+    if (r) {
+        if (mailbox) backup_mailbox_free(&mailbox);
+        return NULL;
+    }
+
+    return mailbox;
+}
+
 EXPORTED struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
                                                   const mbname_t *mbname,
                                                   int want_records)
