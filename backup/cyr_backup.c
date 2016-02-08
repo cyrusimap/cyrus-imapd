@@ -452,14 +452,43 @@ static int cmd_show_mailboxes(struct backup *backup,
     return -1;
 }
 
+static int show_message_headers(const struct buf *buf, void *rock)
+{
+    FILE *out = (FILE *) rock;
+
+    const char *start = buf_cstring(buf);
+    const char *end = strstr(start, "\r\n\r\n");
+
+    if (!end) return -1;
+
+    fwrite(start, 1, end - start, out);
+    fputs("\r\n\r\n", out);
+
+    return 0;
+}
+
 static int cmd_show_messages(struct backup *backup,
                              const struct cyrbu_cmd_options *options)
 {
-    // FIXME
-    (void) backup;
-    (void) options;
-    fprintf(stderr, "%s: unimplemented\n", __func__);
-    return -1;
+    struct backup_message *message = NULL;
+    struct message_guid want_guid;
+    int i;
+
+    for (i = 0; i < strarray_size(options->argv); i++) {
+        if (!message_guid_decode(&want_guid, strarray_nth(options->argv, i)))
+            continue;
+
+        message = backup_get_message(backup, &want_guid);
+        if (!message)
+            continue;
+
+        backup_read_message_data(backup, message,
+                                 show_message_headers, stdout);
+
+        backup_message_free(&message);
+    }
+
+    return 0;
 }
 
 static int dump_buf(const struct buf *buf, void *rock)
