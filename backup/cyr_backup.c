@@ -413,14 +413,23 @@ static int cmd_list_mailboxes(struct backup *backup,
                                   list_mailbox_cb, (void *) options);
 }
 
+static int list_message_cb(const struct backup_message *message, void *rock)
+{
+    const struct cyrbu_cmd_options *options =
+        (const struct cyrbu_cmd_options *) rock;
+
+    (void) options;
+
+    fprintf(stdout, "%s\n", message_guid_encode(message->guid));
+
+    return 0;
+}
+
 static int cmd_list_messages(struct backup *backup,
                              const struct cyrbu_cmd_options *options)
 {
-    // FIXME
-    (void) backup;
-    (void) options;
-    fprintf(stderr, "%s: unimplemented\n", __func__);
-    return -1;
+    return backup_message_foreach(backup, 0, NULL,
+                                  list_message_cb, (void *) options);
 }
 
 static int cmd_show_chunks(struct backup *backup,
