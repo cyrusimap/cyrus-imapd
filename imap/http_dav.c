@@ -618,6 +618,12 @@ EXPORTED int dav_parse_path(const char *path, struct request_target_t *tgt,
     if (tgt->mbentry) {
         /* Just return the mboxname (MKCOL or COPY/MOVE destination) */
         tgt->mbentry->name = xstrdup(mboxname);
+
+        if (!mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
+                                         httpd_userid, httpd_authstate,
+                                         NULL, NULL, 0 /* force */)) {
+            tgt->allow |= ALLOW_MKCOL;
+        }
     }
     else if (*mboxname) {
         /* Locate the mailbox */
