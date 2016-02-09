@@ -5672,7 +5672,7 @@ static int send_notification(xmlDocPtr doc,
     }
 
     r = notify_put(&txn, doc, mailbox, resource, webdavdb);
-    if (r != HTTP_CREATED) {
+    if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR,
                "send_notification: notify_put(%s, %s) failed: %s",
                mailbox->name, resource, error_message(r));
@@ -5755,13 +5755,13 @@ static int dav_post_share(struct transaction_t *txn,
                USER_COLLECTION_PREFIX, txn->req_tgt.userid);
     xml_add_href(node, NULL, buf_cstring(&resource));
 
-    resp = xmlNewChild(type, NULL, NULL, NULL);
+    resp = xmlNewChild(type, NULL, BAD_CAST "invite-noresponse", NULL);
 
     node = xmlNewChild(type, NULL, BAD_CAST "sharer-resource-uri", NULL);
     xml_add_href(node, NULL, txn->req_tgt.path);
 
     node = xmlNewChild(type, NULL, BAD_CAST "share-access", NULL);
-    share = xmlNewChild(node, NULL, NULL, NULL);
+    share = xmlNewChild(node, NULL, BAD_CAST "no-access", NULL);
 
     node = get_props(&txn->req_tgt, invite_props,
                      notify, ns, pparams->propfind.lprops);
@@ -5863,12 +5863,12 @@ static int dav_post_share(struct transaction_t *txn,
 
                     /* XXX  Check for existing response */
                     node = xmlNewNode(ns[NS_DAV], BAD_CAST "invite-noresponse");
-                    resp = xmlReplaceNode(resp, node);
+                    xmlReplaceNode(resp, node);
                     xmlFreeNode(resp);
                     resp = node;
 
                     node = xmlNewNode(ns[NS_DAV], BAD_CAST access_types[access]);
-                    share = xmlReplaceNode(share, node);
+                    xmlReplaceNode(share, node);
                     xmlFreeNode(share);
                     share = node;
 
