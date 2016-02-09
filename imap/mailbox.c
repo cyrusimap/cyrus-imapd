@@ -3776,7 +3776,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         }
 
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled)
+        if (object_storage_enabled && record->system_flags & FLAG_ARCHIVED)
             objectstore_delete(mailbox, record);
         else
         {
@@ -4249,15 +4249,6 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
     return 0;
 }
 
-//  this is used to get message back from ObjectStore
-EXPORTED unsigned mailbox_should_unarchive(struct mailbox *mailbox __attribute__((unused)),
-                                           const struct index_record *record __attribute__((unused)),
-                                           void *rock __attribute__((unused)))
-{
-    return 0;
-}
-
-
 EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
                                          const struct index_record *record,
                                          void *rock)
@@ -4360,8 +4351,12 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             if (object_storage_enabled){
                 /* upload on the blob store */
                 r = objectstore_put(mailbox, &copyrecord, srcname);
-                if (r)
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR archive %s %u failed to objectstorage put file (%s): %s",
+                           mailbox->name, copyrecord.uid, srcname, error_message(r));
+                    // didn't manage to store it, so remove the ARCHIVED flag
                     continue;
+                }
                 r = unlink (srcname);
                 if (r < 0)
                     syslog(LOG_ERR, "unlink(%s) failed: %m", srcname);
@@ -4385,18 +4380,24 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                        mailbox->name, copyrecord.uid, error_message(r));
                 continue;
             }
-            copyrecord.system_flags &= ~FLAG_ARCHIVED;
-            copyrecord.system_flags |= FLAG_NEEDS_CLEANUP;
-            action = "unarchive";
 
 #if defined ENABLE_OBJECTSTORE
             if (object_storage_enabled){
-                  objectstore_delete(mailbox, record);  // this should only lower ref count.
+                /* recover from the blob store */
+                r = objectstore_get(mailbox, &copyrecord, destname);
+                if (r) {
+                    syslog(LOG_ERR, "IOERROR archive %s %u failed to objectstorage get file (%s): %s",
+                          mailbox->name, copyrecord.uid, destname, error_message(r));
+                    continue;
+                }
+                objectstore_delete(mailbox, &copyrecord); // this should only lower ref count.
             }
 #endif
 
+            copyrecord.system_flags &= ~FLAG_ARCHIVED;
+            copyrecord.system_flags |= FLAG_NEEDS_CLEANUP;
+            action = "unarchive";
         }
-
 
         if (!object_storage_enabled){
             /* got a file to copy! */
@@ -4439,6 +4440,30 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
     }
 }
+
+EXPORTED void mailbox_remove_files_from_object_storage(struct mailbox *mailbox,
+                              unsigned flags)
+
+{
+    const struct index_record *record;
+    int object_storage_enabled = 0;
+#if defined ENABLE_OBJECTSTORE
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
+
+    assert(mailbox_index_islocked(mailbox, 1));
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, flags);
+    while ((record = mailbox_iter_step(iter))) {
+        if (!(record->system_flags & FLAG_ARCHIVED))
+            continue;
+#if defined ENABLE_OBJECTSTORE
+        if (object_storage_enabled)
+            objectstore_delete(mailbox, record);  // this should only lower ref count.
+#endif
+    }
+    mailbox_iter_done(&iter);
+}
+
 
 /*
  * Perform an expunge operation on 'mailbox'.  If nonzero, the
@@ -5091,7 +5116,7 @@ HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, con
     ntail = nbuf + strlen(nbuf);
 
     if (mailbox && object_storage_enabled){
-        mailbox_archive(mailbox, mailbox_should_unarchive, NULL, 0);
+        mailbox_remove_files_from_object_storage (mailbox, 0) ;
     }
 
     /* XXX - double XXX - this is a really ugly function.  It should be
@@ -5205,7 +5230,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
         if (r) break;
 
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled) {
+        if (object_storage_enabled && record->system_flags & FLAG_ARCHIVED) {
             static struct mailbox new_mailbox;
             memset(&new_mailbox, 0, sizeof(struct mailbox));
             new_mailbox.name = (char*) newname;
@@ -6020,6 +6045,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     return mailbox_rewrite_index_record(mailbox, record);
 }
+
 
 static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int isarchive,
                                       int flags)

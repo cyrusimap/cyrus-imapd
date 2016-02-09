@@ -1354,7 +1354,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
         if (r) goto out;
 
-        if (object_storage_enabled)
+        if (object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED)
             r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
 
         if (as->isoutbox) {
