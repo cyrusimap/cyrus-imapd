@@ -816,64 +816,43 @@ static void my_caldav_shutdown(void)
 static int caldav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr)
 {
-    int r, rights;
+    int r, rights = 0;
 
-    r = dav_parse_path(path, tgt, (tgt->namespace == URL_NS_FREEBUSY) ?
-                       namespace_freebusy.prefix : namespace_calendar.prefix,
-                       config_getstring(IMAPOPT_CALENDARPREFIX), errstr);
-    if (r || !tgt->mbentry) return r;
+    r = calcarddav_parse_path(path, tgt, (tgt->namespace == URL_NS_FREEBUSY) ?
+                              namespace_freebusy.prefix :
+                              namespace_calendar.prefix,
+                              config_getstring(IMAPOPT_CALENDARPREFIX),
+                              errstr, &rights);
+    if (r || !tgt->collection) return r;
 
-    /* Set proper Allow bits based on path components and ACL of current user */
-    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
+    /* Set proper Allow bits based on collection and ACL of current user */
+    if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
+        /* Read-only non-calendar collection */
+        tgt->allow = ALLOW_READ;
 
-    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
-
-    if (tgt->collection) {
-        if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
-            /* Read-only non-calendar collection */
-            tgt->allow = ALLOW_READ;
-
-            tgt->flags = TGT_MANAGED_ATTACH;
-        }
-        else if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX))) {
-            /* Can only read and DELETE resources from this collection */
-            if (tgt->resource && (rights & DACL_RMRES) == DACL_RMRES)
-                tgt->allow |= ALLOW_DELETE;
-
-            tgt->flags = TGT_SCHED_INBOX;
-        }
-        else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX))){
-            /* Can only POST to this collection (free/busy request) */
-            if (!tgt->resource && (rights & DACL_ADDRES))
-                tgt->allow |= ALLOW_POST;
-
-            tgt->flags = TGT_SCHED_OUTBOX;
-        }
-        else {
-            /* Regular calendar collection */
-            if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
-
-            if (tgt->resource) {
-                if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_PATCH;
-                if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
-                if ((rights & DACL_RMRES) == DACL_RMRES)
-                    tgt->allow |= ALLOW_DELETE;
-
-                if ((tgt->allow & (ALLOW_WRITE|ALLOW_CAL_ATTACH)) ==
-                    (ALLOW_WRITE|ALLOW_CAL_ATTACH)) {
-                    tgt->allow |= ALLOW_POST;
-                }
-            }
-            else {
-                if (rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
-                if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-                if (rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
-            }
-        }
+        tgt->flags = TGT_MANAGED_ATTACH;
     }
-    else if (tgt->userid) {
-        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-        if (rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
+    else if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX))) {
+        /* Can only read and DELETE resources from this collection */
+        tgt->allow = ALLOW_READ;
+
+        if (tgt->resource && (rights & DACL_RMRES) == DACL_RMRES)
+            tgt->allow |= ALLOW_DELETE;
+
+        tgt->flags = TGT_SCHED_INBOX;
+    }
+    else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX))){
+        /* Can only POST to this collection (free/busy request) */
+        tgt->allow = ALLOW_READ;
+
+        if (!tgt->resource && (rights & DACL_ADDRES))
+            tgt->allow |= ALLOW_POST;
+
+        tgt->flags = TGT_SCHED_OUTBOX;
+    }
+    else if (tgt->resource && (rights & DACL_WRITECONT)) {
+        /* Resource in regular calendar collection */
+        tgt->allow |= ALLOW_PATCH;
     }
 
     return 0;

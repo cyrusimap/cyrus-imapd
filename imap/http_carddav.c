@@ -462,38 +462,11 @@ static void my_carddav_shutdown(void)
 static int carddav_parse_path(const char *path,
                               struct request_target_t *tgt, const char **errstr)
 {
-    int r, rights;
+    int rights = 0;
 
-    r = dav_parse_path(path, tgt, namespace_addressbook.prefix,
-                       config_getstring(IMAPOPT_ADDRESSBOOKPREFIX), errstr);
-    if (r || !tgt->mbentry) return r;
-
-    /* Set proper Allow bits based on path components and ACL of current user */
-    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
-
-    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
-
-    if (tgt->collection) {
-        if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
-
-        if (tgt->resource) {
-            if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
-            if ((rights & DACL_RMRES) == DACL_RMRES) tgt->allow |= ALLOW_DELETE;
-        }
-        else {
-#if 0 /* Until Apple Contacts fixes their add-member implementation */
-            if (rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
-#endif
-            if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-            if (rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
-        }
-    }
-    else if (tgt->userid) {
-        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-        if (rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
-    }
-
-    return 0;
+    return calcarddav_parse_path(path, tgt, namespace_addressbook.prefix,
+                                 config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
+                                 errstr, &rights);
 }
 
 /* Perform a COPY/MOVE/PUT request
@@ -503,7 +476,8 @@ static int carddav_parse_path(const char *path,
  *   CARDDAV:no-uid-conflict (DAV:href)
  *   CARDDAV:max-resource-size
  */
-static int store_resource(struct transaction_t *txn, struct vparse_state *vparser,
+static int store_resource(struct transaction_t *txn,
+                          struct vparse_state *vparser,
                           struct mailbox *mailbox, const char *resource,
                           struct carddav_db *davdb, int dupcheck)
 {

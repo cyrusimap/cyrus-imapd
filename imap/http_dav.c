@@ -499,9 +499,10 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
 
 /* Parse request-target path in Cal/CardDAV namespace */
-EXPORTED int dav_parse_path(const char *path, struct request_target_t *tgt,
-                            const char *urlprefix, const char *mboxprefix,
-                            const char **errstr)
+EXPORTED int calcarddav_parse_path(const char *path,
+                                   struct request_target_t *tgt,
+                                   const char *urlprefix, const char *mboxprefix,
+                                   const char **errstr, int *rights)
 {
     char *p, *owner = NULL, *collection = NULL, *freeme = NULL;
     size_t len;
@@ -529,6 +530,7 @@ EXPORTED int dav_parse_path(const char *path, struct request_target_t *tgt,
 
     /* Default to bare-bones Allow bits */
     tgt->allow &= ALLOW_READ_MASK;
+    *rights = 0;
 
     /* Skip namespace */
     p += len;
@@ -640,6 +642,29 @@ EXPORTED int dav_parse_path(const char *path, struct request_target_t *tgt,
             default: return HTTP_SERVER_ERROR;
             }
         }
+    }
+
+    /* Set generic Allow bits based on path components and ACL of current user */
+    *rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
+
+    if (*rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
+
+    if (tgt->collection) {
+        if (*rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
+
+        if (tgt->resource) {
+            if (*rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
+            if ((*rights & DACL_RMRES) == DACL_RMRES) tgt->allow |= ALLOW_DELETE;
+        }
+        else {
+            if (*rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
+            if (*rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+            if (*rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
+        }
+    }
+    else if (tgt->userid) {
+        if (*rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
+        if (*rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
     }
 
     mbname_free(&mbname);
