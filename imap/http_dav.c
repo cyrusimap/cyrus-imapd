@@ -5580,13 +5580,13 @@ static int set_share_access(const char *mboxname,
     /* Set access rights */
     rightstr[0] = (access == SHARE_READWRITE) ? '+' : '-';
 
-    cyrus_acl_masktostr(DACL_READ|DACL_WRITE, rightstr+1);
+    cyrus_acl_masktostr(DACL_SHARERW, rightstr+1);
     r = mboxlist_setacl(&httpd_namespace, mboxname, userid, rightstr,
                         httpd_userisadmin || httpd_userisproxyadmin,
                         httpd_userid, httpd_authstate);
     if (!r && access == SHARE_READONLY) {
         rightstr[0] = '+';
-        cyrus_acl_masktostr(DACL_READ|DACL_PROPCOL, rightstr+1);
+        cyrus_acl_masktostr(DACL_SHARE, rightstr+1);
         r = mboxlist_setacl(&httpd_namespace, mboxname, userid, rightstr,
                             httpd_userisadmin || httpd_userisproxyadmin,
                             httpd_userid, httpd_authstate);
@@ -8352,6 +8352,203 @@ static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
     else {
         /* Return just the URL */
         xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    }
+
+    return 0;
+}
+
+struct userid_rights {
+    long positive;
+    long negative;
+};
+
+static void parse_acl(hash_table *table, const char *origacl)
+{
+    char *acl = xstrdupsafe(origacl);
+    char *thisid, *rights, *nextid;
+
+    for (thisid = acl; *thisid; thisid = nextid) {
+        struct userid_rights *id_rights;
+        int is_negative = 0;
+
+        rights = strchr(thisid, '\t');
+        if (!rights) {
+            break;
+        }
+        *rights++ = '\0';
+
+        nextid = strchr(rights, '\t');
+        if (!nextid) {
+            rights[-1] = '\t';
+            break;
+        }
+        *nextid++ = '\0';
+
+        if (*thisid == '-') {
+            is_negative = 1;
+            thisid++;
+        }
+
+        id_rights = hash_lookup(thisid, table);
+        if (!id_rights) {
+            id_rights = xzmalloc(sizeof(struct userid_rights));
+            hash_insert(thisid, id_rights, table);
+        }
+
+        if (is_negative) id_rights->negative |= cyrus_acl_strtomask(rights);
+        else id_rights->positive |= cyrus_acl_strtomask(rights);
+    }
+
+    free(acl);
+}
+
+struct invite_rock {
+    const char *owner;
+    int is_shared;
+    struct propfind_ctx *fctx;
+    xmlNodePtr node;
+    int legacy;
+};
+
+static void xml_add_sharee(const char *userid, void *data, void *rock)
+{
+    struct userid_rights *id_rights = (struct userid_rights *) data;
+    struct invite_rock *irock = (struct invite_rock *) rock;
+    int rights = id_rights->positive & ~id_rights->negative;
+
+    if (strcmp(userid, irock->owner) && (rights & DACL_SHARE) == DACL_SHARE) {
+        irock->is_shared = 1;
+        if (irock->node) {
+            xmlNodePtr sharee, access;
+
+            sharee =
+                xmlNewChild(irock->node, NULL,
+                            BAD_CAST (irock->legacy ? "user" : "sharee"),
+                            NULL);
+
+            buf_reset(&irock->fctx->buf);
+            if (strchr(userid, '@') || !httpd_extradomain) {
+                buf_printf(&irock->fctx->buf, "%s/%s/%s/",
+                           namespace_principal.prefix,
+                           USER_COLLECTION_PREFIX, userid);
+            }
+            else {
+                buf_printf(&irock->fctx->buf, "%s/%s/%s@%s/",
+                           namespace_principal.prefix,
+                           USER_COLLECTION_PREFIX, userid, httpd_extradomain);
+            }
+            xml_add_href(sharee, irock->fctx->ns[NS_DAV],
+                         buf_cstring(&irock->fctx->buf));
+
+            /* XXX  lookup response */
+            xmlNewChild(sharee, NULL, BAD_CAST "invite-noresponse", NULL);
+
+            access =
+                xmlNewChild(sharee, NULL,
+                            BAD_CAST (irock->legacy ? "access" :
+                                      "share-access"), NULL);
+            if ((rights & DACL_SHARERW) == DACL_SHARERW)
+                xmlNewChild(access, NULL, BAD_CAST "read-write", NULL);
+            else xmlNewChild(access, NULL, BAD_CAST "read", NULL);
+        }
+    }
+}
+
+
+void xml_add_shareaccess(struct propfind_ctx *fctx,
+                         xmlNodePtr resp, xmlNodePtr node, int legacy)
+{
+    if (mboxname_userownsmailbox(fctx->req_tgt->userid, fctx->mbentry->name)) {
+        hash_table table;
+        struct invite_rock irock = { fctx->req_tgt->userid, 0, NULL, NULL, 0 };
+
+        construct_hash_table(&table, 10, 1);
+        parse_acl(&table, fctx->mbentry->acl);
+        hash_enumerate(&table, &xml_add_sharee, &irock);
+
+        if (irock.is_shared) {
+            xmlNsPtr ns = fctx->ns[NS_DAV];
+
+            if (legacy) {
+                ensure_ns(fctx->ns, NS_CS, resp->parent, XML_NS_CS, "CS");
+                ns = fctx->ns[NS_CS];
+            }
+            xmlNewChild(node, ns, BAD_CAST "shared-owner", NULL);
+        }
+        else if (!legacy)
+            xmlNewChild(node, NULL, BAD_CAST "not-shared", NULL);
+
+        free_hash_table(&table, &free);
+    }
+    else if (legacy) {
+        ensure_ns(fctx->ns, NS_CS, resp->parent, XML_NS_CS, "CS");
+        xmlNewChild(node, fctx->ns[NS_CS], BAD_CAST "shared", NULL);
+    }
+    else {
+        int rights = httpd_myrights(httpd_authstate, fctx->mbentry->acl);
+
+        if ((rights & DACL_SHARERW) == DACL_SHARERW)
+            xmlNewChild(node, NULL, BAD_CAST "read-write", NULL);
+        else
+            xmlNewChild(node, NULL, BAD_CAST "read", NULL);
+    }
+}
+
+
+/* Callback to fetch DAV:share-access */
+int propfind_shareaccess(const xmlChar *name, xmlNsPtr ns,
+                         struct propfind_ctx *fctx,
+                         xmlNodePtr prop __attribute__((unused)),
+                         xmlNodePtr resp,
+                         struct propstat propstat[],
+                         void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    if (!fctx->mbentry) return HTTP_NOT_FOUND;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                        &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    xml_add_shareaccess(fctx, resp, node, 0 /* legacy */);
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:invite and CS:invite */
+int propfind_invite(const xmlChar *name, xmlNsPtr ns,
+                    struct propfind_ctx *fctx,
+                    xmlNodePtr prop __attribute__((unused)),
+                    xmlNodePtr resp __attribute__((unused)),
+                    struct propstat propstat[], void *rock)
+{
+    struct invite_rock irock = { fctx->req_tgt->userid, 0 /* is_shared */,
+                                 fctx, NULL, rock != 0 /* legacy */ };
+    xmlNodePtr node;
+
+    if (!fctx->mbentry) return HTTP_NOT_FOUND;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                        &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+    irock.node = node;
+
+    if (mboxname_userownsmailbox(fctx->req_tgt->userid, fctx->mbentry->name)) {
+        hash_table table;
+
+        construct_hash_table(&table, 10, 1);
+
+        parse_acl(&table, fctx->mbentry->acl);
+        hash_enumerate(&table, &xml_add_sharee, &irock);
+
+        free_hash_table(&table, &free);
+    }
+    else {
+        struct userid_rights id_rights = 
+            { httpd_myrights(httpd_authstate, fctx->mbentry->acl), 0 /* neg */};
+
+        irock.owner = "";
+        xml_add_sharee(fctx->req_tgt->userid, &id_rights, &irock);
     }
 
     return 0;

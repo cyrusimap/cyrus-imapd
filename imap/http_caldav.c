@@ -384,15 +384,15 @@ static const struct prop_entry caldav_props[] = {
 
     /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
     { "share-access", NS_DAV, PROP_COLLECTION,
-      NULL, NULL, NULL },
+      propfind_shareaccess, NULL, NULL },
     { "invite", NS_DAV, PROP_COLLECTION,
-      NULL, NULL, NULL },
+      propfind_invite, NULL, NULL },
     { "sharer-resource-uri", NS_DAV, PROP_COLLECTION,
       propfind_sharedurl, NULL, NULL },
 
     /* Backwards compatibility with Apple calendar sharing clients */
     { "invite", NS_CS, PROP_COLLECTION,
-      NULL, NULL, NULL },
+      propfind_invite, NULL, "calendarserver-sharing" },
     { "allowed-sharing-modes", NS_CS, PROP_COLLECTION,
       propfind_sharingmodes, NULL, NULL },
     { "shared-url", NS_CS, PROP_COLLECTION,
@@ -4060,6 +4060,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
             else {
                 xmlNewChild(node, fctx->ns[NS_CALDAV],
                             BAD_CAST "calendar", NULL);
+                xml_add_shareaccess(fctx, resp, node, 1 /* legacy */);
             }
         }
     }

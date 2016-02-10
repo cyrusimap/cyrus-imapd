@@ -164,6 +164,11 @@ enum {
                                            schedule-send-reply,
                                            schedule-send-freebusy) */
 
+/* Privileges assigned via WebDAV Sharing (draft-pot-webdav-resource-sharing) */
+#define DACL_SHARE      (DACL_READ|DACL_PROPCOL)
+#define DACL_SHARERW    (DACL_READ|DACL_WRITE)
+
+
 /* Index into preconditions array */
 enum {
     /* WebDAV (RFC 4918) preconditons */
@@ -693,6 +698,16 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
                        xmlNodePtr prop, xmlNodePtr resp,
                        struct propstat propstat[], void *rock);
 
+void xml_add_shareaccess(struct propfind_ctx *fctx,
+                         xmlNodePtr resp, xmlNodePtr node, int legacy);
+int propfind_shareaccess(const xmlChar *name, xmlNsPtr ns,
+                         struct propfind_ctx *fctx,
+                         xmlNodePtr prop, xmlNodePtr resp,
+                         struct propstat propstat[], void *rock);
+int propfind_invite(const xmlChar *name, xmlNsPtr ns,
+                    struct propfind_ctx *fctx,
+                    xmlNodePtr prop, xmlNodePtr resp,
+                    struct propstat propstat[], void *rock);
 int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop, xmlNodePtr resp,
