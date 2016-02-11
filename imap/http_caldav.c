@@ -834,7 +834,7 @@ static int caldav_parse_path(const char *path,
     }
     else if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX))) {
         /* Can only read and DELETE resources from this collection */
-        tgt->allow = ALLOW_READ;
+        tgt->allow &= ALLOW_READ_MASK;
 
         if (tgt->resource && (rights & DACL_RMRES) == DACL_RMRES)
             tgt->allow |= ALLOW_DELETE;
@@ -843,7 +843,7 @@ static int caldav_parse_path(const char *path,
     }
     else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX))){
         /* Can only POST to this collection (free/busy request) */
-        tgt->allow = ALLOW_READ;
+        tgt->allow &= ALLOW_READ_MASK;
 
         if (!tgt->resource && (rights & DACL_ADDRES))
             tgt->allow |= ALLOW_POST;
