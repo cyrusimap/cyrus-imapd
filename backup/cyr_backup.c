@@ -75,7 +75,36 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    // FIXME
+    fprintf(stderr, "    %s [options] [mode] backup list chunks\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup list mailboxes\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup list messages\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup list all\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup show chunks id...\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup show mailboxes [mboxname | uniqueid]...\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup show messages guid...\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup dump chunk id\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup dump message guid\n", argv0);
+
+    fprintf(stderr, "\n%s\n",
+            "Commands:\n"
+            "    list                # list specified items\n"
+            "    show                # show detailed information for specified items\n"
+            "    dump                # show entire item\n"
+    );
+
+    fprintf(stderr, "%s\n",
+            "Options:\n"
+            "    -C alt_config       # alternate config file\n"
+            "    -v                  # verbose\n"
+    );
+
+    fprintf(stderr, "%s\n",
+            "Modes:\n"
+            "    -f                  # specified backup interpreted as filename\n"
+            "    -m                  # specified backup interpreted as mboxname\n"
+            "    -u                  # specified backup interpreted as userid (default)\n"
+    );
+
     exit(EC_USAGE);
 }
 
