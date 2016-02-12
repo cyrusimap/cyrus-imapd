@@ -289,6 +289,7 @@ int main(int argc, char **argv, char **envp)
     int opt;
     char *alt_config = NULL;
     int call_debugger = 0;
+    int debug_stdio = 0;
     int max_use = MAX_USE;
     int reuse_timeout = REUSE_TIMEOUT;
     int soctype;
@@ -322,7 +323,7 @@ int main(int argc, char **argv, char **envp)
 
     opterr = 0; /* disable error reporting,
                    since we don't know about service-specific options */
-    while ((opt = getopt(argc, argv, "C:U:T:D")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:U:T:DX")) != EOF) {
         if (argv[optind-1][0] == '-' && strlen(argv[optind-1]) > 2) {
             /* we have merged options */
             syslog(LOG_ERR,
@@ -344,6 +345,9 @@ int main(int argc, char **argv, char **envp)
             break;
         case 'D':
             call_debugger = 1;
+            break;
+        case 'X':
+            debug_stdio = 1;
             break;
         default:
             strarray_appendm(&service_argv, argv[optind-1]);
@@ -409,45 +413,52 @@ int main(int argc, char **argv, char **envp)
     }
     syslog(LOG_DEBUG, "executed");
 
-    /* set close on exec */
-    fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
-                                       fdflags | FD_CLOEXEC);
-    if (fdflags == -1) {
-        syslog(LOG_ERR, "unable to set close on exec: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
-            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-        return 1;
+    if (debug_stdio) {
+        if (service_init(service_argv.count, service_argv.data, envp) != 0) {
+            return 1;
+        }
     }
-    fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
-                                       fdflags | FD_CLOEXEC);
-    if (fdflags == -1) {
-        syslog(LOG_ERR, "unable to set close on exec: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
-            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-        return 1;
-    }
+    else {
+        /* set close on exec */
+        fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
+        if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
+                                        fdflags | FD_CLOEXEC);
+        if (fdflags == -1) {
+            syslog(LOG_ERR, "unable to set close on exec: %m");
+            if (MESSAGE_MASTER_ON_EXIT)
+                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            return 1;
+        }
+        fdflags = fcntl(STATUS_FD, F_GETFD, 0);
+        if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
+                                        fdflags | FD_CLOEXEC);
+        if (fdflags == -1) {
+            syslog(LOG_ERR, "unable to set close on exec: %m");
+            if (MESSAGE_MASTER_ON_EXIT)
+                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            return 1;
+        }
 
-    /* figure out what sort of socket this is */
-    if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
-                   (char *) &soctype, &typelen) < 0) {
-        syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
-            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-        return 1;
-    }
-    if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
-        syslog(LOG_ERR, "getsockname: failed: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
-            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-        return 1;
-    }
+        /* figure out what sort of socket this is */
+        if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
+                    (char *) &soctype, &typelen) < 0) {
+            syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
+            if (MESSAGE_MASTER_ON_EXIT)
+                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            return 1;
+        }
+        if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
+            syslog(LOG_ERR, "getsockname: failed: %m");
+            if (MESSAGE_MASTER_ON_EXIT)
+                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            return 1;
+        }
 
-    if (service_init(service_argv.count, service_argv.data, envp) != 0) {
-        if (MESSAGE_MASTER_ON_EXIT)
-            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-        return 1;
+        if (service_init(service_argv.count, service_argv.data, envp) != 0) {
+            if (MESSAGE_MASTER_ON_EXIT)
+                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            return 1;
+        }
     }
 
     /* determine initial process file inode, size and mtime */
@@ -462,6 +473,13 @@ int main(int argc, char **argv, char **envp)
     start_mtime = sbuf.st_mtime;
 
     getlockfd(service, id);
+
+    if (debug_stdio) {
+        service_main(service_argv.count, service_argv.data, envp);
+        service_abort(0);
+        return 0;
+    }
+
     for (;;) {
         /* ok, listen to this socket until someone talks to us */
 
