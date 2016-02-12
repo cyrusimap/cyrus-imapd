@@ -55,6 +55,7 @@
 #define TOKEN_UID  "\"uid\":"
 #define TOKEN_MBOX "\"mboxs\":"
 #define SQL_SELECT_CMD "SELECT list_info FROM user_msg WHERE msg_guid = "
+#define SQL_SELECT_ALL "SELECT * FROM user_msg"
 #define SQL_DELETE_CMD "DELETE FROM user_msg WHERE msg_guid = "
 
 static int      bkeep_db_open        = 0 ;
@@ -62,6 +63,7 @@ static sqldb_t *opened_db            = NULL ;
 static char    *opened_mailboxname   = NULL ;
 
 static struct message_info message_info = { 0,0 } ;
+static struct message_list message_list = { 0,0 } ;
 
 static void free_message_info () {
     int i;
@@ -71,6 +73,13 @@ static void free_message_info () {
     free (message_info.mailbox) ;
     message_info.mailboxes = 0 ;
     message_info.mailbox = NULL ;
+}
+
+static void free_message_list () {
+    if (message_list.message)
+        free (message_list.message) ;
+    message_list.count = 0 ;
+    message_list.message = NULL ;
 }
 
 static char** append_to_array(char** src, int *size, char *newData) {
@@ -85,6 +94,22 @@ static char** append_to_array(char** src, int *size, char *newData) {
        free (src) ;
        *size += 1;
        return tmp ;
+}
+
+static struct message *append_to_list_array(struct message *src, int *size, struct message_guid guid, uint32_t uid )
+{
+    struct message *tmp = malloc(  sizeof (struct message) * (*size + 1) );
+    int i ;
+    for (i = 0; i < *size; i++){
+        tmp [i].message_guid = src[i].message_guid;
+        tmp [i].message_uid = src[i].message_uid;
+    }
+
+    tmp [*size].message_guid = guid;
+    tmp [*size].message_uid = uid;
+    free (src) ;
+    *size += 1;
+    return tmp ;
 }
 
 static char *new_str (char *newData, int size) {
@@ -130,7 +155,8 @@ static int get_mailboxes_callback(void *data __attribute__((unused)),
                                   int argc, char **argv,
                                   char **azColName __attribute__((unused)))
 {
-    if (argc == 1){
+    if (argc == 1) // one column return
+    {
         char *str = argv[0] ;
         char *ret = NULL ;
         int  blast = 0 ;
@@ -153,6 +179,48 @@ static int get_mailboxes_callback(void *data __attribute__((unused)),
     }
     return 0;
 }
+
+static int get_guid_callback(void *data __attribute__((unused)),
+                             int argc, char **argv,
+                             char **azColName __attribute__((unused)))
+{
+    char *mailboxname = (char*) data ;
+    int imailboxname = strlen (mailboxname);
+    uint32_t uid;
+    struct message_guid guid ;
+
+    if (argc == 2)  // two columns return
+    {
+        char *str = argv[1] ;
+        char *ret = NULL ;
+        int  blast = 0 ;
+        ret = strstr(str, TOKEN_UID) ;
+        while (ret && !blast) {
+            char *p;
+            ret += (strlen (TOKEN_UID)) ;
+            p = strstr(ret, TOKEN_UID) ;
+            if ( !p ) {
+                p = strstr(ret, "}") ;
+                blast = 1 ;
+            }
+            if ( p ){
+                char *fname = new_str ( ret, (p - ret) ) ;
+
+                char *ret = strstr(fname, mailboxname) ;
+                if (ret)
+                {
+                    const char *pstart = ret + imailboxname  + 1 ;
+                    const char *pend   = ret + strlen (fname);
+                    if (!parseuint32(pstart, &pend, &uid) && message_guid_decode(&guid, argv[0]))
+                        message_list.message = append_to_list_array(message_list.message, &message_list.count, guid, uid );
+                }
+            }
+            ret = p ;
+        }
+    }
+    return 0;
+}
+
 
 
 static char *pack_update_message (const char *msg_guid){
@@ -411,3 +479,41 @@ EXPORTED int delete_message_guid (struct mailbox *mailbox, const struct index_re
     }
     return (rc == SQLITE_OK) ;
 }
+
+/* return a list of pair GUID - UID */
+EXPORTED struct message *get_list_of_message (struct mailbox *mailbox, uint32_t *count)
+{
+    /* SQL_SELECT_ALL */
+    char *zErrMsg = 0;
+    int rc ;
+    sqldb_t *db = NULL ;
+
+    db = manage_db_open (mailbox) ;
+
+    if (db){
+        rc = sqlite3_exec(db->db, SQL_SELECT_ALL, get_guid_callback, mailbox->name, &zErrMsg);
+        sql_error (rc, zErrMsg) ;
+
+        if (bkeep_db_open) {
+            opened_db  = db ;
+            opened_mailboxname = mailbox->name ;
+        }
+        else
+            sqldb_close(&db);
+    }
+
+    if (rc == SQLITE_OK)
+    {
+        *count = message_list.count ;
+        return message_list.message ;
+    }
+    else return NULL ;
+}
+
+
+EXPORTED int discard_list ()
+{
+    free_message_list () ;
+    return 0 ;
+}
+

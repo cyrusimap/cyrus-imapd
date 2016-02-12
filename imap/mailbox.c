@@ -4446,9 +4446,8 @@ EXPORTED void mailbox_remove_files_from_object_storage(struct mailbox *mailbox,
 
 {
     const struct index_record *record;
-    int object_storage_enabled = 0;
 #if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 #endif
 
     assert(mailbox_index_islocked(mailbox, 1));
@@ -5514,7 +5513,20 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     int i;
 
     strarray_add(&paths, mailbox_datapath(mailbox, 0));
-    strarray_add(&paths, mboxname_archivepath(mailbox->part, mailbox->name, mailbox->uniqueid, 0));
+
+#if defined ENABLE_OBJECTSTORE
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
+    {
+        uint32_t i , count = 0 ;
+        struct message *list = get_list_of_message (mailbox, &count) ;
+        for (i = 0; i < count; i++) {
+            add_found(files, list [i].message_uid, 1 /* isarchive */ );
+        }
+        discard_list( ) ;
+    }
+    else
+#endif
+        strarray_add(&paths, mboxname_archivepath(mailbox->part, mailbox->name, mailbox->uniqueid, 0));
 
     for (i = 0; i < paths.count; i++) {
         const char *dirpath = strarray_nth(&paths, i);
@@ -5873,6 +5885,16 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     int re_pack = 0;
     int did_stat = 0;
 
+    int remove_temp_spool_file = 0 ;
+#if defined ENABLE_OBJECTSTORE
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+
+    if (object_storage_enabled && record->system_flags & FLAG_ARCHIVED){  // put the file on spool temporarily
+        remove_temp_spool_file = 1;
+        r = objectstore_get(mailbox, record, fname);
+    }
+#endif
+
     /* does the file actually exist? */
     if (have_file && do_stat) {
         if (stat(fname, &sbuf) == -1 || (sbuf.st_size == 0)) {
@@ -5886,19 +5908,25 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     if (!have_file) {
         /* well, that's OK if it's supposed to be missing! */
-        if (record->system_flags & FLAG_UNLINKED)
-            return 0;
+        if (record->system_flags & FLAG_UNLINKED){
+            r = 0 ;
+            goto out;
+        }
 
         printf("%s uid %u not found\n", mailbox->name, record->uid);
         syslog(LOG_ERR, "%s uid %u not found", mailbox->name, record->uid);
 
-        if (!make_changes) return 0;
+        if (!make_changes) {
+            r = 0 ;
+            goto out;
+        }
 
         /* otherwise we have issues, mark it unlinked */
         unlink(fname);
         record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
-        return mailbox_rewrite_index_record(mailbox, record);
+        r = mailbox_rewrite_index_record(mailbox, record);
+        goto out;
     }
 
     if (mailbox_cacherecord(mailbox, record) || record->crec.len == 0) {
@@ -5919,7 +5947,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         record->internaldate = 0;
 
         r = message_parse(fname, record);
-        if (r) return r;
+        if (r) goto out;
 
         /* unchanged, keep the old value */
         if (!record->internaldate)
@@ -5934,7 +5962,10 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             syslog(LOG_ERR, "%s uid %u guid mismatch",
                    mailbox->name, record->uid);
 
-            if (!make_changes) return 0;
+            if (!make_changes) {
+                r = 0 ;
+                goto out;
+            }
 
             if (record->system_flags & FLAG_EXPUNGED) {
                 /* already expunged, just unlink it */
@@ -5966,14 +5997,16 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                  * expectation that GUID never changes */
                 copy.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
                 mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
-                return mailbox_rewrite_index_record(mailbox, &copy);
+                r = mailbox_rewrite_index_record(mailbox, &copy);
+                goto out;
             }
 
             /* otherwise we just report it and move on - hopefully the
              * correct file can be restored from backup or something */
             printf("run reconstruct with -R to fix or -U to remove\n");
             syslog(LOG_ERR, "run reconstruct with -R to fix or -U to remove");
-            return 0;
+            r = 0 ;
+            goto out;
         }
     }
 
@@ -5983,13 +6016,17 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         printf("%s uid %u failed to parse\n", mailbox->name, record->uid);
         syslog(LOG_ERR, "%s uid %u failed to parse", mailbox->name, record->uid);
 
-        if (!make_changes) return 0;
+        if (!make_changes) {
+            r = 0 ;
+            goto out;
+        }
 
         /* otherwise we have issues, mark it unlinked */
         unlink(fname);
         record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
-        return mailbox_rewrite_index_record(mailbox, record);
+        r = mailbox_rewrite_index_record(mailbox, record);
+        goto out;
     }
 
     /* get internaldate from the file if not set */
@@ -6028,22 +6065,31 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* after all this - if it still matches in every respect, we don't need
      * to rewrite the record - just return */
-    if (records_match(mailbox->name, &copy, record))
-        return 0;
+    if (records_match(mailbox->name, &copy, record)) {
+        r = 0 ;
+        goto out;
+    }
 
     /* XXX - inform of changes */
-    if (!make_changes)
-        return 0;
+    if (!make_changes) {
+        r = 0 ;
+        goto out;
+    }
 
     /* rewrite the cache record */
     if (re_pack || record->cache_crc != copy.cache_crc) {
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
         record->cache_offset = 0;
         r = mailbox_append_cache(mailbox, record);
-        if (r) return r;
+        if (r) goto out ;
     }
 
-    return mailbox_rewrite_index_record(mailbox, record);
+    r = mailbox_rewrite_index_record(mailbox, record);
+
+out:
+    if (remove_temp_spool_file)
+        remove(fname);
+    return r;
 }
 
 
@@ -6057,10 +6103,37 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     struct stat sbuf;
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
 
-    if (isarchive)
+    memset(&record, 0, sizeof(struct index_record));
+
+    int remove_temp_spool_file = 0 ;
+    int object_storage_enabled = 0 ;
+#if defined ENABLE_OBJECTSTORE
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
+
+    if (isarchive && !object_storage_enabled)
         fname = mboxname_archivepath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
     else
         fname = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
+
+#if defined ENABLE_OBJECTSTORE
+    if (object_storage_enabled)
+    {
+        uint32_t i , count = 0 ;
+        struct message *list = get_list_of_message (mailbox, &count) ;
+        for (i = 0; i < count; i++) {
+            if (uid == list [i].message_uid){
+
+                record.uid = uid ;
+                record.guid = list [i].message_guid ;
+                remove_temp_spool_file = 1;
+                r = objectstore_get(mailbox, &record, fname);
+                break ;
+            }
+        }
+        discard_list( ) ;
+    }
+#endif
 
     /* possible if '0.' file exists */
     if (!uid) {
@@ -6078,15 +6151,17 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     if (r) {
         syslog(LOG_ERR, "%s uid %u not found", mailbox->name, uid);
         printf("%s uid %u not found", mailbox->name, uid);
-        if (!make_changes) return 0;
+        if (!make_changes){
+            r = 0 ;
+            goto out;
+        }
         unlink(fname);
-        return 0;
+        r = 0 ;
+        goto out;
     }
 
-    memset(&record, 0, sizeof(struct index_record));
-
     r = message_parse(fname, &record);
-    if (r) return r;
+    if (r) goto out;
 
     if (isarchive)
         record.system_flags |= FLAG_ARCHIVED;
@@ -6109,25 +6184,35 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
         /* XXX - check firstexpunged? */
         record.uid = mailbox->i.last_uid + 1;
 
-        if (!make_changes) return 0;
+        if (!make_changes) {
+            r = 0 ;
+            goto out;
+        }
 
         oldfname = xstrdup(fname);
         newfname = xstrdup(mailbox_record_fname(mailbox, &record));
         r = rename(oldfname, newfname);
         free(oldfname);
         free(newfname);
-        if (r) return IMAP_IOERROR;
+        if (r) {
+            r = IMAP_IOERROR;
+            goto out ;
+        }
     }
 
-
     /* XXX - inform of changes */
-    if (!make_changes)
-        return 0;
+    if (!make_changes){
+        r = 0 ;
+        goto out;
+    }
 
     r = mailbox_append_index_record(mailbox, &record);
 
     /* XXX - copy per-message annotations? */
 
+out:
+    if (remove_temp_spool_file)
+        remove(fname);
     return r;
 }
 
