@@ -4016,7 +4016,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             xmlNodePtr prop __attribute__((unused)),
                             xmlNodePtr resp,
                             struct propstat propstat[],
-                            void *rock __attribute__((unused)))
+                            void *rock)
 {
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
@@ -4039,7 +4039,10 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
             else {
                 xmlNewChild(node, fctx->ns[NS_CALDAV],
                             BAD_CAST "calendar", NULL);
-                xml_add_shareaccess(fctx, resp, node, 1 /* legacy */);
+                if (rock) {
+                    /* Called from PROPFIND - include "shared[-owner]" type */
+                    xml_add_shareaccess(fctx, resp, node, 1 /* legacy */);
+                }
             }
         }
     }
@@ -5397,7 +5400,9 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (!fctx->req_tgt->resource && !fctx->req_tgt->flags) {
+    if (fctx->req_tgt->collection && !fctx->req_tgt->flags &&
+        !fctx->req_tgt->resource &&
+        mboxname_userownsmailbox(fctx->req_tgt->userid, fctx->mbentry->name)) {
         xmlNewChild(node, NULL, BAD_CAST "can-be-shared", NULL);
         xmlNewChild(node, NULL, BAD_CAST "can-be-published", NULL);
     }

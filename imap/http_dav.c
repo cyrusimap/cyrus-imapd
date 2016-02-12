@@ -145,7 +145,6 @@ static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop, xmlNodePtr resp,
                               struct propstat propstat[], void *rock);
-#define propfind_principalurl  propfind_owner
 
 static int principal_search(const char *userid, void *rock);
 static int report_prin_prop_search(struct transaction_t *txn,
@@ -475,10 +474,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         }
 
         p += len;
-        if (!*p || !*++p) {
-            /* Check ACL for current user */
-            return principal_acl_check(tgt->userid, httpd_authstate);
-        }
+        if (!*p || !*++p) return 0;
     }
     else if (!strncmp(p, SERVER_INFO, len)) {
         p += len;
@@ -1654,8 +1650,8 @@ static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:owner, DAV:principal-URL */
-int propfind_owner(const xmlChar *name, xmlNsPtr ns,
+/* Callback to fetch DAV:principal-URL */
+int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
                           struct propfind_ctx *fctx,
                           xmlNodePtr prop,
                           xmlNodePtr resp __attribute__((unused)),
@@ -1690,6 +1686,40 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
     }
 
     return 0;
+}
+
+
+/* Callback to fetch DAV:owner */
+int propfind_owner(const xmlChar *name, xmlNsPtr ns,
+                   struct propfind_ctx *fctx,
+                   xmlNodePtr prop,
+                   xmlNodePtr resp __attribute__((unused)),
+                   struct propstat propstat[],
+                   void *rock __attribute__((unused)))
+{
+    mbname_t *mbname;
+    const char *owner;
+    int r;
+
+    if (!fctx->mbentry) return HTTP_NOT_FOUND;
+
+    mbname = mbname_from_intname(fctx->mbentry->name);
+    owner = mbname_userid(mbname);
+    if (!owner) {
+        static strarray_t *admins = NULL;
+
+        if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS),
+                                             NULL, STRARRAY_TRIM);
+
+        owner = strarray_nth(admins, 0);
+    }
+
+    r = propfind_principalurl(name, ns, fctx,
+                              prop, resp, propstat, (void *) owner);
+
+    mbname_free(&mbname);
+
+    return r;
 }
 
 
@@ -5870,10 +5900,27 @@ static int dav_post_share(struct transaction_t *txn,
                 }
             }
             else {
-                /* XXX  what other URIs will we see?  principal URL? */
+                const char *errstr = NULL;
+                xmlURIPtr uri = parse_uri(METH_UNKNOWN,
+                                          (const char *) href, 1, &errstr);
+
+                if (uri) {
+                    struct request_target_t principal;
+
+                    memset(&principal, 0, sizeof(struct request_target_t));
+                    r = principal_parse_path((const char *) uri->path,
+                                             &principal, &errstr);
+                    if (!r && principal.userid) userid = principal.userid;
+                    else if (principal.userid) free(principal.userid);
+
+                    xmlFreeURI(uri);
+                }
             }
 
-            if (userid) {
+            if (!userid) {
+                /* XXX  set invite-invalid ? */
+            }
+            else {
                 /* Set access rights */
                 r = set_share_access(txn->req_tgt.mbentry->name,
                                      userid, access);
@@ -8452,15 +8499,16 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
                             NULL);
 
             buf_reset(&irock->fctx->buf);
-            if (strchr(userid, '@') || !httpd_extradomain) {
-                buf_printf(&irock->fctx->buf, "%s/%s/%s/",
-                           namespace_principal.prefix,
-                           USER_COLLECTION_PREFIX, userid);
+            if (strchr(userid, '@')) {
+                buf_printf(&irock->fctx->buf, "mailto:%s", userid);
             }
             else {
-                buf_printf(&irock->fctx->buf, "%s/%s/%s@%s/",
-                           namespace_principal.prefix,
-                           USER_COLLECTION_PREFIX, userid, httpd_extradomain);
+                const char *domain = httpd_extradomain;
+                if (!domain) domain = config_defdomain;
+                if (!domain) domain = config_servername;
+
+                buf_printf(&irock->fctx->buf, "mailto:%s@%s",
+                           userid, domain);
             }
             xml_add_href(sharee, irock->fctx->ns[NS_DAV],
                          buf_cstring(&irock->fctx->buf));

@@ -631,6 +631,10 @@ int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
                        xmlNodePtr prop, xmlNodePtr resp,
                        struct propstat propstat[], void *rock);
 
+int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
+                          struct propfind_ctx *fctx,
+                          xmlNodePtr prop, xmlNodePtr resp,
+                          struct propstat propstat[], void *rock);
 int propfind_owner(const xmlChar *name, xmlNsPtr ns,
                    struct propfind_ctx *fctx,
                    xmlNodePtr prop, xmlNodePtr resp,
