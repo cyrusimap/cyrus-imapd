@@ -103,6 +103,7 @@ static void usage(void)
 
     fprintf(stderr, "%s\n",
             "Lock options:\n"
+            "    -c                  # exclusively create backup\n"
             "    -p                  # lock backup and wait for eof on stdin (default)\n"
             "    -s                  # lock backup and open index in sqlite3\n"
             "    -x command          # lock backup and execute command\n"
@@ -144,6 +145,7 @@ struct ctlbu_cmd_options {
     enum ctlbu_mode mode;
     enum ctlbu_lock_mode lock_mode;
     enum backup_open_nonblock wait;
+    enum backup_open_create create;
     int verbose;
     int stop_on_error;
     int list_stale;
@@ -202,12 +204,15 @@ static foreach_cb *const cmd_func[] = {
 };
 
 static int lock_run_pipe(const char *userid, const char *fname,
-                         enum backup_open_nonblock nonblock);
+                         enum backup_open_nonblock nonblock,
+                         enum backup_open_create create);
 static int lock_run_sqlite(const char *userid, const char *fname,
-                           enum backup_open_nonblock nonblock);
+                           enum backup_open_nonblock nonblock,
+                           enum backup_open_create create);
 static int lock_run_exec(const char *userid, const char *fname,
                          const char *cmd,
-                         enum backup_open_nonblock nonblock);
+                         enum backup_open_nonblock nonblock,
+                         enum backup_open_create create);
 
 static enum ctlbu_cmd parse_cmd_string(const char *cmd)
 {
@@ -308,7 +313,7 @@ int main (int argc, char **argv)
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    while ((opt = getopt(argc, argv, ":AC:DFPSfmpst:x:uvw")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:DFPScfmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -330,6 +335,9 @@ int main (int argc, char **argv)
             break;
         case 'S':
             options.stop_on_error = 1;
+            break;
+        case 'c':
+            options.create = BACKUP_OPEN_CREATE_EXCL;
             break;
         case 'f':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -637,13 +645,14 @@ static int cmd_lock_one(void *rock,
     switch (options->lock_mode) {
     case CTLBU_LOCK_MODE_UNSPECIFIED:
     case CTLBU_LOCK_MODE_PIPE:
-        r = lock_run_pipe(userid, fname, options->wait);
+        r = lock_run_pipe(userid, fname, options->wait, options->create);
         break;
     case CTLBU_LOCK_MODE_SQL:
-        r = lock_run_sqlite(userid, fname, options->wait);
+        r = lock_run_sqlite(userid, fname, options->wait, options->create);
         break;
     case CTLBU_LOCK_MODE_EXEC:
-        r = lock_run_exec(userid, fname, options->lock_exec_cmd, options->wait);
+        r = lock_run_exec(userid, fname, options->lock_exec_cmd,
+                          options->wait, options->create);
         break;
     }
 
@@ -726,20 +735,21 @@ static int cmd_verify_one(void *rock,
 }
 
 static int lock_run_pipe(const char *userid, const char *fname,
-                         enum backup_open_nonblock nonblock)
+                         enum backup_open_nonblock nonblock,
+                         enum backup_open_create create)
 {
     printf("* Trying to obtain lock on %s...\n", userid ? userid : fname);
 
     struct backup *backup = NULL;
     int r;
 
-    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+    r = backup_open_paths(&backup, fname, NULL, nonblock, create);
 
     if (!r)
         r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
 
     if (r) {
-        printf("NO failed\n");
+        printf("NO failed (%s)\n", error_message(r));
         return EC_SOFTWARE; // FIXME would something else be more appropriate?
     }
 
@@ -757,7 +767,8 @@ static int lock_run_pipe(const char *userid, const char *fname,
 }
 
 static int lock_run_sqlite(const char *userid, const char *fname,
-                           enum backup_open_nonblock nonblock)
+                           enum backup_open_nonblock nonblock,
+                           enum backup_open_create create)
 {
     fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
 
@@ -766,7 +777,7 @@ static int lock_run_sqlite(const char *userid, const char *fname,
     int r, status;
     pid_t pid;
 
-    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+    r = backup_open_paths(&backup, fname, NULL, nonblock, create);
 
     if (!r)
         r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
@@ -818,14 +829,15 @@ static const char index_fname_env[] = "ctl_backups_lock_index_fname";
 
 static int lock_run_exec(const char *userid, const char *fname,
                          const char *cmd,
-                         enum backup_open_nonblock nonblock)
+                         enum backup_open_nonblock nonblock,
+                         enum backup_open_create create)
 {
     fprintf(stderr, "trying to obtain lock on %s...\n", userid ? userid : fname);
 
     struct backup *backup = NULL;
     int r;
 
-    r = backup_open_paths(&backup, fname, NULL, nonblock, BACKUP_OPEN_NOCREATE);
+    r = backup_open_paths(&backup, fname, NULL, nonblock, create);
 
     if (!r)
         r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);

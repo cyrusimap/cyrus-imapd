@@ -147,8 +147,13 @@ HIDDEN int backup_real_open(struct backup **backupp,
                       open_flags,
                       S_IRUSR | S_IWUSR);
         if (fd < 0) {
-            syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
-            r = IMAP_IOERROR;
+            if (errno == EEXIST) {
+                r = IMAP_MAILBOX_EXISTS;
+            }
+            else {
+                syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
+                r = IMAP_IOERROR;
+            }
             goto error;
         }
 

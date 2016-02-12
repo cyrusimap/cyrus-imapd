@@ -526,6 +526,7 @@ mode:
     -u                  # specified backups interpteted as userids (default)
 
 lock_opts:
+    -c                  # exclusively create backup
     -s                  # lock backup and open index in sqlite
     -x cmd              # lock backup and execute cmd
     -p                  # lock backup and wait for eof on stdin (default)
@@ -815,7 +816,6 @@ todo list
 * valgrind
 * finish reconstruct
 * compact: split before append?
-* lock/etc: explicit create_excl option
 
 compact implementation steps:
     1 remove unused chunks, keep everything else as is
