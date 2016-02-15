@@ -357,7 +357,6 @@ static int webdav_parse_path(const char *path,
     size_t len, lastlen = 0;
     mbname_t *mbname = NULL;
     const char *mboxname = NULL;
-    int rights;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -491,22 +490,10 @@ static int webdav_parse_path(const char *path,
 
     mbname_free(&mbname);
 
-    /* Set proper Allow bits based on path components and ACL of current user */
-    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
+    /* Set proper Allow bits based on path components */
+    tgt->allow |= ALLOW_ACL | ALLOW_PROPPATCH | ALLOW_WRITE | ALLOW_DELETE;
 
-    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
-    if (rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
-
-    if (tgt->resource) {
-        if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
-        if ((rights & DACL_RMRES) == DACL_RMRES) tgt->allow |= ALLOW_DELETE;
-    }
-    else {
-        if (rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
-        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-        if (rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
-        if (rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
-    }
+    if (!tgt->resource) tgt->allow |= ALLOW_POST | ALLOW_MKCOL;
 
     return 0;
 }

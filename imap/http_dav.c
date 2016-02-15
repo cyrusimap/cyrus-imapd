@@ -492,7 +492,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 EXPORTED int calcarddav_parse_path(const char *path,
                                    struct request_target_t *tgt,
                                    const char *urlprefix, const char *mboxprefix,
-                                   const char **errstr, int *rights)
+                                   const char **errstr)
 {
     char *p, *owner = NULL, *collection = NULL, *freeme = NULL;
     size_t len;
@@ -520,7 +520,6 @@ EXPORTED int calcarddav_parse_path(const char *path,
 
     /* Default to bare-bones Allow bits */
     tgt->allow &= ALLOW_READ_MASK;
-    *rights = 0;
 
     /* Skip namespace */
     p += len;
@@ -634,28 +633,15 @@ EXPORTED int calcarddav_parse_path(const char *path,
         }
     }
 
-    /* Set generic Allow bits based on path components and ACL of current user */
-    *rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
-
-    if (*rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
+    /* Set generic Allow bits based on path components */
+    tgt->allow |= ALLOW_ACL | ALLOW_PROPPATCH;
 
     if (tgt->collection) {
-        if (*rights & DACL_WRITECONT) tgt->allow |= ALLOW_WRITE;
+        tgt->allow |= ALLOW_WRITE | ALLOW_DELETE;
 
-        if (tgt->resource) {
-            if (*rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
-            if ((*rights & DACL_RMRES) == DACL_RMRES) tgt->allow |= ALLOW_DELETE;
-        }
-        else {
-            if (*rights & DACL_ADDRES) tgt->allow |= ALLOW_POST;
-            if (*rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-            if (*rights & DACL_RMCOL) tgt->allow |= ALLOW_DELETE;
-        }
+        if (!tgt->resource) tgt->allow |= ALLOW_POST;
     }
-    else if (tgt->userid) {
-        if (*rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-        if (*rights & DACL_MKCOL) tgt->allow |= ALLOW_MKCOL;
-    }
+    else if (tgt->userid) tgt->allow |= ALLOW_MKCOL;
 
     mbname_free(&mbname);
 
@@ -8753,7 +8739,6 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
     char *p;
     size_t len;
     mbname_t *mbname = NULL;
-    int rights;
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -8850,19 +8835,10 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
 
     mbname_free(&mbname);
 
-    /* Set proper Allow bits based on path components and ACL of current user */
-    rights = httpd_myrights(httpd_authstate, tgt->mbentry->acl);
+    /* Set proper Allow bits based on path components */
+    tgt->allow |= ALLOW_ACL;
 
-    if (rights & DACL_ADMIN) tgt->allow |= ALLOW_ACL;
-
-    if (tgt->resource) {
-        if (rights & DACL_ADMIN) tgt->allow |= ALLOW_POST;
-        if (rights & DACL_PROPRES) tgt->allow |= ALLOW_PROPPATCH;
-        if ((rights & DACL_RMRES) == DACL_RMRES) tgt->allow |= ALLOW_DELETE;
-    }
-    else if (tgt->userid) {
-        if (rights & DACL_PROPCOL) tgt->allow |= ALLOW_PROPPATCH;
-    }
+    if (tgt->resource) tgt->allow |= ALLOW_POST | ALLOW_DELETE;
 
     return 0;
 }

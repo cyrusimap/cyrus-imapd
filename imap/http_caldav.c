@@ -816,14 +816,20 @@ static void my_caldav_shutdown(void)
 static int caldav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr)
 {
-    int r, rights = 0;
+    int r;
 
     r = calcarddav_parse_path(path, tgt, (tgt->namespace == URL_NS_FREEBUSY) ?
                               namespace_freebusy.prefix :
                               namespace_calendar.prefix,
                               config_getstring(IMAPOPT_CALENDARPREFIX),
-                              errstr, &rights);
-    if (r || !tgt->collection) return r;
+                              errstr);
+    if (r) return r;
+    else if (tgt->namespace == URL_NS_FREEBUSY) {
+        /* Read-only collections */
+        tgt->allow = ALLOW_READ;
+        return 0;
+    }
+    else if (!tgt->collection) return 0;
 
     /* Set proper Allow bits based on collection and ACL of current user */
     if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
@@ -836,8 +842,7 @@ static int caldav_parse_path(const char *path,
         /* Can only read and DELETE resources from this collection */
         tgt->allow &= ALLOW_READ_MASK;
 
-        if (tgt->resource && (rights & DACL_RMRES) == DACL_RMRES)
-            tgt->allow |= ALLOW_DELETE;
+        if (tgt->resource) tgt->allow |= ALLOW_DELETE;
 
         tgt->flags = TGT_SCHED_INBOX;
     }
@@ -845,12 +850,11 @@ static int caldav_parse_path(const char *path,
         /* Can only POST to this collection (free/busy request) */
         tgt->allow &= ALLOW_READ_MASK;
 
-        if (!tgt->resource && (rights & DACL_ADDRES))
-            tgt->allow |= ALLOW_POST;
+        if (!tgt->resource) tgt->allow |= ALLOW_POST;
 
         tgt->flags = TGT_SCHED_OUTBOX;
     }
-    else if (tgt->resource && (rights & DACL_WRITECONT)) {
+    else if (tgt->resource) {
         /* Resource in regular calendar collection */
         tgt->allow |= ALLOW_PATCH;
     }

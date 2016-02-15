@@ -534,7 +534,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
 
 int calcarddav_parse_path(const char *path, struct request_target_t *tgt,
                           const char *urlprefix, const char *mboxprefix,
-                          const char **errstr, int *rights);
+                          const char **errstr);
 int dav_check_precond(struct transaction_t *txn, const void *data,
                       const char *etag, time_t lastmod);
 int dav_store_resource(struct transaction_t *txn,
