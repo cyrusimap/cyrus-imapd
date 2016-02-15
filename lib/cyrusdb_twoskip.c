@@ -278,6 +278,9 @@
 /* should be 0.5 for binary search semantics */
 #define PROB 0.5
 
+/* release lock in foreach at least every N records */
+#define FOREACH_LOCK_RELEASE 256
+
 /* format specifics */
 #undef VERSION /* defined in config.h */
 #define VERSION 1
@@ -1514,6 +1517,7 @@ static int myforeach(struct dbengine *db,
                      struct txn **tidptr)
 {
     int r = 0, cb_r = 0;
+    int num_misses = 0;
     int need_unlock = 0;
     const char *val;
     size_t vallen;
@@ -1563,16 +1567,16 @@ static int myforeach(struct dbengine *db,
 
         if (!goodp || goodp(rock, db->loc.keybuf.s, db->loc.keybuf.len,
                                   val, vallen)) {
+            /* take a copy of they key - just in case cb does actions on this database
+             * and clobbers loc */
+            buf_copy(&keybuf, &db->loc.keybuf);
+
             if (!tidptr) {
                 /* release read lock */
                 r = unlock(db);
                 if (r) goto done;
                 need_unlock = 0;
             }
-
-            /* take a copy of they key - just in case cb does actions on this database
-             * and clobbers loc */
-            buf_copy(&keybuf, &db->loc.keybuf);
 
             /* make callback */
             cb_r = cb(rock, db->loc.keybuf.s, db->loc.keybuf.len,
@@ -1584,11 +1588,37 @@ static int myforeach(struct dbengine *db,
                 r = read_lock(db);
                 if (r) goto done;
                 need_unlock = 1;
+
+                num_misses = 0;
             }
 
             /* should be cheap if we're already here */
             r = find_loc(db, keybuf.s, keybuf.len);
             if (r) goto done;
+        }
+        else if (!tidptr) {
+            num_misses++;
+            if (num_misses > FOREACH_LOCK_RELEASE) {
+                /* take a copy of they key - just in case cb does actions on this database
+                 * and clobbers loc */
+                buf_copy(&keybuf, &db->loc.keybuf);
+
+                /* release read lock */
+                r = unlock(db);
+                if (r) goto done;
+                need_unlock = 0;
+
+                /* grab a r lock */
+                r = read_lock(db);
+                if (r) goto done;
+                need_unlock = 1;
+
+                /* should be cheap if we're already here */
+                r = find_loc(db, keybuf.s, keybuf.len);
+                if (r) goto done;
+
+                num_misses = 0;
+            }
         }
 
         /* move to the next one */
