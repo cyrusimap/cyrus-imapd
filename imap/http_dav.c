@@ -121,12 +121,6 @@ static void my_dav_shutdown(void);
 
 static int get_server_info(struct transaction_t *txn);
 
-static int create_notify_collection(const char *userid,
-                                    struct mailbox **mailbox);
-static int notify_put(struct transaction_t *txn, void *obj,
-                      struct mailbox *mailbox, const char *resource,
-                      void *davdb);
-
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
@@ -1529,8 +1523,12 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     else if (!fctx->record) {
         xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
-        if (fctx->req_tgt->userid)
+        if (fctx->req_tgt->userid) {
             xmlNewChild(node, NULL, BAD_CAST "notifications", NULL);
+
+            ensure_ns(fctx->ns, NS_CS, resp->parent, XML_NS_CS, "CS");
+            xmlNewChild(node, fctx->ns[NS_CS], BAD_CAST "notifications", NULL);
+        }
     }
 
     return 0;
@@ -5687,6 +5685,14 @@ static xmlNodePtr get_props(struct request_target_t *req_tgt,
 }
 
 
+static int create_notify_collection(const char *userid,
+                                    struct mailbox **mailbox);
+static int notify_put(struct transaction_t *txn, void *obj,
+                      struct mailbox *mailbox, const char *resource,
+                      void *davdb);
+
+#define DAVNOTIFICATION_CONTENT_TYPE  "application/davnotification+xml"
+
 static int send_notification(xmlDocPtr doc,
                              const char *userid, const char *resource)
 {
@@ -5725,6 +5731,9 @@ static int send_notification(xmlDocPtr doc,
         r = HTTP_SERVER_ERROR;
         goto done;
     }
+
+    spool_cache_header(xstrdup("Content-Type"),
+                       xstrdup(DAVNOTIFICATION_CONTENT_TYPE), txn.req_hdrs);
 
     r = notify_put(&txn, doc, mailbox, resource, webdavdb);
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -5826,7 +5835,7 @@ static int dav_post_share(struct transaction_t *txn,
        We use a consistent naming scheme so that multiple notifications
        of the same type for the same resource are coalesced (overwritten) */
     buf_reset(&resource);
-    buf_printf(&resource, "%x-%x-%x", strhash(txn->req_tgt.mbentry->name),
+    buf_printf(&resource, "%x-%x-%x.xml", strhash(txn->req_tgt.mbentry->name),
                strhash(XML_NS_DAV), strhash(notify_type));
 
     /* Process each sharee */
@@ -8140,11 +8149,10 @@ static xmlDocPtr to_xml(const struct buf *buf)
 
 static struct mime_type_t notify_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "application/davnotification+xml", NULL, "xml",
+    { DAVNOTIFICATION_CONTENT_TYPE, NULL, "xml",
       (struct buf* (*)(void *)) &from_xml,
       (void * (*)(const struct buf*)) &to_xml,
-      (void (*)(void *)) &xmlFreeDoc,
-      NULL, NULL
+      (void (*)(void *)) &xmlFreeDoc, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
@@ -8224,6 +8232,10 @@ static const struct prop_entry notify_props[] = {
 
     /* WebDAV Notifications (draft-pot-webdav-notifications) properties */
     { "notificationtype", NS_DAV, PROP_RESOURCE,
+      propfind_notifytype, NULL, NULL },
+
+    /* Backwards compatibility with Apple notifications clients */
+    { "notificationtype", NS_CS, PROP_RESOURCE,
       propfind_notifytype, NULL, NULL },
 
     /* Apple Calendar Server properties */
@@ -8688,7 +8700,7 @@ static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
 {
     struct webdav_data *wdata = (struct webdav_data *) fctx->data;
     xmlNodePtr node;
-    xmlNsPtr type_ns;
+    xmlNsPtr type_ns = NULL;
     struct dlist *dl = NULL, *al, *item;
     const char *ns_href, *type;
     int i;
@@ -8704,12 +8716,20 @@ static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
     ns_href = dlist_cstring(dlist_getchildn(dl, 1));
     al = dlist_getchildn(dl, 2);
 
-    /* Check if we already have this ns-href, otherwise create a new one */
-    type_ns = xmlSearchNsByHref(node->doc, node, BAD_CAST ns_href);
-    if (!type_ns) {
-        char prefix[20];
-        snprintf(prefix, sizeof(prefix), "X%X", strhash(ns_href) & 0xffff);
-        type_ns = xmlNewNs(node, BAD_CAST ns_href, BAD_CAST prefix);
+    if (!xmlStrcmp(ns->href, BAD_CAST XML_NS_CS)) {
+        if (!strcmp(type, "share-invite-notification"))
+            type = "invite-notification";
+        else if (!strcmp(type, "share-reply-notification"))
+            type = "invite-reply";
+    }
+    else {
+        /* Check if we already have this ns-href, otherwise create a new one */
+        type_ns = xmlSearchNsByHref(node->doc, node, BAD_CAST ns_href);
+        if (!type_ns) {
+            char prefix[20];
+            snprintf(prefix, sizeof(prefix), "X%X", strhash(ns_href) & 0xffff);
+            type_ns = xmlNewNs(node, BAD_CAST ns_href, BAD_CAST prefix);
+        }
     }
 
     /* Create node for type */
