@@ -5404,7 +5404,9 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
         !fctx->req_tgt->resource &&
         mboxname_userownsmailbox(fctx->req_tgt->userid, fctx->mbentry->name)) {
         xmlNewChild(node, NULL, BAD_CAST "can-be-shared", NULL);
+#if 0  /* XXX  this is probably iCloud specific */
         xmlNewChild(node, NULL, BAD_CAST "can-be-published", NULL);
+#endif
     }
 
     return 0;
