@@ -29,7 +29,7 @@
   </div>
 
   {%- if show_sphinx %}
-  {% trans %}Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a modified <a href="https://readthedocs.org">Read the Docs</a> <a href="https://github.com/snide/sphinx_rtd_theme">theme</a>{% endtrans %}.
+  {% trans sphinx_version=sphinx_version|e %}Built with <a href="http://sphinx-doc.org/">Sphinx</a> {{ sphinx_version }} using a modified <a href="https://readthedocs.org">Read the Docs</a> <a href="https://github.com/snide/sphinx_rtd_theme">theme</a>{% endtrans %}.
   {%- endif %}
 
 </footer>

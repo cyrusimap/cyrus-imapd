@@ -200,6 +200,13 @@ p.caption {
     background-color: #2d9dcb;
 }
 
+.wy-side-nav-search a img {
+        margin-bottom: 0px;
+}
+
+.wy-side-nav-search a:hover {
+    background-color: #2d9dcb;
+}
 
 .wy-side-nav-search img {
     border-radius: initial;

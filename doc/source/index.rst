@@ -2,8 +2,7 @@
 Cyrus IMAP and SASL
 ===================
 
-Welcome to the Cyrus IMAP and SASL documentation site, provided to you
-by the `Cyrus Foundation`_.
+Welcome to Cyrus IMAP and SASL.
 
 --------
 
@@ -35,6 +34,7 @@ This is the highlight reel of Cyrus's full list of features_.
 
 .. toctree::
     :maxdepth: 1
+    :glob:
 
     imap/introduction
     imap/features
@@ -43,6 +43,7 @@ This is the highlight reel of Cyrus's full list of features_.
     imap/admin
     imap/developer
     imap/faq
+    imap/release-notes/index
     
 .. toctree::
     :hidden:
@@ -50,21 +51,14 @@ This is the highlight reel of Cyrus's full list of features_.
     overview/about_cyrus
     feedback
 
-Cyrus IMAP Release Notes
-------------------------
-
 ..  note to documentation contributors:
 
-    The files included here are symbolic links to actual files deeper
+    The files included in the release notes glob are symbolic links to actual files deeper
     in the hierarchy of directories, so that the next version
     of the release notes can be worked on without getting in the way
     of the current release notes
 
-.. toctree::
-    :maxdepth: 1
-    :glob:
 
-    imap/release-notes/*
 
 --------
 
@@ -111,4 +105,3 @@ Contributors_, looking to add to Cyrus. (We include testers and documenters too!
 
 .. _Administrators: imap/admin.html
 .. _Contributors: imap/developer.html
-.. _Cyrus Foundation: https://cyrus.foundation
