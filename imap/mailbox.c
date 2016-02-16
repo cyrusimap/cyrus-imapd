@@ -3210,6 +3210,10 @@ static int mailbox_update_dav(struct mailbox *mailbox,
                               const struct index_record *old,
                               struct index_record *new)
 {
+    /* never have DAV on deleted mailboxes */
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+        return 0;
+
     if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
         return mailbox_update_carddav(mailbox, old, new);
     if (mailbox->mbtype & MBTYPE_CALENDAR)
