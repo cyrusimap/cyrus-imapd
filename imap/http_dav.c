@@ -4454,6 +4454,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
                 buf_init_ro(&inbuf, data, datalen);
                 obj = gparams->mime_types[0].to_object(&inbuf);
+                buf_free(&inbuf);
 
                 outbuf = mime->from_object(obj);
                 datalen = buf_len(outbuf);
