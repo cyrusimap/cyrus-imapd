@@ -1058,14 +1058,13 @@ icalcomponent *xcal_string_as_icalcomponent(const struct buf *buf)
     xmlDocPtr doc = NULL;
     xmlNodePtr root;
     icalcomponent *ical = NULL;
-    const char *str = buf_cstring(buf);
 
-    if (!str) return NULL;
+    if (!buf_len(buf)) return NULL;
 
     /* Parse the XML request */
     ctxt = xmlNewParserCtxt();
     if (ctxt) {
-        doc = xmlCtxtReadMemory(ctxt, str, strlen(str), NULL, NULL,
+        doc = xmlCtxtReadMemory(ctxt, buf_base(buf), buf_len(buf), NULL, NULL,
                                 XML_PARSE_NOWARNING);
         xmlFreeParserCtxt(ctxt);
     }
