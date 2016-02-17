@@ -5677,7 +5677,8 @@ static int notify_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *davdb);
 
-#define DAVNOTIFICATION_CONTENT_TYPE  "application/davnotification+xml"
+#define DAVNOTIFICATION_CONTENT_TYPE \
+    "application/davnotification+xml; charset=utf-8"
 
 static int send_notification(xmlDocPtr doc,
                              const char *userid, const char *resource)
@@ -5744,9 +5745,9 @@ static int dav_post_share(struct transaction_t *txn,
     xmlNodePtr root = NULL, node, sharee;
     int rights, ret, legacy = 0;
     const char *notify_type = "share-invite-notification";
-    struct buf resource = BUF_INITIALIZER;
+    struct buf resource = BUF_INITIALIZER, replyurl = BUF_INITIALIZER;
     char dtstamp[RFC3339_DATETIME_MAX];
-    xmlNodePtr notify = NULL, type, resp, share;
+    xmlNodePtr notify = NULL, type, resp, share, reply;
     xmlNsPtr ns[NUM_NAMESPACE];
     const char *invite_props[] = { "resourcetype", "displayname", NULL };
 
@@ -5792,7 +5793,7 @@ static int dav_post_share(struct transaction_t *txn,
     }
 
     /* Create share-invite-notification -
-       response and share-access will be replaced for each sharee */
+       response, share-access, reply-url will be replaced for each sharee */
     notify = init_xml_response("notification", NS_DAV, NULL, ns);
 
     time_to_rfc3339(time(0), dtstamp, RFC3339_DATETIME_MAX);
@@ -5816,6 +5817,8 @@ static int dav_post_share(struct transaction_t *txn,
     node = get_props(&txn->req_tgt, invite_props,
                      notify, ns, pparams->propfind.lprops);
     xmlAddChild(type, node);
+
+    reply = xmlNewChild(type, NULL, BAD_CAST "reply-url", NULL);
 
     /* Create a resource name for the notifications -
        We use a consistent naming scheme so that multiple notifications
@@ -5939,6 +5942,18 @@ static int dav_post_share(struct transaction_t *txn,
                     xmlFreeNode(share);
                     share = node;
 
+                    node = xmlFirstElementChild(reply);
+                    if (node) {
+                        xmlUnlinkNode(node);
+                        xmlFreeNode(node);
+                    }
+                    buf_reset(&replyurl);
+                    buf_printf(&replyurl, "%s/%s/%s/%s",
+                               namespace_notify.prefix, USER_COLLECTION_PREFIX,
+                               userid, buf_cstring(&resource));
+
+                    xml_add_href(reply, NULL, buf_cstring(&replyurl));
+
                     r = send_notification(notify->doc,
                                           userid, buf_cstring(&resource));
                 }
@@ -5955,6 +5970,7 @@ static int dav_post_share(struct transaction_t *txn,
   done:
     if (root) xmlFreeDoc(root->doc);
     if (notify) xmlFreeDoc(notify->doc);
+    buf_free(&replyurl);
     buf_free(&resource);
 
     return ret;
@@ -8094,8 +8110,7 @@ static int get_server_info(struct transaction_t *txn)
 static int notify_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr);
 
-static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data);
+static int meth_get_head_notify(struct transaction_t *txn, void *params);
 
 static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
                                struct propfind_ctx *fctx,
@@ -8115,6 +8130,134 @@ static struct buf *from_xml(xmlDocPtr doc)
     else buf_init(buf);
 
     return buf;
+}
+
+static struct buf *from_calserver_xml(xmlDocPtr indoc)
+{
+    xmlNodePtr notify = NULL, root, node, type;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    xmlDocPtr outdoc;
+    xmlChar *dtstamp = NULL;
+    struct buf *xmlbuf;
+
+    root = xmlDocGetRootElement(indoc);
+    node = xmlFirstElementChild(root);
+    dtstamp = xmlNodeGetContent(node);
+    type = xmlNextElementSibling(node);
+
+    /* Translate DAV notifications into CS notifications */
+    notify = init_xml_response("notification", NS_CS, NULL, ns);
+    outdoc = notify->doc;
+
+    xmlNewChild(notify, NULL, BAD_CAST "dtstamp", dtstamp);
+
+    if (!xmlStrcmp(type->name, BAD_CAST "share-invite-notification")) {
+        xmlNodePtr invite;
+        xmlNodePtr resp = NULL, sharedurl = NULL, sharer = NULL, access = NULL;
+        xmlChar *replyurl = NULL;
+        struct buf buf = BUF_INITIALIZER;
+        struct request_target_t tgt;
+        const char *errstr;
+        time_t t;
+
+        /* Grab DAV elements that we need to construct CS notification */
+        for (node = xmlFirstElementChild(type); node;
+             node = xmlNextElementSibling(node)) {
+            if (!xmlStrncmp(node->name, BAD_CAST "invite-", 7)) {
+                resp = node;
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
+                sharedurl = xmlFirstElementChild(node);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "principal")) {
+                sharer = xmlFirstElementChild(node);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "share-access")) {
+                access = xmlFirstElementChild(node);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "reply-url")) {
+                replyurl = xmlNodeGetContent(xmlFirstElementChild(node));
+            }
+        }
+
+        invite = xmlNewChild(notify, NULL, BAD_CAST "invite-notification", NULL);
+
+        /* Construct uid and sharee href from reply-url */
+        memset(&tgt, 0, sizeof(struct request_target_t));
+        notify_parse_path((const char *) replyurl, &tgt, &errstr);
+        time_from_iso8601((const char *) dtstamp, &t);
+        buf_printf(&buf, "%.*s-%ld",
+                   (int) strcspn(tgt.resource, "."), tgt.resource, t);
+        xmlNewChild(invite, NULL, BAD_CAST "uid", BAD_CAST buf_cstring(&buf));
+
+        buf_reset(&buf);
+        buf_printf(&buf, "%s/%s/%s/", namespace_principal.prefix,
+                   USER_COLLECTION_PREFIX, tgt.userid);
+        node = xml_add_href(invite, NULL, buf_cstring(&buf));
+
+        ensure_ns(ns, NS_DAV, node, XML_NS_DAV, "D");
+        xmlSetNs(node, ns[NS_DAV]);
+
+        xmlNewChild(invite, NULL, resp->name, NULL);
+        node = xmlNewChild(invite, NULL, BAD_CAST "access", NULL);
+        xmlNewChild(node, NULL, access->name, NULL);
+        node = xmlNewChild(invite, NULL, BAD_CAST "hosturl", NULL);
+        xmlAddChild(node, xmlCopyNode(sharedurl, 1));
+        node = xmlNewChild(invite, NULL, BAD_CAST "organizer", NULL);
+        xmlAddChild(node, xmlCopyNode(sharer, 1));
+
+        mboxlist_entry_free(&tgt.mbentry);
+        free(tgt.userid);
+        buf_free(&buf);
+        xmlFree(replyurl);
+    }
+    else if (!xmlStrcmp(type->name, BAD_CAST "share-reply-notification")) {
+        xmlNodePtr reply, resp = NULL, sharedurl = NULL, sharee = NULL;
+
+        /* Grab DAV elements that we need to construct CS notification */
+        for (node = xmlFirstElementChild(type); node;
+             node = xmlNextElementSibling(node)) {
+            if (!xmlStrcmp(node->name, BAD_CAST "sharee")) {
+                xmlNodePtr node2;
+
+                for (node2 = xmlFirstElementChild(node); node2;
+                     node2 = xmlNextElementSibling(node2)) {
+                    if (!xmlStrcmp(node2->name, BAD_CAST "href")) {
+                        sharee = node2;
+                    }
+                    else if (!xmlStrncmp(node2->name, BAD_CAST "invite-", 7)) {
+                        resp = node2;
+                    }
+                }
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "href")) {
+                sharedurl = node;
+            }
+        }
+
+        reply = xmlNewChild(notify, NULL, BAD_CAST "invite-reply", NULL);
+
+        xmlAddChild(reply, xmlCopyNode(sharee, 1));
+        xmlNewChild(reply, NULL, resp->name, NULL);
+        node = xmlNewChild(reply, NULL, BAD_CAST "hosturl", NULL);
+        xmlAddChild(node, xmlCopyNode(sharedurl, 1));
+        /* XXX  how to generate this? */
+        xmlNewChild(reply, NULL, BAD_CAST "in-reply-to", NULL);
+    }
+    else {
+        /* Unknown type - return as-is */
+        xmlFreeDoc(notify->doc);
+        notify = NULL;
+        outdoc = indoc;
+    }
+
+    /* Dump XML response tree into a text buffer */
+    xmlbuf = from_xml(outdoc);
+
+    if (notify) xmlFreeDoc(notify->doc);
+    if (dtstamp) xmlFree(dtstamp);
+
+    return xmlbuf;
 }
 
 static xmlDocPtr to_xml(const struct buf *buf)
@@ -8137,6 +8280,11 @@ static struct mime_type_t notify_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { DAVNOTIFICATION_CONTENT_TYPE, NULL, "xml",
       (struct buf* (*)(void *)) &from_xml,
+      (void * (*)(const struct buf*)) &to_xml,
+      (void (*)(void *)) &xmlFreeDoc, NULL, NULL
+    },
+    { "application/xml; charset=utf-8", NULL, "xml",
+      (struct buf* (*)(void *)) &from_calserver_xml,
       (void * (*)(const struct buf*)) &to_xml,
       (void (*)(void *)) &xmlFreeDoc, NULL, NULL
     },
@@ -8247,7 +8395,7 @@ struct meth_params notify_params = {
     NULL,                                       /* No ACL extensions */
     { 0, &notify_put },
     NULL,                                       /* No special DELETE handling */
-    &notify_get,
+    NULL,                                       /* No special GET handling */
     { 0, MBTYPE_COLLECTION },                   /* Allow any location */
     NULL,                                       /* No PATCH handling */
     NULL,                                       /* No special POST handling */
@@ -8270,8 +8418,8 @@ struct namespace_t namespace_notify = {
         { NULL,                 NULL },                /* BIND         */
         { NULL,                 NULL },                /* COPY         */
         { &meth_delete,         &notify_params },      /* DELETE       */
-        { &meth_get_head,       &notify_params },      /* GET          */
-        { &meth_get_head,       &notify_params },      /* HEAD         */
+        { &meth_get_head_notify,&notify_params },      /* GET          */
+        { &meth_get_head_notify,&notify_params },      /* HEAD         */
         { NULL,                 NULL },                /* LOCK         */
         { NULL,                 NULL },                /* MKCALENDAR   */
         { NULL,                 NULL },                /* MKCOL        */
@@ -8290,27 +8438,24 @@ struct namespace_t namespace_notify = {
 };
 
 
-/* Perform a GET/HEAD request on a WebDAV resource */
-static int notify_get(struct transaction_t *txn,
-                      struct mailbox *mailbox __attribute__((unused)),
-                      struct index_record *record, void *data)
+/* Perform a GET/HEAD request on a WebDAV notification resource */
+static int meth_get_head_notify(struct transaction_t *txn, void *params)
 {
-    if (record && record->uid) {
-        /* GET on a resource */
-        struct webdav_data *wdata = (struct webdav_data *) data;
+    const char **hdr = spool_getheader(txn->req_hdrs, "Accept");
 
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%s/%s", wdata->type, wdata->subtype);
-        txn->resp_body.type = buf_cstring(&txn->buf);
-        return 0;
+    if (!hdr) {
+        /* If no Accept header is given, assume its a legacy notification client
+           and force a mime type translation from application/davnotification+xml
+           to application/xml */
+        spool_cache_header(xstrdup("Accept"),
+                           xstrdup("application/xml"), txn->req_hdrs);
     }
 
-    /* Get on a user/collection */
-    return HTTP_NO_CONTENT;
+    return meth_get_head(txn, params);
 }
 
 
-/* Perform a PUT request on a WebDAV resource */
+/* Perform a PUT request on a WebDAV notification resource */
 static int notify_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *destdb)
