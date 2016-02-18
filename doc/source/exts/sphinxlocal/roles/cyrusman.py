@@ -31,7 +31,7 @@ def make_link_node(rawtext, app, name, manpage_num, options):
     ref = None
     ref = app.config.cyrus_man_url_regex
     if not ref:
-        ref = "http://www.cyrusimap.org/new/imap/admin/%s/%s.html" % (manpage_section, name)
+        ref = "http://www.cyrusimap.org/imap/admin/%s/%s.html" % (manpage_section, name)
     else:
         s = Template(ref)     
         ref = s.substitute(num=manpage_section, topic=name)
