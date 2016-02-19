@@ -4,7 +4,9 @@
 ``sieveshell``
 ==============
 
-The ``sieveshell`` utility allows users to manipulate their scripts on a remote server. It works via MANAGESIEVE, a work in progress.
+The ``sieveshell`` utility allows users to manipulate their scripts on a remote server. Placing a script and activating it on the server also compiles the script to bytecode for faster execution. 
+
+Sieveshell works via MANAGESIEVE, a work in progress.
 
 .. rubric:: Synopsis
 

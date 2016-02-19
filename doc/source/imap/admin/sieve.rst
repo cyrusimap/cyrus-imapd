@@ -14,7 +14,7 @@ Cyrus Sieve is an implementation of the Sieve mail filtering language ( :rfc:`30
 
 Mail filtering occurs on delivery of the message (within lmtpd).
 
-Cyrus compiles sieve scripts to bytecode to reduce the overhead of parsing the scripts fully inside of lmtpd.
+Cyrus compiles sieve scripts to bytecode to reduce the overhead of parsing the scripts fully inside of lmtpd. This occurs automatically if :cyrusman:`sieveshell(1)` is used to place the scripts on the server.
 
 Sieve scripts can be placed either by the :cyrusman:`timsieved(8)` daemon (implementing the ManageSieve protocol :rfc:5804`; this is the preferred options since it allows for syntax checking) or in the user's home directory as a .sieve file.
 
@@ -37,7 +37,7 @@ in your :cyrusman:`imapd.conf(5)`. If you're using Postfix or another MTA, make 
 Managing Sieve Scripts
 ======================
 
-Since Cyrus is based around the concept of a sealed-server, the normal way for users to manipulate Sieve scripts is through the :cyrusman:`sieveshell(8)` utility.
+Since Cyrus is based around the concept of a sealed-server, the normal way for users to manipulate Sieve scripts is through the :cyrusman:`sieveshell(1)` utility.
 
 If, for some reason, you do have user home directories on the server, you can use the **sieveusehomedir** option in :cyrusman:`imapd.conf(5)` and have the sieve script stored in the home directory of the user as ``~/.sieve``.
 
@@ -50,7 +50,7 @@ Cyrus has two types of repositories where Sieve scripts can live:
 2. **Global** is for every user. Global scripts aren’t applied on incoming messages by default: users must include them in their scripts.
     * Note that there are two types of Global scripts: **global** and **global per domain**.
 
-When you log into Cyrus IMAP with :cyrusman:`sieveshell(8)` you have the following combinations (Assuming there is ``manager`` and ``manager@example.com`` as admin in :cyrusman:`imapd.conf(5)`):
+When you log into Cyrus IMAP with :cyrusman:`sieveshell(1)` you have the following combinations (Assuming there is ``manager`` and ``manager@example.com`` as admin in :cyrusman:`imapd.conf(5)`):
 
 * ``sieveshell -a manager -u manager localhost`` - To edit global scripts.
 * ``sieveshell -a manager@example.com -u manager@example.com localhost`` - To edit global script of example.com domain.
@@ -88,7 +88,7 @@ Any message other than one similar to the one above means there is a problem. Ma
 
     logout
     
-Next test authenticating to the sieve server. To do this run the :cyrusman:`sieveshell(8)` utility. You must specify the server. If you run this utility from a different machine without the "sieve" entry in "/etc/services", port 2000 will be used.
+Next test authenticating to the sieve server. To do this run the :cyrusman:`sieveshell(1)` utility. You must specify the server. If you run this utility from a different machine without the "sieve" entry in "/etc/services", port 2000 will be used.
 
 ::
 
