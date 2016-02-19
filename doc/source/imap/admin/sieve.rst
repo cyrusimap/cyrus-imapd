@@ -4,10 +4,13 @@
 Cyrus Sieve
 ===========
 
+.. contents::
+
+    
 Introduction
 ============
 
-Cyrus Sieve is an implementation of the Sieve mail filtering language ( :rfc:`3028` ).
+Cyrus Sieve is an implementation of the Sieve mail filtering language ( :rfc:`3028` ). It allows a series of tests to be applied against an incoming message, with actions to take place if there is a match.
 
 Mail filtering occurs on delivery of the message (within lmtpd).
 
@@ -132,11 +135,11 @@ Special use folders
 
 Some mail clients allow users to rename the system folders, such as Archive and Trash. This can make sieve scripts break if they are using folder names explicitly. Fortunately such folders have a special use flag, allowing you to access them from sieve without needing to know their current titles.
 
-* \Archive
-* \Drafts
-* \Junk - also known as the Spam folder
-* \Sent
-* \Trash
+* \\Archive
+* \\Drafts
+* \\Junk - also known as the Spam folder
+* \\Sent
+* \\Trash
 
 Supported extensions
 --------------------
@@ -144,19 +147,23 @@ Sieve has a lot of `extensions <http://www.iana.org/assignments/sieve-extensions
 
 * Sieve language reference :rfc:`5228`
 * Vacation extension :rfc:`5230`
+* Vacation seconds :rfc:`6131`
 * Relational Tests :rfc:`5231`
 * Subaddress Extension :rfc:`5233`
 * Copying Without Side Effects :rfc:`3894`
 * Regular Expression Extension `Draft RFC <http://tools.ietf.org/html/draft-ietf-sieve-regex-01>`_
 * Checking mailbox status and accessing mailbox metadata :rfc:`5490`
 * Notify Extension :rfc:`5435`
+* Include :rfc:`6609`
+* Date :rfc:`5260`
+* Index :rfc:`5260`
 * IMAP flag Extension `Draft RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
 * Body Extension `Draft RFC <http://tools.ietf.org/html/draft-ietf-sieve-body-02>`_
 
 Note that the final RFCs of these last sieve extensions have significant changes that are not currently supported.
 
 Sieve Tools
-===========
+-----------
 
 * :cyrusman:`timsieved(8)` - server side daemon to accept requests from sieveshell
 * :cyrusman:`sievec(1)` - compile a script into bytecode. See sieved.
@@ -165,3 +172,11 @@ Sieve Tools
 * :cyrusman:`sivtest(8)` - authenticate and test against a MANAGESIEVE server such as timsieved.
 * :cyrusman:`sieveshell(1)` - allow users to manage scripts on a remote server, via MANAGESIEVE
 * :cyrusman:`translatesieve(8)` - utility script to translate sieve scripts to use **unixhierarchysep** and/or **altnamespace**
+
+Writing Sieve
+=============
+
+Sieve scripts can be used to automatically delete or forward messages; to send autoreplies; to sort them in folders; to mark messages as read or flagged; to test messages for spam or viruses; or to reject messages at or after delivery. `Sieve.info <http://sieve.info>`_ has more information on sieve and its uses.
+
+There's a `good sieve reference <http://thsmi.github.io/sieve-reference/en/index.html>`_ online which describes the language.
+
