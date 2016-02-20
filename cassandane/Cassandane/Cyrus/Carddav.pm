@@ -210,4 +210,83 @@ sub test_homeset_extradomain
     $self->assert_str_equals("/dav/addressbooks/user/cassandane\@extradomain.com/", $talk->{basepath});
 }
 
+sub test_no_filter
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+
+    my $xml = <<EOF;
+<C:addressbook-query xmlns:D="DAV:"
+                    xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+      <D:getetag/>
+      <C:address-data content-type="text/vcard" version="3.0"/>
+    </D:prop>
+</C:addressbook-query>
+EOF
+
+    my $Str = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($Str);
+
+    $CardDAV->NewContact($Id, $VCard);
+
+    my $res = $CardDAV->Request('REPORT', "/dav/addressbooks/user/cassandane/$Id", $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_not_null($res->{"{DAV:}response"});
+}
+
+sub test_empty_filter
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+
+    my $xml = <<EOF;
+<C:addressbook-query xmlns:D="DAV:"
+                    xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+      <D:getetag/>
+      <C:address-data content-type="text/vcard" version="3.0"/>
+    </D:prop>
+    <C:filter/>
+</C:addressbook-query>
+EOF
+
+    my $Str = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($Str);
+
+    $CardDAV->NewContact($Id, $VCard);
+
+    my $res = $CardDAV->Request('REPORT', "/dav/addressbooks/user/cassandane/$Id", $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_not_null($res->{"{DAV:}response"});
+}
+
 1;
