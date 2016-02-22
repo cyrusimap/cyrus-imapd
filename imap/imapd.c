@@ -9205,7 +9205,9 @@ static void getannotation_response(const char *mboxname,
 {
     int sep = '(';
     struct attvaluelist *l;
-    char *extname = mboxname_to_external(mboxname, &imapd_namespace, imapd_userid);
+    char *extname = *mboxname ?
+        mboxname_to_external(mboxname, &imapd_namespace, imapd_userid) :
+        xstrdup("");  /* server annotation */
 
     prot_printf(imapd_out, "* ANNOTATION ");
     prot_printastring(imapd_out, extname);
