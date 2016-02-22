@@ -54,7 +54,7 @@ enum {
 struct stdprot_t;
 struct backend;
 
-#define MAX_CAPA 10
+#define MAX_CAPA 11
 
 enum {
     /* generic capabilities */

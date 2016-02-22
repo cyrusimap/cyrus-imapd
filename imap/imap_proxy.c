@@ -95,6 +95,7 @@ struct protocol_t imap_protocol =
           { "IDLE", CAPA_IDLE },
           { "MUPDATE", CAPA_MUPDATE },
           { "MULTIAPPEND", CAPA_MULTIAPPEND },
+          { "METADATA", CAPA_METADATA },
           { "RIGHTS=kxte", CAPA_ACLRIGHTS },
           { "LIST-EXTENDED", CAPA_LISTEXTENDED },
           { "SASL-IR", CAPA_SASL_IR },
@@ -1359,22 +1360,23 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
     if (be) {
         uint64_t server_available = 0;
         uint64_t server_total = 0;
+        const char *annot =
+            (part_list->mode == PART_SELECT_MODE_FREESPACE_MOST) ?
+            "freespace/total" : "freespace/percent/most";
+        struct buf cmd = BUF_INITIALIZER;
         int c;
 
         /* fetch annotation from remote */
         proxy_gentag(mytag, sizeof(mytag));
-        if (part_list->mode == PART_SELECT_MODE_FREESPACE_MOST) {
-            prot_printf(be->out,
-                "%s GETANNOTATION \"\" "
-                "\"" IMAP_ANNOT_NS "freespace/total\" "
-                "\"value.shared\"\r\n", mytag);
+        if (CAPA(be, CAPA_METADATA)) {
+            buf_printf(&cmd, "METADATA \"\" (\"/shared" IMAP_ANNOT_NS "%s\"",
+                       annot);
         }
         else {
-            prot_printf(be->out,
-                "%s GETANNOTATION \"\" "
-                "\"" IMAP_ANNOT_NS "freespace/percent/most\" "
-                "\"value.shared\"\r\n", mytag);
+            buf_printf(&cmd, "ANNOTATION \"\" \"" IMAP_ANNOT_NS "%s\" "
+                       "(\"value.shared\"", annot);
         }
+        prot_printf(be->out, "%s GET%s)\r\n", mytag, buf_cstring(&cmd));
         prot_flush(be->out);
 
         for (/* each annotation response */;;) {
@@ -1384,17 +1386,8 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
             c = prot_getc(be->in);
             if (c != ' ') { /* protocol error */ c = EOF; break; }
 
-            if (part_list->mode == PART_SELECT_MODE_FREESPACE_MOST) {
-                c = chomp(be->in,
-                    "ANNOTATION \"\" "
-                    "\"" IMAP_ANNOT_NS "freespace/total\" "
-                    "(\"value.shared\" ");
-            } else {
-                c = chomp(be->in,
-                    "ANNOTATION \"\" "
-                    "\"" IMAP_ANNOT_NS "freespace/percent/most\" "
-                    "(\"value.shared\" ");
-            }
+            c = chomp(be->in, buf_cstring(&cmd));
+            if (c == ' ') c = prot_getc(be->in);
             if ((c == EOF) || (c != '\"')) {
                 /* we don't care about this response */
                 eatline(be->in, c);
@@ -1410,6 +1403,7 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
             if (c != '\"') { c = EOF; break; }
             eatline(be->in, c); /* we don't care about the rest of the line */
         }
+        buf_free(&cmd);
         if (c != EOF) {
             prot_ungetc(c, be->in);
 
