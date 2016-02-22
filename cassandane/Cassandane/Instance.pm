@@ -239,6 +239,17 @@ sub _init_basedir_and_name
     $self->{basedir} = $info->{basedir};
 }
 
+sub get_basedir
+{
+    my ($self) = @_;
+
+    return $self->{basedir} if $self->{basedir};
+
+    $self->_init_basedir_and_name();
+
+    return $self->{basedir};
+}
+
 # Remove on-disk traces of any previous instances
 sub cleanup_leftovers
 {
