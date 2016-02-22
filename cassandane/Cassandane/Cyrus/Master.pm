@@ -1130,6 +1130,11 @@ sub test_sighup_reloading
     $self->{instance}->_generate_master_conf();
     $self->{instance}->send_sighup();
 
+    # wait a moment for the sighup to be processed
+    # XXX next test does something tricky with prefork/wait,
+    # XXX but i'm not sure if that can be used here.
+    sleep 1;
+
     xlog "connection fails due to unexisting lemming";
     $lemmA = undef;
     eval
