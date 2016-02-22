@@ -54,7 +54,7 @@
 
 EXPORTED int backupdb_open(struct db **backup_dbp, struct txn **tidp)
 {
-    char *fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
+    char *fname = xstrdupnull(config_getstring(IMAPOPT_BACKUP_DB_PATH));
     int flags = CYRUSDB_CREATE;
 
     if (!fname)
