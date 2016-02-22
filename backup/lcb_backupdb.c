@@ -55,11 +55,12 @@
 EXPORTED int backupdb_open(struct db **backup_dbp, struct txn **tidp)
 {
     char *fname = xstrdup(config_getstring(IMAPOPT_BACKUP_DB_PATH));
+    int flags = CYRUSDB_CREATE;
 
     if (!fname)
         fname = strconcat(config_dir, FNAME_BACKUPDB, NULL);
 
-    int r = cyrusdb_lockopen(config_backup_db, fname, 0, backup_dbp, tidp);
+    int r = cyrusdb_lockopen(config_backup_db, fname, flags, backup_dbp, tidp);
 
     free(fname);
     return r;
