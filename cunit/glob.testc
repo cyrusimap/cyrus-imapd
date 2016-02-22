@@ -151,7 +151,7 @@ static void test_messyname(void)
 {
     glob *g;
     int r;
-    const char *str = "INBOX.+++ hello.+++ WORLD.+ test,ca";
+    const char *str = "INBOX.+++ hello.+++ WORLD.+ test,ca \\yes?";
 
     g = glob_init(str, '.');
     CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
