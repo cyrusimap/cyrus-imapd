@@ -204,9 +204,9 @@ static int get_uid2groups(struct transaction_t *txn,
     array = carddav_getuid2groups(db, key, mboxname, otheruser);
     if (!array) goto done;
 
-    json = json_array();
+    json = json_pack("{}");
     for (i = 0; i < strarray_size(array); i++) {
-        json_array_append_new(json, json_string(strarray_nth(array, i)));
+        json_object_set_new(json, strarray_nth(array, i), json_string(strarray_nth(array, i+1)));
     }
 
     result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);

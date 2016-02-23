@@ -329,6 +329,16 @@ static int addarray_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
+static int addarray_kv_cb(sqlite3_stmt *stmt, void *rock)
+{
+    strarray_t *array = (strarray_t *)rock;
+    const char *key = (const char *)sqlite3_column_text(stmt, 0);
+    if (key) strarray_add(array, key);
+    const char *value = (const char *)sqlite3_column_text(stmt, 1);
+    if (value) strarray_add(array, value);
+    return 0;
+}
+
 EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
 {
     struct sqldb_bindval bval[] = {
@@ -369,7 +379,7 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
     " AND E.email = :email AND CO.mailbox = :mailbox;"
 
 #define CMD_GETUID2GROUPS \
-    "SELECT DISTINCT GO.fullname" \
+    "SELECT DISTINCT GO.vcard_uid, GO.fullname" \
     " FROM vcard_objs GO JOIN vcard_groups G" \
     " WHERE G.objid = GO.rowid AND GO.alive = 1" \
     " AND G.member_uid = :member_uid AND G.otheruser = :otheruser" \
@@ -439,7 +449,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
     };
     strarray_t *groups = strarray_new();
 
-    sqldb_exec(carddavdb->db, CMD_GETUID2GROUPS, bval, &addarray_cb, groups);
+    sqldb_exec(carddavdb->db, CMD_GETUID2GROUPS, bval, &addarray_kv_cb, groups);
 
     return groups;
 }
