@@ -92,18 +92,23 @@ AC_ARG_WITH(extraident,
 
 AM_MAINTAINER_MODE
 
+dnl Coverage (disabled by default)
+GCOV_CFLAGS=
+GCOV_CXXFLAGS=
+GCOV_LDFLAGS=
+GCOV_LIBS=
+
 AC_ARG_ENABLE(coverage,
-        [AS_HELP_STRING([--enable-coverage],[enable C test coverage])],
-        [GCOV_CFLAGS="--coverage"
-         GCOV_CXXFLAGS="--coverage"
-         GCOV_LDFLAGS="--coverage"
-         GCOV_LIBS="-lgcov"
-        ],[
-         GCOV_CFLAGS=
-         GCOV_CXXFLAGS=
-         GCOV_LDFLAGS=
-         GCOV_LIBS=
-        ])
+    AS_HELP_STRING([--enable-coverage],[enable C test coverage])
+)
+
+AS_IF([test "x$enable_coverage" = "xyes"], [
+    GCOV_CFLAGS="--coverage"
+    GCOV_CXXFLAGS="--coverage"
+    GCOV_LDFLAGS="--coverage"
+    GCOV_LIBS="-lgcov"
+])
+
 AC_SUBST(GCOV_CFLAGS)
 AC_SUBST(GCOV_CXXFLAGS)
 AC_SUBST(GCOV_LDFLAGS)
