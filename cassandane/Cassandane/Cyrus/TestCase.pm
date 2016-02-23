@@ -202,7 +202,9 @@ magic(AllowMoves => sub {
 magic(DisconnectOnVanished => sub {
     shift->config_set('disconnect_on_vanished_mailbox' => 'yes');
 });
-
+magic(NoStartInstances => sub {
+    shift->want('start_instances' => 0);
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic

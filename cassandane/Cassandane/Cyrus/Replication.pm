@@ -344,4 +344,26 @@ sub test_splitbrain_bothexpunge
     $self->check_messages(\%exp, store => $replica_store);
 }
 
+# trying to reproduce error reported in https://git.cyrus.foundation/T228
+sub test_alternate_globalannots
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    # first, set a different annotation_db_path on the master server
+    my $annotation_db_path = $self->{instance}->get_basedir()
+                             . "/conf/non-default-annotations.db";
+    $self->{instance}->{config}->set('annotation_db_path' => $annotation_db_path);
+
+    # now we can start the instances
+    $self->_start_instances();
+
+    # A replication will automatically occur when the instances are started,
+    # in order to make sure the cassandane user exists on both hosts.
+    # So if we get here without crashing, replication works.
+    xlog "initial replication was successful";
+
+    $self->assert(1);
+}
+
 1;
