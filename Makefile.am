@@ -42,8 +42,8 @@
 #
 
 ACLOCAL_AMFLAGS = -I cmulocal
-AM_CFLAGS = @PERL_CCCDLFLAGS@ $(COV_CFLAGS)
-AM_CXXFLAGS = $(COV_CXXFLAGS)
+AM_CFLAGS = @PERL_CCCDLFLAGS@ $(GCOV_CFLAGS)
+AM_CXXFLAGS = $(GCOV_CXXFLAGS)
 
 AM_CPPFLAGS = \
 	$(COM_ERR_CPPFLAGS) \
@@ -599,7 +599,7 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 # MD5 algorithms, without needing SSL.  Currently we have no way of
 # minimally linking such code.
 LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS} $(LIB_RT) \
-	${LIB_SASL} $(SSL_LIBS)
+	${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS)
 
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
@@ -954,7 +954,7 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 
 dist_imap_libcyrus_imap_la_SOURCES =
 
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) $(GCOV_LIBS) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS)
 
@@ -1383,7 +1383,7 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_LIBADD = libcrc32.a $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
+lib_libcyrus_la_LIBADD = libcrc32.a $(LIB_RT) ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 noinst_LIBRARIES = libcrc32.a
@@ -1430,7 +1430,7 @@ else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID)
+lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(GCOV_LIBS)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
@@ -1551,7 +1551,7 @@ master_master_SOURCES = \
 	master/masterconf.c \
 	master/masterconf.h \
 	master/service.h
-master_master_LDADD = lib/libcyrus_min.la $(LIB_UCDSNMP) $(LIBS) -lm
+master_master_LDADD = lib/libcyrus_min.la $(LIB_UCDSNMP) $(LIBS) $(GCOV_LIBS) -lm
 
 
 netnews_remotepurge_SOURCES = \
