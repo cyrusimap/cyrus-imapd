@@ -89,14 +89,19 @@ AC_ARG_WITH(extraident,
 
 AM_MAINTAINER_MODE
 
+dnl Coverage (disabled by default)
+COV_CFLAGS=
+COV_LDFLAGS=
+
 AC_ARG_ENABLE(coverage,
-	[AS_HELP_STRING([--enable-coverage],[enable C test coverage])],
-	[COV_CFLAGS="--coverage"
-	 COV_LDFLAGS="--coverage"
-	],[
-	 COV_CFLAGS=
-	 COV_LDFLAGS=
-	])
+    AS_HELP_STRING([--enable-coverage],[enable C test coverage])
+)
+
+AS_IF([test "x$enable_coverage" = "xyes"], [
+    COV_CFLAGS="--coverage"
+    COV_LDFLAGS="--coverage"
+])
+
 AC_SUBST(COV_CFLAGS)
 AC_SUBST(COV_LDFLAGS)
 
