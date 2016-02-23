@@ -746,6 +746,70 @@ sub test_freebusy
     $self->assert_num_equals(2, scalar @$data);
 }
 
+sub test_imap_plusdav_novirt
+    :MagicPlus
+{
+    my ($self) = @_;
 
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'magicplus'});
+    $self->assert_not_null($CalendarId);
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $talk = $plusstore->get_client();
+
+    my $list = $talk->list('', '*');
+    my ($this) = grep { $_->[2] eq "INBOX.#calendars.$CalendarId" } @$list;
+    $self->assert_not_null($this);
+}
+
+sub test_imap_plusdav
+    :MagicPlus :VirtDomains
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'magicplus'});
+    $self->assert_not_null($CalendarId);
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $talk = $plusstore->get_client();
+
+    my $list = $talk->list('', '*');
+    my ($this) = grep { $_->[2] eq "INBOX.#calendars.$CalendarId" } @$list;
+    $self->assert_not_null($this);
+}
+
+sub test_imap_magicplus_withdomain
+    :MagicPlus :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user.domuser@example.com');
+
+    my $service = $self->{instance}->get_service("http");
+    my $domdav = Net::CalDAVTalk->new(
+	user => 'domuser@example.com',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $CalendarId = $domdav->NewCalendar({name => 'magicplus'});
+    $self->assert_not_null($CalendarId);
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'domuser+dav@example.com');
+    my $talk = $plusstore->get_client();
+
+    my $list = $talk->list('', '*');
+    my ($this) = grep { $_->[2] eq "INBOX.#calendars.$CalendarId" } @$list;
+    $self->assert_not_null($this);
+}
 
 1;
