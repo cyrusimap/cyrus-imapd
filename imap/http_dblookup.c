@@ -205,7 +205,7 @@ static int get_uid2groups(struct transaction_t *txn,
     if (!array) goto done;
 
     json = json_pack("{}");
-    for (i = 0; i < strarray_size(array); i++) {
+    for (i = 0; i < strarray_size(array); i += 2) {
         json_object_set_new(json, strarray_nth(array, i), json_string(strarray_nth(array, i+1)));
     }
 
