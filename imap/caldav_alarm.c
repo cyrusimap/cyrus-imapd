@@ -780,7 +780,7 @@ EXPORTED int caldav_alarm_process()
 
         ical = icalparser_parse_string(buf_cstring(&msg_buf) + record.header_size);
 
-        rc = annotatemore_lookup(mailbox->name, displayname_annot, NULL, &calname_buf);
+        rc = annotatemore_lookupmask(mailbox->name, displayname_annot, userid, &calname_buf);
         if (rc || !calname_buf.len) buf_setcstr(&calname_buf, strrchr(mailbox->name, '.') + 1);
 
         mailbox_close(&mailbox);
