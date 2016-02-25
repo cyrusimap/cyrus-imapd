@@ -3234,30 +3234,30 @@ static int mailbox_commit_dav(struct mailbox *mailbox)
 
     if (mailbox->local_caldav) {
         r = caldav_commit(mailbox->local_caldav);
-        if (r) return r;
         caldav_close(mailbox->local_caldav);
         mailbox->local_caldav = NULL;
+        if (r) return r;
     }
 
     if (mailbox->local_caldav_alarm) {
         r = sqldb_commit(mailbox->local_caldav_alarm, "alarm");
-        if (r) return r;
         caldav_alarm_close(mailbox->local_caldav_alarm);
         mailbox->local_caldav_alarm = NULL;
+        if (r) return r;
     }
 
     if (mailbox->local_carddav) {
         r = carddav_commit(mailbox->local_carddav);
-        if (r) return r;
         carddav_close(mailbox->local_carddav);
         mailbox->local_carddav = NULL;
+        if (r) return r;
     }
 
     if (mailbox->local_webdav) {
         r = webdav_commit(mailbox->local_webdav);
-        if (r) return r;
         webdav_close(mailbox->local_webdav);
         mailbox->local_webdav = NULL;
+        if (r) return r;
     }
 
     return 0;
@@ -3269,30 +3269,30 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
     if (mailbox->local_caldav) {
         r = caldav_abort(mailbox->local_caldav);
-        if (r) return r;
         caldav_close(mailbox->local_caldav);
         mailbox->local_caldav = NULL;
+        if (r) return r;
     }
 
     if (mailbox->local_caldav_alarm) {
         r = sqldb_rollback(mailbox->local_caldav_alarm, "alarm");
-        if (r) return r;
         caldav_alarm_close(mailbox->local_caldav_alarm);
         mailbox->local_caldav_alarm = NULL;
+        if (r) return r;
     }
 
     if (mailbox->local_carddav) {
         r = carddav_abort(mailbox->local_carddav);
-        if (r) return r;
         carddav_close(mailbox->local_carddav);
         mailbox->local_carddav = NULL;
+        if (r) return r;
     }
 
     if (mailbox->local_webdav) {
         r = webdav_abort(mailbox->local_webdav);
-        if (r) return r;
         webdav_close(mailbox->local_webdav);
         mailbox->local_webdav = NULL;
+        if (r) return r;
     }
 
     return 0;
