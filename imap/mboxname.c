@@ -556,7 +556,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
             /* other user namespace */
             free(strarray_shift(mbname->boxes));
             mbname->localpart = strarray_shift(mbname->boxes);
-            if (crossdomains) {
+            if (crossdomains && mbname->localpart) {
                 char *p = strchr(mbname->localpart, '@');
                 if (p) {
                     *p = '\0';
@@ -617,7 +617,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!strcmpsafe(strarray_nth(mbname->boxes, 0), "user")) {
         free(strarray_shift(mbname->boxes));
         mbname->localpart = strarray_shift(mbname->boxes);
-        if (crossdomains) {
+        if (crossdomains && mbname->localpart) {
             char *p = strchr(mbname->localpart, '@');
             if (p) {
                 *p = '\0';
