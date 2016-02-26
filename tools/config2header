@@ -124,6 +124,18 @@ print CFILE <<EOF
 #include <string.h>
 #include "imapopts.h"
 
+/*
+ * Sun C Compilers are more strict than GNU and won't allow type
+ * casting to a union
+ */
+
+#if defined(__SUNPRO_C) || defined(__SUNPRO_CC)
+#define U_CFG_V
+#else
+#define U_CFG_V (union config_value)
+#endif
+
+
 EXPORTED struct imapopt_s imapopts[] =
 {
   { IMAPOPT_ZERO, "", 0, OPT_NOTOPT, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } },
@@ -150,7 +162,7 @@ while (<STDIN>) {
 
 	if ($3 eq "STRING") {
 	    $def = $use_gcc_extension
-			? "(union config_value)((const char *) $2)"
+			? "U_CFG_V((const char *) $2)"
 			: "{(void *)($2)}";
 	} elsif ($3 eq "ENUM") {
 	    my @values = eval $4;
@@ -163,7 +175,7 @@ while (<STDIN>) {
 	    $e = "IMAP_ENUM_" . uc($opt) . "_" . uc($def);
 	    $e =~ s/[^0-9A-Z_a-z]/_/g;
 	    $def = $use_gcc_extension
-			? "(union config_value)((enum enum_value) $e)"
+			? "U_CFG_V((enum enum_value) $e)"
 			: "{(void *)($e)}";
 
 	    # output the enum_options
@@ -189,7 +201,7 @@ while (<STDIN>) {
 	    my $count = 0;
 
 	    $def = $use_gcc_extension
-			? "(union config_value)((const char *) $2)"
+			? "U_CFG_V((const char *) $2)"
 			: "{(void*)($2)}";
 
 	    # output the enum_options
@@ -219,7 +231,7 @@ while (<STDIN>) {
 	    }
 	    $e .= "0";
 	    $def = $use_gcc_extension
-			? "(union config_value)((unsigned long) $e)"
+			? "U_CFG_V((unsigned long) $e)"
 			: "{(void *)($e)}";
 
 	    # output the enum_options
@@ -242,7 +254,7 @@ while (<STDIN>) {
 	    if ($count > $enum_size) { $enum_size = $count; }
 	} else {
 	    $def = $use_gcc_extension
-			? "(union config_value)((long) $2)"
+			? "U_CFG_V((long) $2)"
 			: "{(void*)$2}";
 	}
 
