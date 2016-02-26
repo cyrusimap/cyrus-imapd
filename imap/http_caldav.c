@@ -1805,7 +1805,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     if (record && record->uid) {
         /* GET on a resource */
         struct caldav_data *cdata = (struct caldav_data *) data;
-        int ret = 0;
+        int ret = HTTP_CONTINUE;
 
         if (cdata->comp_flags.tzbyref) {
             if (!cdata->organizer && cdata->sched_tag) {

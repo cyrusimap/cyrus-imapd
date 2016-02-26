@@ -512,7 +512,7 @@ static int webdav_get(struct transaction_t *txn,
         buf_printf(&txn->buf, "%s/%s", wdata->type, wdata->subtype);
         txn->resp_body.type = buf_cstring(&txn->buf);
         txn->resp_body.fname = wdata->filename;
-        return 0;
+        return HTTP_CONTINUE;
     }
 
     /* Get on a user/collection */

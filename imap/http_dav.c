@@ -4424,7 +4424,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     /* Do any special processing */
     if (gparams->get) {
         ret = gparams->get(txn, mailbox, &record, ddata);
-        if (ret) goto done;
+        if (ret != HTTP_CONTINUE) goto done;
     }
 
     if (record.uid) {
