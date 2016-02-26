@@ -5998,16 +5998,19 @@ int meth_post(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_POST)) return HTTP_NOT_ALLOWED;
 
     /* Do any special processing */
-    if (pparams->post) {
-        ret = pparams->post(txn);
+    if (pparams->post.proc) {
+        ret = pparams->post.proc(txn);
         if (ret != HTTP_CONTINUE) return ret;
     }
 
     /* Check for query params */
     action = hash_lookup("action", &txn->req_qparams);
-    if (!action) return dav_post_share(txn, pparams);
 
-    if (action->next || strcmp(action->s, "add-member")) {
+    if (!action && (pparams->post.allowed & POST_SHARE))
+        return dav_post_share(txn, pparams);
+
+    if (!(pparams->post.allowed & POST_ADDMEMBER) ||
+        !action || action->next || strcmp(action->s, "add-member")) {
         return HTTP_BAD_REQUEST;
     }
 
@@ -8396,9 +8399,9 @@ struct meth_params notify_params = {
     { 0, &notify_put },
     NULL,                                       /* No special DELETE handling */
     NULL,                                       /* No special GET handling */
-    { 0, MBTYPE_COLLECTION },                   /* Allow any location */
+    { 0, 0 },                                   /* No MKCOL handling */
     NULL,                                       /* No PATCH handling */
-    NULL,                                       /* No special POST handling */
+    { 0, NULL },                                /* No POST handling */
     { 0, &notify_put },
     { DAV_FINITE_DEPTH, notify_props},
     notify_reports

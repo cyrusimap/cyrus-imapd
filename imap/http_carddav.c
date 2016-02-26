@@ -310,9 +310,9 @@ static struct meth_params carddav_params = {
     NULL,                                       /* No special GET handling */
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
     NULL,                                       /* No PATCH handling */
-    NULL,                                       /* No special POST handling */
+    { POST_ADDMEMBER | POST_SHARE, NULL },      /* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
-    { DAV_FINITE_DEPTH, carddav_props },                       /* Disable infinite depth */
+    { DAV_FINITE_DEPTH, carddav_props },        /* Disable infinite depth */
     carddav_reports
 };
 

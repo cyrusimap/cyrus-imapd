@@ -454,6 +454,13 @@ struct mkcol_params {
  */
 typedef int (*post_proc_t)(struct transaction_t *txn);
 
+/* POST "mode" bits */
+enum {
+    POST_ADDMEMBER = (1<<0),
+    POST_SHARE     = (1<<1)
+};
+
+
 /* meth_put() parameters */
 typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
                           struct mailbox *mailbox, const char *resource,
@@ -462,6 +469,11 @@ typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
 struct copy_params {
     unsigned uid_conf_precond;          /* precond code for UID conflict */
     put_proc_t proc;                    /* function to process & COPY a rsrc */
+};
+
+struct post_params {
+    unsigned allowed;                   /* allowed generic POST "modes" */
+    post_proc_t proc;                   /* special POST handling (optional) */
 };
 
 struct put_params {
@@ -514,7 +526,7 @@ struct meth_params {
     get_proc_t get;                     /* special GET handling (optional) */
     struct mkcol_params mkcol;          /* params for creating new collection */
     struct patch_doc_t *patch_docs;     /* array of patch docs & funcs (opt) */
-    post_proc_t post;                   /* special POST handling (optional) */
+    struct post_params post;            /* params for POST handling */
     struct put_params put;              /* params for putting a resource */
     struct propfind_params propfind;    /* params for finding properties */
     const struct report_type_t *reports;/* array of reports & proc functions */
