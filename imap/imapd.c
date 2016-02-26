@@ -2545,7 +2545,7 @@ static void cmd_login(char *tag, char *user)
     unsigned userlen;
     const char *canon_user = userbuf;
     const void *val;
-    char c;
+    int c;
     struct buf passwdbuf;
     char *passwd;
     const char *reply = NULL;
@@ -5038,7 +5038,7 @@ static void do_xconvmeta(const char *tag,
 void cmd_xconvmeta(const char *tag)
 {
     int r;
-    char c = ' ';
+    int c = ' ';
     struct conversations_state *state = NULL;
     struct dlist *cidlist = NULL;
     struct dlist *itemlist = NULL;

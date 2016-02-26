@@ -1008,7 +1008,7 @@ static char next_nonspace(struct protstream *in, char c)
     return c;
 }
 
-EXPORTED char dlist_parse(struct dlist **dlp, int parsekey,
+EXPORTED int dlist_parse(struct dlist **dlp, int parsekey,
                           struct protstream *in, const char *alt_reserve_base)
 {
     struct dlist *dl = NULL;
@@ -1111,10 +1111,10 @@ fail:
     return EOF;
 }
 
-EXPORTED char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
+EXPORTED int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in)
 {
-    char c = dlist_parse(dlp, parsekey, in, NULL);
+    int c = dlist_parse(dlp, parsekey, in, NULL);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -1130,7 +1130,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
                    const char *base, unsigned len)
 {
     struct protstream *stream;
-    char c;
+    int c;
     struct dlist *dl = NULL;
 
     stream = prot_readmap(base, len);

@@ -101,7 +101,7 @@ typedef enum {
 
 static int parseheader(FILE *f, char **headname, char **contents)
 {
-    char c;
+    int c;
     static struct buf name = BUF_INITIALIZER;
     static struct buf body = BUF_INITIALIZER;
     state s = HDR_NAME_START;

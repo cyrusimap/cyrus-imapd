@@ -641,7 +641,7 @@ int main(int argc, char **argv)
 
     int maxssf = 128;
     int minssf = 0;
-    char c;
+    int c;
 
     char *tls_keyfile="";(void)tls_keyfile;
     char *port = "imap";

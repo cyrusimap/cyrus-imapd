@@ -1736,8 +1736,8 @@ static int imap_pipe_oneline(char *buf, int len, void *rock) {
     }
 
     if(!text->inLiteral) {
-        char c, *tag, *cmd, *tmp, *sparebuf = (char *)xstrdup(buf);
-        int i;
+        char *tag, *cmd, *tmp, *sparebuf = (char *)xstrdup(buf);
+        int c, i;
         tmp = sparebuf;
 
         if(len > 4 &&

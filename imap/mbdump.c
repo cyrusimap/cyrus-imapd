@@ -378,7 +378,7 @@ static int dump_file(int first, int sync,
     const char *base;
     size_t len;
     struct stat sbuf;
-    char c;
+    int c;
 
     /* map file */
     syslog(LOG_DEBUG, "wanting to dump %s", filename);
@@ -826,7 +826,7 @@ EXPORTED int undump_mailbox(const char *mbname,
                    struct auth_state *auth_state __attribute((unused)))
 {
     struct buf file, data;
-    char c;
+    int c;
     int r = 0;
     int curfile = -1;
     struct mailbox *mailbox = NULL;

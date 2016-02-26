@@ -151,7 +151,7 @@ static void batch_commands(struct db *db)
     struct protstream *in = prot_new(0, 0); // stdin
     struct protstream *out = prot_new(1, 1); // stdout
     int line = 0;
-    char c = '-';
+    int c = '-';
     int r = 0;
 
     while (c != EOF) {

@@ -218,9 +218,9 @@ void dlist_print(const struct dlist *dl, int printkeys,
                  struct protstream *out);
 void dlist_printbuf(const struct dlist *dl, int printkeys,
                     struct buf *outbuf);
-char dlist_parse(struct dlist **dlp, int parsekeys,
+int dlist_parse(struct dlist **dlp, int parsekeys,
                  struct protstream *in, const char *alt_reserve_base);
-char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
+int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in);
 int dlist_parsemap(struct dlist **dlp, int parsekeys,
                    const char *base, unsigned len);

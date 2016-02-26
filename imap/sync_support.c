@@ -1309,7 +1309,7 @@ void sync_send_restart(struct protstream *out)
 struct dlist *sync_parseline(struct protstream *in)
 {
     struct dlist *dl = NULL;
-    char c;
+    int c;
 
     c = dlist_parse(&dl, 1, in, NULL);
 
