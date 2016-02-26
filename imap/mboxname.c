@@ -508,6 +508,10 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!*extname)
         return mbname; // empty string, *sigh*
 
+    /* ^ is bogus in external names */
+    if (ns->hier_sep == '/' && strchr(extname, '^'))
+        return mbname;
+
     mbname_t *userparts = mbname_from_userid(userid);
 
     mbname->extname = xstrdup(extname); // may as well cache it
@@ -534,6 +538,10 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
     mbname->boxes = strarray_split(mbname->extname, sepstr, 0);
     if (p) *p = '@'; // rebuild extname for later use
+    int i;
+    for (i = 0; i < mbname->boxes->count; i++) {
+        _add_dots(mbname->boxes->data[i]);
+    }
 
     if (!strarray_size(mbname->boxes))
         goto done;
@@ -810,6 +818,19 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
     return mbname->recipient;
 }
 
+static void _append_nodots(const struct namespace *ns, struct buf *buf, const char *val)
+{
+    if (ns->hier_sep == '/') {
+        buf_appendcstr(buf, val);
+    }
+    else {
+        char *copy = xstrdup(val);
+        _rm_dots(copy);
+        buf_appendcstr(buf, copy);
+        free(copy);
+    }
+}
+
 /* This is one of the most complex parts of the code - generating an external
  * name based on the namespace, the 'isadmin' status, and of course the current
  * user.  There are some interesting things to look out for:
@@ -867,7 +888,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
                 buf_putc(&buf, ns->hier_sep);
-                buf_appendcstr(&buf, strarray_nth(boxes, i));
+                _append_nodots(ns, &buf, strarray_nth(boxes, i));
             }
             goto end;
         }
@@ -876,17 +897,17 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         if (strcmpsafe(mbname_userid(mbname), userid)) {
             buf_appendcstr(&buf, up);
             buf_putc(&buf, ns->hier_sep);
-            buf_appendcstr(&buf, mbname_localpart(mbname));
+            _append_nodots(ns, &buf, mbname_localpart(mbname));
             if (crossdomains) {
                 const char *domain = mbname_domain(mbname);
                 if (!domain) domain = config_defdomain;
                 buf_putc(&buf, '@');
-                buf_appendcstr(&buf, domain);
+                _append_nodots(ns, &buf, domain);
             }
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
                 buf_putc(&buf, ns->hier_sep);
-                buf_appendcstr(&buf, strarray_nth(boxes, i));
+                _append_nodots(ns, &buf, strarray_nth(boxes, i));
             }
             goto end;
         }
@@ -912,7 +933,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             if (i) buf_putc(&buf, ns->hier_sep);
-            buf_appendcstr(&buf, strarray_nth(boxes, i));
+            _append_nodots(ns, &buf, strarray_nth(boxes, i));
         }
 
         goto end;
@@ -940,7 +961,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             if (i) buf_putc(&buf, ns->hier_sep);
-            buf_appendcstr(&buf, strarray_nth(boxes, i));
+            _append_nodots(ns, &buf, strarray_nth(boxes, i));
         }
 
         goto end;
@@ -950,12 +971,12 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     if (strcmpsafe(mbname_userid(mbname), userid)) {
         buf_appendcstr(&buf, "user");
         buf_putc(&buf, ns->hier_sep);
-        buf_appendcstr(&buf, mbname_localpart(mbname));
+        _append_nodots(ns, &buf, mbname_localpart(mbname));
         if (crossdomains) {
             const char *domain = mbname_domain(mbname);
             if (!domain) domain = config_defdomain;
             buf_putc(&buf, '@');
-            buf_appendcstr(&buf, domain);
+            _append_nodots(ns, &buf, domain);
         }
         /* shared folders can ONLY be in the same domain except for admin */
         else if (!admindomains && strcmpsafe(mbname_domain(mbname), mbname_domain(userparts)))
@@ -963,7 +984,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             buf_putc(&buf, ns->hier_sep);
-            buf_appendcstr(&buf, strarray_nth(boxes, i));
+            _append_nodots(ns, &buf, strarray_nth(boxes, i));
         }
         goto end;
     }
@@ -972,7 +993,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     int i;
     for (i = 0; i < strarray_size(boxes); i++) {
        buf_putc(&buf, ns->hier_sep);
-       buf_appendcstr(&buf, strarray_nth(boxes, i));
+       _append_nodots(ns, &buf, strarray_nth(boxes, i));
     }
 
  end:
@@ -1309,17 +1330,14 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
-#define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~[]()?"
+#define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~[]()?^"
 HIDDEN int mboxname_policycheck(const char *name)
 {
     const char *p;
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
-    int unixsep;
     int namelen = strlen(name);
-
-    unixsep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP);
 
     /* Skip policy check on mailbox created in delayed delete namespace
      * assuming the mailbox existed before and was OK then.
@@ -1434,8 +1452,7 @@ HIDDEN int mboxname_policycheck(const char *name)
         }
         else {
             /* If we're using unixhierarchysep, DOTCHAR is allowed */
-            if (!strchr(GOODCHARS, *name) &&
-                !(unixsep && *name == DOTCHAR))
+            if (!strchr(GOODCHARS, *name))
                 return IMAP_MAILBOX_BADNAME;
             name++;
             sawutf7 = 0;
