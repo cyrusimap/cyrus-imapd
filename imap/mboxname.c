@@ -487,6 +487,7 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
 EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid)
 {
     int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS) && !ns->isadmin;
+    int cdother = config_getswitch(IMAPOPT_CROSSDOMAINS_ONLYOTHER);
     /* old-school virtdomains requires admin to be a different domain than the userid */
     int admindomains = config_virtdomains && ns->isadmin;
 
@@ -563,6 +564,9 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
                     if (strcmpsafe(p+1, config_defdomain))
                         mbname->domain = xstrdup(p+1);
                 }
+                else if (cdother) {
+                    mbname->domain = xstrdupnull(mbname_domain(userparts));
+                }
                 /* otherwise it must be in defdomain.  Domains are
                  * always specified in crossdomains */
             }
@@ -623,6 +627,9 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
                 *p = '\0';
                 if (strcmpsafe(p+1, config_defdomain))
                     mbname->domain = xstrdup(p+1);
+            }
+            else if (cdother) {
+                mbname->domain = xstrdupnull(mbname_domain(userparts));
             }
         }
         goto done;
@@ -841,6 +848,7 @@ static void _append_nodots(const struct namespace *ns, struct buf *buf, const ch
 EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespace *ns, const char *userid)
 {
     int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS) && !ns->isadmin;
+    int cdother = config_getswitch(IMAPOPT_CROSSDOMAINS_ONLYOTHER);
     /* old-school virtdomains requires admin to be a different domain than the userid */
     int admindomains = config_virtdomains && ns->isadmin;
 
@@ -901,8 +909,10 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
             if (crossdomains) {
                 const char *domain = mbname_domain(mbname);
                 if (!domain) domain = config_defdomain;
-                buf_putc(&buf, '@');
-                _append_nodots(ns, &buf, domain);
+                if (!cdother || strcmpsafe(domain, mbname_domain(userparts))) {
+                    buf_putc(&buf, '@');
+                    _append_nodots(ns, &buf, domain);
+                }
             }
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
@@ -975,8 +985,10 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         if (crossdomains) {
             const char *domain = mbname_domain(mbname);
             if (!domain) domain = config_defdomain;
-            buf_putc(&buf, '@');
-            _append_nodots(ns, &buf, domain);
+            if (!cdother || strcmpsafe(domain, mbname_domain(userparts))) {
+                buf_putc(&buf, '@');
+                _append_nodots(ns, &buf, domain);
+            }
         }
         /* shared folders can ONLY be in the same domain except for admin */
         else if (!admindomains && strcmpsafe(mbname_domain(mbname), mbname_domain(userparts)))

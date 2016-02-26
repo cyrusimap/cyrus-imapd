@@ -570,6 +570,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Enable cross domain sharing.  This works best with alt namespace and
    unix hierarchy separators on, so you get Other Users/foo@example.com/... */
 
+{ "crossdomains_onlyother", 0, SWITCH }
+/* only show the domain for users in other domains than your own (for
+   backwards compatibility if you're already sharing */
+
 { "davdriveprefix", "#drive", STRING }
 /* The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
    delimiter will be automatically appended.  The public storage
