@@ -5678,10 +5678,12 @@ static int notify_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *davdb);
 
+#define DAVSHARING_CONTENT_TYPE "application/davsharing+xml"
+
 #define DAVNOTIFICATION_CONTENT_TYPE \
     "application/davnotification+xml; charset=utf-8"
 
-static int send_notification(xmlDocPtr doc,
+static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
                              const char *userid, const char *resource)
 {
     struct mailbox *mailbox = NULL;
@@ -5712,6 +5714,8 @@ static int send_notification(xmlDocPtr doc,
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
+    txn.req_tgt.urlprefix = top_txn->req_tgt.urlprefix;
+    txn.req_tgt.mboxprefix = top_txn->req_tgt.mboxprefix;
 
     /* Create header cache */
     if (!(txn.req_hdrs = spool_new_hdrcache())) {
@@ -5777,7 +5781,7 @@ static int dav_post_share(struct transaction_t *txn,
     /* Local mailbox */
 
     /* Read body */
-    ret = parse_xml_body(txn, &root, "application/davsharing+xml");
+    ret = parse_xml_body(txn, &root, DAVSHARING_CONTENT_TYPE);
     if (!ret && !root) {
         txn->error.desc = "Missing request body";
         ret = HTTP_BAD_REQUEST;
@@ -5955,7 +5959,7 @@ static int dav_post_share(struct transaction_t *txn,
 
                     xml_add_href(reply, NULL, buf_cstring(&replyurl));
 
-                    r = send_notification(notify->doc,
+                    r = send_notification(txn, notify->doc,
                                           userid, buf_cstring(&resource));
                 }
 
@@ -5965,7 +5969,7 @@ static int dav_post_share(struct transaction_t *txn,
             xmlFree(href);
         }
 
-        ret = HTTP_OK;
+        ret = HTTP_NO_CONTENT;
     }
 
   done:
@@ -8465,7 +8469,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
 {
     struct webdav_db *db = (struct webdav_db *)destdb;
     xmlDocPtr doc = (xmlDocPtr) obj;
-    xmlNodePtr root, dtstamp, type = NULL;
+    xmlNodePtr root, dtstamp, type = NULL, node;
     struct webdav_data *wdata;
     struct index_record *oldrecord = NULL, record;
     struct buf *xmlbuf;
@@ -8499,6 +8503,8 @@ static int notify_put(struct transaction_t *txn, void *obj,
     /* Create and cache RFC 5322 header fields for resource */
     if (type) {
         struct buf buf = BUF_INITIALIZER;
+        xmlChar *value;
+        time_t t;
         struct dlist *dl, *al;
         xmlAttrPtr attr;
 
@@ -8506,23 +8512,81 @@ static int notify_put(struct transaction_t *txn, void *obj,
                              xstrdup((char *) type->name), txn->req_hdrs);
 
         /* Create a dlist representing type, namespace, and attribute(s) */
-        dl = dlist_newlist(NULL, "notificationtype");
-        dlist_setatom(dl, "type", (char *) type->name);
-        dlist_setatom(dl, "ns-href", (char *) type->ns->href);
-        al = dlist_newkvlist(dl, NULL);
+        value = xmlNodeGetContent(dtstamp);
+        time_from_iso8601((const char *) value, &t);
+        xmlFree(value);
+
+        dl = dlist_newkvlist(NULL, "N");
+        dlist_setdate(dl, "D", t);
+        dlist_setatom(dl, "NS", (char *) type->ns->href);
+        dlist_setatom(dl, "T", (char *) type->name);
+
+        /* Add any attributes */
+        al = dlist_newkvlist(dl, "A");
         for (attr = type->properties; attr; attr = attr->next) {
-            xmlChar *value = xmlNodeGetContent((xmlNodePtr) attr);
+            value = xmlNodeGetContent((xmlNodePtr) attr);
             dlist_setmap(al, (char *) attr->name,
                          (char *) value, xmlStrlen(value));
             xmlFree(value);
         }
-        dlist_printbuf(dl, 0, &buf);
+
+        /* Add any additional data */
+        al = dlist_newkvlist(dl, "D");
+        if (!xmlStrcmp(type->name, BAD_CAST "share-invite-notification")) {
+            for (node = xmlFirstElementChild(type); node;
+                 node = xmlNextElementSibling(node)) {
+                if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
+                    struct request_target_t tgt;
+                    const char *errstr;
+                    mbname_t *mbname;
+
+                    memset(&tgt, 0, sizeof(struct request_target_t));
+                    value = xmlNodeGetContent(xmlFirstElementChild(node));
+                    calcarddav_parse_path((const char *) value, &tgt,
+                                          txn->req_tgt.urlprefix,
+                                          txn->req_tgt.mboxprefix, &errstr);
+                    xmlFree(value);
+                    free(tgt.userid);
+
+                    dlist_setatom(al, "M", tgt.mbentry->name);
+
+                    mbname = mbname_from_intname(mailbox->name);
+                    buf_reset(&txn->buf);
+                    buf_printf(&txn->buf, "%x-%x-%x-%x-%ld",
+                               strhash((char *) type->ns->href),
+                               strhash((char *) type->name),
+                               strhash(tgt.mbentry->name),
+                               strhash(mbname_userid(mbname)), t);
+                    mbname_free(&mbname);
+
+                    dlist_setatom(al, "U", buf_cstring(&txn->buf));
+
+                    mboxlist_entry_free(&tgt.mbentry);
+                    break;
+                }
+            }
+        }
+        else if (!xmlStrcmp(type->name, BAD_CAST "share-reply-notification")) {
+            for (node = xmlFirstElementChild(type); node;
+                 node = xmlNextElementSibling(node)) {
+                if (!xmlStrcmp(node->name, BAD_CAST "x-in-reply-to")) {
+                    xmlUnlinkNode(node);
+                    value = xmlNodeGetContent(xmlFirstElementChild(node));
+                    dlist_setmap(al, "R", (char *) value, xmlStrlen(value));
+                    xmlFree(value);
+                    xmlFreeNode(node);
+                    break;
+                }
+            }
+        }
+
+        dlist_printbuf(dl, 1, &buf);
         dlist_free(&dl);
         spool_replace_header(xstrdup("Content-Description"),
                              buf_release(&buf), txn->req_hdrs);
     }
 
-    assert(!buf_len(&txn->buf));
+    buf_reset(&txn->buf);
     buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
     spool_replace_header(xstrdup("Message-ID"),
                          buf_release(&txn->buf), txn->req_hdrs);
@@ -8845,10 +8909,10 @@ static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
                         name, ns, NULL, 0);
 
     /* Parse dlist representing notification type, namespace, and attributes */
-    dlist_parsemap(&dl, 0, wdata->filename, strlen(wdata->filename));
-    type = dlist_cstring(dlist_getchildn(dl, 0));
-    ns_href = dlist_cstring(dlist_getchildn(dl, 1));
-    al = dlist_getchildn(dl, 2);
+    dlist_parsemap(&dl, 1, wdata->filename, strlen(wdata->filename));
+    type = dlist_cstring(dlist_getchild(dl, "T"));
+    ns_href = dlist_cstring(dlist_getchild(dl, "NS"));
+    al = dlist_getchild(dl, "A");
 
     if (!xmlStrcmp(ns->href, BAD_CAST XML_NS_CS)) {
         if (!strcmp(type, "share-invite-notification"))
