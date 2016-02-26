@@ -856,7 +856,7 @@ static int caldav_parse_path(const char *path,
     }
     else if (tgt->resource) {
         /* Resource in regular calendar collection */
-        tgt->allow |= ALLOW_PATCH;
+        tgt->allow |= ALLOW_PATCH | ALLOW_POST;
     }
 
     return 0;
