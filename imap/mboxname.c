@@ -1342,7 +1342,7 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
-#define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~[]()?^"
+#define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
 HIDDEN int mboxname_policycheck(const char *name)
 {
     const char *p;
@@ -1463,7 +1463,6 @@ HIDDEN int mboxname_policycheck(const char *name)
             name++;             /* Skip over terminating '-' */
         }
         else {
-            /* If we're using unixhierarchysep, DOTCHAR is allowed */
             if (!strchr(GOODCHARS, *name))
                 return IMAP_MAILBOX_BADNAME;
             name++;
