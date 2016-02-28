@@ -421,19 +421,82 @@ EXPORTED mbname_t *mbname_dup(const mbname_t *orig)
     return mbname;
 }
 
-static void _add_dots(char *p)
+static void _append_intbuf(struct buf *buf, const char *val)
 {
-    for (; *p; p++) {
-        if (*p == '^') *p = '.';
+    const char *p;
+    for (p = val; *p; p++) {
+        switch (*p) {
+        case '.':
+            buf_putc(buf, '^');
+            break;
+        default:
+            buf_putc(buf, *p);
+            break;
+        }
     }
 }
 
-static void _rm_dots(char *p)
+static strarray_t *_array_from_intname(strarray_t *a)
 {
-    for (; *p; p++) {
-        if (*p == '.') *p = '^';
+    int i;
+    for (i = 0; i < strarray_size(a); i++) {
+        char *p;
+        for (p = a->data[i]; *p; p++) {
+            switch (*p) {
+            case '^':
+                *p = '.';
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    return a;
+}
+
+static void _append_extbuf(const struct namespace *ns, struct buf *buf, const char *val)
+{
+    const char *p;
+    int isuhs = (ns->hier_sep == '/');
+    for (p = val; *p; p++) {
+        switch (*p) {
+        case '.':
+            if (isuhs) buf_putc(buf, '.');
+            else buf_putc(buf, '^');
+            break;
+        default:
+            buf_putc(buf, *p);
+            break;
+        }
     }
 }
+
+static strarray_t *_array_from_extname(const struct namespace *ns, strarray_t *a)
+{
+    int i;
+    int isuhs = (ns->hier_sep == '/');
+    for (i = 0; i < strarray_size(a); i++) {
+        char *p;
+        for (p = a->data[i]; *p; p++) {
+            switch (*p) {
+            case '^':
+                if (isuhs) goto err;
+                else *p = '.';
+                break;
+            case '/':
+                goto err;
+            default:
+                break;
+            }
+        }
+    }
+    return a;
+
+err:
+    strarray_free(a);
+    return NULL;
+}
+
 
 EXPORTED mbname_t *mbname_from_intname(const char *intname)
 {
@@ -460,11 +523,7 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
         intname = p+1;
     }
 
-    mbname->boxes = strarray_split(intname, ".", 0);
-    int i;
-    for (i = 0; i < mbname->boxes->count; i++) {
-        _add_dots(mbname->boxes->data[i]);
-    }
+    mbname->boxes = _array_from_intname(strarray_split(intname, ".", 0));
 
     if (!strarray_size(mbname->boxes))
         return mbname;
@@ -509,13 +568,12 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     if (!*extname)
         return mbname; // empty string, *sigh*
 
-    /* ^ is bogus in external names */
-    if (ns->hier_sep == '/' && strchr(extname, '^'))
-        return mbname;
-
-    mbname_t *userparts = mbname_from_userid(userid);
+    sepstr[0] = ns->hier_sep;
+    sepstr[1] = '\0';
 
     mbname->extname = xstrdup(extname); // may as well cache it
+
+    mbname_t *userparts = mbname_from_userid(userid);
 
     if (admindomains) {
         p = strchr(mbname->extname, '@');
@@ -534,15 +592,12 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
         mbname->domain = xstrdupnull(mbname_domain(userparts));
     }
 
-    sepstr[0] = ns->hier_sep;
-    sepstr[1] = '\0';
+    mbname->boxes = _array_from_extname(ns, strarray_split(mbname->extname, sepstr, 0));
 
-    mbname->boxes = strarray_split(mbname->extname, sepstr, 0);
     if (p) *p = '@'; // rebuild extname for later use
-    int i;
-    for (i = 0; i < mbname->boxes->count; i++) {
-        _add_dots(mbname->boxes->data[i]);
-    }
+
+    if (!mbname->boxes)
+        goto done;
 
     if (!strarray_size(mbname->boxes))
         goto done;
@@ -719,19 +774,13 @@ EXPORTED const char *mbname_intname(const mbname_t *mbname)
     if (mbname->localpart) {
         if (sep) buf_putc(&buf, '.');
         buf_appendcstr(&buf, "user.");
-        char *lp = xstrdup(mbname->localpart);
-        _rm_dots(lp);
-        buf_appendcstr(&buf, lp);
-        free(lp);
+        _append_intbuf(&buf, mbname->localpart);
         sep = 1;
     }
 
     for (i = 0; i < strarray_size(boxes); i++) {
         if (sep) buf_putc(&buf, '.');
-        char *lp = xstrdupnull(strarray_nth(boxes, i));
-        _rm_dots(lp);
-        buf_appendcstr(&buf, lp);
-        free(lp);
+        _append_intbuf(&buf, strarray_nth(boxes, i));
         sep = 1;
     }
 
@@ -825,19 +874,6 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
     return mbname->recipient;
 }
 
-static void _append_nodots(const struct namespace *ns, struct buf *buf, const char *val)
-{
-    if (ns->hier_sep == '/') {
-        buf_appendcstr(buf, val);
-    }
-    else {
-        char *copy = xstrdup(val);
-        _rm_dots(copy);
-        buf_appendcstr(buf, copy);
-        free(copy);
-    }
-}
-
 /* This is one of the most complex parts of the code - generating an external
  * name based on the namespace, the 'isadmin' status, and of course the current
  * user.  There are some interesting things to look out for:
@@ -896,7 +932,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
                 buf_putc(&buf, ns->hier_sep);
-                _append_nodots(ns, &buf, strarray_nth(boxes, i));
+                _append_extbuf(ns, &buf, strarray_nth(boxes, i));
             }
             goto end;
         }
@@ -905,19 +941,19 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         if (strcmpsafe(mbname_userid(mbname), userid)) {
             buf_appendcstr(&buf, up);
             buf_putc(&buf, ns->hier_sep);
-            _append_nodots(ns, &buf, mbname_localpart(mbname));
+            _append_extbuf(ns, &buf, mbname_localpart(mbname));
             if (crossdomains) {
                 const char *domain = mbname_domain(mbname);
                 if (!domain) domain = config_defdomain;
                 if (!cdother || strcmpsafe(domain, mbname_domain(userparts))) {
                     buf_putc(&buf, '@');
-                    _append_nodots(ns, &buf, domain);
+                    _append_extbuf(ns, &buf, domain);
                 }
             }
             int i;
             for (i = 0; i < strarray_size(boxes); i++) {
                 buf_putc(&buf, ns->hier_sep);
-                _append_nodots(ns, &buf, strarray_nth(boxes, i));
+                _append_extbuf(ns, &buf, strarray_nth(boxes, i));
             }
             goto end;
         }
@@ -943,7 +979,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             if (i) buf_putc(&buf, ns->hier_sep);
-            _append_nodots(ns, &buf, strarray_nth(boxes, i));
+            _append_extbuf(ns, &buf, strarray_nth(boxes, i));
         }
 
         goto end;
@@ -971,7 +1007,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             if (i) buf_putc(&buf, ns->hier_sep);
-            _append_nodots(ns, &buf, strarray_nth(boxes, i));
+            _append_extbuf(ns, &buf, strarray_nth(boxes, i));
         }
 
         goto end;
@@ -981,13 +1017,13 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     if (strcmpsafe(mbname_userid(mbname), userid)) {
         buf_appendcstr(&buf, "user");
         buf_putc(&buf, ns->hier_sep);
-        _append_nodots(ns, &buf, mbname_localpart(mbname));
+        _append_extbuf(ns, &buf, mbname_localpart(mbname));
         if (crossdomains) {
             const char *domain = mbname_domain(mbname);
             if (!domain) domain = config_defdomain;
             if (!cdother || strcmpsafe(domain, mbname_domain(userparts))) {
                 buf_putc(&buf, '@');
-                _append_nodots(ns, &buf, domain);
+                _append_extbuf(ns, &buf, domain);
             }
         }
         /* shared folders can ONLY be in the same domain except for admin */
@@ -996,7 +1032,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         int i;
         for (i = 0; i < strarray_size(boxes); i++) {
             buf_putc(&buf, ns->hier_sep);
-            _append_nodots(ns, &buf, strarray_nth(boxes, i));
+            _append_extbuf(ns, &buf, strarray_nth(boxes, i));
         }
         goto end;
     }
@@ -1005,7 +1041,7 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
     int i;
     for (i = 0; i < strarray_size(boxes); i++) {
        buf_putc(&buf, ns->hier_sep);
-       _append_nodots(ns, &buf, strarray_nth(boxes, i));
+       _append_extbuf(ns, &buf, strarray_nth(boxes, i));
     }
 
  end:
@@ -1536,10 +1572,8 @@ EXPORTED void mboxname_hash(char *dest, size_t destlen,
 
     int i;
     for (i = 0; i < strarray_size(boxes); i++) {
-        char *item = xstrdup(strarray_nth(boxes, i));
-        _rm_dots(item);
-        buf_printf(&buf, "/%s", item);
-        free(item);
+        buf_putc(&buf, '/');
+        _append_intbuf(&buf, strarray_nth(boxes, i));
     }
 
     /* for now, keep API even though we're doing a buffer inside here */
