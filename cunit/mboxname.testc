@@ -287,6 +287,7 @@ static struct
     int altnamespace;
     int virtdomains;
     int crossdomains;
+    int cdother;
     const char *defdomain;
     const char *userprefix;
     const char *sharedprefix;
@@ -303,6 +304,7 @@ static void toexternal_helper(const char *intname,
     config_defdomain = conf.defdomain;
     imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = conf.unixhierarchysep;
     imapopts[IMAPOPT_CROSSDOMAINS].val.b = conf.crossdomains;
+    imapopts[IMAPOPT_CROSSDOMAINS_ONLYOTHER].val.b = conf.cdother;
     imapopts[IMAPOPT_ALTNAMESPACE].val.b = conf.altnamespace;
     imapopts[IMAPOPT_USERPREFIX].val.s = conf.userprefix;
     imapopts[IMAPOPT_SHAREDPREFIX].val.s = conf.sharedprefix;
@@ -528,6 +530,19 @@ static void test_toexternal_domains(void)
     toexternal_helper("boop.com!shared.quux", NULL);
 }
 
+static void test_toexternal_crossdomains_other(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.virtdomains = 1;
+    conf.crossdomains = 1;
+    conf.cdother = 1;
+    conf.userid = "fred@bloggs.com";
+
+    toexternal_helper("bloggs.com!user.fred", "INBOX");
+    toexternal_helper("bloggs.com!user.jane", "user.jane");
+    toexternal_helper("boop.com!user.betty", "user.betty@boop^com");
+}
+
 static void test_toexternal_crossdomains(void)
 {
     memset(&conf, 0, sizeof(conf));
@@ -628,6 +643,18 @@ static void test_toexternal_crossdomains_alt_nouhs(void)
     toexternal_helper("boop.com!user.betty", "User Magic.betty@boop^com");
     toexternal_helper("boop.com!user.betty.foo.bar", "User Magic.betty@boop^com.foo.bar");
     toexternal_helper("boop.com!user.betty.foo^bar", "User Magic.betty@boop^com.foo^bar");
+}
+
+static void test_toexternal_specials(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.userid = "fred";
+
+    toexternal_helper("user.fred.*`^", "INBOX.*!^");
+
+    conf.unixhierarchysep = 1;
+
+    toexternal_helper("user.fred.*`^", "INBOX/*!.");
 }
 
 static void test_toexternal_unixhier(void)

@@ -944,8 +944,8 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
             _append_extbuf(ns, &buf, mbname_localpart(mbname));
             if (crossdomains) {
                 const char *domain = mbname_domain(mbname);
-                if (!domain) domain = config_defdomain;
                 if (!cdother || strcmpsafe(domain, mbname_domain(userparts))) {
+                    if (!domain) domain = config_defdomain;
                     buf_putc(&buf, '@');
                     _append_extbuf(ns, &buf, domain);
                 }
@@ -1020,8 +1020,8 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         _append_extbuf(ns, &buf, mbname_localpart(mbname));
         if (crossdomains) {
             const char *domain = mbname_domain(mbname);
-            if (!domain) domain = config_defdomain;
             if (!cdother || strcmpsafe(domain, mbname_domain(userparts))) {
+                if (!domain) domain = config_defdomain;
                 buf_putc(&buf, '@');
                 _append_extbuf(ns, &buf, domain);
             }
@@ -1377,6 +1377,7 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
 /*
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
+ * NOTE: '^' is '.' externally in unixhs, and invalid in unixhs
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
 HIDDEN int mboxname_policycheck(const char *name)
@@ -1386,6 +1387,7 @@ HIDDEN int mboxname_policycheck(const char *name)
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
     int namelen = strlen(name);
+    int hasdom = 0;
 
     /* Skip policy check on mailbox created in delayed delete namespace
      * assuming the mailbox existed before and was OK then.
@@ -1407,6 +1409,7 @@ HIDDEN int mboxname_policycheck(const char *name)
         if (config_virtdomains) {
             name = p + 1;
             namelen = strlen(name);
+            hasdom = 1;
         }
         else
             return IMAP_MAILBOX_BADNAME;
@@ -1499,7 +1502,7 @@ HIDDEN int mboxname_policycheck(const char *name)
             name++;             /* Skip over terminating '-' */
         }
         else {
-            if (!strchr(GOODCHARS, *name))
+            if (!(strchr(GOODCHARS, *name) || (hasdom && *name == '!')))
                 return IMAP_MAILBOX_BADNAME;
             name++;
             sawutf7 = 0;
