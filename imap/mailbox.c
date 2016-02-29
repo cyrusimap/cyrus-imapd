@@ -430,6 +430,9 @@ static int cache_parserecord(struct buf *cachebase, size_t cache_offset,
     offset = cache_offset;
 
     for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
+	cacheitem = cachebase->s + offset;
+
+	/* bounds checking */
 	if (offset >= cachebase->len) {
 	    syslog(LOG_ERR, "IOERROR: offset greater than cache size "
 		   SIZE_T_FMT " " SIZE_T_FMT "(%d)",
@@ -437,7 +440,14 @@ static int cache_parserecord(struct buf *cachebase, size_t cache_offset,
 	    return IMAP_IOERROR;
 	}
 
-	cacheitem = cachebase->s + offset;
+	if (offset + CACHE_ITEM_SIZE_SKIP + CACHE_ITEM_LEN(cacheitem) > cachebase->len) {
+	    syslog(LOG_ERR, "IOERROR: cache entry truncated "
+		   SIZE_T_FMT " %u " SIZE_T_FMT "(%d)",
+		   offset, CACHE_ITEM_LEN(cacheitem),
+		   cachebase->len, cache_ent);
+	    return IMAP_IOERROR;
+	}
+
 	/* copy locations */
 	crec->item[cache_ent].len = CACHE_ITEM_LEN(cacheitem);
 	crec->item[cache_ent].offset = offset + CACHE_ITEM_SIZE_SKIP;
