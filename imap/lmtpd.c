@@ -107,8 +107,6 @@
 #include "lmtpengine.h"
 #ifdef USE_SIEVE
 #include "lmtp_sieve.h"
-
-static sieve_interp_t *sieve_interp = NULL;
 #endif
 
 #include "sync_log.h"
@@ -217,9 +215,6 @@ int service_init(int argc __attribute__((unused)),
         mylmtp.addheaders = xzmalloc(2 * sizeof(struct addheader));
         mylmtp.addheaders[0].name = "X-Sieve";
         mylmtp.addheaders[0].body = SIEVE_VERSION;
-
-        /* setup sieve support */
-        sieve_interp = setup_sieve();
 #else
         if (dupelim)
 #endif
@@ -793,7 +788,9 @@ int deliver(message_data_t *msgdata, char *authuser,
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
-            r = run_sieve(mbname, sieve_interp, &mydata);
+            sieve_interp_t *interp = setup_sieve();
+            r = run_sieve(mbname, interp, &mydata);
+            sieve_interp_free(&interp);
             /* if there was no sieve script, or an error during execution,
                r is non-zero and we'll do normal delivery */
 #else
@@ -930,11 +927,7 @@ void shut_down(int code)
     mboxlist_done();
 
     if (!isproxy) {
-#ifdef USE_SIEVE
-        sieve_interp_free(&sieve_interp);
-#else
         if (dupelim)
-#endif
             duplicate_done();
 
         quotadb_close();
