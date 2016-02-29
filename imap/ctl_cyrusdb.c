@@ -193,7 +193,7 @@ static const char *dbfname(struct cyrusdb *db)
         fname = config_getstring(IMAPOPT_MBOXLIST_DB_PATH);
     else if (!strcmp(db->name, FNAME_QUOTADB))
         fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
-    else if (!strcmp(db->name, FNAME_GLOBALANNOTATIONS))
+    else if (!strcmp(db->name, FNAME_ANNOTATIONS))
         fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
     else if (!strcmp(db->name, FNAME_DELIVERDB))
         fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
