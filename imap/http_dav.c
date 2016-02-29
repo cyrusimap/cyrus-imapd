@@ -5001,13 +5001,64 @@ static int propfind_by_resources(struct propfind_ctx *fctx)
 }
 
 
+static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
+                                  const char *mboxname, const char *userid,
+                                  char **mbox_owner)
+{
+    mbname_t *mbname = NULL;
+    const strarray_t *boxes;
+    int n, size;
+    size_t len;
+
+    mbname = mbname_from_intname(mboxname);
+
+    buf_reset(buf);
+    buf_printf(buf, "%s/", urlprefix);
+
+    if (userid) {
+        const char *owner;
+
+        buf_printf(buf, "%s/", USER_COLLECTION_PREFIX);
+
+        if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
+        owner = mbname_userid(mbname);
+        if (!owner) owner = "";
+
+        if (*userid) {
+            buf_printf(buf, "%s/", userid);
+
+            if (strcmp(owner, userid)) {
+                /* Encode shared collection as: <owner> "." <mboxname> */
+                buf_printf(buf, "%s%c", owner, SHARED_COLLECTION_DELIM);
+            }
+        }
+        else buf_printf(buf, "%s/", owner);
+
+        if (mbox_owner) *mbox_owner = xstrdup(owner);
+    }
+
+    len = buf_len(buf);
+
+    /* add collection(s) to path */
+    boxes = mbname_boxes(mbname);
+    size = strarray_size(boxes);
+    for (n = 1; n < size; n++) {
+        buf_appendcstr(buf, strarray_nth(boxes, n));
+        buf_putc(buf, '/');
+    }
+
+    mbname_free(&mbname);
+
+    return len;
+}
+
+
 /* mboxlist_findall() callback to find props on a collection */
 int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     const char *mboxname = mbentry->name;
     struct buf writebuf = BUF_INITIALIZER;
-    mbname_t *mbname = NULL;
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
@@ -5066,44 +5117,8 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
-        const strarray_t *boxes;
-        int n, size;
-
-        mbname = mbname_from_intname(mboxname);
-
-        buf_printf(&writebuf, "%s/", fctx->req_tgt->urlprefix);
-
-        if (fctx->req_tgt->userid) {
-            const char *owner;
-
-            buf_printf(&writebuf, "%s/", USER_COLLECTION_PREFIX);
-
-            if (!mbname_domain(mbname))
-                mbname_set_domain(mbname, httpd_extradomain);
-            owner = mbname_userid(mbname);
-            if (!owner) owner = "";
-
-            if (*fctx->req_tgt->userid) {
-                buf_printf(&writebuf, "%s/", fctx->req_tgt->userid);
-
-                if (strcmp(owner, fctx->req_tgt->userid)) {
-                    /* Encode shared collection as: <owner> "." <mboxname> */
-                    buf_printf(&writebuf, "%s%c",
-                               owner, SHARED_COLLECTION_DELIM);
-                }
-            }
-            else buf_printf(&writebuf, "%s/", owner);
-        }
-
-        len = buf_len(&writebuf);
-
-        /* add collection(s) to path */
-        boxes = mbname_boxes(mbname);
-        size = strarray_size(boxes);
-        for (n = 1; n < size; n++) {
-            buf_appendcstr(&writebuf, strarray_nth(boxes, n));
-            buf_putc(&writebuf, '/');
-        }
+        len = make_collection_url(&writebuf, fctx->req_tgt->urlprefix,
+                                  mboxname, fctx->req_tgt->userid, NULL);
 
         /* copy it all back into place... in theory we should check against
          * 'last' and make sure it doesn't change from the original request.
@@ -5126,7 +5141,6 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
   done:
     buf_free(&writebuf);
-    mbname_free(&mbname);
     if (mailbox) mailbox_close(&mailbox);
 
     return r;
@@ -5686,6 +5700,10 @@ static int notify_put(struct transaction_t *txn, void *obj,
 #define DAVNOTIFICATION_CONTENT_TYPE \
     "application/davnotification+xml; charset=utf-8"
 
+#define SYSTEM_STATUS_NOTIFICATION  "share-invite-notification"
+#define SHARE_INVITE_NOTIFICATION   "share-invite-notification"
+#define SHARE_REPLY_NOTIFICATION    "share-reply-notification"
+
 static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
                              const char *userid, const char *resource)
 {
@@ -5752,7 +5770,6 @@ static int dav_post_share(struct transaction_t *txn,
 {
     xmlNodePtr root = NULL, node, sharee;
     int rights, ret, legacy = 0;
-    const char *notify_type = "share-invite-notification";
     struct buf resource = BUF_INITIALIZER;
     char dtstamp[RFC3339_DATETIME_MAX];
     xmlNodePtr notify = NULL, type, resp, share;
@@ -5807,7 +5824,7 @@ static int dav_post_share(struct transaction_t *txn,
     time_to_rfc3339(time(0), dtstamp, RFC3339_DATETIME_MAX);
     xmlNewChild(notify, NULL, BAD_CAST "dtstamp", BAD_CAST dtstamp);
 
-    type = xmlNewChild(notify, NULL, BAD_CAST notify_type, NULL);
+    type = xmlNewChild(notify, NULL, BAD_CAST SHARE_INVITE_NOTIFICATION, NULL);
 
     node = xmlNewChild(type, NULL, BAD_CAST "principal", NULL);
     buf_printf(&resource, "%s/%s/%s/", namespace_principal.prefix,
@@ -5830,9 +5847,9 @@ static int dav_post_share(struct transaction_t *txn,
        We use a consistent naming scheme so that multiple notifications
        of the same type for the same resource are coalesced (overwritten) */
     buf_reset(&resource);
-    buf_printf(&resource, "%x-%x-%x.xml", strhash(txn->req_tgt.mbentry->name),
-               strhash(XML_NS_DAV), strhash(notify_type));
-
+    buf_printf(&resource, "%x-%x-%x.xml",
+               strhash(XML_NS_DAV), strhash(SHARE_INVITE_NOTIFICATION),
+               strhash(txn->req_tgt.mbentry->name));
     /* Process each sharee */
     for (sharee = xmlFirstElementChild(root); sharee;
          sharee = xmlNextElementSibling(sharee)) {
@@ -8102,9 +8119,10 @@ static int get_server_info(struct transaction_t *txn)
     return 0;
 }
 
-
 static int notify_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr);
+
+static int notify_post(struct transaction_t *txn);
 
 static int notify_get(struct transaction_t *txn,
                       struct mailbox *mailbox __attribute__((unused)),
@@ -8262,7 +8280,7 @@ struct meth_params notify_params = {
     &notify_get,
     { 0, 0 },                                   /* No MKCOL handling */
     NULL,                                       /* No PATCH handling */
-    { 0, NULL },                                /* No POST handling */
+    { 0, &notify_post },                        /* No generic POST handling */
     { 0, &notify_put },
     { DAV_FINITE_DEPTH, notify_props},
     notify_reports
@@ -8290,7 +8308,7 @@ struct namespace_t namespace_notify = {
         { NULL,                 NULL },                /* MOVE         */
         { &meth_options,        &notify_parse_path },  /* OPTIONS      */
         { NULL,                 NULL },                /* PATCH        */
-        { NULL,                 NULL },                /* POST         */
+        { &meth_post,           &notify_params },      /* POST         */
         { &meth_propfind,       &notify_params },      /* PROPFIND     */
         { NULL,                 NULL },                /* PROPPATCH    */
         { NULL,                 NULL },                /* PUT          */
@@ -8336,13 +8354,13 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
     dlist_getatom(dl, "T", &type_str);
     dlist_getlist(dl, "D", &al);
 
-    if (!strcmp(type_str, "systemstatus")) {
+    if (!strcmp(type_str, SYSTEM_STATUS_NOTIFICATION)) {
         notify_type = SYSTEM_STATUS;
     }
-    else if (!strcmp(type_str, "share-invite-notification")) {
+    else if (!strcmp(type_str, SHARE_INVITE_NOTIFICATION)) {
         notify_type = SHARE_INVITE;
     }
-    else if (!strcmp(type_str, "share-reply-notification")) {
+    else if (!strcmp(type_str, SHARE_REPLY_NOTIFICATION)) {
         notify_type = SHARE_REPLY;
     }
     else return HTTP_NOT_ACCEPTABLE;
@@ -8482,6 +8500,187 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
 }
 
 
+/* Perform a POST request on a WebDAV notification resource */
+static int notify_post(struct transaction_t *txn)
+{
+    xmlNodePtr root = NULL, node, resp = NULL;
+    int rights, ret, r, legacy = 0, add = 0;
+    struct mailbox *mailbox = NULL;
+    struct webdav_db *webdavdb = NULL;
+    struct webdav_data *wdata;
+    struct dlist *dl = NULL, *data;
+    const char *type_str, *mboxname, *uid, *url_prefix;
+    char dtstamp[RFC3339_DATETIME_MAX], *owner;
+    xmlNodePtr notify = NULL, type, sharee;
+    xmlNsPtr ns[NUM_NAMESPACE];
+
+    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    if (!(rights & DACL_ADMIN)) {
+        /* DAV:need-privileges */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = DACL_ADMIN;
+        return HTTP_NO_PRIVS;
+    }
+
+    if (txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Read body */
+    ret = parse_xml_body(txn, &root, DAVSHARING_CONTENT_TYPE);
+    if (!ret && !root) {
+        txn->error.desc = "Missing request body";
+        ret = HTTP_BAD_REQUEST;
+    }
+    if (ret) goto done;
+
+    /* Make sure its a invite-reply element */
+    if (!xmlStrcmp(root->ns->href, BAD_CAST XML_NS_CS)) legacy = 1;
+    if (xmlStrcmp(root->name, BAD_CAST "invite-reply")) {
+        txn->error.desc =
+            "Missing invite-reply element in POST request";
+        ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    for (node = xmlFirstElementChild(root); node;
+         node = xmlNextElementSibling(node)) {
+        if (!xmlStrncmp(node->name, BAD_CAST "invite-", 7)) {
+            resp = node;
+        }
+    }
+    if (!resp) {
+        txn->error.desc =
+            "Missing invite response element in POST request";
+        ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+    if (!xmlStrcmp(resp->name, BAD_CAST "invite-accepted")) add = 1;
+
+    /* Open mailbox for reading */
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        goto done;
+    }
+
+    /* Open the WebDAV DB corresponding to the mailbox */
+    webdavdb = webdav_open_mailbox(mailbox);
+
+    /* Find message UID for the resource */
+    webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry->name,
+                           txn->req_tgt.resource, &wdata, 0);
+    if (!wdata->dav.imap_uid) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Parse dlist representing notification type, and data */
+    dlist_parsemap(&dl, 1, wdata->filename, strlen(wdata->filename));
+    dlist_getatom(dl, "T", &type_str);
+    if (strcmp(type_str, SHARE_INVITE_NOTIFICATION)) {
+        ret = HTTP_NOT_ALLOWED;
+        goto done;
+    }
+
+    dlist_getlist(dl, "D", &data);
+    dlist_getatom(data, "M", &mboxname);
+    dlist_getatom(data, "U", &uid);
+
+    r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
+                           httpd_authstate, add, 0, 0);
+    if (r) {
+        syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
+               mboxname, txn->req_tgt.userid, error_message(r));
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Create share-reply-notification */
+    notify = init_xml_response("notification", NS_DAV, NULL, ns);
+
+    time_to_rfc3339(time(0), dtstamp, RFC3339_DATETIME_MAX);
+    xmlNewChild(notify, NULL, BAD_CAST "dtstamp", BAD_CAST dtstamp);
+
+    type = xmlNewChild(notify, NULL, BAD_CAST SHARE_REPLY_NOTIFICATION, NULL);
+
+    sharee = xmlNewChild(type, NULL, BAD_CAST "sharee", NULL);
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%s/%s/%s/", namespace_principal.prefix,
+               USER_COLLECTION_PREFIX, txn->req_tgt.userid);
+    xml_add_href(sharee, NULL, buf_cstring(&txn->buf));
+
+    node = xmlNewChild(sharee, NULL, resp->name, NULL);
+
+    /* shared-url */
+    url_prefix = strstr(mboxname, config_getstring(IMAPOPT_CALENDARPREFIX)) ?
+        namespace_calendar.prefix : namespace_addressbook.prefix;
+    make_collection_url(&txn->buf, url_prefix, mboxname, "", &owner);
+
+    xml_add_href(type, NULL, buf_cstring(&txn->buf));
+
+    xmlNewChild(type, NULL, BAD_CAST "x-in-reply-to", BAD_CAST uid);
+
+    /* Create a resource name for the notifications -
+       We use a consistent naming scheme so that multiple notifications
+       of the same type for the same resource are coalesced (overwritten) */
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%x-%x-%x-%x.xml",
+               strhash(XML_NS_DAV), strhash(SHARE_REPLY_NOTIFICATION),
+               strhash(mboxname), strhash(txn->req_tgt.userid));
+
+    r = send_notification(txn, notify->doc, owner, buf_cstring(&txn->buf));
+
+    make_collection_url(&txn->buf, url_prefix,
+                        mboxname, txn->req_tgt.userid, NULL);
+
+    if (legacy) {
+        /* Create CS:shared-as XML body */
+        xmlNodePtr shared_as = init_xml_response("shared-as", NS_CS, NULL, ns);
+        if (!shared_as) {
+            ret = HTTP_SERVER_ERROR;
+            goto done;
+        }
+
+        node = xml_add_href(shared_as, NULL, buf_cstring(&txn->buf));
+        ensure_ns(ns, NS_DAV, node, XML_NS_DAV, "D");
+        xmlSetNs(node, ns[NS_DAV]);
+        xml_response(HTTP_OK, txn, shared_as->doc);
+        xmlFreeDoc(shared_as->doc);
+        ret = 0;
+    }
+    else {
+        /* Add Location header */
+        txn->location = buf_cstring(&txn->buf);
+        ret = HTTP_CREATED;
+    }
+
+  done:
+    if (root) xmlFreeDoc(root->doc);
+    if (notify) xmlFreeDoc(notify->doc);
+    webdav_close(webdavdb);
+    mailbox_close(&mailbox);
+
+    return ret;
+}
+
+
 /* Perform a PUT request on a WebDAV notification resource */
 static int notify_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
@@ -8497,13 +8696,6 @@ static int notify_put(struct transaction_t *txn, void *obj,
 
     /* Validate the data */
     if (!doc) return HTTP_FORBIDDEN;
-
-    /* Dump XML response tree into a text buffer */
-    xmlbuf = from_xml(doc);
-    if (!buf_len(xmlbuf)) {
-        buf_destroy(xmlbuf);
-        return HTTP_SERVER_ERROR;
-    }
 
     /* Find message UID for the resource */
     webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
@@ -8552,7 +8744,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
 
         /* Add any additional data */
         al = dlist_newkvlist(dl, "D");
-        if (!xmlStrcmp(type->name, BAD_CAST "share-invite-notification")) {
+        if (!xmlStrcmp(type->name, BAD_CAST SHARE_INVITE_NOTIFICATION)) {
             for (node = xmlFirstElementChild(type); node;
                  node = xmlNextElementSibling(node)) {
                 if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
@@ -8586,12 +8778,12 @@ static int notify_put(struct transaction_t *txn, void *obj,
                 }
             }
         }
-        else if (!xmlStrcmp(type->name, BAD_CAST "share-reply-notification")) {
+        else if (!xmlStrcmp(type->name, BAD_CAST SHARE_REPLY_NOTIFICATION)) {
             for (node = xmlFirstElementChild(type); node;
                  node = xmlNextElementSibling(node)) {
                 if (!xmlStrcmp(node->name, BAD_CAST "x-in-reply-to")) {
                     xmlUnlinkNode(node);
-                    value = xmlNodeGetContent(xmlFirstElementChild(node));
+                    value = xmlNodeGetContent(node);
                     dlist_setmap(al, "R", (char *) value, xmlStrlen(value));
                     xmlFree(value);
                     xmlFreeNode(node);
@@ -8615,9 +8807,14 @@ static int notify_put(struct transaction_t *txn, void *obj,
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    /* Store the resource */
-    r = dav_store_resource(txn, buf_cstring(xmlbuf), buf_len(xmlbuf),
-                           mailbox, oldrecord, NULL);
+    /* Dump XML response tree into a text buffer */
+    xmlbuf = from_xml(doc);
+    if (!buf_len(xmlbuf)) r = HTTP_SERVER_ERROR;
+    else {
+        /* Store the resource */
+        r = dav_store_resource(txn, buf_cstring(xmlbuf), buf_len(xmlbuf),
+                               mailbox, oldrecord, NULL);
+    }
 
     buf_destroy(xmlbuf);
 
@@ -8935,9 +9132,9 @@ static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
     dlist_getlist(dl, "A", &al);
 
     if (!xmlStrcmp(ns->href, BAD_CAST XML_NS_CS)) {
-        if (!strcmp(type, "share-invite-notification"))
+        if (!strcmp(type, SHARE_INVITE_NOTIFICATION))
             type = "invite-notification";
-        else if (!strcmp(type, "share-reply-notification"))
+        else if (!strcmp(type, SHARE_REPLY_NOTIFICATION))
             type = "invite-reply";
     }
     else {
