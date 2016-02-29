@@ -429,13 +429,14 @@ static int cache_parserecord(struct buf *cachebase, size_t cache_offset,
 
     offset = cache_offset;
 
-    if (offset >= cachebase->len) {
-	syslog(LOG_ERR, "IOERROR: offset greater than cache size %lu %lu",
-	       offset, cachebase->len);
-	return IMAP_IOERROR;
-    }
-
     for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
+	if (offset >= cachebase->len) {
+	    syslog(LOG_ERR, "IOERROR: offset greater than cache size "
+		   SIZE_T_FMT " " SIZE_T_FMT "(%d)",
+		   offset, cachebase->len, cache_ent);
+	    return IMAP_IOERROR;
+	}
+
 	cacheitem = cachebase->s + offset;
 	/* copy locations */
 	crec->item[cache_ent].len = CACHE_ITEM_LEN(cacheitem);
@@ -449,12 +450,6 @@ static int cache_parserecord(struct buf *cachebase, size_t cache_offset,
 	}
 
 	offset = next - cachebase->s;
-	if (offset > cachebase->len) {
-	    syslog(LOG_ERR, "IOERROR: offset greater than cache size "
-		   SIZE_T_FMT " " SIZE_T_FMT "(%d)",
-		   offset, cachebase->len, cache_ent);
-	    return IMAP_IOERROR;
-	}
     }
 
     /* all fit within the cache, it's gold as far as we can tell */
