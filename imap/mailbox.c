@@ -1940,20 +1940,6 @@ EXPORTED struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
     return mailbox->local_caldav;
 }
 
-EXPORTED sqldb_t *mailbox_open_caldav_alarm(struct mailbox *mailbox)
-{
-    if (!mailbox->local_caldav_alarm) {
-        mailbox->local_caldav_alarm = caldav_alarm_open();
-        int r = sqldb_begin(mailbox->local_caldav_alarm, "alarm");
-        if (r) {
-            sqldb_rollback(mailbox->local_caldav_alarm, "alarm");
-            caldav_alarm_close(mailbox->local_caldav_alarm);
-            mailbox->local_caldav_alarm = NULL;
-        }
-    }
-    return mailbox->local_caldav_alarm;
-}
-
 EXPORTED struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
 {
     if (!mailbox->local_carddav) {
@@ -3057,6 +3043,17 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         r = caldav_delete(caldavdb, cdata->dav.rowid);
     }
     else if (cdata->dav.imap_uid == new->uid) {
+        if (new->system_flags & FLAG_EXPUNGED) {
+            /* remove associated alarms */
+            sqldb_t *alarmdb = caldav_alarm_open();
+            struct caldav_alarm_data alarmdata = {
+                .mailbox    = cdata->dav.mailbox,
+                .resource   = cdata->dav.resource,
+            };
+            caldav_alarm_delete_all(alarmdb, &alarmdata);
+            caldav_alarm_close(alarmdb);
+        }
+
         /* just a flags update to an existing record */
         cdata->dav.modseq = new->modseq;
         cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
@@ -3085,7 +3082,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->sched_tag = sched_tag;
         cdata->comp_flags.tzbyref = tzbyref;
 
-        sqldb_t *alarmdb = mailbox_open_caldav_alarm(mailbox);
+        sqldb_t *alarmdb = caldav_alarm_open();
 
         struct caldav_alarm_data alarmdata = {
             .mailbox    = cdata->dav.mailbox,
@@ -3094,7 +3091,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
         /* remove old ones */
         r = caldav_alarm_delete_all(alarmdb, &alarmdata);
-        if (r) goto done;
+        if (r) goto alarmdone;
 
         /* add new ones unless this record is expunged */
         if (cdata->dav.alive) {
@@ -3105,13 +3102,15 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
                                         icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
                     r = caldav_alarm_add(alarmdb, &alarmdata);
                     caldav_alarm_fini(&alarmdata);
-                    if (r) goto done;
+                    if (r) goto alarmdone;
                 }
             }
         }
 
         r = caldav_writeentry(caldavdb, cdata, ical);
 
+     alarmdone:
+        caldav_alarm_close(alarmdb);
         icalcomponent_free(ical);
     }
 
@@ -3239,13 +3238,6 @@ static int mailbox_commit_dav(struct mailbox *mailbox)
         if (r) return r;
     }
 
-    if (mailbox->local_caldav_alarm) {
-        r = sqldb_commit(mailbox->local_caldav_alarm, "alarm");
-        caldav_alarm_close(mailbox->local_caldav_alarm);
-        mailbox->local_caldav_alarm = NULL;
-        if (r) return r;
-    }
-
     if (mailbox->local_carddav) {
         r = carddav_commit(mailbox->local_carddav);
         carddav_close(mailbox->local_carddav);
@@ -3271,13 +3263,6 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
         r = caldav_abort(mailbox->local_caldav);
         caldav_close(mailbox->local_caldav);
         mailbox->local_caldav = NULL;
-        if (r) return r;
-    }
-
-    if (mailbox->local_caldav_alarm) {
-        r = sqldb_rollback(mailbox->local_caldav_alarm, "alarm");
-        caldav_alarm_close(mailbox->local_caldav_alarm);
-        mailbox->local_caldav_alarm = NULL;
         if (r) return r;
     }
 
