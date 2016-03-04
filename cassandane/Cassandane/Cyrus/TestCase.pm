@@ -248,6 +248,7 @@ sub _create_instances
     my ($self) = @_;
     my $sync_port;
     my $mupdate_port;
+    my $backend_imapd_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
     $self->{_config} = $self->{_config}->clone();
@@ -279,7 +280,10 @@ sub _create_instances
 	if ($want->{murder})
 	{
 	    $mupdate_port = Cassandane::PortManager::alloc();
+	    $backend_imapd_port = Cassandane::PortManager::alloc();
+
 	    $conf->set(
+		servername => "localhost:$backend_imapd_port",
 		mupdate_server => "localhost:$mupdate_port",
 		# XXX documentation says to use mupdate_port, but
 		# XXX this doesn't work -- need to embed port number in
@@ -324,8 +328,18 @@ sub _create_instances
 	    # set up a front end on which we also run the mupdate master
 	    my $frontend_conf = $self->{_config}->clone();
 	    $frontend_conf->set(
+		mupdate_server => "localhost:$mupdate_port",
+		# XXX documentation says to use mupdate_port, but
+		# XXX this doesn't work -- need to embed port number in
+		# XXX mupdate_server setting instead.
+		#mupdate_port => $mupdate_port,
+		mupdate_username => 'mupduser',
+		mupdate_authname => 'mupduser',
+		mupdate_password => 'mupdpass',
+		serverlist => "localhost:$backend_imapd_port",
 		admins => 'admin mupduser',
 		proxy_authname => 'mailproxy',
+		proxy_password => 'mailproxy',
 	    );
 
 	    $instance_params{description} = "murder frontend for test $self->{_name}";
@@ -341,6 +355,11 @@ sub _create_instances
 	    # arrange for the backend to push to mupdate on startup
 	    $self->{instance}->add_start(name => 'mupdatepush',
 					 argv => ['ctl_mboxlist', '-m']);
+
+	    # arrange for the backend imapd to run on a known port
+	    $self->{instance}->remove_service('imap');
+	    $self->{instance}->add_service(name => 'imap',
+					   port => $backend_imapd_port);
 	}
     }
 

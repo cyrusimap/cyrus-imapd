@@ -80,6 +80,11 @@ sub test_frontend_commands
     my $list = $frontend->list("", "*");
     $self->assert_not_null($list);
 
+    # create should be proxied through
+    my $result = $frontend->create('INBOX.newfolder');
+    my $err = $@;
+    $self->assert_not_null($result);
+
     # XXX test other commands
 }
 
