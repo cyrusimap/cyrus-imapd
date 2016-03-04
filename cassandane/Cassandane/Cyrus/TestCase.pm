@@ -52,7 +52,9 @@ use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 use Cassandane::PortManager;
 
-my @stores = qw(store adminstore replica_store replica_adminstore);
+my @stores = qw(store adminstore
+		replica_store replica_adminstore
+		frontend_store frontend_adminstore);
 my %magic_handlers;
 
 # This code for storing function attributes is from
@@ -81,6 +83,7 @@ sub new
     my $want = {
 	instance => 1,
 	replica => 0,
+	murder => 0,
 	start_instances => 1,
 	services => [ 'imap' ],
 	store => 1,
@@ -160,6 +163,7 @@ sub config_set
 }
 
 magic(replication => sub { shift->want('replica'); });
+magic(murder => sub { shift->want('murder'); });
 magic(AnnotationAllowUndefined => sub {
     shift->config_set(annotation_allow_undefined => 1);
 });
@@ -242,7 +246,8 @@ sub _run_magic
 sub _create_instances
 {
     my ($self) = @_;
-    my $port;
+    my $sync_port;
+    my $mupdate_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
     $self->{_config} = $self->{_config}->clone();
@@ -258,16 +263,34 @@ sub _create_instances
 
 	if ($want->{replica})
 	{
-	    $port = Cassandane::PortManager::alloc();
+	    $sync_port = Cassandane::PortManager::alloc();
 	    $conf->set(
 		# sync_client will find the port in the config
-		sync_port => $port,
+		sync_port => $sync_port,
 		# tell sync_client how to login
 		sync_authname => 'repluser',
 		sync_password => 'replpass',
 		sasl_mech_list => 'PLAIN',
 		# Ensure sync_server gives sync_client enough privileges
 		admins => 'admin repluser',
+	    );
+	}
+
+	if ($want->{murder})
+	{
+	    $mupdate_port = Cassandane::PortManager::alloc();
+	    $conf->set(
+		mupdate_server => "localhost:$mupdate_port",
+		# XXX documentation says to use mupdate_port, but
+		# XXX this doesn't work -- need to embed port number in
+		# XXX mupdate_server setting instead.
+		#mupdate_port => $mupdate_port,
+		mupdate_username => 'mupduser',
+		mupdate_authname => 'mupduser',
+		mupdate_password => 'mupdpass',
+		proxyservers => 'mailproxy',
+		lmtp_admins => 'mailproxy',
+		sasl_mech_list => 'PLAIN',
 	    );
 	}
 
@@ -290,10 +313,34 @@ sub _create_instances
 	    $instance_params{description} = "replica instance for test $self->{_name}";
 	    $self->{replica} = Cassandane::Instance->new(%instance_params,
 							 setup_mailbox => 0);
-	    $self->{replica}->add_service(name => 'sync', port => $port);
+	    $self->{replica}->add_service(name => 'sync', port => $sync_port);
 	    $self->{replica}->add_services(@{$want->{services}});
 	    $self->{replica}->_setup_for_deliver()
 		if ($want->{deliver});
+	}
+
+	if ($want->{murder})
+	{
+	    # set up a front end on which we also run the mupdate master
+	    my $frontend_conf = $self->{_config}->clone();
+	    $frontend_conf->set(
+		admins => 'admin mupduser',
+		proxy_authname => 'mailproxy',
+	    );
+
+	    $instance_params{description} = "murder frontend for test $self->{_name}";
+	    $instance_params{config} = $frontend_conf;
+	    $self->{frontend} = Cassandane::Instance->new(%instance_params,
+							  setup_mailbox => 0);
+	    $self->{frontend}->add_service(name => 'mupdate',
+					   port => $mupdate_port,
+					   argv => ['mupdate', '-m'],
+					   prefork => 1);
+	    $self->{frontend}->add_services(@{$want->{services}});
+
+	    # arrange for the backend to push to mupdate on startup
+	    $self->{instance}->add_start(name => 'mupdatepush',
+					 argv => ['ctl_mboxlist', '-m']);
 	}
     }
 
@@ -319,12 +366,12 @@ sub _start_instances
 {
     my ($self) = @_;
 
+    $self->{frontend}->start()
+	if (defined $self->{frontend});
     $self->{instance}->start()
 	if (defined $self->{instance});
-    if (defined $self->{replica})
-    {
-	$self->{replica}->start();
-    }
+    $self->{replica}->start()
+	if (defined $self->{replica});
 
     $self->{store} = undef;
     $self->{adminstore} = undef;
@@ -332,6 +379,10 @@ sub _start_instances
     $self->{master_adminstore} = undef;
     $self->{replica_store} = undef;
     $self->{replica_adminstore} = undef;
+    $self->{frontend_store} = undef;
+    $self->{frontend_adminstore} = undef;
+    $self->{backend_store} = undef;
+    $self->{backend_adminstore} = undef;
 
     # Run the replication engine to create the user mailbox
     # in the replica.  Doing it this way avoids issues with
@@ -377,6 +428,21 @@ sub _start_instances
 		if ($self->{_want}->{adminstore});
 	}
     }
+    if (defined $self->{frontend})
+    {
+	# aliases for the backend store(s)
+	$self->{backend_store} = $self->{store};
+	$self->{backend_adminstore} = $self->{adminstore};
+
+	my $svc = $self->{frontend}->get_service('imap');
+	if (defined $svc)
+	{
+	    $self->{frontend_store} = $svc->create_store(%store_params)
+		if ($self->{_want}->{store});
+	    $self->{frontend_adminstore} = $svc->create_store(%adminstore_params)
+		if ($self->{_want}->{adminstore});
+	}
+    }
 }
 
 sub tear_down
@@ -395,6 +461,8 @@ sub tear_down
     }
     $self->{master_store} = undef;
     $self->{master_adminstore} = undef;
+    $self->{backend_store} = undef;
+    $self->{backend_adminstore} = undef;
 
     if (defined $self->{instance})
     {
@@ -407,6 +475,12 @@ sub tear_down
 	$self->{replica}->stop();
 	$self->{replica}->cleanup();
 	$self->{replica} = undef;
+    }
+    if (defined $self->{frontend})
+    {
+	$self->{frontend}->stop();
+	$self->{frontend}->cleanup();
+	$self->{frontend} = undef;
     }
     xlog "---------- END $self->{_name} ----------";
 }
