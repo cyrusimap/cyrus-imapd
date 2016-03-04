@@ -214,7 +214,7 @@ ec HTTP_BAD_CE,
 
 
 
-# Legally Restricted (draft-ietf-httpbis-legally-restricted-status)
+# Legally Restricted (RFC 7725)
 
 ec HTTP_CENSORED,
    "451 Unavailable For Legal Reasons"
