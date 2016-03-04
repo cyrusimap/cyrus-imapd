@@ -409,12 +409,28 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
     r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        struct mailbox *mailbox = NULL;
+
         r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_ADDRESSBOOK,
                                    NULL, 0,
                                    userid, httpd_authstate,
-                                   0, 0, 0, 0, NULL);
+                                   0, 0, 0, 0, &mailbox);
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mbname_intname(mbname), error_message(r));
+        else {
+            annotate_state_t *astate = NULL;
+
+            r = mailbox_get_annotate_state(mailbox, 0, &astate);
+            if (!r) {
+                const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+                struct buf value = BUF_INITIALIZER;
+
+                buf_init_ro_cstr(&value, "personal");
+                r = annotate_state_writemask(astate, annot, userid, &value);
+            }
+
+            mailbox_close(&mailbox);
+        }
     }
 
  done:
