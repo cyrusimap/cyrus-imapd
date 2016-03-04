@@ -4095,6 +4095,9 @@ int meth_delete(struct transaction_t *txn, void *params)
         }
         else {
             /* Local Mailbox */
+            struct mailbox *mailbox = NULL;
+
+            /* Unsubscribe */
             r = mboxlist_changesub(txn->req_tgt.mbentry->name,
                                    txn->req_tgt.userid,
                                    httpd_authstate, 0 /* remove */, 0, 0);
@@ -4106,6 +4109,30 @@ int meth_delete(struct transaction_t *txn, void *params)
                 ret = HTTP_SERVER_ERROR;
             }
             else ret = HTTP_NO_CONTENT;
+
+            /* Set invite status to declined */
+            r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+            if (r) {
+                syslog(LOG_ERR,
+                       "IOERROR: failed to open mailbox %s for DELETE share",
+                       txn->req_tgt.mbentry->name);
+            }
+            else {
+                annotate_state_t *astate = NULL;
+
+                r = mailbox_get_annotate_state(mailbox, 0, &astate);
+                if (!r) {
+                    const char *annot =
+                        DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+                    struct buf value = BUF_INITIALIZER;
+
+                    buf_init_ro_cstr(&value, "invite-declined");
+                    r = annotate_state_writemask(astate, annot,
+                                                 txn->req_tgt.userid, &value);
+                }
+
+                mailbox_close(&mailbox);
+            }
         }
 
         mboxlist_entry_free(&mbentry);
@@ -5953,9 +5980,18 @@ static int dav_post_share(struct transaction_t *txn,
                 }
                 else {
                     /* Notify sharee - patch in response and share-access */
+                    const char *annot =
+                        DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+                    const char *response = "invite-noresponse";
+                    struct buf value = BUF_INITIALIZER;
+                    int r;
 
-                    /* XXX  Check for existing response */
-                    node = xmlNewNode(ns[NS_DAV], BAD_CAST "invite-noresponse");
+                    /* Lookup invite status */
+                    r = annotatemore_lookupmask(txn->req_tgt.mbentry->name,
+                                                annot, userid, &value);
+                    if (!r && buf_len(&value)) response = buf_cstring(&value);
+                    node = xmlNewNode(ns[NS_DAV], BAD_CAST response);
+                    buf_free(&value);
                     xmlReplaceNode(resp, node);
                     xmlFreeNode(resp);
                     resp = node;
@@ -8505,7 +8541,7 @@ static int notify_post(struct transaction_t *txn)
 {
     xmlNodePtr root = NULL, node, resp = NULL;
     int rights, ret, r, legacy = 0, add = 0;
-    struct mailbox *mailbox = NULL;
+    struct mailbox *mailbox = NULL, *shared = NULL;
     struct webdav_db *webdavdb = NULL;
     struct webdav_data *wdata;
     struct dlist *dl = NULL, *data;
@@ -8602,6 +8638,7 @@ static int notify_post(struct transaction_t *txn)
     dlist_getatom(data, "M", &mboxname);
     dlist_getatom(data, "U", &uid);
 
+    /* [Un]subscribe */
     r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
                            httpd_authstate, add, 0, 0);
     if (r) {
@@ -8610,6 +8647,28 @@ static int notify_post(struct transaction_t *txn)
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
+    }
+
+    /* Set invite status */
+    r = mailbox_open_iwl(mboxname, &shared);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for share reply",
+               mboxname);
+    }
+    else {
+        annotate_state_t *astate = NULL;
+
+        r = mailbox_get_annotate_state(shared, 0, &astate);
+        if (!r) {
+            const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+            struct buf value = BUF_INITIALIZER;
+
+            buf_init_ro_cstr(&value, (char *) resp->name);
+            r = annotate_state_writemask(astate, annot,
+                                         txn->req_tgt.userid, &value);
+        }
+
+        mailbox_close(&shared);
     }
 
     /* Create share-reply-notification */
@@ -8919,6 +8978,10 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
         irock->is_shared = 1;
         if (irock->node) {
             xmlNodePtr sharee, access;
+            const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+            const char *resp = "invite-noresponse";
+            struct buf value = BUF_INITIALIZER;
+            int r;
 
             sharee =
                 xmlNewChild(irock->node, NULL,
@@ -8940,13 +9003,16 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
             xml_add_href(sharee, irock->fctx->ns[NS_DAV],
                          buf_cstring(&irock->fctx->buf));
 
-            /* XXX  lookup response */
-            xmlNewChild(sharee, NULL, BAD_CAST "invite-noresponse", NULL);
+            /* Lookup invite status */
+            r = annotatemore_lookupmask(irock->fctx->mbentry->name,
+                                        annot, userid, &value);
+            if (!r && buf_len(&value)) resp = buf_cstring(&value);
+            xmlNewChild(sharee, NULL, BAD_CAST resp, NULL);
+            buf_free(&value);
 
-            access =
-                xmlNewChild(sharee, NULL,
-                            BAD_CAST (irock->legacy ? "access" :
-                                      "share-access"), NULL);
+            access = xmlNewChild(sharee, NULL,
+                                 BAD_CAST (irock->legacy ? "access" :
+                                           "share-access"), NULL);
             if ((rights & DACL_SHARERW) == DACL_SHARERW)
                 xmlNewChild(access, NULL, BAD_CAST "read-write", NULL);
             else xmlNewChild(access, NULL, BAD_CAST "read", NULL);
