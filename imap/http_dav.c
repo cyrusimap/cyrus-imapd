@@ -6851,7 +6851,6 @@ int report_sync_col(struct transaction_t *txn,
     /* Report the resources within the client requested limit (if any) */
     for (msgno = 1; msgno <= nresp; msgno++) {
         char *p, *resource = NULL;
-        struct dav_data ddata;
         struct index_record thisrecord;
 
         if (index_reload_record(&istate, msgno, &thisrecord))
@@ -6870,24 +6869,34 @@ int report_sync_col(struct transaction_t *txn,
         }
         else if ((p = strchr(resource, ';'))) *p = '\0';
 
-        memset(&ddata, 0, sizeof(struct dav_data));
-        ddata.resource = resource;
-
         if (thisrecord.system_flags & FLAG_EXPUNGED) {
             /* report as NOT FOUND
                IMAP UID of 0 will cause index record to be ignored
                propfind_by_resource() will append our resource name */
+            struct dav_data ddata;
+
+            memset(&ddata, 0, sizeof(struct dav_data));
+            ddata.resource = resource;
             fctx->proc_by_resource(fctx, &ddata);
         }
         else {
+            struct dav_data *ddata;
+
+            /* Open the DAV DB corresponding to the mailbox */
+            if (!fctx->davdb)
+                fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
+
+            rparams->davdb.lookup_resource(fctx->davdb, fctx->mailbox->name,
+                                           resource, (void **) &ddata, 0);
+            ddata->resource = resource;
             fctx->record = &thisrecord;
-            ddata.alive = 1;
-            ddata.imap_uid = thisrecord.uid;
-            fctx->proc_by_resource(fctx, &ddata);
+            fctx->proc_by_resource(fctx, ddata);
         }
 
         fctx->record = NULL;
     }
+
+    if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
 
     /* Add sync-token element */
     if (respmodseq < basemodseq) {
