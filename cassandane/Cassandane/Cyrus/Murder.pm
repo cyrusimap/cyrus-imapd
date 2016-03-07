@@ -73,16 +73,25 @@ sub test_aaasetup
 sub test_frontend_commands
 {
     my ($self) = @_;
+    my $result;
 
     my $frontend = $self->{frontend_store}->get_client();
 
     # should be able to list
-    my $list = $frontend->list("", "*");
-    $self->assert_not_null($list);
+    $result = $frontend->list("", "*");
+    $self->assert_not_null($result);
+
+    # select a folder that doesn't exist yet
+    $result = $frontend->select('INBOX.newfolder');
+    $self->assert_null($result);
+    $self->assert_matches(qr/Mailbox does not exist/i, $frontend->get_last_error());
 
     # create should be proxied through
-    my $result = $frontend->create('INBOX.newfolder');
-    my $err = $@;
+    $result = $frontend->create('INBOX.newfolder');
+    $self->assert_not_null($result);
+
+    # should be able to select it now
+    $result = $frontend->select('INBOX.newfolder');
     $self->assert_not_null($result);
 
     # XXX test other commands
