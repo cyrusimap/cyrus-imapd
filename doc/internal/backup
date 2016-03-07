@@ -292,6 +292,10 @@ restore
 * restored: runs on master servers listening for sync commands from the restore client
 * restore: sbin program for selecting and restoring messages
 
+=> just add SYNCRESTORE to imapd
+=> cyr_backup restore mailboxes -u anne user.anne.something
+=> cyr_backup restore messages -u anne 8962hfa7sdiuhl 87yt3rhjfsbkh 784uygjhfs
+
 restoration is effectively a reverse-direction replication (replicating TO master),
 which means we can't supply things like uid, modseq, etc without racing against normal
 message arrivals.  so instead we add an extra command to the protocol to restore a
@@ -307,17 +311,25 @@ s: OK
 c: [new command: APPLY RESTORE? RESTORE MAILBOX?]
 s: OK
 
-we introduce a new command, RESTORE MAILBOX, which is similar to an inversion of the
-usual APPLY MAILBOX.  i.e. instead of specifying the mailbox state plus a list of
-message records indexed by uid, we instead supply the message guid plus a list of
-mailbox-records describing the mailboxes it should be added to and the flags/annotations
-for each one.  the server adds it into the mailbox as per delivery of a new message
--- generating uid, modseq, etc itself, rather than receiving them from the restore client
+we introduce a new command, RESTORE MAILBOX, which is similar to the existing
+APPLY MAILBOX.  it specifies, for a mailbox, the mailbox state plus the message
+records relevant to the restore.
 
+the imapd/sync_server recieving the RESTORE command creates the mailbox if necessary,
+and then adds the message records to it as new records (i.e. generating new uid etc).
 this will end up generating new events in the backup channel's sync log, and then the
 messages will be backed up again with their new uids, etc.  additional wire transfer
 of message data should be avoided by keeping the same guid.
 
+if the mailbox already exists but its uniqueid does not match the one from the backup,
+then what?  this probably means user has deleted folder and contents, then made new
+folder with same name.  so it's probably v common for mailbox uniqueid to not match
+like this.  so we don't care about special handling for this case.  just add any
+messages that aren't already there.
+
+restore command needs options:
+* whether or not to trim deletedprefix off mailbox names to be restored
+* whether or not to restore uniqueid, highestmodseq, uid and so on
 
 compact
 --------

@@ -2030,6 +2030,9 @@ static int mailbox_compare_update(struct mailbox *mailbox,
             return IMAP_PROTOCOL_ERROR;
         }
 
+        /* n.b. we assume the records in kr are in ascending uid order.
+         * stuff will probably fail in interesting ways if they're ever not.
+         */
         while (rrecord && rrecord->uid < mrecord.uid) {
             /* read another record */
             rrecord = mailbox_iter_step(iter);
@@ -2159,6 +2162,192 @@ static int crceq(struct synccrcs a, struct synccrcs b)
     if (a.basic && b.basic && a.basic != b.basic) return 0;
     if (a.annot && b.annot && a.annot != b.annot) return 0;
     return 1;
+}
+
+/* FIXME don't put this here */
+int sync_restore_mailbox(struct dlist *kin,
+                         struct sync_reserve_list *reserve_list,
+                         struct sync_state *sstate)
+{
+    /* fields from the request */
+    const char *uniqueid = NULL; /* optional */
+    const char *partition;
+    const char *mboxname;
+    const char *mboxtype = NULL; /* optional */
+    uint32_t mbtype;
+    modseq_t highestmodseq = 0;  /* optional */
+    uint32_t uidvalidity = 0;    /* optional */
+    const char *acl;
+    const char *options_str;
+    uint32_t options;
+    struct dlist *kr;
+    struct dlist *ka = NULL;     /* optional */
+    modseq_t xconvmodseq = 0;
+
+    struct mailbox *mailbox = NULL;
+    struct sync_msgid_list *part_list;
+    annotate_state_t *astate = NULL;
+    struct dlist *ki;
+    int has_append = 0;
+    int is_new_mailbox = 0;
+    int r;
+
+    if (!dlist_getatom(kin, "PARTITION", &partition))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(kin, "ACL", &acl))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(kin, "OPTIONS", &options_str))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getlist(kin, "RECORD", &kr))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    /* optional */
+    dlist_getlist(kin, "ANNOTATIONS", &ka);
+    dlist_getatom(kin, "MBOXTYPE", &mboxtype);
+    dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
+
+    options = sync_parse_options(options_str);
+    mbtype = mboxlist_string_to_mbtype(mboxtype);
+
+    /* XXX sanely handle deletedprefix mboxnames */
+
+    /* If the mboxname being restored already exists, then restored messages
+     * are appended to it.  The UNIQUEID, HIGHESTMODSEQ, UIDVALIDITY and
+     * MBOXTYPE fields in the dlist, and the UID, MODSEQ and LAST_UPDATED fields
+     * in the restored message records, are ignored entirely.
+     *
+     * If the mboxname does not exist, we create it.  If UNIQUEID, HIGHESTMODSEQ
+     * and UIDVALIDITY were provided, we try to preserve them, and if we can, we
+     * also try to preserve the UID, MODSEQ and LAST_UPDATED fields of the
+     * restored messages.  This is useful when e.g. rebuilding a server from a
+     * backup, and wanting clients' IMAP states to match.
+     *
+     * If UNIQUEID, HIGHESTMODSEQ or UIDVALIDITY are not provided, we don't try
+     * to preserve them.  We create the mailbox, but then append the restored
+     * messages to it as if it already existed (new UID et al).
+     */
+
+    /* open/create mailbox */
+    r = mailbox_open_iwl(mboxname, &mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        dlist_getatom(kin, "UNIQUEID", &uniqueid);
+        dlist_getnum64(kin, "HIGHESTMODSEQ", &highestmodseq);
+        dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
+
+        /* if any of these three weren't set, disregard the others too */
+        if (!uniqueid || !highestmodseq || !uidvalidity) {
+            uniqueid = NULL;
+            highestmodseq = 0;
+            uidvalidity = 0;
+        }
+
+        r = mboxlist_createsync(mboxname, mbtype, partition,
+                                sstate->userid, sstate->authstate,
+                                options, uidvalidity,
+                                highestmodseq, acl,
+                                uniqueid, sstate->local_only, &mailbox);
+
+        is_new_mailbox = 1;
+    }
+    if (r) {
+        syslog(LOG_ERR, "Failed to open mailbox %s to restore: %s",
+               mboxname, error_message(r));
+        return r;
+    }
+
+    /* XXX what if we've opened a deleted mailbox? */
+
+    /* XXX verify mailbox is suitable? */
+
+    /* make sure mailbox types match */
+    if (mailbox->mbtype != mbtype) {
+        syslog(LOG_ERR, "restore mailbox %s: mbtype mismatch (%d, %d)",
+               mailbox->name, mailbox->mbtype, mbtype);
+        r = IMAP_MAILBOX_BADTYPE;
+        goto bail;
+    }
+
+    part_list = sync_reserve_partlist(reserve_list, mailbox->part);
+
+    /* hold the annotate state open */
+    r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    if (r) goto bail;
+
+    /* and make it hold a transaction open */
+    annotate_state_begin(astate);
+
+    /* XXX do we need to hold the conversation state open? */
+
+    /* restore mailbox annotations */
+    if (ka) {
+        struct sync_annot_list *restore_annots = NULL;
+        struct sync_annot_list *mailbox_annots = NULL;
+
+        r = decode_annotations(ka, &restore_annots, NULL);
+
+        if (!r) r = read_annotations(mailbox, NULL, &mailbox_annots);
+
+        if (!r) r = apply_annotations(mailbox, NULL,
+                                      mailbox_annots, restore_annots,
+                                      !is_new_mailbox);
+        if (r)
+            syslog(LOG_WARNING,
+                   "restore mailbox %s: unable to apply mailbox annotations: %s",
+                   mailbox->name, error_message(r));
+
+        /* keep going on annotations failure*/
+        r = 0;
+
+        sync_annot_list_free(&restore_annots);
+        sync_annot_list_free(&mailbox_annots);
+    }
+
+    /* n.b. undocumented assumption here and in sync_apply_mailbox
+     * that records will be provided sorted by ascending uid */
+    for (ki = kr->head; ki; ki = ki->next) {
+        struct sync_annot_list *annots = NULL;
+        struct index_record record = {0};
+
+        /* XXX skip if the guid is already in this folder? */
+
+        r = parse_upload(ki, mailbox, &record, &annots);
+        if (r) goto bail;
+
+        /* generate a uid if we can't reuse a provided one */
+        if (!uidvalidity || record.uid <= mailbox->i.last_uid)
+            record.uid = mailbox->i.last_uid + 1;
+
+        /* reuse a provided modseq/last_updated if safe */
+        if (highestmodseq && record.modseq && record.modseq <= mailbox->i.highestmodseq)
+            record.silent = 1;
+
+        r = sync_append_copyfile(mailbox, &record, annots, part_list);
+        if (r) goto bail;
+
+        has_append = 1;
+        sync_annot_list_free(&annots);
+    }
+
+    r = mailbox_commit(mailbox);
+    if (r) {
+        syslog(LOG_ERR, "%s: mailbox_commit(%s): %s",
+               __func__, mailbox->name, error_message(r));
+    }
+
+    if (!r && has_append)
+        sync_log_append(mailbox->name);
+
+    mailbox_close(&mailbox);
+
+    return r;
+
+bail:
+    mailbox_abort(mailbox);
+    mailbox_close(&mailbox);
+
+    return r;
 }
 
 int sync_apply_mailbox(struct dlist *kin,
