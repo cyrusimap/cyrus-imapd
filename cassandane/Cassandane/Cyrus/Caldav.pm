@@ -812,4 +812,60 @@ sub test_imap_magicplus_withdomain
     $self->assert_not_null($this);
 }
 
+sub test_bad_event_hex01
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "9f4f1212-222f-4182-850a-8f894818593c";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+PRODID:-//Mozilla.org/NONSGML Mozilla Calendar V1.1//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:America/Los_Angeles
+BEGIN:DAYLIGHT
+TZOFFSETFROM:-0800
+TZOFFSETTO:-0700
+TZNAME:PDT
+DTSTART:19700308T020000
+RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:-0700
+TZOFFSETTO:-0800
+TZNAME:PST
+DTSTART:19701101T020000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=11
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20160106T200252Z
+LAST-MODIFIED:20160106T200327Z
+DTSTAMP:20160106T200327Z
+UID:$uuid
+SUMMARY:Social Media Event
+DTSTART;TZID=America/Los_Angeles:20160119T110000
+DTEND;TZID=America/Los_Angeles:20160119T120000
+DESCRIPTION:Hi\,
+ a weird character 
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  my $Cal = $CalDAV->GetCalendar($CalendarId);
+
+  my $Events = $CalDAV->GetEvents($Cal->{id});
+
+  $self->assert_str_equals("Hi,a weird character ", $Events->[0]{description});
+}
+
+
 1;
