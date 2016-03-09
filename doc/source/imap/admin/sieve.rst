@@ -16,12 +16,22 @@ Mail filtering occurs on delivery of the message (within lmtpd).
 
 Cyrus compiles sieve scripts to bytecode to reduce the overhead of parsing the scripts fully inside of lmtpd. This occurs automatically if :cyrusman:`sieveshell(1)` is used to place the scripts on the server.
 
-Sieve scripts can be placed either by the :cyrusman:`timsieved(8)` daemon (implementing the ManageSieve protocol :rfc:5804`; this is the preferred options since it allows for syntax checking) or in the user's home directory as a .sieve file.
+Sieve scripts can be placed either by the :cyrusman:`timsieved(8)` daemon (implementing the ManageSieve protocol :rfc:`5804`; this is the preferred options since it allows for syntax checking) or in the user's home directory as a .sieve file.
 
 Installing Sieve
 ================
 
 This section assumes that you :ref:`compiled Cyrus <installguide>` with sieve support. If you specified ``--disable-sieve`` when running ``./configure``, you did NOT compile the server with sieve support.
+
+Configure sieve
+---------------
+
+Depending on what's in your ``/etc/services`` file, sieve will usually be set to listen on port 2000 (old convention) or port 4190 (as specified by :rfc:`5804`).
+
+Add lines to :cyrusman:`cyrus.conf(5)` to make the server listen to the right ports for sieveshell commands:
+
+  sieve         cmd="timsieved" listen="servername:sieve" prefork=0
+  managesieve   cmd="timsieved" listen="servername:4190" prefork=0
 
 Configure outgoing mail
 -----------------------
@@ -179,4 +189,7 @@ Writing Sieve
 Sieve scripts can be used to automatically delete or forward messages; to send autoreplies; to sort them in folders; to mark messages as read or flagged; to test messages for spam or viruses; or to reject messages at or after delivery. `Sieve.info <http://sieve.info>`_ has more information on sieve and its uses.
 
 There's a `good sieve reference <http://thsmi.github.io/sieve-reference/en/index.html>`_ online which describes the language.
+
+For those who prefer a client to write code in, Sieve.info has a `list of desktop, web and command line clients <http://sieve.info/clients>`_.
+
 
