@@ -2,17 +2,21 @@
 utf8                utf-8
 utf7                utf-7
 unicode-1-1-utf-8   utf-8
+unicode-1-1-utf-7   utf7
 
 # even ASCII is not exempt
 ascii               us-ascii
 ANSI_X3.4-1968      us-ascii
+usascii             us-ascii
 
 # Yes, the world does contain a lot of rubbish
 # ways of saying iso-8859-1
 ISO_8859_1          iso-8859-1
+ISO_8859-1          iso-8859-1
 ISO_8859            iso-8859-1
 ISO-8859            iso-8859-1
 8859_1              iso-8859-1
+iso--8859-1         iso-8859-1
 so-8859-1           iso-8859-1
 x-mac-roman         iso-8859-1
 macintosh           iso-8859-1
@@ -23,10 +27,12 @@ unknown             iso-8859-1
 unknown-8bit        iso-8859-1
 x-unknown           iso-8859-1
 x-user-defined      iso-8859-1
+x-europa            iso-8859-1
 none                iso-8859-1
 latin1              iso-8859-1
 ISO8859-1           iso-8859-1
 8859-1              iso-8859-1
+es-iso-8859-1       iso-8859-1
 DISPLAY             iso-8859-1
 Any                 iso-8859-1
 
@@ -42,8 +48,15 @@ iso-8859-8-i        iso-8859-8
 ISO8859_15_FDIS     iso-8859-15
 ISO8859-15          iso-8859-15
 tis-620             iso-8859-11
+x-mac-thai          iso-8859-11
 ASMO-708            iso-8859-6
 WIN-KOI8            koi8-r
+KOI8-R              koi8-r
+KOI8-U              koi8-u
+_iso-2022-jp$ESC    iso-2022-jp
+_iso-2022-jp        iso-2022-jp
+csISO2022JP         iso-2022-jp
+ks_c_5601           ksc5601
 
 # windows codepages - these are the ones we have
 1250                windows-1250
@@ -56,6 +69,7 @@ win-1251            windows-1251
 
 1252                windows-1252
 cp1252              windows-1252
+cp-1252             windows-1252
 win-1252            windows-1252
 
 1254                windows-1254
@@ -69,16 +83,65 @@ win-1255            windows-1255
 1256                windows-1256
 cp1256              windows-1256
 win-1256            windows-1256
+win1256             windows-1256
+
+1257                windows-1257
+cp1257              windows-1257
+win-1257            windows-1257
 
 1258                windows-1258
 cp1258              windows-1258
 win-1258            windows-1258
 
-# stuff from the FastMail Perl mapping that we
+cp850               msdos-latin1
+CP850               msdos-latin1
+cp-850              msdos-latin1
+CP-850              msdos-latin1
+dos-latin1          msdos-latin1
+
+cp932               windows-31j
+CP932               windows-31j
+cp-932              windows-31j
+CP-932              windows-31j
+win-31j             windows-31j
+
+# Shift_JIS comes in multiple variants, of which the most
+# popular is windows-31j.
+# https://www.iana.org/assignments/charset-reg/shift_jis
+Shift_JIS           windows-31j
+shift_jis           windows-31j
+SHIFT_JIS           windows-31j
+
+cp936               windows-936
+CP936               windows-936
+cp-936              windows-936
+CP-936              windows-936
+win-936             windows-936
+
+# Mixed up charset vs codepage
+238                  windows-1250
+136                  big5
+
+# GBK has multiple variants, of which codepage 936 is the
+# most popular.
+# https://www.iana.org/assignments/charset-reg/GBK
+gbk                 windows-936
+GBK                 windows-936
+x-gbk               windows-936
+gb2312              windows-936
+
+# stuff from the FastMail Perl mapping or logs that we
 # don't have support for in Cyrus
-#x-gbk               gbk
 #UTS-16              UCS-2BE
-#gb2312              gbk
-#SHIFT_JIS           shiftjis
+#5601                ksc5601-raw
 #ksc5601             ksc5601-raw
 #ks_c_5601           ksc5601-raw
+
+# https://en.wikipedia.org/wiki/Extended_Unix_Code
+#euc-jp
+#euc-kr
+#Euc-Kr
+#EUC-KR
+
+# https://en.wikipedia.org/wiki/GB_18030
+#gb18030

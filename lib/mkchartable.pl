@@ -535,6 +535,12 @@ HIDDEN const struct charset chartables_charset_table[] = {
 
     { "imap-utf-7", 0 }, /* handled directly */
 
+    { "msdos-latin1", chartables_msdos_latin1 },
+    { "windows-31j", chartables_windows_31j },
+    { "windows-936", chartables_windows_936 },
+    { "windows-1257", chartables_windows_1257 },
+    { "koi8-u", chartables_koi8_u },
+
     /* New character sets should only be added to end so that
      * cache files stay with valid information */
 };

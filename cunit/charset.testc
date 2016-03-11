@@ -145,6 +145,49 @@ static void test_to_imaputf7(void)
 #undef TESTCASE
 }
 
+static void test_table(void)
+{
+#define TESTCASE(alias, in, want) \
+    { \
+        char *s; \
+        static const char _in[] = (in); \
+        static const char _want[] = (want); \
+        int cs = charset_lookupname(alias); \
+        CU_ASSERT(cs >= 0); \
+        s = charset_to_utf8(_in, strlen(_in), cs, ENCODING_NONE); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _want); \
+        free(s); \
+    }
+
+    /* MSDOS Latin1 aka CP-850 */
+    TESTCASE("cp850", "Hello, World", "Hello, World");
+    TESTCASE("cp850", "fa""\x87""ade", "fa""\xc3\xa7""ade");
+
+    /* Windows-31J aka CP-932 */
+    TESTCASE("windows-31J", "Hello, World", "Hello, World");
+    TESTCASE("cp932", "Hello, ""\x90\xa2\x8a\x45",
+                      "Hello, ""\xe4\xb8\x96\xe7\x95\x8c");
+
+    /* Windows-936 aka CP-936 */
+    TESTCASE("windows-936", "Hello, World", "Hello, World");
+    TESTCASE("cp936", "\xC4\xE3\xBA\xC3\xA3\xAC\xCA\xC0\xBD\xE7",
+                      "\xE4\xBD\xA0\xE5\xA5\xBD\xEF\xBC\x8C\xE4"
+                      "\xB8\x96\xE7\x95\x8C");
+
+    /* Windows-1257 aka CP-1257 */
+    TESTCASE("windows-1257", "Hello, World", "Hello, World");
+    TESTCASE("cp1257", "\xe0\xd8\xc2", "\xC4\x85\xC5\xB2\xC4\x80");
+
+    /* KOI8-U */
+    TESTCASE("koi8-u", "Hello, World", "Hello, World");
+    TESTCASE("koi8-u", "\xa4\xa6\xa7\xad\xb4\xb6\xb7\xbd",
+                       "\xD1\x94\xD1\x96\xD1\x97\xD2\x91"
+                       "\xD0\x83\xD0\x86\xD0\x87\xD2\x90");
+
+#undef TESTCASE
+}
+
 static void test_qp(void)
 {
     /* corner cases in Quoted-Printable */
