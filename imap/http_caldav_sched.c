@@ -786,7 +786,6 @@ int sched_busytime_query(struct transaction_t *txn,
     fctx.filter_crit = &calfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;
-    fctx.fetcheddata = 0;
 
     /* Create hash table for any remote attendee servers */
     construct_hash_table(&remote_table, 10, 1);

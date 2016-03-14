@@ -396,7 +396,7 @@ static const struct prop_entry caldav_props[] = {
     { "allowed-sharing-modes", NS_CS, PROP_COLLECTION,
       propfind_sharingmodes, NULL, NULL },
     { "shared-url", NS_CS, PROP_COLLECTION,
-      propfind_sharedurl, NULL, NULL },
+      propfind_sharedurl, NULL, "calendarserver-sharing" },
 
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
@@ -841,15 +841,17 @@ static int caldav_parse_path(const char *path,
                               config_getstring(IMAPOPT_CALENDARPREFIX),
                               errstr);
     if (r) return r;
-    else if (tgt->namespace == URL_NS_FREEBUSY) {
+
+    /* Set proper Allow bits based on collection */
+    if (tgt->namespace == URL_NS_FREEBUSY) {
         /* Read-only collections */
         tgt->allow = ALLOW_READ;
-        return 0;
     }
-    else if (!tgt->collection) return 0;
-
-    /* Set proper Allow bits based on collection and ACL of current user */
-    if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
+    else if (!tgt->collection) {
+        /* Allow POST to cal-home-set (share reply) */
+        tgt->allow |= ALLOW_POST;
+    }
+    else if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
         /* Read-only non-calendar collection */
         tgt->allow = ALLOW_READ;
 
@@ -872,7 +874,7 @@ static int caldav_parse_path(const char *path,
         tgt->flags = TGT_SCHED_OUTBOX;
     }
     else if (tgt->resource) {
-        /* Resource in regular calendar collection */
+        /* Resource in regular calendar collection (POST for managed attach) */
         tgt->allow |= ALLOW_PATCH | ALLOW_POST;
     }
 
@@ -2485,6 +2487,10 @@ static int caldav_post(struct transaction_t *txn)
         /* Don't allow POST to special collections */
         ret = HTTP_NOT_ALLOWED;
     }
+    else if (!txn->req_tgt.collection) {
+        /* POST to calendar-home-set */
+        ret = notify_post(txn);
+    }
     else {
         /* POST to regular calendar collection */
         ret = HTTP_CONTINUE;
@@ -4048,7 +4054,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
         if (fctx->req_tgt->collection &&
             fctx->mbentry->mbtype == MBTYPE_CALENDAR) {
             ensure_ns(fctx->ns, NS_CALDAV,
-                      resp ? resp->parent : node, XML_NS_CALDAV, "C");
+                      resp ? resp->parent : node->parent, XML_NS_CALDAV, "C");
             if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
                 xmlNewChild(node, fctx->ns[NS_CALDAV],
                             BAD_CAST "schedule-inbox", NULL);
@@ -4501,7 +4507,7 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
+    r = annotatemore_lookupmask(fctx->mbentry->name, prop_annot,
                                 httpd_userid, &attrib);
     if (r) return HTTP_SERVER_ERROR;
 
@@ -4521,6 +4527,11 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 
     set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                        name, ns, NULL, 0);
+    if (!resp) {
+        ensure_ns(fctx->ns, NS_CALDAV, set->parent, XML_NS_CALDAV, "C");
+        xmlSetNs(set, fctx->ns[NS_CALDAV]);
+    }
+
     /* Create "comp" elements from the stored bitmask */
     for (comp = cal_comps; comp->name; comp++) {
         if (types & comp->type) {
@@ -5420,6 +5431,8 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    fctx->flags.cs_sharing = 1;
 
     if (fctx->req_tgt->collection && !fctx->req_tgt->flags &&
         !fctx->req_tgt->resource &&
@@ -6397,7 +6410,6 @@ static int meth_get_head_fb(struct transaction_t *txn,
     fctx.filter_crit = &calfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;
-    fctx.fetcheddata = 0;
 
     cal = busytime_query_local(txn, &fctx, txn->req_tgt.mbentry->name,
                                0, NULL, NULL, NULL);

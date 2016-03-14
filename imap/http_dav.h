@@ -288,6 +288,12 @@ struct propfind_entry_list;
 struct prop_entry;
 struct error_t;
 
+/* Propfind return flags */
+struct fctx_flags_t {
+    unsigned long fetcheddata : 1;      /* Did we fetch iCalendar/vCard data? */
+    unsigned long cs_sharing  : 1;      /* Is client using CS sharing? */
+};
+
 struct propfind_ctx {
     struct request_target_t *req_tgt;   /* parsed request target URL */
     unsigned mode;                      /* none, allprop, propname, prop */
@@ -322,7 +328,7 @@ struct propfind_ctx {
     unsigned prefix_count;              /* Count of new ns added to resp */
     struct error_t *err;                /* Error info to pass up to caller */
     int *ret;                           /* Return code to pass up to caller */
-    int fetcheddata;                    /* Did we fetch iCalendar/vCard data? */
+    struct fctx_flags_t flags;          /* Return flags for this propfind */
     struct buf buf;                     /* Working buffer */
 };
 
@@ -533,6 +539,8 @@ struct meth_params {
 };
 
 extern struct meth_params webdav_params;
+
+int notify_post(struct transaction_t *txn);
 
 int report_expand_prop(struct transaction_t *txn, struct meth_params *rparams,
                        xmlNodePtr inroot, struct propfind_ctx *fctx);
