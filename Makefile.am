@@ -385,6 +385,8 @@ EXTRA_DIST += \
 	lib/charset/iso-8859-8.t \
 	lib/charset/iso-8859-9.t \
 	lib/charset/koi8-r.t \
+	lib/charset/koi8-u.t \
+	lib/charset/msdos-latin1.t \
 	lib/charset/UnicodeData.txt \
 	lib/charset/unifix.txt \
 	lib/charset/us-ascii.t \
@@ -394,8 +396,11 @@ EXTRA_DIST += \
 	lib/charset/windows-1254.t \
 	lib/charset/windows-1255.t \
 	lib/charset/windows-1256.t \
+	lib/charset/windows-1257.t \
 	lib/charset/windows-1258.t \
+	lib/charset/windows-31j.t \
 	lib/charset/windows-874.t \
+	lib/charset/windows-936.t \
 	lib/htmlchar.st \
 	lib/imapoptions \
 	lib/test/cyrusdb.c \
@@ -1196,9 +1201,11 @@ imap_httpd_SOURCES = \
 	imap/caldav_db.c \
 	imap/http_admin.c \
 	imap/http_caldav.c \
+	imap/http_caldav.h \
 	imap/http_caldav_sched.c \
 	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
+	imap/http_carddav.h \
 	imap/http_client.c \
 	imap/http_client.h \
 	imap/http_dav.c \
@@ -1216,6 +1223,7 @@ imap_httpd_SOURCES = \
 	imap/ical_support.c \
 	imap/jcal.c \
 	imap/jcal.h \
+	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
