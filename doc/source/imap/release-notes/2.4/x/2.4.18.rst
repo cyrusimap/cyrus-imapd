@@ -1,0 +1,41 @@
+===============================
+Cyrus IMAP 2.4.18 Release Notes
+===============================
+
+*   Security fix: handle urlfetch range starting outside message range
+*   A bunch of cleanups and fixes to compiling
+*   A bunch of sieve cleanups
+*   Enhanced SSL/TLS configuration options
+*   Disable use of SSLv2/SSLv3
+*   Allow SQL backend for mboxlist and statuscache (thanks Julien Coloos)
+*   Fixed :task:`116`: correct LIST response for domains starting with 'inbox.'
+*   Fixed :task:`76`: fixed lmtpd userdeny db checks (thanks Leena Heino)
+*   Fixed bug #3856: lmtpd now performs userdeny checks
+*   Fixed bug #3848: support charset aliases in encoded headers
+*   Fixed bug #3853: disconnect_on_vanished_mailbox: release mailbox lock before exiting (thanks Wolfgang Breyha)
+*   Fixed bug #3415: fixed nntpd LIST/GROUP bug
+*   Fixed bug #3784: no longer crash in THREAD REFERENCES when messages reference themselves
+*   Fixed bug #3757: don't segfault on mailbox close with no user
+
+
+New ssl/tls configuration options
+---------------------------------
+
+    tls_compression: 0
+
+        Enable TLS compression. Disabled by default.
+
+    tls_eccurve: prime256v1
+
+        Select the elliptic curve used for ECDHE.
+
+    tls_prefer_server_ciphers: 0
+
+        Prefer the cipher order configured on the server-side.
+
+    tls_versions: tls1_0 tls1_1 tls1_2
+
+        Disable SSL/TLS protocols not in this list.
+
+
+:ref:`imap-release-notes-2.4`

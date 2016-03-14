@@ -1,0 +1,13 @@
+{
+    "diskQuota": 123456789,
+    "diskUsed": 2,
+    "event": "QuotaChange",
+    "maxMessages": -1,
+    "messages": 3,
+    "pid": 8140,
+    "service": "imaps",
+    "timestamp": "2015-03-10T16:16:19.255+01:00",
+    "uri": "imap://john.doe@example.org@kolab.example.org/INBOX",
+    "user": "john.doe@example.org",
+    "vnd.cmu.sessionId": "kolab.example.org-8140-1426000578-1-14068443041501787710"
+}

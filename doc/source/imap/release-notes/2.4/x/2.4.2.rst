@@ -1,0 +1,9 @@
+==============================
+Cyrus IMAP 2.4.2 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.4.1
+
+*   Fix build on Solaris
+
+:ref:`imap-release-notes-2.4`

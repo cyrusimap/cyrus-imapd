@@ -1,0 +1,15 @@
+============================================
+Cyrus IMAP 2.4.17-caldav-beta5 Release Notes
+============================================
+
+Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta4
+
+*   Always verify authorization credentials supplied by the client (a proxy may be reusing an existing connection as a different user)
+*   Don't bother supporting Digest qop=auth-int since no clients seem to use it
+*   Don't show addressbook mailboxes in IMAP LIST output
+*   Plugged leaked memory found by Valgrind
+*   Better handling of request/response bodies
+*   Added httpprettytelemetry option
+*   Added httpallowcors option (Cross-Origin Resource Sharing)
+
+:ref:`imap-release-notes-2.4-dav`

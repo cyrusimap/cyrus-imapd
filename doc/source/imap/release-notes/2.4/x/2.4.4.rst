@@ -1,0 +1,15 @@
+==============================
+Cyrus IMAP 2.4.4 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.4.3
+
+*   Rewrite index_upgrade to always parse the message files and re-create cyrus.cache, to avoid upgrade upgrade failures where cache errors occured.
+*   Fixed sync_reset handling of user deletions
+*   Fixed proc file handling of LOGIN and folder unselect
+*   use cyrus.expunge file (if still present) to delete bogus records from a failed index upgrade (cause by bugs in earlier version)
+*   detect version 2.5 in XFER to support use with master git branch in a murder
+*   made pop3 expunge much more efficient
+*   handle missing seen file in XFER
+
+:ref:`imap-release-notes-2.4`

@@ -1,0 +1,13 @@
+{
+    "diskQuota": 2,
+    "diskUsed": 2,
+    "event": "QuotaExceed",
+    "maxMessages": -1,
+    "messages": 3,
+    "pid": 8210,
+    "service": "lmtpunix",
+    "timestamp": "2015-03-10T16:13:40.218+01:00",
+    "uri": "imap://john.doe@example.org@kolab.example.org/INBOX",
+    "user": "john.doe@example.org",
+    "vnd.cmu.sessionId": "kolab.example.org-8210-1426000420-4-9494635035963533515"
+}

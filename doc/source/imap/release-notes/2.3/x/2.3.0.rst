@@ -1,0 +1,25 @@
+==============================
+Cyrus IMAP 2.3.0 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.2.x
+
+*   Added support for "unified" and "replicated" Murders. A Murder no longer has to have discrete frontend and backend servers; any one "unified" server can both proxy and serve local mailboxes (proxy functionality in proxyd and lmtpproxyd has been merged with imapd and lmtpd respectively), or all "replicated" servers can serve the same mailboxes from a shared filesystem. The new mupdate_config option in imapd.conf is used to determine whether a Murder is using a "traditional", "unified" or "replicated" configuration.
+*   Ported/rewrote/integrated David Carter's mailspool replication code. Development sponsored by Columbia University.
+*   Added support for "delayed" expunge, in which messages are removed from the mailbox index at the time of the EXPUNGE (hiding them from the client), but the message files and cache entries are left behind, to be purged at a later time by cyr_expire. This reduces the amount of I/O that takes place at the time of EXPUNGE and should result in greater responsiveness for the client, especially when expunging a large number of messages. The new expunge_mode option in imapd.conf controls whether expunges are "immediate" or "delayed". Development sponsored by FastMail.
+*   Added support to place some/all mailbox metadata files (cyrus.* files) on a separate (probably high-speed) partition. See the new metapartition and metapartition_files options for details. Development sponsored by FastMail.
+*   Added support for accessing subfolders of INBOX via POP3. See the new popsubfolders option for details. Development sponsored by FastMail.
+*   Added support to lmtpd to do "fuzzy" mailbox matching on user+detail addresses. See the new lmtp_fuzzy_mailbox_match option for details. Development sponsored by FastMail.
+*   Added new sieve_extensions option to allow individual Sieve extensions to be enabled/disabled.
+*   The Sieve "include" extension is now supported. This also allows for global sieve scripts. See the new sieve_extensions options to enable it.
+*   The Sieve "body" extension is now supported. See the new sieve_extensions option to enable it. Development sponsored by FastMail.
+*   The $text$ variable for Sieve notify messages is now supported. Development sponsored by FastMail.
+*   The MIME structure of a new message destined for multiple recipients is now only parsed once rather than once per delivery, resulting in better performance. Development sponsored by FastMail.
+*   Support 64-bit quota usage (both per mailbox and for the entire quotaroot), based on a patch from Jeremy Rumpf. Development sponsored by FastMail.
+*   Added new flushseenstate option which causes imapd to immediately flush changes in \Seen state to disk rather than caching them until the mailbox is closed. Enabling this option may fix \Seen state weirdness with MS Outlook, at the expense of performance/scalability. Based on a patch by John A. Tamplin (jtampli@sph.emory.edu).
+*   The Sieve "copy" extension is now supported.
+*   The IMAP "CATENATE" and "URLAUTH" extensions are now supported.
+*   Updated Sieve "vacation" extension to draft-ietf-sieve-vacation-04.
+*   Added support for Sieve scripts on shared mailboxes via the /vendor/cmu/cyrus-imapd/sieve annotation.
+
+:ref:`imap-release-notes-2.3`

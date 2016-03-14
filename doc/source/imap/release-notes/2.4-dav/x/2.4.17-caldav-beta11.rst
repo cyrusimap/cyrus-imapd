@@ -1,0 +1,13 @@
+=============================================
+Cyrus IMAP 2.4.17-caldav-beta11 Release Notes
+=============================================
+
+2.4.17-caldav-beta11
+
+*   Properly do time range filtering on a recurring event where the recurring component isn't the first component in the iCalendar stream.
+*   Properly do time range filtering on an uncompleted task with no due time.
+*   Added short-circuits to calculation of recurring event time span.
+*   Faster free/busy calculation for non-recurring events.
+*   Added caldav_mindatetime and caldav_maxdatetime options.
+
+:ref:`imap-release-notes-2.4-dav`

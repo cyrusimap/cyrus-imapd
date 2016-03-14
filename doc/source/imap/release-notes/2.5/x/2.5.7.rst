@@ -1,0 +1,78 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.7 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.7.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.7.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.7.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.7.tar.gz.sig
+
+.. _relnotes-2.5.7-changes:
+
+Changes Since 2.5.6
+===================
+
+Security fixes
+--------------
+
+* CVE-2015-8077, CVE-2015-8078: protect against integer overflow in urlfetch
+  range checks
+
+SSL changes
+-----------
+
+* Support for legacy SSLv2 and SSLv3 protocols has been removed
+
+  These protocols were previously enabled by default, but could be disabled by
+  removing them from ``tls_versions`` in :cyrusman:`imapd.conf(5)`.  They are
+  now completely unsupported.
+
+  Administrators needing to support these protocols may find a patch in
+  ``contrib/allow-broken-sslv23.patch``.  With this patch, SSLv2 and SSLv3
+  will be disabled by default, but can be enabled by adding them to
+  ``tls_versions``.  Users of this patch do so at their own risk.
+
+* Support for TLS compression has been removed (thanks Ondřej Surý)
+
+  This was previously disabled by default, but could be enabled with
+  ``tls_compression`` in :cyrusman:`imapd.conf(5)`.  It is now completely
+  unsupported.
+
+Bug fixes
+---------
+
+* Fixed: crash in sync_server when built with buggy Sun CC (thanks Jens Erat)
+* Fixed bug #3908: crash in ctl_mboxlist -m
+* Fixed: setrlimit error on startup
+* Fixed :task:`216`: don't break quotas when transferring mailboxes between
+  backends
+* Fixed: idled shutdown on platforms without pselect (thanks Thomas Jarosch)
+* Fixed: autocreate_sieve now uses ``sievedir`` setting correctly
+* Fixed bug #3907: cyradm ``--cadir`` option is now called ``--capath``, and
+  works (thanks Leena Heino)
+* Fixed bug #3905: fix segfault in all daemons when built with
+  ``-DUSE_SETPROCTITLE``
+* Fixed: pop3d no longer applies ``plaintextloginpause`` to TLS connections
+* Fixed bug #3866: lmtpd now consults local mailboxes.db first, before mupdate
+  master (thanks Michael Menge)
+
+Debian patches
+--------------
+
+A number of patches from Debian's repository have been merged.  Thanks to the
+various developers who contributed them to the Debian project, and to Ondřej
+Surý for collating and sending them upstream.
