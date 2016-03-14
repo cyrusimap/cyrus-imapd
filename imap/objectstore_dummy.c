@@ -64,11 +64,13 @@ const char *filename;   //  Name of blob
 };
 
 
+
 static const char *objectstore_get_object_filename(struct mailbox *mailbox __attribute__((unused)),
                                                    const struct index_record *record)
 {
     return message_guid_encode(&record->guid);
 }
+
 
 
 static struct object_def *objectstore_get_object_def(struct mailbox *mailbox,
@@ -154,7 +156,6 @@ int objectstore_put (struct mailbox *mailbox, const struct index_record *record,
     //create sub-container if not there
     const char *container_path = objectstore_container_path(mailbox, record) ;
     snprintf(path, sizeof(path), "%s/", container_path);
-
     if(stat(path, &fileStat) < 0) {
         if (cyrus_mkdir (path, 755 ) == -1) {
             syslog(LOG_ERR, "Dummy ObjectStore: Cannot create user sub container %s",path);

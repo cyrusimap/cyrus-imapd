@@ -968,17 +968,18 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     /* straight to archive? */
     int in_object_storage = 0;
 #if defined ENABLE_OBJECTSTORE
-    if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
+    if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED)
+    {
         if (!record.internaldate)
             record.internaldate = time(NULL);
         r = objectstore_put(mailbox, &record, fname);
-        if (r) {
-            // didn't manage to store it, so remove the ARCHIVED flag
-            record.system_flags &= ~FLAG_ARCHIVED;
-            r = 0;
+        if (!r) {
+            // file in object store now; must delete local copy
+            in_object_storage = 1;
         }
         else {
-            in_object_storage = 1;
+            // didn't manage to store it, so remove the ARCHIVED flag
+            record.system_flags &= ~FLAG_ARCHIVED;
         }
     }
 #endif
@@ -1034,7 +1035,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
             goto out;
         }
     }
-
 out:
     if (newflags)
         strarray_free(newflags);
@@ -1268,8 +1268,9 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     struct index_record record;
     char *srcfname = NULL;
     char *destfname = NULL;
+    int object_storage_enabled = 0 ;
 #if defined ENABLE_OBJECTSTORE
-    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 #endif
     int r = 0;
     int userflag;
@@ -1348,21 +1349,14 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         srcfname = xstrdup(mailbox_record_fname(mailbox, &records[msg]));
         destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
 
-        r = mailbox_copyfile(srcfname, destfname, nolink);
+        if (!(object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED))   // if object storage do not move file
+           r = mailbox_copyfile(srcfname, destfname, nolink);
+
         if (r) goto out;
 
-        int in_object_storage = 0;
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED) {
+        if (object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED)
             r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
-            if (r) {
-                record.system_flags &= ~FLAG_ARCHIVED;
-                r = 0;
-            }
-            else {
-                in_object_storage = 1;
-            }
-        }
 #endif
 
         if (as->isoutbox) {
@@ -1386,12 +1380,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                               as->mailbox, record.uid,
                               as->userid);
         if (r) goto out;
-
-        if (in_object_storage) {  // must delete local file
-            if (unlink(destfname) != 0) // unlink should do it.
-                if (!remove (destfname))  // we must insist
-                    syslog(LOG_ERR, "Removing local file <%s> error \n", destfname);
-        }
 
         mboxevent_extract_record(mboxevent, as->mailbox, &record);
         mboxevent_extract_copied_record(mboxevent, mailbox, &records[msg]);

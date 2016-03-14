@@ -566,6 +566,7 @@ extern int mailbox_expunge(struct mailbox *mailbox,
                            unsigned *nexpunged, int event_type);
 extern void mailbox_archive(struct mailbox *mailbox,
                             mailbox_decideproc_t *decideproc, void *deciderock, unsigned flags);
+extern void mailbox_remove_files_from_object_storage(struct mailbox *mailbox, unsigned flags);
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
                            mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
