@@ -239,7 +239,7 @@ static void HTMLencode(struct buf *output, const char *input)
 #define HTML_ROW        "<tr><td><b>%s</b></td><td>%s</td></tr>\r\n"
 
 /* Send an iMIP request for attendees in 'ical' */
-static int imip_send_sendmail(icalcomponent *ical)
+static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is_update)
 {
     int r;
     icalcomponent *comp;
@@ -282,8 +282,12 @@ static int imip_send_sendmail(icalcomponent *ical)
                     (const char*(*)(icalproperty *))&icalproperty_get_organizer);
     }
     else {
-        msg_type =
-            (meth == ICAL_METHOD_CANCEL) ? "a cancellation" : "an invitation";
+        if (meth == ICAL_METHOD_CANCEL)
+            msg_type = "a cancellation";
+        else if (is_update)
+            msg_type = "an updated invitation";
+        else
+            msg_type = "an invitation";
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         add_address(&originator, prop,
@@ -355,7 +359,7 @@ static int imip_send_sendmail(icalcomponent *ical)
             originator->qpname ? originator->qpname : "", originator->addr);
 
     for (recip = recipients; recip; recip = recip->next) {
-        if (strcmp(recip->addr, originator->addr)) {
+        if (strcmp(recip->addr, originator->addr) && strcasecmp(recip->addr, recipient)) {
             fprintf(sm, "To: %s <%s>\r\n",
                     recip->qpname ? recip->qpname : "", recip->addr);
         }
@@ -552,7 +556,7 @@ static int imip_send(icalcomponent *ical, const char *recipient, unsigned is_upd
     const char *notifier = config_getstring(IMAPOPT_IMIPNOTIFIER);
 
     /* if no notifier, fall back to sendmail */
-    if (!notifier) return imip_send_sendmail(ical);
+    if (!notifier) return imip_send_sendmail(ical, recipient, is_update);
 
     const char *ical_str = icalcomponent_as_ical_string(ical);
     json_t *val = json_pack("{s:s s:s s:b}",
