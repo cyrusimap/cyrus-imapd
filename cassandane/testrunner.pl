@@ -179,6 +179,11 @@ while (my $a = shift)
     {
 	set_verbose(get_verbose()+1);
     }
+    elsif ($a =~ m/^-v+$/)
+    {
+	# ganged verbosity
+	set_verbose(get_verbose() + length($a) - 1);
+    }
     elsif ($a eq '--valgrind')
     {
 	push(@cassini_overrides, ['valgrind', 'enabled', 'yes']);
