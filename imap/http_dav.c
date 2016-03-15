@@ -5092,7 +5092,11 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
-    int r = 0, rights;
+    int r = 0, rights = 0;
+
+    /* skip deleted items */
+    if (mboxname_isdeletedmailbox(mbentry->name, 0) || mbentry->mbtype == MBTYPE_DELETED)
+        goto done;
 
     /* Check ACL on mailbox for current user */
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
