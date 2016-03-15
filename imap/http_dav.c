@@ -8873,28 +8873,35 @@ int notify_post(struct transaction_t *txn)
 
     r = send_notification(txn, notify->doc, owner, buf_cstring(&txn->buf));
 
-    make_collection_url(&txn->buf, url_prefix,
-                        mboxname, txn->req_tgt.userid, NULL);
+    if (add) {
+        /* Accepted - create URL of sharee's new collection */
+        make_collection_url(&txn->buf, url_prefix,
+                            mboxname, txn->req_tgt.userid, NULL);
 
-    if (legacy) {
-        /* Create CS:shared-as XML body */
-        xmlNodePtr shared_as = init_xml_response("shared-as", NS_CS, NULL, ns);
-        if (!shared_as) {
-            ret = HTTP_SERVER_ERROR;
-            goto done;
+        if (legacy) {
+            /* Create CS:shared-as XML body */
+            xmlNodePtr shared_as = init_xml_response("shared-as", NS_CS, NULL, ns);
+            if (!shared_as) {
+                ret = HTTP_SERVER_ERROR;
+                goto done;
+            }
+
+            node = xml_add_href(shared_as, NULL, buf_cstring(&txn->buf));
+            ensure_ns(ns, NS_DAV, node, XML_NS_DAV, "D");
+            xmlSetNs(node, ns[NS_DAV]);
+            xml_response(HTTP_OK, txn, shared_as->doc);
+            xmlFreeDoc(shared_as->doc);
+            ret = 0;
         }
-
-        node = xml_add_href(shared_as, NULL, buf_cstring(&txn->buf));
-        ensure_ns(ns, NS_DAV, node, XML_NS_DAV, "D");
-        xmlSetNs(node, ns[NS_DAV]);
-        xml_response(HTTP_OK, txn, shared_as->doc);
-        xmlFreeDoc(shared_as->doc);
-        ret = 0;
+        else {
+            /* Add Location header */
+            txn->location = buf_cstring(&txn->buf);
+            ret = HTTP_CREATED;
+        }
     }
     else {
-        /* Add Location header */
-        txn->location = buf_cstring(&txn->buf);
-        ret = HTTP_CREATED;
+        /* Declined */
+        ret = HTTP_NO_CONTENT;
     }
 
   done:
