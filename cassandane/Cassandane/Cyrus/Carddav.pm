@@ -52,6 +52,10 @@ use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 use XML::Spice;
 
+Cassandane::Cyrus::TestCase::magic(FastMailSharing => sub {
+    shift->config_set('fastmailsharing' => 'true');
+});
+
 sub new
 {
     my $class = shift;
@@ -287,6 +291,110 @@ EOF
     my $res = $CardDAV->Request('REPORT', "/dav/addressbooks/user/cassandane/$Id", $xml, Depth => 0, 'Content-Type' => 'text/xml');
 
     $self->assert_not_null($res->{"{DAV:}response"});
+}
+
+sub test_sharing_samedomain
+    :VirtDomains :FastMailSharing
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.user1\@example.com");
+    $admintalk->setacl("user.user1\@example.com", "user1\@example.com", 'lrswipkxtecdan');
+    $admintalk->create("user.user2\@example.com");
+    $admintalk->setacl("user.user2\@example.com", "user2\@example.com", 'lrswipkxtecdan');
+
+    my $service = $self->{instance}->get_service("http");
+    my $talk1 = Net::CardDAVTalk->new(
+	user => 'user1@example.com',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+    my $talk2 = Net::CardDAVTalk->new(
+	user => 'user2@example.com',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    $talk2->NewAddressBook("Shared", name => "Shared Address Book");
+    $admintalk->setacl("user.user2.#addressbooks.Shared\@example.com", "user1\@example.com", 'lrsn');
+
+    my $Addressbooks = $talk1->GetAddressBooks();
+
+    $self->assert_deep_equals([
+          {
+            'name' => 'personal',
+            'isReadOnly' => 0,
+            'path' => 'Default',
+            'href' => '/dav/addressbooks/user/user1@example.com/Default/'
+          },
+          {
+            'path' => '/dav/addressbooks/zzzz/user2@example.com/Shared',
+            'href' => '/dav/addressbooks/zzzz/user2@example.com/Shared/',
+            'name' => 'Shared Address Book',
+            'isReadOnly' => 1,
+          }
+        ], $Addressbooks);
+}
+
+sub test_sharing_crossdomain
+    :VirtDomains :CrossDomains :FastMailSharing
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.user1\@example.com");
+    $admintalk->setacl("user.user1\@example.com", "user1\@example.com", 'lrswipkxtecdan');
+    $admintalk->create("user.user2\@example.org");
+    $admintalk->setacl("user.user2\@example.org", "user2\@example.org", 'lrswipkxtecdan');
+
+    my $service = $self->{instance}->get_service("http");
+    my $talk1 = Net::CardDAVTalk->new(
+	user => 'user1@example.com',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+    my $talk2 = Net::CardDAVTalk->new(
+	user => 'user2@example.org',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    $talk2->NewAddressBook("Shared", name => "Shared Address Book");
+    $admintalk->setacl("user.user2.#addressbooks.Shared\@example.org", "user1\@example.com", 'lrsn');
+
+    my $Addressbooks = $talk1->GetAddressBooks();
+
+    $self->assert_deep_equals([
+          {
+            'name' => 'personal',
+            'isReadOnly' => 0,
+            'path' => 'Default',
+            'href' => '/dav/addressbooks/user/user1@example.com/Default/'
+          },
+          {
+            'path' => '/dav/addressbooks/zzzz/user2@example.org/Shared',
+            'href' => '/dav/addressbooks/zzzz/user2@example.org/Shared/',
+            'name' => 'Shared Address Book',
+            'isReadOnly' => 1
+          }
+        ], $Addressbooks);
 }
 
 1;
