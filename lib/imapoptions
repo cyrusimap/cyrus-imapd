@@ -2267,6 +2267,9 @@ product version in the capabilities */
 { "caringo_port", 80, INT }
 /* The port of the caringo server (caringo_hostname); default is 80. */
 
+{ "fastmailsharing", 0, SWITCH }
+/* If enabled, use FastMail style sharing (oldschool full server paths) */
+
 /*
 .SH SEE ALSO
 .PP

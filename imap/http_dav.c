@@ -530,7 +530,9 @@ EXPORTED int calcarddav_parse_path(const char *path,
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
-    if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
+    /* zzzz is part of the FastMail sorting hack to make shared collections
+     * always appear later */
+    if (!strncmp(p, USER_COLLECTION_PREFIX, len) || !strncmp(p, "zzzz", len)) {
         p += len;
         if (!*p || !*++p) return 0;
 
@@ -5046,25 +5048,31 @@ static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
     buf_printf(buf, "%s/", urlprefix);
 
     if (userid) {
-        const char *owner;
-
-        buf_printf(buf, "%s/", USER_COLLECTION_PREFIX);
-
         if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
-        owner = mbname_userid(mbname);
+        const char *owner = mbname_userid(mbname);
         if (!owner) owner = "";
 
-        if (*userid) {
-            buf_printf(buf, "%s/", userid);
-
-            if (strcmp(owner, userid)) {
-                /* Encode shared collection as: <owner> "." <mboxname> */
-                buf_printf(buf, "%s%c", owner, SHARED_COLLECTION_DELIM);
-            }
-        }
-        else buf_printf(buf, "%s/", owner);
-
         if (mbox_owner) *mbox_owner = xstrdup(owner);
+
+        if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
+            if (strcmp(owner, userid))
+                buf_printf(buf, "%s/%s/", "zzzz", owner);
+            else
+                buf_printf(buf, "%s/%s/", USER_COLLECTION_PREFIX, owner);
+        }
+        else {
+            buf_printf(buf, "%s/", USER_COLLECTION_PREFIX);
+
+            if (*userid) {
+                buf_printf(buf, "%s/", userid);
+
+                if (strcmp(owner, userid)) {
+                    /* Encode shared collection as: <owner> "." <mboxname> */
+                    buf_printf(buf, "%s%c", owner, SHARED_COLLECTION_DELIM);
+                }
+            }
+            else buf_printf(buf, "%s/", owner);
+        }
     }
 
     len = buf_len(buf);
@@ -5135,6 +5143,10 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
         if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
         break;
     }
+
+    /* skip toplevels */
+    if (config_getswitch(IMAPOPT_FASTMAILSHARING) && *p == '#')
+        goto done;
 
 
     /* Open mailbox for reading */
@@ -5433,6 +5445,10 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             if (txn->req_tgt.collection) {
                 /* Add response for target collection */
                 propfind_by_collection(txn->req_tgt.mbentry, &fctx);
+            }
+            else if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
+                /* Add responses for all contained collections */
+                mboxlist_allmbox("", propfind_by_collection, &fctx, 0);
             }
             else if (txn->req_tgt.mbentry) {
                 /* Add responses for all contained collections */
