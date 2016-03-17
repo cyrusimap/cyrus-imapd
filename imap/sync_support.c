@@ -5705,3 +5705,26 @@ EXPORTED const char *sync_get(struct dlist *kin, struct sync_state *state)
 
     return sync_response(r);
 }
+
+EXPORTED const char *sync_restore(struct dlist *kin,
+                                  struct sync_reserve_list *reserve_list,
+                                  struct sync_state *state)
+{
+    int r = IMAP_PROTOCOL_ERROR;
+
+    ucase(kin->name);
+
+    if (!strcmp(kin->name, "MAILBOX"))
+        r = sync_restore_mailbox(kin, reserve_list, state);
+    else if (!strcmp(kin->name, "LOCAL_MAILBOX")) {
+        state->local_only = 1;
+        r = sync_restore_mailbox(kin, reserve_list, state);
+    }
+
+    else {
+        syslog(LOG_ERR, "SYNCERROR: unknown command %s", kin->name);
+        r = IMAP_PROTOCOL_ERROR;
+    }
+
+    return sync_response(r);
+}
