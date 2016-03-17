@@ -330,6 +330,12 @@ messages that aren't already there.
 restore command needs options:
 * whether or not to trim deletedprefix off mailbox names to be restored
 * whether or not to restore uniqueid, highestmodseq, uid and so on
+* whether or not to limit to expunged messages
+* whether or not to restore sub-mailboxes
+* sync_client-like options (servername, local_only, partition, ...)
+* user/mailbox/backup file(s) to restore from
+* mailbox to restore to (override location in backup)
+* override acl?
 
 compact
 --------
