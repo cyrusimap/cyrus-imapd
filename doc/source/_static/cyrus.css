@@ -137,6 +137,14 @@ p.caption {
     font-style: italic;
 }
 
+.caption-text {
+    font-size: 60%
+}
+
+nav.wy-nav-side p.caption {
+    font-size: 150%
+}
+
 /* For bold-italic and italic inside other formatting styles */
 /* ``command line `` :italic:`with italics`
  */

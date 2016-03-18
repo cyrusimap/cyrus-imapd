@@ -36,13 +36,6 @@ Management
     Conversations
     DAV / HTTP
 
-FAQ
-====
-.. toctree::
-    :maxdepth: 2
-
-    faq
-
 References
 ==========
 

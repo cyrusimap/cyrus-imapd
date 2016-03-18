@@ -1,8 +1,8 @@
 .. _imap-release-notes-2.5:
 
-=============================
-Other Cyrus IMAP 2.5 Releases
-=============================
+=======================
+Cyrus IMAP 2.5 Releases
+=======================
 
 .. toctree::
     :maxdepth: 1

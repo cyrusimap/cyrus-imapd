@@ -1,5 +1,5 @@
-Reporting Bugs in Cyrus IMAP/SASL
-=================================
+Reporting Bugs
+==============
 
 Bug reports can be logged in our `Bugzilla issue tracker <http://bugzilla.cyrusimap.org/>`__. Please bear in mind registration is required.
 When reporting a bug, please prepare to provide the following information;

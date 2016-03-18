@@ -34,22 +34,36 @@ This is the highlight reel of Cyrus's full list of features_.
 
 .. toctree::
     :maxdepth: 1
+    :caption: Welcome to Cyrus
     :glob:
 
     imap/introduction
     imap/features
+    Support <feedback>
+    About <overview/about_cyrus>
+    
+.. toctree::
+    :maxdepth: 1
+    :caption: Administrators
+    
     imap/installation
     imap/deployment
     imap/admin
-    imap/developer
-    imap/faq
+    imap/faq    
     imap/release-notes/index
+    
+.. toctree::
+    :maxdepth: 1    
+    :caption: Developers
+    
+    Contribute <contribute>
+    imap/developer
+
     
 .. toctree::
     :hidden:
 
-    overview/about_cyrus
-    feedback
+    admin
 
 ..  note to documentation contributors:
 
@@ -81,6 +95,7 @@ Cyrus IMAP uses Cyrus SASL to provide authentication support to the mail server,
 
 .. toctree::
     :maxdepth: 1
+    :caption: Cyrus SASL
 
     SASL Getting Started <sasl/getting_started>
     sasl/auxiliary_properties

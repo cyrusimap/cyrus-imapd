@@ -1,8 +1,8 @@
 .. _imap-release-notes-2.4-dav:
 
-====================================
-Other Cyrus IMAP 2.4-caldav Releases
-====================================
+==============================
+Cyrus IMAP 2.4-caldav Releases
+==============================
 
 .. toctree::
     :maxdepth: 1

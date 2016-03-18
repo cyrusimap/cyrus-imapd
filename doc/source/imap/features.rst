@@ -4,21 +4,64 @@
 IMAP Features
 =============
 
-The following documents show (intend to show), in no particular order
-[#]_, the full power of each feature that is included with Cyrus IMAP.
+The following documents show the full power of each feature that is included with Cyrus IMAP.
 
 Exceptions notwithstanding, most of this documentation does not involve
 the :ref:`imap-rfc-support`.
 
+Security and Authentication
+---------------------------
+
 .. toctree::
     :maxdepth: 1
-    :glob:
+    
+    features/authentication-kerberos
+    features/authentication-ldap
+    features/authentication-sql
+    features/access-control
+    features/sealed-system
 
-    features/*
+Mailbox Management
+------------------
 
-.. rubric:: Footnotes
+.. toctree::
+    :maxdepth: 1
+    
+    features/automatic-creation-of-mailboxes
+    features/namespaces
+    features/mailbox-annotations
+    features/mailbox-distribution
+    
+Message Management
+------------------
+ 
+.. toctree::
+    :maxdepth: 1
+    
+    features/delayed-delete
+    features/delayed-expunge
+    features/message-annotations
+    features/duplicate-message-delivery-suppression
+    features/shared-seen-state
+    features/server-side-filtering
+    features/event-notifications
+    
+Storage
+-------
 
-.. [#]
+.. toctree::
+    :maxdepth: 1
+    
+    features/mail-spool-partitions
+    features/mailbox-metadata-partitions
+    features/quota
+    features/single-instance-store
+    
+Load Management
+---------------
 
-    No particular order other than alphabetically sorted by filename in
-    the documentation sources' filenames for each article.
+.. toctree::
+    :maxdepth: 1
+    
+    features/server-aggregation
+    
