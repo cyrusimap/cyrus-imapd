@@ -847,6 +847,8 @@ backup_cyr_backup_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
 
 backup_restore_SOURCES = \
     imap/mutex_fake.c \
+    imap/sync_support.c \
+    imap/sync_support.h \
     backup/restore.c
 backup_restore_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
 
