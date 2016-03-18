@@ -338,10 +338,12 @@ restore command needs options:
 + override acl?
 
 can we heuristically determine whether an argument is an mboxname, uniqueid or guid?
+    => uniqueid contains - at fixed positions
+    => mboxname usually contains at least one . somewhere
+    => guid is only hex digits
 
 usage:
-    restore [options] -S server [mode] backup mailboxes [mboxname | uniqueid]...
-    restore [options] -S server [mode] backup messages [guid]...
+    restore [options] -S server [mode] backup [mboxname | uniqueid | guid]...
 
 options:
     -A acl              # apply specified acl to restored mailboxes
