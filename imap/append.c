@@ -929,6 +929,10 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     r = message_create_record(&record, *body);
     if (r) goto out;
 
+    /* And make sure it has a timestamp */
+    if (!record.internaldate)
+        record.internaldate = time(NULL);
+
     /* should we archive it straight away? */
     if (mailbox_should_archive(mailbox, &record, NULL))
         record.system_flags |= FLAG_ARCHIVED;
@@ -970,8 +974,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 #if defined ENABLE_OBJECTSTORE
     if (object_storage_enabled && record.system_flags & FLAG_ARCHIVED)
     {
-        if (!record.internaldate)
-            record.internaldate = time(NULL);
         r = objectstore_put(mailbox, &record, fname);
         if (!r) {
             // file in object store now; must delete local copy
