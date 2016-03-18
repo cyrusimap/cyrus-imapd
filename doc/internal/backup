@@ -328,14 +328,42 @@ like this.  so we don't care about special handling for this case.  just add any
 messages that aren't already there.
 
 restore command needs options:
-* whether or not to trim deletedprefix off mailbox names to be restored
-* whether or not to restore uniqueid, highestmodseq, uid and so on
-* whether or not to limit to expunged messages
-* whether or not to restore sub-mailboxes
-* sync_client-like options (servername, local_only, partition, ...)
-* user/mailbox/backup file(s) to restore from
-* mailbox to restore to (override location in backup)
-* override acl?
++ whether or not to trim deletedprefix off mailbox names to be restored
++ whether or not to restore uniqueid, highestmodseq, uid and so on
++ whether or not to limit to/exclude expunged messages
++ whether or not to restore sub-mailboxes
++ sync_client-like options (servername, local_only, partition, ...)
++ user/mailbox/backup file(s) to restore from
++ mailbox to restore to (override location in backup)
++ override acl?
+
+can we heuristically determine whether an argument is an mboxname, uniqueid or guid?
+
+usage:
+    restore [options] -S server [mode] backup mailboxes [mboxname | uniqueid]...
+    restore [options] -S server [mode] backup messages [guid]...
+
+options:
+    -A acl              # apply specified acl to restored mailboxes
+    -C alt_config       # alternate config file
+    -D                  # don't trim deletedprefix before restoring
+    -F input-file       # read mailboxes/messages from file rather than argv
+    -L                  # local mailbox operations only (no mupdate)
+    -M mboxname         # restore messages to specified mailbox
+    -P partition        # restore mailboxes to specified partition
+    -U                  # try to preserve uniqueid, uid, modseq, etc
+    -X                  # don't restore expunged messages
+    -r                  # recurse into submailboxes
+    -v                  # verbose
+    -w seconds          # wait before starting (useful for attaching a debugger)
+    -x                  # only restore expunged messages (not sure if useful?)
+    -z                  # require compression (abort if compression unavailable)
+
+mode:
+    -f                  # specified backup interpreted as filename
+    -m                  # specified backup interpreted as mboxname
+    -u                  # specified backup interpteted as userid
+
 
 compact
 --------
