@@ -269,7 +269,7 @@ EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
     object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 #endif
 
-    if (!object_storage_enabled && record->system_flags & FLAG_ARCHIVED)
+    if (!object_storage_enabled && (record->system_flags & FLAG_ARCHIVED))
         return mailbox_archive_fname(mailbox, record->uid);
     else
         return mailbox_spool_fname(mailbox, record->uid);
@@ -3747,13 +3747,25 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 {
     const char *spoolfname = mailbox_spool_fname(mailbox, record->uid);
     const char *archivefname = mailbox_archive_fname(mailbox, record->uid);
-    int object_storage_enabled = 0 ;
+    int object_storage_enabled = 0;
 #if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
 #endif
     int r;
 
-    if (record->system_flags & FLAG_UNLINKED) {
+    if (object_storage_enabled) {
+#if defined ENABLE_OBJECTSTORE
+        /* we always remove the spool file here, because we've archived it */
+        if (record->system_flags & FLAG_ARCHIVED)
+            unlink(spoolfname);
+
+        /* if the record is also deleted, we remove the objectstore copy */
+        if (record->system_flags & FLAG_UNLINKED)
+            objectstore_delete(mailbox, record);
+#endif
+    }
+
+    else if (record->system_flags & FLAG_UNLINKED) {
         /* try to delete both */
 
         if (unlink(spoolfname) == 0) {
@@ -3764,22 +3776,13 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
                        record->uid, record->system_flags);
         }
 
-#if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled && record->system_flags & FLAG_ARCHIVED)
-            objectstore_delete(mailbox, record);
-        else
-        {
-#else
-        {
-#endif
-            if (strcmp(spoolfname, archivefname)) {
-                if (unlink(archivefname) == 0) {
-                    if (config_auditlog)
-                        syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
-                                "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%u>",
-                                session_id(), mailbox->name, mailbox->uniqueid,
-                                record->uid, record->system_flags);
-                }
+        if (strcmp(spoolfname, archivefname)) {
+            if (unlink(archivefname) == 0) {
+                if (config_auditlog)
+                    syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
+                            "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%u>",
+                            session_id(), mailbox->name, mailbox->uniqueid,
+                            record->uid, record->system_flags);
             }
         }
 
@@ -3798,17 +3801,19 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         }
     }
 
-    if (record->system_flags & FLAG_ARCHIVED) {
-        /* XXX - stat to make sure the other file exists first? - we mostly
-         *  trust that we didn't do stupid things everywhere else, so maybe not */
-        unlink(spoolfname);
-    }
-    if (!object_storage_enabled){
+    else if (strcmp(spoolfname, archivefname)) {
+        if (record->system_flags & FLAG_ARCHIVED) {
+            /* XXX - stat to make sure the other file exists first? - we mostly
+            *  trust that we didn't do stupid things everywhere else, so maybe not */
+            unlink(spoolfname);
+        }
 
-        if (strcmp(spoolfname, archivefname))
+        else {
             unlink(archivefname);
-        /* else: nothing to cleanup if it's the same file! */
+        }
     }
+
+    /* else: nothing to cleanup if it's the same file! */
 }
 
 /* need a mailbox exclusive lock, we're removing files */
