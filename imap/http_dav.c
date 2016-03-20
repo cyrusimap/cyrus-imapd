@@ -4078,6 +4078,21 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
 
+    /* if FastMail sharing, we need to remove ACLs */
+    if (config_getswitch(IMAPOPT_FASTMAILSHARING) &&!txn->req_tgt.resource &&
+        !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
+        r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mbentry->name,
+                            httpd_userid, /*rights*/NULL, /*isadmin*/1,
+                            httpd_userid, httpd_authstate);
+        if (r) {
+            syslog(LOG_ERR, "meth_delete(%s) failed to remove acl: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
+            txn->error.desc = error_message(r);
+            return HTTP_SERVER_ERROR;
+        }
+        return HTTP_OK;
+    }
+
     /* Special case of deleting a shared collection */
     if (!txn->req_tgt.resource && (txn->req_tgt.flags == TGT_DAV_SHARED)) {
         char *inboxname = mboxname_user_mbox(txn->req_tgt.userid, NULL);
