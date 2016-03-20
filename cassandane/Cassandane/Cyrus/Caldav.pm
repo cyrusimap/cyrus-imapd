@@ -867,5 +867,82 @@ EOF
   $self->assert_str_equals("Hi,a weird character ", $Events->[0]{description});
 }
 
+sub test_fastmailsharing
+    :FastmailSharing
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    my $service = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+	user => "manifold",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    xlog "create calendar";
+    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "share to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrswipcdn');
+
+    xlog "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(2, scalar @$CasCal);
+    my $names = join "/", sort map { $_->{name} } @$CasCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    xlog "get calendars as manifold";
+    my $ManCal = $mantalk->GetCalendars();
+    $self->assert_num_equals(2, scalar @$ManCal);
+    $names = join "/", sort map { $_->{name} } @$ManCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    xlog "Update calendar name as cassandane";
+    my ($CasId) = map { $_->{id} } grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
+    $CalDAV->UpdateCalendar({id => $CasId, name => "Cassandane Name"});
+
+    xlog "changed as cassandane";
+    $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(2, scalar @$CasCal);
+    $names = join "/", sort map { $_->{name} } @$CasCal;
+    $self->assert_str_equals($names, "Cassandane Name/personal");
+
+    xlog "unchanged as manifold";
+    $ManCal = $mantalk->GetCalendars();
+    $self->assert_num_equals(2, scalar @$ManCal);
+    $names = join "/", sort map { $_->{name} } @$ManCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    xlog "delete calendar as cassandane";
+    $CalDAV->DeleteCalendar($CasId);
+
+    xlog "changed as cassandane";
+    $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(1, scalar @$CasCal);
+    $names = join "/", sort map { $_->{name} } @$CasCal;
+    $self->assert_str_equals($names, "personal");
+
+    xlog "unchanged as manifold";
+    $ManCal = $mantalk->GetCalendars();
+    $self->assert_num_equals(2, scalar @$ManCal);
+    $names = join "/", sort map { $_->{name} } @$ManCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+}
+
+
+
 
 1;
