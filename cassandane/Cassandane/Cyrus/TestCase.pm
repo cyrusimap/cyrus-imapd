@@ -212,6 +212,10 @@ magic(NoStartInstances => sub {
 magic(MagicPlus => sub {
     shift->config_set('imapmagicplus' => 'yes');
 });
+magic(FastMailSharing => sub {
+    shift->config_set('fastmailsharing' => 'true');
+});
+
 
 
 # Run any magic handlers indicated by the test name or attributes

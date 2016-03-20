@@ -52,10 +52,6 @@ use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 use XML::Spice;
 
-Cassandane::Cyrus::TestCase::magic(FastMailSharing => sub {
-    shift->config_set('fastmailsharing' => 'true');
-});
-
 sub new
 {
     my $class = shift;
