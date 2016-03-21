@@ -115,6 +115,9 @@ static int restore_add_object(const char *object_name,
                               struct backup_mailbox_list *mailbox_list,
                               struct sync_reserve_list *reserve_list);
 
+static struct sync_folder_list *restore_make_folder_list(
+                              const struct backup_mailbox_list *mailbox_list);
+
 int main(int argc, char **argv)
 {
     save_argv0(argv[0]);
@@ -135,6 +138,7 @@ int main(int argc, char **argv)
     struct backup *backup = NULL;
     mbname_t *mbname = NULL;
     struct backup_mailbox_list *mailbox_list = NULL;
+    struct sync_folder_list *folder_list = NULL;
     struct sync_reserve_list *reserve_list = NULL;
     int opt, r;
 
@@ -301,6 +305,9 @@ int main(int argc, char **argv)
         }
     }
 
+    /* XXX connect to destination */
+    struct backend *sync_backend = NULL;
+
     /* building lists of restore info:
      *   mailboxes will have all messages added, modulo expunged_mode
      *   messages will be added individually with appropriate folder
@@ -314,27 +321,42 @@ int main(int argc, char **argv)
      * guids, which we'll need for processing the reserve step
      */
 
-    /* APPLY RESERVE:
-     *   sync_reserve_partition will take a sync_reserve_list, send a
-     *   RESERVE to the destination, parse the response for * MISSING guids,
-     *   and flag the corresponding sync_msg_id's in the reserve list
-     *   with need_upload=1
-     *
-     *   it needs a sync_folder_list, which it only uses to supply the
-     *   MBOXNAME attribute, so we can just generate such a list quickly
-     *   from the real backup_mailbox_list rather than trying to use
-     *   sync_folder_list as our own internal structure.
+    /* send APPLY RESERVEs and parse missing lists */
+    folder_list = restore_make_folder_list(mailbox_list);
+
+    struct sync_reserve *reserve;
+    for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
+        r = sync_reserve_partition(reserve->part,
+                                   folder_list,
+                                   reserve->list,
+                                   sync_backend);
+        // FIXME r
+    }
+
+    /* sync_prepare_dlists needs to upload messages per-mailbox, because
+     * it needs the mailbox to find the filename for the message.  but
+     * we have no such limitation, so we could potentially process that
+     * while looping over the reserve_list instead.
      */
 
-    /* APPLY MESSAGE:
-     *   something akin to sync_prepare_dlists (which creates an APPLY MAILBOX dlist
-     *   plus a kupload list of the required APPLY MESSAGES), except that it should
-     *   create a RESTORE MAILBOX instead.
-     *   then send them (ala update_mailbox_once)
-     */
+    /* send APPLY MESSAGEs and RESTORE MAILBOXes */
+    struct backup_mailbox *mailbox;
+    for (mailbox = mailbox_list->head; mailbox; mailbox = mailbox->next) {
+        /* something akin to sync_prepare_dlists to get two dlists,
+         * one with the mailbox info, one with the required uploads.
+         *
+         * we still need the backup lock here because this is the point
+         * where we'll read the actual message contents out of the chunk
+         */
 
+         /* loop over required uploads sending APPLY MESSAGEs */
+
+         /* send RESTORE MAILBOX */
+    }
 
 done:
+    /* XXX disconnect */
+
     if (r)
         fprintf(stderr, "%s: %s:\n", backup_name, error_message(r));
 
@@ -342,6 +364,9 @@ done:
         backup_mailbox_list_empty(mailbox_list);
         free(mailbox_list);
     }
+
+    if (folder_list)
+        sync_folder_list_free(&folder_list);
 
     if (reserve_list)
         sync_reserve_list_free(&reserve_list);
@@ -396,6 +421,24 @@ static void my_mailbox_list_add(struct backup_mailbox_list *mailbox_list,
         /* not already in our list -- just add it */
         backup_mailbox_list_add(mailbox_list, mailbox);
     }
+}
+
+static struct sync_folder_list *restore_make_folder_list(
+    const struct backup_mailbox_list *mailbox_list)
+{
+    struct sync_folder_list *folder_list = sync_folder_list_create();
+    struct backup_mailbox *iter;
+
+    for (iter = mailbox_list->head; iter; iter = iter->next) {
+        const struct synccrcs synccrcs = { 0, 0 };
+
+        /* we only care about mboxname here */
+        sync_folder_list_add(folder_list, NULL, iter->mboxname,
+                             0, NULL, NULL, 0, 0, 0, 0, synccrcs,
+                             0, 0, 0, 0, NULL, 0);
+    }
+
+    return folder_list;
 }
 
 static void apply_mailbox_options(struct backup_mailbox *mailbox,
