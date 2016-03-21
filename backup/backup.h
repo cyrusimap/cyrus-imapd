@@ -242,6 +242,12 @@ struct backup_mailbox_message_list *backup_get_mailbox_messages(struct backup *b
                                                                 int chunk_id);
 void backup_mailbox_message_free(struct backup_mailbox_message **mailbox_messagep);
 
+void backup_mailbox_list_add(struct backup_mailbox_list *list,
+                             struct backup_mailbox *mailbox);
+
+struct backup_mailbox *backup_mailbox_list_remove(struct backup_mailbox_list *list,
+                                                  struct backup_mailbox *mailbox);
+
 void backup_mailbox_list_empty(struct backup_mailbox_list *list);
 void backup_mailbox_message_list_empty(struct backup_mailbox_message_list *list);
 

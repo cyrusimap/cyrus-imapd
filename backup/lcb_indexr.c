@@ -170,8 +170,8 @@ EXPORTED void backup_mailbox_message_list_empty(
     memset(list, 0, sizeof(*list));
 }
 
-static void backup_mailbox_list_add(struct backup_mailbox_list *list,
-                                    struct backup_mailbox *mailbox)
+EXPORTED void backup_mailbox_list_add(struct backup_mailbox_list *list,
+                                      struct backup_mailbox *mailbox)
 {
     mailbox->next = NULL;
 
@@ -186,7 +186,7 @@ static void backup_mailbox_list_add(struct backup_mailbox_list *list,
     list->count++;
 }
 
-HIDDEN struct backup_mailbox *backup_mailbox_list_remove(
+EXPORTED struct backup_mailbox *backup_mailbox_list_remove(
     struct backup_mailbox_list *list,
     struct backup_mailbox *mailbox)
 {
