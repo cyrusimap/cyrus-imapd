@@ -199,31 +199,40 @@ struct backup_mailbox_list {
     size_t count;
 };
 
+enum backup_mailbox_want_records {
+    BACKUP_MAILBOX_NO_RECORDS = 0,
+    BACKUP_MAILBOX_ALL_RECORDS = 1,
+    BACKUP_MAILBOX_MATCH_RECORDS = 2,
+};
+
 int backup_get_mailbox_id(struct backup *backup, const char *uniqueid);
 
 typedef int (*backup_mailbox_foreach_cb)(const struct backup_mailbox *mailbox,
                                          void *rock);
 int backup_mailbox_foreach(struct backup *backup, int chunk_id,
-                           int want_records,
+                           enum backup_mailbox_want_records want_records,
                            backup_mailbox_foreach_cb cb, void *rock);
 
-struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
-                                                 int chunk_id,
-                                                 int want_records);
+struct backup_mailbox_list *backup_get_mailboxes(
+                                struct backup *backup,
+                                int chunk_id,
+                                enum backup_mailbox_want_records want_records);
 
 struct backup_message;
 struct backup_mailbox_list *backup_get_mailboxes_by_message(
                                 struct backup *backup,
                                 const struct backup_message *message,
-                                int want_records);
+                                enum backup_mailbox_want_records want_records);
 
-struct backup_mailbox *backup_get_mailbox_by_uniqueid(struct backup *backup,
-                                                      const char *uniqueid,
-                                                      int want_records);
+struct backup_mailbox *backup_get_mailbox_by_uniqueid(
+                                struct backup *backup,
+                                const char *uniqueid,
+                                enum backup_mailbox_want_records want_records);
 
-struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
-                                                  const mbname_t *mbname,
-                                                  int want_records);
+struct backup_mailbox *backup_get_mailbox_by_name(
+                                struct backup *backup,
+                                const mbname_t *mbname,
+                                enum backup_mailbox_want_records want_records);
 
 struct dlist *backup_mailbox_to_dlist(const struct backup_mailbox *mailbox);
 

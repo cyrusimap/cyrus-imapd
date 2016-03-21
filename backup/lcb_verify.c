@@ -477,7 +477,7 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
     if (out && verbose)
         fprintf(out, "checking chunk %d mailbox links...\n", chunk->id);
 
-    mailbox_list = backup_get_mailboxes(backup, chunk->id, 0);
+    mailbox_list = backup_get_mailboxes(backup, chunk->id, BACKUP_MAILBOX_NO_RECORDS);
     mailbox_message_list = backup_get_mailbox_messages(backup, chunk->id);
 
     if (mailbox_list->count == 0 && mailbox_message_list->count == 0) {

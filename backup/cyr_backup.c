@@ -438,7 +438,8 @@ static int cmd_list_mailboxes(struct backup *backup,
                     "last append date",
                     "mboxname");
 
-    return backup_mailbox_foreach(backup, 0, 0,
+    return backup_mailbox_foreach(backup, 0,
+                                  BACKUP_MAILBOX_NO_RECORDS,
                                   list_mailbox_cb, (void *) options);
 }
 
@@ -483,13 +484,15 @@ static int cmd_show_mailboxes(struct backup *backup,
         const char *arg = strarray_nth(options->argv, i);
 
         /* argument could be a uniqueid */
-        mailbox = backup_get_mailbox_by_uniqueid(backup, arg, 1);
+        mailbox = backup_get_mailbox_by_uniqueid(backup, arg,
+                                                 BACKUP_MAILBOX_ALL_RECORDS);
 
         /* or it could be an mboxname */
         if (!mailbox) {
             mbname_t *mbname = mbname_from_intname(arg);
             if (!mbname) continue;
-            mailbox = backup_get_mailbox_by_name(backup, mbname, 1);
+            mailbox = backup_get_mailbox_by_name(backup, mbname,
+                                                 BACKUP_MAILBOX_ALL_RECORDS);
             mbname_free(&mbname);
         }
 
@@ -564,7 +567,8 @@ static int cmd_show_messages(struct backup *backup,
 
         fprintf(stdout, "guid:\t%s\n", message_guid_encode(message->guid));
 
-        mailboxes = backup_get_mailboxes_by_message(backup, message, 0);
+        mailboxes = backup_get_mailboxes_by_message(backup, message,
+                                                    BACKUP_MAILBOX_NO_RECORDS);
         if (mailboxes) {
             fprintf(stdout, "mailboxes:\n");
             for (mailbox = mailboxes->head; mailbox; mailbox = mailbox->next) {

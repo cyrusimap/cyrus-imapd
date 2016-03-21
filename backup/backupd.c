@@ -1288,8 +1288,9 @@ static void cmd_get(struct dlist *dl)
             mbname = mbname_from_userid(dl->sval);
             r = backupd_open_backup(&open, mbname);
             if (!r)
-                r = backup_mailbox_foreach(open->backup, 0, 0,
-                                        backupd_print_mailbox, NULL);
+                r = backup_mailbox_foreach(open->backup, 0,
+                                           BACKUP_MAILBOX_NO_RECORDS,
+                                           backupd_print_mailbox, NULL);
         }
         else {
             r = IMAP_PROTOCOL_BAD_PARAMETERS;

@@ -237,14 +237,19 @@ EXPORTED void backup_mailbox_list_empty(struct backup_mailbox_list *list)
     memset(list, 0, sizeof(*list));
 }
 
+struct _mailbox_message_row_rock {
+    struct message_guid *match_guid;
+    struct backup_mailbox_message_list *save_list;
+};
+
 static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
 {
-    struct backup_mailbox_message_list *save_list;
+    struct _mailbox_message_row_rock *mbrrock =
+        (struct _mailbox_message_row_rock *) rock;
     struct backup_mailbox_message *mailbox_message;
     char *guid_str = NULL;
     int r = 0;
 
-    save_list = (struct backup_mailbox_message_list *) rock;
     mailbox_message = xzmalloc(sizeof *mailbox_message);
 
     int column = 0;
@@ -266,9 +271,15 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
     message_guid_decode(&mailbox_message->guid, guid_str);
     free(guid_str);
 
-    if (save_list)
-        backup_mailbox_message_list_add(save_list, mailbox_message);
-    else
+    if (mbrrock->save_list) {
+        if (!mbrrock->match_guid
+            || message_guid_equal(mbrrock->match_guid, &mailbox_message->guid)) {
+            backup_mailbox_message_list_add(mbrrock->save_list, mailbox_message);
+            mailbox_message = NULL;
+        }
+    }
+
+    if (mailbox_message)
         backup_mailbox_message_free(&mailbox_message);
 
     return r;
@@ -290,8 +301,13 @@ EXPORTED struct backup_mailbox_message_list *backup_get_mailbox_messages(
         backup_index_mailbox_message_select_chunkid_sql :
         backup_index_mailbox_message_select_all_sql;
 
+    struct _mailbox_message_row_rock mbrrock = {
+        NULL,
+        mailbox_message_list,
+    };
+
     int r = sqldb_exec(backup->db, sql, bval, _mailbox_message_row_cb,
-                       mailbox_message_list);
+                       &mbrrock);
 
     if (r) {
         backup_mailbox_message_list_empty(mailbox_message_list);
@@ -306,9 +322,10 @@ struct _mailbox_row_rock {
     sqldb_t *db;
     backup_mailbox_foreach_cb proc;
     void *rock;
+    struct message_guid *match_guid;
     struct backup_mailbox_list *save_list;
     struct backup_mailbox **save_one;
-    int want_records;
+    enum backup_mailbox_want_records want_records;
 };
 
 static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
@@ -342,6 +359,12 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
     mailbox->deleted = _column_int64(stmt, column++);
 
     if (mbrock->want_records) {
+        if (mbrock->want_records == BACKUP_MAILBOX_MATCH_RECORDS && !mbrock->match_guid) {
+            syslog(LOG_WARNING, "%s: request for guid-matched records without guid",
+                   __func__);
+            /* will return all records */
+        }
+
         mailbox->records = xzmalloc(sizeof *mailbox->records);
 
         struct sqldb_bindval bval[] = {
@@ -349,10 +372,15 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
             { NULL,             SQLITE_NULL,    { .s = NULL } },
         };
 
+        struct _mailbox_message_row_rock mbrrock = {
+            mbrock->match_guid,
+            mailbox->records,
+        };
+
         r = sqldb_exec(mbrock->db,
                        backup_index_mailbox_message_select_mailbox_sql,
                        bval,
-                       _mailbox_message_row_cb, mailbox->records);
+                       _mailbox_message_row_cb, &mbrrock);
 
         if (r) goto error;
     }
@@ -376,11 +404,11 @@ error:
 
 EXPORTED int backup_mailbox_foreach(struct backup *backup,
                                     int chunk_id,
-                                    int want_records,
+                                    enum backup_mailbox_want_records want_records,
                                     backup_mailbox_foreach_cb cb,
                                     void *rock)
 {
-    struct _mailbox_row_rock mbrock = { backup->db, cb, rock,
+    struct _mailbox_row_rock mbrock = { backup->db, cb, rock, NULL,
                                         NULL, NULL, want_records};
 
     struct sqldb_bindval bval[] = {
@@ -397,13 +425,14 @@ EXPORTED int backup_mailbox_foreach(struct backup *backup,
     return r;
 }
 
-EXPORTED struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
-                                                          int chunk_id,
-                                                          int want_records)
+EXPORTED struct backup_mailbox_list *backup_get_mailboxes(
+    struct backup *backup,
+    int chunk_id,
+    enum backup_mailbox_want_records want_records)
 {
     struct backup_mailbox_list *mailbox_list = xzmalloc(sizeof *mailbox_list);
 
-    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL, NULL,
                                         mailbox_list, NULL, want_records};
 
     struct sqldb_bindval bval[] = {
@@ -427,15 +456,18 @@ EXPORTED struct backup_mailbox_list *backup_get_mailboxes(struct backup *backup,
 }
 
 EXPORTED struct backup_mailbox_list *backup_get_mailboxes_by_message(
-                                        struct backup *backup,
-                                        const struct backup_message *message,
-                                        int want_records)
+    struct backup *backup,
+    const struct backup_message *message,
+    enum backup_mailbox_want_records want_records)
 {
     char *guid = xstrdup(message_guid_encode(message->guid));
     struct backup_mailbox_list *mailbox_list = xzmalloc(sizeof *mailbox_list);
 
-    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL, NULL,
                                         mailbox_list, NULL, want_records };
+
+    if (want_records == BACKUP_MAILBOX_MATCH_RECORDS)
+        mbrock.match_guid = message->guid;
 
     struct sqldb_bindval bval[] = {
         { ":guid", SQLITE_TEXT, { .s = guid } },
@@ -456,13 +488,14 @@ EXPORTED struct backup_mailbox_list *backup_get_mailboxes_by_message(
     return mailbox_list;
 }
 
-EXPORTED struct backup_mailbox *backup_get_mailbox_by_uniqueid(struct backup *backup,
-                                                      const char *uniqueid,
-                                                      int want_records)
+EXPORTED struct backup_mailbox *backup_get_mailbox_by_uniqueid(
+    struct backup *backup,
+    const char *uniqueid,
+    enum backup_mailbox_want_records want_records)
 {
     struct backup_mailbox *mailbox = NULL;
 
-    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL, NULL,
                                         NULL, &mailbox, want_records };
 
     struct sqldb_bindval bval[] = {
@@ -481,13 +514,14 @@ EXPORTED struct backup_mailbox *backup_get_mailbox_by_uniqueid(struct backup *ba
     return mailbox;
 }
 
-EXPORTED struct backup_mailbox *backup_get_mailbox_by_name(struct backup *backup,
-                                                  const mbname_t *mbname,
-                                                  int want_records)
+EXPORTED struct backup_mailbox *backup_get_mailbox_by_name(
+    struct backup *backup,
+    const mbname_t *mbname,
+    enum backup_mailbox_want_records want_records)
 {
     struct backup_mailbox *mailbox = NULL;
 
-    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL,
+    struct _mailbox_row_rock mbrock = { backup->db, NULL, NULL, NULL,
                                         NULL, &mailbox, want_records };
 
     struct sqldb_bindval bval[] = {
