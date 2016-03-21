@@ -148,6 +148,7 @@ int main(int argc, char **argv)
             alt_config = optarg;
             break;
         case 'D':
+            /* XXX does this clash with keep_uidvalidity? */
             options.trim_deletedprefix = 0;
             break;
         case 'F':
@@ -360,25 +361,6 @@ done:
     exit(r ? EC_TEMPFAIL : EC_OK);
 }
 
-//static void my_folder_list_add(struct sync_folder_list *folder_list,
-//                               const char *mboxname)
-//{
-//    struct sync_folder *folder;
-
-//    /* don't add to the folder list if it's already in there */
-//    for (folder = folder_list->head; folder; folder = folder->next) {
-//        if (0 == strcmp(folder->name, mboxname)) break;
-//    }
-//    if (!folder) {
-//        /* we only really care about the mboxname */
-//        struct synccrcs tmp_synccrcs = { 0, 0 };
-
-//        sync_folder_list_add(folder_list, NULL, mboxname,
-//                             0, NULL, NULL, 0, 0, 0, 0, tmp_synccrcs,
-//                             0, 0, 0, 0, NULL, 0);
-//    }
-//}
-
 static void my_mailbox_list_add(struct backup_mailbox_list *mailbox_list,
                                 struct backup_mailbox *mailbox)
 {
@@ -439,6 +421,42 @@ static void apply_mailbox_options(struct backup_mailbox *mailbox,
         mailbox->uniqueid = NULL;
         mailbox->highestmodseq = 0;
         mailbox->uidvalidity = 0;
+    }
+
+    if (mailbox->mboxname && options->trim_deletedprefix) {
+        mbname_t *mbname = mbname_from_intname(mailbox->mboxname);
+        if (mbname_isdeleted(mbname)) {
+            mbname_set_isdeleted(mbname, 0);
+            free(mailbox->mboxname);
+            mailbox->mboxname = xstrdup(mbname_intname(mbname));
+        }
+        mbname_free(&mbname);
+    }
+
+    if (options->expunged_mode != RESTORE_EXPUNGED_OKAY) {
+        struct backup_mailbox_message *iter, *tmp, *next;
+
+        next = mailbox->records->head;
+        while ((iter = next)) {
+            next = iter->next;
+            tmp = NULL;
+
+            switch (options->expunged_mode) {
+            case RESTORE_EXPUNGED_EXCLUDE:
+                if (iter->expunged)
+                    tmp = backup_mailbox_message_list_remove(mailbox->records, iter);
+                break;
+            case RESTORE_EXPUNGED_ONLY:
+                if (!iter->expunged)
+                    tmp = backup_mailbox_message_list_remove(mailbox->records, iter);
+                break;
+            default:
+                break;
+            }
+
+            if (tmp)
+                backup_mailbox_message_free(&tmp);
+        }
     }
 }
 
