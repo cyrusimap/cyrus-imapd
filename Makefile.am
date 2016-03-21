@@ -1489,6 +1489,12 @@ lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
 	grep -E ' yy_size_t  _yybytes_len ' sieve/addr-lex.c && \
     	sed -r -i -s 's/\tint i;/\tyy_size_t i;/g' sieve/addr-lex.c || :
 
+	grep -E '^static int yy_n_chars;' sieve/sieve-lex.c && \
+    	sed -r -i -s 's/\tyy_size_t yy_buf_size;/\tint yy_buf_size;/g' sieve/sieve-lex.c || :
+
+	grep -E '^static int yy_n_chars;' sieve/addr-lex.c && \
+    	sed -r -i -s 's/\tyy_size_t yy_buf_size;/\tint yy_buf_size;/g' sieve/addr-lex.c || :
+
 GIT_VERSION = $(PACKAGE_VERSION)@git_version@
 
 snapshot::
