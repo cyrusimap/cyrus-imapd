@@ -1124,7 +1124,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                   | OPT_POP3_NEW_UIDL;
     int r;
     struct mailbox *mailbox = NULL;
-    int uidvalidity = 0;
+    uint32_t uidvalidity = 0;
 
     /* check if a previous deleted mailbox existed */
     mbentry_t *oldmbentry = NULL;
