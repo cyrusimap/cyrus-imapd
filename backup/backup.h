@@ -236,10 +236,16 @@ struct backup_mailbox *backup_get_mailbox_by_name(
 
 struct dlist *backup_mailbox_to_dlist(const struct backup_mailbox *mailbox);
 
+struct backup_mailbox *backup_mailbox_clone(const struct backup_mailbox *mailbox);
+
 void backup_mailbox_free(struct backup_mailbox **mailboxp);
 
 struct backup_mailbox_message_list *backup_get_mailbox_messages(struct backup *backup,
                                                                 int chunk_id);
+
+struct backup_mailbox_message *backup_mailbox_message_clone(
+                                    const struct backup_mailbox_message *orig);
+
 void backup_mailbox_message_free(struct backup_mailbox_message **mailbox_messagep);
 
 void backup_mailbox_list_add(struct backup_mailbox_list *list,

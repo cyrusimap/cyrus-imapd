@@ -623,6 +623,73 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
     return dl;
 }
 
+EXPORTED struct backup_mailbox *backup_mailbox_clone(
+    const struct backup_mailbox *mailbox)
+{
+    struct backup_mailbox *clone = xzmalloc(sizeof *clone);
+
+    clone->id = mailbox->id;
+    clone->last_chunk_id = mailbox->last_chunk_id;
+    clone->last_uid = mailbox->last_uid;
+    clone->highestmodseq = mailbox->highestmodseq;
+    clone->recentuid = mailbox->recentuid;
+    clone->recenttime = mailbox->recenttime;
+    clone->last_appenddate = mailbox->last_appenddate;
+    clone->pop3_last_login = mailbox->pop3_last_login;
+    clone->pop3_show_after = mailbox->pop3_show_after;
+    clone->uidvalidity = mailbox->uidvalidity;
+    clone->sync_crc = mailbox->sync_crc;
+    clone->sync_crc_annot = mailbox->sync_crc_annot;
+    clone->xconvmodseq = mailbox->xconvmodseq;
+    clone->deleted = mailbox->deleted;
+
+    clone->uniqueid = xstrdupnull(mailbox->uniqueid);
+    clone->mboxname = xstrdupnull(mailbox->mboxname);
+    clone->mboxtype = xstrdupnull(mailbox->mboxtype);
+    clone->partition = xstrdupnull(mailbox->partition);
+    clone->acl = xstrdupnull(mailbox->acl);
+    clone->options = xstrdupnull(mailbox->options);
+    clone->quotaroot = xstrdupnull(mailbox->quotaroot);
+    clone->annotations = xstrdupnull(mailbox->annotations);
+
+    if (mailbox->records) {
+        struct backup_mailbox_message *iter;
+
+        clone->records = xzmalloc(sizeof *clone->records);
+
+        for (iter = mailbox->records->head; iter; iter = iter->next) {
+            backup_mailbox_message_list_add(clone->records,
+                                            backup_mailbox_message_clone(iter));
+        }
+    }
+
+    return clone;
+}
+
+EXPORTED struct backup_mailbox_message *backup_mailbox_message_clone(
+                                    const struct backup_mailbox_message *orig)
+{
+    struct backup_mailbox_message *clone = xzmalloc(sizeof *clone);
+
+    clone->id = orig->id;
+    clone->mailbox_id = orig->mailbox_id;
+    clone->message_id = orig->message_id;
+    clone->last_chunk_id = orig->last_chunk_id;
+    clone->uid = orig->uid;
+    clone->modseq = orig->modseq;
+    clone->last_updated = orig->last_updated;
+    clone->internaldate = orig->internaldate;
+    clone->guid = orig->guid;
+    clone->size = orig->size;
+    clone->expunged = orig->expunged;
+
+    clone->mailbox_uniqueid = xstrdupnull(orig->mailbox_uniqueid);
+    clone->flags = xstrdupnull(orig->flags);
+    clone->annotations = xstrdupnull(orig->annotations);
+
+    return clone;
+}
+
 EXPORTED void backup_mailbox_message_free(
     struct backup_mailbox_message **mailbox_messagep)
 {
