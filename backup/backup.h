@@ -254,6 +254,10 @@ void backup_mailbox_list_add(struct backup_mailbox_list *list,
 struct backup_mailbox *backup_mailbox_list_remove(struct backup_mailbox_list *list,
                                                   struct backup_mailbox *mailbox);
 
+struct backup_mailbox_message *backup_mailbox_message_list_remove(
+    struct backup_mailbox_message_list *list,
+    struct backup_mailbox_message *mailbox_message);
+
 void backup_mailbox_list_empty(struct backup_mailbox_list *list);
 void backup_mailbox_message_list_empty(struct backup_mailbox_message_list *list);
 

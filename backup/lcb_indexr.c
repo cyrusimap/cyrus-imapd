@@ -118,7 +118,7 @@ static void backup_mailbox_message_list_add(
     list->count++;
 }
 
-HIDDEN struct backup_mailbox_message *backup_mailbox_message_list_remove(
+EXPORTED struct backup_mailbox_message *backup_mailbox_message_list_remove(
     struct backup_mailbox_message_list *list,
     struct backup_mailbox_message *mailbox_message)
 {
