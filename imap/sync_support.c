@@ -61,6 +61,7 @@
 
 #include "assert.h"
 #include "global.h"
+#include "imap_proxy.h"
 #include "mboxlist.h"
 #include "exitcodes.h"
 #include "mailbox.h"
@@ -85,6 +86,121 @@
 #include "sync_log.h"
 
 static int opt_force = 0; // FIXME
+
+/* protocol definitions */
+static char *imap_sasl_parsesuccess(char *str, const char **status);
+static void imap_postcapability(struct backend *s);
+
+struct protocol_t imap_csync_protocol =
+{ "imap", "imap", TYPE_STD,
+  { { { 1, NULL },
+      { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
+        CAPAF_MANY_PER_LINE,
+        { { "AUTH", CAPA_AUTH },
+          { "STARTTLS", CAPA_STARTTLS },
+// FIXME doesn't work with compress at the moment for some reason
+//        { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+// FIXME do we need these ones?
+//        { "IDLE", CAPA_IDLE },
+//        { "MUPDATE", CAPA_MUPDATE },
+//        { "MULTIAPPEND", CAPA_MULTIAPPEND },
+//        { "RIGHTS=kxte", CAPA_ACLRIGHTS },
+//        { "LIST-EXTENDED", CAPA_LISTEXTENDED },
+          { "SASL-IR", CAPA_SASL_IR },
+          { "X-REPLICATION", CAPA_REPLICATION },
+          { NULL, 0 } } },
+      { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
+      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
+        &imap_sasl_parsesuccess, AUTO_CAPA_AUTH_OK },
+      { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
+      { "N01 NOOP", "* ", "N01 OK" },
+      { "Q01 LOGOUT", "* ", "Q01 " } } }
+};
+
+struct protocol_t csync_protocol =
+{ "csync", "csync", TYPE_STD,
+  { { { 1, "* OK" },
+      { NULL, NULL, "* OK", NULL,
+        CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
+        { { "SASL", CAPA_AUTH },
+          { "STARTTLS", CAPA_STARTTLS },
+          { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+          { NULL, 0 } } },
+      { "STARTTLS", "OK", "NO", 1 },
+      { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
+      { "COMPRESS DEFLATE", NULL, "OK" },
+      { "NOOP", NULL, "OK" },
+      { "EXIT", NULL, "OK" } } }
+};
+
+/* parse_success api is undocumented but my current understanding
+ * is that the caller expects it to return a pointer to the position
+ * within str at which base64 encoded "success data" can be found.
+ * status is for passing back other status data (if required) to
+ * the original caller.
+ *
+ * in the case of what we're doing here, there is no base64 encoded
+ * 'success data', but there is a capability string that we want to
+ * save.  so we grab the capability string (including the []s) and
+ * chuck that in status, and then we return NULL to indicate the
+ * lack of base64 data.
+ */
+static char *imap_sasl_parsesuccess(char *str, const char **status)
+{
+    syslog(LOG_DEBUG, "imap_sasl_parsesuccess(): input is: %s", str);
+    if (NULL == status)  return NULL; /* nothing useful we can do */
+
+    const char *prelude = "A01 OK "; // FIXME don't hardcode this, get it from sasl_cmd->ok
+    const size_t prelude_len = strlen(prelude);
+
+    const char *capability = "[CAPABILITY ";
+    const size_t capability_len = strlen(capability);
+
+    char *start, *end;
+
+    if (strncmp(str, prelude, prelude_len)) {
+        /* this isn't the string we expected */
+        syslog(LOG_INFO, "imap_sasl_parsesuccess(): unexpected initial string contents: %s", str);
+        return NULL;
+    }
+
+    start = str + prelude_len;
+
+    if (strncmp(start, capability, capability_len)) {
+        /* this isn't a capability string */
+        syslog(LOG_INFO, "imap_sasl_parsesuccess(): str does not contain a capability string: %s", str);
+        return NULL;
+    }
+
+    end = start + capability_len;
+    while (*end != ']' && *end != '\0') {
+        end++;
+    }
+
+    if (*end == '\0') {
+        /* didn't find end of capability string */
+        syslog(LOG_INFO, "imap_sasl_parsesuccess(): did not find end of capability string: %s", str);
+        return NULL;
+    }
+
+    /* we want to keep the ], but crop the rest off */
+    *++end = '\0';
+
+    /* status gets the capability string */
+    syslog(LOG_INFO, "imap_sasl_parsesuccess(): found capability string: %s", start);
+    *status = start;
+
+    /* there's no base64 data, so return NULL */
+    return NULL;
+}
+
+static void imap_postcapability(struct backend *s)
+{
+    if (CAPA(s, CAPA_SASL_IR)) {
+        /* server supports initial response in AUTHENTICATE command */
+        s->prot->u.std.sasl_cmd.maxlen = USHRT_MAX;
+    }
+}
 
 /* Parse routines */
 

@@ -52,6 +52,9 @@
 #include "seen.h"
 #include "mailbox.h"
 
+extern struct protocol_t imap_csync_protocol;
+extern struct protocol_t csync_protocol;
+
 #define SYNC_MSGID_LIST_HASH_SIZE        (65536)
 #define SYNC_MESSAGE_LIST_HASH_SIZE      (65536)
 #define SYNC_MESSAGE_LIST_MAX_OPEN_FILES (64)
