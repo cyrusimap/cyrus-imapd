@@ -305,18 +305,27 @@ int main(int argc, char **argv)
      *   messages will be added individually with appropriate folder
      */
 
-    /* need to build a sync_folder_list of the mailboxes
-     * this will be something like find_reserve_all but using backup data
-     * plus our options.
+    /* we now have a backup_mailbox_list structure containing all of
+     * the mailboxes we need, with corresponding records for the
+     * messages to be restored.
+     *
+     * we also have a sync_reserve_list structure containing the
+     * guids, which we'll need for processing the reserve step
      */
 
-    /* reserve:
-     *   need to build a sync_reserve_list and then call sync_reserve_partition
-     *   on each node.  the list internals will be updated to flag which
-     *   messages need upload
+    /* APPLY RESERVE:
+     *   sync_reserve_partition will take a sync_reserve_list, send a
+     *   RESERVE to the destination, parse the response for * MISSING guids,
+     *   and flag the corresponding sync_msg_id's in the reserve list
+     *   with need_upload=1
+     *
+     *   it needs a sync_folder_list, which it only uses to supply the
+     *   MBOXNAME attribute, so we can just generate such a list quickly
+     *   from the real backup_mailbox_list rather than trying to use
+     *   sync_folder_list as our own internal structure.
      */
 
-    /* message:
+    /* APPLY MESSAGE:
      *   something akin to sync_prepare_dlists (which creates an APPLY MAILBOX dlist
      *   plus a kupload list of the required APPLY MESSAGES), except that it should
      *   create a RESTORE MAILBOX instead.
@@ -397,6 +406,9 @@ static void my_mailbox_list_add(struct backup_mailbox_list *mailbox_list,
             tmp->records->count += mailbox->records->count;
             memset(mailbox->records, 0, sizeof *mailbox->records);
         }
+
+        /* release the mailbox we were given, since we're not holding it */
+        backup_mailbox_free(&mailbox);
     }
     else {
         /* not already in our list -- just add it */
@@ -430,48 +442,40 @@ static void apply_mailbox_options(struct backup_mailbox *mailbox,
     }
 }
 
-static int restore_add_mailbox(struct backup_mailbox *mailbox,
+static int restore_add_mailbox(const struct backup_mailbox *mailbox,
                                const struct restore_options *options,
                                struct backup_mailbox_list *mailbox_list,
                                struct sync_reserve_list *reserve_list)
 {
-    apply_mailbox_options(mailbox, options);
+    struct backup_mailbox *clone = backup_mailbox_clone(mailbox);
+
+    apply_mailbox_options(clone, options);
 
     /* populate reserve list */
-    if (mailbox->records) {
+    if (clone->records) {
         struct sync_msgid_list *msgid_list = NULL;
         struct backup_mailbox_message *record = NULL;
 
-        msgid_list = sync_reserve_partlist(reserve_list, mailbox->partition);
-        for (record = mailbox->records->head; record; record = record->next) {
+        msgid_list = sync_reserve_partlist(reserve_list, clone->partition);
+        for (record = clone->records->head; record; record = record->next) {
             sync_msgid_insert(msgid_list, &record->guid);
         }
     }
 
     /* populate mailbox list */
-    my_mailbox_list_add(mailbox_list, mailbox);
+    my_mailbox_list_add(mailbox_list, clone);
 
     return 0;
 }
 
-static int restore_add_message(struct backup_message *message,
-                               struct backup_mailbox_list *message_mailboxes,
+static int restore_add_message(const struct backup_message *message,
+                               const struct backup_mailbox_list *message_mailboxes,
                                const struct restore_options *options,
                                struct backup_mailbox_list *mailbox_list,
                                struct sync_reserve_list *reserve_list)
 {
     struct sync_msgid_list *msgid_list = NULL;
 
-    if (options->override_partition) {
-        if (message->partition) free(message->partition);
-        message->partition = xstrdup(options->override_partition);
-    }
-
-    /* add to reserve list */
-    msgid_list = sync_reserve_partlist(reserve_list, message->partition);
-    sync_msgid_insert(msgid_list, message->guid);
-
-    /* add to mailboxes list */
     if (options->override_mboxname) {
         /* create a mailbox... */
         struct backup_mailbox *mailbox = xzmalloc(sizeof *mailbox);
@@ -488,14 +492,26 @@ static int restore_add_message(struct backup_message *message,
         mailbox->records->head = mailbox->records->tail = mailbox_message;
         mailbox->records->count = 1;
 
+        /* add to reserve list */
+        msgid_list = sync_reserve_partlist(reserve_list, mailbox->partition);
+        sync_msgid_insert(msgid_list, message->guid);
+
+        /* add to mailbox list */
         my_mailbox_list_add(mailbox_list, mailbox);
     }
     else if (message_mailboxes) {
-        while (message_mailboxes->head) {
-            struct backup_mailbox *mailbox =
-                backup_mailbox_list_remove(message_mailboxes, message_mailboxes->head);
-            apply_mailbox_options(mailbox, options);
-            my_mailbox_list_add(mailbox_list, mailbox);
+        struct backup_mailbox *iter;
+
+        for (iter = message_mailboxes->head; iter; iter = iter->next) {
+            struct backup_mailbox *clone = backup_mailbox_clone(iter);
+            apply_mailbox_options(clone, options);
+
+            /* add to reserve list */
+            msgid_list = sync_reserve_partlist(reserve_list, clone->partition);
+            sync_msgid_insert(msgid_list, message->guid);
+
+            /* add to mailbox list */
+            my_mailbox_list_add(mailbox_list, clone);
         }
     }
 
@@ -515,10 +531,7 @@ static int submailbox_cb(const struct backup_mailbox *mailbox, void *rock)
     struct submailbox_rock *smbrock = (struct submailbox_rock *) rock;
 
     if (0 == strncmp(smbrock->prefix, mailbox->mboxname, smbrock->prefix_len)) {
-        /* XXX we need a non-const mailbox to for optional overrides */
-        // FIXME this won't work, foreach will free it, we need to clone it */
-        struct backup_mailbox *backdoor = (struct backup_mailbox *) mailbox;
-        return restore_add_mailbox(backdoor,
+        return restore_add_mailbox(mailbox,
                                    smbrock->options,
                                    smbrock->mailbox_list,
                                    smbrock->reserve_list);
