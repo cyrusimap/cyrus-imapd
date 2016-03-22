@@ -4080,6 +4080,7 @@ static void extract_one(struct buf *buf,
                         const char *name,
                         int format,
                         int has_name,
+                        int isutf8,
                         struct buf *raw)
 {
     char *p = NULL;
@@ -4112,11 +4113,16 @@ static void extract_one(struct buf *buf,
             buf_append(buf, raw);
         break;
     case MESSAGE_DECODED:
+        /* XXX - this is also broken with utf8ness, but the only caller protects agains the fields
+         * that could be utf8 (search_header) - so it doesn't matter */
         p = charset_parse_mimeheader(buf_cstring(raw));
         buf_appendcstr(buf, p);
         break;
     case MESSAGE_SNIPPET:
-        p = charset_decode_mimeheader(buf_cstring(raw), CHARSET_SNIPPET);
+        if (isutf8)
+            p = charset_convert(buf_cstring(raw), charset_lookupname("utf-8"), CHARSET_SNIPPET);
+        else
+            p = charset_decode_mimeheader(buf_cstring(raw), CHARSET_SNIPPET);
         buf_appendcstr(buf, p);
         break;
     case MESSAGE_SEARCH:
@@ -4144,6 +4150,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     strarray_t want = STRARRAY_INITIALIZER;
     struct buf raw = BUF_INITIALIZER;
     int hasname = 1;
+    int isutf8 = 0;
 
     /* the 5 standalone cache fields */
     if (!strcasecmp(hdr, "from")) {
@@ -4154,6 +4161,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
             buf_reset(&raw);
         hasname = 0;
+        isutf8 = 1;
     }
     else if (!strcasecmp(hdr, "to")) {
         int r = message_need(m, M_CACHE);
@@ -4163,6 +4171,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
             buf_reset(&raw);
         hasname = 0;
+        isutf8 = 1;
     }
     else if (!strcasecmp(hdr, "cc")) {
         int r = message_need(m, M_CACHE);
@@ -4172,6 +4181,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
             buf_reset(&raw);
         hasname = 0;
+        isutf8 = 1;
     }
     else if (!strcasecmp(hdr, "bcc")) {
         int r = message_need(m, M_CACHE);
@@ -4181,12 +4191,14 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
             buf_reset(&raw);
         hasname = 0;
+        isutf8 = 1;
     }
     else if (!strcasecmp(hdr, "subject")) {
         int r = message_need(m, M_CACHE);
         if (r) return r;
         message1_get_subject(&m->record, &raw);
         hasname = 0;
+        isutf8 = 1;
     }
 
     /* message-id is from the envelope */
@@ -4232,7 +4244,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     }
 
     if (raw.len)
-        extract_one(buf, hdr, flags, hasname, &raw);
+        extract_one(buf, hdr, flags, hasname, isutf8, &raw);
 
     buf_free(&raw);
     strarray_fini(&want);
