@@ -766,7 +766,9 @@ static int restore_add_object(const char *object_name,
                     reserve_list,
                 };
 
-                r = backup_mailbox_foreach(backup, 0, 1, submailbox_cb, &rock);
+                r = backup_mailbox_foreach(backup, 0,
+                                           BACKUP_MAILBOX_ALL_RECORDS,
+                                           submailbox_cb, &rock);
             }
         }
 
