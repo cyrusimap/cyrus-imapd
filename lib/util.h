@@ -369,5 +369,6 @@ int warmup_file(const char *filename, off_t offset, off_t length);
 const char *makeuuid();
 
 void tcp_enable_keepalive(int fd);
+void tcp_disable_nagle(int fd);
 
 #endif /* INCLUDED_UTIL_H */
