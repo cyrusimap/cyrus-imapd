@@ -1617,6 +1617,18 @@ If all partitions are over that limit, this feature is not used anymore.
 /* If enabled, lmtpd rejects messages with 8-bit characters in the
    headers. */
 
+{ "restore_authname", NULL, STRING }
+/* The authentication used by the restore tool when authenticating
+   to an IMAP/sync server. */
+
+{ "restore_password", NULL, STRING }
+/* The password used by the restore tool when authenticating to an
+   IMAP/sync server. */
+
+{ "restore_realm", NULL, STRING }
+/* The authentication realm used by the restore tool when
+   authenticating to an IMAP/sync server. */
+
 { "reverseacls", 0, SWITCH }
 /* At startup time, ctl_cyrusdb -r will check this value and it
    will either add or remove reverse ACL pointers from mailboxes.db */
