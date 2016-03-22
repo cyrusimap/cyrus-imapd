@@ -2740,7 +2740,6 @@ static const char *get_config(const char *channel, const char *val)
 static void replica_connect(const char *channel)
 {
     int wait;
-    struct protoent *proto;
     sasl_callback_t *cb;
     int timeout;
 
@@ -2775,23 +2774,9 @@ static void replica_connect(const char *channel)
 	_exit(1);
     }
 
-    /* Disable Nagle's Algorithm => increase throughput
-     *
-     * http://en.wikipedia.org/wiki/Nagle's_algorithm
-     */
-    if (servername[0] != '/') {
-	if (sync_backend->sock >= 0 && (proto = getprotobyname("tcp")) != NULL) {
-	    int on = 1;
-
-	    if (setsockopt(sync_backend->sock, proto->p_proto, TCP_NODELAY,
-			   (void *) &on, sizeof(on)) != 0) {
-		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
-	    }
-
-	    tcp_enable_keepalive(sync_backend->sock);
-	} else {
-	    syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
-	}
+    if (servername[0] != '/' && sync_backend->sock >= 0) {
+	tcp_disable_nagle(sync_backend->sock);
+	tcp_enable_keepalive(sync_backend->sock);
     }
 
 #ifdef HAVE_ZLIB

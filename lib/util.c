@@ -1629,30 +1629,38 @@ EXPORTED int warmup_file(const char *filename,
     return r;
 }
 
-EXPORTED void tcp_enable_keepalive(int fd)
+static int is_tcp_socket(int fd)
 {
     int so_type;
     socklen_t so_type_len = sizeof(so_type);
     struct sockaddr sock_addr;
     socklen_t sock_addr_len = sizeof(sock_addr);
 
-
-    /* make sure it's a connected, TCP socket */
-    if (fd < 0) return;
+    if (fd < 0) return 0;
 
     if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &so_type, &so_type_len) == -1) {
-	syslog(LOG_ERR, "%s: getsockopt(%d): %m", __func__, fd);
-	return;
+	if (errno != ENOTSOCK)
+	    syslog(LOG_ERR, "%s: getsockopt(%d): %m", __func__, fd);
+	return 0;
     }
 
-    if (so_type != SOCK_STREAM) return;
+    if (so_type != SOCK_STREAM) return 0;
 
     if (getsockname(fd, &sock_addr, &sock_addr_len) == -1) {
-	syslog(LOG_ERR, "%s: getsockname(%d): %m", __func__, fd);
-	return;
+	if (errno != ENOTSOCK)
+	    syslog(LOG_ERR, "%s: getsockname(%d): %m", __func__, fd);
+	return 0;
     }
 
-    if (sock_addr.sa_family == AF_UNIX) return;
+    /* XXX be a bit more pedantic? */
+    if (sock_addr.sa_family == AF_UNIX) return 0;
+
+    return 1;
+}
+
+EXPORTED void tcp_enable_keepalive(int fd)
+{
+    if (!is_tcp_socket(fd)) return;
 
     /* turn on TCP keepalive if set */
     if (config_getswitch(IMAPOPT_TCP_KEEPALIVE)) {
@@ -1692,5 +1700,25 @@ EXPORTED void tcp_enable_keepalive(int fd)
 	    }
 	}
 #endif
+    }
+}
+
+/* Disable Nagle's Algorithm => increase throughput
+ *
+ * http://en.wikipedia.org/wiki/Nagle's_algorithm
+ */
+EXPORTED void tcp_disable_nagle(int fd)
+{
+    if (!is_tcp_socket(fd)) return;
+
+    struct protoent *proto = getprotobyname("tcp");
+    if (!proto) {
+        syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
+        return;
+    }
+
+    int on = 1;
+    if (setsockopt(fd, proto->p_proto, TCP_NODELAY, &on, sizeof(on)) != 0) {
+        syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
     }
 }

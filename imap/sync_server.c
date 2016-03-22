@@ -344,7 +344,6 @@ int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    struct protoent *proto;
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops = NULL;
     int timeout;
@@ -390,20 +389,7 @@ int service_main(int argc __attribute__((unused)),
 	    saslprops.ipremoteport = xstrdup(remoteip);
 	}
 
-	/* Disable Nagle's Algorithm => increase throughput
-	 *
-	 * http://en.wikipedia.org/wiki/Nagle's_algorithm
-	 */
-	if ((proto = getprotobyname("tcp")) != NULL) {
-	    int on = 1;
-
-	    if (setsockopt(1, proto->p_proto, TCP_NODELAY,
-			   (void *) &on, sizeof(on)) != 0) {
-		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
-	    }
-	} else {
-	    syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
-	}
+	tcp_disable_nagle(1); /* XXX magic fd */
     }
 
     proc_register(config_ident, sync_clienthost, NULL, NULL, NULL);
