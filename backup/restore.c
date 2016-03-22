@@ -147,6 +147,7 @@ int main(int argc, char **argv)
     struct sync_reserve_list *reserve_list = NULL;
     struct buf tagbuf = BUF_INITIALIZER;
     struct backend *backend = NULL;
+    struct dlist *upload = NULL;
     int opt, r;
 
     while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXf:m:ru:vw:xz")) != EOF) {
@@ -334,40 +335,63 @@ int main(int argc, char **argv)
      * guids, which we'll need for processing the reserve step
      */
 
-    /* send APPLY RESERVEs and parse missing lists */
     folder_list = restore_make_folder_list(mailbox_list);
 
     struct sync_reserve *reserve;
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
+        /* send APPLY RESERVE and parse missing lists */
         r = sync_reserve_partition(reserve->part,
                                    folder_list,
                                    reserve->list,
                                    backend);
-        // FIXME r
+        if (r) goto done;
+
+        /* send APPLY MESSAGEs */
+        r = backup_prepare_message_upload(backup,
+                                          reserve->part,
+                                          reserve->list,
+                                          &sync_msgid_lookup,
+                                          &upload);
+        if (r) goto done;
+        /* upload in small(ish) blocks to avoid timeouts */
+        while (upload->head) {
+            struct dlist *block = dlist_splice(upload, 1024);
+            sync_send_apply(block, backend->out);
+            r = sync_parse_response("MESSAGE", backend->in, NULL);
+            dlist_unlink_files(block);
+            dlist_free(&block);
+            if (r) goto done;
+        }
     }
 
     /* sync_prepare_dlists needs to upload messages per-mailbox, because
      * it needs the mailbox to find the filename for the message.  but
      * we have no such limitation, so we could potentially process that
      * while looping over the reserve_list instead.
+     *
+     * alternatively, if we do it on a per-mailbox basis then we can limit
+     * the hit on the staging directory to only a mailbox worth of messages
+     * at a time.  though there isn't a logical grouping that would make
+     * this coherent
      */
 
-    /* send APPLY MESSAGEs and RESTORE MAILBOXes */
+    /* send RESTORE MAILBOXes */
     struct backup_mailbox *mailbox;
     for (mailbox = mailbox_list->head; mailbox; mailbox = mailbox->next) {
-        /* something akin to sync_prepare_dlists to get two dlists,
-         * one with the mailbox info, one with the required uploads.
-         *
-         * we still need the backup lock here because this is the point
-         * where we'll read the actual message contents out of the chunk
+        /* something akin to sync_prepare_dlists to get a dlist with
+         * the mailbox info.
          */
-
-         /* loop over required uploads sending APPLY MESSAGEs */
 
          /* send RESTORE MAILBOX */
     }
 
 done:
+    /* XXX think about best cleanup order */
+    if (upload) {
+        dlist_unlink_files(upload);
+        dlist_free(&upload);
+    }
+
     if (backend)
         backend_disconnect(backend);
 
