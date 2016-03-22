@@ -15,6 +15,7 @@ Getting Started
     developer/developer-testing
     developer/process
     developer/architecture
+    developer/jmap
     Contributing to documentation <developer/documentation>
 
 .. toctree::    
