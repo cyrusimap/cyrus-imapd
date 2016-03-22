@@ -9169,50 +9169,57 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
     struct userid_rights *id_rights = (struct userid_rights *) data;
     struct invite_rock *irock = (struct invite_rock *) rock;
     int rights = id_rights->positive & ~id_rights->negative;
+    struct auth_state *authstate;
+    int isadmin;
 
-    if (strcmp(userid, irock->owner) && (rights & DACL_SHARE) == DACL_SHARE) {
-        irock->is_shared = 1;
-        if (irock->node) {
-            xmlNodePtr sharee, access;
-            const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
-            const char *resp = "invite-noresponse";
-            struct buf value = BUF_INITIALIZER;
-            int r;
+    if ((rights & DACL_SHARE) != DACL_SHARE) return;  /* not shared */
+    if (!strcmp(userid, irock->owner)) return;  /* user is owner */
 
-            sharee =
-                xmlNewChild(irock->node, NULL,
-                            BAD_CAST (irock->legacy ? "user" : "sharee"),
-                            NULL);
+    authstate = auth_newstate(userid);
+    isadmin = global_authisa(authstate, IMAPOPT_ADMINS);
+    auth_freestate(authstate);
+    if (isadmin) return;  /* user is an admin */
 
-            buf_reset(&irock->fctx->buf);
-            if (strchr(userid, '@')) {
-                buf_printf(&irock->fctx->buf, "mailto:%s", userid);
-            }
-            else {
-                const char *domain = httpd_extradomain;
-                if (!domain) domain = config_defdomain;
-                if (!domain) domain = config_servername;
 
-                buf_printf(&irock->fctx->buf, "mailto:%s@%s",
-                           userid, domain);
-            }
-            xml_add_href(sharee, irock->fctx->ns[NS_DAV],
-                         buf_cstring(&irock->fctx->buf));
+    irock->is_shared = 1;
 
-            /* Lookup invite status */
-            r = annotatemore_lookupmask(irock->fctx->mbentry->name,
-                                        annot, userid, &value);
-            if (!r && buf_len(&value)) resp = buf_cstring(&value);
-            xmlNewChild(sharee, NULL, BAD_CAST resp, NULL);
-            buf_free(&value);
+    if (irock->node) {
+        xmlNodePtr sharee, access;
+        const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+        const char *resp = "invite-noresponse";
+        struct buf value = BUF_INITIALIZER;
+        int r;
 
-            access = xmlNewChild(sharee, NULL,
-                                 BAD_CAST (irock->legacy ? "access" :
-                                           "share-access"), NULL);
-            if ((rights & DACL_SHARERW) == DACL_SHARERW)
-                xmlNewChild(access, NULL, BAD_CAST "read-write", NULL);
-            else xmlNewChild(access, NULL, BAD_CAST "read", NULL);
+        sharee = xmlNewChild(irock->node, NULL,
+                             BAD_CAST (irock->legacy ? "user" : "sharee"), NULL);
+
+        buf_reset(&irock->fctx->buf);
+        if (strchr(userid, '@')) {
+            buf_printf(&irock->fctx->buf, "mailto:%s", userid);
         }
+        else {
+            const char *domain = httpd_extradomain;
+            if (!domain) domain = config_defdomain;
+            if (!domain) domain = config_servername;
+
+            buf_printf(&irock->fctx->buf, "mailto:%s@%s", userid, domain);
+        }
+        xml_add_href(sharee, irock->fctx->ns[NS_DAV],
+                     buf_cstring(&irock->fctx->buf));
+
+        /* Lookup invite status */
+        r = annotatemore_lookupmask(irock->fctx->mbentry->name,
+                                    annot, userid, &value);
+        if (!r && buf_len(&value)) resp = buf_cstring(&value);
+        xmlNewChild(sharee, NULL, BAD_CAST resp, NULL);
+        buf_free(&value);
+
+        access = xmlNewChild(sharee, NULL,
+                             BAD_CAST (irock->legacy ? "access" :
+                                       "share-access"), NULL);
+        if ((rights & DACL_SHARERW) == DACL_SHARERW)
+            xmlNewChild(access, NULL, BAD_CAST "read-write", NULL);
+        else xmlNewChild(access, NULL, BAD_CAST "read", NULL);
     }
 }
 
