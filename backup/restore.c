@@ -54,6 +54,7 @@
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
+#include "imap/imap_proxy.h"
 #include "imap/mboxname.h"
 #include "imap/message_guid.h"
 #include "imap/sync_support.h"
@@ -103,6 +104,7 @@ struct restore_options {
     enum restore_expunged_mode expunged_mode;
     int do_submailboxes;
     int keep_uidvalidity;
+    int require_compression;
     int trim_deletedprefix;
     int verbose;
 };
@@ -118,6 +120,10 @@ static int restore_add_object(const char *object_name,
 static struct sync_folder_list *restore_make_folder_list(
                               const struct backup_mailbox_list *mailbox_list);
 
+static struct backend *restore_connect(const char *servername,
+                                       struct buf *tagbuf,
+                                       const struct restore_options *options);
+
 int main(int argc, char **argv)
 {
     save_argv0(argv[0]);
@@ -128,7 +134,6 @@ int main(int argc, char **argv)
     const char *servername = NULL;
     enum restore_mode mode = RESTORE_MODE_UNSPECIFIED;
     int local_only = 0;
-    int require_compression = 0;
     int wait = 0;
 
     struct restore_options options = {0};
@@ -140,6 +145,8 @@ int main(int argc, char **argv)
     struct backup_mailbox_list *mailbox_list = NULL;
     struct sync_folder_list *folder_list = NULL;
     struct sync_reserve_list *reserve_list = NULL;
+    struct buf tagbuf = BUF_INITIALIZER;
+    struct backend *backend = NULL;
     int opt, r;
 
     while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXf:m:ru:vw:xz")) != EOF) {
@@ -211,7 +218,7 @@ int main(int argc, char **argv)
             options.expunged_mode = RESTORE_EXPUNGED_ONLY;
             break;
         case 'z':
-            require_compression = 1;
+            options.require_compression = 1;
             break;
         default:
             usage();
@@ -305,8 +312,14 @@ int main(int argc, char **argv)
         }
     }
 
-    /* XXX connect to destination */
-    struct backend *sync_backend = NULL;
+    /* connect to destination */
+    backend = restore_connect(servername, &tagbuf, &options);
+
+    if (!backend) {
+        // FIXME
+        r = -1;
+        goto done;
+    }
 
     /* building lists of restore info:
      *   mailboxes will have all messages added, modulo expunged_mode
@@ -329,7 +342,7 @@ int main(int argc, char **argv)
         r = sync_reserve_partition(reserve->part,
                                    folder_list,
                                    reserve->list,
-                                   sync_backend);
+                                   backend);
         // FIXME r
     }
 
@@ -355,7 +368,8 @@ int main(int argc, char **argv)
     }
 
 done:
-    /* XXX disconnect */
+    if (backend)
+        backend_disconnect(backend);
 
     if (r)
         fprintf(stderr, "%s: %s:\n", backup_name, error_message(r));
@@ -377,13 +391,105 @@ done:
     if (backup)
         backup_close(&backup);
 
+    buf_free(&tagbuf);
+
     backup_cleanup_staging_path();
     cyrus_done();
 
     (void) local_only;
-    (void) require_compression;
 
     exit(r ? EC_TEMPFAIL : EC_OK);
+}
+
+static struct backend *restore_connect(const char *servername,
+                                       struct buf *tagbuf,
+                                       const struct restore_options *options)
+{
+    struct backend *backend = NULL;
+    sasl_callback_t *cb;
+    int timeout;
+    const char *auth_status = NULL;
+
+    cb = mysasl_callbacks(NULL,
+                          config_getstring(IMAPOPT_RESTORE_AUTHNAME),
+                          config_getstring(IMAPOPT_RESTORE_REALM),
+                          config_getstring(IMAPOPT_RESTORE_PASSWORD));
+
+    /* try to connect over IMAP */
+    backend = backend_connect(backend, servername,
+                              &imap_csync_protocol, "", cb, &auth_status,
+                              (options->verbose > 1 ? fileno(stderr) : -1));
+
+    if (backend) {
+        if (backend->capability & CAPA_REPLICATION) {
+            /* attach our IMAP tag buffer to our protstreams as userdata */
+            backend->in->userdata = backend->out->userdata = &tagbuf;
+        }
+        else {
+            backend_disconnect(backend);
+            backend = NULL;
+        }
+    }
+
+    /* if that didn't work, fall back to csync */
+    if (!backend) {
+        backend = backend_connect(backend, servername,
+                                  &csync_protocol, "", cb, NULL,
+                                  (options->verbose > 1 ? fileno(stderr) : -1));
+    }
+
+    free_callbacks(cb);
+    cb = NULL;
+
+    if (!backend) {
+        fprintf(stderr, "Can not connect to server '%s'\n", servername);
+        syslog(LOG_ERR, "Can not connect to server '%s'", servername);
+        return NULL;
+    }
+
+    if (servername[0] != '/' && backend->sock >= 0) {
+        tcp_disable_nagle(backend->sock);
+        tcp_enable_keepalive(backend->sock);
+    }
+
+#ifdef HAVE_ZLIB
+    /* Does the backend support compression? */
+    if (CAPA(backend, CAPA_COMPRESS)) {
+        prot_printf(backend->out, "%s\r\n",
+                    backend->prot->u.std.compress_cmd.cmd);
+        prot_flush(backend->out);
+
+        if (sync_parse_response("COMPRESS", backend->in, NULL)) {
+            if (options->require_compression)
+                fatal("Failed to enable compression, aborting", EC_SOFTWARE);
+            syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
+        }
+        else {
+            prot_setcompress(backend->in);
+            prot_setcompress(backend->out);
+        }
+    }
+    else if (options->require_compression) {
+        fatal("Backend does not support compression, aborting", EC_SOFTWARE);
+    }
+#endif
+
+    if (options->verbose > 1) {
+        /* XXX did we do this during backend_connect already? */
+        prot_setlog(backend->in, fileno(stderr));
+        prot_setlog(backend->out, fileno(stderr));
+    }
+
+    /* Set inactivity timer */
+    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
+    if (timeout < 3) timeout = 3;
+    prot_settimeout(backend->in, timeout);
+
+    /* Force use of LITERAL+ so we don't need two way communications */
+    prot_setisclient(backend->in, 1);
+    prot_setisclient(backend->out, 1);
+
+    return backend;
 }
 
 static void my_mailbox_list_add(struct backup_mailbox_list *mailbox_list,
