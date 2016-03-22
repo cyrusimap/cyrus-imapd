@@ -8063,6 +8063,8 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
         r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
                                    NULL, 1 /* admin */, userid, NULL,
                                    0, 0, 0, 0, mailbox);
+        /* we lost the race, that's OK */
+        if (r == IMAP_MAILBOX_LOCKED) r = 0;
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mbentry->name, error_message(r));
     }
@@ -8079,7 +8081,6 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
     mboxlist_entry_free(&mbentry);
     return r;
 }
-
 
 static void my_dav_auth(const char *userid)
 {
