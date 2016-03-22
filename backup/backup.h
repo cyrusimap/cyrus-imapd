@@ -46,6 +46,7 @@
 
 #include "imap/dlist.h"
 #include "imap/mboxname.h"
+#include "imap/sync_support.h"
 
 #include "lib/gzuncat.h"
 
@@ -315,6 +316,15 @@ int backup_read_message_data(struct backup *backup,
                              const struct backup_message *message,
                              backup_read_data_cb proc, void *rock);
 
+typedef struct sync_msgid *(*sync_msgid_lookup_func)(
+    const struct sync_msgid_list *list,
+    const struct message_guid *guid);
+
+int backup_prepare_message_upload(struct backup *backup,
+                                  const char *partition,
+                                  struct sync_msgid_list *msgid_list,
+                                  sync_msgid_lookup_func msgid_lookup,
+                                  struct dlist **uploadp);
 /* miscellaneous */
 int backup_reindex(const char *name,
                    enum backup_open_nonblock nonblock,

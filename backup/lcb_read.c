@@ -48,6 +48,8 @@
 #include "lib/prot.h"
 #include "lib/util.h"
 
+#include "imap/imap_err.h"
+
 #include "backup/backup.h"
 
 #define LIBCYRUS_BACKUP_SOURCE /* this file is part of libcyrus_backup */
@@ -150,4 +152,115 @@ EXPORTED int backup_read_message_data(struct backup *backup,
     backup_chunk_free(&chunk);
 
     return r;
+}
+
+/* we can't link against imap/sync_support.c within the backup library,
+ * so we need this nasty workaround where the caller provides a
+ * pointer to sync_msgid_lookup for us to use.
+ */
+EXPORTED int backup_prepare_message_upload(struct backup *backup,
+                                           const char *partition,
+                                           struct sync_msgid_list *msgid_list,
+                                           sync_msgid_lookup_func msgid_lookup,
+                                           struct dlist **uploadp)
+{
+    struct dlist *upload = NULL;
+    struct sync_msgid *msgid = NULL;
+    struct gzuncat *gzuc = NULL;
+    int r;
+
+    /* nothing to do */
+    if (!uploadp) return 0;
+
+    upload = dlist_newlist(NULL, "MESSAGE");
+
+    gzuc = gzuc_new(backup->fd);
+
+    for (msgid = msgid_list->head; msgid; msgid = msgid->next) {
+        struct backup_message *message = NULL;
+        struct backup_chunk *chunk = NULL;
+        struct dlist *dl = NULL;
+        struct dlist *di, *next;
+
+        /* already uploaded */
+        if (!msgid->need_upload) continue;
+
+        message = backup_get_message(backup, &msgid->guid);
+        if (!message) {
+            syslog(LOG_ERR, "%s: couldn't find message %s in backup %s",
+                   __func__,
+                   message_guid_encode(&msgid->guid),
+                   backup->data_fname);
+            goto next_msgid;
+        }
+
+        chunk = backup_get_chunk(backup, message->chunk_id);
+        if (!chunk) goto next_msgid;
+
+        /* read message contents from backup */
+        gzuc_member_start_from(gzuc, chunk->offset);
+        r = gzuc_seekto(gzuc, message->offset);
+        if (!r) {
+            struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
+            int c;
+            prot_setisclient(ps, 1); /* don't sync literals */
+            c = parse_backup_line(ps, NULL, NULL, &dl);
+            prot_free(ps);
+            ps = NULL;
+            if (c == EOF) {
+                syslog(LOG_ERR, "IOERROR: couldn't parse message %s from chunk %d of backup %s",
+                       message_guid_encode(&msgid->guid),
+                       chunk->id,
+                       backup->data_fname);
+                r = IMAP_IOERROR;
+            }
+        }
+        gzuc_member_end(gzuc, NULL);
+        if (r) goto next_msgid;
+
+        /* A single backup line contains many messages, so process
+         * them all while they're already decompressed.
+         * Tricksy loop construct so we can unstitch safely.
+         */
+        next = dl->head;
+        while ((di = next)) {
+            struct message_guid *guid = NULL;
+            struct sync_msgid *found_msgid = NULL;
+
+            next = di->next;
+
+            if (!dlist_tofile(di, NULL, &guid, NULL, NULL))
+                continue;
+
+            found_msgid = msgid_lookup(msgid_list, guid);
+            if (!found_msgid)
+                continue;
+
+            /* found one we want, move to upload list */
+            dlist_unstitch(dl, di);
+            dlist_stitch(upload, di);
+
+            /* set the destination partition */
+            if (di->part) free(di->part);
+            di->part = xstrdup(partition);
+
+            /* flag that we're sending it */
+            found_msgid->need_upload = 0;
+            msgid_list->toupload--;
+        }
+
+next_msgid:
+        if (dl) {
+            dlist_unlink_files(dl);
+            dlist_free(&dl);
+        }
+
+        if (chunk) backup_chunk_free(&chunk);
+        if (message) backup_message_free(&message);
+    }
+
+    if (gzuc) gzuc_free(&gzuc);
+
+    *uploadp = upload;
+    return 0;
 }
