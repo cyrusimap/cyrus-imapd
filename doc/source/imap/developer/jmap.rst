@@ -3,7 +3,7 @@
 JMAP support
 ============
 
-JMAP_ is an alternate mechanism for synchronising a mail client with a mail server, intended as a replacement for IMAP. It is s a transport-agnostic, stateless JSON-based API, aiming to be compatible with the IMAP data model, but with reduced data usage and more efficient synchronisation.
+`JMAP <http://jmap.io/>`_ is an alternate mechanism for synchronising a mail client with a mail server, intended as a replacement for IMAP. It is s a transport-agnostic, stateless JSON-based API, aiming to be compatible with the IMAP data model, but with reduced data usage and more efficient synchronisation.
 
 Cyrus administration
 ====================
@@ -139,4 +139,3 @@ Needs improvement
     * None of the JMAP error handlers report an error description.
 
 
-.. _JMAP: http://jmap.io/
