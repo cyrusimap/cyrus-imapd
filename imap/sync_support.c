@@ -1422,6 +1422,18 @@ void sync_send_restart(struct protstream *out)
     prot_flush(out);
 }
 
+void sync_send_restore(struct dlist *kl, struct protstream *out)
+{
+    if (out->userdata) {
+        /* IMAP flavor (w/ tag) */
+        prot_printf(out, "%s SYNC", sync_gentag((struct buf *) out->userdata));
+    }
+    prot_printf(out, "RESTORE ");
+    dlist_print(kl, 1, out);
+    prot_printf(out, "\r\n");
+    prot_flush(out);
+}
+
 struct dlist *sync_parseline(struct protstream *in)
 {
     struct dlist *dl = NULL;

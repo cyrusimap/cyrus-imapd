@@ -401,6 +401,7 @@ void sync_send_response(struct dlist *kl, struct protstream *out);
 void sync_send_apply(struct dlist *kl, struct protstream *out);
 void sync_send_lookup(struct dlist *kl, struct protstream *out);
 void sync_send_restart(struct protstream *out);
+void sync_send_restore(struct dlist *kl, struct protstream *out);
 
 struct dlist *sync_parseline(struct protstream *in);
 
