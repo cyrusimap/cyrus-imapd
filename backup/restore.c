@@ -258,12 +258,14 @@ int main(int argc, char **argv)
         if (!mbname) usage();
         r = backup_open(&backup, mbname,
                         BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+        mbname_free(&mbname);
         break;
     case RESTORE_MODE_USERNAME:
         mbname = mbname_from_userid(backup_name);
         if (!mbname) usage();
         r = backup_open(&backup, mbname,
                         BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+        mbname_free(&mbname);
         break;
     default:
         usage();
@@ -378,6 +380,8 @@ int main(int argc, char **argv)
     /* send RESTORE MAILBOXes */
     struct backup_mailbox *mailbox;
     for (mailbox = mailbox_list->head; mailbox; mailbox = mailbox->next) {
+        /* XXX filter the mailbox records based on reserve/missing/upload */
+
         /* XXX does this sensibly handle mailbox objs with empty values? */
         struct dlist *dl = backup_mailbox_to_dlist(mailbox);
         if (!dl) continue;
@@ -394,17 +398,20 @@ int main(int argc, char **argv)
     }
 
 done:
-    /* XXX think about best cleanup order */
-    if (upload) {
-        dlist_unlink_files(upload);
-        dlist_free(&upload);
-    }
+    if (r)
+        fprintf(stderr, "%s: %s:\n", backup_name, error_message(r));
+
+    /* release lock asap */
+    if (backup)
+        backup_close(&backup);
 
     if (backend)
         backend_disconnect(backend);
 
-    if (r)
-        fprintf(stderr, "%s: %s:\n", backup_name, error_message(r));
+    if (upload) {
+        dlist_unlink_files(upload);
+        dlist_free(&upload);
+    }
 
     if (mailbox_list) {
         backup_mailbox_list_empty(mailbox_list);
@@ -417,18 +424,10 @@ done:
     if (reserve_list)
         sync_reserve_list_free(&reserve_list);
 
-    if (mbname)
-        mbname_free(&mbname);
-
-    if (backup)
-        backup_close(&backup);
-
     buf_free(&tagbuf);
 
     backup_cleanup_staging_path();
     cyrus_done();
-
-    (void) local_only;
 
     exit(r ? EC_TEMPFAIL : EC_OK);
 }
