@@ -454,7 +454,7 @@ static int is_incompressible(const char *p, size_t n)
  * Since we might want to look at the data, we only set a flag and delay
  * any changes to the stream layers until the next prot_write().
  */
-EXPORTED int prot_data_boundary(struct protstream *s)
+EXPORTED int prot_data_boundary(struct protstream *s __attribute__((unused)))
 {
     // XXX - appears to be broken, so just don't set the boundary.  We'll
     // spend trivially more CPU when transferring binary parts.  Boo hoo
