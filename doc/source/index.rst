@@ -114,9 +114,7 @@ Cyrus IMAP uses Cyrus SASL to provide authentication support to the mail server,
 How can we help you?
 ====================
 
-Administrators_, looking to install and maintain Cyrus.
+:ref:`Administrators <imap-admin>`, looking to install and maintain Cyrus.
 
-Contributors_, looking to add to Cyrus. (We include testers and documenters too!)
+:ref:`Contributors <imap-developer>`, looking to add to Cyrus. (We include testers and documenters too!)
 
-.. _Administrators: imap/admin.html
-.. _Contributors: imap/developer.html
