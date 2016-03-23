@@ -378,11 +378,19 @@ int main(int argc, char **argv)
     /* send RESTORE MAILBOXes */
     struct backup_mailbox *mailbox;
     for (mailbox = mailbox_list->head; mailbox; mailbox = mailbox->next) {
-        /* something akin to sync_prepare_dlists to get a dlist with
-         * the mailbox info.
-         */
+        /* XXX does this sensibly handle mailbox objs with empty values? */
+        struct dlist *dl = backup_mailbox_to_dlist(mailbox);
+        if (!dl) continue;
 
-         /* send RESTORE MAILBOX */
+        if (local_only) {
+            free(dl->name);
+            dl->name = xstrdup("LOCAL_MAILBOX");
+        }
+
+        sync_send_restore(dl, backend->out);
+        r = sync_parse_response("MAILBOX", backend->in, NULL);
+        dlist_free(&dl);
+        if (r) goto done;
     }
 
 done:
