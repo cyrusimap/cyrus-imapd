@@ -75,6 +75,7 @@
 #include "stristr.h"
 #include "times.h"
 #include "util.h"
+#include "vcard_support.h"
 #include "version.h"
 #include "vparse.h"
 #include "xmalloc.h"
@@ -129,42 +130,12 @@ static int report_card_query(struct transaction_t *txn,
                              struct meth_params *rparams,
                              xmlNodePtr inroot, struct propfind_ctx *fctx);
 
-static struct buf *vparser_as_vcard_string_r(struct vparse_state *vparser)
-{
-    struct buf *buf = buf_new();
-
-    vparse_tobuf(vparser->card, buf);
-
-    return buf;
-}
-
-static struct vparse_state *vcard_string_as_vparser(const struct buf *buf)
-{
-    struct vparse_state *vparser;
-    int vr;
-
-    vparser = (struct vparse_state *) xzmalloc(sizeof(struct vparse_state));
-    vparser->base = buf_cstring(buf);
-    vparse_set_multival(vparser, "adr");
-    vparse_set_multival(vparser, "org");
-    vparse_set_multival(vparser, "n");
-    vr = vparse_parse(vparser, 0);
-    if (vr) return NULL; // XXX report error
-
-    return vparser;
-}
-
-static void free_vparser(void *vparser) {
-    vparse_free((struct vparse_state *) vparser);
-    free(vparser);
-}
-
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
-      (struct buf* (*)(void *)) &vparser_as_vcard_string_r,
-      (void * (*)(const struct buf*)) &vcard_string_as_vparser,
-      (void (*)(void *)) &free_vparser, NULL, NULL
+      (struct buf* (*)(void *)) &vcard_as_string,
+      (void * (*)(const struct buf*)) &vcard_parse_string,
+      (void (*)(void *)) &vparse_free_card, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
@@ -491,11 +462,10 @@ static int carddav_parse_path(const char *path,
  *   CARDDAV:max-resource-size
  */
 static int store_resource(struct transaction_t *txn,
-                          struct vparse_state *vparser,
+                          struct vparse_card *vcard,
                           struct mailbox *mailbox, const char *resource,
                           struct carddav_db *davdb, int dupcheck)
 {
-    struct vparse_card *vcard;
     struct vparse_entry *ventry;
     struct carddav_data *cdata;
     const char *version = NULL, *uid = NULL, *fullname = NULL;
@@ -503,8 +473,7 @@ static int store_resource(struct transaction_t *txn,
     char *mimehdr;
 
     /* Validate the vCard data */
-    if (!vparser ||
-        !(vcard = vparser->card) ||
+    if (!vcard ||
         !vcard->objects ||
         !vcard->objects->type ||
         strcasecmp(vcard->objects->type, "vcard")) {
@@ -613,11 +582,10 @@ static int store_resource(struct transaction_t *txn,
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vparser->card, &buf);
-    int r = dav_store_resource(txn, buf_cstring(&buf), 0,
+    struct buf *buf = vcard_as_string(vcard);
+    int r = dav_store_resource(txn, buf_cstring(buf), 0,
                               mailbox, oldrecord, NULL);
-    buf_free(&buf);
+    buf_destroy(buf);
     return r;
 }
 
@@ -626,8 +594,8 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
                         void *destdb)
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
-    struct vparse_state *vparser = (struct vparse_state *)obj;
-    return store_resource(txn, vparser, mailbox, resource, db, /*dupcheck*/0);
+    struct vparse_card *vcard = (struct vparse_card *)obj;
+    return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/0);
 }
 
 static int carddav_put(struct transaction_t *txn, void *obj,
@@ -635,8 +603,8 @@ static int carddav_put(struct transaction_t *txn, void *obj,
                        void *destdb)
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
-    struct vparse_state *vparser = (struct vparse_state *)obj;
-    return store_resource(txn, vparser, mailbox, resource, db, /*dupcheck*/1);
+    struct vparse_card *vcard = (struct vparse_card *)obj;
+    return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/1);
 }
 
 

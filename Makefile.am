@@ -1106,6 +1106,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_util.h \
 	imap/ical_support.c \
 	imap/ical_support.h \
+	imap/vcard_support.c \
+	imap/vcard_support.h \
 	imap/webdav_db.c \
 	imap/webdav_db.h
 
@@ -1228,6 +1230,7 @@ imap_httpd_SOURCES = \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
+	imap/vcard_support.c \
 	imap/xcal.c \
 	imap/xcal.h \
 	imap/xml_support.c \
