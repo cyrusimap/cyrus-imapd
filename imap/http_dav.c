@@ -1306,6 +1306,7 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 
             buf_init_ro(&inbuf, data, datalen);
             obj = mime_types->to_object(&inbuf);
+            buf_free(&inbuf);
 
             outbuf = mime->from_object(obj);
             datalen = buf_len(outbuf);
