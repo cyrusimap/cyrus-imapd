@@ -133,8 +133,8 @@ static int report_card_query(struct transaction_t *txn,
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
-      (struct buf* (*)(void *)) &vcard_as_string,
-      (void * (*)(const struct buf*)) &vcard_parse_string,
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
       (void (*)(void *)) &vparse_free_card, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
@@ -582,7 +582,7 @@ static int store_resource(struct transaction_t *txn,
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    struct buf *buf = vcard_as_string(vcard);
+    struct buf *buf = vcard_as_buf(vcard);
     int r = dav_store_resource(txn, buf_cstring(buf), 0,
                               mailbox, oldrecord, NULL);
     buf_destroy(buf);

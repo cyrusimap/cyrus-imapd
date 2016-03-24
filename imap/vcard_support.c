@@ -45,7 +45,7 @@
 
 #include "vcard_support.h"
 
-struct vparse_card *vcard_parse_string(const struct buf *buf)
+struct vparse_card *vcard_parse_string(const char *str)
 {
     struct vparse_state vparser;
     struct vparse_card *vcard = NULL;
@@ -53,7 +53,7 @@ struct vparse_card *vcard_parse_string(const struct buf *buf)
 
     memset(&vparser, 0, sizeof(struct vparse_state));
 
-    vparser.base = buf_cstring(buf);
+    vparser.base = str;
     vparse_set_multival(&vparser, "adr");
     vparse_set_multival(&vparser, "org");
     vparse_set_multival(&vparser, "n");
@@ -70,7 +70,12 @@ struct vparse_card *vcard_parse_string(const struct buf *buf)
     return vcard;
 }
 
-struct buf *vcard_as_string(struct vparse_card *vcard)
+struct vparse_card *vcard_parse_buf(const struct buf *buf)
+{
+    return vcard_parse_string(buf_cstring(buf));
+}
+
+struct buf *vcard_as_buf(struct vparse_card *vcard)
 {
     struct buf *buf = buf_new();
 
@@ -80,7 +85,7 @@ struct buf *vcard_as_string(struct vparse_card *vcard)
 }
 
 struct vparse_card *record_to_vcard(struct mailbox *mailbox,
-                                           const struct index_record *record)
+                                    const struct index_record *record)
 {
     struct buf buf = BUF_INITIALIZER;
     struct vparse_card *vcard = NULL;
