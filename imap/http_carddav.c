@@ -812,14 +812,173 @@ done:
     return r;
 }
 
+
+enum {
+    MATCH_TYPE_CONTAINS = 0,
+    MATCH_TYPE_EQUALS,
+    MATCH_TYPE_PREFIX,
+    MATCH_TYPE_SUFFIX
+};
+
+enum {
+    COLLATION_UNICODE = 0,
+    COLLATION_ASCII,
+    COLLATION_OCTET
+};
+
+struct text_match {
+    xmlChar *text;
+    unsigned char negate;
+    unsigned char type;
+    unsigned char collation;
+    struct text_match *next;
+};
+
+struct param_filter {
+    xmlChar *name;
+    unsigned char not_defined;
+    struct text_match match;
+    struct param_filter *next;
+};
+
+struct prop_filter {
+    xmlChar *name;
+    unsigned char allof;
+    unsigned char not_defined;
+    struct text_match *match;
+    struct param_filter *param;
+    struct prop_filter *next;
+};
+
+struct cardquery_filter {
+    unsigned char allof;
+    struct prop_filter *prop;
+};
+
+static int parse_card_filter(xmlNodePtr root, struct cardquery_filter *filter,
+                             struct error_t *error)
+{
+    int ret = 0;
+    xmlChar *attr;
+    xmlNodePtr node;
+
+    /* Parse elements of filter */
+    attr = xmlGetProp(root, BAD_CAST "test");
+    if (attr) {
+        if (!xmlStrcmp(attr, BAD_CAST "allof")) {
+            filter->allof = 1;
+        }
+        else if (xmlStrcmp(attr, BAD_CAST "anyof")) {
+            error->precond = CARDDAV_SUPP_FILTER;
+            ret = HTTP_FORBIDDEN;
+        }
+        xmlFree(attr);
+    }
+
+    for (node = xmlFirstElementChild(root); !ret && node;
+         node = xmlNextElementSibling(node)) {
+        error->precond = CARDDAV_SUPP_FILTER;
+        ret = HTTP_FORBIDDEN;
+    }
+
+    return ret;
+}
+
+/* See if the current resource matches the specified filter.
+ * Returns 1 if match, 0 otherwise.
+ */
+static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
+{
+    struct cardquery_filter *cardfilter =
+        (struct cardquery_filter *) fctx->filter_crit;
+    struct carddav_data *cdata = (struct carddav_data *) data;
+    struct vparse_card *vcard = NULL;
+    struct prop_filter *prop;
+    int ret = 1;
+
+    for (prop = cardfilter->prop; prop; prop = prop->next) {
+        const char *value = NULL;
+
+        if (!xmlStrcmp(prop->name, BAD_CAST "UID")) {
+            value = cdata->vcard_uid;
+        }
+        else if (!xmlStrcmp(prop->name, BAD_CAST "N")) {
+            value = cdata->name;
+        }
+        else if (!xmlStrcmp(prop->name, BAD_CAST "FN")) {
+            value = cdata->fullname;
+        }
+        else if (!xmlStrcmp(prop->name, BAD_CAST "NICKNAME")) {
+            value = cdata->nickname;
+        }
+        else {
+            /* Load message containing the resource and parse vcard data */
+            if (!vcard) {
+                int r = 0;
+
+                if (!fctx->msg_buf.len) {
+                    r = mailbox_map_record(fctx->mailbox,
+                                           fctx->record, &fctx->msg_buf);
+                }
+                if (!r) {
+                    vcard = vcard_parse_string(buf_cstring(&fctx->msg_buf) +
+                                               fctx->record->header_size);
+                }
+                if (r || !vcard) {
+                    ret = 0;
+                    goto done;
+                }
+            }
+        }
+
+        if (prop->not_defined) {
+            ret = (value == NULL);
+        }
+        else if (prop->match) {
+            struct text_match *match;
+
+            for (match = prop->match; match; match = match->next) {
+            }
+        }
+        else if (prop->param) {
+            struct param_filter *param;
+
+            for (param = prop->param; param; param = param->next) {
+            }
+        }
+
+        if (ret) {
+            if (!cardfilter->allof) {
+                /* anyof succeeds */
+                break;
+            }
+        }
+        else if (cardfilter->allof) {
+            /* allof fails */
+            break;
+        }
+
+        ret = cardfilter->allof;
+    }
+
+  done:
+    vparse_free_card(vcard);
+
+    return ret;
+}
+
 static int report_card_query(struct transaction_t *txn,
                              struct meth_params *rparams __attribute__((unused)),
                              xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0;
     xmlNodePtr node;
+    struct cardquery_filter cardfilter;
+    struct prop_filter *prop, *next;
 
-    fctx->filter_crit = (void *) 0xDEADBEEF;  /* placeholder until we filter */
+    memset(&cardfilter, 0, sizeof(struct cardquery_filter));
+
+    fctx->filter_crit = &cardfilter;
     fctx->open_db = (db_open_proc_t) &carddav_open_mailbox;
     fctx->close_db = (db_close_proc_t) &carddav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &carddav_lookup_resource;
@@ -831,8 +990,9 @@ static int report_card_query(struct transaction_t *txn,
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
             if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-                txn->error.precond = CARDDAV_SUPP_FILTER;
-                return HTTP_FORBIDDEN;
+                ret = parse_card_filter(node, &cardfilter, &txn->error);
+                if (ret) goto done;
+                else fctx->filter = apply_cardfilter;
             }
         }
     }
@@ -856,6 +1016,34 @@ static int report_card_query(struct transaction_t *txn,
         }
 
         ret = *fctx->ret;
+    }
+
+  done:
+    /* Free filter structure */
+    for (prop = cardfilter.prop; prop; prop = next) {
+        next = prop->next;
+
+        if (prop->match) {
+            struct text_match *match, *nextm;
+
+            for (match = prop->match; match; match = nextm) {
+                nextm = match->next;
+                xmlFree(match->text);
+                free(match);
+            }
+        }
+        else if (prop->param) {
+            struct param_filter *param, *nextp;
+
+            for (param = prop->param; param; param = nextp) {
+                nextp = param->next;
+                xmlFree(param->name);
+                free(param);
+            }
+        }
+
+        xmlFree(prop->name);
+        free(prop);
     }
 
     if (fctx->davdb) {
