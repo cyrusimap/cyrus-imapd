@@ -107,6 +107,21 @@ static const struct dav_namespace_t {
     { XML_NS_SYSFLAG, "SF" },
 };
 
+const struct match_type_t dav_match_types[] = {
+    { "contains", MATCH_TYPE_CONTAINS },
+    { "equals", MATCH_TYPE_EQUALS },
+    { "starts-with", MATCH_TYPE_PREFIX },
+    { "ends-with", MATCH_TYPE_SUFFIX },
+    { NULL, 0 }
+};
+
+const struct collation_t dav_collations[] = {
+    { "i;unicode-casemap", COLLATION_UNICODE },
+    { "i;ascii-casemap", COLLATION_ASCII },
+    { "i;octet", COLLATION_OCTET },
+    { NULL, 0 }
+};
+
 static xmlChar *server_info = NULL;
 static int server_info_size = 0;
 static time_t server_info_lastmod = 0;
@@ -387,7 +402,8 @@ static const struct precond_t {
     { "valid-address-data", NS_CARDDAV },
     { "no-uid-conflict", NS_CARDDAV },
     { "addressbook-collection-location-ok", NS_CARDDAV },
-    { "supported-filter", NS_CARDDAV }
+    { "supported-filter", NS_CARDDAV },
+    { "supported-collation", NS_CARDDAV }
 };
 
 
@@ -1619,6 +1635,28 @@ int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
                   known_namespaces[report->ns].href,
                   known_namespaces[report->ns].prefix);
         xmlNewChild(node, fctx->ns[report->ns], BAD_CAST report->name, NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch *DAV:supported-collection-set */
+int propfind_collationset(const xmlChar *name, xmlNsPtr ns,
+                          struct propfind_ctx *fctx,
+                          xmlNodePtr prop __attribute__((unused)),
+                          xmlNodePtr resp __attribute__((unused)),
+                          struct propstat propstat[],
+                          void *rock __attribute__((unused)))
+{
+    xmlNodePtr top;
+    const struct collation_t *col;
+
+    top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                       name, ns, NULL, 0);
+
+    for (col = dav_collations; col->name; col++) {
+        xmlNewChild(top, NULL, BAD_CAST "supported-collation", BAD_CAST col->name);
     }
 
     return 0;
@@ -9612,4 +9650,79 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
     buf_free(&my_fctx.buf);
 
     return 0;
+}
+
+
+int dav_text_match(xmlChar *text, struct text_match_t *match)
+{
+    const xmlChar *cp = NULL;
+    int textlen, matchlen;
+    int r = 0;
+
+    switch (match->type) {
+    case MATCH_TYPE_CONTAINS:
+        switch (match->collation) {
+        case COLLATION_UNICODE:
+            /* XXX  how to do this? */
+        case COLLATION_ASCII:
+            cp = xmlStrcasestr(text, match->text);
+            break;
+        case COLLATION_OCTET:
+            cp = xmlStrstr(text, match->text);
+            break;
+        }
+
+        r = (cp != NULL);
+        break;
+    case MATCH_TYPE_EQUALS:
+        switch (match->collation) {
+        case COLLATION_UNICODE:
+            /* XXX  how to do this? */
+        case COLLATION_ASCII:
+            r = !xmlStrcasecmp(text, match->text);
+            break;
+        case COLLATION_OCTET:
+            r = xmlStrEqual(text, match->text);
+            break;
+        }
+        break;
+    case MATCH_TYPE_PREFIX:
+        matchlen = xmlStrlen(match->text);
+
+        switch (match->collation) {
+        case COLLATION_UNICODE:
+            /* XXX  how to do this? */
+        case COLLATION_ASCII:
+            r = !xmlStrncasecmp(text, match->text, matchlen);
+            break;
+        case COLLATION_OCTET:
+            r = !xmlStrncmp(text, match->text, matchlen);
+            break;
+        }
+        break;
+    case MATCH_TYPE_SUFFIX:
+        textlen = xmlStrlen(text);
+        matchlen = xmlStrlen(match->text);
+
+        if (textlen < matchlen) r = 0;
+        else {
+            cp = text += (textlen - matchlen);
+
+            switch (match->collation) {
+            case COLLATION_UNICODE:
+                /* XXX  how to do this? */
+            case COLLATION_ASCII:
+                r = !xmlStrcasecmp(cp, match->text);
+                break;
+            case COLLATION_OCTET:
+                r = xmlStrEqual(cp, match->text);
+                break;
+            }
+        }
+        break;
+    }
+
+    if (match->negate) r = !r;
+
+    return r;
 }

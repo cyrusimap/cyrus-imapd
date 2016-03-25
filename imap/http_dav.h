@@ -247,7 +247,8 @@ enum {
     CARDDAV_VALID_DATA,
     CARDDAV_UID_CONFLICT,
     CARDDAV_LOCATION_OK,
-    CARDDAV_SUPP_FILTER
+    CARDDAV_SUPP_FILTER,
+    CARDDAV_SUPP_COLLATION
 };
 
 /* Preference bits */
@@ -540,6 +541,43 @@ struct meth_params {
 
 extern struct meth_params webdav_params;
 
+enum {
+    MATCH_TYPE_CONTAINS = 0,
+    MATCH_TYPE_EQUALS,
+    MATCH_TYPE_PREFIX,
+    MATCH_TYPE_SUFFIX
+};
+
+struct match_type_t {
+    const char *name;
+    unsigned value;
+};
+
+extern const struct match_type_t dav_match_types[];
+
+enum {
+    COLLATION_UNICODE = 0,
+    COLLATION_ASCII,
+    COLLATION_OCTET
+};
+
+struct collation_t {
+    const char *name;
+    unsigned value;
+};
+
+extern const struct collation_t dav_collations[];
+    
+struct text_match_t {
+    xmlChar *text;
+    unsigned negate    : 1;
+    unsigned type      : 3;
+    unsigned collation : 3;
+    struct text_match_t *next;
+};
+
+int dav_text_match(xmlChar *text, struct text_match_t *match);
+
 int notify_post(struct transaction_t *txn);
 
 int report_expand_prop(struct transaction_t *txn, struct meth_params *rparams,
@@ -650,6 +688,11 @@ int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop, xmlNodePtr resp,
                        struct propstat propstat[], void *rock);
+
+int propfind_collationset(const xmlChar *name, xmlNsPtr ns,
+                          struct propfind_ctx *fctx,
+                          xmlNodePtr prop, xmlNodePtr resp,
+                          struct propstat propstat[], void *rock);
 
 int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
                           struct propfind_ctx *fctx,
