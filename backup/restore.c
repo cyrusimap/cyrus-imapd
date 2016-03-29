@@ -84,6 +84,12 @@ static void save_argv0(const char *s)
         argv0 = s;
 }
 
+static struct sasl_callback mysasl_cb[] = {
+    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
+    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &mysasl_canon_user, NULL },
+    { SASL_CB_LIST_END, NULL, NULL }
+};
+
 enum restore_mode {
     RESTORE_MODE_UNSPECIFIED = 0,
     RESTORE_MODE_FILENAME,
@@ -149,6 +155,10 @@ int main(int argc, char **argv)
     struct backend *backend = NULL;
     struct dlist *upload = NULL;
     int opt, r;
+
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+        fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXf:m:ru:vw:xz")) != EOF) {
         switch (opt) {
@@ -240,6 +250,9 @@ int main(int argc, char **argv)
 
     /* okay, arguments seem sane, we are go */
     cyrus_init(alt_config, "restore", 0, 0);
+
+    /* load the SASL plugins */
+    global_sasl_init(1, 0, mysasl_cb);
 
     /* wait here for gdb attach */
     if (wait) {
@@ -454,7 +467,7 @@ static struct backend *restore_connect(const char *servername,
     if (backend) {
         if (backend->capability & CAPA_REPLICATION) {
             /* attach our IMAP tag buffer to our protstreams as userdata */
-            backend->in->userdata = backend->out->userdata = &tagbuf;
+            backend->in->userdata = backend->out->userdata = tagbuf;
         }
         else {
             backend_disconnect(backend);
