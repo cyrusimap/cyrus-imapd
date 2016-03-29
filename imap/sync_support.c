@@ -3303,16 +3303,30 @@ int sync_restore_mailbox(struct dlist *kin,
     int is_new_mailbox = 0;
     int r;
 
-    if (!dlist_getatom(kin, "PARTITION", &partition))
+    if (!dlist_getatom(kin, "PARTITION", &partition)) {
+        // FIXME partition can actually be optional
+        syslog(LOG_DEBUG, "%s: missing PARTITION", __func__);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
+    }
+    if (!dlist_getatom(kin, "MBOXNAME", &mboxname)) {
+        syslog(LOG_DEBUG, "%s: missing MBOXNAME", __func__);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kin, "ACL", &acl))
+    }
+    if (!dlist_getatom(kin, "ACL", &acl)) {
+        // FIXME ACL can actually be optional
+        syslog(LOG_DEBUG, "%s: missing ACL", __func__);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kin, "OPTIONS", &options_str))
+    }
+    if (!dlist_getatom(kin, "OPTIONS", &options_str)) {
+        // FIXME OPTIONS can actually be optional
+        syslog(LOG_DEBUG, "%s: missing OPTIONS", __func__);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getlist(kin, "RECORD", &kr))
+    }
+    if (!dlist_getlist(kin, "RECORD", &kr)) {
+        // FIXME RECORD can actually be optional
+        syslog(LOG_DEBUG, "%s: missing RECORD", __func__);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
+    }
 
     /* optional */
     dlist_getlist(kin, "ANNOTATIONS", &ka);
@@ -3342,6 +3356,8 @@ int sync_restore_mailbox(struct dlist *kin,
 
     /* open/create mailbox */
     r = mailbox_open_iwl(mboxname, &mailbox);
+    syslog(LOG_DEBUG, "%s: mailbox_open_iwl %s: %s",
+           __func__, mboxname, error_message(r));
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         dlist_getatom(kin, "UNIQUEID", &uniqueid);
         dlist_getnum64(kin, "HIGHESTMODSEQ", &highestmodseq);
@@ -3359,6 +3375,8 @@ int sync_restore_mailbox(struct dlist *kin,
                                 options, uidvalidity,
                                 highestmodseq, acl,
                                 uniqueid, sstate->local_only, &mailbox);
+        syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
+            __func__, mboxname, error_message(r));
 
         is_new_mailbox = 1;
     }
@@ -3384,6 +3402,8 @@ int sync_restore_mailbox(struct dlist *kin,
 
     /* hold the annotate state open */
     r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    syslog(LOG_DEBUG, "%s: mailbox_get_annotate_state %s: %s",
+        __func__, mailbox->name, error_message(r));
     if (r) goto bail;
 
     /* and make it hold a transaction open */
@@ -3442,6 +3462,8 @@ int sync_restore_mailbox(struct dlist *kin,
     }
 
     r = mailbox_commit(mailbox);
+    syslog(LOG_DEBUG, "%s: mailbox_commit %s: %s",
+        __func__, mailbox->name, error_message(r));
     if (r) {
         syslog(LOG_ERR, "%s: mailbox_commit(%s): %s",
                __func__, mailbox->name, error_message(r));
