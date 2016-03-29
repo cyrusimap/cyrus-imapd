@@ -578,7 +578,7 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
         }
     }
 
-    if (mailbox->records && mailbox->records->count) {
+    if (mailbox->records) {
         struct dlist *records = dlist_newlist(NULL, "RECORD");
         struct backup_mailbox_message *mailbox_message = mailbox->records->head;
 
