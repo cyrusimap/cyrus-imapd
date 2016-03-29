@@ -691,6 +691,8 @@ static int restore_add_message(const struct backup_message *message,
         /* create a mailbox... */
         struct backup_mailbox *mailbox = xzmalloc(sizeof *mailbox);
         apply_mailbox_options(mailbox, options);
+        if (!mailbox->partition)
+            mailbox->partition = xstrdup(message->partition);
 
         /* ... containing this message */
         struct backup_mailbox_message *mailbox_message =
