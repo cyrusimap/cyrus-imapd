@@ -167,4 +167,20 @@ sub test_mix_fuzzy_and_nonfuzzy
     $self->assert_num_equals(2, scalar @$r);
 }
 
+sub test_weird_crasher
+    :Conversations
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    my $talk = $self->{store}->get_client();
+
+    xlog "Select INBOX";
+    $talk->select("INBOX") || die;
+
+    xlog "SEARCH for 'A 李 A'";
+    my $r = $talk->xconvmultisort( [ qw(reverse arrival) ], [ 'conversations', position => [1,10] ], 'utf-8', 'fuzzy', 'text', { Quote => "A 李 A" });
+    $self->assert_num_equals(0, scalar @$r);
+}
+
 1;
