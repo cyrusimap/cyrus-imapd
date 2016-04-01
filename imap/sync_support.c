@@ -3280,20 +3280,22 @@ int sync_restore_mailbox(struct dlist *kin,
                          struct sync_reserve_list *reserve_list,
                          struct sync_state *sstate)
 {
-    /* fields from the request */
-    const char *uniqueid = NULL; /* optional */
-    const char *partition;
+    /* fields from the request, all but mboxname are optional */
     const char *mboxname;
-    const char *mboxtype = NULL; /* optional */
-    uint32_t mbtype;
-    modseq_t highestmodseq = 0;  /* optional */
-    uint32_t uidvalidity = 0;    /* optional */
-    const char *acl;
-    const char *options_str;
-    uint32_t options;
-    struct dlist *kr;
-    struct dlist *ka = NULL;     /* optional */
+    const char *uniqueid = NULL;
+    const char *partition = NULL;
+    const char *mboxtype = NULL;
+    const char *acl = NULL;
+    const char *options_str = NULL;
+    modseq_t highestmodseq = 0;
+    uint32_t uidvalidity = 0;
+    struct dlist *kr = NULL;
+    struct dlist *ka = NULL;
     modseq_t xconvmodseq = 0;
+
+    /* derived fields */
+    uint32_t options = 0;
+    uint32_t mbtype = 0;
 
     struct mailbox *mailbox = NULL;
     struct sync_msgid_list *part_list;
@@ -3303,36 +3305,21 @@ int sync_restore_mailbox(struct dlist *kin,
     int is_new_mailbox = 0;
     int r;
 
-    if (!dlist_getatom(kin, "PARTITION", &partition)) {
-        // FIXME partition can actually be optional
-        syslog(LOG_DEBUG, "%s: missing PARTITION", __func__);
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    }
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname)) {
         syslog(LOG_DEBUG, "%s: missing MBOXNAME", __func__);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
-    if (!dlist_getatom(kin, "ACL", &acl)) {
-        // FIXME ACL can actually be optional
-        syslog(LOG_DEBUG, "%s: missing ACL", __func__);
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    }
-    if (!dlist_getatom(kin, "OPTIONS", &options_str)) {
-        // FIXME OPTIONS can actually be optional
-        syslog(LOG_DEBUG, "%s: missing OPTIONS", __func__);
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    }
-    if (!dlist_getlist(kin, "RECORD", &kr)) {
-        // FIXME RECORD can actually be optional
-        syslog(LOG_DEBUG, "%s: missing RECORD", __func__);
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    }
 
     /* optional */
+    dlist_getatom(kin, "PARTITION", &partition);
+    dlist_getatom(kin, "ACL", &acl);
+    dlist_getatom(kin, "OPTIONS", &options_str);
+    dlist_getlist(kin, "RECORD", &kr);
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
     dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
 
+    /* derived */
     options = sync_parse_options(options_str);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
@@ -3444,6 +3431,8 @@ int sync_restore_mailbox(struct dlist *kin,
         /* XXX skip if the guid is already in this folder? */
 
         r = parse_upload(ki, mailbox, &record, &annots);
+        syslog(LOG_DEBUG, "%s: parse_upload %s: %s",
+               __func__, mailbox->name, error_message(r));
         if (r) goto bail;
 
         /* generate a uid if we can't reuse a provided one */
