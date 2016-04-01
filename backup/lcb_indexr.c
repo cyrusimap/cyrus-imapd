@@ -584,6 +584,7 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
         while (mailbox_message) {
             struct dlist *record = dlist_newkvlist(records, NULL);
+            struct dlist *flags = NULL;
 
             dlist_setnum32(record, "UID", mailbox_message->uid);
             dlist_setnum64(record, "MODSEQ", mailbox_message->modseq);
@@ -592,17 +593,20 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
             dlist_setguid(record, "GUID", &mailbox_message->guid);
             dlist_setnum32(record, "SIZE", mailbox_message->size);
 
+            /* FLAGS field is mandatory */
             if (mailbox_message->flags) {
-                struct dlist *flags = NULL;
                 dlist_parsemap(&flags, 0, mailbox_message->flags,
                                strlen(mailbox_message->flags));
-                if (flags) {
-                    flags->name = xstrdup("FLAGS");
-                    if (mailbox_message->expunged)
-                        dlist_setflag(flags, "FLAG", "\\Expunged");
-                    dlist_stitch(record, flags);
-                }
+                flags->name = xstrdup("FLAGS");
+                dlist_stitch(record, flags);
             }
+            else {
+                flags = dlist_newlist(record, "FLAGS");
+            }
+
+            /* convert expunged to flag */
+            if (mailbox_message->expunged)
+                dlist_setflag(flags, "FLAG", "\\Expunged");
 
             if (mailbox_message->annotations) {
                 struct dlist *annots = NULL;
