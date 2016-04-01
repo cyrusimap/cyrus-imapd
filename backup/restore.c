@@ -121,10 +121,11 @@ static int restore_add_object(const char *object_name,
                               const struct restore_options *options,
                               struct backup *backup,
                               struct backup_mailbox_list *mailbox_list,
+                              struct sync_folder_list *reserve_folder_list,
                               struct sync_reserve_list *reserve_list);
 
-static struct sync_folder_list *restore_make_folder_list(
-                              const struct backup_mailbox_list *mailbox_list);
+static struct sync_folder_list *restore_make_reserve_folder_list(
+                              struct backup *backup);
 
 static struct backend *restore_connect(const char *servername,
                                        struct buf *tagbuf,
@@ -149,7 +150,7 @@ int main(int argc, char **argv)
     struct backup *backup = NULL;
     mbname_t *mbname = NULL;
     struct backup_mailbox_list *mailbox_list = NULL;
-    struct sync_folder_list *folder_list = NULL;
+    struct sync_folder_list *reserve_folder_list = NULL;
     struct sync_reserve_list *reserve_list = NULL;
     struct buf tagbuf = BUF_INITIALIZER;
     struct backend *backend = NULL;
@@ -289,6 +290,7 @@ int main(int argc, char **argv)
 
     /* scan for objects to restore */
     mailbox_list = xzmalloc(sizeof *mailbox_list);
+    reserve_folder_list = restore_make_reserve_folder_list(backup);
     reserve_list = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
 
     if (input_file) {
@@ -310,8 +312,8 @@ int main(int argc, char **argv)
             if (len == 0 || buf[0] == '#')
                 continue;
 
-            r = restore_add_object(buf, &options, backup,
-                                   mailbox_list, reserve_list);
+            r = restore_add_object(buf, &options, backup, mailbox_list,
+                                   reserve_folder_list, reserve_list);
 
             // FIXME r
         }
@@ -321,8 +323,8 @@ int main(int argc, char **argv)
         int i;
 
         for (i = optind; i < argc; i++) {
-            r = restore_add_object(argv[i], &options, backup,
-                                   mailbox_list, reserve_list);
+            r = restore_add_object(argv[i], &options, backup, mailbox_list,
+                                   reserve_folder_list, reserve_list);
 
             // FIXME r
         }
@@ -350,13 +352,11 @@ int main(int argc, char **argv)
      * guids, which we'll need for processing the reserve step
      */
 
-    folder_list = restore_make_folder_list(mailbox_list);
-
     struct sync_reserve *reserve;
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
         /* send APPLY RESERVE and parse missing lists */
         r = sync_reserve_partition(reserve->part,
-                                   folder_list,
+                                   reserve_folder_list,
                                    reserve->list,
                                    backend);
         if (r) goto done;
@@ -431,8 +431,8 @@ done:
         free(mailbox_list);
     }
 
-    if (folder_list)
-        sync_folder_list_free(&folder_list);
+    if (reserve_folder_list)
+        sync_folder_list_free(&reserve_folder_list);
 
     if (reserve_list)
         sync_reserve_list_free(&reserve_list);
@@ -573,19 +573,27 @@ static void my_mailbox_list_add(struct backup_mailbox_list *mailbox_list,
     }
 }
 
-static struct sync_folder_list *restore_make_folder_list(
-    const struct backup_mailbox_list *mailbox_list)
+static struct sync_folder_list *restore_make_reserve_folder_list(
+    struct backup *backup)
 {
     struct sync_folder_list *folder_list = sync_folder_list_create();
+    struct backup_mailbox_list *mailboxes = NULL;
     struct backup_mailbox *iter;
 
-    for (iter = mailbox_list->head; iter; iter = iter->next) {
-        const struct synccrcs synccrcs = { 0, 0 };
+    mailboxes = backup_get_mailboxes(backup, 0, BACKUP_MAILBOX_NO_RECORDS);
 
-        /* we only care about mboxname here */
-        sync_folder_list_add(folder_list, NULL, iter->mboxname,
-                             0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                             0, 0, 0, 0, NULL, 0);
+    if (mailboxes) {
+        for (iter = mailboxes->head; iter; iter = iter->next) {
+            const struct synccrcs synccrcs = { 0, 0 };
+
+            /* we only care about mboxname here */
+            sync_folder_list_add(folder_list, NULL, iter->mboxname,
+                                0, NULL, NULL, 0, 0, 0, 0, synccrcs,
+                                0, 0, 0, 0, NULL, 0);
+        }
+
+        backup_mailbox_list_empty(mailboxes);
+        free(mailboxes);
     }
 
     return folder_list;
@@ -656,6 +664,7 @@ static void apply_mailbox_options(struct backup_mailbox *mailbox,
 static int restore_add_mailbox(const struct backup_mailbox *mailbox,
                                const struct restore_options *options,
                                struct backup_mailbox_list *mailbox_list,
+                               struct sync_folder_list *reserve_folder_list,
                                struct sync_reserve_list *reserve_list)
 {
     struct backup_mailbox *clone = backup_mailbox_clone(mailbox);
@@ -673,6 +682,14 @@ static int restore_add_mailbox(const struct backup_mailbox *mailbox,
         }
     }
 
+    /* add to folder list if not already-extant folder */
+    if (options->override_mboxname) {
+        const struct synccrcs synccrcs = {0, 0};
+        sync_folder_list_add(reserve_folder_list, NULL, clone->mboxname,
+                             0, NULL, NULL, 0, 0, 0, 0, synccrcs,
+                             0, 0, 0, 0, NULL, 0);
+    }
+
     /* populate mailbox list */
     my_mailbox_list_add(mailbox_list, clone);
 
@@ -683,6 +700,7 @@ static int restore_add_message(const struct backup_message *message,
                                const struct backup_mailbox_list *message_mailboxes,
                                const struct restore_options *options,
                                struct backup_mailbox_list *mailbox_list,
+                               struct sync_folder_list *reserve_folder_list,
                                struct sync_reserve_list *reserve_list)
 {
     struct sync_msgid_list *msgid_list = NULL;
@@ -708,6 +726,12 @@ static int restore_add_message(const struct backup_message *message,
         /* add to reserve list */
         msgid_list = sync_reserve_partlist(reserve_list, mailbox->partition);
         sync_msgid_insert(msgid_list, message->guid);
+
+        /* add to reserve folder list */
+        const struct synccrcs synccrcs = {0, 0};
+        sync_folder_list_add(reserve_folder_list, NULL, mailbox->mboxname,
+                             0, NULL, NULL, 0, 0, 0, 0, synccrcs,
+                             0, 0, 0, 0, NULL, 0);
 
         /* add to mailbox list */
         my_mailbox_list_add(mailbox_list, mailbox);
@@ -736,6 +760,7 @@ struct submailbox_rock {
     size_t prefix_len;
     const struct restore_options *options;
     struct backup_mailbox_list *mailbox_list;
+    struct sync_folder_list *reserve_folder_list;
     struct sync_reserve_list *reserve_list;
 };
 
@@ -747,6 +772,7 @@ static int submailbox_cb(const struct backup_mailbox *mailbox, void *rock)
         return restore_add_mailbox(mailbox,
                                    smbrock->options,
                                    smbrock->mailbox_list,
+                                   smbrock->reserve_folder_list,
                                    smbrock->reserve_list);
     }
 
@@ -757,6 +783,7 @@ static int restore_add_object(const char *object_name,
                               const struct restore_options *options,
                               struct backup *backup,
                               struct backup_mailbox_list *mailbox_list,
+                              struct sync_folder_list *reserve_folder_list,
                               struct sync_reserve_list *reserve_list)
 {
     struct backup_mailbox *mailbox = NULL;
@@ -798,7 +825,8 @@ static int restore_add_object(const char *object_name,
 
     /* add it to the restore lists */
     if (mailbox) {
-        r = restore_add_mailbox(mailbox, options, mailbox_list, reserve_list);
+        r = restore_add_mailbox(mailbox, options, mailbox_list,
+                                reserve_folder_list, reserve_list);
 
         if (!r && options->do_submailboxes) {
             char prefix[MAX_MAILBOX_NAME + 1];
@@ -813,6 +841,7 @@ static int restore_add_object(const char *object_name,
                     strlen(prefix),
                     options,
                     mailbox_list,
+                    reserve_folder_list,
                     reserve_list,
                 };
 
@@ -830,8 +859,8 @@ static int restore_add_object(const char *object_name,
         if (!options->override_mboxname)
             mailboxes = backup_get_mailboxes_by_message(backup, message,
                                                         BACKUP_MAILBOX_MATCH_RECORDS);
-        r = restore_add_message(message, mailboxes, options,
-                                mailbox_list, reserve_list);
+        r = restore_add_message(message, mailboxes, options, mailbox_list,
+                                reserve_folder_list, reserve_list);
 
         if (mailboxes) {
             backup_mailbox_list_empty(mailboxes);
