@@ -1684,7 +1684,9 @@ int sync_append_copyfile(struct mailbox *mailbox,
             record->system_flags |= FLAG_UNLINKED;
             goto just_write;
         }
-        syslog(LOG_ERR, "IOERROR: failed to parse %s", message_guid_encode(&record->guid));
+        syslog(LOG_ERR, "IOERROR: failed to parse %s: %s",
+               message_guid_encode(&record->guid),
+               error_message(r));
         return r;
     }
 
