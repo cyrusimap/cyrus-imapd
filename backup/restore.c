@@ -769,11 +769,13 @@ static int restore_add_object(const char *object_name,
     len = strlen(object_name);
     if (len == 24 && strspn(object_name, HEX_DIGITS) == len) {
         /* looks like a non-libuuid uniqueid */
-        mailbox = backup_get_mailbox_by_uniqueid(backup, object_name, 1);
+        mailbox = backup_get_mailbox_by_uniqueid(backup, object_name,
+                                                 BACKUP_MAILBOX_ALL_RECORDS);
     }
     else if (len == 36 && strspn(object_name, "-" HEX_DIGITS) == len) {
         /* looks like a libuuid uniqueid */
-        mailbox = backup_get_mailbox_by_uniqueid(backup, object_name, 1);
+        mailbox = backup_get_mailbox_by_uniqueid(backup, object_name,
+                                                 BACKUP_MAILBOX_ALL_RECORDS);
     }
     else if (message_guid_decode(&tmp_guid, object_name)) {
         /* looks like it's a message guid */
@@ -782,13 +784,15 @@ static int restore_add_object(const char *object_name,
     else if (strchr(object_name, '.')) {
         /* has a dot, might be an mboxname */
         mbname_t *mbname = mbname_from_intname(object_name);
-        mailbox = backup_get_mailbox_by_name(backup, mbname, 1);
+        mailbox = backup_get_mailbox_by_name(backup, mbname,
+                                             BACKUP_MAILBOX_ALL_RECORDS);
         mbname_free(&mbname);
     }
     else {
         /* not sure what it is, guess mboxname? */
         mbname_t *mbname = mbname_from_intname(object_name);
-        mailbox = backup_get_mailbox_by_name(backup, mbname, 1);
+        mailbox = backup_get_mailbox_by_name(backup, mbname,
+                                             BACKUP_MAILBOX_ALL_RECORDS);
         mbname_free(&mbname);
     }
 
@@ -802,7 +806,7 @@ static int restore_add_object(const char *object_name,
 
             len = snprintf(prefix, sizeof(prefix), "%s.", mailbox->mboxname);
 
-            /* can only be submailboxes if parent's path is short enough... */
+            /* can only be submailboxes if parent's name is short enough... */
             if (len < MAX_MAILBOX_NAME) {
                 struct submailbox_rock rock = {
                     prefix,
