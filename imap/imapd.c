@@ -8879,8 +8879,8 @@ static void cmd_getmetadata(const char *tag)
 	}
     }
 
-    if (have_private) strarray_append(&newa, "value.priv");
-    if (have_shared) strarray_append(&newa, "value.shared");
+    if (have_private) strarray_append(&newa, "/private");
+    if (have_shared) strarray_append(&newa, "/shared");
 
     astate = annotate_state_new();
     annotate_state_set_auth(astate,
