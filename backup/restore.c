@@ -641,33 +641,62 @@ static void apply_mailbox_options(struct backup_mailbox *mailbox,
                                   const struct restore_options *options)
 {
     if (options->override_mboxname) {
+        if (options->verbose) {
+            fprintf(stderr, "%s: overriding mboxname with %s\n",
+                    mailbox->mboxname, options->override_mboxname);
+        }
         if (mailbox->mboxname) free(mailbox->mboxname);
         mailbox->mboxname = xstrdup(options->override_mboxname);
     }
 
     if (options->override_partition) {
+        if (options->verbose) {
+            fprintf(stderr, "%s: overriding partition with %s (was %s)\n",
+                    mailbox->mboxname, options->override_partition, mailbox->partition);
+        }
         if (mailbox->partition) free(mailbox->partition);
         mailbox->partition = xstrdup(options->override_partition);
     }
 
     if (options->override_acl) {
+        if (options->verbose) {
+            fprintf(stderr, "%s: overriding acl with %s (was %s)\n",
+                    mailbox->mboxname, options->override_acl, mailbox->acl);
+        }
         if (mailbox->acl) free(mailbox->acl);
         mailbox->acl = xstrdup(options->override_acl);
     }
 
     if (!options->keep_uidvalidity) {
+        if (options->verbose) {
+            fprintf(stderr, "%s: not trying to keep uidvalidity\n",
+                    mailbox->mboxname);
+        }
         if (mailbox->uniqueid) free(mailbox->uniqueid);
         mailbox->uniqueid = NULL;
         mailbox->highestmodseq = 0;
         mailbox->uidvalidity = 0;
     }
+    else if (options->verbose) {
+        fprintf(stderr, "%s: trying to keep uidvalidity(%u), "
+                        "uniqueid(%s), highestmodseq(" MODSEQ_FMT ")\n",
+                mailbox->mboxname,
+                mailbox->uidvalidity,
+                mailbox->uniqueid,
+                mailbox->highestmodseq);
+    }
 
     if (mailbox->mboxname && options->trim_deletedprefix) {
         mbname_t *mbname = mbname_from_intname(mailbox->mboxname);
         if (mbname_isdeleted(mbname)) {
+            char *freeme = mailbox->mboxname;
             mbname_set_isdeleted(mbname, 0);
-            free(mailbox->mboxname);
             mailbox->mboxname = xstrdup(mbname_intname(mbname));
+            if (options->verbose) {
+                fprintf(stderr, "%s: removing deletedprefix (was %s)\n",
+                        mailbox->mboxname, freeme);
+            }
+            free(freeme);
         }
         mbname_free(&mbname);
     }
@@ -682,12 +711,26 @@ static void apply_mailbox_options(struct backup_mailbox *mailbox,
 
             switch (options->expunged_mode) {
             case RESTORE_EXPUNGED_EXCLUDE:
-                if (iter->expunged)
+                if (iter->expunged) {
                     tmp = backup_mailbox_message_list_remove(mailbox->records, iter);
+
+                    if (options->verbose) {
+                        fprintf(stderr, "%s: excluding expunged message: %s\n",
+                                mailbox->mboxname,
+                                message_guid_encode(&iter->guid));
+                    }
+                }
                 break;
             case RESTORE_EXPUNGED_ONLY:
-                if (!iter->expunged)
+                if (!iter->expunged) {
                     tmp = backup_mailbox_message_list_remove(mailbox->records, iter);
+
+                    if (options->verbose) {
+                        fprintf(stderr, "%s: excluding unexpunged message: %s\n",
+                                mailbox->mboxname,
+                                message_guid_encode(&iter->guid));
+                    }
+                }
                 break;
             default:
                 break;
