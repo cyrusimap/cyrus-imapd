@@ -3446,10 +3446,11 @@ int sync_restore_mailbox(struct dlist *kin,
             record.silent = 1;
 
         r = sync_append_copyfile(mailbox, &record, annots, part_list);
-        if (r) goto bail;
 
         has_append = 1;
         sync_annot_list_free(&annots);
+
+        if (r) goto bail;
     }
 
     r = mailbox_commit(mailbox);
