@@ -333,11 +333,17 @@ int main(int argc, char **argv)
         size_t len;
         FILE *f;
 
-        f = fopen(input_file, "r");
-        if (!f) {
-            fprintf(stderr, "fopen %s: %s", input_file, strerror(errno));
-            goto done;// FIXME shut_down?
+        if (0 != strcmp(input_file, "-")) {
+            f = fopen(input_file, "r");
+            if (!f) {
+                fprintf(stderr, "fopen %s: %s\n", input_file, strerror(errno));
+                goto done;// FIXME shut_down?
+            }
         }
+        else {
+            f = stdin;
+        }
+
         while (fgets(buf, sizeof(buf), f)) {
             len = strlen(buf);
 
