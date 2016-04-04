@@ -320,7 +320,10 @@ int main(int argc, char **argv)
 
     if (r) goto done;
 
-    /* scan for objects to restore */
+    /* scan for objects to restore:
+     *   mailboxes will have all messages added, modulo expunged_mode
+     *   messages will be added individually with appropriate folder
+     */
     mailbox_list = xzmalloc(sizeof *mailbox_list);
     reserve_folder_list = restore_make_reserve_folder_list(backup);
     reserve_list = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
@@ -377,19 +380,7 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    /* building lists of restore info:
-     *   mailboxes will have all messages added, modulo expunged_mode
-     *   messages will be added individually with appropriate folder
-     */
-
-    /* we now have a backup_mailbox_list structure containing all of
-     * the mailboxes we need, with corresponding records for the
-     * messages to be restored.
-     *
-     * we also have a sync_reserve_list structure containing the
-     * guids, which we'll need for processing the reserve step
-     */
-
+    /* do the restore */
     struct sync_reserve *reserve;
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
         /* send APPLY RESERVE and parse missing lists */
@@ -419,12 +410,12 @@ int main(int argc, char **argv)
 
     /* sync_prepare_dlists needs to upload messages per-mailbox, because
      * it needs the mailbox to find the filename for the message.  but
-     * we have no such limitation, so we could potentially process that
-     * while looping over the reserve_list instead.
+     * we have no such limitation, so we can upload messages while
+     * looping over the reserve_list instead, above.
      *
      * alternatively, if we do it on a per-mailbox basis then we can limit
      * the hit on the staging directory to only a mailbox worth of messages
-     * at a time.  though there isn't a logical grouping that would make
+     * at a time.  but we don't have a logical grouping that would make
      * this coherent
      */
 
