@@ -355,6 +355,7 @@ options:
     -P partition        # restore mailboxes to specified partition
     -U                  # try to preserve uniqueid, uid, modseq, etc
     -X                  # don't restore expunged messages
+    -a                  # try to restore all mailboxes in backup
     -n                  # calculate work required but don't perform restoration
     -r                  # recurse into submailboxes
     -v                  # verbose

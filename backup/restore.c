@@ -85,6 +85,7 @@ static void usage(void)
             "    -P partition        # restore mailboxes to specified partition\n"
             "    -U                  # try to preserve uniqueid, uid, modseq, etc\n"
             "    -X                  # don't restore expunged messages\n"
+            "    -a                  # try to restore all mailboxes in backup\n"
             "    -n                  # calculate work required but don't perform restoration\n"
             "    -r                  # recurse into submailboxes\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
@@ -151,6 +152,17 @@ static int restore_add_object(const char *object_name,
                               struct backup_mailbox_list *mailbox_list,
                               struct sync_folder_list *reserve_folder_list,
                               struct sync_reserve_list *reserve_list);
+static int restore_add_mailbox(const struct backup_mailbox *mailbox,
+                               const struct restore_options *options,
+                               struct backup_mailbox_list *mailbox_list,
+                               struct sync_folder_list *reserve_folder_list,
+                               struct sync_reserve_list *reserve_list);
+static int restore_add_message(const struct backup_message *message,
+                               const struct backup_mailbox_list *message_mailboxes,
+                               const struct restore_options *options,
+                               struct backup_mailbox_list *mailbox_list,
+                               struct sync_folder_list *reserve_folder_list,
+                               struct sync_reserve_list *reserve_list);
 
 static struct sync_folder_list *restore_make_reserve_folder_list(
                               struct backup *backup);
@@ -171,6 +183,7 @@ int main(int argc, char **argv)
     int local_only = 0;
     int wait = 0;
     int do_nothing = 0;
+    int do_all_mailboxes = 0;
 
     struct restore_options options = {0};
     options.expunged_mode = RESTORE_EXPUNGED_OKAY;
@@ -190,7 +203,7 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXf:m:nru:vw:xz")) != EOF) {
+    while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXaf:m:nru:vw:xz")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.keep_uidvalidity) usage();
@@ -204,6 +217,7 @@ int main(int argc, char **argv)
             options.trim_deletedprefix = 0;
             break;
         case 'F':
+            if (do_all_mailboxes) usage();
             input_file = optarg;
             break;
         case 'L':
@@ -228,6 +242,10 @@ int main(int argc, char **argv)
         case 'X':
             if (options.expunged_mode != RESTORE_EXPUNGED_OKAY) usage();
             options.expunged_mode = RESTORE_EXPUNGED_EXCLUDE;
+            break;
+        case 'a':
+            if (input_file) usage();
+            do_all_mailboxes = 1;
             break;
         case 'f':
             if (mode != RESTORE_MODE_UNSPECIFIED) usage();
@@ -277,9 +295,9 @@ int main(int argc, char **argv)
     if (!backup_name || mode == RESTORE_MODE_UNSPECIFIED) usage();
 
     /* we need either an input file or some objects to restore */
-    if (!input_file && optind == argc) usage();
+    if (!do_all_mailboxes && !input_file && optind == argc) usage();
     /* and we can't have both because i said */
-    if (input_file && optind < argc) usage();
+    if ((input_file || do_all_mailboxes) && optind < argc) usage();
 
     /* okay, arguments seem sane, we are go */
     cyrus_init(alt_config, "restore", 0, 0);
@@ -359,6 +377,21 @@ int main(int argc, char **argv)
             // FIXME r
         }
         fclose(f);
+    }
+    else if (do_all_mailboxes) {
+        struct backup_mailbox_list *all_mailboxes;
+        struct backup_mailbox *mailbox;
+
+        all_mailboxes = backup_get_mailboxes(backup, 0,
+                                             BACKUP_MAILBOX_ALL_RECORDS);
+
+        for (mailbox = all_mailboxes->head; mailbox; mailbox = mailbox->next) {
+            restore_add_mailbox(mailbox, &options, mailbox_list,
+                                reserve_folder_list, reserve_list);
+        }
+
+        backup_mailbox_list_empty(all_mailboxes);
+        free(all_mailboxes);
     }
     else {
         int i;
