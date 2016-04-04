@@ -72,6 +72,33 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    %s [options] -S server [mode] backup [mboxname | uniqueid | guid]...\n", argv0);
+
+    fprintf(stderr, "\n%s\n",
+            "Options:\n"
+            "    -A acl              # apply specified acl to restored mailboxes\n"
+            "    -C alt_config       # alternate config file\n"
+            "    -D                  # don't trim deletedprefix before restoring\n"
+            "    -F input-file       # read mailboxes/messages from file rather than argv\n"
+            "    -L                  # local mailbox operations only (no mupdate)\n"
+            "    -M mboxname         # restore messages to specified mailbox\n"
+            "    -P partition        # restore mailboxes to specified partition\n"
+            "    -U                  # try to preserve uniqueid, uid, modseq, etc\n"
+            "    -X                  # don't restore expunged messages\n"
+            "    -r                  # recurse into submailboxes\n"
+            "    -v                  # verbose (repeat for more verbosity)\n"
+            "    -w seconds          # wait before starting (useful for attaching a debugger)\n"
+            "    -x                  # only restore expunged messages\n"
+            "    -z                  # require compression (abort if compression unavailable)\n"
+    );
+
+    fprintf(stderr, "%s\n",
+            "Modes:\n"
+            "    -f                  # specified backup interpreted as filename\n"
+            "    -m                  # specified backup interpreted as mboxname\n"
+            "    -u                  # specified backup interpreted as userid\n"
+    );
+
     exit(EC_USAGE);
 }
 
