@@ -67,7 +67,8 @@ AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = \
 	xversion.h \
 	imap/imap_err.c \
-	lib/imapopts.c
+	lib/imapopts.c \
+	lib/imapopts.h
 
 DISTCLEANFILES = \
 	imap/imap_err.c \
@@ -761,7 +762,6 @@ include_HEADERS = \
 	lib/gmtoff.h \
 	lib/hash.h \
 	lib/hashu64.h \
-	lib/imapopts.h \
 	lib/imapurl.h \
 	lib/imclient.h \
 	lib/imparse.h \
@@ -788,6 +788,9 @@ include_HEADERS = \
 	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h
+
+nodist_include_HEADERS = \
+	lib/imapopts.h
 
 nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
@@ -1401,13 +1404,15 @@ noinst_LIBRARIES = libcrc32.a
 libcrc32_a_SOURCES = lib/crc32.c lib/crc32c.c
 libcrc32_a_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
+nodist_lib_libcyrus_min_la_SOURCES = \
+	lib/imapopts.c
+
 lib_libcyrus_min_la_SOURCES = \
 	lib/arrayu64.c \
 	lib/assert.c \
 	lib/bufarray.c \
 	lib/hash.c \
 	lib/hashu64.c \
-	lib/imapopts.c \
 	lib/libconfig.c \
 	lib/mpool.c \
 	lib/retry.c \
