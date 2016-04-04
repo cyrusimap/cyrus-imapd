@@ -85,6 +85,7 @@ static void usage(void)
             "    -P partition        # restore mailboxes to specified partition\n"
             "    -U                  # try to preserve uniqueid, uid, modseq, etc\n"
             "    -X                  # don't restore expunged messages\n"
+            "    -n                  # calculate work required but don't perform restoration\n"
             "    -r                  # recurse into submailboxes\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
             "    -w seconds          # wait before starting (useful for attaching a debugger)\n"
@@ -169,6 +170,7 @@ int main(int argc, char **argv)
     enum restore_mode mode = RESTORE_MODE_UNSPECIFIED;
     int local_only = 0;
     int wait = 0;
+    int do_nothing = 0;
 
     struct restore_options options = {0};
     options.expunged_mode = RESTORE_EXPUNGED_OKAY;
@@ -188,7 +190,7 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXf:m:ru:vw:xz")) != EOF) {
+    while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXf:m:nru:vw:xz")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.keep_uidvalidity) usage();
@@ -236,6 +238,9 @@ int main(int argc, char **argv)
             if (mode != RESTORE_MODE_UNSPECIFIED) usage();
             mode = RESTORE_MODE_MBOXNAME;
             backup_name = optarg;
+            break;
+        case 'n':
+            do_nothing = 1;
             break;
         case 'r':
             options.do_submailboxes = 1;
@@ -355,6 +360,12 @@ int main(int argc, char **argv)
 
             // FIXME r
         }
+    }
+
+    if (do_nothing) {
+        if (options.verbose)
+            fprintf(stderr, "do nothing (-n) specified, exiting now\n");
+        goto done;
     }
 
     /* connect to destination */
