@@ -585,21 +585,23 @@ static void my_mailbox_list_add(struct backup_mailbox_list *mailbox_list,
 
     if (tmp) {
         /* mailbox already in our list -- append the records to it */
-        if (!tmp->records) {
-            tmp->records = mailbox->records;
-            mailbox->records = NULL;
-        }
-        else if (!tmp->records->head) {
-            tmp->records->head = mailbox->records->head;
-            tmp->records->tail = mailbox->records->tail;
-            tmp->records->count = mailbox->records->count;
-            memset(mailbox->records, 0, sizeof *mailbox->records);
-        }
-        else {
-            tmp->records->tail->next = mailbox->records->head;
-            tmp->records->tail = mailbox->records->tail;
-            tmp->records->count += mailbox->records->count;
-            memset(mailbox->records, 0, sizeof *mailbox->records);
+        if (mailbox->records && mailbox->records->count) {
+            if (!tmp->records) {
+                tmp->records = mailbox->records;
+                mailbox->records = NULL;
+            }
+            else if (!tmp->records->head) {
+                tmp->records->head = mailbox->records->head;
+                tmp->records->tail = mailbox->records->tail;
+                tmp->records->count = mailbox->records->count;
+                memset(mailbox->records, 0, sizeof *mailbox->records);
+            }
+            else {
+                tmp->records->tail->next = mailbox->records->head;
+                tmp->records->tail = mailbox->records->tail;
+                tmp->records->count += mailbox->records->count;
+                memset(mailbox->records, 0, sizeof *mailbox->records);
+            }
         }
 
         /* release the mailbox we were given, since we're not holding it */
