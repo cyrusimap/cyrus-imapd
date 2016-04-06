@@ -1723,7 +1723,7 @@ static int mailbox_buf_to_index_record(const char *buf,
 
 static struct index_change *_find_change(struct mailbox *mailbox, uint32_t recno)
 {
-    uint32_t changeno = mailbox->index_change_map[recno % 256];
+    uint32_t changeno = mailbox->index_change_map[recno % INDEX_MAP_SIZE];
 
     while (changeno) {
         if (mailbox->index_changes[changeno-1].record.recno == recno)
@@ -1743,13 +1743,14 @@ static void _store_change(struct mailbox *mailbox, struct index_record *record, 
 
         /* allocate a space if required */
         if (mailbox->index_change_count > mailbox->index_change_alloc) {
-            mailbox->index_change_alloc += 30;
+            mailbox->index_change_alloc += 256;
             mailbox->index_changes = xrealloc(mailbox->index_changes, sizeof(struct index_change) * mailbox->index_change_alloc);
         }
 
         /* stitch into place */
-        mailbox->index_changes[mailbox->index_change_count-1].mapnext = mailbox->index_change_map[record->recno % 256];
-        mailbox->index_change_map[record->recno % 256] = mailbox->index_change_count; /* always non-zero */
+        uint32_t pos = record->recno % INDEX_MAP_SIZE;
+        mailbox->index_changes[mailbox->index_change_count-1].mapnext = mailbox->index_change_map[pos];
+        mailbox->index_change_map[pos] = mailbox->index_change_count; /* always non-zero */
         change = &mailbox->index_changes[mailbox->index_change_count-1];
     }
 

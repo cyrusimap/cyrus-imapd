@@ -215,6 +215,8 @@ struct index_change {
     uint32_t flags;
 };
 
+#define INDEX_MAP_SIZE 65536
+
 struct mailbox {
     int index_fd;
     int header_fd;
@@ -269,7 +271,7 @@ struct mailbox {
     quota_t quota_previously_used[QUOTA_NUMRESOURCES]; /* for quota change */
 
     /* index change map */
-    uint32_t index_change_map[256];
+    uint32_t index_change_map[INDEX_MAP_SIZE];
     struct index_change *index_changes;
     uint32_t index_change_alloc;
     uint32_t index_change_count;
