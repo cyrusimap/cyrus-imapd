@@ -1813,7 +1813,7 @@ static void _cleanup_changes(struct mailbox *mailbox)
     mailbox->index_changes = NULL;
     mailbox->index_change_count = 0;
     mailbox->index_change_alloc = 0;
-    memset(mailbox->index_change_map, 0, sizeof(uint32_t)*256);
+    memset(mailbox->index_change_map, 0, sizeof(uint32_t)*INDEX_MAP_SIZE);
 }
 
 /* qsort function for changes */
