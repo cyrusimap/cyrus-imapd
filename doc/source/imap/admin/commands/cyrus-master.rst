@@ -100,7 +100,9 @@ is used.
 hangup signal, SIGHUP.  Services and events may be added, deleted or
 modified when the configuration file is reread.  Any active services
 removed from the configuration file will be allowed to run until
-completion.
+completion.  Services added or modified to listen on a privileged port
+may not be able to bind the port, depending on your system
+configuration.  In this case a full restart is needed.
 
 **cyrus-master** propagates the hangup signal, SIGHUP, to its child
 service processes, so that they stop waiting for incoming connections
@@ -110,7 +112,7 @@ services take into account a new version of the
 connection when SIGHUP is received are allowed to run until the client
 logouts before being recycled. It may take a long time until the client
 logouts, so a log message is generated for processes that have not been
-recycled whithin 30s.
+recycled within 30s.
 
 Notes
 =====

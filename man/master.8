@@ -144,7 +144,10 @@ file.
 rereads its configuration file when it receives a hangup signal,
 SIGHUP.  Services and events may be added, deleted or modified when the
 configuration file is reread.  Any active services removed from the
-configuration file will be allowed to run until completion.
+configuration file will be allowed to run until completion.  Services
+added or modified to listen on a privileged port may not be able to
+bind the port, depending on your system configuration.  In this case a
+full restart is needed.
 .PP
 .I Master
 propagates the hangup signal, SIGHUP, to its child service processes, so
@@ -155,7 +158,7 @@ version of the
 file.  Children that are servicing a client connection when SIGHUP is
 received are allowed to run until the client logouts before being recycled.
 It may take a long time until the client logouts, so a log message is
-generated for processes that have not been recycled whithin 30s.
+generated for processes that have not been recycled within 30s.
 .SH NOTES
 The environment variable \fBCYRUS_VERBOSE\fR can be set to log additional
 debugging information. Setting the value to 1 results in base level logging.
