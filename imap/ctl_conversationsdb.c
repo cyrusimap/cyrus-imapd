@@ -191,35 +191,45 @@ static int build_cid_cb(const mbentry_t *mbentry,
 {
     struct mailbox *mailbox = NULL;
     const struct index_record *record;
-    int r;
+    int r = 0;
+    int count = 1;
     struct conversations_state *cstate = conversations_get_mbox(mbentry->name);
 
     if (!cstate) return IMAP_CONVERSATIONS_NOT_OPEN;
 
-    r = mailbox_open_iwl(mbentry->name, &mailbox);
-    if (r) return r;
+    while (!r && count) {
+        r = mailbox_open_iwl(mbentry->name, &mailbox);
+        if (r) return r;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((record = mailbox_iter_step(iter))) {
-        /* already assigned, fine */
-        if (record->cid != NULLCONVERSATION)
-            continue;
+        count = 0;
 
-        struct index_record oldrecord = *record;
-        r = mailbox_cacherecord(mailbox, &oldrecord);
-        if (r) goto done;
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+        while ((record = mailbox_iter_step(iter))) {
+            /* already assigned, fine */
+            if (record->cid != NULLCONVERSATION)
+                continue;
 
-        r = message_update_conversations(cstate, &oldrecord, NULL);
-        if (r) goto done;
+            struct index_record oldrecord = *record;
+            r = mailbox_cacherecord(mailbox, &oldrecord);
+            if (r) goto done;
 
-        r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-        if (r) goto done;
+            r = message_update_conversations(cstate, &oldrecord, NULL);
+            if (r) goto done;
+
+            r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+            if (r) goto done;
+
+            count++;
+            /* batch so we don't lock for ages */
+            if (count > 8192) break;
+        }
+
+        mailbox_iter_done(&iter);
+
+    done:
+        mailbox_close(&mailbox);
     }
 
-    mailbox_iter_done(&iter);
-
- done:
-    mailbox_close(&mailbox);
     return r;
 }
 
