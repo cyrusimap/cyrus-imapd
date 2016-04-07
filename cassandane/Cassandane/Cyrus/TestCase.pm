@@ -162,6 +162,9 @@ sub config_set
     }
 }
 
+magic(ReverseACLs => sub {
+    shift->config_set(reverseacls => 1);
+});
 magic(replication => sub { shift->want('replica'); });
 magic(murder => sub { shift->want('murder'); });
 magic(AnnotationAllowUndefined => sub {
