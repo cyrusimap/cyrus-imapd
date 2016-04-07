@@ -5501,8 +5501,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                 propfind_by_collection(txn->req_tgt.mbentry, &fctx);
             }
             else if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
-                /* Add responses for all contained collections */
-                mboxlist_allmbox("", propfind_by_collection, &fctx, 0);
+                /* Add responses for all visible collections */
+                mboxlist_usermboxtree(httpd_userid, propfind_by_collection, &fctx, MBOXTREE_PLUS_RACL);
             }
             else if (txn->req_tgt.mbentry) {
                 /* Add responses for all contained collections */
