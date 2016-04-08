@@ -62,8 +62,10 @@
 #include "xstrlcat.h"
 #include "mailbox.h"
 #include "util.h"
-#include "imap_err.h"
 #include "times.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 #define FNAME_NOTIFY_SOCK "/socket/notify"
 
