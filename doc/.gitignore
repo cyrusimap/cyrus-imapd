@@ -1,1 +1,3 @@
+# XXX merge this into top level .gitignore
 build
+*.pyc
