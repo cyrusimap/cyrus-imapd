@@ -140,6 +140,8 @@ When you're done, don't forget to delete your testing script::
 Cyrus Sieve Support
 ===================
 
+.. _cyrus-sieve-specialuse:
+
 Special use folders
 -------------------
 
