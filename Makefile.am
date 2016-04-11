@@ -1602,6 +1602,7 @@ perl_libcyrus_la_SOURCES = $(lib_libcyrus_la_SOURCES)
 perl_libcyrus_la_LIBADD = $(lib_libcyrus_la_LIBADD)
 perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
 perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
+nodist_perl_libcyrus_min_la_SOURCES = $(nodist_lib_libcyrus_min_la_SOURCES)
 
 perl_sieve_lib_libisieve_la_SOURCES = \
 	perl/sieve/lib/codes.h \
