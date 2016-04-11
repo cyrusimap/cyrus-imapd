@@ -10477,6 +10477,16 @@ static int backend_version(struct backend *be)
 {
     const char *minor;
 
+    /* IMPORTANT:
+     *
+     * When adding checks for new versions, you must also backport these
+     * checks to previous versions (especially 2.4 and 2.5).
+     *
+     * Otherwise, old versions will be unable to recognise the new version,
+     * assume it is ancient, and downgrade the index to the oldest version
+     * supported (version 6, prior to v2.3).
+     */
+
     /* It's like looking in the mirror and not suffering from schizophrenia */
     if (strstr(be->banner, cyrus_version())) {
         return MAILBOX_MINOR_VERSION;
