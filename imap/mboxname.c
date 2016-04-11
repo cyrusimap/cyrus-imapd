@@ -1277,9 +1277,7 @@ HIDDEN int mboxname_policycheck(const char *name)
 	else {
 	    if (!strchr(GOODCHARS, *name) &&
 		/* If we're using unixhierarchysep, DOTCHAR is allowed */
-		!(unixsep && *name == DOTCHAR) ||
-		/* If we're not using virtdomains, '@' is not permitted in the mboxname */
-		(!config_virtdomains && *name == '@'))
+		!(unixsep && *name == DOTCHAR))
 		return IMAP_MAILBOX_BADNAME;
 	    name++;
 	    sawutf7 = 0;
