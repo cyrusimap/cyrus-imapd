@@ -74,22 +74,16 @@ void xapian_init(void)
 int xapian_compact_dbs(const char *dest, const char **sources)
 {
     int r = 0;
+    Xapian::Database db;
 
     try {
-        Xapian::Compactor *c = new Xapian::Compactor;
-
         while (*sources) {
-            c->add_source(*sources++);
+            Xapian::Database subdb(*sources++);
+            db.add_database(subdb);
         }
 
-        c->set_destdir(dest);
-
-        /* we never write to compresion targets again */
-        c->set_compaction_level(Xapian::Compactor::FULLER);
-
-        c->set_multipass(true);
-
-        c->compact();
+        /* FULLER because we never write to compression targets again */
+        db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS);
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
