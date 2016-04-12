@@ -253,6 +253,7 @@ EXPORTED int backup_open(struct backup **backupp,
     struct buf index_fname = BUF_INITIALIZER;
 
     int r = backup_get_paths(mbname, &data_fname, &index_fname, create);
+    /* XXX convert CYRUSDB return code to IMAP */
     if (r) goto done;
 
     r = backup_real_open(backupp,

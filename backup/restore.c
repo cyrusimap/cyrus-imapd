@@ -72,7 +72,7 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    %s [options] -S server [mode] backup [mboxname | uniqueid | guid]...\n", argv0);
+    fprintf(stderr, "    %s [options] server [mode] backup [mboxname | uniqueid | guid]...\n", argv0);
 
     fprintf(stderr, "\n%s\n",
             "Options:\n"
@@ -98,7 +98,7 @@ static void usage(void)
             "Modes:\n"
             "    -f                  # specified backup interpreted as filename\n"
             "    -m                  # specified backup interpreted as mboxname\n"
-            "    -u                  # specified backup interpreted as userid\n"
+            "    -u                  # specified backup interpreted as userid (default)\n"
     );
 
     exit(EC_USAGE);
@@ -203,7 +203,7 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "A:C:DF:LM:P:S:UXaf:m:nru:vw:xz")) != EOF) {
+    while ((opt = getopt(argc, argv, "A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.keep_uidvalidity) usage();
@@ -230,9 +230,6 @@ int main(int argc, char **argv)
         case 'P':
             if (options.keep_uidvalidity) usage();
             options.override_partition = optarg;
-            break;
-        case 'S':
-            servername = optarg;
             break;
         case 'U':
             if (options.override_acl || options.override_mboxname || options.override_partition)
@@ -289,10 +286,15 @@ int main(int argc, char **argv)
     }
 
     /* we need a server name */
-    if (!servername) usage();
+    if (optind == argc) usage();
+    servername = argv[optind++];
 
     /* we need a source of backup data */
-    if (!backup_name || mode == RESTORE_MODE_UNSPECIFIED) usage();
+    if (mode == RESTORE_MODE_UNSPECIFIED) {
+        if (optind == argc) usage();
+        backup_name = argv[optind++];
+        mode = RESTORE_MODE_USERNAME;
+    }
 
     /* we need either an input file or some objects to restore */
     if (!do_all_mailboxes && !input_file && optind == argc) usage();
@@ -480,7 +482,7 @@ int main(int argc, char **argv)
 
 done:
     if (r)
-        fprintf(stderr, "%s: %s:\n", backup_name, error_message(r));
+        fprintf(stderr, "%s: %s\n", backup_name, error_message(r));
 
     /* release lock asap */
     if (backup)
