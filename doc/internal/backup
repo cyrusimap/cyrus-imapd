@@ -289,17 +289,10 @@ questions
 restore
 -------
 
-* restored: runs on master servers listening for sync commands from the restore client
-* restore: sbin program for selecting and restoring messages
-
-=> just add SYNCRESTORE to imapd
-=> cyr_backup restore mailboxes -u anne user.anne.something
-=> cyr_backup restore messages -u anne 8962hfa7sdiuhl 87yt3rhjfsbkh 784uygjhfs
-
 restoration is effectively a reverse-direction replication (replicating TO master),
-which means we can't supply things like uid, modseq, etc without racing against normal
-message arrivals.  so instead we add an extra command to the protocol to restore a
-message to a folder but let the server determine the tasty bits.
+which means we can't necessarily supply things like uid, modseq, etc without racing
+against normal message arrivals.  so instead we add an extra command to the protocol
+to restore a message to a folder but let the destination determine the tasty bits.
 
 protocol flow looks something like:
 
@@ -308,7 +301,7 @@ s: * MISSING (foo bar)
 s: OK
 c: APPLY MESSAGE ... # as usual
 s: OK
-c: [new command: APPLY RESTORE? RESTORE MAILBOX?]
+c: RESTORE MAILBOX ... # new sync proto command
 s: OK
 
 we introduce a new command, RESTORE MAILBOX, which is similar to the existing
@@ -327,6 +320,14 @@ folder with same name.  so it's probably v common for mailbox uniqueid to not ma
 like this.  so we don't care about special handling for this case.  just add any
 messages that aren't already there.
 
+if the mailbox doesn't already exist on the destination (e.g. if rebuilding a server
+from backups) then it's safe and good to reuse uidvalidity, uniqueid, uid, modseq etc,
+such that connecting clients can preserve their state.  so the imapd/sync_server
+receiving the restore request accepts these fields as optional, but only preserves
+them if it's safe to do so.
+
+* restore: sbin program for selecting and restoring messages
+
 restore command needs options:
 + whether or not to trim deletedprefix off mailbox names to be restored
 + whether or not to restore uniqueid, highestmodseq, uid and so on
@@ -338,12 +339,13 @@ restore command needs options:
 + override acl?
 
 can we heuristically determine whether an argument is an mboxname, uniqueid or guid?
-    => uniqueid contains - at fixed positions
+    => libuuid uniqueid is 36 bytes of hyphen (at fixed positions) and hex digits
+    => non-libuuid uniqueid is 24 bytes of hex digits
     => mboxname usually contains at least one . somewhere
-    => guid is only hex digits
+    => guid is 40 bytes of hex digits
 
 usage:
-    restore [options] -S server [mode] backup [mboxname | uniqueid | guid]...
+    restore [options] server [mode] backup [mboxname | uniqueid | guid]...
 
 options:
     -A acl              # apply specified acl to restored mailboxes
@@ -366,7 +368,7 @@ options:
 mode:
     -f                  # specified backup interpreted as filename
     -m                  # specified backup interpreted as mboxname
-    -u                  # specified backup interpteted as userid
+    -u                  # specified backup interpreted as userid (default)
 
 
 compact
