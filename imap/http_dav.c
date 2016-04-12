@@ -5109,7 +5109,7 @@ static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
         if (mbox_owner) *mbox_owner = xstrdup(owner);
 
         if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
-            if (strcmp(owner, userid))
+            if (strcmp(owner, userid) && strstr(urlprefix, "addressbooks"))
                 buf_printf(buf, "%s/%s/", "zzzz", owner);
             else
                 buf_printf(buf, "%s/%s/", USER_COLLECTION_PREFIX, owner);
