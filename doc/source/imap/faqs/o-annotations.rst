@@ -21,21 +21,21 @@ Cyrus annotations are based on a draft (http://tools.ietf.org/html/draft-daboo-i
 
 * **/vendor/cmu/cyrus-imapd/condstore** - Enables the IMAP CONDSTORE extension (modification sequences) on the mailbox. (See :cyrusman:`cyradm(1)`)
 
-* **vendor/cmu/cyrus-imapd/duplicatedeliver** - Flag signalling that we're allowing duplicate delivery of messages to the mailbox, overriding system-wide duplicate suppression. (http://cyrusimap.web.cmu.edu/imapd/internal/mailbox-format.html)
+* **vendor/cmu/cyrus-imapd/duplicatedeliver** - Flag signalling that we're allowing duplicate delivery of messages to the mailbox, overriding system-wide duplicate suppression. (https://cyrusimap.org/docs/cyrus-imapd/2.5.7/internal/mailbox-format.php)
 
 * **/vendor/cmu/cyrus-imapd/expire** - Sets the number of days after which messages will be expired from the mailbox. (cyradm(1))
 
 * **/vendor/cmu/cyrus-imapd/freespace** - Undocumented.
 
-* **/vendor/cmu/cyrus-imapd/lastpop** - (time_t) of the last pop3 login to this INBOX, used to enforce the "poptimeout" imapd.conf option. (http://cyrusimap.web.cmu.edu/imapd/internal/mailbox-format.html)
+* **/vendor/cmu/cyrus-imapd/lastpop** - (time_t) of the last pop3 login to this INBOX, used to enforce the "poptimeout" imapd.conf option. (https://cyrusimap.org/docs/cyrus-imapd/2.5.7/internal/mailbox-format.php)
 
-* **vendor/cmu/cyrus-imapd/lastupdate** - (time_t) of the last time a message was appended (http://cyrusimap.web.cmu.edu/imapd/internal/mailbox-format.html)
+* **vendor/cmu/cyrus-imapd/lastupdate** - (time_t) of the last time a message was appended (https://cyrusimap.org/docs/cyrus-imapd/2.5.7/internal/mailbox-format.php)
 
 * **/vendor/cmu/cyrus-imapd/news2mail** - Sets an email address to which messages injected into the server via NNTP will be sent. (cyradm(1))
 
 * **/vendor/cmu/cyrus-imapd/partition** - Undocumented.
 
-* **/vendor/cmu/cyrus-imapd/pop3newuidl** - Flag signalling that we're using "uidvalidity.uid" instead of just "uid" for the output of the POP3 UIDL command. (http://cyrusimap.web.cmu.edu/imapd/internal/mailbox-format.html)
+* **/vendor/cmu/cyrus-imapd/pop3newuidl** - Flag signalling that we're using "uidvalidity.uid" instead of just "uid" for the output of the POP3 UIDL command. (https://cyrusimap.org/docs/cyrus-imapd/2.5.7/internal/mailbox-format.php)
 
 * **/vendor/cmu/cyrus-imapd/serve** - Undocumented.
 
