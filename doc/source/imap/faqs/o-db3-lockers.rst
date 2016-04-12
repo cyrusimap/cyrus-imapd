@@ -27,5 +27,5 @@ Andreas (andreas@conectiva.com.br) writes::
 
     The links above talk about the C api, but don't get alarmed, these paremeters can be set with a DB_CONFIG configuration file located in the DB environment home.
 
-I also suppose the :cyrusman:`db_stat(8)` utility can be used to diagnose this.
+I also suppose the :manpage:`db_stat(8)` utility can be used to diagnose this.
 

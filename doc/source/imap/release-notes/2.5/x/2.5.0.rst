@@ -17,8 +17,8 @@ Cyrus IMAP 2.5.0 Release Notes
 
 Download via HTTP:
 
-    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.0.tar.gz
-    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.0.tar.gz.sig
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.0.tar.gz
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.0.tar.gz.sig
 
 Download via FTP:
 
