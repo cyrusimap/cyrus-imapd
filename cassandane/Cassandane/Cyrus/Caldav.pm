@@ -868,7 +868,7 @@ EOF
 }
 
 sub test_fastmailsharing
-    :FastmailSharing
+    :FastmailSharing :ReverseACLs
 {
     my ($self) = @_;
 
