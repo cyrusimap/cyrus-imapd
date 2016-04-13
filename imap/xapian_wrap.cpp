@@ -249,7 +249,7 @@ int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
         } catch (Xapian::DatabaseOpeningError &e) {
             /* It's OK not to atomically create or open, since we can assume
              * the xapianactive file items to be locked. */
-            dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_CREATE);
+            dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_CREATE|Xapian::DB_BACKEND_CHERT);
             dbw->stem_version = XAPIAN_STEM_CURRENT_VERSION;
             stem_version_set(dbw->database, dbw->stem_version);
         }
