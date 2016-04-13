@@ -239,6 +239,7 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
     namespace = *n;
     /* standardize IMAP URL format */
     namespace.isadmin = 1;
+    namespace.isalt = 0;
 }
 
 static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
