@@ -59,7 +59,10 @@ You should at this moment be able to authenticate against
 
     # :command:`testsaslauthd -u cyrus -p YOUR-PASSWORD`
 
-If this does not succeed, see :ref:`sasl-troubleshooting-saslauthd`.
+
+You should get an ``0: OK "Success."`` message.
+
+.. todo:: If this does not succeed, see ref `sasl-troubleshooting-saslauthd`.
 
 Start the service, and ensure the service starts up when the system
 boots. For Fedora 14 and below:
