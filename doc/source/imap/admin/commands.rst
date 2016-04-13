@@ -21,6 +21,7 @@ List of Command-line Utilities
     commands/arbitron
     commands/arbitronsort.pl    
     commands/chk_cyrus
+    commands/convert-sieve.pl       
     commands/ctl_cyrusdb
     commands/ctl_conversationsdb
     commands/ctl_deliver
@@ -105,12 +106,17 @@ the form of actual man-pages.
     commands/mupdate-loadgen.pl
     commands/proxyd
     commands/rehash
-
-.. translatesieve better version of convert-sieve (does this make convert-sieve obsolete?)]
+    commands/cvt_cyrusdb_all
+    commands/cyr_userseen
+    commands/dohash
+    commands/undohash
+    commands/upgradesieve
+    commands/sieveshell
 
     commands/translatesieve
-    commands/convert-sieve.pl   
-   
-..  this is just the template for new command files so it obeys man and html formatting.   
-
     commands/template
+
+   
+..  commands/template: this is just the template for new command files so it obeys man and html formatting.   
+.. translatesieve better version of convert-sieve (does this make convert-sieve obsolete?)]
+

@@ -1,7 +1,7 @@
 .. _imap-admin-commands-cyradm:
 
 ==========
-``cyradm``
+**cyradm**
 ==========
 
 The ``cyradm`` utility is a simple command line for performing common

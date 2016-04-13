@@ -64,6 +64,9 @@ This is the highlight reel of Cyrus's full list of features_.
     :hidden:
 
     admin
+    imap/index
+    preface
+    styles
 
 ..  note to documentation contributors:
 

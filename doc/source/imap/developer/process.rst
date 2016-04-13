@@ -1,7 +1,8 @@
 .. _devprocess:
-==================================
+
+===================
 Development Process
-==================================
+===================
 
 We need to develop not just for ourselves, but for the legions who follow us. This means following good development process to provide transparency, maintainability and readability to what we're doing.
 
@@ -23,6 +24,7 @@ Making changes
 
 Before you begin
 ----------------
+
 Found a bug? Got an enhancement? Great!
 
 Something to consider before you leap in with a new feature: this is an open source project. If your change isn't a basic part of what is already planned, will you be around to support it? Can you justify why it's in the best interests of the project to have your change included? We'd love to talk it through with you: contact us via the :ref:`mailing lists <feedback>`.

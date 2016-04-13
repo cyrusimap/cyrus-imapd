@@ -1,4 +1,5 @@
 .. _imapinstall-xapian:
+
 ====================
 Xapian for searching
 ====================

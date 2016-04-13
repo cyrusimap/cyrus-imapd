@@ -163,14 +163,14 @@ Sieve has a lot of `extensions <http://www.iana.org/assignments/sieve-extensions
 * Relational Tests :rfc:`5231`
 * Subaddress Extension :rfc:`5233`
 * Copying Without Side Effects :rfc:`3894`
-* Regular Expression Extension `Draft RFC <http://tools.ietf.org/html/draft-ietf-sieve-regex-01>`_
+* Regular Expression Extension `Draft regex RFC <http://tools.ietf.org/html/draft-ietf-sieve-regex-01>`_
 * Checking mailbox status and accessing mailbox metadata :rfc:`5490`
 * Notify Extension :rfc:`5435`
 * Include :rfc:`6609`
 * Date :rfc:`5260`
 * Index :rfc:`5260`
-* IMAP flag Extension `Draft RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
-* Body Extension `Draft RFC <http://tools.ietf.org/html/draft-ietf-sieve-body-02>`_
+* IMAP flag Extension `Draft imap flags RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
+* Body Extension `Draft body extension RFC <http://tools.ietf.org/html/draft-ietf-sieve-body-02>`_
 
 Note that the final RFCs of these last sieve extensions have significant changes that are not currently supported.
 

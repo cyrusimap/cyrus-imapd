@@ -1,4 +1,5 @@
 .. _imapinstallguide:
+
 ==================================
 Developer Environment Installation
 ==================================
@@ -51,7 +52,7 @@ Setting up dependencies
 Compile Cyrus
 ---------------
 
-Do you want to use :ref:`Xapian for searching<imapinstall-xapian>`? If so, there's some additional steps. 
+There are additional :ref:`compile and installation steps<imapinstall-xapian>` if you are using Xapian for searching.  
 
 .. code-block:: bash
 

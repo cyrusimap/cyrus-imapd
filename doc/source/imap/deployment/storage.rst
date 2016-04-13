@@ -180,15 +180,8 @@ look as follows:
 For a fully detailed picture of the internal structures, please see the
 `DRBD`_ website, the canonical experts on this level of replication.
 
-At the time of this writing, the DRBD website has an excellent diagram
-on its front page, explaining why one master is active, and slaves are
-not:
-
-.. figure:: http://www.drbd.org/uploads/pics/overview_02.gif
-    :align: center
-
-As illustrated, normally, storage-level replication occurs in such
-fashion, that it can be compared with a distributed version of a RAID-1
+Normally storage-level replication occurs in such
+fashion that it can be compared with a distributed version of a RAID-1
 array. This incurs limitations that need to be evaluated carefully.
 
 In a hardware RAID-1 array, storage is physically constrained to a

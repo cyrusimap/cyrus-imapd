@@ -27,7 +27,7 @@ Changes Since 2.5.5
 ===================
 
 New imapd.conf options
------------
+----------------------
 
 * tls_required (default: 0).  Set this to 1 to require a TLS session for ALL
   authentications, not just plain ones (thanks Carlos Velasco)

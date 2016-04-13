@@ -1,7 +1,8 @@
 .. _basicserver:
-==================================
+
+======================
 Running a basic server
-==================================
+======================
 
 Now you have :ref:`compiled and installed Cyrus <imapinstallguide>`, it's time to get real.
 
@@ -20,6 +21,7 @@ At the end of this guide, you will be up and running with a local instance of Cy
 
 1. Update your system
 ----------------------
+
 First things first, let's update our existing system to ensure everything is current. This may take some time; you can check `Hacker News`_ in the meantime :-)
 
 ::
@@ -168,6 +170,7 @@ Cyrus uses assorted protocols, which need to have their ports defined in ``/etc/
     
 7. Configuring Cyrus
 --------------------
+
 (Nearly there)
 
 Before you launch Cyrus for the first time, create the Cyrus directory structure: use :cyrusman:`mkimap(8)`.
@@ -250,6 +253,7 @@ Time to cheer!
  
 Optional: Setting up SSL certificates
 -------------------------------------
+
 Let's set up encryption with TLS. Create a TLS certificate using OpenSSL. Generate the certificate and store it in the /var/imap/server.pem file:
 
 ::
@@ -359,19 +363,24 @@ You should also be able to hook up a regular mail client to your shiny new mails
 Checking carddav
 ----------------
 
+To be written.
+
 Checking caldav
 ---------------
+
+To be written.
 
 ----
 
 Troubleshooting
 ---------------
-Some common issues are explained below. You are welcome to join us in the :ref:`#cyrus IRC channel on Freenode <feedback>` if you need help or just want to chat about Cyrus, IMAP, donuts, etc :-)
+
+Some common issues are explained below. 
 
 I have all kinds of weird Perl errors when running cyradm
 #########################################################
 
-The solution is quite simple: we need to set the Perl library path right. To be honest, I was too lazy to figure out exactly which path was right, so I added this snippet to my ``~/.bashrc`` file:
+The solution is to set the Perl library path right. To be honest, I was too lazy to figure out exactly which path was right, so I added this snippet to my ``~/.bashrc`` file:
 
 ::
 
@@ -408,3 +417,7 @@ More information is almost always logged to **syslog**. Make sure you start sysl
 
     /etc/init.d/rsyslog start 
 
+My question isn't answered here
+###############################
+
+Join us in the :ref:`#cyrus IRC channel on Freenode <feedback>` or on the mailing lists if you need help or just want to chat about Cyrus, IMAP, donuts, etc.   

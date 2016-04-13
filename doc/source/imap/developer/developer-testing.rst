@@ -1,4 +1,5 @@
 .. _developer-testing:
+
 ==========================
 Developer Test Environment
 ==========================
@@ -18,7 +19,6 @@ Persian Empire.  So that's kinda cool.
 
 .. _Cassandane: https://en.wikipedia.org/wiki/Cassandane
 
-
 Install and configure Cassandane
 --------------------------------
 
@@ -26,6 +26,8 @@ Install and configure Cassandane
 
     * If you are a member of `IMAP Committers`_, use: ``git clone ssh://git@git.cyrus.foundation/diffusion/C/cassandane.git``
     * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/C/cassandane.git``
+
+.. _IMAP Committers: https://git.cyrus.foundation/tag/imap_committers/
 
 2. Install dependencies
 

@@ -361,6 +361,7 @@ Operations on the Mailbox List
     causes mail delivery to temporarily fail.
 
 .. _imap_referrals:    
+
 IMAP Referrals
 --------------
 
@@ -430,6 +431,7 @@ Failure Mode Analysis
 
 What happens when a backend server comes up?
 #############################################
+
     Resynchronization with the MUPDATE server. Any mailboxes that exist
     locally but are not in MUPDATE are pushed to MUPDATE. Any mailboxes
     that exist locally but are in MUPDATE as living on a different
@@ -438,12 +440,14 @@ What happens when a backend server comes up?
 
 What happens when a frontend server comes up? 
 ##############################################
+
     The only thing that needs to happen is for the frontend to connect
     to the MUPDATE server, issue an UPDATE command, and resynchronize
     its local database copy with the copy on the master server.
     
 Where's the true mailboxes file? 
 ################################
+
     The MUPDATE master contains authoritative information as to the
     location of any mailbox (in the case of a conflict), but the
     backends are authoritative as to which mailboxes actually exist.
@@ -455,6 +459,7 @@ Summary of Benefits
   frontend only result in a reduction of capacity. Users currently
   connected still lose their session but can just reconnect to get back
   online.
+  
     * The failure of the backends will result in the loss of
       availability. However, given that the data is distributed among
       multiple servers, the failure of a single server does not result
@@ -467,17 +472,21 @@ Summary of Benefits
     * At this point, there may be some ideas but no plans for providing
       a high availability solution which would allow for backend
       servers or the MUPDATE server to fail with no availability impact.
+      
 * **Load scalability** - No specific benchmarks have been run to
   show that this system actually performs better. However, it is clear
   that it scales to a larger number of users than a single server
   architecture would. Though, based on the fact that there are no further
   performance problems beyond when running a single machine,
   but handling about 20% more concurrent users, this is a success.
+  
 * **Management benefits** - As with AFS, administrators have the
   flexibility of placement of data on the servers, "live" move of data
   between servers,
+  
 * **User benefits** - The user only needs to know a single server name
   for configuration. The same name can be handed out to all users.
+  
     * Users don't lose the ability to share their folders and those
       folders are visible to other users. A user's INBOX folder
       hierarchy can also exist across multiple machines.

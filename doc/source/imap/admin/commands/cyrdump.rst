@@ -1,8 +1,8 @@
 .. _imap-admin-commands-cyrdump:
 
-==========
+===========
 **cyrdump**
-==========
+===========
 
 Dumps out a basic copy of mailbox data to stdout. There is no corresponding restore command.
 

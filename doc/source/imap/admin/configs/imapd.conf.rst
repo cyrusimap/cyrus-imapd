@@ -50,6 +50,7 @@ DESCRIPTION
     \`\`true'' and \`\`\ 1'' turn the option on, the values \`\`no'', \`\`off'',
     \`\`f'', \`\`false'' and \`\`\ 0'' turn the option off.
 
+    
 FIELD DESCRIPTIONS
 ==================
 

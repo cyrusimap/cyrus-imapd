@@ -22,6 +22,7 @@ Getting Started
     :hidden:
     
     developer/developer-tips
+    developer/install-xapian
     
 Resources
 =========
