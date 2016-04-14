@@ -111,7 +111,6 @@ sub test_list_percent
     $self->assert_deep_equals($alldata, [
           [
             [
-              '\\Noinferiors',
               '\\HasNoChildren'
             ],
             '/',

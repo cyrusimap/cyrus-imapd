@@ -202,7 +202,7 @@ sub test_rfc5258_ex01_list_all
     my $alldata = $imaptalk->list("", "*");
 
     $self->_assert_list_data($alldata, '/', {
-        'INBOX'                 => [qw( \\Noinferiors \\HasNoChildren )],
+        'INBOX'                 => [qw( \\HasNoChildren )],
         'Fruit'                 => [qw( \\HasChildren )],
         'Fruit/Apple'           => [qw( \\HasNoChildren )],
         'Fruit/Banana'          => [qw( \\HasNoChildren )],
@@ -233,7 +233,7 @@ sub test_rfc5258_ex02_list_subscribed
 
     xlog(Dumper $subdata);
     $self->_assert_list_data($subdata, '/', {
-        'INBOX'                 => [qw( \\Noinferiors \\Subscribed )],
+        'INBOX'                 => [qw( \\Subscribed )],
         'Fruit/Banana'          => '\\Subscribed',
         'Fruit/Peach'           => [qw( \\NonExistent \\Subscribed )],
         'Vegetable'             => [qw( \\Subscribed \\HasChildren )], # HasChildren not required by spec, but cyrus tells us
@@ -262,7 +262,7 @@ sub test_rfc5258_ex03_children
     );
 
     $self->_assert_list_data($data, '/', {
-        'INBOX' => [ '\\Noinferiors' ],
+        'INBOX' => [ '\\HasNoChildren' ],
         'Fruit' => [ '\\HasChildren' ],
         'Tofu'  => [ '\\HasNoChildren' ],
         'Vegetable' => [ '\\HasChildren' ],
@@ -306,7 +306,7 @@ sub test_rfc5258_ex07_multiple_mailbox_patterns
     my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
 
     $self->_assert_list_data($data, '/', {
-        'INBOX' => [ '\\Noinferiors' ],
+        'INBOX' => [ '\\HasNoChildren' ],
         'Drafts' => [ '\\HasNoChildren' ],
         'Sent/August2004' => [ '\\HasNoChildren' ],
         'Sent/December2003' => [ '\\HasNoChildren' ],
@@ -328,7 +328,7 @@ sub test_rfc5258_ex08_haschildren_childinfo
     my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
 
     $self->_assert_list_data($data, '/', {
-        'INBOX' => '\\Noinferiors',
+        'INBOX' => '\\HasNoChildren',
         'Foo'   => '\\HasChildren',
         'Moo'   => '\\HasNoChildren',
     });
@@ -369,7 +369,7 @@ sub test_folder_at_novirtdomains
     my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
 
     $self->_assert_list_data($data, '/', {
-        'INBOX' => '\\Noinferiors',
+        'INBOX' => '\\HasNoChildren',
         'foo@bar' => '\\HasNoChildren',
     });
 }
@@ -416,9 +416,62 @@ sub test_crossdomains_alt
     my $data = $imaptalk->list("", "*");
 
     $self->_assert_list_data($data, '/', {
-        'INBOX' => '\\HasNoChildren \\Noinferiors',
+        'INBOX' => '\\HasNoChildren',
         'Other Users/foo@example.com' => '\\HasNoChildren',
         'Other Users/bar@example.net/Shared' => '\\HasNoChildren',
+    });
+}
+
+sub test_inbox_altnamespace
+    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    foreach my $Folder ("user/cassandane/INBOX/sub", "user/cassandane/AEARLY",
+                        "user/cassandane/sub2", "user/cassandane/sub2/achild",
+                        "user/cassandane/INBOX/very/deep/one",
+                        "user/cassandane/not/so/deep",
+                        # stuff you can't see
+                        "user/cassandane/INBOX",
+                        "user/cassandane/inbox",
+                        "user/cassandane/inbox/subnobody") {
+        $admintalk->create($Folder);
+        $admintalk->setacl($Folder, 'cassandane' => 'lrswipkxtecd');
+    }
+
+    my $data = $imaptalk->list("", "*");
+
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\HasChildren',
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very/deep/one' => '\\HasNoChildren',
+        'AEARLY' => '\\HasNoChildren',
+        'not/so/deep' => '\\HasNoChildren',
+        'sub2' => '\\HasChildren',
+        'sub2/achild' => '\\HasNoChildren',
+        'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Alt Folders/inbox' => '\\HasChildren',
+        'Alt Folders/inbox/subnobody' => '\\HasNoChildren',
+    });
+
+    my $data2 = $imaptalk->list("", "%");
+
+    $self->_assert_list_data($data2, '/', {
+        'INBOX' => '\\HasChildren',
+        'AEARLY' => '\\HasNoChildren',
+        'not' => '\\HasChildren \\Noselect',
+        'sub2' => '\\HasChildren',
+        'Alt Folders' => '\\HasChildren \\Noselect',
+    });
+
+    my $data3 = $imaptalk->list("", "INBOX/%");
+
+    $self->_assert_list_data($data3, '/', {
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very' => '\\HasChildren \\Noselect',
     });
 }
 
