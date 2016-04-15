@@ -227,9 +227,10 @@ chunks, if you wish.  Only then should you enable rolling/scheduled replication.
 
 <h3>Restoring from backups</h3>
 
-<p>There's no dedicated tooling for this (yet).  For now, you need to use cyr_backup
-invocations to extract the relevant information, then massage it back into the user's
-mailbox(es) by hand (and then probably reconstruct).</p>
+<p>The restore tool will restore mailboxes and messages from a specified backup to a
+specified destination server.  The destination server must be running a
+replication-capable imapd or sync_server.  The restore tool should be run from the
+backup server containing the specified backup.</p>
 
 <h3>File locking</h3>
 
@@ -384,6 +385,22 @@ additional arguments</p>
 </dl>
 
 <p>
+
+<p>There's no man page yet, but run it without arguments to see a full usage summary</p>
+
+<h4>restore</h4>
+
+<p>This tool is for restoring mail from backup files.</p>
+
+<p>Required arguments are a destination server (in ip:port or host:port format), a backup file,
+and mboxnames, uniqueids or guids specifying the mailboxes or messages to be restored.</p>
+
+<p>If the target mailbox does not already exist on the destination server, options are available
+to preserve the mailbox and message properties as they existed in the backup.  This is useful for
+rebuilding a lost server from backups, such that client state remains consistent.</p>
+
+<p>If the target mailbox already exists on the destination server, restored messages will be
+assigned new, unused uids and will appear to the client as new messages.</p>
 
 <p>There's no man page yet, but run it without arguments to see a full usage summary</p>
 
