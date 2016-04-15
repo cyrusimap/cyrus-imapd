@@ -13,13 +13,13 @@ Cyrus IMAP 2.5.5 Release Notes
 
 Download via HTTP:
 
-    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.5.tar.gz
-    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.5.tar.gz.sig
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz.sig
 
 Download via FTP:
 
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.5.tar.gz
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.5.tar.gz.sig
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz.sig
 
 .. _relnotes-2.5.5-changes:
 

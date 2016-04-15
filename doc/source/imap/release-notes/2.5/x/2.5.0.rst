@@ -22,8 +22,8 @@ Download via HTTP:
 
 Download via FTP:
 
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.0.tar.gz
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.0.tar.gz.sig
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.0.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.0.tar.gz.sig
 
 .. _imap-relnotes-2.5.0-upgrading:
 

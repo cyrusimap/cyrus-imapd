@@ -160,7 +160,7 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
         equal to or higher than Cyrus IMAP 3.0.
 
     Berkely DB backend for Cyrus IMAP databases, from
-    http://www.oracle.com/database/berkeley-db/.
+    https://www.oracle.com/database/berkeley-db/index.html.
 
     .. NOTE::
 
@@ -175,7 +175,7 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
         equal to or higher than Cyrus IMAP 3.0.
 
     Utilities for Berkeley DB databases, from
-    http://www.oracle.com/database/berkeley-db/, needed to pass unit
+    https://www.oracle.com/database/berkeley-db/index.html, needed to pass unit
     tests.
 
     Used with ``make check``.
