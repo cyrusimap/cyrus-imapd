@@ -2457,33 +2457,50 @@ int main(int argc, char **argv)
 	}
 	maxfd++;		/* need 1 greater than maxfd */
 
-	/* how long to wait? - do now so that any scheduled wakeup
-	 * calls get accounted for*/
-	tvptr = NULL;
-	if (schedule && !in_shutdown) {
-	    double delay = timesub(&now, &schedule->mark);
-	    if (delay > 0.0) {
-		timeval_set_double(&tv, delay);
+	int interrupted = 0;
+	do {
+	    /* how long to wait? - do now so that any scheduled wakeup
+	     * calls get accounted for*/
+	    gettimeofday(&now, 0);
+	    tvptr = NULL;
+	    if (schedule && !in_shutdown) {
+		double delay = timesub(&now, &schedule->mark);
+		if (!interrupted && delay > 0.0) {
+		    timeval_set_double(&tv, delay);
+		}
+		else {
+		    tv.tv_sec = 0;
+		    tv.tv_usec = 0;
+		}
+		tvptr = &tv;
 	    }
-	    else {
-		tv.tv_sec = 0;
-		tv.tv_usec = 0;
-	    }
-	    tvptr = &tv;
-	}
 
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-	if (tvptr == NULL) blockp = 1;
-	snmp_select_info(&maxfd, &rfds, tvptr, &blockp);
+	    if (tvptr == NULL) blockp = 1;
+	    snmp_select_info(&maxfd, &rfds, tvptr, &blockp);
 #endif
-	errno = 0;
-	r = myselect(maxfd, &rfds, NULL, NULL, tvptr);
-	if (r == -1 && errno == EAGAIN) continue;
-	if (r == -1 && errno == EINTR) continue;
-	if (r == -1) {
+	    errno = 0;
+	    r = myselect(maxfd, &rfds, NULL, NULL, tvptr);
+
+	    if (r == -1) switch(errno) {
+	    /* Try again to get valid rfds, this time without blocking so we
+	     * will definitely process messages without getting interrupted
+	     * again. */
+	    case EINTR:
+	        interrupted++;
+	        if (interrupted > 5) {
+	            syslog(LOG_WARNING, "Repeatedly interrupted, too many signals?");
+	            /* Fake a timeout */
+	            r = 0;
+	            FD_ZERO(&rfds);
+	        }
+	        break;
+	    /* Try again. */
+	    case EAGAIN: break;
 	    /* uh oh */
-	    fatalf(1, "select failed: %m");
-	}
+	    default: fatalf(1, "select failed: %m");
+	    }
+	} while (r == -1);
 
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
 	/* check for SNMP queries */
