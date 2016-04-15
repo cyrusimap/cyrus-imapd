@@ -2531,11 +2531,12 @@ int main(int argc, char **argv)
             errno = 0;
             r = myselect(maxfd, &rfds, NULL, NULL, tvptr);
 
-            if (r == -1) switch(errno) {
-                /* Try again to get valid rfds, this time without blocking so we
-                * will definitely process messages without getting interrupted
-                * again. */
+            if (r == -1) {
+                switch (errno) {
                 case EINTR:
+                    /* Try again to get valid rfds, this time without blocking so we
+                     * will definitely process messages without getting interrupted
+                     * again. */
                     interrupted++;
                     if (interrupted > 5) {
                         syslog(LOG_WARNING, "Repeatedly interrupted, too many signals?");
@@ -2544,10 +2545,13 @@ int main(int argc, char **argv)
                         FD_ZERO(&rfds);
                     }
                     break;
-                /* Try again. */
-                case EAGAIN: break;
-                /* uh oh */
-                default: fatalf(1, "select failed: %m");
+                case EAGAIN:
+                    /* Try again. */
+                    break;
+                default:
+                    /* uh oh */
+                    fatalf(1, "select failed: %m");
+                }
             }
         } while (r == -1);
 
