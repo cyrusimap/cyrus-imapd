@@ -2504,7 +2504,7 @@ int main(int argc, char **argv)
 		    fatalf(1, "select failed: %m");
 		}
 	    }
-	} while (r == -1);
+	} while (!in_shutdown && r == -1);
 
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
 	/* check for SNMP queries */
