@@ -117,7 +117,7 @@ static struct namespace recon_namespace;
 /* forward declarations */
 static void do_mboxlist(void);
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock);
-static int do_reconstruct(const char *name, int matchlen, int maycreate, void *rock);
+static int do_reconstruct(struct findall_data *data, void *rock);
 static void usage(void);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
@@ -370,7 +370,9 @@ int main(int argc, char **argv)
             fprintf(stderr, "createmailbox %s: %s\n",
                     name, error_message(r));
         } else {
-            do_reconstruct(name, strlen(name), 0, &discovered);
+            mboxlist_findone(&recon_namespace, name, 1, 0,
+                             0, do_reconstruct,
+                             &discovered);
         }
         /* may have added more things into our list */
 
@@ -414,8 +416,11 @@ static void usage(void)
  */
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
 {
-    if (!(mbentry->mbtype & MBTYPE_DELETED))
-        do_reconstruct(mbentry->name, strlen(mbentry->name), 0, rock);
+    if ((mbentry->mbtype & MBTYPE_DELETED))
+        return 0;
+
+    mboxlist_findone(&recon_namespace, mbentry->name, 1, 0, 0,
+                     do_reconstruct, rock);
 
     return 0;
 }
@@ -423,29 +428,24 @@ static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
 /*
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
-static int do_reconstruct(const char *name,
-                          int matchlen,
-                          int maycreate __attribute__((unused)),
-                          void *rock)
+static int do_reconstruct(struct findall_data *data, void *rock)
 {
+    if (!data) return 0;
     strarray_t *discovered = (strarray_t *)rock;
     int r;
     static char lastname[MAX_MAILBOX_NAME] = "";
     char *other;
     struct mailbox *mailbox = NULL;
     char outpath[MAX_MAILBOX_PATH];
+    const char *name = mbname_intname(data->mbname);
 
     signals_poll();
 
     /* don't repeat */
-    if (matchlen == (int) strlen(lastname) &&
-        !strncmp(name, lastname, matchlen)) return 0;
+    if (!strcmp(name, lastname)) return 0;
 
-    if (matchlen >= (int) sizeof(lastname))
-        matchlen = sizeof(lastname) - 1;
-
-    strncpy(lastname, name, matchlen);
-    lastname[matchlen] = '\0';
+    strncpy(lastname, name, sizeof(lastname));
+    lastname[sizeof(lastname)-1] = '\0';
 
     r = mailbox_reconstruct(lastname, reconstruct_flags);
     if (r) {

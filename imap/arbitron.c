@@ -105,7 +105,7 @@ static void run_users(void);
 static void make_report(const char *key, void *data, void *rock);
 static void process_seen(const char *path, const char *user);
 static void process_subs(const char *path, const char *user);
-static int do_mailbox(const char *name, int matchlen, int maycreate, void *rock);
+static int do_mailbox(struct findall_data *data, void *rock);
 
 int main(int argc,char **argv)
 {
@@ -248,12 +248,12 @@ static void usage(void)
     exit(EC_USAGE);
 }
 
-static int do_mailbox(const char *name, int matchlen __attribute__((unused)),
-                      int maycreate __attribute__((unused)),
-                      void *rock __attribute__((unused)))
+static int do_mailbox(struct findall_data *data, void *rock __attribute__((unused)))
 {
+    if (!data) return 0;
     int r;
     struct mailbox *mailbox = NULL;
+    const char *name = mbname_intname(data->mbname);
 
     r = mailbox_open_irl(name, &mailbox);
     if (r) return 0;

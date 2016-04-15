@@ -611,8 +611,8 @@ static void test_toexternal_crossdomains_alt(void)
     toexternal_helper("bloggs.com!user.jane.baz", "User Magic/jane@bloggs.com/baz");
     toexternal_helper("bloggs.com!user.jane.with^a^hat", "User Magic/jane@bloggs.com/with.a.hat");
     toexternal_helper("bloggs.com!user.hatty^smith", "User Magic/hatty.smith@bloggs.com");
-    // no domains in shared folders in crossdomain
-    toexternal_helper("bloggs.com!shared.quux", "Shared Magic/shared/quux");
+    // domain on top-level folder in cross-domain
+    toexternal_helper("bloggs.com!shared.quux", "Shared Magic/shared@bloggs.com/quux");
 
     toexternal_helper("boop.com!user.betty", "User Magic/betty@boop.com");
     toexternal_helper("boop.com!user.betty.foo.bar", "User Magic/betty@boop.com/foo/bar");
@@ -637,8 +637,8 @@ static void test_toexternal_crossdomains_alt_nouhs(void)
     toexternal_helper("bloggs.com!user.jane.baz", "User Magic.jane@bloggs^com.baz");
     toexternal_helper("bloggs.com!user.jane.with^a^hat", "User Magic.jane@bloggs^com.with^a^hat");
     toexternal_helper("bloggs.com!user.hatty^smith", "User Magic.hatty^smith@bloggs^com");
-    // no domains in shared folders in crossdomain
-    toexternal_helper("bloggs.com!shared.quux", "Shared Magic.shared.quux");
+    // domains on top level shared folders in crossdomain
+    toexternal_helper("bloggs.com!shared.quux", "Shared Magic.shared@bloggs^com.quux");
 
     toexternal_helper("boop.com!user.betty", "User Magic.betty@boop^com");
     toexternal_helper("boop.com!user.betty.foo.bar", "User Magic.betty@boop^com.foo.bar");

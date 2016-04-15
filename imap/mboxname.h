@@ -57,6 +57,15 @@ enum { NAMESPACE_INBOX = 0,
        NAMESPACE_USER = 1,
        NAMESPACE_SHARED = 2 };
 
+/* categorise mailboxes */
+enum { MBNAME_INBOX = 1,
+       MBNAME_INBOXSUB = 2,
+       MBNAME_ALTINBOX = 3,
+       MBNAME_ALTPREFIX = 4,
+       MBNAME_OWNER = 5,
+       MBNAME_OTHERUSER = 6,
+       MBNAME_SHARED = 7 };
+
 /* structure holding server namespace info */
 struct namespace {
     char hier_sep;
@@ -83,6 +92,8 @@ typedef struct mbname_parts mbname_t;
 const char *mbname_userid(const mbname_t *mbname);
 const char *mbname_intname(const mbname_t *mbname);
 const char *mbname_extname(const mbname_t *mbname, const struct namespace *ns, const char *userid);
+int mbname_category(const mbname_t *mbname, const struct namespace *ns, const char *userid);
+const char *mbname_category_prefix(int category, const struct namespace *ns);
 const char *mbname_domain(const mbname_t *mbname);
 const char *mbname_localpart(const mbname_t *mbname);
 const strarray_t *mbname_boxes(const mbname_t *mbname);

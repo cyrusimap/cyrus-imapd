@@ -93,7 +93,7 @@
 #define FNAME_SUBSSUFFIX "sub"
 
 #if 0
-static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
+static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 {
     /* deleting all references to the user is too slow right now */
 
@@ -253,8 +253,7 @@ struct rename_rock {
     int domainchange;
 };
 
-static int user_renamesub(const char *name, int matchlen __attribute__((unused)),
-                          int maycreate __attribute__((unused)), void* rock)
+static int user_renamesub(const char *name, void* rock)
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
     char newname[MAX_MAILBOX_BUFFER];
@@ -273,10 +272,6 @@ static int user_renamesub(const char *name, int matchlen __attribute__((unused))
         snprintf(newname, sizeof(newname), "%s%s",
                  rrock->newinbox, name+strlen(rrock->oldinbox));
         name = newname;
-    }
-    else if (rrock->domainchange) {
-        /* if we're changing domains, don't subscribe to other mailboxes */
-        return 0;
     }
 
     return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1);
@@ -348,14 +343,10 @@ static int user_renamesieve(const char *olduser, const char *newuser)
     return r;
 }
 
-EXPORTED int user_renamedata(const char *olduser, const char *newuser,
-                    const char *userid __attribute__((unused)),
-                    struct auth_state *authstate)
+EXPORTED int user_renamedata(const char *olduser, const char *newuser)
 {
-    char *olddomain, *newdomain;
     struct rename_rock rrock;
-    char pat[MAX_MAILBOX_BUFFER];
-    int r;
+    int i;
 
     /* get INBOXes */
     char *oldinbox = mboxname_user_mbox(olduser, NULL);
@@ -370,20 +361,12 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser,
     rrock.oldinbox = oldinbox;
     rrock.newinbox = newinbox;
 
-    olddomain = strchr(oldinbox, '!');
-    newdomain = strchr(newinbox, '!');
-    if ((!olddomain && !newdomain) ||
-        (olddomain && newdomain &&
-         (olddomain - oldinbox) == (newdomain - newinbox) &&
-         !strncmp(oldinbox, newinbox, (olddomain - newdomain))))
-        rrock.domainchange = 0;
-    else
-        rrock.domainchange = 1;
-
     /* copy/rename subscriptions - we're using the internal names here */
-    strcpy(pat, "*");
-    r = mboxlist_findsub(NULL, pat, 1, olduser, authstate, user_renamesub,
-                         &rrock, 1);
+    strarray_t *subs = mboxlist_sublist(olduser);
+    for (i = 0; i < strarray_size(subs); i++) {
+        user_renamesub(strarray_nth(subs, i), &rrock);
+    }
+    strarray_free(subs);
 
     /* move sieve scripts */
     user_renamesieve(olduser, newuser);
@@ -391,7 +374,7 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser,
     free(oldinbox);
     free(newinbox);
 
-    return r;
+    return 0;
 }
 
 EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,

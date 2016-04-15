@@ -407,7 +407,7 @@ struct dlist *sync_parseline(struct protstream *in);
 
 /* ====================================================================== */
 
-int addmbox(char *name, int matchlen, int maycreate, void *rock);
+int addmbox(char *name, int matchlen, int category, void *rock);
 int addmbox_cb(const mbentry_t *mbentry, void *rock);
 
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,

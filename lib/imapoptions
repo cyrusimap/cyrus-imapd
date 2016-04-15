@@ -176,6 +176,10 @@ are listed with ``<none>''.
    affect LMTP delivery of messages directly to mailboxes via
    plus-addressing. */
 
+{ "altprefix", "Alt Folders", STRING }
+/* Alternative INBOX spellings that can't be accessed in altnamespace
+   otherwise go under here */
+
 { "annotation_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for mailbox annotations. */
 

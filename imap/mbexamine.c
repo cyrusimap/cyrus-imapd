@@ -95,8 +95,8 @@ extern char *optarg;
 static struct namespace recon_namespace;
 
 /* forward declarations */
-static int do_examine(const char *name, int matchlen, int maycreate, void *rock);
-static int do_quota(const char *name, int matchlen, int maycreate, void *rock);
+static int do_examine(struct findall_data *data, void *rock);
+static int do_quota(struct findall_data *data, void *rock);
 static void usage(void);
 void shut_down(int code);
 
@@ -193,11 +193,9 @@ static void print_rec(const char *name, const struct buf *citem)
 /*
  * mboxlist_findall() callback function to examine a mailbox
  */
-static int do_examine(const char *name,
-                      int matchlen __attribute__((unused)),
-                      int maycreate __attribute__((unused)),
-                      void *rock __attribute__((unused)))
+static int do_examine(struct findall_data *data, void *rock __attribute__((unused)))
 {
+    if (!data) return 0;
     unsigned i, msgno;
     int r = 0;
     int flag = 0;
@@ -208,9 +206,14 @@ static int do_examine(const char *name,
     signals_poll();
 
     /* Convert internal name to external */
-    char *extname = mboxname_to_external(name, &recon_namespace, "cyrus");
-    printf("Examining %s...\n", extname);
-    free(extname);
+    const char *extname = mbname_extname(data->mbname, &recon_namespace, "cyrus");
+    printf("Examining %s...", extname);
+
+    const char *name = mbname_intname(data->mbname);
+
+    /* Open/lock header */
+    r = mailbox_open_irl(name, &mailbox);
+    if (r) return r;
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
@@ -359,11 +362,9 @@ static int do_examine(const char *name,
 /*
  * mboxlist_findall() callback function to examine a mailbox quota usage
  */
-static int do_quota(const char *name,
-                    int matchlen __attribute__((unused)),
-                    int maycreate __attribute__((unused)),
-                    void *rock __attribute__((unused)))
+static int do_quota(struct findall_data *data, void *rock __attribute__((unused)))
 {
+    if (!data) return 0;
     int r = 0;
     struct mailbox *mailbox = NULL;
     const struct index_record *record;
@@ -374,9 +375,10 @@ static int do_quota(const char *name,
     signals_poll();
 
     /* Convert internal name to external */
-    char *extname = mboxname_to_external(name, &recon_namespace, "cyrus");
+    const char *extname = mbname_extname(data->mbname, &recon_namespace, "cyrus");
     printf("Examining %s...", extname);
-    free(extname);
+
+    const char *name = mbname_intname(data->mbname);
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);

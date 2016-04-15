@@ -71,13 +71,12 @@ static void usage(void)
 
 static const char *check_part = NULL; /* partition we are checking */
 
-static int chkmbox(const char *name,
-                   int matchlen __attribute__((unused)),
-                   int maycreate __attribute__((unused)),
-                   void *rock __attribute__((unused)))
+static int chkmbox(struct findall_data *data, void *rock __attribute__((unused)))
 {
+    if (!data) return 0;
     int r;
     mbentry_t *mbentry = NULL;
+    const char *name = mbname_intname(data->mbname);
 
     r = mboxlist_lookup(name, &mbentry, NULL);
 
@@ -147,7 +146,8 @@ int main(int argc, char **argv)
 
     if(mailbox) {
         fprintf(stderr, "Examining mailbox: %s\n", mailbox);
-        chkmbox((char *)mailbox,0,0,NULL);
+        mboxlist_findone(NULL, mailbox, 1, NULL,
+                         NULL, chkmbox, NULL);
     } else {
         fprintf(stderr, "Examining partition: %s\n",
                 (check_part ? check_part : "ALL PARTITIONS"));

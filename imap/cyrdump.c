@@ -66,7 +66,7 @@
 
 static int verbose = 0;
 
-static int dump_me(const char *name, int matchlen, int maycreate, void *rock);
+static int dump_me(struct findall_data *data, void *rock);
 static void print_seq(const char *tag, const char *attrib,
                       unsigned *seq, int n);
 static int usage(const char *name);
@@ -151,9 +151,9 @@ static search_expr_t *systemflag_match(int flag)
     return e;
 }
 
-static int dump_me(const char *name, int matchlen __attribute__((unused)),
-                   int maycreate __attribute__((unused)), void *rock)
+static int dump_me(struct findall_data *data, void *rock)
 {
+    if (!data) return 0;
     int r;
     char boundary[128];
     struct imapurl url;
@@ -165,6 +165,7 @@ static int dump_me(const char *name, int matchlen __attribute__((unused)),
     unsigned *uidseq;
     int i, n, numuids;
     unsigned msgno;
+    const char *name = mbname_intname(data->mbname);
 
     r = index_open(name, NULL, &state);
     if (r) {

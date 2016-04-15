@@ -316,7 +316,7 @@ int usage(char *name)
 
 int scan_me(const char *name,
             int matchlen __attribute__((unused)),
-            int maycreate __attribute__((unused)),
+            int category __attribute__((unused)),
             void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox;

@@ -260,7 +260,9 @@ struct list_rock {
     struct listargs *listargs;
     strarray_t *subs;
     char *last_name;
+    mbentry_t *last_mbentry;
     int last_attributes;
+    int last_category;
 };
 
 /* Information about one mailbox name that LIST returns */
@@ -481,10 +483,8 @@ static char *canonical_list_pattern(const char *reference,
                                     const char *pattern);
 static void canonical_list_patterns(const char *reference,
                                     strarray_t *patterns);
-static int list_cb(const char *name, int matchlen, int maycreate,
-                   void *rock);
-static int subscribed_cb(const char *name, int matchlen, int maycreate,
-                         void *rock);
+static int list_cb(struct findall_data *data, void *rock);
+static int subscribed_cb(struct findall_data *data, void *rock);
 static void list_data(struct listargs *listargs);
 static int list_data_remote(char *tag, struct listargs *listargs);
 
@@ -7169,7 +7169,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     if (!r && rename_user) {
         user_copyquotaroot(oldmailboxname, newmailboxname);
         user_renameacl(&imapd_namespace, newmailboxname, olduser, newuser);
-        user_renamedata(olduser, newuser, imapd_userid, imapd_authstate);
+        user_renamedata(olduser, newuser);
 
         /* XXX report status/progress of meta-data */
     }
@@ -7791,7 +7791,7 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
     free(intname);
 }
 
-static int printmyrights(const char *extname, mbentry_t *mbentry)
+static int printmyrights(const char *extname, const mbentry_t *mbentry)
 {
     int rights = 0;
     char str[ACL_MAXSTR];
@@ -8672,26 +8672,25 @@ static void cmd_status(char *tag, char *name)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-static int namespacedata(const char *name,
-                         int matchlen __attribute__((unused)),
-                         int maycreate __attribute__((unused)),
-                         void *rock)
+static int namespacedata(struct findall_data *data, void *rock)
 {
+    if (!data) return 0;
     int* sawone = (int*) rock;
 
-    if (!name) {
-        return 0;
-    }
-
-    if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.'))) {
-        /* The user has a "personal" namespace. */
+    switch (data->mb_category) {
+    case MBNAME_INBOX:
+    case MBNAME_ALTINBOX:
+    case MBNAME_ALTPREFIX:
         sawone[NAMESPACE_INBOX] = 1;
-    } else if (mboxname_isusermailbox(name, 0)) {
-        /* The user can see the "other users" namespace. */
+        break;
+
+    case MBNAME_OTHERUSER:
         sawone[NAMESPACE_USER] = 1;
-    } else {
-        /* The user can see the "shared" namespace. */
+        break;
+
+    case MBNAME_SHARED:
         sawone[NAMESPACE_SHARED] = 1;
+        break;
     }
 
     return 0;
@@ -9306,41 +9305,33 @@ struct apply_rock {
     unsigned int nseen;
 };
 
-static int apply_cb(const char *name, int matchlen,
-                    int maycreate __attribute__((unused)), void* rock)
+static int apply_cb(struct findall_data *data, void* rock)
 {
+    if (!data) return 0;
     struct apply_rock *arock = (struct apply_rock *)rock;
     annotate_state_t *state = arock->state;
-    mbentry_t *mbentry = NULL;
     int r;
 
     /* Suppress any output of a partial match */
-    if (name[matchlen])
+    if (!data->mbname)
         return 0;
 
-    strlcpy(arock->lastname, name, sizeof(arock->lastname));
-    arock->lastname[matchlen] = '\0';
+    strlcpy(arock->lastname, mbname_intname(data->mbname), sizeof(arock->lastname));
 
-    r = 0;
-    if (mboxlist_lookup(name, &mbentry, NULL))
-        goto out;
-
-    // Store the external name in the mbentry as ext_name, for later reference
-    char *extname = mboxname_to_external(name, &imapd_namespace, imapd_userid);
     // malloc extra-long to have room for pattern shenanigans later
-    mbentry->ext_name = xmalloc(strlen(extname)+1);
-    strcpy(mbentry->ext_name, extname);
-    free(extname);
+    /* NOTE: this is a fricking horrible abuse of layers.  We'll be passing the
+     * extname less horribly one day */
+    const char *extname = mbname_extname(data->mbname, &imapd_namespace, imapd_userid);
+    mbentry_t *backdoor = (mbentry_t *)data->mbentry;
+    backdoor->ext_name = xmalloc(strlen(extname)+1);
+    strcpy(backdoor->ext_name, extname);
 
-    r = annotate_state_set_mailbox_mbe(state, mbentry);
-    if (r)
-        goto out;
+    r = annotate_state_set_mailbox_mbe(state, data->mbentry);
+    if (r) return r;
 
     r = arock->proc(state, arock->data);
     arock->nseen++;
 
-out:
-    mboxlist_entry_free(&mbentry);
     return r;
 }
 
@@ -11306,56 +11297,46 @@ struct xfer_list {
     const char *part;
     short allow_usersubs;
     struct xfer_item *mboxes;
-};    
+};
 
-static int xfer_addmbox(const char *name, int matchlen,
-			int maycreate __attribute__((unused)), void *rock)
+static int xfer_addmbox(struct findall_data *data, void *rock)
 {
+    if (!data) return 0;
     struct xfer_list *list = (struct xfer_list *) rock;
-    mbentry_t *mbentry;
-    mbname_t *mbname;
 
-    if (name[matchlen]) {
-	/* No partial matches */
-	return 0;
+    if (!data->mbentry) {
+        /* No partial matches */
+        return 0;
     }
 
-    if (mboxlist_lookup(name, &mbentry, NULL)) return 0;
-
-    if (list->part && strcmp(mbentry->partition, list->part)) {
-	/* Not on specified partition */
-	mboxlist_entry_free(&mbentry);
-	return 0;
+    if (list->part && strcmp(data->mbentry->partition, list->part)) {
+        /* Not on specified partition */
+        return 0;
     }
-
-    mbname = mbname_from_intname(mbentry->name);
 
     /* Only add shared mailboxes, targeted user submailboxes, or user INBOXes */
-    if (!mbname_localpart(mbname) || list->allow_usersubs ||
-	(!mbname_isdeleted(mbname) && !strarray_size(mbname_boxes(mbname)))) {
-	const char *extname = mbname_extname(mbname, list->ns, list->userid);
-	struct xfer_item *mbox = xzmalloc(sizeof(struct xfer_item));
+    if (!mbname_localpart(data->mbname) || list->allow_usersubs ||
+        (!mbname_isdeleted(data->mbname) && !strarray_size(mbname_boxes(data->mbname)))) {
+        const char *extname = mbname_extname(data->mbname, list->ns, list->userid);
+        struct xfer_item *mbox = xzmalloc(sizeof(struct xfer_item));
 
-	mbox->mbentry = mbentry;
-	strncpy(mbox->extname, extname, sizeof(mbox->extname));
-	if (mbname_localpart(mbname) && !list->allow_usersubs) {
-	    /* User INBOX */
-	    mbox->state = XFER_MOVING_USER;
-	}
+        mbox->mbentry = mboxlist_entry_copy(data->mbentry);
+        strncpy(mbox->extname, extname, sizeof(mbox->extname));
+        if (mbname_localpart(data->mbname) && !list->allow_usersubs) {
+            /* User INBOX */
+            mbox->state = XFER_MOVING_USER;
+        }
 
-	/* Add link on to the list (reverse order) */
-	mbox->next = list->mboxes;
-	list->mboxes = mbox;
+        /* Add link on to the list (reverse order) */
+        mbox->next = list->mboxes;
+        list->mboxes = mbox;
     }
-    else mboxlist_entry_free(&mbentry);
-
-    mbname_free(&mbname);
 
     return 0;
 }
 
 static void cmd_xfer(const char *tag, const char *name,
-		     const char *toserver, const char *topart)
+                     const char *toserver, const char *topart)
 {
     int r = 0, partial_success = 0, mbox_count = 0;
     struct xfer_header *xfer = NULL;
@@ -12104,7 +12085,7 @@ static int set_haschildren(const mbentry_t *mbentry __attribute__((unused)), voi
     return CYRUSDB_DONE;
 }
 
-static void specialuse_flags(mbentry_t *mbentry, const char *sep,
+static void specialuse_flags(const mbentry_t *mbentry, const char *sep,
                              int isxlist)
 {
     if (!mbentry) return;
@@ -12137,7 +12118,7 @@ static void specialuse_flags(mbentry_t *mbentry, const char *sep,
      * the substr.  Ok to just print nothing */
 }
 
-static void printmetadata(mbentry_t *mbentry,
+static void printmetadata(const mbentry_t *mbentry,
                           const strarray_t *entries,
                           struct getmetadata_options *opts)
 {
@@ -12160,26 +12141,21 @@ done:
 }
 
 /* Print LIST or LSUB untagged response */
-static void list_response(const char *name, int attributes,
-                          struct listargs *listargs)
+static void list_response(const char *extname, const mbentry_t *mbentry,
+                          int attributes, struct listargs *listargs)
 {
     const struct mbox_name_attribute *attr;
     int r;
     const char *sep;
     const char *cmd;
-    mbentry_t *mbentry = NULL;
     struct statusdata sdata = STATUSDATA_INIT;
 
-    if (!name) return;
-
-    /* get info and set flags */
-    r = mboxlist_lookup(name, &mbentry, NULL);
-
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        attributes |= (listargs->cmd & LIST_CMD_EXTENDED) ?
-                       MBOX_ATTRIBUTE_NONEXISTENT : MBOX_ATTRIBUTE_NOSELECT;
+    if ((attributes & MBOX_ATTRIBUTE_NONEXISTENT)) {
+        if (!(listargs->cmd & LIST_CMD_EXTENDED)) {
+            attributes |= MBOX_ATTRIBUTE_NOSELECT;
+            attributes &= ~MBOX_ATTRIBUTE_NONEXISTENT;
+        }
     }
-    else if (r) return;
 
     else if (listargs->scan) {
         /* SCAN mailbox for content */
@@ -12209,12 +12185,12 @@ static void list_response(const char *name, int attributes,
                 r = pipe_until_tag(s, mytag, 0);
             }
 
-            goto done;
+            return;
         }
-        else if (!strcmpsafe(name, index_mboxname(imapd_index))) {
+        else if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index))) {
             /* currently selected mailbox */
             if (!index_scan(imapd_index, listargs->scan))
-                goto done; /* no matching messages */
+                return; /* no matching messages */
         }
         else {
             /* other local mailbox */
@@ -12227,7 +12203,7 @@ static void list_response(const char *name, int attributes,
             init.authstate = imapd_authstate;
             init.out = imapd_out;
 
-            r = index_open(name, &init, &state);
+            r = index_open(mbentry->name, &init, &state);
 
             if (!r)
                 doclose = 1;
@@ -12245,18 +12221,17 @@ static void list_response(const char *name, int attributes,
 
             if (doclose) index_close(&state);
 
-            if (r) goto done;
+            if (r) return;
         }
     }
 
     /* figure out \Has(No)Children if necessary
        This is mainly used for LIST (SUBSCRIBED) RETURN (CHILDREN)
     */
-    if (listargs->ret & LIST_RET_CHILDREN
-        && ! (attributes & MBOX_ATTRIBUTE_HASCHILDREN)
-        && ! (attributes & MBOX_ATTRIBUTE_HASNOCHILDREN) ) {
-        mboxlist_mboxtree(name, set_haschildren, &attributes, MBOXTREE_SKIP_ROOT);
-        if ( ! (attributes & MBOX_ATTRIBUTE_HASCHILDREN) )
+    int have_childinfo = MBOX_ATTRIBUTE_HASCHILDREN | MBOX_ATTRIBUTE_HASNOCHILDREN;
+    if ((listargs->ret & LIST_RET_CHILDREN) && !(attributes & have_childinfo)) {
+        if (mbentry) mboxlist_mboxtree(mbentry->name, set_haschildren, &attributes, MBOXTREE_SKIP_ROOT);
+        if (!(attributes & MBOX_ATTRIBUTE_HASCHILDREN))
             attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
     }
 
@@ -12281,7 +12256,7 @@ static void list_response(const char *name, int attributes,
         else if (attributes & MBOX_ATTRIBUTE_HASCHILDREN)
             keep = 1;
 
-        if (!keep) goto done;
+        if (!keep) return;
     }
 
     if (listargs->cmd & LIST_CMD_LSUB) {
@@ -12302,6 +12277,10 @@ static void list_response(const char *name, int attributes,
     if (attributes & MBOX_ATTRIBUTE_NOINFERIORS)
         attributes &= ~MBOX_ATTRIBUTE_HASCHILDREN;
 
+    /* you can't have both!  If it's had children, it has children */
+    if ((attributes & MBOX_ATTRIBUTE_HASCHILDREN) && (attributes & MBOX_ATTRIBUTE_HASNOCHILDREN))
+        attributes &= ~MBOX_ATTRIBUTE_HASNOCHILDREN;
+
     /* remove redundant flags */
     if (listargs->cmd & LIST_CMD_EXTENDED) {
         /* \NoInferiors implies \HasNoChildren */
@@ -12313,22 +12292,21 @@ static void list_response(const char *name, int attributes,
     }
 
     if (listargs->sel & LIST_SEL_SPECIALUSE) {
+        if (!mbentry) return;
         struct buf attrib = BUF_INITIALIZER;
-        if (!mbentry) goto done;
         /* check that this IS a specialuse folder */
         if (annotatemore_lookup(mbentry->name, "/specialuse", imapd_userid, &attrib))
-            goto done;
+            return;
         if (!attrib.len) {
             buf_free(&attrib);
-            goto done;
+            return;
         }
         buf_free(&attrib);
     }
 
     /* can we read the status data ? */
-    if ((listargs->ret & LIST_RET_STATUS) &&
-        !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
-        r = imapd_statusdata(name, listargs->statusitems, &sdata);
+    if ((listargs->ret & LIST_RET_STATUS) && mbentry) {
+        r = imapd_statusdata(mbentry->name, listargs->statusitems, &sdata);
         if (r) {
             /* RFC 5819: the STATUS response MUST NOT be returned and the
              * LIST response MUST include the \NoSelect attribute. */
@@ -12347,6 +12325,7 @@ static void list_response(const char *name, int attributes,
         cmd = "LIST";
         break;
     }
+
     prot_printf(imapd_out, "* %s (", cmd);
     for (sep = "", attr = mbox_name_attributes; attr->id; attr++) {
         if (attributes & attr->flag) {
@@ -12366,7 +12345,6 @@ static void list_response(const char *name, int attributes,
 
     prot_printf(imapd_out, "\"%c\" ", imapd_namespace.hier_sep);
 
-    char *extname = mboxname_to_external(name, &imapd_namespace, imapd_userid);
     prot_printastring(imapd_out, extname);
 
     if (listargs->cmd & LIST_CMD_EXTENDED &&
@@ -12399,135 +12377,145 @@ static void list_response(const char *name, int attributes,
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
         printmetadata(mbentry, &listargs->metaitems, &listargs->metaopts);
     }
-    free(extname);
-
-done:
-    mboxlist_entry_free(&mbentry);
 }
 
 static void _addsubs(struct list_rock *rock)
 {
     if (!rock->subs) return;
-    if (rock->last_attributes & MBOX_ATTRIBUTE_NOINFERIORS) return;
-    if (!strcmp(rock->last_name, "")) return;
-    if (!strcmp(rock->last_name, "user")) return;
+    if (!rock->last_mbentry) return;
     int i;
-    int namelen = strlen(rock->last_name);
+    const char *last_name = rock->last_mbentry->name;
+    int namelen = strlen(last_name);
     for (i = 0; i < rock->subs->count; i++) {
         const char *name = strarray_nth(rock->subs, i);
-        if (strncmp(rock->last_name, name, namelen))
+        if (strncmp(last_name, name, namelen))
             continue;
-        else if (!name[namelen])
-            rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
+        else if (!name[namelen]) {
+            if ((rock->last_attributes & MBOX_ATTRIBUTE_NONEXISTENT))
+                rock->last_attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+            else
+                rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
+        }
         else if (name[namelen] == '.')
             rock->last_attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
     }
 }
 
-static int perform_output(const char *name, size_t matchlen,
-                          struct list_rock *rock)
+static int perform_output(const char *extname, const mbentry_t *mbentry, struct list_rock *rock)
 {
     /* skip non-responsive mailboxes early, so they don't break sub folder detection */
-    if (name && !imapd_userisadmin) {
-        int mbtype = 0;
-        /* skip all non-IMAP folders */
-        mbentry_t *mbentry = NULL;
-        if (!mboxlist_lookup(name, &mbentry, NULL)) {
-            mbtype = mbentry->mbtype;
-            mboxlist_entry_free(&mbentry);
-            if (mbtype == MBTYPE_NETNEWS) return 0;
-        }
+    if (mbentry && !imapd_userisadmin) {
+        if (mbentry->mbtype == MBTYPE_NETNEWS) return 0;
         if (!(rock->listargs->sel & LIST_SEL_DAV)) {
-            if (mboxname_iscalendarmailbox(name, mbtype)) return 0;
-            if (mboxname_isaddressbookmailbox(name, mbtype)) return 0;
-            if (mboxname_isdavdrivemailbox(name, mbtype)) return 0;
+            if (mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype)) return 0;
+            if (mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype)) return 0;
+            if (mboxname_isdavdrivemailbox(mbentry->name, mbentry->mbtype)) return 0;
         }
     }
 
     if (rock->last_name) {
-        if (strlen(rock->last_name) == matchlen && name &&
-            !strncmp(rock->last_name, name, matchlen))
-            return 0; /* skip duplicate calls */
+        if (extname) {
+            /* same again */
+            if (!strcmp(rock->last_name, extname)) return 0;
+            size_t extlen = strlen(extname);
+            if (extlen < strlen(rock->last_name)
+             && rock->last_name[extlen] == imapd_namespace.hier_sep
+             && !strncmp(rock->last_name, extname, extlen))
+                return 0; /* skip duplicate or reversed calls */
+        }
         _addsubs(rock);
-        list_response(rock->last_name, rock->last_attributes, rock->listargs);
+        list_response(rock->last_name, rock->last_mbentry, rock->last_attributes, rock->listargs);
         free(rock->last_name);
         rock->last_name = NULL;
+        mboxlist_entry_free(&rock->last_mbentry);
     }
 
-    if (name) {
-        rock->last_name = xstrndup(name, matchlen);
-        rock->last_attributes = 0;
+    if (extname) {
+        rock->last_name = xstrdup(extname);
+        if (mbentry) rock->last_mbentry = mboxlist_entry_copy(mbentry);
     }
+
+    rock->last_attributes = 0;
+    rock->last_category = 0;
 
     return 1;
 }
 
 /* callback for mboxlist_findall
  * used when the SUBSCRIBED selection option is NOT given */
-static int list_cb(const char *name, int matchlen, int maycreate,
-                   void *rockp)
+static int list_cb(struct findall_data *data, void *rockp)
 {
     struct list_rock *rock = (struct list_rock *)rockp;
-    int last_len;
+    if (!data) {
+        if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
+            rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
+        perform_output(NULL, NULL, rock);
+        return 0;
+    }
+    size_t last_len = (rock->last_name ? strlen(rock->last_name) : 0);
+    const char *extname = data->extname;
     int last_name_is_ancestor =
         rock->last_name
-        && matchlen >= (last_len = strlen(rock->last_name))
-        && name[last_len] == '.'
-        && !(rock->last_attributes & MBOX_ATTRIBUTE_NOINFERIORS)
-        && !memcmp(rock->last_name, name, last_len);
+        && strlen(extname) >= last_len
+        && extname[last_len] == imapd_namespace.hier_sep
+        && !memcmp(rock->last_name, extname, last_len);
 
     list_callback_calls++;
 
-    if (last_name_is_ancestor)
+    if (last_name_is_ancestor || (rock->last_name && !data->mbname && !strcmp(rock->last_name, extname)))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
-    /* tidy up flags */
-    if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
+    else if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
 
-    if (!perform_output(name, matchlen, rock))
+    if (!perform_output(data->extname, data->mbentry, rock))
         return 0;
 
-    if (!maycreate)
+    if (!data->mbname)
+        rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN | MBOX_ATTRIBUTE_NONEXISTENT;
+
+    else if (data->mb_category == MBNAME_ALTINBOX)
         rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
-    else if (name[matchlen] == '.')
-        rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     return 0;
 }
 
 /* callback for mboxlist_findsub
  * used when SUBSCRIBED but not RECURSIVEMATCH is given */
-static int subscribed_cb(const char *name, int matchlen, int maycreate,
-                         void *rockp)
+static int subscribed_cb(struct findall_data *data, void *rockp)
 {
     struct list_rock *rock = (struct list_rock *)rockp;
-    int last_len;
+    if (!data) {
+        perform_output(NULL, NULL, rock);
+        return 0;
+    }
+    size_t last_len = (rock->last_name ? strlen(rock->last_name) : 0);
+    const char *extname = data->extname;
     int last_name_is_ancestor =
         rock->last_name
-        && matchlen >= (last_len = strlen(rock->last_name))
-        && name[last_len] == '.'
-        && !(rock->last_attributes & MBOX_ATTRIBUTE_NOINFERIORS)
-        && !memcmp(rock->last_name, name, last_len);
+        && strlen(extname) >= last_len
+        && extname[last_len] == imapd_namespace.hier_sep
+        && !memcmp(rock->last_name, extname, last_len);
 
     list_callback_calls++;
 
-    if (last_name_is_ancestor)
+    if (last_name_is_ancestor || (rock->last_name && !data->mbname && !strcmp(rock->last_name, extname)))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
-    if (!name[matchlen]) {
-        perform_output(name, matchlen, rock);
+    if (data->mbname) { /* exact match */
+        perform_output(extname, data->mbentry, rock);
         rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
-        if (!maycreate)
+        if (mboxlist_lookup(mbname_intname(data->mbname), NULL, NULL))
+            rock->last_attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
+        if (data->mb_category == MBNAME_ALTINBOX)
             rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
     }
-    else if (name[matchlen] == '.' &&
-             rock->listargs->cmd & LIST_CMD_LSUB) {
+    else if (rock->listargs->cmd & LIST_CMD_LSUB) {
         /* special case: for LSUB,
          * mailbox names that match the pattern but aren't subscribed
          * must also be returned if they have a child mailbox that is
          * subscribed */
-        perform_output(name, matchlen, rock);
+        perform_output(extname, data->mbentry, rock);
         rock->last_attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
     }
 
@@ -12586,36 +12574,29 @@ static void canonical_list_patterns(const char *reference,
 
 /* callback for mboxlist_findsub
  * used by list_data_recursivematch */
-static int recursivematch_cb(const char *name, int matchlen, int maycreate, void *rockp)
+static int recursivematch_cb(struct findall_data *data, void *rockp)
 {
+    if (!data) return 0;
+
     struct list_rock_recursivematch *rock = (struct list_rock_recursivematch *)rockp;
     list_callback_calls++;
 
-    char c = name[matchlen];
-    if (c) {
-        if (c == '.') {
-            int *parent_info;
-            char *parentname = xstrndup(name, matchlen);
-            parent_info = hash_lookup(parentname, &rock->table);
-            if (!parent_info) {
-                parent_info = xzmalloc(sizeof(int));
-                hash_insert(parentname, parent_info, &rock->table);
-                rock->count++;
-            }
-            if (!(*parent_info & MBOX_ATTRIBUTE_NOINFERIORS))
-                *parent_info |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
-            free(parentname);
-        }
-    } else {
-        int *list_info = hash_lookup(name, &rock->table);
-        if (!list_info) {
-            list_info = xzmalloc(sizeof(int));
-            *list_info |= MBOX_ATTRIBUTE_SUBSCRIBED;
-            if (!maycreate) *list_info |= MBOX_ATTRIBUTE_NOINFERIORS;
-            hash_insert(name, list_info, &rock->table);
-            rock->count++;
-        }
+    const char *extname = data->extname;
+
+    int *list_info = hash_lookup(extname, &rock->table);
+    if (!list_info) {
+        list_info = xzmalloc(sizeof(int));
+        hash_insert(extname, list_info, &rock->table);
     }
+
+    if (data->mbname) { /* exact match */
+        *list_info |= MBOX_ATTRIBUTE_SUBSCRIBED;
+    }
+    else {
+        *list_info |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED | MBOX_ATTRIBUTE_HASCHILDREN;
+    }
+
+    rock->count++;
 
     return 0;
 }
@@ -12663,9 +12644,14 @@ static void list_data_recursivematch(struct listargs *listargs) {
 
         /* print */
         for (i = 0; i < entries; i++) {
+            if (!rock.array[i].name) continue;
+            mbentry_t *mbentry = NULL;
+            mboxlist_lookup(rock.array[i].name, &mbentry, NULL);
             list_response(rock.array[i].name,
+                          mbentry,
                           rock.array[i].attributes,
                           rock.listargs);
+            mboxlist_entry_free(&mbentry);
         }
 
         free(rock.array);
@@ -12696,7 +12682,6 @@ static void list_data(struct listargs *listargs)
         if (listargs->sel & LIST_SEL_SUBSCRIBED) {
             mboxlist_findsubmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
                                   imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
-            subscribed_cb("", 0, 0, &rock);
         } else {
             if (listargs->scan) {
                 construct_hash_table(&listargs->server_table, 10, 1);
@@ -12708,7 +12693,6 @@ static void list_data(struct listargs *listargs)
 
             mboxlist_findallmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
                                   imapd_userid, imapd_authstate, list_cb, &rock);
-            list_cb("", 0, 0, &rock);
 
             if (listargs->scan)
                 free_hash_table(&listargs->server_table, NULL);

@@ -537,15 +537,14 @@ struct changesub_rock_st {
  * one has permissions to be subscribed to.
  * INBOX subfolders are excluded.
  */
-static int autochangesub(const char *name,
-                         int matchlen __attribute__((unused)),
-                         int maycreate __attribute__((unused)),
-                         void *rock)
+static int autochangesub(struct findall_data *data, void *rock)
 {
+    if (!data) return 0;
     struct changesub_rock_st *crock = (struct changesub_rock_st *)rock;
     const char *userid = crock->userid;
     struct auth_state *auth_state = crock->auth_state;
     int was_explicit = crock->was_explicit;
+    const char *name = mbname_intname(data->mbname);
     int r;
 
     /* ignore all user mailboxes, we only want shared */
@@ -614,7 +613,8 @@ static void autosubscribe_sharedfolders(struct namespace *namespace,
 
     for (i = 0; i < folders->count; i++) {
         const char *mboxname = strarray_nth(folders, i);
-        autochangesub(mboxname, 0, 0, &changesub_rock);
+        mboxlist_findone(namespace, mboxname, 0, userid, auth_state,
+                         autochangesub, &changesub_rock);
     }
 
     strarray_free(folders);

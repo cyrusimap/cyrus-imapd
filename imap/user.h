@@ -58,8 +58,7 @@ int user_deletedata(const char *userid, int wipe_user);
 /* Rename/copy user meta-data (seen state, subscriptions, sieve scripts)
  * from 'olduser' to 'newuser'.
  */
-int user_renamedata(const char *olduser, const char *newuser,
-                    const char *userid, struct auth_state *authstate);
+int user_renamedata(const char *olduser, const char *newuser);
 
 /* Rename ACL for 'olduser' to 'newuser' on mailbox 'name'. */
 int user_renameacl(const struct namespace *namespace, const char *name,

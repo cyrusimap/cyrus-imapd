@@ -409,7 +409,7 @@ struct list_rock {
     struct node *last;
 };
 
-static int list_cb(const char *name, int matchlen, int maycreate, void *rock)
+static int do_list(const char *name, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
     struct node *last = lrock->last;
@@ -442,7 +442,7 @@ static int list_cb(const char *name, int matchlen, int maycreate, void *rock)
         (!last->len || (name[last->len] == '.'))) {
         /* Found closest ancestor of 'name' */
         struct node *node;
-        size_t len = matchlen;
+        size_t len = strlen(name);
         char shortname[MAX_MAILBOX_NAME+1], path[MAX_MAILBOX_PATH+1];
         char *cp, *href = NULL;
 
@@ -493,7 +493,7 @@ static int list_cb(const char *name, int matchlen, int maycreate, void *rock)
             /* Add missing ancestor and recurse down the tree */
             buf_printf(buf, "<li>%s", shortname);
 
-            list_cb(name, matchlen, maycreate, rock);
+            do_list(name, rock);
         }
     }
     else {
@@ -507,11 +507,18 @@ static int list_cb(const char *name, int matchlen, int maycreate, void *rock)
         if (last->parent) {
             /* Recurse back up the tree */
             lrock->last = last->parent;
-            list_cb(name, matchlen, maycreate, rock);
+            do_list(name, rock);
         }
     }
 
     return 0;
+}
+
+static int list_cb(struct findall_data *data, void *rock)
+{
+    if (data && data->mbname)
+        return do_list(mbname_intname(data->mbname), rock);
+    return do_list(NULL, rock);
 }
 
 
@@ -627,7 +634,6 @@ static int list_feeds(struct transaction_t *txn)
                      httpd_authstate, list_cb, &lrock);
 
     /* Close out the tree */
-    list_cb(NULL, 0, 0, &lrock);
     if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
 
     /* Send rest of template */

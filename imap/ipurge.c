@@ -94,7 +94,7 @@ typedef struct mbox_stats_s {
 static int verbose = 1;
 static int forceall = 0;
 
-static int purge_me(const char *, int, int, void *);
+static int purge_me(struct findall_data *, void *);
 static unsigned purge_check(struct mailbox *mailbox,
                             const struct index_record *record,
                             void *rock);
@@ -219,20 +219,20 @@ static int usage(const char *name)
   exit(0);
 }
 
-/* we don't check what comes in on matchlen and maycreate, should we? */
-static int purge_me(const char *name, int matchlen __attribute__((unused)),
-                    int maycreate __attribute__((unused)),
-                    void *rock __attribute__((unused)))
+/* we don't check what comes in on matchlen and category, should we? */
+static int purge_me(struct findall_data *data, void *rock __attribute__((unused)))
 {
-  struct mailbox *mailbox = NULL;
-  int r;
-  mbox_stats_t stats;
+    if (!data) return 0;
+    struct mailbox *mailbox = NULL;
+    int r;
+    mbox_stats_t stats;
+    const char *name = mbname_intname(data->mbname);
 
-  if (!forceall) {
-      /* DON'T purge INBOX* and user.* */
-      if (!strncasecmp(name,"INBOX",5) || mboxname_isusermailbox(name, 0))
-          return 0;
-  }
+    if (!forceall) {
+        /* DON'T purge INBOX* and user.* */
+        if (mbname_userid(data->mbname))
+            return 0;
+    }
 
   memset(&stats, '\0', sizeof(mbox_stats_t));
 

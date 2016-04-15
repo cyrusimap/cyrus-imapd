@@ -209,7 +209,15 @@ int mboxlist_set_racls(int enabled);
 
 modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox);
 
-typedef int findall_cb(const char *name, int matchlen, int maycreate, void *rock);
+struct findall_data {
+    const char *extname;
+    int mb_category;
+    const mbentry_t *mbentry;
+    const mbname_t *mbname;
+};
+
+typedef int findall_cb(struct findall_data *data, void *rock);
+
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,
                      const char *pattern, int isadmin,
@@ -219,6 +227,10 @@ int mboxlist_findallmulti(struct namespace *namespace,
                           const strarray_t *patterns, int isadmin,
                           const char *userid, const struct auth_state *auth_state,
                           findall_cb *proc, void *rock);
+int mboxlist_findone(struct namespace *namespace,
+                     const char *intname, int isadmin,
+                     const char *userid, const struct auth_state *auth_state,
+                     findall_cb *proc, void *rock);
 
 /* Find a mailbox's parent (if any) */
 int mboxlist_findparent(const char *mboxname,

@@ -95,7 +95,7 @@ extern char *optarg;
 static struct namespace recon_namespace;
 
 /* forward declarations */
-static int do_cmd(const char *name, int matchlen, int maycreate, void *rock);
+static int do_cmd(struct findall_data *data, void *rock);
 
 static void usage(void);
 void shut_down(int code);
@@ -172,7 +172,7 @@ static void usage(void)
 /*
  * mboxlist_findall() callback function to examine a mailbox
  */
-static int do_timestamp(const char *name)
+static int do_timestamp(const mbname_t *mbname)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
@@ -183,9 +183,10 @@ static int do_timestamp(const char *name)
     signals_poll();
 
     /* Convert internal name to external */
-    char *extname = mboxname_to_external(name, &recon_namespace, "cyrus");
+    const char *extname = mbname_extname(mbname, &recon_namespace, "cyrus");
     printf("Working on %s...\n", extname);
-    free(extname);
+
+    const char *name = mbname_intname(mbname);
 
     /* Open/lock header */
     r = mailbox_open_iwl(name, &mailbox);
@@ -217,15 +218,13 @@ static int do_timestamp(const char *name)
     return r;
 }
 
-int do_cmd(const char *name,
-           int matchlen __attribute__((unused)),
-           int maycreate __attribute__((unused)),
-           void *rock)
+int do_cmd(struct findall_data *data, void *rock)
 {
+    if (!data) return 0;
     int *valp = (int *)rock;
 
     if (*valp == CMD_TIME)
-        return do_timestamp(name);
+        return do_timestamp(data->mbname);
 
     return 0;
 }
