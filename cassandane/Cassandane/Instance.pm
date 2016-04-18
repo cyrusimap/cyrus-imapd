@@ -523,7 +523,39 @@ sub _generate_imapd_conf
                 event_groups => 'mailbox message flags calendar',
 
     );
+    if ($self->{buildinfo}->{search}->{xapian}) {
+        my %xapian_defaults = (
+            search_engine => 'xapian',
+            search_index_headers => 'no',
+            search_batchsize => '8192',
+            defaultsearchtier => 't1',
+            't1searchpartition-default' => "$self->{basedir}/search",
+        );
+        while (my ($k, $v) = each %xapian_defaults) {
+            if (not defined $self->{config}->get($k)) {
+                $self->{config}->set($k => $v);
+            }
+        }
+    }
     $self->{config}->generate($self->_imapd_conf());
+}
+
+sub _read_buildinfo
+{
+    my ($self) = @_;
+
+    my $filename = $self->{basedir} .  "/buildinfo.out";
+    $self->run_command({
+            cyrus => 1,
+            redirects => { stdout => $filename }
+    }, 'cyr_buildinfo');
+
+    local $/;
+    open FH, '<', $filename
+        or die "Cannot open $filename for reading: $!";
+    my $str = <FH>;
+    $self->{buildinfo} = JSON::decode_json($str);
+    close FH;
 }
 
 sub _emit_master_entry
@@ -880,6 +912,7 @@ sub start
 	$self->_build_skeleton();
 	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
 	# TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
+	$self->_read_buildinfo();
 	$self->_generate_imapd_conf();
 	$self->_generate_master_conf();
 	$self->_fix_ownership();

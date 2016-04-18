@@ -59,10 +59,8 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
 
-    # Test if Xapian is enabled. Otherwise we won't run fuzzy search tests.
-    my $engine = $self->{instance}->{config}->get("search_engine");
-    if ($engine ne 'xapian') {
-        xlog "No xapian search_engine in imapd.conf. Skipping tests.";
+    if (not $self->{instance}->{buildinfo}->{search}->{xapian}) {
+        xlog "No xapian support enabled. Skipping tests.";
         return;
     }
     $self->{test_fuzzy_search} = 1;
