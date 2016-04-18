@@ -9067,7 +9067,7 @@ static void jmap_participants_to_ical(icalcomponent *comp,
     hash_table cache;
 
     /* Purge existing ORGANIZER and ATTENDEEs only if instructed to do so. */
-    if (!JNOTNULL(organizer) && !JNOTNULL(attendees)) {
+    if (organizer == json_null() && attendees == json_null()) {
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         icalcomponent_remove_property(comp, prop);
         icalproperty_free(prop);
@@ -10243,8 +10243,12 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     /* Determine the current timezone, if any. */
     tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzstart_old = icaltimezone_get_builtin_timezone(tzid);
+
     /* Read the new timezone, if any. */
-    if (JNOTNULL(json_object_get(event, "startTimeZone"))) {
+    if (json_object_get(event, "startTimeZone") != json_null()) {
+        /* Either startTimeZone is set to something other than JSON null, or not
+         * at all. For the former we read the new value. For the latter, we
+         * just keep the current timezone. */
         pe = jmap_readprop(event, "startTimeZone", create&&!exc, invalid, "s", &val);
         if (pe > 0) {
             /* Lookup the new timezone. */
@@ -10253,11 +10257,11 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
                 json_array_append_new(invalid, json_string("startTimeZone"));
             }
         } else if (!pe) {
-             /* Keep the current timezone. */
+             /* Now timezone property set. Keep the current timezone. */
             rock->tzstart = rock->tzstart_old;
         }
     } else {
-        /* The startTimeZone is explicitly set to null. */
+        /* The startTimeZone is explicitly set to null via JSON null. */
         rock->tzstart = NULL;
     }
     if (create) {
@@ -10274,9 +10278,13 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
     tzid = jmap_tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
     if (!tzid) tzid = jmap_tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) rock->tzend_old = icaltimezone_get_builtin_timezone(tzid);
-    if (JNOTNULL(json_object_get(event, "endTimeZone"))) {
+    if (json_object_get(event, "endTimeZone") != json_null()) {
+        /* Either endTimeZone is set to something other than JSON null, or not
+         * at all. For the former we read the new value. For the latter, we
+         * just keep the current timezone. */
         pe = jmap_readprop(event, "endTimeZone", create&&!exc, invalid, "s", &val);
         if (pe > 0) {
+            /* Lookup the new timezone */
             rock->tzend = icaltimezone_get_builtin_timezone(val);
             if (!rock->tzend) {
                 json_array_append_new(invalid, json_string("endTimeZone"));
@@ -10286,6 +10294,7 @@ static void jmap_calendarevent_dt_to_ical(icalcomponent *comp,
             rock->tzend = rock->tzend_old;
         }
     } else {
+        /* The endTimeZone is explicitly set to null via JSON null. */
         rock->tzend = NULL;
     }
     if (create) {
@@ -10409,7 +10418,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
 
     jmap_readprop(event, "organizer", 0, invalid, "o", &organizer);
     jmap_readprop(event, "attendees", 0, invalid, "o", &attendees);
-    if (!JNOTNULL(organizer) && !JNOTNULL(attendees)) {
+    if (organizer == json_null() && attendees == json_null()) {
         /* Remove both organizer and attendees from event. */
         jmap_participants_to_ical(comp, organizer, attendees, rock);
     } else if (organizer && attendees && json_array_size(attendees)) {
@@ -10424,7 +10433,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *alerts = NULL;
     pe = jmap_readprop(event, "alerts", 0, invalid, "o", &alerts);
     if (pe > 0) {
-        if (!JNOTNULL(alerts) || json_array_size(alerts)) {
+        if (alerts == json_null() || json_array_size(alerts)) {
             jmap_alerts_to_ical(comp, alerts, rock);
         } else {
             json_array_append_new(invalid, json_string("alerts"));
@@ -10457,7 +10466,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *inclusions = NULL;
     pe = jmap_readprop(event, "inclusions", 0, invalid, "o", &inclusions);
     if (pe > 0) {
-        if (!exc && (!JNOTNULL(inclusions) || json_array_size(inclusions))) {
+        if (!exc && (inclusions == json_null() || json_array_size(inclusions))) {
             jmap_inclusions_to_ical(comp, inclusions, rock);
         } else {
             json_array_append_new(invalid, json_string("inclusions"));
@@ -10471,7 +10480,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *exceptions = NULL;
     pe = jmap_readprop(event, "exceptions", 0, invalid, "o", &exceptions);
     if (pe > 0) {
-        if (!exc && (!JNOTNULL(exceptions) || json_object_size(exceptions))) {
+        if (!exc && (exceptions == json_null() || json_object_size(exceptions))) {
             jmap_exceptions_to_ical(comp, exceptions, rock);
         } else {
             json_array_append_new(invalid, json_string("exceptions"));
@@ -10489,7 +10498,7 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     json_t *attachments = NULL;
     pe = jmap_readprop(event, "attachments", 0, invalid, "o", &attachments);
     if (pe > 0) {
-        if (!exc && (!JNOTNULL(attachments) || json_array_size(attachments))) {
+        if (!exc && (attachments == json_null() || json_array_size(attachments))) {
             jmap_attachments_to_ical(comp, attachments, rock);
         } else {
             json_array_append_new(invalid, json_string("attachments"));
