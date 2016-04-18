@@ -8469,6 +8469,10 @@ static void jmap_participants_from_ical(icalcomponent *comp,
         short depth = 0;
         while (!rsvp) {
             param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+            if (!param) {
+                rsvp = "";
+                break;
+            }
             icalparameter_partstat pst = icalparameter_get_partstat(param);
             switch (pst) {
                 case ICAL_PARTSTAT_ACCEPTED:
