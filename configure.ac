@@ -1383,12 +1383,18 @@ dnl
 AC_ARG_ENABLE(idled,
         [AS_HELP_STRING([--enable-idled], [enable IMAP idled support])],,[enable_idled="no";])
 AM_CONDITIONAL([IDLED], [test "$enable_idled" != "no"])
+if test "x$enable_idled" = "xyes"; then
+        AC_DEFINE(USE_IDLED,[],[Build with idled functionality])
+fi
 dnl
 dnl see if we're compiling with NNTP support
 dnl
 AC_ARG_ENABLE(nntp,
         [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],,[enable_nntp="no";])
 AM_CONDITIONAL([NNTPD], [test "$enable_nntp" != "no"])
+if test "x$enable_nntp" = "xyes"; then
+        AC_DEFINE(USE_NNTPD,[],[Build with nntpd functionality])
+fi
 
 dnl
 dnl see if we're compiling the Murder support programs
@@ -1400,14 +1406,18 @@ if test "$enable_murder" != no; then
         # for master/slave auto-selection
         AC_CHECK_HEADERS(sys/sockio.h)
 fi
-
+if test "x$enable_murder" = "xyes"; then
+        AC_DEFINE(USE_MURDER,[],[Build with Murder functionality])
+fi
 dnl
 dnl see if we're compiling with calendar alarm support
 dnl
 AC_ARG_ENABLE(calalarmd,
         [AS_HELP_STRING([--enable-calalarmd], [enable CalDAV alarm support])],,[enable_calalarmd="no";])
 AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
-
+if test "x$enable_calalarmd" = "xyes"; then
+        AC_DEFINE(USE_CALALARMD,[],[Build with calendar alarm functionality])
+fi
 dnl
 dnl see if we're compiling with HTTP support
 dnl
@@ -1503,6 +1513,9 @@ dnl
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
+if test "x$enable_http" = "xyes"; then
+        AC_DEFINE(USE_HTTPD,[],[Build with HTTP functionality])
+fi
 
 dnl
 dnl see if we're compiling replication support programs
@@ -1510,6 +1523,9 @@ dnl
 AC_ARG_ENABLE(replication,
         [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])],,[enable_replication="no";])
 AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != no])
+if test "x$enable_replication" = "xyes"; then
+        AC_DEFINE(USE_REPLICATION,[],[Build with replication functionality])
+fi
 
 dnl
 dnl see if we're compiling backup support programs

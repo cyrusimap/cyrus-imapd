@@ -166,6 +166,7 @@ sbin_PROGRAMS += \
 	imap/cyr_deny \
 	imap/cyr_expire \
 	imap/cyr_info \
+	imap/cyr_buildinfo \
 	imap/cyr_sequence \
 	imap/cyr_synclog \
 	imap/cyr_userseen \
@@ -891,6 +892,9 @@ imap_cyr_expire_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c master/masterconf.c
 imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
+imap_cyr_buildinfo_SOURCES = imap/cli_fatal.c imap/cyr_buildinfo.c imap/mutex_fake.c master/masterconf.c
+imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
+
 imap_cyr_sequence_SOURCES = imap/cli_fatal.c imap/cyr_sequence.c imap/mutex_fake.c
 imap_cyr_sequence_LDADD = $(LD_UTILITY_ADD)
 
@@ -1498,6 +1502,7 @@ dist_man_MANS = \
 	man/cyr_deny.8 \
 	man/cyr_df.8 \
 	man/cyr_info.8 \
+	man/cyr_buildinfo.8 \
 	man/cyr_synclog.8 \
 	man/deliver.8 \
 	man/fud.8 \
