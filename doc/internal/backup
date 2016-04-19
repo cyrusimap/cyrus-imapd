@@ -608,6 +608,7 @@ usage:
     cyr_backup [options] [mode] backup show mailboxes [mboxname | uniqueid]...
     cyr_backup [options] [mode] backup dump [dump_opts] chunk id
     cyr_backup [options] [mode] backup dump [dump_opts] message guid
+    cyr_backup [options] [mode] backup json [chunks | mailboxes | messages]...
 
 options:
     -C alt_config       # alternate config file
@@ -622,6 +623,7 @@ commands:
     list: table of contents, one per line
     show: indexed details of listed items, one per paragraph, detail per line
     dump: relevant contents from backup stream
+    json: indexed details of listed items in json format
 
 dump options:
     -o filename         # dump to named file instead of stdout

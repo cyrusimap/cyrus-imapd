@@ -49,6 +49,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <jansson.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -61,6 +62,7 @@
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
+#include "imap/json_support.h"
 
 #include "backup/backup.h"
 
@@ -84,12 +86,16 @@ static void usage(void)
     fprintf(stderr, "    %s [options] [mode] backup show messages guid...\n", argv0);
     fprintf(stderr, "    %s [options] [mode] backup dump chunk id\n", argv0);
     fprintf(stderr, "    %s [options] [mode] backup dump message guid\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup json chunks\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup json mailboxes\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup json messages\n", argv0);
 
     fprintf(stderr, "\n%s\n",
             "Commands:\n"
             "    list                # list specified items\n"
             "    show                # show detailed information for specified items\n"
             "    dump                # show entire item\n"
+            "    json                # show detailed information in json format\n"
     );
 
     fprintf(stderr, "%s\n",
@@ -152,6 +158,12 @@ static int cmd_dump_mailbox(struct backup *backup,
                             const struct cyrbu_cmd_options *options);
 static int cmd_dump_message(struct backup *backup,
                             const struct cyrbu_cmd_options *options);
+static int cmd_json_chunks(struct backup *backup,
+                           const struct cyrbu_cmd_options *options);
+static int cmd_json_mailboxes(struct backup *backup,
+                              const struct cyrbu_cmd_options *options);
+static int cmd_json_messages(struct backup *backup,
+                             const struct cyrbu_cmd_options *options);
 
 enum cyrbu_cmd {
     CYRBU_CMD_UNSPECIFIED = 0,
@@ -165,6 +177,9 @@ enum cyrbu_cmd {
     CYRBU_CMD_DUMP_CHUNK,
     CYRBU_CMD_DUMP_MAILBOX,
     CYRBU_CMD_DUMP_MESSAGE,
+    CYRBU_CMD_JSON_CHUNKS,
+    CYRBU_CMD_JSON_MAILBOXES,
+    CYRBU_CMD_JSON_MESSAGES,
 };
 
 static cyrbu_cmd_func *const cmd_func[] = {
@@ -179,6 +194,9 @@ static cyrbu_cmd_func *const cmd_func[] = {
     cmd_dump_chunk,
     cmd_dump_mailbox,
     cmd_dump_message,
+    cmd_json_chunks,
+    cmd_json_mailboxes,
+    cmd_json_messages,
 };
 
 static enum cyrbu_cmd parse_cmd_string(const char *command, const char *sub)
@@ -189,6 +207,13 @@ static enum cyrbu_cmd parse_cmd_string(const char *command, const char *sub)
             if (strcmp(sub, "chunk") == 0) return CYRBU_CMD_DUMP_CHUNK;
             else if (strcmp(sub, "mailbox") == 0) return CYRBU_CMD_DUMP_MAILBOX;
             else if (strcmp(sub, "message") == 0) return CYRBU_CMD_DUMP_MESSAGE;
+        }
+        break;
+    case 'j':
+        if (strcmp(command, "json") == 0) {
+            if (strcmp(sub, "chunks") == 0) return CYRBU_CMD_JSON_CHUNKS;
+            else if (strcmp(sub, "mailboxes") == 0) return CYRBU_CMD_JSON_MAILBOXES;
+            else if (strcmp(sub, "messages") == 0) return CYRBU_CMD_JSON_MESSAGES;
         }
         break;
     case 'l':
@@ -279,6 +304,9 @@ int main(int argc, char **argv)
     case CYRBU_CMD_LIST_CHUNKS:
     case CYRBU_CMD_LIST_MAILBOXES:
     case CYRBU_CMD_LIST_MESSAGES:
+    case CYRBU_CMD_JSON_CHUNKS:
+    case CYRBU_CMD_JSON_MAILBOXES:
+    case CYRBU_CMD_JSON_MESSAGES:
         /* these want no more arguments */
         if (optind != argc) usage();
         break;
@@ -308,6 +336,9 @@ int main(int argc, char **argv)
     // FIXME finish parsing options
 
     cyrus_init(alt_config, "cyr_backup", 0, 0);
+
+    /* use xmalloc rather than malloc for json internals */
+    json_set_alloc_funcs(xmalloc, free);
 
     /* open backup */
     switch (mode) {
@@ -646,5 +677,202 @@ static int cmd_dump_message(struct backup *backup,
 
     backup_message_free(&message);
 
+    return r;
+}
+
+static int cmd_json_chunks(struct backup *backup,
+                           const struct cyrbu_cmd_options *options)
+{
+    struct backup_chunk_list *chunks = NULL;
+    struct backup_chunk *chunk = NULL;
+    json_t *jchunks = NULL;
+    struct stat data_stat_buf;
+    double total_length = 0.0;
+    int r;
+
+    (void) options;
+
+    r = backup_stat(backup, &data_stat_buf, NULL);
+    if (r) return r;
+
+    jchunks = json_array();
+    chunks = backup_get_chunks(backup);
+
+    for (chunk = chunks->head; chunk; chunk = chunk->next) {
+        char ts_start[32] = "[unknown]";
+        char ts_end[32] = "[unknown]";
+        json_t *jchunk = json_object();
+        double ratio;
+
+        strftime(ts_start, sizeof(ts_start), "%F %T",
+                localtime(&chunk->ts_start));
+        strftime(ts_end, sizeof(ts_end), "%F %T",
+                localtime(&chunk->ts_end));
+
+        if (chunk->next) {
+            ratio = 100.0 * (chunk->next->offset - chunk->offset) / chunk->length;
+        }
+        else {
+            ratio = 100.0 * (data_stat_buf.st_size - chunk->offset) / chunk->length;
+        }
+
+        total_length += chunk->length;
+
+        /* XXX which fields do we want? */
+        json_object_set_new(jchunk, "id", json_integer(chunk->id));
+        json_object_set_new(jchunk, "offset", json_integer(chunk->offset));
+        json_object_set_new(jchunk, "length", json_integer(chunk->length));
+        json_object_set_new(jchunk, "ratio", json_real(ratio));
+        json_object_set_new(jchunk, "start time", json_string(ts_start));
+        json_object_set_new(jchunk, "end time", json_string(ts_end));
+
+        json_array_append_new(jchunks, jchunk);
+    }
+
+    backup_chunk_list_free(&chunks);
+
+    if (!r) {
+        const int flags = JSON_PRESERVE_ORDER | JSON_INDENT(2);
+        char *dump;
+
+        dump = json_dumps(jchunks, flags);
+        printf("%s\n", dump);
+        free(dump);
+    }
+
+    json_decref(jchunks);
+    return r;
+}
+
+static int json_mailbox_cb(const struct backup_mailbox *mailbox, void *rock)
+{
+    json_t *jmailboxes = (json_t *) rock;
+    json_t *jmailbox = json_object();
+    json_t *jmessages = json_array();
+    char ts_last_appenddate[32] = "[unknown]";
+
+    strftime(ts_last_appenddate, sizeof(ts_last_appenddate), "%F %T",
+             localtime(&mailbox->last_appenddate));
+
+    /* XXX which fields are we interested in? */
+    json_object_set_new(jmailbox, "uniqueid", json_string(mailbox->uniqueid));
+    json_object_set_new(jmailbox, "mboxname", json_string(mailbox->mboxname));
+    json_object_set_new(jmailbox, "last_appenddate", json_string(ts_last_appenddate));
+
+    if (mailbox->records && mailbox->records->count) {
+        struct backup_mailbox_message *iter;
+
+        for (iter = mailbox->records->head; iter; iter = iter->next) {
+            json_t *jrecord = json_object();
+
+            json_object_set_new(jrecord, "uid", json_integer(iter->uid));
+            json_object_set_new(jrecord, "guid",
+                                json_string(message_guid_encode(&iter->guid)));
+
+            if (iter->expunged) {
+                char ts_expunged[32] = "                   ";
+                strftime(ts_expunged, sizeof(ts_expunged), "%F %T",
+                         localtime(&iter->expunged));
+                json_object_set_new(jrecord, "expunged",
+                                    json_string(ts_expunged));
+            }
+
+            json_array_append_new(jmessages, jrecord);
+        }
+
+        json_object_set_new(jmailbox, "messages", jmessages);
+    }
+
+    json_array_append_new(jmailboxes, jmailbox);
+    return 0;
+}
+
+static int cmd_json_mailboxes(struct backup *backup,
+                              const struct cyrbu_cmd_options *options)
+{
+    json_t *mailboxes = json_array();
+    int r;
+
+    (void) options;
+
+    r = backup_mailbox_foreach(backup, 0, BACKUP_MAILBOX_ALL_RECORDS,
+                               json_mailbox_cb, mailboxes);
+
+    if (!r) {
+        const int flags = JSON_PRESERVE_ORDER | JSON_INDENT(2);
+        char *dump;
+
+        dump = json_dumps(mailboxes, flags);
+        printf("%s\n", dump);
+        free(dump);
+    }
+
+    json_decref(mailboxes);
+    return r;
+}
+
+struct json_message_rock {
+    struct backup *backup;
+    json_t *jmessages;
+};
+
+static int json_message_cb(const struct backup_message *message, void *rock)
+{
+    struct json_message_rock *jmrock = (struct json_message_rock *) rock;
+    struct backup_mailbox_list *mailboxes;
+    struct backup_mailbox *mailbox;
+    json_t *jmessage = json_object();
+
+    /* XXX what fields do we want? */
+    json_object_set_new(jmessage, "guid",
+                        json_string(message_guid_encode(message->guid)));
+
+    mailboxes = backup_get_mailboxes_by_message(jmrock->backup, message,
+                                                BACKUP_MAILBOX_NO_RECORDS);
+    if (mailboxes && mailboxes->count) {
+        json_t *jmailboxes = json_array();
+
+        for (mailbox = mailboxes->head; mailbox; mailbox = mailbox->next) {
+            json_t *jmailbox = json_object();
+
+            json_object_set_new(jmailbox, "uniqueid",
+                                json_string(mailbox->uniqueid));
+            json_object_set_new(jmailbox, "mboxname",
+                                json_string(mailbox->mboxname));
+
+            json_array_append_new(jmailboxes, jmailbox);
+        }
+
+        json_object_set_new(jmessage, "mailboxes", jmailboxes);
+    }
+    backup_mailbox_list_empty(mailboxes);
+    free(mailboxes);
+
+    json_array_append_new(jmrock->jmessages, jmessage);
+
+    return 0;
+}
+
+static int cmd_json_messages(struct backup *backup,
+                             const struct cyrbu_cmd_options *options)
+{
+    json_t *messages = json_array();
+    struct json_message_rock rock = { backup, messages };
+    int r;
+
+    (void) options;
+
+    r = backup_message_foreach(backup, 0, NULL, json_message_cb, &rock);
+
+    if (!r) {
+        const int flags = JSON_PRESERVE_ORDER | JSON_INDENT(2);
+        char *dump;
+
+        dump = json_dumps(messages, flags);
+        printf("%s\n", dump);
+        free(dump);
+    }
+
+    json_decref(messages);
     return r;
 }
