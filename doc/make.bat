@@ -175,7 +175,7 @@ if "%1" == "text" (
 )
 
 if "%1" == "man" (
-	%SPHINXBUILD% -b man %ALLSPHINXOPTS% %BUILDDIR%/man
+	%SPHINXBUILD% -b cyrman %ALLSPHINXOPTS% %BUILDDIR%/man
 	if errorlevel 1 exit /b 1
 	echo.
 	echo.Build finished. The manual pages are in %BUILDDIR%/man.

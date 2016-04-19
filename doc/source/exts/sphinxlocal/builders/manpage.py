@@ -14,6 +14,7 @@
 
 from os import path
 
+from six import string_types
 from docutils.io import FileOutput
 from docutils.frontend import OptionParser
 
@@ -59,7 +60,7 @@ class CyrusManualPageBuilder(ManualPageBuilder):
 
         for info in self.config.man_pages:
             docname, name, description, authors, section = info
-            if isinstance(authors, basestring):
+            if isinstance(authors, string_types):
                 if authors:
                     authors = [authors]
                 else:
@@ -74,7 +75,7 @@ class CyrusManualPageBuilder(ManualPageBuilder):
             tree = self.env.get_doctree(docname)
             docnames = set()
             largetree = inline_all_toctrees(self, docnames, docname, tree,
-                                            darkgreen)
+                                            darkgreen, [docname])
             self.info('} ', nonl=True)
             self.env.resolve_references(largetree, docname, self)
             # remove pending_xref nodes
