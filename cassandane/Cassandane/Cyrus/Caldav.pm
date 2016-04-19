@@ -944,5 +944,120 @@ sub test_fastmailsharing
 
 
 
+sub test_multiinvite_add_person
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+	user => "cassandane%example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'invite2'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "a684f618-da72-4254-9274-d11f4180696b";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150701T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160601T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+RRULE:FREQ=WEEKLY;COUNT=3
+DTSTART;TZID=Australia/Melbourne:20160601T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  my $data = $self->{instance}->getnotify();
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  {
+    my $newdata = $self->{instance}->getnotify();
+    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
+    my $recips = join ('-', sort map { $_->{recipient} } @payloads);
+    $self->assert_str_equals($recips, "test1\@example.com-test2\@example.com");
+  }
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  my $newdata = $self->{instance}->getnotify();
+  my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+  my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
+  my $recips = join ('-', sort map { $_->{recipient} } @payloads);
+
+  # add an override instance
+  $card =~ s/An Event/An Event just us/;
+  $card =~ s/SEQUENCE:0/SEQUENCE:1/;
+  my $override = <<EOF;
+BEGIN:VEVENT
+CREATED:20150701T234328Z
+UID:$uuid
+RECURRENCE-ID:20160608T053000Z
+DTEND;TZID=Australia/Melbourne:20160601T183000
+TRANSP:OPAQUE
+SUMMARY:An Event with a friend
+DTSTART;TZID=Australia/Melbourne:20160601T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:1
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+EOF
+
+  $card =~ s/END:VCALENDAR/${override}END:VCALENDAR/;
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  {
+    my $newdata = $self->{instance}->getnotify();
+    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
+    my $recips = join ('-', sort map { $_->{recipient} } @payloads);
+    $self->assert_str_equals($recips, "test1\@example.com-test2\@example.com-test3\@example.com");
+    die Dumper(\@payloads);
+  }
+}
+
 
 1;
