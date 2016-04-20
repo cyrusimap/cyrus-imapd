@@ -7894,6 +7894,10 @@ int dav_store_resource(struct transaction_t *txn,
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
+    if ((hdr = spool_getheader(hdrcache, "X-Schedule-User-Address"))) {
+        fprintf(f, "X-Schedule-User-Address: %s\r\n", hdr[0]);
+    }
+
     if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
         fprintf(f, "Content-Type: %s\r\n", hdr[0]);
     }

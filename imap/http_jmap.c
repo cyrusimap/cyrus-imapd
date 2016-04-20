@@ -8758,7 +8758,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
     crock->rows++;
 
     /* Load VEVENT from record. */
-    ical = record_to_ical(crock->mailbox, &record);
+    ical = record_to_ical(crock->mailbox, &record, NULL);
     if (!ical) {
         syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, crock->mailbox->name);
@@ -10609,12 +10609,12 @@ static int jmap_schedule_ical(const char *userid,
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
         /* Send scheduling message. */
-        if (!strcmpsafe(sparam.userid, userid)) {
+        if (!strcmpsafe(organizer, userid)) {
             /* Organizer scheduling object resource */
-            sched_request(userid, organizer, &sparam, oldical, ical, 0);
+            sched_request(httpd_userid, userid, oldical, ical);
         } else {
             /* Attendee scheduling object resource */
-            sched_reply(userid, oldical, ical);
+            sched_reply(httpd_userid, userid, oldical, ical);
         }
     }
 
@@ -10746,7 +10746,7 @@ static int jmap_write_calendarevent(json_t *event,
 
     if (!create) {
         /* Load VEVENT from record. */
-        ical = record_to_ical(mbox, &record);
+        ical = record_to_ical(mbox, &record, NULL);
         if (!ical) {
             syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
                     cdata->dav.imap_uid, mbox->name);
@@ -10888,7 +10888,8 @@ static int jmap_write_calendarevent(json_t *event,
         struct transaction_t txn;
         memset(&txn, 0, sizeof(struct transaction_t));
         txn.req_hdrs = spool_new_hdrcache();
-        r = caldav_store_resource(&txn, ical, mbox, resource, db, 0);
+        /* XXX - fix userid */
+        r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, NULL);
         spool_free_hdrcache(txn.req_hdrs);
         buf_free(&txn.buf);
         if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -11461,7 +11462,7 @@ static int getcalendareventlist_cb(void *rock, struct caldav_data *cdata) {
     if (r) goto done;
 
     /* Load VEVENT from record. */
-    ical = record_to_ical(crock->mailbox, &record);
+    ical = record_to_ical(crock->mailbox, &record, NULL);
     if (!ical) {
         syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, crock->mailbox->name);

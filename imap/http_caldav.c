@@ -1063,7 +1063,8 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
     }
 
     /* Store source resource at destination */
-    r = caldav_store_resource(txn, ical, dest_mbox, dest_rsrc, db, flags);
+    /* XXX - set calendar-user-address based on original message? */
+    r = caldav_store_resource(txn, ical, dest_mbox, dest_rsrc, db, flags, NULL);
 
     return r;
 }
@@ -1081,7 +1082,8 @@ static int caldav_delete_cal(struct transaction_t *txn,
     struct caldav_data *cdata = (struct caldav_data *) data;
     icalcomponent *ical = NULL, *comp;
     icalproperty *prop;
-    char *userid = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    char *schedule_address = NULL;
     int r = 0;
 
     /* Only process deletes on regular calendar collections */
@@ -1093,7 +1095,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         struct webdav_db *webdavdb = NULL;
 
         /* Load message containing the resource and parse iCal data */
-        ical = record_to_ical(mailbox, record);
+        ical = record_to_ical(mailbox, record, &schedule_address);
 
         if (!ical) {
             syslog(LOG_ERR,
@@ -1155,11 +1157,12 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
     if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
         /* Scheduling object resource */
-        const char *organizer, **hdr;
-        struct sched_param sparam;
+        const char **hdr;
+
+        /* XXX - check date range? - don't send in the past */
 
         /* Load message containing the resource and parse iCal data */
-        if (!ical) ical = record_to_ical(mailbox, record);
+        if (!ical) ical = record_to_ical(mailbox, record, &schedule_address);
 
         if (!ical) {
             syslog(LOG_ERR,
@@ -1168,43 +1171,45 @@ static int caldav_delete_cal(struct transaction_t *txn,
             return HTTP_SERVER_ERROR;
         }
 
-        /* Construct userid corresponding to mailbox */
-        userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
-
-        /* Grab the organizer */
-        comp = icalcomponent_get_first_real_component(ical);
-        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        organizer = icalproperty_get_organizer(prop);
-
-        r = caladdress_lookup(organizer, &sparam, userid);
-        if (r == HTTP_NOT_FOUND) {
-            r = 0;
-            goto done;
-        }
-        if (r) {
-            syslog(LOG_ERR,
-                   "meth_delete: failed to process scheduling message in %s"
-                   " (org=%s, att=%s)",
-                   txn->req_tgt.mbentry->name, organizer, userid);
-            txn->error.desc = "Failed to lookup organizer address\r\n";
-            r = HTTP_SERVER_ERROR;
-            goto done;
+        if (!schedule_address) {
+            const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
+            if (hdr) schedule_address = xstrdup(hdr[0]);
         }
 
-        if (sparam.isyou) {
+        /* XXX - after legacy records are gone, we can strip this and just not send a
+         * cancellation if deleting a record which was never replied to... */
+        if (!schedule_address) {
+            /* userid corresponding to target */
+            schedule_address = xstrdup(txn->req_tgt.userid);
+
+            /* or overridden address-set for target user */
+            const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+            char *mailboxname = caldav_mboxname(schedule_address, NULL);
+            int r = annotatemore_lookupmask(mailboxname, annotname,
+                                            schedule_address, &buf);
+            free(mailboxname);
+            if (!r && buf.len > 7 && strncmp(buf_cstring(&buf), "mailto:", 7)) {
+                free(schedule_address);
+                schedule_address = xstrdup(buf_cstring(&buf) + 7);
+            }
+        }
+
+        const char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        if (!strcasecmpsafe(cdata->organizer, schedule_address)) {
             /* Organizer scheduling object resource */
-            sched_request(userid, organizer, &sparam, ical, NULL, 0);
+            sched_request(userid, schedule_address, ical, NULL);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
-            sched_reply(userid, ical, NULL);
+            sched_reply(userid, schedule_address, ical, NULL);
         }
     }
 
   done:
     if (ical) icalcomponent_free(ical);
-    free(userid);
+    free(schedule_address);
+    buf_free(&buf);
 
     return r;
 }
@@ -1324,7 +1329,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
         icalcomponent *ical;
 
         /* Map and parse existing iCalendar resource */
-        ical = record_to_ical(mailbox, record);
+        ical = record_to_ical(mailbox, record, NULL);
 
         if (ical) {
             icalcomponent *comp;
@@ -1844,8 +1849,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             /* Strip known VTIMEZONEs */
             icalcomponent *ical;
             struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
-
-            ical = record_to_ical(mailbox, record);
+            char *userid = NULL;
 
             mailbox_unlock_index(mailbox, NULL);
             r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
@@ -1855,9 +1859,12 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                 goto done;
             }
 
+            ical = record_to_ical(mailbox, record, &userid);
+
             caldav_store_resource(txn, ical, mailbox,
                                   cdata->dav.resource, caldavdb,
-                                  TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0));
+                                  TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0), userid);
+            free(userid);
 
             icalcomponent_free(ical);
 
@@ -1999,6 +2006,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     struct webdav_db *webdavdb = NULL;
     struct webdav_data *wdata;
     struct index_record record;
+    char *schedule_address = NULL;
     const char *etag = NULL, **hdr;
     char *mailboxname = NULL;
     time_t lastmod = 0;
@@ -2088,7 +2096,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     lastmod = record.internaldate;
 
     /* Load and parse message containing the resource */
-    ical = record_to_ical(calendar, &record);
+    ical = record_to_ical(calendar, &record, &schedule_address);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
 
@@ -2297,7 +2305,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Store updated calendar resource */
     ret = caldav_store_resource(txn, ical, calendar,
-                                txn->req_tgt.resource, caldavdb, 0);
+                                txn->req_tgt.resource, caldavdb, 0, schedule_address);
 
     if (ret == HTTP_NO_CONTENT && return_rep) {
         struct buf *data;
@@ -2329,6 +2337,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
   done:
+    free(schedule_address);
     if (ical) icalcomponent_free(ical);
     if (webdavdb) webdav_close(webdavdb);
     if (caldavdb) caldav_close(caldavdb);
@@ -3145,7 +3154,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent_kind kind;
     icalproperty *prop;
     const char *uid, *organizer = NULL;
-    char *userid = NULL;
+    char *schedule_address = NULL;
+    struct buf buf = BUF_INITIALIZER;
     struct caldav_data *cdata;
     int flags = 0;
 
@@ -3239,7 +3249,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                    strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
         free(owner);
-        return HTTP_FORBIDDEN;
+        ret = HTTP_FORBIDDEN;
+        goto done;
     }
 
     /* Check for duplicate iCalendar UID */
@@ -3256,7 +3267,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                    strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
         free(owner);
-        return HTTP_FORBIDDEN;
+        ret = HTTP_FORBIDDEN;
+        goto done;
     }
 
     switch (kind) {
@@ -3267,67 +3279,72 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* XXX  Hack for Outlook */
             icalcomponent_get_first_invitee(comp)) {
             /* Scheduling object resource */
-            struct sched_param sparam;
             int r;
 
-            /* Construct userid corresponding to mailbox */
-            userid = mboxname_to_userid(mailbox->name);
+            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
-            /* Lookup the organizer */
-            r = caladdress_lookup(organizer, &sparam, userid);
-            if (r == HTTP_NOT_FOUND) {
-                break;  /* not a local organiser?  Just skip it */
-            }
-            if (r) {
-                syslog(LOG_ERR,
-                       "meth_put: failed to process scheduling message in %s"
-                       " (org=%s)",
-                       txn->req_tgt.mbentry->name, organizer);
-                txn->error.desc = "Failed to lookup organizer address\r\n";
-                ret = HTTP_SERVER_ERROR;
-                goto done;
+            if (cdata->organizer) {
+                /* Don't allow ORGANIZER to be changed */
+                if (strcmp(cdata->organizer, organizer)) {
+                    txn->error.desc = "Can not change organizer address";
+                    ret = HTTP_FORBIDDEN;
+                }
             }
 
+            /* existing record? */
             if (cdata->dav.imap_uid) {
                 /* Update existing object */
                 struct index_record record;
+
+                syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
 
                 /* Load message containing the resource and parse iCal data */
                 r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
                 if (r) {
                     txn->error.desc = "Failed to read record \r\n";
                     ret = HTTP_SERVER_ERROR;
-                    sched_param_free(&sparam);
                     goto done;
                 }
-                oldical = record_to_ical(mailbox, &record);
+
+                oldical = record_to_ical(mailbox, &record, &schedule_address);
             }
 
-            if (cdata->organizer) {
-                /* Don't allow ORGANIZER to be changed */
-                const char *p = organizer;
+            /* allow override of schedule-address per-message (FM specific) */
+            if (!schedule_address) {
+                const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
+                if (hdr) schedule_address = xstrdup(hdr[0]);
+            }
 
-                if (!strncasecmp(p, "mailto:", 7)) p += 7;
-                if (strcmp(cdata->organizer, p)) {
-                    txn->error.desc = "Can not change organizer address";
-                    ret = HTTP_FORBIDDEN;
+            /* find the schedule address based on the destination calendar's user */
+            if (!schedule_address) {
+                /* userid corresponding to target */
+                schedule_address = xstrdup(txn->req_tgt.userid);
+
+                /* or overridden address-set for target user */
+                const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+                char *mailboxname = caldav_mboxname(schedule_address, NULL);
+                int r = annotatemore_lookupmask(mailboxname, annotname,
+                                                schedule_address, &buf);
+                free(mailboxname);
+                if (!r && buf.len > 7 && strncmp(buf_cstring(&buf), "mailto:", 7)) {
+                    free(schedule_address);
+                    schedule_address = xstrdup(buf_cstring(&buf) + 7);
                 }
             }
 
-            if (sparam.isyou) {
+            const char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+            if (!strcasecmpsafe(schedule_address, organizer)) {
                 /* Organizer scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
-                    sched_param_free(&sparam);
                     goto done;
                 }
-                sched_request(userid, organizer, &sparam, oldical, ical, 0);
+                sched_request(userid, schedule_address, oldical, ical);
             }
             else {
                 /* Attendee scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ATT_CHANGE;
-                    sched_param_free(&sparam);
                     goto done;
                 }
 #if 0
@@ -3339,9 +3356,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                     goto done;
                 }
 #endif
-                sched_reply(userid, oldical, ical);
+                sched_reply(userid, schedule_address, oldical, ical);
             }
-            sched_param_free(&sparam);
 
             flags |= NEW_STAG;
         }
@@ -3426,7 +3442,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                     txn->error.desc = "Failed to read record";
                     ret = HTTP_SERVER_ERROR;
                 }
-                else oldical = record_to_ical(mailbox, &record);
+                else oldical = record_to_ical(mailbox, &record, NULL);
             }
 
             if (oldical) {
@@ -3472,15 +3488,16 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     default:
         txn->error.precond = CALDAV_SUPP_COMP;
-        return HTTP_FORBIDDEN;
+        ret = HTTP_FORBIDDEN;
+        goto done;
     }
 
     /* Store resource at target */
-    if (!ret) ret = caldav_store_resource(txn, ical, mailbox, resource, db, flags);
+    if (!ret) ret = caldav_store_resource(txn, ical, mailbox, resource, db, flags, schedule_address);
 
   done:
     if (oldical) icalcomponent_free(oldical);
-    free(userid);
+    free(schedule_address);
 
     return ret;
 }
@@ -3766,7 +3783,7 @@ int apply_calfilter(struct propfind_ctx *fctx, void *data)
              * Need to mmap() and parse iCalendar object
              * to perform complete check of each recurrence.
              */
-            icalcomponent *ical = record_to_ical(fctx->mailbox, fctx->record);
+            icalcomponent *ical = record_to_ical(fctx->mailbox, fctx->record, NULL);
             icalcomponent_kind kind;
 
             kind =
@@ -3942,7 +3959,6 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
     if (cdata->dav.imap_uid && !cdata->comp_flags.tzbyref) {
         struct index_record record;
-        struct buf msg_buf = BUF_INITIALIZER;
         int r;
 
         /* Relock index for writing */
@@ -3964,20 +3980,16 @@ static int caldav_propfind_by_resource(void *rock, void *data)
             fctx->record = r ? NULL : &record;
         }
 
-        if (fctx->record) mailbox_map_record(fctx->mailbox, fctx->record, &msg_buf);
-
-        if (buf_len(&msg_buf)) {
-            /* Parse the resource and re-store it */
+        if (fctx->record) {
+            char *schedule_address = NULL;
+            icalcomponent *ical = record_to_ical(fctx->mailbox, fctx->record, &schedule_address);
             struct transaction_t txn;
-            icalcomponent *ical;
 
-            ical = icalparser_parse_string(buf_cstring(&msg_buf)
-                                           + fctx->record->header_size);
-            buf_free(&msg_buf);
             if (!ical) {
                 syslog(LOG_NOTICE,
                        "Unable to parse iCal %s:%u prior to stripping TZ",
                        fctx->mailbox->name, fctx->record->uid);
+                free(schedule_address);
                 goto done;
             }
 
@@ -3986,17 +3998,18 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
             caldav_store_resource(&txn, ical, fctx->mailbox,
                                   cdata->dav.resource, fctx->davdb,
-                                  TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0));
+                                  TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
+                                  schedule_address);
             spool_free_hdrcache(txn.req_hdrs);
             buf_free(&txn.buf);
+            free(schedule_address);
 
             icalcomponent_free(ical);
 
             caldav_lookup_resource(fctx->davdb, fctx->mailbox->name,
                                    cdata->dav.resource, &cdata, 0);
+            fctx->record = NULL;
         }
-
-        fctx->record = NULL;
     }
 
   done:
@@ -6079,7 +6092,8 @@ static int report_fb_query(struct transaction_t *txn,
 /* Store the iCal data in the specified calendar/resource */
 int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           struct mailbox *mailbox, const char *resource,
-                          struct caldav_db *caldavdb, unsigned flags)
+                          struct caldav_db *caldavdb, unsigned flags,
+                          const char *schedule_address)
 {
     int ret;
     icalcomponent *comp;
@@ -6199,6 +6213,11 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     else spool_replace_header(xstrdup("Subject"),
                             xstrdup(icalcomponent_kind_to_string(kind)),
                             txn->req_hdrs);
+
+    if (schedule_address) {
+        mimehdr = charset_encode_mimeheader(schedule_address, 0);
+        spool_replace_header(xstrdup("X-Schedule-User-Address"), mimehdr, txn->req_hdrs);
+    }
 
     time_to_rfc822(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
                                                utc_zone),

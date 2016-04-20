@@ -1715,7 +1715,7 @@ static void sched_deliver_local(const char *recipient,
 
         /* Load message containing the resource and parse iCal data */
         r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-        ical = record_to_ical(mailbox, &record);
+        ical = record_to_ical(mailbox, &record, NULL);
 
         for (comp = icalcomponent_get_first_component(sched_data->itip,
                                                       ICAL_ANY_COMPONENT);
@@ -1816,7 +1816,8 @@ static void sched_deliver_local(const char *recipient,
 
     /* Store the (updated) object in the recipients's calendar */
     if (!r) r = caldav_store_resource(&txn, ical, mailbox,
-                                      buf_cstring(&resource), caldavdb, NEW_STAG);
+                                      buf_cstring(&resource), caldavdb, NEW_STAG,
+                                      recipient);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         sched_data->status =
@@ -1840,7 +1841,7 @@ static void sched_deliver_local(const char *recipient,
 
         /* Store the message in the recipient's Inbox */
         r = caldav_store_resource(&txn, sched_data->itip, inbox,
-                                  buf_cstring(&resource), caldavdb, 0);
+                                  buf_cstring(&resource), caldavdb, 0, NULL);
         /* XXX  What do we do if storing to Inbox fails? */
     }
 
@@ -1851,7 +1852,7 @@ static void sched_deliver_local(const char *recipient,
         if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
             sched_pollstatus(recipient, sparam, ical, attendee);
         else
-            sched_request(userid, recipient, sparam, NULL, ical, attendee);
+            sched_request(userid, userid, NULL, ical); // oldical?
     }
 
   done:
@@ -2026,7 +2027,7 @@ static void sched_exclude(const char *attendee __attribute__((unused)),
  * properly modified component to the attendee's iTIP request if necessary
  */
 static void process_attendees(icalcomponent *comp, unsigned ncomp,
-                              const char *organizer, const char *att_update __attribute__((unused)), // XXX: att_update logic
+                              const char *organizer,
                               struct hash_table *att_table,
                               icalcomponent *itip, unsigned needs_action,
                               unsigned is_changed, icalcomponent *oldcomp)
@@ -2175,7 +2176,7 @@ static void sched_cancel(const char *recurid __attribute__((unused)),
     icalcomponent_set_status(old_data->comp, ICAL_STATUS_CANCELLED);
     icalcomponent_set_sequence(old_data->comp, old_data->sequence+1);
 
-    process_attendees(old_data->comp, 0, crock->organizer, NULL,
+    process_attendees(old_data->comp, 0, crock->organizer,
                       crock->att_table, crock->itip, 0, 0, NULL);
 }
 
@@ -2230,13 +2231,10 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
 /* Create and deliver an organizer scheduling request */
 void sched_request(const char *userid, const char *organizer,
-                   struct sched_param *sparam,
-                   icalcomponent *oldical, icalcomponent *newical,
-                   const char *att_update)
+                   icalcomponent *oldical, icalcomponent *newical)
 {
     int r;
     icalproperty_method method;
-    struct auth_state *authstate;
     icalcomponent *ical, *req, *comp;
     icalproperty *prop;
     icalcomponent_kind kind;
@@ -2256,31 +2254,29 @@ void sched_request(const char *userid, const char *organizer,
         method = ICAL_METHOD_REQUEST;
     }
 
-    if (!att_update) {
-        int rights = 0;
-        mbentry_t *mbentry = NULL;
-        /* Check ACL of auth'd user on userid's Scheduling Outbox */
-        char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+    int rights = 0;
+    mbentry_t *mbentry = NULL;
+    /* Check ACL of auth'd user on userid's Scheduling Outbox */
+    char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
-        r = mboxlist_lookup(outboxname, &mbentry, NULL);
-        if (r) {
-            syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-                   outboxname, error_message(r));
-        }
-        else {
-            rights = httpd_myrights(httpd_authstate, mbentry->acl);
-        }
-        free(outboxname);
-        mboxlist_entry_free(&mbentry);
+    r = mboxlist_lookup(outboxname, &mbentry, NULL);
+    if (r) {
+        syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+               outboxname, error_message(r));
+    }
+    else {
+        rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    }
+    free(outboxname);
+    mboxlist_entry_free(&mbentry);
 
-        if (!(rights & DACL_INVITE)) {
-            /* DAV:need-privileges */
-            sched_stat = SCHEDSTAT_NOPRIVS;
-            syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
-                   httpd_userid, userid);
+    if (!(rights & DACL_INVITE)) {
+        /* DAV:need-privileges */
+        sched_stat = SCHEDSTAT_NOPRIVS;
+        syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
+               httpd_userid, organizer);
 
-            goto done;
-        }
+        goto done;
     }
 
     /* Create a shell for our iTIP request objects */
@@ -2312,10 +2308,12 @@ void sched_request(const char *userid, const char *organizer,
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
 
+    struct comp_data *old_master = NULL;
+
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
 
-    if (!att_update && oldical) {
+    if (oldical) {
         comp = icalcomponent_get_first_real_component(oldical);
 
         /* If the existing object isn't a scheduling object,
@@ -2329,11 +2327,13 @@ void sched_request(const char *userid, const char *organizer,
                 prop =
                     icalcomponent_get_first_property(comp,
                                                      ICAL_RECURRENCEID_PROPERTY);
-                if (prop) recurid = icalproperty_get_value_as_string(prop);
-                else recurid = "";
-
-                hash_insert(recurid, old_data, &comp_table);
-
+                if (prop) {
+                    recurid = icalproperty_get_value_as_string(prop);
+                    hash_insert(recurid, old_data, &comp_table);
+                }
+                else {
+                    old_master = old_data;
+                }
             } while ((comp = icalcomponent_get_next_component(oldical, kind)));
         }
     }
@@ -2351,10 +2351,13 @@ void sched_request(const char *userid, const char *organizer,
 
             prop = icalcomponent_get_first_property(comp,
                                                     ICAL_RECURRENCEID_PROPERTY);
-            if (prop) recurid = icalproperty_get_value_as_string(prop);
-            else recurid = "";
-
-            old_data = hash_del(recurid, &comp_table);
+            if (prop) {
+                recurid = icalproperty_get_value_as_string(prop);
+                old_data = hash_del(recurid, &comp_table);
+            }
+            else {
+                old_data = old_master;
+            }
 
             if (old_data) {
                 is_changed = 0;
@@ -2394,15 +2397,17 @@ void sched_request(const char *userid, const char *organizer,
                     is_changed = 1;
             }
 
+            /* if no previous overridden recurrence on this date, the
+             * values should be taken from the old master event */
             struct comp_data *src_data = old_data;
-            if (!src_data) src_data = hash_lookup("", &comp_table);
+            if (!src_data) src_data = old_master;
 
             /* Process all attendees in created/modified components */
-            process_attendees(comp, ncomp++, organizer, att_update,
+            process_attendees(comp, ncomp++, organizer,
                               &att_table, req, needs_action, is_changed,
                               src_data ? src_data->comp : NULL);
 
-            free(old_data);
+            if (old_data != old_master) free(old_data);
         } while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
 
@@ -2414,17 +2419,11 @@ void sched_request(const char *userid, const char *organizer,
     }
     free_hash_table(&comp_table, free);
 
+    free(old_master);
+
     icalcomponent_free(req);
 
-    /* Attempt to deliver requests to attendees */
-    /* XXX  Do we need to do more checks here? */
-    if (sparam->flags & SCHEDTYPE_REMOTE)
-        authstate = auth_newstate("anonymous");
-    else
-        authstate = auth_newstate(userid);
-
-    hash_enumerate(&att_table, sched_deliver, authstate);
-    auth_freestate(authstate);
+    hash_enumerate(&att_table, sched_deliver, httpd_authstate);
 
   done:
     if (newical) {
@@ -2569,7 +2568,7 @@ static void sched_decline(const char *recurid __attribute__((unused)),
 
 
 /* Create and deliver an attendee scheduling reply */
-void sched_reply(const char *userid,
+void sched_reply(const char *userid, const char *attendee,
                  icalcomponent *oldical, icalcomponent *newical)
 {
     int r, rights = 0;
@@ -2635,7 +2634,7 @@ void sched_reply(const char *userid,
         /* DAV:need-privileges */
         if (newical) sched_data->status = SCHEDSTAT_NOPRIVS;
         syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
-               httpd_userid, userid);
+               httpd_userid, attendee);
 
         goto done;
     }
@@ -2675,7 +2674,7 @@ void sched_reply(const char *userid,
         do {
             old_data = xzmalloc(sizeof(struct comp_data));
 
-            old_data->comp = trim_attendees(comp, userid, NULL,
+            old_data->comp = trim_attendees(comp, attendee, NULL,
                                             &old_data->partstat, &recurid);
 
             hash_insert(recurid, old_data, &comp_table);
@@ -2694,7 +2693,7 @@ void sched_reply(const char *userid,
             icalparameter_partstat partstat;
             int changed = 1;
 
-            copy = trim_attendees(comp, userid,
+            copy = trim_attendees(comp, attendee,
                                   &myattendee, &partstat, &recurid);
             if (myattendee) {
                 /* Found our userid */
@@ -2746,7 +2745,7 @@ void sched_reply(const char *userid,
 
         if (!sched_data->status) {
             /* Attempt to deliver reply to organizer */
-            authstate = auth_newstate(userid);
+            authstate = auth_newstate(attendee);
             sched_deliver(organizer, sched_data, authstate);
             auth_freestate(authstate);
         }

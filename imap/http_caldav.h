@@ -48,4 +48,9 @@
  * boxes for userid, if they don't already exist. */
 extern int caldav_create_defaultcalendars(const char *userid);
 
+extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
+                                 struct mailbox *mailbox, const char *resource,
+                                 struct caldav_db *caldavdb, unsigned flags,
+                                 const char *schedule_userid);
+
 #endif /* HTTP_CALDAV_H */

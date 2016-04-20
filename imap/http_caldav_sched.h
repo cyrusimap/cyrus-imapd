@@ -61,6 +61,7 @@
 
 #include "http_dav.h"
 #include "ical_support.h"
+#include "http_caldav.h"
 
 
 #define NEW_STAG (1<<8)         /* Make sure we skip over PREFER bits */
@@ -165,19 +166,14 @@ extern icalcomponent *busytime_query_local(struct transaction_t *txn,
                                            const char *organizer,
                                            const char *attendee);
 
-extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
-                                 struct mailbox *mailbox, const char *resource,
-                                 struct caldav_db *caldavdb, unsigned flags);
-
 extern int isched_send(struct sched_param *sparam, const char *recipient,
                        icalcomponent *ical, xmlNodePtr *xml);
 
 extern int sched_busytime_query(struct transaction_t *txn,
                                 struct mime_type_t *mime, icalcomponent *comp);
-extern void sched_request(const char *userid, const char *organizer, struct sched_param *sparam,
-                          icalcomponent *oldical, icalcomponent *newical,
-                          const char *att_update);
-extern void sched_reply(const char *userid,
+extern void sched_request(const char *userid, const char *organizer,
+                          icalcomponent *oldical, icalcomponent *newical);
+extern void sched_reply(const char *userid, const char *attendee,
                         icalcomponent *oldical, icalcomponent *newical);
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,

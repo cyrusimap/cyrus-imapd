@@ -47,6 +47,7 @@
 
 #include "caldav_db.h"
 #include "ical_support.h"
+#include "message.h"
 #include "util.h"
 
 #ifdef HAVE_ICAL
@@ -67,17 +68,28 @@ struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
 }
 
 icalcomponent *record_to_ical(struct mailbox *mailbox,
-                              const struct index_record *record)
+                              const struct index_record *record,
+                              char **schedule_userid)
 {
-    struct buf buf = BUF_INITIALIZER;
     icalcomponent *ical = NULL;
+    message_t *m = message_new_from_record(mailbox, record);
+    struct buf buf = BUF_INITIALIZER;
 
     /* Load message containing the resource and parse iCal data */
-    if (!mailbox_map_record(mailbox, record, &buf)) {
-        ical = icalparser_parse_string(buf_cstring(&buf) + record->header_size);
-        buf_free(&buf);
+    if (!message_get_field(m, "rawbody", MESSAGE_RAW, &buf)) {
+        ical = icalparser_parse_string(buf_cstring(&buf));
     }
 
+    /* extract the schedule user header */
+    if (schedule_userid) {
+        buf_reset(&buf);
+        if (!message_get_field(m, "x-schedule-user-address", MESSAGE_DECODED|MESSAGE_TRIM, &buf)) {
+            if (buf.len) *schedule_userid = buf_release(&buf);
+        }
+    }
+
+    buf_free(&buf);
+    message_unref(&m);
     return ical;
 }
 
