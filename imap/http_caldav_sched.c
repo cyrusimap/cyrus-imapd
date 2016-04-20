@@ -2128,11 +2128,11 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
                 sched_data = xzmalloc(sizeof(struct sched_data));
                 sched_data->itip = icalcomponent_new_clone(itip);
                 sched_data->force_send = force_send;
-                sched_data->is_update = !is_new;
                 hash_insert(attendee, sched_data, att_table);
             }
             new_comp = icalcomponent_new_clone(copy);
             icalcomponent_add_component(sched_data->itip, new_comp);
+            if (!is_new) sched_data->is_update = 1;
             sched_data->comp_mask |= (1 << ncomp);
 
             /* XXX  We assume that the master component is always first */
@@ -2394,10 +2394,13 @@ void sched_request(const char *userid, const char *organizer,
                     is_changed = 1;
             }
 
+            struct comp_data *src_data = old_data;
+            if (!src_data) src_data = hash_lookup("", &comp_table);
+
             /* Process all attendees in created/modified components */
             process_attendees(comp, ncomp++, organizer, att_update,
                               &att_table, req, needs_action, is_changed,
-                              old_data ? old_data->comp : NULL);
+                              src_data ? src_data->comp : NULL);
 
             free(old_data);
         } while ((comp = icalcomponent_get_next_component(newical, kind)));
