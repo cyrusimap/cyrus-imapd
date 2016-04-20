@@ -108,6 +108,9 @@ int backup_verify(struct backup *backup, unsigned level, int verbose, FILE *out)
 /* accessing backup properties */
 const char *backup_get_data_fname(const struct backup *backup);
 const char *backup_get_index_fname(const struct backup *backup);
+int backup_stat(const struct backup *backup,
+                struct stat *data_statp,
+                struct stat *index_statp);
 
 
 /* reading backup chunk data */

@@ -496,6 +496,33 @@ EXPORTED const char *backup_get_index_fname(const struct backup *backup)
     return backup->index_fname;
 }
 
+EXPORTED int backup_stat(const struct backup *backup,
+                         struct stat *data_statp,
+                         struct stat *index_statp)
+{
+    struct stat data_statbuf, index_statbuf;
+    int r;
+
+    r = fstat(backup->fd, &data_statbuf);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: fstat %s: %m", backup->data_fname);
+        return IMAP_IOERROR;
+    }
+
+    r = stat(backup->index_fname, &index_statbuf);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: stat %s: %m", backup->index_fname);
+        return IMAP_IOERROR;
+    }
+
+    if (data_statp)
+        memcpy(data_statp, &data_statbuf, sizeof data_statbuf);
+    if (index_statp)
+        memcpy(index_statp, &index_statbuf, sizeof index_statbuf);
+
+    return 0;
+}
+
 static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
 {
     struct gzuncat *gzuc = (struct gzuncat *) rock;
