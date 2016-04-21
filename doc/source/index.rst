@@ -67,6 +67,7 @@ This is the highlight reel of Cyrus's full list of features_.
     imap/index
     preface
     styles
+    glossary
 
 ..  note to documentation contributors:
 

@@ -407,8 +407,4 @@ The shared namespace can be suppressed in LIST commands by setting
 can be advantageous to larger environments that want to avoid all LIST
 operations to result in very large, long lists of folders.
 
-.. seealso::
-
-    *   :ref:`imap-howto-shared-folder-mail-delivery`
-
 Back to :ref:`imap-features`

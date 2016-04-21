@@ -1,4 +1,5 @@
-.. _jmap:
+.. _developer-jmap:
+
 ============
 JMAP support
 ============
@@ -20,11 +21,12 @@ JMAP client
 
 Test JMAP support
 -----------------
-Once Cyrus is running, you can test JMAP on the command line for any existing Cuyrus user. The user must at least have an INBOX provisioned but is not required to have any calendars, contacts or messages.
+
+Once Cyrus is running, you can test JMAP on the command line for any existing Cyrus user. The user must at least have an INBOX provisioned but is not required to have any calendars, contacts or messages.
 
 To obtain the JMAP calendars for user ``test``, issue the following request:
 
-.. code-block: bash
+.. code-block:: bash
 
     curl -X POST \
          -H "Content-Type: application/json" \
@@ -34,6 +36,8 @@ To obtain the JMAP calendars for user ``test``, issue the following request:
          http://localhost/jmap
 
 you should get a response which looks similar to
+
+.. code-block:: none
 
     [
         [
@@ -67,7 +71,7 @@ Similar requests exist to obtain contacts and messages. For details, see the
 JMAP specification.
 
 Optional: Install sample JMAP client
---------------------------
+------------------------------------
 
 .. note::
 
@@ -94,8 +98,10 @@ The JMAP implementation in Cyrus is at various stages of maturity.
 
 Working
 -------
+
 * **Contacts**
     * Mostly. All JMAP methods are implemented. JMAP blobs are not supported.
+    
 * **Calendars**
     * Mostly. All JMAP methods are implemented. JMAP blobs are not supported.
 
@@ -133,13 +139,16 @@ Not yet implemented
 
 
 * **Remote mailboxes**
+
 * **Events**
     * The JMAP event service hooks into notifications, so that’s almost done.
     * What’s missing is the service layer (Bron knows more).
+    
 * **Messages**
     * Search snippets
     * Conversations
     * Anything else not mentioned in the "In Progress" section above
+    
 * **Phrase-Matching search**
     * The JMAP filters require phrase matching for text properties, but as a placeholder we currently only support case-insensitive substring search. We are working on Sphinx/Xapian integration.
 
@@ -148,8 +157,10 @@ Needs improvement
 
 * **Lookup message by guid**
     * We use message guids as JMAP message ids. Currently, that requires O(n), where n is the number of records across all a users mailboxes. That really should become O(1) or O(lgN)
+    
 * **Lookup mailbox by unique-id**
     * We use mailbox unique-ids for JMAP mailbox ids. Currently, the lookup is O(n) (n is the number of a users mailboxes). Should be O(1) or O(lgN) 
+    
 * **Filters**
     * Message filters currently build on a very naive filter implementation. As a
       consequence, filtering messages is slooooow. We are working on Xapian
@@ -157,6 +168,7 @@ Needs improvement
     * Calendar and contacts similarly use naive filters but typically operate
       on a significantly smaller database. Still, we are working on speeding up
       these filters as well.
+      
 * **Error reporting**
     * The JMAP spec requires all invalid properties of a request to be reported. 
     * Contacts fail at the first property error. 

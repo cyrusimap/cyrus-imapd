@@ -15,7 +15,6 @@ documents:
 
 *   :ref:`imap-admin-access-control-combining-rights`
 *   :ref:`imap-admin-access-control-defaults`
-*   :ref:`imap-admin-access-control-identifiers`
 
 Individual Rights Reference
 ===========================
@@ -60,11 +59,6 @@ Individual Rights Reference
             S: * LIST () "/" "C"
             S: * LIST (\\NoInferiors) "/" "C/D"
             S: A777 OK LIST completed
-
-    .. seealso::
-
-        *   :ref:`imap-admin-sop-disabling-namespace-other-users`
-        *   :ref:`imap-admin-sop-disabling-namespace-shared`
 
 .. _imap-admin-access-control-right-r:
 
@@ -329,7 +323,6 @@ Individual Rights Reference
     .. seealso::
 
         *   :ref:`imap-admin-sop-restoring-expunged-messages`
-        *   :ref:`imap-admin-config-expunge_mode`
 
     .. NOTE::
 

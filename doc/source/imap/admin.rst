@@ -27,6 +27,7 @@ Management
     admin/eventsource    
     admin/config-mailboxdistribution
     admin/nginx-proxy
+    admin/tweaking
 
 .. :todo:
     admin/sop/search Search (squat, xapian, ...)

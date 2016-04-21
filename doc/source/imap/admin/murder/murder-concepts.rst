@@ -539,6 +539,8 @@ multiple servers and users must potentially configure a server for each
 user with a shared folder he wishes to view. Also, the user's INBOX 
 hierarchy must also reside on a single machine. 
 
+.. _appendix-b-imap-multiplexing:
+
 Appendix B: IMAP Multiplexing
 -----------------------------
 
@@ -573,24 +575,30 @@ Appendix C: Definitions
 IMAP connection
     A single IMAP TCP/IP session with a single IMAP server is a
     "connection".
+    
 client
     A client is a process on a remote computer that communicates with
     the set of servers distributing mail data, be they ACAP, IMAP,
     LDAP, or IMSP servers. A client opens one or more connections to
     various servers.
+    
 mailbox tree
     The collection of all mailboxes at a given site in a namespace is
     called the mailbox tree. Generally, the user Bovik's personal data
     is found in ``user.bovik``.
+    
 mailboxes database
     A local database containing a list of mailboxes known to a
     particular server.
+    
 mailbox dataset
     The store of mailbox information on the ACAP server is the "mailbox
     dataset".
+    
 mailbox operation
     The following IMAP commands are "mailbox operations": CREATE,
     RENAME, DELETE, and SETACL.
+    
 MTA
     The mail transport agent (e.g. sendmail, postfix).
     
@@ -599,9 +607,10 @@ MTA
 Murder of IMAP servers
     A grouping of IMAP servers. It sounded cool for crows so we decided
     to use it for IMAP servers as well.
+    
 quota operations
     The quota IMAP commands (GETQUOTA, GETQUOTAROOT, and SETQUOTA)
     operate on mailbox trees. In future versions of Cyrus, it is
     expected that a quotaroot will be a subset of a mailbox tree that
-    resides on one partition on one server. For rational, see section
+    resides on one partition on one server. For rationale, see section
     xxx.

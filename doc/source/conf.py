@@ -1151,7 +1151,7 @@ rst_prolog += """
 rst_prolog += """
 .. |default-conf-text| replace:: reads its configuration options out of the :manpage:`imapd.conf(5)` file unless specified otherwise by **-C**.
 .. |cli-dash-c-text| replace:: Use the specified configuration file *config-file* rather than the default :manpage:`imapd.conf(5)`.
-.. |def-confdir-text| replace:: The *configdirectory* option in :manpage:`imapd.conf(5)` is used to determine the default location of the
+.. |def-confdir-text| replace:: The *configdirectory* option in :cyrusman:`imapd.conf(5)` is used to determine the default location of the
 """
 
 # New feature version disclaimer for 3.0 (big changes)
