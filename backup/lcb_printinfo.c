@@ -41,6 +41,7 @@
  *
  */
 #include <assert.h>
+#include <errno.h>
 #include <syslog.h>
 
 #include "backup/backup.h"

@@ -43,6 +43,7 @@
 #include <config.h>
 
 #include <assert.h>
+#include <errno.h>
 #include <syslog.h>
 
 #include "lib/gzuncat.h"
