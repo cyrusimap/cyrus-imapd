@@ -551,6 +551,149 @@ EOF
   $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
 }
 
+sub test_invite_withheader
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+	user => "cassandane%example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  my $data = $self->{instance}->getnotify();
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar', 'Schedule-Address' => 'cassandane@example.net');
+
+  my $newdata = $self->{instance}->getnotify();
+  my ($imip) = grep { $_->{METHOD} eq 'imip' } @$newdata;
+  my $payload = decode_json($imip->{MESSAGE});
+
+  $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
+}
+
+sub test_invite_fullvirtual
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user.domuser@example.com');
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+	user => "domuser\@example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:domuser\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:domuser\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  my $data = $self->{instance}->getnotify();
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  my $newdata = $self->{instance}->getnotify();
+  my ($imip) = grep { $_->{METHOD} eq 'imip' } @$newdata;
+  my $payload = decode_json($imip->{MESSAGE});
+
+  $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
+}
+
 sub test_changes_add
 {
     my ($self) = @_;
@@ -1055,7 +1198,7 @@ EOF
     my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
     my $recips = join ('-', sort map { $_->{recipient} } @payloads);
     $self->assert_str_equals($recips, "test1\@example.com-test2\@example.com-test3\@example.com");
-    die Dumper(\@payloads);
+    #die Dumper(\@payloads);
   }
 }
 
