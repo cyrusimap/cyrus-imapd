@@ -166,6 +166,7 @@ AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
 AC_CHECK_SIZEOF(size_t)
 AC_CHECK_SIZEOF(off_t)
+AC_CHECK_SIZEOF(time_t)
 
 dnl Check that `long long int' is available
 AC_CHECK_SIZEOF(long long int)
