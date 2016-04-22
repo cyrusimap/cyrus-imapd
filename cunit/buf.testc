@@ -1531,6 +1531,30 @@ static void test_findline(void)
 #undef WORDU
 }
 
+static void _trimsto(const char *src, const char *dest)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, src);
+    buf_trim(&buf);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), dest);
+    buf_free(&buf);
+}
+
+static void test_trim(void)
+{
+    _trimsto("", "");
+    _trimsto("a", "a");
+    _trimsto("abcdefg", "abcdefg");
+    _trimsto("ab\tcde fg", "ab\tcde fg");
+    _trimsto("  ab\tcde fg", "ab\tcde fg");
+    _trimsto("  ab\tcde fg  ", "ab\tcde fg");
+    _trimsto("ab\tcde fg  ", "ab\tcde fg");
+    _trimsto("\tab\tcde fg  ", "ab\tcde fg");
+    _trimsto("\t  ", "");
+}
+
+
+
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
 /* vim: set ft=c: */

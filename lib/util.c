@@ -1449,6 +1449,30 @@ EXPORTED const char *buf_lcase(struct buf *buf)
     return buf->s;
 }
 
+EXPORTED void buf_trim(struct buf *buf)
+{
+    size_t i;
+    for (i = 0; i < buf->len; i++) {
+        if (buf->s[i] == ' ') continue;
+        if (buf->s[i] == '\t') continue;
+        if (buf->s[i] == '\r') continue;
+        if (buf->s[i] == '\n') continue;
+        break;
+    }
+    if (i) buf_remove(buf, 0, i);
+
+    for (i = buf->len; i > 1; i--) {
+        if (buf->s[i-1] == ' ') continue;
+        if (buf->s[i-1] == '\t') continue;
+        if (buf->s[i-1] == '\r') continue;
+        if (buf->s[i-1] == '\n') continue;
+        break;
+    }
+    if (i != buf->len) {
+        buf_truncate(buf, i);
+    }
+}
+
 EXPORTED int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
 {
     const unsigned char *v = bin;
