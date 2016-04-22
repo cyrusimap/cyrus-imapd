@@ -4133,6 +4133,9 @@ static void extract_one(struct buf *buf,
         break;
     }
 
+    if (format & MESSAGE_TRIM)
+        buf_trim(buf);
+
     free(p);
 }
 

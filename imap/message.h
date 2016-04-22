@@ -221,7 +221,11 @@ enum message_format
     /* This flag can be OR'd into the format argument to request that
      * results be appended to the buffer; normally the buffer is reset
      * first. */
-    MESSAGE_APPEND=             (1<<7)
+    MESSAGE_APPEND=             (1<<7),
+
+    /* This flag can be OR'd into hte format argument to request that
+     * leading and trailing space be trimmed from the buffer */
+    MESSAGE_TRIM=               (1<<8)
 };
 
 enum message_indexflags
