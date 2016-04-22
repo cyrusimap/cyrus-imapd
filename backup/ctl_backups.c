@@ -634,7 +634,7 @@ static int cmd_lock_one(void *rock,
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     char *userid = NULL;
     char *fname = NULL;
-    int r;
+    int r = 0;
 
     /* input args might not be 0-terminated, so make a safe copy */
     if (key_len)
