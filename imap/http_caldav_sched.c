@@ -2051,10 +2051,10 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
             if (!strcasecmp(attendee, organizer)) continue;
 
             /* seen this one before, so we send them updates */
-            char *lat = xstrdup(attendee);
-            lcase(lat);
-            hash_insert(lat, &dummy, &oldatt_table);
-            free(lat);
+            char *lc_attendee = xstrdup(attendee);
+            lcase(lc_attendee);
+            hash_insert(lc_attendee, &dummy, &oldatt_table);
+            free(lc_attendee);
         }
     }
 
@@ -2091,16 +2091,18 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
         icalparameter_scheduleforcesend force_send =
             ICAL_SCHEDULEFORCESEND_NONE;
         const char *attendee = icalproperty_get_invitee(prop);
-        char *lat = xstrdup(attendee);
-        lcase(lat);
-        int is_new = !hash_lookup(lat, &oldatt_table);
-        free(lat);
 
         /* Don't schedule attendee == organizer */
         if (!strcasecmp(attendee, organizer)) continue;
 
+        char *lc_attendee = xstrdup(attendee);
+        lcase(lc_attendee);
+        int is_new = !hash_lookup(lc_attendee, &oldatt_table);
+        struct sched_data *sched_data = hash_lookup(lc_attendee, att_table);
+
         /* don't send an update if there's no change */
-        if (!is_new && !is_changed) continue;
+        if ((!sched_data || !sched_data->master) && !is_new && !is_changed)
+            do_sched = 0;
 
         /* Check CalDAV Scheduling parameters */
         param = icalproperty_get_scheduleagent_parameter(prop);
@@ -2120,16 +2122,14 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 
         /* Create/update iTIP request for this attendee */
         if (do_sched) {
-            struct sched_data *sched_data;
             icalcomponent *new_comp;
 
-            sched_data = hash_lookup(attendee, att_table);
             if (!sched_data) {
                 /* New attendee - add it to the hash table */
                 sched_data = xzmalloc(sizeof(struct sched_data));
                 sched_data->itip = icalcomponent_new_clone(itip);
                 sched_data->force_send = force_send;
-                hash_insert(attendee, sched_data, att_table);
+                hash_insert(lc_attendee, sched_data, att_table);
             }
             new_comp = icalcomponent_new_clone(copy);
             icalcomponent_add_component(sched_data->itip, new_comp);
@@ -2139,6 +2139,8 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
             /* XXX  We assume that the master component is always first */
             if (!ncomp) sched_data->master = new_comp;
         }
+
+        free(lc_attendee);
     }
 
     free_hash_table(&oldatt_table, NULL);
