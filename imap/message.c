@@ -4152,6 +4152,13 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     int hasname = 1;
     int isutf8 = 0;
 
+    if (!strcasecmp(hdr, "rawbody")) {
+        int r = message_need(m, M_MAP|M_RECORD);
+        if (r) return r;
+        buf_setmap(buf, m->map.s + m->record.header_size, m->record.size - m->record.header_size);
+        return 0;
+    }
+
     /* the 5 standalone cache fields */
     if (!strcasecmp(hdr, "from")) {
         int r = message_need(m, M_CACHE);
