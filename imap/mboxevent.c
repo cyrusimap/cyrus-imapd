@@ -917,12 +917,16 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
                 carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
             }
-            if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            else if (mailbox->mbtype & MBTYPE_CALENDAR) {
                 struct caldav_db *caldavdb = NULL;
                 struct caldav_data *cdata = NULL;
                 caldavdb = mailbox_open_caldav(mailbox);
                 caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
+            }
+            else {
+                /* don't bail for MBTYPE_COLLECTION or any new things */
+                FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(""));
             }
         }
     }
