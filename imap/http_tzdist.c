@@ -575,7 +575,7 @@ static int list_cb(const char *tzid, int tzidlen,
     }
 
     strlcpy(tzidbuf, tzid, tzidlen+1);
-    sprintf(etag, "%u-%ld", strhash(tzid), zi->dtstamp);
+    sprintf(etag, "%u-%ld", strhash(tzidbuf), zi->dtstamp);
     time_to_rfc3339(zi->dtstamp, lastmod, RFC3339_DATETIME_MAX);
 
     tz = json_pack("{s:s s:s s:s s:s s:s}",
