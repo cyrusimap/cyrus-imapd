@@ -1030,10 +1030,7 @@ static void sched_deliver_remote(const char *recipient,
         }
     }
     else {
-        if (!strncasecmp(recipient, "mailto:", 7))
-            r = imip_send(sched_data->itip, recipient + 7, sched_data->is_update);
-        else
-            r = 1; /* code doesn't matter */
+        r = imip_send(sched_data->itip, recipient, sched_data->is_update);
         if (!r) {
             sched_data->status =
                 sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
@@ -2046,6 +2043,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
             prop = icalcomponent_get_next_invitee(oldcomp)) {
 
             const char *attendee = icalproperty_get_invitee(prop);
+            if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
             /* Don't modify attendee == organizer */
             if (!strcasecmp(attendee, organizer)) continue;
@@ -2065,6 +2063,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
          prop = icalcomponent_get_next_invitee(comp)) {
 
         const char *attendee = icalproperty_get_invitee(prop);
+        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         /* Don't modify attendee == organizer */
         if (!strcasecmp(attendee, organizer)) continue;
@@ -2091,6 +2090,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
         icalparameter_scheduleforcesend force_send =
             ICAL_SCHEDULEFORCESEND_NONE;
         const char *attendee = icalproperty_get_invitee(prop);
+        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         /* Don't schedule attendee == organizer */
         if (!strcasecmp(attendee, organizer)) continue;
@@ -2441,6 +2441,8 @@ void sched_request(const char *userid, const char *organizer,
                  prop = icalcomponent_get_next_invitee(comp)) {
                 const char *stat = NULL;
                 const char *attendee = icalproperty_get_invitee(prop);
+
+                if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
                 /* Don't set status if attendee == organizer */
                 if (!strcmp(attendee, organizer)) continue;
