@@ -788,7 +788,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
                 /* If we're encoding binary, replace "binary"
                    with "base64" in CTE header body */
                 if (msg->encode &&
-                    !strcmp(body->encoding, "BINARY")) {
+                    !strcmpsafe(body->encoding, "BINARY")) {
                     char *p = (char*)
                         stristr(msg->base + body->header_offset +
                                 (next - headers.s) + 27,
