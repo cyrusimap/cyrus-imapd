@@ -9657,6 +9657,58 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
 }
 
 
+int dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
+                        unsigned type, unsigned collation,
+                        unsigned filter_precond, unsigned collation_precond)
+{
+    unsigned negate = 0;
+    xmlChar *attr;
+    int r = 0;
+
+    *match = NULL;
+
+    attr = xmlGetProp(node, BAD_CAST "negate-condition");
+    if (attr) {
+        if (!xmlStrcmp(attr, BAD_CAST "yes")) negate = 1;
+        else if (xmlStrcmp(attr, BAD_CAST "no")) r = filter_precond;
+        xmlFree(attr);
+    }
+    attr = xmlGetProp(node, BAD_CAST "match-type");
+    if (attr) {
+        const struct match_type_t *match;
+
+        for (match = dav_match_types; match->name; match++) {
+            if (!xmlStrcmp(attr, BAD_CAST match->name)) break;
+        }
+        if (match->name) type = match->value;
+        else r = filter_precond;
+        xmlFree(attr);
+    }
+    attr = xmlGetProp(node, BAD_CAST "collation");
+    if (attr) {
+        if (xmlStrcmp(attr, BAD_CAST "default")) {
+            const struct collation_t *col;
+
+            for (col = dav_collations; col->name; col++) {
+                if (!xmlStrcmp(attr, BAD_CAST col->name)) break;
+            }
+            if (col->name) collation = col->value;
+            else r = collation_precond;
+        }
+        xmlFree(attr);
+    }
+
+    if (!r) {
+        *match = xzmalloc(sizeof(struct text_match_t));
+        (*match)->text = xmlNodeGetContent(node);
+        (*match)->negate = negate;
+        (*match)->type = type;
+        (*match)->collation = collation;
+    }
+
+    return r;
+}
+
 int dav_text_match(xmlChar *text, struct text_match_t *match)
 {
     const xmlChar *cp = NULL;

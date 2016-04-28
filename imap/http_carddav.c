@@ -836,57 +836,6 @@ struct cardquery_filter {
     struct prop_filter *prop;
 };
 
-static int parse_textmatch(xmlNodePtr node, struct text_match_t **match)
-{
-    unsigned negate = 0, type = MATCH_TYPE_CONTAINS, collation = COLLATION_UNICODE;
-    xmlChar *attr;
-    int r = 0;
-
-    *match = NULL;
-
-    attr = xmlGetProp(node, BAD_CAST "negate-condition");
-    if (attr) {
-        if (!xmlStrcmp(attr, BAD_CAST "yes")) negate = 1;
-        else if (xmlStrcmp(attr, BAD_CAST "no")) r = CARDDAV_SUPP_FILTER;
-        xmlFree(attr);
-    }
-    attr = xmlGetProp(node, BAD_CAST "match-type");
-    if (attr) {
-        const struct match_type_t *match;
-
-        for (match = dav_match_types; match->name; match++) {
-            if (!xmlStrcmp(attr, BAD_CAST match->name)) break;
-        }
-        if (match->name) type = match->value;
-        else r = CARDDAV_SUPP_FILTER;
-        xmlFree(attr);
-    }
-    attr = xmlGetProp(node, BAD_CAST "collation");
-    if (attr) {
-        if (!xmlStrcmp(attr, BAD_CAST "default")) collation = COLLATION_UNICODE;
-        else {
-            const struct collation_t *col;
-
-            for (col = dav_collations; col->name; col++) {
-                if (!xmlStrcmp(attr, BAD_CAST col->name)) break;
-            }
-            if (col->name) collation = col->value;
-            else r = CARDDAV_SUPP_COLLATION;
-        }
-        xmlFree(attr);
-    }
-
-    if (!r) {
-        *match = xzmalloc(sizeof(struct text_match_t));
-        (*match)->text = xmlNodeGetContent(node);
-        (*match)->negate = negate;
-        (*match)->type = type;
-        (*match)->collation = collation;
-    }
-
-    return r;
-}
-
 static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
                             struct error_t *error)
 {
@@ -940,7 +889,11 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
                 struct text_match_t *match = NULL;
 
                 if (prop->not_defined) r = CARDDAV_SUPP_FILTER;
-                else if (!(r = parse_textmatch(node2, &match))) {
+                else if (!(r = dav_parse_textmatch(node2, &match,
+                                                   MATCH_TYPE_CONTAINS,
+                                                   COLLATION_UNICODE,
+                                                   CARDDAV_SUPP_FILTER,
+                                                   CARDDAV_SUPP_COLLATION))) {
                     if (prop->match) match->next = prop->match;
                     prop->match = match;
                 }
@@ -964,7 +917,11 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
                             param->not_defined = 1;
                         }
                         else if (!xmlStrcmp(node3->name, BAD_CAST "text-match")) {
-                            r = parse_textmatch(node3, &param->match);
+                            r = dav_parse_textmatch(node3, &param->match,
+                                                    MATCH_TYPE_CONTAINS,
+                                                    COLLATION_UNICODE,
+                                                    CARDDAV_SUPP_FILTER,
+                                                    CARDDAV_SUPP_COLLATION);
                         }
                         else r = CARDDAV_SUPP_FILTER;
                     }
@@ -1075,6 +1032,7 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
 
                     if (!vparam) pass = param->not_defined;
                     else if (param->match) {
+                        /* XXX  Todo */
                     }
                     else pass = 1;
 

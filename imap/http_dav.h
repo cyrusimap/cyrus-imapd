@@ -576,6 +576,9 @@ struct text_match_t {
     struct text_match_t *next;
 };
 
+int dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
+                        unsigned type, unsigned collation,
+                        unsigned filter_precond, unsigned collation_precond);
 int dav_text_match(xmlChar *text, struct text_match_t *match);
 
 int notify_post(struct transaction_t *txn);
