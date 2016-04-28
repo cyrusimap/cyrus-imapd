@@ -1,8 +1,8 @@
-.. _imap-admin-commands-cyrus-master:
+.. _imap-admin-commands-master:
 
-================
-**cyrus-master**
-================
+==========
+**master**
+==========
 
 The Cyrus IMAP master process.
 
@@ -11,7 +11,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyrus-master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ]
+    **master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ]
         [ **-l** *listen queue* ] [ **-p** *pidfile* ] [ **-P** *snmp agentx ping interval* ]
         [ **-j** *janitor period* ] [ **-d** | **-D** ] [ **-L** *logfile* ]
         [ **-x** *snmp agentx socket* ]
@@ -19,7 +19,7 @@ Synopsis
 Description
 ===========
 
-**cyrus-master** is the process that controls all of the Cyrus
+**master** is the process that controls all of the Cyrus
 processes. This process is responsible for creating all imapd, pop3d,
 lmtpd and sieved child processes. This process also initializes the
 Berkeley DB code and performs scheduled cleanup/maintenance.
@@ -28,12 +28,12 @@ If this process dies, then no new sessions will be started.
 
 It kills itself and all child processes when it receives a SIGTERM.
 
-**cyrus-master** |default-conf-text|
+**master** |default-conf-text|
 
 Options
 =======
 
-.. program:: cyrus-master
+.. program:: master
 
 .. option:: -C  alternate imapd.conf
 
@@ -61,7 +61,7 @@ Options
 .. option:: -p  pidfile
 
     Use *pidfile* as the pidfile.  If not specified, defaults to
-    ``/var/run/cyrus-master.pid``
+    ``/var/run/master.pid``
 
 .. option:: -P  snmp agentx ping interval
 
@@ -92,11 +92,11 @@ Options
 Configuration
 =============
 
-Upon execution, **cyrus-master** reads its configuration information
-out of the :manpage:`cyrus.conf(5)` file, or an alternative if **-M**
+Upon execution, **master** reads its configuration information
+out of the :cyrusman:`cyrus.conf(5)` file, or an alternative if **-M**
 is used.
 
-**cyrus-master** rereads its configuration file when it receives a
+**master** rereads its configuration file when it receives a
 hangup signal, SIGHUP.  Services and events may be added, deleted or
 modified when the configuration file is reread.  Any active services
 removed from the configuration file will be allowed to run until
@@ -104,11 +104,11 @@ completion.  Services added or modified to listen on a privileged port
 may not be able to bind the port, depending on your system
 configuration.  In this case a full restart is needed.
 
-**cyrus-master** propagates the hangup signal, SIGHUP, to its child
+**master** propagates the hangup signal, SIGHUP, to its child
 service processes, so that they stop waiting for incoming connections
 and exit, allowing them to be recycled.  This is useful to make
 services take into account a new version of the
-:manpage:`imapd.conf(5)` file.  Children that are servicing a client
+:cyrusman:`imapd.conf(5)` file.  Children that are servicing a client
 connection when SIGHUP is received are allowed to run until the client
 logouts before being recycled. It may take a long time until the client
 logouts, so a log message is generated for processes that have not been
@@ -121,22 +121,16 @@ The environment variable **CYRUS_VERBOSE** can be set to log additional
 debugging information. Setting the value to 1 results in base level logging.
 Setting it higher results in more log messages being generated.
 
-History
-=======
-
-The name of the command was changed from ``master`` to ``cyrus-master``
-in Cyrus IMAP version |imap_version_master_renamed|.
-
 Files
 =====
 
 /etc/cyrus.conf,
 /etc/imapd.conf,
-/var/run/cyrus-master.pid
+/var/run/master.pid
 
 See Also
 ========
 
-:manpage:`cyrus.conf(5)`, :manpage:`imapd.conf(5)`, :manpage:`imapd(8)`,
-:manpage:`pop3d(8)`, :manpage:`lmtpd(8)`, :manpage:`timsieved(8)`,
-:manpage:`idled(8)`
+:cyrusman:`cyrus.conf(5)`, :cyrusman:`imapd.conf(5)`, :cyrusman:`imapd(8)`,
+:cyrusman:`pop3d(8)`, :cyrusman:`lmtpd(8)`, :cyrusman:`timsieved(8)`,
+:cyrusman:`idled(8)`

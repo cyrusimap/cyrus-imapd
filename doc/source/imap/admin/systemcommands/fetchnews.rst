@@ -1,8 +1,8 @@
-.. _imap-admin-commands-cyrfetchnews:
+.. _imap-admin-commands-fetchnews:
 
-================
-**cyrfetchnews**
-================
+=============
+**fetchnews**
+=============
 
 Retrieve new articles from peer and feed to Cyrus
 
@@ -11,24 +11,24 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyrfetchnews** [ **-C** *config-file* ] [ **-s** *servername*\ [:\ *port*\ ]]
+    **fetchnews** [ **-C** *config-file* ] [ **-s** *servername*\ [:\ *port*\ ]]
         [ **-n** ] [ **-y** ] [ **-w** *wildmat* ] [ **-f** *tstampfile* ]
         [ **-a** *authname* [ **-p** *password* ]] *peername*
 
 Description
 ===========
 
-**cyrfetchnews** retrieves news articles from a peer news server and
-feeds them to a Cyrus server. **cyrfetchnews** connects to the peer
+**fetchnews** retrieves news articles from a peer news server and
+feeds them to a Cyrus server. **fetchnews** connects to the peer
 specified by *peername*, requests new articles since the time stored in
 *tstampfile* and feeds them to *servername*.
 
-**cyrfetchnews** |default-conf-text|
+**fetchnews** |default-conf-text|
 
 Options
 =======
 
-.. program:: cyrfetchnews
+.. program:: fetchnews
 
 .. option:: -C config-file
 
@@ -41,7 +41,7 @@ Options
 
 .. option:: -n
 
-    Don't use the NEWNEWS command. **cyrfetchnews** will keep track of the
+    Don't use the NEWNEWS command. **fetchnews** will keep track of the
     high and low water marks for each group and use them to fetch new
     articles.
 

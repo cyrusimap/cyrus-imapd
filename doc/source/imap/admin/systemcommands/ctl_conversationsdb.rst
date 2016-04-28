@@ -117,4 +117,4 @@ Files
 
 See Also
 ========
-:manpage:`imapd.conf(5)`, :manpage:`cyrus-master(8)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`master(8)`

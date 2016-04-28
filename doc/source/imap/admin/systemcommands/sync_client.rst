@@ -79,7 +79,7 @@ Options
     replication cycle and shuts down if it is present. Used to request
     a nice clean shutdown at the first convenient point. The file is
     removed on shutdown. Overrides ``sync_shutdown_file`` option in
-    :manpage:`imapd.conf(5)`.
+    :cyrusman:`imapd.conf(5)`.
 
 .. option:: -w interval
 
@@ -104,8 +104,8 @@ Options
 .. option:: -r
 
     Rolling (repeat) replication mode. Pick up a list of actions
-    recorded by the :manpage:`lmtpd(8)`, :manpage:`imapd(8)`,
-    :manpage:`popd(8)` and :manpage:`nntpd(8)` daemons from the file
+    recorded by the :cyrusman:`lmtpd(8)`, :cyrusman:`imapd(8)`,
+    :cyrusman:`popd(8)` and :cyrusman:`nntpd(8)` daemons from the file
     specified in ``sync_log_file``. Repeat until ``sync_shutdown_file``
     appears.
 
@@ -138,13 +138,13 @@ Options
     Sieve mode.
     Remaining arguments are list of users whose Sieve files should be
     replicated. Principally used for debugging purposes: not exposed to
-    :manpage:`sync_client(8)`.
+    :cyrusman:`sync_client(8)`.
 
 Examples
 ========
 
 On a replication master, the following would be added to the START
-section of :manpage:`cyrus.conf(5)`:
+section of :cyrusman:`cyrus.conf(5)`:
 
     ::
 
@@ -165,5 +165,5 @@ Files
 See Also
 ========
 
-:manpage:`sync_server(8)`, :manpage:`cyrus.conf(5)`,
-:manpage:`imapd.conf(5)`, :manpage:`cyrus-master(8)`
+:cyrusman:`sync_server(8)`, :cyrusman:`cyrus.conf(5)`,
+:cyrusman:`imapd.conf(5)`, :cyrusman:`master(8)`

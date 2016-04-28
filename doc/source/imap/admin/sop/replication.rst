@@ -293,7 +293,7 @@ For example:
 
 ::
 
-    [root@cyrus-master ~]# /usr/lib/cyrus-imapd/sync_client -S cyrus-replica.example.org -v -u john.doe@example.org
+    [root@skynet ~]# /usr/lib/cyrus-imapd/sync_client -S cyrus-replica.example.org -v -u john.doe@example.org
     USER john^doe@example.org
     
 One can run :cyrusman:`cyr_synclog(8)` instead, which will insert the

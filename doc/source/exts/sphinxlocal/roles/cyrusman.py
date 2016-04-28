@@ -25,8 +25,8 @@ import re
 def make_link_node(rawtext, app, name, manpage_num, options):
     """Create a link to a man page.
     """
-#   These section names map to directory names. ie: section 8 will generate a url to 'commands'
-    sections = ['commands','system','library','special','configs','games','misc','commands']
+#   These section names map to directory names. ie: section 8 will generate a url to 'systemcommands'
+    sections = ['usercommands','system','libraries','special','configs','games','misc','systemcommands']
     manpage_section = sections[int(manpage_num)-1]
     ref = None
     ref = app.config.cyrus_man_url_regex

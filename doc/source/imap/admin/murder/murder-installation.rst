@@ -149,7 +149,7 @@ If everything is configured properly, the mailbox database of the
 current host will upload to the mupdate master. If there are problems,
 the most likely cause is a misconfiguration of the authentication
 settings, or :cyrusman:`mupdate(8)` might not be running on the master.
-Using :cyrusman:`mupdatetest(8)` may be helpful in this case (it
+Using :cyrusman:`mupdatetest(1)` may be helpful in this case (it
 establishes an authenticated connection to the mupdate server, if it
 can).
 
@@ -230,7 +230,7 @@ KERBEROS_V4), the password options are not required. Note the use of
 the same authname as configured in the proxyservers line of the
 backend's :cyrusman:`imapd.conf(5)` above.
 
-Upon starting :cyrusman:`cyrus-master(8)` on the frontend, the local
+Upon starting :cyrusman:`master(8)` on the frontend, the local
 mailboxes database should automatically synchronize with the contents
 of the MUPDATE master, and it's ready to go. Clients should connect to
 the frontends, and the frontends will proxy or refer as applicable to

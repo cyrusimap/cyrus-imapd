@@ -12,71 +12,69 @@ List of Configuration Files, Formats and Settings
     configs/imapd.conf
     configs/krb.equiv
 
-List of Command-line Utilities
-==============================
+List of System Command-line Utilities
+=====================================
 
 .. toctree::
     :maxdepth: 1
 
-    commands/arbitron
-    commands/arbitronsort.pl    
-    commands/chk_cyrus
-    commands/convert-sieve.pl       
-    commands/ctl_cyrusdb
-    commands/ctl_conversationsdb
-    commands/ctl_deliver
-    commands/ctl_mboxlist
-    commands/ctl_zoneinfo
-    commands/cvt_cyrusdb
-    commands/cyradm
-    commands/cyrdump    
-    commands/cyrfetchnews
-    commands/cyrus-master
-    commands/cyr_dbtool
-    commands/cyr_deny
-    commands/cyr_df
-    commands/cyr_expire
-    commands/cyr_info
-    commands/cyr_sequence    
-    commands/cyr_synclog
-    commands/deliver
-    commands/fud
-    commands/httpd
-    commands/idled
-    commands/imapd
-    commands/imtest
-    commands/installsieve
-    commands/ipurge
-    commands/lmtpd
-    commands/lmtptest
-    commands/masssievec    
-    commands/master 
-    commands/mbexamine
-    commands/mbpath
-    commands/mbtool
-    commands/mkimap
-    commands/mupdate
-    commands/mupdatetest
-    commands/nntpd
-    commands/nntptest
-    commands/notifyd
-    commands/pop3d
-    commands/pop3test
-    commands/quota
-    commands/reconstruct
-    commands/rmnews
-    commands/sievec
-    commands/sieved    
-    commands/sivtest
-    commands/smmapd
-    commands/smtptest
-    commands/squatter
-    commands/sync_client
-    commands/sync_reset
-    commands/sync_server
-    commands/timsieved
-    commands/tls_prune
-    commands/unexpunge
+    systemcommands/arbitron
+    systemcommands/chk_cyrus
+    systemcommands/ctl_cyrusdb
+    systemcommands/ctl_conversationsdb
+    systemcommands/ctl_deliver
+    systemcommands/ctl_mboxlist
+    systemcommands/ctl_zoneinfo
+    systemcommands/cvt_cyrusdb
+    systemcommands/cyradm
+    systemcommands/cyrdump    
+    systemcommands/fetchnews
+    systemcommands/cyr_buildinfo
+    systemcommands/cyr_dbtool
+    systemcommands/cyr_deny
+    systemcommands/cyr_df
+    systemcommands/cyr_expire
+    systemcommands/cyr_info
+    systemcommands/cyr_sequence    
+    systemcommands/cyr_synclog
+    systemcommands/deliver
+    systemcommands/fud
+    systemcommands/httpd
+    systemcommands/idled
+    systemcommands/imapd
+    systemcommands/ipurge
+    systemcommands/lmtpd
+    systemcommands/master 
+    systemcommands/mbexamine
+    systemcommands/mbpath
+    systemcommands/mbtool
+    systemcommands/mkimap
+    systemcommands/mupdate
+    systemcommands/nntpd
+    systemcommands/notifyd
+    systemcommands/pop3d
+    systemcommands/quota
+    systemcommands/reconstruct
+    systemcommands/rmnews
+    systemcommands/sievec
+    systemcommands/sieved    
+    systemcommands/smmapd
+    systemcommands/squatter
+    systemcommands/sync_client
+    systemcommands/sync_reset
+    systemcommands/sync_server
+    systemcommands/timsieved
+    systemcommands/tls_prune
+    systemcommands/unexpunge
+
+List of User Command-line Utilities
+===================================
+
+.. toctree::
+    :maxdepth: 1
+    :glob:
+    
+    usercommands/*
 
 Work-in-Progress
 ================
@@ -88,35 +86,38 @@ the form of actual man-pages.
 .. toctree::
     :maxdepth: 1
 
-    commands/ptdump
-    commands/ptexpire
-    commands/ptloader
+    systemcommands/ptdump
+    systemcommands/ptexpire
+    systemcommands/ptloader
+    systemcommands/proxyd
+    systemcommands/sieveshell
 
 .. toctree::
     :maxdepth: 1
     :hidden:
     
-    commands/compile_st.pl
+    systemcommands/compile_st.pl
 
-    commands/cyr_systemd_helper
+    systemcommands/cyr_systemd_helper
 
-    commands/fixsearchpath.pl
-    commands/migrate-metadata
-    commands/mknewsgroups
-    commands/mupdate-loadgen.pl
-    commands/proxyd
-    commands/rehash
-    commands/cvt_cyrusdb_all
-    commands/cyr_userseen
-    commands/dohash
-    commands/undohash
-    commands/upgradesieve
-    commands/sieveshell
+    systemcommands/convert-sieve.pl       
+    systemcommands/masssievec    
+    systemcommands/arbitronsort.pl    
+    systemcommands/fixsearchpath.pl
+    systemcommands/migrate-metadata
+    systemcommands/mknewsgroups
+    systemcommands/mupdate-loadgen.pl
+    systemcommands/rehash
+    systemcommands/cvt_cyrusdb_all
+    systemcommands/cyr_userseen
+    systemcommands/dohash
+    systemcommands/undohash
+    systemcommands/upgradesieve
 
-    commands/translatesieve
-    commands/template
+    systemcommands/translatesieve
+    systemcommands/template
 
    
-..  commands/template: this is just the template for new command files so it obeys man and html formatting.   
+..  systemcommands/template: this is just the template for new command files so it obeys man and html formatting.   
 .. translatesieve better version of convert-sieve (does this make convert-sieve obsolete?)]
 

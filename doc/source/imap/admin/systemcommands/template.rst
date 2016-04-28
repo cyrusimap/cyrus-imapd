@@ -1,3 +1,5 @@
+:orphan:
+
 .. _imap-admin-commands-CMD:
 
 ==========

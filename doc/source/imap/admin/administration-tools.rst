@@ -40,8 +40,8 @@ cyrdump
 cyr_expire
 ++++++++++
 
-cyrfetchnews
-++++++++++++
+fetchnews
++++++++++
 
 cyr_sequence
 ++++++++++++
