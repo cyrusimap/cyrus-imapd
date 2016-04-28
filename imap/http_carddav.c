@@ -1000,6 +1000,7 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
         }
 
         if (!values) pass = prop->not_defined;
+        else if (prop->not_defined) pass = 0;
         else if (prop->match || prop->param) {
             pass = prop->allof;
 
@@ -1031,6 +1032,7 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
                         vparse_get_param(entry, (char *) param->name);
 
                     if (!vparam) pass = param->not_defined;
+                    else if (param->not_defined) pass = 0;
                     else if (param->match) {
                         /* XXX  Todo */
                     }
