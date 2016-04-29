@@ -836,10 +836,11 @@ struct cardquery_filter {
     struct prop_filter *prop;
 };
 
+#define IS_NOT_DEF_ERR "is-not-defined can NOT be combined with other elements"
+
 static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
                             struct error_t *error)
 {
-    int r = 0;
     xmlChar *attr;
     xmlNodePtr node;
 
@@ -847,22 +848,32 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
     attr = xmlGetProp(root, BAD_CAST "test");
     if (attr) {
         if (!xmlStrcmp(attr, BAD_CAST "allof")) filter->allof = 1;
-        else if (xmlStrcmp(attr, BAD_CAST "anyof")) r = CARDDAV_SUPP_FILTER;
+        else if (xmlStrcmp(attr, BAD_CAST "anyof")) {
+            error->precond = CARDDAV_SUPP_FILTER;
+            error->desc = "Unsupported test";
+            error->node = xmlCopyNode(root, 2);
+        }
         xmlFree(attr);
     }
 
-    for (node = xmlFirstElementChild(root); !r && node;
+    for (node = xmlFirstElementChild(root); node && !error->precond;
          node = xmlNextElementSibling(node)) {
         struct prop_filter *prop;
         xmlNodePtr node2;
 
-        attr = NULL;
-
         if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
             attr = xmlGetProp(node, BAD_CAST "name");
+            if (!attr) {
+                error->precond = CARDDAV_SUPP_FILTER;
+                error->desc = "Missing 'name' attribute in prop-filter";
+                error->node = xmlCopyNode(node, 2);
+                break;
+            }
         }
-        if (!attr) {
-            r = CARDDAV_SUPP_FILTER;
+        else {
+            error->precond = CARDDAV_SUPP_FILTER;
+            error->desc = "Unsupported element in filter";
+            error->node = xmlCopyNode(root, 1);
             break;
         }
 
@@ -874,34 +885,47 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
         attr = xmlGetProp(node, BAD_CAST "test");
         if (attr) {
             if (!xmlStrcmp(attr, BAD_CAST "allof")) prop->allof = 1;
-            else if (xmlStrcmp(attr, BAD_CAST "anyof")) r = CARDDAV_SUPP_FILTER;
+            else if (xmlStrcmp(attr, BAD_CAST "anyof")) {
+                error->precond = CARDDAV_SUPP_FILTER;
+                error->desc = "Unsupported test";
+                error->node = xmlCopyNode(node, 2);
+            }
             xmlFree(attr);
         }
 
-        for (node2 = xmlFirstElementChild(node); !r && node2;
+        for (node2 = xmlFirstElementChild(node); node2 && !error->precond;
              node2 = xmlNextElementSibling(node2)) {
 
-            if (!xmlStrcmp(node2->name, BAD_CAST "is-not-defined")) {
-                if (prop->match || prop->param) r = CARDDAV_SUPP_FILTER;
+            if (prop->not_defined) {
+                error->precond = CARDDAV_SUPP_FILTER;
+                error->desc = IS_NOT_DEF_ERR;
+                error->node = xmlCopyNode(node, 1);
+            }
+            else if (!xmlStrcmp(node2->name, BAD_CAST "is-not-defined")) {
+                if (prop->match || prop->param) {
+                    error->precond = CARDDAV_SUPP_FILTER;
+                    error->desc = IS_NOT_DEF_ERR;
+                    error->node = xmlCopyNode(node, 1);
+                }
                 else prop->not_defined = 1;
             }
             else if (!xmlStrcmp(node2->name, BAD_CAST "text-match")) {
                 struct text_match_t *match = NULL;
 
-                if (prop->not_defined) r = CARDDAV_SUPP_FILTER;
-                else if (!(r = dav_parse_textmatch(node2, &match,
-                                                   MATCH_TYPE_CONTAINS,
-                                                   COLLATION_UNICODE,
-                                                   CARDDAV_SUPP_FILTER,
-                                                   CARDDAV_SUPP_COLLATION))) {
+                dav_parse_textmatch(node2, &match, MATCH_TYPE_CONTAINS,
+                                    COLLATION_UNICODE, CARDDAV_SUPP_FILTER,
+                                    CARDDAV_SUPP_COLLATION, error);
+                if (match) {
                     if (prop->match) match->next = prop->match;
                     prop->match = match;
                 }
             }
             else if (!xmlStrcmp(node2->name, BAD_CAST "param-filter")) {
-                if (prop->not_defined ||
-                    !(attr = xmlGetProp(node2, BAD_CAST "name"))) {
-                    r = CARDDAV_SUPP_FILTER;
+                attr = xmlGetProp(node2, BAD_CAST "name");
+                if (!attr) {
+                    error->precond = CARDDAV_SUPP_FILTER;
+                    error->desc = "Missing 'name' attribute in param-filter";
+                    error->node = xmlCopyNode(node2, 2);
                 }
                 else {
                     struct param_filter *param =
@@ -913,29 +937,46 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
                     prop->param = param;
 
                     if ((node3 = xmlFirstElementChild(node2))) {
-                        if (!xmlStrcmp(node3->name, BAD_CAST "is-not-defined")) {
-                            param->not_defined = 1;
+                        if (param->not_defined) {
+                            error->precond = CARDDAV_SUPP_FILTER;
+                            error->desc = IS_NOT_DEF_ERR;
+                            error->node = xmlCopyNode(node2, 1);
                         }
-                        else if (!xmlStrcmp(node3->name, BAD_CAST "text-match")) {
-                            r = dav_parse_textmatch(node3, &param->match,
-                                                    MATCH_TYPE_CONTAINS,
-                                                    COLLATION_UNICODE,
-                                                    CARDDAV_SUPP_FILTER,
-                                                    CARDDAV_SUPP_COLLATION);
+                        else if (!xmlStrcmp(node3->name,
+                                            BAD_CAST "is-not-defined")) {
+                            if (prop->match) {
+                                error->precond = CARDDAV_SUPP_FILTER;
+                                error->desc = IS_NOT_DEF_ERR;
+                                error->node = xmlCopyNode(node2, 1);
+                            }
+                            else param->not_defined = 1;
                         }
-                        else r = CARDDAV_SUPP_FILTER;
+                        else if (!xmlStrcmp(node3->name,
+                                            BAD_CAST "text-match")) {
+                            dav_parse_textmatch(node3, &param->match,
+                                                MATCH_TYPE_CONTAINS,
+                                                COLLATION_UNICODE,
+                                                CARDDAV_SUPP_FILTER,
+                                                CARDDAV_SUPP_COLLATION,
+                                                error);
+                        }
+                        else {
+                            error->precond = CARDDAV_SUPP_FILTER;
+                            error->desc = "Unsupported element in param-filter";
+                            error->node = xmlCopyNode(node2, 1);
+                        }
                     }
                 }
             }
-            else r = CARDDAV_SUPP_FILTER;
+            else {
+                error->precond = CARDDAV_SUPP_FILTER;
+                error->desc = "Unsupported element in prop-filter";
+                error->node = xmlCopyNode(node, 1);
+            }
         }
     }
 
-    if (r) {
-        error->precond = r;
-        return HTTP_FORBIDDEN;
-    }
-    else return 0;
+    return error->precond ? HTTP_FORBIDDEN : 0;
 }
 
 /* See if the current resource matches the specified filter.
