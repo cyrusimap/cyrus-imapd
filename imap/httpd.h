@@ -246,7 +246,8 @@ struct auth_challenge_t {
 struct error_t {
     const char *desc;                   /* Error description */
     unsigned precond;                   /* [Cal]DAV precondition */
-    const char *resource;               /* Resource which lacks privileges */
+    xmlNodePtr node;                    /* XML node to be added to error */
+    const char *resource;               /* Resource href to be added to error */
     int rights;                         /* Privileges needed by resource */
 };
 

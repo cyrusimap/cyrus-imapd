@@ -1061,6 +1061,7 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
         break;
 
     default:
+        if (err->node) xmlAddChild(node, err->node);
         if (err->resource) xml_add_href(node, avail_ns[NS_DAV], err->resource);
         break;
     }
@@ -1261,7 +1262,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
                 xmlNewChild(stat->root, NULL, BAD_CAST "status",
                             BAD_CAST http_statusline(stat->status));
                 if (stat->precond) {
-                    struct error_t error = { NULL, stat->precond, NULL, 0 };
+                    struct error_t error = { NULL, stat->precond, NULL, NULL, 0 };
                     xml_add_error(stat->root, &error, fctx->ns);
                 }
 
@@ -2998,7 +2999,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
             xmlNewChild(stat->root, NULL, BAD_CAST "status",
                         BAD_CAST http_statusline(stat->status));
             if (stat->precond) {
-                struct error_t error = { NULL, stat->precond, NULL, 0 };
+                struct error_t error = { NULL, stat->precond, NULL, NULL, 0 };
                 xml_add_error(stat->root, &error, pctx->ns);
             }
 
@@ -3461,7 +3462,7 @@ static int move_collection(const mbentry_t *mbentry, void *rock)
     }
 
     if (r) {
-        struct error_t err = { error_message(r), 0, NULL, 0 };
+        struct error_t err = { error_message(r), 0, NULL, NULL, 0 };
         struct buf href = BUF_INITIALIZER;
         xmlNodePtr resp;
         mbname_t *mbname;
