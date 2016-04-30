@@ -98,7 +98,25 @@ sub _all_keys_match
     return 0 unless $ref eq ref($b);
 
     return $a eq $b unless $ref;
-    return "@$a" eq "@$b" if $ref eq 'ARRAY'; # must sort same
+    if ($ref eq 'ARRAY') {
+        my @payloads = @$b;
+        foreach my $item (@$a) {
+            my $match;
+            my @rest;
+            foreach my $payload (@payloads) {
+                if (not $match and _all_keys_match($item, $payload)) {
+                    $match = $payload;
+                }
+                else {
+                    push @rest, $payload;
+                }
+            }
+            return 0 unless $match;
+            @payloads = @rest;
+        }
+        return 0 if @payloads;
+        return 1;
+    }
 
     if ($ref eq 'HASH') {
         foreach my $key (keys %$a) {
@@ -128,28 +146,8 @@ sub assert_caldav_notified
     foreach my $payload (@payloads) {
         ($payload->{event}) = $self->{caldav}->vcalendarToEvents($payload->{ical});
     }
-    my @copy = @payloads;
 
-    my @unfound;
-
-    foreach my $item (@expected) {
-        my $match;
-        my @rest;
-        foreach my $payload (@payloads) {
-            if (not $match and _all_keys_match($item, $payload)) {
-                $match = $payload;
-            }
-            else {
-                push @rest, $payload;
-            }
-        }
-        push @unfound, $item unless $match;
-        @payloads = @rest;
-    }
-
-    if (@payloads or @unfound) {
-        die "IMIP notifies failed to match " . Dumper(\@payloads, \@unfound);
-    }
+    $self->assert(_all_keys_match(\@expected, \@payloads));
 }
 
 sub test_caldavcreate
