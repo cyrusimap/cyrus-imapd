@@ -89,6 +89,69 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub _all_keys_match
+{
+    my $a = shift;
+    my $b = shift;
+
+    my $ref = ref($a);
+    return 0 unless $ref eq ref($b);
+
+    return $a eq $b unless $ref;
+    return "@$a" eq "@$b" if $ref eq 'ARRAY'; # must sort same
+
+    if ($ref eq 'HASH') {
+        foreach my $key (keys %$a) {
+            return 0 unless exists $b->{$key};
+            return 0 unless _all_keys_match($a->{$key}, $b->{$key});
+        }
+        return 1;
+    }
+
+    if ($ref eq 'JSON::PP::Boolean') {
+        return $a eq $b;
+    }
+
+    die "WEIRD REF $ref for $a";
+
+    return 0;
+}
+
+sub assert_caldav_notified
+{
+    my $self = shift;
+    my @expected = @_;
+
+    my $newdata = $self->{instance}->getnotify();
+    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
+    foreach my $payload (@payloads) {
+        ($payload->{event}) = $self->{caldav}->vcalendarToEvents($payload->{ical});
+    }
+    my @copy = @payloads;
+
+    my @unfound;
+
+    foreach my $item (@expected) {
+        my $match;
+        my @rest;
+        foreach my $payload (@payloads) {
+            if (not $match and _all_keys_match($item, $payload)) {
+                $match = $payload;
+            }
+            else {
+                push @rest, $payload;
+            }
+        }
+        push @unfound, $item unless $match;
+        @payloads = @rest;
+    }
+
+    if (@payloads or @unfound) {
+        die "IMIP notifies failed to match " . Dumper(\@payloads, \@unfound);
+    }
+}
+
 sub test_caldavcreate
 {
     my ($self) = @_;
@@ -231,8 +294,6 @@ sub test_url_virtdom_domain
     xlog "check that the href has domain";
     $self->assert_str_equals("/dav/calendars/user/test\@example.com/$CalendarId/", $Calendar->{href});
 }
-
-
 
 sub test_user_rename
     :AllowMoves
@@ -540,15 +601,11 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-  my $data = $self->{instance}->getnotify();
-
   $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-  my $newdata = $self->{instance}->getnotify();
-  my ($imip) = grep { $_->{METHOD} eq 'imip' } @$newdata;
-  my $payload = decode_json($imip->{MESSAGE});
-
-  $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
+  $self->assert_caldav_notified(
+   { recipient => "friend\@example.com", is_update => JSON::false },
+  );
 }
 
 sub test_invite_withheader
@@ -1147,24 +1204,12 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-  my $data = $self->{instance}->getnotify();
-
   $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-  {
-    my $newdata = $self->{instance}->getnotify();
-    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
-    my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
-    my $recips = join ('-', sort map { $_->{recipient} } @payloads);
-    $self->assert_str_equals($recips, "test1\@example.com-test2\@example.com");
-  }
-
-  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
-
-  my $newdata = $self->{instance}->getnotify();
-  my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
-  my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
-  my $recips = join ('-', sort map { $_->{recipient} } @payloads);
+  $self->assert_caldav_notified(
+   { recipient => "test1\@example.com", is_update => JSON::false },
+   { recipient => "test2\@example.com", is_update => JSON::false },
+  );
 
   # add an override instance
   $card =~ s/An Event/An Event just us/;
@@ -1192,14 +1237,11 @@ EOF
 
   $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-  {
-    my $newdata = $self->{instance}->getnotify();
-    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
-    my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
-    my $recips = join ('-', sort map { $_->{recipient} } @payloads);
-    $self->assert_str_equals($recips, "test1\@example.com-test2\@example.com-test3\@example.com");
-    #die Dumper(\@payloads);
-  }
+  $self->assert_caldav_notified(
+   { recipient => "test1\@example.com", is_update => JSON::true },
+   { recipient => "test2\@example.com", is_update => JSON::true },
+   { recipient => "test3\@example.com", is_update => JSON::false },
+  );
 }
 
 
