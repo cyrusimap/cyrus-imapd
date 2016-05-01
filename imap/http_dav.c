@@ -1319,18 +1319,17 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
         if (mime != mime_types) {
             /* Not the storage format - convert into requested MIME type */
             struct buf inbuf, *outbuf;
-            void *obj;
 
-            buf_init_ro(&inbuf, data, datalen);
-            obj = mime_types->to_object(&inbuf);
-            buf_free(&inbuf);
+            if (!fctx->obj) {
+                buf_init_ro(&inbuf, data, datalen);
+                fctx->obj = mime_types->to_object(&inbuf);
+                buf_free(&inbuf);
+            }
 
-            outbuf = mime->from_object(obj);
+            outbuf = mime->from_object(fctx->obj);
             datalen = buf_len(outbuf);
             data = freeme = buf_release(outbuf);
             buf_destroy(outbuf);
-
-            mime_types->free(obj);
         }
 
         if (type) {
@@ -5418,7 +5417,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.reqd_privs = DACL_READ;
     fctx.filter = NULL;
     fctx.filter_crit = NULL;
-    fctx.free_obj = fparams->mime_types[0].free;
+    if (fparams->mime_types) fctx.free_obj = fparams->mime_types[0].free;
     fctx.open_db = fparams->davdb.open_db;
     fctx.close_db = fparams->davdb.close_db;
     fctx.lookup_resource = fparams->davdb.lookup_resource;
@@ -7607,6 +7606,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = report->reqd_privs;
+    if (fparams->mime_types) fctx.free_obj = fparams->mime_types[0].free;
     fctx.elist = NULL;
     fctx.lprops = rparams->propfind.lprops;
     fctx.root = outroot;
