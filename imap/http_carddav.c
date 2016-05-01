@@ -987,7 +987,7 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
     struct cardquery_filter *cardfilter =
         (struct cardquery_filter *) fctx->filter_crit;
     struct carddav_data *cdata = (struct carddav_data *) data;
-    struct vparse_card *vcard = NULL;
+    struct vparse_card *vcard = fctx->obj;
     struct prop_filter *prop;
     int pass = 1;
 
@@ -1021,8 +1021,9 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
                                            fctx->record, &fctx->msg_buf);
                 }
                 if (!r) {
-                    vcard = vcard_parse_string(buf_cstring(&fctx->msg_buf) +
-                                               fctx->record->header_size);
+                    vcard = fctx->obj =
+                        vcard_parse_string(buf_cstring(&fctx->msg_buf) +
+                                           fctx->record->header_size);
                 }
                 if (!vcard) {
                     pass = 0;
@@ -1099,7 +1100,6 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
     }
 
   done:
-    vparse_free_card(vcard);
 
     return pass;
 }

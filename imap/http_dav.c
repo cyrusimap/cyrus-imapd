@@ -5038,6 +5038,10 @@ int propfind_by_resource(void *rock, void *data)
     }
 
     buf_free(&fctx->msg_buf);
+    if (fctx->obj) {
+        fctx->free_obj(fctx->obj);
+        fctx->obj = NULL;
+    }
     fctx->record = NULL;
     fctx->data = NULL;
 
@@ -5414,6 +5418,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.reqd_privs = DACL_READ;
     fctx.filter = NULL;
     fctx.filter_crit = NULL;
+    fctx.free_obj = fparams->mime_types[0].free;
     fctx.open_db = fparams->davdb.open_db;
     fctx.close_db = fparams->davdb.close_db;
     fctx.lookup_resource = fparams->davdb.lookup_resource;

@@ -311,6 +311,8 @@ struct propfind_ctx {
     struct index_record *record;        /* cyrus.index record for resource */
     void *data;                         /* DAV record for resource */
     struct buf msg_buf;                 /* mmap()'d resource file */
+    void *obj;                          /* parsed resource */
+    void (*free_obj)(void *);           /* free parsed object */
     unsigned long reqd_privs;           /* privileges req'd on collections */
     int (*filter)(struct propfind_ctx *,
                   void *data);          /* callback to filter resources */
