@@ -7606,7 +7606,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = report->reqd_privs;
-    if (fparams->mime_types) fctx.free_obj = fparams->mime_types[0].free;
+    if (rparams->mime_types) fctx.free_obj = rparams->mime_types[0].free;
     fctx.elist = NULL;
     fctx.lprops = rparams->propfind.lprops;
     fctx.root = outroot;
