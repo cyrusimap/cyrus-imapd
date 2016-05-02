@@ -126,7 +126,7 @@ sub _all_keys_match
         return 1;
     }
 
-    if ($ref eq 'JSON::PP::Boolean') {
+    if ($ref eq 'JSON::PP::Boolean' or $ref eq 'JSON::XS::Boolean') {
         return $a eq $b;
     }
 
