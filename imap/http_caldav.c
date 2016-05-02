@@ -1187,7 +1187,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
             int r = annotatemore_lookupmask(mailboxname, annotname,
                                             schedule_address, &buf);
             free(mailboxname);
-            if (!r && buf.len > 7 && strncmp(buf_cstring(&buf), "mailto:", 7)) {
+            if (!r && buf.len > 7 && strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
                 free(schedule_address);
                 schedule_address = xstrdup(buf_cstring(&buf) + 7);
             }
@@ -3325,7 +3325,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 int r = annotatemore_lookupmask(mailboxname, annotname,
                                                 schedule_address, &buf);
                 free(mailboxname);
-                if (!r && buf.len > 7 && strncmp(buf_cstring(&buf), "mailto:", 7)) {
+                if (!r && buf.len > 7 && strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
                     free(schedule_address);
                     schedule_address = xstrdup(buf_cstring(&buf) + 7);
                 }

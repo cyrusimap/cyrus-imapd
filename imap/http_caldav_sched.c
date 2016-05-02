@@ -1757,7 +1757,7 @@ static void sched_deliver_local(const char *recipient,
                         organizer = icalproperty_get_organizer(prop);
 
                     if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
-                    if (strcmp(cdata->organizer, organizer)) reject = 1;
+                    if (strcasecmp(cdata->organizer, organizer)) reject = 1;
                 }
             }
 
@@ -2445,7 +2445,7 @@ void sched_request(const char *userid, const char *organizer,
                 if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
                 /* Don't set status if attendee == organizer */
-                if (!strcmp(attendee, organizer)) continue;
+                if (!strcasecmp(attendee, organizer)) continue;
 
                 if (sched_stat) stat = sched_stat;
                 else {
