@@ -7241,6 +7241,8 @@ static int principal_search(const char *userid, void *rock)
     size_t len;
     char *p;
 
+    /* XXX - this function needs extradomain and virtdomains support */
+
     /* Check ACL for current user */
     if (principal_acl_check(userid, httpd_authstate)) return 0;
 
