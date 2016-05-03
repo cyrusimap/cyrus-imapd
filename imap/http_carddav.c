@@ -822,8 +822,17 @@ struct param_filter {
     struct param_filter *next;
 };
 
+typedef enum vcardproperty_kind {
+    VCARD_ANY_PROPERTY = 0,
+    VCARD_FN_PROPERTY = 1,
+    VCARD_N_PROPERTY = 2,
+    VCARD_NICKNAME_PROPERTY = 3,
+    VCARD_UID_PROPERTY = 4
+} vcardproperty_kind;
+
 struct prop_filter {
     xmlChar *name;
+    vcardproperty_kind kind;
     unsigned allof       : 1;
     unsigned not_defined : 1;
     struct text_match_t *match;
@@ -910,6 +919,16 @@ static void parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
     else {
         *prop = xzmalloc(sizeof(struct prop_filter));
         (*prop)->name = attr;
+
+        if (!xmlStrcasecmp(attr, BAD_CAST "FN"))
+            (*prop)->kind = VCARD_FN_PROPERTY;
+        else if (!xmlStrcasecmp(attr, BAD_CAST "N"))
+            (*prop)->kind = VCARD_N_PROPERTY;
+        else if (!xmlStrcasecmp(attr, BAD_CAST "NICKNAME"))
+            (*prop)->kind = VCARD_NICKNAME_PROPERTY;
+        else if (!xmlStrcasecmp(attr, BAD_CAST "UID"))
+            (*prop)->kind = VCARD_UID_PROPERTY;
+        else (*prop)->kind = VCARD_ANY_PROPERTY;
 
         attr = xmlGetProp(root, BAD_CAST "test");
         if (attr) {
@@ -1008,6 +1027,127 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
     return error->precond ? HTTP_FORBIDDEN : 0;
 }
 
+
+static int apply_paramfilter(struct param_filter *paramfilter,
+                             struct vparse_entry *prop)
+{
+    struct vparse_param *param =
+        vparse_get_param(prop, (char *) paramfilter->name);
+
+    if (!param) return paramfilter->not_defined;
+    if (paramfilter->not_defined) return 0;
+    if (!paramfilter->match) return 1;
+
+    return dav_text_match(BAD_CAST param->value, paramfilter->match);
+}
+
+static int apply_propfilter(struct prop_filter *propfilter,
+                            struct carddav_data *cdata,
+                            struct propfind_ctx *fctx)
+{
+    int pass = 1;
+    struct vparse_card *vcard = fctx->obj;
+    struct vparse_entry myprop, *prop = NULL;
+
+    if (!propfilter->param) {
+        memset(&myprop, 0, sizeof(struct vparse_entry));
+
+        switch (propfilter->kind) {
+        case VCARD_FN_PROPERTY:
+            if (cdata->fullname) myprop.v.value = (char *) cdata->fullname;
+            break;
+
+        case VCARD_N_PROPERTY:
+            if (cdata->name) myprop.v.value = (char *) cdata->name;
+            break;
+
+        case VCARD_NICKNAME_PROPERTY:
+            if (cdata->nickname) {
+                if (propfilter->match) {
+                    myprop.multivalue = 1;
+                    myprop.v.values =
+                        strarray_split(cdata->nickname, ",", STRARRAY_TRIM);
+                }
+                else myprop.v.value = (char *) cdata->nickname;
+            }
+            break;
+
+        case VCARD_UID_PROPERTY:
+            if (cdata->vcard_uid) myprop.v.value = (char *) cdata->vcard_uid;
+            break;
+
+        default:
+            break;
+        }
+
+        if (myprop.v.value) prop = &myprop;
+    }
+
+    if (propfilter->param || (propfilter->kind == VCARD_ANY_PROPERTY)) {
+        /* Load message containing the resource and parse vcard data */
+        if (!vcard) {
+            if (!fctx->msg_buf.len) {
+                mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
+            }
+            if (fctx->msg_buf.len) {
+                vcard = fctx->obj =
+                    vcard_parse_string(buf_cstring(&fctx->msg_buf) +
+                                       fctx->record->header_size);
+            }
+            if (!vcard) return 0;
+        }
+
+        prop = vparse_get_entry(vcard->objects, NULL, (char *) propfilter->name);
+    }
+
+    if (!prop) return propfilter->not_defined;
+    if (propfilter->not_defined) return 0;
+    if (!(propfilter->match || propfilter->param)) return 1;
+
+    /* Test each instance of this property (logical OR) */
+    do {
+        struct text_match_t *match;
+        struct param_filter *paramfilter;
+
+        if (!pass && strcasecmpsafe(prop->name, (char *) propfilter->name)) {
+            /* Skip property if name doesn't match */
+            continue;
+        }
+    
+        pass = propfilter->allof;
+
+        /* Apply each text-match, breaking if allof fails or anyof succeeds */
+        for (match = propfilter->match;
+             match && (pass == propfilter->allof);
+             match = match->next) {
+
+            int n = 0;
+            const char *text =
+                prop->multivalue ? strarray_nth(prop->v.values, n) : prop->v.value;
+
+            /* Test each value of this property (logical OR) */
+            do {
+                pass = dav_text_match(BAD_CAST text, match);
+
+            } while (!pass && prop->multivalue &&
+                     (text = strarray_nth(prop->v.values, ++n)));
+        }
+
+        /* Apply each param-filter, breaking if allof fails or anyof succeeds */
+        for (paramfilter = propfilter->param;
+             paramfilter && (pass == propfilter->allof);
+             paramfilter = paramfilter->next) {
+
+            pass = apply_paramfilter(paramfilter, prop);
+        }
+
+    } while (!pass && (prop = prop->next));  /* XXX  No API to fetch next prop */
+
+    if (myprop.multivalue) strarray_free(myprop.v.values);
+
+    return pass;
+}
+
 /* See if the current resource matches the specified filter.
  * Returns 1 if match, 0 otherwise.
  */
@@ -1016,119 +1156,15 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
     struct cardquery_filter *cardfilter =
         (struct cardquery_filter *) fctx->filter_crit;
     struct carddav_data *cdata = (struct carddav_data *) data;
-    struct vparse_card *vcard = fctx->obj;
-    struct prop_filter *prop;
-    int pass = 1;
+    struct prop_filter *propfilter;
+    int pass = cardfilter->allof;
 
-    for (prop = cardfilter->prop; prop; prop = prop->next) {
-        strarray_t single = { 1, 0, NULL }, *values = NULL;
-        struct vparse_entry *entry = NULL;
+    for (propfilter = cardfilter->prop;
+         propfilter && (pass == cardfilter->allof);
+         propfilter = propfilter->next) {
 
-        if (!prop->param && !xmlStrcasecmp(prop->name, BAD_CAST "UID")) {
-            single.data = (char **) &cdata->vcard_uid;
-            values = &single;
-        }
-        else if (!prop->param && !xmlStrcasecmp(prop->name, BAD_CAST "N")) {
-            single.data = (char **) &cdata->name;
-            values = &single;
-        }
-        else if (!prop->param && !xmlStrcasecmp(prop->name, BAD_CAST "FN")) {
-            single.data = (char **) &cdata->fullname;
-            values = &single;
-        }
-        else if (!prop->param && !xmlStrcasecmp(prop->name, BAD_CAST "NICKNAME")) {
-            single.data = (char **) &cdata->nickname;
-            values = &single;
-        }
-        else {
-            /* Load message containing the resource and parse vcard data */
-            if (!vcard) {
-                int r = 0;
-
-                if (!fctx->msg_buf.len) {
-                    r = mailbox_map_record(fctx->mailbox,
-                                           fctx->record, &fctx->msg_buf);
-                }
-                if (!r) {
-                    vcard = fctx->obj =
-                        vcard_parse_string(buf_cstring(&fctx->msg_buf) +
-                                           fctx->record->header_size);
-                }
-                if (!vcard) {
-                    pass = 0;
-                    goto done;
-                }
-            }
-
-            entry = vparse_get_entry(vcard->objects, NULL, (char *) prop->name);
-            if (entry) {
-                if (entry->multivalue) values = entry->v.values;
-                else {
-                    single.data = &entry->v.value;
-                    values = &single;
-                }
-            }
-        }
-
-        if (!values) pass = prop->not_defined;
-        else if (prop->not_defined) pass = 0;
-        else if (prop->match || prop->param) {
-            pass = prop->allof;
-
-            if (prop->match) {
-                struct text_match_t *match;
-
-                for (match = prop->match; match; match = match->next) {
-                    int n, size = strarray_size(values);
-
-                    for (n = 0; n < size; n++) {
-                        pass = dav_text_match(BAD_CAST strarray_nth(values, n),
-                                              match);
-                        if (pass) break;
-                    }
-
-                    if (pass) {
-                        if (!prop->allof) break;  /* anyof succeeds */
-                    }
-                    else if (prop->allof) break;  /* allof fails */
-
-                    pass = prop->allof;
-                }
-            }
-            if (prop->param && (pass == prop->allof)) {
-                struct param_filter *param;
-
-                for (param = prop->param; param; param = param->next) {
-                    struct vparse_param *vparam =
-                        vparse_get_param(entry, (char *) param->name);
-
-                    if (!vparam) pass = param->not_defined;
-                    else if (param->not_defined) pass = 0;
-                    else if (param->match) {
-                        /* XXX  Todo */
-                    }
-                    else pass = 1;
-
-                    if (pass) {
-                        if (!prop->allof) break;  /* anyof succeeds */
-                    }
-                    else if (prop->allof) break;  /* allof fails */
-
-                    pass = prop->allof;
-                }
-            }
-        }
-        else pass = 1;
-
-        if (pass) {
-            if (!cardfilter->allof) break;  /* anyof succeeds */
-        }
-        else if (cardfilter->allof) break;  /* allof fails */
-
-        pass = cardfilter->allof;
+        pass = apply_propfilter(propfilter, cdata, fctx);
     }
-
-  done:
 
     return pass;
 }
