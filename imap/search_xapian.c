@@ -848,9 +848,11 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
          * field"; instead we fake it by explicitly searching for
          * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-            if (prefix_by_part[i] != NULL)
-                ptrarray_push(&childqueries,
-                              xapian_query_new_match(db, prefix_by_part[i], on->arg));
+            if (prefix_by_part[i] != NULL) {
+                xapian_query_t *q = xapian_query_new_match(db, prefix_by_part[i], on->arg);
+                if (!q) goto done;
+                ptrarray_push(&childqueries, q);
+            }
         }
         qq = xapian_query_new_compound(db, /*is_or*/1,
                                        (xapian_query_t **)childqueries.data,
@@ -862,6 +864,7 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
         qq = xapian_query_new_match(db, prefix_by_part[on->op], on->arg);
         break;
     }
+done:
     ptrarray_fini(&childqueries);
     return qq;
 }
@@ -902,6 +905,9 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 
     optimise_nodes(NULL, bb->root);
     qq = opnode_to_query(bb->db, bb->root);
+
+    if (!qq)
+        return IMAP_INTERNAL;
 
     bb->proc = proc;
     bb->rock = rock;

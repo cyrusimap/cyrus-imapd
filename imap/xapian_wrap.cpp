@@ -310,6 +310,7 @@ xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
+        return 0;
     }
 }
 
