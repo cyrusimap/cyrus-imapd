@@ -134,7 +134,7 @@ struct vavailability_array {
     unsigned alloc;
 };
 
-struct calquery_filter {
+struct calrange_filter {
     unsigned comp;
     unsigned flags;
     struct icaltimetype start;
@@ -144,7 +144,7 @@ struct calquery_filter {
     struct vavailability_array vavail;  /* array of found vavail components */
 };
 
-/* Bitmask of calquery flags */
+/* Bitmask of calrange flags */
 enum {
     BUSYTIME_QUERY =            (1<<0),
     CHECK_CAL_TRANSP =          (1<<1),
@@ -157,7 +157,7 @@ extern icaltimezone *utc_zone;
 extern struct strlist *cua_domains;
 extern icalarray *rscale_calendars;
 
-extern int apply_calfilter(struct propfind_ctx *fctx, void *data);
+extern int apply_rangefilter(struct propfind_ctx *fctx, void *data);
 extern icalcomponent *busytime_query_local(struct transaction_t *txn,
                                            struct propfind_ctx *fctx,
                                            char mailboxname[],

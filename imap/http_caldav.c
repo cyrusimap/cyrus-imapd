@@ -3508,7 +3508,7 @@ static void add_freebusy(struct icaltimetype *recurid,
                          struct icaltimetype *start,
                          struct icaltimetype *end,
                          icalparameter_fbtype fbtype,
-                         struct calquery_filter *calfilter)
+                         struct calrange_filter *calfilter)
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
     struct freebusy *newfb;
@@ -3552,9 +3552,9 @@ static void add_freebusy(struct icaltimetype *recurid,
 
 /* Append a new busytime period for recurring comp to the busytime array */
 static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
-                         void *rock)
+                              void *rock)
 {
-    struct calquery_filter *calfilter = (struct calquery_filter *) rock;
+    struct calrange_filter *calfilter = (struct calrange_filter *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
     struct icaltimetype start, end, recurid;
     icalparameter_fbtype fbtype;
@@ -3619,7 +3619,7 @@ static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
 }
 
 
-static int is_busytime(struct calquery_filter *calfilter, icalcomponent *comp)
+static int is_busytime(struct calrange_filter *calfilter, icalcomponent *comp)
 {
     if (calfilter->flags & BUSYTIME_QUERY) {
         /* Check TRANSP and STATUS per RFC 4791, section 7.10 */
@@ -3664,7 +3664,7 @@ static int compare_freebusy(const void *fb1, const void *fb2)
 
 static int expand_occurrences(icalcomponent *ical, icalcomponent **master,
                               icalcomponent_kind kind,
-                              struct calquery_filter *calfilter)
+                              struct calrange_filter *calfilter)
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
     icalcomponent *comp;
@@ -3747,10 +3747,10 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent **master,
 /* See if the current resource matches the specified filter
  * (comp-type and/or time-range).  Returns 1 if match, 0 otherwise.
  */
-int apply_calfilter(struct propfind_ctx *fctx, void *data)
+int apply_rangefilter(struct propfind_ctx *fctx, void *data)
 {
-    struct calquery_filter *calfilter =
-        (struct calquery_filter *) fctx->filter_crit;
+    struct calrange_filter *calfilter =
+        (struct calrange_filter *) fctx->filter_crit;
     struct caldav_data *cdata = (struct caldav_data *) data;
     int match = 1;
 
@@ -3824,6 +3824,49 @@ int apply_calfilter(struct propfind_ctx *fctx, void *data)
 }
 
 
+struct param_filter {
+    xmlChar *name;              /* need this for X- parameters */
+    icalparameter_kind kind;
+    unsigned not_defined : 1;
+    struct text_match_t *match;
+    struct param_filter *next;
+};
+
+struct prop_filter {
+    xmlChar *name;              /* need this for X- properties */
+    icalproperty_kind kind;
+    unsigned allof       : 1;
+    unsigned not_defined : 1;
+    struct icalperiodtype *range;
+    struct text_match_t *match;
+    struct param_filter *param;
+    struct prop_filter *next;
+};
+
+struct comp_filter {
+    xmlChar *name;              /* need this for X- components */
+    unsigned depth;
+    icalcomponent_kind kind;
+    unsigned allof       : 1;
+    unsigned not_defined : 1;
+    struct icalperiodtype *range;
+    struct prop_filter *prop;
+    struct comp_filter *comp;
+    struct comp_filter *next;
+};
+
+struct calquery_filter {
+    unsigned flags;             /* mask of flags controlling filter */
+    unsigned comp_types;        /* mask of "real" component types in filter */
+    icaltimezone *tz;
+    struct comp_filter *comp;
+};
+
+/* Bitmask of calquery flags */
+enum {
+    PARSE_ICAL = (1<<0)
+};
+
 static int is_valid_timerange(const struct icaltimetype start,
                               const struct icaltimetype end)
 {
@@ -3833,112 +3876,774 @@ static int is_valid_timerange(const struct icaltimetype start,
             (icaltime_is_utc(end) || end.zone));
 }
 
-
-static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
-                             struct error_t *error)
+static void parse_timerange(xmlNodePtr node,
+                            struct icalperiodtype **range, struct error_t *error)
 {
-    int ret = 0;
+    xmlChar *attr;
+
+    *range = xzmalloc(sizeof(struct icalperiodtype));
+
+    attr = xmlGetProp(node, BAD_CAST "start");
+    if (attr) {
+        (*range)->start = icaltime_from_string((char *) attr);
+        xmlFree(attr);
+    }
+    else {
+        (*range)->start =
+            icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
+    }
+
+    attr = xmlGetProp(node, BAD_CAST "end");
+    if (attr) {
+        (*range)->end = icaltime_from_string((char *) attr);
+        xmlFree(attr);
+    }
+    else {
+        (*range)->end =
+            icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
+    }
+
+    if (!is_valid_timerange((*range)->start, (*range)->end)) {
+        error->precond = CALDAV_VALID_FILTER;
+        error->desc = "Invalid time-range";
+        error->node = xmlCopyNode(node->parent, 1);
+    }
+}
+
+#define IS_NOT_DEF_ERR "is-not-defined can NOT be combined with other elements"
+#define TEXT_MATCH_ERR "text-match can NOT be combined with time-range"
+
+static void parse_paramfilter(xmlNodePtr root, struct param_filter **param,
+                              struct error_t *error)
+{
+    xmlChar *attr;
     xmlNodePtr node;
 
-    /* Parse elements of filter */
-    for (node = root; node; node = node->next) {
-        if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
-                xmlChar *name = xmlGetProp(node, BAD_CAST "name");
+    attr = xmlGetProp(root, BAD_CAST "name");
+    if (!attr) {
+        error->precond = CALDAV_SUPP_FILTER;
+        error->desc = "Missing 'name' attribute";
+        error->node = xmlCopyNode(root, 2);
+    }
+    else {
+        icalparameter_kind kind =
+            icalparameter_string_to_kind((const char *) attr);
+        
+        *param = xzmalloc(sizeof(struct param_filter));
+        (*param)->name = attr;
+        (*param)->kind = kind;
 
-                if (!filter->comp) {
-                    if (!xmlStrcmp(name, BAD_CAST "VCALENDAR"))
-                        filter->comp = CAL_COMP_VCALENDAR;
-                    else {
-                        error->precond = CALDAV_VALID_FILTER;
-                        ret = HTTP_FORBIDDEN;
-                    }
-                }
-                else if (filter->comp == CAL_COMP_VCALENDAR) {
-                    if (!xmlStrcmp(name, BAD_CAST "VCALENDAR") ||
-                        !xmlStrcmp(name, BAD_CAST "VALARM")) {
-                        error->precond = CALDAV_VALID_FILTER;
-                        ret = HTTP_FORBIDDEN;
-                    }
-                    else if (!xmlStrcmp(name, BAD_CAST "VEVENT"))
-                        filter->comp |= CAL_COMP_VEVENT;
-                    else if (!xmlStrcmp(name, BAD_CAST "VTODO"))
-                        filter->comp |= CAL_COMP_VTODO;
-                    else if (!xmlStrcmp(name, BAD_CAST "VJOURNAL"))
-                        filter->comp |= CAL_COMP_VJOURNAL;
-                    else if (!xmlStrcmp(name, BAD_CAST "VFREEBUSY"))
-                        filter->comp |= CAL_COMP_VFREEBUSY;
-                    else if (!xmlStrcmp(name, BAD_CAST "VTIMEZONE"))
-                        filter->comp |= CAL_COMP_VTIMEZONE;
-                    else if (!xmlStrcmp(name, BAD_CAST "VAVAILABILITY"))
-                        filter->comp |= CAL_COMP_VAVAILABILITY;
-                    else if (!xmlStrcmp(name, BAD_CAST "VPOLL"))
-                        filter->comp |= CAL_COMP_VPOLL;
-                    else {
-                        error->precond = CALDAV_SUPP_FILTER;
-                        ret = HTTP_FORBIDDEN;
-                    }
-                }
-                else if (filter->comp & (CAL_COMP_VEVENT | CAL_COMP_VTODO)) {
-                    if (!xmlStrcmp(name, BAD_CAST "VALARM"))
-                        filter->comp |= CAL_COMP_VALARM;
-                    else {
-                        error->precond = CALDAV_VALID_FILTER;
-                        ret = HTTP_FORBIDDEN;
-                    }
-                }
-                else {
-                    error->precond = CALDAV_SUPP_FILTER;
-                    ret = HTTP_FORBIDDEN;
-                }
+        if (kind == ICAL_NO_PARAMETER) {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = "Unsupported parameter";
+            error->node = xmlCopyNode(root, 2);
+        }
+    }
 
-                xmlFree(name);
+    for (node = xmlFirstElementChild(root); node && !error->precond;
+         node = xmlNextElementSibling(node)) {
 
-                if (!ret)
-                    ret = parse_comp_filter(node->children, filter, error);
-                if (ret) return ret;
+        if ((*param)->not_defined) {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = IS_NOT_DEF_ERR;
+            error->node = xmlCopyNode(root, 1);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
+            if ((*param)->match) {
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc = IS_NOT_DEF_ERR;
+                error->node = xmlCopyNode(root, 1);
             }
-            else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
-                xmlChar *start, *end;
-
-                if (!(filter->comp & (CAL_COMP_VEVENT | CAL_COMP_VTODO))) {
-                    error->precond = CALDAV_VALID_FILTER;
-                    return HTTP_FORBIDDEN;
-                }
-
-                start = xmlGetProp(node, BAD_CAST "start");
-                if (start) {
-                    filter->start = icaltime_from_string((char *) start);
-                    xmlFree(start);
-                }
-                else {
-                    filter->start =
-                        icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
-                }
-
-                end = xmlGetProp(node, BAD_CAST "end");
-                if (end) {
-                    filter->end = icaltime_from_string((char *) end);
-                    xmlFree(end);
-                }
-                else {
-                    filter->end =
-                        icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
-                }
-
-                if (!is_valid_timerange(filter->start, filter->end)) {
-                    error->precond = CALDAV_VALID_FILTER;
-                    return HTTP_FORBIDDEN;
-                }
+            else (*param)->not_defined = 1;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "text-match")) {
+            if ((*param)->match) {
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc = "Multiple text-match";
+                error->node = xmlCopyNode(root, 1);
             }
             else {
-                error->precond = CALDAV_SUPP_FILTER;
-                return HTTP_FORBIDDEN;
+                struct text_match_t *match = NULL;
+
+                dav_parse_textmatch(node, &match, MATCH_TYPE_CONTAINS,
+                                    COLLATION_ASCII, CALDAV_SUPP_FILTER,
+                                    CALDAV_SUPP_COLLATION, error);
+                (*param)->match = match;
+            }
+        }
+        else {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc =
+                "Unsupported element in param-filter";
+            error->node = xmlCopyNode(root, 1);
+        }
+    }
+}
+
+static void parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
+                             struct error_t *error)
+{
+    xmlChar *attr;
+    xmlNodePtr node;
+
+    attr = xmlGetProp(root, BAD_CAST "name");
+    if (!attr) {
+        error->precond = CALDAV_SUPP_FILTER;
+        error->desc = "Missing 'name' attribute";
+        error->node = xmlCopyNode(root, 2);
+    }
+    else {
+        icalproperty_kind kind = 
+            icalproperty_string_to_kind((const char *) attr);
+
+        *prop = xzmalloc(sizeof(struct prop_filter));
+        (*prop)->name = attr;
+        (*prop)->kind = kind;
+        (*prop)->allof = 1;
+
+        if (kind == ICAL_NO_PROPERTY) {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = "Unsupported property";
+            error->node = xmlCopyNode(root, 2);
+        }
+        else {
+            attr = xmlGetProp(root, BAD_CAST "test");
+            if (attr) {
+                if (!xmlStrcmp(attr, BAD_CAST "anyof")) (*prop)->allof = 0;
+                else if (xmlStrcmp(attr, BAD_CAST "allof")) {
+                    error->precond = CALDAV_SUPP_FILTER;
+                    error->desc = "Unsupported test";
+                    error->node = xmlCopyNode(root, 2);
+                }
+                xmlFree(attr);
             }
         }
     }
 
-    return ret;
+    for (node = xmlFirstElementChild(root); node && !error->precond;
+         node = xmlNextElementSibling(node)) {
+
+        if ((*prop)->not_defined) {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = IS_NOT_DEF_ERR;
+            error->node = xmlCopyNode(root, 1);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
+            if ((*prop)->range || (*prop)->match || (*prop)->param) {
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc = IS_NOT_DEF_ERR;
+                error->node = xmlCopyNode(root, 1);
+            }
+            else (*prop)->not_defined = 1;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+            if ((*prop)->range || (*prop)->match) {
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc =
+                    (*prop)->range ? "Multiple time-range" : TEXT_MATCH_ERR;
+                error->node = xmlCopyNode(root, 1);
+            }
+            else {
+                struct icalperiodtype *range = NULL;
+                icalvalue_kind kind =
+                    icalproperty_kind_to_value_kind((*prop)->kind);
+
+                switch (kind) {
+                case ICAL_DATE_VALUE:
+                case ICAL_DATETIME_VALUE:
+                case ICAL_DATETIMEPERIOD_VALUE:
+                case ICAL_PERIOD_VALUE:
+                    parse_timerange(node, &range, error);
+                    (*prop)->range = range;
+                    break;
+
+                default:
+                    error->precond = CALDAV_SUPP_FILTER;
+                    error->desc = "Property does not support time-range";
+                    error->node = xmlCopyNode(root, 1);
+                    break;
+                }
+            }
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "text-match")) {
+            if ((*prop)->range || (*prop)->match) {
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc =
+                    (*prop)->match ? "Multiple text-match" : TEXT_MATCH_ERR;
+                error->node = xmlCopyNode(root, 1);
+            }
+            else {
+                struct text_match_t *match = NULL;
+
+                dav_parse_textmatch(node, &match, MATCH_TYPE_CONTAINS,
+                                    COLLATION_ASCII, CALDAV_SUPP_FILTER,
+                                    CALDAV_SUPP_COLLATION, error);
+                (*prop)->match = match;
+            }
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "param-filter")) {
+            struct param_filter *param = NULL;
+
+            parse_paramfilter(node, &param, error);
+            if (param) {
+                if ((*prop)->param) param->next = (*prop)->param;
+                (*prop)->param = param;
+            }
+        }
+        else {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = "Unsupported element in prop-filter";
+            error->node = xmlCopyNode(root, 1);
+        }
+    }
+}
+
+/* This handles calendar-query-extended per draft-daboo-caldav-extensions */
+static void parse_compfilter(xmlNodePtr root, unsigned depth,
+                             struct comp_filter **comp, unsigned *flags,
+                             unsigned *comp_types, struct error_t *error)
+{
+    xmlChar *attr;
+    xmlNodePtr node;
+
+    /* Parse elements of comp-filter */
+    attr = xmlGetProp(root, BAD_CAST "name");
+    if (!attr) {
+        error->precond = CALDAV_SUPP_FILTER;
+        error->desc = "Missing 'name' attribute";
+        error->node = xmlCopyNode(root, 2);
+    }
+    else {
+        icalcomponent_kind kind;
+
+        if (!xmlStrcmp(attr, BAD_CAST "*")) kind = ICAL_ANY_COMPONENT;
+        else kind = icalcomponent_string_to_kind((const char *) attr);
+
+        *comp = xzmalloc(sizeof(struct comp_filter));
+        (*comp)->name = attr;
+        (*comp)->depth = depth;
+        (*comp)->kind = kind;
+        (*comp)->allof = 1;
+
+        if (kind == ICAL_NO_COMPONENT) {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = "Unsupported component";
+            error->node = xmlCopyNode(root, 2);
+        }
+        else {
+            switch (depth) {
+            case 0:
+                /* VCALENDAR */
+                if (kind != ICAL_VCALENDAR_COMPONENT) {
+                    /* All other components MUST be a decendent of VCALENDAR */
+                    error->precond = CALDAV_VALID_FILTER;
+                    error->desc = "VCALENDAR must be toplevel component";
+                }
+                break;
+
+            case 1:
+                /* Child of VCALENDAR */
+                switch (kind) {
+                case ICAL_VCALENDAR_COMPONENT:
+                    /* VCALENDAR MUST only appear at toplevel */
+                    error->precond = CALDAV_VALID_FILTER;
+                    error->desc = "VCALENDAR can only be toplevel component";
+                    break;
+                case ICAL_VEVENT_COMPONENT:
+                    *comp_types |= CAL_COMP_VEVENT;
+                    break;
+                case ICAL_VTODO_COMPONENT:
+                    *comp_types |= CAL_COMP_VTODO;
+                    break;
+                case ICAL_VJOURNAL_COMPONENT:
+                    *comp_types |= CAL_COMP_VJOURNAL;
+                    break;
+                case ICAL_VFREEBUSY_COMPONENT:
+                    *comp_types |= CAL_COMP_VFREEBUSY;
+                    break;
+                case ICAL_VAVAILABILITY_COMPONENT:
+                    *comp_types |= CAL_COMP_VAVAILABILITY;
+                    break;
+                case ICAL_VPOLL_COMPONENT:
+                    *comp_types |= CAL_COMP_VPOLL;
+                    break;
+                default:
+                    *flags |= PARSE_ICAL;
+                    break;
+                }
+                break;
+
+            default:
+                /* [Great*] grandchild of VCALENDAR */
+                if (kind == ICAL_VCALENDAR_COMPONENT) {
+                    /* VCALENDAR MUST only appear at toplevel */
+                    error->precond = CALDAV_VALID_FILTER;
+                    error->desc = "VCALENDAR can only be toplevel component";
+                }
+                else *flags |= PARSE_ICAL;
+                break;
+            }
+        }
+
+        if (!error->precond) {
+            attr = xmlGetProp(root, BAD_CAST "test");
+            if (attr) {
+                if (!xmlStrcmp(attr, BAD_CAST "anyof")) (*comp)->allof = 0;
+                else if (xmlStrcmp(attr, BAD_CAST "allof")) {
+                    error->precond = CALDAV_SUPP_FILTER;
+                    error->desc = "Unsupported test";
+                    error->node = xmlCopyNode(root, 2);
+                }
+                xmlFree(attr);
+            }
+        }
+    }
+
+    for (node = xmlFirstElementChild(root); node && !error->precond;
+         node = xmlNextElementSibling(node)) {
+
+        if ((*comp)->not_defined) {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = IS_NOT_DEF_ERR;
+            error->node = xmlCopyNode(root, 1);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
+            if ((*comp)->range || (*comp)->prop || (*comp)->comp) {
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc = IS_NOT_DEF_ERR;
+                error->node = xmlCopyNode(root, 1);
+            }
+            else (*comp)->not_defined = 1;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+            if ((*comp)->range) {
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc = "Multiple time-range";
+                error->node = xmlCopyNode(root, 1);
+            }
+            else {
+                switch ((*comp)->kind) {
+                case ICAL_ANY_COMPONENT:
+                case ICAL_VEVENT_COMPONENT:
+                case ICAL_VTODO_COMPONENT:
+                case ICAL_VJOURNAL_COMPONENT:
+                case ICAL_VFREEBUSY_COMPONENT:
+                case ICAL_VAVAILABILITY_COMPONENT:
+                case ICAL_VPOLL_COMPONENT:
+                    parse_timerange(node, &(*comp)->range, error);
+                    break;
+
+                default:
+                    error->precond = CALDAV_SUPP_FILTER;
+                    error->desc = "time-range unsupported for this component";
+                    error->node = xmlCopyNode(root, 1);
+                    break;
+                }
+            }
+
+            if (depth != 1) *flags |= PARSE_ICAL;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
+            struct prop_filter *prop = NULL;
+
+            *flags |= PARSE_ICAL;
+
+            parse_propfilter(node, &prop, error);
+            if (prop) {
+                if ((*comp)->prop) prop->next = (*comp)->prop;
+                (*comp)->prop = prop;
+            }
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
+            struct comp_filter *subcomp = NULL;
+
+            parse_compfilter(node, depth + 1, &subcomp,
+                             flags, comp_types, error);
+            if (subcomp) {
+                if ((*comp)->comp) subcomp->next = (*comp)->comp;
+                (*comp)->comp = subcomp;
+            }
+        }
+        else {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = "Unsupported element in comp-filter";
+            error->node = xmlCopyNode(root, 1);
+        }
+    }
+}
+
+static int parse_calfilter(xmlNodePtr root, struct calquery_filter *filter,
+                           struct error_t *error)
+{
+    xmlNodePtr node;
+
+    /* Parse elements of filter */
+    node = xmlFirstElementChild(root);
+    if (node && !xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
+        parse_compfilter(node, 0, &filter->comp,
+                         &filter->flags, &filter->comp_types, error);
+    }
+    else {
+        error->precond = CALDAV_VALID_FILTER;
+        error->desc = "missing comp-filter element";
+    }
+
+    return error->precond ? HTTP_FORBIDDEN : 0;
+}
+
+
+static int apply_paramfilter(struct param_filter *paramfilter,
+                             icalproperty *prop)
+{
+    int pass = 1;
+    icalparameter *param =
+        icalproperty_get_first_parameter(prop, paramfilter->kind);
+
+    if (paramfilter->kind == ICAL_X_PARAMETER) {
+        /* Find the first X- parameter with matching name */
+        for (; param && strcmp((const char *) paramfilter->name,
+                               icalparameter_get_xname(param));
+             param = icalproperty_get_next_parameter(prop, paramfilter->kind));
+    }
+
+    if (!param) return paramfilter->not_defined;
+    if (paramfilter->not_defined) return 0;
+    if (!paramfilter->match) return 1;
+
+    /* Test each instance of this parameter (logical OR) */
+    do {
+        const char *text;
+
+        if (!pass && (paramfilter->kind == ICAL_X_PARAMETER) &&
+            strcmp((const char *) paramfilter->name,
+                   icalparameter_get_xname(param))) {
+            /* Skip X- parameter if name doesn't match */
+            continue;
+        }
+
+        text = icalparameter_get_iana_value(param);
+        pass = dav_text_match(BAD_CAST text, paramfilter->match);
+
+    } while (!pass &&
+             (param = icalproperty_get_next_parameter(prop, paramfilter->kind)));
+
+    return pass;
+}
+
+static int apply_prop_timerange(struct icalperiodtype *range, icalproperty *prop)
+{
+    icalvalue *value = icalproperty_get_value(prop);
+    struct icalperiodtype period = icalperiodtype_null_period();
+    icalparameter *param;
+
+    switch (icalvalue_isa(value)) {
+    case ICAL_DATE_VALUE:
+        period.start = icalvalue_get_date(value);
+        period.start.is_date = 0;  /* MUST be DATE-TIME */
+        break;
+
+    case ICAL_DATETIME_VALUE:
+        period.start = icalvalue_get_datetime(value);
+        break;
+
+    case ICAL_PERIOD_VALUE:
+        period = icalvalue_get_period(value);
+        break;
+
+    default:
+        /* Should never get here */
+        break;
+    }
+
+    /* Set the timezone, if any, on the start time */
+    if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER))) {
+        const char *tzid = icalparameter_get_tzid(param);
+        icaltimezone *tz = NULL;
+        icalcomponent *comp;
+
+        for (comp = icalproperty_get_parent(prop); comp;
+             comp = icalcomponent_get_parent(comp)) {
+            tz = icalcomponent_get_timezone(comp, tzid);
+            if (tz) break;
+        }
+
+        if (!tz) tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+
+        if (tz) period.start = icaltime_set_timezone(&period.start, tz);
+    }
+
+    if (!icaldurationtype_is_null_duration(period.duration)) {
+        /* Calculate end time from duration */
+        period.end = icaltime_add(period.start, period.duration);
+    }
+    else if (icaltime_is_null_time(period.end)) period.end = period.start;
+
+    /* Convert to UTC for comparison with range */
+    period.start = icaltime_convert_to_zone(period.start, utc_zone);
+    period.end = icaltime_convert_to_zone(period.end, utc_zone);
+
+    if (icaltime_compare(period.start, range->end) >= 0 ||
+        icaltime_compare(period.end, range->start) <= 0) {
+        /* Starts later or ends earlier than range */
+        return 0;
+    }
+
+    return 1;
+}
+
+static int apply_propfilter(struct prop_filter *propfilter, icalcomponent *comp)
+{
+    int pass = 1;
+    icalproperty *prop =
+        icalcomponent_get_first_property(comp, propfilter->kind);
+
+    if (propfilter->kind == ICAL_X_PROPERTY) {
+        /* Find the first X- property with matching name */
+        for (; prop && strcmp((const char *) propfilter->name,
+                              icalproperty_get_property_name(prop));
+             prop = icalcomponent_get_next_property(comp, propfilter->kind));
+    }
+
+    if (!prop) return propfilter->not_defined;
+    if (propfilter->not_defined) return 0;
+    if (!(propfilter->range || propfilter->match || propfilter->param)) return 1;
+
+    /* Test each instance of this property (logical OR) */
+    do {
+        struct param_filter *paramfilter;
+
+        if (!pass && (propfilter->kind == ICAL_X_PROPERTY) &&
+            strcmp((const char *) propfilter->name,
+                   icalproperty_get_property_name(prop))) {
+            /* Skip X- property if name doesn't match */
+            continue;
+        }
+
+        pass = propfilter->allof;
+
+        if (propfilter->range) {
+            pass = apply_prop_timerange(propfilter->range, prop);
+        }
+        else if (propfilter->match) {
+            const char *text = icalproperty_get_value_as_string(prop);
+
+            pass = dav_text_match(BAD_CAST text, propfilter->match);
+        }
+
+        /* Apply each param-filter, breaking if allof fails or anyof succeeds */
+        for (paramfilter = propfilter->param;
+             paramfilter && (pass == propfilter->allof);
+             paramfilter = paramfilter->next) {
+
+            pass = apply_paramfilter(paramfilter, prop);
+        }
+
+    } while (!pass &&
+             (prop = icalcomponent_get_next_property(comp, propfilter->kind)));
+
+    return pass;
+}
+
+static void in_range(icalcomponent *comp __attribute__((unused)),
+                     struct icaltime_span *span __attribute__((unused)),
+                     void *rock)
+{
+    int *pass = (int *) rock;
+
+    *pass = 1;
+}
+
+static int apply_comp_timerange(struct comp_filter *compfilter,
+                                icalcomponent *comp, struct caldav_data *cdata,
+                                struct propfind_ctx *fctx)
+{
+    struct icalperiodtype *range = compfilter->range;
+    struct icaltimetype dtstart;
+    struct icaltimetype dtend;
+    int pass = 0;
+
+    if (compfilter->depth == 1) {
+        /* Use period from cdata */
+        dtstart = icaltime_from_string(cdata->dtstart);
+        dtend = icaltime_from_string(cdata->dtend);
+
+        if (icaltime_compare(dtstart, range->end) >= 0 ||
+            icaltime_compare(dtend, range->start) <= 0) {
+            /* All occurrences start later or end earlier than range */
+            return 0;
+        }
+        if (compfilter->kind == ICAL_VAVAILABILITY_COMPONENT) {
+            /* Don't try to expand VAVAILABILITY, just mark it as in range */
+            return 1;
+        }
+        if (cdata->comp_flags.recurring) {
+            if (!(compfilter->prop || compfilter->comp) &&
+                (icaltime_compare(dtstart, range->start) >= 0 ||
+                 icaltime_compare(dtend, range->end) <= 0)) {
+                /* An occurrence (possibly override) starts or ends within range
+                   and we don't need to do further filtering of the comp */
+                return 1;
+            }
+
+            /* Load message containing the resource and parse iCal data */
+            if (!comp) {
+                if (!fctx->msg_buf.len) {
+                    mailbox_map_record(fctx->mailbox,
+                                       fctx->record, &fctx->msg_buf);
+                }
+                if (fctx->msg_buf.len && !fctx->obj) {
+                    fctx->obj =
+                        icalparser_parse_string(buf_cstring(&fctx->msg_buf) +
+                                                fctx->record->header_size);
+                }
+                if (!fctx->obj) return 0;
+                comp = icalcomponent_get_first_component(fctx->obj,
+                                                         compfilter->kind);
+            }
+        }
+        else {
+            /* Non-recurring component overlaps range */
+            return 1;
+        }
+    }
+
+    /* Process component */
+    if (!comp) return 0;
+
+    icalcomponent_foreach_recurrence(comp, range->start, range->end,
+                                     in_range, &pass);
+
+    return pass;
+}
+
+/* See if the current resource matches the specified filter.
+ * Returns 1 if match, 0 otherwise.
+ */
+static int apply_compfilter(struct comp_filter *compfilter, icalcomponent *ical,
+                            struct caldav_data *cdata, struct propfind_ctx *fctx)
+{
+    int pass = 0;
+    icalcomponent *comp = NULL;
+
+    if (ical) {
+        if (compfilter->kind == ICAL_VCALENDAR_COMPONENT) comp = ical;
+        else comp = icalcomponent_get_first_component(ical, compfilter->kind);
+    }
+
+    /* XXX  Do we need to handle X- components?
+       It doesn't appear that libical currently deals with them.
+    */
+
+    if (ical && !comp) return compfilter->not_defined;
+    if (compfilter->not_defined) return 0;
+    if (!(compfilter->range || compfilter->prop || compfilter->comp)) return 1;
+
+    /* Test each instance of this component (logical OR) */
+    do {
+        struct prop_filter *propfilter;
+        struct comp_filter *subfilter;
+
+        pass = compfilter->allof;
+
+        if (compfilter->range) {
+            pass = apply_comp_timerange(compfilter, comp, cdata, fctx);
+        }
+
+        /* Apply each prop-filter, breaking if allof fails or anyof succeeds */
+        for (propfilter = compfilter->prop;
+             propfilter && (pass == compfilter->allof);
+             propfilter = propfilter->next) {
+
+            pass = apply_propfilter(propfilter, comp);
+        }
+
+        /* Apply each comp-filter, breaking if allof fails or anyof succeeds */
+        for (subfilter = compfilter->comp;
+             subfilter && (pass == compfilter->allof);
+             subfilter = subfilter->next) {
+
+            pass = apply_compfilter(subfilter, comp, cdata, fctx);
+        }
+
+    } while (!pass &&
+             (comp = icalcomponent_get_next_component(ical, compfilter->kind)));
+
+    return pass;
+}
+
+/* See if the current resource matches the specified filter.
+ * Returns 1 if match, 0 otherwise.
+ */
+static int apply_calfilter(struct propfind_ctx *fctx, void *data)
+{
+    struct calquery_filter *calfilter =
+        (struct calquery_filter *) fctx->filter_crit;
+    struct caldav_data *cdata = (struct caldav_data *) data;
+    icalcomponent *ical = fctx->obj;
+
+    if (calfilter->comp_types) {
+        /* Check comp-filter vs component type of resource */
+        if (!(cdata->comp_type & calfilter->comp_types)) return 0;
+    }
+
+    if (calfilter->flags & PARSE_ICAL) {
+        /* Load message containing the resource and parse iCal data */
+        if (!ical) {
+            if (!fctx->msg_buf.len)
+                mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
+            if (!fctx->msg_buf.len) return 0;
+
+            ical = fctx->obj =
+                icalparser_parse_string(buf_cstring(&fctx->msg_buf) +
+                                        fctx->record->header_size);
+        }
+        if (!ical) return 0;
+    }
+
+    return apply_compfilter(calfilter->comp, ical, cdata, fctx);
+}
+
+
+static void free_compfilter(struct comp_filter *comp)
+{
+    struct comp_filter *sibling, *nextc;
+    struct prop_filter *prop, *nextp;
+
+    if (!comp) return;
+
+    if (comp->range) free(comp->range);
+
+    for (prop = comp->prop; prop; prop = nextp) {
+        struct param_filter *param, *next;
+
+        nextp = prop->next;
+
+        if (prop->range) free(prop->range);
+        else if (prop->match) {
+            xmlFree(prop->match->text);
+            free(prop->match);
+        }
+        for (param = prop->param; param; param = next) {
+            next = param->next;
+            if (param->match) {
+                xmlFree(param->match->text);
+                free(param->match);
+            }
+            xmlFree(param->name);
+            free(param);
+        }
+
+        xmlFree(prop->name);
+        free(prop);
+    }
+    for (sibling = comp->comp; sibling; sibling = nextc) {
+        nextc = sibling->next;
+
+        free_compfilter(sibling);
+    }
+
+    xmlFree(comp->name);
+    free(comp);
 }
 
 
@@ -4189,32 +4894,35 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 {
     struct partial_caldata_t *partial = (struct partial_caldata_t *) rock;
     struct caldav_data *cdata = (struct caldav_data *) fctx->data;
-    struct buf buf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
     int r = 0;
 
     if (propstat) {
-        icalcomponent *ical = NULL;
+        icalcomponent *ical = fctx->obj;
 
         if (!fctx->record) return HTTP_NOT_FOUND;
-        mailbox_map_record(fctx->mailbox, fctx->record, &buf);
-        data = buf_cstring(&buf) + fctx->record->header_size;
-        datalen = buf_len(&buf) - fctx->record->header_size;
+
+        if (!fctx->msg_buf.len)
+            mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
+        if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
+
+        data = fctx->msg_buf.s + fctx->record->header_size;
+        datalen = fctx->record->size - fctx->record->header_size;
 
         if (!icaltime_is_null_time(partial->start)) {
             /* Expand recurrences */
-            struct calquery_filter calfilter;
+            struct calrange_filter calfilter;
             icalcomponent *master, *comp, *nextcomp;
             icalproperty *prop, *nextprop;
             icalcomponent_kind kind;
             unsigned i;
 
-            memset(&calfilter, 0, sizeof(struct calquery_filter));
+            memset(&calfilter, 0, sizeof(struct calrange_filter));
             calfilter.start = partial->start;
             calfilter.end = partial->end;
 
-            if (!ical) ical = icalparser_parse_string(data);
+            if (!ical) ical = fctx->obj = icalparser_parse_string(data);
 
             if (!cdata->comp_flags.tzbyref) {
                 /* Strip all VTIMEZONEs */
@@ -4323,16 +5031,14 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         if (partial->comp) {
             /* Limit returned properties */
-            if (!ical) ical = icalparser_parse_string(data);
+            if (!ical) ical = fctx->obj = icalparser_parse_string(data);
             prune_properties(ical, partial->comp);
         }
 
         if (ical) {
             /* Create iCalendar data from new ical component */
-            buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
-            data = buf_cstring(&buf);
-            datalen = buf_len(&buf);
-            icalcomponent_free(ical);
+            data = icalcomponent_as_ical_string(ical);
+            datalen = strlen(data);
         }
     }
     else if (prop) {
@@ -4403,8 +5109,6 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
     r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
                          CALDAV_SUPP_DATA, data, datalen);
-
-    buf_free(&buf);
 
     return r;
 }
@@ -5482,20 +6186,22 @@ static int report_cal_query(struct transaction_t *txn,
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
             if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-                ret = parse_comp_filter(node->children, &calfilter, &txn->error);
-                if (ret) return ret;
+                ret = parse_calfilter(node, &calfilter, &txn->error);
+                if (ret) goto done;
                 else fctx->filter = apply_calfilter;
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
                 xmlChar *tzdata = NULL;
                 icalcomponent *ical = NULL, *tz = NULL;
 
-                /* XXX  Need to do pass this to query for floating time */
+                /* XXX  Need to pass this to query for floating time */
                 syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
                 tzdata = xmlNodeGetContent(node);
                 ical = icalparser_parse_string((const char *) tzdata);
-                if (ical) tz = icalcomponent_get_first_component(ical,
-                                                                 ICAL_VTIMEZONE_COMPONENT);
+                if (ical) {
+                    tz = icalcomponent_get_first_component(ical,
+                                                           ICAL_VTIMEZONE_COMPONENT);
+                }
                 if (!tz || icalcomponent_get_first_real_component(ical)) {
                     txn->error.precond = CALDAV_VALID_DATA;
                     ret = HTTP_FORBIDDEN;
@@ -5546,10 +6252,10 @@ static int report_cal_query(struct transaction_t *txn,
         ret = *fctx->ret;
     }
 
+  done:
+    /* Free filter structure */
     if (calfilter.tz) icaltimezone_free(calfilter.tz, 1);
-
-    /* Expanded recurrences still populate busytime array */
-    if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+    free_compfilter(calfilter.comp);
 
     if (fctx->davdb) {
         caldav_close(fctx->davdb);
@@ -5624,11 +6330,11 @@ static int busytime_by_resource(void *rock, void *data)
     if (r) return 0;
 
     fctx->record = &record;
-    if (apply_calfilter(fctx, data) &&
+    if (apply_rangefilter(fctx, data) &&
         cdata->comp_type == CAL_COMP_VAVAILABILITY) {
         /* Add VAVAIL to our array for later use */
-        struct calquery_filter *calfilter =
-            (struct calquery_filter *) fctx->filter_crit;
+        struct calrange_filter *calfilter =
+            (struct calrange_filter *) fctx->filter_crit;
         icalcomponent *vav;
 
         mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
@@ -5651,8 +6357,8 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 {
     const char *mboxname = mbentry->name;
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    struct calquery_filter *calfilter =
-        (struct calquery_filter *) fctx->filter_crit;
+    struct calrange_filter *calfilter =
+        (struct calrange_filter *) fctx->filter_crit;
 
     if (calfilter && (calfilter->flags & CHECK_CAL_TRANSP)) {
         /* Check if the collection is marked as transparent */
@@ -5705,17 +6411,17 @@ static int compare_vavail(const void *v1, const void *v2)
 }
 
 
-static void combine_vavailability(struct calquery_filter *calfilter)
+static void combine_vavailability(struct calrange_filter *calfilter)
 {
     struct vavailability_array *vavail = &calfilter->vavail;
-    struct calquery_filter availfilter;
+    struct calrange_filter availfilter;
     struct query_range {
         struct icalperiodtype per;
         struct query_range *next;
     } *ranges, *range, *prev, *next;
     unsigned i, j;
 
-    memset(&availfilter, 0, sizeof(struct calquery_filter));
+    memset(&availfilter, 0, sizeof(struct calrange_filter));
 
     /* Sort VAVAILBILITY periods by priority and start time */
     qsort(vavail->vav, vavail->len,
@@ -5853,8 +6559,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
                                     const char *organizer,
                                     const char *attendee)
 {
-    struct calquery_filter *calfilter =
-        (struct calquery_filter *) fctx->filter_crit;
+    struct calrange_filter *calfilter =
+        (struct calrange_filter *) fctx->filter_crit;
     struct freebusy_array *freebusy = &calfilter->freebusy;
     struct vavailability_array *vavail = &calfilter->vavail;
     icalcomponent *ical = NULL;
@@ -6017,7 +6723,7 @@ static int report_fb_query(struct transaction_t *txn,
     int ret = 0;
     const char **hdr;
     struct mime_type_t *mime;
-    struct calquery_filter calfilter;
+    struct calrange_filter calfilter;
     xmlNodePtr node;
     icalcomponent *cal;
 
@@ -6031,13 +6737,13 @@ static int report_fb_query(struct transaction_t *txn,
     else mime = caldav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
-    memset(&calfilter, 0, sizeof(struct calquery_filter));
+    memset(&calfilter, 0, sizeof(struct calrange_filter));
     calfilter.comp =
         CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
     calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
     calfilter.flags = BUSYTIME_QUERY;
-    fctx->filter = apply_calfilter;
+    fctx->filter = apply_rangefilter;
     fctx->filter_crit = &calfilter;
 
     /* Parse children element of report */
@@ -6308,7 +7014,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     struct strlist *param;
     struct mime_type_t *mime = NULL;
     struct propfind_ctx fctx;
-    struct calquery_filter calfilter;
+    struct calrange_filter calfilter;
     time_t start;
     struct icaldurationtype period = icaldurationtype_null_duration();
     icalcomponent *cal;
@@ -6361,7 +7067,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
 
     if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
 
-    memset(&calfilter, 0, sizeof(struct calquery_filter));
+    memset(&calfilter, 0, sizeof(struct calrange_filter));
     calfilter.comp =
         CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
@@ -6425,7 +7131,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.filter = apply_calfilter;
+    fctx.filter = apply_rangefilter;
     fctx.filter_crit = &calfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;

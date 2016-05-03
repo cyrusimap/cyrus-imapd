@@ -2002,7 +2002,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 prot_puts(httpd_out, "DAV: 1, 2, 3, access-control,"
                           " extended-mkcol, resource-sharing\r\n");
                 if (txn->req_tgt.allow & ALLOW_CAL) {
-                    prot_printf(httpd_out, "DAV: calendar-access%s%s%s\r\n",
+                    prot_printf(httpd_out, "DAV: calendar-access"
+                                " calendar-query-extended%s%s%s\r\n",
                                 (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
                                 ", calendar-auto-schedule" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?

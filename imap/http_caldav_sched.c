@@ -733,7 +733,7 @@ int sched_busytime_query(struct transaction_t *txn,
     xmlNodePtr root = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
-    struct calquery_filter calfilter;
+    struct calrange_filter calfilter;
     struct hash_table remote_table;
     struct sched_param *remote = NULL;
 
@@ -768,7 +768,7 @@ int sched_busytime_query(struct transaction_t *txn,
     ensure_ns(ns, NS_DAV, root, XML_NS_DAV, "D");
 
     /* Populate our filter and propfind context for local attendees */
-    memset(&calfilter, 0, sizeof(struct calquery_filter));
+    memset(&calfilter, 0, sizeof(struct calrange_filter));
     calfilter.comp =
         CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.start = icalcomponent_get_dtstart(comp);
@@ -782,7 +782,7 @@ int sched_busytime_query(struct transaction_t *txn,
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = org_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.filter = apply_calfilter;
+    fctx.filter = apply_rangefilter;
     fctx.filter_crit = &calfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;
