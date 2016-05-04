@@ -3823,26 +3823,6 @@ int apply_rangefilter(struct propfind_ctx *fctx, void *data)
     return match;
 }
 
-
-struct param_filter {
-    xmlChar *name;              /* need this for X- parameters */
-    icalparameter_kind kind;
-    unsigned not_defined : 1;
-    struct text_match_t *match;
-    struct param_filter *next;
-};
-
-struct prop_filter {
-    xmlChar *name;              /* need this for X- properties */
-    icalproperty_kind kind;
-    unsigned allof       : 1;
-    unsigned not_defined : 1;
-    struct icalperiodtype *range;
-    struct text_match_t *match;
-    struct param_filter *param;
-    struct prop_filter *next;
-};
-
 struct comp_filter {
     xmlChar *name;              /* need this for X- components */
     unsigned depth;
@@ -3910,191 +3890,41 @@ static void parse_timerange(xmlNodePtr node,
     }
 }
 
-#define IS_NOT_DEF_ERR "is-not-defined can NOT be combined with other elements"
-#define TEXT_MATCH_ERR "text-match can NOT be combined with time-range"
-
-static void parse_paramfilter(xmlNodePtr root, struct param_filter **param,
-                              struct error_t *error)
+static void cal_parse_propfilter(xmlNodePtr node, struct prop_filter *prop,
+                                 struct error_t *error)
 {
-    xmlChar *attr;
-    xmlNodePtr node;
+    if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+        if (prop->other) {
+            error->precond = CALDAV_SUPP_FILTER;
+            error->desc = "Multiple time-range";
+            error->node = xmlCopyNode(node->parent, 1);
+        }
+        else {
+            struct icalperiodtype *range = NULL;
+            icalvalue_kind kind =
+                icalproperty_kind_to_value_kind(prop->kind);
 
-    attr = xmlGetProp(root, BAD_CAST "name");
-    if (!attr) {
-        error->precond = CALDAV_SUPP_FILTER;
-        error->desc = "Missing 'name' attribute";
-        error->node = xmlCopyNode(root, 2);
+            switch (kind) {
+            case ICAL_DATE_VALUE:
+            case ICAL_DATETIME_VALUE:
+            case ICAL_DATETIMEPERIOD_VALUE:
+            case ICAL_PERIOD_VALUE:
+                parse_timerange(node, &range, error);
+                prop->other = range;
+                break;
+
+            default:
+                error->precond = CALDAV_SUPP_FILTER;
+                error->desc = "Property does not support time-range";
+                error->node = xmlCopyNode(node->parent, 1);
+                break;
+            }
+        }
     }
     else {
-        icalparameter_kind kind =
-            icalparameter_string_to_kind((const char *) attr);
-        
-        *param = xzmalloc(sizeof(struct param_filter));
-        (*param)->name = attr;
-        (*param)->kind = kind;
-
-        if (kind == ICAL_NO_PARAMETER) {
-            error->precond = CALDAV_SUPP_FILTER;
-            error->desc = "Unsupported parameter";
-            error->node = xmlCopyNode(root, 2);
-        }
-    }
-
-    for (node = xmlFirstElementChild(root); node && !error->precond;
-         node = xmlNextElementSibling(node)) {
-
-        if ((*param)->not_defined) {
-            error->precond = CALDAV_SUPP_FILTER;
-            error->desc = IS_NOT_DEF_ERR;
-            error->node = xmlCopyNode(root, 1);
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
-            if ((*param)->match) {
-                error->precond = CALDAV_SUPP_FILTER;
-                error->desc = IS_NOT_DEF_ERR;
-                error->node = xmlCopyNode(root, 1);
-            }
-            else (*param)->not_defined = 1;
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "text-match")) {
-            if ((*param)->match) {
-                error->precond = CALDAV_SUPP_FILTER;
-                error->desc = "Multiple text-match";
-                error->node = xmlCopyNode(root, 1);
-            }
-            else {
-                struct text_match_t *match = NULL;
-
-                dav_parse_textmatch(node, &match, MATCH_TYPE_CONTAINS,
-                                    COLLATION_ASCII, CALDAV_SUPP_FILTER,
-                                    CALDAV_SUPP_COLLATION, error);
-                (*param)->match = match;
-            }
-        }
-        else {
-            error->precond = CALDAV_SUPP_FILTER;
-            error->desc =
-                "Unsupported element in param-filter";
-            error->node = xmlCopyNode(root, 1);
-        }
-    }
-}
-
-static void parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
-                             struct error_t *error)
-{
-    xmlChar *attr;
-    xmlNodePtr node;
-
-    attr = xmlGetProp(root, BAD_CAST "name");
-    if (!attr) {
         error->precond = CALDAV_SUPP_FILTER;
-        error->desc = "Missing 'name' attribute";
-        error->node = xmlCopyNode(root, 2);
-    }
-    else {
-        icalproperty_kind kind = 
-            icalproperty_string_to_kind((const char *) attr);
-
-        *prop = xzmalloc(sizeof(struct prop_filter));
-        (*prop)->name = attr;
-        (*prop)->kind = kind;
-        (*prop)->allof = 1;
-
-        if (kind == ICAL_NO_PROPERTY) {
-            error->precond = CALDAV_SUPP_FILTER;
-            error->desc = "Unsupported property";
-            error->node = xmlCopyNode(root, 2);
-        }
-        else {
-            attr = xmlGetProp(root, BAD_CAST "test");
-            if (attr) {
-                if (!xmlStrcmp(attr, BAD_CAST "anyof")) (*prop)->allof = 0;
-                else if (xmlStrcmp(attr, BAD_CAST "allof")) {
-                    error->precond = CALDAV_SUPP_FILTER;
-                    error->desc = "Unsupported test";
-                    error->node = xmlCopyNode(root, 2);
-                }
-                xmlFree(attr);
-            }
-        }
-    }
-
-    for (node = xmlFirstElementChild(root); node && !error->precond;
-         node = xmlNextElementSibling(node)) {
-
-        if ((*prop)->not_defined) {
-            error->precond = CALDAV_SUPP_FILTER;
-            error->desc = IS_NOT_DEF_ERR;
-            error->node = xmlCopyNode(root, 1);
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
-            if ((*prop)->range || (*prop)->match || (*prop)->param) {
-                error->precond = CALDAV_SUPP_FILTER;
-                error->desc = IS_NOT_DEF_ERR;
-                error->node = xmlCopyNode(root, 1);
-            }
-            else (*prop)->not_defined = 1;
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
-            if ((*prop)->range || (*prop)->match) {
-                error->precond = CALDAV_SUPP_FILTER;
-                error->desc =
-                    (*prop)->range ? "Multiple time-range" : TEXT_MATCH_ERR;
-                error->node = xmlCopyNode(root, 1);
-            }
-            else {
-                struct icalperiodtype *range = NULL;
-                icalvalue_kind kind =
-                    icalproperty_kind_to_value_kind((*prop)->kind);
-
-                switch (kind) {
-                case ICAL_DATE_VALUE:
-                case ICAL_DATETIME_VALUE:
-                case ICAL_DATETIMEPERIOD_VALUE:
-                case ICAL_PERIOD_VALUE:
-                    parse_timerange(node, &range, error);
-                    (*prop)->range = range;
-                    break;
-
-                default:
-                    error->precond = CALDAV_SUPP_FILTER;
-                    error->desc = "Property does not support time-range";
-                    error->node = xmlCopyNode(root, 1);
-                    break;
-                }
-            }
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "text-match")) {
-            if ((*prop)->range || (*prop)->match) {
-                error->precond = CALDAV_SUPP_FILTER;
-                error->desc =
-                    (*prop)->match ? "Multiple text-match" : TEXT_MATCH_ERR;
-                error->node = xmlCopyNode(root, 1);
-            }
-            else {
-                struct text_match_t *match = NULL;
-
-                dav_parse_textmatch(node, &match, MATCH_TYPE_CONTAINS,
-                                    COLLATION_ASCII, CALDAV_SUPP_FILTER,
-                                    CALDAV_SUPP_COLLATION, error);
-                (*prop)->match = match;
-            }
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "param-filter")) {
-            struct param_filter *param = NULL;
-
-            parse_paramfilter(node, &param, error);
-            if (param) {
-                if ((*prop)->param) param->next = (*prop)->param;
-                (*prop)->param = param;
-            }
-        }
-        else {
-            error->precond = CALDAV_SUPP_FILTER;
-            error->desc = "Unsupported element in prop-filter";
-            error->node = xmlCopyNode(root, 1);
-        }
+        error->desc = "Unsupported element in prop-filter";
+        error->node = xmlCopyNode(node->parent, 1);
     }
 }
 
@@ -4105,6 +3935,12 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
 {
     xmlChar *attr;
     xmlNodePtr node;
+    struct filter_profile_t profile =
+        { 1 /* allof */, COLLATION_ASCII,
+          CALDAV_SUPP_FILTER, CALDAV_SUPP_COLLATION,
+          &icalproperty_string_to_kind, ICAL_NO_PROPERTY,
+          &icalparameter_string_to_kind, ICAL_NO_PARAMETER,
+          &cal_parse_propfilter };
 
     /* Parse elements of comp-filter */
     attr = xmlGetProp(root, BAD_CAST "name");
@@ -4204,13 +4040,13 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
 
         if ((*comp)->not_defined) {
             error->precond = CALDAV_SUPP_FILTER;
-            error->desc = IS_NOT_DEF_ERR;
+            error->desc = DAV_FILTER_ISNOTDEF_ERR;
             error->node = xmlCopyNode(root, 1);
         }
         else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
             if ((*comp)->range || (*comp)->prop || (*comp)->comp) {
                 error->precond = CALDAV_SUPP_FILTER;
-                error->desc = IS_NOT_DEF_ERR;
+                error->desc = DAV_FILTER_ISNOTDEF_ERR;
                 error->node = xmlCopyNode(root, 1);
             }
             else (*comp)->not_defined = 1;
@@ -4248,10 +4084,18 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
 
             *flags |= PARSE_ICAL;
 
-            parse_propfilter(node, &prop, error);
+            dav_parse_propfilter(node, &prop, &profile, error);
             if (prop) {
                 if ((*comp)->prop) prop->next = (*comp)->prop;
                 (*comp)->prop = prop;
+            }
+            if (prop->match) {
+                if (prop->other || prop->match->next) {
+                    error->precond = CALDAV_SUPP_FILTER;
+                    error->desc = prop->match->next ? "Multiple text-match" :
+                        "time-range can NOT be combined with text-match";
+                    error->node = xmlCopyNode(node, 1);
+                }
             }
         }
         else if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
@@ -4322,7 +4166,7 @@ static int apply_paramfilter(struct param_filter *paramfilter,
         }
 
         text = icalparameter_get_iana_value(param);
-        pass = dav_text_match(BAD_CAST text, paramfilter->match);
+        pass = dav_apply_textmatch(BAD_CAST text, paramfilter->match);
 
     } while (!pass &&
              (param = icalproperty_get_next_parameter(prop, paramfilter->kind)));
@@ -4406,7 +4250,7 @@ static int apply_propfilter(struct prop_filter *propfilter, icalcomponent *comp)
 
     if (!prop) return propfilter->not_defined;
     if (propfilter->not_defined) return 0;
-    if (!(propfilter->range || propfilter->match || propfilter->param)) return 1;
+    if (!(propfilter->other || propfilter->match || propfilter->param)) return 1;
 
     /* Test each instance of this property (logical OR) */
     do {
@@ -4421,13 +4265,13 @@ static int apply_propfilter(struct prop_filter *propfilter, icalcomponent *comp)
 
         pass = propfilter->allof;
 
-        if (propfilter->range) {
-            pass = apply_prop_timerange(propfilter->range, prop);
+        if (propfilter->other) {
+            pass = apply_prop_timerange(propfilter->other, prop);
         }
         else if (propfilter->match) {
             const char *text = icalproperty_get_value_as_string(prop);
 
-            pass = dav_text_match(BAD_CAST text, propfilter->match);
+            pass = dav_apply_textmatch(BAD_CAST text, propfilter->match);
         }
 
         /* Apply each param-filter, breaking if allof fails or anyof succeeds */
@@ -4606,43 +4450,26 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 
 static void free_compfilter(struct comp_filter *comp)
 {
-    struct comp_filter *sibling, *nextc;
+    struct comp_filter *subcomp, *nextc;
     struct prop_filter *prop, *nextp;
 
     if (!comp) return;
 
+    xmlFree(comp->name);
     if (comp->range) free(comp->range);
 
     for (prop = comp->prop; prop; prop = nextp) {
-        struct param_filter *param, *next;
-
         nextp = prop->next;
 
-        if (prop->range) free(prop->range);
-        else if (prop->match) {
-            xmlFree(prop->match->text);
-            free(prop->match);
-        }
-        for (param = prop->param; param; param = next) {
-            next = param->next;
-            if (param->match) {
-                xmlFree(param->match->text);
-                free(param->match);
-            }
-            xmlFree(param->name);
-            free(param);
-        }
-
-        xmlFree(prop->name);
-        free(prop);
+        if (prop->other) free(prop->other);
+        dav_free_propfilter(prop);
     }
-    for (sibling = comp->comp; sibling; sibling = nextc) {
-        nextc = sibling->next;
+    for (subcomp = comp->comp; subcomp; subcomp = nextc) {
+        nextc = subcomp->next;
 
-        free_compfilter(sibling);
+        free_compfilter(subcomp);
     }
 
-    xmlFree(comp->name);
     free(comp);
 }
 

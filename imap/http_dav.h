@@ -579,11 +579,46 @@ struct text_match_t {
     struct text_match_t *next;
 };
 
-void dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
-                         unsigned type, unsigned collation,
-                         unsigned filter_precond, unsigned collation_precond,
-                         struct error_t *error);
-int dav_text_match(xmlChar *text, struct text_match_t *match);
+struct param_filter {
+    xmlChar *name;
+    unsigned kind;
+    unsigned not_defined : 1;
+    struct text_match_t *match;
+    struct param_filter *next;
+};
+
+struct prop_filter {
+    xmlChar *name;
+    unsigned kind;
+    unsigned allof       : 1;
+    unsigned not_defined : 1;
+    void *other;                /* some other filter defined by caller */
+    struct text_match_t *match;
+    struct param_filter *param;
+    struct prop_filter *next;
+};
+
+struct filter_profile_t {
+    unsigned allof      : 1;
+    unsigned collation  : 3;
+    unsigned filter_precond;
+    unsigned collation_precond;
+    unsigned (*prop_string_to_kind)(const char *);
+    unsigned no_prop_value;
+    unsigned (*param_string_to_kind)(const char *);
+    unsigned no_param_value;
+    void (*parse_propfilter)(xmlNodePtr, struct prop_filter *,
+                             struct error_t *);
+};
+
+#define DAV_FILTER_ISNOTDEF_ERR \
+    "is-not-defined can NOT be combined with other elements"
+
+void dav_parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
+                          struct filter_profile_t *profile,
+                          struct error_t *error);
+void dav_free_propfilter(struct prop_filter *prop);
+int dav_apply_textmatch(xmlChar *text, struct text_match_t *match);
 
 int notify_post(struct transaction_t *txn);
 

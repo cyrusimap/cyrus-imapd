@@ -9664,12 +9664,13 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
 }
 
 
-void dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
-                         unsigned type, unsigned collation,
-                         unsigned filter_precond, unsigned collation_precond,
-                         struct error_t *error)
+static void dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
+                                struct filter_profile_t *profile,
+                                struct error_t *error)
 {
     unsigned negate = 0;
+    unsigned type = MATCH_TYPE_CONTAINS;
+    unsigned collation = profile->collation;
     xmlChar *attr;
 
     *match = NULL;
@@ -9678,7 +9679,7 @@ void dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
     if (attr) {
         if (!xmlStrcmp(attr, BAD_CAST "yes")) negate = 1;
         else if (xmlStrcmp(attr, BAD_CAST "no")) {
-            error->precond = filter_precond;
+            error->precond = profile->filter_precond;
             error->desc = "negate-condition is a yes/no option";
             error->node = xmlCopyNode(node->parent, 1);
         }
@@ -9695,7 +9696,7 @@ void dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
             }
             if (match->name) type = match->value;
             else {
-                error->precond = filter_precond;
+                error->precond = profile->filter_precond;
                 error->desc = "Unsupported match-type";
                 error->node = xmlCopyNode(node->parent, 1);
             }
@@ -9713,7 +9714,7 @@ void dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
                     if (!xmlStrcmp(attr, BAD_CAST col->name)) break;
                 }
                 if (col->name) collation = col->value;
-                else error->precond = collation_precond;
+                else error->precond = profile->collation_precond;
             }
             xmlFree(attr);
         }
@@ -9728,7 +9729,183 @@ void dav_parse_textmatch(xmlNodePtr node, struct text_match_t **match,
     }
 }
 
-int dav_text_match(xmlChar *text, struct text_match_t *match)
+static void dav_parse_paramfilter(xmlNodePtr root, struct param_filter **param,
+                                  struct filter_profile_t *profile,
+                                  struct error_t *error)
+{
+    xmlChar *attr;
+    xmlNodePtr node;
+
+    attr = xmlGetProp(root, BAD_CAST "name");
+    if (!attr) {
+        error->precond = profile->filter_precond;
+        error->desc = "Missing 'name' attribute";
+        error->node = xmlCopyNode(root, 2);
+    }
+    else {
+        *param = xzmalloc(sizeof(struct param_filter));
+        (*param)->name = attr;
+
+        if (profile->param_string_to_kind) {
+            (*param)->kind = profile->param_string_to_kind((const char *) attr);
+        
+            if ((*param)->kind == profile->no_param_value) {
+                error->precond = profile->filter_precond;
+                error->desc = "Unsupported parameter";
+                error->node = xmlCopyNode(root, 2);
+            }
+        }
+    }
+
+    for (node = xmlFirstElementChild(root); node && !error->precond;
+         node = xmlNextElementSibling(node)) {
+
+        if ((*param)->not_defined) {
+            error->precond = profile->filter_precond;
+            error->desc = DAV_FILTER_ISNOTDEF_ERR;
+            error->node = xmlCopyNode(root, 1);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
+            if ((*param)->match) {
+                error->precond = profile->filter_precond;
+                error->desc = DAV_FILTER_ISNOTDEF_ERR;
+                error->node = xmlCopyNode(root, 1);
+            }
+            else (*param)->not_defined = 1;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "text-match")) {
+            if ((*param)->match) {
+                error->precond = profile->filter_precond;
+                error->desc = "Multiple text-match";
+                error->node = xmlCopyNode(root, 1);
+            }
+            else {
+                struct text_match_t *match = NULL;
+
+                dav_parse_textmatch(node, &match, profile, error);
+                (*param)->match = match;
+            }
+        }
+        else {
+            error->precond = profile->filter_precond;
+            error->desc =
+                "Unsupported element in param-filter";
+            error->node = xmlCopyNode(root, 1);
+        }
+    }
+}
+
+void dav_parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
+                          struct filter_profile_t *profile,
+                          struct error_t *error)
+{
+    xmlChar *attr;
+    xmlNodePtr node;
+
+    attr = xmlGetProp(root, BAD_CAST "name");
+    if (!attr) {
+        error->precond = profile->filter_precond;
+        error->desc = "Missing 'name' attribute";
+        error->node = xmlCopyNode(root, 2);
+    }
+    else {
+        *prop = xzmalloc(sizeof(struct prop_filter));
+        (*prop)->name = attr;
+        (*prop)->allof = profile->allof;
+
+        if (profile->prop_string_to_kind) {
+            (*prop)->kind = profile->prop_string_to_kind((const char *) attr);
+
+            if ((*prop)->kind == profile->no_prop_value) {
+                error->precond = profile->filter_precond;
+                error->desc = "Unsupported property";
+                error->node = xmlCopyNode(root, 2);
+            }
+        }
+
+        if (!error->precond) {
+            attr = xmlGetProp(root, BAD_CAST "test");
+            if (attr) {
+                if (!xmlStrcmp(attr, BAD_CAST "allof")) (*prop)->allof = 1;
+                else if (!xmlStrcmp(attr, BAD_CAST "anyof")) (*prop)->allof = 0;
+                else {
+                    error->precond = profile->filter_precond;
+                    error->desc = "Unsupported test";
+                    error->node = xmlCopyNode(root, 2);
+                }
+                xmlFree(attr);
+            }
+        }
+    }
+
+    for (node = xmlFirstElementChild(root); node && !error->precond;
+         node = xmlNextElementSibling(node)) {
+
+        if ((*prop)->not_defined) {
+            error->precond = profile->filter_precond;
+            error->desc = DAV_FILTER_ISNOTDEF_ERR;
+            error->node = xmlCopyNode(root, 1);
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
+            if ((*prop)->other || (*prop)->match || (*prop)->param) {
+                error->precond = profile->filter_precond;
+                error->desc = DAV_FILTER_ISNOTDEF_ERR;
+                error->node = xmlCopyNode(root, 1);
+            }
+            else (*prop)->not_defined = 1;
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "text-match")) {
+            struct text_match_t *match = NULL;
+
+            dav_parse_textmatch(node, &match, profile, error);
+            if (match) {
+                if ((*prop)->match) match->next = (*prop)->match;
+                (*prop)->match = match;
+            }
+        }
+        else if (!xmlStrcmp(node->name, BAD_CAST "param-filter")) {
+            struct param_filter *param = NULL;
+
+            dav_parse_paramfilter(node, &param, profile, error);
+            if (param) {
+                if ((*prop)->param) param->next = (*prop)->param;
+                (*prop)->param = param;
+            }
+        }
+        else if (profile->parse_propfilter) {
+            profile->parse_propfilter(node, *prop, error);
+        }
+        else {
+            error->precond = profile->filter_precond;
+            error->desc = "Unsupported element in prop-filter";
+            error->node = xmlCopyNode(root, 1);
+        }
+    }
+}
+
+void dav_free_propfilter(struct prop_filter *prop)
+{
+    struct param_filter *param, *next;
+
+    xmlFree(prop->name);
+    if (prop->match) {
+        xmlFree(prop->match->text);
+        free(prop->match);
+    }
+    for (param = prop->param; param; param = next) {
+        next = param->next;
+
+        xmlFree(param->name);
+        if (param->match) {
+            xmlFree(param->match->text);
+            free(param->match);
+        }
+        free(param);
+    }
+    free(prop);
+}
+
+int dav_apply_textmatch(xmlChar *text, struct text_match_t *match)
 {
     const xmlChar *cp = NULL;
     int textlen, matchlen;
