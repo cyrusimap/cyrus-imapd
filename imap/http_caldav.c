@@ -47,9 +47,8 @@
  *     residing on same server as user's INBOX.  Doesn't handle global/shared
  *     calendars.
  *   - Support COPY/MOVE on collections
- *   - Add more required properties
- *   - GET/HEAD on collections (iCalendar stream of resources)
- *   - calendar-query REPORT (handle partial retrieval, prop-filter, timezone?)
+ *   - Add more required properties?
+ *   - calendar-query REPORT (handle timezone, timezone-id)
  *   - free-busy-query REPORT (check ACL and transp on all calendars)
  *   - sync-collection REPORT - need to handle Depth infinity?
  */
