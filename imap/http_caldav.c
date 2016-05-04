@@ -4725,7 +4725,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     int r = 0;
 
     if (propstat) {
-        icalcomponent *ical = fctx->obj;
+        icalcomponent *ical = NULL;
 
         if (!fctx->record) return HTTP_NOT_FOUND;
 
@@ -4748,7 +4748,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             calfilter.start = partial->start;
             calfilter.end = partial->end;
 
-            if (!ical) ical = fctx->obj = icalparser_parse_string(data);
+            if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
+            ical = fctx->obj;
 
             if (!cdata->comp_flags.tzbyref) {
                 /* Strip all VTIMEZONEs */
@@ -4857,7 +4858,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         if (partial->comp) {
             /* Limit returned properties */
-            if (!ical) ical = fctx->obj = icalparser_parse_string(data);
+            if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
+            ical = fctx->obj;
             prune_properties(ical, partial->comp);
         }
 
