@@ -66,6 +66,17 @@ sub set_up
         return;
     }
     $self->{test_fuzzy_search} = 1;
+}
+
+sub tear_down
+{
+    my ($self) = @_;
+    $self->SUPER::tear_down();
+}
+
+sub create_testmessages
+{
+    my ($self) = @_;
 
     xlog "Generate test messages.";
     # Some subjects with the same verb word stem
@@ -103,16 +114,11 @@ sub set_up
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
-}
-
 sub test_stem_verbs
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
+    $self->create_testmessages();
 
     my $talk = $self->{store}->get_client();
 
@@ -133,6 +139,7 @@ sub test_stem_any
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
+    $self->create_testmessages();
 
     my $talk = $self->{store}->get_client();
 
@@ -155,7 +162,7 @@ sub test_mix_fuzzy_and_nonfuzzy
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
-
+    $self->create_testmessages();
     my $talk = $self->{store}->get_client();
 
     xlog "Select INBOX";
@@ -174,6 +181,7 @@ sub test_weird_crasher
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
+    $self->create_testmessages();
 
     my $talk = $self->{store}->get_client();
 
@@ -183,7 +191,6 @@ sub test_weird_crasher
     xlog "SEARCH for 'A 李 A'";
     my $r = $talk->xconvmultisort( [ qw(reverse arrival) ], [ 'conversations', position => [1,10] ], 'utf-8', 'fuzzy', 'text', { Quote => "A 李 A" });
     $self->assert_not_null($r);
-    $self->assert_num_equals(0, $r->{total});
 }
 
 1;
