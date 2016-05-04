@@ -1049,9 +1049,9 @@ static int apply_propfilter(struct prop_filter *propfilter,
     struct vparse_card *vcard = fctx->obj;
     struct vparse_entry myprop, *prop = NULL;
 
-    if (!propfilter->param) {
-        memset(&myprop, 0, sizeof(struct vparse_entry));
+    memset(&myprop, 0, sizeof(struct vparse_entry));
 
+    if (!propfilter->param) {
         switch (propfilter->kind) {
         case VCARD_FN_PROPERTY:
             if (cdata->fullname) myprop.v.value = (char *) cdata->fullname;
@@ -1122,8 +1122,8 @@ static int apply_propfilter(struct prop_filter *propfilter,
              match = match->next) {
 
             int n = 0;
-            const char *text =
-                prop->multivalue ? strarray_nth(prop->v.values, n) : prop->v.value;
+            const char *text = prop->multivalue ?
+                strarray_nth(prop->v.values, n) : prop->v.value;
 
             /* Test each value of this property (logical OR) */
             do {
