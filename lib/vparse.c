@@ -617,6 +617,11 @@ EXPORTED void vparse_free_card(struct vparse_card *card)
     _free_card(card);
 }
 
+EXPORTED void vparse_free_entry(struct vparse_entry *entry)
+{
+    _free_entry(entry);
+}
+
 EXPORTED void vparse_fillpos(struct vparse_state *state, struct vparse_errorpos *pos)
 {
     int l = 1;
