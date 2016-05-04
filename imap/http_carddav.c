@@ -94,6 +94,8 @@ static void my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
 
+static strarray_t partial_addrdata;
+
 static int carddav_parse_path(const char *path,
                               struct request_target_t *tgt, const char **errstr);
 
@@ -243,8 +245,8 @@ static const struct prop_entry carddav_props[] = {
       propfind_sharedurl, NULL, NULL },
 
     /* CardDAV (RFC 6352) properties */
-    { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_PRESCREEN,
-      propfind_addrdata, NULL, NULL },
+    { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
+      propfind_addrdata, NULL, &partial_addrdata },
     { "addressbook-description", NS_CARDDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
     { "supported-address-data", NS_CARDDAV, PROP_COLLECTION,
@@ -653,14 +655,33 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+static void prune_properties(struct vparse_card *vcard, strarray_t *partial)
+{
+    struct vparse_entry **entryp = &vcard->properties;
+
+    while (*entryp) {
+        struct vparse_entry *entry = *entryp;
+
+        if (strarray_find_case(partial, entry->name, 0) < 0) {
+            *entryp = entry->next;
+            entry->next = NULL; /* so free doesn't walk the chain */
+            vparse_free_entry(entry);
+        }
+        else {
+            entryp = &((*entryp)->next);
+        }
+    }
+}
+
 /* Callback to prescreen/fetch CARDDAV:address-data */
 static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop,
                              xmlNodePtr resp __attribute__((unused)),
                              struct propstat propstat[],
-                             void *rock __attribute__((unused)))
+                             void *rock)
 {
+    strarray_t *partial = (strarray_t *) rock;
     const char *data = NULL;
     size_t datalen = 0;
 
@@ -673,6 +694,46 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 
         data = fctx->msg_buf.s + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
+
+        if (strarray_size(partial)) {
+            /* Limit returned properties */
+            struct vparse_card *vcard = fctx->obj;
+
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+            prune_properties(vcard->objects, partial);
+
+            /* Create vCard data from new vcard component */
+            buf_reset(&fctx->msg_buf);
+            vparse_tobuf(vcard, &fctx->msg_buf);
+            data = buf_cstring(&fctx->msg_buf);
+            datalen = buf_len(&fctx->msg_buf);
+        }
+    }
+    else if (prop) {
+        /* Prescreen "property" request - read partial properties */
+        xmlNodePtr node;
+
+        /* Initialize partial property array to be empty */
+        strarray_init(partial);
+
+        /* Check for and parse child elements of CARDDAV:address-data */
+        for (node = xmlFirstElementChild(prop); node;
+             node = xmlNextElementSibling(node)) {
+
+            if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+                xmlChar *name = xmlGetProp(node, BAD_CAST "name");
+                if (name) {
+                    strarray_add_case(partial, (const char *) name);
+                    xmlFree(name);
+                }
+            }
+        }
+    }
+    else {
+        /* Cleanup "property" request - free partial property array */
+        strarray_fini(partial);
+
+        return 0;
     }
 
     return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
