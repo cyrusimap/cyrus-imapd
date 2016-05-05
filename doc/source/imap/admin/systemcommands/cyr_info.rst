@@ -113,4 +113,4 @@ Files
 
 See Also
 ========
-:manpage:`imapd.conf(5)`, :manpage:`cyrus.conf(5)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`

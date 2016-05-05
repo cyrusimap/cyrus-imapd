@@ -121,4 +121,4 @@ Examples
 See Also
 ========
 
-:manpage:`nntpd(8)`
+:cyrusman:`nntpd(8)`

@@ -32,7 +32,7 @@ As an example, one could imagine a set of disks configured as follows:
 Mounting a filesystem on the fast disks under
 :file:`/var/spool/imap/fast/`, and mounting a filesystem on the slow
 disks under :file:`/var/spool/imap/slow/`, you could configure the
-following in :manpage:`imapd.conf(5)`:
+following in :cyrusman:`imapd.conf(5)`:
 
 .. parsed-literal::
 

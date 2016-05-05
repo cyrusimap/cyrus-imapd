@@ -121,4 +121,4 @@ Examples
 See Also
 ========
 
-:manpage:`pop3d(8)`
+:cyrusman:`pop3d(8)`

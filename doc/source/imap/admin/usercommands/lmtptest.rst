@@ -118,4 +118,4 @@ Examples
 See Also
 ========
 
-:manpage:`lmtpd(8)`
+:cyrusman:`lmtpd(8)`

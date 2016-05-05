@@ -19,7 +19,7 @@ Description
 **timsieved** is a server that allows users to remotely manage their 
 sieve scripts kept on the server.  It accepts commands on its standard 
 input and responds on its standard output. It MUST be invoked by 
-:manpage:`master(8)` with those descriptors attached to a remote client 
+:cyrusman:`master(8)` with those descriptors attached to a remote client 
 connection.
 
 Cyrus admins who authenticate and authorize as themselves (e.g. don't
@@ -40,7 +40,7 @@ Examples
 ========
 
 **timsieved** is commonly included in the SERVICES section of
-:manpage:`cyrus.conf(5)` like so:
+:cyrusman:`cyrus.conf(5)` like so:
 
 .. parsed-literal::
     SERVICES {
@@ -64,6 +64,6 @@ Files
 See Also
 ========
 
-:manpage:`master(8)`,
-:manpage:`imapd.conf(5)`,
-:manpage:`cyrus.conf(5)`
+:cyrusman:`master(8)`,
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`cyrus.conf(5)`

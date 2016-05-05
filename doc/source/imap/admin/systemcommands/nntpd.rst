@@ -19,7 +19,7 @@ Description
 
 **nntpd** is an NNTP server. It accepts commands on its standard input
 and responds on its standard output. It MUST invoked by
-:manpage:`master(8)` with those descriptors attached to a remote client
+:cyrusman:`master(8)` with those descriptors attached to a remote client
 connection.
 
 **nntpd** |default-conf-text|  The optional ``newsprefix`` setting
@@ -93,5 +93,5 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`,
-:manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`master(8)`

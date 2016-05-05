@@ -67,7 +67,7 @@ Examples
 ..
 
         Recover databases, performing cleanup.  This is commonly used in
-        the **START** section of :manpage:`cyrus.conf(5)`.
+        the **START** section of :cyrusman:`cyrus.conf(5)`.
 
 .. only:: html
 
@@ -95,7 +95,7 @@ Examples
 ..
 
         Checkpoint databases.  Commonly used in the **EVENTS** section of
-        :manpage:`cyrus.conf(5)`.
+        :cyrusman:`cyrus.conf(5)`.
 
 .. only:: html
 
@@ -113,4 +113,4 @@ Files
 
 See Also
 ========
-:manpage:`cyrus.conf(5)`, :manpage:`imapd.conf(5)`, :manpage:`master(8)`
+:cyrusman:`cyrus.conf(5)`, :cyrusman:`imapd.conf(5)`, :cyrusman:`master(8)`

@@ -40,7 +40,7 @@ Options
     *configdirectory*/**zoneinfo**.  The database to be rebuilt will be
     in the default location of *configdirectory*/**zoneinfo.db** unless
     otherwise specified by the *zoneinfo_db_path* option in
-    :manpage:`imapd.conf(5)`.  The *version-string* should describe the
+    :cyrusman:`imapd.conf(5)`.  The *version-string* should describe the
     source of the timezone data (e.g. "Olson 2013h") and will be used
     by the *timezone* module of :manpage:`httpd(8)`.
 
@@ -63,4 +63,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`, :manpage:`httpd(8)`, :manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`, :manpage:`httpd(8)`, :cyrusman:`master(8)`

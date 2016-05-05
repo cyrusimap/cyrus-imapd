@@ -145,7 +145,7 @@ Examples
 
         Synchronize our mailboxes database with the MUPDATE server.  (One may
         commonly put a command like this into the **START** section of
-        :manpage:`cyrus.conf(5)` on backend nodes of a Murder cluster to cause
+        :cyrusman:`cyrus.conf(5)` on backend nodes of a Murder cluster to cause
         the backend to syncronize its mailbox list with the mupdate master upon
         startup).
 
@@ -203,4 +203,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`, :manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`master(8)`

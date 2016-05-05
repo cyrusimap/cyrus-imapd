@@ -23,7 +23,7 @@ MANAGESIEVE server and interactively issue commands to it. Once
 authenticated you may issue any MANAGESIEVE command by simply typing it
 in. It is capable of multiple SASL authentication mechanisms and
 handles encryption layers transparently. This utility is often used for
-testing the operation of a :manpage:`timsieved(8)` server. Also those
+testing the operation of a :cyrusman:`timsieved(8)` server. Also those
 developing MANAGESIEVE clients find it useful.
 
 Options
@@ -117,4 +117,4 @@ Examples
 See Also
 ========
 
-:manpage:`timsieved(8)`
+:cyrusman:`timsieved(8)`

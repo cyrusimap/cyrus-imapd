@@ -88,7 +88,7 @@ following::
     expunged more than 7 days ago.
 
 To use delayed deletion of mailboxes, you need the following entry in
-:manpage:`imapd.conf(5)`:
+:cyrusman:`imapd.conf(5)`:
 
 .. parsed-literal::
 
@@ -97,7 +97,7 @@ To use delayed deletion of mailboxes, you need the following entry in
 .. versionadded:: 2.3.9
 
 The default prefix for deleted mailboxes is ``DELETED`` but it probably
-doesn't hurt to specify it in :manpage:`imapd.conf(5)` as well:
+doesn't hurt to specify it in :cyrusman:`imapd.conf(5)` as well:
 
 .. parsed-literal::
 

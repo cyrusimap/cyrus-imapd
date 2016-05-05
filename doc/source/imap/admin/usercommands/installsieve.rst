@@ -87,4 +87,4 @@ History
 See Also
 ========
 
-:manpage:`sieveshell(1)`
+:cyrusman:`sieveshell(1)`

@@ -74,7 +74,7 @@ Options
 NOTES
 =====
 
-Depending on the setting of ``reject8bit`` in :manpage:`imapd.conf(5)`, deliver
+Depending on the setting of ``reject8bit`` in :cyrusman:`imapd.conf(5)`, deliver
 either rejects/accepts messages with 8-bit-set characters in the headers.
 If we accept messages with 8-bit-set characters in the headers, then depending
 on the setting of ``munge8bit``, these characters are either left un-touched
@@ -99,4 +99,4 @@ Files
 
 See Also
 ========
-:manpage:`lmtpd(8)`
+:cyrusman:`lmtpd(8)`

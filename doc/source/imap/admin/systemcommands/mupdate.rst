@@ -18,7 +18,7 @@ Description
 
 **mupdate** is the mailboxdb aggregation server.  It accepts commands 
 on its standard input and responds on its standard output.  It MUST be 
-invoked by :manpage:`master(8)` with those descriptors attached to a 
+invoked by :cyrusman:`master(8)` with those descriptors attached to a 
 remote client connection.
 
 **mupdate** |default-conf-text|
@@ -46,7 +46,7 @@ Options
 .. option:: -a
 
     [autoselect] Check ``mupdate_server`` setting in
-    :manpage:`imapd.conf(5)` to see if this is the designated master
+    :cyrusman:`imapd.conf(5)` to see if this is the designated master
     server, and act as master if this is the case.  Otherwise act as
     slave.
 
@@ -54,7 +54,7 @@ Examples
 ========
 
 **mupdate** is commonly included in the SERVICES section of
-:manpage:`cyrus.conf(5)` like so:
+:cyrusman:`cyrus.conf(5)` like so:
 
 .. parsed-literal::
     SERVICES {
@@ -79,5 +79,5 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`,
-:manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`master(8)`

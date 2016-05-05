@@ -115,7 +115,7 @@ Here's the stock version of the ``SERVICES`` section of
 
 Edit ``/etc/imapd.conf`` and change the default settings as needed.
 Please consult
-:manpage:`imapd.conf(5)` for details.
+:cyrusman:`imapd.conf(5)` for details.
 
 *   You MUST, at the very least, uncomment the ``admins:`` line.
 *   As documented in the man page, "the values ``yes``, ``on``, ``t``, ``true`` and ``1`` turn the option  on,  the  values  ``no``,  ``off``, ``f``, ``false`` and ``0`` turn the option off."
@@ -143,7 +143,7 @@ this.  Shown below are examples for \*nix password file and SASL methods:
     cyrus\@newhost.example.com: userPassword
 
 To enable
-:manpage:`saslauthd(8)`, edit ``/etc/default/saslauthd`` and set
+:cyrusman:`saslauthd(8)`, edit ``/etc/default/saslauthd`` and set
 ``START=yes``.  Make sure to change any other settings here as needed.
 
 .. Note::
@@ -153,7 +153,7 @@ To enable
     so the Postfix ``smtpd`` daemon can access it.
 
 Start
-:manpage:`saslauthd(8)` if needed:
+:cyrusman:`saslauthd(8)` if needed:
 
 .. parsed-literal::
 
@@ -161,7 +161,7 @@ Start
     * Starting SASL Authentication Daemon saslauthd              [ OK ]
 
 You should at this moment be able to authenticate against
-:manpage:`saslauthd(8)`:
+:cyrusman:`saslauthd(8)`:
 
 .. parsed-literal::
 

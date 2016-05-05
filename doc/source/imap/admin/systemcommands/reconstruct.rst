@@ -91,7 +91,7 @@ Options
 .. option:: -n
 
     Don't make any changes.  This gives equivalent behaviour to
-    :manpage:`chk_cyrus(8)` where problems are reported, but not fixed.
+    :cyrusman:`chk_cyrus(8)` where problems are reported, but not fixed.
 
 .. option:: -G
 
@@ -149,7 +149,7 @@ Options
 
     Rebuild the *mailboxes* file.  Use whatever data in the existing
     *mailboxes* file it can scavenge, then scans all partitions listed
-    in the :manpage:`imapd.conf(5)` file for additional mailboxes.
+    in the :cyrusman:`imapd.conf(5)` file for additional mailboxes.
 
 Examples
 ========
@@ -244,4 +244,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`
+:cyrusman:`imapd.conf(5)`

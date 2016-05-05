@@ -106,4 +106,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`, :manpage:`sync_client(8)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`sync_client(8)`

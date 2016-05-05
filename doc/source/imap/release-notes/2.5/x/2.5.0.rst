@@ -37,13 +37,13 @@ performing the upgrade, as the newer binaries will end up writing to
 
 You can start the server immediately after upgrading, however.
 
-Underscores in ``cmd`` Names in :manpage:`cyrus.conf(5)`
---------------------------------------------------------
+Underscores in ``cmd`` Names in :cyrusman:`cyrus.conf(5)`
+---------------------------------------------------------
 
 Underscores (the ``_`` character) are no longer allowed in the
 ``START``, ``SERVICES`` and ``EVENTS`` sections of
-:manpage:`cyrus.conf(5)`, as they interfere with configuration options
-in :manpage:`imapd.conf(5)` being prefixed by service names and an
+:cyrusman:`cyrus.conf(5)`, as they interfere with configuration options
+in :cyrusman:`imapd.conf(5)` being prefixed by service names and an
 underscore (``_``) character.
 
 Database Format Upgrade for Mailboxes
@@ -95,7 +95,7 @@ later versions.
 
 .. NOTE::
 
-    Additional options can be specified to :manpage:`reconstruct(8)` to
+    Additional options can be specified to :cyrusman:`reconstruct(8)` to
     more granularly specify which mailboxes' :file:`cyrus.index` is to
     be upgraded.
 
@@ -241,7 +241,7 @@ Allowing Undefined Annotations
 
 Cyrus IMAP 2.5.0 allows administrators to configure that undefined
 annotations should be allowed, using a new
-``annotation_allow_undefined`` setting in :manpage:`imapd.conf(5)`.
+``annotation_allow_undefined`` setting in :cyrusman:`imapd.conf(5)`.
 
 Catchall Mailbox for LMTP
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -394,7 +394,7 @@ The following *autocreate* options are now available:
 Default Change: ``delete_mode``
 -------------------------------
 
-The default for the :manpage:`imapd.conf(5)` configuration option
+The default for the :cyrusman:`imapd.conf(5)` configuration option
 ``delete_mode`` has changed from ``immediate`` to ``delayed``.
 
 This causes mail folders that are deleted by a client to not
@@ -402,11 +402,11 @@ immediately dissappear from the filesystem. Instead, they are renamed
 to a deleted namespace that is visible only to administrators.
 
 A separate job ``cyr_expire -D $x`` is to be included in the master
-service configuration file :manpage:`cyrus.conf(5)`, specifically in
+service configuration file :cyrusman:`cyrus.conf(5)`, specifically in
 the EVENTS section. ``$x`` is a number of days to keep already deleted
 folders.
 
-**Example section of :manpage:`cyrus.conf(5)`**
+**Example section of :cyrusman:`cyrus.conf(5)`**
 
     .. parsed-literal::
 
@@ -421,7 +421,7 @@ monthly (full, virtual) backup of which one might fail.
 Default Change: ``expunge_mode``
 --------------------------------
 
-The default for the :manpage:`imapd.conf(5)` configuration option
+The default for the :cyrusman:`imapd.conf(5)` configuration option
 ``expunge_mode`` has changed from ``default`` to ``delayed``.
 
 This causes the mail message files associated with messages that are
@@ -430,11 +430,11 @@ individual messages that are expunged, to not be removed from the
 filesystem directly.
 
 A separate job ``cyr_expire -X $x`` is to be included in the master
-service configuration file :manpage:`cyrus.conf(5)`, specifically in
+service configuration file :cyrusman:`cyrus.conf(5)`, specifically in
 the EVENTS section. ``$x`` is a number of days to keep the message
 files on the filesystem.
 
-**Example section of :manpage:`cyrus.conf(5)`**
+**Example section of :cyrusman:`cyrus.conf(5)`**
 
     .. parsed-literal::
 
@@ -450,7 +450,7 @@ Option Name Changes for ``ldap_tls_*``
 --------------------------------------
 
 Configuration option names for LDAP SSL/TLS configuration in
-:manpage:`imapd.conf(5)` have been changed:
+:cyrusman:`imapd.conf(5)` have been changed:
 
 **ldap_ca_dir** (was: ``ldap_tls_cacert_dir``)
 
@@ -468,7 +468,7 @@ Option Name Changes for ``tls_*``
 ---------------------------------
 
 Configuration option names for SSL/TLS configuration in
-:manpage:`imapd.conf(5)` have been changed to better reflect how
+:cyrusman:`imapd.conf(5)` have been changed to better reflect how
 they are used, as enhancements would otherwise create great confusion.
 
 **tls_client_ca_dir** (was: ``tls_ca_path``)

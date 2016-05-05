@@ -157,7 +157,7 @@ Partitions can be optionally specified as follows:
 
 
 Note that in the above example, the ``unixhierarchysep`` setting in
-:manpage:`imapd.conf(5)` is set to ``0``. When using the UNIX
+:cyrusman:`imapd.conf(5)` is set to ``0``. When using the UNIX
 hierarchy seperator, the ``/`` (forward slash) character would be
 used as the hierarchy seperator, and the example would look as
 follows:
@@ -178,7 +178,7 @@ follows:
     identifier john as the mailbox name.
 
     With the use of virtual domains, controlled through the
-    ``virtdomains`` setting in :manpage:`imapd.conf(5)`.
+    ``virtdomains`` setting in :cyrusman:`imapd.conf(5)`.
 
 .. WARNING::
 

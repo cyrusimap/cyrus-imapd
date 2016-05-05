@@ -18,7 +18,7 @@ Description
 
 **lmtpd** is an LMTP server used to deliver mail to the IMAP mailstore.
 It accepts commands on its standard input and responds on its standard
-output. It MUST be invoked by :manpage:`master(8)` with those
+output. It MUST be invoked by :cyrusman:`master(8)` with those
 descriptors attached to a remote client connection.
 
 **lmtpd** |default-conf-text|
@@ -57,7 +57,7 @@ Examples
 ========
 
 **lmtpd** is commonly included in the SERVICES section of
-:manpage:`cyrus.conf(5)` like so:
+:cyrusman:`cyrus.conf(5)` like so:
 
 .. parsed-literal::
     SERVICES {
@@ -77,5 +77,5 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`,
-:manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`master(8)`

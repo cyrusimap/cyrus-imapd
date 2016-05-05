@@ -22,7 +22,7 @@ last arrived in a user's mailbox, and how many messages are recent for
 that user.
 
 Note that for **fud** to run properly you must set ``proto=udp`` in its
-:manpage:`cyrus.conf(5)` services entry.  ``prefork=1`` is also
+:cyrusman:`cyrus.conf(5)` services entry.  ``prefork=1`` is also
 recommended.
 
 **fud** will automatically proxy any and all FUD requests to the
@@ -79,5 +79,5 @@ by a more standards-based protocol.
 See Also
 ========
 
-:manpage:`imapd.conf(5)`,
-:manpage:`cyrus.conf(5)`
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`cyrus.conf(5)`

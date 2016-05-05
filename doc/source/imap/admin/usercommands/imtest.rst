@@ -144,4 +144,4 @@ Examples
 See Also
 ========
 
-:manpage:`imapd(8)`
+:cyrusman:`imapd(8)`

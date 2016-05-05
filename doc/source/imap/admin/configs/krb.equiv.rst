@@ -40,4 +40,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`
+:cyrusman:`imapd.conf(5)`

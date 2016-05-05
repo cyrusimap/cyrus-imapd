@@ -41,8 +41,8 @@ the root of that tree.  If a mailbox does not have a
 inherit one), then no messages are expired from the mailbox.
 
 The annotation can be examined using the **info** command of
-:manpage:`cyradm(1p)`, and modified using the **mboxconfig** and
-**setinfo** commands of :manpage:`cyradm(1p)`.
+:cyrusman:`cyradm(8)`, and modified using the **mboxconfig** and
+**setinfo** commands of :cyrusman:`cyradm(8)`.
 
 Expiration of duplicate delivery database entries for a given mailbox
 is also controlled by the ``/vendor/cmu/cyrus-imapd/expire`` annotation
@@ -51,10 +51,10 @@ annotation applies to the mailbox then duplicate database entries are
 expired using the value given to the **-E** option.
 
 Expiration of conversations database entries occurs if the
-**conversations** option is present in :manpage:`imapd.conf(5)`.
+**conversations** option is present in :cyrusman:`imapd.conf(5)`.
 Expiration can be disabled using the **-c** option.  The period used to
 expire entries is controlled by the **conversations_expire_days**
-option in :manpage:`imapd.conf(5)`.
+option in :cyrusman:`imapd.conf(5)`.
 
 **cyr_expire** |default-conf-text|
 
@@ -178,4 +178,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`, :manpage:`master(8)`, :manpage:`cyradm(1p)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`master(8)`, :cyrusman:`cyradm(8)`

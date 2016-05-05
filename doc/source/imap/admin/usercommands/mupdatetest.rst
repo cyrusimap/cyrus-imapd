@@ -115,4 +115,4 @@ Examples
 See Also
 ========
 
-:manpage:`mupdate(8)`
+:cyrusman:`mupdate(8)`

@@ -35,5 +35,5 @@ Two means exist to suppress sharing folders between users:
 
 #.  Suppress the listing of the
     :ref:`imap-features-namespaces-other-users` by enabling
-    ``disable_user_namespace`` in :manpage:`imapd.conf(5)`.
+    ``disable_user_namespace`` in :cyrusman:`imapd.conf(5)`.
 

@@ -147,7 +147,7 @@ list and restore messages expunged. See the documentation on
 works.
 
 With the use of ``expunge_mode: delayed``, a regular ``EVENT`` (see
-:manpage:`cyrus.conf(5)`) is responsible for triggering
+:cyrusman:`cyrus.conf(5)`) is responsible for triggering
 :ref:`imap-admin-commands-cyr_expire`. This utility takes a parameter
 ``-X <days>`` to delete from the filesystem any messages that had been
 expunged (by the user or the IMAP client) more than ``<days>`` days ago.

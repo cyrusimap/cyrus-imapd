@@ -20,7 +20,7 @@ Description
 mailbox changes and signals the appropriate **imapd** to report the
 changes to the client.
 
-**Idled** is usually started from :manpage:`master(8)`.
+**Idled** is usually started from :cyrusman:`master(8)`.
 
 **idled** |default-conf-text|
 
@@ -37,7 +37,7 @@ Examples
 ========
 
 **idled** is commonly included in the START section of
-:manpage:`cyrus.conf(5)` like so::
+:cyrusman:`cyrus.conf(5)` like so::
 
     START {
         recover			cmd="/usr/lib/cyrus/bin/ctl_cyrusdb -r"
@@ -53,6 +53,6 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`,
-:manpage:`cyrus.conf(5)`,
-:manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`cyrus.conf(5)`,
+:cyrusman:`master(8)`

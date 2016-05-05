@@ -243,15 +243,15 @@ still have separate access control rules.
 See Also
 ========
 
-:manpage:`master(8)`,
-:manpage:`imapd(8)`,
-:manpage:`pop3d(8)`,
-:manpage:`lmtpd(8)`,
-:manpage:`timsieved(8)`,
-:manpage:`idled(8)`,
-:manpage:`notifyd(8)`,
-:manpage:`ctl_cyrusdb(8)`,
-:manpage:`ctl_deliver(8)`,
-:manpage:`tls_prune(8)`,
+:cyrusman:`master(8)`,
+:cyrusman:`imapd(8)`,
+:cyrusman:`pop3d(8)`,
+:cyrusman:`lmtpd(8)`,
+:cyrusman:`timsieved(8)`,
+:cyrusman:`idled(8)`,
+:cyrusman:`notifyd(8)`,
+:cyrusman:`ctl_cyrusdb(8)`,
+:cyrusman:`ctl_deliver(8)`,
+:cyrusman:`tls_prune(8)`,
 :manpage:`hosts_access(5)`
 

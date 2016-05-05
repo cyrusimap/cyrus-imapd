@@ -45,5 +45,5 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`,
-:manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`master(8)`

@@ -228,7 +228,7 @@ Examples
 ..
 
         The same command, supporting the ``unixhierarchysep: yes``
-        option in :manpage:`imapd.conf(5)`.
+        option in :cyrusman:`imapd.conf(5)`.
 
 Files
 =====
@@ -236,4 +236,4 @@ Files
 
 See Also
 ========
-:manpage:`imapd.conf(5)`
+:cyrusman:`imapd.conf(5)`

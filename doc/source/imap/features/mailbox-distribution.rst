@@ -27,7 +27,7 @@ Partition Selection Mode
 
 Among the partitions, how the most fitting one is selected depends on
 the configured selection mode, using the ``partition_select_mode``
-setting in :manpage:`imapd.conf(5)`.
+setting in :cyrusman:`imapd.conf(5)`.
 
 .. rubric:: Available Selection Modes
 
@@ -168,7 +168,7 @@ In that case, only one of those partitions will be selected. You may not
 know in advance which one will be: it depends of the order in which
 configured partitions are stored in memory (``hashtable``). In
 particular, it may not be the first one that appears listed in your
-:manpage:`imapd.conf(5)` configuration file.
+:cyrusman:`imapd.conf(5)` configuration file.
 
 Also note that since the selected partition will now have less free
 space, it shall not be seen as most fitting next time.
@@ -186,7 +186,7 @@ others were not configured. Cyrus IMAP uses the device id of the
 partition hierarchy for this. You may not know in advance which one will
 be: it depends of the order in which configured partitions are stored in
 memory (``hashtable``). In particular, it may not be the first one that
-appears listed in your :manpage:`imapd.conf(5)` configuration file.
+appears listed in your :cyrusman:`imapd.conf(5)` configuration file.
 
 Excluding Partitions
 --------------------
@@ -194,13 +194,13 @@ Excluding Partitions
 **partition_select_exclude**
 
     Partitions listed in the ``partition_select_exclude`` setting in
-    :manpage:`imapd.conf(5)` are permanently excluded from being
+    :cyrusman:`imapd.conf(5)` are permanently excluded from being
     selected.
 
     Listed partition's names are separated by spaces and/or commas. Only
     configured partition names (and not paths) are expected.
 
-    With the following configuration in :manpage:`imapd.conf(5)`,
+    With the following configuration in :cyrusman:`imapd.conf(5)`,
     ``parta`` and ``partb`` would be permanently excluded from being
     selected:
 

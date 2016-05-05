@@ -267,8 +267,8 @@ No known bugs.
 See Also
 ========
 
-:manpage:`cyradm(8)`,
-:manpage:`imapd(8)`,
+:cyrusman:`cyradm(8)`,
+:cyrusman:`imapd(8)`,
 :rfc:`2033` (IMAP LITERAL+ extension),
 :rfc:`2060` (IMAP4rev1 specification), and
 :manpage:`select(2)`

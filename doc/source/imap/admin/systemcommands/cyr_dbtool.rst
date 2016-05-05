@@ -88,7 +88,7 @@ is typically a Cyrus "flat" format database.
 database version number (currently 2), a list of "wildmat" patterns
 specifying Cyrus services to be denied, and a text message to be
 displayed to the user upon denial. The service names to be matched are
-those as used in :manpage:`cyrus.conf(5)`.
+those as used in :cyrusman:`cyrus.conf(5)`.
 
 .. Note::
 
@@ -153,4 +153,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`
+:cyrusman:`imapd.conf(5)`

@@ -60,7 +60,7 @@ following procedure, starting from a clean Cyrus IMAP installation:
 Example Effects of Using the Netnews Namespace Convention
 ---------------------------------------------------------
 
-In :manpage:`imapd.conf(5)`, ensure the following settings are
+In :cyrusman:`imapd.conf(5)`, ensure the following settings are
 configured:
 
 *   ``unixhierarchysep``: ``0``, to ensure the use of the **netnews**
@@ -126,7 +126,7 @@ An alternative hierarchy separator can be used to allow the use of ``.``
 (dot) characters in mailbox names: the UNIX hierarchy separator.
 
 The UNIX hierarchy separator is a ``/`` (forward slash) character, and
-is configured by setting in :manpage:`imapd.conf(5)`:
+is configured by setting in :cyrusman:`imapd.conf(5)`:
 
 *   ``unixhierarchysep: 1``
 
@@ -199,7 +199,7 @@ hierarchy separator):
 *   ``Sent Items``
 
 To configure the use of the alternative namespace, use the
-``altnamespace`` setting in :manpage:`imapd.conf(5)` and set it to
+``altnamespace`` setting in :cyrusman:`imapd.conf(5)` and set it to
 ``1``.
 
 .. NOTE::
@@ -244,7 +244,7 @@ Administrator Namespaces
 ========================
 
 An administrator -- a user for which the username is included in the
-``admins`` setting in :manpage:`imapd.conf(5)` -- has a different
+``admins`` setting in :cyrusman:`imapd.conf(5)` -- has a different
 perspective when using the IMAP protocol to perform administrative
 tasks.
 
@@ -283,7 +283,7 @@ domains be in use, the list may appear to the administrator user
 *   ``user/john/Drafts@example.org``
 *   ``user/john/Sent Items@example.org``
 
-But the ``admins`` setting in :manpage:`imapd.conf(5)` allows for a
+But the ``admins`` setting in :cyrusman:`imapd.conf(5)` allows for a
 username of ``admin@example.org`` to be specified as an administrator as
 well. Should ``admin@example.org`` take a peek, then the following list
 would appear:
@@ -368,7 +368,7 @@ in other user's personal namespaces, that have been shared with the
 current user.
 
 The other users namespace can be suppressed in LIST commands by setting
-``disable_user_namespace`` to ``1`` in :manpage:`imapd.conf(5)`. This
+``disable_user_namespace`` to ``1`` in :cyrusman:`imapd.conf(5)`. This
 can be advantageous to larger environments because of the nature of the
 :ref:`imap-features-access-control-lists-discretionary` Cyrus IMAP
 entertains by default.
@@ -403,7 +403,7 @@ Examples of shared folders could include:
 *   ``shared/webmaster@example.org``
 
 The shared namespace can be suppressed in LIST commands by setting
-``disable_shared_namespace`` to ``1`` in :manpage:`imapd.conf(5)`. This
+``disable_shared_namespace`` to ``1`` in :cyrusman:`imapd.conf(5)`. This
 can be advantageous to larger environments that want to avoid all LIST
 operations to result in very large, long lists of folders.
 

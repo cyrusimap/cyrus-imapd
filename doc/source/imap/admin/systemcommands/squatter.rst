@@ -47,7 +47,7 @@ rather than from specified mailbox(es).
 In the third synopsis, **squatter** runs in rolling mode.  In this mode
 **squatter** backgrounds itself and runs as a daemon, listening to a
 sync log channel (chosen using **-n** option, and set up using the
-*sync_log_channels* setting in :manpage:`imapd.conf(5)`).  Very soon
+*sync_log_channels* setting in :cyrusman:`imapd.conf(5)`).  Very soon
 after messages are delivered or uploaded to mailboxes **squatter** will
 incrementally index the affected mailbox.
 
@@ -180,7 +180,7 @@ Options
 Examples
 ========
 
-Sample entries from the EVENTS section of :manpage:`cyrus.conf(5)` for
+Sample entries from the EVENTS section of :cyrusman:`cyrus.conf(5)` for
 periodic **squatter** runs:
 
     ::
@@ -219,4 +219,4 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`, :manpage:`cyrus.conf(5)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`

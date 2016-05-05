@@ -19,7 +19,7 @@ Description
 
 **sync_server** is the server side of the the replication system.  It
 runs on the target (replica) system and listens for connections from
-:manpage:`sync_client(8)` which provides instructions for synchronizing
+:cyrusman:`sync_client(8)` which provides instructions for synchronizing
 the replica system with the master system.
 
 **sync_server** |default-conf-text|
@@ -43,7 +43,7 @@ Examples
 ========
 
 **sync_server** is commonly included in the SERVICES section of
-:manpage:`cyrus.conf(5)` like so:
+:cyrusman:`cyrus.conf(5)` like so:
 
 .. parsed-literal::
     SERVICES {
@@ -68,6 +68,6 @@ Files
 See Also
 ========
 
-:manpage:`sync_client(8)`,
-:manpage:`imapd.conf(5)`,
-:manpage:`cyrus.conf(5)`
+:cyrusman:`sync_client(8)`,
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`cyrus.conf(5)`

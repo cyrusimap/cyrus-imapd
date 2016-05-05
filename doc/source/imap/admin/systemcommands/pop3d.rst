@@ -19,7 +19,7 @@ Description
 
 **pop3d** is an POP3 server.  It accepts commands on its standard
 input and responds on its standard output.  It MUST be invoked by
-:manpage:`master(8)` with those descriptors attached to a remote client
+:cyrusman:`master(8)` with those descriptors attached to a remote client
 connection.
 
 **pop3d** |default-conf-text|
@@ -74,7 +74,7 @@ Examples
 ========
 
 **pop3d** is commonly included in the SERVICES section of
-:manpage:`cyrus.conf(5)` like so:
+:cyrusman:`cyrus.conf(5)` like so:
 
 .. parsed-literal::
     SERVICES {
@@ -96,5 +96,5 @@ Files
 See Also
 ========
 
-:manpage:`imapd.conf(5)`,
-:manpage:`master(8)`
+:cyrusman:`imapd.conf(5)`,
+:cyrusman:`master(8)`
