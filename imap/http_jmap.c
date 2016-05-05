@@ -77,6 +77,7 @@
 #include "stristr.h"
 #include "times.h"
 #include "util.h"
+#include "vcard_support.h"
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -4023,25 +4024,16 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 
     crock->rows++;
 
-    /* XXX - this could definitely be refactored from here and mailbox.c */
-    struct buf msg_buf = BUF_INITIALIZER;
-    struct vparse_state vparser;
     struct vparse_entry *ventry = NULL;
 
     /* Load message containing the resource and parse vcard data */
-    r = mailbox_map_record(crock->mailbox, &record, &msg_buf);
-    if (r) return r;
-
-    memset(&vparser, 0, sizeof(struct vparse_state));
-    vparser.base = buf_cstring(&msg_buf) + record.header_size;
-    r = vparse_parse(&vparser, 0);
-    buf_free(&msg_buf);
-    if (r) return r;
-    if (!vparser.card || !vparser.card->objects) {
-        vparse_free(&vparser);
-        return r;
+    struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
+    if (!vcard || !vcard->objects) {
+        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+                cdata->dav.imap_uid, crock->mailbox->name);
+        vparse_free_card(vcard);
+        return IMAP_INTERNAL;
     }
-    struct vparse_card *vcard = vparser.card->objects;
 
     json_t *obj = json_pack("{}");
 
@@ -4055,7 +4047,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 
     _add_xhref(obj, cdata->dav.mailbox, cdata->dav.resource);
 
-    for (ventry = vcard->properties; ventry; ventry = ventry->next) {
+    for (ventry = vcard->objects->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
 
@@ -4088,7 +4080,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 
     json_array_append_new(crock->array, obj);
 
-    vparse_free(&vparser);
+    vparse_free_card(vcard);
 
     return 0;
 }
@@ -4637,9 +4629,6 @@ static int setContactGroups(struct jmap_req *req)
                 json_object_del(arg, "addressbookId");
             }
 
-            /* XXX - this could definitely be refactored from here and mailbox.c */
-            struct buf msg_buf = BUF_INITIALIZER;
-            struct vparse_state vparser;
             struct index_record record;
 
             r = mailbox_find_index_record(mailbox,
@@ -4650,28 +4639,18 @@ static int setContactGroups(struct jmap_req *req)
             }
 
             /* Load message containing the resource and parse vcard data */
-            r = mailbox_map_record(mailbox, &record, &msg_buf);
-            if (r) {
-                free(resource);
-                goto done;
-            }
-
-            memset(&vparser, 0, sizeof(struct vparse_state));
-            vparser.base = buf_cstring(&msg_buf) + record.header_size;
-            vparse_set_multival(&vparser, "adr");
-            vparse_set_multival(&vparser, "org");
-            vparse_set_multival(&vparser, "n");
-            r = vparse_parse(&vparser, 0);
-            buf_free(&msg_buf);
-            if (r || !vparser.card || !vparser.card->objects) {
+            struct vparse_card *vcard = record_to_vcard(mailbox, &record);
+            if (!vcard || !vcard->objects) {
+                syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+                       cdata->dav.imap_uid, mailbox->name);
                 json_t *err = json_pack("{s:s}", "type", "parseError");
                 json_object_set_new(notUpdated, uid, err);
-                vparse_free(&vparser);
+                vparse_free_card(vcard);
                 mailbox_close(&newmailbox);
                 free(resource);
                 continue;
             }
-            struct vparse_card *card = vparser.card->objects;
+            struct vparse_card *card = vcard->objects;
 
             json_t *namep = json_object_get(arg, "name");
             if (namep) {
@@ -4680,7 +4659,7 @@ static int setContactGroups(struct jmap_req *req)
                     json_t *err = json_pack("{s:s}",
                                             "type", "invalidArguments");
                     json_object_set_new(notUpdated, uid, err);
-                    vparse_free(&vparser);
+                    vparse_free_card(vcard);
                     mailbox_close(&newmailbox);
                     free(resource);
                     continue;
@@ -4709,7 +4688,7 @@ static int setContactGroups(struct jmap_req *req)
                 json_t *err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notUpdated, uid, err);
-                vparse_free(&vparser);
+                vparse_free_card(vcard);
                 mailbox_close(&newmailbox);
                 free(resource);
                 continue;
@@ -4725,7 +4704,7 @@ static int setContactGroups(struct jmap_req *req)
                 r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox);
             mailbox_close(&newmailbox);
 
-            vparse_free(&vparser);
+            vparse_free_card(vcard);
             free(resource);
             if (r) goto done;
 
@@ -5339,33 +5318,21 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
     crock->rows++;
 
-    /* XXX - this could definitely be refactored from here and mailbox.c */
-    struct buf msg_buf = BUF_INITIALIZER;
-    struct vparse_state vparser;
-
     /* Load message containing the resource and parse vcard data */
-    r = mailbox_map_record(crock->mailbox, &record, &msg_buf);
-    if (r) return r;
-
-    memset(&vparser, 0, sizeof(struct vparse_state));
-    vparser.base = buf_cstring(&msg_buf) + record.header_size;
-    vparse_set_multival(&vparser, "adr");
-    vparse_set_multival(&vparser, "org");
-    vparse_set_multival(&vparser, "n");
-    r = vparse_parse(&vparser, 0);
-    buf_free(&msg_buf);
-    if (r || !vparser.card || !vparser.card->objects) {
-        vparse_free(&vparser);
-        return r;
+    struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
+    if (!vcard || !vcard->objects) {
+        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+                cdata->dav.imap_uid, crock->mailbox->name);
+        vparse_free_card(vcard);
+        return IMAP_INTERNAL;
     }
-    struct vparse_card *card = vparser.card->objects;
 
     /* Convert the VCARD to a JMAP contact. */
-    json_t *obj = jmap_contact_from_vcard(card, cdata, &record,
+    json_t *obj = jmap_contact_from_vcard(vcard->objects, cdata, &record,
                                           crock->props, crock->mailbox->name);
     json_array_append_new(crock->array, obj);
 
-    vparse_free(&vparser);
+    vparse_free_card(vcard);
 
     return 0;
 }
@@ -5781,29 +5748,21 @@ static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
     if (r) goto done;
 
     /* Load contact from record. */
-    struct vparse_state vparser;
-    struct buf buf = BUF_INITIALIZER;
-
-    r = mailbox_map_record(crock->mailbox, &record, &buf);
-    if (r) goto done;
-    memset(&vparser, 0, sizeof(struct vparse_state));
-    vparser.base = buf_cstring(&buf) + record.header_size;
-    vparse_set_multival(&vparser, "adr");
-    vparse_set_multival(&vparser, "org");
-    vparse_set_multival(&vparser, "n");
-    r = vparse_parse(&vparser, 0);
-    buf_free(&buf);
-    if (r || !vparser.card || !vparser.card->objects) {
-        vparse_free(&vparser);
+    struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
+    if (!vcard || !vcard->objects) {
+        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+                cdata->dav.imap_uid, crock->mailbox->name);
+        vparse_free_card(vcard);
+        r = IMAP_INTERNAL;
         goto done;
     }
 
     /* Convert the VCARD to a JMAP contact. */
     /* XXX If this conversion turns out to waste too many cycles, then first
      * initialize props with any non-NULL field in filter f or its subconditions. */
-    contact = jmap_contact_from_vcard(vparser.card->objects, cdata, &record,
-                                              NULL /* props */, crock->mailbox->name);
-    vparse_free(&vparser);
+    contact = jmap_contact_from_vcard(vcard->objects, cdata, &record,
+                                      NULL /* props */, crock->mailbox->name);
+    vparse_free_card(vcard);
 
     /* Match the contact against the filter and update statistics. */
     struct contact_filter_rock cfrock;
@@ -6664,16 +6623,9 @@ static int setContacts(struct jmap_req *req)
                 json_object_del(arg, "addressbookId");
             }
 
-            /* XXX - this could definitely be refactored from here and mailbox.c */
-            struct buf msg_buf = BUF_INITIALIZER;
-            struct vparse_state vparser;
             struct index_record record;
 
             r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-            if (r) goto done;
-
-            /* Load message containing the resource and parse vcard data */
-            r = mailbox_map_record(mailbox, &record, &msg_buf);
             if (r) goto done;
 
             strarray_t *flags =
@@ -6681,25 +6633,22 @@ static int setContacts(struct jmap_req *req)
             struct entryattlist *annots =
                 mailbox_extract_annots(mailbox, &record);
 
-            memset(&vparser, 0, sizeof(struct vparse_state));
-            vparser.base = buf_cstring(&msg_buf) + record.header_size;
-            vparse_set_multival(&vparser, "adr");
-            vparse_set_multival(&vparser, "org");
-            vparse_set_multival(&vparser, "n");
-            r = vparse_parse(&vparser, 0);
-            buf_free(&msg_buf);
-            if (r || !vparser.card || !vparser.card->objects) {
+            /* Load message containing the resource and parse vcard data */
+            struct vparse_card *vcard = record_to_vcard(mailbox, &record);
+            if (!vcard || !vcard->objects) {
+                syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+                       cdata->dav.imap_uid, mailbox->name);
                 r = 0;
                 json_t *err = json_pack("{s:s}", "type", "parseError");
                 json_object_set_new(notUpdated, uid, err);
-                vparse_free(&vparser);
+                vparse_free_card(vcard);
                 strarray_free(flags);
                 freeentryatts(annots);
                 mailbox_close(&newmailbox);
                 free(resource);
                 continue;
             }
-            struct vparse_card *card = vparser.card->objects;
+            struct vparse_card *card = vcard->objects;
 
             json_t *invalid = json_pack("[]");
 
@@ -6734,7 +6683,7 @@ static int setContacts(struct jmap_req *req)
                 }
                 json_decref(invalid);
                 json_object_set_new(notUpdated, uid, err);
-                vparse_free(&vparser);
+                vparse_free_card(vcard);
                 strarray_free(flags);
                 freeentryatts(annots);
                 mailbox_close(&newmailbox);
@@ -6755,7 +6704,7 @@ static int setContacts(struct jmap_req *req)
             strarray_free(flags);
             freeentryatts(annots);
 
-            vparse_free(&vparser);
+            vparse_free_card(vcard);
             free(resource);
 
             if (r) goto done;
