@@ -81,6 +81,8 @@
 #include "caldav_alarm.h"
 #include "carddav_db.h"
 #include "webdav_db.h"
+#include "ical_support.h"
+#include "vcard_support.h"
 #endif /* WITH_DAV */
 #include "crc32.h"
 #include "md5.h"
@@ -103,7 +105,6 @@
 #include "statuscache.h"
 #include "strarray.h"
 #include "sync_log.h"
-#include "vparse.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -2942,21 +2943,14 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         r = carddav_write(carddavdb, cdata);
     }
     else {
-        struct buf msg_buf = BUF_INITIALIZER;
-        struct vparse_state vparser;
-        int vr;
-
         /* Load message containing the resource and parse vcard data */
-        r = mailbox_map_record(mailbox, new, &msg_buf);
-        if (r) goto done;
+        struct vparse_card *vcard = record_to_vcard(mailbox, new);
 
-        memset(&vparser, 0, sizeof(struct vparse_state));
-        vparser.base = buf_cstring(&msg_buf) + new->header_size;
-        vr = vparse_parse(&vparser, 0);
-        buf_free(&msg_buf);
-        if (vr) goto done; // XXX report error
-        if (!vparser.card || !vparser.card->objects) {
-            vparse_free(&vparser);
+        if (!vcard || !vcard->objects) {
+            syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+                   cdata->dav.imap_uid, mailbox->name);
+            r = IMAP_MAILBOX_BADFORMAT; // XXX better error?
+            vparse_free_card(vcard);
             goto done;
         }
 
@@ -2970,9 +2964,9 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         if (!cdata->dav.creationdate)
             cdata->dav.creationdate = new->internaldate;
 
-        r = carddav_writecard(carddavdb, cdata, vparser.card->objects);
+        r = carddav_writecard(carddavdb, cdata, vcard->objects);
 
-        vparse_free(&vparser);
+        vparse_free_card(vcard);
     }
 
 done:
@@ -3061,15 +3055,12 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         r = caldav_write(caldavdb, cdata);
     }
     else {
-        struct buf msg_buf = BUF_INITIALIZER;
-        icalcomponent *ical = NULL;
+        /* Load message containing the resource and parse ical data */
+        icalcomponent *ical = record_to_ical(mailbox, new, NULL);
 
-        r = mailbox_map_record(mailbox, new, &msg_buf);
-        if (r) goto done;
-
-        ical = icalparser_parse_string(buf_cstring(&msg_buf) + new->header_size);
-        buf_free(&msg_buf);
         if (!ical) {
+            syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
+                   cdata->dav.imap_uid, mailbox->name);
             r = IMAP_MAILBOX_BADFORMAT; // XXX better error?
             goto done;
         }
