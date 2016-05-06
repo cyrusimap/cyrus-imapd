@@ -1909,7 +1909,7 @@ void sched_deliver(const char *recipient, void *data, void *rock)
 /*
  * sched_request/reply() helper function
  *
- * Update DTSTAMP, remove VALARMs,
+ * Update DTSTAMP, remove VALARMs, remove SCHEDULE-* parameters
  */
 static void clean_component(icalcomponent *comp)
 {
@@ -1917,13 +1917,12 @@ static void clean_component(icalcomponent *comp)
     icalproperty *prop;
 
     /* Replace DTSTAMP on component */
-    prop = icalcomponent_get_first_property(comp,
-                                            ICAL_DTSTAMP_PROPERTY);
-    icalcomponent_remove_property(comp, prop);
-    icalproperty_free(prop);
-    prop =
-        icalproperty_new_dtstamp(icaltime_current_time_with_zone(utc_zone));
-    icalcomponent_add_property(comp, prop);
+    prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
+    if (!prop) {
+        prop = icalproperty_new(ICAL_DTSTAMP_PROPERTY);
+        icalcomponent_add_property(comp, prop);
+    }
+    icalproperty_set_dtstamp(prop, icaltime_current_time_with_zone(utc_zone));
 
     /* Remove any VALARM components */
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
@@ -1940,6 +1939,7 @@ static void clean_component(icalcomponent *comp)
     icalproperty_remove_parameter_by_name(prop, "SCHEDULE-AGENT");
     icalproperty_remove_parameter_by_name(prop, "SCHEDULE-FORCE-SEND");
 
+    /* Remove CalDAV Scheduling parameters from attendees */
     for (prop = icalcomponent_get_first_invitee(comp);
          prop;
          prop = icalcomponent_get_next_invitee(comp)) {
