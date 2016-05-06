@@ -2379,7 +2379,8 @@ static void schedule_sub_updates(const char *attendee, icalcomponent *oldical, i
             }
         }
 
-        int is_update = !!find_attendee(oldcomp, attendee);
+        int is_update = !!find_attendee(oldcomp, attendee) ||
+                        !!find_attendee(master, attendee);
 
         /* we need to send an update for this recurrence */
         icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
