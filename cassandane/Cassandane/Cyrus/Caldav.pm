@@ -1819,7 +1819,7 @@ ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-    $self->assert_caldav_notified();
+    $self->{instance}->getnotify();
     eval { $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "updated event"); };
 ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
@@ -1838,7 +1838,7 @@ ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-    $self->assert_caldav_notified();
+    $self->{instance}->getnotify();
     eval { $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF); };
 ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
@@ -1923,7 +1923,7 @@ ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=YES:MAILTO:cassandane\@example.
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-    $self->assert_caldav_notified();
+    $self->{instance}->getnotify();
     $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
@@ -1942,7 +1942,7 @@ ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=YES:MAILTO:cassandane\@example.
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-    $self->assert_caldav_notified();
+    $self->{instance}->getnotify();
     $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
@@ -1959,7 +1959,7 @@ ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=YES:MAILTO:cassandane\@example.
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-    $self->assert_caldav_notified();
+    $self->{instance}->getnotify();
     $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
