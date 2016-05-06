@@ -104,6 +104,11 @@ sub _all_keys_match
     }
 
     unless ($ref) {
+        unless (defined $a) {
+            return 1 unless defined $b;
+            return 0;
+        }
+        return 0 unless defined $b;
         if (lc $a ne lc $b) {
             push @$errors, "not equal $a / $b";
             return 0;
@@ -1236,15 +1241,14 @@ BEGIN:VEVENT
 CREATED:20150701T234328Z
 UID:$uuid
 RECURRENCE-ID:20160608T053000Z
-DTEND;TZID=Australia/Melbourne:20160601T183000
+DTEND;TZID=Australia/Melbourne:20160608T183000
 TRANSP:OPAQUE
-SUMMARY:An Event with a friend
-DTSTART;TZID=Australia/Melbourne:20160601T153000
+SUMMARY:An Event with a different friend
+DTSTART;TZID=Australia/Melbourne:20160608T153000
 DTSTAMP:20150806T234327Z
 SEQUENCE:1
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
-ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 END:VEVENT
@@ -1255,9 +1259,61 @@ EOF
   $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
   $self->assert_caldav_notified(
-   { recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST' },
-   { recipient => "test2\@example.com", is_update => JSON::true, method => 'REQUEST' },
-   { recipient => "test3\@example.com", is_update => JSON::false, method => 'REQUEST' },
+   { recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST',
+        event => {
+            uid => $uuid,
+            organizer => { email => "cassandane\@example.com" },
+            exceptions => {
+                '2016-06-08T15:30:00' => {
+                    summary => "An Event with a different friend",
+                    attendees => [
+                        { email => "cassandane\@example.com" },
+                        { email => "test1\@example.com" },
+                        { email => "test3\@example.com" },
+                    ],
+                },
+            },
+            start => '2016-06-01T15:30:00',
+            end => '2016-06-01T18:30:00',
+            summary => "An Event just us",
+            attendees => [
+                { email => "cassandane\@example.com" },
+                { email => "test1\@example.com" },
+                { email => "test2\@example.com" },
+            ],
+        },
+   },
+   { recipient => "test2\@example.com", is_update => JSON::true, method => 'REQUEST',
+        event => {
+            uid => $uuid,
+            organizer => { email => "cassandane\@example.com" },
+            exceptions => {
+                '2016-06-08T15:30:00' => undef,
+            },
+            start => '2016-06-01T15:30:00',
+            end => '2016-06-01T18:30:00',
+            summary => "An Event just us",
+            attendees => [
+                { email => "cassandane\@example.com" },
+                { email => "test1\@example.com" },
+                { email => "test2\@example.com" },
+            ],
+        },
+   },
+   { recipient => "test3\@example.com", is_update => JSON::false, method => 'REQUEST',
+        event => {
+            uid => $uuid,
+            organizer => { email => "cassandane\@example.com" },
+            attendees => [
+                { email => "cassandane\@example.com" },
+                { email => "test1\@example.com" },
+                { email => "test3\@example.com" },
+            ],
+            start => '2016-06-08T15:30:00',
+            end => '2016-06-08T18:30:00',
+            summary => "An Event with a different friend",
+        },
+   },
   );
 }
 
@@ -1966,6 +2022,47 @@ ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 EOF
     $self->assert_caldav_notified();
+  }
+}
+
+sub test_attendee_exdate
+{
+  my ($self) = @_;
+  my $CalDAV = $self->{caldav};
+
+  my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
+  $self->assert_not_null($CalendarId);
+
+  xlog "recurring event";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+RRULE:FREQ=WEEKLY
+ORGANIZER:MAILTO:test1\@example.com
+EOF
+    $self->{instance}->getnotify();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER:MAILTO:test1\@example.com
+RRULE:FREQ=WEEKLY
+EXDATE;TZID=Australia/Melbourne:20160608T153000
+EOF
+
+    # should this send a PARTSTAT=DECLINED instead? 
+    $self->assert_caldav_notified(
+      {
+        recipient => "test1\@example.com",
+        method => 'REPLY',
+        event => {
+            uid => $uuid,
+            organizer => { email => "test1\@example.com" },
+            exceptions => { '2016-06-08T15:30:00' => undef },
+        },
+      },
+    );
   }
 }
 
