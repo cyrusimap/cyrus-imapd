@@ -2097,7 +2097,6 @@ static int has_exdate(icalcomponent *ical, struct icaltimetype test)
         icalcomponent_get_first_property(ical, ICAL_EXDATE_PROPERTY);
     for (; prop;
          prop = icalcomponent_get_next_property(ical, ICAL_EXDATE_PROPERTY)) {
-        /* we're going to have to send these if they're new */
         struct icaltimetype exdate = icalproperty_get_exdate(prop);
         if (!icaltime_compare(exdate, test)) return 1;
     }
