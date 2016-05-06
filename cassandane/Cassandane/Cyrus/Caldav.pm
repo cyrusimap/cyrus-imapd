@@ -2066,4 +2066,96 @@ EOF
   }
 }
 
+sub test_remove_oneattendee_recurring
+{
+  my ($self) = @_;
+  my $CalDAV = $self->{caldav};
+
+  my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
+  $self->assert_not_null($CalendarId);
+
+  xlog "recurring event";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+RRULE:FREQ=WEEKLY
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+EOF
+    $self->{instance}->getnotify();
+    my $overrides = <<EOF;
+BEGIN:VEVENT
+CREATED:20150701T234327Z
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+UID:$uuid
+RECURRENCE-ID:20160608T153000
+DTEND;TZID=Australia/Melbourne:20160608T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160608T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:1
+END:VEVENT
+EOF
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, overrides => $overrides);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+RRULE:FREQ=WEEKLY
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+EOF
+
+    $self->assert_caldav_notified(
+       {
+         method => 'REQUEST',
+         recipient => "test1\@example.com",
+         is_update => JSON::true,
+         event => {
+           start => '2016-06-08T15:30:00',
+           attendees => [
+             { email => "cassandane\@example.com" },
+             { email => "test1\@example.com" },
+             { email => "test3\@example.com" },
+           ],
+         },
+       },
+       {
+         method => 'REQUEST',
+         recipient => "test2\@example.com",
+         is_update => JSON::true,
+         event => {
+           start => '2016-06-01T15:30:00',
+           exceptions => { '2016-06-08T15:30:00' => undef },
+           attendees => [
+             { email => "cassandane\@example.com" },
+             { email => "test1\@example.com" },
+             { email => "test2\@example.com" },
+             { email => "test3\@example.com" },
+           ],
+         },
+       },
+       {
+         method => 'REQUEST',
+         recipient => "test3\@example.com",
+         is_update => JSON::true,
+         event => {
+           start => '2016-06-08T15:30:00',
+           attendees => [
+             { email => "cassandane\@example.com" },
+             { email => "test1\@example.com" },
+             { email => "test3\@example.com" },
+           ],
+         },
+       },
+    );
+  }
+}
+
 1;
