@@ -313,6 +313,24 @@ EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void 
       }
 }
 
+EXPORTED strarray_t *hash_keys(hash_table *table)
+{
+    unsigned i;
+    bucket *temp;
+
+    strarray_t *sa = strarray_new();
+
+    for (i = 0; i < table->size; i++) {
+        temp = (table->table)[i];
+        while (temp) {
+            strarray_append(sa, temp->key);
+            temp = temp->next;
+        }
+    }
+
+    return sa;
+}
+
 EXPORTED int hash_numrecords(hash_table *table)
 {
     unsigned i;

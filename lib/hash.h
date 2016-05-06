@@ -4,6 +4,7 @@
 
 #include <stddef.h>           /* For size_t     */
 #include "mpool.h"
+#include "strarray.h"
 
 #define HASH_TABLE_INITIALIZER {0, NULL, NULL}
 
@@ -76,6 +77,9 @@ void *hash_del(const char *key,hash_table *table);
 
 void hash_enumerate(hash_table *table,void (*func)(const char *,void *,void *),
                     void *rock);
+
+/* gets all the keys from the hashtable */
+strarray_t *hash_keys(hash_table *table);
 
 /* counts the number of nodes in the hash table */
 
