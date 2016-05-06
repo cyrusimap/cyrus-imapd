@@ -2766,12 +2766,9 @@ static void schedule_sub_replies(const char *attendee,
 }
 
 /* we've already tested that master does NOT contain this attendee */
-static void schedule_full_decline(const char *attendee,
+static void schedule_full_decline(const char *attendee, icalcomponent *mastercomp,
                                   icalcomponent *oldical, icalcomponent *newical)
 {
-    icalcomponent *mastercomp = find_attended_component(oldical, "", attendee);
-    if (!mastercomp) return;
-
     const char *organizer = get_organizer(mastercomp);
     if (!organizer) return;
 
@@ -2817,12 +2814,9 @@ static void schedule_full_decline(const char *attendee,
 }
 
 /* we've already tested that master contains this attendee */
-static void schedule_full_reply(const char *attendee,
+static void schedule_full_reply(const char *attendee, icalcomponent *mastercomp,
                                 icalcomponent *oldical, icalcomponent *newical)
 {
-    icalcomponent *mastercomp = find_attended_component(newical, "", attendee);
-    if (!mastercomp) return;
-
     const char *organizer = get_organizer(mastercomp);
     if (!organizer) return;
 
@@ -2938,15 +2932,16 @@ void sched_reply(const char *userid, const char *attendee,
     }
 
     /* case: this attendee is attending the master event */
-    if (find_attended_component(newical, "", attendee)) {
-        schedule_full_reply(attendee, oldical, newical);
+    icalcomponent *mastercomp;
+    if ((mastercomp = find_attended_component(newical, "", attendee))) {
+        schedule_full_reply(attendee, mastercomp, oldical, newical);
         return;
     }
 
     /* otherwise we need to cancel for each sub event and then we'll still
      * send the updates if any */
-    if (find_attended_component(oldical, "", attendee)) {
-        schedule_full_decline(attendee, oldical, newical);
+    if ((mastercomp = find_attended_component(oldical, "", attendee))) {
+        schedule_full_decline(attendee, mastercomp, oldical, newical);
     }
     else {
         schedule_sub_declines(attendee, oldical, newical);
