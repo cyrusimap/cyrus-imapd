@@ -2008,16 +2008,15 @@ static void add_attendees(icalcomponent *ical, const char *organizer, strarray_t
 {
     if (!ical) return;
 
-    icalcomponent *master = icalcomponent_get_first_real_component(ical);
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
 
     /* if no organizer, this isn't a scheduling resource, so nothing else to do */
-    if (!icalcomponent_get_first_property(master, ICAL_ORGANIZER_PROPERTY))
+    if (!icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY))
         return;
 
-    icalcomponent_kind kind = icalcomponent_isa(master);
-    icalcomponent *comp;
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    for (comp = master; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
         icalproperty *prop;
         icalparameter *param;
         for (prop = icalcomponent_get_first_invitee(comp);
@@ -2047,12 +2046,9 @@ static icalproperty *find_attendee(icalcomponent *comp, const char *match)
 {
     if (!comp) return NULL;
 
-    icalproperty *prop;
+    icalproperty *prop = icalcomponent_get_first_invitee(comp);
 
-    for (prop = icalcomponent_get_first_invitee(comp);
-        prop;
-        prop = icalcomponent_get_next_invitee(comp)) {
-
+    for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
         const char *attendee = icalproperty_get_invitee(prop);
         if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
@@ -2074,12 +2070,11 @@ static icalcomponent *find_component(icalcomponent *ical, const char *match)
 {
     if (!ical) return NULL;
 
-    icalcomponent *master = icalcomponent_get_first_real_component(ical);
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
 
-    icalcomponent_kind kind = icalcomponent_isa(master);
-    icalcomponent *comp;
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    for (comp = master; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
         icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
         const char *recurid = "";
         if (prop) recurid = icalproperty_get_value_as_string(prop);
@@ -2101,10 +2096,8 @@ static int has_exdate(icalcomponent *ical, struct icaltimetype test)
 {
     if (!ical) return 0;
 
-    icalproperty *prop;
-    for (prop = icalcomponent_get_first_property(ical, ICAL_EXDATE_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(ical, ICAL_EXDATE_PROPERTY)) {
+    icalproperty *prop = icalcomponent_get_first_property(ical, ICAL_EXDATE_PROPERTY);
+    for (; prop; prop = icalcomponent_get_next_property(ical, ICAL_EXDATE_PROPERTY)) {
         /* we're going to have to send these if they're new */
         struct icaltimetype exdate = icalproperty_get_exdate(prop);
         if (!icaltime_compare(exdate, test)) return 1;
@@ -2231,25 +2224,21 @@ static void schedule_set_exdate(icalcomponent *master, icalcomponent *this)
 static void update_attendee_status(icalcomponent *ical, const char *onrecurid,
                                    const char *onattendee, const char *status)
 {
-    icalcomponent *master = icalcomponent_get_first_real_component(ical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    icalcomponent *comp;
-    icalproperty *prop;
-    for (comp = master; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
         if (onrecurid) {
             /* this recurrenceid is attended by this attendee in the new data?
             * there's nothing to cancel */
-            prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+            icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
             const char *recurid = "";
             if (prop) recurid = icalproperty_get_value_as_string(prop);
             if (strcmp(recurid, onrecurid)) continue;
         }
 
-        for (prop = icalcomponent_get_first_invitee(comp);
-            prop;
-            prop = icalcomponent_get_next_invitee(comp)) {
-
+        icalproperty *prop = icalcomponent_get_first_invitee(comp);
+        for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
             const char *attendee = icalproperty_get_invitee(prop);
             if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
@@ -2265,31 +2254,34 @@ static void update_attendee_status(icalcomponent *ical, const char *onrecurid,
 /* we've already tested that master contains this attendee */
 static void schedule_full_cancel(const char *attendee, icalcomponent *oldical, icalcomponent *newical)
 {
+    icalcomponent *mastercomp = find_attended_component(oldical, "", attendee);
+    if (!mastercomp) return;
+
     /* we need to send a cancel for all matching recurrences with exdates */
     icalcomponent *itip = make_itip(ICAL_METHOD_CANCEL, oldical);
 
-    icalcomponent *master = icalcomponent_get_first_real_component(oldical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+    clean_component(mastercopy);
+    icalcomponent_add_component(itip, mastercopy);
 
-    icalcomponent *mastercopy = NULL;
-    icalcomponent *comp;
-    icalproperty *prop;
-    for (comp = master; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+    icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+
+    for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue; /* skip master */
+        const char *recurid = icalproperty_get_value_as_string(prop);
+
         /* non matching are exdates on the master */
         if (!find_attendee(comp, attendee)) {
             schedule_set_exdate(mastercopy, comp);
             continue;
         }
 
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
         icalcomponent *newcomp = find_attended_component(newical, recurid, attendee);
         if (newcomp) continue; /* will be scheduled separately */
 
         icalcomponent *copy = icalcomponent_new_clone(comp);
-        if (comp == master) mastercopy = copy;
-
         clean_component(copy);
         icalcomponent_add_component(itip, copy);
     }
@@ -2305,21 +2297,20 @@ static void schedule_sub_cancels(const char *attendee, icalcomponent *oldical, i
 {
     if (!oldical) return;
 
-    icalcomponent *master = icalcomponent_get_first_real_component(oldical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    icalcomponent *comp;
+    for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        const char *recurid = icalproperty_get_value_as_string(prop);
 
-    for (comp = master; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
         /* we're not attending, there's nothing to cancel */
         if (!find_attendee(comp, attendee))
             continue;
 
         /* this recurrenceid is attended by this attendee in the new data?
          * there's nothing to cancel */
-        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
         if (find_attended_component(newical, recurid, attendee))
             continue;
 
@@ -2350,22 +2341,22 @@ static void schedule_sub_updates(const char *attendee, icalcomponent *oldical, i
 {
     if (!newical) return;
 
-    icalcomponent *master = icalcomponent_get_first_real_component(newical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
 
-    icalcomponent *comp;
-    icalproperty *prop;
+    icalcomponent *comp = icalcomponent_get_first_real_component(newical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    for (comp = master; comp; comp = icalcomponent_get_next_component(newical, kind)) {
+    for (; comp; comp = icalcomponent_get_next_component(newical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        const char *recurid = icalproperty_get_value_as_string(prop);
+
         /* we're not attending, nothing to do */
         icalproperty *att = find_attendee(comp, attendee);
         if (!att) continue;
         icalparameter_scheduleforcesend force_send = get_forcesend(att);
 
         /* this recurrenceid is attended by this attendee in the old data? */
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
         icalcomponent *oldcomp = find_attended_component(oldical, recurid, attendee);
 
         icalcomponent *copy = icalcomponent_new_clone(comp);
@@ -2379,8 +2370,8 @@ static void schedule_sub_updates(const char *attendee, icalcomponent *oldical, i
             }
         }
 
-        int is_update = !!find_attendee(oldcomp, attendee) ||
-                        !!find_attendee(master, attendee);
+        int is_update = oldcomp ? !!find_attendee(oldcomp, attendee) :
+                                  !!find_attendee(oldmaster, attendee);
 
         /* we need to send an update for this recurrence */
         icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
@@ -2399,35 +2390,51 @@ static void schedule_sub_updates(const char *attendee, icalcomponent *oldical, i
 /* we've already tested that master does contain this attendee */
 static void schedule_full_update(const char *attendee, icalcomponent *oldical, icalcomponent *newical)
 {
+    icalcomponent *mastercomp = find_attended_component(newical, "", attendee);
+    if (!mastercomp) return;
+
     /* create an itip for the complete event */
     icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
 
-    icalcomponent *master = icalcomponent_get_first_real_component(newical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
-
-    icalcomponent *mastercopy = NULL;
-    icalcomponent *comp;
-
-    icalproperty *masteratt = find_attendee(master, attendee);
-    assert(masteratt); // we checked this earlier
-    icalparameter_scheduleforcesend force_send = get_forcesend(masteratt);
+    icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+    clean_component(mastercopy);
+    icalcomponent_add_component(itip, mastercopy);
 
     int do_send = 0;
     int is_update = 0;
 
+    icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
+    if (check_changes(oldmaster, mastercopy, attendee)) {
+        /* we only force the send if the top level event has changed */
+        do_send = 1;
+        if (oldmaster) is_update = 1;
+    }
+
+    icalproperty *masteratt = find_attendee(mastercomp, attendee);
+    icalparameter_scheduleforcesend force_send = get_forcesend(masteratt);
+
     /* force the matter */
     if (force_send != ICAL_SCHEDULEFORCESEND_NONE) do_send = 1;
 
-    for (comp = master; comp; comp = icalcomponent_get_next_component(newical, kind)) {
+    icalcomponent *comp = icalcomponent_get_first_real_component(newical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    for (; comp; comp = icalcomponent_get_next_component(newical, kind)) {
         /* this recurrenceid is attended by this attendee in the old data?
          * check if changed */
         icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
+        if (!prop) continue;
+        const char *recurid = icalproperty_get_value_as_string(prop);
+
+        /* we can't just use "find_attended_component" here, because a previous
+         * sub component without this attendee is an old EXDATE for us, while
+         * no previous sub component means it was just a regular recurrence
+         * of the master event */
         icalcomponent *oldcomp = find_component(oldical, recurid);
 
         int has_old = !!find_attendee(oldcomp, attendee);
         if (has_old) is_update = 1;
+        if (!oldcomp && oldmaster)
+            is_update = 1;
 
         /* non matching are exdates on the master */
         if (!find_attendee(comp, attendee)) {
@@ -2440,12 +2447,10 @@ static void schedule_full_update(const char *attendee, icalcomponent *oldical, i
         }
 
         icalcomponent *copy = icalcomponent_new_clone(comp);
-        if (comp == master) mastercopy = copy;
 
-        if (check_changes(oldcomp, copy, attendee)) {
-            /* we only force the send if the top level event has changed */
-            if (!prop) do_send = 1;
-        }
+        /* we don't care if it's changed, just using this for the
+         * side effect changes to RSVP */
+        check_changes(oldcomp, copy, attendee);
 
         clean_component(copy);
         icalcomponent_add_component(itip, copy);
@@ -2588,20 +2593,18 @@ static int reply_mark_declined(icalcomponent *comp)
 static void update_organizer_status(icalcomponent *ical, const char *onrecurid,
                                     const char *status)
 {
-    icalcomponent *master = icalcomponent_get_first_real_component(ical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    icalcomponent *comp;
-    icalproperty *prop;
-    for (comp = master; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
         if (onrecurid) {
-            prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+            icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
             const char *recurid = "";
             if (prop) recurid = icalproperty_get_value_as_string(prop);
             if (strcmp(recurid, onrecurid)) continue;
         }
 
-        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 
         /* mark the status */
         icalparameter *param = icalparameter_new_schedulestatus(status);
@@ -2627,24 +2630,23 @@ static void schedule_sub_declines(const char *attendee, icalcomponent *oldical, 
 {
     if (!oldical) return;
 
-    icalcomponent *master = icalcomponent_get_first_real_component(oldical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    const char *organizer = get_organizer(master);
-    if (!organizer) return;
+    for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        const char *recurid = icalproperty_get_value_as_string(prop);
 
-    icalcomponent *comp;
-    icalproperty *prop;
-
-    for (comp = master; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
         /* we weren't attending, nothing to do */
         if (!find_attendee(comp, attendee))
             continue;
 
-        /* this recurrenceid is attended by this attendee in the new data? */
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
+        /* no organizer, can't do anything */
+        const char *organizer = get_organizer(comp);
+        if (!organizer) continue;
+
+        /* this recurrenceid is attended by this attendee in the new data? don't decline */
         icalcomponent *newcomp = find_attended_component(newical, recurid, attendee);
         if (newcomp) continue;
 
@@ -2685,26 +2687,25 @@ static void schedule_sub_replies(const char *attendee, icalcomponent *oldical, i
 {
     if (!newical) return;
 
-    icalcomponent *master = icalcomponent_get_first_real_component(newical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *comp = icalcomponent_get_first_real_component(newical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    const char *organizer = get_organizer(master);
-    if (!organizer) return;
+    for (; comp; comp = icalcomponent_get_next_component(newical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        const char *recurid = icalproperty_get_value_as_string(prop);
 
-    icalcomponent *comp;
-    icalproperty *prop;
-
-    for (comp = master; comp; comp = icalcomponent_get_next_component(newical, kind)) {
         /* we're not attending, nothing to do */
         if (!find_attendee(comp, attendee))
             continue;
 
+        /* no organizer, can't do anything */
+        const char *organizer = get_organizer(comp);
+        if (!organizer) continue;
+
         icalparameter_scheduleforcesend force_send = get_forcesend(icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY));
 
         /* this recurrenceid is attended by this attendee in the old data? */
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
         icalcomponent *oldcomp = find_attended_component(oldical, recurid, attendee);
 
         /* unchanged partstat - we don't need to send anything */
@@ -2735,27 +2736,32 @@ static void schedule_sub_replies(const char *attendee, icalcomponent *oldical, i
 /* we've already tested that master does NOT contain this attendee */
 static void schedule_full_decline(const char *attendee, icalcomponent *oldical, icalcomponent *newical)
 {
+    icalcomponent *mastercomp = find_attended_component(oldical, "", attendee);
+    if (!mastercomp) return;
+
+    const char *organizer = get_organizer(mastercomp);
+    if (!organizer) return;
+
     /* we need to send an update for this recurrence */
     icalcomponent *itip = make_itip(ICAL_METHOD_REPLY, oldical);
 
-    icalcomponent *master = icalcomponent_get_first_real_component(oldical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
+    icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+    clean_component(mastercopy);
+    icalcomponent_add_component(itip, mastercopy);
 
-    const char *organizer = get_organizer(master);
-    if (!organizer) return;
+    icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
 
-    icalcomponent *comp;
-    icalproperty *prop;
+    for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        const char *recurid = icalproperty_get_value_as_string(prop);
 
-    for (comp = master; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
         /* we're not attending, nothing to do (shouldn't be possible) */
         if (!find_attendee(comp, attendee))
             continue;
 
         /* this recurrenceid is attended by this attendee in the old data? */
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
         icalcomponent *newcomp = find_attended_component(newical, recurid, attendee);
         if (newcomp) continue; /* will be sent with replies */
 
@@ -2777,40 +2783,38 @@ static void schedule_full_decline(const char *attendee, icalcomponent *oldical, 
 /* we've already tested that master contains this attendee */
 static void schedule_full_reply(const char *attendee, icalcomponent *oldical, icalcomponent *newical)
 {
-    /* we need to send an update for this recurrence */
-    icalcomponent *itip = make_itip(ICAL_METHOD_REPLY, newical);
+    icalcomponent *mastercomp = find_attended_component(newical, "", attendee);
+    if (!mastercomp) return;
 
-    icalcomponent *master = icalcomponent_get_first_real_component(newical);
-    icalcomponent_kind kind = icalcomponent_isa(master);
-
-    const char *organizer = get_organizer(master);
+    const char *organizer = get_organizer(mastercomp);
     if (!organizer) return;
 
-    icalcomponent *comp;
-    icalproperty *prop;
+    /* build an itip, which we will send if anything has changed */
+    icalcomponent *itip = make_itip(ICAL_METHOD_REPLY, newical);
+
+    icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+    clean_component(mastercopy);
+    icalcomponent_add_component(itip, mastercopy);
+
+    icalparameter_scheduleforcesend force_send = get_forcesend(icalcomponent_get_first_property(mastercomp, ICAL_ORGANIZER_PROPERTY));
 
     int do_send = 0;
-
-    icalparameter_scheduleforcesend force_send = get_forcesend(icalcomponent_get_first_property(master, ICAL_ORGANIZER_PROPERTY));
-
     if (force_send != ICAL_SCHEDULEFORCESEND_NONE) do_send = 1;
 
-    for (comp = master; comp; comp = icalcomponent_get_next_component(newical, kind)) {
+    icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
+    if (partstat_changed(oldmaster, mastercomp, attendee))
+        do_send = 1;
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(newical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    for (; comp; comp = icalcomponent_get_next_component(newical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        /* we don't even care what the recurrence ID is, just that we have one */
+
         /* we're not attending, nothing to do (shouldn't be possible) */
         if (!find_attendee(comp, attendee))
             continue;
-
-        /* this recurrenceid is attended by this attendee in the old data? */
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
-        icalcomponent *oldcomp = find_attended_component(oldical, recurid, attendee);
-
-        /* unchanged partstat - we don't need to send anything */
-        if (partstat_changed(oldcomp, comp, attendee)) {
-            /* we only force the send if the top level event has changed */
-            if (!prop) do_send = 1;
-        }
 
         icalcomponent *copy = icalcomponent_new_clone(comp);
         trim_attendees(copy, attendee);
@@ -2820,27 +2824,20 @@ static void schedule_full_reply(const char *attendee, icalcomponent *oldical, ic
         icalcomponent_add_component(itip, copy);
     }
 
-    icalcomponent *oldmaster = oldical ? icalcomponent_get_first_component(oldical, kind) : NULL;
-
-    for (prop = icalcomponent_get_first_property(master, ICAL_EXDATE_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(master, ICAL_EXDATE_PROPERTY)) {
+    icalproperty *prop = icalcomponent_get_first_property(mastercomp, ICAL_EXDATE_PROPERTY);
+    for (; prop; prop = icalcomponent_get_next_property(mastercomp, ICAL_EXDATE_PROPERTY)) {
         struct icaltimetype exdate = icalproperty_get_exdate(prop);
         if (!has_exdate(oldmaster, exdate)) do_send = 1;
         /* we're going to have to send these if they're new */
     }
 
-    for (comp = oldmaster; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
-        /* we were not attending, nothing to do (shouldn't be possible) */
-        if (!find_attendee(comp, attendee))
-            continue;
+    comp = icalcomponent_get_first_component(oldical, kind);
+    for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        const char *recurid = icalproperty_get_value_as_string(prop);
 
-        /* this recurrenceid is attended by this attendee in the new data? */
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        const char *recurid = "";
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
         icalcomponent *newcomp = find_attended_component(newical, recurid, attendee);
-
         if (newcomp) continue;
 
         icalcomponent *copy = icalcomponent_new_clone(comp);
