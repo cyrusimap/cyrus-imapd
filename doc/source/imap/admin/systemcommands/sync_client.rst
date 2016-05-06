@@ -14,7 +14,7 @@ Synopsis
     **sync_client** [ **-v** ] [ **-l** ] [ **-L** ] [ **-z** ] [ **-C** *config-file* ] [ **-S** *server-name* ]
         [ **-f** *input-file* ] [ **-F** *shutdown_file* ] [ **-w** *wait_interval* ]
         [ **-t** *timeout* ] [ **-d** *delay* ] [ **-r** ] [ **-n** *channel* ] [ **-u** ] [ **-m** ]
-        [ **-A** ] [ **-s** ] *objects*...
+        [ **-p** *partition* ] [ **-A** ] [ **-s** ] *objects*...
 
 Description
 ===========
@@ -140,6 +140,12 @@ Options
     replicated. Principally used for debugging purposes: not exposed to
     :cyrusman:`sync_client(8)`.
 
+.. option:: -p partition
+
+    In mailbox or user replication mode: provides the name of the 
+    partition on the replica to which the mailboxes/users should be 
+    replicated.
+        
 Examples
 ========
 

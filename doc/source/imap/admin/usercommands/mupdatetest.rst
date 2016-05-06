@@ -88,7 +88,7 @@ Options
 
 .. option:: -q
 
-    Enable MUPDATE COMPRESSion (before the last authentication attempt).
+    Enable MUPDATE COMPRESSion (after authentication).
 
 .. option:: -c
 

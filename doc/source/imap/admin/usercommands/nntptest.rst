@@ -13,7 +13,8 @@ Synopsis
 
     **nntptest** [ **-t** *keyfile* ] [ **-p** *port* ] [ **-m** *mechanism* ] [ **-a** *userid* ]
         [ **-u** *userid* ] [ **-k** *num* ] [ **-l** *num* ] [ **-r** *realm* ] [ **-f** *file* ]
-        [ **-n** *num* ] [ **-s** ] [ **-c** ] [ **-i** ] [ **-v** ] [ **-o** *option*\ =\ *value* ] *hostname*
+        [ **-n** *num* ] [ **-s** ] [ **-c** ] [ **-i** ] [ **-v** ] [ **-q** ] 
+        [ **-o** *option*\ =\ *value* ] *hostname*
 
 Description
 ===========
@@ -95,6 +96,10 @@ Options
 .. option:: -s
 
     Enable NNTP over SSL (nntps).
+    
+.. option:: -q
+
+    Enable NNTP COMPRESSion (after authentication)
 
 .. option:: -c
 

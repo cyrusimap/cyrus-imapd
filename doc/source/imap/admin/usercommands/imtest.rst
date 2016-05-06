@@ -100,7 +100,7 @@ Options
 
 .. option:: -q
 
-    Enable IMAP COMPRESSion (before the last authentication attempt).
+    Enable IMAP COMPRESSion (after authentication).
 
 .. option:: -c
 
