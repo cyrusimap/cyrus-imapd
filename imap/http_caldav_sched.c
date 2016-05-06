@@ -2097,6 +2097,22 @@ static icalcomponent *find_attended_component(icalcomponent *ical, const char *r
     return NULL;
 }
 
+static int has_exdate(icalcomponent *ical, struct icaltimetype test)
+{
+    if (!ical) return 0;
+
+    icalproperty *prop;
+    for (prop = icalcomponent_get_first_property(ical, ICAL_EXDATE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(ical, ICAL_EXDATE_PROPERTY)) {
+        /* we're going to have to send these if they're new */
+        struct icaltimetype exdate = icalproperty_get_exdate(prop);
+        if (!icaltime_compare(exdate, test)) return 1;
+    }
+
+    return 0;
+}
+
 static int check_changes_any(icalcomponent *old, icalcomponent *comp, int *needs_actionp)
 {
     if (!old) {
@@ -2757,7 +2773,7 @@ static void schedule_full_decline(const char *attendee, icalcomponent *oldical, 
     icalcomponent_free(itip);
 }
 
-/* we've already tested that master does NOT contain this attendee */
+/* we've already tested that master contains this attendee */
 static void schedule_full_reply(const char *attendee, icalcomponent *oldical, icalcomponent *newical)
 {
     /* we need to send an update for this recurrence */
@@ -2803,10 +2819,18 @@ static void schedule_full_reply(const char *attendee, icalcomponent *oldical, ic
         icalcomponent_add_component(itip, copy);
     }
 
-    for (comp = icalcomponent_get_first_component(oldical, kind);
-         comp;
-         comp = icalcomponent_get_next_component(oldical, kind)) {
-        /* we're not attending, nothing to do (shouldn't be possible) */
+    icalcomponent *oldmaster = oldical ? icalcomponent_get_first_component(oldical, kind) : NULL;
+
+    for (prop = icalcomponent_get_first_property(master, ICAL_EXDATE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(master, ICAL_EXDATE_PROPERTY)) {
+        struct icaltimetype exdate = icalproperty_get_exdate(prop);
+        if (!has_exdate(oldmaster, exdate)) do_send = 1;
+        /* we're going to have to send these if they're new */
+    }
+
+    for (comp = oldmaster; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+        /* we were not attending, nothing to do (shouldn't be possible) */
         if (!find_attendee(comp, attendee))
             continue;
 
