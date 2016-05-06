@@ -59,7 +59,7 @@
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "notify.h"
-#include "md5.h"
+#include "crc32.h"
 #include "smtpclient.h"
 #include "strhash.h"
 #include "times.h"
@@ -1957,8 +1957,8 @@ static void clean_component(icalcomponent *comp)
  *
  * If the property exists in neither comp, then they are equal.
  * If the property exists in only 1 comp, then they are not equal.
- * if the property is RDATE or EXDATE, create an MD5 hash of all
- *   property strings for each component and compare the hashes.
+ * if the property is RDATE or EXDATE, create an XORed CRC32 of all
+ *   property strings for each component (order irrelevant) and compare the CRCs.
  * Otherwise compare the two property strings.
  */
 static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
@@ -1970,27 +1970,20 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
     if (!oldprop) return (newprop != NULL);
     else if (!newprop) return 1;
     else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY)) {
-        MD5_CTX ctx;
         const char *str;
-        unsigned char old_md5[MD5_DIGEST_LENGTH], new_md5[MD5_DIGEST_LENGTH];
+        uint32_t old_crc = 0, new_crc = 0;
 
-        MD5Init(&ctx);
         do {
             str = icalproperty_get_value_as_string(oldprop);
-            MD5Update(&ctx, str, strlen(str));
+            old_crc ^= crc32_cstring(str);
         } while ((oldprop = icalcomponent_get_next_property(oldical, kind)));
 
-        MD5Final(old_md5, &ctx);
-
-        MD5Init(&ctx);
         do {
             str = icalproperty_get_value_as_string(newprop);
-            MD5Update(&ctx, str, strlen(str));
+            new_crc ^= crc32_cstring(str);
         } while ((newprop = icalcomponent_get_next_property(newical, kind)));
 
-        MD5Final(new_md5, &ctx);
-
-        return (memcmp(old_md5, new_md5, MD5_DIGEST_LENGTH) != 0);
+        return (old_crc != new_crc);
     }
     else {
         return (strcmp(icalproperty_get_value_as_string(oldprop),
