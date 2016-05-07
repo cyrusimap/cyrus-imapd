@@ -1075,15 +1075,14 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
         (struct cardquery_filter *) fctx->filter_crit;
     struct carddav_data *cdata = (struct carddav_data *) data;
     struct prop_filter *propfilter;
-    int pass = cardfilter->allof;
+    int pass = 1;
 
-    if (!propfilter) return 1;
-
-    for (propfilter = cardfilter->prop;
-         propfilter && (pass == cardfilter->allof);
+    for (propfilter = cardfilter->prop; propfilter;
          propfilter = propfilter->next) {
 
         pass = apply_propfilter(propfilter, cdata, fctx);
+        /* If allof fails or anyof succeeds, we're done */
+        if (pass != cardfilter->allof) break;
     }
 
     return pass;
