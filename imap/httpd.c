@@ -2003,7 +2003,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                           " extended-mkcol, resource-sharing\r\n");
                 if (txn->req_tgt.allow & ALLOW_CAL) {
                     prot_printf(httpd_out, "DAV: calendar-access"
-                                " calendar-query-extended%s%s%s\r\n",
+                                ", calendar-query-extended%s%s%s\r\n",
                                 (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
                                 ", calendar-auto-schedule" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
