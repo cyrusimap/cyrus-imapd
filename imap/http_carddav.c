@@ -1077,6 +1077,8 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
     struct prop_filter *propfilter;
     int pass = cardfilter->allof;
 
+    if (!propfilter) return 1;
+
     for (propfilter = cardfilter->prop;
          propfilter && (pass == cardfilter->allof);
          propfilter = propfilter->next) {
