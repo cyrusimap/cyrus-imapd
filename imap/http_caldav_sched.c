@@ -2254,12 +2254,9 @@ static void update_attendee_status(icalcomponent *ical, const char *onrecurid,
 }
 
 /* we've already tested that master contains this attendee */
-static void schedule_full_cancel(const char *attendee,
+static void schedule_full_cancel(const char *attendee, icalcomponent *mastercomp,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
-    icalcomponent *mastercomp = find_attended_component(oldical, "", attendee);
-    if (!mastercomp) return;
-
     /* we need to send a cancel for all matching recurrences with exdates */
     icalcomponent *itip = make_itip(ICAL_METHOD_CANCEL, oldical);
 
@@ -2400,12 +2397,9 @@ static void schedule_sub_updates(const char *attendee,
 }
 
 /* we've already tested that master does contain this attendee */
-static void schedule_full_update(const char *attendee,
+static void schedule_full_update(const char *attendee, icalcomponent *mastercomp,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
-    icalcomponent *mastercomp = find_attended_component(newical, "", attendee);
-    if (!mastercomp) return;
-
     /* create an itip for the complete event */
     icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
 
@@ -2490,15 +2484,16 @@ static void schedule_one_attendee(const char *attendee,
                                   icalcomponent *oldical, icalcomponent *newical)
 {
     /* case: this attendee is attending the master event */
-    if (find_attended_component(newical, "", attendee)) {
-        schedule_full_update(attendee, oldical, newical);
+    icalcomponent *mastercomp;
+    if ((mastercomp = find_attended_component(newical, "", attendee))) {
+        schedule_full_update(attendee, mastercomp, oldical, newical);
         return;
     }
 
     /* otherwise we need to cancel for each sub event and then we'll still
      * send the updates if any */
-    if (find_attended_component(oldical, "", attendee)) {
-        schedule_full_cancel(attendee, oldical, newical);
+    if ((mastercomp = find_attended_component(oldical, "", attendee))) {
+        schedule_full_cancel(attendee, mastercomp, oldical, newical);
     }
     else {
         schedule_sub_cancels(attendee, oldical, newical);
