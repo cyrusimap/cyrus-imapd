@@ -65,6 +65,7 @@ require 5;
 
 package Man2rst;
 use strict;
+use warnings;
 
 my $mode = 0;
 my $save = "";
@@ -366,8 +367,9 @@ while (<>) {
             $tabs = 0;
             $opt = '';
         } elsif (m|\s*(.*)\s*|) {
-            chomp($1);
-            print print_man2rst($1);
+            my $stripped = $1;
+	    chomp($stripped);
+            print print_man2rst($stripped);
         }
     }
 }
