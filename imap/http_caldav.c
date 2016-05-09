@@ -4621,6 +4621,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
+#define PROP_NOVALUE (1<<31)
 
 static struct partial_comp_t *parse_partial_comp(xmlNodePtr node)
 {
@@ -4640,12 +4641,21 @@ static struct partial_comp_t *parse_partial_comp(xmlNodePtr node)
             arrayu64_add(&pcomp->props, ICAL_ANY_PROPERTY);
         }
         else if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
-            icalproperty_kind kind = ICAL_NO_PROPERTY;
+            uint64_t kind = ICAL_NO_PROPERTY;
 
             prop = xmlGetProp(node, BAD_CAST "name");
             if (prop) {
                 kind = icalproperty_string_to_kind((char *) prop);
                 xmlFree(prop);
+ 
+                prop = xmlGetProp(node, BAD_CAST "novalue");
+                if (prop) {
+                    if (!xmlStrcmp(prop, BAD_CAST "yes")) {
+                        /* Set highest order bit to encode "novalue" */
+                        kind |= PROP_NOVALUE;
+                    }
+                    xmlFree(prop);
+                }
             }
             arrayu64_add(&pcomp->props, kind);
         }
@@ -4668,9 +4678,9 @@ static void prune_properties(icalcomponent *parent,
                              struct partial_comp_t *pcomp)
 {
     icalcomponent *comp, *next;
+    int n, size = arrayu64_size(&pcomp->props);
 
-    if (!arrayu64_size(&pcomp->props) ||
-        arrayu64_nth(&pcomp->props, 0) != ICAL_ANY_PROPERTY) {
+    if (!size || arrayu64_nth(&pcomp->props, 0) != ICAL_ANY_PROPERTY) {
         /* Strip unwanted properties from component */
         icalproperty *prop, *nextprop;
 
@@ -4679,10 +4689,26 @@ static void prune_properties(icalcomponent *parent,
             nextprop =
                 icalcomponent_get_next_property(parent, ICAL_ANY_PROPERTY);
 
-            if (arrayu64_find(&pcomp->props,
-                              icalproperty_isa(prop), 0) < 0) {
+            uint64_t kind;
+
+            for (n = 0; n < size; n++) {
+                kind = arrayu64_nth(&pcomp->props, n);
+                /* Highest order bit encodes "novalue" */
+                if ((kind & ~PROP_NOVALUE) == icalproperty_isa(prop)) break;
+            }
+
+            if (n >= size) {
+                /* Don't want this property, remove it */
                 icalcomponent_remove_property(parent, prop);
                 icalproperty_free(prop);
+            }
+            else if (kind & PROP_NOVALUE) {
+                /* Don't want value for this property, remove it */
+                /* XXX  This requires libical (<= 2.x) to be compiled with
+                   ICAL_ALLOW_EMPTY_PROPERTIES=true
+                   otherwise icalproperty_as_ical_string() will output
+                   "ERROR: No Value" as the property value */
+                icalproperty_set_value(prop, icalvalue_new(ICAL_NO_VALUE));
             }
         }
     }
