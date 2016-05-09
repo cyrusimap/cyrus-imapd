@@ -34,6 +34,7 @@ DESCRIPTION
     force it to continue on the next one.  No additional whitespace is
     inserted before or after the \`\`\\''.  Note that a line that is split
     using \`\`\\'' character(s) is still considered a single line.
+
     For example
         *option*:\\
 
@@ -50,7 +51,6 @@ DESCRIPTION
     \`\`true'' and \`\`\ 1'' turn the option on, the values \`\`no'', \`\`off'',
     \`\`f'', \`\`false'' and \`\`\ 0'' turn the option off.
 
-    
 FIELD DESCRIPTIONS
 ==================
 
@@ -69,7 +69,7 @@ FIELD DESCRIPTIONS
         The prefix for the addressbook mailboxes hierarchies.  The hierarchy
         delimiter will be automatically appended.  The public addressbook
         hierarchy will be at the toplevel of the shared namespace.  A
-        user's personal calendar hierarchy will be a child of their Inbox. 
+        user's personal addressbook hierarchy will be a child of their Inbox. 
 
     .. endblob addressbookprefix
 
@@ -160,8 +160,13 @@ FIELD DESCRIPTIONS
 
     ``allowplaintext:`` 0
 
-        Allow the use of cleartext passwords on the wire. 
+        If enabled, allows the use of cleartext passwords on the wire.
 
+        By default, the use of cleartext passwords requires a TLS/SSL
+        encryption layer to be negotiated prior to any cleartext
+        authentication mechanisms being advertised or allowed.  To require a
+        TLS/SSL encryption layer to be negotiated prior to ANY
+        authentication, see the *tls_required* option. 
 
     .. endblob allowplaintext
 
@@ -243,6 +248,7 @@ FIELD DESCRIPTIONS
 
         Each line of the file specifies the properties of an annotation and
         has the following form:
+
             *name*, *scope*, *attrib-type*, *proxy-type*,
             *attrib-names*, *acl*
 
@@ -317,13 +323,22 @@ FIELD DESCRIPTIONS
 
     .. endblob annotation_callout
 
+    .. startblob aps_topic
+
+    ``aps_topic:`` <none>
+
+        Topic for Apple Push Service registration. 
+
+
+    .. endblob aps_topic
+
     .. startblob archive_enabled
 
     ``archive_enabled:`` 0
 
         Is archiving enabled for this server.  You also need to have an
         archivepartition for the mailbox.  Archiving allows older email
-        to be stored on slower, cheaper disks - even within a the same
+        to be stored on slower, cheaper disks - even within the same
         mailbox, as distinct from partitions. 
 
     .. endblob archive_enabled
@@ -350,10 +365,24 @@ FIELD DESCRIPTIONS
 
     ``archive_keepflagged:`` 0
 
-        if set, keep messages with \Flagged system flag on the archive
-        partition forever, so long as they are smaller than maxsize 
+        If set, messages with the \\Flagged system flag won't be archived,
+        provided they are smaller than **archive_maxsize**. 
 
     .. endblob archive_keepflagged
+
+    .. startblob archivepartition-name
+
+    ``archivepartition-name:`` <none>
+
+        The pathname of the archive partition *name*, corresponding to
+        spool partition **partition-name**.  For any mailbox residing in
+        a directory on **partition-name**, the archived messages will be
+        stored in a corresponding directory on **archivepartition-name**.
+        Note that not every **partition-name** option is strictly required
+        to have a corresponding **archivepartition-name** option, but that
+        without one there's no benefit to enabling archiving. 
+
+    .. endblob archivepartition-name
 
     .. startblob auditlog
 
@@ -414,7 +443,7 @@ FIELD DESCRIPTIONS
 
     .. startblob generate_compiled_sieve_script
 
-    ``generate_compiled_sieve_script:`` <none>
+    ``generate_compiled_sieve_script:`` 0
 
         Deprecated in favor of *autocreate_sieve_script_compile*. 
 
@@ -614,6 +643,87 @@ FIELD DESCRIPTIONS
         automatically created. 
 
     .. endblob autocreate_users
+
+    .. startblob backuppartition-name
+
+    ``backuppartition-name:`` <none>
+
+        The pathname of the backup partition *name*.  At least one backup
+        partition pathname MUST be specified if backups are in use.  Note that
+        there is no relationship between spool partitions and backup partitions. 
+
+    .. endblob backuppartition-name
+
+    .. startblob backup_compact_minsize
+
+    ``backup_compact_minsize:`` 0
+
+        The minimum size in kilobytes of chunks in each backup.  The compact tool
+        will try to combine adjacent chunks that are smaller than this.
+
+        Setting this value to zero or negative disables combining of chunks. 
+
+    .. endblob backup_compact_minsize
+
+    .. startblob backup_compact_maxsize
+
+    ``backup_compact_maxsize:`` 0
+
+        The maximum size in kilobytes of chunks in each backup.  The compact tool
+        will try to split chunks larger than this into smaller chunks.
+
+        Setting this value to zero or negative disables splitting of chunks. 
+
+    .. endblob backup_compact_maxsize
+
+    .. startblob backup_compact_work_threshold
+
+    ``backup_compact_work_threshold:`` 1
+
+        The number of chunks that must obviously need compaction before the compact
+        tool will go ahead with the compaction.  If set to less than one, the value
+        is treated as being one. 
+
+    .. endblob backup_compact_work_threshold
+
+    .. startblob backup_staging_path
+
+    ``backup_staging_path:`` <none>
+
+        The absolute path of the backup staging area.  If not specified,
+        will be temp_path/backup 
+
+    .. endblob backup_staging_path
+
+    .. startblob backup_retention_days
+
+    ``backup_retention_days:`` 7
+
+        The number of days to keep content in backup after it has been deleted
+        from the source.  If set to a negative value or zero, deleted content
+        will be kept indefinitely. 
+
+    .. endblob backup_retention_days
+
+    .. startblob backup_db
+
+    ``backup_db:`` twoskip
+
+        The cyrusdb backend to use for the backup locations database. 
+
+        Allowed values: *skiplist*, *sql*, *twoskip*
+
+
+    .. endblob backup_db
+
+    .. startblob backup_db_path
+
+    ``backup_db_path:`` <none>
+
+        The absolute path to the backup db file.  If not specified,
+        will be confdir/backups.db 
+
+    .. endblob backup_db_path
 
     .. startblob boundary_limit
 
@@ -825,6 +935,46 @@ FIELD DESCRIPTIONS
 
     .. endblob conversations_expire_days
 
+    .. startblob crossdomains
+
+    ``crossdomains:`` 0
+
+        Enable cross domain sharing.  This works best with alt namespace and
+        unix hierarchy separators on, so you get Other Users/foo@example.com/... 
+
+    .. endblob crossdomains
+
+    .. startblob crossdomains_onlyother
+
+    ``crossdomains_onlyother:`` 0
+
+        only show the domain for users in other domains than your own (for
+        backwards compatibility if you're already sharing 
+
+    .. endblob crossdomains_onlyother
+
+    .. startblob davdriveprefix
+
+    ``davdriveprefix:`` #drive
+
+        The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
+        delimiter will be automatically appended.  The public storage
+        hierarchy will be at the toplevel of the shared namespace.  A
+        user's personal storage hierarchy will be a child of their Inbox. 
+
+    .. endblob davdriveprefix
+
+    .. startblob davnotificationsprefix
+
+    ``davnotificationsprefix:`` #notifications
+
+        The prefix for the DAV notifications hierarchy.  The hierarchy
+        delimiter will be automatically appended.  The public notifications
+        hierarchy will be at the toplevel of the shared namespace.  A
+        user's personal notifications hierarchy will be a child of their Inbox. 
+
+    .. endblob davnotificationsprefix
+
     .. startblob dav_realm
 
     ``dav_realm:`` <none>
@@ -857,7 +1007,7 @@ FIELD DESCRIPTIONS
 
     .. startblob defaultdomain
 
-    ``defaultdomain:`` <none>
+    ``defaultdomain:`` internal
 
         The default domain for virtual domain support 
 
@@ -1079,7 +1229,7 @@ FIELD DESCRIPTIONS
 
         Space-separated list of groups of related events to turn on notification 
 
-        Allowed values: *message*, *quota*, *flags*, *access*, *mailbox*, *subscription*, *calendar*
+        Allowed values: *message*, *quota*, *flags*, *access*, *mailbox*, *subscription*, *calendar*, *applepushservice*
 
 
     .. endblob event_groups
@@ -1307,7 +1457,7 @@ FIELD DESCRIPTIONS
         Note that "domainkey" depends on "ischedule" being enabled, and
         that both "freebusy" and "ischedule" depend on "caldav" being
         enabled. 
-        Allowed values: *caldav*, *carddav*, *domainkey*, *freebusy*, *ischedule*, *jmap*, *rss*, *tzdist*
+        Allowed values: *caldav*, *carddav*, *domainkey*, *freebusy*, *ischedule*, *jmap*, *rss*, *tzdist*, *webdav*
 
 
     .. endblob httpmodules
@@ -1384,6 +1534,15 @@ FIELD DESCRIPTIONS
 
     .. endblob imapmagicplus
 
+    .. startblob imipnotifier
+
+    ``imipnotifier:`` <none>
+
+        Notifyd(8) method to use for "IMIP" notifications which are based on
+        the :rfc:`6047`.  If not set, "IMIP" notifications are disabled. 
+
+    .. endblob imipnotifier
+
     .. startblob implicit_owner_rights
 
     ``implicit_owner_rights:`` lkxa
@@ -1431,6 +1590,24 @@ FIELD DESCRIPTIONS
 
 
     .. endblob internaldate_heuristic
+
+    .. startblob jmap_preview_annot
+
+    ``jmap_preview_annot:`` <none>
+
+        The name of the per-message annotation, if any, to store message
+        previews. 
+
+    .. endblob jmap_preview_annot
+
+    .. startblob jmap_preview_length
+
+    ``jmap_preview_length:`` 64
+
+        The maximum byte length of dynamically generated message previews. Previews
+        stored in jmap_preview_annot take precedence. 
+
+    .. endblob jmap_preview_length
 
     .. startblob iolog
 
@@ -1817,24 +1994,6 @@ FIELD DESCRIPTIONS
 
     .. endblob ldap_ca_file
 
-    .. startblob ldap_client_cert
-
-    ``ldap_client_cert:`` <none>
-
-        File containing the client certificate. 
-
-
-    .. endblob ldap_client_cert
-
-    .. startblob ldap_verify_peer
-
-    ``ldap_verify_peer:`` 0
-
-        Require and verify server certificate.  If this option is yes,
-        you must specify ldap_ca_file or ldap_ca_dir. 
-
-    .. endblob ldap_verify_peer
-
     .. startblob ldap_ciphers
 
     ``ldap_ciphers:`` <none>
@@ -1844,6 +2003,15 @@ FIELD DESCRIPTIONS
 
     .. endblob ldap_ciphers
 
+    .. startblob ldap_client_cert
+
+    ``ldap_client_cert:`` <none>
+
+        File containing the client certificate. 
+
+
+    .. endblob ldap_client_cert
+
     .. startblob ldap_client_key
 
     ``ldap_client_key:`` <none>
@@ -1852,6 +2020,15 @@ FIELD DESCRIPTIONS
 
 
     .. endblob ldap_client_key
+
+    .. startblob ldap_verify_peer
+
+    ``ldap_verify_peer:`` 0
+
+        Require and verify server certificate.  If this option is yes,
+        you must specify ldap_ca_file or ldap_ca_dir. 
+
+    .. endblob ldap_verify_peer
 
     .. startblob ldap_tls_cacert_dir
 
@@ -1891,7 +2068,7 @@ FIELD DESCRIPTIONS
 
     .. startblob ldap_tls_check_peer
 
-    ``ldap_tls_check_peer:`` <none>
+    ``ldap_tls_check_peer:`` 0
 
         Deprecated in favor of *ldap_verify_peer*. 
 
@@ -2455,7 +2632,7 @@ FIELD DESCRIPTIONS
     ``notesmailbox:`` <none>
 
         The top level mailbox in each user's account which is used to store
-        Apple-style Notes.  Default is blank (disabled) 
+        \* Apple-style Notes.  Default is blank (disabled) 
 
     .. endblob notesmailbox
 
@@ -2477,6 +2654,7 @@ FIELD DESCRIPTIONS
 
         The external program will be called with the following
         command line options:
+
             .. option:: -c    class
 
             .. option:: -p    priority
@@ -2501,6 +2679,15 @@ FIELD DESCRIPTIONS
         **partition-default** field is required. 
 
     .. endblob partition-name
+
+    .. startblob outbox_sendlater
+
+    ``outbox_sendlater:`` 0
+
+        If enabled, any message with a \Draft flag will be sent at the time of its INTERNALDATE 
+
+
+    .. endblob outbox_sendlater
 
     .. startblob partition_select_mode
 
@@ -2915,6 +3102,42 @@ FIELD DESCRIPTIONS
 
     .. endblob reject8bit
 
+    .. startblob restore_authname
+
+    ``restore_authname:`` <none>
+
+        The authentication used by the restore tool when authenticating
+        to an IMAP/sync server. 
+
+    .. endblob restore_authname
+
+    .. startblob restore_password
+
+    ``restore_password:`` <none>
+
+        The password used by the restore tool when authenticating to an
+        IMAP/sync server. 
+
+    .. endblob restore_password
+
+    .. startblob restore_realm
+
+    ``restore_realm:`` <none>
+
+        The authentication realm used by the restore tool when
+        authenticating to an IMAP/sync server. 
+
+    .. endblob restore_realm
+
+    .. startblob reverseacls
+
+    ``reverseacls:`` 0
+
+        At startup time, ctl_cyrusdb -r will check this value and it
+        will either add or remove reverse ACL pointers from mailboxes.db 
+
+    .. endblob reverseacls
+
     .. startblob rfc2046_strict
 
     ``rfc2046_strict:`` 0
@@ -3248,6 +3471,7 @@ FIELD DESCRIPTIONS
 
         The server information to display in the greeting and capability
         responses. Information is displayed as follows:
+
             "off" = no server information in the greeting or capabilities
 
             "min" = *servername* in the greeting; no server information in the capabilities
@@ -3282,7 +3506,7 @@ FIELD DESCRIPTIONS
 
     .. startblob sieve_extensions
 
-    ``sieve_extensions:`` fileinto reject vacation vacation-seconds imapflags notify envelope relational regex subaddress copy date index imap4flags
+    ``sieve_extensions:`` fileinto reject vacation vacation-seconds imapflags notify envelope relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata
 
         Space-separated list of Sieve extensions allowed to be used in
         sieve scripts, enforced at submission by timsieved(8).  Any
@@ -3290,7 +3514,7 @@ FIELD DESCRIPTIONS
         will continue to execute regardless of the extensions used.  This
         option has no effect on options that are disabled at compile time
         (e.g., "regex"). 
-        Allowed values: *fileinto*, *reject*, *vacation*, *vacation-seconds*, *imapflags*, *notify*, *include*, *envelope*, *body*, *relational*, *regex*, *subaddress*, *copy*, *date*, *index*, *imap4flags*
+        Allowed values: *fileinto*, *reject*, *vacation*, *vacation-seconds*, *imapflags*, *notify*, *include*, *envelope*, *body*, *relational*, *regex*, *subaddress*, *copy*, *date*, *index*, *imap4flags*, *mailbox*, *mboxmetadata*, *servermetadata*
 
 
     .. endblob sieve_extensions
@@ -3806,16 +4030,18 @@ FIELD DESCRIPTIONS
 
     .. startblob timeout
 
-    ``timeout:`` 30
+    ``timeout:`` 32
 
         The length of the IMAP server's inactivity autologout timer,
-        in minutes.  The minimum value is 30, the default. 
+        in minutes.  The minimum value is 30, the default.  The default
+        is 32 to allow a bit of leeway for clients that try to NOOP every
+        30 minutes. 
 
     .. endblob timeout
 
     .. startblob tls_ca_file
 
-    ``tls_ca_file:`` DEFAULT
+    ``tls_ca_file:`` <none>
 
         Deprecated in favor of *tls_client_ca_file*. 
 
@@ -3824,7 +4050,7 @@ FIELD DESCRIPTIONS
 
     .. startblob tls_ca_path
 
-    ``tls_ca_path:`` DEFAULT
+    ``tls_ca_path:`` <none>
 
         Deprecated in favor of *tls_client_ca_dir*. 
 
@@ -3833,7 +4059,7 @@ FIELD DESCRIPTIONS
 
     .. startblob tlscache_db
 
-    ``tlscache_db:`` DEFAULT
+    ``tlscache_db:`` twoskip
 
         Deprecated in favor of *tls_sessions_db*. 
 
@@ -3842,7 +4068,7 @@ FIELD DESCRIPTIONS
 
     .. startblob tlscache_db_path
 
-    ``tlscache_db_path:`` DEFAULT
+    ``tlscache_db_path:`` <none>
 
         Deprecated in favor of *tls_sessions_db_path*. 
 
@@ -3851,7 +4077,7 @@ FIELD DESCRIPTIONS
 
     .. startblob tls_cert_file
 
-    ``tls_cert_file:`` DEFAULT
+    ``tls_cert_file:`` <none>
 
         Deprecated in favor of *tls_server_cert*. 
 
@@ -3925,15 +4151,6 @@ FIELD DESCRIPTIONS
 
     .. endblob tls_client_key
 
-    .. startblob tls_compression
-
-    ``tls_compression:`` 0
-
-        Deactivate TLS compression by default. 
-
-
-    .. endblob tls_compression
-
     .. startblob tls_eccurve
 
     ``tls_eccurve:`` prime256v1
@@ -3945,12 +4162,21 @@ FIELD DESCRIPTIONS
 
     .. startblob tls_key_file
 
-    ``tls_key_file:`` DEFAULT
+    ``tls_key_file:`` <none>
 
         Deprecated in favor of *tls_server_key*. 
 
 
     .. endblob tls_key_file
+
+    .. startblob tls_required
+
+    ``tls_required:`` 0
+
+        If enabled, require a TLS/SSL encryption layer to be negotiated
+        prior to ANY authentication mechanisms being advertised or allowed. 
+
+    .. endblob tls_required
 
     .. startblob tls_prefer_server_ciphers
 
@@ -4039,6 +4265,19 @@ FIELD DESCRIPTIONS
         disabled. 
 
     .. endblob tls_versions
+
+    .. startblob uidl_format
+
+    ``uidl_format:`` cyrus
+
+        Choose the format for UIDLs in pop3.  Possible values are "uidonly",
+        "cyrus", "dovecot" and "courier".  "uidonly" forces the old default
+        of UID, "cyrus" is UIDVALIDITY.UID.  Dovecot is 8 digits of leading
+        hex (lower case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID. 
+        Allowed values: *uidonly*, *cyrus*, *dovecot*, *courier*
+
+
+    .. endblob uidl_format
 
     .. startblob umask
 
@@ -4164,6 +4403,119 @@ FIELD DESCRIPTIONS
         will be confdir/zoneinfo.db 
 
     .. endblob zoneinfo_db_path
+
+    .. startblob object_storage_enabled
+
+    ``object_storage_enabled:`` 0
+
+        Is Object storage enabled for this server.  You also need to have
+        archiving enabled and archivepartition for the mailbox.
+        Only email files will be stored on object Storage archive partition will be
+        used to store any other files 
+
+    .. endblob object_storage_enabled
+
+    .. startblob object_storage_dummy_spool
+
+    ``object_storage_dummy_spool:`` <none>
+
+        Dummy object storage spool; this is for test only.
+        Spool where user directory (container) will be created to store all emails 
+        in a flat structure  
+
+    .. endblob object_storage_dummy_spool
+
+    .. startblob openio_namespace
+
+    ``openio_namespace:`` <none>
+
+        The OpenIO namespace used to store archived email messages. A namespace
+        identifies the physical platform cyrus must contact. This directive is used
+        by the OpenIO's SDK to locate its platform entry point. 
+
+    .. endblob openio_namespace
+
+    .. startblob openio_account
+
+    ``openio_account:`` <none>
+
+        The OpenIO account used to account for stored emails. Accounts are unique
+        in their namespace. They provides virtual partitions, with quotas and QoS
+        features. 
+
+    .. endblob openio_account
+
+    .. startblob openio_rawx_timeout
+
+    ``openio_rawx_timeout:`` 30
+
+        The OpenIO timeout to query to the RAWX services (default 30 sec). 
+
+
+    .. endblob openio_rawx_timeout
+
+    .. startblob openio_proxy_timeout
+
+    ``openio_proxy_timeout:`` 5
+
+        The OpenIO timeout to query to the PROXY services (default 5 sec). 
+
+
+    .. endblob openio_proxy_timeout
+
+    .. startblob openio_autocreate
+
+    ``openio_autocreate:`` 0
+
+        Allow the OpenIO SDK to autocreate containers. Mainly destined to be turned
+        on development environments. In production, the container should have been
+        provisioned with the mailboxes. 
+
+    .. endblob openio_autocreate
+
+    .. startblob openio_verbosity
+
+    ``openio_verbosity:`` <none>
+
+        Sets the logging verbosity of the OpenIO's internal behavior. Admissible
+        values are: "warning", "notice", "info", "debug", "trace", "quiet".
+        The default verbosity is "warning". Set to "notice" for a few lines on a
+        per-client basis. Set to "info" for a few lines on a per-request basis. Set
+        to "debug" Set to "trace" to activate the underlying libcurl debug
+        output. Enabling a verbosity higher to equal than "debug" requires
+        the cyrus to be set in debug mode. The special "quiet" value disables all
+        kinds of logging at the GLib level. 
+
+    .. endblob openio_verbosity
+
+    .. startblob caringo_hostname
+
+    ``caringo_hostname:`` <none>
+
+        The Caringo hostname used to store archived email messages. A hostname
+        identifies the physical platform cyrus must contact. This directive is used
+        by the Caringo's SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP) 
+        on HTTP 1.1 using a RESTful architecture  
+
+    .. endblob caringo_hostname
+
+    .. startblob caringo_port
+
+    ``caringo_port:`` 80
+
+        The port of the caringo server (caringo_hostname); default is 80. 
+
+
+    .. endblob caringo_port
+
+    .. startblob fastmailsharing
+
+    ``fastmailsharing:`` 0
+
+        If enabled, use FastMail style sharing (oldschool full server paths) 
+
+
+    .. endblob fastmailsharing
 
 
 SEE ALSO
