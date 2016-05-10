@@ -134,8 +134,8 @@ struct partial_comp_t {
 };
 
 static struct partial_caldata_t {
-    struct icaltimetype start;
-    struct icaltimetype end;
+    unsigned expand : 1;
+    struct icalperiodtype range;
     struct partial_comp_t *comp;
 } partial_caldata;
 
@@ -4736,6 +4736,168 @@ static void prune_properties(icalcomponent *parent,
 
 static int compare_freebusy_with_type(const void *fb1, const void *fb2);
 
+static void expand_caldata(icalcomponent *ical, struct icalperiodtype *range)
+{
+    /* Expand recurrences */
+    struct calrange_filter calfilter;
+    icalcomponent *master, *comp, *nextcomp;
+    icalproperty *prop, *nextprop;
+    icalcomponent_kind kind;
+    unsigned i;
+
+    memset(&calfilter, 0, sizeof(struct calrange_filter));
+    calfilter.start = range->start;
+    calfilter.end = range->end;
+
+    kind = icalcomponent_isa(icalcomponent_get_first_real_component(ical));
+
+    expand_occurrences(ical, &master, kind, &calfilter);
+
+    /* Strip unwanted properties from master component */
+    for (prop = icalcomponent_get_first_property(master, ICAL_ANY_PROPERTY);
+         prop; prop = nextprop) {
+        nextprop = icalcomponent_get_next_property(master, ICAL_ANY_PROPERTY);
+        switch (icalproperty_isa(prop)) {
+        case ICAL_RRULE_PROPERTY:
+        case ICAL_RDATE_PROPERTY:
+        case ICAL_EXRULE_PROPERTY:
+        case ICAL_EXDATE_PROPERTY:
+            icalcomponent_remove_property(master, prop);
+            icalproperty_free(prop);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    /* Re-sort freebusy periods by start time and type.
+       Overriden instances (FBTYPE=NONE) will have higher ordinal num */
+    qsort(calfilter.freebusy.fb, calfilter.freebusy.len,
+          sizeof(struct freebusy), compare_freebusy_with_type);
+
+    /* Determine which existing components we want to keep */
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp; comp = nextcomp) {
+        nextcomp = icalcomponent_get_next_component(ical, kind);
+        struct icaltimetype recurid;
+        struct freebusy *found;
+
+        recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+        if (icaltime_is_null_time(recurid)) {
+            recurid = icalcomponent_get_dtstart(comp);
+        }
+        recurid = icaltime_convert_to_zone(recurid, utc_zone);
+        recurid.is_date = 0;  /* make DATE-TIME for comparison */
+
+        found = bsearch(&recurid, calfilter.freebusy.fb,
+                        calfilter.freebusy.len,
+                        sizeof(struct freebusy), compare_recurid);
+        if (found) {
+            /* Strip unwanted properties from component */
+
+            /* Set DTSTART/DTEND/RECURRENCEID to UTC */
+            icalcomponent_set_dtstart(comp, found->per.start);
+            icalcomponent_set_dtend(comp, found->per.end);
+
+            prop = icalcomponent_get_first_property(comp,
+                                                    ICAL_RECURRENCEID_PROPERTY);
+            if (prop) {
+                icalproperty_remove_parameter_by_kind(prop,
+                                                      ICAL_TZID_PARAMETER);
+                icalproperty_set_recurrenceid(prop, recurid);
+            }
+            else if (icaltime_compare(recurid, found->per.start)) {
+                /* Overridden master instance */
+                icalcomponent_remove_component(ical, comp);
+            }
+
+            /* Mark this instance as handled */
+            found->type = ICAL_FBTYPE_NONE;
+        }
+        else {
+            /* Remove this component (doesn't overlap expand range) */
+            icalcomponent_remove_component(ical, comp);
+            if (comp != master) icalcomponent_free(comp);
+        }
+    }
+
+    /* Create recurrence components for remaining instances */
+    for (i = 0; i < calfilter.freebusy.len; i++) {
+        struct freebusy *fb = &calfilter.freebusy.fb[i];
+
+        if (fb->type == ICAL_FBTYPE_NONE) continue;
+
+        comp = icalcomponent_new_clone(master);
+        icalcomponent_set_dtstart(comp, fb->per.start);
+        icalcomponent_set_dtend(comp, fb->per.end);
+        icalcomponent_set_recurrenceid(comp, fb->recurid);
+        icalcomponent_add_component(ical, comp);
+    }
+
+    /* Cleanup */
+    if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+    if (!icalcomponent_get_parent(master)) icalcomponent_free(master);
+}
+
+static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
+{
+    icaltime_span limitspan;
+    icaltimetype dtstart, dtend, recurid;
+    struct icaldurationtype dtduration = icaldurationtype_null_duration();
+    icalcomponent *comp, *nextcomp;
+    icalcomponent_kind kind;
+
+    limitspan.start = icaltime_as_timet_with_zone(limit->start, utc_zone);
+    limitspan.end = icaltime_as_timet_with_zone(limit->end, utc_zone);
+
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+
+    /* Find master component */
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+
+        recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+
+        if (icaltime_is_null_time(recurid)) {
+            /* Calculate duration of master component */
+            dtstart = icalcomponent_get_dtstart(comp);
+            dtend = icalcomponent_get_dtend(comp);
+            dtduration = icaltime_subtract(dtend, dtstart);
+            break;
+        }
+    }
+
+    /* Check spans of each override against our limit span */
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp; comp = nextcomp) {
+
+        icaltime_span recurspan;
+
+        nextcomp = icalcomponent_get_next_component(ical, kind);
+        recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+
+        /* Skip master component */
+        if (icaltime_is_null_time(recurid)) continue;
+
+        /* Check span of override */
+        dtstart = icalcomponent_get_dtstart(comp);
+        dtend = icalcomponent_get_dtend(comp);
+        recurspan = icaltime_span_new(dtstart, dtend, 1);
+        if (icaltime_span_overlaps(&recurspan, &limitspan)) continue;
+
+        /* Check span of original occurrence */
+        dtstart = recurid;
+        dtend = icaltime_add(dtstart, dtduration);
+        recurspan = icaltime_span_new(dtstart, dtend, 1);
+        if (icaltime_span_overlaps(&recurspan, &limitspan)) continue;
+
+        /* Remove this component (doesn't overlap limit range) */
+        icalcomponent_remove_component(ical, comp);
+        icalcomponent_free(comp);
+    }
+}
+
 /* Callback to prescreen/fetch CALDAV:calendar-data */
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
@@ -4762,17 +4924,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         data = fctx->msg_buf.s + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
 
-        if (!icaltime_is_null_time(partial->start)) {
-            /* Expand recurrences */
-            struct calrange_filter calfilter;
-            icalcomponent *master, *comp, *nextcomp;
-            icalproperty *prop, *nextprop;
-            icalcomponent_kind kind;
-            unsigned i;
-
-            memset(&calfilter, 0, sizeof(struct calrange_filter));
-            calfilter.start = partial->start;
-            calfilter.end = partial->end;
+        if (!icaltime_is_null_time(partial->range.start)) {
+            icalcomponent *comp, *nextcomp;
 
             if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
             ical = fctx->obj;
@@ -4789,97 +4942,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                 }
             }
 
-            kind =
-                icalcomponent_isa(icalcomponent_get_first_real_component(ical));
-
-            expand_occurrences(ical, &master, kind, &calfilter);
-
-            /* Strip unwanted properties from master component */
-            for (prop = icalcomponent_get_first_property(master,
-                                                         ICAL_ANY_PROPERTY);
-                 prop; prop = nextprop) {
-                nextprop = icalcomponent_get_next_property(master,
-                                                           ICAL_ANY_PROPERTY);
-                switch (icalproperty_isa(prop)) {
-                case ICAL_RRULE_PROPERTY:
-                case ICAL_RDATE_PROPERTY:
-                case ICAL_EXDATE_PROPERTY:
-                    icalcomponent_remove_property(master, prop);
-                    icalproperty_free(prop);
-                    break;
-
-                default:
-                    break;
-                }
-            }
-
-            /* Re-sort freebusy periods by start time and type.
-               Overriden instances (FBTYPE=NONE) will have higher ordinal num */
-            qsort(calfilter.freebusy.fb, calfilter.freebusy.len,
-                  sizeof(struct freebusy), compare_freebusy_with_type);
-
-            /* Determine which existing components we want to keep */
-            for (comp = icalcomponent_get_first_component(ical, kind);
-                 comp; comp = nextcomp) {
-                nextcomp = icalcomponent_get_next_component(ical, kind);
-                struct icaltimetype recurid;
-                struct freebusy *found;
-
-                recurid = icalcomponent_get_recurrenceid_with_zone(comp);
-                if (icaltime_is_null_time(recurid)) {
-                    recurid = icalcomponent_get_dtstart(comp);
-                }
-                recurid = icaltime_convert_to_zone(recurid, utc_zone);
-                recurid.is_date = 0;  /* make DATE-TIME for comparison */
-
-                found = bsearch(&recurid, calfilter.freebusy.fb,
-                                calfilter.freebusy.len,
-                                sizeof(struct freebusy), compare_recurid);
-                if (found) {
-                    /* Strip unwanted properties from component */
-
-                    /* Set DTSTART/DTEND/RECURRENCEID to UTC */
-                    icalcomponent_set_dtstart(comp, found->per.start);
-                    icalcomponent_set_dtend(comp, found->per.end);
-
-                    prop = icalcomponent_get_first_property(comp,
-                                                            ICAL_RECURRENCEID_PROPERTY);
-                    if (prop) {
-                        icalproperty_remove_parameter_by_kind(prop,
-                                                              ICAL_TZID_PARAMETER);
-                        icalproperty_set_recurrenceid(prop, recurid);
-                    }
-                    else if (icaltime_compare(recurid, found->per.start)) {
-                        /* Overridden master instance */
-                        icalcomponent_remove_component(ical, comp);
-                    }
-
-                    /* Mark this instance as handled */
-                    found->type = ICAL_FBTYPE_NONE;
-                }
-                else {
-                    /* Remove this component (doesn't overlap expand range) */
-                    icalcomponent_remove_component(ical, comp);
-                    if (comp != master) icalcomponent_free(comp);
-                }
-            }
-
-            /* Create recurrence components for remaining instances */
-            for (i = 0; i < calfilter.freebusy.len; i++) {
-                struct freebusy *fb = &calfilter.freebusy.fb[i];
-
-                if (fb->type == ICAL_FBTYPE_NONE) continue;
-
-                comp = icalcomponent_new_clone(master);
-                icalcomponent_set_dtstart(comp, fb->per.start);
-                icalcomponent_set_dtend(comp, fb->per.end);
-                icalcomponent_set_recurrenceid(comp, fb->recurid);
-                icalcomponent_add_component(ical, comp);
-            }
-
-            /* Cleanup */
-            if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
-            if (!icalcomponent_get_parent(master)) icalcomponent_free(master);
+            if (partial->expand) expand_caldata(ical, &partial->range);
+            else limit_caldata(ical, &partial->range);
         }
 
         if (partial->comp) {
@@ -4900,8 +4964,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         xmlNodePtr node;
 
         /* Initialize expand to be "empty" */
-        partial->start = icaltime_null_time();
-        partial->end = icaltime_null_time();
+        partial->range.start = icaltime_null_time();
+        partial->range.end = icaltime_null_time();
         partial->comp = NULL;
 
         /* Check for and parse child elements of CALDAV:calendar-data */
@@ -4909,15 +4973,17 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
              node = xmlNextElementSibling(node)) {
             xmlChar *prop;
 
-            if (!xmlStrcmp(node->name, BAD_CAST "expand")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "expand") ||
+                !xmlStrcmp(node->name, BAD_CAST "limit-recurrence-set")) {
+                partial->expand = (node->name[0] == 'e');
                 prop = xmlGetProp(node, BAD_CAST "start");
                 if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
-                partial->start = icaltime_from_string((char *) prop);
+                partial->range.start = icaltime_from_string((char *) prop);
                 xmlFree(prop);
 
                 prop = xmlGetProp(node, BAD_CAST "end");
                 if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
-                partial->end = icaltime_from_string((char *) prop);
+                partial->range.end = icaltime_from_string((char *) prop);
                 xmlFree(prop);
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
@@ -4926,11 +4992,6 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                     partial->comp->kind != ICAL_VCALENDAR_COMPONENT) {
                     return (*fctx->ret = HTTP_BAD_REQUEST);
                 }
-            }
-            else if (!xmlStrcmp(node->name, BAD_CAST "limit-recurrence-set")) {
-                syslog(LOG_NOTICE,
-                       "Client attempted to use CALDAV:limit-recurrence-set");
-                return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set")) {
                 syslog(LOG_NOTICE,
