@@ -63,6 +63,7 @@ Although there is no limit to the length of a line, a ``\\''
 force it to continue on the next one.  No additional whitespace is
 inserted before or after the ``\\''.  Note that a line that is split
 using ``\\'' character(s) is still considered a single line.
+
 For example
 .IP
 \fIoption\fR:\\
@@ -197,6 +198,7 @@ are listed with ``<none>''.
 .PP
 Each line of the file specifies the properties of an annotation and
 has the following form:
+
 .IP
 \fIname\fR, \fIscope\fR, \fIattrib-type\fR, \fIproxy-type\fR,
 \fIattrib-names\fR, \fIacl\fR
@@ -1375,6 +1377,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
 The external program will be called with the following
 command line options:
+
 .TP
 .BI \-c " class"
 .\"
@@ -1813,6 +1816,7 @@ If all backends are over that limit, this feature is not used anymore.
 { "serverinfo", "on", ENUM("off", "min", "on") }
 /* The server information to display in the greeting and capability
    responses. Information is displayed as follows:
+   
 .IP
    "off" = no server information in the greeting or capabilities
 .br
