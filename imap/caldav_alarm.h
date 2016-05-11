@@ -102,6 +102,6 @@ int caldav_alarm_delmbox(sqldb_t *alarmdb, const char *mboxname);
 void caldav_alarm_fini(struct caldav_alarm_data *alarmdata);
 
 /* distribute alarms with triggers in the next minute */
-int caldav_alarm_process();
+int caldav_alarm_process(time_t runattime);
 
 #endif /* CALDAV_ALARM_H */

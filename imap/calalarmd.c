@@ -94,18 +94,22 @@ int main(int argc, char **argv)
     int opt;
     pid_t pid;
     char *alt_config = NULL;
+    time_t runattime = 0;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:di:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:dt:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
         case 'd': /* don't fork. debugging mode */
             debugmode = 1;
+            break;
+        case 't': /* run a single scan at this time */
+            runattime = atoi(optarg);
             break;
         default:
             fprintf(stderr, "invalid argument\n");
@@ -124,6 +128,11 @@ int main(int argc, char **argv)
     caldav_init();
 
     mboxevent_init();
+
+    if (runattime) {
+        caldav_alarm_process(runattime);
+        shut_down(0);
+    }
 
     signals_set_shutdown(shut_down);
     signals_add_handlers(0);
@@ -152,7 +161,7 @@ int main(int argc, char **argv)
         signals_poll();
 
         gettimeofday(&start, 0);
-        caldav_alarm_process();
+        caldav_alarm_process(0);
         gettimeofday(&end, 0);
 
         signals_poll();

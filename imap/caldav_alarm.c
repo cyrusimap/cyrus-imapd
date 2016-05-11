@@ -65,10 +65,13 @@
 #include "imap/imap_err.h"
 
 static struct namespace caldav_alarm_namespace;
+icaltimezone *utc_zone = NULL;
 
 EXPORTED int caldav_alarm_init(void)
 {
     int r;
+
+    utc_zone = icaltimezone_get_utc_timezone();
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&caldav_alarm_namespace, 1))) {
@@ -347,15 +350,14 @@ static void recur_cb(icalcomponent *comp, struct icaltime_span *span, void *rock
 {
     struct recur_cb_data *rdata = (struct recur_cb_data *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
     /* is_date true ensures that the time is set to 00:00:00, but
      * we still want to use it as a full datetime later, so we
      * clear the flag once we're done with it */
     struct icaltimetype start =
-        icaltime_from_timet_with_zone(span->start, is_date, utc);
+        icaltime_from_timet_with_zone(span->start, is_date, utc_zone);
     struct icaltimetype end =
-        icaltime_from_timet_with_zone(span->end, is_date, utc);
+        icaltime_from_timet_with_zone(span->end, is_date, utc_zone);
     start.is_date = end.is_date = 0;
 
     int i;
@@ -473,8 +475,6 @@ EXPORTED int caldav_alarm_prepare(
         assert(ntriggers <= nalarms);
     }
 
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-
     struct recur_cb_data rdata = {
         .triggerdata    = triggerdata,
         .ntriggers      = ntriggers,
@@ -493,7 +493,7 @@ EXPORTED int caldav_alarm_prepare(
         icalcomponent_foreach_recurrence(
             comp,
             rdata.now,
-            icaltime_from_timet_with_zone(INT_MAX, 0, utc),
+            icaltime_from_timet_with_zone(INT_MAX, 0, utc_zone),
             recur_cb,
             &rdata);
 
@@ -694,12 +694,14 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
 }
 
 /* process alarms with triggers within before a given time */
-EXPORTED int caldav_alarm_process()
+EXPORTED int caldav_alarm_process(time_t runattime)
 {
     syslog(LOG_DEBUG, "processing alarms");
 
     // all alarms in the past and within the next 60 seconds
-    icaltimetype before = icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
+    icaltimetype before = runattime
+                        ? icaltime_from_timet_with_zone(runattime, 0, utc_zone)
+                        : icaltime_current_time_with_zone(utc_zone);
     icaltime_adjust(&before, 0, 0, 0, 60);
 
     struct sqldb_bindval bval[] = {
