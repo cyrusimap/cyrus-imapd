@@ -506,12 +506,13 @@ dnl
 dnl Search engines - SQUAT
 dnl
 
-enable_squat=yes
 AC_ARG_ENABLE(squat,
-        [  --disable-squat         disable Squat support])
-if test "x$enable_squat" != xno ; then
-    AC_DEFINE(USE_SQUAT,[],[Build in Squat support?])
+    [AS_HELP_STRING([--disable-squat], [disable Squat support])],,[enable_squat="yes";])
+
+if test "$enable_squat" != "no"; then
+    AC_DEFINE(USE_SQUAT,[],[Build in Sieve support?])
 fi
+
 AM_CONDITIONAL([USE_SQUAT], [test "${enable_squat}" != "no"])
 
 dnl
