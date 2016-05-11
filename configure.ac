@@ -1502,12 +1502,13 @@ dnl
                         [Build jCal/jCard/JMAP/TZdist support into httpd?]),
                 AC_MSG_ERROR([Need jansson for http]))
 
-        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
-                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
-                        AC_DEFINE(WITH_DKIM,[],
-                                [Build DKIM support into iSchedule?]),
-                        AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
-                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
+dnl  Don't bother checking for DKIM until iSchedule gains traction
+dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
+dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
+dnl                        AC_DEFINE(WITH_DKIM,[],
+dnl                                [Build DKIM support into iSchedule?]),
+dnl                        AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
+dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
 
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS}"
         HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS}"
