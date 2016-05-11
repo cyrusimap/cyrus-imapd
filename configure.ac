@@ -1493,14 +1493,19 @@ dnl
                 AC_DEFINE(HAVE_VPOLL,[], [Build VPOLL support into httpd?]),
                 AC_MSG_WARN([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
 
-        AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
-                AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]),
+        AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported, [
+                PKG_CHECK_MODULES([ICU4C], [icu-i18n], [
+                        AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])
+                        LIBS="$LIBS ${ICU4C_LIBS}"
+                        ],
+                        AC_MSG_WARN([Need ICU4C for RSCALE support in httpd]))
+                ],
                 AC_MSG_WARN([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
 
         PKG_CHECK_MODULES([JANSSON], [jansson],
                 AC_DEFINE(WITH_JSON,[],
                         [Build jCal/jCard/JMAP/TZdist support into httpd?]),
-                AC_MSG_ERROR([Need jansson for http]))
+                AC_MSG_ERROR([Need Jansson for http]))
 
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
