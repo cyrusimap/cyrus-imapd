@@ -14,6 +14,8 @@ extern "C" {
 #include "search_part.h"
 #include "xmalloc.h"
 #include "xapian_wrap.h"
+#include "charset.h"
+
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -21,7 +23,8 @@ extern "C" {
 
 #include <xapian.h>
 
-
+// from global.h
+extern int charset_flags;
 
 #define SLOT_CYRUSID        0
 
@@ -705,6 +708,35 @@ struct xapian_snipgen
     Xapian::SnippetGenerator *snippet_generator;
 };
 
+class CharsetTermNormalizer : public Xapian::SnippetGenerator::TermNormalizer
+{
+    charset_index utf8;
+    std::map<const std::string, std::string> cache;
+
+    public:
+    CharsetTermNormalizer() : utf8(charset_lookupname("utf-8")) { }
+
+    virtual const std::string & normalize(const std::string & term)
+    {
+        // Is this term already in the cache?
+        std::map<const std::string, std::string>::iterator it = cache.find(term);
+        if (it != cache.end()) {
+            return it->second;
+        }
+
+        // Convert the term to search form
+        char *q = charset_convert(term.c_str(), utf8, charset_flags);
+        if (!q) {
+            return term;
+        }
+
+        // Store in cache and return the normalized term
+        cache[term] = q;
+        free(q);
+        return cache[term];
+    }
+};
+
 xapian_snipgen_t *xapian_snipgen_new(void)
 {
     xapian_snipgen_t *snipgen = NULL;
@@ -715,6 +747,7 @@ xapian_snipgen_t *xapian_snipgen_new(void)
         snipgen->stemmer = new Xapian::Stem("en");
         snipgen->snippet_generator = new Xapian::SnippetGenerator;
         snipgen->snippet_generator->set_stemmer(*snipgen->stemmer);
+        snipgen->snippet_generator->set_normalizer(new CharsetTermNormalizer);
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
