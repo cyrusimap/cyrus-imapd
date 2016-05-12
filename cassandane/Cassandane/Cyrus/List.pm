@@ -129,7 +129,7 @@ sub _assert_list_data
             $expected_flag_str = join q{ }, sort @{$expected_mailbox_flags->{$mailbox}};
         }
         else {
-            $expected_flag_str = $expected_mailbox_flags->{$mailbox};
+            $expected_flag_str = join q{ }, sort split / /, $expected_mailbox_flags->{$mailbox};
         }
 
         $self->assert_str_equals(
@@ -473,6 +473,383 @@ sub test_inbox_altnamespace
         'INBOX/sub' => '\\HasNoChildren',
         'INBOX/very' => '\\HasChildren \\Noselect',
     });
+}
+
+# https://tools.ietf.org/html/rfc3501#section-6.3.8
+# If the "%" wildcard is the last character of a
+# mailbox name argument, matching levels of hierarchy
+# are also returned.
+sub test_percent
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # INBOX needs to exist even if we can't see it
+    $admintalk->create('user.bar');
+
+    foreach my $Folder ("user.cassandane.INBOX.sub", "user.cassandane.AEARLY",
+                        "user.cassandane.sub2", "user.cassandane.sub2.achild",
+                        "user.cassandane.INBOX.very.deep.one",
+                        "user.cassandane.not.so.deep",
+                        # stuff you can't see
+                        "user.cassandane.INBOX",
+                        "user.cassandane.inbox",
+                        "user.cassandane.inbox.subnobody.deep",
+                        "user.cassandane.Inbox.subnobody.deep",
+                        # other users
+                        "user.bar.Trash",
+                        "user.foo",
+                        "user.foo.really.deep",
+                        # shared
+                        "shared stuff.something") {
+        $admintalk->create($Folder);
+        $admintalk->setacl($Folder, 'cassandane' => 'lrswipkxtecd');
+    }
+
+    xlog "List *";
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '.', {
+        'INBOX' => '\\HasChildren',
+        'INBOX.INBOX' => '\\HasChildren',
+        'INBOX.INBOX.sub' => '\\HasNoChildren',
+        'INBOX.INBOX.very.deep.one' => '\\HasNoChildren',
+        'INBOX.Inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.inbox' => '\\HasChildren',
+        'INBOX.inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.AEARLY' => '\\HasNoChildren',
+        'INBOX.not.so.deep' => '\\HasNoChildren',
+        'INBOX.sub2' => '\\HasChildren',
+        'INBOX.sub2.achild' => '\\HasNoChildren',
+        'user.bar.Trash' => '\\HasNoChildren',
+        'user.foo' => '\\HasChildren',
+        'user.foo.really.deep' => '\\HasNoChildren',
+        'shared stuff.something' => '\\HasNoChildren',
+    });
+
+    #xlog "LIST %";
+    #$data = $imaptalk->list("", "%");
+    #$self->_assert_list_data($data, '.', {
+        #'INBOX' => '\\HasChildren',
+        #'user' => '\\Noselect \\HasChildren',
+        #'shared stuff' => '\\Noselect \\HasChildren',
+    #});
+
+    xlog "List *%";
+    $data = $imaptalk->list("", "*%");
+    $self->_assert_list_data($data, '.', {
+        'INBOX' => '\\HasChildren',
+        'INBOX.INBOX' => '\\HasChildren',
+        'INBOX.INBOX.sub' => '\\HasNoChildren',
+        'INBOX.INBOX.very' => '\\Noselect \\HasChildren',
+        'INBOX.INBOX.very.deep' => '\\Noselect \\HasChildren',
+        'INBOX.INBOX.very.deep.one' => '\\HasNoChildren',
+        'INBOX.Inbox' => '\\Noselect \\HasChildren',
+        'INBOX.Inbox.subnobody' => '\\Noselect \\HasChildren',
+        'INBOX.Inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.inbox' => '\\HasChildren',
+        'INBOX.inbox.subnobody' => '\\Noselect \\HasChildren',
+        'INBOX.inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.AEARLY' => '\\HasNoChildren',
+        'INBOX.not' => '\\Noselect \\HasChildren',
+        'INBOX.not.so' => '\\Noselect \\HasChildren',
+        'INBOX.not.so.deep' => '\\HasNoChildren',
+        'INBOX.sub2' => '\\HasChildren',
+        'INBOX.sub2.achild' => '\\HasNoChildren',
+        'user' => '\\Noselect \\HasChildren',
+        'user.bar' => '\\Noselect \\HasChildren',
+        'user.bar.Trash' => '\\HasNoChildren',
+        'user.foo' => '\\HasChildren',
+        'user.foo.really' => '\\Noselect \\HasChildren',
+        'user.foo.really.deep' => '\\HasNoChildren',
+        'shared stuff' => '\\Noselect \\HasChildren',
+        'shared stuff.something' => '\\HasNoChildren',
+    });
+
+    xlog "LIST INBOX.*";
+    $data = $imaptalk->list("INBOX.", "*");
+    $self->_assert_list_data($data, '.', {
+        'INBOX.INBOX' => '\\HasChildren',
+        'INBOX.INBOX.sub' => '\\HasNoChildren',
+        'INBOX.INBOX.very.deep.one' => '\\HasNoChildren',
+        'INBOX.Inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.inbox' => '\\HasChildren',
+        'INBOX.inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.AEARLY' => '\\HasNoChildren',
+        'INBOX.not.so.deep' => '\\HasNoChildren',
+        'INBOX.sub2' => '\\HasChildren',
+        'INBOX.sub2.achild' => '\\HasNoChildren',
+    });
+
+    xlog "LIST INBOX.*%";
+    $data = $imaptalk->list("INBOX.", "*%");
+    $self->_assert_list_data($data, '.', {
+        'INBOX.INBOX' => '\\HasChildren',
+        'INBOX.INBOX.sub' => '\\HasNoChildren',
+        'INBOX.INBOX.very' => '\\Noselect \\HasChildren',
+        'INBOX.INBOX.very.deep' => '\\Noselect \\HasChildren',
+        'INBOX.INBOX.very.deep.one' => '\\HasNoChildren',
+        'INBOX.Inbox' => '\\Noselect \\HasChildren',
+        'INBOX.Inbox.subnobody' => '\\Noselect \\HasChildren',
+        'INBOX.Inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.inbox' => '\\HasChildren',
+        'INBOX.inbox.subnobody' => '\\Noselect \\HasChildren',
+        'INBOX.inbox.subnobody.deep' => '\\HasNoChildren',
+        'INBOX.AEARLY' => '\\HasNoChildren',
+        'INBOX.not' => '\\Noselect \\HasChildren',
+        'INBOX.not.so' => '\\Noselect \\HasChildren',
+        'INBOX.not.so.deep' => '\\HasNoChildren',
+        'INBOX.sub2' => '\\HasChildren',
+        'INBOX.sub2.achild' => '\\HasNoChildren',
+    });
+
+    xlog "LIST INBOX.%";
+    $data = $imaptalk->list("INBOX.", "%");
+    $self->_assert_list_data($data, '.', {
+        'INBOX.INBOX' => '\\HasChildren',
+        'INBOX.Inbox' => '\\Noselect \\HasChildren',
+        'INBOX.inbox' => '\\HasChildren',
+        'INBOX.AEARLY' => '\\HasNoChildren',
+        'INBOX.not' => '\\Noselect \\HasChildren',
+        'INBOX.sub2' => '\\HasChildren',
+    });
+
+    xlog "List user.*";
+    $data = $imaptalk->list("user.", "*");
+    $self->_assert_list_data($data, '.', {
+        'user.bar.Trash' => '\\HasNoChildren',
+        'user.foo' => '\\HasChildren',
+        'user.foo.really.deep' => '\\HasNoChildren',
+    });
+
+    xlog "List user.*%";
+    $data = $imaptalk->list("user.", "*%");
+    $self->_assert_list_data($data, '.', {
+        'user.bar' => '\\Noselect \\HasChildren',
+        'user.bar.Trash' => '\\HasNoChildren',
+        'user.foo' => '\\HasChildren',
+        'user.foo.really' => '\\Noselect \\HasChildren',
+        'user.foo.really.deep' => '\\HasNoChildren',
+    });
+
+    #xlog "List user.%";
+    #$data = $imaptalk->list("user.", "%");
+    #$self->_assert_list_data($data, '.', {
+    #    'user.bar' => '\\Noselect \\HasChildren',
+    #    'user.foo' => '\\HasChildren',
+    #});
+
+}
+
+# https://tools.ietf.org/html/rfc3501#section-6.3.8
+# If the "%" wildcard is the last character of a
+# mailbox name argument, matching levels of hierarchy
+# are also returned.
+sub test_percent_altns
+    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # INBOX needs to exist even if we can't see it
+    $admintalk->create('user/bar');
+
+    foreach my $Folder ("user/cassandane/INBOX/sub", "user/cassandane/AEARLY",
+                        "user/cassandane/sub2", "user/cassandane/sub2/achild",
+                        "user/cassandane/INBOX/very/deep/one",
+                        "user/cassandane/not/so/deep",
+                        # stuff you can't see
+                        "user/cassandane/INBOX",
+                        "user/cassandane/inbox",
+                        "user/cassandane/inbox/subnobody/deep",
+                        "user/cassandane/Inbox/subnobody/deep",
+                        # other users
+                        "user/bar/Trash",
+                        "user/foo",
+                        "user/foo/really/deep",
+                        # shared
+                        "shared stuff/something") {
+        $admintalk->create($Folder);
+        $admintalk->setacl($Folder, 'cassandane' => 'lrswipkxtecd');
+    }
+
+    xlog "List *";
+    my $data = $imaptalk->list("", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\HasChildren',
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very/deep/one' => '\\HasNoChildren',
+        'AEARLY' => '\\HasNoChildren',
+        'not/so/deep' => '\\HasNoChildren',
+        'sub2' => '\\HasChildren',
+        'sub2/achild' => '\\HasNoChildren',
+        'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Alt Folders/inbox' => '\\HasChildren',
+        'Alt Folders/inbox/subnobody/deep' => '\\HasNoChildren',
+        'Alt Folders/Inbox/subnobody/deep' => '\\HasNoChildren',
+        'Other Users/bar@defdomain/Trash' => '\\HasNoChildren',
+        'Other Users/foo@defdomain' => '\\HasChildren',
+        'Other Users/foo@defdomain/really/deep' => '\\HasNoChildren',
+        'Shared Folders/shared stuff@defdomain/something' => '\\HasNoChildren',
+    });
+
+    xlog "List *%";
+    $data = $imaptalk->list("", "*%");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\HasChildren',
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very' => '\\Noselect \\HasChildren',
+        'INBOX/very/deep' => '\\Noselect \\HasChildren',
+        'INBOX/very/deep/one' => '\\HasNoChildren',
+        'AEARLY' => '\\HasNoChildren',
+        'not' => '\\Noselect \\HasChildren',
+        'not/so' => '\\Noselect \\HasChildren',
+        'not/so/deep' => '\\HasNoChildren',
+        'sub2' => '\\HasChildren',
+        'sub2/achild' => '\\HasNoChildren',
+        'Alt Folders' => '\\Noselect \\HasChildren',
+        'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Alt Folders/inbox' => '\\HasChildren',
+        'Alt Folders/inbox/subnobody' => '\\Noselect \\HasChildren',
+        'Alt Folders/inbox/subnobody/deep' => '\\HasNoChildren',
+        'Alt Folders/Inbox' => '\\Noselect \\HasChildren',
+        'Alt Folders/Inbox/subnobody' => '\\Noselect \\HasChildren',
+        'Alt Folders/Inbox/subnobody/deep' => '\\HasNoChildren',
+        'Other Users' => '\\Noselect \\HasChildren',
+        'Other Users/bar@defdomain' => '\\Noselect \\HasChildren',
+        'Other Users/bar@defdomain/Trash' => '\\HasNoChildren',
+        'Other Users/foo@defdomain' => '\\HasChildren',
+        'Other Users/foo@defdomain/really' => '\\Noselect \\HasChildren',
+        'Other Users/foo@defdomain/really/deep' => '\\HasNoChildren',
+        'Shared Folders' => '\\Noselect \\HasChildren',
+        'Shared Folders/shared stuff@defdomain' => '\\Noselect \\HasChildren',
+        'Shared Folders/shared stuff@defdomain/something' => '\\HasNoChildren',
+    });
+
+    xlog "List %";
+    $data = $imaptalk->list("", "%");
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\HasChildren',
+        'AEARLY' => '\\HasNoChildren',
+        'not' => '\\Noselect \\HasChildren',
+        'sub2' => '\\HasChildren',
+        'Alt Folders' => '\\Noselect \\HasChildren',
+        'Other Users' => '\\Noselect \\HasChildren',
+        'Shared Folders' => '\\Noselect \\HasChildren',
+    });
+
+    # check some partials
+
+    xlog "List INBOX/*";
+    $data = $imaptalk->list("INBOX/", "*");
+    $self->_assert_list_data($data, '/', {
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very/deep/one' => '\\HasNoChildren',
+    });
+
+    xlog "List INBOX/*%";
+    $data = $imaptalk->list("INBOX/", "*%");
+    $self->_assert_list_data($data, '/', {
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very' => '\\Noselect \\HasChildren',
+        'INBOX/very/deep' => '\\Noselect \\HasChildren',
+        'INBOX/very/deep/one' => '\\HasNoChildren',
+    });
+
+    xlog "List INBOX/%";
+    $data = $imaptalk->list("INBOX/", "%");
+    $self->_assert_list_data($data, '/', {
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very' => '\\Noselect \\HasChildren',
+    });
+
+    xlog "List AEARLY/*";
+    $data = $imaptalk->list("AEARLY/", "*");
+    $self->_assert_list_data($data, '/', {});
+
+    xlog "List AEARLY/*%";
+    $data = $imaptalk->list("AEARLY/", "*%");
+    $self->_assert_list_data($data, '/', {});
+
+    xlog "List AEARLY/%";
+    $data = $imaptalk->list("AEARLY/", "%");
+    $self->_assert_list_data($data, '/', {});
+
+    xlog "List sub2/*";
+    $data = $imaptalk->list("sub2/", "*");
+    $self->_assert_list_data($data, '/', {
+        'sub2/achild' => '\\HasNoChildren',
+    });
+
+    xlog "List sub2/*%";
+    $data = $imaptalk->list("sub2/", "*%");
+    $self->_assert_list_data($data, '/', {
+        'sub2/achild' => '\\HasNoChildren',
+    });
+
+    xlog "List sub2/%";
+    $data = $imaptalk->list("sub2/", "%");
+    $self->_assert_list_data($data, '/', {
+        'sub2/achild' => '\\HasNoChildren',
+    });
+
+    xlog "List Alt Folders/*";
+    $data = $imaptalk->list("Alt Folders/", "*");
+    $self->_assert_list_data($data, '/', {
+        'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Alt Folders/inbox' => '\\HasChildren',
+        'Alt Folders/inbox/subnobody/deep' => '\\HasNoChildren',
+        'Alt Folders/Inbox/subnobody/deep' => '\\HasNoChildren',
+    });
+
+    xlog "List Alt Folders/*%";
+    $data = $imaptalk->list("Alt Folders/", "*%");
+    $self->_assert_list_data($data, '/', {
+        'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Alt Folders/inbox' => '\\HasChildren',
+        'Alt Folders/inbox/subnobody' => '\\Noselect \\HasChildren',
+        'Alt Folders/inbox/subnobody/deep' => '\\HasNoChildren',
+        'Alt Folders/Inbox' => '\\Noselect \\HasChildren',
+        'Alt Folders/Inbox/subnobody' => '\\Noselect \\HasChildren',
+        'Alt Folders/Inbox/subnobody/deep' => '\\HasNoChildren',
+    });
+
+    xlog "List Alt Folders/%";
+    $data = $imaptalk->list("Alt Folders/", "%");
+    $self->_assert_list_data($data, '/', {
+        'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Alt Folders/inbox' => '\\HasChildren',
+        'Alt Folders/Inbox' => '\\Noselect \\HasChildren',
+    });
+
+    xlog "List Other Users/*";
+    $data = $imaptalk->list("Other Users/", "*");
+    $self->_assert_list_data($data, '/', {
+        'Other Users/bar@defdomain/Trash' => '\\HasNoChildren',
+        'Other Users/foo@defdomain' => '\\HasChildren',
+        'Other Users/foo@defdomain/really/deep' => '\\HasNoChildren',
+    });
+
+    xlog "List Other Users/*%";
+    $data = $imaptalk->list("Other Users/", "*%");
+    $self->_assert_list_data($data, '/', {
+        'Other Users/bar@defdomain' => '\\Noselect \\HasChildren',
+        'Other Users/bar@defdomain/Trash' => '\\HasNoChildren',
+        'Other Users/foo@defdomain' => '\\HasChildren',
+        'Other Users/foo@defdomain/really' => '\\Noselect \\HasChildren',
+        'Other Users/foo@defdomain/really/deep' => '\\HasNoChildren',
+    });
+
+    xlog "List Other Users/%";
+    $data = $imaptalk->list("Other Users/", "%");
+    $self->_assert_list_data($data, '/', {
+        'Other Users/bar@defdomain' => '\\Noselect \\HasChildren',
+        'Other Users/foo@defdomain' => '\\HasChildren',
+    });
+
 }
 
 1;
