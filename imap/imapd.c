@@ -10152,6 +10152,7 @@ static int get_snippetargs(struct snippetargs **sap)
     if (c != ' ') goto syntax_error;
 
 out:
+    free(intname);
     buf_free(&arg);
     return c;
 
