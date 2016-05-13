@@ -2533,6 +2533,7 @@ int main(int argc, char **argv)
 
             if (r == -1) {
                 switch (errno) {
+                case EAGAIN:
                 case EINTR:
                     /* Try again to get valid rfds, this time without blocking so we
                      * will definitely process messages without getting interrupted
@@ -2544,9 +2545,6 @@ int main(int argc, char **argv)
                         r = 0;
                         FD_ZERO(&rfds);
                     }
-                    break;
-                case EAGAIN:
-                    /* Try again. */
                     break;
                 default:
                     /* uh oh */
