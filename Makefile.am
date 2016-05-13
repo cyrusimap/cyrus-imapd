@@ -432,7 +432,6 @@ EXTRA_DIST += \
 	perl/imap/Changes \
 	perl/imap/cyradm.sh \
 	perl/imap/cyrperl.h \
-	perl/imap/Cyrus/Shell.pm \
 	perl/imap/examples/auditmbox.pl \
 	perl/imap/examples/imapcollate.pl \
 	perl/imap/examples/imapdu.pl \
