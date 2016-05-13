@@ -4661,6 +4661,8 @@ sub test_setcalendarevents_schedule_request
 
     my $data = $self->{instance}->getnotify();
     my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
@@ -4721,8 +4723,9 @@ sub test_setcalendarevents_schedule_reply
 
 
     my $data = $self->{instance}->getnotify();
-
     my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
@@ -4780,6 +4783,8 @@ sub test_setcalendarevents_schedule_cancel
 
     my $data = $self->{instance}->getnotify();
     my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
