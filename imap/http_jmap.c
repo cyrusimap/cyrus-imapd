@@ -10497,60 +10497,61 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
     }
 }
 
-static int jmap_schedule_ical(const char *userid,
+static int jmap_schedule_ical(struct jmap_req *req,
+                              char **schedaddrp,
                               icalcomponent *oldical,
                               icalcomponent *ical,
                               int mode)
 {
-    struct sched_param sparam;
-    int r;
-    const char *organizer = NULL, *uid;
-    icalcomponent *comp = NULL;
-
-
-    /* Initialize scheduling parameters. */
-    memset(&sparam, 0, sizeof(struct sched_param));
-
     /* Determine if any scheduling is required. */
     icalcomponent *src = mode&JMAP_DESTROY ? oldical : ical;
-    comp = icalcomponent_get_first_component(src, ICAL_VEVENT_COMPONENT);
+    icalcomponent *comp = icalcomponent_get_first_component(src, ICAL_VEVENT_COMPONENT);
     icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) organizer = icalproperty_get_organizer(prop);
-    if (!organizer) {
-        r = 0;
-        goto done;
+    if (!prop) return 0;
+    const char *organizer = icalproperty_get_organizer(prop);
+    if (!organizer) return 0;
+    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+
+    if (!*schedaddrp) {
+        const char **hdr = spool_getheader(req->txn->req_hdrs, "Schedule-Address");
+        if (hdr) *schedaddrp = xstrdup(hdr[0]);
     }
 
-    /* Lookup the organizer. */
-    uid = icalcomponent_get_uid(comp);
-    r = caladdress_lookup(organizer, &sparam, userid);
-    if (r && r != HTTP_NOT_FOUND) {
-        syslog(LOG_ERR, "failed to process scheduling message (org=%s, icaluid=%s)",
-                organizer, uid);
-        goto done;
+    /* XXX - after legacy records are gone, we can strip this and just not send a
+     * cancellation if deleting a record which was never replied to... */
+    if (!*schedaddrp) {
+        /* userid corresponding to target */
+        *schedaddrp = xstrdup(req->userid);
+
+        /* or overridden address-set for target user */
+        const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        char *mailboxname = caldav_mboxname(*schedaddrp, NULL);
+        struct buf buf = BUF_INITIALIZER;
+        int r = annotatemore_lookupmask(mailboxname, annotname,
+                                        *schedaddrp, &buf);
+        free(mailboxname);
+        if (!r && buf.len > 7 && !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
+            free(*schedaddrp);
+            *schedaddrp = xstrdup(buf_cstring(&buf) + 7);
+        }
+        buf_free(&buf);
     }
 
     /* Validate create/update. */
-    if (mode & (JMAP_CREATE|JMAP_UPDATE)) {
+    if (oldical && (mode & (JMAP_CREATE|JMAP_UPDATE))) {
         /* Don't allow ORGANIZER to be changed */
         const char *oldorganizer = NULL;
 
-        if (oldical) {
-            icalcomponent *oldcomp = NULL;
-            icalproperty *prop = NULL;
-            oldcomp = icalcomponent_get_first_component(oldical, ICAL_VEVENT_COMPONENT);
-            if (oldcomp) prop = icalcomponent_get_first_property(oldcomp, ICAL_ORGANIZER_PROPERTY);
-            if (prop) oldorganizer = icalproperty_get_organizer(prop);
-        }
+        icalcomponent *oldcomp = NULL;
+        icalproperty *prop = NULL;
+        oldcomp = icalcomponent_get_first_component(oldical, ICAL_VEVENT_COMPONENT);
+        if (oldcomp) prop = icalcomponent_get_first_property(oldcomp, ICAL_ORGANIZER_PROPERTY);
+        if (prop) oldorganizer = icalproperty_get_organizer(prop);
         if (oldorganizer) {
-            const char *o = oldorganizer;
-            const char *p = organizer;
-            if (!strncasecmp(p, "mailto:", 7)) p += 7;
-            if (!strncasecmp(o, "mailto:", 7)) o += 7;
-            if (strcmp(o, p)) {
+            if (!strncasecmp(oldorganizer, "mailto:", 7)) oldorganizer += 7;
+            if (strcasecmp(oldorganizer, organizer)) {
                 /* XXX This should become a set error. */
-                r = 0;
-                goto done;
+                return 0;
             }
         }
     }
@@ -10558,18 +10559,16 @@ static int jmap_schedule_ical(const char *userid,
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
         /* Send scheduling message. */
-        if (!strcmpsafe(organizer, userid)) {
+        if (!strcmpsafe(organizer, *schedaddrp)) {
             /* Organizer scheduling object resource */
-            sched_request(httpd_userid, userid, oldical, ical);
+            sched_request(req->userid, *schedaddrp, oldical, ical);
         } else {
             /* Attendee scheduling object resource */
-            sched_reply(httpd_userid, userid, oldical, ical);
+            sched_reply(req->userid, *schedaddrp, oldical, ical);
         }
     }
 
-done:
-    sched_param_free(&sparam);
-    return r;
+    return 0;
 }
 
 /* Create, update or destroy the JMAP calendar event. Mode must be one of
@@ -10603,6 +10602,8 @@ static int jmap_write_calendarevent(json_t *event,
     struct calevent_rock rock;
     json_t *invalid = json_pack("[]");
     const char *calendarId = NULL;
+
+    char *schedule_address = NULL;
 
     if (!destroy) {
         /* Look up the calendarId property. */
@@ -10695,7 +10696,7 @@ static int jmap_write_calendarevent(json_t *event,
 
     if (!create) {
         /* Load VEVENT from record. */
-        ical = record_to_ical(mbox, &record, NULL);
+        ical = record_to_ical(mbox, &record, &schedule_address);
         if (!ical) {
             syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
                     cdata->dav.imap_uid, mbox->name);
@@ -10791,8 +10792,9 @@ static int jmap_write_calendarevent(json_t *event,
     }
 
     /* Handle scheduling. */
-    r = jmap_schedule_ical(req->userid, oldical, ical, mode);
+    r = jmap_schedule_ical(req, &schedule_address, oldical, ical, mode);
     if (r) goto done;
+
 
     if (destroy || (update && dstmbox)) {
         /* Expunge the resource from mailbox. */
@@ -10838,7 +10840,7 @@ static int jmap_write_calendarevent(json_t *event,
         memset(&txn, 0, sizeof(struct transaction_t));
         txn.req_hdrs = spool_new_hdrcache();
         /* XXX - fix userid */
-        r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, NULL);
+        r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, schedule_address);
         spool_free_hdrcache(txn.req_hdrs);
         buf_free(&txn.buf);
         if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -10857,6 +10859,7 @@ done:
     if (resource) free(resource);
     if (ical) icalcomponent_free(ical);
     if (oldical) icalcomponent_free(oldical);
+    free(schedule_address);
     json_decref(invalid);
     return r;
 }
