@@ -92,6 +92,7 @@ sub set_up
 	    url => '/',
 	    expandurl => 1,
 	);
+        $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
 	$self->{jmap} = Mail::JMAPTalk->new(
 	    user => 'cassandane',
 	    password => 'pass',
@@ -4649,11 +4650,11 @@ sub test_setcalendarevents_schedule_request
                         "$id" => {
                             "organizer" => {
                                 "name" => "Cassandane",
-                                "email" => "cassandane",
+                                "email" => "cassandane\@example.com",
                             },
                             "attendees" => [{
                                 "name" => "Bugs Bunny",
-                                "email" => "bugs\@localhost",
+                                "email" => "bugs\@example.com",
                                 "rsvp" => ""
                             }]
                         }
@@ -4666,9 +4667,9 @@ sub test_setcalendarevents_schedule_request
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
-    $self->assert_str_equals($payload->{recipient}, "bugs\@localhost");
+    $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
     $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "ATTENDEE;CN=Bugs Bunny;PARTSTAT=NEEDS-ACTION:mailto:bugs\@localhost");
+    $self->assert($ical =~ "ATTENDEE;CN=Bugs Bunny;PARTSTAT=NEEDS-ACTION:mailto:bugs\@example.com");
 }
 
 sub test_setcalendarevents_schedule_reply
@@ -4711,11 +4712,11 @@ sub test_setcalendarevents_schedule_reply
                         "$id" => {
                             "organizer" => {
                                 "name" => "Bugs Bunny",
-                                "email" => "bugs\@localhost"
+                                "email" => "bugs\@example.com"
                             },
                             "attendees" => [{
                                 "name" => "Cassandane",
-                                "email" => "cassandane",
+                                "email" => "cassandane\@example.com",
                                 "rsvp" => "maybe"
                             }]
                         }
@@ -4729,7 +4730,7 @@ sub test_setcalendarevents_schedule_reply
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
-    $self->assert_str_equals($payload->{recipient}, "bugs\@localhost");
+    $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
     $self->assert($ical =~ "METHOD:REPLY");
     $self->assert($ical =~ "ATTENDEE;CN=Cassandane;PARTSTAT=TENTATIVE:mailto:cassandane");
 }
@@ -4764,11 +4765,11 @@ sub test_setcalendarevents_schedule_cancel
                             "endTimeZone" => "Australia/Melbourne",
                             "organizer" => {
                                 "name" => "Cassandane",
-                                "email" => "cassandane",
+                                "email" => "cassandane\@example.com",
                             },
                             "attendees" => [{
                                 "name" => "Bugs Bunny",
-                                "email" => "bugs\@localhost",
+                                "email" => "bugs\@example.com",
                                 "rsvp" => ""
                             }]
                         }
@@ -4788,7 +4789,7 @@ sub test_setcalendarevents_schedule_cancel
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
-    $self->assert_str_equals($payload->{recipient}, "bugs\@localhost");
+    $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
     $self->assert($ical =~ "METHOD:CANCEL");
 }
 
