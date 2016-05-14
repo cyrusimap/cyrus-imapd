@@ -82,7 +82,6 @@ sub set_up
 	expandurl => 1,
     );
     $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
-    $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
 }
 
 sub tear_down
