@@ -6848,14 +6848,13 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* XXX - validate uid for mime safety? */
     if (strchr(uid, '@')) {
-        spool_replace_header(xstrdup("Message-ID"),
-                             xstrdup(uid), txn->req_hdrs);
+        buf_printf(&txn->buf, "<%s>", uid);
     }
     else {
         buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
-        spool_replace_header(xstrdup("Message-ID"),
-                             buf_release(&txn->buf), txn->req_hdrs);
     }
+    spool_replace_header(xstrdup("Message-ID"),
+                         buf_release(&txn->buf), txn->req_hdrs);
 
     buf_setcstr(&txn->buf, "text/calendar; charset=utf-8");
     if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
