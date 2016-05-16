@@ -826,6 +826,7 @@ backup_libcyrus_backup_la_SOURCES = \
     backup/lcb_sqlconsts.c \
     backup/lcb_sqlconsts.h \
     backup/lcb_verify.c
+backup_libcyrus_backup_la_LIBADD = $(LD_BASIC_ADD)
 
 backup_backupd_SOURCES = \
     imap/mutex_fake.c \
@@ -833,26 +834,26 @@ backup_backupd_SOURCES = \
     imap/sync_support.h \
     master/service.c \
     backup/backupd.c
-backup_backupd_LDADD = $(LD_SERVER_ADD) backup/libcyrus_backup.la
+backup_backupd_LDADD = backup/libcyrus_backup.la $(LD_SERVER_ADD)
 
 backup_ctl_backups_SOURCES = \
     imap/mutex_fake.c \
     imap/sync_support.c \
     imap/sync_support.h \
     backup/ctl_backups.c
-backup_ctl_backups_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+backup_ctl_backups_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 
 backup_cyr_backup_SOURCES = \
     imap/mutex_fake.c \
     backup/cyr_backup.c
-backup_cyr_backup_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 
 backup_restore_SOURCES = \
     imap/mutex_fake.c \
     imap/sync_support.c \
     imap/sync_support.h \
     backup/restore.c
-backup_restore_LDADD = $(LD_UTILITY_ADD) backup/libcyrus_backup.la
+backup_restore_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
