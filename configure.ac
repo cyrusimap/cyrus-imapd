@@ -609,6 +609,14 @@ if test "$enable_sieve" != "no"; then
         AC_PROG_YACC
         AM_PROG_LEX
 
+        if test -z "$ac_cv_prog_YACC"; then
+            AC_MSG_ERROR([Sieve requires bison/byacc/yacc, but none is installed])
+        fi
+
+        if test -z "$ac_cv_prog_LEX"; then
+            AC_MSG_ERROR([Sieve requires flex/lex, but none is installed])
+        fi
+
         if test "$enable_pcre" != "no"; then
             AC_CHECK_HEADER(pcreposix.h)
             if test "$ac_cv_header_pcreposix_h" = "yes"; then
