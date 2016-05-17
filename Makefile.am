@@ -113,7 +113,7 @@ SUBDIRS = .
 DIST_SUBDIRS = .
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
-EXTRA_PROGRAMS = doc/text/htmlstrip
+EXTRA_PROGRAMS = tools/htmlstrip
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
@@ -739,7 +739,7 @@ check-%: cunit/unit
 
 endif
 
-doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
+tools_htmlstrip_SOURCE = tools/htmlstrip.c
 
 includedir=@includedir@/cyrus
 
@@ -1802,7 +1802,7 @@ xversion xversion.h:
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
 
-dist-hook: doc/text/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
+dist-hook: tools/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
 	@$(MKDIR_P) doc/text doc/man
 	for man in $(top_builddir)/man/*.[1-9] $(top_srcdir)/man/*.[1-9]; \
 	do \
@@ -1814,9 +1814,8 @@ dist-hook: doc/text/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
 	for file in $(top_srcdir)/doc/*.html; \
 	do \
 		echo "=== $$file ==="; \
-		doc/text/htmlstrip $$file > doc/text/`basename $$file .html`; \
+		tools/htmlstrip $$file > doc/text/`basename $$file .html`; \
 	done
-	@rm doc/text/htmlstrip doc/text/htmlstrip.o doc/text/.dirstamp
 	@echo "== done =="
 
 install-data-hook:
