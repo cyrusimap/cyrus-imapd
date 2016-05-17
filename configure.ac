@@ -510,7 +510,7 @@ AC_ARG_ENABLE(squat,
     [AS_HELP_STRING([--disable-squat], [disable Squat support])],,[enable_squat="yes";])
 
 if test "$enable_squat" != "no"; then
-    AC_DEFINE(USE_SQUAT,[],[Build in Sieve support?])
+    AC_DEFINE(USE_SQUAT,[],[Build in Squat support?])
 fi
 
 AM_CONDITIONAL([USE_SQUAT], [test "${enable_squat}" != "no"])
