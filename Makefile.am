@@ -175,9 +175,11 @@ sbin_PROGRAMS += \
 	imap/mbexamine \
 	imap/mbpath \
 	imap/mbtool \
-	imap/message_test \
 	imap/quota \
-	imap/reconstruct \
+	imap/reconstruct
+
+noinst_PROGRAMS += \
+	imap/message_test \
 	imap/search_test
 
 if HAVE_CLAMAV
@@ -189,7 +191,7 @@ sbin_PROGRAMS += imap/cyr_sphinxmgr
 endif
 
 if USE_SQUAT
-sbin_PROGRAMS += imap/squat_dump
+noinst_PROGRAMS += imap/squat_dump
 endif
 if SQUATTER
 # Despite the name, the squatter program handles any search engine
