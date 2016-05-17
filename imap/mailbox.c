@@ -3026,13 +3026,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         if (!cdata->dav.imap_uid) goto done;
 
         /* remove associated alarms */
-        sqldb_t *alarmdb = caldav_alarm_open();
-        struct caldav_alarm_data alarmdata = {
-            .mailbox    = cdata->dav.mailbox,
-            .resource   = cdata->dav.resource,
-        };
-        caldav_alarm_delete_all(alarmdb, &alarmdata);
-        caldav_alarm_close(alarmdb);
+        caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
 
         /* delete entry */
         r = caldav_delete(caldavdb, cdata->dav.rowid);
@@ -3040,13 +3034,11 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     else if (cdata->dav.imap_uid == new->uid) {
         if (new->system_flags & FLAG_EXPUNGED) {
             /* remove associated alarms */
-            sqldb_t *alarmdb = caldav_alarm_open();
-            struct caldav_alarm_data alarmdata = {
-                .mailbox    = cdata->dav.mailbox,
-                .resource   = cdata->dav.resource,
-            };
-            caldav_alarm_delete_all(alarmdb, &alarmdata);
-            caldav_alarm_close(alarmdb);
+            caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
+        }
+        else {
+            /* make sure record is up to date */
+            caldav_alarm_touch_record(mailbox, new);
         }
 
         /* just a flags update to an existing record */
@@ -3065,6 +3057,12 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
             goto done;
         }
 
+        /* remove old ones */
+        if (cdata->dav.imap_uid) {
+            r = caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
+            if (r) goto alarmdone;
+        }
+
         cdata->dav.creationdate = new->internaldate;
         cdata->dav.mailbox = mailbox->name;
         cdata->dav.imap_uid = new->uid;
@@ -3074,35 +3072,15 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->sched_tag = sched_tag;
         cdata->comp_flags.tzbyref = tzbyref;
 
-        sqldb_t *alarmdb = caldav_alarm_open();
-
-        struct caldav_alarm_data alarmdata = {
-            .mailbox    = cdata->dav.mailbox,
-            .resource   = cdata->dav.resource,
-        };
-
-        /* remove old ones */
-        r = caldav_alarm_delete_all(alarmdb, &alarmdata);
-        if (r) goto alarmdone;
-
         /* add new ones unless this record is expunged */
         if (cdata->dav.alive) {
-            int i;
-            for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
-                /* prepare alarm data */
-                if (!caldav_alarm_prepare(ical, &alarmdata, i,
-                                        icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
-                    r = caldav_alarm_add(alarmdb, &alarmdata);
-                    caldav_alarm_fini(&alarmdata);
-                    if (r) goto alarmdone;
-                }
-            }
+            r = caldav_alarm_add_record(mailbox, new, ical);
+            if (r) goto alarmdone;
         }
 
         r = caldav_writeentry(caldavdb, cdata, ical);
 
      alarmdone:
-        caldav_alarm_close(alarmdb);
         icalcomponent_free(ical);
     }
 
@@ -4990,12 +4968,8 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
         if (r) return r;
     }
 
-    sqldb_t *alarmdb = caldav_alarm_open();
-    if (alarmdb) {
-        int r = caldav_alarm_delmbox(alarmdb, mailbox->name);
-        caldav_alarm_close(alarmdb);
-        if (r) return r;
-    }
+    int r = caldav_alarm_delete_mailbox(mailbox->name);
+    if (r) return r;
 
     return 0;
 }

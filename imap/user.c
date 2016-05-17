@@ -235,9 +235,7 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 
 #ifdef WITH_DAV
     /* delete all the calendar alarms for the user */
-    sqldb_t *alarmdb = caldav_alarm_open();
-    caldav_alarm_delete_user(alarmdb, userid);
-    caldav_alarm_close(alarmdb);
+    caldav_alarm_delete_user(userid);
 #endif /* WITH_DAV */
 
     proc_killuser(userid);

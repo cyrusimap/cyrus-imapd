@@ -151,7 +151,7 @@ static struct recurrence_data *_add_override(icalarray *array,
     return data;
 }
 
-time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz)
+EXPORTED time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz)
 {
     if (icaltime_is_null_time(t))
         return 0;

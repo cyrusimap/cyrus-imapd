@@ -53,6 +53,7 @@
 #include "exitcodes.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "ical_support.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "mboxname.h"
@@ -63,6 +64,26 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+
+struct caldav_alarm_data {
+    char *mboxname;
+    uint32_t imap_uid;
+    time_t nextcheck;
+};
+
+void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
+{
+    free(alarmdata->mboxname);
+    alarmdata->mboxname = NULL;
+}
+
+struct get_alarm_rock {
+    const char *mboxname;
+    icaltimezone *floatingtz;
+    time_t last;
+    time_t now;
+    time_t nextcheck;
+};
 
 static struct namespace caldav_alarm_namespace;
 icaltimezone *utc_zone = NULL;
@@ -90,30 +111,22 @@ EXPORTED int caldav_alarm_done(void)
 
 
 #define CMD_CREATE                                      \
-    "CREATE TABLE IF NOT EXISTS alarms ("               \
-    " rowid INTEGER PRIMARY KEY AUTOINCREMENT,"         \
-    " mailbox TEXT NOT NULL,"                           \
-    " resource TEXT NOT NULL,"                          \
-    " action INTEGER NOT NULL,"                         \
-    " nextalarm TEXT NOT NULL,"                         \
-    " tzid TEXT NOT NULL,"                              \
-    " start TEXT NOT NULL,"                             \
-    " end TEXT NOT NULL"                                \
+    "CREATE TABLE IF NOT EXISTS events ("               \
+    " mboxname TEXT NOT NULL,"                          \
+    " imap_uid INTEGER NOT NULL,"                       \
+    " nextcheck INTEGER NOT NULL,"                      \
+    " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
-    "CREATE TABLE IF NOT EXISTS alarm_recipients ("     \
-    " rowid INTEGER PRIMARY KEY AUTOINCREMENT,"         \
-    " alarmid INTEGER NOT NULL,"                        \
-    " email TEXT NOT NULL,"                             \
-    " FOREIGN KEY (alarmid) REFERENCES alarms (rowid) ON DELETE CASCADE" \
-    ");"                                                \
-    "CREATE INDEX IF NOT EXISTS idx_alarm_id ON alarm_recipients ( alarmid );"
+    "CREATE INDEX checktime ON events (nextcheck);"     \
 
-#define DBVERSION 1
+#define DBVERSION 2
+
+/* the command loop will do the upgrade and then drop the old tables.
+ * Sadly there's no other way to do it without creating a lock inversion! */
+#define CMD_UPGRADEv2 CMD_CREATE
 
 struct sqldb_upgrade upgrade[] = {
-    /* XXX - insert upgrade rows here, i.e.
-     * { 2, CMD_UPGRADEv2, &upgrade_v2_callback },
-     */
+    { 2, CMD_UPGRADEv2, NULL },
     /* always finish with an empty row */
     { 0, NULL, NULL }
 };
@@ -123,7 +136,7 @@ int refcount;
 static struct mboxlock *my_alarmdb_lock;
 
 /* get a database handle to the alarm db */
-EXPORTED sqldb_t *caldav_alarm_open()
+static sqldb_t *caldav_alarm_open()
 {
     /* already running?  Bonus */
     if (refcount) {
@@ -138,6 +151,7 @@ EXPORTED sqldb_t *caldav_alarm_open()
         return NULL;
     }
 
+    // XXX - config option?
     char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
     my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade);
 
@@ -149,11 +163,10 @@ EXPORTED sqldb_t *caldav_alarm_open()
     free(dbfilename);
     refcount = 1;
     return my_alarmdb;
-
 }
 
 /* close this handle */
-EXPORTED int caldav_alarm_close(sqldb_t *alarmdb)
+static int caldav_alarm_close(sqldb_t *alarmdb)
 {
     assert(my_alarmdb == alarmdb);
 
@@ -165,472 +178,34 @@ EXPORTED int caldav_alarm_close(sqldb_t *alarmdb)
     return 0;
 }
 
-#define CMD_INSERT_ALARM                                                        \
-    "INSERT INTO alarms"                                                        \
-    " ( mailbox, resource, action, nextalarm, tzid, start, end )"               \
-    " VALUES"                                                                   \
-    " ( :mailbox, :resource, :action, :nextalarm, :tzid, :start, :end )"        \
-    ";"
-
-#define CMD_INSERT_RECIPIENT            \
-    "INSERT INTO alarm_recipients"      \
-    " ( alarmid, email )"               \
-    " VALUES"                           \
-    " ( :alarmid, :email )"             \
-    ";"
-
-/* add a calendar alarm */
-EXPORTED int caldav_alarm_add(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata)
-{
-    assert(alarmdb);
-    assert(alarmdata);
-
-    struct sqldb_bindval bval[] = {
-        { ":mailbox",   SQLITE_TEXT,    { .s = alarmdata->mailbox                               } },
-        { ":resource",  SQLITE_TEXT,    { .s = alarmdata->resource                              } },
-        { ":action",    SQLITE_INTEGER, { .i = alarmdata->action                                } },
-        { ":nextalarm", SQLITE_TEXT,    { .s = icaltime_as_ical_string(alarmdata->nextalarm)    } },
-        { ":tzid",      SQLITE_TEXT,    { .s = alarmdata->tzid                                  } },
-        { ":start",     SQLITE_TEXT,    { .s = icaltime_as_ical_string(alarmdata->start)        } },
-        { ":end",       SQLITE_TEXT,    { .s = icaltime_as_ical_string(alarmdata->end)          } },
-        { NULL,         SQLITE_NULL,    { .s = NULL                                             } }
-    };
-
-    int rc = 0;
-
-    rc = sqldb_begin(alarmdb, "addalarm");
-    if (rc) return rc;
-
-    /* XXX deal with SQLITE_FULL */
-    rc = sqldb_exec(alarmdb, CMD_INSERT_ALARM, bval, NULL, NULL);
-    if (rc) {
-        sqldb_rollback(alarmdb, "addalarm");
-        return rc;
-    }
-
-    alarmdata->rowid = sqldb_lastid(alarmdb);
-
-    int i;
-    for (i = 0; i < strarray_size(&alarmdata->recipients); i++) {
-        const char *email = strarray_nth(&alarmdata->recipients, i);
-
-        struct sqldb_bindval rbval[] = {
-            { ":alarmid",   SQLITE_INTEGER, { .i = alarmdata->rowid     } },
-            { ":email",     SQLITE_TEXT,    { .s = email                } },
-            { NULL,         SQLITE_NULL,    { .s = NULL                 } }
-        };
-
-        rc = sqldb_exec(alarmdb, CMD_INSERT_RECIPIENT, rbval, NULL, NULL);
-        if (rc) {
-            sqldb_rollback(alarmdb, "addalarm");
-            return rc;
-        }
-    }
-
-    return sqldb_commit(alarmdb, "addalarm");
-}
-
-#define CMD_DELETE              \
-    "DELETE FROM alarms WHERE"  \
-    " rowid = :rowid"           \
-    ";"
-
-/* delete a single alarm */
-static int caldav_alarm_delete_row(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata)
-{
-    assert(alarmdb);
-    assert(alarmdata);
-
-    struct sqldb_bindval bval[] = {
-        { ":rowid", SQLITE_INTEGER, { .i = alarmdata->rowid } },
-        { NULL,     SQLITE_NULL,    { .s = NULL             } }
-    };
-
-    return sqldb_exec(alarmdb, CMD_DELETE, bval, NULL, NULL);
-}
-
-#define CMD_DELETEALL           \
-    "DELETE FROM alarms WHERE"  \
-    " mailbox = :mailbox AND"   \
-    " resource = :resource"     \
-    ";"
-
-/* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delete_all(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata)
-{
-    assert(alarmdb);
-    assert(alarmdata);
-
-    struct sqldb_bindval bval[] = {
-        { ":mailbox",   SQLITE_TEXT, { .s = alarmdata->mailbox  } },
-        { ":resource",  SQLITE_TEXT, { .s = alarmdata->resource } },
-        { NULL,         SQLITE_NULL, { .s = NULL                } }
-    };
-
-    return sqldb_exec(alarmdb, CMD_DELETEALL, bval, NULL, NULL);
-}
-
-#define CMD_DELETEMAILBOX               \
-    "DELETE FROM alarms WHERE"  \
-    " mailbox = :mailbox"       \
-    ";"
-
-/* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delmbox(sqldb_t *alarmdb, const char *mboxname)
-{
-    assert(alarmdb);
-
-    struct sqldb_bindval bval[] = {
-        { ":mailbox",   SQLITE_TEXT, { .s = mboxname  } },
-        { NULL,         SQLITE_NULL, { .s = NULL        } }
-    };
-
-    return sqldb_exec(alarmdb, CMD_DELETEMAILBOX, bval, NULL, NULL);
-}
-
-#define CMD_DELETEUSER          \
-    "DELETE FROM alarms WHERE"  \
-    " mailbox LIKE :prefix"     \
-    ";"
-
-/* delete all alarms matching the event */
-EXPORTED int caldav_alarm_delete_user(sqldb_t *alarmdb, const char *userid)
-{
-    assert(alarmdb);
-    const char *mboxname = NULL;
-    char *prefix;
-    mbname_t *mbname = NULL;
-
-    mbname = mbname_from_userid(userid);
-
-    mboxname = mbname_intname(mbname);
-
-    size_t len = strlen(mboxname);
-    if (len + 3 > MAX_MAILBOX_NAME) return IMAP_INTERNAL;
-    prefix = strconcat(mboxname, ".%", (char *)NULL);
-
-    struct sqldb_bindval bval[] = {
-        { ":prefix",    SQLITE_TEXT, { .s = prefix  } },
-        { NULL,         SQLITE_NULL, { .s = NULL    } }
-    };
-
-    int r = sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
-
-    free(prefix);
-    mbname_free(&mbname);
-
-    return r;
-}
-
-enum trigger_type {
-    TRIGGER_RELATIVE_START,
-    TRIGGER_RELATIVE_END,
-    TRIGGER_ABSOLUTE
-};
-struct trigger_data {
-    icalcomponent               *alarm;
-    struct icaltriggertype      trigger;
-    enum trigger_type           type;
-    enum caldav_alarm_action    action;
-};
-
-struct recur_cb_data {
-    struct trigger_data         *triggerdata;
-    int                         ntriggers;
-    struct icaltimetype         now;
-    icalcomponent               *nextalarm;
-    enum caldav_alarm_action    nextaction;
-    struct icaltimetype         nextalarmtime;
-    struct icaltimetype         eventstart;
-    struct icaltimetype         eventend;
-};
-
-/* icalcomponent_foreach_recurrence() callback to find closest future event */
-static void recur_cb(icalcomponent *comp, struct icaltime_span *span, void *rock)
-{
-    struct recur_cb_data *rdata = (struct recur_cb_data *) rock;
-    int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-
-    /* is_date true ensures that the time is set to 00:00:00, but
-     * we still want to use it as a full datetime later, so we
-     * clear the flag once we're done with it */
-    struct icaltimetype start =
-        icaltime_from_timet_with_zone(span->start, is_date, utc_zone);
-    struct icaltimetype end =
-        icaltime_from_timet_with_zone(span->end, is_date, utc_zone);
-    start.is_date = end.is_date = 0;
-
-    int i;
-    for (i = 0; i < rdata->ntriggers; i++) {
-        struct trigger_data *tdata = &(rdata->triggerdata[i]);
-
-        struct icaltimetype alarmtime;
-        switch (tdata->type) {
-            case TRIGGER_RELATIVE_START:
-                alarmtime = icaltime_add(start, tdata->trigger.duration);
-                break;
-            case TRIGGER_RELATIVE_END:
-                alarmtime = icaltime_add(end, tdata->trigger.duration);
-                break;
-            case TRIGGER_ABSOLUTE:
-                alarmtime = tdata->trigger.time;
-                break;
-            default:
-                /* doesn't happen */
-                continue;
-        }
-
-        if (icaltime_compare(alarmtime, rdata->now) > 0 &&
-            (!rdata->nextalarm ||
-             icaltime_compare(alarmtime, rdata->nextalarmtime) < 0)) {
-
-            rdata->nextalarm = tdata->alarm;
-
-            rdata->nextaction = tdata->action;
-
-            memcpy(&(rdata->nextalarmtime), &alarmtime, sizeof(struct icaltimetype));
-
-            memcpy(&(rdata->eventstart), &start, sizeof(struct icaltimetype));
-            memcpy(&(rdata->eventend), &end, sizeof(struct icaltimetype));
-        }
-    }
-}
-
-/* fill alarmdata with data for next alarm for given entry */
-EXPORTED int caldav_alarm_prepare(
-        icalcomponent *ical, struct caldav_alarm_data *alarmdata,
-        enum caldav_alarm_action wantaction, icaltimetype after)
-{
-    assert(ical);
-    assert(alarmdata);
-
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-
-    /* if there's no VALARM on this item then we have nothing to do */
-    int nalarms = icalcomponent_count_components(comp, ICAL_VALARM_COMPONENT);
-    if (nalarms == 0)
-        return 1;
-
-    int ntriggers = 0;
-    struct trigger_data *triggerdata =
-        (struct trigger_data *) xmalloc(sizeof(struct trigger_data) * nalarms);
-
-    icalcomponent *alarm;
-    for ( alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
-          alarm;
-          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
-
-        icalproperty *prop;
-        icalvalue *val;
-
-        prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
-        if (!prop)
-            /* no action, invalid alarm, skip */
-            continue;
-
-        val = icalproperty_get_value(prop);
-        enum icalproperty_action action = icalvalue_get_action(val);
-        if (!(action == ICAL_ACTION_DISPLAY || action == ICAL_ACTION_EMAIL))
-            /* we only want DISPLAY and EMAIL, skip */
-            continue;
-
-        if (
-            (wantaction == CALDAV_ALARM_ACTION_DISPLAY && action != ICAL_ACTION_DISPLAY) ||
-            (wantaction == CALDAV_ALARM_ACTION_EMAIL   && action != ICAL_ACTION_EMAIL)
-        )
-            /* specific action was requested and this doesn't match, skip */
-            continue;
-
-        prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
-        if (!prop)
-            /* no trigger, invalid alarm, skip */
-            continue;
-
-        val = icalproperty_get_value(prop);
-
-        struct trigger_data *tdata = &(triggerdata[ntriggers]);
-
-        tdata->alarm = alarm;
-        tdata->action =
-            action ==
-                ICAL_ACTION_DISPLAY     ? CALDAV_ALARM_ACTION_DISPLAY   :
-                ICAL_ACTION_EMAIL       ? CALDAV_ALARM_ACTION_EMAIL     :
-                                          CALDAV_ALARM_ACTION_NONE;
-
-        struct icaltriggertype trigger = icalvalue_get_trigger(val);
-        /* XXX validate trigger */
-        memcpy(&(tdata->trigger), &trigger, sizeof(struct icaltriggertype));
-
-        if (icalvalue_isa(val) == ICAL_DURATION_VALUE) {
-            icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
-            if (param && icalparameter_get_related(param) == ICAL_RELATED_END)
-                tdata->type = TRIGGER_RELATIVE_END;
-            else
-                tdata->type = TRIGGER_RELATIVE_START;
-        }
-        else
-            tdata->type = TRIGGER_ABSOLUTE;
-
-        ntriggers++;
-        assert(ntriggers <= nalarms);
-    }
-
-    struct recur_cb_data rdata = {
-        .triggerdata    = triggerdata,
-        .ntriggers      = ntriggers,
-        .now            = after,
-        .nextalarm      = NULL,
-        .nextalarmtime  = icaltime_null_time(),
-        .eventstart     = icaltime_null_time(),
-        .eventend       = icaltime_null_time()
-    };
-
-    /* See if its a recurring event */
-    if (icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY) ||
-        icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY) ||
-        icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) {
-
-        icalcomponent_foreach_recurrence(
-            comp,
-            rdata.now,
-            icaltime_from_timet_with_zone(INT_MAX, 0, utc_zone),
-            recur_cb,
-            &rdata);
-
-        /* Handle overridden recurrences */
-        icalcomponent *subcomp = comp;
-        while ((subcomp = icalcomponent_get_next_component(subcomp, ICAL_VEVENT_COMPONENT))) {
-            struct icalperiodtype period;
-            caldav_get_period(subcomp, ICAL_VEVENT_COMPONENT, &period);
-            icaltime_span span = icaltime_span_new(period.start, period.end, 0);
-            recur_cb(subcomp, &span, &rdata);
-        }
-    }
-
-    else {
-        /* not recurring, use dtstart/dtend instead */
-        struct icalperiodtype period;
-        caldav_get_period(comp, ICAL_VEVENT_COMPONENT, &period);
-        icaltime_span span = icaltime_span_new(period.start, period.end, 0);
-        recur_cb(comp, &span, &rdata);
-    }
-
-    /* no next alarm, nothing more to do! */
-    if (!rdata.nextalarm) {
-        free(triggerdata);
-        return 1;
-    }
-
-    /* now fill out alarmdata with all the stuff from event/ocurrence/alarm */
-    alarmdata->action = rdata.nextaction;
-
-    alarmdata->nextalarm = rdata.nextalarmtime;
-
-    /* dtstart timezone is good enough for alarm purposes */
-    icalproperty *prop = NULL;
-    icalparameter *param = NULL;
-    const char *tzid = NULL;
-
-    prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-    if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-    if (param) tzid = icalparameter_get_tzid(param);
-    alarmdata->tzid = xstrdup(tzid ? tzid : "[floating]");
-
-    memcpy(&(alarmdata->start), &(rdata.eventstart), sizeof(struct icaltimetype));
-    memcpy(&(alarmdata->end), &(rdata.eventend), sizeof(struct icaltimetype));
-
-    icalproperty *attendee = icalcomponent_get_first_property(rdata.nextalarm, ICAL_ATTENDEE_PROPERTY);
-    while (attendee) {
-        const char *email = icalproperty_get_value_as_string(attendee);
-        if (email)
-            strarray_append(&alarmdata->recipients, email);
-        attendee = icalcomponent_get_next_property(rdata.nextalarm, ICAL_ATTENDEE_PROPERTY);
-    }
-
-    free(triggerdata);
-    return 0;
-}
-
-/* clean up alarmdata after prepare */
-void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
-{
-    free((void *) alarmdata->tzid);
-    alarmdata->tzid = NULL;
-    strarray_fini(&alarmdata->recipients);
-}
-
-#define CMD_SELECT_ALARM                                                        \
-    "SELECT rowid, mailbox, resource, action, nextalarm, tzid, start, end"      \
-    " FROM alarms WHERE"                                                        \
-    " nextalarm <= :before"                                                     \
-    ";"
-
-#define CMD_SELECT_RECIPIENT            \
-    "SELECT email"                      \
-    " FROM alarm_recipients WHERE"      \
-    " alarmid = :alarmid"               \
-    ";"
-
-struct alarmdata_list {
-    struct alarmdata_list       *next;
-    struct caldav_alarm_data    data;
-    int                         do_delete;
-};
-
-static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
-{
-    struct alarmdata_list **list = (struct alarmdata_list **) rock;
-
-    struct alarmdata_list *n = xzmalloc(sizeof(struct alarmdata_list));
-
-    n->data.rowid       = sqlite3_column_int(stmt, 0);
-    n->data.mailbox     = xstrdup((const char *) sqlite3_column_text(stmt, 1));
-    n->data.resource    = xstrdup((const char *) sqlite3_column_text(stmt, 2));
-    n->data.action      = sqlite3_column_int(stmt, 3);
-    n->data.nextalarm   = icaltime_from_string((const char *) sqlite3_column_text(stmt, 4));
-    n->data.tzid        = xstrdup((const char *) sqlite3_column_text(stmt, 5));
-    n->data.start       = icaltime_from_string((const char *) sqlite3_column_text(stmt, 6));
-    n->data.end         = icaltime_from_string((const char *) sqlite3_column_text(stmt, 7));
-
-    n->do_delete = 1; // unless something goes wrong, we will delete this alarm
-
-    n->next = *list;
-    *list = n;
-
-    return 0;
-}
-
-static int recipient_read_cb(sqlite3_stmt *stmt, void *rock)
-{
-    strarray_t *recipients = (strarray_t *) rock;
-
-    strarray_append(recipients, (const char *) sqlite3_column_text(stmt, 0));
-
-    return 0;
-}
-
 /*
  * Extract data from the given ical object
  */
 static void mboxevent_extract_icalcomponent(struct mboxevent *event,
-                                            icalcomponent *ical,
                                             const char *userid,
                                             const char *calname,
-                                            enum caldav_alarm_action action,
-                                            icaltimetype alarmtime,
-                                            const char *timezone,
+                                            icalcomponent *comp,
+                                            icalcomponent *alarm,
                                             icaltimetype start,
                                             icaltimetype end,
-                                            strarray_t *recipients)
+                                            icaltimetype alarmtime,
+                                            icaltimezone *floatingtz)
 {
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-
     icalproperty *prop;
+    icalvalue *val;
 
     FILL_STRING_PARAM(event, EVENT_CALENDAR_ALARM_TIME,
                       xstrdup(icaltime_as_ical_string(alarmtime)));
 
-    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
+    prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+    val = icalproperty_get_value(prop);
+    enum icalproperty_action action = icalvalue_get_action(val);
+    if (action == ICAL_ACTION_DISPLAY) {
+        FILL_STRING_PARAM(event, EVENT_CALENDAR_ACTION, xstrdup("display"));
+    }
+    else {
+        FILL_STRING_PARAM(event, EVENT_CALENDAR_ACTION, xstrdup("email"));
+    }
 
     FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, xstrdup(calname));
@@ -638,11 +213,6 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
                       xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
-
-    FILL_STRING_PARAM(event, EVENT_CALENDAR_ACTION, xstrdup(
-        action == CALDAV_ALARM_ACTION_DISPLAY   ? "display" :
-        action == CALDAV_ALARM_ACTION_EMAIL     ? "email" :
-                                                  ""));
 
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_SUMMARY,
@@ -660,6 +230,15 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_ORGANIZER,
                       xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
 
+    const char *timezone = NULL;
+    if (!icaltime_is_date(start) && icaltime_is_utc(start))
+        timezone = "UTC";
+    else if (icaltime_get_timezone(start))
+        timezone = icaltime_get_tzid(start);
+    else if (floatingtz)
+        timezone = icaltimezone_get_tzid(floatingtz);
+    else
+        timezone = "[floating]";
     FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
                       xstrdup(timezone));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_START,
@@ -669,11 +248,23 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
     FILL_UNSIGNED_PARAM(event, EVENT_CALENDAR_ALLDAY,
                         icaltime_is_date(start) ? 1 : 0);
 
+    strarray_t *recipients = strarray_new();
+    for (prop = icalcomponent_get_first_property(alarm, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(alarm, ICAL_ATTENDEE_PROPERTY)) {
+        const char *email = icalproperty_get_value_as_string(prop);
+        if (!email)
+            continue;
+        strarray_append(recipients, email);
+    }
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
+
     strarray_t *attendee_names = strarray_new();
     strarray_t *attendee_emails = strarray_new();
     strarray_t *attendee_status = strarray_new();
-    prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-    while (prop) {
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
         const char *email = icalproperty_get_value_as_string(prop);
         if (!email)
             continue;
@@ -684,182 +275,531 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
 
         const char *partstat = icalproperty_get_parameter_as_string(prop, "PARTSTAT");
         strarray_append(attendee_status, partstat ? partstat : "");
-
-        prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
     }
-
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_NAMES, attendee_names);
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_EMAILS, attendee_emails);
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_STATUS, attendee_status);
 }
 
-/* process alarms with triggers within before a given time */
-EXPORTED int caldav_alarm_process(time_t runattime)
+static int send_alarm(struct get_alarm_rock *rock,
+                      icalcomponent *comp, icalcomponent *alarm,
+                      icaltimetype start, icaltimetype end, icaltimetype alarmtime)
+{
+    char *userid = mboxname_to_userid(rock->mboxname);
+    struct buf calname = BUF_INITIALIZER;
+
+    /* get the display name annotation */
+    const char *displayname_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    annotatemore_lookupmask(rock->mboxname, displayname_annot, userid, &calname);
+    if (!calname.len) buf_setcstr(&calname, strrchr(rock->mboxname, '.') + 1);
+
+    struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
+    mboxevent_extract_icalcomponent(event, userid, buf_cstring(&calname),
+                                    comp, alarm, start, end, alarmtime, rock->floatingtz);
+    mboxevent_notify(event);
+    mboxevent_free(&event);
+
+    buf_free(&calname);
+    free(userid);
+
+    return 0;
+}
+
+static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
+                            icaltimetype end, void *rock)
+{
+    struct get_alarm_rock *data = (struct get_alarm_rock *)rock;
+
+    icalcomponent *alarm;
+    icalproperty *prop;
+    icalvalue *val;
+
+    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+         alarm;
+         alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
+
+        prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+        if (!prop) {
+            /* no action, invalid alarm, skip */
+            continue;
+        }
+
+        val = icalproperty_get_value(prop);
+        enum icalproperty_action action = icalvalue_get_action(val);
+        if (!(action == ICAL_ACTION_DISPLAY || action == ICAL_ACTION_EMAIL)) {
+            /* we only want DISPLAY and EMAIL, skip */
+            continue;
+        }
+
+        prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
+        if (!prop) {
+            /* no trigger, invalid alarm, skip */
+            continue;
+        }
+
+        val = icalproperty_get_value(prop);
+
+        struct icaltriggertype trigger = icalvalue_get_trigger(val);
+        /* XXX validate trigger */
+
+        icaltimetype alarmtime = icaltime_null_time();
+        if (icalvalue_isa(val) == ICAL_DURATION_VALUE) {
+            icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
+            if (param && icalparameter_get_related(param) == ICAL_RELATED_END) {
+                alarmtime = icaltime_add(end, trigger.duration);
+            }
+            else {
+                alarmtime = icaltime_add(start, trigger.duration);
+            }
+        }
+        else {
+            alarmtime = trigger.time;
+        }
+
+        time_t check = icaltime_to_timet(alarmtime, data->floatingtz);
+
+        /* skip already sent alarms */
+        if (check <= data->last) {
+            continue;
+        }
+
+        if (check <= data->now) {
+            send_alarm(data, comp, alarm, start, end, alarmtime);
+        }
+
+        else if (!data->nextcheck || check < data->nextcheck) {
+            data->nextcheck = check;
+        }
+
+        /* alarms can't be more than a week either side of the event start, so if we're
+         * past 2 months, then just check again in a month */
+        if (check > data->now + 86400*60) {
+            time_t next = data->now + 86400*30;
+            if (!data->nextcheck || next < data->nextcheck)
+                data->nextcheck = next;
+            return 0;
+        }
+    }
+
+    return 1; /* keep going */
+}
+
+#define CMD_REPLACE                              \
+    "REPLACE INTO events"                        \
+    " ( mboxname, imap_uid, nextcheck )"         \
+    " VALUES"                                    \
+    " ( :mboxname, :imap_uid, :nextcheck )"      \
+    ";"
+
+#define CMD_DELETE                               \
+    "DELETE FROM events"                         \
+    " WHERE mboxname = :mboxname"                \
+    "   AND imap_uid = :imap_uid"                \
+    ";"
+
+static int update_alarmdb(const char *mboxname, uint32_t imap_uid, time_t nextcheck)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mboxname",  SQLITE_TEXT,    { .s = mboxname  } },
+        { ":imap_uid",  SQLITE_INTEGER, { .i = imap_uid  } },
+        { ":nextcheck", SQLITE_INTEGER, { .i = nextcheck } },
+        { NULL,         SQLITE_NULL,    { .s = NULL      } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    if (!alarmdb) return -1;
+    int rc = SQLITE_OK;
+
+    if (nextcheck)
+        rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
+    else
+        rc = sqldb_exec(alarmdb, CMD_DELETE, bval, NULL, NULL);
+
+    caldav_alarm_close(alarmdb);
+
+    if (rc == SQLITE_OK) return 0;
+
+    /* failed? */
+    return -1;
+}
+
+static icaltimezone *get_floatingtz(struct mailbox *mailbox)
+{
+    icaltimezone *floatingtz = NULL;
+
+    struct buf buf = BUF_INITIALIZER;
+    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+    if (!annotatemore_lookup(mailbox->name, annotname, /*userid*/"", &buf)) {
+        icalcomponent *comp = NULL;
+        comp = icalparser_parse_string(buf_cstring(&buf));
+        icalcomponent *subcomp = icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
+        if (subcomp) {
+            floatingtz = icaltimezone_new();
+            icalcomponent_remove_component(comp, subcomp);
+            icaltimezone_set_component(floatingtz, subcomp);
+        }
+        icalcomponent_free(comp);
+    }
+
+    return floatingtz;
+}
+
+static int has_alarms(icalcomponent *ical)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
+            return 1;
+    }
+    return 0;
+}
+
+static time_t process_alarms(const char *mboxname, icaltimezone *floatingtz,
+                             icalcomponent *ical, time_t lastrun, time_t runtime)
+{
+    struct get_alarm_rock rock = { mboxname, floatingtz, lastrun, runtime, 0 };
+    struct icalperiodtype range = icalperiodtype_null_period();
+    icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
+    return rock.nextcheck;
+}
+
+/* add a calendar alarm */
+EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *record,
+                                     icalcomponent *ical)
+{
+    if (!has_alarms(ical)) return 0;
+    int rc = 0;
+
+    /* XXX - we COULD cache this in the mailbox object so it doesn't get read multiple times,
+     * but this is really rare - only dav_reconstruct maybe */
+    icaltimezone *floatingtz = get_floatingtz(mailbox);
+
+    const char *annotname = DAV_ANNOT_NS "lastalarm";
+    struct buf annot_buf = BUF_INITIALIZER;
+    annotatemore_msg_lookup(mailbox->name, record->uid, annotname, "", &annot_buf);
+    time_t lastrun = annot_buf.len ? atoi(buf_cstring(&annot_buf)) : record->internaldate;
+
+    time_t nextcheck = process_alarms(mailbox->name, floatingtz, ical, lastrun, lastrun);
+    rc = update_alarmdb(mailbox->name, record->uid, nextcheck);
+
+    if (floatingtz) icaltimezone_free(floatingtz, 1);
+    buf_free(&annot_buf);
+
+    return rc;
+}
+
+EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox, const struct index_record *record)
+{
+    const char *annotname = DAV_ANNOT_NS "lastalarm";
+    struct buf annot_buf = BUF_INITIALIZER;
+    int rc = 0;
+
+    mailbox_annotation_lookup(mailbox, record->uid, annotname, "", &annot_buf);
+    if (!annot_buf.len) goto done;
+
+    const char *val = buf_cstring(&annot_buf);
+    val = strchr(val, ' ');
+    if (val) {
+        /* might be zero -> delete */
+        time_t nextcheck = atoi(val + 1);
+        rc = update_alarmdb(mailbox->name, record->uid, nextcheck);
+    }
+
+done:
+    buf_free(&annot_buf);
+    return rc;
+}
+
+/* delete all alarms matching the event */
+EXPORTED int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
+{
+    return update_alarmdb(mboxname, imap_uid, 0);
+}
+
+#define CMD_DELETEMAILBOX       \
+    "DELETE FROM events WHERE"  \
+    " mboxname = :mboxname"     \
+    ";"
+
+/* delete all alarms matching the event */
+EXPORTED int caldav_alarm_delete_mailbox(const char *mboxname)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mboxname",  SQLITE_TEXT, { .s = mboxname  } },
+        { NULL,         SQLITE_NULL, { .s = NULL      } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    int rc = sqldb_exec(alarmdb, CMD_DELETEMAILBOX, bval, NULL, NULL);
+    caldav_alarm_close(alarmdb);
+
+    return rc;
+}
+
+#define CMD_DELETEUSER          \
+    "DELETE FROM events WHERE"  \
+    " mailbox LIKE :prefix"     \
+    ";"
+
+/* delete all alarms matching the event */
+EXPORTED int caldav_alarm_delete_user(const char *userid)
+{
+    mbname_t *mbname = mbname_from_userid(userid);
+    const char *mboxname = mbname_intname(mbname);
+    char *prefix = strconcat(mboxname, ".%", (char *)NULL);
+    mbname_free(&mbname);
+
+    struct sqldb_bindval bval[] = {
+        { ":prefix",    SQLITE_TEXT, { .s = prefix  } },
+        { NULL,         SQLITE_NULL, { .s = NULL    } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    int rc = sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
+    caldav_alarm_close(alarmdb);
+
+    free(prefix);
+
+    return rc;
+}
+
+#define CMD_SELECT_ALARMS                                                \
+    "SELECT mboxname, imap_uid, nextcheck"                               \
+    " FROM events WHERE"                                                 \
+    " nextcheck < :before"                                               \
+    " ORDER BY mboxname, imap_uid"                                       \
+    ";"
+
+static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
+{
+    ptrarray_t *target = (ptrarray_t *)rock;
+
+    struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
+
+    data->mboxname    = xstrdup((const char *) sqlite3_column_text(stmt, 0));
+    data->imap_uid    = sqlite3_column_int(stmt, 1);
+    data->nextcheck   = sqlite3_column_int(stmt, 2);
+
+    ptrarray_append(target, data);
+
+    return 0;
+}
+
+static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
+                               icaltimezone *floatingtz, time_t runtime)
+{
+    int rc;
+    icalcomponent *ical = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+    struct buf annot_buf = BUF_INITIALIZER;
+
+    syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
+           mailbox->name, imap_uid);
+
+    struct index_record record;
+    memset(&record, 0, sizeof(struct index_record));
+    rc = mailbox_find_index_record(mailbox, imap_uid, &record);
+    if (rc == IMAP_NOTFOUND) {
+        /* no record, no worries */
+        goto done_item;
+    }
+    if (rc) {
+        /* XXX no index record? item deleted or transient error? */
+        goto done_item;
+    }
+    if (record.system_flags & FLAG_EXPUNGED) {
+        /* no longer exists?  nothing to do */
+        goto done_item;
+    }
+
+    rc = mailbox_map_record(mailbox, &record, &msg_buf);
+    if (rc) {
+        /* XXX no message? index is wrong? yikes */
+        goto done_item;
+    }
+
+    ical = icalparser_parse_string(buf_cstring(&msg_buf) + record.header_size);
+
+    if (!ical) {
+        /* XXX log error */
+        goto done_item;
+    }
+
+    const char *annotname = DAV_ANNOT_NS "lastalarm";
+    mailbox_annotation_lookup(mailbox, record.uid, annotname, "", &annot_buf);
+    time_t lastrun = annot_buf.len ? atoi(buf_cstring(&annot_buf)) : record.internaldate;
+
+    time_t nextcheck = process_alarms(mailbox->name, floatingtz, ical, lastrun, runtime);
+
+    buf_reset(&annot_buf);
+    buf_printf(&annot_buf, "%ld %ld", runtime, nextcheck);
+    mailbox_annotation_write(mailbox, record.uid, annotname, "", &annot_buf);
+
+done_item:
+    buf_free(&annot_buf);
+    buf_free(&msg_buf);
+    if (ical) icalcomponent_free(ical);
+}
+
+static void process_records(ptrarray_t *list, time_t runtime)
+{
+    struct mailbox *mailbox = NULL;
+    int rc;
+    int i;
+    icaltimezone *floatingtz = NULL;
+
+    for (i = 0; i < list->count; i++) {
+        struct caldav_alarm_data *data = ptrarray_nth(list, i);
+
+        if (mailbox && !strcmp(mailbox->name, data->mboxname)) {
+            /* woot, reuse mailbox */
+        }
+        else {
+            if (floatingtz) icaltimezone_free(floatingtz, 1);
+            floatingtz = NULL;
+            mailbox_close(&mailbox);
+            rc = mailbox_open_iwl(data->mboxname, &mailbox);
+            if (rc == IMAP_MAILBOX_NONEXISTENT) {
+                /* mailbox was deleted or something, nothing we can do */
+                data->nextcheck = 0;
+                continue;
+            }
+            if (rc) {
+                /* transient open error, don't delete this alarm */
+                continue;
+            }
+            floatingtz = get_floatingtz(mailbox);
+        }
+        process_one_record(mailbox, data->imap_uid, floatingtz, runtime);
+    }
+
+    if (floatingtz) icaltimezone_free(floatingtz, 1);
+    mailbox_close(&mailbox);
+}
+
+/* process alarms with triggers before a given time */
+EXPORTED int caldav_alarm_process(time_t runtime)
 {
     syslog(LOG_DEBUG, "processing alarms");
 
-    // all alarms in the past and within the next 60 seconds
-    icaltimetype before = runattime
-                        ? icaltime_from_timet_with_zone(runattime, 0, utc_zone)
-                        : icaltime_current_time_with_zone(utc_zone);
-    icaltime_adjust(&before, 0, 0, 0, 60);
+    if (!runtime) {
+        /* check 10s into the future - we run every 10, so that guarantees we will
+         * deliver on or before the target time */
+        runtime = time(NULL) + 10;
+    }
 
     struct sqldb_bindval bval[] = {
-        { ":before",    SQLITE_TEXT,    { .s = icaltime_as_ical_string(before)  } },
-        { NULL,         SQLITE_NULL,    { .s = NULL                             } }
+        { ":before",    SQLITE_INTEGER, { .i = runtime  } },
+        { NULL,         SQLITE_NULL,    { .s = NULL     } }
     };
-
-    struct alarmdata_list *list = NULL, *scan;
 
     sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb)
         return HTTP_SERVER_ERROR;
 
-    int rc = sqldb_exec(alarmdb, CMD_SELECT_ALARM, bval, &alarm_read_cb, &list);
-    if (rc)
-        goto done;
+    ptrarray_t list = PTRARRAY_INITIALIZER;
 
-    for (scan = list; scan; scan = scan->next) {
-        struct mailbox *mailbox = NULL;
-        char *userid = NULL;
-        struct caldav_db *caldavdb = NULL;
-        icalcomponent *ical = NULL;
-        struct buf msg_buf = BUF_INITIALIZER;
-        struct buf calname_buf = BUF_INITIALIZER;
-        static const char *displayname_annot =
-            DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    int rc = sqldb_exec(alarmdb, CMD_SELECT_ALARMS, bval, &alarm_read_cb, &list);
 
-        syslog(LOG_DEBUG,
-               "processing alarm rowid %llu mailbox %s resource %s action %d nextalarm %s tzid %s start %s end %s",
-               scan->data.rowid, scan->data.mailbox,
-               scan->data.resource, scan->data.action,
-               icaltime_as_ical_string(scan->data.nextalarm),
-               scan->data.tzid,
-               icaltime_as_ical_string(scan->data.start),
-               icaltime_as_ical_string(scan->data.end)
-        );
-
-        rc = mailbox_open_irl(scan->data.mailbox, &mailbox);
-        if (rc == IMAP_MAILBOX_NONEXISTENT)
-            /* mailbox was deleted or something, nothing we can do */
-            continue;
-        if (rc) {
-            /* transient open error, don't delete this alarm */
-            scan->do_delete = 0;
-            continue;
-        }
-
-        userid = mboxname_to_userid(mailbox->name);
-
-        caldavdb = caldav_open_mailbox(mailbox);
-        if (!caldavdb) {
-            /* XXX mailbox exists but caldav structure doesn't? delete event? */
-            scan->do_delete = 0;
-            goto done_item;
-        }
-
-        struct caldav_data *cdata = NULL;
-        caldav_lookup_resource(caldavdb, mailbox->name, scan->data.resource, &cdata, 0);
-        if (!cdata || !cdata->ical_uid)
-            /* resource not found, nothing we can do */
-            goto done_item;
-
-        struct index_record record;
-        memset(&record, 0, sizeof(struct index_record));
-        rc = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-        if (rc == IMAP_NOTFOUND) {
-            /* no record, no worries */
-            goto done_item;
-        }
-        if (rc) {
-            /* XXX no index record? item deleted or transient error? */
-            scan->do_delete = 0;
-            goto done_item;
-        }
-        if (record.system_flags & FLAG_EXPUNGED) {
-            /* no longer exists?  nothing to do */
-            goto done_item;
-        }
-
-        rc = mailbox_map_record(mailbox, &record, &msg_buf);
-        if (rc) {
-            /* XXX no message? index is wrong? yikes */
-            scan->do_delete = 0;
-            goto done_item;
-        }
-
-        ical = icalparser_parse_string(buf_cstring(&msg_buf) + record.header_size);
-
-        rc = annotatemore_lookupmask(mailbox->name, displayname_annot, userid, &calname_buf);
-        if (rc || !calname_buf.len) buf_setcstr(&calname_buf, strrchr(mailbox->name, '.') + 1);
-
-        mailbox_close(&mailbox);
-        mailbox = NULL;
-
-        caldav_close(caldavdb);
-        caldavdb = NULL;
-
-        if (!ical)
-            /* XXX log error */
-            goto done_item;
-
-        /* fill out recipients */
-        struct sqldb_bindval rbval[] = {
-            { ":alarmid",       SQLITE_INTEGER, { .i = scan->data.rowid } },
-            { NULL,             SQLITE_NULL,    { .s = NULL             } }
-        };
-
-        rc = sqldb_exec(alarmdb, CMD_SELECT_RECIPIENT, rbval, recipient_read_cb,
-                      &scan->data.recipients);
-
-        struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
-        mboxevent_extract_icalcomponent(event, ical, userid, buf_cstring(&calname_buf),
-                                        scan->data.action, scan->data.nextalarm,
-                                        scan->data.tzid,
-                                        scan->data.start, scan->data.end,
-                                        &scan->data.recipients);
-        mboxevent_notify(event);
-        mboxevent_free(&event);
-
-        /* set up for next alarm */
-        struct caldav_alarm_data alarmdata = {
-            .mailbox  = scan->data.mailbox,
-            .resource = scan->data.resource,
-        };
-
-        if (!caldav_alarm_prepare(ical, &alarmdata, scan->data.action, before)) {
-            rc = caldav_alarm_add(alarmdb, &alarmdata);
-            caldav_alarm_fini(&alarmdata);
-            /* report error, but don't do anything */
-        }
-
-done_item:
-        buf_free(&calname_buf);
-        buf_free(&msg_buf);
-        if (ical) icalcomponent_free(ical);
-        if (caldavdb) caldav_close(caldavdb);
-        if (userid) free(userid);
-        if (mailbox) mailbox_close(&mailbox);
-    }
-
-    for (scan = list; scan; scan = scan->next)
-        if (scan->do_delete)
-            caldav_alarm_delete_row(alarmdb, &scan->data);
-
-done:
     caldav_alarm_close(alarmdb);
 
-    scan = list;
-    while (scan) {
-        struct alarmdata_list *next = scan->next;
+    process_records(&list, runtime);
 
-        free((void*) scan->data.mailbox);
-        free((void*) scan->data.resource);
-        free((void*) scan->data.tzid);
-        free(scan);
-
-        scan = next;
+    int i;
+    for (i = 0; i < list.count; i++) {
+        struct caldav_alarm_data *data = ptrarray_nth(&list, i);
+        caldav_alarm_fini(data);
+        free(data);
     }
+    ptrarray_fini(&list);
+
+    return rc;
+}
+
+static int upgrade_read_cb(sqlite3_stmt *stmt, void *rock)
+{
+    strarray_t *target = (strarray_t *)rock;
+
+    strarray_append(target, (const char *) sqlite3_column_text(stmt, 0));
+
+    return 0;
+}
+
+#define CMD_READ_OLDALARMS "SELECT DISTINCT mailbox FROM alarms;"
+
+EXPORTED int caldav_alarm_upgrade()
+{
+    syslog(LOG_DEBUG, "checking if alarm database needs upgrading");
+
+    struct mailbox *mailbox = NULL;
+
+    strarray_t mailboxes = STRARRAY_INITIALIZER;
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    if (!alarmdb) return HTTP_SERVER_ERROR;
+    int rc = sqldb_exec(alarmdb, "SELECT DISTINCT mailbox FROM alarms;",
+                        NULL, &upgrade_read_cb, &mailboxes);
+    caldav_alarm_close(alarmdb);
+
+    time_t runtime = time(NULL);
+    const char *annotname = DAV_ANNOT_NS "lastalarm";
+    struct buf annot_buf = BUF_INITIALIZER;
+
+    int i;
+    for (i = 0; i < strarray_size(&mailboxes); i++) {
+        const char *mboxname = strarray_nth(&mailboxes, i);
+        syslog(LOG_DEBUG, "UPDATING calalarm database for %s", mboxname);
+        rc = mailbox_open_iwl(mboxname, &mailbox);
+        if (rc) continue;
+
+        sqldb_t *alarmdb = caldav_alarm_open();
+        /* clean up any existing alarms for this mailbox */
+        struct sqldb_bindval bval[] = {
+            { ":mboxname",  SQLITE_TEXT, { .s = mboxname  } },
+            { NULL,         SQLITE_NULL, { .s = NULL      } }
+        };
+        rc = sqldb_exec(alarmdb, CMD_DELETEMAILBOX, bval, NULL, NULL);
+        caldav_alarm_close(alarmdb);
+        if (rc) continue;
+
+        icaltimezone *floatingtz = get_floatingtz(mailbox);
+
+        /* add alarms for all records */
+        const struct index_record *record;
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+        while ((record = mailbox_iter_step(iter))) {
+            struct buf msg_buf = BUF_INITIALIZER;
+            rc = mailbox_map_record(mailbox, record, &msg_buf);
+            if (rc) continue;
+            icalcomponent *ical = icalparser_parse_string(buf_cstring(&msg_buf) + record->header_size);
+            if (ical) {
+                if (has_alarms(ical)) {
+                    time_t nextcheck = process_alarms(mailbox->name, floatingtz, ical, runtime, runtime);
+                    buf_reset(&annot_buf);
+                    buf_printf(&annot_buf, "%ld %ld", runtime, nextcheck);
+                    mailbox_annotation_write(mailbox, record->uid, annotname, "", &annot_buf);
+                }
+                icalcomponent_free(ical);
+            }
+            buf_free(&msg_buf);
+        }
+        mailbox_iter_done(&iter);
+        mailbox_close(&mailbox);
+
+        if (floatingtz) icaltimezone_free(floatingtz, 1);
+    }
+
+    strarray_fini(&mailboxes);
+
+    alarmdb = caldav_alarm_open();
+    if (!alarmdb) return HTTP_SERVER_ERROR;
+    rc = sqldb_exec(alarmdb, "DROP TABLE alarm_recipients;", NULL, NULL, NULL);
+    if (rc == SQLITE_OK)
+        rc = sqldb_exec(alarmdb, "DROP TABLE alarms;", NULL, NULL, NULL);
+    caldav_alarm_close(alarmdb);
+
+    buf_free(&annot_buf);
 
     return rc;
 }

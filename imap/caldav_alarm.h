@@ -47,29 +47,8 @@
 #include <config.h>
 
 #include "sqldb.h"
-#include "strarray.h"
+#include "mailbox.h"
 #include <libical/ical.h>
-
-enum caldav_alarm_action {
-    CALDAV_ALARM_ACTION_NONE    = 0,
-    CALDAV_ALARM_ACTION_DISPLAY = 1,
-    CALDAV_ALARM_ACTION_EMAIL   = 2,
-
-    CALDAV_ALARM_ACTION_FIRST   = CALDAV_ALARM_ACTION_DISPLAY,
-    CALDAV_ALARM_ACTION_LAST    = CALDAV_ALARM_ACTION_EMAIL
-};
-
-struct caldav_alarm_data {
-    sqlite3_int64               rowid;
-    const char                  *mailbox;
-    const char                  *resource;
-    enum caldav_alarm_action    action;
-    icaltimetype                nextalarm;
-    const char                  *tzid;
-    icaltimetype                start;
-    icaltimetype                end;
-    strarray_t                  recipients;
-};
 
 /* prepare for caldav alarm operations in this process */
 int caldav_alarm_init(void);
@@ -77,31 +56,26 @@ int caldav_alarm_init(void);
 /* done with all caldav operations for this process */
 int caldav_alarm_done(void);
 
-/* get a database handle to the alarm db */
-sqldb_t *caldav_alarm_open(void);
-
-/* close this handle */
-int caldav_alarm_close(sqldb_t *alarmdb);
-
 /* add a calendar alarm */
-int caldav_alarm_add(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata);
+int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *record,
+                            icalcomponent *ical);
+
+/* make sure that the alarms match the annotation */
+int caldav_alarm_touch_record(struct mailbox *mailbox, const struct index_record *record);
 
 /* delete all alarms matching the event */
-int caldav_alarm_delete_all(sqldb_t *alarmdb, struct caldav_alarm_data *alarmdata);
-
-/* delete all alarms for a user */
-int caldav_alarm_delete_user(sqldb_t *alarmdb, const char *userid);
-
-/* fill alarmdata with data for next alarm of given type for given entry */
-int caldav_alarm_prepare(icalcomponent *ical, struct caldav_alarm_data *alarmdata, enum caldav_alarm_action action, icaltimetype after);
+int caldav_alarm_delete_record(const char *mboxname, uint32_t uid);
 
 /* delete entire mailbox's alarms */
-int caldav_alarm_delmbox(sqldb_t *alarmdb, const char *mboxname);
+int caldav_alarm_delete_mailbox(const char *mboxname);
 
-/* clean up alarmdata after prepare */
-void caldav_alarm_fini(struct caldav_alarm_data *alarmdata);
+/* delete all alarms for a user */
+int caldav_alarm_delete_user(const char *userid);
 
 /* distribute alarms with triggers in the next minute */
-int caldav_alarm_process(time_t runattime);
+int caldav_alarm_process(time_t runtime);
+
+/* upgrade old databases */
+int caldav_alarm_upgrade();
 
 #endif /* CALDAV_ALARM_H */

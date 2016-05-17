@@ -264,9 +264,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
      * task is interrupted, but we can't afford to keep the
      * alarm database locked for the entire time, it's a single
      * blocking database over the entire server */
-    sqldb_t *alarmdb = caldav_alarm_open();
-    caldav_alarm_delete_user(alarmdb, userid);
-    caldav_alarm_close(alarmdb);
+    caldav_alarm_delete_user(userid);
 
     in_reconstruct = 1;
 
