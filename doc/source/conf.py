@@ -678,7 +678,27 @@ man_pages = [
             1
     ),
 
+          (
+            'imap/admin/usercommands/synctest',
+            'synctest',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                ],
+            1
+    ),
+
         (
+            'imap/admin/usercommands/dav_reconstruct',
+            'dav_reconstruct',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                ],
+            1
+    ),
+    
+    (
             'imap/admin/usercommands/installsieve',
             'installsieve',
             u'Cyrus IMAP Documentation',
