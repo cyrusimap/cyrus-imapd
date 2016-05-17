@@ -1598,8 +1598,8 @@ if test -z "$with_com_err"; then
           with_com_err="yes"
         fi
         if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
-          AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
-          AC_MSG_WARN([Will build com_err from included sources.])
+          AC_MSG_NOTICE([Parts of com_err distribution were found, but not compile_et.])
+          AC_MSG_NOTICE([Will build com_err from included sources.])
           with_com_err="yes" # build it ourselves
         fi
 fi
