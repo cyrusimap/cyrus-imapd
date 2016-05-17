@@ -6,6 +6,7 @@
 *.patch
 !debian/patches/*.patch
 *.orig
+*.pyc
 *.rej
 *.sig
 *.tar.gz
@@ -42,6 +43,7 @@ com_err/et/compile_et
 coverage.xml
 cscope.out
 depcomp
+doc/build/
 doc/man/
 doc/rst/
 doc/text/
