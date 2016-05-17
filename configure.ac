@@ -1507,7 +1507,7 @@ dnl
                         AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])
                         LIBS="$LIBS ${ICU4C_LIBS}"
                         ],
-                        AC_MSG_WARN([Need ICU4C for RSCALE support in httpd]))
+                        AC_MSG_ERROR([Need ICU4C for RSCALE support in httpd]))
                 ],
                 AC_MSG_WARN([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
 
