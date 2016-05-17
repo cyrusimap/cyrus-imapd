@@ -1,4 +1,4 @@
-.. _imap-admin-commands-sivtest:
+.. _imap-admin-usercommands-sivtest:
 
 ===========
 **sivtest**

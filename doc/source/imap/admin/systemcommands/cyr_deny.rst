@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyr_deny:
+.. _imap-admin-systemcommands-cyr_deny:
 
 ============
 **cyr_deny**

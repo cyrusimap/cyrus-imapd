@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyr_dbtool:
+.. _imap-admin-systemcommands-cyr_dbtool:
 
 ==============
 **cyr_dbtool**

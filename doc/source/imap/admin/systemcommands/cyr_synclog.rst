@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyr_synclog:
+.. _imap-admin-systemcommands-cyr_synclog:
 
 ===============
 **cyr_synclog**

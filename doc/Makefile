@@ -6,10 +6,16 @@ SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 PAPER         =
 BUILDDIR      = build
+PERL2RST      = ../tools/perl2rst
 
 # User-friendly check for sphinx-build
 ifeq ($(shell which $(SPHINXBUILD) >/dev/null 2>&1; echo $$?), 1)
 $(error The '$(SPHINXBUILD)' command was not found. Make sure you have Sphinx installed, then set the SPHINXBUILD environment variable to point to the full path of the '$(SPHINXBUILD)' executable. Alternatively you can add the directory with the executable to your PATH. If you don't have Sphinx installed, grab it from http://sphinx-doc.org/)
+endif
+
+# User-friendly check for perl2rst
+ifeq ($(shell which $(PERL2RST) >/dev/null 2>&1; echo $$?), 1)
+$(error The '$(PERL2RST)' command was not found. Make sure you have perl2rst installed, then set the PERL2RST environment variable to point to the full path of the '$(PERL2RST)' script. It relies on Perl module Pod::POM::View::Restructured)
 endif
 
 # Internal variables.
@@ -48,8 +54,14 @@ help:
 
 clean:
 	rm -rf $(BUILDDIR)/*
+    
+init: ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
+	@echo "creating imap/admin/systemcommands/cyradm.rst"
+	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > source/imap/admin/systemcommands/cyradm.rst 
+	@echo "creating imap/admin/configs/imapd.conf.rst"
+	../tools/config2rst ../lib/imapoptions > source/imap/admin/configs/imapd.conf.rst     
 
-html:
+html: init
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
@@ -127,7 +139,7 @@ text:
 	@echo
 	@echo "Build finished. The text files are in $(BUILDDIR)/text."
 
-man:
+man: init
 	$(SPHINXBUILD) -b cyrman $(ALLSPHINXOPTS) $(BUILDDIR)/man
 	@echo
 	@echo "Build finished. The manual pages are in $(BUILDDIR)/man."

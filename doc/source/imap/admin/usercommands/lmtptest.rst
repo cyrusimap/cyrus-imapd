@@ -1,4 +1,4 @@
-.. _imap-admin-commands-lmtptest:
+.. _imap-admin-usercommands-lmtptest:
 
 ============
 **lmtptest**
@@ -18,6 +18,8 @@ Synopsis
 
 Description
 ===========
+
+This is actually installed as a hard link to :cyrusman:`imtest(1)`.
 
 **lmtptest** is a utility that allows you to authenticate to a LMTP server
 and interactively issue commands to it. Once authenticated you may

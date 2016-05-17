@@ -1,4 +1,4 @@
-.. _imap-admin-commands-squatter:
+.. _imap-admin-systemcommands-squatter:
 
 ============
 **squatter**

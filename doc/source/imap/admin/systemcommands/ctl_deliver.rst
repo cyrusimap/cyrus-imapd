@@ -1,4 +1,4 @@
-.. _imap-admin-commands-ctl_deliver:
+.. _imap-admin-systemcommands-ctl_deliver:
 
 ===============
 **ctl_deliver**

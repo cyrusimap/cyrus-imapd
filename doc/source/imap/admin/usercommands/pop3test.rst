@@ -1,10 +1,10 @@
-.. _imap-admin-commands-pop3test:
+.. _imap-admin-usercommands-pop3test:
 
 ============
 **pop3test**
 ============
 
-Interactive POP3 test program
+Interactive POP3 test program.
 
 Synopsis
 ========
@@ -17,6 +17,8 @@ Synopsis
 
 Description
 ===========
+
+This is actually installed as a hard linked copy of :cyrusman:`imtest(1)`.
 
 **pop3test** is a utility that allows you to authenticate to a
 POP3 server and interactively issue commands to it. Once

@@ -1,4 +1,4 @@
-.. _imap-admin-commands-unexpunge:
+.. _imap-admin-systemcommands-unexpunge:
 
 =============
 **unexpunge**

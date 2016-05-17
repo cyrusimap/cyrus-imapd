@@ -1,4 +1,4 @@
-.. _imap-admin-commands-sync_server:
+.. _imap-admin-systemcommands-sync_server:
 
 ===============
 **sync_server**

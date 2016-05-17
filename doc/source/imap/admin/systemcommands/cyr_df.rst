@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyr_df:
+.. _imap-admin-systemcommands-cyr_df:
 
 ==========
 **cyr_df**

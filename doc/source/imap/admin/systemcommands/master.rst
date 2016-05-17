@@ -1,4 +1,4 @@
-.. _imap-admin-commands-master:
+.. _imap-admin-systemcommands-master:
 
 ==========
 **master**

@@ -1,6 +1,6 @@
 :orphan:
 
-.. _imap-admin-commands-CMD:
+.. _imap-admin-systemcommands-CMD:
 
 ==========
 **CMD**

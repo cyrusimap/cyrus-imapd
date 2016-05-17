@@ -200,6 +200,15 @@ FIELD DESCRIPTIONS
 
     .. endblob altnamespace
 
+    .. startblob altprefix
+
+    ``altprefix:`` Alt Folders
+
+        Alternative INBOX spellings that can't be accessed in altnamespace
+        otherwise go under here 
+
+    .. endblob altprefix
+
     .. startblob annotation_db
 
     ``annotation_db:`` twoskip

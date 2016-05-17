@@ -1,4 +1,4 @@
-.. _imap-admin-commands-nntpd:
+.. _imap-admin-systemcommands-nntpd:
 
 =========
 **nntpd**

@@ -1,4 +1,4 @@
-.. _imap-admin-commands-ptdump:
+.. _imap-admin-systemcommands-ptdump:
 
 ==========
 ``ptdump``

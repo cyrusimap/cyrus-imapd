@@ -1,4 +1,4 @@
-.. _imap-admin-commands-sieved:
+.. _imap-admin-systemcommands-sieved:
 
 ==========
 **sieved**

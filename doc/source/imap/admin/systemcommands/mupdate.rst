@@ -1,4 +1,4 @@
-.. _imap-admin-commands-mupdate:
+.. _imap-admin-systemcommands-mupdate:
 
 ===========
 **mupdate**

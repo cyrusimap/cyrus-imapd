@@ -1,4 +1,4 @@
-.. _imap-admin-commands-sievec:
+.. _imap-admin-systemcommands-sievec:
 
 ==========
 **sievec**

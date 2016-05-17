@@ -1,4 +1,4 @@
-.. _imap-admin-commands-installsieve:
+.. _imap-admin-usercommands-installsieve:
 
 ================
 **installsieve**

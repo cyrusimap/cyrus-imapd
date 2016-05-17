@@ -1,4 +1,4 @@
-.. _imap-admin-commands-quota:
+.. _imap-admin-systemcommands-quota:
 
 =========
 **quota**

@@ -47,7 +47,7 @@ Major changes since the 2.5.x series
     ``--with-cyrus-prefix`` and ``--with-service-path`` in favour of the more conventional
     ``--prefix``, ``--bindir``, ``--sbindir``, and ``--libexecdir``.
 
-*   Binaries executed by the :ref:`master(8) <imap-admin-commands-master>`
+*   Binaries executed by the :ref:`master(8) <imap-admin-systemcommands-master>`
     service process are now installed to ``--libexecdir``.  Other binaries are installed to
     ``--bindir`` and/or ``--sbindir``.
 
@@ -69,7 +69,7 @@ Major changes since the 2.5.x series
 
 *   New numeric header available for sorting: X-Spam-Score
 
-*   Added IMIP notification support to :ref:`notifyd(8) <imap-admin-commands-notifyd>`.  See
+*   Added IMIP notification support to :ref:`notifyd(8) <imap-admin-systemcommands-notifyd>`.  See
     ``imipnotifier`` in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`
 
 *   Optimised CRC32 implementation

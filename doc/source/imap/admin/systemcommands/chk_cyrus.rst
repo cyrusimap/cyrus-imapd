@@ -1,4 +1,4 @@
-.. _imap-admin-commands-chk_cyrus:
+.. _imap-admin-systemcommands-chk_cyrus:
 
 =============
 **chk_cyrus**

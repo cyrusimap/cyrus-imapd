@@ -1,4 +1,4 @@
-.. _imap-admin-commands-proxyd:
+.. _imap-admin-systemcommands-proxyd:
 
 ==========
 **proxyd**

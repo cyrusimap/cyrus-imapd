@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyrdump:
+.. _imap-admin-systemcommands-cyrdump:
 
 ===========
 **cyrdump**

@@ -1,4 +1,4 @@
-.. _imap-admin-commands-fetchnews:
+.. _imap-admin-systemcommands-fetchnews:
 
 =============
 **fetchnews**

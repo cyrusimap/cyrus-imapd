@@ -1,4 +1,4 @@
-.. _imap-admin-commands-reconstruct:
+.. _imap-admin-systemcommands-reconstruct:
 
 ===============
 **reconstruct**

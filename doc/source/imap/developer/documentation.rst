@@ -16,7 +16,7 @@ While editing the documentation can take place in any text editor, you'll need t
 Documentation Tools
 ===================
 
-For basic reStructured Text operations, we are using Sphinx version 1.2.3 (We can't use 1.3.* due to a bug with graphviz captions):
+For basic reStructured Text operations, we are using Sphinx version 1.3.6:
 
 * python-sphinx
 * python-sphinxcontrib-programoutput
@@ -26,7 +26,11 @@ For basic reStructured Text operations, we are using Sphinx version 1.2.3 (We ca
 * python-sphinxcontrib.phpdomain
 * python-sphinxcontrib.seqdiag
 * python-sphinxcontrib.spelling
-    
+
+You will also need the perl package, which is used to build some docs from their Perl source:
+
+* Pod::POM::View::Restructured    
+
 For editing and preview
 
 * `geany <http://www.geany.org>`_
@@ -56,7 +60,7 @@ Checking the files
     
 For a full-fledged test generating Sphinx output, run::
 
-    make clean man html
+    make clean init man html
     
 from the checkout directory and look at the results. This generates the manpages and the html files.
 

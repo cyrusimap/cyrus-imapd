@@ -1,4 +1,4 @@
-.. _imap-admin-commands-mbtool:
+.. _imap-admin-systemcommands-mbtool:
 
 ==========
 **mbtool**

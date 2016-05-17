@@ -1,4 +1,4 @@
-.. _imap-admin-commands-arbitronsort.pl:
+.. _imap-admin-systemcommands-arbitronsort.pl:
 
 ===================
 **arbitronsort.pl**

@@ -1,4 +1,4 @@
-.. _imap-admin-commands-ctl_mboxlist:
+.. _imap-admin-systemcommands-ctl_mboxlist:
 
 ================
 **ctl_mboxlist**

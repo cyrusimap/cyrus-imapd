@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyr_expire:
+.. _imap-admin-systemcommands-cyr_expire:
 
 ==============
 **cyr_expire**

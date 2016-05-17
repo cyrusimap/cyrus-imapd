@@ -46,7 +46,7 @@ Major changes
     ``--with-cyrus-prefix`` and ``--with-service-path`` in favour of the more conventional
     ``--prefix``, ``--bindir``, ``--sbindir``, and ``--libexecdir``.
 
-*   Binaries executed by the :ref:`master(8) <imap-admin-commands-master>`
+*   Binaries executed by the :ref:`master(8) <imap-admin-systemcommands-master>`
     service process are now installed to ``--libexecdir``.  Other binaries are installed to
     ``--bindir`` and/or ``--sbindir``.
 

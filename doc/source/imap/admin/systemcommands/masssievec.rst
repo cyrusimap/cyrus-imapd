@@ -1,4 +1,4 @@
-.. _imap-admin-commands-masssievec:
+.. _imap-admin-systemcommands-masssievec:
 
 ==============
 **masssievec**

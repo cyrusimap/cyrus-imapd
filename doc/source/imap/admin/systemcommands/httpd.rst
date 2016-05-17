@@ -1,4 +1,4 @@
-.. _imap-admin-commands-httpd:
+.. _imap-admin-systemcommands-httpd:
 
 =========
 **httpd**

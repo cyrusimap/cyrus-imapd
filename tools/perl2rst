@@ -22,7 +22,7 @@ use Pod::POM::View::Restructured;
                 return '';
             }
 
-            return $text;
+            return $text . "\n";
         }
 
         return $self->SUPER::view_for($node);

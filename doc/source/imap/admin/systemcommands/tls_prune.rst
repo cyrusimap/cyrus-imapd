@@ -1,4 +1,4 @@
-.. _imap-admin-commands-tls_prune:
+.. _imap-admin-systemcommands-tls_prune:
 
 =============
 **tls_prune**

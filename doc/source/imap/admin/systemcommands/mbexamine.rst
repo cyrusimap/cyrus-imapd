@@ -1,4 +1,4 @@
-.. _imap-admin-commands-mbexamine:
+.. _imap-admin-systemcommands-mbexamine:
 
 =============
 **mbexamine**

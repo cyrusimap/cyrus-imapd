@@ -1,4 +1,4 @@
-.. _imap-admin-commands-ptloader:
+.. _imap-admin-systemcommands-ptloader:
 
 ============
 ``ptloader``

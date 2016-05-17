@@ -1,4 +1,4 @@
-.. _imap-admin-commands-ptexpire:
+.. _imap-admin-systemcommands-ptexpire:
 
 ============
 ``ptexpire``

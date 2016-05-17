@@ -1,4 +1,4 @@
-.. _imap-admin-commands-smtptest:
+.. _imap-admin-usercommands-smtptest:
 
 ============
 **smtptest**

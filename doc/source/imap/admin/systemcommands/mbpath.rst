@@ -1,4 +1,4 @@
-.. _imap-admin-commands-mbpath:
+.. _imap-admin-systemcommands-mbpath:
 
 ==========
 **mbpath**

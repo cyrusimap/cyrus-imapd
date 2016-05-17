@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyr_buildinfo:
+.. _imap-admin-systemcommands-cyr_buildinfo:
 
 =================
 **cyr_buildinfo**

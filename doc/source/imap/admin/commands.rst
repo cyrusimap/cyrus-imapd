@@ -44,6 +44,7 @@ List of System Command-line Utilities
     systemcommands/imapd
     systemcommands/ipurge
     systemcommands/lmtpd
+    systemcommands/lmtpproxyd
     systemcommands/master 
     systemcommands/mbexamine
     systemcommands/mbpath
@@ -53,6 +54,7 @@ List of System Command-line Utilities
     systemcommands/nntpd
     systemcommands/notifyd
     systemcommands/pop3d
+    systemcommands/pop3proxyd    
     systemcommands/quota
     systemcommands/reconstruct
     systemcommands/rmnews

@@ -1,4 +1,4 @@
-.. _imap-admin-commands-mupdatetest:
+.. _imap-admin-usercommands-mupdatetest:
 
 ===============
 **mupdatetest**

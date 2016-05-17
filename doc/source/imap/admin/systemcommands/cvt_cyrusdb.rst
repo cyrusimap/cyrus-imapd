@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cvt_cyrusdb:
+.. _imap-admin-systemcommands-cvt_cyrusdb:
 
 ===============
 **cvt_cyrusdb**

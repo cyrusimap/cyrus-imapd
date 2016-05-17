@@ -1,4 +1,4 @@
-.. _imap-admin-commands-**ctl_zoneinfo**:
+.. _imap-admin-systemcommands-**ctl_zoneinfo**:
 
 ================
 **ctl_zoneinfo**

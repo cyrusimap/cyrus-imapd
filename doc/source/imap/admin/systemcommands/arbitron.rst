@@ -1,4 +1,4 @@
-.. _imap-admin-commands-arbitron:
+.. _imap-admin-systemcommands-arbitron:
 
 ============
 **arbitron**

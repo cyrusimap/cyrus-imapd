@@ -1,4 +1,4 @@
-.. _imap-admin-commands-convert-sieve:
+.. _imap-admin-systemcommands-convert-sieve:
 
 ====================
 **convert-sieve.pl**

@@ -1,4 +1,4 @@
-.. _imap-admin-commands-sync_reset:
+.. _imap-admin-systemcommands-sync_reset:
 
 ==============
 **sync_reset**

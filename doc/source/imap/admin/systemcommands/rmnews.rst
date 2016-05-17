@@ -1,4 +1,4 @@
-.. _imap-admin-commands-rmnews:
+.. _imap-admin-systemcommands-rmnews:
 
 ==========
 **rmnews**

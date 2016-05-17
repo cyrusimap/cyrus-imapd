@@ -1,4 +1,4 @@
-.. _imap-admin-commands-timsieved:
+.. _imap-admin-systemcommands-timsieved:
 
 =============
 **timsieved**

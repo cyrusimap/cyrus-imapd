@@ -1,4 +1,4 @@
-.. _imap-admin-commands-cyr_sequence:
+.. _imap-admin-systemcommands-cyr_sequence:
 
 ================
 **cyr_sequence**

@@ -1,4 +1,4 @@
-.. _imap-admin-commands-notifyd:
+.. _imap-admin-systemcommands-notifyd:
 
 ===========
 **notifyd**

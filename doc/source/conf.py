@@ -382,13 +382,12 @@ man_pages = [
             'cyradm',
             u'Cyrus IMAP Documentation',
             [
-                    u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
-                ],
+                    u'The Cyrus Team'
+            ],
             8
     ),
 
-        (
+    (
             'imap/admin/systemcommands/cyr_buildinfo',
             'cyr_buildinfo',
             u'Cyrus IMAP Documentation',
@@ -735,6 +734,16 @@ man_pages = [
     ),
 
         (
+            'imap/admin/systemcommands/lmtpproxyd',
+            'lmtpproxyd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                ],
+            8
+    ),
+
+    (
             'imap/admin/usercommands/lmtptest',
             'lmtptest',
             u'Cyrus IMAP Documentation',
@@ -812,6 +821,16 @@ man_pages = [
     ),
 
         (
+            'imap/admin/systemcommands/pop3proxyd',
+            'pop3proxyd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                ],
+            8
+    ),
+
+    (
             'imap/admin/usercommands/pop3test',
             'pop3test',
             u'Cyrus IMAP Documentation',

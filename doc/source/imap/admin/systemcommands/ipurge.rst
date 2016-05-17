@@ -1,4 +1,4 @@
-.. _imap-admin-commands-ipurge:
+.. _imap-admin-systemcommands-ipurge:
 
 ==========
 **ipurge**

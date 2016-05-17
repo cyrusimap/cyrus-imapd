@@ -43,6 +43,10 @@ Setting up dependencies
 
 3. Additional dependencies for cyrus-imapd-2.5: you'll need the ``-dev`` package to match whichever version of libdb you already have installed (assuming it's probably already installed). On Debian 8.0, ``libdb5.3-dev`` is needed, but ``libdb5.1-dev`` on 7.8.
 
+4. Install dependencies for :ref:`building the docs <contribute-docs>`.
+    * ``sudo pip install python-sphinx``
+    * ``sudo cpan install Pod::POM::View::Restructured``
+
 .. _steps 1-3: https://help.github.com/articles/generating-ssh-keys/
 .. _Phabricator: https://git.cyrus.foundation/
 .. _SSH Keys settings panel: https://git.cyrus.foundation/settings/panel/ssh/

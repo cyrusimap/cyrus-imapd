@@ -1,4 +1,4 @@
-.. _imap-admin-commands-smmapd:
+.. _imap-admin-systemcommands-smmapd:
 
 ==========
 **smmapd**

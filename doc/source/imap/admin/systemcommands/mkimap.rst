@@ -1,4 +1,4 @@
-.. _imap-admin-commands-mkimap:
+.. _imap-admin-systemcommands-mkimap:
 
 ==========
 **mkimap**

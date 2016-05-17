@@ -1,4 +1,4 @@
-.. _imap-admin-commands-nntptest:
+.. _imap-admin-usercommands-nntptest:
 
 ============
 **nntptest**

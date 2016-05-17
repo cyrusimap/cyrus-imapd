@@ -1,4 +1,4 @@
-.. _imap-admin-commands-fud:
+.. _imap-admin-systemcommands-fud:
 
 =======
 **fud**

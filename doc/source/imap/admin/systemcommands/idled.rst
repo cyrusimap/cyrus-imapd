@@ -1,4 +1,4 @@
-.. _imap-admin-commands-idled:
+.. _imap-admin-systemcommands-idled:
 
 =========
 **idled**

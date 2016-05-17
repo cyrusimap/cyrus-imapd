@@ -1,4 +1,4 @@
-.. _imap-admin-commands-sieveshell:
+.. _imap-admin-systemcommands-sieveshell:
 
 ==============
 ``sieveshell``
@@ -36,7 +36,7 @@ Sieveshell works via MANAGESIEVE, a work in progress.
 
     Instead of working interactively, run commands from script, and exit when done.
 
-.. _imap-admin-commands-sieveshell-list:
+.. _imap-admin-systemcommands-sieveshell-list:
 
 list
 ----
@@ -47,7 +47,7 @@ List scripts on server.
 
     > :command:`list`
     
-.. _imap-admin-commands-sieveshell-put:
+.. _imap-admin-systemcommands-sieveshell-put:
 
 put
 ---
@@ -58,7 +58,7 @@ Uploads <filename> script to server.
 
     > :command:`put <filename>`
 
-.. _imap-admin-commands-sieveshell-get:
+.. _imap-admin-systemcommands-sieveshell-get:
 
 get
 ---
@@ -69,7 +69,7 @@ Fetches a script from the server. If no <filename> is provided, display script c
 
     > :command:`get <name> [<filename>]` 
 
-.. _imap-admin-commands-sieveshell-delete:
+.. _imap-admin-systemcommands-sieveshell-delete:
 
 delete
 ------
@@ -80,7 +80,7 @@ Deletes a script from the server.
 
     > :command:`delete <name>` 
 
-.. _imap-admin-commands-sieveshell-activate:
+.. _imap-admin-systemcommands-sieveshell-activate:
 
 activate
 --------
@@ -91,7 +91,7 @@ Activates the script on the server.
 
     > :command:`activate <name>` 
 
-.. _imap-admin-commands-sieveshell-deactivate:
+.. _imap-admin-systemcommands-sieveshell-deactivate:
     
 deactivate
 ----------

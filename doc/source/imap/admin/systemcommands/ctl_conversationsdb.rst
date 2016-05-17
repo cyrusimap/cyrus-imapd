@@ -1,4 +1,4 @@
-.. _imap-admin-commands-ctl_conversationsdb:
+.. _imap-admin-systemcommands-ctl_conversationsdb:
 
 =======================
 **ctl_conversationsdb**
