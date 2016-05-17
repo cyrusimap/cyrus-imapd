@@ -1881,6 +1881,22 @@ if test "$cyrus_cv_sse42" = "yes" ; then
 fi
 AC_MSG_RESULT($cyrus_cv_sse42)
 
+dnl documentation generation (sphinx)
+AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
+AC_ARG_WITH([sphinx-build],
+            AS_HELP_STRING([with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
+            [with_sphinx_build=$withval],
+            [with_sphinx_build=yes])
+AS_CASE([$with_sphinx_build],
+        [yes],  [AC_PATH_PROG(SPHINX_BUILD, sphinx-build)],
+        [no],   [SPHINX_BUILD='']
+        [*],    [AC_PATH_PROG(SPHINX_BUILD, sphinx-build, [], [$with_sphinx_build])])
+
+AS_IF([test -z "$SPHINX_BUILD"],
+      [AC_MSG_WARN([No sphinx-build, won't be able to regenerate docs])])
+AC_SUBST([SPHINX_BUILD])
+AM_CONDITIONAL([HAVE_SPHINX_BUILD], [ test -n "$SPHINX_BUILD" ])
+
 AH_TOP([
 /*
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
