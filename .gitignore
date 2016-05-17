@@ -155,6 +155,7 @@ sieve/test
 sieve/tests/
 stamp-h1
 timsieved/timsieved
+tools/htmlstrip
 tools/vzic/vzic
 xversion.h
 ylwrap
