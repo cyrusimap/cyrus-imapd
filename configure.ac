@@ -1263,7 +1263,7 @@ dnl
 	if test "$ENABLE_RSCALE" != no; then
 	     AC_SUBST(ICU_CFLAGS)
 	     AC_SUBST(ICU_LIBS)
-	     AC_CHECK_LIB(ical, icalrecur_rscale_token_handling_is_supported,
+	     AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
 		    AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]))
 	fi
 fi
