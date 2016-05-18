@@ -72,6 +72,10 @@ extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
 
 /* Functions not declared in in libical < v2.0 */
 
+#if !HAVE_DECL_ICALPROPERTY_GET_PARENT
+extern icalcomponent *icalproperty_get_parent(const icalproperty *property);
+#endif
+
 #if !HAVE_DECL_ICALRECUR_FREQ_TO_STRING
 extern const char *icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
 #endif

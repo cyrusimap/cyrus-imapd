@@ -136,8 +136,6 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 }
 
 
-extern icalcomponent* icalproperty_get_parent(const icalproperty*);
-
 void icalcomponent_remove_invitee(icalcomponent *comp, icalproperty *prop)
 {
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
