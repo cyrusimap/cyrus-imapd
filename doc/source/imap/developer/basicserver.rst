@@ -173,13 +173,7 @@ Cyrus uses assorted protocols, which need to have their ports defined in ``/etc/
 
 (Nearly there)
 
-Before you launch Cyrus for the first time, create the Cyrus directory structure: use :cyrusman:`mkimap(8)`.
-
-::
-
-    sudo -u cyrus ./tools/mkimap  
-    
-Now set up a simple directory structure for Cyrus to store emails, owned by the ``cyrus:mail`` account:
+Set up a simple directory structure for Cyrus to store emails, owned by the ``cyrus:mail`` account:
 
 ::
 
@@ -240,6 +234,12 @@ For :cyrusman:`cyrus.conf(5)`, start with this:
       tlsprune    cmd="tls_prune" at=0400
     }
 
+Before you launch Cyrus for the first time, create the Cyrus directory structure: use :cyrusman:`mkimap(8)`.
+
+::
+
+    sudo -u cyrus ./tools/mkimap  
+        
 8. Launch Cyrus
 ---------------
 
