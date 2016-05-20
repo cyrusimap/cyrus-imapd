@@ -65,13 +65,15 @@ static struct icaltimetype _my_datetime(icalcomponent *comp,
     icalproperty *prop = icalcomponent_get_first_property(comp, kind);
     if (!prop) return icaltime_null_time();
 
-    struct icaltimetype ret = icalvalue_get_datetime(icalproperty_get_value(prop));
+    struct icaltimetype ret =
+        icalvalue_get_datetime(icalproperty_get_value(prop));
 
     /* skip timezones if it's UTC */
     if (icaltime_is_utc(ret))
         return ret;
 
-    icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+    icalparameter *param =
+        icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
 
     if (param) {
         const char *tzid = icalparameter_get_tzid(param);
@@ -104,7 +106,8 @@ static int sort_overrides(const void **ap, const void **bp)
 }
 
 static struct recurrence_data *_add_override(ptrarray_t *array,
-                                             time_t start, time_t end, icalcomponent *comp)
+                                             time_t start, time_t end,
+                                             icalcomponent *comp)
 {
     struct recurrence_data *data = NULL;
     int i;
@@ -179,16 +182,20 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             /* if there's an end, we calculate the duration */
             struct icaltimetype dtend = _my_datetime(comp, ICAL_DTEND_PROPERTY);
             icaltime_span basespan = icaltime_span_new(dtstart, dtend, 1);
-            event_length = icaldurationtype_from_int(basespan.end - basespan.start);
+            event_length =
+                icaldurationtype_from_int(basespan.end - basespan.start);
         }
     }
 
-    /* add any RDATEs first, since both RECURRENCE-ID and EXDATE items can override them */
+    /* add any RDATEs first,
+       since both RECURRENCE-ID and EXDATE items can override them */
     if (mastercomp) {
         icalproperty *prop;
-        for (prop = icalcomponent_get_first_property(mastercomp, ICAL_RDATE_PROPERTY);
+        for (prop = icalcomponent_get_first_property(mastercomp,
+                                                     ICAL_RDATE_PROPERTY);
              prop;
-             prop = icalcomponent_get_next_property(mastercomp, ICAL_RDATE_PROPERTY)) {
+             prop = icalcomponent_get_next_property(mastercomp,
+                                                    ICAL_RDATE_PROPERTY)) {
             struct icaldatetimeperiodtype rdate = icalproperty_get_rdate(prop);
             icaltimetype mystart = rdate.time;
             icaltimetype myend = rdate.time;
@@ -211,11 +218,13 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     for (comp = icalcomponent_get_first_component(ical, kind);
          comp;
          comp = icalcomponent_get_next_component(ical, kind)) {
-        struct icaltimetype recur = icalcomponent_get_recurrenceid_with_zone(comp);
+        struct icaltimetype recur =
+            icalcomponent_get_recurrenceid_with_zone(comp);
         if (icaltime_is_null_time(recur)) continue;
         /* this is definitely a recurrence override */
         struct icaltimetype mydtstart = icalcomponent_get_dtstart(comp);
-        struct icaltimetype mystart = icaltime_is_null_time(mydtstart) ? recur : mydtstart;
+        struct icaltimetype mystart =
+            icaltime_is_null_time(mydtstart) ? recur : mydtstart;
         struct icaltimetype myend = icalcomponent_get_dtend(comp);
 
         if (icaltime_is_null_time(myend)) {
@@ -234,9 +243,11 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     /* finally, track any EXDATES */
     if (mastercomp) {
         icalproperty *prop;
-        for (prop = icalcomponent_get_first_property(mastercomp, ICAL_EXDATE_PROPERTY);
+        for (prop = icalcomponent_get_first_property(mastercomp,
+                                                     ICAL_EXDATE_PROPERTY);
              prop;
-             prop = icalcomponent_get_next_property(mastercomp, ICAL_EXDATE_PROPERTY)) {
+             prop = icalcomponent_get_next_property(mastercomp,
+                                                    ICAL_EXDATE_PROPERTY)) {
             struct icaltimetype exdate = icalproperty_get_exdate(prop);
             time_t extime = _itime(exdate, floatingtz);
             _add_override(&overrides, extime, extime, NULL);
@@ -249,7 +260,8 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     /* now we can do the RRULE, because we have all overrides */
     icalrecur_iterator *rrule_itr = NULL;
     if (mastercomp) {
-        icalproperty *rrule = icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
+        icalproperty *rrule =
+            icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
         if (rrule) {
             struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
             rrule_itr = icalrecur_iterator_new(recur, dtstart);
@@ -263,7 +275,8 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
         data = ptrarray_nth(&overrides, onum);
         otime = data->span.start;
     }
-    struct icaltimetype ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : dtstart;
+    struct icaltimetype ritem = rrule_itr ?
+        icalrecur_iterator_next(rrule_itr) : dtstart;
     time_t rtime = _itime(ritem, floatingtz);
 
     while (rtime || otime) {
@@ -277,7 +290,8 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
                 goto done;
 
             /* incr recurrences */
-            ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+            ritem = rrule_itr ?
+                icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
             rtime = _itime(ritem, floatingtz);
         }
         else {
@@ -339,7 +353,8 @@ icalcomponent *record_to_ical(struct mailbox *mailbox,
     /* extract the schedule user header */
     if (schedule_userid) {
         buf_reset(&buf);
-        if (!message_get_field(m, "x-schedule-user-address", MESSAGE_DECODED|MESSAGE_TRIM, &buf)) {
+        if (!message_get_field(m, "x-schedule-user-address",
+                               MESSAGE_DECODED|MESSAGE_TRIM, &buf)) {
             if (buf.len) *schedule_userid = buf_release(&buf);
         }
     }
