@@ -52,11 +52,14 @@
 
 #include "mailbox.h"
 
+extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
+
 /* callback returns true (1) while it wants more events, 0 to finish */
 extern int icalcomponent_myforeach(icalcomponent *comp,
                                    const icaltimezone *floatingtz,
                                    int (*callback) (icalcomponent *comp,
-                                                    struct icaltime_span span,
+                                                    icaltimetype start,
+                                                    icaltimetype end,
                                                     void *data),
                                    void *callback_data);
 
