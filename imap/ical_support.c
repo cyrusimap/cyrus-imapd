@@ -49,8 +49,302 @@
 #include "ical_support.h"
 #include "message.h"
 #include "util.h"
+#include "ptrarray.h"
+#include "xmalloc.h"
 
 #ifdef HAVE_ICAL
+
+struct recurrence_data {
+    icaltime_span span;
+    icalcomponent *comp;
+};
+
+static struct icaltimetype _my_datetime(icalcomponent *comp,
+                                        icalproperty_kind kind)
+{
+    icalproperty *prop = icalcomponent_get_first_property(comp, kind);
+    if (!prop) return icaltime_null_time();
+
+    struct icaltimetype ret = icalvalue_get_datetime(icalproperty_get_value(prop));
+
+    /* skip timezones if it's UTC */
+    if (icaltime_is_utc(ret))
+        return ret;
+
+    icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+
+    if (param) {
+        const char *tzid = icalparameter_get_tzid(param);
+        icaltimezone *tz = NULL;
+
+        icalcomponent *c;
+        for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
+            tz = icalcomponent_get_timezone(c, tzid);
+            if (tz != NULL)
+                break;
+        }
+
+        if (tz == NULL)
+            tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+
+        if (tz != NULL)
+            ret = icaltime_set_timezone(&ret, tz);
+    }
+
+    return ret;
+}
+
+
+static int sort_overrides(const void **ap, const void **bp)
+{
+    struct recurrence_data *a = (struct recurrence_data *)*ap;
+    struct recurrence_data *b = (struct recurrence_data *)*bp;
+
+    return (a->span.start - b->span.start);
+}
+
+static struct recurrence_data *_add_override(ptrarray_t *array,
+                                             time_t start, time_t end, icalcomponent *comp)
+{
+    struct recurrence_data *data = NULL;
+    int i;
+
+    for (i = 0; i < array->count; i++) {
+        struct recurrence_data *item = ptrarray_nth(array, i);
+        if (item->span.start != start) continue;
+        data = item;
+        break;
+    }
+
+    if (!data) {
+        data = xzmalloc(sizeof(struct recurrence_data));
+    }
+
+    data->span.start = start;
+    data->span.end = end;
+    data->comp = comp;
+
+    return data;
+}
+
+static time_t _itime(icaltimetype t, const icaltimezone *floatingtz)
+{
+    if (icaltime_is_null_time(t))
+        return 0;
+
+    const icaltimezone *zone = floatingtz;
+
+    if (icaltime_is_utc(t))
+        zone = icaltimezone_get_utc_timezone();
+    else if (t.zone)
+        zone = t.zone;
+
+    if (!zone) zone = icaltimezone_get_utc_timezone();
+
+    return icaltime_as_timet_with_zone(t, zone);
+}
+
+extern int icalcomponent_myforeach(icalcomponent *ical,
+                                   const icaltimezone *floatingtz,
+                                   int (*callback) (icalcomponent *comp,
+                                                    struct icaltime_span span,
+                                                    void *data),
+                                   void *callback_data)
+{
+    icalproperty *endprop = NULL;
+    icalproperty *durprop = NULL;
+    ptrarray_t overrides = PTRARRAY_INITIALIZER;
+    struct icaldurationtype event_length = icaldurationtype_null_duration();
+    struct icaltimetype dtstart = icaltime_null_time();
+    int i;
+
+    icalcomponent *mastercomp = NULL;
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+
+    /* find the master component */
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (prop) continue;
+        mastercomp = comp;
+        break;
+    }
+
+    /* find event length first, we'll need it for overrides */
+    if (mastercomp) {
+        dtstart = _my_datetime(mastercomp, ICAL_DTSTART_PROPERTY);
+
+        endprop = icalcomponent_get_first_property(mastercomp, ICAL_DTEND_PROPERTY);
+        if (endprop) {
+            /* if there's an end, we calculate the duration */
+            struct icaltimetype dtend = _my_datetime(comp, ICAL_DTEND_PROPERTY);
+            icaltime_span basespan = icaltime_span_new(dtstart, dtend, 1);
+            event_length = icaldurationtype_from_int(basespan.end - basespan.start);
+        }
+
+        else {
+            durprop = icalcomponent_get_first_property(mastercomp, ICAL_DURATION_PROPERTY);
+            if (durprop) event_length = icalproperty_get_duration(durprop);
+        }
+    }
+
+    /* add any RDATEs first, since both RECURRENCE-ID and EXDATE items can override them */
+    if (mastercomp) {
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(mastercomp, ICAL_RDATE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(mastercomp, ICAL_RDATE_PROPERTY)) {
+            struct icaldatetimeperiodtype rdate = icalproperty_get_rdate(prop);
+            icaltimetype mystart = rdate.time;
+            icaltimetype myend = rdate.time;
+            if (icalperiodtype_is_null_period(rdate.period)) {
+                myend = icaltime_add(mystart, event_length);
+            }
+            else {
+                mystart = rdate.period.start;
+                myend = rdate.period.end;
+            }
+            if (icaltime_is_null_time(mystart))
+                continue;
+
+            _add_override(&overrides, _itime(mystart, floatingtz),
+                          _itime(myend, floatingtz), comp);
+        }
+    }
+
+    /* add any RECURRENCE-ID overrides next */
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) continue;
+        /* this is definitely a recurrence override */
+        icaltimetype recur = icalproperty_get_recurrenceid(prop);
+        struct icaltimetype mydtstart = icalcomponent_get_dtstart(comp);
+        struct icaltimetype mystart = icaltime_is_null_time(mydtstart) ? recur : mydtstart;
+        struct icaltimetype myend = mystart; /* default zero length */
+
+        /* calculate the duration */
+        icalproperty *myendprop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+        icalproperty *mydurprop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
+
+        if (myendprop) {
+            myend = _my_datetime(comp, ICAL_DTEND_PROPERTY);
+        }
+        else if (mydurprop) {
+            myend = icaltime_add(mystart, icalproperty_get_duration(mydurprop));
+        }
+        else {
+            myend = icaltime_add(mystart, event_length);
+        }
+
+        _add_override(&overrides, _itime(mystart, floatingtz),
+                      _itime(myend, floatingtz), comp);
+    }
+
+    /* finally, track any EXDATES */
+    if (mastercomp) {
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(mastercomp, ICAL_EXDATE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(mastercomp, ICAL_EXDATE_PROPERTY)) {
+            struct icaltimetype exdate = icalproperty_get_exdate(prop);
+            time_t extime = _itime(exdate, floatingtz);
+            _add_override(&overrides, extime, extime, NULL);
+        }
+    }
+
+    /* sort all overrides in order */
+    ptrarray_sort(&overrides, sort_overrides);
+
+    /* now we can do the RRULE, because we have all overrides */
+    icalrecur_iterator *rrule_itr = NULL;
+    if (mastercomp) {
+        icalproperty *rrule = icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
+        if (rrule) {
+            struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+            rrule_itr = icalrecur_iterator_new(recur, dtstart);
+        }
+    }
+
+    int onum = 0;
+    time_t otime = 0;
+    if (onum < overrides.count) {
+        struct recurrence_data *data = ptrarray_nth(&overrides, onum);
+        otime = data->span.start;
+    }
+    struct icaltimetype ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : dtstart;
+    time_t rtime = _itime(ritem, floatingtz);
+
+    while (1) {
+        if (rtime && (!otime || otime >= rtime)) {
+            if (rtime == otime) {
+                /* an overridden recurrence */
+                struct recurrence_data *data = ptrarray_nth(&overrides, onum);
+                if (data->comp && !callback(data->comp, data->span, callback_data))
+                    goto done;
+
+                /* incr overrides */
+                onum++;
+                if (onum < overrides.count) {
+                    struct recurrence_data *data = ptrarray_nth(&overrides, onum);
+                    otime = data->span.start;
+                }
+                else {
+                    otime = 0;
+                }
+
+                /* incr recurrences */
+                ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+                rtime = _itime(ritem, floatingtz);
+            }
+            else {
+                /* a non-overridden recurrence */
+                struct icaltimetype thisend = icaltime_add(ritem, event_length);
+                icaltime_span thisspan;
+                thisspan.start = rtime;
+                thisspan.end = _itime(thisend, floatingtz);
+                if (!callback(mastercomp, thisspan, callback_data))
+                    goto done;
+
+                /* incr recurrences */
+                ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+                rtime = _itime(ritem, floatingtz);
+            }
+        }
+        else {
+            if (!otime) break; /* we made it!  No more recurrences or overrides */
+
+            /* an overridden recurrence */
+            struct recurrence_data *data = ptrarray_nth(&overrides, onum);
+            if (data->comp && !callback(data->comp, data->span, callback_data))
+                goto done;
+
+            /* incr overrides */
+            onum++;
+            if (onum < overrides.count) {
+                struct recurrence_data *data = ptrarray_nth(&overrides, onum);
+                otime = data->span.start;
+            }
+            else {
+                otime = 0;
+            }
+        }
+    }
+
+ done:
+    if (rrule_itr) icalrecur_iterator_free(rrule_itr);
+
+    for (i = 0; i < overrides.count; i++)
+        free(overrides.data[i]);
+    ptrarray_fini(&overrides);
+
+    return 0;
+}
+
 
 icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {

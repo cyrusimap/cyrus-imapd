@@ -52,6 +52,15 @@
 
 #include "mailbox.h"
 
+/* callback returns true (1) while it wants more events, 0 to finish */
+extern int icalcomponent_myforeach(icalcomponent *comp,
+                                   const icaltimezone *floatingtz,
+                                   int (*callback) (icalcomponent *comp,
+                                                    struct icaltime_span span,
+                                                    void *data),
+                                   void *callback_data);
+
+
 extern icalcomponent *ical_string_as_icalcomponent(const struct buf *buf);
 extern struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp);
 
