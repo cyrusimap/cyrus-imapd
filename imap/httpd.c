@@ -283,10 +283,8 @@ struct namespace_t *namespaces[] = {
     &namespace_principal,
     &namespace_calendar,
     &namespace_addressbook,
-#ifdef HAVE_IANA_PARAMS
     &namespace_ischedule,
     &namespace_domainkey,
-#endif /* HAVE_IANA_PARAMS */
 #endif /* WITH_DAV */
     &namespace_rss,
     &namespace_dblookup,

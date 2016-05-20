@@ -104,7 +104,6 @@
 
 
 #ifdef HAVE_RSCALE
-#include <unicode/ucal.h>
 #include <unicode/uversion.h>
 
 static int rscale_cmp(const void *a, const void *b)
@@ -112,23 +111,12 @@ static int rscale_cmp(const void *a, const void *b)
     /* Convert to uppercase since that's what we prefer to output */
     return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
+
+static icalarray *rscale_calendars = NULL;
 #endif /* HAVE_RSCALE */
 
 
-#ifdef HAVE_SCHEDULING_PARAMS
-
-/* Wrappers to fetch scheduling parameters by kind */
-
-#define icalproperty_get_scheduleagent_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEAGENT_PARAMETER)
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEFORCESEND_PARAMETER)
-
-#define icalproperty_get_schedulestatus_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
-
-#elif defined(HAVE_IANA_PARAMS)
+#ifndef HAVE_SCHEDULING_PARAMS
 
 /* Functions to replace those not available in libical < v1.0 */
 
@@ -191,22 +179,18 @@ icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
 #define icalproperty_get_schedulestatus_parameter(prop) \
     icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-STATUS")
 
-#else /* !HAVE_IANA_PARAMS */
+#else
 
-/* Functions to replace those not available in libical < v0.48 */
+/* Wrappers to fetch scheduling parameters by kind */
 
-#define icalparameter_get_scheduleagent(param) ICAL_SCHEDULEAGENT_NONE
+#define icalproperty_get_scheduleagent_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEAGENT_PARAMETER)
 
-#define icalparameter_get_scheduleforcesend(param) ICAL_SCHEDULEFORCESEND_NONE
+#define icalproperty_get_scheduleforcesend_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEFORCESEND_PARAMETER)
 
-#define icalparameter_new_schedulestatus(stat) NULL; \
-    (void) stat  /* silence compiler */
-
-#define icalproperty_get_scheduleagent_parameter(prop) NULL
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) NULL
-
-#define icalproperty_get_schedulestatus_parameter(prop) NULL
+#define icalproperty_get_schedulestatus_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
 
 #endif /* HAVE_SCHEDULING_PARAMS */
 
@@ -676,7 +660,6 @@ static void my_caldav_init(struct buf *serverinfo)
 
     caldav_init();
 
-#ifdef HAVE_IANA_PARAMS
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {
 	namespace_calendar.allow |= ALLOW_CAL_SCHED;
@@ -686,7 +669,6 @@ static void my_caldav_init(struct buf *serverinfo)
 	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
 #endif
     }
-#endif /* HAVE_IANA_PARAMS */
 
 #ifdef HAVE_TZ_BY_REF
     if (namespace_timezone.enabled) {
@@ -2656,12 +2638,13 @@ static int caldav_put(struct transaction_t *txn,
 #ifdef HAVE_RSCALE
     /* Make sure we support the provided RSCALE in an RRULE */
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    if (prop && rscale_calendars) {
+    if (prop) {
 	struct icalrecurrencetype rt = icalproperty_get_rrule(prop);
 
-	if (rt.rscale) {
-	    /* Perform binary search on sorted icalarray */
-	    unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
+	if (*rt.rscale) {
+	    UEnumeration *en;
+	    UErrorCode stat = U_ZERO_ERROR;
+	    const char *rscale;
 
 	    ucase(rt.rscale);
 	    while (!found && start < end) {
@@ -2673,8 +2656,9 @@ static int caldav_put(struct transaction_t *txn,
 		else if (r < 0) end = mid;
 		else start = mid + 1;
 	    }
+	    uenum_close(en);
 
-	    if (!found) {
+	    if (!rscale) {
 		txn->error.precond = CALDAV_SUPP_RSCALE;
 		ret = HTTP_FORBIDDEN;
 		goto done;
@@ -4355,22 +4339,26 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 
     if (fctx->req_tgt->resource) return HTTP_NOT_FOUND;
 
-    if (rscale_calendars) {
+#ifdef HAVE_RSCALE
+    if (icalrecur_rscale_token_handling_is_supported()) {
 	xmlNodePtr top;
-	int i, n;
+	UEnumeration *en;
+	UErrorCode status = U_ZERO_ERROR;
+	const char *rscale;
 
 	top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			   name, ns, NULL, 0);
 
-	for (i = 0, n = rscale_calendars->num_elements; i < n; i++) {
-	    const char **rscale = icalarray_element_at(rscale_calendars, i);
-
+	en = ucal_getKeywordValuesForLocale("calendar", NULL, FALSE, &status);
+	while ((rscale = uenum_next(en, NULL, &status))) {
 	    xmlNewChild(top, fctx->ns[NS_CALDAV],
-			BAD_CAST "supported-rscale", BAD_CAST *rscale);
+			BAD_CAST "supported-rscale", BAD_CAST rscale);
 	}
+	uenum_close(en);
 
 	return 0;
     }
+#endif
 
     return HTTP_NOT_FOUND;
 }

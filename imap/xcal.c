@@ -56,6 +56,14 @@
 #include "xcal.h"
 
 
+extern icalvalue_kind icalproperty_kind_to_value_kind(icalproperty_kind kind);
+extern const char* icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
+extern const char* icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
+#ifdef HAVE_RSCALE
+extern const char* icalrecur_skip_to_string(icalrecurrencetype_skip kind);
+#endif
+
+
 /*
  * Determine the type (kind) of an iCalendar property value.
  */
@@ -152,6 +160,34 @@ const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value)
 }
 
 
+static const struct {
+    const char *str;
+    int limit;
+    size_t offset;
+} recurmap[] =
+{
+    { "bysecond",     ICAL_BY_SECOND_SIZE,
+      offsetof(struct icalrecurrencetype, by_second)	},
+    { "byminute",     ICAL_BY_MINUTE_SIZE,
+      offsetof(struct icalrecurrencetype, by_minute)	},
+    { "byhour",	      ICAL_BY_HOUR_SIZE,
+      offsetof(struct icalrecurrencetype, by_hour)	},
+    { "byday",	      ICAL_BY_DAY_SIZE,
+      offsetof(struct icalrecurrencetype, by_day)	},
+    { "bymonthday",   ICAL_BY_MONTHDAY_SIZE,
+      offsetof(struct icalrecurrencetype, by_month_day)	},
+    { "byyearday",    ICAL_BY_YEARDAY_SIZE,
+      offsetof(struct icalrecurrencetype, by_year_day)	},
+    { "byweekno",     ICAL_BY_WEEKNO_SIZE,
+      offsetof(struct icalrecurrencetype, by_week_no)	},
+    { "bymonth",      ICAL_BY_MONTH_SIZE,
+      offsetof(struct icalrecurrencetype, by_month)	},
+    { "bysetpos",     ICAL_BY_SETPOS_SIZE,
+      offsetof(struct icalrecurrencetype, by_set_pos)	},
+    { 0, 0, 0 },
+};
+
+
 /*
  * Add iCalendar recur-rule-parts to a structured element.
  */
@@ -160,47 +196,75 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
 				   void (*add_str)(void *, const char *,
 						   const char *))
 {
-    char *rrule, *rpart;
-    tok_t rparts;
+    int i, j;
 
-    /* generate an iCal RRULE string */
-    rrule = icalrecurrencetype_as_string_r(recur);
-    
-    /* split string into rparts & values */
-    tok_initm(&rparts, rrule, "=;", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while ((rpart = tok_next(&rparts))) {
-        if (!strcmp(rpart, "UNTIL")) {
-            /* need to translate date format to ISO */
-            struct icaltimetype until = icaltime_from_string(tok_next(&rparts));
+    if (recur->freq == ICAL_NO_RECURRENCE) return;
 
-            add_str(obj, "until", icaltime_as_iso_string(until));
-        }
-        else {
-            /* assume the rpart has multiple values - split them */
-            tok_t vlist;
-            char *val, *p;
+    add_str(obj, "freq", icalrecur_freq_to_string(recur->freq));
 
-            tok_init(&vlist, tok_next(&rparts), ",",
-                     TOK_TRIMLEFT|TOK_TRIMRIGHT);
-            while ((val = tok_next(&vlist))) {
-                if (add_int) {
-                    /* try converting value to integer */
-                    int n = strtol(val, &p, 10);
+#ifdef HAVE_RSCALE
+    if (*recur->rscale) {
+	add_str(obj, "rscale", recur->rscale);
 
-                    if (n && !*p) {
-                        add_int(obj, lcase(rpart), n);
-                        continue;
-                    }
-                }
-
-                add_str(obj, lcase(rpart), val);
-            }
-            tok_fini(&vlist);
-        }
+	if (recur->skip != ICAL_SKIP_BACKWARD)
+	    add_str(obj, "skip", icalrecur_skip_to_string(recur->skip));
     }
-    tok_fini(&rparts);
+#endif
 
-    free(rrule);
+    /* until and count are mutually exclusive */
+    if (recur->until.year) {
+	add_str(obj, "until", icaltime_as_iso_string(recur->until));
+    }
+    else if (recur->count) add_int(obj, "count", recur->count);
+
+    if (recur->interval != 1) add_int(obj, "interval", recur->interval);
+
+    /* Monday is the default, so no need to include it */
+    if (recur->week_start != ICAL_MONDAY_WEEKDAY && 
+	recur->week_start != ICAL_NO_WEEKDAY) {
+	const char *daystr;
+
+	daystr = icalrecur_weekday_to_string(
+	    icalrecurrencetype_day_day_of_week(recur->week_start));
+	add_str(obj, "wkst", daystr);
+    }
+
+    /* The BY* parameters can each take a list of values.
+     *
+     * Each of the lists is terminated with the value
+     * ICAL_RECURRENCE_ARRAY_MAX unless the the list is full.
+     */
+    for (j = 0; recurmap[j].str; j++) {
+	short *array = (short *)((size_t) recur + recurmap[j].offset);
+	int limit = recurmap[j].limit - 1;
+
+	for (i = 0; i < limit && array[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
+	    char temp[20];
+
+	    if (j == 3) { /* BYDAY */
+		const char *daystr;
+		int pos;
+
+		daystr = icalrecur_weekday_to_string(
+		    icalrecurrencetype_day_day_of_week(array[i]));
+		pos = icalrecurrencetype_day_position(array[i]);  
+
+		if (pos != 0) {
+		    snprintf(temp, sizeof(temp), "%d%s", pos, daystr);
+		    daystr = temp;
+		}   
+
+		add_str(obj, recurmap[j].str, daystr);
+	    }
+#ifdef HAVE_RSCALE
+	    else if (j == 7 && ICAL_RSCALE_IS_LEAP_MONTH(array[i])) {
+		snprintf(temp, sizeof(temp), "%dL", ICAL_RSCALE_MONTH_NUM(array[i]));
+		add_str(obj, recurmap[j].str, temp);
+	    }
+#endif
+	    else add_int(obj, recurmap[j].str, array[i]);
+	}
+    }
 }
 
 
@@ -230,6 +294,15 @@ static void icalperiodtype_add_as_xml_element(xmlNodePtr xtype,
 /*
  * Add an iCalendar recur-rule-part to a XML recur element.
  */
+static void icalrecur_add_int_as_xml_element(void *xrecur, const char *rpart,
+					     int i)
+{
+    char ibuf[20];
+
+    snprintf(ibuf, sizeof(ibuf), "%d", i);
+    xmlNewTextChild((xmlNodePtr) xrecur, NULL, BAD_CAST rpart, BAD_CAST ibuf);
+}
+
 static void icalrecur_add_string_as_xml_element(void *xrecur, const char *rpart,
 						const char *s)
 {
@@ -254,11 +327,9 @@ static xmlNodePtr icalparameter_as_xml_element(icalparameter *param)
         kind_string = icalparameter_get_xname(param);
 	break;
 
-#ifdef HAVE_IANA_PARAMS
     case ICAL_IANA_PARAMETER:
 	kind_string = icalparameter_get_iana_name(param);
 	break;
-#endif
 
     default:
 	kind_string = icalparameter_kind_to_string(kind);
@@ -367,9 +438,10 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
     case ICAL_RECUR_VALUE: {
 	struct icalrecurrencetype recur = icalvalue_get_recur(value);
 
-        icalrecurrencetype_add_as_xxx(&recur, xtype, NULL,
-                                      &icalrecur_add_string_as_xml_element);
-        return;
+	icalrecurrencetype_add_as_xxx(&recur, xtype,
+				      &icalrecur_add_int_as_xml_element,
+				      &icalrecur_add_string_as_xml_element);
+	return;
     }
 
     case ICAL_REQUESTSTATUS_VALUE: {
@@ -590,14 +662,109 @@ char *icalcomponent_as_xcal_string(icalcomponent *ical)
 }
 
 
-static void append_byrule(char *byrule, struct buf *vals, struct buf *rrule)
-{
-    /* append BY* rule to RRULE buffer */
-    buf_printf(rrule, ";%s=%s", ucase(byrule), buf_cstring(vals));
+/* Add an iCalendar recurrence rule part to icalrecurrencetype.
+ *
+ * XXX  The following structure is opaque libical, but for some stupid
+ * reason the icalrecur_add_by*rules() functions require it even though
+ * all they use is the rt field.  MUST keep this in sync with icalrecur.c
+ */
+struct icalrecur_parser {
+    const char* rule;
+    char* copy;
+    char* this_clause;
+    char* next_clause;
 
-    /* free the vals buffer */
-    buf_free(vals);
-    free(vals);
+    struct icalrecurrencetype rt;
+};
+
+extern icalrecurrencetype_frequency icalrecur_string_to_freq(const char* str);
+#ifdef HAVE_RSCALE
+extern icalrecurrencetype_skip icalrecur_string_to_skip(const char* str);
+#endif
+extern void icalrecur_add_byrules(struct icalrecur_parser *parser, short *array,
+				  int size, char* vals);
+extern void icalrecur_add_bydayrules(struct icalrecur_parser *parser,
+				     const char* vals);
+
+struct icalrecurrencetype *icalrecur_add_rule(struct icalrecurrencetype **rt,
+					      const char *rpart, void *data,
+					      int (*get_int)(void *),
+					      const char* (*get_str)(void *))
+{
+    static struct icalrecur_parser parser;
+
+    if (!*rt) {
+	/* Initialize */
+	*rt = &parser.rt;
+	icalrecurrencetype_clear(*rt);
+    }
+
+    if (!strcmp(rpart, "freq")) {
+	(*rt)->freq = icalrecur_string_to_freq(get_str(data));
+    }
+#ifdef HAVE_RSCALE
+    else if (!strcmp(rpart, "rscale")) {
+	(*rt)->rscale = icalmemory_tmp_copy(get_str(data));
+    }
+    else if (!strcmp(rpart, "skip")) {
+	(*rt)->skip = icalrecur_string_to_skip(get_str(data));
+    }
+#endif
+    else if (!strcmp(rpart, "count")) {
+	(*rt)->count = get_int(data);
+    }
+    else if (!strcmp(rpart, "until")) {
+	(*rt)->until = icaltime_from_string(get_str(data));
+    }
+    else if (!strcmp(rpart, "interval")) {
+	(*rt)->interval = get_int(data);
+	if ((*rt)->interval < 1) (*rt)->interval = 1;  /* MUST be >= 1 */
+    }
+    else if (!strcmp(rpart, "wkst")) {
+	(*rt)->week_start = icalrecur_string_to_weekday(get_str(data));
+    }
+    else if (!strcmp(rpart, "byday")) {
+	icalrecur_add_bydayrules(&parser, get_str(data));
+    }
+    else {
+	int i;
+
+	for (i = 0; recurmap[i].str && strcmp(rpart, recurmap[i].str); i++);
+
+	if (recurmap[i].str) {
+	    short *array =
+		(short *)((size_t) *rt + recurmap[i].offset);
+	    int limit = recurmap[i].limit;
+
+	    icalrecur_add_byrules(&parser, array, limit,
+				  icalmemory_tmp_copy(get_str(data)));
+	}
+	else {
+	    syslog(LOG_WARNING, "Unknown recurrence rule-part: %s", rpart);
+	    icalrecurrencetype_clear(*rt);
+	    *rt = NULL;
+	}
+    }
+
+#ifdef HAVE_RSCALE
+    /* When "RSCALE" is not present the default is "YES".
+       When "RSCALE" is present the default is "BACKWARD". */
+    if (!(*rt)->rscale) (*rt)->skip = ICAL_SKIP_YES;
+    else if ((*rt)->skip == ICAL_SKIP_NO) (*rt)->skip = ICAL_SKIP_BACKWARD;
+#endif
+
+    return *rt;
+}
+
+
+int xmlElementContent_to_int(void *content)
+{
+    return atoi((const char *) content);
+}
+
+const char *xmlElementContent_to_str(void *content)
+{
+    return (const char *) content;
 }
 
 
@@ -701,57 +868,22 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
     }
 
     case ICAL_RECUR_VALUE: {
-        struct buf rrule = BUF_INITIALIZER;
-        struct hash_table byrules;
-        struct icalrecurrencetype rt;
-        char *sep = "";
+	struct icalrecurrencetype *rt = NULL;
 
-        construct_hash_table(&byrules, 10, 1);
+	for (node = xmlFirstElementChild(xtype); node;
+	     node = xmlNextElementSibling(node)) {
 
-        /* create an iCal RRULE string from xCal <recur> sub-elements */
-        for (node = xmlFirstElementChild(xtype); node;
-             node = xmlNextElementSibling(node)) {
+	    content = xmlNodeGetContent(node);
+	    rt = icalrecur_add_rule(&rt, (const char *) node->name, content,
+				    &xmlElementContent_to_int,
+				    &xmlElementContent_to_str);
+	    xmlFree(content);
+	    content = NULL;
+	    if (!rt) break;
+	}
 
-            content = xmlNodeGetContent(node);
-            if (!xmlStrncmp(node->name, BAD_CAST "by", 2)) {
-                /* BY* rules can have a list of values -
-                   assemble them using a hash table */
-                struct buf *vals =
-                    hash_lookup((const char *) node->name, &byrules);
-
-                if (vals) {
-                    /* append this value to existing list */
-                    buf_printf(vals, ",%s", (char *) content);
-                }
-                else {
-                    /* create new list with this valiue */
-                    vals = xzmalloc(sizeof(struct buf));
-                    buf_setcstr(vals, (char *) content);
-                    hash_insert((char *) node->name, vals, &byrules);
-                }
-            }
-            else {
-                /* single value rpart */
-                buf_printf(&rrule, "%s%s=%s", sep,
-                           ucase((char *) node->name), (char *) content);
-                sep = ";";
-            }
-
-            xmlFree(content);
-            content = NULL;
-        }
-
-        /* append the BY* rules to RRULE buffer */
-        hash_enumerate(&byrules,
-                       (void (*)(const char*, void*, void*)) &append_byrule,
-                       &rrule);
-        free_hash_table(&byrules, NULL);
-
-        /* parse our iCal RRULE string */
-        rt = icalrecurrencetype_from_string(buf_cstring(&rrule));
-        buf_free(&rrule);
-
-        if (rt.freq != ICAL_NO_RECURRENCE) value = icalvalue_new_recur(rt);
+	if (rt && rt->freq != ICAL_NO_RECURRENCE)
+	    value = icalvalue_new_recur(*rt);
 
 	break;
     }
