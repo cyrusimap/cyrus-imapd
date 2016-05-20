@@ -249,9 +249,11 @@ static void icalparameter_as_json_object_member(icalparameter *param,
         kind_string = icalparameter_get_xname(param);
 	break;
 
+#ifdef HAVE_IANA_PARAMS
     case ICAL_IANA_PARAMETER:
 	kind_string = icalparameter_get_iana_name(param);
 	break;
+#endif
 
     default:
 	kind_string = icalparameter_kind_to_string(kind);
@@ -445,50 +447,41 @@ char *icalcomponent_as_jcal_string(icalcomponent *ical)
 }
 
 
-struct icalrecur_parser {
-    const char* rule;
-    char* copy;
-    char* this_clause;
-    char* next_clause;
-
-    struct icalrecurrencetype rt;
-};
-
-extern icalrecurrencetype_frequency icalrecur_string_to_freq(const char* str);
-extern void icalrecur_add_byrules(struct icalrecur_parser *parser, short *array,
-				  int size, char* vals);
-extern void icalrecur_add_bydayrules(struct icalrecur_parser *parser,
-				     const char* vals);
-
-static const char *_json_x_value(json_t *jvalue)
+static void buf_appendjson(struct buf *buf, json_t *jvalue)
 {
-    static char buf[21];
+    switch (json_typeof(jvalue)) {
+    case JSON_ARRAY: {
+        size_t i, n = json_array_size(jvalue);
+        const char *sep = "";
 
-    if (json_is_integer(jvalue)) {
-	snprintf(buf, sizeof(buf), "%" JSON_INTEGER_FORMAT,
-		 json_integer_value(jvalue));
-	return buf;
+        for (i = 0; i < n; i++, sep = ",") {
+            buf_appendcstr(buf, sep);
+            buf_appendjson(buf, json_array_get(jvalue, i));
+        }
+        break;
     }
-    else return json_string_value(jvalue);
-}
 
-static const char *json_x_value(json_t *jvalue)
-{
-    static struct buf buf = BUF_INITIALIZER;
+    case JSON_STRING:
+        buf_appendcstr(buf, json_string_value(jvalue));
+        break;
 
-    if (json_is_array(jvalue)) {
-	size_t i, n = json_array_size(jvalue);
-	const char *sep = "";
+    case JSON_INTEGER:
+        buf_printf(buf, "%" JSON_INTEGER_FORMAT, json_integer_value(jvalue));
+        break;
 
-	buf_reset(&buf);
-	for (i = 0; i < n; i++) {
-	    buf_printf(&buf, "%s%s",
-		       sep, _json_x_value(json_array_get(jvalue, i)));
-	    sep = ",";
-	}
-	return buf_cstring(&buf);
+    case JSON_REAL:
+        buf_printf(buf, "%f", json_real_value(jvalue));
+        break;
+
+    case JSON_TRUE:
+    case JSON_FALSE:
+        buf_printf(buf, "%d", json_boolean_value(jvalue));
+        break;
+
+    default:
+        /* Shouldn't get here - ignore object */
+        break;
     }
-    else return _json_x_value(jvalue);
 }
 
 
@@ -548,24 +541,30 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
 	break;
 
     case ICAL_RECUR_VALUE:
-	if (json_is_object(jvalue)) {
-	    struct icalrecurrencetype *rt = NULL;
-	    const char *key;
-	    json_t *val;
+        if (json_is_object(jvalue)) {
+            struct buf rrule = BUF_INITIALIZER;
+            struct icalrecurrencetype rt;
+            const char *key, *sep = "";
+            json_t *val;
 
-	    json_object_foreach(jvalue, key, val) {
-		rt = icalrecur_add_rule(&rt, key, val,
-		    (int (*)(void *)) &json_integer_value,
-		    (const char * (*)(void *)) &json_x_value);
-		if (!rt) break;
-	    }
+            /* create an iCal RRULE string from jCal 'recur' object */
+            json_object_foreach(jvalue, key, val) {
+                char *mykey = xstrdup(key);
+                buf_printf(&rrule, "%s%s=", sep, ucase(mykey));
+                buf_appendjson(&rrule, val);
+                sep = ";";
+                free(mykey);
+            }
 
-            if (rt && rt->freq != ICAL_NO_RECURRENCE)
-		value = icalvalue_new_recur(*rt);
-	}
-	else
-	    syslog(LOG_WARNING, "jCal object object expected");
-	break;
+            /* parse our iCal RRULE string */
+            rt = icalrecurrencetype_from_string(buf_cstring(&rrule));
+            buf_free(&rrule);
+
+            if (rt.freq != ICAL_NO_RECURRENCE) value = icalvalue_new_recur(rt);
+        }
+        else
+            syslog(LOG_WARNING, "jCal object object expected");
+        break;
 
     case ICAL_REQUESTSTATUS_VALUE:
 	/* MUST be an array of 2-3 strings */
