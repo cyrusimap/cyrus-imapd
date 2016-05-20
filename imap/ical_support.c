@@ -185,11 +185,8 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             event_length =
                 icaldurationtype_from_int(basespan.end - basespan.start);
         }
-    }
 
-    /* add any RDATEs first,
-       since both RECURRENCE-ID and EXDATE items can override them */
-    if (mastercomp) {
+        /* add any RDATEs first, since EXDATE items can override them */
         icalproperty *prop;
         for (prop = icalcomponent_get_first_property(mastercomp,
                                                      ICAL_RDATE_PROPERTY);
@@ -212,9 +209,23 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             _add_override(&overrides, _itime(mystart, floatingtz),
                           _itime(myend, floatingtz), comp);
         }
+
+        /* track any EXDATEs */
+        for (prop = icalcomponent_get_first_property(mastercomp,
+                                                     ICAL_EXDATE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(mastercomp,
+                                                    ICAL_EXDATE_PROPERTY)) {
+            struct icaltimetype exdate = icalproperty_get_exdate(prop);
+            time_t extime = _itime(exdate, floatingtz);
+            _add_override(&overrides, extime, extime, NULL);
+        }
     }
 
-    /* add any RECURRENCE-ID overrides next */
+    /* finally, add any RECURRENCE-ID overrides
+       Per Cyrus Daboo, these should probably supercede EXDATEs
+       (don't throw away potentially valid data)
+    */
     for (comp = icalcomponent_get_first_component(ical, kind);
          comp;
          comp = icalcomponent_get_next_component(ical, kind)) {
@@ -238,20 +249,6 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             _add_override(&overrides, rtime, rtime, NULL);
         }
         _add_override(&overrides, stime, _itime(myend, floatingtz), comp);
-    }
-
-    /* finally, track any EXDATES */
-    if (mastercomp) {
-        icalproperty *prop;
-        for (prop = icalcomponent_get_first_property(mastercomp,
-                                                     ICAL_EXDATE_PROPERTY);
-             prop;
-             prop = icalcomponent_get_next_property(mastercomp,
-                                                    ICAL_EXDATE_PROPERTY)) {
-            struct icaltimetype exdate = icalproperty_get_exdate(prop);
-            time_t extime = _itime(exdate, floatingtz);
-            _add_override(&overrides, extime, extime, NULL);
-        }
     }
 
     /* sort all overrides in order */
