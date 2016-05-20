@@ -11,8 +11,8 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_dbtool** [ **-C** *config-file* ] [ **-n** ] [ **-o** ] [ **-T** ] *db-file*
-            *db-backend* *action* [ *key* ] [ *value* ]
+    **cyr_dbtool** [ **-C** *config-file* ] [ **-M** ] [ **-n** ] [ **-o** ] [ **-T** ]
+            *db-file* *db-backend* *action* [ *key* ] [ *value* ]
 
 Description
 ===========
@@ -62,6 +62,10 @@ Options
 .. option:: -C config-file
 
     |cli-dash-c-text|
+
+.. option:: -M
+
+    Uses improved MBOX list sort
 
 .. option:: -n
 
