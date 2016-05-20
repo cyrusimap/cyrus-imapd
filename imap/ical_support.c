@@ -151,8 +151,6 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
                                                     void *data),
                                    void *callback_data)
 {
-    icalproperty *endprop = NULL;
-    icalproperty *durprop = NULL;
     ptrarray_t overrides = PTRARRAY_INITIALIZER;
     struct icaldurationtype event_length = icaldurationtype_null_duration();
     struct icaltimetype dtstart = icaltime_null_time();
@@ -174,19 +172,14 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
 
     /* find event length first, we'll need it for overrides */
     if (mastercomp) {
-        dtstart = _my_datetime(mastercomp, ICAL_DTSTART_PROPERTY);
+        dtstart = icalcomponent_get_dtstart(mastercomp);
+        struct icaltimetype dtend = icalcomponent_get_dtend(mastercomp);
 
-        endprop = icalcomponent_get_first_property(mastercomp, ICAL_DTEND_PROPERTY);
-        if (endprop) {
+        if (!icaltime_is_null_time(dtend)) {
             /* if there's an end, we calculate the duration */
             struct icaltimetype dtend = _my_datetime(comp, ICAL_DTEND_PROPERTY);
             icaltime_span basespan = icaltime_span_new(dtstart, dtend, 1);
             event_length = icaldurationtype_from_int(basespan.end - basespan.start);
-        }
-
-        else {
-            durprop = icalcomponent_get_first_property(mastercomp, ICAL_DURATION_PROPERTY);
-            if (durprop) event_length = icalproperty_get_duration(durprop);
         }
     }
 
@@ -223,19 +216,9 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
         /* this is definitely a recurrence override */
         struct icaltimetype mydtstart = icalcomponent_get_dtstart(comp);
         struct icaltimetype mystart = icaltime_is_null_time(mydtstart) ? recur : mydtstart;
-        struct icaltimetype myend = mystart; /* default zero length */
+        struct icaltimetype myend = icalcomponent_get_dtend(comp);
 
-        /* calculate the duration */
-        icalproperty *myendprop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        icalproperty *mydurprop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
-
-        if (myendprop) {
-            myend = _my_datetime(comp, ICAL_DTEND_PROPERTY);
-        }
-        else if (mydurprop) {
-            myend = icaltime_add(mystart, icalproperty_get_duration(mydurprop));
-        }
-        else {
+        if (icaltime_is_null_time(myend)) {
             myend = icaltime_add(mystart, event_length);
         }
 
