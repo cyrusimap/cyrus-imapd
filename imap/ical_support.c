@@ -218,11 +218,9 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     for (comp = icalcomponent_get_first_component(ical, kind);
          comp;
          comp = icalcomponent_get_next_component(ical, kind)) {
-        icalproperty *prop =
-            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (!prop) continue;
+        struct icaltimetype recur = icalcomponent_get_recurrenceid_with_zone(comp);
+        if (icaltime_is_null_time(recur)) continue;
         /* this is definitely a recurrence override */
-        icaltimetype recur = icalproperty_get_recurrenceid(prop);
         struct icaltimetype mydtstart = icalcomponent_get_dtstart(comp);
         struct icaltimetype mystart = icaltime_is_null_time(mydtstart) ? recur : mydtstart;
         struct icaltimetype myend = mystart; /* default zero length */
@@ -241,8 +239,13 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             myend = icaltime_add(mystart, event_length);
         }
 
-        _add_override(&overrides, _itime(mystart, floatingtz),
-                      _itime(myend, floatingtz), comp);
+        time_t rtime = _itime(recur, floatingtz);
+        time_t stime = _itime(mystart, floatingtz);
+        if (rtime != stime) {
+            /* DTSTART has changed: add an exception for RECURRENCE-ID */
+            _add_override(&overrides, rtime, rtime, NULL);
+        }
+        _add_override(&overrides, stime, _itime(myend, floatingtz), comp);
     }
 
     /* finally, track any EXDATES */
