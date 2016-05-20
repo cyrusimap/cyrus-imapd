@@ -275,61 +275,37 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
 
     int onum = 0;
     time_t otime = 0;
+    struct recurrence_data *data = NULL;
     if (onum < overrides.count) {
-        struct recurrence_data *data = ptrarray_nth(&overrides, onum);
+        data = ptrarray_nth(&overrides, onum);
         otime = data->span.start;
     }
     struct icaltimetype ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : dtstart;
     time_t rtime = _itime(ritem, floatingtz);
 
-    while (1) {
-        if (rtime && (!otime || otime >= rtime)) {
-            if (rtime == otime) {
-                /* an overridden recurrence */
-                struct recurrence_data *data = ptrarray_nth(&overrides, onum);
-                if (data->comp && !callback(data->comp, data->span, callback_data))
-                    goto done;
+    while (rtime || otime) {
+        if (rtime && (!otime || otime > rtime)) {
+            /* a non-overridden recurrence */
+            struct icaltimetype thisend = icaltime_add(ritem, event_length);
+            icaltime_span thisspan;
+            thisspan.start = rtime;
+            thisspan.end = _itime(thisend, floatingtz);
+            if (!callback(mastercomp, thisspan, callback_data))
+                goto done;
 
-                /* incr overrides */
-                onum++;
-                if (onum < overrides.count) {
-                    struct recurrence_data *data = ptrarray_nth(&overrides, onum);
-                    otime = data->span.start;
-                }
-                else {
-                    otime = 0;
-                }
-
-                /* incr recurrences */
-                ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
-                rtime = _itime(ritem, floatingtz);
-            }
-            else {
-                /* a non-overridden recurrence */
-                struct icaltimetype thisend = icaltime_add(ritem, event_length);
-                icaltime_span thisspan;
-                thisspan.start = rtime;
-                thisspan.end = _itime(thisend, floatingtz);
-                if (!callback(mastercomp, thisspan, callback_data))
-                    goto done;
-
-                /* incr recurrences */
-                ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
-                rtime = _itime(ritem, floatingtz);
-            }
+            /* incr recurrences */
+            ritem = rrule_itr ? icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+            rtime = _itime(ritem, floatingtz);
         }
         else {
-            if (!otime) break; /* we made it!  No more recurrences or overrides */
-
             /* an overridden recurrence */
-            struct recurrence_data *data = ptrarray_nth(&overrides, onum);
             if (data->comp && !callback(data->comp, data->span, callback_data))
                 goto done;
 
             /* incr overrides */
             onum++;
             if (onum < overrides.count) {
-                struct recurrence_data *data = ptrarray_nth(&overrides, onum);
+                data = ptrarray_nth(&overrides, onum);
                 otime = data->span.start;
             }
             else {
