@@ -1,4 +1,4 @@
-/* ical_support.h -- Helper functions for libical
+/* ical_support.c -- Helper functions for libical
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -127,6 +127,7 @@ static struct recurrence_data *_add_override(ptrarray_t *array,
 
     if (!data) {
         data = xzmalloc(sizeof(struct recurrence_data));
+        ptrarray_append(array, data);
     }
 
     data->span.start = start;
@@ -215,7 +216,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             if (icaltime_is_null_time(mystart))
                 continue;
 
-            _add_override(&overrides, mystart, myend, comp, floatingtz);
+            _add_override(&overrides, mystart, myend, mastercomp, floatingtz);
         }
 
         /* track any EXDATEs */
