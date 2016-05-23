@@ -296,6 +296,15 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             if (data->comp && !callback(data->comp, data->span, callback_data))
                 goto done;
 
+            /* if they're both the same time, it's a precisely overridden
+             * recurrence, so increment both */
+            if (rtime == otime) {
+                /* incr recurrences */
+                ritem = rrule_itr ?
+                    icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+                rtime = _itime(ritem, floatingtz);
+            }
+
             /* incr overrides */
             onum++;
             if (onum < overrides.count) {
