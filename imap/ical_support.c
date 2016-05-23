@@ -233,14 +233,8 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             icalcomponent_get_recurrenceid_with_zone(comp);
         if (icaltime_is_null_time(recur)) continue;
         /* this is definitely a recurrence override */
-        struct icaltimetype mydtstart = icalcomponent_get_dtstart(comp);
-        struct icaltimetype mystart =
-            icaltime_is_null_time(mydtstart) ? recur : mydtstart;
+        struct icaltimetype mystart = icalcomponent_get_dtstart(comp);
         struct icaltimetype myend = icalcomponent_get_dtend(comp);
-
-        if (icaltime_is_null_time(myend)) {
-            myend = icaltime_add(mystart, event_length);
-        }
 
         time_t rtime = _itime(recur, floatingtz);
         time_t stime = _itime(mystart, floatingtz);
