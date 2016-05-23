@@ -99,7 +99,6 @@ MAINTAINERCLEANFILES = \
 	doc/netnews.png \
 	doc/man/cyradm.1.html \
 	man/imapd.conf.5 \
-	doc/rst/imapd.conf.rst \
 	man/sieveshell.1 \
 	doc/man/sieveshell.1.html \
 	imap/lmtpstats.h \
@@ -1479,7 +1478,6 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 @SET_MAKE@
 
 dist_man_MANS = \
-	doc/rst/imapd.conf.rst \
 	man/imtest.1 \
 	man/installsieve.1 \
 	man/lmtptest.1 \
@@ -1743,14 +1741,12 @@ snapshot::
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
 
-man/imapd.conf.5: $(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions
-	@echo creating man/imapd.conf.5
-	@$(MKDIR_P) man
-	$(AM_V_GEN)$(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions > $@
+docsrc/imap/admin/systemcommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst cyradm < $< > $@
 
-doc/rst/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
-	@echo creating man/imapd.conf.rst
-	@$(MKDIR_P) doc/rst
+docsrc/imap/admin/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
+	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
 
 man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
@@ -1768,6 +1764,35 @@ doc/man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	$(AM_V_GEN)pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
 	rm pod2htm*
 
+%.1: man/.sphinx-build.stamp
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)touch $@
+
+%.3: man/.sphinx-build.stamp
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)touch $@
+
+%.5: man/.sphinx-build.stamp
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)touch $@
+
+%.8: man/.sphinx-build.stamp
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)touch $@
+
+if HAVE_SPHINX_BUILD
+## XXX doesn't detect if other rst sources are updated...
+## XXX doesn't support VPATH builds -- sphinx can't handle two source directories!
+man/.sphinx-build.stamp: docsrc/imap/admin/configs/imapd.conf.rst \
+                         docsrc/imap/admin/systemcommands/cyradm.rst
+	$(AM_V_GEN)$(SPHINX_BUILD) -q -b cyrman $(top_srcdir)/docsrc $(top_builddir)/man
+	@touch $@
+else
+man/.sphinx-build.stamp:
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)touch $@
+	@echo "warning: no sphinx-build, man pages will be empty" 1>&2
+endif
 
 dist-old:: distgit
 	@echo "creating configure"

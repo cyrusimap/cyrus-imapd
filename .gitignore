@@ -44,7 +44,6 @@ coverage.xml
 cscope.out
 depcomp
 doc/man/
-doc/rst/
 doc/text/
 docsrc/build/
 imap/arbitron
