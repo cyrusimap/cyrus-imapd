@@ -1749,7 +1749,12 @@ sub getnotify
             Peer => $path,
         ) || die "Connection failed $!";
         my $line = $sock->getline();
-        return decode_json($line);
+        my $json = decode_json($line);
+        if (get_verbose) {
+            use Data::Dumper;
+            warn "NOTIFY " . Dumper($json);
+        }
+        return $json;
     };
     if ($@) {
         my $data = `ls -la $basedir/run; whoami; lsof -n | grep notify`;
