@@ -49,8 +49,6 @@
 #include "ical_support.h"
 #include "message.h"
 #include "util.h"
-#include "ptrarray.h"
-#include "xmalloc.h"
 
 #ifdef HAVE_ICAL
 
@@ -99,39 +97,39 @@ static struct icaltimetype _my_datetime(icalcomponent *comp,
 }
 
 
-static int sort_overrides(const void **ap, const void **bp)
+static int sort_overrides(const void *ap, const void *bp)
 {
-    struct recurrence_data *a = (struct recurrence_data *)*ap;
-    struct recurrence_data *b = (struct recurrence_data *)*bp;
+    struct recurrence_data *a = (struct recurrence_data *)ap;
+    struct recurrence_data *b = (struct recurrence_data *)bp;
 
     return (a->span.start - b->span.start);
 }
 
-static struct recurrence_data *_add_override(ptrarray_t *array,
+static struct recurrence_data *_add_override(icalarray *array,
                                              icaltimetype dtstart,
                                              icaltimetype dtend,
                                              icalcomponent *comp,
                                              const icaltimezone *floatingtz)
 {
     struct recurrence_data *data = NULL;
-    int i;
+    size_t i;
 
     time_t start = icaltime_to_timet(dtstart, floatingtz);
     time_t end = icaltime_to_timet(dtend, floatingtz);
 
-    for (i = 0; i < array->count; i++) {
-        struct recurrence_data *item = ptrarray_nth(array, i);
+    for (i = 0; i < array->num_elements; i++) {
+        struct recurrence_data *item = icalarray_element_at(array, i);
         if (item->span.start != start) continue;
         data = item;
         break;
     }
 
     if (!data) {
-        data = xzmalloc(sizeof(struct recurrence_data));
-        ptrarray_append(array, data);
+        struct recurrence_data new = { .span.start = start };
+        icalarray_append(array, &new);
+        data = icalarray_element_at(array, i);
     }
 
-    data->span.start = start;
     data->dtstart = dtstart;
     data->span.end = end;
     data->dtend = dtend;
@@ -165,10 +163,9 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
                                                     void *data),
                                    void *callback_data)
 {
-    ptrarray_t overrides = PTRARRAY_INITIALIZER;
+    icalarray *overrides = icalarray_new(sizeof(struct recurrence_data), 16);
     struct icaldurationtype event_length = icaldurationtype_null_duration();
     struct icaltimetype dtstart = icaltime_null_time();
-    int i;
 
     icalcomponent *mastercomp = NULL;
 
@@ -217,7 +214,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             if (icaltime_is_null_time(mystart))
                 continue;
 
-            _add_override(&overrides, mystart, myend, mastercomp, floatingtz);
+            _add_override(overrides, mystart, myend, mastercomp, floatingtz);
         }
 
         /* track any EXDATEs */
@@ -227,7 +224,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
              prop = icalcomponent_get_next_property(mastercomp,
                                                     ICAL_EXDATE_PROPERTY)) {
             struct icaltimetype exdate = icalproperty_get_exdate(prop);
-            _add_override(&overrides, exdate, exdate, NULL, floatingtz);
+            _add_override(overrides, exdate, exdate, NULL, floatingtz);
         }
     }
 
@@ -248,13 +245,13 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
 
         if (icaltime_compare(mystart, recur)) {
             /* DTSTART has changed: add an exception for RECURRENCE-ID */
-            _add_override(&overrides, recur, recur, NULL, floatingtz);
+            _add_override(overrides, recur, recur, NULL, floatingtz);
         }
-        _add_override(&overrides, mystart, myend, comp, floatingtz);
+        _add_override(overrides, mystart, myend, comp, floatingtz);
     }
 
     /* sort all overrides in order */
-    ptrarray_sort(&overrides, sort_overrides);
+    icalarray_sort(overrides, sort_overrides);
 
     /* now we can do the RRULE, because we have all overrides */
     icalrecur_iterator *rrule_itr = NULL;
@@ -267,9 +264,9 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
         }
     }
 
-    int onum = 0;
-    struct recurrence_data *data = overrides.count ?
-        ptrarray_nth(&overrides, onum) : NULL;
+    size_t onum = 0;
+    struct recurrence_data *data = overrides->num_elements ?
+        icalarray_element_at(overrides, onum) : NULL;
     struct icaltimetype ritem = rrule_itr ?
         icalrecur_iterator_next(rrule_itr) : dtstart;
 
@@ -293,8 +290,8 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
 
             /* incr overrides */
             onum++;
-            data = (onum < overrides.count) ?
-                ptrarray_nth(&overrides, onum) : NULL;
+            data = (onum < overrides->num_elements) ?
+                icalarray_element_at(overrides, onum) : NULL;
         }
         else {
             /* a non-overridden recurrence */
@@ -312,9 +309,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
  done:
     if (rrule_itr) icalrecur_iterator_free(rrule_itr);
 
-    for (i = 0; i < overrides.count; i++)
-        free(overrides.data[i]);
-    ptrarray_fini(&overrides);
+    icalarray_free(overrides);
 
     return 0;
 }
