@@ -95,31 +95,7 @@ sub tear_down
 {
     my ($self) = @_;
 
-    if ($self->{calalarmd_pid}) {
-        $self->stop_calalarmd();
-    }
-
     $self->SUPER::tear_down();
-}
-
-sub start_calalarmd
-{
-    my ($self) = @_;
-
-    my $pid = $self->{instance}->run_command(
-        { cyrus => 1, background => 1 }, 'calalarmd', '-d'
-    );
-    $self->{calalarmd_pid} = $pid;
-    xlog "Started calalarmd with PID $pid";
-}
-
-sub stop_calalarmd
-{
-    my ($self) = @_;
-
-    xlog "Kill calarmd with PID $self->{calalarmd_pid}";
-    kill(SIGTERM, $self->{calalarmd_pid});
-    delete $self->{calalarmd_pid};
 }
 
 sub test_simple
@@ -178,10 +154,9 @@ EOF
     # clean notification cache
     $self->{instance}->getnotify();
 
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
     # trigger processing of alarms
-    $self->start_calalarmd();
-    sleep 3;
-    $self->stop_calalarmd();
 
     # pick first calendar alarm from notifications
     my $event = undef;
@@ -287,9 +262,7 @@ EOF
     $self->{instance}->getnotify();
 
     # trigger processing of alarms
-    $self->start_calalarmd();
-    sleep 3;
-    $self->stop_calalarmd();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
     # pick first calendar alarm from notifications
     my $event = undef;
@@ -397,9 +370,7 @@ EOF
     $self->{instance}->getnotify();
 
     # trigger processing of alarms
-    $self->start_calalarmd();
-    sleep 15;
-    $self->stop_calalarmd();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
     # pick first calendar alarm from notifications
     my $event = undef;
