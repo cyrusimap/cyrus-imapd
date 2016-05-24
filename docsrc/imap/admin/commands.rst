@@ -92,7 +92,6 @@ the form of actual man-pages.
     systemcommands/ptexpire
     systemcommands/ptloader
     systemcommands/proxyd
-    systemcommands/sieveshell
 
 .. toctree::
     :maxdepth: 1

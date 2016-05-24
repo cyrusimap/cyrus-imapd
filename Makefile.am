@@ -1749,10 +1749,9 @@ docsrc/imap/admin/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_s
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
 
-man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
-	@echo creating man/sieveshell.1
-	@$(MKDIR_P) man
-	$(AM_V_GEN)pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
+docsrc/imap/admin/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst sieveshell < $< > $@
 
 doc/man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
 	@$(MKDIR_P) doc/man
@@ -1784,7 +1783,8 @@ if HAVE_SPHINX_BUILD
 ## XXX doesn't detect if other rst sources are updated...
 ## XXX doesn't support VPATH builds -- sphinx can't handle two source directories!
 man/.sphinx-build.stamp: docsrc/imap/admin/configs/imapd.conf.rst \
-                         docsrc/imap/admin/systemcommands/cyradm.rst
+                         docsrc/imap/admin/systemcommands/cyradm.rst \
+                         docsrc/imap/admin/usercommands/sieveshell.rst
 	$(AM_V_GEN)$(SPHINX_BUILD) -q -b cyrman $(top_srcdir)/docsrc $(top_builddir)/man
 	@touch $@
 else

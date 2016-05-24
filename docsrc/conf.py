@@ -710,6 +710,16 @@ man_pages = [
     ),
 
         (
+            'imap/admin/usercommands/sieveshell',
+            'sieveshell',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team'
+            ],
+            1
+    ),
+
+        (
             'imap/admin/configs/cyrus.conf',
             'cyrus.conf',
             u'Cyrus IMAP Documentation',
@@ -1145,4 +1155,4 @@ extlinks = {
 
 # Change this to whatever your output root is
 # If you're in a local build environment, this might be file://cyrus-imapd/doc/build/imap/admin/$num/$topic/$topic.html    
-cyrus_man_url_regex = "http://www.cyrusimap.org/imap/admin/$num/$topic.html";    
+cyrus_man_url_regex = "http://www.cyrusimap.org/imap/admin/$num/$topic.html";

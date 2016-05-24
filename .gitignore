@@ -48,6 +48,7 @@ doc/text/
 docsrc/build/
 docsrc/imap/admin/configs/imapd.conf.rst
 docsrc/imap/admin/systemcommands/cyradm.rst
+docsrc/imap/admin/usercommands/sieveshell.rst
 imap/arbitron
 imap/calalarmd
 imap/ctl_conversationsdb
