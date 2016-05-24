@@ -296,6 +296,11 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
     mboxevent = xmalloc(sizeof(struct mboxevent));
     memcpy(mboxevent, &event_template, sizeof(struct mboxevent));
 
+    unsigned i;
+    for (i = 0; mboxevent->params[i].id; i++) {
+        assert(i == mboxevent->params[i].id);
+    }
+
     mboxevent->type = type;
 
     /* From RFC 5423:
