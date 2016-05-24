@@ -1781,11 +1781,14 @@ doc/man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 
 if HAVE_SPHINX_BUILD
 ## XXX doesn't detect if other rst sources are updated...
-## XXX doesn't support VPATH builds -- sphinx can't handle two source directories!
 man/.sphinx-build.stamp: docsrc/imap/admin/configs/imapd.conf.rst \
                          docsrc/imap/admin/systemcommands/cyradm.rst \
                          docsrc/imap/admin/usercommands/sieveshell.rst
-	$(AM_V_GEN)$(SPHINX_BUILD) -q -b cyrman $(top_srcdir)/docsrc $(top_builddir)/man
+	## detect when source directory is not build directory (i.e. VPATH
+	## build), and clone the docsrc tree into the build directory, so
+	## that we have a single "source directory" for sphinx-build to use.
+	$(AM_V_at)test x"$(top_srcdir)" = x"$(top_builddir)" || (cd $(top_srcdir) && tar cf - docsrc) | tar xf -
+	$(AM_V_GEN)$(SPHINX_BUILD) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 else
 man/.sphinx-build.stamp:
