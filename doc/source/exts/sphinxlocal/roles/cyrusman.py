@@ -4,7 +4,7 @@
 
     Turn :cyrusman: links into manpage references to the cyrus imap doc tree
     
-    Config: use 'cyrus_man_url_regex' to set the location for generated links. Defaults to http://docs.cyrus.foundation/imap/admin/%s/%s.html
+    Config: use 'cyrus_man_url_regex' to set the location for generated links. Defaults to http://www.cyrusimap.org/imap/admin/%s/%s.html
     
     If :cyrusman: references are missing the section number, it die with an error.
 

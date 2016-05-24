@@ -1142,3 +1142,7 @@ extlinks = {
         'rfc':('http://tools.ietf.org/html/rfc%s', 'RFC '),
         'task':('https://git.cyrus.foundation/T%s', 'Task #'),
     }
+
+# Change this to whatever your output root is
+# If you're in a local build environment, this might be file://cyrus-imapd/doc/build/imap/admin/$num/$topic/$topic.html    
+cyrus_man_url_regex = "http://www.cyrusimap.org/imap/admin/$num/$topic.html";    
