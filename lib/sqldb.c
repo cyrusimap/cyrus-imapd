@@ -110,7 +110,7 @@ static int _version_cb(void *rock, int ncol, char **vals, char **names __attribu
 
 /* Open DAV DB corresponding in file */
 EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
-                             int version, const struct sqldb_upgrade *upgradesql)
+                             int version, const struct sqldb_upgrade *upgrade)
 {
     int rc = SQLITE_OK;
     struct stat sbuf;
@@ -215,22 +215,33 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
         }
     }
     else {
-        if (!upgradesql) {
+        if (!upgrade) {
             syslog(LOG_ERR, "sqldb_open(%s) need upgrade from %d to %d: %s",
                    open->fname, open->version, version, sqlite3_errmsg(open->db));
             _free_open(open);
             return NULL;
         }
-        for (i = 0; upgradesql[i].to; i++) {
-            if (upgradesql[i].to <= open->version) continue;
+        for (i = 0; upgrade[i].to; i++) {
+            if (upgrade[i].to <= open->version) continue;
 
-            syslog(LOG_NOTICE, "sqldb_open(%s) upgrade to v%d", open->fname, upgradesql[i].to);
-            rc = sqlite3_exec(open->db, upgradesql[i].sql, NULL, NULL, NULL);
-            if (rc != SQLITE_OK) {
-                syslog(LOG_ERR, "sqldb_open(%s) upgrade v%d: %s",
-                       open->fname, upgradesql[i].to, sqlite3_errmsg(open->db));
-                _free_open(open);
-                return NULL;
+            syslog(LOG_NOTICE, "sqldb_open(%s) upgrade to v%d", open->fname, upgrade[i].to);
+            if (upgrade[i].sql) {
+                rc = sqlite3_exec(open->db, upgrade[i].sql, NULL, NULL, NULL);
+                if (rc != SQLITE_OK) {
+                    syslog(LOG_ERR, "sqldb_open(%s) upgrade v%d: %s",
+                        open->fname, upgrade[i].to, sqlite3_errmsg(open->db));
+                    _free_open(open);
+                    return NULL;
+                }
+            }
+            if (upgrade[i].cb) {
+                rc = upgrade[i].cb(open);
+                if (rc != SQLITE_OK) {
+                    syslog(LOG_ERR, "sqldb_open(%s) upgrade v%d: %s",
+                        open->fname, upgrade[i].to, sqlite3_errmsg(open->db));
+                    _free_open(open);
+                    return NULL;
+                }
             }
         }
     }
