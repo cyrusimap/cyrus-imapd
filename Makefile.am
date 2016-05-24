@@ -1797,6 +1797,15 @@ man/.sphinx-build.stamp:
 	@echo "warning: no sphinx-build, man pages will be empty" 1>&2
 endif
 
+.PHONY: man man-force
+man-force:
+	## trash the timestamp, so we always re-run sphinx-build.
+	## sphinx-build tracks source modifications itself, so forced
+	## rebuilds will still be a lot quicker once it has run once.
+	@$(RM) man/.sphinx-build.stamp
+
+man: man-force $(dist_man_MANS)
+
 dist-old:: distgit
 	@echo "creating configure"
 	@cd dist/cyrus-imapd-$(PACKAGE_VERSION) ; sh SMakefile
