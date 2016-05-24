@@ -360,6 +360,7 @@ EXTRA_DIST += \
 	cunit/key.pem \
 	cunit/vg.supp \
 	doc \
+	docsrc \
 	imap/dav_util.h \
 	imap/http_caldav.js \
 	imap/http_err.et \

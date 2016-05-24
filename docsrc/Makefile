@@ -5,6 +5,7 @@
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 PAPER         =
+SOURCEDIR     = .
 BUILDDIR      = build
 PERL2RST      = ../tools/perl2rst
 
@@ -21,9 +22,9 @@ endif
 # Internal variables.
 PAPEROPT_a4     = -D latex_paper_size=a4
 PAPEROPT_letter = -D latex_paper_size=letter
-ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) source
+ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SOURCEDIR)
 # the i18n builder cannot share the environment and doctrees with the others
-I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) source
+I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SOURCEDIR)
 
 .PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext
 
@@ -57,9 +58,9 @@ clean:
     
 init: ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
 	@echo "creating imap/admin/systemcommands/cyradm.rst"
-	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > source/imap/admin/systemcommands/cyradm.rst 
+	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/imap/admin/systemcommands/cyradm.rst
 	@echo "creating imap/admin/configs/imapd.conf.rst"
-	../tools/config2rst ../lib/imapoptions > source/imap/admin/configs/imapd.conf.rst     
+	../tools/config2rst ../lib/imapoptions > $(SOURCEDIR)/imap/admin/configs/imapd.conf.rst
 
 html: init
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html

@@ -43,10 +43,10 @@ com_err/et/compile_et
 coverage.xml
 cscope.out
 depcomp
-doc/build/
 doc/man/
 doc/rst/
 doc/text/
+docsrc/build/
 imap/arbitron
 imap/calalarmd
 imap/ctl_conversationsdb
