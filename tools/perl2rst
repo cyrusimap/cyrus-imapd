@@ -32,6 +32,6 @@ use Pod::POM::View::Restructured;
 my $title = shift || die "Usage: $0 title < in > out";
 
 my $conv = Pod::POM::View::Restructured->new;
-my $output = $conv->convert_file(\*STDIN, $title, \*STDOUT);
+my $output = $conv->convert_file(\*STDIN, "**$title**", \*STDOUT);
 
 
