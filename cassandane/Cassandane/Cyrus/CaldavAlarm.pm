@@ -108,8 +108,8 @@ sub test_simple
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    my $tzid = strftime("%Z", localtime());
     my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
 
     # define the event to start in a few seconds
     my $startdt = $now->clone();
@@ -130,13 +130,29 @@ BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
 CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
 BEGIN:VEVENT
 CREATED:20150806T234327Z
 UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
-DTEND;TZID=$tzid:$end
+DTEND;TZID=Australia/Sydney:$end
 TRANSP:OPAQUE
 SUMMARY:Simple
-DTSTART;TZID=$tzid:$start
+DTSTART;TZID=Australia/Sydney:$start
 DTSTAMP:20150806T234327Z
 SEQUENCE:0
 BEGIN:VALARM
@@ -184,10 +200,9 @@ sub test_override
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    my $tzid = strftime("%Z", localtime());
     my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
 
-  
     # define an event that started almost an hour ago and repeats hourly
     my $startdt = $now->clone();
     $startdt->subtract(DateTime::Duration->new(minutes => 59, seconds => 55));
@@ -219,14 +234,29 @@ BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
 CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
 BEGIN:VEVENT
 TRANSP:OPAQUE
-DTEND;TZID=$tzid:$end
+DTEND;TZID=Australia/Sydney:$end
 UID:12A08570-CF92-4418-986C-6173001AB557
 DTSTAMP:20160420T141259Z
 SEQUENCE:0
 SUMMARY:main
-DTSTART;TZID=$tzid:$start
+DTSTART;TZID=Australia/Sydney:$start
 CREATED:20160420T141217Z
 RRULE:FREQ=HOURLY;INTERVAL=1;COUNT=3
 BEGIN:VALARM
@@ -239,13 +269,13 @@ END:VEVENT
 BEGIN:VEVENT
 CREATED:20160420T141217Z
 UID:12A08570-CF92-4418-986C-6173001AB557
-DTEND;TZID=$tzid:$recurend
+DTEND;TZID=Australia/Sydney:$recurend
 TRANSP:OPAQUE
 SUMMARY:exception
-DTSTART;TZID=$tzid:$recurstart
+DTSTART;TZID=Australia/Sydney:$recurstart
 DTSTAMP:20160420T141312Z
 SEQUENCE:0
-RECURRENCE-ID;TZID=$tzid:$recurid
+RECURRENCE-ID;TZID=Australia/Sydney:$recurid
 BEGIN:VALARM
 TRIGGER:$trigger
 ACTION:DISPLAY
@@ -290,10 +320,9 @@ sub test_override_exception
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    my $tzid = strftime("%Z", localtime());
     my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
 
-  
     # define an event that started almost an hour ago and repeats hourly
     my $startdt = $now->clone();
     $startdt->subtract(DateTime::Duration->new(minutes => 59, seconds => 55));
@@ -327,14 +356,29 @@ BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
 CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
 BEGIN:VEVENT
 TRANSP:OPAQUE
-DTEND;TZID=$tzid:$end
+DTEND;TZID=Australia/Sydney:$end
 UID:12A08570-CF92-4418-986C-6173001AB557
 DTSTAMP:20160420T141259Z
 SEQUENCE:0
 SUMMARY:main
-DTSTART;TZID=$tzid:$start
+DTSTART;TZID=Australia/Sydney:$start
 CREATED:20160420T141217Z
 RRULE:FREQ=HOURLY;INTERVAL=1;COUNT=3
 BEGIN:VALARM
@@ -347,13 +391,13 @@ END:VEVENT
 BEGIN:VEVENT
 CREATED:20160420T141217Z
 UID:12A08570-CF92-4418-986C-6173001AB557
-DTEND;TZID=$tzid:$recurend
+DTEND;TZID=Australia/Sydney:$recurend
 TRANSP:OPAQUE
 SUMMARY:exception
-DTSTART;TZID=$tzid:$recurstart
+DTSTART;TZID=Australia/Sydney:$recurstart
 DTSTAMP:20160420T141312Z
 SEQUENCE:0
-RECURRENCE-ID;TZID=$tzid:$recurid
+RECURRENCE-ID;TZID=Australia/Sydney:$recurid
 BEGIN:VALARM
 TRIGGER:$trigger
 ACTION:DISPLAY
@@ -388,5 +432,202 @@ EOF
     $self->assert_str_equals($event->{summary}, 'exception');
 }
 
+sub test_floating
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $tz = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+END:VCALENDAR
+EOF
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timezone => $tz});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND:$end
+TRANSP:OPAQUE
+SUMMARY:Floating
+DTSTART:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    # trigger processing of alarms
+
+    # pick first calendar alarm from notifications
+    my $event = undef;
+    my $data = $self->{instance}->getnotify();
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                $event = $e;
+                last;
+            }
+        }
+    }
+
+    $self->assert_str_equals($event->{summary}, 'Floating');
+}
+
+sub test_floating_nomatch
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $tz = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:America/New_York
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=11
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+END:DAYLIGHT
+END:VTIMEZONE
+END:VCALENDAR
+EOF
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timezone => $tz});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND:$end
+TRANSP:OPAQUE
+SUMMARY:Floating
+DTSTART:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    # trigger processing of alarms
+
+    # pick first calendar alarm from notifications
+    my $event = undef;
+    my $data = $self->{instance}->getnotify();
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                $event = $e;
+                last;
+            }
+        }
+    }
+
+    $self->assert_null($event);
+}
 
 1;
