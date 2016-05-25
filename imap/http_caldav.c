@@ -4733,35 +4733,63 @@ static void prune_properties(icalcomponent *parent,
     }
 }
 
-static int compare_freebusy_with_type(const void *fb1, const void *fb2);
-
-static void expand_caldata(icalcomponent *ical, struct icalperiodtype *range)
+static int expand_cb(icalcomponent *comp,
+                     icaltimetype start, icaltimetype end, void *rock)
 {
-    /* Expand recurrences */
-    struct calrange_filter calfilter;
-    icalcomponent *master, *comp, *nextcomp;
-    icalproperty *prop, *nextprop;
-    icalcomponent_kind kind;
-    unsigned i;
+    icalcomponent *ical = icalcomponent_get_parent(comp);
+    icalcomponent *expanded_ical = (icalcomponent *) rock;
+    icalproperty *prop, *nextprop, *recurid = NULL;
+    struct icaldatetimeperiodtype dtp;
+    icaltimetype dtstart;
 
-    memset(&calfilter, 0, sizeof(struct calrange_filter));
-    calfilter.start = range->start;
-    calfilter.end = range->end;
+    start = icaltime_convert_to_zone(start, utc_zone);
+    end = icaltime_convert_to_zone(end, utc_zone);
 
-    kind = icalcomponent_isa(icalcomponent_get_first_real_component(ical));
-
-    expand_occurrences(ical, &master, kind, &calfilter);
-
-    /* Strip unwanted properties from master component */
-    for (prop = icalcomponent_get_first_property(master, ICAL_ANY_PROPERTY);
+    /* Fetch/set/remove interesting properties */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
          prop; prop = nextprop) {
-        nextprop = icalcomponent_get_next_property(master, ICAL_ANY_PROPERTY);
+        nextprop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
+
         switch (icalproperty_isa(prop)) {
+        case ICAL_DTSTART_PROPERTY:
+            /* Fetch exiting DTSTART (might be master) */
+            dtp = icalproperty_get_datetimeperiod(prop);
+            dtstart = icaltime_convert_to_zone(dtp.time, utc_zone);
+
+            /* Set DTSTART to be for this occurrence (in UTC) */
+            icalproperty_set_dtstart(prop, start);
+            icalproperty_remove_parameter_by_kind(prop, ICAL_TZID_PARAMETER);
+            break;
+
+        case ICAL_DTEND_PROPERTY:
+            /* Set DTEND to be for this occurrence (in UTC) */
+            icalproperty_set_dtend(prop, end);
+            icalproperty_remove_parameter_by_kind(prop, ICAL_TZID_PARAMETER);
+            break;
+            
+        case ICAL_DURATION_PROPERTY:
+            /* Set DURATION to be for this occurrence */
+            icalproperty_set_duration(prop, icaltime_subtract(end, start));
+            break;
+            
+        case ICAL_RECURRENCEID_PROPERTY:
+            /* Reset RECURRENCE-ID of this override to UTC */
+            dtp = icalproperty_get_datetimeperiod(prop);
+            dtp.time = icaltime_convert_to_zone(dtp.time, utc_zone);
+            icalproperty_set_recurrenceid(prop, dtp.time);
+            icalproperty_remove_parameter_by_kind(prop, ICAL_TZID_PARAMETER);
+            recurid = prop;
+
+            /* Remove component from existing ical (we can use it as-is)  */
+            icalcomponent_remove_component(ical, comp);
+            break;
+
         case ICAL_RRULE_PROPERTY:
         case ICAL_RDATE_PROPERTY:
         case ICAL_EXRULE_PROPERTY:
         case ICAL_EXDATE_PROPERTY:
-            icalcomponent_remove_property(master, prop);
+            /* We don't want any recurrence rule properties */
+            icalcomponent_remove_property(comp, prop);
             icalproperty_free(prop);
             break;
 
@@ -4770,73 +4798,48 @@ static void expand_caldata(icalcomponent *ical, struct icalperiodtype *range)
         }
     }
 
-    /* Re-sort freebusy periods by start time and type.
-       Overriden instances (FBTYPE=NONE) will have higher ordinal num */
-    qsort(calfilter.freebusy.fb, calfilter.freebusy.len,
-          sizeof(struct freebusy), compare_freebusy_with_type);
-
-    /* Determine which existing components we want to keep */
-    for (comp = icalcomponent_get_first_component(ical, kind);
-         comp; comp = nextcomp) {
-        nextcomp = icalcomponent_get_next_component(ical, kind);
-        struct icaltimetype recurid;
-        struct freebusy *found;
-
-        recurid = icalcomponent_get_recurrenceid_with_zone(comp);
-        if (icaltime_is_null_time(recurid)) {
-            recurid = icalcomponent_get_dtstart(comp);
-        }
-        recurid = icaltime_convert_to_zone(recurid, utc_zone);
-        recurid.is_date = 0;  /* make DATE-TIME for comparison */
-
-        found = bsearch(&recurid, calfilter.freebusy.fb,
-                        calfilter.freebusy.len,
-                        sizeof(struct freebusy), compare_recurid);
-        if (found) {
-            /* Strip unwanted properties from component */
-
-            /* Set DTSTART/DTEND/RECURRENCEID to UTC */
-            icalcomponent_set_dtstart(comp, found->per.start);
-            icalcomponent_set_dtend(comp, found->per.end);
-
-            prop = icalcomponent_get_first_property(comp,
-                                                    ICAL_RECURRENCEID_PROPERTY);
-            if (prop) {
-                icalproperty_remove_parameter_by_kind(prop,
-                                                      ICAL_TZID_PARAMETER);
-                icalproperty_set_recurrenceid(prop, recurid);
-            }
-            else if (icaltime_compare(recurid, found->per.start)) {
-                /* Overridden master instance */
-                icalcomponent_remove_component(ical, comp);
-            }
-
-            /* Mark this instance as handled */
-            found->type = ICAL_FBTYPE_NONE;
+    if (!recurid) {
+        /* Master component */
+        if (!icaltime_compare(start, dtstart)) {
+            /* First instance -
+               remove component from existing ical (we can use it as-is)  */
+            icalcomponent_remove_component(ical, comp);
         }
         else {
-            /* Remove this component (doesn't overlap expand range) */
-            icalcomponent_remove_component(ical, comp);
-            if (comp != master) icalcomponent_free(comp);
+            /* Clone the component and set RECURRENCE-ID */
+            comp = icalcomponent_new_clone(comp);
+            icalcomponent_set_recurrenceid(comp, start);
         }
     }
 
-    /* Create recurrence components for remaining instances */
-    for (i = 0; i < calfilter.freebusy.len; i++) {
-        struct freebusy *fb = &calfilter.freebusy.fb[i];
+    /* Append the component to expanded ical */
+    icalcomponent_add_component(expanded_ical, comp);
 
-        if (fb->type == ICAL_FBTYPE_NONE) continue;
+    return 1;
+}
 
-        comp = icalcomponent_new_clone(master);
-        icalcomponent_set_dtstart(comp, fb->per.start);
-        icalcomponent_set_dtend(comp, fb->per.end);
-        icalcomponent_set_recurrenceid(comp, fb->recurid);
-        icalcomponent_add_component(ical, comp);
-    }
+/* Expand recurrences of ical in range.
+   NOTE: expand_cb() is destructive of ical as it builds expanded_ical */
+static icalcomponent *expand_caldata(icalcomponent **ical,
+                                     struct icalperiodtype range)
+{
+    icalcomponent *expanded_ical =
+        icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+                            icalproperty_new_version("2.0"),
+                            icalproperty_new_prodid(ical_prodid),
+                            0);
 
-    /* Cleanup */
-    if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
-    if (!icalcomponent_get_parent(master)) icalcomponent_free(master);
+    /* Copy over any CALSCALE property */
+    icalproperty *prop =
+        icalcomponent_get_first_property(*ical, ICAL_CALSCALE_PROPERTY);
+    if (prop)
+        icalcomponent_add_property(expanded_ical, icalproperty_new_clone(prop));
+
+    icalcomponent_myforeach(*ical, range, NULL, expand_cb, expanded_ical);
+    icalcomponent_free(*ical);
+    *ical = expanded_ical;
+    
+    return *ical;
 }
 
 static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
@@ -4941,7 +4944,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                 }
             }
 
-            if (partial->expand) expand_caldata(ical, &partial->range);
+            if (partial->expand) fctx->obj = expand_caldata(&ical, partial->range);
             else limit_caldata(ical, &partial->range);
         }
 
