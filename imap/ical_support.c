@@ -52,6 +52,14 @@
 
 #ifdef HAVE_ICAL
 
+#if (SIZEOF_TIME_T > 4)
+static time_t epoch    = (time_t) LONG_MIN;
+static time_t eternity = (time_t) LONG_MAX;
+#else
+static time_t epoch    = (time_t) INT_MIN;
+static time_t eternity = (time_t) INT_MAX;
+#endif
+
 struct recurrence_data {
     icalcomponent *comp;
     icaltimetype dtstart;
@@ -155,7 +163,15 @@ time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz)
     return icaltime_as_timet_with_zone(t, zone);
 }
 
+static int span_compare_range(icaltime_span *span, icaltime_span *range)
+{
+    if (span->start >= range->end) return 1;  /* span starts later than range */
+    if (span->end <= range->start) return -1; /* span ends earlier than range */
+    return 0; /* span overlaps range */
+}
+
 extern int icalcomponent_myforeach(icalcomponent *ical,
+                                   struct icalperiodtype range,
                                    const icaltimezone *floatingtz,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
@@ -166,6 +182,19 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     icalarray *overrides = icalarray_new(sizeof(struct recurrence_data), 16);
     struct icaldurationtype event_length = icaldurationtype_null_duration();
     struct icaltimetype dtstart = icaltime_null_time();
+    icaltime_span range_span = {
+        icaltime_to_timet(range.start, NULL),
+        icaltime_to_timet(range.end, NULL), 0 /* is_busy */
+    };
+
+    if (!range_span.start) range_span.start = epoch;
+    if (!range_span.end) {
+        if (!icaldurationtype_is_null_duration(range.duration)) {
+            icaltimetype end = icaltime_add(range.start, range.duration);
+            range_span.end = icaltime_to_timet(end, NULL);
+        }
+        else range_span.end = eternity;
+    }
 
     icalcomponent *mastercomp = NULL;
 
@@ -255,7 +284,16 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
         if (rrule) {
             struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
-            rrule_itr = icalrecur_iterator_new(recur, dtstart);
+
+            /* check if span of RRULE overlaps range */
+            icaltime_span recur_span = {
+                icaltime_to_timet(dtstart, floatingtz),
+                icaltime_to_timet(recur.until, NULL), 0 /* is_busy */
+            };
+            if (!recur_span.end) recur_span.end = eternity;
+
+            if (!span_compare_range(&recur_span, &range_span))
+                rrule_itr = icalrecur_iterator_new(recur, dtstart);
         }
     }
 
@@ -266,12 +304,13 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
         icalrecur_iterator_next(rrule_itr) : dtstart;
 
     while (data || !icaltime_is_null_time(ritem)) {
-        time_t otime = data ? data->span.start : INT_MAX;
+        time_t otime = data ? data->span.start : eternity;
         time_t rtime = icaltime_to_timet(ritem, floatingtz);
 
         if (icaltime_is_null_time(ritem) || (data && otime <= rtime)) {
             /* an overridden recurrence */
             if (data->comp &&
+                !span_compare_range(&data->span, &range_span) &&
                 !callback(data->comp, data->dtstart, data->dtend, callback_data))
                 goto done;
 
@@ -291,7 +330,13 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
         else {
             /* a non-overridden recurrence */
             struct icaltimetype thisend = icaltime_add(ritem, event_length);
-            if (!callback(mastercomp, ritem, thisend, callback_data))
+            icaltime_span this_span = {
+                rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
+            };
+            int r = span_compare_range(&this_span, &range_span);
+
+            if (r > 1 || /* gone past the end of range */
+                (!r && !callback(mastercomp, ritem, thisend, callback_data)))
                 goto done;
 
             /* incr recurrences */

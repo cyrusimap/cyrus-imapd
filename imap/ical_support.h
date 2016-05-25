@@ -54,8 +54,11 @@
 
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
 
-/* callback returns true (1) while it wants more events, 0 to finish */
+/* If range is a NULL period, callback() is executed for ALL occurrences,
+   otherwise callback() is only executed for occurrences that overlap the range.
+   callback() returns true (1) while it wants more occurrences, 0 to finish */
 extern int icalcomponent_myforeach(icalcomponent *comp,
+                                   struct icalperiodtype range,
                                    const icaltimezone *floatingtz,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
