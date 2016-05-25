@@ -137,11 +137,12 @@ static struct recurrence_data *_add_override(icalarray *array,
     }
 
     if (!data) {
-        struct recurrence_data new = { .span.start = start };
+        struct recurrence_data new;
         icalarray_append(array, &new);
         data = icalarray_element_at(array, i);
     }
 
+    data->span.start = start;
     data->dtstart = dtstart;
     data->span.end = end;
     data->dtend = dtend;
