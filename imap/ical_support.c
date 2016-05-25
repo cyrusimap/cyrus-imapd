@@ -59,18 +59,10 @@ struct recurrence_data {
     icaltime_span span; /* for sorting, etc */
 };
 
-static struct icaltimetype _my_datetime(icalcomponent *comp,
-                                        icalproperty_kind kind)
+static struct icaldatetimeperiodtype _my_datetimeperiod(icalproperty *prop)
 {
-    icalproperty *prop = icalcomponent_get_first_property(comp, kind);
-    if (!prop) return icaltime_null_time();
-
-    struct icaltimetype ret =
-        icalvalue_get_datetime(icalproperty_get_value(prop));
-
-    /* skip timezones if it's UTC */
-    if (icaltime_is_utc(ret))
-        return ret;
+    struct icaldatetimeperiodtype ret =
+        icalvalue_get_datetimeperiod(icalproperty_get_value(prop));
 
     icalparameter *param =
         icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
@@ -80,7 +72,8 @@ static struct icaltimetype _my_datetime(icalcomponent *comp,
         icaltimezone *tz = NULL;
 
         icalcomponent *c;
-        for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
+        for (c = icalproperty_get_parent(prop); c != NULL;
+             c = icalcomponent_get_parent(c)) {
             tz = icalcomponent_get_timezone(c, tzid);
             if (tz != NULL)
                 break;
@@ -89,8 +82,15 @@ static struct icaltimetype _my_datetime(icalcomponent *comp,
         if (tz == NULL)
             tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
 
-        if (tz != NULL)
-            ret = icaltime_set_timezone(&ret, tz);
+        if (tz != NULL) {
+            if (icalperiodtype_is_null_period(ret.period))
+                ret.time = icaltime_set_timezone(&ret.time, tz);
+            else {
+                ret.period.start = icaltime_set_timezone(&ret.period.start, tz);
+                if (icaldurationtype_is_null_duration(ret.period.duration))
+                    ret.period.end = icaltime_set_timezone(&ret.period.end, tz);
+            }
+        }
     }
 
     return ret;
@@ -193,7 +193,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
              prop;
              prop = icalcomponent_get_next_property(mastercomp,
                                                     ICAL_RDATE_PROPERTY)) {
-            struct icaldatetimeperiodtype rdate = icalproperty_get_rdate(prop);
+            struct icaldatetimeperiodtype rdate = _my_datetimeperiod(prop);
             icaltimetype mystart = rdate.time;
             icaltimetype myend = rdate.time;
             if (icalperiodtype_is_null_period(rdate.period)) {
@@ -201,7 +201,10 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             }
             else {
                 mystart = rdate.period.start;
-                myend = rdate.period.end;
+                if (icaldurationtype_is_null_duration(rdate.period.duration))
+                    myend = rdate.period.end;
+                else
+                    myend = icaltime_add(mystart, rdate.period.duration);
             }
             if (icaltime_is_null_time(mystart))
                 continue;
@@ -458,7 +461,12 @@ const char *icalproperty_get_invitee(icalproperty *prop)
 
 icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
 {
-    return _my_datetime(comp, ICAL_RECURRENCEID_PROPERTY);
+    icalproperty *prop =
+        icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+    if (!prop) return icaltime_null_time();
+
+    struct icaldatetimeperiodtype dtp = _my_datetimeperiod(prop);
+    return dtp.time;
 }
 
 #ifndef HAVE_TZDIST_PROPS
