@@ -184,15 +184,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     /* find event length first, we'll need it for overrides */
     if (mastercomp) {
         dtstart = icalcomponent_get_dtstart(mastercomp);
-        struct icaltimetype dtend = icalcomponent_get_dtend(mastercomp);
-
-        if (!icaltime_is_null_time(dtend)) {
-            /* if there's an end, we calculate the duration */
-            struct icaltimetype dtend = _my_datetime(comp, ICAL_DTEND_PROPERTY);
-            icaltime_span basespan = icaltime_span_new(dtstart, dtend, 1);
-            event_length =
-                icaldurationtype_from_int(basespan.end - basespan.start);
-        }
+        event_length = icalcomponent_get_duration(mastercomp);
 
         /* add any RDATEs first, since EXDATE items can override them */
         icalproperty *prop;
