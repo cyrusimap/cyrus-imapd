@@ -50,6 +50,7 @@ use JSON::XS;
 use Net::CalDAVTalk;
 use Data::Dumper;
 use POSIX;
+use Carp;
 
 sub new
 {
@@ -89,6 +90,56 @@ sub set_up
     }
     $self->{test_calalarmd} = 1;
 
+}
+
+sub _can_match {
+    my $event = shift;
+    my $want = shift;
+
+    # I wrote a really good one of these for Caldav, but this will do for now
+    foreach my $key (keys %$want) {
+        return 0 if not exists $event->{$key};
+        return 0 if $event->{$key} ne $want->{$key};
+    }
+
+    return 1;
+}
+
+sub assert_alarms {
+    my $self = shift;
+    my @want = @_;
+    # pick first calendar alarm from notifications
+    my $data = $self->{instance}->getnotify();
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    my @left;
+    while (my $event = shift @events) {
+        my $found = 0;
+        my @newwant;
+        foreach my $data (@want) {
+            if (not $found and _can_match($event, $data)) {
+                $found = 1;
+            }
+            else {
+                push @newwant, $data;
+            }
+        }
+        if (not $found) {
+            push @left, $event;
+        }
+        @want = @newwant;
+    }
+
+
+    Carp::confess(Data::Dumper::Dumper(\@want, \@left)) if (@want or @left);
 }
 
 sub tear_down
@@ -172,22 +223,7 @@ EOF
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    # trigger processing of alarms
-
-    # pick first calendar alarm from notifications
-    my $event = undef;
-    my $data = $self->{instance}->getnotify();
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                $event = $e;
-                last;
-            }
-        }
-    }
-
-    $self->assert_str_equals($event->{summary}, 'Simple');
+    $self->assert_alarms({summary => 'Simple', start => $start});
 }
 
 sub test_override
@@ -294,20 +330,7 @@ EOF
     # trigger processing of alarms
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    # pick first calendar alarm from notifications
-    my $event = undef;
-    my $data = $self->{instance}->getnotify();
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                $event = $e;
-                last;
-            }
-        }
-    }
-
-    $self->assert_str_equals($event->{summary}, 'exception');
+    $self->assert_alarms({summary => 'exception', start => $recurstart});
 }
 
 sub test_override_exception
@@ -340,7 +363,7 @@ sub test_override_exception
     # but it starts a few seconds after the regular start
     my $rstartdt = $now->clone();
     $rstartdt->add(DateTime::Duration->new(seconds => 15));
-    my $recurstart = $recuriddt->strftime('%Y%m%dT%H%M%S');
+    my $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
 
     my $renddt = $rstartdt->clone();
     $renddt->add(DateTime::Duration->new(seconds => 15));
@@ -416,20 +439,7 @@ EOF
     # trigger processing of alarms
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    # pick first calendar alarm from notifications
-    my $event = undef;
-    my $data = $self->{instance}->getnotify();
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                $event = $e;
-                last;
-            }
-        }
-    }
-
-    $self->assert_str_equals($event->{summary}, 'exception');
+    $self->assert_alarms({summary => 'exception', start => $recurstart});
 }
 
 sub test_floating
@@ -513,25 +523,10 @@ EOF
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    # trigger processing of alarms
-
-    # pick first calendar alarm from notifications
-    my $event = undef;
-    my $data = $self->{instance}->getnotify();
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                $event = $e;
-                last;
-            }
-        }
-    }
-
-    $self->assert_str_equals($event->{summary}, 'Floating');
+    $self->assert_alarms({summary => 'Floating'});
 }
 
-sub test_floating_nomatch
+sub test_floating_differenttz
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -612,22 +607,14 @@ EOF
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    # trigger processing of alarms
+    # no alarms
+    $self->assert_alarms();
 
-    # pick first calendar alarm from notifications
-    my $event = undef;
-    my $data = $self->{instance}->getnotify();
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                $event = $e;
-                last;
-            }
-        }
-    }
+    # trigger processing a day later!
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 86400 );
 
-    $self->assert_null($event);
+    # alarm fires
+    $self->assert_alarms({summary => 'Floating', timezone => 'America/New_York', start => $start});
 }
 
 1;
