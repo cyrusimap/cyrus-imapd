@@ -52,6 +52,8 @@
 
 #include "mailbox.h"
 
+extern struct icaldatetimeperiodtype
+icalproperty_get_datetimeperiod(icalproperty *prop);
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,

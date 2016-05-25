@@ -67,10 +67,14 @@ struct recurrence_data {
     icaltime_span span; /* for sorting, etc */
 };
 
-static struct icaldatetimeperiodtype _my_datetimeperiod(icalproperty *prop)
+struct icaldatetimeperiodtype
+icalproperty_get_datetimeperiod(icalproperty *prop)
 {
-    struct icaldatetimeperiodtype ret =
-        icalvalue_get_datetimeperiod(icalproperty_get_value(prop));
+    struct icaldatetimeperiodtype ret = { icaltime_null_time(),
+                                          icalperiodtype_null_period() };
+    if (!prop) return ret;
+
+    ret = icalvalue_get_datetimeperiod(icalproperty_get_value(prop));
 
     icalparameter *param =
         icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
@@ -222,7 +226,8 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
              prop;
              prop = icalcomponent_get_next_property(mastercomp,
                                                     ICAL_RDATE_PROPERTY)) {
-            struct icaldatetimeperiodtype rdate = _my_datetimeperiod(prop);
+            struct icaldatetimeperiodtype rdate =
+                icalproperty_get_datetimeperiod(prop);
             icaltimetype mystart = rdate.time;
             icaltimetype myend = rdate.time;
             if (icalperiodtype_is_null_period(rdate.period)) {
@@ -507,9 +512,8 @@ icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
 {
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-    if (!prop) return icaltime_null_time();
 
-    struct icaldatetimeperiodtype dtp = _my_datetimeperiod(prop);
+    struct icaldatetimeperiodtype dtp = icalproperty_get_datetimeperiod(prop);
     return dtp.time;
 }
 
