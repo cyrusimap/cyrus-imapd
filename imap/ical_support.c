@@ -265,11 +265,11 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     struct icaltimetype ritem = rrule_itr ?
         icalrecur_iterator_next(rrule_itr) : dtstart;
 
-    do {
+    while (data || !icaltime_is_null_time(ritem)) {
         time_t otime = data ? data->span.start : INT_MAX;
         time_t rtime = icaltime_to_timet(ritem, floatingtz);
 
-        if (!rtime || otime <= rtime) {
+        if (icaltime_is_null_time(ritem) || (data && otime <= rtime)) {
             /* an overridden recurrence */
             if (data->comp &&
                 !callback(data->comp, data->dtstart, data->dtend, callback_data))
@@ -298,8 +298,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             ritem = rrule_itr ?
                 icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
         }
-
-    } while (data || !icaltime_is_null_time(ritem));
+    }
 
  done:
     if (rrule_itr) icalrecur_iterator_free(rrule_itr);
