@@ -271,7 +271,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
         icalrecur_iterator_next(rrule_itr) : dtstart;
 
     do {
-        time_t otime = data ? data->span.start : 0;
+        time_t otime = data ? data->span.start : INT_MAX;
         time_t rtime = icaltime_to_timet(ritem, floatingtz);
 
         if (!rtime || otime <= rtime) {
