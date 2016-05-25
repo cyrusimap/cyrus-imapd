@@ -110,6 +110,10 @@ sub assert_alarms {
     my @want = @_;
     # pick first calendar alarm from notifications
     my $data = $self->{instance}->getnotify();
+    if ($self->{replica}) {
+        my $more = $self->{replica}->getnotify();
+        push @$data, @$more;
+    }
     my @events;
     foreach (@$data) {
         if ($_->{CLASS} eq 'EVENT') {
@@ -615,6 +619,249 @@ EOF
 
     # alarm fires
     $self->assert_alarms({summary => 'Floating', timezone => 'America/New_York', start => $start});
+}
+
+sub test_replication_at1
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    $self->assert_not_null($self->{replica});
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define an event that starts now and repeats hourly
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 60));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 60));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    # the next event will start in a few seconds
+    my $recuriddt = $startdt->clone();
+    $recuriddt->add(DateTime::Duration->new(minutes => 60));
+    my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%S');
+
+    # but it starts a few seconds after the regular start
+    my $rstartdt = $recuriddt->clone();
+    $rstartdt->add(DateTime::Duration->new(seconds => 15));
+    my $recurstart = $recuriddt->strftime('%Y%m%dT%H%M%S');
+
+    my $renddt = $rstartdt->clone();
+    $renddt->add(DateTime::Duration->new(seconds => 60));
+    my $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+TRANSP:OPAQUE
+DTEND;TZID=Australia/Sydney:$end
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTSTAMP:20160420T141259Z
+SEQUENCE:0
+SUMMARY:main
+DTSTART;TZID=Australia/Sydney:$start
+CREATED:20160420T141217Z
+RRULE:FREQ=HOURLY;INTERVAL=1;COUNT=3
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alert
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20160420T141217Z
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTEND;TZID=Australia/Sydney:$recurend
+TRANSP:OPAQUE
+SUMMARY:exception
+DTSTART;TZID=Australia/Sydney:$recurstart
+DTSTAMP:20160420T141312Z
+SEQUENCE:0
+RECURRENCE-ID;TZID=Australia/Sydney:$recurid
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm exception
+DESCRIPTION:My alarm exception has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # replicate to the other end
+    $self->run_replication();
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    # trigger processing of alarms
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 500 );
+    $self->assert_alarms({summary => 'main'});
+
+    # no alarm when you run the second time
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 500 );
+    $self->assert_alarms();
+
+    # replicate to the other end
+    $self->run_replication();
+
+    # running on the replica gets the exception, not the first instance
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 5000 );
+    $self->assert_alarms({summary => 'exception'});
+
+    # no alarm when you run the second time
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 5000 );
+    $self->assert_alarms();
+
+    # running on the master still gets the exception, because it doesn't know about the change
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 5000 );
+    $self->assert_alarms({summary => 'exception'});
+}
+
+sub test_override_double
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define an event that started almost an hour ago and repeats hourly
+    my $startdt = $now->clone();
+    $startdt->subtract(DateTime::Duration->new(minutes => 59, seconds => 55));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    # the next event will start in a few seconds
+    my $recuriddt = $now->clone();
+    $recuriddt->add(DateTime::Duration->new(seconds => 5));
+    my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%S');
+
+    my $rstartdt = $recuriddt->clone();
+    my $recurstart = $recuriddt->strftime('%Y%m%dT%H%M%S');
+
+    my $renddt = $rstartdt->clone();
+    $renddt->add(DateTime::Duration->new(seconds => 15));
+    my $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
+
+    my $lastrepl = $recuriddt->clone();
+    $lastrepl->add(DateTime::Duration->new(minutes => 60));
+    my $lastalarm = $lastrepl->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+TRANSP:OPAQUE
+DTEND;TZID=Australia/Sydney:$end
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTSTAMP:20160420T141259Z
+SEQUENCE:0
+SUMMARY:main
+DTSTART;TZID=Australia/Sydney:$start
+CREATED:20160420T141217Z
+RRULE:FREQ=HOURLY;INTERVAL=1;COUNT=3
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alert
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20160420T141217Z
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTEND;TZID=Australia/Sydney:$recurend
+TRANSP:OPAQUE
+SUMMARY:exception
+DTSTART;TZID=Australia/Sydney:$recurstart
+DTSTAMP:20160420T141312Z
+SEQUENCE:0
+RECURRENCE-ID;TZID=Australia/Sydney:$recurid
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm exception
+DESCRIPTION:My alarm exception has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    # trigger processing of alarms
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 6000 );
+
+    $self->assert_alarms({summary => 'exception', start => $recurstart}, {summary => 'main', start => $lastalarm});
 }
 
 1;
