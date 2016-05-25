@@ -6700,6 +6700,71 @@ EXPORTED int mailbox_get_annotate_state(struct mailbox *mailbox,
     return 0;
 }
 
+EXPORTED int mailbox_annotation_write(struct mailbox *mailbox, uint32_t uid,
+                                      const char *entry, const char *userid,
+                                      const struct buf *value)
+{
+    annotate_state_t *state = NULL;
+    int r;
+
+    struct index_record record;
+    memset(&record, 0, sizeof(struct index_record));
+    r = mailbox_find_index_record(mailbox, uid, &record);
+    if (r) return r;
+
+    r = mailbox_get_annotate_state(mailbox, uid, &state);
+    if (r) return r;
+
+    r = annotate_state_write(state, entry, userid, value);
+    if (r) return r;
+
+    /* need to touch the modseq */
+    r = mailbox_rewrite_index_record(mailbox, &record);
+    if (r) return r;
+
+    return 0;
+}
+
+EXPORTED int mailbox_annotation_writemask(struct mailbox *mailbox, uint32_t uid,
+                                          const char *entry, const char *userid,
+                                          const struct buf *value)
+{
+    annotate_state_t *state = NULL;
+    int r;
+
+    struct index_record record;
+    memset(&record, 0, sizeof(struct index_record));
+    r = mailbox_find_index_record(mailbox, uid, &record);
+    if (r) return r;
+
+    r = mailbox_get_annotate_state(mailbox, uid, &state);
+    if (r) return r;
+
+    r = annotate_state_writemask(state, entry, userid, value);
+    if (r) return r;
+
+    /* need to touch the modseq */
+    r = mailbox_rewrite_index_record(mailbox, &record);
+    if (r) return r;
+
+    return 0;
+}
+
+EXPORTED int mailbox_annotation_lookup(struct mailbox *mailbox, uint32_t uid,
+                                       const char *entry, const char *userid,
+                                       struct buf *value)
+{
+    return annotatemore_msg_lookup(mailbox->name, uid, entry, userid, value);
+}
+
+EXPORTED int mailbox_annotation_lookupmask(struct mailbox *mailbox, uint32_t uid,
+                                           const char *entry, const char *userid,
+                                           struct buf *value)
+{
+    return annotatemore_msg_lookupmask(mailbox->name, uid, entry, userid, value);
+}
+
+
 int mailbox_cid_rename(struct mailbox *mailbox,
                        conversation_id_t from_cid,
                        conversation_id_t to_cid)

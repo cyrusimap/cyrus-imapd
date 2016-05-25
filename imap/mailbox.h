@@ -614,6 +614,23 @@ extern int mailbox_get_annotate_state(struct mailbox *mailbox,
                                       unsigned int uid,
                                       struct annotate_state **statep);
 
+extern int mailbox_annotation_write(struct mailbox *mailbox, uint32_t uid,
+                                    const char *entry, const char *userid,
+                                    const struct buf *value);
+
+extern int mailbox_annotation_writemask(struct mailbox *mailbox, uint32_t uid,
+                                        const char *entry, const char *userid,
+                                        const struct buf *value);
+
+extern int mailbox_annotation_lookup(struct mailbox *mailbox, uint32_t uid,
+                                     const char *entry, const char *userid,
+                                     struct buf *value);
+
+
+extern int mailbox_annotation_lookupmask(struct mailbox *mailbox, uint32_t uid,
+                                         const char *entry, const char *userid,
+                                         struct buf *value);
+
 extern struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
                                               modseq_t changedsince,
                                               unsigned flags);
