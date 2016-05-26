@@ -794,9 +794,8 @@ EXPORTED int caldav_alarm_upgrade()
 
     alarmdb = caldav_alarm_open();
     if (!alarmdb) return HTTP_SERVER_ERROR;
-    rc = sqldb_exec(alarmdb, "DROP TABLE alarm_recipients;", NULL, NULL, NULL);
-    if (rc == SQLITE_OK)
-        rc = sqldb_exec(alarmdb, "DROP TABLE alarms;", NULL, NULL, NULL);
+    sqldb_exec(alarmdb, "DROP TABLE alarm_recipients;", NULL, NULL, NULL);
+    sqldb_exec(alarmdb, "DROP TABLE alarms;", NULL, NULL, NULL);
     caldav_alarm_close(alarmdb);
 
     buf_free(&annot_buf);
