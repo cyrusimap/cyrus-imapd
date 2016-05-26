@@ -45,6 +45,7 @@ use warnings;
 package Cassandane::Cyrus::CaldavAlarm;
 use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
+use DateTime::Format::ISO8601;
 use Cassandane::Util::Log;
 use JSON::XS;
 use Net::CalDAVTalk;
@@ -446,7 +447,78 @@ EOF
     $self->assert_alarms({summary => 'exception', start => $recurstart});
 }
 
-sub test_floating
+sub test_floating_notz
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $utc = DateTime::Format::ISO8601->new->parse_datetime($start . 'Z');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND:$end
+TRANSP:OPAQUE
+SUMMARY:Floating
+DTSTART:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    $self->assert_alarms();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $utc->epoch() - 60 );
+
+    $self->assert_alarms();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $utc->epoch() + 60 );
+
+    $self->assert_alarms({summary => 'Floating', start => $start, timezone => '[floating]'});
+}
+
+sub test_floating_sametz
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -862,6 +934,159 @@ EOF
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 6000 );
 
     $self->assert_alarms({summary => 'exception', start => $recurstart}, {summary => 'main', start => $lastalarm});
+}
+
+sub test_allday_notz
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start today
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(days => 1));
+    $startdt->truncate(to => 'day');
+    my $start = $startdt->strftime('%Y%m%d');
+
+    my $utc = DateTime::Format::ISO8601->new->parse_datetime($start . 'T000000Z');
+
+    my $end = $start;
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TYPE=DATE:$end
+TRANSP:OPAQUE
+SUMMARY:allday
+DTSTART;TYPE=DATE:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    $self->assert_alarms();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $utc->epoch() - 60 );
+
+    $self->assert_alarms();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $utc->epoch() + 60 );
+
+    $self->assert_alarms({summary => 'allday', start => $start, timezone => '[floating]'});
+}
+
+sub test_allday_sametz
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $tz = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+END:VCALENDAR
+EOF
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timezone => $tz});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start today
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(days => 1));
+    $startdt->truncate(to => 'day');
+    my $start = $startdt->strftime('%Y%m%d');
+
+    my $end = $start;
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TYPE=DATE:$end
+TRANSP:OPAQUE
+SUMMARY:allday
+DTSTART;TYPE=DATE:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch() + 60 );
+
+    $self->assert_alarms({summary => 'allday', start => $start, timezone => 'Australia/Sydney'});
 }
 
 1;
