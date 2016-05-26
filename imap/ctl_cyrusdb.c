@@ -182,17 +182,11 @@ static void process_mboxlist(void)
     quotadb_init(0);
     quotadb_open(NULL);
 
-    caldav_init();
-
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_allmbox(NULL, fixmbox, NULL, 0);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
-
-    caldav_alarm_upgrade();
-
-    caldav_done();
 
     quotadb_close();
     quotadb_done();

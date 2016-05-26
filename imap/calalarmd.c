@@ -97,12 +97,13 @@ int main(int argc, char **argv)
     pid_t pid;
     char *alt_config = NULL;
     time_t runattime = 0;
+    int upgrade = 0;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:dt:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:dt:U")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -112,6 +113,9 @@ int main(int argc, char **argv)
             break;
         case 't': /* run a single scan at this time */
             runattime = atoi(optarg);
+            break;
+        case 'U':
+            upgrade = 1;
             break;
         default:
             fprintf(stderr, "invalid argument\n");
@@ -133,6 +137,11 @@ int main(int argc, char **argv)
     caldav_init();
 
     mboxevent_init();
+
+    if (upgrade) {
+        caldav_alarm_upgrade();
+        shut_down(0);
+    }
 
     if (runattime) {
         caldav_alarm_process(runattime);
