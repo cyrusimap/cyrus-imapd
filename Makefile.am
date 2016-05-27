@@ -97,10 +97,8 @@ DISTCLEANFILES = \
 MAINTAINERCLEANFILES = \
 	doc/legacy/murder.png \
 	doc/legacy/netnews.png \
-	doc/man/cyradm.1.html \
 	man/imapd.conf.5 \
 	man/sieveshell.1 \
-	doc/man/sieveshell.1.html \
 	imap/lmtpstats.h \
 	imap/pushstats.h \
 	lib/chartable.c \
@@ -1755,16 +1753,6 @@ docsrc/imap/admin/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst sieveshell < $< > $@
 
-doc/man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
-	@$(MKDIR_P) doc/man
-	$(AM_V_GEN)pod2html $(top_srcdir)/perl/imap/cyradm.sh > $@
-	rm pod2htm*
-
-doc/man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
-	@$(MKDIR_P) doc/man
-	$(AM_V_GEN)pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
-	rm pod2htm*
-
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
@@ -1843,15 +1831,8 @@ xversion xversion.h:
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
 
-dist-hook: tools/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
-	@$(MKDIR_P) doc/text doc/man
-	for man in $(top_builddir)/man/*.[1-9] $(top_srcdir)/man/*.[1-9]; \
-	do \
-		echo "=== $$man ==="; \
-		groff -man -Thtml $$man > doc/man/`basename $$man`.html; \
-	done
-	rm -f doc/groff-html-*.png
-
+dist-hook: tools/htmlstrip
+	@$(MKDIR_P) doc/text
 	for file in $(top_srcdir)/doc/legacy/*.html; \
 	do \
 		echo "=== $$file ==="; \
