@@ -702,6 +702,10 @@ static int savemsg(struct clientdata *cd,
     fprintf(f, "%s\r\n", p);
     spool_cache_header(xstrdup("Received"), addbody, m->hdrcache);
 
+    char *sid = xstrdup(session_id());
+    fprintf(f, "X-Cyrus-Session-Id: %s\r\n", sid);
+    spool_cache_header(xstrdup("X-Cyrus-Session-Id"), sid, m->hdrcache);
+
     /* add any requested headers */
     if (func->addheaders) {
         struct addheader *h;
@@ -1249,6 +1253,7 @@ void lmtpmode(struct lmtp_func *func,
                   mechcount > 0) {
                   prot_printf(pout,"250-%s\r\n", mechs);
               }
+              prot_printf(pout, "250-SESSIONID %s\r\n", session_id());
               prot_printf(pout, "250 IGNOREQUOTA\r\n");
 
               strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
