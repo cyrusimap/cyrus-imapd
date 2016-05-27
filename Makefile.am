@@ -1767,12 +1767,13 @@ docsrc/imap/admin/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
 
+## define this unconditionally because dist-hook references it
+SPHINX_CACHE = docsrc/.doctrees
+
 if HAVE_SPHINX_BUILD
 GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
                  docsrc/imap/admin/systemcommands/cyradm.rst \
                  docsrc/imap/admin/usercommands/sieveshell.rst
-
-SPHINX_CACHE = docsrc/.doctrees
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
@@ -1866,6 +1867,10 @@ xversion xversion.h:
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> xversion.h.tmp
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
+
+dist-hook:
+	find $(top_distdir) -type f -name .sphinx-build.stamp -delete
+	rm -rf $(top_distdir)/$(SPHINX_CACHE)
 
 install-data-hook:
 if CMULOCAL
