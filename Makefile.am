@@ -1774,6 +1774,8 @@ GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
                  docsrc/imap/admin/systemcommands/cyradm.rst \
                  docsrc/imap/admin/usercommands/sieveshell.rst
 
+SPHINX_CACHE = docsrc/.doctrees
+
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
@@ -1783,12 +1785,12 @@ docsrc/.sphinx-build.stamp:
 
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
+	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) -q -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 else
 man/.sphinx-build.stamp:

@@ -48,6 +48,7 @@ doc/html/
 doc/legacy/murder.png
 doc/legacy/netnews.png
 doc/text/
+docsrc/.doctrees/
 docsrc/build/
 docsrc/imap/admin/configs/imapd.conf.rst
 docsrc/imap/admin/systemcommands/cyradm.rst
