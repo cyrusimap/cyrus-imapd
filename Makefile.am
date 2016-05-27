@@ -1785,11 +1785,20 @@ docsrc/.sphinx-build.stamp:
 man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)$(SPHINX_BUILD) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
+
+## XXX doesn't detect if other rst sources are updated...
+doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
+	$(AM_V_GEN)$(SPHINX_BUILD) -q -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+	@touch $@
 else
 man/.sphinx-build.stamp:
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
 	@echo "warning: missing documentation dependencies. man pages will be empty" 1>&2
+
+doc/html/.sphinx-build.stamp:
+	@echo "error: missing documentation dependencies. cannot build html documentation" 1>&2
+	@false
 endif
 
 .PHONY: man man-force
@@ -1800,6 +1809,14 @@ man-force:
 	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
 
 man: man-force $(dist_man_MANS)
+
+.PHONY: doc doc-html doc-html-force
+doc-html-force:
+	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
+
+doc-html: doc-html-force doc/html/.sphinx-build.stamp
+
+doc: doc-html
 
 dist-old:: distgit
 	@echo "creating configure"

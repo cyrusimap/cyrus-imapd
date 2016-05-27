@@ -44,6 +44,7 @@ com_err/et/compile_et
 coverage.xml
 cscope.out
 depcomp
+doc/html/
 doc/legacy/murder.png
 doc/legacy/netnews.png
 doc/text/
