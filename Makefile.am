@@ -1794,7 +1794,7 @@ else
 man/.sphinx-build.stamp:
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
-	@echo "warning: no sphinx-build, man pages will be empty" 1>&2
+	@echo "warning: missing documentation dependencies. man pages will be empty" 1>&2
 endif
 
 .PHONY: man man-force

@@ -1881,7 +1881,7 @@ if test "$cyrus_cv_sse42" = "yes" ; then
 fi
 AC_MSG_RESULT($cyrus_cv_sse42)
 
-dnl documentation generation (sphinx)
+dnl documentation generation (sphinx, perl2rst)
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
             AS_HELP_STRING([with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
@@ -1889,13 +1889,15 @@ AC_ARG_WITH([sphinx-build],
             [with_sphinx_build=yes])
 AS_CASE([$with_sphinx_build],
         [yes],  [AC_PATH_PROG(SPHINX_BUILD, sphinx-build)],
-        [no],   [SPHINX_BUILD='']
+        [no],   [SPHINX_BUILD=''],
         [*],    [AC_PATH_PROG(SPHINX_BUILD, sphinx-build, [], [$with_sphinx_build])])
-
 AS_IF([test -z "$SPHINX_BUILD"],
       [AC_MSG_WARN([No sphinx-build, won't be able to regenerate docs])])
 AC_SUBST([SPHINX_BUILD])
-AM_CONDITIONAL([HAVE_SPHINX_BUILD], [ test -n "$SPHINX_BUILD" ])
+AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
+                     [have_ppvr=yes],
+                     [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])])
+AM_CONDITIONAL([HAVE_SPHINX_BUILD], [ test -n "$SPHINX_BUILD" -a x"$have_ppvr" = xyes])
 
 AH_TOP([
 /*
