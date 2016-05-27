@@ -1818,7 +1818,7 @@ doc-html-force:
 
 doc-html: doc-html-force doc/html/.sphinx-build.stamp
 
-doc: doc-html
+doc: man doc-html
 
 dist-old:: distgit
 	@echo "creating configure"
