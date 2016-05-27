@@ -37,6 +37,8 @@ coverage.xml
 cscope.out
 depcomp
 doc/man/
+doc/murder.png
+doc/netnews.png
 doc/rst/
 doc/text/
 imap/arbitron

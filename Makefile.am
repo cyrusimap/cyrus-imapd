@@ -314,6 +314,8 @@ EXTRA_DIST += \
 	cunit/cunit-to-junit.pl \
 	cunit/key.pem \
 	cunit/vg.supp \
+	doc/murder.png \
+	doc/netnews.png \
 	doc \
 	imap/dav_util.h \
 	imap/http_err.et \
