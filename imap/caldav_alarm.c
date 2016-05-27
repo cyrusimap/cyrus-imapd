@@ -117,7 +117,8 @@ EXPORTED int caldav_alarm_done(void)
     " nextcheck INTEGER NOT NULL,"                      \
     " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
-    "CREATE INDEX checktime ON events (nextcheck);"     \
+    "CREATE INDEX IF NOT EXISTS checktime ON events (nextcheck);"
+
 
 #define DBVERSION 2
 
