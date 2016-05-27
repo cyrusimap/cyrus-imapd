@@ -1770,14 +1770,19 @@ docsrc/imap/admin/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/
 	$(AM_V_GEN)touch $@
 
 if HAVE_SPHINX_BUILD
+GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
+                 docsrc/imap/admin/systemcommands/cyradm.rst \
+                 docsrc/imap/admin/usercommands/sieveshell.rst
+
+## detect when source directory is not build directory (i.e. VPATH
+## build), and clone the docsrc tree into the build directory, so
+## that we have a single "source directory" for sphinx-build to use.
+docsrc/.sphinx-build.stamp:
+	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || (cd $(top_srcdir) && tar cf - docsrc) | tar xf -
+	@touch $@
+
 ## XXX doesn't detect if other rst sources are updated...
-man/.sphinx-build.stamp: docsrc/imap/admin/configs/imapd.conf.rst \
-                         docsrc/imap/admin/systemcommands/cyradm.rst \
-                         docsrc/imap/admin/usercommands/sieveshell.rst
-	## detect when source directory is not build directory (i.e. VPATH
-	## build), and clone the docsrc tree into the build directory, so
-	## that we have a single "source directory" for sphinx-build to use.
-	$(AM_V_at)test x"$(top_srcdir)" = x"$(top_builddir)" || (cd $(top_srcdir) && tar cf - docsrc) | tar xf -
+man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)$(SPHINX_BUILD) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 else
@@ -1789,10 +1794,10 @@ endif
 
 .PHONY: man man-force
 man-force:
-	## trash the timestamp, so we always re-run sphinx-build.
+	## trash the timestamps, so we always re-run sphinx-build.
 	## sphinx-build tracks source modifications itself, so forced
 	## rebuilds will still be a lot quicker once it has run once.
-	@$(RM) man/.sphinx-build.stamp
+	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
 
 man: man-force $(dist_man_MANS)
 
