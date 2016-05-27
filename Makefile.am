@@ -95,8 +95,8 @@ DISTCLEANFILES = \
 	sieve/sieve_err.h
 
 MAINTAINERCLEANFILES = \
-	doc/murder.png \
-	doc/netnews.png \
+	doc/legacy/murder.png \
+	doc/legacy/netnews.png \
 	doc/man/cyradm.1.html \
 	man/imapd.conf.5 \
 	man/sieveshell.1 \
@@ -358,8 +358,8 @@ EXTRA_DIST += \
 	cunit/cunit-to-junit.pl \
 	cunit/key.pem \
 	cunit/vg.supp \
-	doc/murder.png \
-	doc/netnews.png \
+	doc/legacy/murder.png \
+	doc/legacy/netnews.png \
 	doc \
 	docsrc \
 	imap/dav_util.h \
@@ -1852,7 +1852,7 @@ dist-hook: tools/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
 	done
 	rm -f doc/groff-html-*.png
 
-	for file in $(top_srcdir)/doc/*.html; \
+	for file in $(top_srcdir)/doc/legacy/*.html; \
 	do \
 		echo "=== $$file ==="; \
 		tools/htmlstrip $$file > doc/text/`basename $$file .html`; \
