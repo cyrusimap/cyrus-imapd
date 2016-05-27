@@ -919,4 +919,47 @@ static void test_extract(void)
 }
 #undef TESTCASE
 
+static void test_utf8_to_searchform(void)
+{
+    char *s;
+
+    /* LATIN SMALL LETTER I WITH DIAERESIS' (U+00EF) */
+    static const char UTF8_1[] = "\xC3\xAF";
+    static const char SEARCH_1[] = "I";
+
+    /* LATIN CAPITAL LETTER I WITH DIAERESIS' (U+00CF) */
+    static const char UTF8_2[] = "\xC3\x8F";
+    static const char SEARCH_2[] = "I";
+
+    /* LATIN CAPITAL LETTER I (U+0049) COMBINING DIAERESIS (U+0308) */
+    static const char UTF8_3[] = "\x49\xCC\x88";
+    static const char SEARCH_3[] = "I";
+
+    /* LATIN SMALL LETTER I' (U+0069) COMBINING DIAERESIS (U+0408) */
+    static const char UTF8_4[] = "\x69\xCC\x88";
+    static const char SEARCH_4[] = "I";
+
+    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+
+    s = charset_utf8_to_searchform(UTF8_1, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_1);
+    free(s);
+
+    s = charset_utf8_to_searchform(UTF8_2, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_2);
+    free(s);
+
+    s = charset_utf8_to_searchform(UTF8_3, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_3);
+    free(s);
+
+    s = charset_utf8_to_searchform(UTF8_4, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_4);
+    free(s);
+}
+
 /* vim: set ft=c: */

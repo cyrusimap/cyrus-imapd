@@ -525,6 +525,12 @@ static void uni2searchform(struct convert_rock *rock, int c)
 
     /* case - one character output */
     if (code > 0) {
+        /* diacritical character range.  This duplicates the
+         * behaviour of Cyrus versions before 2.5 */
+        if (s->flags & CHARSET_SKIPDIACRIT) {
+            if (0x300 <= code && code <= 0x36f)
+                return;
+        }
         convert_putc(rock->next, code);
         return;
     }
@@ -535,6 +541,8 @@ static void uni2searchform(struct convert_rock *rock, int c)
         /* diacritical character range.  This duplicates the
          * behaviour of Cyrus versions before 2.5 */
         if (s->flags & CHARSET_SKIPDIACRIT) {
+            /* XXX combining diacritical marks only range from 0x300 to 0x36f
+             * but this would break backwards compatibility */
             if ((c & ~0xff) == 0x300)
                 continue;
         }
