@@ -329,6 +329,9 @@ const struct mailbox_header_cache mailbox_cache_headers[] = {
     /* for conversations */
     { "x-me-message-id", 4 },
 
+    /* for delivery matching */
+    { "x-cyrus-session-id", 4 },
+
     /* things to never cache */
     { "bcc", BIT32_MAX },
     { "cc", BIT32_MAX },
