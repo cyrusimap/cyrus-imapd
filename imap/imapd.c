@@ -11882,6 +11882,10 @@ static int list_data_remote(char *tag, struct listargs *listargs)
 	    prot_printf(backend_inbox->out, "%cchildren", c);
 	    c = ' ';
 	}
+	if (listargs->ret & LIST_RET_SPECIALUSE) {
+	    prot_printf(backend_inbox->out, "%cspecial-use", c);
+	    c = ' ';
+	}
 	(void)prot_putc(')', backend_inbox->out);
     }
 
