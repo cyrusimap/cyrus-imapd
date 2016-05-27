@@ -1790,6 +1790,11 @@ man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
+
+## XXX doesn't detect if other rst sources are updated...
+doc/text/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
+	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
+	@touch $@
 else
 man/.sphinx-build.stamp:
 	@$(MKDIR_P) $(@D)
@@ -1798,6 +1803,10 @@ man/.sphinx-build.stamp:
 
 doc/html/.sphinx-build.stamp:
 	@echo "error: missing documentation dependencies. cannot build html documentation" 1>&2
+	@false
+
+doc/text/.sphinx-build.stamp:
+	@echo "error: missing documentation dependencies. cannot build text documentation" 1>&2
 	@false
 endif
 
@@ -1810,13 +1819,18 @@ man-force:
 
 man: man-force $(dist_man_MANS)
 
-.PHONY: doc doc-html doc-html-force
+.PHONY: doc doc-html doc-html-force doc-text doc-text-force
 doc-html-force:
 	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
 
 doc-html: doc-html-force doc/html/.sphinx-build.stamp
 
-doc: man doc-html
+doc-text-force:
+	@$(RM) docsrc/.sphinx-build.stamp doc/text/.sphinx-build.stamp
+
+doc-text: doc-text-force doc/text/.sphinx-build.stamp
+
+doc: man doc-html doc-text
 
 dist-old:: distgit
 	@echo "creating configure"
