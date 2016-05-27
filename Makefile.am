@@ -110,7 +110,7 @@ SUBDIRS = .
 DIST_SUBDIRS = .
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
-EXTRA_PROGRAMS = tools/htmlstrip
+EXTRA_PROGRAMS =
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
@@ -738,8 +738,6 @@ check-%: cunit/unit
 		exit $$retval
 
 endif
-
-tools_htmlstrip_SOURCE = tools/htmlstrip.c
 
 includedir=@includedir@/cyrus
 
@@ -1854,15 +1852,6 @@ xversion xversion.h:
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> xversion.h.tmp
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
-
-dist-hook: tools/htmlstrip
-	@$(MKDIR_P) doc/text
-	for file in $(top_srcdir)/doc/legacy/*.html; \
-	do \
-		echo "=== $$file ==="; \
-		tools/htmlstrip $$file > doc/text/`basename $$file .html`; \
-	done
-	@echo "== done =="
 
 install-data-hook:
 if CMULOCAL

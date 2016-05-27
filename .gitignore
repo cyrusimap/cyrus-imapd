@@ -47,7 +47,6 @@ depcomp
 doc/html/
 doc/legacy/murder.png
 doc/legacy/netnews.png
-doc/text/
 docsrc/.doctrees/
 docsrc/build/
 docsrc/imap/admin/configs/imapd.conf.rst
@@ -175,7 +174,6 @@ sieve/test
 sieve/tests/
 stamp-h1
 timsieved/timsieved
-tools/htmlstrip
 tools/vzic/vzic
 xversion.h
 ylwrap
