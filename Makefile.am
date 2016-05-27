@@ -358,6 +358,8 @@ EXTRA_DIST += \
 	cunit/cunit-to-junit.pl \
 	cunit/key.pem \
 	cunit/vg.supp \
+	doc/murder.png \
+	doc/netnews.png \
 	doc \
 	docsrc \
 	imap/dav_util.h \

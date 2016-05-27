@@ -44,6 +44,8 @@ coverage.xml
 cscope.out
 depcomp
 doc/man/
+doc/murder.png
+doc/netnews.png
 doc/text/
 docsrc/build/
 docsrc/imap/admin/configs/imapd.conf.rst
