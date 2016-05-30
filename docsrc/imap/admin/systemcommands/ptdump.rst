@@ -1,3 +1,5 @@
+.. cyrusman:: ptdump(8)
+
 .. _imap-admin-systemcommands-ptdump:
 
 ==========

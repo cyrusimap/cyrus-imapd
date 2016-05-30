@@ -1,3 +1,5 @@
+.. cyrusman:: pop3d(8)
+
 .. _pop3-admin-commands-pop3d:
 
 =========

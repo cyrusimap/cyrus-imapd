@@ -1,3 +1,5 @@
+.. cyrusman:: convert-sieve.pl(8)
+
 .. _imap-admin-systemcommands-convert-sieve:
 
 ====================

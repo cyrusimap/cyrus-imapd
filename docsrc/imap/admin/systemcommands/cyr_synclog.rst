@@ -1,3 +1,5 @@
+.. cyrusman:: cyr_synclog(8)
+
 .. _imap-admin-systemcommands-cyr_synclog:
 
 ===============

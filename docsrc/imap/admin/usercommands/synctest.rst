@@ -1,3 +1,5 @@
+.. cyrusman:: synctest(1)
+
 .. _imap-admin-usercommands-synctest:
 
 ============

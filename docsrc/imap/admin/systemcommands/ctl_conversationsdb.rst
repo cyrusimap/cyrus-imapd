@@ -1,3 +1,5 @@
+.. cyrusman:: ctl_conversationsdb(8)
+
 .. _imap-admin-systemcommands-ctl_conversationsdb:
 
 =======================

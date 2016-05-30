@@ -1,3 +1,5 @@
+.. cyrusman:: sieved(8)
+
 .. _imap-admin-systemcommands-sieved:
 
 ==========

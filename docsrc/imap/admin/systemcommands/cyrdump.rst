@@ -1,3 +1,5 @@
+.. cyrusman:: cyrdump(8)
+
 .. _imap-admin-systemcommands-cyrdump:
 
 ===========

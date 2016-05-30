@@ -1,3 +1,5 @@
+.. cyrusman:: cyr_info(8)
+
 .. _imap-admin-systemcommands-cyr_info:
 
 ==============

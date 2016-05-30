@@ -1,3 +1,5 @@
+.. cyrusman:: arbitronsort.pl(8)
+
 .. _imap-admin-systemcommands-arbitronsort.pl:
 
 ===================

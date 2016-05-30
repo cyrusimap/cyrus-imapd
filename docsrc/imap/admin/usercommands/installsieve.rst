@@ -1,3 +1,5 @@
+.. cyrusman:: installsieve(1)
+
 .. _imap-admin-usercommands-installsieve:
 
 ================

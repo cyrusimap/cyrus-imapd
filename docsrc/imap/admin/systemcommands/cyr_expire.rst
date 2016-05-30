@@ -1,3 +1,5 @@
+.. cyrusman:: cyr_expire(8)
+
 .. _imap-admin-systemcommands-cyr_expire:
 
 ==============

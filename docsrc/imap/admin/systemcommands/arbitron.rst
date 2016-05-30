@@ -1,3 +1,5 @@
+.. cyrusman:: arbitron(8)
+
 .. _imap-admin-systemcommands-arbitron:
 
 ============

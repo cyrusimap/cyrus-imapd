@@ -1,3 +1,5 @@
+.. cyrusman:: cyrus.conf(5)
+
 .. _imap-admin-configs-cyrus.conf:
 
 ==============

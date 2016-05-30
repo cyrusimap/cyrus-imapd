@@ -1,3 +1,5 @@
+.. cyrusman:: quota(8)
+
 .. _imap-admin-systemcommands-quota:
 
 =========

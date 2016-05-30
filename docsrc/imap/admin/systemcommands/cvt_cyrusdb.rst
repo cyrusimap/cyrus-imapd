@@ -1,3 +1,5 @@
+.. cyrusman:: cvt_cyrusdb(8)
+
 .. _imap-admin-systemcommands-cvt_cyrusdb:
 
 ===============

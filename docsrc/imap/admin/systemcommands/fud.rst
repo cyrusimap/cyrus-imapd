@@ -1,3 +1,5 @@
+.. cyrusman:: fud(8)
+
 .. _imap-admin-systemcommands-fud:
 
 =======

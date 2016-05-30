@@ -1,3 +1,5 @@
+.. cyrusman:: imtest(1)
+
 .. _imap-admin-usercommands-imtest:
 
 ==========

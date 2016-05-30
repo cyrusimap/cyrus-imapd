@@ -1,3 +1,5 @@
+.. cyrusman:: ptloader(8)
+
 .. _imap-admin-systemcommands-ptloader:
 
 ============

@@ -1,3 +1,5 @@
+.. cyrusman:: unexpunge(8)
+
 .. _imap-admin-systemcommands-unexpunge:
 
 =============

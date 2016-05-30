@@ -1,3 +1,5 @@
+.. cyrusman:: sync_server(8)
+
 .. _imap-admin-systemcommands-sync_server:
 
 ===============

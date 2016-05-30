@@ -1,3 +1,5 @@
+.. cyrusman:: ctl_deliver(8)
+
 .. _imap-admin-systemcommands-ctl_deliver:
 
 ===============

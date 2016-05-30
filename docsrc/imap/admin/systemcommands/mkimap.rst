@@ -1,3 +1,5 @@
+.. cyrusman:: mkimap(8)
+
 .. _imap-admin-systemcommands-mkimap:
 
 ==========

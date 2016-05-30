@@ -1,3 +1,5 @@
+.. cyrusman:: idled(8)
+
 .. _imap-admin-systemcommands-idled:
 
 =========

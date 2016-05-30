@@ -1,3 +1,5 @@
+.. cyrusman:: fetchnews(8)
+
 .. _imap-admin-systemcommands-fetchnews:
 
 =============
