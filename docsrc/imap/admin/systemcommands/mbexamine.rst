@@ -1,3 +1,5 @@
+.. cyrusman:: mbexamine(8)
+
 .. _imap-admin-systemcommands-mbexamine:
 
 =============

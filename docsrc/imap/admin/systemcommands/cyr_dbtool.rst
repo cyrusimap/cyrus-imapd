@@ -1,3 +1,5 @@
+.. cyrusman:: cyr_dbtool(8)
+
 .. _imap-admin-systemcommands-cyr_dbtool:
 
 ==============

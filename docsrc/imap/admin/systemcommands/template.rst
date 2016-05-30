@@ -1,5 +1,7 @@
 :orphan:
 
+.. cyrusman:: CMDNAME(8)
+
 .. _imap-admin-systemcommands-CMD:
 
 ==========

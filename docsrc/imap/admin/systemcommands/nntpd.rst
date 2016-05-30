@@ -1,3 +1,5 @@
+.. cyrusman:: nntpd(8)
+
 .. _imap-admin-systemcommands-nntpd:
 
 =========

@@ -1,3 +1,5 @@
+.. cyrusman:: timsieved(8)
+
 .. _imap-admin-systemcommands-timsieved:
 
 =============

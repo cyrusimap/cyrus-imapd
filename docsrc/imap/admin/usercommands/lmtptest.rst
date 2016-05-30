@@ -1,3 +1,5 @@
+.. cyrusman:: lmtptest(1)
+
 .. _imap-admin-usercommands-lmtptest:
 
 ============

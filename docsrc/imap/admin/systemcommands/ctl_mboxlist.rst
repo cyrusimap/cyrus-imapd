@@ -1,3 +1,5 @@
+.. cyrusman:: ctl_mboxlist(8)
+
 .. _imap-admin-systemcommands-ctl_mboxlist:
 
 ================

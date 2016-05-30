@@ -1,3 +1,5 @@
+.. cyrusman:: mbpath(8)
+
 .. _imap-admin-systemcommands-mbpath:
 
 ==========

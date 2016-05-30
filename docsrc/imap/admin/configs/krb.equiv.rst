@@ -1,3 +1,5 @@
+.. cyrusman:: krb.equiv(5)
+
 .. _imap-admin-configs-krb.equiv:
 
 =============

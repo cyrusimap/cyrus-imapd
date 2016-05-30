@@ -1,3 +1,5 @@
+.. cyrusman:: proxyd(8)
+
 .. _imap-admin-systemcommands-proxyd:
 
 ==========

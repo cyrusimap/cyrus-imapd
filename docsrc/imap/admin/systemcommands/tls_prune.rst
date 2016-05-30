@@ -1,3 +1,5 @@
+.. cyrusman:: tls_prune(8)
+
 .. _imap-admin-systemcommands-tls_prune:
 
 =============

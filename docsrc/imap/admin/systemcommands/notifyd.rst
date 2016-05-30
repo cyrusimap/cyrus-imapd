@@ -1,3 +1,5 @@
+.. cyrusman:: notifyd(8)
+
 .. _imap-admin-systemcommands-notifyd:
 
 ===========

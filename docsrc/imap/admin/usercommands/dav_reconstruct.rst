@@ -1,3 +1,5 @@
+.. cyrusman:: dav_reconstruct(1)
+
 .. _imap-admin-usercommands-dav_reconstruct:
 
 ===================
