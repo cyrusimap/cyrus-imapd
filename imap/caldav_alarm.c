@@ -79,6 +79,7 @@ void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
 
 struct get_alarm_rock {
     const char *mboxname;
+    uint32_t imap_uid;  // for logging
     icaltimezone *floatingtz;
     time_t last;
     time_t now;
@@ -315,9 +316,13 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
     icalproperty *prop;
     icalvalue *val;
 
+    int alarmno = 0;
+
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
+
+        alarmno++;
 
         prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
         if (!prop) {
@@ -346,16 +351,21 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
         icaltimetype alarmtime = icaltime_null_time();
         if (icalvalue_isa(val) == ICAL_DURATION_VALUE) {
             icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
+            icaltimetype base = icaltime_null_time();
             if (param && icalparameter_get_related(param) == ICAL_RELATED_END) {
-                alarmtime = icaltime_add(end, trigger.duration);
+                base = end;
             }
             else {
-                alarmtime = icaltime_add(start, trigger.duration);
+                base = start;
             }
+            base.is_date = 0; /* need an actual time for triggers */
+            alarmtime = icaltime_add(base, trigger.duration);
         }
         else {
+            /* absolute */
             alarmtime = trigger.time;
         }
+        alarmtime.is_date = 0;
 
         time_t check = icaltime_to_timet(alarmtime, data->floatingtz);
 
@@ -365,7 +375,25 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
         }
 
         if (check <= data->now) {
-            send_alarm(data, comp, alarm, start, end, alarmtime);
+            prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+            const char *summary = prop ? icalproperty_get_value_as_string(prop) : "[no summary]";
+            int age = data->now - check;
+            if (age > 7200) { // more than 2 hours stale?  Just log it
+                syslog(LOG_ERR, "suppressing alarm aged %d seconds at %s for %s %u - %s(%d) %s",
+                       age,
+                       icaltime_as_ical_string(alarmtime),
+                       data->mboxname, data->imap_uid,
+                       icaltime_as_ical_string(start), alarmno,
+                       summary);
+            }
+            else {
+                syslog(LOG_NOTICE, "sending alarm at %s for %s %u - %s(%d) %s",
+                       icaltime_as_ical_string(alarmtime),
+                       data->mboxname, data->imap_uid,
+                       icaltime_as_ical_string(start), alarmno,
+                       summary);
+                send_alarm(data, comp, alarm, start, end, alarmtime);
+            }
         }
 
         else if (!data->nextcheck || check < data->nextcheck) {
@@ -456,10 +484,10 @@ static int has_alarms(icalcomponent *ical)
     return 0;
 }
 
-static time_t process_alarms(const char *mboxname, icaltimezone *floatingtz,
+static time_t process_alarms(const char *mboxname, uint32_t imap_uid, icaltimezone *floatingtz,
                              icalcomponent *ical, time_t lastrun, time_t runtime)
 {
-    struct get_alarm_rock rock = { mboxname, floatingtz, lastrun, runtime, 0 };
+    struct get_alarm_rock rock = { mboxname, imap_uid, floatingtz, lastrun, runtime, 0 };
     struct icalperiodtype range = icalperiodtype_null_period();
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
     return rock.nextcheck;
@@ -481,7 +509,7 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index
     annotatemore_msg_lookup(mailbox->name, record->uid, annotname, "", &annot_buf);
     time_t lastrun = annot_buf.len ? atoi(buf_cstring(&annot_buf)) : record->internaldate;
 
-    time_t nextcheck = process_alarms(mailbox->name, floatingtz, ical, lastrun, lastrun);
+    time_t nextcheck = process_alarms(mailbox->name, record->uid, floatingtz, ical, lastrun, lastrun);
     rc = update_alarmdb(mailbox->name, record->uid, nextcheck);
 
     if (floatingtz) icaltimezone_free(floatingtz, 1);
@@ -631,7 +659,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     mailbox_annotation_lookup(mailbox, record.uid, annotname, "", &annot_buf);
     time_t lastrun = annot_buf.len ? atoi(buf_cstring(&annot_buf)) : record.internaldate;
 
-    time_t nextcheck = process_alarms(mailbox->name, floatingtz, ical, lastrun, runtime);
+    time_t nextcheck = process_alarms(mailbox->name, record.uid, floatingtz, ical, lastrun, runtime);
 
     buf_reset(&annot_buf);
     buf_printf(&annot_buf, "%ld %ld", runtime, nextcheck);
@@ -776,7 +804,7 @@ EXPORTED int caldav_alarm_upgrade()
             icalcomponent *ical = icalparser_parse_string(buf_cstring(&msg_buf) + record->header_size);
             if (ical) {
                 if (has_alarms(ical)) {
-                    time_t nextcheck = process_alarms(mailbox->name, floatingtz, ical, runtime, runtime);
+                    time_t nextcheck = process_alarms(mailbox->name, record->uid, floatingtz, ical, runtime, runtime);
                     buf_reset(&annot_buf);
                     buf_printf(&annot_buf, "%ld %ld", runtime, nextcheck);
                     mailbox_annotation_write(mailbox, record->uid, annotname, "", &annot_buf);
