@@ -1572,7 +1572,9 @@ xversion xversion.h:
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
 
-dist-hook: tools/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
+.PHONY: doc
+
+doc: tools/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
 	@$(MKDIR_P) doc/text doc/man
 	for man in $(top_builddir)/man/*.[1-9] $(top_srcdir)/man/*.[1-9]; \
 	do \
