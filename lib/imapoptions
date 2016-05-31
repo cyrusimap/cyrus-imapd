@@ -2100,8 +2100,12 @@ product version in the capabilities */
 /* Deprecated in favor of \fItls_ciphers\fR. */
 
 { "tls_ciphers", "DEFAULT", STRING }
-/* The list of SSL/TLS ciphers to allow.  The format of the string is
-   described in ciphers(1). */
+/* The list of SSL/TLS ciphers to allow.  The format of the string
+   (and definition of "DEFAULT") is described in \fBciphers(1)\fR.
+.PP
+   See also Mozilla's server-side TLS recommendations:
+.PP
+   https://wiki.mozilla.org/Security/Server_Side_TLS */
 
 { "tls_client_ca_dir", NULL, STRING }
 /* Path to a directory containing the CA certificates used to verify
