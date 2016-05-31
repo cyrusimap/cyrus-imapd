@@ -242,6 +242,15 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
             goto out;
     }
 
+    /* If the sender has requested no vacation response */
+    if (interp->getheader(m, "x-ignorevacation", &body) == SIEVE_OK) {
+        /* we don't deal with comments, etc. here */
+        /* skip leading white-space */
+        while (*body[0] && Uisspace(*body[0])) body[0]++;
+        if (strcasecmp(body[0], "no"))
+            goto out;
+    }
+
     /* Implementations SHOULD NOT respond to any message that has an
        "Auto-submitted" header field with a value other than "no".
        This header field is described in [RFC3834]. */
