@@ -866,6 +866,53 @@ static int backend_login(struct backend *ret, const char *userid,
     return 0;
 }
 
+static int backend_client_bind(const int sock, const struct addrinfo *dest)
+{
+    const char *client_bind_name = config_getstring(IMAPOPT_CLIENT_BIND_NAME);
+    struct addrinfo hints = {0}, *res0 = NULL, *iter;
+    int r;
+
+    if (!client_bind_name) client_bind_name = config_servername;
+
+    hints.ai_family = dest->ai_family;
+    hints.ai_socktype = dest->ai_socktype;
+    hints.ai_protocol = dest->ai_protocol;
+    hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+
+    r = getaddrinfo(client_bind_name, NULL, &hints, &res0);
+    if (r && config_debug) {
+        syslog(LOG_DEBUG, "%s: getaddrinfo(%s) failed: %s",
+               __func__, client_bind_name, gai_strerror(r));
+    }
+
+    for (iter = res0; iter != NULL; iter = iter->ai_next) {
+        r = bind(sock, iter->ai_addr, iter->ai_addrlen);
+        if (!r) break;  /* found a good one */
+
+        if (config_debug) {
+            char bind_addr[1024] = {0};
+            int saved_errno = errno;
+
+            getnameinfo(iter->ai_addr, iter->ai_addrlen,
+                        bind_addr, sizeof(bind_addr),
+                        NULL, 0,
+                        NI_NUMERICHOST);
+
+            errno = saved_errno;
+            syslog(LOG_DEBUG, "%s: bind(%s) failed: %m", __func__, bind_addr);
+        }
+    }
+
+    if (r || !iter) {
+        syslog(LOG_ERR, "client bind failed: no suitable address found for %s",
+               client_bind_name);
+        r = r ? r : -1;
+    }
+
+    if (res0 != NULL) freeaddrinfo(res0);
+
+    return r;
+}
 
 EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char *server,
                                 struct protocol_t *prot, const char *userid,
@@ -877,6 +924,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     int sock = -1;
     int r;
     int err = -1;
+    int do_client_bind = 0;
     int do_tls = 0;
     int noauth = 0;
     struct addrinfo hints, *res0 = NULL, *res;
@@ -944,12 +992,23 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
                    server, gai_strerror(err));
             goto error;
         }
+
+        do_client_bind = config_getswitch(IMAPOPT_CLIENT_BIND);
     }
 
     for (res = res0; res; res = res->ai_next) {
         sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
         if (sock < 0)
             continue;
+
+        if (do_client_bind) {
+            r = backend_client_bind(sock, res);
+            if (r) {
+                close(sock);
+                sock = -1;
+                continue;
+            }
+        }
 
         /* Do a non-blocking connect() */
         nonblock(sock, 1);

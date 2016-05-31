@@ -538,6 +538,20 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If yes, syslog tags and commands for every IMAP command, mailboxes
    for every lmtp connection, every POP3 command, etc */
 
+{ "client_bind", 0, SWITCH }
+/* If enabled, a specific IP will be bound when performing a client
+   connection.  \fBclient_bind_name\fR is used if it is set, otherwise
+   \fBservername\fR is used.  This is useful on multi-homed servers where
+   Cyrus should not use other services' interfaces.
+.PP
+   If not enabled (the default), no bind will be performed.  Client
+   connections will use an IP chosen by the operating system. */
+
+{ "client_bind_name", NULL, STRING }
+/* IPv4, IPv6 address or hostname to bind for client connections when
+   \fBclient_bind\fR is enabled.  If not set (the default),
+   \fRservername\fR will be used. */
+
 { "client_timeout", 10, INT }
 /* Number of seconds to wait before returning a timeout failure when
    performing a client connection (e.g., in a murder environment) */
