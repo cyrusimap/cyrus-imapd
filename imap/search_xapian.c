@@ -81,18 +81,6 @@
 
 /* Name of columns */
 #define COL_CYRUSID     "cyrusid"
-static const char * const prefix_by_part[SEARCH_NUM_PARTS] = {
-    NULL,
-    "F",                /* FROM */
-    "T",                /* TO */
-    "C",                /* CC */
-    "B",                /* BCC */
-    "S",                /* SUBJECT */
-    "L",                /* LISTID */
-    "Y",                /* TYPE */
-    "H",                /* HEADERS */
-    "D",                /* BODY */
-};
 
 struct segment
 {
@@ -851,11 +839,8 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
          * field"; instead we fake it by explicitly searching for
          * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-            if (prefix_by_part[i] != NULL) {
-                xapian_query_t *q = xapian_query_new_match(db, prefix_by_part[i], on->arg);
-                if (!q) goto done;
-                ptrarray_push(&childqueries, q);
-            }
+            void *q = xapian_query_new_match(db, i, on->arg);
+            if (q) ptrarray_push(&childqueries, q);
         }
         qq = xapian_query_new_compound(db, /*is_or*/1,
                                        (xapian_query_t **)childqueries.data,
@@ -864,10 +849,9 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
     default:
         assert(on->arg != NULL);
         assert(on->children == NULL);
-        qq = xapian_query_new_match(db, prefix_by_part[on->op], on->arg);
+        qq = xapian_query_new_match(db, on->op, on->arg);
         break;
     }
-done:
     ptrarray_fini(&childqueries);
     return qq;
 }
@@ -1354,7 +1338,7 @@ static int end_message_update(search_text_receiver_t *rx)
 
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-        r = xapian_dbw_doc_part(tr->dbw, &seg->text, prefix_by_part[seg->part]);
+        r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
         if (r) goto out;
     }
 

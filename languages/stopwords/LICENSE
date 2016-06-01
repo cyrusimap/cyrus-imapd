@@ -1,0 +1,8 @@
+stopwords are copied from the Xapian core source distribution and are based on
+the Snowball compiler and stemming algorithms.
+
+Copyright (c) 2001, Dr Martin Porter
+Copyright (c) 2004,2005, Richard Boulton
+All rights reserved.
+
+See http://snowball.tartarus.org/

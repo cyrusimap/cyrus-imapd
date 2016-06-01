@@ -1,9 +1,17 @@
 
+#include <errno.h>
 #include <config.h>
+#include <string.h>
 #include <sys/types.h>
 #include <syslog.h>
 
+#include <fstream>
+#include <sstream>
+
 extern "C" {
+#include <assert.h>
+#include "libconfig.h"
+#include "search_part.h"
 #include "xmalloc.h"
 #include "xapian_wrap.h"
 
@@ -13,7 +21,43 @@ extern "C" {
 
 #include <xapian.h>
 
+
+
 #define SLOT_CYRUSID        0
+
+/* ====================================================================== */
+
+static Xapian::Stopper *get_stopper()
+{
+    Xapian::Stopper *stopper = NULL;
+
+    const char *swpath = config_getstring(IMAPOPT_SEARCH_STOPWORD_PATH);
+    if (swpath) {
+        // Set path to stopword file
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, swpath);
+        // XXX doesn't play nice with WIN32 paths
+        buf_appendcstr(&buf, "/english.list");
+
+        // Open the stopword file
+        errno = 0;
+        std::ifstream inFile (buf_cstring(&buf));
+        if (inFile.fail()) {
+            syslog(LOG_ERR, "Xapian: could not open stopword file %s: %s",
+                   buf_cstring(&buf), errno ? strerror(errno) : "unknown error");
+            exit(1);
+        }
+
+        // Create the Xapian stopper
+        stopper = new Xapian::SimpleStopper(
+                std::istream_iterator<std::string>(inFile),
+                std::istream_iterator<std::string>());
+
+        // Clean up
+        buf_free(&buf);
+    }
+    return stopper;
+}
 
 /* ====================================================================== */
 
@@ -55,12 +99,138 @@ int xapian_compact_dbs(const char *dest, const char **sources)
 
 /* ====================================================================== */
 
+#define XAPIAN_STEM_VERSIONS_NUM 2
+#define XAPIAN_STEM_CURRENT_VERSION (XAPIAN_STEM_VERSIONS_NUM-1)
+#define XAPIAN_STEM_VERSION_KEY "cyrus.stem.version"
+
+static const char * const
+stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
+    // Version 0: Initial version
+    {
+        NULL,
+        "F",                /* FROM */
+        "T",                /* TO */
+        "C",                /* CC */
+        "B",                /* BCC */
+        "S",                /* SUBJECT */
+        "L",                /* LISTID */
+        "Y",                /* TYPE */
+        "H",                /* HEADERS */
+        "D",                 /* BODY */
+    },
+    // Version 1: Stem using STEM_SOME with stopwords
+    {
+        NULL,
+        "XF",                /* FROM */
+        "XT",                /* TO */
+        "XC",                /* CC */
+        "XB",                /* BCC */
+        "XS",                /* SUBJECT */
+        "XL",                /* LISTID */
+        "XY",                /* TYPE */
+        "XH",                /* HEADERS */
+        "",                  /* BODY */
+    }
+};
+
+static Xapian::QueryParser::stem_strategy
+qp_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
+    // Version 0: Initial version
+    {
+        Xapian::QueryParser::STEM_NONE,
+        Xapian::QueryParser::STEM_ALL,   /* FROM */
+        Xapian::QueryParser::STEM_ALL,   /* TO */
+        Xapian::QueryParser::STEM_ALL,   /* CC */
+        Xapian::QueryParser::STEM_ALL,   /* BCC */
+        Xapian::QueryParser::STEM_ALL,   /* SUBJECT */
+        Xapian::QueryParser::STEM_ALL,   /* LISTID */
+        Xapian::QueryParser::STEM_ALL,   /* TYPE */
+        Xapian::QueryParser::STEM_ALL,   /* HEADERS */
+        Xapian::QueryParser::STEM_ALL    /* BODY */
+    },
+    // Version 1: Stem bodies using STEM_SOME with stopwords
+    {
+        Xapian::QueryParser::STEM_NONE,
+        Xapian::QueryParser::STEM_ALL,   /* FROM */
+        Xapian::QueryParser::STEM_ALL,   /* TO */
+        Xapian::QueryParser::STEM_ALL,   /* CC */
+        Xapian::QueryParser::STEM_ALL,   /* BCC */
+        Xapian::QueryParser::STEM_ALL,   /* SUBJECT */
+        Xapian::QueryParser::STEM_ALL,   /* LISTID */
+        Xapian::QueryParser::STEM_ALL,   /* TYPE */
+        Xapian::QueryParser::STEM_ALL,   /* HEADERS */
+        Xapian::QueryParser::STEM_SOME   /* BODY */
+    }
+};
+
+static Xapian::TermGenerator::stem_strategy
+tg_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
+    // Version 0: Initial version
+    {
+        Xapian::TermGenerator::STEM_NONE,
+        Xapian::TermGenerator::STEM_ALL,   /* FROM */
+        Xapian::TermGenerator::STEM_ALL,   /* TO */
+        Xapian::TermGenerator::STEM_ALL,   /* CC */
+        Xapian::TermGenerator::STEM_ALL,   /* BCC */
+        Xapian::TermGenerator::STEM_ALL,   /* SUBJECT */
+        Xapian::TermGenerator::STEM_ALL,   /* LISTID */
+        Xapian::TermGenerator::STEM_ALL,   /* TYPE */
+        Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
+        Xapian::TermGenerator::STEM_ALL    /* BODY */
+    },
+    // Version 1: Stem bodies using STEM_SOME with stopwords
+    {
+        Xapian::TermGenerator::STEM_NONE,
+        Xapian::TermGenerator::STEM_ALL,   /* FROM */
+        Xapian::TermGenerator::STEM_ALL,   /* TO */
+        Xapian::TermGenerator::STEM_ALL,   /* CC */
+        Xapian::TermGenerator::STEM_ALL,   /* BCC */
+        Xapian::TermGenerator::STEM_ALL,   /* SUBJECT */
+        Xapian::TermGenerator::STEM_ALL,   /* LISTID */
+        Xapian::TermGenerator::STEM_ALL,   /* TYPE */
+        Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
+        Xapian::TermGenerator::STEM_SOME   /* BODY */
+    }
+};
+
+static int stem_version_get(Xapian::Database *database)
+{
+    std::string val = database->get_metadata(XAPIAN_STEM_VERSION_KEY);
+    if (val.empty()) {
+        // Absence of the key indicates the legacy stem prefix scheme
+        return 0;
+    }
+    char *err = NULL;
+    long version = strtol(val.c_str(), &err, 10);
+    if ((err && *err) || version < 0 || version > INT_MAX) {
+        // That's just bogus data
+        return -1;
+    }
+    if (version > XAPIAN_STEM_CURRENT_VERSION) {
+        // This could indicate an issue with versioning. Probably a more
+        // recent squatter wrote the database than the current instance?
+        return -2;
+    }
+    return version;
+}
+
+static int stem_version_set(Xapian::WritableDatabase *database, int version)
+{
+    std::ostringstream convert;
+    convert << version;
+    database->set_metadata(XAPIAN_STEM_VERSION_KEY, convert.str());
+}
+
+/* ====================================================================== */
+
 struct xapian_dbw
 {
     Xapian::WritableDatabase *database;
     Xapian::Stem *stemmer;
     Xapian::TermGenerator *term_generator;
     Xapian::Document *document;
+    Xapian::Stopper *stopper;
+    int stem_version;
 };
 
 int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
@@ -69,15 +239,32 @@ int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
     int r = 0;
 
     try {
-        int action = Xapian::DB_CREATE_OR_OPEN;
-        dbw->database = new Xapian::WritableDatabase(path, action);
+        /* Determine the sterm version of an existing database, or create a
+         * new one with the latest one. Never implicitly upgrade. */
+        try {
+            dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_OPEN);
+            dbw->stem_version = stem_version_get(dbw->database);
+            if (dbw->stem_version < 0) {
+                syslog(LOG_ERR, "xapian_wrapper: Invalid stem version %d in %s",
+                        dbw->stem_version, path);
+                r = IMAP_IOERROR;
+            }
+        } catch (Xapian::DatabaseOpeningError &e) {
+            /* It's OK not to atomically create or open, since we can assume
+             * the xapianactive file items to be locked. */
+            dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_CREATE);
+            dbw->stem_version = XAPIAN_STEM_CURRENT_VERSION;
+            stem_version_set(dbw->database, dbw->stem_version);
+        }
+
         dbw->term_generator = new Xapian::TermGenerator();
         dbw->stemmer = new Xapian::Stem("en");
+        dbw->stopper = get_stopper();
         dbw->term_generator->set_stemmer(*dbw->stemmer);
-        dbw->term_generator->set_stemming_strategy(Xapian::TermGenerator::STEM_ALL);
         /* Always enable CJK word tokenization */
         dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_NGRAM,
                 ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
+        dbw->term_generator->set_stopper(dbw->stopper);
     }
     catch (const Xapian::DatabaseLockError &err) {
         /* somebody else is already indexing this user.  They may be doing a different
@@ -105,6 +292,7 @@ void xapian_dbw_close(xapian_dbw_t *dbw)
         delete dbw->database;
         delete dbw->term_generator;
         delete dbw->stemmer;
+        delete dbw->stopper;
         delete dbw->document;
         free(dbw);
     }
@@ -178,10 +366,21 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const char *cyrusid)
     return r;
 }
 
-int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, const char *prefix)
+int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
 {
     int r = 0;
+    const char *prefix;
+
+    prefix = stem_prefixes[dbw->stem_version][num_part];
+    if (!prefix) {
+        syslog(LOG_ERR, "xapian_wrapper: no prefix for num_part %d", num_part);
+        return IMAP_INTERNAL;
+    }
+
     try {
+        Xapian::TermGenerator::stem_strategy stem;
+        stem = tg_stem_strategies[dbw->stem_version][num_part];
+        dbw->term_generator->set_stemming_strategy(stem);
         dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1, prefix);
         dbw->term_generator->increase_termpos();
     }
@@ -217,6 +416,8 @@ struct xapian_db
     Xapian::Database *database;
     Xapian::Stem *stemmer;
     Xapian::QueryParser *parser;
+    Xapian::Stopper *stopper;
+    std::set<int> *stem_versions;
 };
 
 int xapian_db_open(const char **paths, xapian_db_t **dbp)
@@ -230,16 +431,29 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
         db->database = new Xapian::Database();
         while (*paths) {
             thispath = *paths++;
-            db->database->add_database(Xapian::Database(thispath));
+            Xapian::Database database = Xapian::Database(thispath);
+            int stem_version = stem_version_get(&database);
+            if (stem_version < 0) {
+                syslog(LOG_ERR, "xapian_wrapper: Invalid prefix version %d in %s",
+                        stem_version, thispath);
+                r = IMAP_INTERNAL;
+                goto done;
+            }
+            if (!db->stem_versions)
+                db->stem_versions = new std::set<int>();
+            db->stem_versions->insert(stem_version);
+            db->database->add_database(database);
             db->paths->append(thispath);
             db->paths->append(" ");
             thispath = "(unknown)";
         }
         db->stemmer = new Xapian::Stem("en");
         db->parser = new Xapian::QueryParser;
+        db->stopper = get_stopper();
         db->parser->set_stemmer(*db->stemmer);
         db->parser->set_default_op(Xapian::Query::OP_AND);
         db->parser->set_database(*db->database);
+        db->parser->set_stopper(db->stopper);
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
@@ -247,6 +461,7 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
         r = IMAP_IOERROR;
     }
 
+done:
     if (r)
         xapian_db_close(db);
     else
@@ -261,7 +476,9 @@ void xapian_db_close(xapian_db_t *db)
         delete db->database;
         delete db->stemmer;
         delete db->parser;
+        delete db->stopper;
         delete db->paths;
+        delete db->stem_versions;
         free(db);
     }
     catch (const Xapian::Error &err) {
@@ -271,13 +488,23 @@ void xapian_db_close(xapian_db_t *db)
     }
 }
 
-xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix, const char *str)
+
+static xapian_query_t *
+xapian_query_new_match_internal(const xapian_db_t *db, int stem_version,
+                                int num_part, const char *str)
 {
     try {
         // We don't use FLAG_BOOLEAN because Cyrus is doing boolean for us
         // TODO: FLAG_AUTO_SYNONYMS
         int has_highbit = 0;
         const unsigned char *p;
+        const char *prefix = stem_prefixes[stem_version][num_part];
+
+        if (!prefix) {
+            // Imitating the legacy prefix handling code, this is not an error
+            return NULL;
+        }
+
         for (p = (const unsigned char *)str; *p; p++)
             if (*p > 205) has_highbit = 1;
 
@@ -292,18 +519,38 @@ xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix
                                     std::string(prefix));
             return (xapian_query_t *)new Xapian::Query(query);
         }
-        else {
-            // quote the query for phrase management
-            std::string quoted = std::string("\"") + str + "\"";
-            db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_ALL);
-            Xapian::Query query = db->parser->parse_query(
-                                    quoted,
-                                    (Xapian::QueryParser::FLAG_PHRASE |
-                                     Xapian::QueryParser::FLAG_LOVEHATE |
-                                     Xapian::QueryParser::FLAG_WILDCARD),
-                                    std::string(prefix));
-            return (xapian_query_t *)new Xapian::Query(query);
+
+        // Determine the stem strategy for this prefix and message part
+        Xapian::QueryParser::stem_strategy stem;
+        stem = qp_stem_strategies[stem_version][num_part];
+        db->parser->set_stemming_strategy(stem);
+
+        // Prepare the search term
+        std::string search;
+        switch (stem) {
+            case Xapian::QueryParser::STEM_ALL:
+                // quote the query for phrase management. This is for
+                // backward compatibility, but shouldn't hurt anyways.
+                search = std::string("\"") + str + "\"";
+                break;
+            case Xapian::QueryParser::STEM_SOME:
+                // Cyrus canonical search form is all upper case, but STEM_SOME
+                // doesn't work for terms starting with upper case. Best guess
+                // is to lower case and risk stemming proper nouns
+                search = Xapian::Unicode::tolower(str);
+                break;
+            default:
+                search = std::string(str);
         }
+
+        // Finally, run the query
+        Xapian::Query query = db->parser->parse_query(
+                search,
+                (Xapian::QueryParser::FLAG_PHRASE |
+                 Xapian::QueryParser::FLAG_LOVEHATE |
+                 Xapian::QueryParser::FLAG_WILDCARD),
+                std::string(prefix));
+        return (xapian_query_t *)new Xapian::Query(query);
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
@@ -311,6 +558,55 @@ xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix
         return 0;
     }
 }
+
+xapian_query_t *
+xapian_query_new_match(const xapian_db_t *db, int num_part,const char *str)
+{
+    std::set<int> *versions = db->stem_versions;
+    const char *prefix;
+    Xapian::Query *query;
+
+    // at least one database must be open
+    assert(versions);
+    assert(versions->size());
+
+    if (versions->size() == 1) {
+        // All database are using the same stemming scheme. Great!
+        int version = *(versions->begin());
+
+        if (!stem_prefixes[version][num_part])
+            return NULL;
+
+        return (xapian_query_t *)
+            xapian_query_new_match_internal(db, version, num_part, str);
+    }
+
+    // At least two prefix schemes are used in the open databases. Since db
+    // fans out to n databases, let's OR queries for each stem version
+    std::vector<Xapian::Query*> v;
+    // No 'auto' before C++0x... :(
+    for (std::set<int>::iterator it = versions->begin(); it != versions->end(); ++it) {
+        if (stem_prefixes[*it][num_part]) {
+            v.push_back((Xapian::Query *)
+                    xapian_query_new_match_internal(db, *it, num_part, str));
+        }
+    }
+    if (v.empty()) {
+        return NULL;
+    }
+
+    Xapian::Query *compound =
+        new Xapian::Query(Xapian::Query::OP_OR, v.begin(), v.end());
+
+    // 'compound' owns a refcount on each child.  We need to
+    // drop the one we got when we allocated the children
+    for (std::vector<Xapian::Query*>::iterator it = v.begin(); it != v.end(); ++it) {
+        delete *(it);
+    }
+
+    return (xapian_query_t *)compound;
+}
+
 
 xapian_query_t *xapian_query_new_compound(const xapian_db_t *db __attribute__((unused)),
                                           int is_or, xapian_query_t **children, int n)
