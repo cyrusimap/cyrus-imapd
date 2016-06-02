@@ -2157,4 +2157,111 @@ EOF
   }
 }
 
+sub test_delete_recur_extraattendee
+{
+  my ($self) = @_;
+  my $CalDAV = $self->{caldav};
+
+  my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
+  $self->assert_not_null($CalendarId);
+
+  xlog "set up event";
+  my $uuid = $CalDAV->genuuid();
+  my $overrides = <<EOF;
+BEGIN:VEVENT
+CREATED:20150701T234327Z
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+UID:$uuid
+RECURRENCE-ID:20160608T153000
+DTEND;TZID=Australia/Melbourne:20160608T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160608T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:1
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20150701T234327Z
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+UID:$uuid
+RECURRENCE-ID:20160615T153000
+DTEND;TZID=Australia/Melbourne:20160615T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160615T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:1
+END:VEVENT
+EOF
+  $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, overrides => $overrides);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+RRULE:FREQ=WEEKLY
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+EOF
+  $self->{instance}->getnotify();
+  my $href = "$CalendarId/$uuid.ics";
+  $self->{caldav}->Request('DELETE', $href);
+
+  my $except1 = {
+    start => '2016-06-08T15:30:00',
+    attendees => [
+      { email => "cassandane\@example.com" },
+      { email => "test1\@example.com" },
+      { email => "test2\@example.com" },
+      { email => "test3\@example.com" },
+    ],
+  };
+
+  my $except2 = {
+    start => '2016-06-15T15:30:00',
+    attendees => [
+      { email => "cassandane\@example.com" },
+      { email => "test1\@example.com" },
+      { email => "test2\@example.com" },
+      { email => "test3\@example.com" },
+    ],
+  };
+
+  my $regular = {
+    start => '2016-06-01T15:30:00',
+    attendees => [
+      { email => "cassandane\@example.com" },
+      { email => "test1\@example.com" },
+      { email => "test3\@example.com" },
+    ],
+    exceptions => {
+      '2016-06-08T15:30:00' => $except1,
+      '2016-06-15T15:30:00' => $except2,
+    },
+  };
+
+  $self->assert_caldav_notified(
+     {
+       method => 'CANCEL',
+       recipient => "test1\@example.com",
+       event => $regular,
+     },
+     {
+       method => 'CANCEL',
+       recipient => "test2\@example.com",
+       event => $except1,
+     },
+     {
+       method => 'CANCEL',
+       recipient => "test3\@example.com",
+       event => $regular,
+     },
+  );
+}
+
 1;
