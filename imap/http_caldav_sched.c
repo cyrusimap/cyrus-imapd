@@ -2586,6 +2586,7 @@ struct reply_data {
 static void trim_attendees(icalcomponent *comp, const char *match)
 {
     icalproperty *prop;
+    ptrarray_t remove = PTRARRAY_INITIALIZER;
 
     /* Locate userid in the attendee list (stripping others) */
     for (prop = icalcomponent_get_first_invitee(comp);
@@ -2598,8 +2599,14 @@ static void trim_attendees(icalcomponent *comp, const char *match)
         if (!strcasecmp(attendee, match)) continue;
 
         /* Some other attendee, remove it */
-        icalcomponent_remove_invitee(comp, prop);
+        ptrarray_append(&remove, prop);
     }
+
+    int i;
+    for (i = 0; i < remove.count; i++) {
+        icalcomponent_remove_invitee(comp, ptrarray_nth(&remove, i));
+    }
+    ptrarray_fini(&remove);
 }
 
 
