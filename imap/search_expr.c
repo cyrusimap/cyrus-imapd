@@ -2407,6 +2407,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
         attr = (search_attr_t *)xzmalloc(sizeof(search_attr_t));
         *attr = proto;
         attr->name = key;
+        attr->cost = mailbox_cached_header(field) ? SEARCH_COST_CACHE : SEARCH_COST_BODY;
         attr->part = (config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS)
                         ? SEARCH_PART_HEADERS : -1);
         attr->data1 = strchr(key, ':')+1;
