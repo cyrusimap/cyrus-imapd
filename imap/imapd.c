@@ -10149,7 +10149,6 @@ out:
 
 syntax_error:
     free_snippetargs(sap);
-    free(intname);
     c = EOF;
     goto out;
 }
