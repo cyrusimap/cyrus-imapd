@@ -2301,10 +2301,13 @@ static void schedule_sub_cancels(const char *attendee,
 {
     if (!oldical) return;
 
-    icalcomponent *itip = NULL;
+    /* we have to create this upfront because it walks the components too */
+    icalcomponent *itip = make_itip(ICAL_METHOD_CANCEL, oldical);
 
     icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
+
+    int do_send = 0;
 
     for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
         icalproperty *prop =
@@ -2321,21 +2324,21 @@ static void schedule_sub_cancels(const char *attendee,
         if (find_attended_component(newical, recurid, attendee))
             continue;
 
-        /* we need to send a cancel for this recurrence */
-        if (!itip) itip = make_itip(ICAL_METHOD_CANCEL, oldical);
-
         icalcomponent *copy = icalcomponent_new_clone(comp);
         clean_component(copy);
         icalcomponent_add_component(itip, copy);
+
+        do_send = 1;
     }
 
-    if (itip) {
+    if (do_send) {
         struct sched_data sched =
             { 0, 0, 0, itip, ICAL_SCHEDULEFORCESEND_NONE, NULL };
         sched_deliver(attendee, &sched, httpd_authstate);
 
-        icalcomponent_free(itip);
     }
+
+    icalcomponent_free(itip);
 }
 
 icalparameter_scheduleforcesend get_forcesend(icalproperty *prop)
@@ -2352,7 +2355,7 @@ static void schedule_sub_updates(const char *attendee,
 {
     if (!newical) return;
 
-    icalcomponent *itip = NULL;
+    icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
     strarray_t recurids = STRARRAY_INITIALIZER;
     icalparameter_scheduleforcesend force_send = ICAL_SCHEDULEFORCESEND_NONE;
     int is_update = 0;
@@ -2361,6 +2364,8 @@ static void schedule_sub_updates(const char *attendee,
 
     icalcomponent *comp = icalcomponent_get_first_real_component(newical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
+
+    int do_send = 0;
 
     for (; comp; comp = icalcomponent_get_next_component(newical, kind)) {
         icalproperty *prop =
@@ -2390,23 +2395,21 @@ static void schedule_sub_updates(const char *attendee,
         is_update |= oldcomp ? !!find_attendee(oldcomp, attendee) :
                                !!find_attendee(oldmaster, attendee);
 
-        /* we need to send an update for this recurrence */
-        if (!itip) itip = make_itip(ICAL_METHOD_REQUEST, newical);
-
         icalcomponent_add_component(itip, copy);
 
         strarray_add(&recurids, recurid);
+
+        do_send = 1;
     }
 
-    if (itip) {
+    if (do_send) {
         struct sched_data sched = { 0, 0, is_update, itip, force_send, NULL };
         sched_deliver(attendee, &sched, httpd_authstate);
-
         update_attendee_status(newical, &recurids, attendee, sched.status);
-
-        icalcomponent_free(itip);
-        strarray_fini(&recurids);
     }
+
+    icalcomponent_free(itip);
+    strarray_fini(&recurids);
 }
 
 /* we've already tested that master does contain this attendee */
@@ -2687,6 +2690,9 @@ static void schedule_sub_declines(const char *attendee,
 {
     if (!oldical) return;
 
+    if (!reply->itip)
+        reply->itip = make_itip(ICAL_METHOD_REPLY, oldical);
+
     icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
 
@@ -2710,15 +2716,12 @@ static void schedule_sub_declines(const char *attendee,
             find_attended_component(newical, recurid, attendee);
         if (newcomp) continue;
 
+        /* we need to send an update for this recurrence */
         icalcomponent *copy = icalcomponent_new_clone(comp);
         trim_attendees(copy, attendee);
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
         clean_component(copy);
         reply_mark_declined(copy);
-
-        /* we need to send an update for this recurrence */
-        if (!reply->itip)
-            reply->itip = make_itip(ICAL_METHOD_REPLY, oldical);
 
         icalcomponent_add_component(reply->itip, copy);
 
@@ -2732,6 +2735,8 @@ static void schedule_sub_replies(const char *attendee,
                                  struct reply_data *reply)
 {
     if (!newical) return;
+
+    if (!reply->itip) reply->itip = make_itip(ICAL_METHOD_REPLY, newical);
 
     icalcomponent *comp = icalcomponent_get_first_real_component(newical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -2768,14 +2773,11 @@ static void schedule_sub_replies(const char *attendee,
         reply->force_send = force_send;
         reply->organizer = organizer;
 
+        /* we need to send an update for this recurrence */
         icalcomponent *copy = icalcomponent_new_clone(comp);
         trim_attendees(copy, attendee);
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
         clean_component(copy);
-
-        /* we need to send an update for this recurrence */
-        if (!reply->itip)
-            reply->itip = make_itip(ICAL_METHOD_REPLY, newical);
 
         icalcomponent_add_component(reply->itip, copy);
 
@@ -2801,8 +2803,7 @@ static void schedule_full_decline(const char *attendee,
 
     /* we need to send a reply for this recurrence for sure, because we know that the
      * that new master doesn't have this attendee */
-    if (!reply->itip)
-        reply->itip = make_itip(ICAL_METHOD_REPLY, oldical);
+    if (!reply->itip) reply->itip = make_itip(ICAL_METHOD_REPLY, oldical);
 
     reply->force_send =
         get_forcesend(icalcomponent_get_first_property(mastercomp,
@@ -2861,8 +2862,7 @@ static void schedule_full_reply(const char *attendee,
     }
 
     if (reply->do_send) {
-        if (!reply->itip)
-            reply->itip = make_itip(ICAL_METHOD_REPLY, newical);
+        if (!reply->itip) reply->itip = make_itip(ICAL_METHOD_REPLY, newical);
 
         /* add the master */
         icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
