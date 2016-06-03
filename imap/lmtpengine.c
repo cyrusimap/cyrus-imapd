@@ -1253,8 +1253,8 @@ void lmtpmode(struct lmtp_func *func,
                   mechcount > 0) {
                   prot_printf(pout,"250-%s\r\n", mechs);
               }
-              prot_printf(pout, "250-SESSIONID %s\r\n", session_id());
-              prot_printf(pout, "250 IGNOREQUOTA\r\n");
+              prot_printf(pout, "250-IGNOREQUOTA\r\n");
+              prot_printf(pout, "250 Ok SESSIONID=<%s>\r\n", session_id());
 
               strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
 
@@ -1453,7 +1453,7 @@ void lmtpmode(struct lmtp_func *func,
             }
             else if (!strcasecmp(buf, "rset")) {
                 session_new_id();
-                prot_printf(pout, "250 2.0.0 ok SESSIONID=<%s>\r\n", session_id());
+                prot_printf(pout, "250 2.0.0 Ok SESSIONID=<%s>\r\n", session_id());
 
               rset:
                 if (msg) msg_free(msg);
