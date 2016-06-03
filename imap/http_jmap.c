@@ -8716,13 +8716,16 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
     }
 
     /* Locate the main VEVENT. */
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+    icalcomponent *firstcomp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+    for (comp = firstcomp;
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
         if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
             break;
         }
     }
+    /* magic promote to toplevel for the first item */
+    if (!comp) comp = firstcomp;
     if (!comp) {
         syslog(LOG_ERR, "no VEVENT in record %u:%s",
                 cdata->dav.imap_uid, crock->mailbox->name);
@@ -8759,9 +8762,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
              excomp;
              excomp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
 
-            if (!icalcomponent_get_first_property(excomp, ICAL_RECURRENCEID_PROPERTY)) {
-                continue;
-            }
+            if (excomp == comp) continue; /* skip toplevel promoted object */
 
             json_t *exc = jmap_calendarevent_from_ical(excomp, comp, crock->props, userid);
             if (!exc) {
