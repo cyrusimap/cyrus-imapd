@@ -638,6 +638,10 @@ EOF
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
 
+    my $syd = DateTime::TimeZone->new( name => 'Australia/Sydney' );
+    my $ny = DateTime::TimeZone->new( name => 'America/New_York' );
+    my $offset = $syd->offset_for_datetime($now) - $ny->offset_for_datetime($now);
+
     # define the event to start in a few seconds
     my $startdt = $now->clone();
     $startdt->add(DateTime::Duration->new(seconds => 2));
@@ -686,8 +690,8 @@ EOF
     # no alarms
     $self->assert_alarms();
 
-    # trigger processing a day later!
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 86400 );
+    # trigger processing in New York
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 + $offset );
 
     # alarm fires
     $self->assert_alarms({summary => 'Floating', timezone => 'America/New_York', start => $start});
