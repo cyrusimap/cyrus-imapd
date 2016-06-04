@@ -2401,7 +2401,7 @@ EOF
      },
      {
        method => 'CANCEL',
-       recipient => "tese2\@example.com",
+       recipient => "test2\@example.com",
        event => $except1,
      },
      {
