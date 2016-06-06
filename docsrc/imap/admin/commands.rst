@@ -20,15 +20,12 @@ List of System Command-line Utilities
 
     systemcommands/arbitron
     systemcommands/chk_cyrus
-    systemcommands/ctl_cyrusdb
     systemcommands/ctl_conversationsdb
+    systemcommands/ctl_cyrusdb
     systemcommands/ctl_deliver
     systemcommands/ctl_mboxlist
     systemcommands/ctl_zoneinfo
     systemcommands/cvt_cyrusdb
-    systemcommands/cyradm
-    systemcommands/cyrdump    
-    systemcommands/fetchnews
     systemcommands/cyr_buildinfo
     systemcommands/cyr_dbtool
     systemcommands/cyr_deny
@@ -37,7 +34,10 @@ List of System Command-line Utilities
     systemcommands/cyr_info
     systemcommands/cyr_sequence    
     systemcommands/cyr_synclog
+    systemcommands/cyradm
+    systemcommands/cyrdump
     systemcommands/deliver
+    systemcommands/fetchnews
     systemcommands/fud
     systemcommands/httpd
     systemcommands/idled
