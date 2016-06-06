@@ -1475,7 +1475,7 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 @SET_MAKE@
 
-dist_man_MANS = \
+dist_man1_MANS = \
 	man/imtest.1 \
 	man/installsieve.1 \
 	man/lmtptest.1 \
@@ -1484,24 +1484,30 @@ dist_man_MANS = \
 	man/pop3test.1 \
 	man/sieveshell.1 \
 	man/sivtest.1 \
-	man/smtptest.1 \
-	man/imclient.3 \
+	man/smtptest.1
+
+dist_man3_MANS = \
+	man/imclient.3
+
+dist_man5_MANS = \
 	man/cyrus.conf.5 \
 	man/imapd.conf.5 \
-	man/krb.equiv.5 \
+	man/krb.equiv.5
+
+dist_man8_MANS = \
 	man/arbitron.8 \
-	man/ctl_conversationsdb.8 \
 	man/chk_cyrus.8 \
+	man/ctl_conversationsdb.8 \
 	man/ctl_cyrusdb.8 \
 	man/ctl_deliver.8 \
 	man/ctl_mboxlist.8 \
-	man/cyr_expire.8 \
 	man/cvt_cyrusdb.8 \
+	man/cyr_buildinfo.8 \
 	man/cyr_dbtool.8 \
 	man/cyr_deny.8 \
 	man/cyr_df.8 \
+	man/cyr_expire.8 \
 	man/cyr_info.8 \
-	man/cyr_buildinfo.8 \
 	man/cyr_synclog.8 \
 	man/deliver.8 \
 	man/fud.8 \
@@ -1523,7 +1529,7 @@ dist_man_MANS = \
 	man/unexpunge.8
 
 if USE_SQUAT
-dist_man_MANS += \
+dist_man8_MANS += \
 	man/squatter.8
 
 else
@@ -1533,7 +1539,7 @@ EXTRA_DIST += \
 endif # USE_SQUAT
 
 if NNTPD
-dist_man_MANS += \
+dist_man8_MANS += \
 	man/fetchnews.8 \
 	man/nntpd.8
 
@@ -1545,7 +1551,7 @@ EXTRA_DIST += \
 endif # NNTPD
 
 if HTTPD
-dist_man_MANS += \
+dist_man8_MANS += \
 	man/ctl_zoneinfo.8 \
 	man/httpd.8
 
@@ -1557,7 +1563,7 @@ EXTRA_DIST += \
 endif # HTTPD
 
 if REPLICATION
-dist_man_MANS += \
+dist_man8_MANS += \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8
@@ -1818,7 +1824,7 @@ man-force:
 	## rebuilds will still be a lot quicker once it has run once.
 	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
 
-man: man-force $(dist_man_MANS)
+man: man-force $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
 
 .PHONY: doc doc-html doc-html-force doc-text doc-text-force
 doc-html-force:
