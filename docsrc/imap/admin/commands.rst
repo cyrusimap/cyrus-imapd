@@ -19,13 +19,16 @@ List of System Command-line Utilities
     :maxdepth: 1
 
     systemcommands/arbitron
+    systemcommands/backupd
     systemcommands/chk_cyrus
+    systemcommands/ctl_backups
     systemcommands/ctl_conversationsdb
     systemcommands/ctl_cyrusdb
     systemcommands/ctl_deliver
     systemcommands/ctl_mboxlist
     systemcommands/ctl_zoneinfo
     systemcommands/cvt_cyrusdb
+    systemcommands/cyr_backup
     systemcommands/cyr_buildinfo
     systemcommands/cyr_dbtool
     systemcommands/cyr_deny
@@ -57,6 +60,7 @@ List of System Command-line Utilities
     systemcommands/pop3proxyd    
     systemcommands/quota
     systemcommands/reconstruct
+    systemcommands/restore
     systemcommands/rmnews
     systemcommands/sievec
     systemcommands/sieved    

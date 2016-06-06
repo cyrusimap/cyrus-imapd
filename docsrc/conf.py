@@ -259,6 +259,16 @@ man_pages = [
     ),
 
         (
+            'imap/admin/systemcommands/backupd',
+            'backupd',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                ],
+            8
+    ),
+
+        (
             'imap/admin/systemcommands/chk_cyrus',
             'chk_cyrus',
             u'Cyrus IMAP Documentation',
@@ -266,6 +276,16 @@ man_pages = [
                     u'The Cyrus Team',
                     u'Jeroen van Meeuwen (Kolab Systems)',
                     u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/systemcommands/ctl_backups',
+            'ctl_backups',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
                 ],
             8
     ),
@@ -325,6 +345,16 @@ man_pages = [
                     u'The Cyrus Team',
                     u'Jeroen van Meeuwen (Kolab Systems)',
                     u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/systemcommands/cyr_backup',
+            'cyr_backup',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
                 ],
             8
     ),
@@ -438,6 +468,16 @@ man_pages = [
             [
                     u'The Cyrus Team',
                     u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/systemcommands/restore',
+            'restore',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
                 ],
             8
     ),

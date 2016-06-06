@@ -1496,12 +1496,15 @@ dist_man5_MANS = \
 
 dist_man8_MANS = \
 	man/arbitron.8 \
+	man/backupd.8 \
 	man/chk_cyrus.8 \
+	man/ctl_backups.8 \
 	man/ctl_conversationsdb.8 \
 	man/ctl_cyrusdb.8 \
 	man/ctl_deliver.8 \
 	man/ctl_mboxlist.8 \
 	man/cvt_cyrusdb.8 \
+	man/cyr_backup.8 \
 	man/cyr_buildinfo.8 \
 	man/cyr_dbtool.8 \
 	man/cyr_deny.8 \
@@ -1522,6 +1525,7 @@ dist_man8_MANS = \
 	man/pop3d.8 \
 	man/quota.8 \
 	man/reconstruct.8 \
+	man/restore.8 \
 	man/rmnews.8 \
 	man/smmapd.8 \
 	man/timsieved.8 \
