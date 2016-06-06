@@ -18,13 +18,13 @@ problems with any binary distribution, please contact the source of
 the binary distribution.
 
 ----------------------------------------------------------------------
-* For the real README file, please see doc/readme.html.
+* For the real README file, please see doc/legacy/readme.html.
 
-* To install the software, please read doc/install.html (but please
-  read doc/readme.html first!).
+* To install the software, please read doc/legacy/install.html (but please
+  read doc/legacy/readme.html first!).
 
-* To see the changes since previous versions, check doc/changes.html,
-  and if upgrading look at doc/install-upgrade.html as well.
+* To see the changes since previous versions, check doc/legacy/changes.html,
+  and if upgrading look at doc/legacy/install-upgrade.html as well.
 
 * To obtain updates to this software, visit the web page
             http://www.cyrusimap.org/
