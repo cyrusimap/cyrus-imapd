@@ -18,6 +18,7 @@
 .dirstamp
 .libs
 .sphinx-build.stamp
+README
 Makefile.in
 Makefile
 Makefile.bak

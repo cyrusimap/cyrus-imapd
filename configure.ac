@@ -51,6 +51,18 @@ AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([cmulocal])
 AC_CANONICAL_SYSTEM
 
+dnl carve the version string (defined in AC_INIT above) into useful chunks
+dnl e.g. for version 3.0.0-beta:
+dnl   CYRUS_IMAPD_SERIES   => 3.0
+dnl   CYRUS_IMAPD_REVISION => 0
+dnl   CYRUS_IMAPD_PATCH    => beta2
+CYRUS_IMAPD_SERIES=`echo AC_PACKAGE_VERSION | cut -d- -f1 | cut -d. -f1-2`
+CYRUS_IMAPD_REVISION=`echo AC_PACKAGE_VERSION | cut -d- -f1 | cut -d. -f3`
+CYRUS_IMAPD_PATCH=`echo AC_PACKAGE_VERSION | cut -d- -f2-`
+AC_SUBST([CYRUS_IMAPD_SERIES])
+AC_SUBST([CYRUS_IMAPD_REVISION])
+AC_SUBST([CYRUS_IMAPD_PATCH])
+
 dnl in case the first use of PKG_CHECK_MODULES is inside a conditional
 PKG_PROG_PKG_CONFIG
 
@@ -2114,6 +2126,7 @@ enum {
 
 dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
+    README
     libcyrus_min.pc
     libcyrus.pc
     libcyrus_sieve.pc

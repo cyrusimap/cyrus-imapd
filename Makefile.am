@@ -316,6 +316,7 @@ endif # SIEVE
 EXTRA_DIST += \
 	COPYING \
 	INSTALL \
+	README \
 	README.andrew \
 	SMakefile \
 	xversion.h \
