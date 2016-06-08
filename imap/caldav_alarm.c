@@ -127,7 +127,7 @@ EXPORTED int caldav_alarm_done(void)
  * Sadly there's no other way to do it without creating a lock inversion! */
 #define CMD_UPGRADEv2 CMD_CREATE
 
-struct sqldb_upgrade upgrade[] = {
+static struct sqldb_upgrade upgrade[] = {
     { 2, CMD_UPGRADEv2, NULL },
     /* always finish with an empty row */
     { 0, NULL, NULL }
