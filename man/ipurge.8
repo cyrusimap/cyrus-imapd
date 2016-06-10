@@ -65,6 +65,9 @@ ipurge \- delete mail from IMAP mailbox or partition based on age or size
 [
 .B \-o
 ]
+[
+.B \-n
+]
 .br
        [
 .BI \-d " days"
@@ -133,6 +136,9 @@ Skip over messages that have the \\Flagged flag set.
 .TP
 .B \-o
 Only purge messages that have the \\Deleted flag set.
+.TP
+.B \-n
+Only print messages that would be deleted (dry run).
 .SH FILES
 .TP
 .B /etc/imapd.conf
