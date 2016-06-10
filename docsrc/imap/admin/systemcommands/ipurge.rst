@@ -13,7 +13,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ] [ **-n** ]
+    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ] [ **-n** ] [ **-v** ]
             [ **-d** *days* | **-b** *bytes* | **-k** *Kbytes* | **-m** *Mbytes* ]
             [ *mailbox-pattern*... ]
 
@@ -88,6 +88,10 @@ Options
 .. option:: -n
 
     Only print messages that would be deleted (dry run).
+
+.. option:: -v
+
+    Enable verbose output/logging.
 
 Examples
 ========

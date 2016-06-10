@@ -92,7 +92,7 @@ typedef struct mbox_stats_s {
 } mbox_stats_t;
 
 static int dryrun = 0;
-static int verbose = 1;
+static int verbose = 0;
 static int forceall = 0;
 
 static int purge_me(struct findall_data *, void *);
@@ -112,7 +112,7 @@ int main (int argc, char *argv[]) {
       fatal("must run as the Cyrus user", EC_USAGE);
   }
 
-  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXion")) != EOF) {
+  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXionv")) != EOF) {
     switch (option) {
     case 'C': /* alt config file */
       alt_config = optarg;
@@ -143,6 +143,9 @@ int main (int argc, char *argv[]) {
     } break;
     case 'n' : {
       dryrun = 1;
+    } break;
+    case 'v' : {
+      verbose++;
     } break;
     case 'x' : {
       exact = 1;
@@ -223,6 +226,7 @@ static int usage(const char *name)
   printf("\t -i invert match logic: -x means not equal, date is for newer, size is for smaller.\n");
   printf("\t -o only purge messages that are deleted.\n");
   printf("\t -n only print messages that would be deleted (dry run).\n");
+  printf("\t -v enable verbose output/logging.\n");
   exit(0);
 }
 
