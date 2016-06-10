@@ -91,6 +91,7 @@ typedef struct mbox_stats_s {
 
 } mbox_stats_t;
 
+static int dryrun = 0;
 static int verbose = 1;
 static int forceall = 0;
 
@@ -99,6 +100,8 @@ static unsigned purge_check(struct mailbox *mailbox,
                             const struct index_record *record,
                             void *rock);
 static int usage(const char *name);
+static void print_record(struct mailbox *mailbox,
+                         const struct index_record *record);
 static void print_stats(mbox_stats_t *stats);
 
 int main (int argc, char *argv[]) {
@@ -109,7 +112,7 @@ int main (int argc, char *argv[]) {
       fatal("must run as the Cyrus user", EC_USAGE);
   }
 
-  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXio")) != EOF) {
+  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXion")) != EOF) {
     switch (option) {
     case 'C': /* alt config file */
       alt_config = optarg;
@@ -137,6 +140,9 @@ int main (int argc, char *argv[]) {
         usage(argv[0]);
       }
       size = atoi(optarg) * 1048576; /* 1024 * 1024 */
+    } break;
+    case 'n' : {
+      dryrun = 1;
     } break;
     case 'x' : {
       exact = 1;
@@ -207,7 +213,7 @@ int main (int argc, char *argv[]) {
 
 static int usage(const char *name)
 {
-  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] [-o] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] [-o] [-n] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
   printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
   printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
   printf("\t -x specifies an exact match for days or size\n");
@@ -216,6 +222,7 @@ static int usage(const char *name)
   printf("\t -X use delivery time instead of date header for date matches.\n");
   printf("\t -i invert match logic: -x means not equal, date is for newer, size is for smaller.\n");
   printf("\t -o only purge messages that are deleted.\n");
+  printf("\t -n only print messages that would be deleted (dry run).\n");
   exit(0);
 }
 
@@ -263,7 +270,7 @@ static void deleteit(bit32 msgsize, mbox_stats_t *stats)
 
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
-static unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
+static unsigned purge_check(struct mailbox *mailbox,
                      const struct index_record *record,
                      void *deciderock)
 {
@@ -289,11 +296,11 @@ static unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
       if (((my_time - (time_t) senttime)/86400) == (days/86400)) {
           if (invertmatch) return 0;
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       } else {
           if (!invertmatch) return 0;
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       }
     }
     if (size >= 0) {
@@ -301,11 +308,11 @@ static unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
         if (record->size == (unsigned)size) {
           if (invertmatch) return 0;
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       } else {
           if (!invertmatch) return 0;
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       }
     }
     return 0;
@@ -314,32 +321,58 @@ static unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
       if (!invertmatch && ((my_time - (time_t) senttime) > days)) {
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       }
       if (invertmatch && ((my_time - (time_t) senttime) < days)) {
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       }
     }
     if (size >= 0) {
       /* check size */
         if (!invertmatch && ((int) record->size > size)) {
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       }
         if (invertmatch && ((int) record->size < size)) {
           deleteit(record->size, stats);
-          return 1;
+          return dryrun ? print_record(mailbox, record), 0 : 1;
       }
     }
     return 0;
   }
 }
 
+static void print_record(struct mailbox *mailbox,
+                         const struct index_record *record)
+{
+    printf("UID: %u\n", record->uid);
+    printf("\tSize: %u\n", record->size);
+    printf("\tSent: %s", ctime(&record->sentdate));
+    printf("\tRecv: %s", ctime(&record->internaldate));
+
+    if (mailbox_cacherecord(mailbox, record)) {
+        printf("\tERROR: cache record missing or corrupt, "
+               "not printing cache details\n\n");
+        return;
+    }
+
+    printf("\tFrom: %.*s\n", cacheitem_size(record, CACHE_FROM),
+            cacheitem_base(record, CACHE_FROM));
+    printf("\tTo  : %.*s\n", cacheitem_size(record, CACHE_TO),
+            cacheitem_base(record, CACHE_TO));
+    printf("\tCc  : %.*s\n", cacheitem_size(record, CACHE_CC),
+            cacheitem_base(record, CACHE_CC));
+    printf("\tBcc : %.*s\n", cacheitem_size(record, CACHE_BCC),
+            cacheitem_base(record, CACHE_BCC));
+    printf("\tSubj: %.*s\n\n", cacheitem_size(record, CACHE_SUBJECT),
+            cacheitem_base(record, CACHE_SUBJECT));
+}
+
 static void print_stats(mbox_stats_t *stats)
 {
-    printf("total messages    \t\t %d\n",stats->total);
-    printf("total bytes       \t\t %d\n",stats->total_bytes);
+    printf("Total messages    \t\t %d\n",stats->total);
+    printf("Total bytes       \t\t %d\n",stats->total_bytes);
     printf("Deleted messages  \t\t %d\n",stats->deleted);
     printf("Deleted bytes     \t\t %d\n",stats->deleted_bytes);
     printf("Remaining messages\t\t %d\n",stats->total - stats->deleted);

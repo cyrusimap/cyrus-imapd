@@ -13,7 +13,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ]
+    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ] [ **-n** ]
             [ **-d** *days* | **-b** *bytes* | **-k** *Kbytes* | **-m** *Mbytes* ]
             [ *mailbox-pattern*... ]
 
@@ -84,6 +84,10 @@ Options
 .. option:: -o
 
     Only purge messages that have the \\Deleted flag set.
+
+.. option:: -n
+
+    Only print messages that would be deleted (dry run).
 
 Examples
 ========
