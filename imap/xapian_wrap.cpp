@@ -19,13 +19,7 @@ extern "C" {
 
 void xapian_init(void)
 {
-    static int init = 0;
-    static /* NOT const */ char enable_ngrams[] = "XAPIAN_CJK_NGRAM=1";
-
-    if (!init) {
-        putenv(enable_ngrams);
-        init = 1;
-    }
+    /* do nothing */
 }
 
 /* ====================================================================== */
@@ -81,6 +75,9 @@ int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
         dbw->stemmer = new Xapian::Stem("en");
         dbw->term_generator->set_stemmer(*dbw->stemmer);
         dbw->term_generator->set_stemming_strategy(Xapian::TermGenerator::STEM_ALL);
+        /* Always enable CJK word tokenization */
+        dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_NGRAM,
+                ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
     }
     catch (const Xapian::DatabaseLockError &err) {
         /* somebody else is already indexing this user.  They may be doing a different
@@ -290,7 +287,8 @@ xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix
             db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
             std::string sstr = std::string("") + str;
             Xapian::Query query = db->parser->parse_query(
-                                    sstr, /*flags*/0,
+                                    sstr,
+                                    Xapian::QueryParser::FLAG_CJK_NGRAM,
                                     std::string(prefix));
             return (xapian_query_t *)new Xapian::Query(query);
         }
