@@ -193,4 +193,114 @@ sub test_weird_crasher
     $self->assert_not_null($r);
 }
 
+sub test_stopwords
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    # This test assumes that "the" is a stopword and is configured with
+    # the search_stopword_path in cassandane.ini. If the option is not
+    # set it tests legacy behaviour.
+
+    my $talk = $self->{store}->get_client();
+
+    # Set up Xapian database
+    xlog "Generate and index test messages.";
+    my %params = (
+        mime_charset => "utf-8",
+    );
+    my $subject;
+    my $body;
+
+    $subject = "1";
+    $body = "In my opinion the soup smells tasty";
+    $params{body} = $body;
+    $self->make_message($subject, %params) || die;
+
+    $subject = "2";
+    $body = "The funny thing is that this isn't funny";
+    $params{body} = $body;
+    $self->make_message($subject, %params) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # Connect via IMAP
+    xlog "Select INBOX";
+    $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    my $term;
+    my $r;
+
+    # Search for stopword only
+    $term = "the";
+    xlog "SEARCH for FUZZY body \"$term\"";
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
+    ) || die;
+
+    my $expected_matches;
+    if ($self->{instance}->{config}->get('search_stopword_path')) {
+        $expected_matches = 0;
+    } else {
+        $expected_matches = 2;
+    }
+    $self->assert_num_equals($expected_matches, scalar @$r);
+
+    # Search for stopword plus significant term
+    $term = "the soup";
+    xlog "SEARCH for FUZZY body \"$term\"";
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+}
+
+sub test_normalize_snippets
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    # Set up test message with funny characters
+    my $body = "foo gären советской diĝir naïve léger";
+    my @terms = split / /, $body;
+
+    xlog "Generate and index test messages.";
+    my %params = (
+        mime_charset => "utf-8",
+        body => $body
+    );
+    $self->make_message("1", %params) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # Connect to IMAP
+    xlog "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    # Assert that diacritics are matched and returned
+    foreach my $term (@terms) {
+        xlog "XSNIPPETS for FUZZY text \"$term\"";
+        $r = $talk->xsnippets(
+            [['INBOX', $uidvalidity, $uids]], 'utf-8',
+            ['fuzzy', 'text', { Quote => $term }]
+        ) || die;
+        $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>$term</b>"), -1);
+    }
+
+    # Assert that search without diacritics matches
+    my $term = "naive";
+    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'text', { Quote => $term }]
+    ) || die;
+    $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>naïve</b>"), -1);
+}
+
 1;
