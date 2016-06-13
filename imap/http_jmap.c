@@ -5427,9 +5427,7 @@ static int getContactUpdates(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
     json_t *dofetch = json_object_get(req->args, "fetchRecords");
-    if (!dofetch) dofetch = json_object_get(req->args, "fetchContacts");
     json_t *doprops = json_object_get(req->args, "fetchRecordProperties");
-    if (!doprops) doprops = json_object_get(req->args, "fetchContactProperties");
     if (dofetch && json_is_true(dofetch) && json_array_size(rock.changed)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
@@ -5837,9 +5835,9 @@ static int getContactList(struct jmap_req *req)
     }
     rock.limit = limit;
 
-    /* fetchContacts */
-    if (JNOTNULL(json_object_get(req->args, "fetchContacts"))) {
-        jmap_readprop(req->args, "fetchContacts", 0 /*mandatory*/, invalid, "b", &dofetch);
+    /* fetchRecords */
+    if (JNOTNULL(json_object_get(req->args, "fetchRecords"))) {
+        jmap_readprop(req->args, "fetchRecords", 0 /*mandatory*/, invalid, "b", &dofetch);
     }
 
     if (json_array_size(invalid)) {
