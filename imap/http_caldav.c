@@ -3208,6 +3208,11 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
     uid = icalcomponent_get_uid(comp);
+    if (!uid) {
+        txn->error.precond = CALDAV_VALID_OBJECT;
+        ret = HTTP_FORBIDDEN;
+        goto done;
+    }
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) organizer = icalproperty_get_organizer(prop);
     while ((nextcomp =
