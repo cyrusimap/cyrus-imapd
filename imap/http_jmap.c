@@ -5426,8 +5426,10 @@ static int getContactUpdates(struct jmap_req *req)
 
     json_array_append_new(req->response, item);
 
-    json_t *dofetch = json_object_get(req->args, "fetchContacts");
-    json_t *doprops = json_object_get(req->args, "fetchContactProperties");
+    json_t *dofetch = json_object_get(req->args, "fetchRecords");
+    if (!dofetch) dofetch = json_object_get(req->args, "fetchContacts");
+    json_t *doprops = json_object_get(req->args, "fetchRecordProperties");
+    if (!doprops) doprops = json_object_get(req->args, "fetchContactProperties");
     if (dofetch && json_is_true(dofetch) && json_array_size(rock.changed)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
