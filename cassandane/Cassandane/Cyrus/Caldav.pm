@@ -422,6 +422,38 @@ sub test_user_rename_dom
     $self->assert_str_equals($NewCalendar->{name}, 'foo');
 }
 
+sub test_put_nouid
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $href = "$CalendarId/nouid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+SUMMARY:NoUID
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  eval { $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar') };
+  my $Err = $@;
+  $self->assert_matches(qr/valid-calendar-object-resource/, $Err);
+}
+
 sub test_apple_location_notz
 {
     my ($self) = @_;
