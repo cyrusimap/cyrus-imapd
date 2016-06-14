@@ -342,6 +342,7 @@ EXTRA_DIST += \
 	contrib/cyrus-graphtools.1.0/script/cyrus.pl \
 	contrib/cyrus-graphtools.1.0/script/run \
 	contrib/cyrus-graphtools.1.0/script/cyrusrc \
+	contrib/cyrusv2.mc \
 	contrib/dkim_canon_ischedule.patch \
 	contrib/notify_unix/notify \
 	contrib/notify_unix/net-server-prefork-0.01.tgz \
