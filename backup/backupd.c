@@ -489,7 +489,7 @@ static int backupd_open_backup(struct open_backup **openp, const mbname_t *mbnam
     if (!open) {
         struct backup *backup = NULL;
         int r = backup_open(&backup, mbname,
-                            BACKUP_OPEN_BLOCK, BACKUP_OPEN_CREATE);
+                            BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_CREATE);
         if (r) return r;
 
         r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
