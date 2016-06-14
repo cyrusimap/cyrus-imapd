@@ -1630,13 +1630,16 @@ int sync_parse_response(const char *cmd, struct protstream *in,
 
         /* Slight hack to transform certain error strings into equivalent
          * imap_err value so that caller has some idea of cause.  Match
-         * this to the logic at sync_print_response() */ /* FIXME */
+         * this to the logic at sync_response() */
         if (!strncmp(errmsg.s, "IMAP_INVALID_USER ",
                      strlen("IMAP_INVALID_USER ")))
             return IMAP_INVALID_USER;
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NONEXISTENT ",
                           strlen("IMAP_MAILBOX_NONEXISTENT ")))
             return IMAP_MAILBOX_NONEXISTENT;
+        else if (!strncmp(errmsg.s, "IMAP_MAILBOX_LOCKED ",
+                          strlen("IMAP_MAILBOX_LOCKED ")))
+            return IMAP_MAILBOX_LOCKED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
             return IMAP_SYNC_CHECKSUM;
@@ -3490,6 +3493,9 @@ static const char *sync_response(int r)
         break;
     case IMAP_MAILBOX_NONEXISTENT:
         resp = "NO IMAP_MAILBOX_NONEXISTENT No Such Mailbox";
+        break;
+    case IMAP_MAILBOX_LOCKED:
+        resp = "NO IMAP_MAILBOX_LOCKED Mailbox locked";
         break;
     case IMAP_SYNC_CHECKSUM:
         resp = "NO IMAP_SYNC_CHECKSUM Checksum Failure";
