@@ -304,7 +304,11 @@ static int jmap_post(struct transaction_t *txn,
         json_t *args = json_array_get(msg, 1);
         json_t *id = json_array_get(msg, 2);
         /* XXX - better error reporting */
-        if (!id) continue;
+        if (!id) {
+            txn->error.desc = "Missing id on request\n";
+            ret = HTTP_BAD_REQUEST;
+            goto done;
+        }
         const char *tag = json_string_value(id);
         int r = 0;
 
