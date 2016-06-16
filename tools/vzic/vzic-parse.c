@@ -32,6 +32,7 @@
 
 #include "vzic.h"
 #include "vzic-parse.h"
+#include "vzic-output.h"
 
 /* This is the maximum line length we allow. */
 #define MAX_LINE_LEN    1024
