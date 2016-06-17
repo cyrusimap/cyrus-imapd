@@ -141,11 +141,10 @@ struct freebusy_filter {
     struct vavailability_array vavail;  /* array of found vavail components */
 };
 
-/* Bitmask of calrange flags */
+/* Bitmask of freebusy_filter flags */
 enum {
-    BUSYTIME_QUERY =            (1<<0),
-    CHECK_CAL_TRANSP =          (1<<1),
-    CHECK_USER_AVAIL =          (1<<2)
+    CHECK_CAL_TRANSP =          (1<<0),
+    CHECK_USER_AVAIL =          (1<<1)
 };
 
 extern unsigned config_allowsched;

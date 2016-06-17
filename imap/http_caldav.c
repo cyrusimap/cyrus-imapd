@@ -3539,14 +3539,12 @@ static void add_freebusy(struct icaltimetype *recurid,
     }
     else {
         newfb->per.duration = icaldurationtype_null_duration();
-        if ((calfilter->flags & BUSYTIME_QUERY) &&
-            icaltime_compare(calfilter->end, *end) < 0) {
+        if (icaltime_compare(calfilter->end, *end) < 0) {
             newfb->per.end = calfilter->end;
         }
         else newfb->per.end = *end;
 
-        if ((calfilter->flags & BUSYTIME_QUERY) &&
-            icaltime_compare(calfilter->start, *start) > 0) {
+        if (icaltime_compare(calfilter->start, *start) > 0) {
             newfb->per.start = calfilter->start;
         }
         else newfb->per.start = *start;
@@ -3630,18 +3628,16 @@ static int add_freebusy_comp(icalcomponent *comp,
 
 static int is_busytime(struct freebusy_filter *calfilter, icalcomponent *comp)
 {
-    if (calfilter->flags & BUSYTIME_QUERY) {
-        /* Check TRANSP and STATUS per RFC 4791, section 7.10 */
-        const icalproperty *prop;
+    /* Check TRANSP and STATUS per RFC 4791, section 7.10 */
+    const icalproperty *prop;
 
-        /* Skip transparent events */
-        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-        if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT)
-            return 0;
+    /* Skip transparent events */
+    prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+    if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT)
+        return 0;
 
-        /* Skip cancelled events */
-        if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 0;
-    }
+    /* Skip cancelled events */
+    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 0;
 
     return 1;
 }
@@ -3667,9 +3663,6 @@ static int expand_occurrences(icalcomponent *ical,
     struct freebusy_array *freebusy = &calfilter->freebusy;
     struct icalperiodtype rangespan;
     unsigned firstr;
-
-    /* If not saving busytime, reset our array */
-    if (!(calfilter->flags & BUSYTIME_QUERY)) freebusy->len = 0;
 
     /* Create a span for the given time-range */
     rangespan.start = calfilter->start;
@@ -3729,7 +3722,7 @@ int apply_fbfilter(struct propfind_ctx *fctx, void *data)
 
             icalcomponent_free(ical);
         }
-        else if (calfilter->flags & BUSYTIME_QUERY) {
+        else {
             icalparameter_fbtype fbtype;
             /* Component is non-recurring and we need to save busytime */
             if (cdata->comp_flags.transp) {
@@ -6592,7 +6585,6 @@ static int report_fb_query(struct transaction_t *txn,
     memset(&calfilter, 0, sizeof(struct freebusy_filter));
     calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
     calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
-    calfilter.flags = BUSYTIME_QUERY;
     fctx->filter = apply_fbfilter;
     fctx->filter_crit = &calfilter;
 
@@ -6917,7 +6909,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
 
     memset(&calfilter, 0, sizeof(struct freebusy_filter));
-    calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
+    calfilter.flags = CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
 
     /* Check for 'start' */
     param = hash_lookup("start", &txn->req_qparams);

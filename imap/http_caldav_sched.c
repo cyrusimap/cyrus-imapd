@@ -771,7 +771,7 @@ int sched_busytime_query(struct transaction_t *txn,
     memset(&calfilter, 0, sizeof(struct freebusy_filter));
     calfilter.start = icalcomponent_get_dtstart(comp);
     calfilter.end = icalcomponent_get_dtend(comp);
-    calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
+    calfilter.flags = CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
