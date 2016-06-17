@@ -289,10 +289,8 @@ struct namespace_t namespace_default = {
 
 /* Array of different namespaces and features supported by the server */
 struct namespace_t *namespaces[] = {
-#ifdef WITH_JSON
     &namespace_jmap,
     &namespace_tzdist,          /* MUST be before namespace_calendar!! */
-#endif /* WITH_JSON */
 #ifdef WITH_DAV
     &namespace_calendar,
     &namespace_freebusy,

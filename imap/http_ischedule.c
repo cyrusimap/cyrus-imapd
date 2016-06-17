@@ -107,13 +107,11 @@ static struct mime_type_t isched_mime_types[] = {
       (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
       NULL, NULL, NULL
     },
-#ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, NULL, NULL,
     },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 

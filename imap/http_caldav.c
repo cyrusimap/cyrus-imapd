@@ -270,13 +270,11 @@ static struct mime_type_t caldav_mime_types[] = {
       (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
       NULL, &begin_xcal, &end_xcal
     },
-#ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -582,9 +580,7 @@ static void my_caldav_init(struct buf *serverinfo)
         buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
 #endif
-#ifdef WITH_JSON
     buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
-#endif
 
     namespace_calendar.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
@@ -6844,12 +6840,10 @@ static struct mime_type_t freebusy_mime_types[] = {
       (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
-#ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jfb",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       NULL, NULL, NULL, NULL
     },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 

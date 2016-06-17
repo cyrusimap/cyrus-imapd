@@ -43,8 +43,6 @@
 
 #include <config.h>
 
-#ifdef WITH_JSON
-
 #include <stdio.h>  /* for snprintf() */
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
@@ -877,5 +875,3 @@ EXPORTED void end_jcal(struct buf *buf)
     /* End jCal stream */
     buf_setcstr(buf, "]]");
 }
-
-#endif  /* WITH_JSON */

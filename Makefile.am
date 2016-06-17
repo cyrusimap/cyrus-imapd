@@ -846,7 +846,7 @@ backup_ctl_backups_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 backup_cyr_backup_SOURCES = \
     imap/mutex_fake.c \
     backup/cyr_backup.c
-backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
+backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 
 backup_restore_SOURCES = \
     imap/mutex_fake.c \
@@ -895,7 +895,7 @@ imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c maste
 imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_buildinfo_SOURCES = imap/cli_fatal.c imap/cyr_buildinfo.c imap/mutex_fake.c master/masterconf.c
-imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
+imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 
 imap_cyr_sequence_SOURCES = imap/cli_fatal.c imap/cyr_sequence.c imap/mutex_fake.c
 imap_cyr_sequence_LDADD = $(LD_UTILITY_ADD)
@@ -975,8 +975,15 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 
 dist_imap_libcyrus_imap_la_SOURCES =
 
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) $(GCOV_LIBS) lib/libcyrus_min.la lib/libcyrus.la
-imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+imap_libcyrus_imap_la_LIBADD = \
+    $(COM_ERR_LIBS) \
+    $(LIB_UUID) \
+    $(GCOV_LIBS) \
+    $(JANSSON_LIBS) \
+    lib/libcyrus_min.la \
+    lib/libcyrus.la
+
+imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) $(JANSSON_CFLAGS)
 imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS)
 
 imap_libcyrus_imap_la_SOURCES = \
@@ -1101,11 +1108,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/search_sphinx.c \
 	imap/sphinxmgr_client.c \
 	imap/sphinxmgr_client.h
-endif
-
-if JANSSON
-imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
-imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
 endif
 
 if HTTPD
