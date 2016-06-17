@@ -3688,7 +3688,7 @@ static int expand_occurrences(icalcomponent *ical,
 /* See if the current resource matches the specified filter
  * (comp-type and/or time-range).  Returns 1 if match, 0 otherwise.
  */
-int apply_rangefilter(struct propfind_ctx *fctx, void *data)
+int apply_fbfilter(struct propfind_ctx *fctx, void *data)
 {
     struct freebusy_filter *calfilter =
         (struct freebusy_filter *) fctx->filter_crit;
@@ -6185,7 +6185,7 @@ static int busytime_by_resource(void *rock, void *data)
     if (r) return 0;
 
     fctx->record = &record;
-    if (apply_rangefilter(fctx, data) &&
+    if (apply_fbfilter(fctx, data) &&
         cdata->comp_type == CAL_COMP_VAVAILABILITY) {
         /* Add VAVAIL to our array for later use */
         struct freebusy_filter *calfilter =
@@ -6593,7 +6593,7 @@ static int report_fb_query(struct transaction_t *txn,
     calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
     calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
     calfilter.flags = BUSYTIME_QUERY;
-    fctx->filter = apply_rangefilter;
+    fctx->filter = apply_fbfilter;
     fctx->filter_crit = &calfilter;
 
     /* Parse children element of report */
@@ -6978,7 +6978,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.filter = apply_rangefilter;
+    fctx.filter = apply_fbfilter;
     fctx.filter_crit = &calfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;

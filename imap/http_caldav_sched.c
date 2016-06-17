@@ -780,7 +780,7 @@ int sched_busytime_query(struct transaction_t *txn,
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = org_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.filter = apply_rangefilter;
+    fctx.filter = apply_fbfilter;
     fctx.filter_crit = &calfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;
