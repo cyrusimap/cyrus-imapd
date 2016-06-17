@@ -354,7 +354,7 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             };
             int r = span_compare_range(&this_span, &range_span);
 
-            if (r > 1 || /* gone past the end of range */
+            if (r > 0 || /* gone past the end of range */
                 (!r && !callback(mastercomp, ritem, thisend, callback_data)))
                 goto done;
 
