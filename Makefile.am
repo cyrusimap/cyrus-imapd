@@ -1791,7 +1791,8 @@ GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
 docsrc/.sphinx-build.stamp:
-	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || (cd $(top_srcdir) && tar cf - docsrc) | tar xf -
+	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
+        (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc) | tar xf -
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
