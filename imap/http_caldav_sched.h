@@ -153,7 +153,6 @@ extern icaltimezone *utc_zone;
 extern struct strlist *cua_domains;
 extern icalarray *rscale_calendars;
 
-extern int apply_fbfilter(struct propfind_ctx *fctx, void *data);
 extern icalcomponent *busytime_query_local(struct transaction_t *txn,
                                            struct propfind_ctx *fctx,
                                            char mailboxname[],
