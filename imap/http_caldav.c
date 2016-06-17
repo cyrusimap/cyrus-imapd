@@ -138,7 +138,7 @@ static struct partial_caldata_t {
     struct partial_comp_t *comp;
 } partial_caldata;
 
-static int is_busytime(struct freebusy_filter *calfilter, icalcomponent *comp);
+static int is_busytime(icalcomponent *comp);
 
 static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
@@ -3562,7 +3562,7 @@ static int add_freebusy_comp(icalcomponent *comp,
     struct icaltimetype recurid;
     icalparameter_fbtype fbtype;
 
-    if (!is_busytime(calfilter, comp)) return 1;
+    if (!is_busytime(comp)) return 1;
 
     /* Set start and end times */
     start = icaltime_convert_to_zone(start, utc_zone);
@@ -3626,7 +3626,7 @@ static int add_freebusy_comp(icalcomponent *comp,
 }
 
 
-static int is_busytime(struct freebusy_filter *calfilter, icalcomponent *comp)
+static int is_busytime(icalcomponent *comp)
 {
     /* Check TRANSP and STATUS per RFC 4791, section 7.10 */
     const icalproperty *prop;
