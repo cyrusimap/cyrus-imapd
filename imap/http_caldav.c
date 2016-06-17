@@ -3695,11 +3695,10 @@ int apply_rangefilter(struct propfind_ctx *fctx, void *data)
     struct caldav_data *cdata = (struct caldav_data *) data;
     int match = 1;
 
-    /* https://tools.ietf.org/html/rfc4791#section-9.7.1 says that just
-     * VCALENDAR by itself with no sub keys should match too */
-    if (calfilter->comp && calfilter->comp != CAL_COMP_VCALENDAR) {
-        /* Perform CALDAV:comp-filter filtering */
-        if (!(cdata->comp_type & calfilter->comp)) return 0;
+    /* Perform component filtering */
+    if (!(cdata->comp_type &
+          (CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY))) {
+        return 0;
     }
 
     if (!icaltime_is_null_time(calfilter->start)) {
@@ -6591,8 +6590,6 @@ static int report_fb_query(struct transaction_t *txn,
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     memset(&calfilter, 0, sizeof(struct freebusy_filter));
-    calfilter.comp =
-        CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
     calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
     calfilter.flags = BUSYTIME_QUERY;
@@ -6920,8 +6917,6 @@ static int meth_get_head_fb(struct transaction_t *txn,
     if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
 
     memset(&calfilter, 0, sizeof(struct freebusy_filter));
-    calfilter.comp =
-        CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
 
     /* Check for 'start' */

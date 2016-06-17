@@ -133,7 +133,6 @@ struct vavailability_array {
 };
 
 struct freebusy_filter {
-    unsigned comp;
     unsigned flags;
     struct icaltimetype start;
     struct icaltimetype end;

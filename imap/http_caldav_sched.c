@@ -769,8 +769,6 @@ int sched_busytime_query(struct transaction_t *txn,
 
     /* Populate our filter and propfind context for local attendees */
     memset(&calfilter, 0, sizeof(struct freebusy_filter));
-    calfilter.comp =
-        CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.start = icalcomponent_get_dtstart(comp);
     calfilter.end = icalcomponent_get_dtend(comp);
     calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
