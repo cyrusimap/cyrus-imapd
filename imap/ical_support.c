@@ -201,9 +201,22 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
         else range_span.end = eternity;
     }
 
-    icalcomponent *mastercomp = NULL;
+    icalcomponent *mastercomp = NULL, *comp;
 
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    switch (icalcomponent_isa(ical)) {
+    case ICAL_VCALENDAR_COMPONENT:
+        comp = icalcomponent_get_first_real_component(ical);
+        break;
+
+    case ICAL_VAVAILABILITY_COMPONENT:
+        comp = icalcomponent_get_first_component(ical, ICAL_XAVAILABLE_COMPONENT);
+        break;
+
+    default:
+        comp = ical;
+        break;
+    }
+
     icalcomponent_kind kind = icalcomponent_isa(comp);
 
     /* find the master component */
