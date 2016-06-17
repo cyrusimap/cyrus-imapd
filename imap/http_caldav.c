@@ -138,6 +138,8 @@ static struct partial_caldata_t {
     struct partial_comp_t *comp;
 } partial_caldata;
 
+static int is_busytime(struct calrange_filter *calfilter, icalcomponent *comp);
+
 static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_fb(struct transaction_t *txn, void *params);
@@ -3554,17 +3556,19 @@ static void add_freebusy(struct icaltimetype *recurid,
 
 
 /* Append a new busytime period for recurring comp to the busytime array */
-static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
-                              void *rock)
+static int add_freebusy_comp(icalcomponent *comp,
+                             icaltimetype start, icaltimetype end,
+                             void *rock)
 {
     struct calrange_filter *calfilter = (struct calrange_filter *) rock;
-    int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    struct icaltimetype start, end, recurid;
+    struct icaltimetype recurid;
     icalparameter_fbtype fbtype;
 
+    if (!is_busytime(calfilter, comp)) return 1;
+
     /* Set start and end times */
-    start = icaltime_from_timet_with_zone(span->start, is_date, utc_zone);
-    end = icaltime_from_timet_with_zone(span->end, is_date, utc_zone);
+    start = icaltime_convert_to_zone(start, utc_zone);
+    end = icaltime_convert_to_zone(end, utc_zone);
 
     /* Set recurid */
     recurid = icalcomponent_get_recurrenceid_with_zone(comp);
@@ -3619,6 +3623,8 @@ static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
     }
 
     add_freebusy(&recurid, &start, &end, fbtype, calfilter);
+
+    return 1;
 }
 
 
@@ -3641,16 +3647,6 @@ static int is_busytime(struct calrange_filter *calfilter, icalcomponent *comp)
 }
 
 
-/* Compare recurid to recurid of busytime periods -- used for searching */
-static int compare_recurid(const void *key, const void *mem)
-{
-    struct icaltimetype *recurid = (struct icaltimetype *) key;
-    struct freebusy *fb = (struct freebusy *) mem;
-
-    return icaltime_compare(*recurid, fb->recurid);
-}
-
-
 /* Compare start/end times of freebusy periods -- used for sorting */
 static int compare_freebusy(const void *fb1, const void *fb2)
 {
@@ -3665,83 +3661,25 @@ static int compare_freebusy(const void *fb1, const void *fb2)
 }
 
 
-static int expand_occurrences(icalcomponent *ical, icalcomponent **master,
-                              icalcomponent_kind kind,
+static int expand_occurrences(icalcomponent *ical,
                               struct calrange_filter *calfilter)
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
-    icalcomponent *comp;
-    icaltime_span rangespan;
-    unsigned firstr, lastr;
+    struct icalperiodtype rangespan;
+    unsigned firstr;
 
     /* If not saving busytime, reset our array */
     if (!(calfilter->flags & BUSYTIME_QUERY)) freebusy->len = 0;
 
     /* Create a span for the given time-range */
-    rangespan.start = icaltime_as_timet_with_zone(calfilter->start, utc_zone);
-    rangespan.end = icaltime_as_timet_with_zone(calfilter->end, utc_zone);
+    rangespan.start = calfilter->start;
+    rangespan.end = calfilter->end;
 
     /* Mark start of where recurrences will be added */
     firstr = freebusy->len;
 
-    /* Find the master component */
-    for (comp = icalcomponent_get_first_component(ical, kind);
-         comp &&
-             icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-         comp = icalcomponent_get_next_component(ical, kind));
-    if (master) *master = comp;
-
-    if (is_busytime(calfilter, comp)) {
-        /* Add all recurring busytime in specified time-range */
-        icalcomponent_foreach_recurrence(comp,
-                                         calfilter->start,
-                                         calfilter->end,
-                                         add_freebusy_comp, calfilter);
-    }
-
-    /* Mark end of where recurrences were added */
-    lastr = freebusy->len;
-
-    /* Sort freebusy periods by start time */
-    qsort(freebusy->fb + firstr, freebusy->len - firstr,
-          sizeof(struct freebusy), compare_freebusy);
-
-    /* Handle overridden recurrences */
-    for (comp = icalcomponent_get_first_component(ical, kind);
-         comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        struct icaltimetype recurid;
-        struct freebusy *overridden;
-        icaltime_span recurspan;
-
-        recurid = icalcomponent_get_recurrenceid_with_zone(comp);
-        if (icaltime_is_null_time(recurid)) continue;
-
-        recurid = icaltime_convert_to_zone(recurid, utc_zone);
-        recurid.is_date = 0;  /* make DATE-TIME for comparison */
-
-        /* Check if this overridden instance is in our array */
-        overridden = bsearch(&recurid, freebusy->fb + firstr, lastr - firstr,
-                             sizeof(struct freebusy), compare_recurid);
-        if (overridden) {
-            /* "Remove" the instance
-               by setting fbtype to NONE (we ignore these later)
-               NOTE: MUST keep recurid otherwise bsearch() breaks */
-            /* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
-            overridden->type = ICAL_FBTYPE_NONE;
-        }
-
-        /* If overriding component isn't busytime, skip it */
-        if (!is_busytime(calfilter, comp)) continue;
-
-        /* Check if the new instance is in our time-range */
-        recurspan = icaltime_span_new(icalcomponent_get_dtstart(comp),
-                                      icalcomponent_get_dtend(comp), 1);
-
-        if (icaltime_span_overlaps(&recurspan, &rangespan)) {
-            /* Add this instance to the array */
-            add_freebusy_comp(comp, &recurspan, calfilter);
-        }
-    }
+    icalcomponent_myforeach(ical, rangespan,
+                            NULL, add_freebusy_comp, calfilter);
 
     return (freebusy->len - firstr);
 }
@@ -3787,12 +3725,8 @@ int apply_rangefilter(struct propfind_ctx *fctx, void *data)
              * to perform complete check of each recurrence.
              */
             icalcomponent *ical = record_to_ical(fctx->mailbox, fctx->record, NULL);
-            icalcomponent_kind kind;
 
-            kind =
-                icalcomponent_isa(icalcomponent_get_first_real_component(ical));
-
-            match = expand_occurrences(ical, NULL, kind, calfilter);
+            match = expand_occurrences(ical, calfilter);
 
             icalcomponent_free(ical);
         }
@@ -6369,7 +6303,6 @@ static void combine_vavailability(struct calrange_filter *calfilter)
 
         for (range = ranges, prev = NULL; range; prev = range, range = next) {
             struct icalperiodtype period;
-            icaltime_span span;
 
             next = range->next;
 
@@ -6430,7 +6363,7 @@ static void combine_vavailability(struct calrange_filter *calfilter)
             }
 
             /* Expand available time occurrences */
-            expand_occurrences(comp, NULL, ICAL_XAVAILABLE_COMPONENT, &availfilter);
+            expand_occurrences(comp, &availfilter);
 
             /* Calculate unavailable periods and add to busytime */
             period.start = availfilter.start;
@@ -6442,15 +6375,13 @@ static void combine_vavailability(struct calrange_filter *calfilter)
 
                 period.end = fb->per.start;
                 if (icaltime_compare(period.end, period.start) > 0) {
-                    span = icaltime_span_new(period.start, period.end, 1);
-                    add_freebusy_comp(comp, &span, calfilter);
+                    add_freebusy_comp(comp, period.start, period.end, calfilter);
                 }
                 period.start = fb->per.end;
             }
             period.end = availfilter.end;
             if (icaltime_compare(period.end, period.start) > 0) {
-                span = icaltime_span_new(period.start, period.end, 1);
-                add_freebusy_comp(comp, &span, calfilter);
+                add_freebusy_comp(comp, period.start, period.end, calfilter);
             }
         }
 
