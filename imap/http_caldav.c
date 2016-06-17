@@ -138,8 +138,6 @@ static struct partial_caldata_t {
     struct partial_comp_t *comp;
 } partial_caldata;
 
-static int is_busytime(icalcomponent *comp);
-
 static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_fb(struct transaction_t *txn, void *params);
@@ -3508,250 +3506,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 }
 
 
-/* Append a new busytime period to the busytime array */
-static void add_freebusy(struct icaltimetype *recurid,
-                         struct icaltimetype *start,
-                         struct icaltimetype *end,
-                         icalparameter_fbtype fbtype,
-                         struct freebusy_filter *calfilter)
-{
-    struct freebusy_array *freebusy = &calfilter->freebusy;
-    struct freebusy *newfb;
-
-    /* Grow the array, if necessary */
-    if (freebusy->len == freebusy->alloc) {
-        freebusy->alloc += 100;  /* XXX  arbitrary */
-        freebusy->fb = xrealloc(freebusy->fb,
-                                freebusy->alloc * sizeof(struct freebusy));
-    }
-
-    /* Add new freebusy */
-    newfb = &freebusy->fb[freebusy->len++];
-    memset(newfb, 0, sizeof(struct freebusy));
-
-    if (recurid) newfb->recurid = *recurid;
-
-    if (icaltime_is_date(*start)) {
-        newfb->per.duration = icaltime_subtract(*end, *start);
-        newfb->per.end = icaltime_null_time();
-        start->is_date = 0;  /* MUST be DATE-TIME */
-        newfb->per.start = icaltime_convert_to_zone(*start, utc_zone);
-    }
-    else {
-        newfb->per.duration = icaldurationtype_null_duration();
-        if (icaltime_compare(calfilter->end, *end) < 0) {
-            newfb->per.end = calfilter->end;
-        }
-        else newfb->per.end = *end;
-
-        if (icaltime_compare(calfilter->start, *start) > 0) {
-            newfb->per.start = calfilter->start;
-        }
-        else newfb->per.start = *start;
-    }
-    newfb->type = fbtype;
-}
-
-
-/* Append a new busytime period for recurring comp to the busytime array */
-static int add_freebusy_comp(icalcomponent *comp,
-                             icaltimetype start, icaltimetype end,
-                             void *rock)
-{
-    struct freebusy_filter *calfilter = (struct freebusy_filter *) rock;
-    struct icaltimetype recurid;
-    icalparameter_fbtype fbtype;
-
-    if (!is_busytime(comp)) return 1;
-
-    /* Set start and end times */
-    start = icaltime_convert_to_zone(start, utc_zone);
-    end = icaltime_convert_to_zone(end, utc_zone);
-
-    /* Set recurid */
-    recurid = icalcomponent_get_recurrenceid_with_zone(comp);
-    if (icaltime_is_null_time(recurid)) recurid = start;
-    else {
-        recurid = icaltime_convert_to_zone(recurid, utc_zone);
-        recurid.is_date = 0;  /* make DATE-TIME for comparison */
-    }
-
-    /* Set FBTYPE */
-    switch (icalcomponent_isa(comp)) {
-    case ICAL_VEVENT_COMPONENT:
-        fbtype = icalcomponent_get_status(comp) == ICAL_STATUS_TENTATIVE ?
-            ICAL_FBTYPE_BUSYTENTATIVE : ICAL_FBTYPE_BUSY;
-        break;
-
-    case ICAL_VFREEBUSY_COMPONENT:
-        /* XXX  Need to do something better here */
-        fbtype = ICAL_FBTYPE_BUSY;
-        break;
-
-#ifdef HAVE_VAVAILABILITY
-    case ICAL_VAVAILABILITY_COMPONENT: {
-        enum icalproperty_busytype busytype = ICAL_BUSYTYPE_BUSYUNAVAILABLE;
-        icalproperty *prop =
-            icalcomponent_get_first_property(comp, ICAL_BUSYTYPE_PROPERTY);
-
-        if (prop) busytype = icalproperty_get_busytype(prop);
-
-        switch (busytype) {
-        case ICAL_BUSYTYPE_BUSYUNAVAILABLE:
-            fbtype = ICAL_FBTYPE_BUSYUNAVAILABLE;
-            break;
-        case ICAL_BUSYTYPE_BUSYTENTATIVE:
-            fbtype = ICAL_FBTYPE_BUSYTENTATIVE;
-            break;
-        default:
-            fbtype = ICAL_FBTYPE_BUSY;
-            break;
-        }
-        break;
-    }
-
-    case ICAL_XAVAILABLE_COMPONENT:
-        fbtype = ICAL_FBTYPE_FREE;
-        break;
-#endif /* HAVE_VAVAILABILITY */
-
-    default:
-        fbtype = ICAL_FBTYPE_NONE;
-        break;
-    }
-
-    add_freebusy(&recurid, &start, &end, fbtype, calfilter);
-
-    return 1;
-}
-
-
-static int is_busytime(icalcomponent *comp)
-{
-    /* Check TRANSP and STATUS per RFC 4791, section 7.10 */
-    const icalproperty *prop;
-
-    /* Skip transparent events */
-    prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-    if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT)
-        return 0;
-
-    /* Skip cancelled events */
-    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 0;
-
-    return 1;
-}
-
-
-/* Compare start/end times of freebusy periods -- used for sorting */
-static int compare_freebusy(const void *fb1, const void *fb2)
-{
-    struct freebusy *a = (struct freebusy *) fb1;
-    struct freebusy *b = (struct freebusy *) fb2;
-
-    int r = icaltime_compare(a->per.start, b->per.start);
-
-    if (r == 0) r = icaltime_compare(a->per.end, b->per.end);
-
-    return r;
-}
-
-
-static int expand_occurrences(icalcomponent *ical,
-                              struct freebusy_filter *calfilter)
-{
-    struct freebusy_array *freebusy = &calfilter->freebusy;
-    struct icalperiodtype rangespan;
-    unsigned firstr;
-
-    /* Create a span for the given time-range */
-    rangespan.start = calfilter->start;
-    rangespan.end = calfilter->end;
-
-    /* Mark start of where recurrences will be added */
-    firstr = freebusy->len;
-
-    icalcomponent_myforeach(ical, rangespan,
-                            NULL, add_freebusy_comp, calfilter);
-
-    return (freebusy->len - firstr);
-}
-
-
-/* See if the current resource matches the specified filter
- * (comp-type and/or time-range).  Returns 1 if match, 0 otherwise.
- */
-int apply_fbfilter(struct propfind_ctx *fctx, void *data)
-{
-    struct freebusy_filter *calfilter =
-        (struct freebusy_filter *) fctx->filter_crit;
-    struct caldav_data *cdata = (struct caldav_data *) data;
-    int match = 1;
-
-    /* Perform component filtering */
-    if (!(cdata->comp_type &
-          (CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY))) {
-        return 0;
-    }
-
-    if (!icaltime_is_null_time(calfilter->start)) {
-        /* Perform CALDAV:time-range filtering */
-        struct icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
-        struct icaltimetype dtend = icaltime_from_string(cdata->dtend);
-
-        if (icaltime_compare(dtend, calfilter->start) <= 0) {
-            /* Component ends earlier than range */
-            return 0;
-        }
-        else if (icaltime_compare(dtstart, calfilter->end) >= 0) {
-            /* Component starts later than range */
-            return 0;
-        }
-        else if (cdata->comp_type == CAL_COMP_VAVAILABILITY) {
-            /* Don't try to expand VAVAILABILITY, just mark it as in range */
-            return 1;
-        }
-        else if (cdata->comp_flags.recurring) {
-            /* Component is recurring.
-             * Need to mmap() and parse iCalendar object
-             * to perform complete check of each recurrence.
-             */
-            icalcomponent *ical = record_to_ical(fctx->mailbox, fctx->record, NULL);
-
-            match = expand_occurrences(ical, calfilter);
-
-            icalcomponent_free(ical);
-        }
-        else {
-            icalparameter_fbtype fbtype;
-            /* Component is non-recurring and we need to save busytime */
-            if (cdata->comp_flags.transp) {
-                /* Don't include transparent events in freebusy */
-                return 0;
-            }
-            if (cdata->comp_flags.status == CAL_STATUS_CANCELED) {
-                /* Don't include canceled events in freebusy */
-                return 0;
-            }
-
-            switch (cdata->comp_flags.status) {
-            case CAL_STATUS_UNAVAILABLE:
-                fbtype = ICAL_FBTYPE_BUSYUNAVAILABLE; break;
-
-            case CAL_STATUS_TENTATIVE:
-                fbtype = ICAL_FBTYPE_BUSYTENTATIVE; break;
-
-            default:
-                fbtype = ICAL_FBTYPE_BUSY; break;
-            }
-
-            add_freebusy(&dtstart, &dtstart, &dtend, fbtype, calfilter);
-        }
-    }
-
-    return match;
-}
-
 struct comp_filter {
     xmlChar *name;              /* need this for X- components */
     unsigned depth;
@@ -6114,6 +5868,153 @@ static int report_cal_query(struct transaction_t *txn,
 }
 
 
+static int is_busytime(icalcomponent *comp)
+{
+    /* Check TRANSP and STATUS per RFC 4791, section 7.10 */
+    const icalproperty *prop;
+
+    /* Skip transparent events */
+    prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+    if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT)
+        return 0;
+
+    /* Skip cancelled events */
+    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 0;
+
+    return 1;
+}
+
+
+/* Append a new busytime period to the busytime array */
+static void add_freebusy(struct icaltimetype *recurid,
+                         struct icaltimetype *start,
+                         struct icaltimetype *end,
+                         icalparameter_fbtype fbtype,
+                         struct freebusy_filter *calfilter)
+{
+    struct freebusy_array *freebusy = &calfilter->freebusy;
+    struct freebusy *newfb;
+
+    /* Grow the array, if necessary */
+    if (freebusy->len == freebusy->alloc) {
+        freebusy->alloc += 100;  /* XXX  arbitrary */
+        freebusy->fb = xrealloc(freebusy->fb,
+                                freebusy->alloc * sizeof(struct freebusy));
+    }
+
+    /* Add new freebusy */
+    newfb = &freebusy->fb[freebusy->len++];
+    memset(newfb, 0, sizeof(struct freebusy));
+
+    if (recurid) newfb->recurid = *recurid;
+
+    if (icaltime_is_date(*start)) {
+        newfb->per.duration = icaltime_subtract(*end, *start);
+        newfb->per.end = icaltime_null_time();
+        start->is_date = 0;  /* MUST be DATE-TIME */
+        newfb->per.start = icaltime_convert_to_zone(*start, utc_zone);
+    }
+    else {
+        newfb->per.duration = icaldurationtype_null_duration();
+        if (icaltime_compare(calfilter->end, *end) < 0) {
+            newfb->per.end = calfilter->end;
+        }
+        else newfb->per.end = *end;
+
+        if (icaltime_compare(calfilter->start, *start) > 0) {
+            newfb->per.start = calfilter->start;
+        }
+        else newfb->per.start = *start;
+    }
+    newfb->type = fbtype;
+}
+
+
+/* Append a new busytime period for recurring comp to the busytime array */
+static int add_freebusy_comp(icalcomponent *comp,
+                             icaltimetype start, icaltimetype end,
+                             void *rock)
+{
+    struct freebusy_filter *calfilter = (struct freebusy_filter *) rock;
+    struct icaltimetype recurid;
+    icalparameter_fbtype fbtype;
+
+    if (!is_busytime(comp)) return 1;
+
+    /* Set start and end times */
+    start = icaltime_convert_to_zone(start, utc_zone);
+    end = icaltime_convert_to_zone(end, utc_zone);
+
+    /* Set recurid */
+    recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+    if (icaltime_is_null_time(recurid)) recurid = start;
+    else {
+        recurid = icaltime_convert_to_zone(recurid, utc_zone);
+        recurid.is_date = 0;  /* make DATE-TIME for comparison */
+    }
+
+    /* Set FBTYPE */
+    switch (icalcomponent_isa(comp)) {
+    case ICAL_VEVENT_COMPONENT:
+        fbtype = icalcomponent_get_status(comp) == ICAL_STATUS_TENTATIVE ?
+            ICAL_FBTYPE_BUSYTENTATIVE : ICAL_FBTYPE_BUSY;
+        break;
+
+    case ICAL_VFREEBUSY_COMPONENT:
+        /* XXX  Need to do something better here */
+        fbtype = ICAL_FBTYPE_BUSY;
+        break;
+
+#ifdef HAVE_VAVAILABILITY
+    case ICAL_VAVAILABILITY_COMPONENT: {
+        enum icalproperty_busytype busytype = ICAL_BUSYTYPE_BUSYUNAVAILABLE;
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_BUSYTYPE_PROPERTY);
+
+        if (prop) busytype = icalproperty_get_busytype(prop);
+
+        switch (busytype) {
+        case ICAL_BUSYTYPE_BUSYUNAVAILABLE:
+            fbtype = ICAL_FBTYPE_BUSYUNAVAILABLE;
+            break;
+        case ICAL_BUSYTYPE_BUSYTENTATIVE:
+            fbtype = ICAL_FBTYPE_BUSYTENTATIVE;
+            break;
+        default:
+            fbtype = ICAL_FBTYPE_BUSY;
+            break;
+        }
+        break;
+    }
+
+    case ICAL_XAVAILABLE_COMPONENT:
+        fbtype = ICAL_FBTYPE_FREE;
+        break;
+#endif /* HAVE_VAVAILABILITY */
+
+    default:
+        fbtype = ICAL_FBTYPE_NONE;
+        break;
+    }
+
+    add_freebusy(&recurid, &start, &end, fbtype, calfilter);
+
+    return 1;
+}
+
+
+static void expand_occurrences(icalcomponent *ical,
+                               struct freebusy_filter *calfilter)
+{
+    /* Create a span for the given time-range */
+    struct icalperiodtype rangespan =
+        { calfilter->start, calfilter->end, icaldurationtype_null_duration() };
+
+    icalcomponent_myforeach(ical, rangespan,
+                            NULL, add_freebusy_comp, calfilter);
+}
+
+
 /* Append a new vavailability period to the vavail array */
 static void
 add_vavailability(struct vavailability_array *vavail, icalcomponent *ical)
@@ -6166,35 +6067,83 @@ static int busytime_by_resource(void *rock, void *data)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct caldav_data *cdata = (struct caldav_data *) data;
-    struct index_record record;
-    int r;
+    struct freebusy_filter *calfilter =
+        (struct freebusy_filter *) fctx->filter_crit;
 
     keepalive_response();
 
     if (!cdata->dav.imap_uid) return 0;
 
-    /* Fetch index record for the resource */
-    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record);
-    if (r) return 0;
-
-    fctx->record = &record;
-    if (apply_fbfilter(fctx, data) &&
-        cdata->comp_type == CAL_COMP_VAVAILABILITY) {
-        /* Add VAVAIL to our array for later use */
-        struct freebusy_filter *calfilter =
-            (struct freebusy_filter *) fctx->filter_crit;
-        icalcomponent *vav;
-
-        mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
-
-        vav =
-            icalparser_parse_string(buf_cstring(&fctx->msg_buf) + fctx->record->header_size);
-
-        add_vavailability(&calfilter->vavail, vav);
+    /* Perform component filtering */
+    if (!(cdata->comp_type &
+          (CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY))) {
+        return 0;
     }
 
-    buf_free(&fctx->msg_buf);
-    fctx->record = NULL;
+    /* Perform time-range filtering */
+    struct icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
+    struct icaltimetype dtend = icaltime_from_string(cdata->dtend);
+
+    if (icaltime_compare(dtend, calfilter->start) <= 0) {
+        /* Component ends earlier than range */
+        return 0;
+    }
+    if (icaltime_compare(dtstart, calfilter->end) >= 0) {
+        /* Component starts later than range */
+        return 0;
+    }
+
+    if (cdata->comp_flags.recurring ||
+        cdata->comp_type == CAL_COMP_VAVAILABILITY) {
+        /* Need to mmap() and parse iCalendar object */
+        struct index_record record;
+        icalcomponent *ical = NULL;
+        int r;
+
+        /* Fetch index record for the resource */
+        r = mailbox_find_index_record(fctx->mailbox,
+                                      cdata->dav.imap_uid, &record);
+
+        if (!r) ical = record_to_ical(fctx->mailbox, &record, NULL);
+        if (!ical) return 0;
+
+        if (cdata->comp_flags.recurring) {
+            /* Component is recurring - process each recurrence */
+            expand_occurrences(ical, calfilter);
+
+            icalcomponent_free(ical);
+        }
+        else {
+            /* VAVAILABILITY - add to our array for later use */
+            add_vavailability(&calfilter->vavail, ical);
+        }
+    }
+    else {
+        /* Component is non-recurring */
+        icalparameter_fbtype fbtype;
+
+        if (cdata->comp_flags.transp) {
+            /* Don't include transparent events in freebusy */
+            return 0;
+        }
+        if (cdata->comp_flags.status == CAL_STATUS_CANCELED) {
+            /* Don't include canceled events in freebusy */
+            return 0;
+        }
+
+        switch (cdata->comp_flags.status) {
+        case CAL_STATUS_UNAVAILABLE:
+            fbtype = ICAL_FBTYPE_BUSYUNAVAILABLE; break;
+
+        case CAL_STATUS_TENTATIVE:
+            fbtype = ICAL_FBTYPE_BUSYTENTATIVE; break;
+
+        default:
+            fbtype = ICAL_FBTYPE_BUSY; break;
+        }
+
+        add_freebusy(&dtstart, &dtstart, &dtend, fbtype, calfilter);
+    }
 
     return 0;
 }
@@ -6224,6 +6173,20 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
     }
 
     return propfind_by_collection(mbentry, rock);
+}
+
+
+/* Compare start/end times of freebusy periods -- used for sorting */
+static int compare_freebusy(const void *fb1, const void *fb2)
+{
+    struct freebusy *a = (struct freebusy *) fb1;
+    struct freebusy *b = (struct freebusy *) fb2;
+
+    int r = icaltime_compare(a->per.start, b->per.start);
+
+    if (r == 0) r = icaltime_compare(a->per.end, b->per.end);
+
+    return r;
 }
 
 
@@ -6585,7 +6548,6 @@ static int report_fb_query(struct transaction_t *txn,
     memset(&calfilter, 0, sizeof(struct freebusy_filter));
     calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
     calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
-    fctx->filter = apply_fbfilter;
     fctx->filter_crit = &calfilter;
 
     /* Parse children element of report */
@@ -6970,7 +6932,6 @@ static int meth_get_head_fb(struct transaction_t *txn,
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.filter = apply_fbfilter;
     fctx.filter_crit = &calfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;
