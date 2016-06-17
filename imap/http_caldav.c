@@ -5890,9 +5890,9 @@ static void add_freebusy(struct icaltimetype *recurid,
                          struct icaltimetype *start,
                          struct icaltimetype *end,
                          icalparameter_fbtype fbtype,
-                         struct freebusy_filter *calfilter)
+                         struct freebusy_filter *fbfilter)
 {
-    struct freebusy_array *freebusy = &calfilter->freebusy;
+    struct freebusy_array *freebusy = &fbfilter->freebusy;
     struct freebusy *newfb;
 
     /* Grow the array, if necessary */
@@ -5916,13 +5916,13 @@ static void add_freebusy(struct icaltimetype *recurid,
     }
     else {
         newfb->per.duration = icaldurationtype_null_duration();
-        if (icaltime_compare(calfilter->end, *end) < 0) {
-            newfb->per.end = calfilter->end;
+        if (icaltime_compare(fbfilter->end, *end) < 0) {
+            newfb->per.end = fbfilter->end;
         }
         else newfb->per.end = *end;
 
-        if (icaltime_compare(calfilter->start, *start) > 0) {
-            newfb->per.start = calfilter->start;
+        if (icaltime_compare(fbfilter->start, *start) > 0) {
+            newfb->per.start = fbfilter->start;
         }
         else newfb->per.start = *start;
     }
@@ -5935,7 +5935,7 @@ static int add_freebusy_comp(icalcomponent *comp,
                              icaltimetype start, icaltimetype end,
                              void *rock)
 {
-    struct freebusy_filter *calfilter = (struct freebusy_filter *) rock;
+    struct freebusy_filter *fbfilter = (struct freebusy_filter *) rock;
     struct icaltimetype recurid;
     icalparameter_fbtype fbtype;
 
@@ -5997,21 +5997,20 @@ static int add_freebusy_comp(icalcomponent *comp,
         break;
     }
 
-    add_freebusy(&recurid, &start, &end, fbtype, calfilter);
+    add_freebusy(&recurid, &start, &end, fbtype, fbfilter);
 
     return 1;
 }
 
 
 static void expand_occurrences(icalcomponent *ical,
-                               struct freebusy_filter *calfilter)
+                               struct freebusy_filter *fbfilter)
 {
     /* Create a span for the given time-range */
     struct icalperiodtype rangespan =
-        { calfilter->start, calfilter->end, icaldurationtype_null_duration() };
+        { fbfilter->start, fbfilter->end, icaldurationtype_null_duration() };
 
-    icalcomponent_myforeach(ical, rangespan,
-                            NULL, add_freebusy_comp, calfilter);
+    icalcomponent_myforeach(ical, rangespan, NULL, add_freebusy_comp, fbfilter);
 }
 
 
@@ -6067,7 +6066,7 @@ static int busytime_by_resource(void *rock, void *data)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct caldav_data *cdata = (struct caldav_data *) data;
-    struct freebusy_filter *calfilter =
+    struct freebusy_filter *fbfilter =
         (struct freebusy_filter *) fctx->filter_crit;
 
     keepalive_response();
@@ -6084,11 +6083,11 @@ static int busytime_by_resource(void *rock, void *data)
     struct icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
     struct icaltimetype dtend = icaltime_from_string(cdata->dtend);
 
-    if (icaltime_compare(dtend, calfilter->start) <= 0) {
+    if (icaltime_compare(dtend, fbfilter->start) <= 0) {
         /* Component ends earlier than range */
         return 0;
     }
-    if (icaltime_compare(dtstart, calfilter->end) >= 0) {
+    if (icaltime_compare(dtstart, fbfilter->end) >= 0) {
         /* Component starts later than range */
         return 0;
     }
@@ -6109,13 +6108,13 @@ static int busytime_by_resource(void *rock, void *data)
 
         if (cdata->comp_flags.recurring) {
             /* Component is recurring - process each recurrence */
-            expand_occurrences(ical, calfilter);
+            expand_occurrences(ical, fbfilter);
 
             icalcomponent_free(ical);
         }
         else {
             /* VAVAILABILITY - add to our array for later use */
-            add_vavailability(&calfilter->vavail, ical);
+            add_vavailability(&fbfilter->vavail, ical);
         }
     }
     else {
@@ -6142,7 +6141,7 @@ static int busytime_by_resource(void *rock, void *data)
             fbtype = ICAL_FBTYPE_BUSY; break;
         }
 
-        add_freebusy(&dtstart, &dtstart, &dtend, fbtype, calfilter);
+        add_freebusy(&dtstart, &dtstart, &dtend, fbtype, fbfilter);
     }
 
     return 0;
@@ -6154,16 +6153,17 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 {
     const char *mboxname = mbentry->name;
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    struct freebusy_filter *calfilter =
+    struct freebusy_filter *fbfilter =
         (struct freebusy_filter *) fctx->filter_crit;
 
-    if (calfilter && (calfilter->flags & CHECK_CAL_TRANSP)) {
+    if (fbfilter->flags & CHECK_CAL_TRANSP) {
         /* Check if the collection is marked as transparent */
         struct buf attrib = BUF_INITIALIZER;
         const char *prop_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 
-        if (!annotatemore_lookupmask(mboxname, prop_annot, httpd_userid, &attrib)) {
+        if (!annotatemore_lookupmask(mboxname, prop_annot,
+                                     httpd_userid, &attrib)) {
             if (!strcmp(buf_cstring(&attrib), "transparent")) {
                 buf_free(&attrib);
                 return 0;
@@ -6222,9 +6222,9 @@ static int compare_vavail(const void *v1, const void *v2)
 }
 
 
-static void combine_vavailability(struct freebusy_filter *calfilter)
+static void combine_vavailability(struct freebusy_filter *fbfilter)
 {
-    struct vavailability_array *vavail = &calfilter->vavail;
+    struct vavailability_array *vavail = &fbfilter->vavail;
     struct freebusy_filter availfilter;
     struct query_range {
         struct icalperiodtype per;
@@ -6245,8 +6245,8 @@ static void combine_vavailability(struct freebusy_filter *calfilter)
      * Quit when no ranges or VAVAILABILITY components remain.
      */
     ranges = xmalloc(sizeof(struct query_range));
-    ranges->per.start = calfilter->start;
-    ranges->per.end = calfilter->end;
+    ranges->per.start = fbfilter->start;
+    ranges->per.end = fbfilter->end;
     ranges->next = NULL;
 
     for (i = 0; i < vavail->len; i++) {
@@ -6330,13 +6330,13 @@ static void combine_vavailability(struct freebusy_filter *calfilter)
 
                 period.end = fb->per.start;
                 if (icaltime_compare(period.end, period.start) > 0) {
-                    add_freebusy_comp(comp, period.start, period.end, calfilter);
+                    add_freebusy_comp(comp, period.start, period.end, fbfilter);
                 }
                 period.start = fb->per.end;
             }
             period.end = availfilter.end;
             if (icaltime_compare(period.end, period.start) > 0) {
-                add_freebusy_comp(comp, period.start, period.end, calfilter);
+                add_freebusy_comp(comp, period.start, period.end, fbfilter);
             }
         }
 
@@ -6367,10 +6367,10 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
                                     const char *organizer,
                                     const char *attendee)
 {
-    struct freebusy_filter *calfilter =
+    struct freebusy_filter *fbfilter =
         (struct freebusy_filter *) fctx->filter_crit;
-    struct freebusy_array *freebusy = &calfilter->freebusy;
-    struct vavailability_array *vavail = &calfilter->vavail;
+    struct freebusy_array *freebusy = &fbfilter->freebusy;
+    struct vavailability_array *vavail = &fbfilter->vavail;
     icalcomponent *ical = NULL;
     icalcomponent *fbcomp;
     icalproperty *prop;
@@ -6403,7 +6403,7 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
 
     if (*fctx->ret) return NULL;
 
-    if (calfilter->flags & CHECK_USER_AVAIL) {
+    if (fbfilter->flags & CHECK_USER_AVAIL) {
         /* Check for CALDAV:calendar-availability on user's Inbox */
         struct buf attrib = BUF_INITIALIZER;
         const char *prop_annot =
@@ -6418,7 +6418,7 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
     }
 
     /* Combine VAVAILABILITY components into busytime */
-    if (vavail->len) combine_vavailability(calfilter);
+    if (vavail->len) combine_vavailability(fbfilter);
 
     /* Sort busytime periods by type and start/end times for coalescing */
     qsort(freebusy->fb, freebusy->len,
@@ -6490,8 +6490,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
                                  icalproperty_new_dtstamp(
                                      icaltime_from_timet_with_zone(
                                          time(0), 0, utc_zone)),
-                                 icalproperty_new_dtstart(calfilter->start),
-                                 icalproperty_new_dtend(calfilter->end),
+                                 icalproperty_new_dtstart(fbfilter->start),
+                                 icalproperty_new_dtend(fbfilter->end),
                                  0);
 
     icalcomponent_add_component(ical, fbcomp);
@@ -6531,7 +6531,7 @@ static int report_fb_query(struct transaction_t *txn,
     int ret = 0;
     const char **hdr;
     struct mime_type_t *mime;
-    struct freebusy_filter calfilter;
+    struct freebusy_filter fbfilter;
     xmlNodePtr node;
     icalcomponent *cal;
 
@@ -6545,10 +6545,10 @@ static int report_fb_query(struct transaction_t *txn,
     else mime = caldav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
-    memset(&calfilter, 0, sizeof(struct freebusy_filter));
-    calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
-    calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
-    fctx->filter_crit = &calfilter;
+    memset(&fbfilter, 0, sizeof(struct freebusy_filter));
+    fbfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
+    fbfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
+    fctx->filter_crit = &fbfilter;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -6558,17 +6558,17 @@ static int report_fb_query(struct transaction_t *txn,
 
                 start = xmlGetProp(node, BAD_CAST "start");
                 if (start) {
-                    calfilter.start = icaltime_from_string((char *) start);
+                    fbfilter.start = icaltime_from_string((char *) start);
                     xmlFree(start);
                 }
 
                 end = xmlGetProp(node, BAD_CAST "end");
                 if (end) {
-                    calfilter.end = icaltime_from_string((char *) end);
+                    fbfilter.end = icaltime_from_string((char *) end);
                     xmlFree(end);
                 }
 
-                if (!is_valid_timerange(calfilter.start, calfilter.end)) {
+                if (!is_valid_timerange(fbfilter.start, fbfilter.end)) {
                     return HTTP_BAD_REQUEST;
                 }
             }
@@ -6578,7 +6578,7 @@ static int report_fb_query(struct transaction_t *txn,
     cal = busytime_query_local(txn, fctx, txn->req_tgt.mbentry->name,
                                0, NULL, NULL, NULL);
 
-    if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+    if (fbfilter.freebusy.fb) free(fbfilter.freebusy.fb);
 
     if (cal) {
         /* Output the iCalendar object as text/calendar */
@@ -6817,7 +6817,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     struct strlist *param;
     struct mime_type_t *mime = NULL;
     struct propfind_ctx fctx;
-    struct freebusy_filter calfilter;
+    struct freebusy_filter fbfilter;
     time_t start;
     struct icaldurationtype period = icaldurationtype_null_duration();
     icalcomponent *cal;
@@ -6870,19 +6870,19 @@ static int meth_get_head_fb(struct transaction_t *txn,
 
     if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
 
-    memset(&calfilter, 0, sizeof(struct freebusy_filter));
-    calfilter.flags = CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
+    memset(&fbfilter, 0, sizeof(struct freebusy_filter));
+    fbfilter.flags = CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
 
     /* Check for 'start' */
     param = hash_lookup("start", &txn->req_qparams);
     if (param) {
         if (param->next  /* once only */) return HTTP_BAD_REQUEST;
 
-        calfilter.start = icaltime_from_rfc3339_string(param->s);
-        if (icaltime_is_null_time(calfilter.start)) return HTTP_BAD_REQUEST;
+        fbfilter.start = icaltime_from_rfc3339_string(param->s);
+        if (icaltime_is_null_time(fbfilter.start)) return HTTP_BAD_REQUEST;
 
         /* Default to end of given day */
-        start = icaltime_as_timet_with_zone(calfilter.start, utc_zone);
+        start = icaltime_as_timet_with_zone(fbfilter.start, utc_zone);
         tm = localtime(&start);
 
         period.seconds = 60 - tm->tm_sec;
@@ -6894,7 +6894,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
         start = time(0);
         tm = localtime(&start);
         tm->tm_hour = tm->tm_min = tm->tm_sec = 0;
-        calfilter.start = icaltime_from_timet_with_zone(mktime(tm), 0, utc_zone);
+        fbfilter.start = icaltime_from_timet_with_zone(mktime(tm), 0, utc_zone);
 
         /* Default to 42 day period */
         period.days = 42;
@@ -6916,12 +6916,12 @@ static int meth_get_head_fb(struct transaction_t *txn,
     if (param) {
         if (param->next  /* once only */) return HTTP_BAD_REQUEST;
 
-        calfilter.end = icaltime_from_rfc3339_string(param->s);
-        if (icaltime_is_null_time(calfilter.end)) return HTTP_BAD_REQUEST;
+        fbfilter.end = icaltime_from_rfc3339_string(param->s);
+        if (icaltime_is_null_time(fbfilter.end)) return HTTP_BAD_REQUEST;
     }
     else {
         /* Set end based on period */
-        calfilter.end = icaltime_add(calfilter.start, period);
+        fbfilter.end = icaltime_add(fbfilter.start, period);
     }
 
 
@@ -6932,14 +6932,14 @@ static int meth_get_head_fb(struct transaction_t *txn,
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.filter_crit = &calfilter;
+    fctx.filter_crit = &fbfilter;
     fctx.err = &txn->error;
     fctx.ret = &ret;
 
     cal = busytime_query_local(txn, &fctx, txn->req_tgt.mbentry->name,
                                0, NULL, NULL, NULL);
 
-    if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+    if (fbfilter.freebusy.fb) free(fbfilter.freebusy.fb);
 
     if (cal) {
         const char *proto, *host;
