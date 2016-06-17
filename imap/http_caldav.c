@@ -138,7 +138,7 @@ static struct partial_caldata_t {
     struct partial_comp_t *comp;
 } partial_caldata;
 
-static int is_busytime(struct calrange_filter *calfilter, icalcomponent *comp);
+static int is_busytime(struct freebusy_filter *calfilter, icalcomponent *comp);
 
 static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
@@ -3513,7 +3513,7 @@ static void add_freebusy(struct icaltimetype *recurid,
                          struct icaltimetype *start,
                          struct icaltimetype *end,
                          icalparameter_fbtype fbtype,
-                         struct calrange_filter *calfilter)
+                         struct freebusy_filter *calfilter)
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
     struct freebusy *newfb;
@@ -3560,7 +3560,7 @@ static int add_freebusy_comp(icalcomponent *comp,
                              icaltimetype start, icaltimetype end,
                              void *rock)
 {
-    struct calrange_filter *calfilter = (struct calrange_filter *) rock;
+    struct freebusy_filter *calfilter = (struct freebusy_filter *) rock;
     struct icaltimetype recurid;
     icalparameter_fbtype fbtype;
 
@@ -3628,7 +3628,7 @@ static int add_freebusy_comp(icalcomponent *comp,
 }
 
 
-static int is_busytime(struct calrange_filter *calfilter, icalcomponent *comp)
+static int is_busytime(struct freebusy_filter *calfilter, icalcomponent *comp)
 {
     if (calfilter->flags & BUSYTIME_QUERY) {
         /* Check TRANSP and STATUS per RFC 4791, section 7.10 */
@@ -3662,7 +3662,7 @@ static int compare_freebusy(const void *fb1, const void *fb2)
 
 
 static int expand_occurrences(icalcomponent *ical,
-                              struct calrange_filter *calfilter)
+                              struct freebusy_filter *calfilter)
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
     struct icalperiodtype rangespan;
@@ -3690,8 +3690,8 @@ static int expand_occurrences(icalcomponent *ical,
  */
 int apply_rangefilter(struct propfind_ctx *fctx, void *data)
 {
-    struct calrange_filter *calfilter =
-        (struct calrange_filter *) fctx->filter_crit;
+    struct freebusy_filter *calfilter =
+        (struct freebusy_filter *) fctx->filter_crit;
     struct caldav_data *cdata = (struct caldav_data *) data;
     int match = 1;
 
@@ -6189,8 +6189,8 @@ static int busytime_by_resource(void *rock, void *data)
     if (apply_rangefilter(fctx, data) &&
         cdata->comp_type == CAL_COMP_VAVAILABILITY) {
         /* Add VAVAIL to our array for later use */
-        struct calrange_filter *calfilter =
-            (struct calrange_filter *) fctx->filter_crit;
+        struct freebusy_filter *calfilter =
+            (struct freebusy_filter *) fctx->filter_crit;
         icalcomponent *vav;
 
         mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
@@ -6213,8 +6213,8 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 {
     const char *mboxname = mbentry->name;
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    struct calrange_filter *calfilter =
-        (struct calrange_filter *) fctx->filter_crit;
+    struct freebusy_filter *calfilter =
+        (struct freebusy_filter *) fctx->filter_crit;
 
     if (calfilter && (calfilter->flags & CHECK_CAL_TRANSP)) {
         /* Check if the collection is marked as transparent */
@@ -6267,17 +6267,17 @@ static int compare_vavail(const void *v1, const void *v2)
 }
 
 
-static void combine_vavailability(struct calrange_filter *calfilter)
+static void combine_vavailability(struct freebusy_filter *calfilter)
 {
     struct vavailability_array *vavail = &calfilter->vavail;
-    struct calrange_filter availfilter;
+    struct freebusy_filter availfilter;
     struct query_range {
         struct icalperiodtype per;
         struct query_range *next;
     } *ranges, *range, *prev, *next;
     unsigned i, j;
 
-    memset(&availfilter, 0, sizeof(struct calrange_filter));
+    memset(&availfilter, 0, sizeof(struct freebusy_filter));
 
     /* Sort VAVAILBILITY periods by priority and start time */
     qsort(vavail->vav, vavail->len,
@@ -6412,8 +6412,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
                                     const char *organizer,
                                     const char *attendee)
 {
-    struct calrange_filter *calfilter =
-        (struct calrange_filter *) fctx->filter_crit;
+    struct freebusy_filter *calfilter =
+        (struct freebusy_filter *) fctx->filter_crit;
     struct freebusy_array *freebusy = &calfilter->freebusy;
     struct vavailability_array *vavail = &calfilter->vavail;
     icalcomponent *ical = NULL;
@@ -6576,7 +6576,7 @@ static int report_fb_query(struct transaction_t *txn,
     int ret = 0;
     const char **hdr;
     struct mime_type_t *mime;
-    struct calrange_filter calfilter;
+    struct freebusy_filter calfilter;
     xmlNodePtr node;
     icalcomponent *cal;
 
@@ -6590,7 +6590,7 @@ static int report_fb_query(struct transaction_t *txn,
     else mime = caldav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
-    memset(&calfilter, 0, sizeof(struct calrange_filter));
+    memset(&calfilter, 0, sizeof(struct freebusy_filter));
     calfilter.comp =
         CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
@@ -6866,7 +6866,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     struct strlist *param;
     struct mime_type_t *mime = NULL;
     struct propfind_ctx fctx;
-    struct calrange_filter calfilter;
+    struct freebusy_filter calfilter;
     time_t start;
     struct icaldurationtype period = icaldurationtype_null_duration();
     icalcomponent *cal;
@@ -6919,7 +6919,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
 
     if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
 
-    memset(&calfilter, 0, sizeof(struct calrange_filter));
+    memset(&calfilter, 0, sizeof(struct freebusy_filter));
     calfilter.comp =
         CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
     calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;

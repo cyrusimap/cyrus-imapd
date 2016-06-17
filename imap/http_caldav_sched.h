@@ -132,7 +132,7 @@ struct vavailability_array {
     unsigned alloc;
 };
 
-struct calrange_filter {
+struct freebusy_filter {
     unsigned comp;
     unsigned flags;
     struct icaltimetype start;
