@@ -6599,6 +6599,32 @@ static int report_fb_query(struct transaction_t *txn,
 }
 
 
+/* Replace TZID aliases with the actual TZIDs */
+void replace_tzid_aliases(icalcomponent *ical,
+                          struct hash_table *tzid_table)
+{
+    icalproperty *prop;
+    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
+        icalparameter *param =
+            icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+        if (!param) continue;
+
+        const char *tzid =
+            hash_lookup(icalparameter_get_tzid(param), tzid_table);
+        if (tzid) icalparameter_set_tzid(param, tzid);
+    }
+
+    icalcomponent *comp;
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+        replace_tzid_aliases(comp, tzid_table);
+    }
+}
+
+
 /* Store the iCal data in the specified calendar/resource */
 int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           struct mailbox *mailbox, const char *resource,
@@ -6673,7 +6699,11 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Remove all VTIMEZONE components for known TZIDs */
     if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+        struct hash_table tzid_table;
         icalcomponent *vtz, *next;
+
+        /* Create hash table for TZID aliases */
+        construct_hash_table(&tzid_table, 10, 1);
 
         for (vtz = icalcomponent_get_first_component(ical,
                                                      ICAL_VTIMEZONE_COMPONENT);
@@ -6683,11 +6713,29 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                                     ICAL_VTIMEZONE_COMPONENT);
 
             prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
-            if (!zoneinfo_lookup(icalproperty_get_tzid(prop), NULL)) {
+
+            const char *tzid = icalproperty_get_tzid(prop);
+            struct zoneinfo zi;
+
+            if (!zoneinfo_lookup(tzid, &zi)) {
+                if (zi.type == ZI_LINK) {
+                    /* Add this alias to our table */
+                    hash_insert(tzid, xstrdup(zi.data->s), &tzid_table);
+                }
+                freestrlist(zi.data);
+
                 icalcomponent_remove_component(ical, vtz);
                 icalcomponent_free(vtz);
             }
         }
+
+        if (hash_numrecords(&tzid_table)) {
+            /* Replace all TZID aliases with actual TZIDs.
+               XXX  This needs to be done otherwise looking up the
+               builtin timezone will fail on a TZID mismatch. */
+            replace_tzid_aliases(ical, &tzid_table);
+        }
+        free_hash_table(&tzid_table, free);
 
         tzbyref = 1;
     }
