@@ -172,6 +172,7 @@ struct dbengine {
     /* tracking info */
     int lock_status;
     int is_open;
+    int open_flags;
     struct txn *current_txn;
     struct timeval starttime;
 
@@ -850,6 +851,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     db->fd = -1;
     db->fname = xstrdup(fname);
     db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox : compare_signed;
+    db->open_flags = (flags & ~CYRUSDB_CREATE);
 
     db->fd = open(fname, O_RDWR, 0644);
     if (db->fd == -1 && errno == ENOENT) {
@@ -1534,7 +1536,8 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         db->current_txn = NULL;
 
     /* consider checkpointing */
-    if (!r && tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
+    if (!r && !(db->open_flags & CYRUSDB_NOCOMPACT) &&
+        tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
         r = mycheckpoint(db);
     }
 
