@@ -395,7 +395,7 @@ sub test_shutdownfile_abortedidled
     $self->{instance}->start();
     $self->start_and_abort_idled();
 
-    $self->common_basic();
+    $self->common_shutdownfile();
 }
 
 sub test_sigterm
