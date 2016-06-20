@@ -23,10 +23,6 @@
 
 #include "config.h"
 
-#ifndef _AIX
-typedef unsigned int uint;
-#endif
-
 #if defined(__cplusplus) && __cplusplus
  extern "C" {
 #endif
@@ -34,7 +30,7 @@ typedef unsigned int uint;
 EXPORTED char *stristr(const char *String, const char *Pattern)
 {
       char *pptr, *sptr, *start;
-      uint  slen, plen;
+      size_t  slen, plen;
 
       for (start = (char *)String,
            pptr  = (char *)Pattern,
