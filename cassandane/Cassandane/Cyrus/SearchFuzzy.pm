@@ -294,13 +294,16 @@ sub test_normalize_snippets
     }
 
     # Assert that search without diacritics matches
-    my $term = "naive";
-    xlog "XSNIPPETS for FUZZY text \"$term\"";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'text', { Quote => $term }]
-    ) || die;
-    $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>naïve</b>"), -1);
+    my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
+    if ($skipdiacrit && !($skipdiacrit eq "false")) {
+        my $term = "naive";
+        xlog "XSNIPPETS for FUZZY text \"$term\"";
+        $r = $talk->xsnippets(
+            [['INBOX', $uidvalidity, $uids]], 'utf-8',
+            ['fuzzy', 'text', { Quote => $term }]
+        ) || die;
+        $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>naïve</b>"), -1);
+    }
 }
 
 1;
