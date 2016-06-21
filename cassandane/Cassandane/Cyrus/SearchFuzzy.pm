@@ -306,4 +306,50 @@ sub test_normalize_snippets
     }
 }
 
+sub test_cjk_words
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    my $body = "明末時已經有香港地方的概念";
+
+    xlog "Generate and index test messages.";
+    my %params = (
+        mime_charset => "utf-8",
+        body => $body
+    );
+    $self->make_message("1", %params) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # Connect to IMAP
+    xlog "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    my $term;
+    # Search for a two-character CJK word
+    $term = "已經";
+    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'text', { Quote => $term }]
+    ) || die;
+    $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>$term</b>"), -1);
+
+    # Search for the CJK words 明末 and 時.
+    # IMAP search requires them to be ANDed and so they won't be found.
+    $term = "明末時";
+    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'text', { Quote => $term }]
+    ) || die;
+    $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
+}
+
+
 1;
