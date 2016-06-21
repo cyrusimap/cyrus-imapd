@@ -265,8 +265,8 @@ int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
         dbw->stopper = get_stopper();
         dbw->term_generator->set_stemmer(*dbw->stemmer);
         /* Always enable CJK word tokenization */
-        dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_NGRAM,
-                ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
+        dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
+                ~Xapian::TermGenerator::FLAG_CJK_WORDS);
         dbw->term_generator->set_stopper(dbw->stopper);
     }
     catch (const Xapian::DatabaseLockError &err) {
@@ -518,7 +518,7 @@ xapian_query_new_match_internal(const xapian_db_t *db, int stem_version,
             std::string sstr = std::string("") + str;
             Xapian::Query query = db->parser->parse_query(
                                     sstr,
-                                    Xapian::QueryParser::FLAG_CJK_NGRAM,
+                                    Xapian::QueryParser::FLAG_CJK_WORDS,
                                     std::string(prefix));
             return (xapian_query_t *)new Xapian::Query(query);
         }
@@ -808,7 +808,9 @@ int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
     int r = 0;
 
     try {
-        snipgen->snippet_generator->accept_text(Xapian::Utf8Iterator(part->s, part->len));
+        // Always enable CJK word tokenization
+        snipgen->snippet_generator->accept_text(Xapian::Utf8Iterator(part->s, part->len),
+                Xapian::SnippetGenerator::FLAG_CJK_WORDS);
         snipgen->snippet_generator->increase_termpos();
     }
     catch (const Xapian::Error &err) {
