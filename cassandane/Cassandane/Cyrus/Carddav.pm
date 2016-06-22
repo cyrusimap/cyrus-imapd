@@ -193,6 +193,7 @@ EOF
 }
 
 sub test_homeset_extradomain
+    :ReverseACLs
 {
     my ($self) = @_;
 
@@ -290,7 +291,7 @@ EOF
 }
 
 sub test_sharing_samedomain
-    :VirtDomains :FastMailSharing
+    :VirtDomains :FastMailSharing :ReverseACLs
 {
     my ($self) = @_;
 
@@ -342,7 +343,7 @@ sub test_sharing_samedomain
 }
 
 sub test_sharing_crossdomain
-    :VirtDomains :CrossDomains :FastMailSharing
+    :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs
 {
     my ($self) = @_;
 
