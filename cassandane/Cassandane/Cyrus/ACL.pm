@@ -153,4 +153,19 @@ sub test_reconstruct
     $self->assert_deep_equals($oldacl, $newacl);
 }
 
+sub test_setacl_emptyid
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.emptyid");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # send an empty identifier for SETACL
+    $admintalk->setacl("user.cassandane.emptyid", "", "lrswipcd");
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+}
+
 1;
