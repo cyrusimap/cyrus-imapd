@@ -136,6 +136,12 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
         /* trying to delete invalid/non-existent identifier */
     }
 
+    /* Prevent ACLs for empty identifiers */
+    if (strlen(identifier) == 0) {
+        if (newidentifier) free(newidentifier);
+        return -1;
+    }
+
     /* Find any existing entry for 'identifier' in 'acl' */
     for (thisid = nextid = *acl; *thisid; thisid = nextid) {
         rights = strchr(thisid, '\t');
