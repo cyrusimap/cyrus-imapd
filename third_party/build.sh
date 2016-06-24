@@ -6,6 +6,7 @@ NAME=cyruslibs
 PREFIX=/usr/local/$NAME
 MAKEOPTS="-j 8"
 
+git submodule init
 git submodule update
 
 (
