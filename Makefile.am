@@ -1921,11 +1921,26 @@ endif
 	  $(LN_S) -f imtest smtptest && \
 	  $(LN_S) -f imtest synctest
 
-uninstall-hook:
+uninstall-hook: cyrus-makemaker-uninstall-workaround
 if PERL
 	for s in installsieve sieveshell; do \
 	    rm -f $(DESTDIR)$(bindir)/$$s; \
 	done
+endif
+
+.PHONY: cyrus-makemaker-uninstall-workaround
+
+# Workaround for deprecated no-op MakeMaker uninstall.
+# Don't remove the packlists themselves, otherwise MakeMaker uninstall will
+# crash.  Just remove the files MakeMaker uninstall won't remove itself.
+#
+# We have another layer of workaround in each module's Makefile that
+# removes the packlist after MakeMaker uninstall has finished ignoring it.
+cyrus-makemaker-uninstall-workaround:
+if PERL
+	( packlists=`find $(DESTDIR)$(libdir) -type f -name .packlist` && \
+	  echo "uninstalling files from packlists: $$packlists" && \
+	  rm -f `cat $$packlists` )
 endif
 
 install-binsymlinks:
