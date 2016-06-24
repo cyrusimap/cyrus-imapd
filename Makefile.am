@@ -1784,6 +1784,10 @@ docsrc/imap/admin/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/
 ## define this unconditionally because dist-hook references it
 SPHINX_CACHE = docsrc/.doctrees
 
+.PHONY: clean-sphinx-cache clean-docsrc
+clean-sphinx-cache:
+	@$(RM) -r $(SPHINX_CACHE)
+
 if HAVE_SPHINX_BUILD
 GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
                  docsrc/imap/admin/systemcommands/cyradm.rst \
@@ -1797,10 +1801,17 @@ docsrc/.sphinx-build.stamp:
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc) | tar xf -
 	@touch $@
 
+clean-docsrc:
+	test x"$(top_srcdir)" = x"$(top_builddir)" || \
+		$(RM) -r $(top_builddir)/docsrc
+
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
+
+clean-man:
+	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
@@ -1812,10 +1823,14 @@ doc/text/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 else
+clean-docsrc:
+
 man/.sphinx-build.stamp:
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
 	@echo "warning: missing documentation dependencies. man pages will be empty" 1>&2
+
+clean-man:
 
 doc/html/.sphinx-build.stamp:
 	@echo "error: missing documentation dependencies. cannot build html documentation" 1>&2
@@ -1826,7 +1841,7 @@ doc/text/.sphinx-build.stamp:
 	@false
 endif
 
-.PHONY: man man-force
+.PHONY: man man-force clean-man
 man-force:
 	## trash the timestamps, so we always re-run sphinx-build.
 	## sphinx-build tracks source modifications itself, so forced
@@ -1835,18 +1850,34 @@ man-force:
 
 man: man-force $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
 
-.PHONY: doc doc-html doc-html-force doc-text doc-text-force
+# clean-man is conditionally defined above. We do not want to remove
+# man pages if the user is unable to rebuild them.
+
+.PHONY: doc-html doc-html-force clean-doc-html
 doc-html-force:
 	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
 
 doc-html: doc-html-force doc/html/.sphinx-build.stamp
 
+clean-doc-html:
+	@$(RM) -r doc/html
+
+.PHONY: doc-text doc-text-force clean-doc-text
 doc-text-force:
 	@$(RM) docsrc/.sphinx-build.stamp doc/text/.sphinx-build.stamp
 
 doc-text: doc-text-force doc/text/.sphinx-build.stamp
 
+clean-doc-text:
+	@$(RM) -r doc/text
+
+.PHONY: doc clean-doc
 doc: man doc-html doc-text
+
+clean-doc: clean-man clean-doc-html clean-doc-text
+
+.PHONY: clean-local
+clean-local: clean-doc clean-sphinx-cache clean-docsrc
 
 dist-old:: distgit
 	@echo "creating configure"
