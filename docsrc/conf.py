@@ -1190,7 +1190,8 @@ rst_prolog += """
 # Use this as :task:`18`
 extlinks = {
         'rfc':('http://tools.ietf.org/html/rfc%s', 'RFC '),
-        'task':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Task #'),
+        'task':('https://git.cyrus.foundation/T%s', 'Task #'),
+        'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
     }
 
 # Change this to whatever your output root is
