@@ -279,13 +279,13 @@ extern void sieverestart(FILE *f);
 %type <nval> priority
 %type <ftag> ftags
 
-%name-prefix="sieve"
+%name-prefix "sieve"
 %defines
 %destructor { free_tree($$); } commands command action elsif block
 
 %parse-param{sieve_script_t *parse_script}
 %lex-param{sieve_script_t *parse_script}
-%pure_parser
+%pure-parser
 %%
 
 start: reqs                     { parse_script->cmds = NULL; }
