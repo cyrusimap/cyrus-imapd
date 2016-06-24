@@ -6,6 +6,8 @@ NAME=cyruslibs
 PREFIX=/usr/local/$NAME
 MAKEOPTS="-j 8"
 
+PKG_CONFIG_PATH="$PREFIX:$PKG_CONFIG_PATH"
+
 git submodule init
 git submodule update
 
