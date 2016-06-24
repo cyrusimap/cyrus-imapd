@@ -70,6 +70,11 @@ BUILT_SOURCES = \
 	lib/imapopts.c \
 	lib/imapopts.h
 
+CLEANFILES = \
+	lib/chartable.c \
+	lib/imapopts.c \
+	lib/imapopts.h
+
 DISTCLEANFILES = \
 	imap/imap_err.c \
 	imap/imap_err.h \
@@ -101,8 +106,6 @@ MAINTAINERCLEANFILES = \
 	man/sieveshell.1 \
 	imap/lmtpstats.h \
 	imap/pushstats.h \
-	lib/chartable.c \
-	lib/imapopts.h \
 	sieve/addr.h \
 	sieve/sieve.h
 
@@ -117,7 +120,6 @@ sbin_PROGRAMS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
-CLEANFILES =
 EXTRA_DIST = \
 	$(wildcard tools/vzic/*)
 
