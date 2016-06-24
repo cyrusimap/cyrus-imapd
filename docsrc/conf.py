@@ -1132,7 +1132,7 @@ rst_prolog = """
 """
 
 rst_prolog += """
-.. |git_cyrus_imapd_url| replace:: https://git.cyrus.foundation/diffusion/I/cyrus-imapd.git
+.. |git_cyrus_imapd_url| replace:: https://github.com/cyrusimap/cyrus-imapd.git
 """
 
 # The version in which compatibility support for RFC 2086 (the 'c' and
@@ -1183,7 +1183,7 @@ rst_prolog += """
 
     #You are looking at documentation that is maintained by interval.
 
-    #Please see https://docs.cyrus.foundation/ for better maintained
+    #Please see https://www.cyrusimap.org/ for better maintained
     #documentation.
 #"""
 
@@ -1191,6 +1191,7 @@ rst_prolog += """
 extlinks = {
         'rfc':('http://tools.ietf.org/html/rfc%s', 'RFC '),
         'task':('https://git.cyrus.foundation/T%s', 'Task #'),
+        'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
     }
 
 # Change this to whatever your output root is

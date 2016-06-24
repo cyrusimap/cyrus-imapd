@@ -46,11 +46,10 @@ IMAPTest
 Development hub
 ---------------    
 
-Phabricator
-    We use Phabricator_ for our collaboration and change tracking. Diffusion provides repository browsing, Differential provides code review, Maniphest provides bug tracking. Arcanist_ provides a command-line interface to Phabricator.
+GitHub
+    We use GitHub for our collaboration and change tracking. 
     
     Check out our :ref:`development process <devprocess>` for a guide on how to contribute your changes to the community.
 
 
-.. _Arcanist: https://secure.phabricator.com/book/phabricator/article/arcanist/
-.. _Phabricator: https://git.cyrus.foundation
+

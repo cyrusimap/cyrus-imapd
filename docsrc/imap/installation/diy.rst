@@ -17,23 +17,8 @@ the GIT repository's branches, or a tarball of a released version.
 From GIT
 ========
 
-Clone the GIT repository:
-
-.. parsed-literal::
-
-    $ :command:`git clone https://git.cyrus.foundation/diffusion/I/cyrus-imapd.git`
-
-Check out the desired branch or revision:
-
-.. parsed-literal::
-
-    $ :command:`git branch -la`
-    * master
-      (...snip...)
-      remotes/origin/cyrus-imapd-2.3
-      remotes/origin/cyrus-imapd-2.4
-      remotes/origin/cyrus-imapd-2.5
-    $ :command:`git checkout` *$branch*
+Read our :ref:`Guide to GitHub <github-guide>` for details on how to
+access our GitHub repository, and fork/clone the source.
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
 
