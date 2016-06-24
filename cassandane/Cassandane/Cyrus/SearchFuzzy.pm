@@ -180,7 +180,8 @@ sub test_weird_crasher
 
     xlog "SEARCH for 'A 李 A'";
     my $r = $talk->xconvmultisort( [ qw(reverse arrival) ], [ 'conversations', position => [1,10] ], 'utf-8', 'fuzzy', 'text', { Quote => "A 李 A" });
-    $self->assert_num_equals(0, scalar @$r);
+    $self->assert_not_null($r);
+    $self->assert_num_equals(0, $r->{total});
 }
 
 1;
