@@ -1921,6 +1921,13 @@ endif
 	  $(LN_S) -f imtest smtptest && \
 	  $(LN_S) -f imtest synctest
 
+uninstall-hook:
+if PERL
+	for s in installsieve sieveshell; do \
+	    rm -f $(DESTDIR)$(bindir)/$$s; \
+	done
+endif
+
 install-binsymlinks:
 ## Let's symlink everything else
 	for prog in $(sbin_PROGRAMS); do $(LN_S) -f $(sbindir)/`basename $$prog` $(DESTDIR)$(bindir)/; done
