@@ -1,0 +1,20 @@
+[submodule "jansson"]
+	path = jansson
+	url = git@github.com:cyrusimap/jansson.git
+	branch = cyrus
+[submodule "xapian"]
+	path = xapian
+	url = git@github.com:cyrusimap/xapian.git
+	branch = cyrus
+[submodule "libical"]
+	path = libical
+	url = git@github.com:cyrusimap/libical.git
+	branch = cyrus
+[submodule "opendkim"]
+	path = opendkim
+	url = git@github.com:cyrusimap/opendkim.git
+	branch = cyrus
+[submodule "icu4c"]
+	path = icu4c
+	url = git@github.com:cyrusimap/icu4c.git
+	branch = cyrus
