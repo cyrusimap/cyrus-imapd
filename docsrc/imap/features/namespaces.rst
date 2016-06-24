@@ -390,8 +390,8 @@ Examples of shared folders could include:
 
 .. rubric:: Shared mail folders for mailing list traffic
 
-*   ``lists/cyrus.foundation/announce@example.org``
-*   ``lists/cyrus.foundation/devel@example.org``
+*   ``lists/cyrus.imap/announce@example.org``
+*   ``lists/cyrus.imap/devel@example.org``
 
 .. rubric:: Shared mail folders for common email addresses
 

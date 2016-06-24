@@ -22,12 +22,9 @@ Persian Empire.  So that's kinda cool.
 Install and configure Cassandane
 --------------------------------
 
-1. Clone the Cassandane repository (you can get the URL from the Diffusion app within Phabricator)
+1. Clone the Cassandane repository 
 
-    * If you are a member of `IMAP Committers`_, use: ``git clone ssh://git@git.cyrus.foundation/diffusion/C/cassandane.git``
-    * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/C/cassandane.git``
-
-.. _IMAP Committers: https://git.cyrus.foundation/tag/imap_committers/
+    * ``git clone https://github.com/cyrusimap/cassandane.git``
 
 2. Install dependencies
 
@@ -42,38 +39,6 @@ Install and configure Cassandane
         libmime-types-perl libdatetime-format-iso8601-perl libcal-dav-perl \
         libclone-perl
 
-There are a number of Perl modules required that aren't already packages in the standard repository. A few aren't in CPAN yet and should be installed from github.
-
-.. code-block:: bash
-
-    git clone https://github.com/brong/Net-DAVTalk/
-    cd Net-DAVTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
-    git clone https://github.com/brong/Net-CardDAVTalk/
-    cd Net-CardDAVTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
-    git clone https://github.com/brong/Net-CalDAVTalk/
-    cd Net-CalDAVTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
-    git clone https://github.com/brong/Mail-JMAPTalk/
-    cd Mail-JMAPTalk
-    perl Makefile.PL
-    make
-    sudo make install
-    cd ..
-
 The quickest option for the rest is installing via CPAN, but you could build packages using dh-make-perl if that is preferred.
 
 .. code-block:: bash
@@ -86,7 +51,11 @@ The quickest option for the rest is installing via CPAN, but you could build pac
     sudo cpan -i Mail::IMAPTalk
     sudo cpan -i List::Pairwise
     sudo cpan -i Convert::Base64
-
+    sudo cpan -i Net::DAVTalk
+    sudo cpan -i Net::CardDAVTalk
+    sudo cpan -i Net::CalDAVTalk
+    sudo cpan -i Mail::JMAPTalk
+                
 3. Install Cassandane
 
 .. code-block:: bash

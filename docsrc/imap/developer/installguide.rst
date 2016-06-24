@@ -16,21 +16,7 @@ Fetching Cyrus
 
 You'll need access to the cyrus-imapd git repository.
 
-1. You'll need a public key. If you don't already have a `~/.ssh/id_rsa.pub`, then create one with `ssh-keygen(1)`.
-    * Use the GitHub guide, following `steps 1-3`_
-    
-2. Login to Phabricator_
-    * Go to the `SSH Keys settings panel`_.
-    * Click **Upload public key**
-    * Paste the contents of your ``~/.ssh/id_rsa.pub`` (n.b. NOT ``~/.ssh/id_rsa``!) into the public key box.
-    * Give it a descriptive name and click **Upload**
-    
-3. Install git if you don't already have it:
-    * ``sudo apt-get install git``    
-    
-4. Clone the cyrus-imapd repository (you can get this URL from the Diffusion app within Phabricator):
-    * If you are a member of `IMAP Committers`_, use ``git clone ssh://git@git.cyrus.foundation/diffusion/I/cyrus-imapd.git``
-    * If you aren't (yet), use ``git clone https://git.cyrus.foundation/diffusion/I/cyrus-imapd.git``
+Follow our :ref:`Guide to GitHub <github-guide>` for details on how to access the repository, fork it, clone it, and branch it.
 
 Setting up dependencies
 -----------------------
@@ -46,11 +32,6 @@ Setting up dependencies
 4. Install dependencies for :ref:`building the docs <contribute-docs>`.
     * ``sudo pip install python-sphinx``
     * ``sudo cpan install Pod::POM::View::Restructured``
-
-.. _steps 1-3: https://help.github.com/articles/generating-ssh-keys/
-.. _Phabricator: https://git.cyrus.foundation/
-.. _SSH Keys settings panel: https://git.cyrus.foundation/settings/panel/ssh/
-.. _IMAP Committers: https://git.cyrus.foundation/tag/imap_committers/
 
 
 Compile Cyrus
@@ -85,27 +66,6 @@ The ``--prefix`` option sets where Cyrus is installed to. Adjust to suit.
 It may be of use to also add ``--std=gnu99`` to the ``CFLAGS``.  That generates TONS of warnings.
     
 You may see warnings regarding libical v2.0 being recommended to support certain functionality. Currently libical v1.0.1 is sufficient, unless you need/want RSCALE (non-gregorian recurrences), VPOLL (consensus scheduling), or VAVAILABILITY (specifying availability over time) functionality. If v2 is required, it will need to be installed from `github <https://github.com/libical/libical>`_.  
-
-Arcanist
-=========
-
-Installing Arcanist
---------------------
-
-Arcanist is a tool for managing workflow (code review, etc), which sits between git and Phabricator.
-
-.. note::
-
-    Conrad (@conradk) says: "Installing arcanist on Ubuntu was apparently as easy as ``sudo apt-get install arcanist``. But, the folks over at arcanist say: "clone the code from GitHub."
-
-1. `Install Arcanist`_
-2. Set up Arcanist
-    * cd in to any of the GIT repositories (so that the ./.arcconfig file included in those has the upper hand for the next step)
-    * Link your local arc to Phabricator: ``arc install-certificate``
-    
-3. Get familiar with the :ref:`Arcanist workflow <devprocess>`
-
-.. _Install Arcanist: https://secure.phabricator.com/book/phabricator/article/arcanist/#installing-arcanist
 
 Setting up syslog
 =================

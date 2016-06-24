@@ -25,6 +25,9 @@ Download via FTP:
 Major changes since the 2.5.x series
 ====================================
 
+*   The source repository has moved to :ref:`GitHub <github-guide>`, Bugzilla and Phabricator
+    have been deprecated and their issue lists imported into GitHub.
+
 *   Support added for FastMail-style conversations (threaded messages).
     (See the ``conversations`` options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
 

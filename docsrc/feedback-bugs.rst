@@ -1,8 +1,8 @@
 Reporting Bugs
 ==============
 
-Bug reports can be logged in our `Bugzilla issue tracker <http://bugzilla.cyrusimap.org/>`__. Please bear in mind registration is required.
-When reporting a bug, please prepare to provide the following information;
+Bug reports can be sent to us through our :ref:`mailing list <feedback-mailing-lists>` or logged in our `GitHub issue tracker <https://github.com/cyrusimap/cyrus-imapd/issues/>`__. Bear in mind registration is required.
+When reporting a bug, please provide the following information;
 
 * Your platform, and if applicable, your distribution and the distribution version.
 * The exact version of Cyrus IMAP or SASL you are using.
