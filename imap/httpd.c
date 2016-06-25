@@ -410,6 +410,8 @@ static void httpd_reset(void)
        saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
+
+    session_new_id();
 }
 
 /*
