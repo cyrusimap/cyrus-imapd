@@ -135,12 +135,14 @@ missing
 netnews/remotepurge
 notifyd/notifyd
 notifyd/notifytest
+perl/annotator/Cyrus-Annotator-Daemon-*/
 perl/annotator/Makefile.old
 perl/annotator/Makefile.PL
 perl/annotator/MYMETA.json
 perl/annotator/MYMETA.yml
 perl/annotator/blib/
 perl/annotator/pm_to_blib
+perl/imap/Cyrus-IMAP-*/
 perl/imap/IMAP.bs
 perl/imap/IMAP.c
 perl/imap/Makefile.old
@@ -150,6 +152,7 @@ perl/imap/cyradm
 perl/imap/pm_to_blib
 perl/imap/MYMETA.json
 perl/imap/MYMETA.yml
+perl/sieve/managesieve/Cyrus-SIEVE-managesieve-*/
 perl/sieve/managesieve/MYMETA.json
 perl/sieve/managesieve/MYMETA.yml
 perl/sieve/managesieve/blib/

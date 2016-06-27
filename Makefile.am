@@ -88,12 +88,6 @@ DISTCLEANFILES = \
 	imap/tz_err.c \
 	imap/tz_err.h \
 	com_err/et/compile_et \
-	perl/annotator/Makefile \
-	perl/annotator/Makefile.PL \
-	perl/imap/Makefile \
-	perl/imap/Makefile.PL \
-	perl/sieve/managesieve/Makefile \
-	perl/sieve/managesieve/Makefile.PL \
 	perl/sieve/scripts/installsieve \
 	perl/sieve/scripts/sieveshell \
 	sieve/sieve_err.c \
@@ -110,7 +104,7 @@ MAINTAINERCLEANFILES = \
 	sieve/sieve.h
 
 SUBDIRS = .
-DIST_SUBDIRS = .
+DIST_SUBDIRS = . perl/annotator perl/imap perl/sieve/managesieve
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 EXTRA_PROGRAMS =
