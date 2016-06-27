@@ -143,6 +143,11 @@ EXPORTED void fatal(const char *s, int code)
     exit(code);
 }
 
+#define report_verbose(...) do {                            \
+    if (verbose) printf(__VA_ARGS__);                       \
+    if (verbose_logging) syslog(LOG_INFO, __VA_ARGS__);     \
+} while(0)
+
 /* ====================================================================== */
 
 static int do_unuser(const char *userid)
@@ -255,14 +260,8 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
                     mbox->mark = 1;
 
                     sync_action_list_add(user_list, NULL, userid);
-                    if (verbose) {
-                        printf("  Promoting: MAILBOX %s -> USER %s\n",
-                               mbox->name, userid);
-                    }
-                    if (verbose_logging) {
-                        syslog(LOG_INFO, "  Promoting: MAILBOX %s -> USER %s",
-                               mbox->name, userid);
-                    }
+                    report_verbose("  Promoting: MAILBOX %s -> USER %s\n",
+                                   mbox->name, userid);
                     free(userid);
                 }
                 else
@@ -366,14 +365,8 @@ static int do_sync(sync_log_reader_t *slr)
         if (r) {
             /* XXX - bogus handling, should be user */
             sync_action_list_add(mailbox_list, action->name, NULL);
-            if (verbose) {
-                printf("  Promoting: QUOTA %s -> MAILBOX %s\n",
-                       action->name, action->name);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: QUOTA %s -> MAILBOX %s",
-                       action->name, action->name);
-            }
+            report_verbose("  Promoting: QUOTA %s -> MAILBOX %s\n",
+                           action->name, action->name);
         }
     }
 
@@ -388,14 +381,8 @@ static int do_sync(sync_log_reader_t *slr)
         if (r && *action->name) {
             /* XXX - bogus handling, should be ... er, something */
             sync_action_list_add(mailbox_list, action->name, NULL);
-            if (verbose) {
-                printf("  Promoting: ANNOTATION %s -> MAILBOX %s\n",
-                       action->name, action->name);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: ANNOTATION %s -> MAILBOX %s",
-                       action->name, action->name);
-            }
+            report_verbose("  Promoting: ANNOTATION %s -> MAILBOX %s\n",
+                           action->name, action->name);
         }
     }
 
@@ -408,24 +395,12 @@ static int do_sync(sync_log_reader_t *slr)
             char *userid = mboxname_to_userid(action->name);
             if (userid && mboxname_isusermailbox(action->name, 1) && !strcmp(userid, action->user)) {
                 sync_action_list_add(user_list, NULL, action->user);
-                if (verbose) {
-                    printf("  Promoting: SEEN %s %s -> USER %s\n",
-                           action->user, action->name, action->user);
-                }
-                if (verbose_logging) {
-                    syslog(LOG_INFO, "  Promoting: SEEN %s %s -> USER %s",
-                           action->user, action->name, action->user);
-                }
+                report_verbose("  Promoting: SEEN %s %s -> USER %s\n",
+                               action->user, action->name, action->user);
             } else {
                 sync_action_list_add(meta_list, NULL, action->user);
-                if (verbose) {
-                    printf("  Promoting: SEEN %s %s -> META %s\n",
-                           action->user, action->name, action->user);
-                }
-                if (verbose_logging) {
-                    syslog(LOG_INFO, "  Promoting: SEEN %s %s -> META %s",
-                           action->user, action->name, action->user);
-                }
+                report_verbose("  Promoting: SEEN %s %s -> META %s\n",
+                               action->user, action->name, action->user);
             }
             free(userid);
         }
@@ -438,14 +413,8 @@ static int do_sync(sync_log_reader_t *slr)
         r = user_sub(action->user, action->name);
         if (r) {
             sync_action_list_add(meta_list, NULL, action->user);
-            if (verbose) {
-                printf("  Promoting: SUB %s %s -> META %s\n",
-                       action->user, action->name, action->user);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: SUB %s %s -> META %s",
-                       action->user, action->name, action->name);
-            }
+            report_verbose("  Promoting: SUB %s %s -> META %s\n",
+                           action->user, action->name, action->user);
         }
     }
 
@@ -487,14 +456,8 @@ static int do_sync(sync_log_reader_t *slr)
             if (r == IMAP_INVALID_USER) goto cleanup;
 
             sync_action_list_add(user_list, NULL, action->user);
-            if (verbose) {
-                printf("  Promoting: META %s -> USER %s\n",
-                       action->user, action->user);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: META %s -> USER %s",
-                       action->user, action->user);
-            }
+            report_verbose("  Promoting: META %s -> USER %s\n",
+                           action->user, action->user);
         }
     }
 
