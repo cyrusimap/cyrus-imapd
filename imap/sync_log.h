@@ -88,6 +88,39 @@ void sync_log_channel(const char *channel, const char *fmt, ...);
 #define sync_log_subscribe(user, name) \
     sync_log("SUB %s %s\n", user, name)
 
+#define sync_log_channel_user(channel, user) \
+    sync_log_channel(channel, "USER %s\n", user)
+
+#define sync_log_channel_unuser(channel, user) \
+    sync_log_channel(channel, "UNUSER %s\n", user)
+
+#define sync_log_channel_sieve(channel, user) \
+    sync_log_channel(channel, "META %s\n", user)
+
+#define sync_log_channel_append(channel, name) \
+    sync_log_channel(channel, "APPEND %s\n", name)
+
+#define sync_log_channel_mailbox(channel, name) \
+    sync_log_channel(channel, "MAILBOX %s\n", name)
+
+#define sync_log_channel_unmailbox(channel, name) \
+    sync_log_channel(channel, "UNMAILBOX %s\n", name)
+
+#define sync_log_channel_mailbox_double(channel, name1, name2) \
+    sync_log_channel(channel, "MAILBOX %s\nMAILBOX %s\n", name1, name2)
+
+#define sync_log_channel_quota(channel, name) \
+    sync_log_channel(channel, "QUOTA %s\n", name)
+
+#define sync_log_channel_annotation(channel, name) \
+    sync_log_channel(channel, "ANNOTATION %s\n", name)
+
+#define sync_log_channel_seen(channel, user, name) \
+    sync_log_channel(channel, "SEEN %s %s\n", user, name)
+
+#define sync_log_channel_subscribe(channel, user, name) \
+    sync_log_channel(channel, "SUB %s %s\n", user, name)
+
 /* read-side sync log code */
 typedef struct sync_log_reader sync_log_reader_t;
 
