@@ -239,16 +239,25 @@ static void remove_meta(char *user, struct sync_action_list *list)
 
 static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
                              struct sync_action_list *user_list,
+                             const char *channel,
                              unsigned flags)
 {
+    struct sync_name *mbox;
     int r = 0;
 
     if (mboxname_list->count) {
         r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, flags);
-        if (r) {
+        if (r == IMAP_MAILBOX_LOCKED) {
+            for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+                if (mbox->mark) continue;
+                sync_log_channel_mailbox(channel, mbox->name);
+                report_verbose("  Deferred: MAILBOX %s\n", mbox->name);
+            }
+            r = 0;
+        }
+        else if (r) {
             /* promote failed personal mailboxes to USER */
             int nonuser = 0;
-            struct sync_name *mbox;
 
             for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
                 /* done OK?  Good :) */
@@ -450,9 +459,7 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         /* only do up to 1000 mailboxes at a time */
         if (mboxname_list->count > 1000) {
             syslog(LOG_NOTICE, "sync_mailboxes: doing 1000");
-            r = do_sync_mailboxes(mboxname_list, user_list, flags);
-            // FIXME do_sync_mailboxes needs to handle IMAP_MAILBOX_LOCKED
-            // for now it will just promote to USER....
+            r = do_sync_mailboxes(mboxname_list, user_list, channel, flags);
             if (r) goto cleanup;
             r = do_restart();
             if (r) goto cleanup;
@@ -461,7 +468,7 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         }
     }
 
-    r = do_sync_mailboxes(mboxname_list, user_list, flags);
+    r = do_sync_mailboxes(mboxname_list, user_list, channel, flags);
     if (r) goto cleanup;
     r = do_restart();
     if (r) goto cleanup;
