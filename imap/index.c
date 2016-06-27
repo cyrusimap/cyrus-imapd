@@ -5007,7 +5007,7 @@ static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
         rawbuf = xstrndup(s, len - (s - subj));
     }
 
-    buf = charset_parse_mimeheader(rawbuf);
+    buf = charset_parse_mimeheader(rawbuf, charset_flags);
     free(rawbuf);
 
     for (s = buf;;) {

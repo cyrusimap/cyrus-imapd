@@ -258,6 +258,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     if (config_getswitch(IMAPOPT_SEARCH_SKIPHTML))
         charset_flags |= CHARSET_SKIPHTML;
 
+    if (config_getswitch(IMAPOPT_RFC2047_UTF8))
+        charset_flags |= CHARSET_MIME_UTF8;
 
     if (!cyrus_init_nodb) {
         /* lookup the database backends */

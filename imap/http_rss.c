@@ -953,7 +953,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         buf_printf_markup(buf, level++, "<entry>");
 
         /* <title> - required */
-        subj = charset_parse_mimeheader(body->subject);
+        subj = charset_parse_mimeheader(body->subject, charset_flags);
         buf_printf_markup(buf, level++, "<title type=\"html\">");
         buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0, level);
         buf_printf_markup(buf, --level, "</title>");
@@ -985,7 +985,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
             /* <name> - required */
             if (addr->name) {
-                char *name = charset_parse_mimeheader(addr->name);
+                char *name = charset_parse_mimeheader(addr->name, charset_flags);
                 buf_printf_markup(buf, level++, "<name>");
                 buf_escapestr(buf, name, 0, 0, level);
                 buf_printf_markup(buf, --level, "</name>");
@@ -1104,7 +1104,7 @@ static void display_part(struct transaction_t *txn,
         if (subpart->subject) {
             char *subj;
 
-            subj = charset_parse_mimeheader(subpart->subject);
+            subj = charset_parse_mimeheader(subpart->subject, charset_flags);
             buf_printf_markup(buf, level++, "<tr>");
             buf_printf_markup(buf, level,
                               "<td align=right valign=top><b>Subject: </b></td>");

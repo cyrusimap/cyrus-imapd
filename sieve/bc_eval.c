@@ -815,7 +815,7 @@ envelope_err:
                 if  (match == B_COUNT) {
                     count++;
                 } else {
-                    decoded_header = charset_parse_mimeheader(val[y]);
+                    decoded_header = charset_parse_mimeheader(val[y], 0 /*flags*/);
                     /*search through all the data*/
                     currd=datai+2;
                     for (z=0; z<numdata && !res; z++)

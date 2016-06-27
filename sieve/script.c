@@ -271,7 +271,7 @@ static void add_header(sieve_interp_t *i, int isenv, char *header,
     if (!h || !h[0])
         return;
 
-    decoded_header = charset_parse_mimeheader(h[0]);
+    decoded_header = charset_parse_mimeheader(h[0], 0/*flags*/);
     buf_appendcstr(out, decoded_header);
     free(decoded_header);
 }

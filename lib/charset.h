@@ -53,6 +53,7 @@
 #define CHARSET_SKIPHTML (1<<3)
 #define CHARSET_SNIPPET (1<<4)
 #define CHARSET_UNFOLD_SKIPWS (1<<5)
+#define CHARSET_MIME_UTF8 (1<<6)
 
 #define CHARSET_UNKNOWN_CHARSET (-1)
 
@@ -67,7 +68,7 @@ extern const char *encoding_name(int);
 /* ensure up to MAXTRANSLATION times expansion into buf */
 extern char *charset_convert(const char *s, charset_index charset, int flags);
 extern char *charset_decode_mimeheader(const char *s, int flags);
-extern char *charset_parse_mimeheader(const char *s);
+extern char *charset_parse_mimeheader(const char *s, int flags);
 extern char *charset_utf8_to_searchform(const char *s, int flags);
 
 extern const char *charset_name(charset_index);
