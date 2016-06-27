@@ -362,7 +362,8 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
 
-        if (sync_do_quota(action->name, sync_backend, flags)) {
+        r = sync_do_quota(action->name, sync_backend, flags);
+        if (r) {
             /* XXX - bogus handling, should be user */
             sync_action_list_add(mailbox_list, action->name, NULL);
             if (verbose) {
@@ -383,8 +384,8 @@ static int do_sync(sync_log_reader_t *slr)
         /* NOTE: ANNOTATION "" is a special case - it's a server
          * annotation, hence the check for a character at the
          * start of the name */
-        if (sync_do_annotation(action->name, sync_backend,
-                               flags) && *action->name) {
+        r = sync_do_annotation(action->name, sync_backend, flags);
+        if (r && *action->name) {
             /* XXX - bogus handling, should be ... er, something */
             sync_action_list_add(mailbox_list, action->name, NULL);
             if (verbose) {
@@ -402,7 +403,8 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
 
-        if (sync_do_seen(action->user, action->name, sync_backend, flags)) {
+        r = sync_do_seen(action->user, action->name, sync_backend, flags);
+        if (r) {
             char *userid = mboxname_to_userid(action->name);
             if (userid && mboxname_isusermailbox(action->name, 1) && !strcmp(userid, action->user)) {
                 sync_action_list_add(user_list, NULL, action->user);
@@ -433,7 +435,8 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
 
-        if (user_sub(action->user, action->name)) {
+        r = user_sub(action->user, action->name);
+        if (r) {
             sync_action_list_add(meta_list, NULL, action->user);
             if (verbose) {
                 printf("  Promoting: SUB %s %s -> META %s\n",
