@@ -408,7 +408,7 @@ static const struct precond_t {
 };
 
 
-/* Check ACL on userid's principal (Inbox): ANY right gives access */
+/* Check ACL on userid's principal (Inbox): LOOKUP right gives access */
 static int principal_acl_check(const char *userid, struct auth_state *authstate)
 {
     int r = 0;
@@ -423,7 +423,7 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
                    inboxname, error_message(r));
             r = HTTP_NOT_FOUND;
         }
-        else if (!(httpd_myrights(authstate, mbentry->acl) & ACL_FULL)) {
+        else if (!(httpd_myrights(authstate, mbentry->acl) & ACL_LOOKUP)) {
             r = HTTP_NOT_FOUND;
         }
 
