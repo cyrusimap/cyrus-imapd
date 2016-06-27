@@ -15,7 +15,7 @@ git submodule update
   cd icu4c
   git clean -f -x -d
   cd source
-  ./configure --prefix=$PREFIX LDFLAGS=-Wl,-rpath,$PREFIX/lib
+  ./configure --with-data-packaging=archive --prefix=$PREFIX LDFLAGS=-Wl,-rpath,$PREFIX/lib
   make $MAKEOPTS
   sudo make install
 )
