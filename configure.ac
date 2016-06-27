@@ -66,7 +66,8 @@ AC_SUBST([CYRUS_IMAPD_PATCH])
 dnl in case the first use of PKG_CHECK_MODULES is inside a conditional
 PKG_PROG_PKG_CONFIG
 
-AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects silent-rules])
+AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2
+                  no-installinfo subdir-objects silent-rules tar-ustar])
 AC_CONFIG_LIBOBJ_DIR([lib])
 
 dnl if the git repository is here we also have git
