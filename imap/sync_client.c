@@ -281,7 +281,7 @@ static int do_restart()
     return sync_parse_response("RESTART", sync_in, NULL);
 }
 
-static int do_sync(sync_log_reader_t *slr)
+static int do_sync(sync_log_reader_t *slr, const char *channel)
 {
     struct sync_action_list *user_list = sync_action_list_create();
     struct sync_action_list *unuser_list = sync_action_list_create();
@@ -367,7 +367,7 @@ static int do_sync(sync_log_reader_t *slr)
 
         r = sync_do_quota(action->name, sync_backend, flags);
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_quota(action->name);
+            sync_log_channel_quota(channel, action->name);
             report_verbose("  Deferred: QUOTA %s\n", action->name);
         }
         else if (r) {
@@ -389,7 +389,7 @@ static int do_sync(sync_log_reader_t *slr)
         if (!*action->name) continue;
 
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_annotation(action->name);
+            sync_log_channel_annotation(channel, action->name);
             report_verbose("  Deferred: ANNOTATION %s\n", action->name);
         }
         else if (r) {
@@ -406,7 +406,7 @@ static int do_sync(sync_log_reader_t *slr)
 
         r = sync_do_seen(action->user, action->name, sync_backend, flags);
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_seen(action->user, action->name);
+            sync_log_channel_seen(channel, action->user, action->name);
             report_verbose("  Deferred: SEEN %s %s\n",
                            action->user, action->name);
         }
@@ -431,7 +431,7 @@ static int do_sync(sync_log_reader_t *slr)
 
         r = user_sub(action->user, action->name);
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_subscribe(action->user, action->name);
+            sync_log_channel_subscribe(channel, action->user, action->name);
             report_verbose("  Deferred: SUB %s %s\n",
                            action->user, action->name);
         }
@@ -471,7 +471,7 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
         r = do_unmailbox(action->name, sync_backend, flags);
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_unmailbox(action->name);
+            sync_log_channel_unmailbox(channel, action->name);
             report_verbose("  Deferred: UNMAILBOX %s\n", action->name);
         }
         else if (r) goto cleanup;
@@ -483,7 +483,7 @@ static int do_sync(sync_log_reader_t *slr)
 
         r = sync_do_meta(action->user, sync_backend, flags);
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_sieve(action->user);
+            sync_log_channel_sieve(channel, action->user);
             report_verbose("  Deferred: META %s\n", action->user);
         }
         else if (r == IMAP_INVALID_USER) {
@@ -501,7 +501,7 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
         r = sync_do_user(action->user, NULL, sync_backend, flags);
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_user(action->user);
+            sync_log_channel_user(channel, action->user);
             report_verbose("  Deferred: USER %s\n", action->user);
         }
         else if (r) goto cleanup;
@@ -514,7 +514,7 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
         r = do_unuser(action->user);
         if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_unuser(action->user);
+            sync_log_channel_unuser(channel, action->user);
             report_verbose("  Deferred: UNUSER %s\n", action->user);
         }
         else if (r) goto cleanup;
@@ -556,7 +556,7 @@ static int do_sync_filename(const char *filename)
 
     r = sync_log_reader_begin(slr);
     if (!r)
-        r = do_sync(slr);
+        r = do_sync(slr, NULL);
 
     sync_log_reader_end(slr);
     sync_log_reader_free(slr);
@@ -622,7 +622,7 @@ static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
         }
 
         /* Process the work log */
-        if ((r=do_sync(slr))) {
+        if ((r=do_sync(slr, channel))) {
             syslog(LOG_ERR,
                    "Processing sync log file %s failed: %s",
                    sync_log_reader_get_file_name(slr), error_message(r));
