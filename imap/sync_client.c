@@ -357,12 +357,20 @@ static int do_sync(sync_log_reader_t *slr)
     }
 
     /* And then run tasks. */
+
+    /* we want to be able to defer items to the subsequent sync log */
+    sync_log_init();
+
     for (action = quota_list->head; action; action = action->next) {
         if (!action->active)
             continue;
 
         r = sync_do_quota(action->name, sync_backend, flags);
-        if (r) {
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_quota(action->name);
+            report_verbose("  Deferred: QUOTA %s\n", action->name);
+        }
+        else if (r) {
             /* XXX - bogus handling, should be user */
             sync_action_list_add(mailbox_list, action->name, NULL);
             report_verbose("  Promoting: QUOTA %s -> MAILBOX %s\n",
@@ -378,7 +386,13 @@ static int do_sync(sync_log_reader_t *slr)
          * annotation, hence the check for a character at the
          * start of the name */
         r = sync_do_annotation(action->name, sync_backend, flags);
-        if (r && *action->name) {
+        if (!*action->name) continue;
+
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_annotation(action->name);
+            report_verbose("  Deferred: ANNOTATION %s\n", action->name);
+        }
+        else if (r) {
             /* XXX - bogus handling, should be ... er, something */
             sync_action_list_add(mailbox_list, action->name, NULL);
             report_verbose("  Promoting: ANNOTATION %s -> MAILBOX %s\n",
@@ -391,7 +405,12 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
 
         r = sync_do_seen(action->user, action->name, sync_backend, flags);
-        if (r) {
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_seen(action->user, action->name);
+            report_verbose("  Deferred: SEEN %s %s\n",
+                           action->user, action->name);
+        }
+        else if (r) {
             char *userid = mboxname_to_userid(action->name);
             if (userid && mboxname_isusermailbox(action->name, 1) && !strcmp(userid, action->user)) {
                 sync_action_list_add(user_list, NULL, action->user);
@@ -411,7 +430,12 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
 
         r = user_sub(action->user, action->name);
-        if (r) {
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_subscribe(action->user, action->name);
+            report_verbose("  Deferred: SUB %s %s\n",
+                           action->user, action->name);
+        }
+        else if (r) {
             sync_action_list_add(meta_list, NULL, action->user);
             report_verbose("  Promoting: SUB %s %s -> META %s\n",
                            action->user, action->name, action->user);
@@ -427,6 +451,8 @@ static int do_sync(sync_log_reader_t *slr)
         if (mboxname_list->count > 1000) {
             syslog(LOG_NOTICE, "sync_mailboxes: doing 1000");
             r = do_sync_mailboxes(mboxname_list, user_list, flags);
+            // FIXME do_sync_mailboxes needs to handle IMAP_MAILBOX_LOCKED
+            // for now it will just promote to USER....
             if (r) goto cleanup;
             r = do_restart();
             if (r) goto cleanup;
@@ -444,7 +470,11 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = do_unmailbox(action->name, sync_backend, flags);
-        if (r) goto cleanup;
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_unmailbox(action->name);
+            report_verbose("  Deferred: UNMAILBOX %s\n", action->name);
+        }
+        else if (r) goto cleanup;
     }
 
     for (action = meta_list->head; action; action = action->next) {
@@ -452,9 +482,14 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
 
         r = sync_do_meta(action->user, sync_backend, flags);
-        if (r) {
-            if (r == IMAP_INVALID_USER) goto cleanup;
-
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_sieve(action->user);
+            report_verbose("  Deferred: META %s\n", action->user);
+        }
+        else if (r == IMAP_INVALID_USER) {
+            goto cleanup;
+        }
+        else if (r) {
             sync_action_list_add(user_list, NULL, action->user);
             report_verbose("  Promoting: META %s -> USER %s\n",
                            action->user, action->user);
@@ -465,7 +500,11 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = sync_do_user(action->user, NULL, sync_backend, flags);
-        if (r) goto cleanup;
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_user(action->user);
+            report_verbose("  Deferred: USER %s\n", action->user);
+        }
+        else if (r) goto cleanup;
         r = do_restart();
         if (r) goto cleanup;
     }
@@ -474,7 +513,11 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = do_unuser(action->user);
-        if (r) goto cleanup;
+        if (r == IMAP_MAILBOX_LOCKED) {
+            sync_log_unuser(action->user);
+            report_verbose("  Deferred: UNUSER %s\n", action->user);
+        }
+        else if (r) goto cleanup;
     }
 
   cleanup:
@@ -484,6 +527,8 @@ static int do_sync(sync_log_reader_t *slr)
 
         syslog(LOG_ERR, "Error in do_sync(): bailing out! %s", error_message(r));
     }
+
+    sync_log_done();
 
     sync_action_list_free(&user_list);
     sync_action_list_free(&unuser_list);
