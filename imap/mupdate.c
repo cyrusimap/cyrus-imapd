@@ -555,7 +555,9 @@ int service_init(int argc, char **argv,
     database_init();
 
 #ifdef HAVE_SSL
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     CRYPTO_thread_setup();
+#endif
 #endif
 
     if (!masterp) {
@@ -604,7 +606,9 @@ int service_init(int argc, char **argv,
 void service_abort(int error)
 {
 #ifdef HAVE_SSL
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     CRYPTO_thread_cleanup();
+#endif
 #endif
     shut_down(error);
 }
