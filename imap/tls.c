@@ -489,6 +489,8 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     time_t expire;
     int ret = -1;
     unsigned char *asn;
+    const unsigned char *session_id = NULL;
+    unsigned int session_id_length = 0;
 
     assert(sess);
 
@@ -514,9 +516,11 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 
     if (len) {
 	/* store the session in our database */
+
+	session_id = SSL_SESSION_get_id(sess, &session_id_length);
 	do {
-	    ret = cyrusdb_store(sessdb, (const char *) sess->session_id,
-			    sess->session_id_length,
+	    ret = cyrusdb_store(sessdb, (const char *) session_id,
+			    session_id_length,
 			    (const char *) data, len + sizeof(time_t), NULL);
 	} while (ret == CYRUSDB_AGAIN);
     }
@@ -527,8 +531,8 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     if (var_imapd_tls_loglevel > 0) {
 	unsigned int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
-	for (i = 0; i < sess->session_id_length; i++) {
-	    sprintf(idstr+i*2, "%02X", sess->session_id[i]);
+	for (i = 0; i < session_id_length; i++) {
+	    sprintf(idstr+i*2, "%02X", session_id[i]);
 	}
 	syslog(LOG_DEBUG, "new TLS session: id=%s, expire=%s, status=%s",
 	       idstr, ctime(&expire), ret ? "failed" : "ok");
@@ -540,7 +544,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 /*
  * Function for removing a session from our database.
  */
-static void remove_session(unsigned char *id, int idlen)
+static void remove_session(const unsigned char *id, int idlen)
 {
     int ret;
 
@@ -571,9 +575,14 @@ static void remove_session(unsigned char *id, int idlen)
 static void remove_session_cb(SSL_CTX *ctx __attribute__((unused)),
 			      SSL_SESSION *sess)
 {
+    const unsigned char *session_id = NULL;
+    unsigned int session_id_length = 0;
+
     assert(sess);
 
-    remove_session(sess->session_id, sess->session_id_length);
+    session_id = SSL_SESSION_get_id(sess, &session_id_length);
+
+    remove_session(session_id, session_id_length);
 }
 
 /*
@@ -582,8 +591,13 @@ static void remove_session_cb(SSL_CTX *ctx __attribute__((unused)),
  * called, also when session caching was disabled.  We lookup the
  * session in our database in case it was stored by another process.
  */
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
+				   const unsigned char *id, int idlen, int *copy)
+#else
 static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 				   unsigned char *id, int idlen, int *copy)
+#endif
 {
     int ret;
     const char *data = NULL;
