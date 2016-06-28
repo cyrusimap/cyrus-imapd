@@ -2353,7 +2353,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL;
-    struct sched_param sparam;
+    struct caldav_sched_param sparam;
 
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {

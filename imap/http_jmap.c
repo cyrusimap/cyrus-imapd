@@ -8326,7 +8326,7 @@ static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
 /* Set isyou if userid matches the user looked up by caladdr. Return 0 on
  * success or a Cyrus error on failure. */
 static int jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
-    struct sched_param sparam;
+    struct caldav_sched_param sparam;
 
     if (userid) {
         sparam.userid = NULL;

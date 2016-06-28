@@ -97,7 +97,7 @@ struct proplist {
 
 /* Each calendar user address has the following scheduling protocol params */
 /* All memory must be freed with sched_param_free. */
-struct sched_param {
+struct caldav_sched_param {
     char *userid;       /* Userid corresponding to calendar address */
     char *server;       /* Remote server user lives on */
     unsigned port;      /* Remote server port, default = 80 */
@@ -106,7 +106,7 @@ struct sched_param {
     struct proplist *props; /* List of attendee iCal properties */
 };
 
-extern void sched_param_free(struct sched_param *sparam);
+extern void sched_param_free(struct caldav_sched_param *sparam);
 
 struct freebusy {
     struct icalperiodtype per;
@@ -161,7 +161,7 @@ extern icalcomponent *busytime_query_local(struct transaction_t *txn,
                                            const char *organizer,
                                            const char *attendee);
 
-extern int isched_send(struct sched_param *sparam, const char *recipient,
+extern int isched_send(struct caldav_sched_param *sparam, const char *recipient,
                        icalcomponent *ical, xmlNodePtr *xml);
 
 extern int sched_busytime_query(struct transaction_t *txn,
@@ -173,7 +173,7 @@ extern void sched_reply(const char *userid, const char *attendee,
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
-extern int caladdress_lookup(const char *addr, struct sched_param *param,
+extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
                              const char *myuserid);
 
 
