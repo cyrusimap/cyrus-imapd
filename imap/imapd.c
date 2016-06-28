@@ -6428,7 +6428,13 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
                         } else {
                             server = parent->server;
+                            /* DO NOT set the partition:
+                               only admins are allowed to do this
+                               and the backend will use the partition
+                               of the parent by default anyways.
+
                             partition = parent->partition;
+                            */
                         }
                     }
 
