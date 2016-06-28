@@ -222,25 +222,49 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
 }
 #endif
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+/* replacements for new 1.1 API accessors */
+/* XXX probably put these somewhere central */
+static int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
+{
+    if (p == NULL || g == NULL) return 0;
+    dh->p = p;
+    dh->q = q; /* optional */
+    dh->g = g;
+    return 1;
+}
+#endif
+
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
  * DH params to work with DHE-* cipher suites. Hardcoded fallback
  * in case no DH params in server_key or server_cert.
+ * Modified quite a bit for openssl 1.1.0 compatibility.
+ * XXX we might be able to just replace this with DH_get_1024_160?
+ * XXX the apps/s_server.c example doesn't use this anymore at all.
  */
 static DH *get_dh1024(void)
 {
     /* Second Oakley group 1024-bits MODP group from RFC2409 */
-    DH *dh=NULL;
+    DH *dh;
+    BIGNUM *p = NULL, *g = NULL;
 
-    if ((dh=DH_new()) == NULL) return(NULL);
-    dh->p=get_rfc2409_prime_1024(NULL);
-    dh->g=NULL;
-    BN_dec2bn(&(dh->g), "2");
-    if ((dh->p == NULL) || (dh->g == NULL)) return(NULL);
+    dh = DH_new();
+    if (!dh) return NULL;
 
-    return(dh);
-	
+    p = get_rfc2409_prime_1024(NULL);
+    BN_dec2bn(&g, "2");
+
+    if (DH_set0_pqg(dh, p, NULL, g))
+	return dh;
+
+    if (g) BN_free(g);
+    if (p) BN_free(p);
+    DH_free(dh);
+
+    return NULL;
 }
+
 static DH *load_dh_param(const char *keyfile, const char *certfile)
 {
     DH *ret=NULL;
