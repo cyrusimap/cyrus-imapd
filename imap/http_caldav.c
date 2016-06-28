@@ -2075,7 +2075,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                            txn->req_tgt.resource, &cdata, 0);
     if (!cdata->dav.rowid) ret = HTTP_NOT_FOUND;
     else if (!cdata->dav.imap_uid) ret = HTTP_CONFLICT;
-    else if (!cdata->dav.alive) ret = HTTP_GONE;
     if (ret) goto done;
 
     /* Fetch index record for the cal resource */

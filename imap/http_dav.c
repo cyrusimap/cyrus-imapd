@@ -3935,9 +3935,10 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mbentry->name,
                                    txn->req_tgt.resource,
                                    (void **) &ddata, 0);
-    if (!ddata->rowid) ret = HTTP_NOT_FOUND;
-    else if (!ddata->alive) ret = HTTP_GONE;
-    if (ret) goto done;
+    if (!ddata->rowid) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
 
     if (ddata->imap_uid) {
         /* Mapped URL - Fetch index record for the resource */
@@ -4298,9 +4299,10 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Find message UID for the resource, if exists */
     dparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
                                    txn->req_tgt.resource, (void **) &ddata, 0);
-    if (!ddata->rowid) ret = HTTP_NOT_FOUND;
-    else if (!ddata->alive) ret = HTTP_GONE;
-    if (ret) goto done;
+    if (!ddata->rowid) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
 
     memset(&record, 0, sizeof(struct index_record));
     if (ddata->imap_uid) {
@@ -4463,9 +4465,10 @@ int meth_get_head(struct transaction_t *txn, void *params)
     /* Find message UID for the resource */
     gparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
                                    txn->req_tgt.resource, (void **) &ddata, 0);
-    if (!ddata->rowid) ret = HTTP_NOT_FOUND;
-    else if (!ddata->alive) ret = HTTP_GONE;
-    if (ret) goto done;
+    if (!ddata->rowid) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
 
     memset(&record, 0, sizeof(struct index_record));
     if (ddata->imap_uid) {
@@ -5076,11 +5079,6 @@ static int propfind_by_resources(struct propfind_ctx *fctx)
             /* Add response for missing target */
             xml_add_response(fctx, HTTP_NOT_FOUND, 0);
             return HTTP_NOT_FOUND;
-        }
-        else if (!ddata->alive) {
-            /* Add response for recently removed target */
-            xml_add_response(fctx, HTTP_GONE, 0);
-            return HTTP_GONE;
         }
         r = fctx->proc_by_resource(fctx, ddata);
     }
@@ -6298,9 +6296,10 @@ int meth_patch(struct transaction_t *txn, void *params)
     /* Find message UID for the resource */
     pparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
                                    txn->req_tgt.resource, (void *) &ddata, 0);
-    if (!ddata->imap_uid) ret = HTTP_NOT_FOUND;
-    else if (!ddata->alive) ret = HTTP_GONE;
-    if (ret) goto done;
+    if (!ddata->imap_uid) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
 
     /* Fetch index record for the resource */
     r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
@@ -6536,12 +6535,7 @@ int meth_put(struct transaction_t *txn, void *params)
                                    txn->req_tgt.resource, (void *) &ddata, 0);
     /* XXX  Check errors */
 
-    if (!ddata->rowid || !ddata->alive) {
-        /* New resource */
-        etag = NULL;
-        lastmod = 0;
-    }
-    else if (ddata->imap_uid) {
+    if (ddata->imap_uid) {
         /* Overwriting existing resource */
 
         /* Fetch index record for the resource */
@@ -6557,10 +6551,15 @@ int meth_put(struct transaction_t *txn, void *params)
         etag = message_guid_encode(&oldrecord.guid);
         lastmod = oldrecord.internaldate;
     }
-    else {
+    else if (ddata->rowid) {
         /* Unmapped URL (empty resource) */
         etag = NULL;
         lastmod = ddata->creationdate;
+    }
+    else {
+        /* New resource */
+        etag = NULL;
+        lastmod = 0;
     }
 
     /* Check any preferences */
@@ -7742,9 +7741,10 @@ int meth_unlock(struct transaction_t *txn, void *params)
     /* Find message UID for the resource, if exists */
     lparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
                                    txn->req_tgt.resource, (void **) &ddata, 0);
-    if (!ddata->rowid) ret = HTTP_NOT_FOUND;
-    else if (!ddata->alive) ret = HTTP_GONE;
-    if (ret) goto done;
+    if (!ddata->rowid) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
 
     /* Check if resource is locked */
     if (ddata->lock_expire <= time(NULL)) {
