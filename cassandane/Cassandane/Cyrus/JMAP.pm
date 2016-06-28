@@ -51,6 +51,7 @@ use Net::CalDAVTalk;
 use Net::CardDAVTalk;
 use Mail::JMAPTalk;
 use Data::Dumper;
+use charnames ':full';
 
 sub new
 {
