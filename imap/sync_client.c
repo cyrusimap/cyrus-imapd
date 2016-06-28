@@ -239,7 +239,7 @@ static void remove_meta(char *user, struct sync_action_list *list)
 
 static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
                              struct sync_action_list *user_list,
-                             const char *channel,
+                             const char **channelp,
                              unsigned flags)
 {
     struct sync_name *mbox;
@@ -247,10 +247,10 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
 
     if (mboxname_list->count) {
         r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, flags);
-        if (r == IMAP_MAILBOX_LOCKED) {
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
             for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
                 if (mbox->mark) continue;
-                sync_log_channel_mailbox(channel, mbox->name);
+                sync_log_channel_mailbox(*channelp, mbox->name);
                 report_verbose("  Deferred: MAILBOX %s\n", mbox->name);
             }
             r = 0;
@@ -290,7 +290,12 @@ static int do_restart()
     return sync_parse_response("RESTART", sync_in, NULL);
 }
 
-static int do_sync(sync_log_reader_t *slr, const char *channel)
+/*
+ *   channelp = NULL    => we're not processing a channel
+ *   *channelp = NULL   => we're processing the default channel
+ *   *channelp = "foo"  => we're processing the channel named "foo"
+ */
+static int do_sync(sync_log_reader_t *slr, const char **channelp)
 {
     struct sync_action_list *user_list = sync_action_list_create();
     struct sync_action_list *unuser_list = sync_action_list_create();
@@ -375,8 +380,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
             continue;
 
         r = sync_do_quota(action->name, sync_backend, flags);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_quota(channel, action->name);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_quota(*channelp, action->name);
             report_verbose("  Deferred: QUOTA %s\n", action->name);
         }
         else if (r) {
@@ -397,8 +402,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         r = sync_do_annotation(action->name, sync_backend, flags);
         if (!*action->name) continue;
 
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_annotation(channel, action->name);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_annotation(*channelp, action->name);
             report_verbose("  Deferred: ANNOTATION %s\n", action->name);
         }
         else if (r) {
@@ -414,8 +419,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
             continue;
 
         r = sync_do_seen(action->user, action->name, sync_backend, flags);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_seen(channel, action->user, action->name);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_seen(*channelp, action->user, action->name);
             report_verbose("  Deferred: SEEN %s %s\n",
                            action->user, action->name);
         }
@@ -439,8 +444,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
             continue;
 
         r = user_sub(action->user, action->name);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_subscribe(channel, action->user, action->name);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_subscribe(*channelp, action->user, action->name);
             report_verbose("  Deferred: SUB %s %s\n",
                            action->user, action->name);
         }
@@ -459,7 +464,7 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         /* only do up to 1000 mailboxes at a time */
         if (mboxname_list->count > 1000) {
             syslog(LOG_NOTICE, "sync_mailboxes: doing 1000");
-            r = do_sync_mailboxes(mboxname_list, user_list, channel, flags);
+            r = do_sync_mailboxes(mboxname_list, user_list, channelp, flags);
             if (r) goto cleanup;
             r = do_restart();
             if (r) goto cleanup;
@@ -468,7 +473,7 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         }
     }
 
-    r = do_sync_mailboxes(mboxname_list, user_list, channel, flags);
+    r = do_sync_mailboxes(mboxname_list, user_list, channelp, flags);
     if (r) goto cleanup;
     r = do_restart();
     if (r) goto cleanup;
@@ -477,8 +482,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         if (!action->active)
             continue;
         r = do_unmailbox(action->name, sync_backend, flags);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_unmailbox(channel, action->name);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_unmailbox(*channelp, action->name);
             report_verbose("  Deferred: UNMAILBOX %s\n", action->name);
         }
         else if (r) goto cleanup;
@@ -489,8 +494,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
             continue;
 
         r = sync_do_meta(action->user, sync_backend, flags);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_sieve(channel, action->user);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_sieve(*channelp, action->user);
             report_verbose("  Deferred: META %s\n", action->user);
         }
         else if (r == IMAP_INVALID_USER) {
@@ -507,8 +512,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         if (!action->active)
             continue;
         r = sync_do_user(action->user, NULL, sync_backend, flags);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_user(channel, action->user);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_user(*channelp, action->user);
             report_verbose("  Deferred: USER %s\n", action->user);
         }
         else if (r) goto cleanup;
@@ -520,8 +525,8 @@ static int do_sync(sync_log_reader_t *slr, const char *channel)
         if (!action->active)
             continue;
         r = do_unuser(action->user);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            sync_log_channel_unuser(channel, action->user);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_unuser(*channelp, action->user);
             report_verbose("  Deferred: UNUSER %s\n", action->user);
         }
         else if (r) goto cleanup;
@@ -629,7 +634,7 @@ static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
         }
 
         /* Process the work log */
-        if ((r=do_sync(slr, channel))) {
+        if ((r=do_sync(slr, &channel))) {
             syslog(LOG_ERR,
                    "Processing sync log file %s failed: %s",
                    sync_log_reader_get_file_name(slr), error_message(r));
