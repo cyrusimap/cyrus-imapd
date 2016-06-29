@@ -51,6 +51,8 @@ imap/ipurge
 imap/lmtpd
 imap/lmtpstats.c
 imap/lmtpstats.h
+imap/make_md5
+imap/make_sha1
 imap/mbexamine
 imap/mbpath
 imap/mupdate_err.c
