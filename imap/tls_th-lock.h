@@ -9,6 +9,12 @@
 
 #ifdef HAVE_SSL
 
+/*
+ * This entire interface is obsoleted by OpenSSL 1.1.0.
+ * Keep it around for a while for backward compatibility though.
+ */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
 void CRYPTO_thread_setup(void);
 void CRYPTO_thread_cleanup(void);
 /*
@@ -17,6 +23,8 @@ static unsigned long pthreads_thread_id(void );
 */
 void pthreads_locking_callback(int mode,int type,char *file,int line);
 unsigned long pthreads_thread_id(void );
+
+#endif /* OPENSSL_VERSION_NUMBER */
 
 #endif /* HAVE_SSL */
 #endif /* INCLUDED_TLS_TH_LOCK_H */
