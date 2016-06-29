@@ -2,7 +2,7 @@
 
 set -e
 
-NAME=cyruslibs
+NAME=${1:-cyruslibs}
 PREFIX=/usr/local/$NAME
 MAKEOPTS="-j 8"
 
