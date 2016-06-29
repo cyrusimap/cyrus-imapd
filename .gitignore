@@ -82,6 +82,8 @@ notifyd/notifyd
 perl/imap/IMAP.bs
 perl/imap/IMAP.c
 perl/imap/IMAP.o
+perl/imap/MYMETA.json
+perl/imap/MYMETA.yml
 perl/imap/Makefile.old
 perl/imap/blib/
 perl/imap/cyradm
