@@ -396,8 +396,8 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 }
 
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 /* taken from OpenSSL apps/s_cb.c */
-
 static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
                        int export __attribute__((unused)), int keylength)
 {
@@ -408,6 +408,7 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
     }
     return (rsa_tmp);
 }
+#endif
 
 /* taken from OpenSSL apps/s_cb.c
  * tim - this seems to just be giving logging messages
@@ -536,7 +537,9 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
             printf("TLS engine: cannot load cert/key data, may be a cert/key mismatch?\n");
             return IMTEST_FAIL;
         }
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSL_CTX_set_tmp_rsa_callback(tls_ctx, tmp_rsa_cb);
+#endif
 
     verify_depth = verifydepth;
     SSL_CTX_set_verify(tls_ctx, verify_flags, verify_callback);
