@@ -209,6 +209,7 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
     }
 }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 /* taken from OpenSSL apps/s_cb.c
    not thread safe! */
 static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
@@ -222,6 +223,7 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
     }
     return (rsa_tmp);
 }
+#endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
@@ -716,7 +718,10 @@ int     tls_init_serverengine(const char *ident,
 	syslog(LOG_ERR,"TLS server engine: cannot load cert/key data");
 	return (-1);
     }
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
+#endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
@@ -1281,7 +1286,10 @@ int tls_init_clientengine(int verifydepth,
 	    return (-1);
 	}
     }
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSL_CTX_set_tmp_rsa_callback(c_ctx, tmp_rsa_cb);
+#endif
     
     verify_depth = verifydepth;
     SSL_CTX_set_verify(c_ctx, verify_flags, verify_callback);
