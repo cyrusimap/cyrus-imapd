@@ -296,9 +296,9 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
             verify_error = X509_V_ERR_CERT_CHAIN_TOO_LONG;
         }
     }
-    switch (ctx->error) {
+    switch (err) {
     case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
-        X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, sizeof(buf));
+        X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, sizeof(buf));
         syslog(LOG_NOTICE, "issuer= %s", buf);
         break;
     case X509_V_ERR_CERT_NOT_YET_VALID:
