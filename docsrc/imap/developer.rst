@@ -10,6 +10,7 @@ Getting Started
     :maxdepth: 1
 
     developer/overview
+    developer/github-guide
     developer/installguide
     developer/basicserver
     developer/developer-testing
