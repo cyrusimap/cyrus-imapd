@@ -1110,7 +1110,7 @@ rst_prolog = """
 .. |imap_current_stable_version| replace:: 2.5.8
 .. |imap_current_stable_next_version| replace:: 2.5.8 + patches
 .. |imap_current_stable_branch| replace:: `cyrus-imapd-2.5`
-.. |imap_latest_development_version| replace:: 3.0.0-beta2
+.. |imap_latest_development_version| replace:: 3.0.0-beta3
 .. |imap_latest_development_branch| replace:: master
 .. |imap_tikanga_stock_version| replace:: 2.3.7
 .. |imap_santiago_stock_version| replace:: 2.3.16
@@ -1127,7 +1127,7 @@ rst_prolog = """
     
 .. |imap_development_release_notes| raw:: html
 
-    <a href="3.0/x/3.0.0-beta2.html">3.0.0-beta2</a>
+    <a href="3.0/x/3.0.0-beta3.html">3.0.0-beta3</a>
     
 """
 
