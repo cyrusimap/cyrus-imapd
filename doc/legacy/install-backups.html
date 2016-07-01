@@ -236,14 +236,7 @@ backup server containing the specified backup.</p>
 
 <p>All backupd/ctl_backups/cyr_backup operations first obtain a lock on the relevant
 backup file.  ctl_backups and cyr_backup will try to do this without blocking (unless
-told otherwise), whereas backupd will block.<p>
-
-<p>This means, for now, that working on a user's backup will cause a backup replication
-stall if that user was about to be backed up but is already locked.</p>
-
-<p>It's anticipated that in the future backupd will (configurably) not block waiting
-for a lock, but sync_client doesn't currently know how to deal with a MAILBOX_LOCKED
-response, so backupd needs to block and wait for now.</p>
+told otherwise), whereas backupd will never block.<p>
 
 <h3>Moving backup files to different backup partitions</h3>
 
