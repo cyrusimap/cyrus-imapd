@@ -2029,14 +2029,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 }
             }
 
-            if (txn->flags.cors == CORS_PREFLIGHT) {
-                /* Access-Control-Allow-Methods supersedes Allow */
-                break;
-            }
-            else {
+            /* Access-Control-Allow-Methods supersedes Allow */
+            if (txn->flags.cors != CORS_PREFLIGHT) {
                 /* Construct Allow header(s) */
                 allow_hdr("Allow", txn->req_tgt.allow);
             }
+            break;
         }
         goto authorized;
 
@@ -2174,8 +2172,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                         resp_body->len);
 
             /* Set actual content length of range */
-            resp_body->len = resp_body->range->last -
-                resp_body->range->first + 1;
+            resp_body->len =
+                resp_body->range->last - resp_body->range->first + 1;
 
             free(resp_body->range);
         }
