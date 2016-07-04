@@ -168,6 +168,25 @@ static int search_strlist(SquatSearchIndex* index, struct index_state *state,
 	    output[i] &= tmp[i];
 	}
 
+	if (/* version == */1) {
+	    char *lcs = xstrdup(s);
+	    lcase(lcs);
+	    memset(tmp, 0, len);
+	    if (squat_search_execute(index, s, strlen(s), fill_with_hits, &r)
+		!= SQUAT_OK) {
+		free(lcs);
+		if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
+		    return 1; /* The rest of the search is still viable */
+		syslog(LOG_DEBUG, "SQUAT string list search failed on string %s "
+				  "with part types %s", s, part_types);
+		return 0;
+	    }
+	    for (i = 0; i < len; i++) {
+		output[i] &= tmp[i];
+	    }
+	    free(lcs);
+	}
+
 	strs = strs->next;
     }
     return 1;
