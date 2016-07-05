@@ -182,6 +182,11 @@ void sieve_register_execute_error(sieve_interp_t *interp,
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
                        void *script_context, sieve_script_t **ret);
 
+/* Wrapper for sieve_script_parse using a disposable single-use interpreter.
+ * Use when you only want to parse or compile, but not execute, a script. */
+int sieve_script_parse_only(FILE *stream, char **out_errors,
+                            sieve_script_t **ret);
+
 /* given a path to a bytecode file, load it into the sieve_execute_t */
 int sieve_script_load(const char *fpath, sieve_execute_t **ret);
 
