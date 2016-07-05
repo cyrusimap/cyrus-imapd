@@ -2372,19 +2372,6 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
     return r;
 }
 
-EXPORTED modseq_t mboxname_readmodseq(const char *mboxname)
-{
-    struct mboxname_counters counters;
-
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return 0;
-
-    if (mboxname_read_counters(mboxname, &counters))
-        return 0;
-
-    return counters.highestmodseq;
-}
-
 EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
 {
     struct mboxname_counters counters;

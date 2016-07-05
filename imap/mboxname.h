@@ -260,7 +260,6 @@ struct mboxname_counters {
 };
 
 int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals);
-modseq_t mboxname_readmodseq(const char *mboxname);
 modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder);
 modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype, int dofolder);
 uint32_t mboxname_readuidvalidity(const char *mboxname);

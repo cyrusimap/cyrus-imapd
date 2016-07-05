@@ -2205,7 +2205,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     ptrarray_t dummy_response;
     int total = UNPREDICTABLE;
     int r = 0;
-    modseq_t hms;
+    struct mboxname_counters counters;
     search_query_t *query = NULL;
     search_folder_t *folder = NULL;
     search_folder_t *anchor_folder = NULL;
@@ -2224,7 +2224,8 @@ EXPORTED int index_convmultisort(struct index_state *state,
     r = index_refresh(state);
     if (r) return r;
 
-    hms = mboxname_readmodseq(index_mboxname(state));
+    r = mboxname_read_counters(index_mboxname(state), &counters);
+    if (r) return r;
     query = search_query_new(state, searchargs);
     query->multiple = 1;
     query->need_ids = 1;
@@ -2367,7 +2368,7 @@ out:
             prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
 
         prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
-                    hms);
+                    counters.mailmodseq);
 #if 0
         prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
                     state->mailbox->i.last_uid + 1);
