@@ -318,7 +318,7 @@ int putscript(struct protstream *conn, const struct buf *name,
 {
   FILE *stream;
   const char *dataptr;
-  char *errstr;
+  struct buf errors = BUF_INITIALIZER;
   unsigned int i;
   int last_was_r = 0;
   int result;
@@ -380,25 +380,28 @@ int putscript(struct protstream *conn, const struct buf *name,
   if (last_was_r)
       putc('\n', stream);
 
+  rewind(stream);
 
   /* let's make sure this is a valid script
      (no parse errors)
   */
-  result = sieve_script_parse_only(stream, &errstr, &s);
+  result = sieve_script_parse(interp, stream, &errors, &s);
 
   if (result != SIEVE_OK) {
-      if (errstr && *errstr) {
+      if (buf_len(&errors)) {
           prot_printf(conn, "NO ");
-          prot_printstring(conn, errstr);
+          prot_printstring(conn, buf_cstring(&errors));
           prot_printf(conn, "\r\n");
       } else {
           prot_printf(conn, "NO \"parse failed\"\r\n");
       }
-      free(errstr);
+      buf_free(&errors);
       fclose(stream);
       unlink(path);
       return TIMSIEVE_FAIL;
   }
+
+  buf_free(&errors);
 
   fflush(stream);
   fclose(stream);
