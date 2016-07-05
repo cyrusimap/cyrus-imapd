@@ -28,10 +28,10 @@ Configure sieve
 
 Depending on what's in your ``/etc/services`` file, sieve will usually be set to listen on port 2000 (old convention) or port 4190 (as specified by :rfc:`5804`).
 
-Add lines to :cyrusman:`cyrus.conf(5)` to make the server listen to the right ports for sieveshell commands:
+Add lines to :cyrusman:`cyrus.conf(5)` to make the server listen to the right ports for sieveshell commands::
 
-  sieve         cmd="timsieved" listen="servername:sieve" prefork=0
-  managesieve   cmd="timsieved" listen="servername:4190" prefork=0
+    sieve         cmd="timsieved" listen="servername:sieve" prefork=0
+    managesieve   cmd="timsieved" listen="servername:4190" prefork=0
 
 Configure outgoing mail
 -----------------------
