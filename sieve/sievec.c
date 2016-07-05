@@ -63,7 +63,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#if 0
 static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret);
+#endif
 
 #define TIMSIEVE_FAIL -1
 #define TIMSIEVE_OK 0
@@ -102,7 +104,7 @@ int main(int argc, char **argv)
     /* Load configuration file. */
     config_read(alt_config, 0);
 
-    if(is_script_parsable(instream, &err, &s) == TIMSIEVE_FAIL) {
+    if(sieve_script_parse_only(instream, &err, &s) != SIEVE_OK) {
         if(err) {
             fprintf(stderr, "Unable to parse script: %s\n", err);
         } else {
@@ -139,6 +141,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
+#if 0
 /* to make larry's stupid functions happy :) */
 static void foo(void)
 {
@@ -168,6 +171,7 @@ static int mysieve_error(int lineno, const char *msg,
     buf_printf(errors, "line %d: %s\r\n", lineno, msg);
     return SIEVE_OK;
 }
+#endif
 
 EXPORTED void fatal(const char *s, int code)
 {
@@ -178,6 +182,7 @@ EXPORTED void fatal(const char *s, int code)
 /* end the boilerplate */
 
 /* returns TRUE or FALSE */
+#if 0
 static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 {
     sieve_interp_t *i;
@@ -237,3 +242,4 @@ done:
 
     return (res == SIEVE_OK) ? TIMSIEVE_OK : TIMSIEVE_FAIL;
 }
+#endif
