@@ -77,6 +77,7 @@
 #define TIMSIEVE_OK     0
 #define MAX_FILENAME    1024
 
+#if 0
 static void foo(void);
 static int sieve_notify(void *ac __attribute__((unused)),
                         void *interp_context __attribute__((unused)),
@@ -94,6 +95,7 @@ static sieve_vacation_t vacation2 = {
     (sieve_callback *) &foo,    /* autorespond() */
     (sieve_callback *) &foo     /* send_response() */
 };
+#endif
 
 
 /*
@@ -263,7 +265,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
     /* Because we failed to open a precompiled bc sieve script, we compile one */
     if(do_compile) {
-       if(is_script_parsable(in_stream,&err, &s) == TIMSIEVE_FAIL) {
+       if(sieve_script_parse_only(in_stream,&err, &s) != SIEVE_OK) {
             if(err && *err) {
                syslog(LOG_WARNING,"autocreate_sieve: Error while parsing script %s.",err);
                free(err);
@@ -437,6 +439,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     return 0;
 }
 
+#if 0
 /* to make larry's stupid functions happy :) */
 static void foo(void)
 {
@@ -519,6 +522,7 @@ out:
 
     return (res == SIEVE_OK) ? TIMSIEVE_OK : TIMSIEVE_FAIL;
 }
+#endif
 
 #endif /* USE_SIEVE */
 
