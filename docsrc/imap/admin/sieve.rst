@@ -182,7 +182,7 @@ Sieve Tools
 * :cyrusman:`sieved(8)` - decompile a script back from bytecode. See sievec.
 * :cyrusman:`masssievec(8)` - compiles all the scripts in **sievedir** from ``imapd.conf``.
 * :cyrusman:`sivtest(1)` - authenticate and test against a MANAGESIEVE server such as timsieved.
-* :cyrusman:`sieveshell(8)` - allow users to manage scripts on a remote server, via MANAGESIEVE
+* :cyrusman:`sieveshell(1)` - allow users to manage scripts on a remote server, via MANAGESIEVE
 * :cyrusman:`translatesieve(8)` - utility script to translate sieve scripts to use **unixhierarchysep** and/or **altnamespace**
 
 Writing Sieve
