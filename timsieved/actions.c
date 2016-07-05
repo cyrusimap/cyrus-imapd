@@ -384,9 +384,9 @@ int putscript(struct protstream *conn, const struct buf *name,
   /* let's make sure this is a valid script
      (no parse errors)
   */
-  result = is_script_parsable(stream, &errstr, &s);
+  result = sieve_script_parse_only(stream, &errstr, &s);
 
-  if (result != TIMSIEVE_OK) {
+  if (result != SIEVE_OK) {
       if (errstr && *errstr) {
           prot_printf(conn, "NO ");
           prot_printstring(conn, errstr);
@@ -397,7 +397,7 @@ int putscript(struct protstream *conn, const struct buf *name,
       free(errstr);
       fclose(stream);
       unlink(path);
-      return result;
+      return TIMSIEVE_FAIL;
   }
 
   fflush(stream);
