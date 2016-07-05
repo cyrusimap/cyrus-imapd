@@ -1710,8 +1710,6 @@ timsieved_timsieved_SOURCES = \
 	timsieved/lex.h \
 	timsieved/parser.c \
 	timsieved/parser.h \
-	timsieved/scripttest.c \
-	timsieved/scripttest.h \
 	timsieved/timsieved.c
 
 timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)

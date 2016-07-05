@@ -66,14 +66,16 @@
 #include "imap/sync_log.h"
 #include "imap/tls.h"
 #include "imap/version.h"
+#include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
-#include "timsieved/scripttest.h"
 
 /* after a user has authentication, our current directory is their Sieve
    directory! */
 
 extern int sieved_userisadmin;
+extern sieve_interp_t *interp;
+
 static char *sieve_dir_config = NULL;
 
 static const char *sieved_userid = NULL;
