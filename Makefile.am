@@ -619,6 +619,17 @@ LD_UTILITY_ADD = imap/libcyrus_imap.la $(LD_BASIC_ADD) $(COM_ERR_LIBS)
 # the SASL library.
 LD_SERVER_ADD = $(LD_UTILITY_ADD) $(LIB_WRAP)
 
+# SIEVE is the libraries that sieve-using components need to link with
+#
+# This is empty if sieve is not enabled, so it can be used unconditionally
+# elsewhere.
+
+if SIEVE
+LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
+else
+LD_SIEVE_ADD =
+endif
+
 # ----
 
 if CUNIT
@@ -687,13 +698,7 @@ cunit_TESTS += \
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
-cunit_unit_LDADD =
-
-if SIEVE
-cunit_unit_LDADD += sieve/libcyrus_sieve.la
-endif
-
-cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
+cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
 
@@ -953,13 +958,7 @@ imap_imapd_SOURCES += \
 	imap/autocreate.c
 endif
 
-imap_imapd_LDADD =
-
-if SIEVE
-imap_imapd_LDADD += sieve/libcyrus_sieve.la
-endif
-
-imap_imapd_LDADD += $(LD_SERVER_ADD)
+imap_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
@@ -1154,14 +1153,11 @@ imap_lmtpd_SOURCES += \
 	imap/autocreate.h
 endif # AUTOCREATE
 
-imap_lmtpd_LDADD =
-
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
-imap_lmtpd_LDADD += sieve/libcyrus_sieve.la
 endif # SIEVE
 
-imap_lmtpd_LDADD += $(LD_SERVER_ADD)
+imap_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 SNMPGEN = $(abs_top_srcdir)/snmp/snmpgen
 
@@ -1268,13 +1264,7 @@ imap_pop3d_SOURCES += \
 	imap/autocreate.h
 endif # AUTOCREATE
 
-imap_pop3d_LDADD =
-
-if SIEVE
-imap_pop3d_LDADD += sieve/libcyrus_sieve.la
-endif # SIEVE
-
-imap_pop3d_LDADD += $(LD_SERVER_ADD)
+imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
 imap_quota_LDADD = $(LD_UTILITY_ADD)
@@ -1688,8 +1678,6 @@ sieve_libcyrus_sieve_la_SOURCES = \
 sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
 sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
-LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
-
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
@@ -1697,7 +1685,7 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
-sieve_test_LDADD = sieve/libcyrus_sieve.la $(LD_UTILITY_ADD)
+sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = \
 	imap/mutex_fake.c \
@@ -1712,11 +1700,12 @@ timsieved_timsieved_SOURCES = \
 	timsieved/parser.h \
 	timsieved/timsieved.c
 
-timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
+timsieved_timsieved_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 # TODO: Should not really stay around, but GNU software is hard to
 # contribute fixes to. Needed when building with the following:
 # CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
+if SIEVE
 lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
 	grep -E '^yy_size_t sieveleng;$$' sieve/sieve-lex.c && \
     	sed -r -i -e 's/int yyl;/yy_size_t yyl;/g' sieve/sieve-lex.c || :
@@ -1732,6 +1721,9 @@ lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
 
 	grep -E '^static int yy_n_chars;' sieve/addr-lex.c && \
     	sed -r -i -s 's/\tyy_size_t yy_buf_size;/\tint yy_buf_size;/g' sieve/addr-lex.c || :
+else
+lex-fix:
+endif
 
 GIT_VERSION = $(PACKAGE_VERSION)@git_version@
 
