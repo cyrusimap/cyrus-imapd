@@ -1954,10 +1954,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                         resp_body->iserial);
         }
     }
-    if (resp_body->cmid) {
-        prot_printf(httpd_out, "Cal-Managed-ID: \"%s\"\r\n", resp_body->cmid);
-        if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
-    }
     if (resp_body->prefs) {
         /* Construct Preference-Applied header */
         const char *prefs[] =
@@ -2003,18 +1999,15 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                           " extended-mkcol, resource-sharing\r\n");
                 if (txn->req_tgt.allow & ALLOW_CAL) {
                     prot_printf(httpd_out, "DAV: calendar-access"
-                                ", calendar-query-extended%s%s%s\r\n",
+                                ", calendar-query-extended%s%s%s%s\r\n",
                                 (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
                                 ", calendar-auto-schedule" : "",
+                                (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
+                                ", calendar-no-timezone" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
                                 ", calendar-availability" : "",
-                                (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
-                                ", calendar-no-timezone" : "");
-                    if (txn->req_tgt.allow & ALLOW_CAL_ATTACH) {
-                        prot_puts(httpd_out,
-                                  "DAV: calendar-managed-attachments, "
-                                  "calendar-managed-attachments-no-recurrence\r\n");
-                    }
+                                (txn->req_tgt.allow & ALLOW_CAL_ATTACH) ?
+                                ", calendar-managed-attachments" : "");
 
                     /* Backwards compatibility with older Apple clients */
                     prot_printf(httpd_out,
@@ -2123,6 +2116,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Representation Metadata */
+    if (resp_body->cmid) {
+        prot_printf(httpd_out, "Cal-Managed-ID: \"%s\"\r\n", resp_body->cmid);
+        if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
+    }
     if (resp_body->type) {
         prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
 
