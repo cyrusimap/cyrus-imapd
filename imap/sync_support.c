@@ -78,6 +78,10 @@
 #include "dlist.h"
 #include "xstrlcat.h"
 
+#ifdef USE_SIEVE
+#include "sieve/sieve_interface.h"
+#endif
+
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
@@ -1005,10 +1009,17 @@ int sync_sieve_upload(const char *userid, const char *name,
     const char *sieve_path = user_sieve_path(userid);
     char tmpname[2048];
     char newname[2048];
+    char *ext;
     FILE *file;
     int   r = 0;
     struct stat sbuf;
     struct utimbuf utimbuf;
+
+    ext = strrchr(name, '.');
+    if (ext && !strcmp(ext, ".bc")) {
+        /* silently ignore attempts to upload compiled bytecode */
+        return 0;
+    }
 
     if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
         if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
@@ -1023,7 +1034,7 @@ int sync_sieve_upload(const char *userid, const char *name,
     snprintf(newname, sizeof(newname), "%s/%s", sieve_path, name);
 
     if ((file=fopen(tmpname, "w")) == NULL) {
-        return(IMAP_IOERROR);
+        return IMAP_IOERROR;
     }
 
     /* XXX - error handling */
@@ -1042,6 +1053,18 @@ int sync_sieve_upload(const char *userid, const char *name,
 
     if (!r && (rename(tmpname, newname) < 0))
         r = IMAP_IOERROR;
+
+#ifdef USE_SIEVE
+    if (!r) {
+        char *bcname = sieve_getbcfname(newname);
+        if (bcname) {
+            r = sieve_rebuild(newname, bcname, /*force*/ 1, NULL);
+            if (r == SIEVE_PARSE_ERROR || r == SIEVE_FAIL)
+                r = IMAP_SYNC_BADSIEVE;
+            free(bcname);
+        }
+    }
+#endif
 
     sync_log_sieve(userid);
 
