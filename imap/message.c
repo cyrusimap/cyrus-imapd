@@ -3545,7 +3545,7 @@ static int parse_mime_params(struct protstream *prot, struct param **prev)
         param->attribute = buf_releasenull(&key);
         param->value = buf_releasenull(&val);
         *prev = param;
-        prev = &param;
+        prev = &param->next;
     } while (c == ' ');
 
     return prot_getc(prot);
