@@ -2004,11 +2004,12 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     const char *etag = NULL, **hdr;
     char *mailboxname = NULL;
     time_t lastmod = 0;
-    icalcomponent *ical = NULL, *comp;
+    icalcomponent *ical = NULL, *comp, *nextc, *master = NULL;
     icalcomponent_kind kind;
     icalproperty *aprop = NULL, *prop;
     icalparameter *param;
     unsigned op, return_rep;
+    strarray_t *rids = NULL;
     enum {
         ATTACH_ADD,
         ATTACH_UPDATE,
@@ -2043,8 +2044,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (!action || action->next) return HTTP_BAD_REQUEST;
     else if (!strcmp(action->s, "attachment-add")) {
         op = ATTACH_ADD;
-        if (rid  /* not supported (yet) */
-            || mid) return HTTP_BAD_REQUEST;
+        if (mid) return HTTP_BAD_REQUEST;
     }
     else if (!strcmp(action->s, "attachment-update")) {
         op = ATTACH_UPDATE;
@@ -2052,8 +2052,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
     else if (!strcmp(action->s, "attachment-remove")) {
         op = ATTACH_REMOVE;
-        if (rid  /* not supported (yet) */
-            || !mid || mid->next) return HTTP_BAD_REQUEST;
+        if (!mid || mid->next) return HTTP_BAD_REQUEST;
     }
     else return HTTP_BAD_REQUEST;
 
@@ -2130,15 +2129,28 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     webdavdb = webdav_open_mailbox(attachments);
 
     if (mid) {
-        /* Locate ATTACH property with this managed-id */
-        for (aprop = icalcomponent_get_first_property(comp,
-                                                      ICAL_ATTACH_PROPERTY);
-             aprop;
-             aprop = icalcomponent_get_next_property(comp,
-                                                     ICAL_ATTACH_PROPERTY)) {
-            param = icalproperty_get_managedid_parameter(aprop);
-            if (!strcmp(mid->s, icalparameter_get_managedid(param))) break;
-        }
+        /* Locate first ATTACH property with this MANAGED-ID */
+        do {
+            for (aprop = icalcomponent_get_first_property(comp,
+                                                          ICAL_ATTACH_PROPERTY);
+                 aprop;
+                 aprop = icalcomponent_get_next_property(comp,
+                                                         ICAL_ATTACH_PROPERTY)) {
+                param = icalproperty_get_managedid_parameter(aprop);
+                if (param &&
+                    !strcmp(mid->s, icalparameter_get_managedid(param))) break;
+            }
+
+            /* Check if this is master component */
+            if (rid && !master &&
+                !icalcomponent_get_first_property(comp,
+                                                  ICAL_RECURRENCEID_PROPERTY)) {
+                master = comp;
+            }
+
+        } while (!aprop &&
+                 (comp = icalcomponent_get_next_component(ical, kind)));
+
         if (!aprop) {
             txn->error.precond = CALDAV_VALID_MANAGEDID;
             ret = HTTP_BAD_REQUEST;
@@ -2149,9 +2161,13 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         decrement_refcount(mid->s, attachments, webdavdb);
     }
 
-    switch (op) {
-    case ATTACH_ADD:
-    case ATTACH_UPDATE: {
+    if (rid) {
+        /* Split list of RECURRENCE-IDs */
+        rids = strarray_split(rid->s, ",", STRARRAY_TRIM);
+    }
+ 
+    if (op == ATTACH_REMOVE) aprop = NULL;
+    else {
         /* SHA1 of content used as resource UID, resource name, & managed-id */
         static char uid[2*MESSAGE_GUID_SIZE+1];
         struct message_guid guid;
@@ -2196,9 +2212,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         /* Update reference count */
         increment_refcount(uid, &wdata, webdavdb);
 
-        /* Update ATTACH parameters on cal resource */
-        if (!aprop) {
-            /* Create new ATTACH property */
+        /* Create new ATTACH property */
+        if (aprop) aprop = icalproperty_new_clone(aprop);
+        else {
             const char *proto = NULL, *host = NULL;
             icalattach *attach;
 
@@ -2212,10 +2228,10 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             buf_reset(&txn->buf);
 
             aprop = icalproperty_new_attach(attach);
-            icalcomponent_add_property(comp, aprop);
             icalattach_unref(attach);
         }
 
+        /* Update ATTACH parameters - MANAGED-ID, FILENAME, SIZE, FMTTYPE */
         param = icalproperty_get_managedid_parameter(aprop);
         if (param) icalparameter_set_managedid(param, resp_body->cmid);
         else {
@@ -2251,55 +2267,131 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                 icalproperty_add_parameter(aprop, param);
             }
         }
+    }
+        
+    /* Process each component */
+    for (; comp; comp = nextc) {
+        int idx;
 
-        for (comp = icalcomponent_get_next_component(ical, kind);
-             comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        nextc = icalcomponent_get_next_component(ical, kind);
+
+        if (rid) {
+            /* Check if RECURRENCE-ID is in our list */
+            const char *recurid;
+
+            prop = icalcomponent_get_first_property(comp,
+                                                    ICAL_RECURRENCEID_PROPERTY);
+            if (prop) recurid = icalproperty_get_value_as_string(prop);
+            else {
+                master = comp;
+                recurid = "M";
+            }
+
+            idx = strarray_find_case(rids, recurid, 0);
+            if (idx >= 0) {
+                /* Remove found recurid from list -
+                   we will create new overrides for unfound recurids */
+                free(strarray_remove(rids, idx));
+            }
+            else if (!nextc && strarray_size(rids)) {
+                /* Create new overrides */
+                struct icaldatetimeperiodtype dtp;
+                icalproperty *nextp;
+
+                master = icalcomponent_new_clone(master);
+
+                /* Get DTSTART and Remove unwanted recurrence properties */
+                for (prop = icalcomponent_get_first_property(master,
+                                                             ICAL_ANY_PROPERTY);
+                     prop; prop = nextp) {
+                    nextp = icalcomponent_get_next_property(master,
+                                                            ICAL_ANY_PROPERTY);
+                    switch (icalproperty_isa(prop)) {
+                    case ICAL_RRULE_PROPERTY:
+                    case ICAL_RDATE_PROPERTY:
+                    case ICAL_EXDATE_PROPERTY:
+                    case ICAL_EXRULE_PROPERTY:
+                        icalcomponent_remove_property(master, prop);
+                        icalproperty_free(prop);
+                        break;
+
+                    case ICAL_DTSTART_PROPERTY:
+                        dtp = icalproperty_get_datetimeperiod(prop);
+                        break;
+
+                    default:
+                        break;
+                    }
+                }
+
+                /* Get TZID of DTSTART */
+                struct icaltimetype dtstart = dtp.time;
+                const icaltimezone *tz = icaltime_get_timezone(dtstart);
+                const char *tzid = icaltimezone_get_tzid((icaltimezone *) tz);
+
+                for (idx = 0; idx < strarray_size(rids); idx++) {
+                    /* Create new component and set DTSTART and RECURRENCE-ID */
+                    dtstart = icaltime_from_string(strarray_nth(rids, idx));
+                    if (icaltime_is_null_time(dtstart)) continue;
+
+                    icaltime_set_timezone(&dtstart, tz);
+
+                    comp = icalcomponent_new_clone(master);
+                    icalcomponent_add_component(ical, comp);
+                    icalcomponent_set_dtstart(comp, dtstart);
+
+                    prop = icalproperty_new_recurrenceid(dtstart);
+                    icalcomponent_add_property(comp, prop);
+                    if (tzid) {
+                        icalproperty_add_parameter(prop,
+                                                   icalparameter_new_tzid(tzid));
+                    }
+                }
+
+                icalcomponent_free(master);
+                nextc = icalcomponent_get_next_component(ical, kind);
+                rid = NULL;
+            }
+            else {
+                /* No matching RECURRENCE-ID - Skip this component */
+                continue;
+            }
+        }
+
+        if (mid) {
+            /* Remove matching ATTACH property */
             for (prop = icalcomponent_get_first_property(comp,
                                                          ICAL_ATTACH_PROPERTY);
                  prop;
                  prop = icalcomponent_get_next_property(comp,
                                                         ICAL_ATTACH_PROPERTY)) {
                 param = icalproperty_get_managedid_parameter(prop);
-                if (!strcmp(mid->s, icalparameter_get_managedid(param))) {
+                if (param &&
+                    !strcmp(mid->s, icalparameter_get_managedid(param))) {
                     icalcomponent_remove_property(comp, prop);
                     icalproperty_free(prop);
                     break;
                 }
             }
+
+            if (!prop) {
+                /* No matching ATTACH - Skip this component */
+                continue;
+            }
+        }
+
+        if (aprop) {
+            /* Add new/updated ATTACH property */
             icalcomponent_add_property(comp, icalproperty_new_clone(aprop));
         }
-        break;
-    }
-
-    case ATTACH_REMOVE:
-        /* Remove ATTACH properties from cal resource */
-        icalcomponent_remove_property(comp, aprop);
-        icalproperty_free(aprop);
-
-        for (comp = icalcomponent_get_next_component(ical, kind);
-             comp; comp = icalcomponent_get_next_component(ical, kind)) {
-            for (prop = icalcomponent_get_first_property(comp,
-                                                         ICAL_ATTACH_PROPERTY);
-                 prop;
-                 prop = icalcomponent_get_next_property(comp,
-                                                        ICAL_ATTACH_PROPERTY)) {
-                param = icalproperty_get_managedid_parameter(prop);
-                if (!strcmp(mid->s, icalparameter_get_managedid(param))) {
-                    icalcomponent_remove_property(comp, prop);
-                    icalproperty_free(prop);
-                    break;
-                }
-            }
-        }
-        break;
     }
 
     /* Finished with attachment collection */
     mailbox_unlock_index(attachments, NULL);
 
     /* Store updated calendar resource */
-    ret = caldav_store_resource(txn, ical, calendar,
-                                txn->req_tgt.resource, caldavdb, 0, schedule_address);
+    ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
+                                caldavdb, 0, schedule_address);
 
     if (ret == HTTP_NO_CONTENT && return_rep) {
         struct buf *data;
@@ -2331,7 +2423,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
   done:
+    strarray_free(rids);
     free(schedule_address);
+    if (aprop) icalproperty_free(aprop);
     if (ical) icalcomponent_free(ical);
     if (webdavdb) webdav_close(webdavdb);
     if (caldavdb) caldav_close(caldavdb);
