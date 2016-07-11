@@ -1764,4 +1764,56 @@ sub getnotify
     return $data;
 }
 
+sub get_sieve_script_dir
+{
+    my ($self, $user) = @_;
+
+    my $sieved = "$self->{basedir}/conf/sieve/";
+
+    if (defined $user)
+    {
+	my $uhash = substr($user, 0, 1);
+	$sieved .= "$uhash/$user";
+    }
+    else
+    {
+	# shared folder
+	$sieved .= 'global/';
+    }
+
+    return $sieved;
+}
+
+sub install_sieve_script
+{
+    my ($self, $script, %params) = @_;
+
+    my $user = (exists $params{username} ? $params{username} : 'cassandane');
+    my $name = $params{name} || 'test1';
+    my $sieved = $self->get_sieve_script_dir($user);
+
+    xlog "Installing sieve script $name in $sieved";
+
+    mkpath $sieved
+	or die "Cannot make path $sieved: $!";
+    die "Path does not exist: $sieved" if not -d $sieved;
+
+    open(FH, '>', "$sieved/$name.script")
+	or die "Cannot open $sieved/$name.script for writing: $!";
+    print FH $script;
+    close(FH);
+
+    $self->run_command({ cyrus => 1 },
+			 "sievec",
+			 "$sieved/$name.script",
+			 "$sieved/$name.bc");
+    die "File does not exist: $sieved/$name.bc" if not -f "$sieved/$name.bc";
+
+    symlink("$name.bc", "$sieved/defaultbc")
+	or die "Cannot symlink $name.bc to $sieved/defaultbc";
+    die "Symlink does not exist: $sieved/defaultbc" if not -l "$sieved/defaultbc";
+
+    xlog "Sieve script installed successfully";
+}
+
 1;

@@ -366,4 +366,58 @@ sub test_alternate_globalannots
     $self->assert(1);
 }
 
+sub test_sieve_replication
+{
+    my ($self) = @_;
+
+    my $user = 'cassandane';
+    my $scriptname = 'test1';
+    my $scriptcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+
+    # first, verify that sieve script does not exist on master or replica
+    my $master_sievedir = $self->{instance}->get_sieve_script_dir($user);
+    my $replica_sievedir = $self->{replica}->get_sieve_script_dir($user);
+
+    $self->assert(( ! -f "$master_sievedir/$scriptname.script" ));
+    $self->assert(( ! -f "$master_sievedir/$scriptname.bc" ));
+    $self->assert(( ! -e "$master_sievedir/defaultbc" ));
+
+    $self->assert(( ! -f "$replica_sievedir/$scriptname.script" ));
+    $self->assert(( ! -f "$replica_sievedir/$scriptname.bc" ));
+    $self->assert(( ! -e "$replica_sievedir/defaultbc" ));
+
+    # then, install sieve script on master
+    $self->{instance}->install_sieve_script($scriptcontent, name=>$scriptname);
+
+    # then, verify that sieve script exists on master but not on replica
+    $self->assert(( -f "$master_sievedir/$scriptname.script" ));
+    $self->assert(( -f "$master_sievedir/$scriptname.bc" ));
+    $self->assert(( -l "$master_sievedir/defaultbc" ));
+    $self->assert_str_equals("$scriptname.bc", readlink "$master_sievedir/defaultbc");
+
+    $self->assert(( ! -f "$replica_sievedir/$scriptname.script" ));
+    $self->assert(( ! -f "$replica_sievedir/$scriptname.bc" ));
+    $self->assert(( ! -e "$replica_sievedir/defaultbc" ));
+
+    # then, run replication,
+    $self->run_replication();
+
+    # then, verify that sieve script exists on both master and replica
+    $self->assert(( -f "$master_sievedir/$scriptname.script" ));
+    $self->assert(( -f "$master_sievedir/$scriptname.bc" ));
+    $self->assert(( -l "$master_sievedir/defaultbc" ));
+    $self->assert_str_equals("$scriptname.bc", readlink "$master_sievedir/defaultbc");
+
+    $self->assert(( -f "$replica_sievedir/$scriptname.script" ));
+    $self->assert(( -f "$replica_sievedir/$scriptname.bc" ));
+    $self->assert(( -l "$replica_sievedir/defaultbc" ));
+    $self->assert_str_equals("$scriptname.bc", readlink "$replica_sievedir/defaultbc");
+}
+
 1;

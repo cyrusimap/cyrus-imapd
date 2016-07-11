@@ -43,7 +43,6 @@ use strict;
 use warnings;
 package Cassandane::Cyrus::Sieve;
 use base qw(Cassandane::Cyrus::TestCase);
-use File::Path qw(mkpath);
 use IO::File;
 use Cassandane::Util::Log;
 
@@ -67,50 +66,6 @@ sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
-}
-
-sub install_sieve_script
-{
-    my ($self, $script, %params) = @_;
-
-    my $user = (exists $params{username} ? $params{username} : 'cassandane');
-    my $basedir = $self->{instance}->{basedir};
-    my $name = $params{name} || 'test1';
-    my $sieved = "$basedir/conf/sieve/";
-
-    if (defined $user)
-    {
-	my $uhash = substr($user, 0, 1);
-	$sieved .= "$uhash/$user";
-    }
-    else
-    {
-	# shared folder
-	$sieved .= 'global/';
-    }
-
-    xlog "Installing sieve script $name in $sieved";
-
-    mkpath $sieved
-	or die "Cannot make path $sieved: $!";
-    $self->assert(( -d $sieved ));
-
-    open(FH, '>', "$sieved/$name.script")
-	or die "Cannot open $sieved/$name.script for writing: $!";
-    print FH $script;
-    close(FH);
-
-    $self->{instance}->run_command({ cyrus => 1 },
-				   "sievec",
-				   "$sieved/$name.script",
-				   "$sieved/$name.bc");
-    $self->assert(( -f "$sieved/$name.bc" ));
-
-    symlink("$name.bc", "$sieved/defaultbc")
-	or die "Cannot symlink $name.bc to $sieved/defaultbc";
-    $self->assert(( -l "$sieved/defaultbc" ));
-
-    xlog "Sieve script installed successfully";
 }
 
 sub read_errors
@@ -257,7 +212,7 @@ sub test_deliver
     my $target = "INBOX.target";
 
     xlog "Install a sieve script filing all mail into a nonexistant folder";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 fileinto "$target";
 EOF
@@ -302,7 +257,7 @@ sub test_deliver_specialuse
     $self->{store}->set_fetch_attributes('uid');
 
     xlog "Install a sieve script filing all mail into the Trash role";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 fileinto "\\\\Trash";
 EOF
@@ -416,7 +371,7 @@ sub test_dup_keep_keep
 
     xlog "Testing duplicate suppression between 'keep' & 'keep'";
 
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 keep;
 keep;
 EOF
@@ -443,7 +398,7 @@ sub test_dup_keep_fileinto
 
     xlog "Testing duplicate suppression between 'keep' & 'fileinto'";
 
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 keep;
 fileinto "INBOX";
@@ -486,7 +441,7 @@ sub test_deliver_fileinto_dot
 	 or die "Cannot create $target: $@";
 
     xlog "Install the sieve script";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 fileinto "$target";
 EOF
@@ -529,7 +484,7 @@ sub XXXtest_shared_delivery_addflag
 
     xlog "Install the sieve script";
     my $scriptname = 'cosbySweater';
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["imapflags"];
 if header :comparator "i;ascii-casemap" :is "Subject" "quinoa"  {
     addflag "\\\\Flagged";
@@ -567,7 +522,7 @@ sub test_rfc5490_create
 
     xlog "Install the sieve script";
     my $scriptname = 'lazySusan';
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailbox"];
 if header :comparator "i;ascii-casemap" :is "Subject" "quinoa"  {
     fileinto :create "$hitfolder";
@@ -618,7 +573,7 @@ sub test_rfc5490_mailboxexists
 
     xlog "Install the sieve script";
     my $scriptname = 'flatPack';
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailbox"];
 if mailboxexists "$testfolder"  {
     fileinto "$hitfolder";
@@ -671,7 +626,7 @@ sub test_rfc5490_metadata
     my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mboxmetadata"];
 if metadata "INBOX" "/private/comment" "awesome" {
     fileinto "$hitfolder";
@@ -724,7 +679,7 @@ sub test_rfc5490_metadata_matches
     my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mboxmetadata"];
 if metadata :contains "INBOX" "/private/comment" "awesome" {
     fileinto "$hitfolder";
@@ -781,7 +736,7 @@ sub test_rfc5490_metadataexists
     my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mboxmetadata"];
 if metadataexists "INBOX" "/private/magic" {
     fileinto "$hitfolder";
@@ -836,7 +791,7 @@ sub test_rfc5490_servermetadata
     my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "servermetadata"];
 if servermetadata "/shared/magic" "awesome" {
     fileinto "$hitfolder";
@@ -894,7 +849,7 @@ sub test_rfc5490_servermetadataexists
     my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
-    $self->install_sieve_script(<<EOF
+    $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "servermetadata"];
 if servermetadataexists ["/shared/magic", "/shared/moo"] {
     fileinto "$hitfolder";
