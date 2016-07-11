@@ -269,6 +269,8 @@ sub _create_instances
     my $want = $self->{_want};
     my %instance_params = %{$self->{_instance_params}};
 
+    my $cassini = Cassandane::Cassini->instance();
+
     if ($want->{instance})
     {
 	my $conf = $self->{_config}->clone();
@@ -325,6 +327,12 @@ sub _create_instances
 
 	if ($want->{replica})
 	{
+	    my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
+	    if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
+		xlog "replica instance: using [cyrus replica] configuration";
+		$instance_params{installation} = 'replica';
+	    }
+
 	    $instance_params{description} = "replica instance for test $self->{_name}";
 	    $self->{replica} = Cassandane::Instance->new(%instance_params,
 							 setup_mailbox => 0);
@@ -352,6 +360,12 @@ sub _create_instances
 		proxy_authname => 'mailproxy',
 		proxy_password => 'mailproxy',
 	    );
+
+	    my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');
+	    if (defined $cyrus_murder_prefix and -d $cyrus_murder_prefix) {
+		xlog "murder instance: using [cyrus murder] configuration";
+		$instance_params{installation} = 'murder';
+	    }
 
 	    $instance_params{description} = "murder frontend for test $self->{_name}";
 	    $instance_params{config} = $frontend_conf;

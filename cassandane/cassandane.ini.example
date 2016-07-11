@@ -87,6 +87,24 @@
 # If set, binaries will be in {destdir}{prefix}/bin (etc)
 ##destdir =
 
+# This optional section describes the Cyrus installation used for the
+# replica side of replication tests.  You can use this to test
+# replication to a different Cyrus version from your main instance.
+# If this section does not exist, or the prefix it names does not
+# exist, then the replica side will use the "cyrus default".
+##[cyrus replica]
+##prefix = /usr/cyrus
+##destdir =
+
+# This optional section describes the Cyrus installation used for the
+# murder frontend in murder tests.  You can use this to test a murder
+# with a different Cyrus version from your main instance.
+# If this section does not exist, or the prefix it names does not
+# exist, then the murder tests will use the "cyrus default".
+##[cyrus murder]
+##prefix = /usr/cyrus
+##destdir =
+
 # This section enables GDB debugging of services run from Cyrus master
 # on a per-service basis.  To debug, enable one of these, run
 # Cassandane, and look in syslog for helpful instructions from gdbtramp.
