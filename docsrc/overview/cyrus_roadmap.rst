@@ -56,5 +56,5 @@ pre 2.2
 * unsupported
 
 .. 
-	Detailed Roadmap - This used to be an extract out of bugzilla, but we're not using that any more. And maniphest/phabricator doesn't seem to have a field for what version an item is targeted to.
+	This is woefully out of date.
 	

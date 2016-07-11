@@ -3,7 +3,7 @@ IRC Chat
 ========
 
 We found chatting on IRC has just that little more bandwidth available
-for a conversation as opposed to mailing lists and/or Phabricator, so we
+for a conversation as opposed to mailing lists and/or bug reports, so we
 would like to invite you to join us on IRC if you're interested.
 
 There are often Cyrus developers and experienced administrators hanging
