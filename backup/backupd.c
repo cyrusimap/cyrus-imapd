@@ -1129,11 +1129,19 @@ static void cmd_apply(struct dlist *dl)
         /* ignore and succeed */
         r = 0;
     }
+    else if (strcmp(dl->name, "ACTIVATE_SIEVE") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
     else if (strcmp(dl->name, "SUB") == 0) {
         /* ignore and succeed */
         r = 0;
     }
     else if (strcmp(dl->name, "UNSUB") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
+    else if (strcmp(dl->name, "UNUSER") == 0) {
         /* ignore and succeed */
         r = 0;
     }
