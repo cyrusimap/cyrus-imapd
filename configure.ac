@@ -2169,5 +2169,9 @@ Search engine:
    xapian:             $enable_xapian
 
 Hardware support:
-    SSE4.2:            $cyrus_cv_sse42
+   SSE4.2:             $cyrus_cv_sse42
+
+Installation directories:
+   prefix:             $prefix
+   sysconfdir:         $sysconfdir
 "
