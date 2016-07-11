@@ -21,10 +21,6 @@ Mailing Lists
     This is a mailing list for the use of Cyrus developers and package
     maintainers, for all the Cyrus software.
 
-* cyrus-bugzilla@lists.andrew.cmu.edu (no archive)
-
-    This is the bugzilla event list.
-
 Archives
 --------
 
@@ -64,9 +60,6 @@ or send mail to the following addresses to subscribe:
     To subscribe to cyrus-devel send email to
     cyrus-devel-subscribe@lists.andrew.cmu.edu.
 
-    To subscribe to cyrus-bugzilla send email to
-    cyrus-bugzilla-subscribe@lists.andrew.cmu.edu.
-
 Or to these addresses to unsubscribe:
 
     To unsubscribe from cyrus-announce email
@@ -80,9 +73,6 @@ Or to these addresses to unsubscribe:
 
     To unsubscribe from cyrus-devel email
     cyrus-devel-unsubscribe@lists.andrew.cmu.edu
-
-    To unsubscribe from cyrus-bugzilla email
-    cyrus-bugzilla-unsubscribe@lists.andrew.cmu.edu
 
 Digest Lists
 ------------

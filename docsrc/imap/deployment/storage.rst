@@ -803,7 +803,7 @@ such, they could grow infinitely (until disks run out of space).
 A busy mailing list used for human communications, such as
 devel@lists.fedoraproject.org, can be expected to grow to as much as 1
 GB of data foot print on disk over a period of 3 years -- at a message
-rate of < ~100 a day and without purging.
+rate of less than ~100 a day and without purging.
 
 A mailing list with automated messages generated from applications, such
 as bugs-list@kde.org, which is notified of all ticket changes for KDE's
