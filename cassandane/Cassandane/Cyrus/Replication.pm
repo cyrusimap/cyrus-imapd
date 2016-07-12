@@ -447,4 +447,107 @@ EOF
     $self->assert_sieve_active($self->{replica}, $user, $scriptname);
 }
 
+sub test_sieve_replication_exists
+{
+    my ($self) = @_;
+
+    my $user = 'cassandane';
+    my $scriptname = 'test1';
+    my $scriptcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+
+    # first, verify that sieve script does not exist on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install sieve script on both master and replica
+    $self->{instance}->install_sieve_script($scriptcontent, name=>$scriptname);
+    $self->{replica}->install_sieve_script($scriptcontent, name=>$scriptname);
+
+    # then, verify that sieve script exists on both
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+
+    # then, run replication,
+    $self->run_replication();
+
+    # then, verify that sieve script still exists on both master and replica
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+}
+
+sub test_sieve_replication_different
+{
+    my ($self) = @_;
+
+    my $user = 'cassandane';
+    my $script1name = 'test1';
+    my $script1content = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+
+    my $script2name = 'test2';
+    my $script2content = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "more testing";
+}
+EOF
+
+    # first, verify that neither script exists on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script2name);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script2name);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install different sieve script on master and replica
+    $self->{instance}->install_sieve_script($script1content, name=>$script1name);
+    $self->{replica}->install_sieve_script($script2content, name=>$script2name);
+
+    # then, verify that each sieve script exists on one only
+    $self->assert_sieve_exists($self->{instance}, $user, $script1name);
+    $self->assert_sieve_active($self->{instance}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script2name);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $script2name);
+    $self->assert_sieve_active($self->{replica}, $user, $script2name);
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script1name);
+
+    # then, run replication,
+    # the one that exists on master only will be replicated
+    # the one that exists on replica only will be deleted
+    $self->run_replication();
+
+    # then, verify that scripts are in expected state
+    $self->assert_sieve_exists($self->{instance}, $user, $script1name);
+    $self->assert_sieve_active($self->{instance}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script2name);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $script1name);
+    $self->assert_sieve_active($self->{replica}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script2name);
+}
+
 1;
