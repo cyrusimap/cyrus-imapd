@@ -1,3 +1,5 @@
+.. _feedback-mailing-lists:
+
 Mailing Lists
 =============
 

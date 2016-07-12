@@ -1,3 +1,5 @@
+.. _feedback-bugs:
+
 Reporting Bugs
 ==============
 

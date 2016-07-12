@@ -1,3 +1,5 @@
+.. _feedback-irc:
+
 ========
 IRC Chat
 ========
