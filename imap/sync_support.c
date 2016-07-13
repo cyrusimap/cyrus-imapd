@@ -5621,6 +5621,7 @@ int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve
     struct sync_sieve *mitem, *ritem;
     int master_active = 0;
     int replica_active = 0;
+    char *ext;
 
     master_sieve = sync_sieve_list_generate(userid);
     if (!master_sieve) {
@@ -5643,6 +5644,11 @@ int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve
             else if (ritem->last_update >= mitem->last_update)
                 continue; /* changed */
         }
+
+        /* Don't upload compiled bytecode */
+        ext = strrchr(mitem->name, '.');
+        if (ext && !strcmp(ext, ".bc"))
+            continue;
 
         r = sieve_upload(userid, mitem->name, mitem->last_update,
                          sync_be, flags);
