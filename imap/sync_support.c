@@ -1081,6 +1081,21 @@ int sync_sieve_activate(const char *userid, const char *name)
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
     unlink(active);
 
+#ifdef USE_SIEVE
+    char *script = sieve_getscriptfname(target);
+    if (script) {
+        char *script_fname = strconcat(sieve_path, "/", script, NULL);
+        char *bc_fname= strconcat(sieve_path, "/", target, NULL);
+        sieve_rebuild(script_fname, bc_fname, 0, NULL);
+        free(bc_fname);
+        free(script_fname);
+        free(script);
+    }
+#endif
+
+    /* N.B symlink() does NOT verify target for anything but string validity,
+     * so activation of a nonexistent script will report success.
+     */
     if (symlink(target, active) < 0)
         return(IMAP_IOERROR);
 
