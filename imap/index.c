@@ -167,9 +167,12 @@ static void index_thread_orderedsubj(struct index_state *state,
 static void index_thread_sort(Thread *root, const struct sortcrit *sortcrit);
 static void index_thread_print(struct index_state *state,
                                Thread *threads, int usinguid);
-static void index_thread_ref(struct index_state *state,
-                             unsigned *msgno_list, unsigned int nmsg,
-                             int usinguid);
+static void index_thread_references(struct index_state *state,
+                                    unsigned *msgno_list, unsigned int nmsg,
+                                    int usinguid);
+static void index_thread_refs(struct index_state *state,
+                              unsigned *msgno_list, unsigned int nmsg,
+                              int usinguid);
 
 static struct seqset *_parse_sequence(struct index_state *state,
                                       const char *sequence, int usinguid);
@@ -178,7 +181,8 @@ static void massage_header(char *hdr);
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
 static const struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
-    { "REFERENCES", index_thread_ref },
+    { "REFERENCES", index_thread_references },
+    { "REFS", index_thread_refs },
     { NULL, NULL }
 };
 
@@ -5340,6 +5344,8 @@ void index_msgdata_free(MsgData **msgdata, unsigned int n)
     for (i = 0 ; i < n ; i++) {
         MsgData *md = msgdata[i];
 
+        if (!md) continue;
+
         free(md->cc);
         free(md->from);
         free(md->to);
@@ -5511,7 +5517,7 @@ static void _index_thread_print(struct index_state *state,
         /* if we have a message, print its identifier
          * (do nothing for empty containers)
          */
-        if (thread->msgdata) {
+        if (thread->msgdata && thread->msgdata->uid) {
             prot_printf(state->out, "%u",
                         usinguid ? thread->msgdata->uid :
                         thread->msgdata->msgno);
@@ -6070,15 +6076,16 @@ static void index_thread_search(struct index_state *state,
 
 /*
  * Guts of the REFERENCES algorithms.  Behavior is tweaked with loadcrit[],
- * searchproc() and sortcrit[].
+ * threadproc(), searchproc() and sortcrit[].
  */
 static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
                               unsigned int nmsg,
                               const struct sortcrit loadcrit[],
+                              MsgData **(*threadproc) (struct rootset *, Thread **),
                               int (*searchproc) (MsgData *),
                               const struct sortcrit sortcrit[], int usinguid)
 {
-    MsgData **msgdata;
+    MsgData **msgdata, **thrdata = NULL;
     unsigned int mi;
     int tref, nnode;
     Thread *newnode;
@@ -6134,11 +6141,8 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
     /* Step 3: prune tree of empty containers - get our deposit back :^) */
     ref_prune_tree(rootset.root);
 
-    /* Step 4: sort the root set */
-    ref_sort_root(rootset.root);
-
-    /* Step 5: group root set by subject */
-    ref_group_subjects(rootset.root, rootset.nroot, &newnode);
+    /* Steps 4/5: algorithm-specific thread processing */
+    if (threadproc) thrdata = threadproc(&rootset, &newnode);
 
     /* Optionally search threads (to be used by REFERENCES derivatives) */
     if (searchproc) index_thread_search(state, rootset.root, searchproc);
@@ -6154,14 +6158,27 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
 
     /* free the msgdata array */
     index_msgdata_free(msgdata, nmsg);
+    index_msgdata_free(thrdata, rootset.nroot);
 }
 
 /*
  * Thread a list of messages using the REFERENCES algorithm.
  */
-static void index_thread_ref(struct index_state *state,
-                             unsigned *msgno_list, unsigned int nmsg,
-                             int usinguid)
+static MsgData **references_thread_proc(struct rootset *rootset,
+                                        Thread **newnode)
+{
+    /* Step 4: sort the root set */
+    ref_sort_root(rootset->root);
+    
+    /* Step 5: group root set by subject */
+    ref_group_subjects(rootset->root, rootset->nroot, newnode);
+
+    return NULL;
+}
+
+static void index_thread_references(struct index_state *state,
+                                    unsigned *msgno_list, unsigned int nmsg,
+                                    int usinguid)
 {
     static const struct sortcrit loadcrit[] =
                                  {{ LOAD_IDS,      0, {{NULL,NULL}} },
@@ -6172,7 +6189,81 @@ static void index_thread_ref(struct index_state *state,
                                  {{ SORT_DATE,     0, {{NULL,NULL}} },
                                   { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
 
-    _index_thread_ref(state, msgno_list, nmsg, loadcrit, NULL, sortcrit, usinguid);
+    _index_thread_ref(state, msgno_list, nmsg, loadcrit,
+                      references_thread_proc, NULL, sortcrit, usinguid);
+}
+
+/* Find most recent internaldate of all messages in thread */
+static void find_most_recent(Thread *thread, MsgData *recent)
+{
+    Thread *child;
+
+    /* test the head node */
+    if (thread->msgdata->internaldate > recent->internaldate)
+        recent->internaldate = thread->msgdata->internaldate;
+
+    /* test the children recursively */
+    child = thread->child;
+    while (child) {
+        find_most_recent(child, recent);
+        child = child->next;
+    }
+}
+
+/*
+ * Tag the root of each thread with the most recent internaldate of all
+ * messages in the thread.  The actual sorting will be done by the calling
+ * function, but we leverage the fact that sorting by sentdate will fallback
+ * to internaldate if sentdate == 0.
+ */
+static MsgData **refs_thread_proc(struct rootset *rootset,
+                                  Thread **newnode __attribute((unused)))
+{
+    MsgData **ptrs, *md;
+    Thread *cur;
+    int i = 0;
+
+    /* Create an array of MsgData for dummy roots */
+    ptrs = (MsgData **) xzmalloc(rootset->nroot *
+                                 (sizeof(MsgData *) + sizeof(MsgData)));
+    md = (MsgData *)(ptrs + rootset->nroot);
+
+    /* Find most recent internaldate in each thread */
+    cur = rootset->root->child;
+    while (cur) {
+        /* If the message is a dummy, assign it MsgData for sorting */
+        if (!cur->msgdata) {
+            cur->msgdata = ptrs[i] = &md[i++];
+            cur->msgdata->internaldate = cur->child->msgdata->internaldate;
+        }
+        cur->msgdata->sentdate = 0; /* force date sort to use internaldate */
+
+        find_most_recent(cur, cur->msgdata);
+        cur = cur->next;
+    }
+
+    return ptrs;
+}
+
+/*
+ * Thread a list of messages using the REFS algorithm.
+ */
+static void index_thread_refs(struct index_state *state,
+                              unsigned *msgno_list, unsigned int nmsg,
+                              int usinguid)
+{
+    static const struct sortcrit loadcrit[] =
+                                 {{ LOAD_IDS,      0, {{NULL,NULL}} },
+                                  { SORT_DATE,     0, {{NULL,NULL}} },
+                                  { SORT_ARRIVAL,  0, {{NULL,NULL}} },
+                                  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
+    static const struct sortcrit sortcrit[] =
+                                 {{ SORT_DATE,     0, {{NULL,NULL}} },
+                                  { SORT_ARRIVAL,  0, {{NULL,NULL}} },
+                                  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
+
+    _index_thread_ref(state, msgno_list, nmsg, loadcrit,
+                      refs_thread_proc, NULL, sortcrit, usinguid);
 }
 
 /*

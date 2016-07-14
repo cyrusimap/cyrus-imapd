@@ -323,6 +323,7 @@ static struct capa_struct base_capabilities[] = {
     { "SORT=UID",              2 },  /* not standard */
     { "THREAD=ORDEREDSUBJECT", 2 },
     { "THREAD=REFERENCES",     2 },
+    { "THREAD=REFS",           2 }, /* draft-ietf-morg-inthread */
     { "ANNOTATEMORE",          2 },
     { "ANNOTATE-EXPERIMENT-1", 2 },
     { "METADATA",              2 },
