@@ -6233,7 +6233,8 @@ static MsgData **refs_thread_proc(struct rootset *rootset,
     while (cur) {
         /* If the message is a dummy, assign it MsgData for sorting */
         if (!cur->msgdata) {
-            cur->msgdata = ptrs[i] = &md[i++];
+            cur->msgdata = ptrs[i] = &md[i];
+            i++;
             cur->msgdata->internaldate = cur->child->msgdata->internaldate;
         }
         cur->msgdata->sentdate = 0; /* force date sort to use internaldate */
