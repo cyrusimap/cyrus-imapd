@@ -3240,7 +3240,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *oldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
-    icalproperty *prop;
+    icalproperty *prop, *rrule = NULL;
     const char *uid, *organizer = NULL;
     char *schedule_address = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -3264,36 +3264,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     comp = icalcomponent_get_first_real_component(ical);
-
-#ifdef HAVE_RSCALE
-    /* Make sure we support the provided RSCALE in an RRULE */
-    prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    if (prop && rscale_calendars) {
-        struct icalrecurrencetype rt = icalproperty_get_rrule(prop);
-
-        if (rt.rscale) {
-            /* Perform binary search on sorted icalarray */
-            unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
-
-            ucase(rt.rscale);
-            while (!found && start < end) {
-                unsigned mid = start + (end - start) / 2;
-                const char **rscale = icalarray_element_at(rscale_calendars, mid);
-                int r = strcmp(rt.rscale, *rscale);
-
-                if (r == 0) found = 1;
-                else if (r < 0) end = mid;
-                else start = mid + 1;
-            }
-
-            if (!found) {
-                txn->error.precond = CALDAV_SUPP_RSCALE;
-                ret = HTTP_FORBIDDEN;
-                goto done;
-            }
-        }
+    if (rscale_calendars) {
+        /* Grab RRULE to check RSCALE */
+        rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     }
-#endif /* HAVE_RSCALE */
 
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
@@ -3327,7 +3301,43 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 goto done;
             }
         }
+
+        if (rscale_calendars && !rrule) {
+            /* Grab RRULE to check RSCALE */
+            rrule = icalcomponent_get_first_property(nextcomp,
+                                                     ICAL_RRULE_PROPERTY);
+        }
     }
+
+#ifdef HAVE_RSCALE
+    /* Make sure we support the provided RSCALE in an RRULE */
+    if (rrule && rscale_calendars) {
+        struct icalrecurrencetype rt = icalproperty_get_rrule(rrule);
+
+        if (rt.rscale) {
+            /* Perform binary search on sorted icalarray */
+            unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
+
+            ucase(rt.rscale);
+            while (!found && start < end) {
+                unsigned mid = start + (end - start) / 2;
+                const char **rscale =
+                    icalarray_element_at(rscale_calendars, mid);
+                int r = strcmp(rt.rscale, *rscale);
+
+                if (r == 0) found = 1;
+                else if (r < 0) end = mid;
+                else start = mid + 1;
+            }
+
+            if (!found) {
+                txn->error.precond = CALDAV_SUPP_RSCALE;
+                ret = HTTP_FORBIDDEN;
+                goto done;
+            }
+        }
+    }
+#endif /* HAVE_RSCALE */
 
     /* Check for changed UID */
     caldav_lookup_resource(db, mailbox->name, resource, &cdata, 0);
