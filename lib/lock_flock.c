@@ -67,8 +67,9 @@ EXPORTED const char *lock_method_desc = "flock";
  * string naming the action that failed.
  *
  */
-EXPORTED int lock_reopen(int fd, const char *filename,
-			 struct stat *sbuf, const char **failaction)
+EXPORTED int lock_reopen_ex(int fd, const char *filename,
+                            struct stat *sbuf, const char **failaction,
+                            int *changed)
 {
     int r;
     struct stat sbuffile, sbufspare;
@@ -93,6 +94,8 @@ EXPORTED int lock_reopen(int fd, const char *filename,
 	}
 
 	if (sbuf->st_ino == sbuffile.st_ino) return 0;
+
+        if (changed) *changed = 1;
 
 	newfd = open(filename, O_RDWR);
 	if (newfd == -1) {
