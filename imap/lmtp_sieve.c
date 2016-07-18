@@ -836,9 +836,12 @@ static void _rm_dots(char *p)
         if (*p == '.') *p = '^';
     }
 }
+
 static int sieve_find_script(const char *user, const char *domain,
                              const char *script, char *fname, size_t size)
 {
+    char *ext = NULL;
+
     if (!user && !script) {
         return -1;
     }
@@ -883,6 +886,17 @@ static int sieve_find_script(const char *user, const char *domain,
 
         snprintf(fname+len, size-len, "%s.bc", script);
     }
+
+    /* don't do this for ~username ones */
+    ext = strrchr(fname, '.');
+    if (ext && !strcmp(ext, ".bc")) {
+        char *script_fname = sieve_getscriptfname(fname);
+        if (script_fname) {
+            sieve_rebuild(script_fname, fname, 0, NULL);
+            free(script_fname);
+        }
+    }
+
     return 0;
 }
 
