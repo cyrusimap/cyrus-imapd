@@ -616,6 +616,11 @@ HIDDEN int cyrusdb_generic_archive(const strarray_t *fnames,
     /* archive those files specified by the app */
     for (i = 0; i < fnames->count; i++) {
         const char *fname = strarray_nth(fnames, i);
+        struct stat sbuf;
+        if (stat(fname, &sbuf) < 0) {
+            syslog(LOG_DEBUG, "not archiving database file: %s: %m", fname);
+            continue;
+        }
         syslog(LOG_DEBUG, "archiving database file: %s", fname);
         strlcpy(dp, strrchr(fname, '/'), rest);
         r = cyrusdb_copyfile(fname, dstname);
