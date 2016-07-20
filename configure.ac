@@ -1219,6 +1219,11 @@ dnl
 	HTTP_LIBS="${XML2_LIBS} ${ICAL_LIBS} ${SQLITE3_LIBS} ${JSON_LIBS}"
 	HTTP_CPPFLAGS="${JSON_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${XML2_CFLAGS}"
 
+	saved_LIBS=${LIBS}
+	saved_CPPFLAGS="${CPPFLAGS}"
+	LIBS="${LIBS} ${HTTP_LIBS}"
+	CPPFLAGS="${CPPFLAGS} ${HTTP_CPPFLAGS}"
+
 	AC_DEFINE(HAVE_XML2,[],[Build in libxml support?])
 	AC_DEFINE(HAVE_ICAL,[],[Build in ical support?])
 	AC_DEFINE(HAVE_SQLITE3,[],[Build in SQLite support?])
@@ -1266,6 +1271,9 @@ dnl
 	     AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
 		    AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]))
 	fi
+
+	LIBS="${saved_LIBS}"
+	CPPFLAGS="${saved_CPPFLAGS}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
