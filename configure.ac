@@ -1230,7 +1230,7 @@ dnl
 		AC_DEFINE(HAVE_TZ_BY_REF,[],
 			[Build TZ by ref support into httpd?]))
 
-	AC_EGREP_HEADER(ICAL_TZUNTIL_PROPERTY, ical.h,
+	AC_EGREP_HEADER(ICAL_TZUNTIL_PROPERTY, [libical/ical.h],
 		AC_DEFINE(HAVE_TZDIST_PROPS,[],
 			[Do we have built-in support for TZdist props?]))
 
@@ -1241,20 +1241,20 @@ dnl
 	    AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) 
 	fi
 
-	AC_EGREP_HEADER(ICAL_IANA_PARAMETER, ical.h,
+	AC_EGREP_HEADER(ICAL_IANA_PARAMETER, [libical/ical.h],
 		AC_DEFINE(HAVE_IANA_PARAMS,[],
 			[Do we have support for IANA params?]),
 		AC_MSG_WARN([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
 
-	AC_EGREP_HEADER(ICAL_SCHEDULESTATUS_PARAMETER, ical.h,
+	AC_EGREP_HEADER(ICAL_SCHEDULESTATUS_PARAMETER, [libical/ical.h],
 		AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
 			[Do we have built-in support for scheduling params?]))
 
-	AC_EGREP_HEADER(ICAL_VAVAILABILITY_COMPONENT, ical.h,
+	AC_EGREP_HEADER(ICAL_VAVAILABILITY_COMPONENT, [libical/ical.h],
 		AC_DEFINE(HAVE_VAVAILABILITY,[],
 			[Build VAVAILABILITY support into httpd?]))
 
-	AC_EGREP_HEADER(ICAL_VPOLL_COMPONENT, ical.h,
+	AC_EGREP_HEADER(ICAL_VPOLL_COMPONENT, [libical/ical.h],
 		AC_DEFINE(HAVE_VPOLL,[],
 			[Build VPOLL support into httpd?]))
 
