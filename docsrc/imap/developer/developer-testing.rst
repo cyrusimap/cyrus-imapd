@@ -156,7 +156,7 @@ If you're testing across versions, the binsymlinks is necessary as older Cyrus d
     make -j16 && make -j16 check
     sudo make install
     sudo make install-binsymlinks
-    sudo cp tools/mkimap /usr/cyrus/bin/mkimap'
+    sudo cp tools/mkimap /usr/cyrus/bin/mkimap
 
 
 Running the tests
