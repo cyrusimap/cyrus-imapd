@@ -8,6 +8,28 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.5.8</h1>
+<h2>Dependency changes</h2>
+<ul>
+<li>Libical 2.0.0 is now supported.</li>
+<li>preliminary support for OpenSSL 1.1.0 (not yet released)</li>
+</ul>
+</div>
+<h2>Other changes</h2>
+<ul>
+<li>ipurge(8) now supports a &#8220;-n&#8221; (dry run) option (thanks Valentin Vidic)</li>
+</ul>
+<h2>Bug fixes</h2>
+<ul>
+<li>Fixed: imapd now proxies LIST (special-use) to backend (thanks John Capo)</li>
+<li>Fixed: sync_client handles its shutdown file more reliably (thanks John Capo)</li>
+<li>Fixed: httpd no longer crashes with assertion failure on shutdown after
+CalDAV has been used</li>
+<li>Fixed bugzilla #3938: squat search now handles pre-2.5 cyrus.squat data</li>
+<li>Fixed Issue #5: twoskip database I/O performance in unlocked foreach</li>
+<li>various build system improvements</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.5.7</h1>
 <h2>Murder changes</h2>
 <ul>
