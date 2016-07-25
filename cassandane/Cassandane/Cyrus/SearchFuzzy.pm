@@ -351,5 +351,46 @@ sub test_cjk_words
     $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
 }
 
+sub test_subject_isutf8
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    xlog "Generate and index test messages.";
+    # that's: "nuff réunion critères duff"
+    my $subject = "=?utf-8?q?nuff_r=C3=A9union_crit=C3=A8res_duff?=";
+    my $body = "empty";
+    my %params = (
+        mime_charset => "utf-8",
+        body => $body
+    );
+    $self->make_message($subject, %params) || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # Connect to IMAP
+    xlog "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+
+    # Search subject without accents
+    # my $term = "réunion critères";
+    my %searches = (
+        "reunion criteres" => 1,
+        "réunion critères" => 1,
+        "reunion critères" => 1,
+        "réunion criter" => 1,
+        "réunion crit" => 0,
+        "union critères" => 0,
+    );
+    while (my($term, $expectedCnt) = each %searches) {
+        xlog "SEARCH for FUZZY body \"$term\"";
+        $r = $talk->search(
+            "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
+        ) || die;
+        $self->assert_num_equals($expectedCnt, scalar @$r);
+    }
+}
+
 
 1;
