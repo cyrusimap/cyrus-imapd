@@ -71,8 +71,6 @@
 #endif
 
 #include "annotate.h"
-#include "caldav_alarm.h"
-#include "caldav_db.h"
 #include "cyrusdb.h"
 #include "duplicate.h"
 #include "global.h"
