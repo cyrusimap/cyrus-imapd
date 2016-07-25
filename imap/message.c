@@ -4128,7 +4128,10 @@ static void extract_one(struct buf *buf,
     case MESSAGE_SEARCH:
         /* TODO: need a variant of decode_mimeheader() which
          * takes two struct buf* and a search flag */
-        p = charset_decode_mimeheader(buf_cstring(raw), charset_flags);
+        if (isutf8)
+            p = charset_convert(buf_cstring(raw), charset_lookupname("utf-8"), charset_flags);
+        else
+            p = charset_decode_mimeheader(buf_cstring(raw), charset_flags);
         buf_appendcstr(buf, p);
         break;
     }
