@@ -610,6 +610,10 @@ int mailbox_append_cache(struct mailbox *mailbox,
 			  record->cache_offset, &record->crec);
     if (r) return r;
 
+    /* old-style record */
+    if (!record->cache_crc)
+	return 0;
+
     if (record->cache_crc != crc32_buf(cache_buf(record)))
 	return IMAP_MAILBOX_CHECKSUM;
 
