@@ -289,10 +289,8 @@ struct namespace_t namespace_default = {
 
 /* Array of different namespaces and features supported by the server */
 struct namespace_t *namespaces[] = {
-#ifdef WITH_JSON
     &namespace_jmap,
     &namespace_tzdist,          /* MUST be before namespace_calendar!! */
-#endif /* WITH_JSON */
 #ifdef WITH_DAV
     &namespace_calendar,
     &namespace_freebusy,
@@ -412,6 +410,8 @@ static void httpd_reset(void)
        saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
+
+    session_new_id();
 }
 
 /*
@@ -1954,10 +1954,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                         resp_body->iserial);
         }
     }
-    if (resp_body->cmid) {
-        prot_printf(httpd_out, "Cal-Managed-ID: \"%s\"\r\n", resp_body->cmid);
-        if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
-    }
     if (resp_body->prefs) {
         /* Construct Preference-Applied header */
         const char *prefs[] =
@@ -2002,19 +1998,16 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 prot_puts(httpd_out, "DAV: 1, 2, 3, access-control,"
                           " extended-mkcol, resource-sharing\r\n");
                 if (txn->req_tgt.allow & ALLOW_CAL) {
-                    prot_printf(httpd_out, "DAV: calendar-access"
-                                ", calendar-query-extended%s%s%s\r\n",
+                    prot_printf(httpd_out, "DAV: calendar-access%s%s\r\n"
+                                "DAV: calendar-query-extended%s%s\r\n",
                                 (txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
                                 ", calendar-auto-schedule" : "",
+                                (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
+                                ", calendar-no-timezone" : "",
                                 (txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
                                 ", calendar-availability" : "",
-                                (txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
-                                ", calendar-no-timezone" : "");
-                    if (txn->req_tgt.allow & ALLOW_CAL_ATTACH) {
-                        prot_puts(httpd_out,
-                                  "DAV: calendar-managed-attachments, "
-                                  "calendar-managed-attachments-no-recurrence\r\n");
-                    }
+                                (txn->req_tgt.allow & ALLOW_CAL_ATTACH) ?
+                                ", calendar-managed-attachments" : "");
 
                     /* Backwards compatibility with older Apple clients */
                     prot_printf(httpd_out,
@@ -2029,14 +2022,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 }
             }
 
-            if (txn->flags.cors == CORS_PREFLIGHT) {
-                /* Access-Control-Allow-Methods supersedes Allow */
-                break;
-            }
-            else {
+            /* Access-Control-Allow-Methods supersedes Allow */
+            if (txn->flags.cors != CORS_PREFLIGHT) {
                 /* Construct Allow header(s) */
                 allow_hdr("Allow", txn->req_tgt.allow);
             }
+            break;
         }
         goto authorized;
 
@@ -2125,6 +2116,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Representation Metadata */
+    if (resp_body->cmid) {
+        prot_printf(httpd_out, "Cal-Managed-ID: \"%s\"\r\n", resp_body->cmid);
+        if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
+    }
     if (resp_body->type) {
         prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
 
@@ -2174,8 +2169,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                         resp_body->len);
 
             /* Set actual content length of range */
-            resp_body->len = resp_body->range->last -
-                resp_body->range->first + 1;
+            resp_body->len =
+                resp_body->range->last - resp_body->range->first + 1;
 
             free(resp_body->range);
         }

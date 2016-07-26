@@ -247,6 +247,97 @@ EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
+static void stub_generic(void)
+{
+    fatal("stub function called", 0);
+}
+
+static sieve_vacation_t stub_vacation = {
+    0,                                  /* min response */
+    0,                                  /* max response */
+    (sieve_callback *) &stub_generic,   /* autorespond() */
+    (sieve_callback *) &stub_generic,   /* send_response() */
+};
+
+static int stub_notify(void *ac __attribute__((unused)),
+                       void *interp_context __attribute__((unused)),
+                       void *script_context __attribute__((unused)),
+                       void *message_context __attribute__((unused)),
+                       const char **errmsg __attribute__((unused)))
+{
+    fatal("stub function called", 0);
+    return SIEVE_FAIL;
+}
+
+static int stub_parse_error(int lineno, const char *msg,
+                            void *interp_context __attribute__((unused)),
+                            void *script_context)
+{
+    struct buf *errors = (struct buf *) script_context;
+    buf_printf(errors, "line %d: %s\r\n", lineno, msg);
+    return SIEVE_OK;
+}
+
+/* Wrapper for sieve_script_parse using a disposable single-use interpreter.
+ * Use when you only want to parse or compile, but not execute, a script. */
+EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
+                                     sieve_script_t **out_script)
+{
+    sieve_interp_t *interpreter = NULL;
+    sieve_script_t *script = NULL;
+    struct buf errors = BUF_INITIALIZER;
+    int res;
+
+    /* build a single-use interpreter using stub callbacks*/
+    interpreter = sieve_interp_alloc(NULL); /* uses xmalloc, never returns NULL */
+
+    sieve_register_redirect(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_discard(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_reject(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_fileinto(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_keep(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_imapflags(interpreter, NULL);
+    sieve_register_size(interpreter, (sieve_get_size *) &stub_generic);
+    sieve_register_mailboxexists(interpreter, (sieve_get_mailboxexists *) &stub_generic);
+    sieve_register_metadata(interpreter, (sieve_get_metadata *) &stub_generic);
+    sieve_register_header(interpreter, (sieve_get_header *) &stub_generic);
+    sieve_register_envelope(interpreter, (sieve_get_envelope *) &stub_generic);
+    sieve_register_body(interpreter, (sieve_get_body *) &stub_generic);
+    sieve_register_include(interpreter, (sieve_get_include *) &stub_generic);
+
+    res = sieve_register_vacation(interpreter, &stub_vacation);
+    if (res != SIEVE_OK) {
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        goto done;
+    }
+
+    sieve_register_notify(interpreter, &stub_notify);
+    sieve_register_parse_error(interpreter, &stub_parse_error);
+
+    buf_appendcstr(&errors, "script errors:\r\n");
+    *out_errors = NULL;
+
+    rewind(stream);
+    res = sieve_script_parse(interpreter, stream, &errors, &script);
+
+    if (res == SIEVE_OK) {
+        if (out_script) {
+            *out_script = script;
+        } else {
+            sieve_script_free(&script);
+        }
+    }
+    else {
+        sieve_script_free(&script);
+        *out_errors = buf_release(&errors);
+    }
+
+done:
+    sieve_interp_free(&interpreter);
+    buf_free(&errors);
+    return res;
+}
+
 EXPORTED void sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
@@ -271,7 +362,7 @@ static void add_header(sieve_interp_t *i, int isenv, char *header,
     if (!h || !h[0])
         return;
 
-    decoded_header = charset_parse_mimeheader(h[0]);
+    decoded_header = charset_parse_mimeheader(h[0], 0/*flags*/);
     buf_appendcstr(out, decoded_header);
     free(decoded_header);
 }

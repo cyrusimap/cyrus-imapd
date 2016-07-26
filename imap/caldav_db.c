@@ -777,14 +777,6 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
     }
     cdata->comp_flags.transp = transp;
 
-    /* Check for managed attachment */
-    prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
-    if (prop) {
-        icalparameter *param = icalproperty_get_managedid_parameter(prop);
-        if (param) mattach = 1;
-    }
-    cdata->comp_flags.mattach = mattach;
-
     /* Initialize span to be nothing */
     span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
     span.end = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
@@ -850,12 +842,25 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
         if (icaltime_compare(period.end, span.end) > 0)
             memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
 
+        /* Check for managed attachment */
+        if (!mattach) {
+            for (prop = icalcomponent_get_first_property(comp,
+                                                         ICAL_ATTACH_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp,
+                                                        ICAL_ATTACH_PROPERTY)) {
+
+                if (icalproperty_get_managedid_parameter(prop)) mattach = 1;
+            }
+        }
+
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
     cdata->dtstart = icaltime_as_ical_string(span.start);
     cdata->dtend = icaltime_as_ical_string(span.end);
     cdata->comp_flags.recurring = recurring;
-
+    cdata->comp_flags.mattach = mattach;
+    
     return caldav_write(caldavdb, cdata);
 }
 

@@ -210,6 +210,7 @@ static void apps_ssl_info_callback(const SSL * s, int where, int ret)
     }
 }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 /* taken from OpenSSL apps/s_cb.c
    not thread safe! */
 static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
@@ -223,26 +224,51 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
     }
     return (rsa_tmp);
 }
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+/* replacements for new 1.1 API accessors */
+/* XXX probably put these somewhere central */
+static int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
+{
+    if (p == NULL || g == NULL) return 0;
+    dh->p = p;
+    dh->q = q; /* optional */
+    dh->g = g;
+    return 1;
+}
+#endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
  * DH params to work with DHE-* cipher suites. Hardcoded fallback
  * in case no DH params in server_key or server_cert.
+ * Modified quite a bit for openssl 1.1.0 compatibility.
+ * XXX we might be able to just replace this with DH_get_1024_160?
+ * XXX the apps/s_server.c example doesn't use this anymore at all.
  */
 static DH *get_dh1024(void)
 {
     /* Second Oakley group 1024-bits MODP group from RFC2409 */
-    DH *dh=NULL;
+    DH *dh;
+    BIGNUM *p = NULL, *g = NULL;
 
-    if ((dh=DH_new()) == NULL) return(NULL);
-    dh->p=get_rfc2409_prime_1024(NULL);
-    dh->g=NULL;
-    BN_dec2bn(&(dh->g), "2");
-    if ((dh->p == NULL) || (dh->g == NULL)) return(NULL);
+    dh = DH_new();
+    if (!dh) return NULL;
 
-    return(dh);
+    p = get_rfc2409_prime_1024(NULL);
+    BN_dec2bn(&g, "2");
 
+    if (DH_set0_pqg(dh, p, NULL, g))
+        return dh;
+
+    if (g) BN_free(g);
+    if (p) BN_free(p);
+    DH_free(dh);
+
+    return NULL;
 }
+
 static DH *load_dh_param(const char *keyfile, const char *certfile)
 {
     DH *ret=NULL;
@@ -296,9 +322,9 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
             verify_error = X509_V_ERR_CERT_CHAIN_TOO_LONG;
         }
     }
-    switch (ctx->error) {
+    switch (err) {
     case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
-        X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, sizeof(buf));
+        X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, sizeof(buf));
         syslog(LOG_NOTICE, "issuer= %s", buf);
         break;
     case X509_V_ERR_CERT_NOT_YET_VALID:
@@ -467,6 +493,8 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     time_t expire;
     int ret = -1;
     unsigned char *asn;
+    const unsigned char *session_id = NULL;
+    unsigned int session_id_length = 0;
 
     assert(sess);
 
@@ -492,9 +520,11 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 
     if (len) {
         /* store the session in our database */
+
+        session_id = SSL_SESSION_get_id(sess, &session_id_length);
         do {
-            ret = cyrusdb_store(sessdb, (const char *) sess->session_id,
-                            sess->session_id_length,
+            ret = cyrusdb_store(sessdb, (const char *) session_id,
+                            session_id_length,
                             (const char *) data, len + sizeof(time_t), NULL);
         } while (ret == CYRUSDB_AGAIN);
     }
@@ -505,8 +535,8 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     if (var_imapd_tls_loglevel > 0) {
         unsigned int i;
         char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
-        for (i = 0; i < sess->session_id_length; i++) {
-            sprintf(idstr+i*2, "%02X", sess->session_id[i]);
+        for (i = 0; i < session_id_length; i++) {
+            sprintf(idstr+i*2, "%02X", session_id[i]);
         }
         syslog(LOG_DEBUG, "new TLS session: id=%s, expire=%s, status=%s",
                idstr, ctime(&expire), ret ? "failed" : "ok");
@@ -518,7 +548,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 /*
  * Function for removing a session from our database.
  */
-static void remove_session(unsigned char *id, int idlen)
+static void remove_session(const unsigned char *id, int idlen)
 {
     int ret;
 
@@ -549,9 +579,14 @@ static void remove_session(unsigned char *id, int idlen)
 static void remove_session_cb(SSL_CTX *ctx __attribute__((unused)),
                               SSL_SESSION *sess)
 {
+    const unsigned char *session_id = NULL;
+    unsigned int session_id_length = 0;
+
     assert(sess);
 
-    remove_session(sess->session_id, sess->session_id_length);
+    session_id = SSL_SESSION_get_id(sess, &session_id_length);
+
+    remove_session(session_id, session_id_length);
 }
 
 /*
@@ -560,8 +595,13 @@ static void remove_session_cb(SSL_CTX *ctx __attribute__((unused)),
  * called, also when session caching was disabled.  We lookup the
  * session in our database in case it was stored by another process.
  */
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
+                                   const unsigned char *id, int idlen, int *copy)
+#else
 static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
                                    unsigned char *id, int idlen, int *copy)
+#endif
 {
     int ret;
     const char *data = NULL;
@@ -840,7 +880,9 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         return (-1);
     }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
+#endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
@@ -1450,7 +1492,9 @@ HIDDEN int tls_init_clientengine(int verifydepth,
         }
     }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSL_CTX_set_tmp_rsa_callback(c_ctx, tmp_rsa_cb);
+#endif
 
     verify_depth = verifydepth;
     SSL_CTX_set_verify(c_ctx, verify_flags, verify_callback);

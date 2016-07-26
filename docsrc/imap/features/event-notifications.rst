@@ -365,4 +365,16 @@ The ``ApplePushService`` event occurs when
     :language: json
     :linenos:
     
+apsVersion
+    Version of the Apple Push Service this message is compliant with.
+
+apsAccountId
+    Service Provider's accountID with the Apple Push Service.
+
+apsDeviceToken
+    Unique identifier for the user's device registered with Apple.
+
+apsSubtopic
+    TODO: describe this
+
 Back to :ref:`imap-features`

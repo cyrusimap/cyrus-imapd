@@ -44,7 +44,7 @@ dnl configure.ac for the Cyrus imapd
 dnl
 
 
-AC_INIT([cyrus-imapd], [3.0.0-beta2], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
+AC_INIT([cyrus-imapd], [3.0.0-beta3], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
 AC_PREREQ([2.63])
 AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS(config.h)
@@ -66,7 +66,8 @@ AC_SUBST([CYRUS_IMAPD_PATCH])
 dnl in case the first use of PKG_CHECK_MODULES is inside a conditional
 PKG_PROG_PKG_CONFIG
 
-AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects silent-rules])
+AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2
+                  no-installinfo subdir-objects silent-rules tar-ustar])
 AC_CONFIG_LIBOBJ_DIR([lib])
 
 dnl if the git repository is here we also have git
@@ -1348,6 +1349,13 @@ esac
 AC_MSG_CHECKING(for libcap)
 AC_MSG_RESULT($have_libcap)
 
+dnl
+dnl Check for jansson library, needed for JSON support
+dnl
+PKG_CHECK_MODULES([JANSSON], [jansson >= 2.3])
+dnl call AC_SUBST macro to support pkg-config version older than 0.24
+AC_SUBST([JANSSON_LIBS])
+AC_SUBST([JANSSON_CFLAGS])
 
 dnl
 dnl Test for mailbox event notification
@@ -1358,15 +1366,7 @@ AC_ARG_ENABLE(event-notification,
         [enable_event_notification="yes";])
 
 if test "$enable_event_notification" != "no"; then
-    PKG_CHECK_MODULES([JANSSON], [jansson >= 2.0],
-        [check_jansson=true]
-          dnl call AC_SUBST macro to support pkg-config version older that 0.24 without any bad consequence for recent version
-          [AC_SUBST([JANSSON_LIBS])]
-          [AC_SUBST([JANSSON_CFLAGS])]
-          [AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])],
-        [check_jansson=false]
-          [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])]
-          enable_event_notification="no")
+    AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])
 
     dnl support for Apple Push Service registration
     dnl disabled by default
@@ -1378,7 +1378,6 @@ if test "$enable_event_notification" != "no"; then
         AC_DEFINE(ENABLE_APPLEPUSHSERVICE,[],[Build with support for Apple Push Service])
     fi
 fi
-AM_CONDITIONAL(JANSSON, test x$check_jansson = xtrue)
 
 dnl
 dnl Set pidfile location
@@ -1523,11 +1522,6 @@ dnl
                         AC_MSG_ERROR([Need ICU4C for RSCALE support in httpd]))
                 ],
                 AC_MSG_WARN([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
-
-        PKG_CHECK_MODULES([JANSSON], [jansson],
-                AC_DEFINE(WITH_JSON,[],
-                        [Build jCal/jCard/JMAP/TZdist support into httpd?]),
-                AC_MSG_ERROR([Need Jansson for http]))
 
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
@@ -2175,5 +2169,9 @@ Search engine:
    xapian:             $enable_xapian
 
 Hardware support:
-    SSE4.2:            $cyrus_cv_sse42
+   SSE4.2:             $cyrus_cv_sse42
+
+Installation directories:
+   prefix:             $prefix
+   sysconfdir:         $sysconfdir
 "

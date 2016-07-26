@@ -1314,8 +1314,8 @@ static int sender_preferred_name(const char *a, const char *b)
     char *sa = NULL;
     char *sb = NULL;
 
-    sa = charset_parse_mimeheader((a ? a : ""));
-    sb = charset_parse_mimeheader((b ? b : ""));
+    sa = charset_parse_mimeheader((a ? a : ""), charset_flags);
+    sb = charset_parse_mimeheader((b ? b : ""), charset_flags);
 
     /* A name with characters > 0x7f is preferred to a flat
      * ascii one, on the assumption that this is more likely to

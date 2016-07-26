@@ -553,7 +553,10 @@ static int webdav_put(struct transaction_t *txn, void *obj,
         while ((dparam = tok_next(&tok))) {
             if (!strncasecmp(dparam, "filename=", 9)) {
                 filename = dparam+9;
-                if (*filename++ == '"') filename[strlen(filename)-1] = '\0';
+                if (*filename == '"') {
+                    filename++;
+                    filename[strlen(filename)-1] = '\0';
+                }
                 break;
             }
         }

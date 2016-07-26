@@ -143,6 +143,11 @@ EXPORTED void fatal(const char *s, int code)
     exit(code);
 }
 
+#define report_verbose(...) do {                            \
+    if (verbose) printf(__VA_ARGS__);                       \
+    if (verbose_logging) syslog(LOG_INFO, __VA_ARGS__);     \
+} while(0)
+
 /* ====================================================================== */
 
 static int do_unuser(const char *userid)
@@ -234,16 +239,25 @@ static void remove_meta(char *user, struct sync_action_list *list)
 
 static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
                              struct sync_action_list *user_list,
+                             const char **channelp,
                              unsigned flags)
 {
+    struct sync_name *mbox;
     int r = 0;
 
     if (mboxname_list->count) {
         r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, flags);
-        if (r) {
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+                if (mbox->mark) continue;
+                sync_log_channel_mailbox(*channelp, mbox->name);
+                report_verbose("  Deferred: MAILBOX %s\n", mbox->name);
+            }
+            r = 0;
+        }
+        else if (r) {
             /* promote failed personal mailboxes to USER */
             int nonuser = 0;
-            struct sync_name *mbox;
 
             for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
                 /* done OK?  Good :) */
@@ -255,14 +269,8 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
                     mbox->mark = 1;
 
                     sync_action_list_add(user_list, NULL, userid);
-                    if (verbose) {
-                        printf("  Promoting: MAILBOX %s -> USER %s\n",
-                               mbox->name, userid);
-                    }
-                    if (verbose_logging) {
-                        syslog(LOG_INFO, "  Promoting: MAILBOX %s -> USER %s",
-                               mbox->name, userid);
-                    }
+                    report_verbose("  Promoting: MAILBOX %s -> USER %s\n",
+                                   mbox->name, userid);
                     free(userid);
                 }
                 else
@@ -282,7 +290,12 @@ static int do_restart()
     return sync_parse_response("RESTART", sync_in, NULL);
 }
 
-static int do_sync(sync_log_reader_t *slr)
+/*
+ *   channelp = NULL    => we're not processing a channel
+ *   *channelp = NULL   => we're processing the default channel
+ *   *channelp = "foo"  => we're processing the channel named "foo"
+ */
+static int do_sync(sync_log_reader_t *slr, const char **channelp)
 {
     struct sync_action_list *user_list = sync_action_list_create();
     struct sync_action_list *unuser_list = sync_action_list_create();
@@ -358,21 +371,24 @@ static int do_sync(sync_log_reader_t *slr)
     }
 
     /* And then run tasks. */
+
+    /* we want to be able to defer items to the subsequent sync log */
+    sync_log_init();
+
     for (action = quota_list->head; action; action = action->next) {
         if (!action->active)
             continue;
 
-        if (sync_do_quota(action->name, sync_backend, flags)) {
+        r = sync_do_quota(action->name, sync_backend, flags);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_quota(*channelp, action->name);
+            report_verbose("  Deferred: QUOTA %s\n", action->name);
+        }
+        else if (r) {
             /* XXX - bogus handling, should be user */
             sync_action_list_add(mailbox_list, action->name, NULL);
-            if (verbose) {
-                printf("  Promoting: QUOTA %s -> MAILBOX %s\n",
-                       action->name, action->name);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: QUOTA %s -> MAILBOX %s",
-                       action->name, action->name);
-            }
+            report_verbose("  Promoting: QUOTA %s -> MAILBOX %s\n",
+                           action->name, action->name);
         }
     }
 
@@ -383,18 +399,18 @@ static int do_sync(sync_log_reader_t *slr)
         /* NOTE: ANNOTATION "" is a special case - it's a server
          * annotation, hence the check for a character at the
          * start of the name */
-        if (sync_do_annotation(action->name, sync_backend,
-                               flags) && *action->name) {
+        r = sync_do_annotation(action->name, sync_backend, flags);
+        if (!*action->name) continue;
+
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_annotation(*channelp, action->name);
+            report_verbose("  Deferred: ANNOTATION %s\n", action->name);
+        }
+        else if (r) {
             /* XXX - bogus handling, should be ... er, something */
             sync_action_list_add(mailbox_list, action->name, NULL);
-            if (verbose) {
-                printf("  Promoting: ANNOTATION %s -> MAILBOX %s\n",
-                       action->name, action->name);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: ANNOTATION %s -> MAILBOX %s",
-                       action->name, action->name);
-            }
+            report_verbose("  Promoting: ANNOTATION %s -> MAILBOX %s\n",
+                           action->name, action->name);
         }
     }
 
@@ -402,28 +418,22 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
 
-        if (sync_do_seen(action->user, action->name, sync_backend, flags)) {
+        r = sync_do_seen(action->user, action->name, sync_backend, flags);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_seen(*channelp, action->user, action->name);
+            report_verbose("  Deferred: SEEN %s %s\n",
+                           action->user, action->name);
+        }
+        else if (r) {
             char *userid = mboxname_to_userid(action->name);
             if (userid && mboxname_isusermailbox(action->name, 1) && !strcmp(userid, action->user)) {
                 sync_action_list_add(user_list, NULL, action->user);
-                if (verbose) {
-                    printf("  Promoting: SEEN %s %s -> USER %s\n",
-                           action->user, action->name, action->user);
-                }
-                if (verbose_logging) {
-                    syslog(LOG_INFO, "  Promoting: SEEN %s %s -> USER %s",
-                           action->user, action->name, action->user);
-                }
+                report_verbose("  Promoting: SEEN %s %s -> USER %s\n",
+                               action->user, action->name, action->user);
             } else {
                 sync_action_list_add(meta_list, NULL, action->user);
-                if (verbose) {
-                    printf("  Promoting: SEEN %s %s -> META %s\n",
-                           action->user, action->name, action->user);
-                }
-                if (verbose_logging) {
-                    syslog(LOG_INFO, "  Promoting: SEEN %s %s -> META %s",
-                           action->user, action->name, action->user);
-                }
+                report_verbose("  Promoting: SEEN %s %s -> META %s\n",
+                               action->user, action->name, action->user);
             }
             free(userid);
         }
@@ -433,16 +443,16 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
 
-        if (user_sub(action->user, action->name)) {
+        r = user_sub(action->user, action->name);
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_subscribe(*channelp, action->user, action->name);
+            report_verbose("  Deferred: SUB %s %s\n",
+                           action->user, action->name);
+        }
+        else if (r) {
             sync_action_list_add(meta_list, NULL, action->user);
-            if (verbose) {
-                printf("  Promoting: SUB %s %s -> META %s\n",
-                       action->user, action->name, action->user);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: SUB %s %s -> META %s",
-                       action->user, action->name, action->name);
-            }
+            report_verbose("  Promoting: SUB %s %s -> META %s\n",
+                           action->user, action->name, action->user);
         }
     }
 
@@ -454,7 +464,7 @@ static int do_sync(sync_log_reader_t *slr)
         /* only do up to 1000 mailboxes at a time */
         if (mboxname_list->count > 1000) {
             syslog(LOG_NOTICE, "sync_mailboxes: doing 1000");
-            r = do_sync_mailboxes(mboxname_list, user_list, flags);
+            r = do_sync_mailboxes(mboxname_list, user_list, channelp, flags);
             if (r) goto cleanup;
             r = do_restart();
             if (r) goto cleanup;
@@ -463,7 +473,7 @@ static int do_sync(sync_log_reader_t *slr)
         }
     }
 
-    r = do_sync_mailboxes(mboxname_list, user_list, flags);
+    r = do_sync_mailboxes(mboxname_list, user_list, channelp, flags);
     if (r) goto cleanup;
     r = do_restart();
     if (r) goto cleanup;
@@ -472,7 +482,11 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = do_unmailbox(action->name, sync_backend, flags);
-        if (r) goto cleanup;
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_unmailbox(*channelp, action->name);
+            report_verbose("  Deferred: UNMAILBOX %s\n", action->name);
+        }
+        else if (r) goto cleanup;
     }
 
     for (action = meta_list->head; action; action = action->next) {
@@ -480,18 +494,17 @@ static int do_sync(sync_log_reader_t *slr)
             continue;
 
         r = sync_do_meta(action->user, sync_backend, flags);
-        if (r) {
-            if (r == IMAP_INVALID_USER) goto cleanup;
-
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_sieve(*channelp, action->user);
+            report_verbose("  Deferred: META %s\n", action->user);
+        }
+        else if (r == IMAP_INVALID_USER) {
+            goto cleanup;
+        }
+        else if (r) {
             sync_action_list_add(user_list, NULL, action->user);
-            if (verbose) {
-                printf("  Promoting: META %s -> USER %s\n",
-                       action->user, action->user);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: META %s -> USER %s",
-                       action->user, action->user);
-            }
+            report_verbose("  Promoting: META %s -> USER %s\n",
+                           action->user, action->user);
         }
     }
 
@@ -499,7 +512,11 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = sync_do_user(action->user, NULL, sync_backend, flags);
-        if (r) goto cleanup;
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_user(*channelp, action->user);
+            report_verbose("  Deferred: USER %s\n", action->user);
+        }
+        else if (r) goto cleanup;
         r = do_restart();
         if (r) goto cleanup;
     }
@@ -508,7 +525,11 @@ static int do_sync(sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = do_unuser(action->user);
-        if (r) goto cleanup;
+        if (channelp && r == IMAP_MAILBOX_LOCKED) {
+            sync_log_channel_unuser(*channelp, action->user);
+            report_verbose("  Deferred: UNUSER %s\n", action->user);
+        }
+        else if (r) goto cleanup;
     }
 
   cleanup:
@@ -518,6 +539,8 @@ static int do_sync(sync_log_reader_t *slr)
 
         syslog(LOG_ERR, "Error in do_sync(): bailing out! %s", error_message(r));
     }
+
+    sync_log_done();
 
     sync_action_list_free(&user_list);
     sync_action_list_free(&unuser_list);
@@ -545,7 +568,7 @@ static int do_sync_filename(const char *filename)
 
     r = sync_log_reader_begin(slr);
     if (!r)
-        r = do_sync(slr);
+        r = do_sync(slr, NULL);
 
     sync_log_reader_end(slr);
     sync_log_reader_free(slr);
@@ -611,7 +634,7 @@ static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
         }
 
         /* Process the work log */
-        if ((r=do_sync(slr))) {
+        if ((r=do_sync(slr, &channel))) {
             syslog(LOG_ERR,
                    "Processing sync log file %s failed: %s",
                    sync_log_reader_get_file_name(slr), error_message(r));

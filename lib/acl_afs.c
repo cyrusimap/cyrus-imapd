@@ -116,6 +116,9 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
     int oldaccess = 0;
     char *rights;
 
+    if (!identifier)
+        return -1;
+
     /* Convert 'identifier' into canonical form */
     canonid = auth_canonifyid(*identifier == '-' ? identifier+1 : identifier, 0);
     if (canonid) {
@@ -131,6 +134,12 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
         return -1;
     } else {
         /* trying to delete invalid/non-existent identifier */
+    }
+
+    /* Prevent ACLs for empty identifiers */
+    if (strlen(identifier) == 0) {
+        if (newidentifier) free(newidentifier);
+        return -1;
     }
 
     /* Find any existing entry for 'identifier' in 'acl' */

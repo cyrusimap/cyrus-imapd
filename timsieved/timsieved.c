@@ -71,10 +71,11 @@
 #include "imap/mboxlist.h"
 #include "imap/proxy.h"
 #include "imap/sync_log.h"
+#include "lib/assert.h"
+#include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
 #include "timsieved/parser.h"
-#include "timsieved/scripttest.h"
 #include "timsieved/lex.h"
 
 /* global state */
@@ -83,6 +84,7 @@ const int config_need_data = 0;
 int sieved_tls_required = 0;
 
 sieve_interp_t *interp = NULL;
+static int build_sieve_interp(void);
 
 static struct
 {
@@ -364,4 +366,69 @@ static void bitpipe(void)
     if (shutdown) prot_printf(sieved_out, "NO \"%s\"\r\n", buf);
 
     return;
+}
+
+static void timsieved_generic_cb(void)
+{
+    fatal("stub function called", 0);
+}
+
+static sieve_vacation_t timsieved_vacation_cbs = {
+    0,                                          /* min response */
+    0,                                          /* max response */
+    (sieve_callback *) &timsieved_generic_cb,   /* autorespond() */
+    (sieve_callback *) &timsieved_generic_cb,   /* send_response() */
+};
+
+static int timsieved_notify_cb(void *ac __attribute__((unused)),
+                               void *interp_context __attribute__((unused)),
+                               void *script_context __attribute__((unused)),
+                               void *message_context __attribute__((unused)),
+                               const char **errmsg __attribute__((unused)))
+{
+    fatal("stub function called", 0);
+    return SIEVE_FAIL;
+}
+
+static int timsieved_parse_error_cb(int lineno, const char *msg,
+                                    void *interp_context __attribute__((unused)),
+                                    void *script_context)
+{
+    struct buf *errors = (struct buf *) script_context;
+    buf_printf(errors, "line %d: %s\r\n", lineno, msg);
+    return SIEVE_OK;
+}
+
+/* returns TIMSIEVE_OK or TIMSIEVE_FAIL */
+static int build_sieve_interp(void)
+{
+    int res;
+
+    interp = sieve_interp_alloc(NULL);
+    assert(interp != NULL);
+
+    sieve_register_redirect(interp, (sieve_callback *) &timsieved_generic_cb);
+    sieve_register_discard(interp, (sieve_callback *) &timsieved_generic_cb);
+    sieve_register_reject(interp, (sieve_callback *) &timsieved_generic_cb);
+    sieve_register_fileinto(interp, (sieve_callback *) &timsieved_generic_cb);
+    sieve_register_keep(interp, (sieve_callback *) &timsieved_generic_cb);
+    sieve_register_imapflags(interp, NULL);
+    sieve_register_size(interp, (sieve_get_size *) &timsieved_generic_cb);
+    sieve_register_mailboxexists(interp, (sieve_get_mailboxexists *) &timsieved_generic_cb);
+    sieve_register_metadata(interp, (sieve_get_metadata *) &timsieved_generic_cb);
+    sieve_register_header(interp, (sieve_get_header *) &timsieved_generic_cb);
+    sieve_register_envelope(interp, (sieve_get_envelope *) &timsieved_generic_cb);
+    sieve_register_body(interp, (sieve_get_body *) &timsieved_generic_cb);
+    sieve_register_include(interp, (sieve_get_include *) &timsieved_generic_cb);
+
+    res = sieve_register_vacation(interp, &timsieved_vacation_cbs);
+    if (res != SIEVE_OK) {
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        return TIMSIEVE_FAIL;
+    }
+
+    sieve_register_notify(interp, &timsieved_notify_cb);
+    sieve_register_parse_error(interp, &timsieved_parse_error_cb);
+
+    return TIMSIEVE_OK;
 }

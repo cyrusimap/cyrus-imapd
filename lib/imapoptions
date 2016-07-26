@@ -1662,6 +1662,14 @@ If all partitions are over that limit, this feature is not used anymore.
    (and earlier), it is recommended that it be left disabled unless
    there is good reason to do otherwise. */
 
+{ "rfc2047_utf8", 0, SWITCH }
+/* If enabled, imapd will parse any non-encoded character sequence in
+   MIME header values as UTF8. This is useful for installations that
+   either advertise the UTF8SMTP (RFC 5335) extension or receive mails
+   with improperly escaped UTF-8 byte sequences. It is recommended that
+   this option is left disabled unless there is good reason to do
+   otherwise. */
+
 { "rfc3028_strict", 1, SWITCH }
 /* If enabled, Sieve will be strict (per RFC 3028) with regards to
    which headers are allowed to be used in address and envelope tests.

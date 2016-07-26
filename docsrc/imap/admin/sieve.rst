@@ -28,10 +28,10 @@ Configure sieve
 
 Depending on what's in your ``/etc/services`` file, sieve will usually be set to listen on port 2000 (old convention) or port 4190 (as specified by :rfc:`5804`).
 
-Add lines to :cyrusman:`cyrus.conf(5)` to make the server listen to the right ports for sieveshell commands:
+Add lines to :cyrusman:`cyrus.conf(5)` to make the server listen to the right ports for sieveshell commands::
 
-  sieve         cmd="timsieved" listen="servername:sieve" prefork=0
-  managesieve   cmd="timsieved" listen="servername:4190" prefork=0
+    sieve         cmd="timsieved" listen="servername:sieve" prefork=0
+    managesieve   cmd="timsieved" listen="servername:4190" prefork=0
 
 Configure outgoing mail
 -----------------------
@@ -182,7 +182,7 @@ Sieve Tools
 * :cyrusman:`sieved(8)` - decompile a script back from bytecode. See sievec.
 * :cyrusman:`masssievec(8)` - compiles all the scripts in **sievedir** from ``imapd.conf``.
 * :cyrusman:`sivtest(1)` - authenticate and test against a MANAGESIEVE server such as timsieved.
-* :cyrusman:`sieveshell(8)` - allow users to manage scripts on a remote server, via MANAGESIEVE
+* :cyrusman:`sieveshell(1)` - allow users to manage scripts on a remote server, via MANAGESIEVE
 * :cyrusman:`translatesieve(8)` - utility script to translate sieve scripts to use **unixhierarchysep** and/or **altnamespace**
 
 Writing Sieve

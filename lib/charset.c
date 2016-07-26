@@ -2027,7 +2027,7 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, int charset, in
     return res;
 }
 
-static void mimeheader_cat(struct convert_rock *target, const char *s)
+static void mimeheader_cat(struct convert_rock *target, const char *s, int flags)
 {
     struct convert_rock *input, *unfold;
     int eatspace = 0;
@@ -2035,11 +2035,12 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
     int len;
     int charset;
     const char *p;
+    int defaultcs = (flags & CHARSET_MIME_UTF8) ? charset_lookupname("utf-8") : 0;
 
     if (!s) return;
 
     /* set up the conversion path */
-    input = table_init(0, target);
+    input = table_init(defaultcs, target);
     /* note: we assume the caller of this function has already
      * determined that all newlines are followed by whitespace */
     unfold = unfold_init(0 /*skipws*/, input);
@@ -2070,7 +2071,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
         }
         if (!eatspace) {
             len = start - s - 1;
-            table_switch(input, 0); /* US_ASCII */
+            table_switch(input, defaultcs);
             convert_catn(unfold, s, len);
         }
 
@@ -2109,7 +2110,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
 
     /* Copy over the tail part of the input string */
     if (*s) {
-        table_switch(input, 0); /* US_ASCII */
+        table_switch(input, defaultcs);
         convert_cat(unfold, s);
     }
 
@@ -2134,7 +2135,7 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
     input = uni_init(tobuffer);
     input = canon_init(flags, input);
 
-    mimeheader_cat(input, s);
+    mimeheader_cat(input, s, flags);
 
     res = buffer_cstring(tobuffer);
 
@@ -2173,7 +2174,7 @@ EXPORTED char *charset_unfold(const char *s, size_t len, int flags)
  * string, containing the decoded string, which must be free()d by the
  * caller.
  */
-EXPORTED char *charset_parse_mimeheader(const char *s)
+EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
@@ -2183,7 +2184,7 @@ EXPORTED char *charset_parse_mimeheader(const char *s)
     tobuffer = buffer_init();
     input = uni_init(tobuffer);
 
-    mimeheader_cat(input, s);
+    mimeheader_cat(input, s, flags);
 
     res = buffer_cstring(tobuffer);
 
@@ -2202,7 +2203,7 @@ EXPORTED int charset_search_mimeheader(const char *substr, comp_pat *pat,
     input = uni_init(tosearch);
     input = canon_init(flags, input);
 
-    mimeheader_cat(input, s);
+    mimeheader_cat(input, s, flags);
 
     res = search_havematch(tosearch);
 

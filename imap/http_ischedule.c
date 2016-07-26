@@ -107,13 +107,11 @@ static struct mime_type_t isched_mime_types[] = {
       (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
       NULL, NULL, NULL
     },
-#ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, NULL, NULL,
     },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -551,7 +549,7 @@ static int meth_post_isched(struct transaction_t *txn,
 
                 while ((recipient = tok_next(&tok))) {
                     /* Is recipient remote or local? */
-                    struct sched_param sparam;
+                    struct caldav_sched_param sparam;
                     int r = caladdress_lookup(recipient, &sparam, /*myuserid*/NULL);
 
                     /* Don't allow scheduling with remote users via iSchedule */
@@ -594,7 +592,7 @@ static int meth_post_isched(struct transaction_t *txn,
 }
 
 
-int isched_send(struct sched_param *sparam, const char *recipient,
+int isched_send(struct caldav_sched_param *sparam, const char *recipient,
                 icalcomponent *ical, xmlNodePtr *xml)
 {
     int r = 0;

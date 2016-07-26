@@ -270,13 +270,11 @@ static struct mime_type_t caldav_mime_types[] = {
       (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
       NULL, &begin_xcal, &end_xcal
     },
-#ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -582,9 +580,7 @@ static void my_caldav_init(struct buf *serverinfo)
         buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
 #endif
-#ifdef WITH_JSON
     buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
-#endif
 
     namespace_calendar.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
@@ -1071,6 +1067,174 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
 static void decrement_refcount(const char *managed_id,
                                struct mailbox *attachments,
                                struct webdav_db *webdavdb);
+static struct webdav_data *increment_refcount(const char *managed_id,
+                                              struct webdav_db *webdavdb);
+
+enum {
+    REFCNT_DEC  = -1,
+    REFCNT_HOLD = 0,
+    REFCNT_INC  = 1
+};
+
+static void update_refcount(const char *mid, short *op,
+                            struct mailbox *attachments)
+{
+    switch (*op) {
+    case REFCNT_DEC:
+        decrement_refcount(mid, attachments, attachments->local_webdav);
+        break;
+
+    case REFCNT_INC:
+        increment_refcount(mid, attachments->local_webdav);
+        break;
+    }
+}
+
+/* Check an iCal object to see if managed attachments are being manipulated */
+static int manage_attachments(struct transaction_t *txn,
+                              struct mailbox *mailbox,
+                              icalcomponent *ical, struct caldav_data *cdata,
+                              icalcomponent **oldical, char **schedule_address)
+{
+    /* Compare any managed attachments in new and existing resources */
+    char *mailboxname = NULL;
+    struct mailbox *attachments = NULL;
+    struct webdav_db *webdavdb = NULL;
+    struct hash_table mattach_table = HASH_TABLE_INITIALIZER;
+    icalcomponent *comp = NULL;
+    icalcomponent_kind kind;
+    icalproperty *prop;
+    icalparameter *param;
+    const char *mid;
+    short *op;
+    int r, ret = 0;
+
+    /* Open attachments collection for writing */
+    mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
+    r = mailbox_open_iwl(mailboxname, &attachments);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+               mailboxname, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+    }
+    else {
+        /* Open the WebDAV DB corresponding to the attachments collection */
+        webdavdb = mailbox_open_webdav(attachments);
+        if (!webdavdb) {
+            syslog(LOG_ERR, "webdav_open_mailbox(%s) failed",
+                   attachments->name);
+            ret = HTTP_SERVER_ERROR;
+        }
+    }
+    free(mailboxname);
+
+    if (ret) return ret;
+
+    /* Create hash table of managed attachments in new resource */
+    construct_hash_table(&mattach_table, 10, 1);
+
+    if (ical) {
+        comp = icalcomponent_get_first_real_component(ical);
+        kind = icalcomponent_isa(comp);
+    }
+
+    for (; comp;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+            
+        for (prop = icalcomponent_get_first_property(comp,
+                                                     ICAL_ATTACH_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp,
+                                                    ICAL_ATTACH_PROPERTY)) {
+
+            icalattach *attach = icalproperty_get_attach(prop);
+
+            if (icalattach_get_is_url(attach)) {
+                struct webdav_data *wdata;
+
+                param = icalproperty_get_managedid_parameter(prop);
+                if (!param) continue;
+
+                /* Find DAV record for the attachment with this managed-id */
+                mid = icalparameter_get_managedid(param);
+                webdav_lookup_uid(webdavdb, mid, &wdata);
+
+                if (!wdata->dav.rowid) {
+                    txn->error.precond = CALDAV_VALID_MANAGEDID;
+                    ret = HTTP_FORBIDDEN;
+                    goto done;
+                }
+
+                if (!hash_lookup(mid, &mattach_table)) {
+                    /* Assume attachment is being added to ical */
+                    op = xmalloc(sizeof(short));
+                    *op = REFCNT_INC;
+                    hash_insert(mid, op, &mattach_table);
+                }
+            }
+            else {
+                /* XXX  Do we want to strip and manage inline attachments? */
+            }
+        }
+    }
+
+    /* Compare existing managed attachments to those in new resource */
+    if (cdata->comp_flags.mattach) {
+        struct index_record record;
+
+        syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+
+        /* Load message containing the resource and parse iCal data */
+        r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+        if (r) {
+            txn->error.desc = "Failed to read record";
+            ret = HTTP_SERVER_ERROR;
+            goto done;
+        }
+
+        *oldical = record_to_ical(mailbox, &record, schedule_address);
+        comp = icalcomponent_get_first_real_component(*oldical);
+        kind = icalcomponent_isa(comp);
+
+        for (; comp;
+             comp = icalcomponent_get_next_component(*oldical, kind)) {
+            for (prop = icalcomponent_get_first_property(comp,
+                                                         ICAL_ATTACH_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp,
+                                                        ICAL_ATTACH_PROPERTY)) {
+
+                param = icalproperty_get_managedid_parameter(prop);
+                if (!param) continue;
+
+                mid = icalparameter_get_managedid(param);
+                op = hash_lookup(mid, &mattach_table);
+                if (!op) {
+                    /* Attachment removed from ical */
+                    op = xmalloc(sizeof(short));
+                    *op = REFCNT_DEC;
+                    hash_insert(mid, op, &mattach_table);
+                }
+                else if (*op != REFCNT_DEC) {
+                    /* Attachment still in ical */
+                    *op = REFCNT_HOLD;
+                }
+            }
+        }
+    }
+
+    /* Update reference counts of attachments in hash table */
+    hash_enumerate(&mattach_table,
+                   (void(*)(const char*,void*,void*)) &update_refcount,
+                   attachments);
+
+  done:
+    free_hash_table(&mattach_table, free);
+    mailbox_close(&attachments);
+
+    return ret;
+}
+
 
 /* Perform scheduling actions for a DELETE request */
 static int caldav_delete_cal(struct transaction_t *txn,
@@ -1078,8 +1242,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
                              struct index_record *record, void *data)
 {
     struct caldav_data *cdata = (struct caldav_data *) data;
-    icalcomponent *ical = NULL, *comp;
-    icalproperty *prop;
+    icalcomponent *ical = NULL;
     struct buf buf = BUF_INITIALIZER;
     char *schedule_address = NULL;
     int r = 0;
@@ -1088,69 +1251,9 @@ static int caldav_delete_cal(struct transaction_t *txn,
     if (txn->req_tgt.flags) return 0;
 
     if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) && cdata->comp_flags.mattach) {
-        char *mailboxname = NULL;
-        struct mailbox *attachments = NULL;
-        struct webdav_db *webdavdb = NULL;
-
-        /* Load message containing the resource and parse iCal data */
-        ical = record_to_ical(mailbox, record, &schedule_address);
-
-        if (!ical) {
-            syslog(LOG_ERR,
-                   "meth_delete: failed to parse iCalendar object %s:%u",
-                   txn->req_tgt.mbentry->name, record->uid);
-            return HTTP_SERVER_ERROR;
-        }
-
-        /* XXX  Need this because of nested txns - should fix *dav_db.c
-           so that txn is per DB, NOT per table. */
-        mailbox_unlock_index(mailbox, NULL);
-
-        /* Open attachments collection for writing */
-        mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
-        r = mailbox_open_iwl(mailboxname, &attachments);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mailboxname, error_message(r));
-            free(mailboxname);
-            return HTTP_SERVER_ERROR;
-        }
-        free(mailboxname);
-
-        /* Open the WebDAV DB corresponding to the attachments collection */
-        webdavdb = webdav_open_mailbox(attachments);
-        if (!webdavdb) {
-            syslog(LOG_ERR, "webdav_open_mailbox(%s) failed", attachments->name);
-            mailbox_close(&attachments);
-            return HTTP_SERVER_ERROR;
-        }
-
-        /* Locate managed ATTACHment properties */
-        comp = icalcomponent_get_first_real_component(ical);
-        for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
-             prop;
-             prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)){
-
-            icalparameter *param = icalproperty_get_managedid_parameter(prop);
-
-            if (!param) continue;
-
-            /* Update reference count */
-            decrement_refcount(icalparameter_get_managedid(param),
-                               attachments, webdavdb);
-        }
-
-        webdav_close(webdavdb);
-        mailbox_close(&attachments);
-
-        /* XXX  Relock index so that delete of calendar resource will succeed.
-           Remove this call when mailbox_unlock_index() above is removed. */
-        r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
-        if (r) {
-            syslog(LOG_ERR, "relock index(%s) failed: %s",
-                   mailbox->name, error_message(r));
-            goto done;
-        }
+        r = manage_attachments(txn, mailbox, NULL,
+                               cdata, &ical, &schedule_address);
+        if (r) goto done;
     }
 
     if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
@@ -1968,27 +2071,27 @@ static void decrement_refcount(const char *managed_id,
 }
 
 /* Increment reference count on a managed attachment resource */
-static void increment_refcount(const char *managed_id,
-                               struct webdav_data **result,
-                               struct webdav_db *webdavdb)
+static struct webdav_data *increment_refcount(const char *managed_id,
+                                              struct webdav_db *webdavdb)
 {
     int r;
     struct webdav_data *wdata;
 
     /* Find DAV record for the attachment with this managed-id */
     webdav_lookup_uid(webdavdb, managed_id, &wdata);
-    *result = wdata;
 
-    if (!wdata->dav.rowid) return;
+    if (wdata->dav.rowid) {
+        /* Update reference count on WebDAV record */
+        wdata->ref_count++;
+        r = webdav_write(webdavdb, wdata);
 
-    /* Update reference count on WebDAV record */
-    wdata->ref_count++;
-    r = webdav_write(webdavdb, wdata);
-
-    if (r) {
-        syslog(LOG_ERR, "updating ref count (%s) failed: %s",
-               wdata->dav.resource, error_message(r));
+        if (r) {
+            syslog(LOG_ERR, "updating ref count (%s) failed: %s",
+                   wdata->dav.resource, error_message(r));
+        }
     }
+
+    return wdata;
 }
 
 /* Manage attachment */
@@ -2008,11 +2111,12 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     const char *etag = NULL, **hdr;
     char *mailboxname = NULL;
     time_t lastmod = 0;
-    icalcomponent *ical = NULL, *comp;
+    icalcomponent *ical = NULL, *comp, *nextc, *master = NULL;
     icalcomponent_kind kind;
     icalproperty *aprop = NULL, *prop;
     icalparameter *param;
     unsigned op, return_rep;
+    strarray_t *rids = NULL;
     enum {
         ATTACH_ADD,
         ATTACH_UPDATE,
@@ -2047,8 +2151,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (!action || action->next) return HTTP_BAD_REQUEST;
     else if (!strcmp(action->s, "attachment-add")) {
         op = ATTACH_ADD;
-        if (rid  /* not supported (yet) */
-            || mid) return HTTP_BAD_REQUEST;
+        if (mid) return HTTP_BAD_REQUEST;
     }
     else if (!strcmp(action->s, "attachment-update")) {
         op = ATTACH_UPDATE;
@@ -2056,8 +2159,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
     else if (!strcmp(action->s, "attachment-remove")) {
         op = ATTACH_REMOVE;
-        if (rid  /* not supported (yet) */
-            || !mid || mid->next) return HTTP_BAD_REQUEST;
+        if (!mid || mid->next) return HTTP_BAD_REQUEST;
     }
     else return HTTP_BAD_REQUEST;
 
@@ -2134,15 +2236,28 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     webdavdb = webdav_open_mailbox(attachments);
 
     if (mid) {
-        /* Locate ATTACH property with this managed-id */
-        for (aprop = icalcomponent_get_first_property(comp,
-                                                      ICAL_ATTACH_PROPERTY);
-             aprop;
-             aprop = icalcomponent_get_next_property(comp,
-                                                     ICAL_ATTACH_PROPERTY)) {
-            param = icalproperty_get_managedid_parameter(aprop);
-            if (!strcmp(mid->s, icalparameter_get_managedid(param))) break;
-        }
+        /* Locate first ATTACH property with this MANAGED-ID */
+        do {
+            for (aprop = icalcomponent_get_first_property(comp,
+                                                          ICAL_ATTACH_PROPERTY);
+                 aprop;
+                 aprop = icalcomponent_get_next_property(comp,
+                                                         ICAL_ATTACH_PROPERTY)) {
+                param = icalproperty_get_managedid_parameter(aprop);
+                if (param &&
+                    !strcmp(mid->s, icalparameter_get_managedid(param))) break;
+            }
+
+            /* Check if this is master component */
+            if (rid && !master &&
+                !icalcomponent_get_first_property(comp,
+                                                  ICAL_RECURRENCEID_PROPERTY)) {
+                master = comp;
+            }
+
+        } while (!aprop &&
+                 (comp = icalcomponent_get_next_component(ical, kind)));
+
         if (!aprop) {
             txn->error.precond = CALDAV_VALID_MANAGEDID;
             ret = HTTP_BAD_REQUEST;
@@ -2153,9 +2268,13 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         decrement_refcount(mid->s, attachments, webdavdb);
     }
 
-    switch (op) {
-    case ATTACH_ADD:
-    case ATTACH_UPDATE: {
+    if (rid) {
+        /* Split list of RECURRENCE-IDs */
+        rids = strarray_split(rid->s, ",", STRARRAY_TRIM);
+    }
+ 
+    if (op == ATTACH_REMOVE) aprop = NULL;
+    else {
         /* SHA1 of content used as resource UID, resource name, & managed-id */
         static char uid[2*MESSAGE_GUID_SIZE+1];
         struct message_guid guid;
@@ -2198,11 +2317,11 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         }
 
         /* Update reference count */
-        increment_refcount(uid, &wdata, webdavdb);
+        wdata = increment_refcount(uid, webdavdb);
 
-        /* Update ATTACH parameters on cal resource */
-        if (!aprop) {
-            /* Create new ATTACH property */
+        /* Create new ATTACH property */
+        if (aprop) aprop = icalproperty_new_clone(aprop);
+        else {
             const char *proto = NULL, *host = NULL;
             icalattach *attach;
 
@@ -2216,10 +2335,10 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             buf_reset(&txn->buf);
 
             aprop = icalproperty_new_attach(attach);
-            icalcomponent_add_property(comp, aprop);
             icalattach_unref(attach);
         }
 
+        /* Update ATTACH parameters - MANAGED-ID, FILENAME, SIZE, FMTTYPE */
         param = icalproperty_get_managedid_parameter(aprop);
         if (param) icalparameter_set_managedid(param, resp_body->cmid);
         else {
@@ -2255,55 +2374,131 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                 icalproperty_add_parameter(aprop, param);
             }
         }
+    }
+        
+    /* Process each component */
+    for (; comp; comp = nextc) {
+        int idx;
 
-        for (comp = icalcomponent_get_next_component(ical, kind);
-             comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        nextc = icalcomponent_get_next_component(ical, kind);
+
+        if (rid) {
+            /* Check if RECURRENCE-ID is in our list */
+            const char *recurid;
+
+            prop = icalcomponent_get_first_property(comp,
+                                                    ICAL_RECURRENCEID_PROPERTY);
+            if (prop) recurid = icalproperty_get_value_as_string(prop);
+            else {
+                master = comp;
+                recurid = "M";
+            }
+
+            idx = strarray_find_case(rids, recurid, 0);
+            if (idx >= 0) {
+                /* Remove found recurid from list -
+                   we will create new overrides for unfound recurids */
+                free(strarray_remove(rids, idx));
+            }
+            else if (!nextc && strarray_size(rids)) {
+                /* Create new overrides */
+                struct icaldatetimeperiodtype dtp;
+                icalproperty *nextp;
+
+                master = icalcomponent_new_clone(master);
+
+                /* Get DTSTART and Remove unwanted recurrence properties */
+                for (prop = icalcomponent_get_first_property(master,
+                                                             ICAL_ANY_PROPERTY);
+                     prop; prop = nextp) {
+                    nextp = icalcomponent_get_next_property(master,
+                                                            ICAL_ANY_PROPERTY);
+                    switch (icalproperty_isa(prop)) {
+                    case ICAL_RRULE_PROPERTY:
+                    case ICAL_RDATE_PROPERTY:
+                    case ICAL_EXDATE_PROPERTY:
+                    case ICAL_EXRULE_PROPERTY:
+                        icalcomponent_remove_property(master, prop);
+                        icalproperty_free(prop);
+                        break;
+
+                    case ICAL_DTSTART_PROPERTY:
+                        dtp = icalproperty_get_datetimeperiod(prop);
+                        break;
+
+                    default:
+                        break;
+                    }
+                }
+
+                /* Get TZID of DTSTART */
+                struct icaltimetype dtstart = dtp.time;
+                const icaltimezone *tz = icaltime_get_timezone(dtstart);
+                const char *tzid = icaltimezone_get_tzid((icaltimezone *) tz);
+
+                for (idx = 0; idx < strarray_size(rids); idx++) {
+                    /* Create new component and set DTSTART and RECURRENCE-ID */
+                    dtstart = icaltime_from_string(strarray_nth(rids, idx));
+                    if (icaltime_is_null_time(dtstart)) continue;
+
+                    icaltime_set_timezone(&dtstart, tz);
+
+                    comp = icalcomponent_new_clone(master);
+                    icalcomponent_add_component(ical, comp);
+                    icalcomponent_set_dtstart(comp, dtstart);
+
+                    prop = icalproperty_new_recurrenceid(dtstart);
+                    icalcomponent_add_property(comp, prop);
+                    if (tzid) {
+                        icalproperty_add_parameter(prop,
+                                                   icalparameter_new_tzid(tzid));
+                    }
+                }
+
+                icalcomponent_free(master);
+                nextc = icalcomponent_get_next_component(ical, kind);
+                rid = NULL;
+            }
+            else {
+                /* No matching RECURRENCE-ID - Skip this component */
+                continue;
+            }
+        }
+
+        if (mid) {
+            /* Remove matching ATTACH property */
             for (prop = icalcomponent_get_first_property(comp,
                                                          ICAL_ATTACH_PROPERTY);
                  prop;
                  prop = icalcomponent_get_next_property(comp,
                                                         ICAL_ATTACH_PROPERTY)) {
                 param = icalproperty_get_managedid_parameter(prop);
-                if (!strcmp(mid->s, icalparameter_get_managedid(param))) {
+                if (param &&
+                    !strcmp(mid->s, icalparameter_get_managedid(param))) {
                     icalcomponent_remove_property(comp, prop);
                     icalproperty_free(prop);
                     break;
                 }
             }
+
+            if (!prop) {
+                /* No matching ATTACH - Skip this component */
+                continue;
+            }
+        }
+
+        if (aprop) {
+            /* Add new/updated ATTACH property */
             icalcomponent_add_property(comp, icalproperty_new_clone(aprop));
         }
-        break;
-    }
-
-    case ATTACH_REMOVE:
-        /* Remove ATTACH properties from cal resource */
-        icalcomponent_remove_property(comp, aprop);
-        icalproperty_free(aprop);
-
-        for (comp = icalcomponent_get_next_component(ical, kind);
-             comp; comp = icalcomponent_get_next_component(ical, kind)) {
-            for (prop = icalcomponent_get_first_property(comp,
-                                                         ICAL_ATTACH_PROPERTY);
-                 prop;
-                 prop = icalcomponent_get_next_property(comp,
-                                                        ICAL_ATTACH_PROPERTY)) {
-                param = icalproperty_get_managedid_parameter(prop);
-                if (!strcmp(mid->s, icalparameter_get_managedid(param))) {
-                    icalcomponent_remove_property(comp, prop);
-                    icalproperty_free(prop);
-                    break;
-                }
-            }
-        }
-        break;
     }
 
     /* Finished with attachment collection */
     mailbox_unlock_index(attachments, NULL);
 
     /* Store updated calendar resource */
-    ret = caldav_store_resource(txn, ical, calendar,
-                                txn->req_tgt.resource, caldavdb, 0, schedule_address);
+    ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
+                                caldavdb, 0, schedule_address);
 
     if (ret == HTTP_NO_CONTENT && return_rep) {
         struct buf *data;
@@ -2335,7 +2530,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
   done:
+    strarray_free(rids);
     free(schedule_address);
+    if (aprop) icalproperty_free(aprop);
     if (ical) icalcomponent_free(ical);
     if (webdavdb) webdav_close(webdavdb);
     if (caldavdb) caldav_close(caldavdb);
@@ -2357,7 +2554,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL;
-    struct sched_param sparam;
+    struct caldav_sched_param sparam;
 
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
@@ -3150,7 +3347,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *oldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
-    icalproperty *prop;
+    icalproperty *prop, *rrule = NULL;
     const char *uid, *organizer = NULL;
     char *schedule_address = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -3174,36 +3371,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     comp = icalcomponent_get_first_real_component(ical);
-
-#ifdef HAVE_RSCALE
-    /* Make sure we support the provided RSCALE in an RRULE */
-    prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    if (prop && rscale_calendars) {
-        struct icalrecurrencetype rt = icalproperty_get_rrule(prop);
-
-        if (rt.rscale) {
-            /* Perform binary search on sorted icalarray */
-            unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
-
-            ucase(rt.rscale);
-            while (!found && start < end) {
-                unsigned mid = start + (end - start) / 2;
-                const char **rscale = icalarray_element_at(rscale_calendars, mid);
-                int r = strcmp(rt.rscale, *rscale);
-
-                if (r == 0) found = 1;
-                else if (r < 0) end = mid;
-                else start = mid + 1;
-            }
-
-            if (!found) {
-                txn->error.precond = CALDAV_SUPP_RSCALE;
-                ret = HTTP_FORBIDDEN;
-                goto done;
-            }
-        }
+    if (rscale_calendars) {
+        /* Grab RRULE to check RSCALE */
+        rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     }
-#endif /* HAVE_RSCALE */
 
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
@@ -3237,11 +3408,58 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 goto done;
             }
         }
+
+        if (rscale_calendars && !rrule) {
+            /* Grab RRULE to check RSCALE */
+            rrule = icalcomponent_get_first_property(nextcomp,
+                                                     ICAL_RRULE_PROPERTY);
+        }
     }
+
+#ifdef HAVE_RSCALE
+    /* Make sure we support the provided RSCALE in an RRULE */
+    if (rrule && rscale_calendars) {
+        struct icalrecurrencetype rt = icalproperty_get_rrule(rrule);
+
+        if (rt.rscale) {
+            /* Perform binary search on sorted icalarray */
+            unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
+
+            ucase(rt.rscale);
+            while (!found && start < end) {
+                unsigned mid = start + (end - start) / 2;
+                const char **rscale =
+                    icalarray_element_at(rscale_calendars, mid);
+                int r = strcmp(rt.rscale, *rscale);
+
+                if (r == 0) found = 1;
+                else if (r < 0) end = mid;
+                else start = mid + 1;
+            }
+
+            if (!found) {
+                txn->error.precond = CALDAV_SUPP_RSCALE;
+                ret = HTTP_FORBIDDEN;
+                goto done;
+            }
+        }
+    }
+#endif /* HAVE_RSCALE */
 
     /* Check for changed UID */
     caldav_lookup_resource(db, mailbox->name, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->ical_uid, uid)) {
+        ret = HTTP_FORBIDDEN;
+    }
+    else {
+        /* Check for duplicate iCalendar UID */
+        caldav_lookup_uid(db, uid, &cdata);
+        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
+                                    strcmp(cdata->dav.resource, resource))) {
+            ret = HTTP_FORBIDDEN;
+        }
+    }
+    if (ret) {
         /* CALDAV:no-uid-conflict */
         char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
@@ -3256,22 +3474,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Check for duplicate iCalendar UID */
-    caldav_lookup_uid(db, uid, &cdata);
-    if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
-                                strcmp(cdata->dav.resource, resource))) {
-        /* CALDAV:no-uid-conflict */
-        char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
-        txn->error.precond = CALDAV_UID_CONFLICT;
-        buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
-        txn->error.resource = buf_cstring(&txn->buf);
-        free(owner);
-        ret = HTTP_FORBIDDEN;
-        goto done;
+    if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
+        ret = manage_attachments(txn, mailbox, ical,
+                                 cdata, &oldical, &schedule_address);
+        if (ret) goto done;
     }
 
     switch (kind) {
@@ -3295,7 +3501,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             }
 
             /* existing record? */
-            if (cdata->dav.imap_uid) {
+            if (cdata->dav.imap_uid && !oldical) {
                 /* Update existing object */
                 struct index_record record;
 
@@ -3364,126 +3570,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
             flags |= NEW_STAG;
         }
-
-        /* Fall through and process managed attachments */
-
-    case ICAL_VJOURNAL_COMPONENT: {
-        /* Compare any managed attachments in new and existing resources */
-        char *mailboxname = NULL;
-        struct mailbox *attachments = NULL;
-        struct webdav_db *webdavdb = NULL;
-        struct hash_table mattach_table;
-        icalparameter *param;
-        const char *mid;
-        int r;
-
-        /* we're not managing attachments */
-        if (!(namespace_calendar.allow & ALLOW_CAL_ATTACH))
-            break;
-
-        comp = icalcomponent_get_first_real_component(ical);
-        prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
-
-        if (!prop && !cdata->comp_flags.mattach) {
-            /* Neither new nor existing resource has attachments */
-            break;
-        }
-
-        /* Open attachments collection for writing */
-        mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
-        r = mailbox_open_iwl(mailboxname, &attachments);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mailboxname, error_message(r));
-            free(mailboxname);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-        free(mailboxname);
-
-        /* Open the WebDAV DB corresponding to the attachments collection */
-        webdavdb = webdav_open_mailbox(attachments);
-        if (!webdavdb) {
-            syslog(LOG_ERR, "webdav_open_mailbox(%s) failed",
-                   attachments->name);
-            mailbox_close(&attachments);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        /* Create hash table of managed attachments in new resource */
-        construct_hash_table(&mattach_table, 10, 1);
-
-        for (; prop;
-             prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)){
-
-            struct webdav_data *wdata;
-
-            param = icalproperty_get_managedid_parameter(prop);
-            if (!param) continue;
-
-            /* Find DAV record for the attachment with this managed-id */
-            mid = icalparameter_get_managedid(param);
-            webdav_lookup_uid(webdavdb, mid, &wdata);
-
-            if (wdata->dav.rowid) hash_insert(mid, &wdata, &mattach_table);
-            else {
-                txn->error.precond = CALDAV_VALID_MANAGEDID;
-                ret = HTTP_FORBIDDEN;
-                break;
-            }
-        }
-
-        /* Compare existing managed attachments to those in new resource */
-        if (!ret && cdata->comp_flags.mattach) {
-            if (!oldical) {
-                struct index_record record;
-
-                /* Load message containing the resource and parse iCal data */
-                r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-                if (r) {
-                    txn->error.desc = "Failed to read record";
-                    ret = HTTP_SERVER_ERROR;
-                }
-                else oldical = record_to_ical(mailbox, &record, NULL);
-            }
-
-            if (oldical) {
-                comp = icalcomponent_get_first_real_component(oldical);
-                prop = icalcomponent_get_first_property(comp,
-                                                        ICAL_ATTACH_PROPERTY);
-            }
-            for (; prop;
-                 prop = icalcomponent_get_next_property(comp,
-                                                        ICAL_ATTACH_PROPERTY)) {
-
-                param = icalproperty_get_managedid_parameter(prop);
-                if (!param) continue;
-
-                mid = icalparameter_get_managedid(param);
-                if (!hash_del(mid, &mattach_table)) {
-                    /* Attachment removed from resource - update ref count */
-                    decrement_refcount(mid, attachments, webdavdb);
-                }
-            }
-        }
-
-        /* Remaining attachments in hash table have been added to resource -
-           update reference counts */
-        if (!ret) {
-            hash_enumerate(&mattach_table,
-                           (void(*)(const char*,void*,void*))&increment_refcount,
-                           webdavdb);
-        }
-
-        free_hash_table(&mattach_table, NULL);
-
-        webdav_close(webdavdb);
-        mailbox_close(&attachments);
-
         break;
-    }
 
+    case ICAL_VJOURNAL_COMPONENT:
     case ICAL_VFREEBUSY_COMPONENT:
     case ICAL_VAVAILABILITY_COMPONENT:
         /* Nothing else to do */
@@ -6844,12 +6933,10 @@ static struct mime_type_t freebusy_mime_types[] = {
       (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
-#ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jfb",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       NULL, NULL, NULL, NULL
     },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 

@@ -23,6 +23,7 @@ Management
     admin/nntp
     admin/protlayer
     admin/sieve
+    admin/backups
     admin/sop
     admin/eventsource    
     admin/config-mailboxdistribution

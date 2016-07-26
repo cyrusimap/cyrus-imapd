@@ -321,6 +321,61 @@ static void test_decode_mimeheader(void)
     free(s);
 }
 
+static void test_parse_mimeheader(void)
+{
+    char *s;
+    static const char ASCII[] = "Lorem IPSUM";
+    static const char UTF8[] = "=?utf-8?q?=C2=A1Hola,_se=C3=B1or!?= Lorem IPSÜM";
+    static const char LATIN1[] = "=?ISO-8859-1?q?Caf=E9?= Lorem IPS""\xDC""M";
+
+    static const char UTF8_1[] = "¡Hola, señor! Lorem IPS" UTF8_REPLACEMENT UTF8_REPLACEMENT "M";
+    static const char UTF8_2[] = "¡Hola, señor! Lorem IPSÜM";
+    static const char LATIN1_1[] = "Café Lorem IPS" UTF8_REPLACEMENT "M";
+
+    int flags = 0; /* default */
+
+    s = charset_parse_mimeheader(NULL, flags);
+    CU_ASSERT_PTR_NULL(s);
+    free(s);
+
+    s = charset_parse_mimeheader("", flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "");
+    free(s);
+
+    s = charset_parse_mimeheader(ASCII, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, ASCII);
+    free(s);
+
+    s = charset_parse_mimeheader(UTF8, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, UTF8_1);
+    free(s);
+
+    s = charset_parse_mimeheader(LATIN1, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, LATIN1_1);
+    free(s);
+
+    flags = CHARSET_MIME_UTF8;
+
+    s = charset_parse_mimeheader(ASCII, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, ASCII);
+    free(s);
+
+    s = charset_parse_mimeheader(UTF8, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, UTF8_2);
+    free(s);
+
+    s = charset_parse_mimeheader(LATIN1, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, LATIN1_1);
+    free(s);
+}
+
 static void test_mimeheader_badcharset(void)
 {
     /* when given an unknown charset, the entire word is

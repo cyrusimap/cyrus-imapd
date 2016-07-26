@@ -489,7 +489,7 @@ static int backupd_open_backup(struct open_backup **openp, const mbname_t *mbnam
     if (!open) {
         struct backup *backup = NULL;
         int r = backup_open(&backup, mbname,
-                            BACKUP_OPEN_BLOCK, BACKUP_OPEN_CREATE);
+                            BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_CREATE);
         if (r) return r;
 
         r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
@@ -1129,11 +1129,19 @@ static void cmd_apply(struct dlist *dl)
         /* ignore and succeed */
         r = 0;
     }
+    else if (strcmp(dl->name, "ACTIVATE_SIEVE") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
     else if (strcmp(dl->name, "SUB") == 0) {
         /* ignore and succeed */
         r = 0;
     }
     else if (strcmp(dl->name, "UNSUB") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
+    else if (strcmp(dl->name, "UNUSER") == 0) {
         /* ignore and succeed */
         r = 0;
     }

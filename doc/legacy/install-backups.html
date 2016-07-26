@@ -236,14 +236,7 @@ backup server containing the specified backup.</p>
 
 <p>All backupd/ctl_backups/cyr_backup operations first obtain a lock on the relevant
 backup file.  ctl_backups and cyr_backup will try to do this without blocking (unless
-told otherwise), whereas backupd will block.<p>
-
-<p>This means, for now, that working on a user's backup will cause a backup replication
-stall if that user was about to be backed up but is already locked.</p>
-
-<p>It's anticipated that in the future backupd will (configurably) not block waiting
-for a lock, but sync_client doesn't currently know how to deal with a MAILBOX_LOCKED
-response, so backupd needs to block and wait for now.</p>
+told otherwise), whereas backupd will never block.<p>
 
 <h3>Moving backup files to different backup partitions</h3>
 
@@ -340,8 +333,7 @@ across multiple/all backups</p>
     <dd>List known backups.  Add more <code>-v</code>'s for more detail.</dd>
 
     <dt>lock</dt>
-    <dd>Lock a single backup, so you can safely work on it with non-cyrus tools.  (This
-        may be moved into cyr_backup at some point.)</dd>
+    <dd>Lock a single backup, so you can safely work on it with non-cyrus tools.</dd>
 
     <dt>reindex</dt>
     <dd>Regenerate indexes for backups from their data files.  Useful if index becomes
@@ -362,7 +354,7 @@ across multiple/all backups</p>
             <li>Message data checksum matches indexed checksums</li>
         </ul></dd>
 </dl>
-<p>There's no man page yet, but run it without arguments to see a full usage summary</p>
+<p>See the <code>ctl_backups</code> man page for more information.</p>
 
 <h4>cyr_backup</h4>
 
@@ -386,7 +378,7 @@ additional arguments</p>
 
 <p>
 
-<p>There's no man page yet, but run it without arguments to see a full usage summary</p>
+<p>See the <code>cyr_backup</code> man page for more information.</p>
 
 <h4>restore</h4>
 
@@ -402,7 +394,7 @@ rebuilding a lost server from backups, such that client state remains consistent
 <p>If the target mailbox already exists on the destination server, restored messages will be
 assigned new, unused uids and will appear to the client as new messages.</p>
 
-<p>There's no man page yet, but run it without arguments to see a full usage summary</p>
+<p>See the <code>restore</code> man page for more information.</p>
 
 </body>
 </html>

@@ -92,6 +92,10 @@ distributions:
 
     from http://www.gnu.org/software/gperf/
 
+**jansson-devel** version 2.3 or higher
+
+    from http://www.digip.org/jansson/.
+
 **libtool** version 2.2.6 or higher
 
     from http://www.gnu.org/software/libtool/
@@ -168,25 +172,6 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
 **groff**
 
     from http://www.gnu.org/software/groff/
-
-**jansson-devel**
-
-    Development headers for Jansson, a C-library for JSON, from
-    http://www.digip.org/jansson/.
-
-    Version 2.0 or higher is required for the event notifications
-    feature.
-
-    Version 2.3 or higher is required for HTTP.
-
-    Configure options: ``--enable-event-notifications`` and
-    ``--enable-http``.
-
-    .. NOTE::
-
-        Specifying the configure option ``--enable-event-notifications``
-        without having Jansson development headers installed will
-        **not** cause ``./configure`` to fail.
 
 **krb5-devel**
 

@@ -67,11 +67,11 @@ extern int addrlex(YYSTYPE*, sieve_script_t*);
 %}
 
 %token ATOM QTEXT DTEXT
-%name-prefix="addr"
+%name-prefix "addr"
 %defines
 %parse-param {sieve_script_t *parse_script}
 %lex-param {sieve_script_t *parse_script}
-%pure_parser
+%pure-parser
 %%
 sieve_address: addrspec                 /* simple address */
         | phrase '<' addrspec '>'       /* name & addr-spec */

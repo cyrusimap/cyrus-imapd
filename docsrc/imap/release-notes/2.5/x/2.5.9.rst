@@ -1,0 +1,49 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.9 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.9.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.9.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.9.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.9.tar.gz.sig
+
+.. _relnotes-2.5.9-changes:
+
+Changes Since 2.5.8
+===================
+
+Dependency changes
+------------------
+
+* Libical 2.0.0 is now supported.
+* preliminary support for OpenSSL 1.1.0 (not yet released)
+
+Other changes
+-------------
+
+* :cyrusman:`ipurge(8)` now supports a "-n" (dry run) option (thanks Valentin Vidic)
+
+Bug fixes
+---------
+
+* Fixed: imapd now proxies LIST (special-use) to backend (thanks John Capo)
+* Fixed: sync_client handles its shutdown file more reliably (thanks John Capo)
+* Fixed: httpd no longer crashes with assertion failure on shutdown after
+  CalDAV has been used
+* Fixed bugzilla #3938: squat search now handles pre-2.5 cyrus.squat data
+* Fixed :issue:`5`: twoskip database I/O performance in unlocked foreach
+* various build system improvements

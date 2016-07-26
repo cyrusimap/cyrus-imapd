@@ -408,7 +408,7 @@ static const struct precond_t {
 };
 
 
-/* Check ACL on userid's principal (Inbox): ANY right gives access */
+/* Check ACL on userid's principal (Inbox): LOOKUP right gives access */
 static int principal_acl_check(const char *userid, struct auth_state *authstate)
 {
     int r = 0;
@@ -423,7 +423,7 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
                    inboxname, error_message(r));
             r = HTTP_NOT_FOUND;
         }
-        else if (!(httpd_myrights(authstate, mbentry->acl) & ACL_FULL)) {
+        else if (!(httpd_myrights(authstate, mbentry->acl) & ACL_LOOKUP)) {
             r = HTTP_NOT_FOUND;
         }
 
@@ -1399,14 +1399,18 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
     /* XXX  Do LDAP/SQL lookup here */
     buf_reset(&fctx->buf);
 
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
-    int r = annotatemore_lookupmask(mailboxname, annotname,
-                                    fctx->req_tgt->userid, &fctx->buf);
-    free(mailboxname);
-
-    if (r || !buf_len(&fctx->buf)) {
-        buf_printf(&fctx->buf, "%s", fctx->req_tgt->userid);
+    if (fctx->req_tgt->userid) {
+        const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+        char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
+        int r = annotatemore_lookupmask(mailboxname, annotname,
+                                        fctx->req_tgt->userid, &fctx->buf);
+        free(mailboxname);
+        if (r || !buf_len(&fctx->buf)) {
+            buf_printf(&fctx->buf, "%s", fctx->req_tgt->userid);
+        }
+    }
+    else {
+        buf_printf(&fctx->buf, "no userid");
     }
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],

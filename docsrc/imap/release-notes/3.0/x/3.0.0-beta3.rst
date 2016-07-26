@@ -26,7 +26,7 @@ Major changes since the 2.5.x series
 ====================================
 
 *   The source repository has moved to :ref:`GitHub <github-guide>`, Bugzilla and Phabricator
-    have been deprecated and their issue lists imported into GitHub.
+    have been deprecated.  Their issue lists are being imported into GitHub.
 
 *   Support added for FastMail-style conversations (threaded messages).
     (See the ``conversations`` options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
@@ -63,7 +63,7 @@ Major changes since the 2.5.x series
 *   The ``defaultdomain`` setting in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`
     now defaults to "internal" (was: NULL)
 
-*   Added experimental backup service.  See ``docs/install-backup.html`` in the source
+*   Added experimental backup service.  See ``doc/legacy/install-backup.html`` in the source
     distribution for preliminary installation/configuration/administration documentation.
 
 *   Support for Apple's Push service (XAPPLEPUSH).  See :doc:`/imap/admin/eventsource`
@@ -97,15 +97,14 @@ Major changes since the 2.5.x series
 *   Under ``delete_mode: delayed``, only the 20 most recently deleted mailboxes are kept
     for any given name.
     
-*   Documentation cleanup: as part of the move to a single restructured text source for man
-    pages and html format output, if you want to build the docs, you will need to 
-    install the perl module ``Pod::POM::View::Restructured``. 
+*   Documentation cleanup: we are moving toward having a single restructured text source for man
+    pages and html/text documentation, which are pre-generated for inclusion in release tarballs.
+    If you wish to rebuild these, or are building from a git clone in which they are not
+    pregenerated, you will need to install ``sphinx-build``, and the perl module
+    ``Pod::POM::View::Restructured``.  The top level Makefile now has ``man`` and ``doc`` targets.
+    for building these.
 
-*   As part of the documentation cleanup, imap/admin/systemcommands/cyradm.rst and 
-    imap/admin/configs/imapd.conf.rst are now both generated from perl/imap/IMAP/Shell.pm and
-    lib/imapoptions respectively. Do not edit the restructured text versions! 
-    ``make man`` and ``make html`` both now call ``make init`` which generates the rst files
-    from the source.
+*   Added support for OpenSSL 1.1.0-pre5.
 
 
 Significant bugfixes

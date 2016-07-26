@@ -4382,7 +4382,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
 
     json_array_append_new(req->response, item);
 
-    if (dofetch && json_array_size(rock.changed)) {
+    if (dofetch) {
         struct jmap_req subreq = *req; // struct copy, woot
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.changed);
@@ -5432,7 +5432,7 @@ static int getContactUpdates(struct jmap_req *req)
 
     json_t *dofetch = json_object_get(req->args, "fetchRecords");
     json_t *doprops = json_object_get(req->args, "fetchRecordProperties");
-    if (dofetch && json_is_true(dofetch) && json_array_size(rock.changed)) {
+    if (dofetch && json_is_true(dofetch)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.changed);
@@ -7514,7 +7514,7 @@ static int getCalendarUpdates(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
-    if (dofetch && json_array_size(rock.changed)) {
+    if (dofetch) {
         struct jmap_req subreq = *req; // struct copy, woot
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.changed);
@@ -8326,7 +8326,7 @@ static json_t* jmap_alerts_from_ical(icalcomponent *comp) {
 /* Set isyou if userid matches the user looked up by caladdr. Return 0 on
  * success or a Cyrus error on failure. */
 static int jmap_isyou(const char *caladdr, const char *userid, short *isyou) {
-    struct sched_param sparam;
+    struct caldav_sched_param sparam;
 
     if (userid) {
         sparam.userid = NULL;
@@ -11138,7 +11138,7 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
     /* Fetch updated records, if requested. */
-    if (dofetch && json_array_size(rock.changed)) {
+    if (dofetch) {
         json_t *props = json_object_get(req->args, "fetchRecordProperties");
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
@@ -11534,7 +11534,7 @@ static int getCalendarEventList(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
     /* Fetch updated records, if requested. */
-    if (dofetch && json_array_size(rock.events)) {
+    if (dofetch) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", rock.events);

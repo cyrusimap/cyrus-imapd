@@ -70,6 +70,11 @@ BUILT_SOURCES = \
 	lib/imapopts.c \
 	lib/imapopts.h
 
+CLEANFILES = \
+	lib/chartable.c \
+	lib/imapopts.c \
+	lib/imapopts.h
+
 DISTCLEANFILES = \
 	imap/imap_err.c \
 	imap/imap_err.h \
@@ -83,12 +88,6 @@ DISTCLEANFILES = \
 	imap/tz_err.c \
 	imap/tz_err.h \
 	com_err/et/compile_et \
-	perl/annotator/Makefile \
-	perl/annotator/Makefile.PL \
-	perl/imap/Makefile \
-	perl/imap/Makefile.PL \
-	perl/sieve/managesieve/Makefile \
-	perl/sieve/managesieve/Makefile.PL \
 	perl/sieve/scripts/installsieve \
 	perl/sieve/scripts/sieveshell \
 	sieve/sieve_err.c \
@@ -101,13 +100,11 @@ MAINTAINERCLEANFILES = \
 	man/sieveshell.1 \
 	imap/lmtpstats.h \
 	imap/pushstats.h \
-	lib/chartable.c \
-	lib/imapopts.h \
 	sieve/addr.h \
 	sieve/sieve.h
 
 SUBDIRS = .
-DIST_SUBDIRS = .
+DIST_SUBDIRS = . perl/annotator perl/imap perl/sieve/managesieve
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 EXTRA_PROGRAMS =
@@ -117,7 +114,6 @@ sbin_PROGRAMS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
-CLEANFILES =
 EXTRA_DIST = \
 	$(wildcard tools/vzic/*)
 
@@ -623,6 +619,17 @@ LD_UTILITY_ADD = imap/libcyrus_imap.la $(LD_BASIC_ADD) $(COM_ERR_LIBS)
 # the SASL library.
 LD_SERVER_ADD = $(LD_UTILITY_ADD) $(LIB_WRAP)
 
+# SIEVE is the libraries that sieve-using components need to link with
+#
+# This is empty if sieve is not enabled, so it can be used unconditionally
+# elsewhere.
+
+if SIEVE
+LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
+else
+LD_SIEVE_ADD =
+endif
+
 # ----
 
 if CUNIT
@@ -691,13 +698,7 @@ cunit_TESTS += \
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
-cunit_unit_LDADD =
-
-if SIEVE
-cunit_unit_LDADD += sieve/libcyrus_sieve.la
-endif
-
-cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
+cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
 
@@ -846,7 +847,7 @@ backup_ctl_backups_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 backup_cyr_backup_SOURCES = \
     imap/mutex_fake.c \
     backup/cyr_backup.c
-backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
+backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 
 backup_restore_SOURCES = \
     imap/mutex_fake.c \
@@ -895,7 +896,7 @@ imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c maste
 imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_buildinfo_SOURCES = imap/cli_fatal.c imap/cyr_buildinfo.c imap/mutex_fake.c master/masterconf.c
-imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
+imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 
 imap_cyr_sequence_SOURCES = imap/cli_fatal.c imap/cyr_sequence.c imap/mutex_fake.c
 imap_cyr_sequence_LDADD = $(LD_UTILITY_ADD)
@@ -957,13 +958,7 @@ imap_imapd_SOURCES += \
 	imap/autocreate.c
 endif
 
-imap_imapd_LDADD =
-
-if SIEVE
-imap_imapd_LDADD += sieve/libcyrus_sieve.la
-endif
-
-imap_imapd_LDADD += $(LD_SERVER_ADD)
+imap_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
@@ -975,8 +970,15 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 
 dist_imap_libcyrus_imap_la_SOURCES =
 
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) $(GCOV_LIBS) lib/libcyrus_min.la lib/libcyrus.la
-imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+imap_libcyrus_imap_la_LIBADD = \
+    $(COM_ERR_LIBS) \
+    $(LIB_UUID) \
+    $(GCOV_LIBS) \
+    $(JANSSON_LIBS) \
+    lib/libcyrus_min.la \
+    lib/libcyrus.la
+
+imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) $(JANSSON_CFLAGS)
 imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS)
 
 imap_libcyrus_imap_la_SOURCES = \
@@ -1103,11 +1105,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/sphinxmgr_client.h
 endif
 
-if JANSSON
-imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
-imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
-endif
-
 if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
 	imap/caldav_alarm.c \
@@ -1156,14 +1153,11 @@ imap_lmtpd_SOURCES += \
 	imap/autocreate.h
 endif # AUTOCREATE
 
-imap_lmtpd_LDADD =
-
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
-imap_lmtpd_LDADD += sieve/libcyrus_sieve.la
 endif # SIEVE
 
-imap_lmtpd_LDADD += $(LD_SERVER_ADD)
+imap_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 SNMPGEN = $(abs_top_srcdir)/snmp/snmpgen
 
@@ -1270,13 +1264,7 @@ imap_pop3d_SOURCES += \
 	imap/autocreate.h
 endif # AUTOCREATE
 
-imap_pop3d_LDADD =
-
-if SIEVE
-imap_pop3d_LDADD += sieve/libcyrus_sieve.la
-endif # SIEVE
-
-imap_pop3d_LDADD += $(LD_SERVER_ADD)
+imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
 imap_quota_LDADD = $(LD_UTILITY_ADD)
@@ -1690,8 +1678,6 @@ sieve_libcyrus_sieve_la_SOURCES = \
 sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
 sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
-LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
-
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
@@ -1699,7 +1685,7 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
-sieve_test_LDADD = sieve/libcyrus_sieve.la $(LD_UTILITY_ADD)
+sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = \
 	imap/mutex_fake.c \
@@ -1712,15 +1698,14 @@ timsieved_timsieved_SOURCES = \
 	timsieved/lex.h \
 	timsieved/parser.c \
 	timsieved/parser.h \
-	timsieved/scripttest.c \
-	timsieved/scripttest.h \
 	timsieved/timsieved.c
 
-timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
+timsieved_timsieved_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 # TODO: Should not really stay around, but GNU software is hard to
 # contribute fixes to. Needed when building with the following:
 # CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
+if SIEVE
 lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
 	grep -E '^yy_size_t sieveleng;$$' sieve/sieve-lex.c && \
     	sed -r -i -e 's/int yyl;/yy_size_t yyl;/g' sieve/sieve-lex.c || :
@@ -1736,6 +1721,9 @@ lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
 
 	grep -E '^static int yy_n_chars;' sieve/addr-lex.c && \
     	sed -r -i -s 's/\tyy_size_t yy_buf_size;/\tint yy_buf_size;/g' sieve/addr-lex.c || :
+else
+lex-fix:
+endif
 
 GIT_VERSION = $(PACKAGE_VERSION)@git_version@
 
@@ -1782,6 +1770,10 @@ docsrc/imap/admin/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/
 ## define this unconditionally because dist-hook references it
 SPHINX_CACHE = docsrc/.doctrees
 
+.PHONY: clean-sphinx-cache clean-docsrc
+clean-sphinx-cache:
+	@$(RM) -r $(SPHINX_CACHE)
+
 if HAVE_SPHINX_BUILD
 GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
                  docsrc/imap/admin/systemcommands/cyradm.rst \
@@ -1795,10 +1787,17 @@ docsrc/.sphinx-build.stamp:
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc) | tar xf -
 	@touch $@
 
+clean-docsrc:
+	test x"$(top_srcdir)" = x"$(top_builddir)" || \
+		$(RM) -r $(top_builddir)/docsrc
+
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
+
+clean-man:
+	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
@@ -1810,10 +1809,14 @@ doc/text/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 else
+clean-docsrc:
+
 man/.sphinx-build.stamp:
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
 	@echo "warning: missing documentation dependencies. man pages will be empty" 1>&2
+
+clean-man:
 
 doc/html/.sphinx-build.stamp:
 	@echo "error: missing documentation dependencies. cannot build html documentation" 1>&2
@@ -1824,7 +1827,7 @@ doc/text/.sphinx-build.stamp:
 	@false
 endif
 
-.PHONY: man man-force
+.PHONY: man man-force clean-man
 man-force:
 	## trash the timestamps, so we always re-run sphinx-build.
 	## sphinx-build tracks source modifications itself, so forced
@@ -1833,18 +1836,34 @@ man-force:
 
 man: man-force $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
 
-.PHONY: doc doc-html doc-html-force doc-text doc-text-force
+# clean-man is conditionally defined above. We do not want to remove
+# man pages if the user is unable to rebuild them.
+
+.PHONY: doc-html doc-html-force clean-doc-html
 doc-html-force:
 	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
 
 doc-html: doc-html-force doc/html/.sphinx-build.stamp
 
+clean-doc-html:
+	@$(RM) -r doc/html
+
+.PHONY: doc-text doc-text-force clean-doc-text
 doc-text-force:
 	@$(RM) docsrc/.sphinx-build.stamp doc/text/.sphinx-build.stamp
 
 doc-text: doc-text-force doc/text/.sphinx-build.stamp
 
+clean-doc-text:
+	@$(RM) -r doc/text
+
+.PHONY: doc clean-doc
 doc: man doc-html doc-text
+
+clean-doc: clean-man clean-doc-html clean-doc-text
+
+.PHONY: clean-local
+clean-local: clean-doc clean-sphinx-cache clean-docsrc
 
 dist-old:: distgit
 	@echo "creating configure"
@@ -1918,6 +1937,28 @@ endif
 	  $(LN_S) -f imtest sivtest && \
 	  $(LN_S) -f imtest smtptest && \
 	  $(LN_S) -f imtest synctest
+
+uninstall-hook: cyrus-makemaker-uninstall-workaround
+if PERL
+	for s in installsieve sieveshell; do \
+	    rm -f $(DESTDIR)$(bindir)/$$s; \
+	done
+endif
+
+.PHONY: cyrus-makemaker-uninstall-workaround
+
+# Workaround for deprecated no-op MakeMaker uninstall.
+# Don't remove the packlists themselves, otherwise MakeMaker uninstall will
+# crash.  Just remove the files MakeMaker uninstall won't remove itself.
+#
+# We have another layer of workaround in each module's Makefile that
+# removes the packlist after MakeMaker uninstall has finished ignoring it.
+cyrus-makemaker-uninstall-workaround:
+if PERL
+	( packlists=`find $(DESTDIR)$(libdir) -type f -name .packlist` && \
+	  echo "uninstalling files from packlists: $$packlists" && \
+	  rm -f `cat $$packlists` )
+endif
 
 install-binsymlinks:
 ## Let's symlink everything else

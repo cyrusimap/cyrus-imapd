@@ -43,8 +43,6 @@
 
 #include <config.h>
 
-#ifdef WITH_JSON
-
 #include <libical/ical.h>
 #include <jansson.h>
 
@@ -54,5 +52,3 @@ extern struct buf *icalcomponent_as_jcal_string(icalcomponent* comp);
 extern icalcomponent *jcal_string_as_icalcomponent(const struct buf *);
 extern const char *begin_jcal(struct buf *buf);
 extern void end_jcal(struct buf *buf);
-
-#endif  /* WITH_JSON */

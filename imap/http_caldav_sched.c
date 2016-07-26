@@ -71,7 +71,7 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-int caladdress_lookup(const char *addr, struct sched_param *param, const char *myuserid)
+int caladdress_lookup(const char *addr, struct caldav_sched_param *param, const char *myuserid)
 {
     const char *userid = addr, *p;
     int islocal = 1, found = 1;
@@ -106,7 +106,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param, const char *m
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
 
-    memset(param, 0, sizeof(struct sched_param));
+    memset(param, 0, sizeof(struct caldav_sched_param));
 
     if (testuser && !strcasecmp(userid, testuser)) {
         param->isyou = 1;
@@ -602,7 +602,7 @@ struct remote_rock {
 static void busytime_query_remote(const char *server __attribute__((unused)),
                                   void *data, void *rock)
 {
-    struct sched_param *remote = (struct sched_param *) data;
+    struct caldav_sched_param *remote = (struct caldav_sched_param *) data;
     struct remote_rock *rrock = (struct remote_rock *) rock;
     icalcomponent *comp;
     struct proplist *list;
@@ -703,7 +703,7 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
 
 static void free_sched_param_props(void *data)
 {
-    struct sched_param *sched_param = (struct sched_param *) data;
+    struct caldav_sched_param *sched_param = (struct caldav_sched_param *) data;
 
     if (sched_param) {
         struct proplist *prop, *next;
@@ -728,14 +728,14 @@ int sched_busytime_query(struct transaction_t *txn,
     char mailboxname[MAX_MAILBOX_BUFFER];
     icalproperty *prop = NULL, *next;
     const char *uid = NULL, *organizer = NULL;
-    struct sched_param sparam;
+    struct caldav_sched_param sparam;
     struct auth_state *org_authstate = NULL;
     xmlNodePtr root = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
     struct freebusy_filter calfilter;
     struct hash_table remote_table;
-    struct sched_param *remote = NULL;
+    struct caldav_sched_param *remote = NULL;
 
     if (!calendarprefix) {
         calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
@@ -835,7 +835,7 @@ int sched_busytime_query(struct transaction_t *txn,
             remote = hash_lookup(key, &remote_table);
             if (!remote) {
                 /* New remote - add it to the hash table */
-                remote = xzmalloc(sizeof(struct sched_param));
+                remote = xzmalloc(sizeof(struct caldav_sched_param));
                 if (sparam.server) remote->server = xstrdup(sparam.server);
                 remote->port = sparam.port;
                 remote->flags = sparam.flags;
@@ -959,7 +959,7 @@ int sched_busytime_query(struct transaction_t *txn,
 
 /* Deliver scheduling object to a remote recipient */
 static void sched_deliver_remote(const char *recipient,
-                                 struct sched_param *sparam,
+                                 struct caldav_sched_param *sparam,
                                  struct sched_data *sched_data)
 {
     int r;
@@ -1136,7 +1136,7 @@ static int deliver_merge_pollstatus(icalcomponent *ical, icalcomponent *request)
 
 
 static void sched_pollstatus(const char *organizer,
-                             struct sched_param *sparam, icalcomponent *ical,
+                             struct caldav_sched_param *sparam, icalcomponent *ical,
                              const char *voter)
 {
     struct auth_state *authstate;
@@ -1249,7 +1249,7 @@ deliver_merge_pollstatus(icalcomponent *ical __attribute__((unused)),
 }
 
 static void sched_pollstatus(const char *organizer __attribute__((unused)),
-                             struct sched_param *sparam __attribute__((unused)),
+                             struct caldav_sched_param *sparam __attribute__((unused)),
                              icalcomponent *ical __attribute__((unused)),
                              const char *voter __attribute__((unused)))
 {
@@ -1569,7 +1569,7 @@ static int deliver_merge_request(const char *attendee,
 
 /* Deliver scheduling object to local recipient */
 static void sched_deliver_local(const char *recipient,
-                                struct sched_param *sparam,
+                                struct caldav_sched_param *sparam,
                                 struct sched_data *sched_data,
                                 struct auth_state *authstate)
 {
@@ -1854,7 +1854,7 @@ void sched_deliver(const char *recipient, void *data, void *rock)
 {
     struct sched_data *sched_data = (struct sched_data *) data;
     struct auth_state *authstate = (struct auth_state *) rock;
-    struct sched_param sparam;
+    struct caldav_sched_param sparam;
     int islegal;
 
     /* Check SCHEDULE-FORCE-SEND value */
@@ -2928,11 +2928,11 @@ void sched_reply(const char *userid, const char *attendee,
     if (reply.itip) icalcomponent_free(reply.itip);
 }
 
-void sched_param_free(struct sched_param *sparam) {
+void sched_param_free(struct caldav_sched_param *sparam) {
     if (sparam->userid) free(sparam->userid);
     if (sparam->server) free(sparam->server);
     if (sparam->props) {
         free_sched_param_props(sparam->props);
     }
-    memset(sparam, 0, sizeof(struct sched_param));
+    memset(sparam, 0, sizeof(struct caldav_sched_param));
 }
