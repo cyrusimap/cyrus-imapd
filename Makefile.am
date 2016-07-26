@@ -1321,8 +1321,10 @@ imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
 
 # xxd cannot have path details in its input filename, otherwise it junks up
 # the variable names in the output file.  so do a tricky directory change.
+# the /dev/null redirection on cd is to prevent shell environments with
+# CDPATH echoing the path change on stdout and consequently into the .h file
 imap/http_caldav_js.h: imap/http_caldav.js
-	$(AM_V_GEN)(cd $(<D) && xxd -i $(<F)) > $@
+	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
