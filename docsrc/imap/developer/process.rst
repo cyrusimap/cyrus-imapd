@@ -4,7 +4,7 @@
 Development Process
 ===================
 
-We need to develop not just for ourselves, but for the legions who follow us. This means following good development process to provide transparency, maintainability and readability to what we're doing.
+We need to develop not just for ourselves, but for those who follow us. This means following good development process to provide transparency, maintainability and readability to what we're doing.
 
 Coding Style
 ============
@@ -16,7 +16,7 @@ Coding Style
 * You are not a compiler: code for readability, not compactness.
 * We are open source: coding security-by-obscurity is not necessary. Use semantically sensible function and variable names.
 * Comments. More comments. Still more comments. Nobody will know what your brilliant idea was when you wrote that gnarly piece of code unless you tell them.
-* Commit messages. Commit discrete changes, don't munge six different fixes into a single commit. And provide a clear message (preferably tied into a Maniphest task/Differential diff) of what problem these changes address.
+* Commit messages. Commit discrete changes, don't munge six different fixes into a single commit. And provide a clear message (preferably tied into a GitHub issue) of what problem these changes address.
 
 
 Making changes
@@ -27,7 +27,7 @@ Before you begin
 
 Found a bug? Got an enhancement? Great!
 
-Something to consider before you leap in with a new feature: this is an open source project. If your change isn't a basic part of what is already planned, will you be around to support it? Can you justify why it's in the best interests of the project to have your change included? We'd love to talk it through with you: contact us via the :ref:`mailing lists <feedback>`.
+New Feature considerations: this is an open source project. If your change isn't a basic part of what is already planned, will you be around to support it? Can you justify why it's in the best interests of the project to have your change included? We'd love to talk it through with you: contact us via the :ref:`mailing lists <feedback>`.
 
 Using GitHub
 ------------

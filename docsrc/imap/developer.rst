@@ -14,6 +14,7 @@ Getting Started
     developer/installguide
     developer/basicserver
     developer/developer-testing
+    developer/github-guide
     developer/process
     developer/architecture
     developer/jmap

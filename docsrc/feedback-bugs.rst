@@ -1,3 +1,5 @@
+.. _feedback-bugs:
+
 Reporting Bugs
 ==============
 
@@ -27,7 +29,7 @@ When reporting a bug, please provide the following information;
     Most Linux distributions allow you do get the full version with ``rpm -qv cyrus-sasl`` or ``dpkg -l cyrus-sasl``.
     If package management, for whatever reason, cannot tell you what version of Cyrus SASL you have, **what could?**
 
-If you run a development version of Cyrus IMAP or SASL (i.e. your own compile from GIT's master or any of the stable branches), please remember to use the -next version for the Bugzilla report.
+If you run a development version of Cyrus IMAP or SASL (i.e. your own compile from GIT's master or any of the stable branches), please remember to note that in the report.
 
 .. todo::
-    provide some text on logging a new ticket in our bugzilla, information to provide, etc. Possibly mention the life cycle of a product version series. 
+    provide some text on logging a new ticket, information to provide, etc. Possibly mention the life cycle of a product version series. 
