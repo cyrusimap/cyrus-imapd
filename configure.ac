@@ -1172,10 +1172,13 @@ xno)
     ;;
 x|xyes)
     # default args or --with-openssl
-    # try to enable, search in default system directories
     #
-    ssl_cppflags=
-    ssl_ldflags=
+    # Try pkg-config - OpenSSL >= 0.9.6 has openssl.pc
+    PKG_CHECK_MODULES(OPENSSL, openssl, [with_ssl=yes])
+    ssl_cppflags="$OPENSSL_CFLAGS"
+    ssl_ldflags="$OPENSSL_LIBS"
+    #
+    # If pkg-config doesn't work, search in default system directories
     ;;
 *)
     # --with-openssl=DIR
@@ -1183,7 +1186,11 @@ x|xyes)
     if test -d "$with_ssl"; then
         ssl_cppflags="-I${with_ssl}/include"
         ssl_ldflags=
-        CMU_ADD_LIBPATH_TO(${with_ssl}/lib, ssl_ldflags)
+        if test -d "${with_ssl}/lib64"; then
+            CMU_ADD_LIBPATH_TO(${with_ssl}/lib64, ssl_ldflags)
+        else
+            CMU_ADD_LIBPATH_TO(${with_ssl}/lib, ssl_ldflags)
+        fi
         with_ssl=yes
     else
         AC_WARN([Disabling OpenSSL - no include files found])
