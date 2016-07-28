@@ -178,10 +178,13 @@ static strarray_t *activefile_filter(const strarray_t *active, const strarray_t 
     int i;
 
     for (i = 0; i < active->count; i++) {
-        struct activeitem *item = activeitem_parse(strarray_nth(active, i));
+        const char *name = strarray_nth(active, i);
+        struct activeitem *item = activeitem_parse(name);
         /* we want to compress anything which can't possibly exist as well
          * as anything which matches the filter tiers */
-        if (!item || strarray_find(tiers, item->tier, 0) >= 0 || !xapian_rootdir(item->tier, partition))
+        if (!item || strarray_find(tiers, item->tier, 0) >= 0
+                  || strarray_find(tiers, name, 0) >= 0
+                  || !xapian_rootdir(item->tier, partition))
             strarray_append(res, strarray_nth(active, i));
         activeitem_free(item);
     }
