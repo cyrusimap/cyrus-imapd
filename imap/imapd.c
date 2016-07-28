@@ -8329,7 +8329,8 @@ static void cmd_starttls(char *tag, int imaps)
 
     result=tls_init_serverengine("imap",
                                  5,        /* depth to verify */
-                                 !imaps);  /* can client auth? */
+                                 !imaps,   /* can client auth? */
+                                 NULL);
 
     if (result == -1) {
 

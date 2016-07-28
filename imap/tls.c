@@ -679,7 +679,8 @@ static int tls_rand_init(void)
 // I am the server
 EXPORTED int     tls_init_serverengine(const char *ident,
                               int verifydepth,
-                              int askcert)
+                              int askcert,
+                              SSL_CTX **ret)
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
@@ -692,6 +693,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     enum enum_value tls_client_certs;
     int server_cipher_order;
     int timeout;
+
+    if (ret) *ret = s_ctx;
 
     /* Whether or not to use any client certificate CA context to
      * verify client SSL certificates with.
@@ -990,6 +993,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     }
 
     tls_serverengine = 1;
+    if (ret) *ret = s_ctx;
+
     return (0);
 }
 

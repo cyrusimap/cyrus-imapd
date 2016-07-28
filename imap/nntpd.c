@@ -4075,7 +4075,8 @@ static void cmd_starttls(int nntps)
 
     result=tls_init_serverengine("nntp",
                                  5,        /* depth to verify */
-                                 !nntps);  /* can client auth? */
+                                 !nntps,   /* can client auth? */
+                                 NULL);
 
     if (result == -1) {
 

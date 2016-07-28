@@ -1295,7 +1295,8 @@ static void cmd_starttls(int pop3s)
 
     result=tls_init_serverengine("pop3",
                                  5,        /* depth to verify */
-                                 !pop3s);  /* can client auth? */
+                                 !pop3s,   /* can client auth? */
+                                 NULL);
 
     if (result == -1) {
 

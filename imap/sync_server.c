@@ -873,7 +873,8 @@ static void cmd_starttls(void)
 
     result=tls_init_serverengine("csync",
                                  5,        /* depth to verify */
-                                 1);       /* can client auth? */
+                                 1,        /* can client auth? */
+                                 NULL);
 
     if (result == -1) {
         syslog(LOG_ERR, "error initializing TLS");
