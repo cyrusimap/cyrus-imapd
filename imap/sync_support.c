@@ -1643,6 +1643,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
             return IMAP_SYNC_CHECKSUM;
+        else if (!strncmp(errmsg.s, "IMAP_SYNC_BADSIEVE ",
+                          strlen("IMAP_SYNC_BADSIEVE ")))
+            return IMAP_SYNC_BADSIEVE;
         else if (!strncmp(errmsg.s, "IMAP_PROTOCOL_ERROR ",
                           strlen("IMAP_PROTOCOL_ERROR ")))
             return IMAP_PROTOCOL_ERROR;
@@ -3499,6 +3502,9 @@ static const char *sync_response(int r)
         break;
     case IMAP_SYNC_CHECKSUM:
         resp = "NO IMAP_SYNC_CHECKSUM Checksum Failure";
+        break;
+    case IMAP_SYNC_BADSIEVE:
+        resp = "NO IMAP_SYNC_BADSIEVE Sieve script compilation failure";
         break;
     case IMAP_PROTOCOL_ERROR:
         resp = "NO IMAP_PROTOCOL_ERROR Protocol error";
