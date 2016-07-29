@@ -879,8 +879,16 @@ static int sieve_find_script(const char *user, const char *domain,
             free(usercopy);
 
             if (!script) { /* default script */
+                char *bc_fname;
+
                 strlcat(fname, "defaultbc", size);
-                /* XXX T114 maybe check what defaultbc points to and rebuild it */
+
+                bc_fname = sieve_getdefaultbcfname(fname);
+                if (bc_fname) {
+                    sieve_rebuild(NULL, bc_fname, 0, NULL);
+                    free(bc_fname);
+                }
+
                 return 0;
             }
         }
