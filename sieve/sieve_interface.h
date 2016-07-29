@@ -219,7 +219,9 @@ void sieve_free_bytecode(bytecode_info_t **p);
 char *sieve_getbcfname(const char *script_fname);
 char *sieve_getscriptfname(const char *bc_name);
 
-/* Rebuild bc_fname from script_fname if needed or forced. */
+/* Rebuild bc_fname from script_fname if needed or forced.
+ * At least one of script_fname or bc_fname must be provided.
+ */
 int sieve_rebuild(const char *script_fname, const char *bc_fname,
                   int force, char **out_parse_errors);
 

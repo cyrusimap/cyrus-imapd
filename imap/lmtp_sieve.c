@@ -889,13 +889,8 @@ static int sieve_find_script(const char *user, const char *domain,
 
     /* don't do this for ~username ones */
     ext = strrchr(fname, '.');
-    if (ext && !strcmp(ext, ".bc")) {
-        char *script_fname = sieve_getscriptfname(fname);
-        if (script_fname) {
-            sieve_rebuild(script_fname, fname, 0, NULL);
-            free(script_fname);
-        }
-    }
+    if (ext && !strcmp(ext, ".bc"))
+        sieve_rebuild(NULL, fname, 0, NULL);
 
     return 0;
 }

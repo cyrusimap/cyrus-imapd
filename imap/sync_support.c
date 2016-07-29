@@ -1056,13 +1056,9 @@ int sync_sieve_upload(const char *userid, const char *name,
 
 #ifdef USE_SIEVE
     if (!r) {
-        char *bcname = sieve_getbcfname(newname);
-        if (bcname) {
-            r = sieve_rebuild(newname, bcname, /*force*/ 1, NULL);
-            if (r == SIEVE_PARSE_ERROR || r == SIEVE_FAIL)
-                r = IMAP_SYNC_BADSIEVE;
-            free(bcname);
-        }
+        r = sieve_rebuild(newname, NULL, /*force*/ 1, NULL);
+        if (r == SIEVE_PARSE_ERROR || r == SIEVE_FAIL)
+            r = IMAP_SYNC_BADSIEVE;
     }
 #endif
 
@@ -1082,15 +1078,9 @@ int sync_sieve_activate(const char *userid, const char *name)
     unlink(active);
 
 #ifdef USE_SIEVE
-    char *script = sieve_getscriptfname(target);
-    if (script) {
-        char *script_fname = strconcat(sieve_path, "/", script, NULL);
-        char *bc_fname= strconcat(sieve_path, "/", target, NULL);
-        sieve_rebuild(script_fname, bc_fname, 0, NULL);
-        free(bc_fname);
-        free(script_fname);
-        free(script);
-    }
+    char *bc_fname = strconcat(sieve_path, "/", target, NULL);
+    sieve_rebuild(NULL, bc_fname, 0, NULL);
+    free(bc_fname);
 #endif
 
     /* N.B symlink() does NOT verify target for anything but string validity,

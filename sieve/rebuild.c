@@ -102,7 +102,8 @@ EXPORTED char *sieve_getscriptfname(const char *bc_name)
 EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
                            int force, char **out_parse_errors)
 {
-    char new_bc_fname[MAX_MAILBOX_PATH + 1];
+    char new_bc_fname[MAX_MAILBOX_PATH + 1] = {0};
+    char *freeme = NULL;
     FILE *script_file = NULL;
     char *parse_errors = NULL;
     sieve_script_t *script = NULL;
@@ -111,6 +112,18 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     int r;
     size_t len;
 
+    if (!script_fname && !bc_fname)
+        return SIEVE_FAIL; /* XXX assert? */
+
+    if (!script_fname)
+        script_fname = freeme = sieve_getscriptfname(bc_fname);
+
+    if (!bc_fname)
+        bc_fname = freeme = sieve_getbcfname(script_fname);
+
+    if (!script_fname || !bc_fname)
+        return SIEVE_FAIL;
+
     /* exit early if bc is up to date */
     if (!force) {
         struct stat script_stat, bc_stat;
@@ -118,18 +131,21 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
         r = stat(script_fname, &script_stat);
         if (r) {
             syslog(LOG_DEBUG, "%s: stat %s: %m", __func__, script_fname);
-            return SIEVE_FAIL;
+            r = SIEVE_FAIL;
+            goto done;
         }
 
         r = stat(bc_fname, &bc_stat);
         if (r && errno != ENOENT) {
             syslog(LOG_DEBUG, "%s: stat %s: %m", __func__, bc_fname);
-            return SIEVE_FAIL;
+            r = SIEVE_FAIL;
+            goto done;
         }
 
         if (!r && bc_stat.st_mtime >= script_stat.st_mtime) {
             syslog(LOG_DEBUG, "%s: %s is up to date\n", __func__, bc_fname);
-            return SIEVE_OK;
+            r = SIEVE_OK;
+            goto done;
         }
     }
 
@@ -137,18 +153,21 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     if (!script_file) {
         syslog(LOG_ERR, "IOERROR: unable to open %s for reading: %m",
                         script_fname);
-        return IMAP_IOERROR;
+        r = IMAP_IOERROR;
+        goto done;
     }
 
     len = strlcpy(new_bc_fname, bc_fname, sizeof(new_bc_fname));
     if (len >= sizeof(new_bc_fname)) {
         syslog(LOG_DEBUG, "%s: filename too long: %s", __func__, bc_fname);
-        return SIEVE_FAIL;
+        r = SIEVE_FAIL;
+        goto done;
     }
     len = strlcat(new_bc_fname, ".NEW", sizeof(new_bc_fname));
     if (len >= sizeof(new_bc_fname)) {
         syslog(LOG_DEBUG, "%s: filename too long: %s", __func__, bc_fname);
-        return SIEVE_FAIL;
+        r = SIEVE_FAIL;
+        goto done;
     }
 
     bc_fd = open(new_bc_fname, O_CREAT|O_EXCL|O_WRONLY,
@@ -156,8 +175,8 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     if (bc_fd < 0) {
         syslog(LOG_ERR, "IOERROR: unable to open %s for writing: %m",
                         new_bc_fname);
-        fclose(script_file);
-        return IMAP_IOERROR;
+        r = IMAP_IOERROR;
+        goto done;
     }
 
     /* if an error occurs after this point, we need to unlink new_bc_fname */
@@ -194,7 +213,7 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
                       __func__, bc_fname, script_fname);
 
 done:
-    if (r) unlink(new_bc_fname);
+    if (r && new_bc_fname[0] != '\0') unlink(new_bc_fname);
 
     if (parse_errors) {
         if (out_parse_errors)
@@ -207,6 +226,7 @@ done:
     if (script) sieve_script_free(&script);
     if (bc_fd >= 0) close(bc_fd);
     if (script_file) fclose(script_file);
+    if (freeme) free(freeme);
 
     return r;
 }
