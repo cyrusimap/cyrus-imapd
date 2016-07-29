@@ -10333,19 +10333,19 @@ static void jmap_calendarevent_to_ical(icalcomponent *comp,
 
     /* summary */
     pe = jmap_readprop(event, "summary", create&&!exc, invalid, "s", &val);
-    if (pe > 0) {
+    if (pe > 0 && strlen(val)) {
         icalcomponent_set_summary(comp, val);
     }
 
     /* description */
     pe = jmap_readprop(event, "description", create&&!exc, invalid, "s", &val);
-    if (pe > 0) {
+    if (pe > 0 && strlen(val)) {
         icalcomponent_set_description(comp, val);
     }
 
     /* location */
     pe = jmap_readprop(event, "location", create&&!exc, invalid, "s", &val);
-    if (pe > 0) {
+    if (pe > 0 && strlen(val)) {
         icalcomponent_set_location(comp, val);
     }
 
