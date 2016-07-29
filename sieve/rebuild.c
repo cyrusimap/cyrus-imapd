@@ -99,6 +99,36 @@ EXPORTED char *sieve_getscriptfname(const char *bc_name)
     return xstrdup(tmp);
 }
 
+EXPORTED char *sieve_getdefaultbcfname(const char *defaultbc)
+{
+    char tmp[MAX_MAILBOX_PATH + 1];
+    char target[MAX_MAILBOX_PATH + 1];
+    char *tail;
+    size_t len;
+    ssize_t llen;
+
+    len = strlcpy(tmp, defaultbc, sizeof(tmp));
+    if (len >= sizeof(tmp))
+        return NULL;
+
+    tail = strrchr(tmp, '/');
+    if (!tail || strcmp(tail, "/defaultbc"))
+        return NULL;
+
+    llen = readlink(defaultbc, target, sizeof(target) - 1);
+    if (llen == -1)
+        return NULL;
+
+    target[llen] = '\0';
+    *(tail + 1) = '\0';
+
+    len = strlcat(tmp, target, sizeof(tmp));
+    if (len >= sizeof(tmp))
+        return NULL;
+
+    return xstrdup(tmp);
+}
+
 EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
                            int force, char **out_parse_errors)
 {

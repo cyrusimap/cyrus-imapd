@@ -880,6 +880,7 @@ static int sieve_find_script(const char *user, const char *domain,
 
             if (!script) { /* default script */
                 strlcat(fname, "defaultbc", size);
+                /* XXX T114 maybe check what defaultbc points to and rebuild it */
                 return 0;
             }
         }
