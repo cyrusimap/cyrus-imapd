@@ -457,8 +457,6 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         return HTTP_FORBIDDEN;
     }
 
-    tgt->urlprefix = namespace_principal.prefix;
-
     /* Skip namespace */
     p += len;
     if (!*p || !*++p) {
@@ -511,7 +509,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 /* Parse request-target path in Cal/CardDAV namespace */
 EXPORTED int calcarddav_parse_path(const char *path,
                                    struct request_target_t *tgt,
-                                   const char *urlprefix, const char *mboxprefix,
+                                   const char *mboxprefix,
                                    const char **errstr)
 {
     char *p, *owner = NULL, *collection = NULL, *freeme = NULL;
@@ -528,14 +526,13 @@ EXPORTED int calcarddav_parse_path(const char *path,
     p = tgt->path;
 
     /* Sanity check namespace */
-    len = strlen(urlprefix);
+    len = strlen(tgt->namespace->prefix);
     if (strlen(p) < len ||
-        strncmp(urlprefix, p, len) || (path[len] && path[len] != '/')) {
+        strncmp(tgt->namespace->prefix, p, len) || (path[len] && path[len] != '/')) {
         *errstr = "Namespace mismatch request target path";
         return HTTP_FORBIDDEN;
     }
 
-    tgt->urlprefix = urlprefix;
     tgt->mboxprefix = mboxprefix;
 
     /* Default to bare-bones Allow bits */
@@ -1527,7 +1524,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->req_tgt->namespace == URL_NS_PRINCIPAL) {
+    if (fctx->req_tgt->namespace->id == URL_NS_PRINCIPAL) {
         if (fctx->req_tgt->userid)
             xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
         else
@@ -1796,7 +1793,7 @@ int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
     add_suppriv(agg, "read-current-user-privilege-set", NULL, 1,
                 "Read current user privilege set");
 
-    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+    if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
         if (fctx->req_tgt->collection) {
             ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 
@@ -2082,7 +2079,7 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
                        name, ns, NULL, 0);
 
     if (!fctx->req_tgt->resource) {
-        if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+        if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
             flags = PRIV_IMPLICIT;
 
             if (fctx->req_tgt->collection) {
@@ -2123,7 +2120,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
             return HTTP_UNAUTHORIZED;
     }
 
-    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+    if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
         flags = PRIV_IMPLICIT;
 
         if (fctx->req_tgt->collection) {
@@ -3258,7 +3255,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                     !strncmp(namespace_principal.prefix, uri->path, plen) &&
                     uri->path[plen] == '/') {
                     memset(&tgt, 0, sizeof(struct request_target_t));
-                    tgt.namespace = URL_NS_PRINCIPAL;
+                    tgt.namespace = &namespace_principal;
                     /* XXX: there is no doubt that this leaks memory */
                     r = principal_parse_path(uri->path, &tgt, &errstr);
                     if (!r && tgt.userid) userid = tgt.userid;
@@ -3684,7 +3681,7 @@ static int dav_move_collection(struct transaction_t *txn,
     if (!r && recursive) {
         char ombn[MAX_MAILBOX_BUFFER];
         struct move_rock mrock =
-            { ++omlen, ++nmlen, BUF_INITIALIZER, dest_tgt->urlprefix, NULL, {0} };
+            { ++omlen, ++nmlen, BUF_INITIALIZER, dest_tgt->namespace->prefix, NULL, {0} };
 
         strcpy(ombn, oldmailboxname);
         strcat(ombn, ".");
@@ -4402,7 +4399,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
                               &txn->req_tgt, &txn->error.desc);
     if (ret) return ret;
 
-    if (txn->req_tgt.namespace == URL_NS_PRINCIPAL) {
+    if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
         /* Special "principal" */
         if (txn->req_tgt.flags == TGT_SERVER_INFO) return get_server_info(txn);
 
@@ -5174,13 +5171,13 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
     /* We only match known types */
-    if (!(mbentry->mbtype & fctx->req_tgt->mboxtype)) goto done;
+    if (!(mbentry->mbtype & fctx->req_tgt->namespace->mboxtype)) goto done;
 
     p = strrchr(mboxname, '.');
     if (!p) goto done;
     p++; /* skip dot */
 
-    switch (fctx->req_tgt->namespace) {
+    switch (fctx->req_tgt->namespace->id) {
     case URL_NS_DRIVE:
         if (fctx->req_tgt->flags == TGT_DRIVE_USER) {
             /* Special case of listing users with DAV #drives */
@@ -5226,7 +5223,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
-        len = make_collection_url(&writebuf, fctx->req_tgt->urlprefix,
+        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix,
                                   mboxname, fctx->req_tgt->userid, NULL);
 
         /* copy it all back into place... in theory we should check against
@@ -5440,7 +5437,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     preload_proplist(props, &fctx);
 
     /* Generate responses */
-    if (txn->req_tgt.namespace == URL_NS_PRINCIPAL) {
+    if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
         if (!depth || !(fctx.prefer & PREFER_NOROOT)) {
             /* Add response for target URL */
             xml_add_response(&fctx, 0, 0);
@@ -5521,11 +5518,11 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                                   propfind_by_collection, &fctx,
                                   MBOXTREE_SKIP_ROOT);
 
-                switch (txn->req_tgt.namespace) {
+                switch (txn->req_tgt.namespace->id) {
                 case URL_NS_DRIVE:
                     if (txn->req_tgt.flags == TGT_DRIVE_ROOT) {
                         /* Add a response for 'user' hierarchy */
-                        buf_setcstr(&fctx.buf, txn->req_tgt.urlprefix);
+                        buf_setcstr(&fctx.buf, txn->req_tgt.namespace->prefix);
                         buf_printf(&fctx.buf, "/%s/", USER_COLLECTION_PREFIX);
                         strlcpy(fctx.req_tgt->path,
                                 buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
@@ -5854,7 +5851,7 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
-    txn.req_tgt.urlprefix = top_txn->req_tgt.urlprefix;
+    txn.req_tgt.namespace = top_txn->req_tgt.namespace;
     txn.req_tgt.mboxprefix = top_txn->req_tgt.mboxprefix;
 
     /* Create header cache */
@@ -7102,7 +7099,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
                               propfind_by_collection, fctx,
                               MBOXTREE_SKIP_ROOT);
 
-            switch (fctx->req_tgt->namespace) {
+            switch (fctx->req_tgt->namespace->id) {
             case URL_NS_CALENDAR:
             case URL_NS_ADDRESSBOOK:
                 /* Add responses for shared collections */
@@ -9089,9 +9086,9 @@ static int notify_put(struct transaction_t *txn, void *obj,
                     const char *errstr;
 
                     memset(&tgt, 0, sizeof(struct request_target_t));
+                    tgt.namespace = txn->req_tgt.namespace;
                     value = xmlNodeGetContent(xmlFirstElementChild(node));
                     calcarddav_parse_path((const char *) value, &tgt,
-                                          txn->req_tgt.urlprefix,
                                           txn->req_tgt.mboxprefix, &errstr);
                     xmlFree(value);
                     free(tgt.userid);
@@ -9404,7 +9401,7 @@ int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
         return HTTP_NOT_FOUND;
     }
 
-    buf_setcstr(&fctx->buf, fctx->req_tgt->urlprefix);
+    buf_setcstr(&fctx->buf, fctx->req_tgt->namespace->prefix);
 
     if (mbname_localpart(mbname)) {
         const char *domain =
@@ -9512,7 +9509,6 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
         return HTTP_FORBIDDEN;
     }
 
-    tgt->urlprefix = namespace_notify.prefix;
     tgt->mboxprefix = config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX);
 
     /* Default to bare-bones Allow bits */
@@ -9616,8 +9612,8 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
                USER_COLLECTION_PREFIX, fctx->req_tgt->userid);
 
     memset(&tgt, 0, sizeof(struct request_target_t));
+    tgt.namespace = &namespace_notify;
     notify_parse_path(buf_cstring(&my_fctx.buf), &tgt, &err);
-    tgt.mboxtype = MBTYPE_COLLECTION;
 
     my_fctx.req_tgt = &tgt;
     my_fctx.mode = fctx->mode;

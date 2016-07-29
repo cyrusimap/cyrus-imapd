@@ -453,7 +453,7 @@ static void my_carddav_shutdown(void)
 static int carddav_parse_path(const char *path,
                               struct request_target_t *tgt, const char **errstr)
 {
-    return calcarddav_parse_path(path, tgt, namespace_addressbook.prefix,
+    return calcarddav_parse_path(path, tgt,
                                  config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
                                  errstr);
 }

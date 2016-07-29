@@ -1202,9 +1202,8 @@ static void cmdloop(void)
             }
         }
         if ((namespace = namespaces[i])) {
-            txn.req_tgt.namespace = namespace->id;
+            txn.req_tgt.namespace = namespace;
             txn.req_tgt.allow = namespace->allow;
-            txn.req_tgt.mboxtype = namespace->mboxtype;
 
             /* Check if method is supported in this namespace */
             meth_t = &namespace->methods[txn.meth];
@@ -2961,7 +2960,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     }
 
     /* Get realm - based on namespace of URL */
-    switch (txn->req_tgt.namespace) {
+    switch (txn->req_tgt.namespace->id) {
     case URL_NS_DEFAULT:
     case URL_NS_PRINCIPAL:
         realm = config_getstring(IMAPOPT_DAV_REALM);
@@ -3624,10 +3623,8 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
                 if (meth == METH_UNKNOWN) txn->flags.cors = 0;
                 else {
                     /* Check Method against those supported by the resource */
-                    for (i = 0; namespaces[i] &&
-                             namespaces[i]->id != txn->req_tgt.namespace; i++);
-
-                    if (!namespaces[i]->methods[meth].proc) txn->flags.cors = 0;
+                    if (!txn->req_tgt.namespace->methods[meth].proc)
+                        txn->flags.cors = 0;
                 }
             }
         }

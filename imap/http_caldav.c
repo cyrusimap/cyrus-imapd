@@ -829,15 +829,13 @@ static int caldav_parse_path(const char *path,
 {
     int r;
 
-    r = calcarddav_parse_path(path, tgt, (tgt->namespace == URL_NS_FREEBUSY) ?
-                              namespace_freebusy.prefix :
-                              namespace_calendar.prefix,
+    r = calcarddav_parse_path(path, tgt,
                               config_getstring(IMAPOPT_CALENDARPREFIX),
                               errstr);
     if (r) return r;
 
     /* Set proper Allow bits based on collection */
-    if (tgt->namespace == URL_NS_FREEBUSY) {
+    if (tgt->namespace->id == URL_NS_FREEBUSY) {
         /* Read-only collections */
         tgt->allow = ALLOW_READ;
     }

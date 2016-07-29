@@ -207,7 +207,7 @@ struct request_line_t {
 struct request_target_t {
     char path[MAX_MAILBOX_PATH+1]; /* working copy of URL path */
     char *tail;                 /* tail of original request path */
-    unsigned namespace;         /* namespace of path */
+    const struct namespace_t *namespace; /* namespace of path */
     char *userid;               /* owner of collection (needs freeing) */
     char *collection;           /* ptr to collection name */
     size_t collen;
@@ -215,9 +215,7 @@ struct request_target_t {
     size_t reslen;
     unsigned flags;             /* target-specific flags/meta-data */
     unsigned long allow;        /* bitmask of allowed features/methods */
-    int mboxtype;               /* mailbox types to match on findall */
     mbentry_t *mbentry;         /* mboxlist entry of target collection */
-    const char *urlprefix;      /* namespace prefix */
     const char *mboxprefix;     /* mailbox prefix */
 };
 

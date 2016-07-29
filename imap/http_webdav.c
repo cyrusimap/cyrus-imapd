@@ -375,7 +375,6 @@ static int webdav_parse_path(const char *path,
         return HTTP_FORBIDDEN;
     }
 
-    tgt->urlprefix = namespace_drive.prefix;
     tgt->mboxprefix = config_getstring(IMAPOPT_DAVDRIVEPREFIX);
 
     /* Default to bare-bones Allow bits */
