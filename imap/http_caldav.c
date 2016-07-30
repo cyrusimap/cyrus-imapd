@@ -95,6 +95,7 @@
 #include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xstrnstr.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
@@ -1629,9 +1630,9 @@ int list_tzid_cb(const char *tzid,
     struct list_tzid_rock *tzrock = (struct list_tzid_rock *) rock;
 
     /* Skip Etc and other non-standard zones */
-    if (strchr(tzid, '/') && strncmp(tzid, "Etc/", 4)) {
+    if (strnchr(tzid, '/', tzidlen) && strncmp(tzid, "Etc/", 4)) {
         buf_printf_markup(tzrock->body, *tzrock->level,
-                          "<option>%s</option>", tzid);
+                          "<option>%.*s</option>", tzidlen, tzid);
     }
 
     return 0;
