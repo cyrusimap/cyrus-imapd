@@ -204,11 +204,11 @@ EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **
 }
 
 
-static int tzmatch(const char *str, const char *pat)
+static int tzmatch(const char *str, size_t slen, const char *pat)
 {
-    for ( ; *pat; str++, pat++) {
+    for ( ; *pat; str++, slen--, pat++) {
         /* End of string and more pattern */
-        if (!*str && *pat != '*') return 0;
+        if (!slen && *pat != '*') return 0;
 
         switch (*pat) {
         case '*':
@@ -218,7 +218,7 @@ static int tzmatch(const char *str, const char *pat)
             /* Trailing star matches anything */
             if (!*pat) return 1;
 
-            while (*str) if (tzmatch(str++, pat)) return 1;
+            while (slen) if (tzmatch(str++, slen--, pat)) return 1;
             return 0;
 
         case ' ':
@@ -235,7 +235,7 @@ static int tzmatch(const char *str, const char *pat)
     }
 
     /* Did we reach end of string? */
-    return (!*str);
+    return (!slen);
 }
 
 
@@ -270,7 +270,7 @@ static int find_p(void *rock,
 
     if (!frock->find) return 1;
     if (frock->tzid_only) return (tzidlen == strlen(frock->find));
-    return tzmatch(tzid, frock->find);
+    return tzmatch(tzid, tzidlen, frock->find);
 }
 
 static int find_cb(void *rock,
