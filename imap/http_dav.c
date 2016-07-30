@@ -84,6 +84,7 @@
 #include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xstrnstr.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -7826,16 +7827,6 @@ int meth_unlock(struct transaction_t *txn, void *params)
     mailbox_close(&mailbox);
 
     return ret;
-}
-
-
-static char *strnchr(const char *s, int c, size_t n)
-{
-    if (!s) return NULL;
-
-    for (; n; n--, s++) if (*s == c) return ((char *) s);
-
-    return NULL;
 }
 
 
