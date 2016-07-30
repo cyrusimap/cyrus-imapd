@@ -569,12 +569,13 @@ static int list_cb(const char *tzid, int tzidlen,
     char tzidbuf[200], etag[32], lastmod[RFC3339_DATETIME_MAX];
     json_t *tz;
 
+    snprintf(tzidbuf, sizeof(tzidbuf), "%.*s", tzidlen, tzid);
+
     if (lrock->tztable) {
-        if (hash_lookup(tzid, lrock->tztable)) return 0;
-        hash_insert(tzid, (void *) 0xDEADBEEF, lrock->tztable);
+        if (hash_lookup(tzidbuf, lrock->tztable)) return 0;
+        hash_insert(tzidbuf, (void *) 0xDEADBEEF, lrock->tztable);
     }
 
-    strlcpy(tzidbuf, tzid, tzidlen+1);
     sprintf(etag, "%u-%ld", strhash(tzidbuf), zi->dtstamp);
     time_to_rfc3339(zi->dtstamp, lastmod, RFC3339_DATETIME_MAX);
 
