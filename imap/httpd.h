@@ -53,6 +53,10 @@
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
 
+#ifdef HAVE_NGHTTP2
+#include <nghttp2/nghttp2.h>
+#endif /* HAVE_NGHTTP2 */
+
 #include "annotate.h" /* for strlist */
 #include "hash.h"
 #include "http_client.h"
@@ -161,13 +165,16 @@ enum {
                           |ALLOW_PROPPATCH|ALLOW_MKCOL|ALLOW_ACL)
 
 
+struct transaction_t;
+
 struct auth_scheme_t {
     unsigned idx;               /* Index value of the scheme */
     const char *name;           /* HTTP auth scheme name */
     const char *saslmech;       /* Corresponding SASL mech name */
     unsigned flags;             /* Bitmask of requirements/features */
                                 /* Optional function to send success data */
-    void (*send_success)(const char *name, const char *data);
+    void (*send_success)(struct transaction_t *txn,
+                         const char *name, const char *data);
                                 /* Optional function to recv success data */
     const char *(*recv_success)(hdrcache_t hdrs);
 };
@@ -286,7 +293,7 @@ struct resp_body_t {
 
 /* Transaction flags */
 struct txn_flags_t {
-    unsigned long ver1_0   : 1;         /* Request from HTTP/1.0 client */
+    unsigned long ver      : 2;         /* HTTP version of request */
     unsigned long conn     : 3;         /* Connection opts on req/resp */
     unsigned long override : 1;         /* HTTP method override */
     unsigned long cors     : 3;         /* Cross-Origin Resource Sharing */
@@ -298,8 +305,38 @@ struct txn_flags_t {
     unsigned long trailer  : 1;         /* Headers which will be in trailer */
 };
 
+/* HTTP connection context */
+struct http_connection {
+    struct protstream *pin;             /* Input protstream */
+    struct protstream *pout;            /* Output protstream */
+
+    int gzip_enabled;                   /* Is gzip compression enabled? */
+#ifdef HAVE_ZLIB
+    z_stream zstrm;                     /* Compression context */
+#endif
+
+#ifdef HAVE_NGHTTP2
+    nghttp2_session *http2_session;     /* HTTP/2 session context */
+    nghttp2_option *http2_options;      /* Config options for HTTP/2 session */
+};
+
+#define HTTP2_MAX_HEADERS  100
+
+/* HTTP/2 stream context */
+struct http2_stream {
+    int32_t stream_id;                  /* Stream ID */
+    size_t num_resp_hdrs;               /* Number of response headers */
+    nghttp2_nv resp_hdrs[HTTP2_MAX_HEADERS]; /* Array of response headers */
+#endif /* HAVE_NGHTTP2 */
+};
+
+
 /* Transaction context */
 struct transaction_t {
+    struct http_connection *conn;       /* Global connection context */
+#ifdef HAVE_NGHTTP2
+    struct http2_stream http2;          /* HTTP/2 stream data */
+#endif
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */
@@ -310,12 +347,10 @@ struct transaction_t {
     struct body_t req_body;             /* Buffered request body */
     struct auth_challenge_t auth_chal;  /* Authentication challenge */
     const char *location;               /* Location of resource */
+    const char *protocol;               /* Upgrade protocol token */
     struct error_t error;               /* Error response meta-data */
     struct resp_body_t resp_body;       /* Response body meta-data */
-#ifdef HAVE_ZLIB
-    z_stream zstrm;                     /* Compression context */
     struct buf zbuf;                    /* Compression buffer */
-#endif
     struct buf buf;                     /* Working buffer - currently used for:
                                            httpd:
                                              - telemetry of auth'd request
@@ -330,6 +365,13 @@ struct transaction_t {
                                            http_ischedule:
                                              - error desc string
                                         */
+};
+
+/* HTTP version flags */
+enum {
+    VER_1_0 =           0,
+    VER_1_1 =           1,
+    VER_2 =             2
 };
 
 /* Connection token flags */
@@ -458,7 +500,10 @@ extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(long code);
 extern char *rfc3339date_gen(char *buf, size_t len, time_t t);
 extern char *httpdate_gen(char *buf, size_t len, time_t t);
-extern void comma_list_hdr(const char *hdr, const char *vals[],
+extern void simple_hdr(struct transaction_t *txn,
+                       const char *name, const char *value, ...);
+extern void comma_list_hdr(struct transaction_t *txn,
+                           const char *hdr, const char *vals[],
                            unsigned flags, ...);
 extern void response_header(long code, struct transaction_t *txn);
 extern void buf_printf_markup(struct buf *buf, unsigned level,

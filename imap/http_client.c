@@ -90,7 +90,7 @@ int is_mediatype(const char *pat, const char *type)
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified)
  */
-int http_parse_framing(hdrcache_t hdrs, struct body_t *body,
+int http_parse_framing(int http2, hdrcache_t hdrs, struct body_t *body,
                        const char **errstr)
 {
     static unsigned max_msgsize = 0;
@@ -110,6 +110,11 @@ int http_parse_framing(hdrcache_t hdrs, struct body_t *body,
 
     /* Check for Transfer-Encoding */
     if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
+        if (http2) {
+            *errstr = "Transfer-Encoding not allowed in HTTP/2";
+            return HTTP_BAD_REQUEST;
+        }
+
         for (; *hdr; hdr++) {
             tok_t tok = TOK_INITIALIZER(*hdr, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
             char *token;
@@ -198,20 +203,19 @@ int http_read_body(struct protstream *pin, struct protstream *pout,
     unsigned n;
     int r = 0;
 
-    syslog(LOG_DEBUG, "read_body(%#x)", body->flags);
+    syslog(LOG_DEBUG, "read_body(flags=%#x, framing=%d)", body->flags, body->framing);
 
     if (body->flags & BODY_DONE) return 0;
     body->flags |= BODY_DONE;
 
-    if (!(body->flags & BODY_DISCARD)) buf_reset(&body->payload);
-    else if (body->flags & BODY_CONTINUE) {
+    if ((body->flags & BODY_DISCARD) && (body->flags & BODY_CONTINUE)) {
         /* Don't care about the body and client hasn't sent it, we're done */
         return 0;
     }
 
     if (body->framing == FRAMING_UNKNOWN) {
         /* Get message framing */
-        r = http_parse_framing(hdrs, body, errstr);
+        r = http_parse_framing(0, hdrs, body, errstr);
         if (r) return r;
     }
 
@@ -224,6 +228,10 @@ int http_read_body(struct protstream *pin, struct protstream *pout,
 
     /* Read and buffer the body */
     switch (body->framing) {
+    case FRAMING_HTTP2:
+        /* Data has already been read */
+        break;
+
     case FRAMING_LENGTH:
         /* Read 'len' octets */
         for (; body->len; body->len -= n) {

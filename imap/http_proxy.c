@@ -628,6 +628,7 @@ static void send_response(const char *statline, hdrcache_t hdrs,
     write_forwarding_hdrs(httpd_out, hdrs, HTTP_VERSION, NULL);
     if (flags->conn) {
         /* Construct Connection header */
+        struct transaction_t txn;
         const char *conn_tokens[] =
             { "close", "Upgrade", "Keep-Alive", NULL };
 
@@ -635,7 +636,8 @@ static void send_response(const char *statline, hdrcache_t hdrs,
             prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
         }
 
-        comma_list_hdr("Connection", conn_tokens, flags->conn);
+        txn.flags.ver = flags->ver;
+        comma_list_hdr(&txn, "Connection", conn_tokens, flags->conn);
     }
     if (httpd_tls_done) {
         prot_puts(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
@@ -647,7 +649,7 @@ static void send_response(const char *statline, hdrcache_t hdrs,
         /* Empty body -- use  payload headers from response, if any */
         const char **hdr;
 
-        if (!flags->ver1_0 &&
+        if (flags->ver == VER_1_1 &&
             (hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
             prot_printf(httpd_out, "Transfer-Encoding: %s\r\n", hdr[0]);
             if ((hdr = spool_getheader(hdrs, "Trailer"))) {
@@ -690,13 +692,13 @@ static unsigned pipe_chunk(struct protstream *pin, struct protstream *pout,
 /* Proxy (pipe) a response body to a client/server. */
 static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
                           hdrcache_t resp_hdrs, struct body_t *resp_body,
-                          int ver1_0, const char **errstr)
+                          int ver, const char **errstr)
 {
     char buf[PROT_BUFSIZE];
 
     if (resp_body->framing == FRAMING_UNKNOWN) {
         /* Get message framing */
-        int r = http_parse_framing(resp_hdrs, resp_body, errstr);
+        int r = http_parse_framing(0, resp_hdrs, resp_body, errstr);
         if (r) return r;
     }
 
@@ -733,7 +735,7 @@ static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
             }
             else if (chunk > resp_body->max - resp_body->len)
                 return HTTP_PAYLOAD_TOO_LARGE;
-            else if (!ver1_0) prot_puts(pout, buf);
+            else if (ver == VER_1_1) prot_puts(pout, buf);
 
             if (chunk) {
                 /* Read 'chunk' octets */
@@ -752,7 +754,7 @@ static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
                         *errstr = "Error reading trailer";
                         return HTTP_BAD_GATEWAY;
                     }
-                    else if (!ver1_0) prot_puts(pout, buf);
+                    else if (ver == VER_1_1) prot_puts(pout, buf);
                 }
             }
 
@@ -762,7 +764,7 @@ static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
                 *errstr = "Missing CRLF following chunk/trailer";
                 return HTTP_BAD_GATEWAY;
             }
-            else if (!ver1_0) prot_puts(pout, buf);
+            else if (ver == VER_1_1) prot_puts(pout, buf);
 
         } while (chunk);
 
@@ -893,7 +895,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
             if (txn->meth == METH_HEAD) break;
 
             if (pipe_resp_body(be->in, httpd_out, resp_hdrs, &resp_body,
-                               txn->flags.ver1_0, &txn->error.desc)) {
+                               txn->flags.ver, &txn->error.desc)) {
                 /* Couldn't pipe the body and can't finish response */
                 txn->flags.conn = CONN_CLOSE;
             }

@@ -64,6 +64,7 @@ struct body_t {
 /* Message Framing flags */
 enum {
     FRAMING_UNKNOWN = 0,
+    FRAMING_HTTP2,
     FRAMING_LENGTH,
     FRAMING_CHUNKED,
     FRAMING_CLOSE
@@ -116,7 +117,7 @@ enum {
 
 
 extern int is_mediatype(const char *pat, const char *type);
-extern int http_parse_framing(hdrcache_t hdrs, struct body_t *body,
+extern int http_parse_framing(int http2, hdrcache_t hdrs, struct body_t *body,
                               const char **errstr);
 extern int http_read_body(struct protstream *pin, struct protstream *pout,
                           hdrcache_t hdrs, struct body_t *body,
