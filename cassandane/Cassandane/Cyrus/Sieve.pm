@@ -279,6 +279,45 @@ EOF
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 }
 
+sub test_deliver_compile
+{
+    my ($self) = @_;
+
+    my $target = "INBOX.target";
+
+    xlog "Create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($target)
+	 or die "Cannot create $target: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Install a sieve script filing all mail into the target folder";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto"];
+fileinto "$target";
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog "Delete the compiled bytecode";
+    my $sieve_dir = $self->{instance}->get_sieve_script_dir('cassandane');
+    my $fname = "$sieve_dir/test1.bc";
+    unlink $fname or die "Cannot unlink $fname: $!";
+
+    sleep 1; # so the two deliveries get different syslog timestamps
+
+    xlog "Deliver another message - lmtpd should rebuild the missing bytecode";
+    my $msg2 = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg2);
+
+    xlog "Check that both messages made it to the target";
+    $self->{store}->set_folder($target);
+    $self->check_messages({ 1 => $msg1, 2 => $msg2 }, check_guid => 0);
+}
+
 sub badscript_common
 {
     my ($self) = @_;
