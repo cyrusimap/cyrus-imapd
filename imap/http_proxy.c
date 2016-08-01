@@ -629,6 +629,7 @@ static void send_response(const char *statline, hdrcache_t hdrs,
     if (flags->conn) {
         /* Construct Connection header */
         struct transaction_t txn;
+        struct http_connection conn = { .pout = httpd_out };
         const char *conn_tokens[] =
             { "close", "Upgrade", "Keep-Alive", NULL };
 
@@ -636,6 +637,7 @@ static void send_response(const char *statline, hdrcache_t hdrs,
             prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
         }
 
+        txn.conn = &conn;
         txn.flags.ver = flags->ver;
         comma_list_hdr(&txn, "Connection", conn_tokens, flags->conn);
     }
