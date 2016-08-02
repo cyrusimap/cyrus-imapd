@@ -1250,6 +1250,8 @@ static int starttls(struct transaction_t *txn, int *http2)
         /* enable TLS ALPN extension */
         SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, http2);
     }
+#else
+    (void) http2; /* silence 'unused variable http2' warning */
 #endif
 
     result=tls_start_servertls(0, /* read */
@@ -1911,7 +1913,7 @@ static void cmdloop(struct http_connection *conn)
 #endif
 
     for (;;) {
-        int ret = 0, r;
+        int ret = 0;
 
         /* Reset txn state */
         transaction_reset(&txn);
@@ -1923,7 +1925,7 @@ static void cmdloop(struct http_connection *conn)
             if (conn->http2_session &&
                 nghttp2_session_want_write(conn->http2_session)) {
                 /* Send queued frame(s) */
-                r = nghttp2_session_send(conn->http2_session);
+                int r = nghttp2_session_send(conn->http2_session);
                 if (r) {
                     syslog(LOG_ERR,
                            "nghttp2_session_send: %s", nghttp2_strerror(r));
@@ -1960,7 +1962,7 @@ static void cmdloop(struct http_connection *conn)
             if (nghttp2_session_want_read(conn->http2_session)) {
                 if (!ret) {
                     /* Read frame(s) */
-                    r = nghttp2_session_recv(conn->http2_session);
+                    int r = nghttp2_session_recv(conn->http2_session);
                     if (!r) continue;
                     else if (r != NGHTTP2_ERR_EOF) {
                         syslog(LOG_WARNING, "nghttp2_session_recv: %s (%s)",
@@ -2567,6 +2569,8 @@ EXPORTED int end_headers(struct transaction_t *txn, long code)
 
         return 0;
     }
+#else
+    (void) code; /* silence 'unused variable code' warning */
 #endif /* HAVE_NGHTTP2 */
 
     /* CRLF terminating the header block */
