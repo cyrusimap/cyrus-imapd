@@ -2036,7 +2036,7 @@ static void cmdloop(struct http_connection *conn)
 
             /* Read remainder of preface */
             prot_readbuf(httpd_in, &txn.req_body.payload,
-                         NGHTTP2_CLIENT_MAGIC - strlen(req_line->buf));
+                         NGHTTP2_CLIENT_MAGIC_LEN - strlen(req_line->buf));
 
             /* Start HTTP/2 */
             ret = starthttp2(conn, 0, &txn);
