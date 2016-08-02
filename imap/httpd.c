@@ -1236,7 +1236,7 @@ static int starttls(struct transaction_t *txn, int *http2)
     if (result == -1) {
         syslog(LOG_ERR, "error initializing TLS");
 
-        txn->error.desc = "Error initializing TLS";
+        if (txn) txn->error.desc = "Error initializing TLS";
         return HTTP_SERVER_ERROR;
     }
 
@@ -1263,7 +1263,7 @@ static int starttls(struct transaction_t *txn, int *http2)
     if (result == -1) {
         syslog(LOG_NOTICE, "starttls failed: %s", httpd_clienthost);
 
-        txn->error.desc = "Error negotiating TLS";
+        if (txn) txn->error.desc = "Error negotiating TLS";
         return HTTP_BAD_REQUEST;
     }
 
