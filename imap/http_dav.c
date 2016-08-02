@@ -6683,27 +6683,32 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
     int r, ret = 0;
     struct mailbox *mailbox = NULL;
     xmlNodePtr node;
-    struct buf uri = BUF_INITIALIZER;
 
     /* Get props for each href */
     for (node = inroot->children; node; node = node->next) {
         if ((node->type == XML_ELEMENT_NODE) &&
             !xmlStrcmp(node->name, BAD_CAST "href")) {
             xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
-            int len = xmlStrlen(href);
+            xmlURIPtr uri;
             struct request_target_t tgt;
             struct dav_data *ddata;
 
-            buf_ensure(&uri, len+1);
-            xmlURIUnescapeString((const char *) href, len, uri.s);
-            uri.len = strlen(uri.s);
+            /* Parse the URI */
+            uri = parse_uri(METH_REPORT, (const char *) href,
+                            1 /* path required */, &fctx->err->desc);
             xmlFree(href);
+            if (!uri) {
+                ret = HTTP_FORBIDDEN;
+                goto done;
+            }
 
             /* Parse the path */
             memset(&tgt, 0, sizeof(struct request_target_t));
             tgt.namespace = txn->req_tgt.namespace;
 
-            if ((r = rparams->parse_path(buf_cstring(&uri), &tgt, &fctx->err->desc))) {
+            r = rparams->parse_path(uri->path, &tgt, &fctx->err->desc);
+            xmlFreeURI(uri);
+            if (r) {
                 ret = r;
                 goto done;
             }
@@ -6755,7 +6760,6 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
   done:
     mailbox_close(&mailbox);
-    buf_free(&uri);
 
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
