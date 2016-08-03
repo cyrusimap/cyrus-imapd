@@ -462,68 +462,58 @@ static int http2_frame_not_send_cb(nghttp2_session *session,
 }
 
 
-static int starthttp2(struct http_connection *conn,
-                      int upgrade, struct transaction_t *txn)
+static int starthttp2(struct http_connection *conn, struct transaction_t *txn)
 {
     int r;
     nghttp2_settings_entry iv =
         { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 };
 
-    r = nghttp2_session_server_new(&conn->http2_session,
-                                   http2_callbacks, conn);
+    r = nghttp2_session_server_new2(&conn->http2_session,
+                                    http2_callbacks, conn, conn->http2_options);
     if (r) {
         syslog(LOG_WARNING,
                "nghttp2_session_server_new: %s", nghttp2_strerror(r));
         return r;
     }
 
-    if (!httpd_tls_done) {
-        /* h2c */
-        if (upgrade) {
-            const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
-            if (!hdr || hdr[1]) return 0;
+    if (txn && txn->flags.conn & CONN_UPGRADE) {
+        const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
+        if (!hdr || hdr[1]) return 0;
 
-            /* base64url decode the settings.
-               Use the SASL base64 decoder after replacing the encoded values
-               for chars 62 and 63 and adding appropriate padding. */
-            unsigned outlen;
-            struct buf buf;
-            buf_init_ro_cstr(&buf, hdr[0]);
-            buf_replace_char(&buf, '-', '+');
-            buf_replace_char(&buf, '_', '/');
-            buf_appendmap(&buf, "==", (4 - (buf_len(&buf) % 4)) % 4);
-            r = sasl_decode64(buf_base(&buf), buf_len(&buf),
-                              (char *) buf_base(&buf), buf_len(&buf), &outlen);
-            if (r != SASL_OK) {
-                syslog(LOG_WARNING, "sasl_decode64 failed: %s",
-                       sasl_errstring(r, NULL, NULL));
-                buf_free(&buf);
-                return r;
-            }
-            r = nghttp2_session_upgrade2(conn->http2_session,
-                                         (const uint8_t *) buf_base(&buf),
-                                         outlen, txn->meth == METH_HEAD, NULL);
+        /* base64url decode the settings.
+           Use the SASL base64 decoder after replacing the encoded values
+           for chars 62 and 63 and adding appropriate padding. */
+        unsigned outlen;
+        struct buf buf;
+        buf_init_ro_cstr(&buf, hdr[0]);
+        buf_replace_char(&buf, '-', '+');
+        buf_replace_char(&buf, '_', '/');
+        buf_appendmap(&buf, "==", (4 - (buf_len(&buf) % 4)) % 4);
+        r = sasl_decode64(buf_base(&buf), buf_len(&buf),
+                          (char *) buf_base(&buf), buf_len(&buf), &outlen);
+        if (r != SASL_OK) {
+            syslog(LOG_WARNING, "sasl_decode64 failed: %s",
+                   sasl_errstring(r, NULL, NULL));
             buf_free(&buf);
-            if (r) {
-                syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
-                       nghttp2_strerror(r));
-                return r;
-            }
-
-            /* tell client to start h2c upgrade (RFC 7540) */
-            txn->protocol = NGHTTP2_CLEARTEXT_PROTO_VERSION_ID;
-            response_header(HTTP_SWITCH_PROT, txn);
-
-            txn->conn = conn;
-            txn->http2.stream_id = 1;
+            return r;
         }
-        else {
-            /* prior knowledge */
-            nghttp2_option_new(&conn->http2_options);
-            nghttp2_option_set_no_recv_client_magic(conn->http2_options, 1);
+        r = nghttp2_session_upgrade2(conn->http2_session,
+                                     (const uint8_t *) buf_base(&buf),
+                                     outlen, txn->meth == METH_HEAD, NULL);
+        buf_free(&buf);
+        if (r) {
+            syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
+                   nghttp2_strerror(r));
+            return r;
         }
+
+        /* tell client to start h2c upgrade (RFC 7540) */
+        txn->protocol = NGHTTP2_CLEARTEXT_PROTO_VERSION_ID;
+        response_header(HTTP_SWITCH_PROT, txn);
 
         txn->flags.ver = VER_2;
+        txn->http2.stream_id =
+            nghttp2_session_get_last_proc_stream_id(conn->http2_session);
     }
 
     r = nghttp2_submit_settings(conn->http2_session, NGHTTP2_FLAG_NONE, &iv, 1);
@@ -536,7 +526,6 @@ static int starthttp2(struct http_connection *conn,
 }
 #else
 static int starthttp2(void *conn __attribute__((unused)),
-                      int upgrade __attribute__((unused)),
                       struct transaction_t *txn __attribute__((unused)))
 {
     fatal("starthttp2() called, but no Nghttp2", EC_SOFTWARE);
@@ -1049,7 +1038,7 @@ int service_main(int argc __attribute__((unused)),
         int r, http2 = 0;
 
         r = starttls(NULL, &http2);
-        if (!r && http2) r = starthttp2(&http_conn, 0, NULL);
+        if (!r && http2) r = starthttp2(&http_conn, NULL);
         if (r) shut_down(0);
     }
 
@@ -1995,13 +1984,18 @@ static void cmdloop(struct http_connection *conn)
         if (http2_callbacks &&
             !strncmp(NGHTTP2_CLIENT_MAGIC,
                      req_line->buf, strlen(req_line->buf))) {
+            syslog(LOG_DEBUG, "HTTP/2 client connection preface");
 
             /* Read remainder of preface */
             prot_readbuf(httpd_in, &txn.req_body.payload,
                          NGHTTP2_CLIENT_MAGIC_LEN - strlen(req_line->buf));
 
+            /* Tell library not to look for preface */
+            nghttp2_option_new(&conn->http2_options);
+            nghttp2_option_set_no_recv_client_magic(conn->http2_options, 1);
+
             /* Start HTTP/2 */
-            ret = starthttp2(conn, 0, &txn);
+            ret = starthttp2(conn, &txn);
             if (ret) {
                 /* XXX  what do we do here? */
                 transaction_free(&txn);
@@ -2247,7 +2241,7 @@ static int parse_connection(struct transaction_t *txn)
             else if (http2_callbacks &&
                      !strncmp(upgrd[0], NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
                               strcspn(upgrd[0], " ,"))) {
-                ret = starthttp2(txn->conn, 1, txn);
+                ret = starthttp2(txn->conn, txn);
             }
 #endif /* HAVE_NGHTTP2 */
         }
