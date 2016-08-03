@@ -2033,9 +2033,9 @@ int main(int argc, char **argv)
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 #ifdef HAVE_NETSNMP
-    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vP:x:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vVP:x:")) != EOF) {
 #else
-    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:v")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vV")) != EOF) {
 #endif
 	switch (opt) {
 	case 'C': /* alt imapd.conf file */
@@ -2079,8 +2079,12 @@ int main(int argc, char **argv)
 	    break;
 #endif
 	case 'v':
-		verbose++;
-		break;
+	    verbose++;
+	    break;
+	case 'V':
+	    /* print version information and exit */
+	    printf("%s %s\n", PACKAGE_NAME, PACKAGE_VERSION);
+	    return 0;
 	default:
 	    break;
 	}
