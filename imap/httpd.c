@@ -385,6 +385,7 @@ static int http2_frame_recv_cb(nghttp2_session *session,
             if (txn->req_body.flags & BODY_CONTINUE) {
                 txn->req_body.flags &= ~BODY_CONTINUE;
                 response_header(HTTP_CONTINUE, txn);
+                break;
             }
         }
 
