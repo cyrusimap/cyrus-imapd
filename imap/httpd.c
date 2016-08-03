@@ -419,8 +419,9 @@ static int http2_frame_recv_cb(nghttp2_session *session,
             syslog(LOG_DEBUG, "nghttp2_submit_goaway()");
 
             nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE,
-                                  frame->hd.stream_id, NGHTTP2_NO_ERROR,
-                                  NULL, 0);
+                                  nghttp2_session_get_last_proc_stream_id(
+                                      txn->conn->http2_session),
+                                  NGHTTP2_NO_ERROR, NULL, 0);
         }
 
         break;
