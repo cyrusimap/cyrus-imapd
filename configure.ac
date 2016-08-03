@@ -46,9 +46,9 @@ dnl
 
 AC_INIT([cyrus-imapd],
         m4_esyscmd_s(git describe --dirty=-dirty | sed -e 's/^cyrus-imapd-//'),
-        [http://bugzilla.cyrusimap.org],
+        [https://github.com/cyrusimap/cyrus-imapd/issues],
         ,
-        [http://www.cyrusimap.org])
+        [https://www.cyrusimap.org])
 AC_PREREQ([2.68])
 AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS(config.h)
