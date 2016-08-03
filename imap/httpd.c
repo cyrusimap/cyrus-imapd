@@ -96,7 +96,6 @@
 #include "md5.h"
 
 /* generated headers are not necessarily in current directory */
-#include "imap/imap_err.h"
 #include "imap/http_err.h"
 
 #ifdef WITH_DAV
@@ -901,10 +900,7 @@ int service_init(int argc __attribute__((unused)),
     buf_printf(&serverinfo, " Nghttp2/%s", NGHTTP2_VERSION);
 
     /* Setup HTTP/2 callbacks */
-    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* proxy-only server - won't don't proxy HTTP/2 clients yet */
-    }
-    else if ((r = nghttp2_session_callbacks_new(&http2_callbacks))) {
+    if ((r = nghttp2_session_callbacks_new(&http2_callbacks))) {
         syslog(LOG_WARNING,
                "nghttp2_session_callbacks_new: %s", nghttp2_strerror(r));
     }
@@ -1412,41 +1408,6 @@ static int parse_request_line(struct transaction_t *txn)
     tok_fini(&tok);
 
     return ret;
-}
-
-
-static int parse_headers(struct transaction_t *txn)
-{
-    int r, c;
-
-    syslog(LOG_DEBUG, "read & parse headers");
-
-    /* Create header cache */
-    if (!(txn->req_hdrs = spool_new_hdrcache())) {
-        txn->error.desc = "Unable to create header cache";
-        return HTTP_SERVER_ERROR;
-    }
-
-    /* Read and parse headers */
-    if ((r = spool_fill_hdrcache(httpd_in, NULL, txn->req_hdrs, NULL))) {
-        txn->error.desc = error_message(r);
-        return HTTP_BAD_REQUEST;
-    }
-    else if ((txn->error.desc = prot_error(httpd_in)) &&
-        strcmp(txn->error.desc, PROT_EOF_STRING)) {
-        /* client timed out */
-        syslog(LOG_WARNING, "%s, closing connection", txn->error.desc);
-        return HTTP_TIMEOUT;
-    }
-
-    /* Read CRLF separating headers and body */
-    if ((c = prot_getc(httpd_in)) != '\r' ||
-             (c = prot_getc(httpd_in)) != '\n') {
-        txn->error.desc = error_message(IMAP_MESSAGE_NOBLANKLINE);
-        return HTTP_BAD_REQUEST;
-    }
-
-    return 0;
 }
 
 
@@ -2055,7 +2016,10 @@ static void cmdloop(struct http_connection *conn)
         ret = parse_request_line(&txn);
 
         /* Parse headers */
-        if (!ret) ret = parse_headers(&txn);
+        if (!ret) {
+            ret = http_read_headers(httpd_in, 1 /* read_sep */,
+                                    &txn.req_hdrs, &txn.error.desc);
+        }
 
         if (ret) {
             txn.flags.conn = CONN_CLOSE;
@@ -2509,28 +2473,37 @@ EXPORTED void content_md5_hdr(struct transaction_t *txn,
     simple_hdr(txn, "Content-MD5", base64);
 }
 
-EXPORTED void begin_headers(struct transaction_t *txn, long code)
+EXPORTED void begin_resp_headers(struct transaction_t *txn, long code)
 {
 #ifdef HAVE_NGHTTP2
     if (txn->flags.ver == VER_2) {
         txn->http2.num_resp_hdrs = 0;
-        simple_hdr(txn, ":status", "%.3s", error_message(code));
+        if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
         return;
     }
 #endif /* HAVE_NGHTTP2 */
 
-    prot_printf(txn->conn->pout, "%s\r\n", http_statusline(code));
+    if (code) prot_printf(txn->conn->pout, "%s\r\n", http_statusline(code));
     return;
 }
 
-EXPORTED int end_headers(struct transaction_t *txn, long code)
+EXPORTED int end_resp_headers(struct transaction_t *txn, long code)
 {
 #ifdef HAVE_NGHTTP2
     if (txn->flags.ver == VER_2) {
         uint8_t flags = NGHTTP2_FLAG_NONE;
         int r;
 
+        syslog(LOG_DEBUG,
+               "end_resp_headers(code = %ld, len = %ld, flags.te = %#x)",
+               code, txn->resp_body.len, txn->flags.te);
+
         switch (code) {
+        case 0:
+            /* Trailer */
+            flags = NGHTTP2_FLAG_END_STREAM;
+            break;
+
         case HTTP_CONTINUE:
         case HTTP_PROCESSING:
             /* Provisional response */
@@ -2554,16 +2527,26 @@ EXPORTED int end_headers(struct transaction_t *txn, long code)
             break;
         }
 
-        syslog(LOG_DEBUG, "nghttp2_submit headers(id=%d, flags=%#x)",
+        syslog(LOG_DEBUG, "%s(id=%d, flags=%#x)",
+               code ? "nghttp2_submit headers" : "nghttp2_submit_trailers",
                txn->http2.stream_id, flags);
 
-        r = nghttp2_submit_headers(txn->conn->http2_session,
-                                   flags, txn->http2.stream_id, NULL,
-                                   txn->http2.resp_hdrs,
-                                   txn->http2.num_resp_hdrs, NULL);
+        if (code) {
+            r = nghttp2_submit_headers(txn->conn->http2_session,
+                                       flags, txn->http2.stream_id, NULL,
+                                       txn->http2.resp_hdrs,
+                                       txn->http2.num_resp_hdrs, NULL);
+        }
+        else {
+            r = nghttp2_submit_trailer(txn->conn->http2_session,
+                                       txn->http2.stream_id,
+                                       txn->http2.resp_hdrs,
+                                       txn->http2.num_resp_hdrs);
+        }
         if (r) {
-            syslog(LOG_ERR,
-                   "nghttp2_submit_headers: %s", nghttp2_strerror(r));
+            syslog(LOG_ERR, "%s: %s",
+                   code ? "nghttp2_submit headers" : "nghttp2_submit_trailers",
+                   nghttp2_strerror(r));
             return r;
         }
 
@@ -2595,7 +2578,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Status-Line */
-    begin_headers(txn, code);
+    begin_resp_headers(txn, code);
 
 
     /* Connection Management */
@@ -2610,7 +2593,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
         /* Provisional response - nothing else needed */
-        end_headers(txn, code);
+        end_resp_headers(txn, code);
 
         /* Force the response to the client immediately */
         prot_flush(httpd_out);
@@ -2929,7 +2912,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 comma_list_hdr(txn, "Transfer-Encoding", te, txn->flags.te);
             }
 
-            if (txn->flags.trailer) {
+            if (txn->flags.trailer & ~TRAILER_PROXY) {
                 /* Construct Trailer header */
                 const char *trailer_hdrs[] = { "Content-MD5", NULL };
 
@@ -2943,7 +2926,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* End of headers */
-    end_headers(txn, code);
+    end_resp_headers(txn, code);
 
 
     /* Log the client request and our response */
@@ -3153,6 +3136,9 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     static MD5_CTX ctx;
     static unsigned char md5[MD5_DIGEST_LENGTH];
 
+    syslog(LOG_DEBUG, "write_body(code = %ld, flags.te = %#x, len = %u)",
+           code, txn->flags.te, len);
+
     if (!is_dynamic && len < GZIP_MIN_LEN) {
         /* Don't compress small static content */
         txn->resp_body.enc = CE_IDENTITY;
@@ -3290,11 +3276,13 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         if (txn->flags.te & TE_CHUNKED) {
             if (len) {
                 flags = NGHTTP2_FLAG_NONE;
-                if (do_md5 && outlen) MD5Update(&ctx, buf + offset, outlen);
+                if (outlen && (txn->flags.trailer & TRAILER_CMD5)) {
+                    MD5Update(&ctx, buf + offset, outlen);
+                }
             }
-            else if (do_md5) {
+            else if (txn->flags.trailer) {
                 flags = NGHTTP2_FLAG_NONE;
-                MD5Final(md5, &ctx);
+                if (txn->flags.trailer & TRAILER_CMD5) MD5Final(md5, &ctx);
             }
         }
 
@@ -3315,19 +3303,9 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         }
 
         if (!len && (txn->flags.trailer & TRAILER_CMD5)) {
-            txn->http2.num_resp_hdrs = 0;
+            begin_resp_headers(txn, 0);
             content_md5_hdr(txn, md5);
-
-            syslog(LOG_DEBUG, "nghttp2_submit trailer(id=%d)",
-                   txn->http2.stream_id);
-
-            r = nghttp2_submit_trailer(txn->conn->http2_session,
-                                       txn->http2.stream_id,
-                                       txn->http2.resp_hdrs,
-                                       txn->http2.num_resp_hdrs);
-            if (r) {
-                syslog(LOG_ERR, "nghttp2_submit_trailers: %s", nghttp2_strerror(r));
-            }
+            end_resp_headers(txn, 0);
         }
 
         prot_free(s);
@@ -3337,23 +3315,20 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
     if ((txn->flags.te & TE_CHUNKED) && txn->flags.ver == VER_1_1) {
         /* HTTP/1.1 chunk */
-        if (outlen) {
-            prot_printf(httpd_out, "%x\r\n", outlen);
-            prot_write(httpd_out, buf, outlen);
-            prot_puts(httpd_out, "\r\n");
+        prot_printf(httpd_out, "%x\r\n", outlen);
+        prot_write(httpd_out, buf, outlen);
 
-            if (do_md5) MD5Update(&ctx, buf, outlen);
-        }
-        if (!len) {
-            /* Terminate the HTTP/1.1 body with a zero-length chunk */
-            prot_puts(httpd_out, "0\r\n");
-
-            /* Trailer */
-            if (do_md5) {
+        if (txn->flags.trailer & TRAILER_CMD5) {
+            if (outlen) MD5Update(&ctx, buf, outlen);
+            else if (!len) {
+                /* Trailer */
                 MD5Final(md5, &ctx);
                 content_md5_hdr(txn, md5);
             }
+        }
 
+        if (len || txn->flags.trailer != TRAILER_PROXY) {
+            /* Terminate the chunk/trailer */
             prot_puts(httpd_out, "\r\n");
         }
     }

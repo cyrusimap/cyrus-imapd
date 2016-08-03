@@ -55,9 +55,10 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 /* Compare Content-Types */
-int is_mediatype(const char *pat, const char *type)
+EXPORTED int is_mediatype(const char *pat, const char *type)
 {
     const char *psep = strchr(pat, '/');
     const char *tsep = strchr(type, '/');
@@ -90,8 +91,8 @@ int is_mediatype(const char *pat, const char *type)
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified)
  */
-int http_parse_framing(int http2, hdrcache_t hdrs, struct body_t *body,
-                       const char **errstr)
+EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
+                                struct body_t *body, const char **errstr)
 {
     static unsigned max_msgsize = 0;
     const char **hdr;
@@ -190,14 +191,56 @@ int http_parse_framing(int http2, hdrcache_t hdrs, struct body_t *body,
 }
 
 
+EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
+                               hdrcache_t *hdrs, const char **errstr)
+{
+    int r, c;
+
+    syslog(LOG_DEBUG, "read & parse headers");
+
+    if (*hdrs) {
+        spool_free_hdrcache(*hdrs);
+        *hdrs = NULL;
+    }
+
+    /* Create header cache */
+    if (!(*hdrs = spool_new_hdrcache())) {
+        *errstr = "Unable to create header cache";
+        return HTTP_SERVER_ERROR;
+    }
+
+    /* Read and parse headers */
+    if ((r = spool_fill_hdrcache(pin, NULL, *hdrs, NULL))) {
+        *errstr = error_message(r);
+        return HTTP_BAD_REQUEST;
+    }
+    else if ((*errstr = prot_error(pin)) &&
+        strcmp(*errstr, PROT_EOF_STRING)) {
+        /* client timed out */
+        syslog(LOG_WARNING, "%s, closing connection", *errstr);
+        return HTTP_TIMEOUT;
+    }
+
+    /* Read CRLF separating headers and body */
+    if (read_sep &&
+        ((c = prot_getc(pin)) != '\r' || (c = prot_getc(pin)) != '\n')) {
+        *errstr = error_message(IMAP_MESSAGE_NOBLANKLINE);
+        return HTTP_BAD_REQUEST;
+    }
+
+    return 0;
+}
+
+
 /*
  * Read the body of a request or response.
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified)
  * Handles gzip and deflate CE only.
  */
-int http_read_body(struct protstream *pin, struct protstream *pout,
-                   hdrcache_t hdrs, struct body_t *body, const char **errstr)
+EXPORTED int http_read_body(struct protstream *pin, struct protstream *pout,
+                            hdrcache_t hdrs, struct body_t *body,
+                            const char **errstr)
 {
     char buf[PROT_BUFSIZE];
     unsigned n;
@@ -391,29 +434,24 @@ int http_read_body(struct protstream *pin, struct protstream *pout,
 
 
 /* Read a response from backend */
-int http_read_response(struct backend *be, unsigned meth, unsigned *code,
-                       const char **statline, hdrcache_t *hdrs,
-                       struct body_t *body, const char **errstr)
+EXPORTED int http_read_response(struct backend *be, unsigned meth,
+                                unsigned *code, hdrcache_t *hdrs,
+                                struct body_t *body, const char **errstr)
 {
     static char statbuf[2048];
     const char **conn;
+    int r;
 
-    if (statline) *statline = statbuf;
     *errstr = NULL;
     *code = HTTP_BAD_GATEWAY;
 
-    if (*hdrs) spool_free_hdrcache(*hdrs);
-    if (!(*hdrs = spool_new_hdrcache())) {
-        *errstr = "Unable to create header cache for backend response";
-        return HTTP_SERVER_ERROR;
-    }
     if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
-        (sscanf(statbuf, HTTP_VERSION " %u ", code) != 1) ||
-        spool_fill_hdrcache(be->in, NULL, *hdrs, NULL)) {
-        *errstr = "Unable to read status-line/headers from backend";
+        (sscanf(statbuf, HTTP_VERSION " %u ", code) != 1)) {
+        *errstr = "Unable to read status-line from backend";
         return HTTP_BAD_GATEWAY;
     }
-    eatline(be->in, ' '); /* CRLF separating headers & body */
+    r = http_read_headers(be->in, 1 /* read_sep */, hdrs, errstr);
+    if (r) return (r != HTTP_SERVER_ERROR ? HTTP_BAD_GATEWAY: r);
 
     /* 1xx (provisional) response - nothing else to do */
     if (*code < 200) return 0;

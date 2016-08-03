@@ -302,7 +302,7 @@ struct txn_flags_t {
     unsigned long cc       : 7;         /* Cache-Control directives for resp */
     unsigned long ranges   : 1;         /* Accept range requests for resource */
     unsigned long vary     : 4;         /* Headers on which response varied */
-    unsigned long trailer  : 1;         /* Headers which will be in trailer */
+    unsigned long trailer  : 2;         /* Headers which will be in trailer */
 };
 
 /* HTTP connection context */
@@ -416,7 +416,8 @@ enum {
 
 /* Trailer header flags */
 enum {
-    TRAILER_CMD5 =      (1<<0)  /* Content-MD5 */
+    TRAILER_CMD5 =      (1<<0), /* Content-MD5 will be generated */
+    TRAILER_PROXY =     (1<<1)  /* Trailer(s) will be proxied from origin */
 };
 
 typedef int (*premethod_proc_t)(struct transaction_t *txn);
@@ -500,6 +501,8 @@ extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(long code);
 extern char *rfc3339date_gen(char *buf, size_t len, time_t t);
 extern char *httpdate_gen(char *buf, size_t len, time_t t);
+extern void begin_resp_headers(struct transaction_t *txn, long code);
+extern int end_resp_headers(struct transaction_t *txn, long code);
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...);
 extern void comma_list_hdr(struct transaction_t *txn,
