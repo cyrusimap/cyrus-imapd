@@ -1414,7 +1414,7 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
             /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
 
             txn->protocol = TLS_VERSION;
-            response_header(HTTP_UPGRADE, txn);
+            return HTTP_UPGRADE;
         }
         else {
             /* All other clients use RFC 2818 (HTTPS) */
@@ -1439,11 +1439,8 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
 
             /* Output our HTML response */
             txn->resp_body.type = "text/html; charset=utf-8";
-            write_body(HTTP_MOVED, txn,
-                       buf_cstring(html), buf_len(html));
+            return HTTP_MOVED;
         }
-
-        return 0;
     }
     else {
         /* Tell client to authenticate */
@@ -3456,7 +3453,6 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         }
     }
 
-    buf_reset(html);
     if (txn->error.desc) {
         const char **hdr, *host = "";
         char *port = NULL;
