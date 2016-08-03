@@ -1061,6 +1061,15 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
+#ifdef HAVE_ZLIB
+    /* Always use gzip format because IE incorrectly uses raw deflate */
+    if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS) &&
+        deflateInit2(&http_conn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                     16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) == Z_OK) {
+        http_conn.gzip_enabled = 1;
+    }
+#endif
+
     cmdloop(&http_conn);
 
     /* Closing connection */
@@ -1851,15 +1860,6 @@ static void cmdloop(struct http_connection *conn)
 
     /* Pre-allocate our working buffer */
     buf_ensure(&txn.buf, 1024);
-
-#ifdef HAVE_ZLIB
-    /* Always use gzip format because IE incorrectly uses raw deflate */
-    if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS) &&
-        deflateInit2(&conn->zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-                     16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) == Z_OK) {
-        conn->gzip_enabled = 1;
-    }
-#endif
 
     for (;;) {
         int ret = 0;
