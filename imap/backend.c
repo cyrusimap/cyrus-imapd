@@ -500,6 +500,7 @@ EXPORTED int backend_starttls(	struct backend *s,
     char *auth_id = NULL;
     int *layerp = NULL;
     int r = 0;
+    int auto_capa = 0;
 
     if (tls_cmd) {
 	char buf[2048];
@@ -511,6 +512,8 @@ EXPORTED int backend_starttls(	struct backend *s,
 	if (!prot_fgets(buf, sizeof(buf), s->in) ||
 	    strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
 	    return -1;
+
+	auto_capa = tls_cmd->auto_capa;
     }
 
     r = tls_init_clientengine(5, c_cert_file, c_key_file);
@@ -533,7 +536,7 @@ EXPORTED int backend_starttls(	struct backend *s,
     prot_settls(s->in,  s->tlsconn);
     prot_settls(s->out, s->tlsconn);
 
-    ask_capability(s, /*dobanner*/1, tls_cmd->auto_capa);
+    ask_capability(s, /*dobanner*/1, auto_capa);
 
     return 0;
 #endif /* HAVE_SSL */
