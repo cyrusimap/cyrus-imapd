@@ -5834,7 +5834,12 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
 
     /* Open notifications collection for writing */
     r = create_notify_collection(userid, &mailbox);
-    if (r) {
+    if (r == IMAP_INVALID_USER) {
+        syslog(LOG_NOTICE,
+               "send_notification(%s) failed: %s", userid, error_message(r));
+        return 0;
+    }
+    else if (r) {
         syslog(LOG_ERR,
                "send_notification: create_notify_collection(%s) failed: %s",
                userid, error_message(r));
@@ -8073,13 +8078,14 @@ static int lookup_notify_collection(const char *userid, mbentry_t **mbentry)
     notifyname = mbname_intname(mbname);
     r = http_mlookup(notifyname, mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (config_mupdate_server) {
-            /* Find location of INBOX */
-            char *inboxname = mboxname_user_mbox(userid, NULL);
+        /* Find location of INBOX */
+        char *inboxname = mboxname_user_mbox(userid, NULL);
 
-            int r1 = http_mlookup(inboxname, mbentry, NULL);
-            free(inboxname);
-            if (r1) goto done;
+        int r1 = http_mlookup(inboxname, mbentry, NULL);
+        free(inboxname);
+        if (r1 == IMAP_MAILBOX_NONEXISTENT) {
+            r = IMAP_INVALID_USER;
+            goto done;
         }
 
         if (*mbentry) free((*mbentry)->name);
@@ -8100,7 +8106,10 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
     mbentry_t *mbentry = NULL;
     int r = lookup_notify_collection(userid, &mbentry);
 
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
+    if (r == IMAP_INVALID_USER) {
+        goto done;
+    }
+    else if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (!mbentry) goto done;
         else if (mbentry->server) {
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
@@ -8848,7 +8857,7 @@ int notify_post(struct transaction_t *txn)
         txn->req_tgt.mbentry = NULL;
         r = lookup_notify_collection(txn->req_tgt.userid, &txn->req_tgt.mbentry);
         if (r) {
-            syslog(LOG_ERR, "lookup_notify_ollection(%s) failed: %s",
+            syslog(LOG_ERR, "lookup_notify_collection(%s) failed: %s",
                    txn->req_tgt.userid, error_message(r));
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
