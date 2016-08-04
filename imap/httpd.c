@@ -189,7 +189,7 @@ static ssize_t http2_send_cb(nghttp2_session *session __attribute__((unused)),
 
     r = prot_write(pout, (const char *) data, length);
 
-    syslog(LOG_DEBUG, "http2_send_cb(%ld): %d", length, r);
+    syslog(LOG_DEBUG, "http2_send_cb(%zu): %d", length, r);
 
     if (r) return NGHTTP2_ERR_CALLBACK_FAILURE;
 
@@ -224,7 +224,7 @@ static ssize_t http2_recv_cb(nghttp2_session *session __attribute__((unused)),
     }
 
     syslog(LOG_DEBUG,
-           "http2_recv_cb(%ld): n = %ld, eof = %d, err = '%s', errno = %d",
+           "http2_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %d",
            length, n, pin->eof, pin->error ? pin->error : "", errno);
 
     return n;
@@ -241,7 +241,7 @@ static ssize_t http2_data_source_read_cb(nghttp2_session *session __attribute__(
     size_t n = prot_read(s, (char *) buf, length);
 
     syslog(LOG_DEBUG,
-           "http2_data_source_read_cb(id=%d, len=%ld): n=%ld, eof=%d",
+           "http2_data_source_read_cb(id=%d, len=%zu): n=%zu, eof=%d",
            stream_id, length, n, !s->cnt);
 
     if (!s->cnt) *data_flags |= NGHTTP2_DATA_FLAG_EOF;
@@ -337,7 +337,7 @@ static int http2_data_chunk_recv_cb(nghttp2_session *session,
 
     if (!txn) return 0;
 
-    syslog(LOG_DEBUG, "http2_data_chunk_recv_cb(id=%d, len=%d, txnflags=%#x)",
+    syslog(LOG_DEBUG, "http2_data_chunk_recv_cb(id=%d, len=%zu, txnflags=%#x)",
            stream_id, (int) len, txn->req_body.flags);
 
     if (txn->req_body.flags & BODY_DISCARD) return 0;
