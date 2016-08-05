@@ -438,7 +438,10 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             }
             if (!db->stem_versions)
                 db->stem_versions = new std::set<int>();
-            db->stem_versions->insert(stem_version);
+            // always both for now
+            // db->stem_versions->insert(stem_version);
+            db->stem_versions->insert(0);
+            db->stem_versions->insert(1);
             db->database->add_database(database);
             db->paths->append(thispath);
             db->paths->append(" ");
