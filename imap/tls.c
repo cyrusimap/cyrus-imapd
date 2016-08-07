@@ -120,6 +120,7 @@
 /* Application-specific. */
 #include "assert.h"
 #include "nonblock.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "tls.h"
 #include "tls_th-lock.h"
@@ -1044,6 +1045,9 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     X509   *peer;
     const char *tls_protocol = NULL;
     const char *tls_cipher_name = NULL;
+    const unsigned char *alpn = NULL;
+    unsigned int alpn_len = 0;
+    struct buf log = BUF_INITIALIZER;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
     SSL *tls_conn;
@@ -1219,32 +1223,29 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
         *layerbits = tls_cipher_usebits;
     }
 
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+    SSL_get0_alpn_selected(tls_conn, &alpn, &alpn_len);
+#endif
+
+    buf_printf(&log, "starttls: %s with cipher %s (%d/%d bits %s) ",
+               tls_protocol, tls_cipher_name,
+               tls_cipher_usebits, tls_cipher_algbits,
+               SSL_session_reused(tls_conn) ? "reused" : "new");
+
     if (authid && *authid) {
-        syslog(
-                LOG_NOTICE,
-                "starttls: %s with cipher %s (%d/%d bits %s) "
-                "authenticated as %s",
-                tls_protocol,
-                tls_cipher_name,
-                tls_cipher_usebits,
-                tls_cipher_algbits,
-                SSL_session_reused(tls_conn) ? "reused" : "new",
-                *authid
-            );
-
-    } else {
-        syslog(
-                LOG_NOTICE,
-                "starttls: %s with cipher %s (%d/%d bits %s) "
-                "no authentication",
-                tls_protocol,
-                tls_cipher_name,
-                tls_cipher_usebits,
-                tls_cipher_algbits,
-                SSL_session_reused(tls_conn) ? "reused" : "new"
-            );
-
+        buf_printf(&log, "authenticated as %s", *authid);
     }
+    else {
+        buf_appendcstr(&log, "no authentication");
+    }
+
+    if (alpn) {
+        buf_printf(&log, "; application protocol = %.*s",
+                   alpn_len, (const char *) alpn);
+    }
+
+    syslog(LOG_NOTICE, buf_cstring(&log));
+    buf_free(&log);
 
  done:
     nonblock(readfd, 0);
