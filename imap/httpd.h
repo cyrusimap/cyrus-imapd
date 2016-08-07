@@ -295,6 +295,7 @@ struct resp_body_t {
 struct txn_flags_t {
     unsigned long ver      : 2;         /* HTTP version of request */
     unsigned long conn     : 3;         /* Connection opts on req/resp */
+    unsigned long upgrade  : 2;         /* Upgrade protocols */
     unsigned long override : 1;         /* HTTP method override */
     unsigned long cors     : 3;         /* Cross-Origin Resource Sharing */
     unsigned long mime     : 1;         /* MIME-conformant response */
@@ -379,6 +380,12 @@ enum {
     CONN_CLOSE =        (1<<0),
     CONN_UPGRADE =      (1<<1),
     CONN_KEEPALIVE =    (1<<2)
+};
+
+/* Upgrade protocol flags */
+enum {
+    UPGRADE_TLS =       (1<<0),
+    UPGRADE_HTTP2 =     (1<<1)
 };
 
 /* Cross-Origin Resource Sharing flags */

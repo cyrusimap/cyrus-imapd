@@ -1236,19 +1236,20 @@ static int starttls(struct transaction_t *txn, int *http2)
         return HTTP_SERVER_ERROR;
     }
 
-    if (!https) {
-        /* tell client to start TLS upgrade (RFC 2817) */
-        txn->protocol = TLS_VERSION;
-        response_header(HTTP_SWITCH_PROT, txn);
-    }
 #if (defined HAVE_NGHTTP2 && OPENSSL_VERSION_NUMBER >= 0x10002000L)
-    else if (http2_callbacks) {
+    if (http2_callbacks) {
         /* enable TLS ALPN extension */
         SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, http2);
     }
 #else
     (void) http2; /* silence 'unused variable http2' warning */
 #endif
+
+    if (!https) {
+        /* tell client to start TLS upgrade (RFC 2817) */
+        txn->protocol = TLS_VERSION;
+        response_header(HTTP_SWITCH_PROT, txn);
+    }
 
     result=tls_start_servertls(0, /* read */
                                1, /* write */
@@ -1419,7 +1420,7 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
 
         /* Check which response is required */
         if ((hdr = spool_getheader(txn->req_hdrs, "Upgrade")) &&
-            !strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
+            strstr(hdr[0], TLS_VERSION)) {
             /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
 
             txn->protocol = TLS_VERSION;
@@ -1493,9 +1494,26 @@ static int examine_request(struct transaction_t *txn)
     }
 
     /* Check for Connection options */
-    if ((ret = parse_connection(txn))) {
-        if (ret != HTTP_BAD_REQUEST) txn->flags.conn = CONN_CLOSE;
-        return ret;
+    if ((ret = parse_connection(txn))) return ret;
+
+    syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
+           txn->flags.upgrade, httpd_tls_required);
+    if (txn->flags.upgrade & UPGRADE_TLS) {
+        int http2 = 0;
+        if ((ret = starttls(txn, &http2))) {
+            txn->flags.conn = CONN_CLOSE;
+            return ret;
+        }
+        if (http2) txn->flags.upgrade |= UPGRADE_HTTP2;
+    }
+
+    syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
+           txn->flags.upgrade, httpd_tls_required);
+    if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
+        if ((ret = starthttp2(txn->conn, httpd_tls_done ? NULL : txn))) {
+            txn->flags.conn = CONN_CLOSE;
+            return ret;
+        }
     }
 
     /* Check message framing */
@@ -2157,7 +2175,7 @@ static int parse_expect(struct transaction_t *txn)
         char *token;
 
         while (!ret && (token = tok_next(&tok))) {
-            /* Check if this is a non-persistent connection */
+            /* Check if client wants acknowledgment before sending body */ 
             if (!strcasecmp(token, "100-continue")) {
                 syslog(LOG_DEBUG, "Expect: 100-continue");
                 txn->req_body.flags |= BODY_CONTINUE;
@@ -2231,7 +2249,7 @@ static int parse_connection(struct transaction_t *txn)
             /* Check if we need to upgrade to TLS */
             if (!strncmp(upgrd[0], TLS_VERSION, strcspn(upgrd[0], " ,"))) {
                 if (!httpd_tls_done && tls_enabled()) {
-                    ret = starttls(txn, NULL);
+                    txn->flags.upgrade |= UPGRADE_TLS;
                 }
             }
 #ifdef HAVE_NGHTTP2
@@ -2239,13 +2257,10 @@ static int parse_connection(struct transaction_t *txn)
             else if (http2_callbacks &&
                      !strncmp(upgrd[0], NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
                               strcspn(upgrd[0], " ,"))) {
-                ret = starthttp2(txn->conn, txn);
+                txn->flags.upgrade |= UPGRADE_HTTP2;
             }
 #endif /* HAVE_NGHTTP2 */
         }
-
-        /* We don't want Upgrade in final response */
-        txn->flags.conn &= ~CONN_UPGRADE;
     }
 
     return ret;
@@ -2575,6 +2590,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Connection Management */
+    txn->flags.conn &= ~CONN_UPGRADE;
+
     switch (code) {
     case HTTP_SWITCH_PROT:
         /* Tell client to start new protocol */
