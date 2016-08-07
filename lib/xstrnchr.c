@@ -1,4 +1,4 @@
-/* xstrnstr.c -- Implementation of strnstr()
+/* xstrnchr.c -- Implementation of strnchr()
  *
  * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,9 +40,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "xstrnstr.h"
+#include "xstrnchr.h"
 
-#ifndef HAVE_STRNSTR
+#ifndef HAVE_STRNCHR
 EXPORTED char *strnchr(const char *s, int c, size_t n)
 {
     if (!s) return NULL;

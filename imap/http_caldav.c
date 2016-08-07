@@ -95,7 +95,7 @@
 #include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "xstrnstr.h"
+#include "xstrnchr.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

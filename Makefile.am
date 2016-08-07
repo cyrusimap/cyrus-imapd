@@ -809,7 +809,7 @@ noinst_HEADERS += \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
-	lib/xstrnstr.h
+	lib/xstrnchr.h
 
 backup_libcyrus_backup_la_SOURCES = \
     lib/gzuncat.c \
@@ -1427,7 +1427,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/xmalloc.c \
 	lib/xstrlcat.c \
 	lib/xstrlcpy.c \
-	lib/xstrnstr.c
+	lib/xstrnchr.c
 if !HAVE_SSL
 lib_libcyrus_min_la_SOURCES += lib/xsha1.c
 endif

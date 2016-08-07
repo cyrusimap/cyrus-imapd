@@ -1,4 +1,4 @@
-/* xstrnstr.h -- Implementation of strnstr()
+/* xstrnchr.h -- Implementation of strnchr()
  *
  * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,16 +40,16 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef INCLUDED_XSTRNSTR_H
-#define INCLUDED_XSTRNSTR_H
+#ifndef INCLUDED_XSTRNCHR_H
+#define INCLUDED_XSTRNCHR_H
 
 #include <config.h>
 
 /* for size_t */
 #include <stdio.h>
 
-#ifndef HAVE_STRNSTR
+#ifndef HAVE_STRNCHR
 extern char *strnchr(const char *s, int c, size_t n);
 #endif
 
-#endif /* INCLUDED_XSTRNSTR_H */
+#endif /* INCLUDED_XSTRNCHR_H */
