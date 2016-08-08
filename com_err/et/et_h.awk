@@ -134,6 +134,7 @@ c2n["_"]=63
 
 END {
         print "extern void initialize_" table_name "_error_table ();" > outfile
+        print "extern const struct error_table et_" table_name "_error_table;" > outfile
         if (tab_base_high == 0) {
                 print "#define ERROR_TABLE_BASE_" table_name " (" \
                         sprintf("%d", tab_base_sign*tab_base_low) \

@@ -160,11 +160,11 @@ END {
         print "extern struct et_list *_et_list;" > outfile
         print "" > outfile
         if (tab_base_high == 0) {
-            print "static const struct error_table et = { text, " \
+            print "const struct error_table et_" table_name "_error_table = { text, " \
                 sprintf("%dL, %d };", tab_base_sign*tab_base_low, \
                 table_item_count) > outfile
         } else {
-            print "static const struct error_table et = { text, " \
+            print "const struct error_table et_" table_name "_error_table = { text, " \
                 sprintf("%d%06dL, %d };", tab_base_sign*tab_base_high, \
                 tab_base_low, table_item_count) > outfile
         }
@@ -174,7 +174,7 @@ END {
         print "void initialize_" table_name "_error_table (NOARGS) {" > outfile
         print "    if (!link.table) {" > outfile
         print "        link.next = _et_list;" > outfile
-        print "        link.table = &et;" > outfile
+        print "        link.table = &et_" table_name "_error_table;" > outfile
         print "        _et_list = &link;" > outfile
         print "    }" > outfile
         print "}" > outfile
