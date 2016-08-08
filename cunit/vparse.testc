@@ -93,3 +93,78 @@ static void test_control_chars(void)
 
 #undef TESTCASE
 }
+
+static void test_crlf(void)
+{
+#define TESTCASE(in, wanterr) \
+    { \
+        struct vparse_state vparser; \
+        memset(&vparser, 0, sizeof(struct vparse_state)); \
+        vparse_set_multival(&vparser, "adr"); \
+        vparser.base = (in); \
+        int vr = vparse_parse(&vparser, 0); \
+        CU_ASSERT_EQUAL(vr, (wanterr)); \
+        vparse_free(&vparser); \
+    }
+
+    char crlf[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:All lines end on CRLF\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    char lf[] =
+        "BEGIN:VCARD\n"
+        "VERSION:3.0\n"
+        "NOTE:All lines end on LF\n"
+        "REV:2008-04-24T19:52:43Z\n"
+        "END:VCARD\n";
+
+    char cr[] =
+        "BEGIN:VCARD\r"
+        "VERSION:3.0\r"
+        /* This one is rejected */
+        "NOTE:All lines end on CR\r"
+        "REV:2008-04-24T19:52:43Z\r"
+        "END:VCARD\r";
+
+    char mixed[] =
+        "BEGIN:VCARD\n"
+        "VERSION:3.0\n"
+        "NOTE:Some lines end on CRLF, some on LF\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\n";
+
+    char extra_cr[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:An extra CR before CRLF\r\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    char lflf[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:Two LF make one empty line\n\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    char lonely_cr[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        /* Probably too forgiving. This one could be rejected */
+        "NOTE:One lonely \r in the middle of text\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    TESTCASE(crlf, PE_OK);
+    TESTCASE(lf, PE_OK);
+    TESTCASE(cr, PE_FINISHED_EARLY);
+    TESTCASE(mixed, PE_OK);
+    TESTCASE(extra_cr, PE_OK);
+    TESTCASE(lflf, PE_OK);
+    TESTCASE(lonely_cr, PE_OK);
+
+#undef TESTCASE
+}
