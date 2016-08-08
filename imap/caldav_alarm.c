@@ -574,7 +574,7 @@ EXPORTED int caldav_alarm_delete_mailbox(const char *mboxname)
 
 #define CMD_DELETEUSER          \
     "DELETE FROM events WHERE"  \
-    " mailbox LIKE :prefix"     \
+    " mboxname LIKE :prefix"     \
     ";"
 
 /* delete all alarms matching the event */
