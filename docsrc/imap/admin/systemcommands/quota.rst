@@ -63,6 +63,10 @@ Options
     Operate quietly. If **-f** is specified, then don't print the quota
     values, only print messages when things are changed.
 
+.. option:: -J
+
+    Output the quota values as JSON for automated tooling support
+
 .. option:: mailbox-prefix
 
     Only report and/or fix quota in mailboxes starting with the
