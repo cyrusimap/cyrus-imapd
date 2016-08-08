@@ -45,11 +45,14 @@
 
 #include "vcard_support.h"
 
+#include "global.h"
+
 struct vparse_card *vcard_parse_string(const char *str)
 {
     struct vparse_state vparser;
     struct vparse_card *vcard = NULL;
     int vr;
+    int repair = config_getswitch(IMAPOPT_CARDDAV_REPAIR_VCARD);
 
     memset(&vparser, 0, sizeof(struct vparse_state));
 
@@ -57,6 +60,7 @@ struct vparse_card *vcard_parse_string(const char *str)
     vparse_set_multival(&vparser, "adr");
     vparse_set_multival(&vparser, "org");
     vparse_set_multival(&vparser, "n");
+    vparser.ctrl = repair ? VPARSE_CTRL_SKIP : VPARSE_CTRL_REJECT;
     vr = vparse_parse(&vparser, 0);
     if (vr) {
         // XXX report error

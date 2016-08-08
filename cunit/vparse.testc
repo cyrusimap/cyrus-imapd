@@ -12,3 +12,84 @@ static void test_double_end(void)
     CU_ASSERT_EQUAL(vr, PE_MISMATCHED_CARD);
 }
 
+static void test_control_chars(void)
+{
+#define TESTCASE(in, flag, wanterr) \
+    { \
+        struct vparse_state vparser; \
+        memset(&vparser, 0, sizeof(struct vparse_state)); \
+        vparse_set_multival(&vparser, "adr"); \
+        vparser.base = (in); \
+        vparser.ctrl = flag; \
+        int vr = vparse_parse(&vparser, 0); \
+        CU_ASSERT_EQUAL(vr, (wanterr)); \
+        vparse_free(&vparser); \
+    }
+
+    char ctl_in_propname[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "N\bOTE:Weird control chars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    char ctl_in_propval1[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:Weird control\b chars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    char ctl_in_propval2[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        /* Newline forces parser to switch to property name state */
+        "NOTE:Weird control\n\bchars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    char ctl_in_propval3[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        /* Multivalue field, separated by semicolon */
+        "ADR:;;123 Main Street;Any Town;CA;91921-1234;U.S.\x01\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    char ctl_in_paraname[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "EMAIL;\x01TYPE\x03=work:foo@local\r\n"
+        "END:VCARD\r\n";
+
+    char ctl_in_paraval1[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "EMAIL;TYPE=w\x1bork:foo@local\r\n"
+        "END:VCARD\r\n";
+
+    char ctl_in_paraval2[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        /* control char in quoted param value */
+        "EMAIL;TYPE=\"\x1bork\":foo@local\r\n"
+        "END:VCARD\r\n";
+
+    TESTCASE(ctl_in_propname, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
+    TESTCASE(ctl_in_propval1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
+    TESTCASE(ctl_in_propval2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
+    TESTCASE(ctl_in_propval3, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
+    TESTCASE(ctl_in_paraname, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
+    TESTCASE(ctl_in_paraval1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
+    TESTCASE(ctl_in_paraval2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
+
+    TESTCASE(ctl_in_propname, VPARSE_CTRL_SKIP, PE_OK);
+    TESTCASE(ctl_in_propval1, VPARSE_CTRL_SKIP, PE_OK);
+    TESTCASE(ctl_in_propval2, VPARSE_CTRL_SKIP, PE_NAME_EOL);
+    TESTCASE(ctl_in_propval3, VPARSE_CTRL_SKIP, PE_OK);
+    TESTCASE(ctl_in_paraname, VPARSE_CTRL_SKIP, PE_OK);
+    TESTCASE(ctl_in_paraval1, VPARSE_CTRL_SKIP, PE_OK);
+    TESTCASE(ctl_in_paraval2, VPARSE_CTRL_SKIP, PE_OK);
+
+#undef TESTCASE
+}

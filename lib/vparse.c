@@ -22,6 +22,22 @@ static char *buf_dup_cstring(struct buf *buf)
 #define MAKE(X, Y) X = xzmalloc(sizeof(struct Y));
 #define PUTC(C) buf_putc(&state->buf, C)
 #define INC(I) state->p += I
+#define IS_CTRL(ch) \
+    (ch <= 0x1f && ch != '\r' && ch != '\n' && ch != '\t')
+#define HANDLECTRL(state) \
+{ \
+    if (IS_CTRL(*state->p)) { \
+        if (state->ctrl == VPARSE_CTRL_REJECT) { \
+            return PE_ILLEGAL_CHAR; \
+        } \
+        while (*(state->p++)) { \
+            if (!IS_CTRL(*state->p)) \
+                break; \
+        } \
+        if ((*state->p) == 0) \
+            break; \
+    }  \
+}
 
 /* just leaves it on the buffer */
 static int _parse_param_quoted(struct vparse_state *state, int multiparam)
@@ -29,6 +45,10 @@ static int _parse_param_quoted(struct vparse_state *state, int multiparam)
     NOTESTART();
 
     while (*state->p) {
+
+        /* Handle control characters and break for NUL char */
+        HANDLECTRL(state);
+
         switch (*state->p) {
         case '"':
             INC(1);
@@ -110,6 +130,10 @@ static int _parse_param_key(struct vparse_state *state, int *haseq)
     *haseq = 0;
 
     while (*state->p) {
+
+        /* Handle control characters and break for NUL char */
+        HANDLECTRL(state);
+
         switch (*state->p) {
         case '=':
             state->param->name = buf_dup_cstring(&state->buf);
@@ -171,6 +195,10 @@ repeat:
 
     /* now get the value */
     while (*state->p) {
+
+        /* Handle control characters and break for NUL char */
+        HANDLECTRL(state);
+
         switch (*state->p) {
         case '\\': /* normal backslash quoting */
             /* seen in the wild - \n split by line wrapping */
@@ -288,6 +316,10 @@ static int _parse_entry_key(struct vparse_state *state)
     NOTESTART();
 
     while (*state->p) {
+
+        /* Handle control characters and break for NUL char */
+        HANDLECTRL(state);
+
         switch (*state->p) {
         case ':':
             state->entry->name = buf_dup_cstring(&state->buf);
@@ -336,6 +368,10 @@ static int _parse_entry_multivalue(struct vparse_state *state)
     NOTESTART();
 
     while (*state->p) {
+
+        /* Handle control characters and break for NUL char */
+        HANDLECTRL(state);
+
         switch (*state->p) {
         /* only one type of quoting */
         case '\\':
@@ -394,6 +430,10 @@ static int _parse_entry_value(struct vparse_state *state)
     NOTESTART();
 
     while (*state->p) {
+
+        /* Handle control characters and break for NUL char */
+        HANDLECTRL(state);
+
         switch (*state->p) {
         /* only one type of quoting */
         case '\\':
@@ -680,6 +720,8 @@ EXPORTED const char *vparse_errstr(int err)
         return "End of data while parsing quoted value";
     case PE_QSTRING_EOL:
         return "End of line while parsing quoted value";
+    case PE_ILLEGAL_CHAR:
+        return "Illegal character in VCard";
     }
     return "Unknown error";
 }

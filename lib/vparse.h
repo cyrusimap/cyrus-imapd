@@ -21,7 +21,13 @@ PE_PARAMVALUE_EOL,
 PE_QSTRING_EOF,
 PE_QSTRING_EOL,
 PE_QSTRING_COMMA,
+PE_ILLEGAL_CHAR,
 PE_NUMERR /* last */
+};
+
+enum parse_ctrl {
+    VPARSE_CTRL_REJECT = 0,
+    VPARSE_CTRL_SKIP
 };
 
 struct vparse_state {
@@ -32,6 +38,7 @@ struct vparse_state {
     strarray_t *multival;
     strarray_t *multiparam;
     int barekeys;
+    int ctrl;
 
     /* current items */
     struct vparse_card *card;

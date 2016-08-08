@@ -534,6 +534,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    If not set (the default), the value of the "servername" option will
    be used.*/
 
+{ "carddav_repair_vcard", 0, SWITCH }
+/* If enabled, VCARDs with invalid content are attempted to be repaired
+   during creation. */
+
 { "chatty", 0, SWITCH }
 /* If yes, syslog tags and commands for every IMAP command, mailboxes
    for every lmtp connection, every POP3 command, etc */
