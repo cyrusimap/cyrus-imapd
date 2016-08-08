@@ -338,7 +338,7 @@ static int http2_data_chunk_recv_cb(nghttp2_session *session,
     if (!txn) return 0;
 
     syslog(LOG_DEBUG, "http2_data_chunk_recv_cb(id=%d, len=%zu, txnflags=%#x)",
-           stream_id, (int) len, txn->req_body.flags);
+           stream_id, len, txn->req_body.flags);
 
     if (txn->req_body.flags & BODY_DISCARD) return 0;
 
