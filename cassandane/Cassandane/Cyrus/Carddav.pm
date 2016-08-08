@@ -394,4 +394,39 @@ sub test_sharing_crossdomain
         ], $Addressbooks);
 }
 
+sub test_control_chars
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+    my $href = "$Id/bar.vcf";
+
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:123456789
+N:Gump;Forrest;;Mr.
+FN:Forrest\b Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $repair = $self->{instance}->{config}->get('carddav_repair_vcard');
+    if ($repair ne 'yes') {
+        eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+        my $Err = $@;
+        $self->assert_matches(qr/valid-address-data/, $Err);
+    } else {
+        my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
+        my $path = $CardDAV->NewContact($Id, $VCard);
+        my $res = $CardDAV->GetContact($path);
+        $self->assert_str_equals($res->{properties}{fn}[0]{value}, 'Forrest Gump');
+    }
+}
+
 1;
