@@ -96,7 +96,7 @@ static void test_control_chars(void)
 
 static void test_crlf(void)
 {
-#define TESTCASE(in, wanterr) \
+#define TESTCASE(in, wanterr, wantbuf) \
     { \
         struct vparse_state vparser; \
         memset(&vparser, 0, sizeof(struct vparse_state)); \
@@ -104,23 +104,40 @@ static void test_crlf(void)
         vparser.base = (in); \
         int vr = vparse_parse(&vparser, 0); \
         CU_ASSERT_EQUAL(vr, (wanterr)); \
+        if (wantbuf != NULL) { \
+            struct buf *buf = buf_new(); \
+            vparse_tobuf(vparser.card, buf); \
+            CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
+            buf_destroy(buf); \
+        } \
         vparse_free(&vparser); \
     }
 
+    /* All lines end on CRLF */
     char crlf[] =
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:All lines end on CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
+    TESTCASE(crlf, PE_OK, crlf);
 
-    char lf[] =
+    /* All lines end on LF */
+    char lf_in[] =
         "BEGIN:VCARD\n"
         "VERSION:3.0\n"
         "NOTE:All lines end on LF\n"
         "REV:2008-04-24T19:52:43Z\n"
         "END:VCARD\n";
+    char lf_out[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:All lines end on LF\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    TESTCASE(lf_in, PE_OK, lf_out);
 
+    /* All lines end on CR */
     char cr[] =
         "BEGIN:VCARD\r"
         "VERSION:3.0\r"
@@ -128,43 +145,95 @@ static void test_crlf(void)
         "NOTE:All lines end on CR\r"
         "REV:2008-04-24T19:52:43Z\r"
         "END:VCARD\r";
+    TESTCASE(cr, PE_ILLEGAL_CHAR, NULL);
 
-    char mixed[] =
+    /* Some lines end on CRLF and some on LF */
+    char mixed_in[] =
         "BEGIN:VCARD\n"
         "VERSION:3.0\n"
-        "NOTE:Some lines end on CRLF, some on LF\r\n"
+        "NOTE:Some lines end on LF and some on CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\n";
+    char mixed_out[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:Some lines end on LF and some on CRLF\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    TESTCASE(mixed_in, PE_OK, mixed_out);
 
-    char extra_cr[] =
+    /* An extra CR before CRLF */
+    char extra_cr_in[] =
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:An extra CR before CRLF\r\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
+    char extra_cr_out[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:An extra CR before CRLF\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    TESTCASE(extra_cr_in, PE_OK, extra_cr_out);
 
-    char lflf[] =
+    /* Two LF make one empty line */
+    char lflf_in[] =
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:Two LF make one empty line\n\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-
-    char lonely_cr[] =
+    char lflf_out[] =
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
-        /* Probably too forgiving. This one could be rejected */
+        "NOTE:Two LF make one empty line\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    TESTCASE(lflf_in, PE_OK, lflf_out);
+
+    /* One lonely CR in the middle of text */
+    /* Single-value */
+    char cr_val1[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
         "NOTE:One lonely \r in the middle of text\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-
-    TESTCASE(crlf, PE_OK);
-    TESTCASE(lf, PE_OK);
-    TESTCASE(cr, PE_FINISHED_EARLY);
-    TESTCASE(mixed, PE_OK);
-    TESTCASE(extra_cr, PE_OK);
-    TESTCASE(lflf, PE_OK);
-    TESTCASE(lonely_cr, PE_OK);
+    /* Multi-value */
+    char cr_val2[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:One lonely CR in the middle of text\r\n"
+        "ADR:;;123\rMain Street;Any Town;CA;91921-1234;U.S.A\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    /* CR in key */
+    char cr_key[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE\r:CR in key\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    /* CR in param name */
+    char cr_para1[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "EMAIL;TYPE\r=work:foo@local\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    /* CR in param name */
+    char cr_para2[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "EMAIL;TYPE=work\r:foo@local\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    TESTCASE(cr_val1, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_val2, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_key, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_para1, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_para2, PE_ILLEGAL_CHAR, NULL);
 
 #undef TESTCASE
 }
