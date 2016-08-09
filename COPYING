@@ -1,6 +1,6 @@
-ALL versions of the  Cyrus IMAP server are now covered by the following copyright:
+ALL versions of the Cyrus IMAP server are covered by the following copyright:
 
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,17 +42,4 @@ ALL versions of the  Cyrus IMAP server are now covered by the following copyrigh
 If you find this software useful and valuable in your work, we would
 welcome any support you can offer toward continuing this work.
 
-We gratefully accept contributions, whether intellectual or monetary.
-Intellectual contributions in the form of code or constructive
-collaboration can be directed to cyrus-bugs+@andrew.cmu.edu (even if
-it is not a bug).
-
-If you wish to provide financial support to the Cyrus Project, send a
-check payable to "Carnegie Mellon University" to
-
-       Project Cyrus
-       Computing Services
-       Carnegie Mellon University
-       5000 Forbes Ave
-       Pittsburgh, PA 15213
-       USA
+http://cyrusimap.org/ for information on how to contact us and contributing.
