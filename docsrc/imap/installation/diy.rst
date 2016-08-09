@@ -272,7 +272,7 @@ Configure the Build
 
 .. parsed-literal::
 
-    $ :command:`autoreconf -vi`
+    $ :command:`autoreconf -i`
     $ :command:`./configure` [options]
 
 Check the summary after ``./configure`` completes successfully. The

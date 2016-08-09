@@ -57,7 +57,7 @@ Installation of Cyrus IMAP |imap_current_stable_next_version| on CentOS
 
     .. parsed-literal::
 
-        $ :command:`autoreconf -vi`
+        $ :command:`autoreconf -i`
         $ :command:`./configure` [options]
 
     For a full list of options, see ``./configure --help``.
