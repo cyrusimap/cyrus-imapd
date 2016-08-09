@@ -538,7 +538,7 @@ int fixquota_fixroot(struct mailbox *mailbox,
 {
     int r;
 
-    printf("%s: quota root %s --> %s\n", mailbox->name,
+    fprintf(stderr, "%s: quota root %s --> %s\n", mailbox->name,
            mailbox->quotaroot ? mailbox->quotaroot : "(none)",
            root ? root : "(none)");
 
@@ -561,7 +561,7 @@ int fixquota_finish(int thisquota)
 
     if (!quotaroots[thisquota].refcount) {
         quotaroots[thisquota].deleted = 1;
-        printf("%s: removed\n", root);
+        fprintf(stderr, "%s: removed\n", root);
         r = quota_deleteroot(root);
         if (r) {
             errmsg("failed deleting quotaroot '%s'", root, r);
@@ -580,7 +580,7 @@ int fixquota_finish(int thisquota)
     /* is it different? */
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
         if (localq.scanuseds[res] != localq.useds[res]) {
-            printf("%s: %s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
+            fprintf(stderr, "%s: %s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
                 root,
                 quota_names[res],
                 localq.useds[res],
