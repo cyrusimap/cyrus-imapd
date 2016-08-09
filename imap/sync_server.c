@@ -1052,7 +1052,7 @@ static void reserve_folder(const char *part, const char *mboxname,
 
     /* Open and lock mailbox */
     r = mailbox_open_irl(mboxname, &mailbox);
-
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) return;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -1437,6 +1437,7 @@ static int do_mailbox(struct dlist *kin)
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createsync(mboxname, mbtype, partition,
 				sync_userid, sync_authstate,
@@ -1668,6 +1669,7 @@ static int mailbox_cb(char *name,
      * to safely get read-only access to the annotation and
      * other "side" databases here */
     r = mailbox_open_iwl(name, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT ||
 	r == IMAP_MAILBOX_RESERVED) {
@@ -1705,6 +1707,7 @@ static int do_getfullmailbox(struct dlist *kin)
      * don't have a good way to express that, so we use
      * write locks anyway */
     r = mailbox_open_iwl(kin->sval, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto out;
 
     r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 1);
@@ -1955,6 +1958,7 @@ static int do_annotation(struct dlist *kin)
     mboxname_hiersep_toexternal(sync_namespacep, name, 0);
 
     r = mailbox_open_iwl(name, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto done;
 
     appendattvalue(&attvalues,
@@ -2010,6 +2014,8 @@ static int do_unannotation(struct dlist *kin)
     mboxname_hiersep_toexternal(sync_namespacep, name, 0);
 
     r = mailbox_open_iwl(name, &mailbox);
+    if (!r)
+	r = sync_mailbox_version_check(&mailbox);
     if (r)
 	goto done;
 
@@ -2267,6 +2273,7 @@ static int do_expunge(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto done;
 
     /* don't want to expunge the wrong mailbox! */
@@ -2341,6 +2348,9 @@ static void print_response(int r)
 	break;
     case IMAP_PROTOCOL_BAD_PARAMETERS:
 	prot_printf(sync_out, "NO IMAP_PROTOCOL_BAD_PARAMETERS near %s\r\n", dlist_lastkey());
+	break;
+    case IMAP_MAILBOX_NOTSUPPORTED:
+	prot_printf(sync_out, "NO IMAP_MAILBOX_NOTSUPPORTED Operation is not supported on mailbox\r\n");
 	break;
     default:
 	prot_printf(sync_out, "NO %s\r\n", error_message(r));

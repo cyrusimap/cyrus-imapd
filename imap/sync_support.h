@@ -433,4 +433,6 @@ int diff_annotations(const struct sync_annot_list *local_annots,
 
 /* ====================================================================== */
 
+int sync_mailbox_version_check(struct mailbox **mailboxp);
+
 #endif /* INCLUDED_SYNC_SUPPORT_H */

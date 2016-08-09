@@ -1497,6 +1497,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
 	else if (!strncmp(errmsg.s, "IMAP_PROTOCOL_BAD_PARAMETERS ",
 			  strlen("IMAP_PROTOCOL_BAD_PARAMETERS ")))
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
+	else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NOTSUPPORTED ",
+			  strlen("IMAP_MAILBOX_NOTSUPPORTED ")))
+	    return IMAP_MAILBOX_NOTSUPPORTED;
 	else
 	    return IMAP_REMOTE_DENIED;
     }
@@ -1802,3 +1805,13 @@ out:
 }
 
 /* ====================================================================== */
+
+int sync_mailbox_version_check(struct mailbox **mailboxp)
+{
+    if ((*mailboxp)->i.minor_version >= 10)
+	return 0;
+
+    /* index records will not have guids! */
+    mailbox_close(mailboxp);
+    return IMAP_MAILBOX_NOTSUPPORTED;
+}
