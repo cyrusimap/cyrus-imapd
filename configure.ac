@@ -1653,10 +1653,13 @@ if test "$with_com_err" != yes ; then
     "${COMPILE_ET}" $TEST1.et > /dev/null
     compile_et_ok=no
     if test -f $TEST1.h ; then
-        if test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "(-1904809472L)" ; then
-            compile_et_ok=yes
-        fi
         dnl Broken compile_et produces (2390157824L)
+        if test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "(-1904809472L)" ; then
+            dnl We need a version that exposes et_[foo]_error_table
+            if grep -q '^extern const struct error_table et_imap_error_table;' $TEST1.h; then
+                compile_et_ok=yes
+            fi
+        fi
     fi
     /bin/rm -f $TEST1.et $TEST1.h $TEST1.c
     if test "$compile_et_ok" = no ; then
