@@ -601,9 +601,13 @@ EXPORTED int become_cyrus(int is_master)
 
     if (uid) return cap_setuid(uid, is_master);
 
-    p = getpwnam(CYRUS_USER);
+    const char *cyrus_user = getenv("CYRUS_USER");
+    if (!cyrus_user) cyrus_user = config_getstring(IMAPOPT_CYRUS_USER);
+    if (!cyrus_user) cyrus_user = CYRUS_USER;
+
+    p = getpwnam(cyrus_user);
     if (p == NULL) {
-        syslog(LOG_ERR, "no entry in /etc/passwd for user %s", CYRUS_USER);
+        syslog(LOG_ERR, "no entry in /etc/passwd for user %s", cyrus_user);
         return -1;
     }
 
@@ -621,7 +625,7 @@ EXPORTED int become_cyrus(int is_master)
         return 0;
     }
 
-    if (initgroups(CYRUS_USER, newgid)) {
+    if (initgroups(cyrus_user, newgid)) {
         syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
                CYRUS_USER, strerror(errno));
         return -1;
@@ -629,7 +633,7 @@ EXPORTED int become_cyrus(int is_master)
 
     if (setgid(newgid)) {
         syslog(LOG_ERR, "unable to set group id to %d for user %s: %s",
-              newgid, CYRUS_USER, strerror(errno));
+              newgid, cyrus_user, strerror(errno));
         return -1;
     }
 

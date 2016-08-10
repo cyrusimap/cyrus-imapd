@@ -594,6 +594,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* only show the domain for users in other domains than your own (for
    backwards compatibility if you're already sharing */
 
+{ "cyrus_user", NULL, STRING }
+/* The username to use as the 'cyrus' user.  If not configured, the compile
+   time default will be used */
+
 { "davdriveprefix", "#drive", STRING }
 /* The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
    delimiter will be automatically appended.  The public storage
