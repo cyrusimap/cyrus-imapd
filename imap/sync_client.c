@@ -212,6 +212,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 	 * USE the value... the whole "add to master folders" actually
 	 * looks a bit pointless... */
 	r = mailbox_open_iwl(mbox->name, &mailbox);
+	if (!r) r = sync_mailbox_version_check(&mailbox);
 
 	/* Quietly skip over folders which have been deleted since we
 	   started working (but record fact in case caller cares) */
@@ -1298,6 +1299,7 @@ static int mailbox_full_update(const char *mboxname)
 
     /* we'll be updating it! */
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto done;
 
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
@@ -1468,6 +1470,7 @@ static int update_mailbox_once(struct sync_folder *local,
     annotate_state_t *astate = NULL;
 
     r = mailbox_open_iwl(local->name, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* been deleted in the meanwhile... it will get picked up by the
 	 * delete call later */
@@ -1946,6 +1949,7 @@ static int do_mailbox_info(void *rock,
     /* XXX - check for deleted? */
 
     r = mailbox_open_irl(name, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = 0;
