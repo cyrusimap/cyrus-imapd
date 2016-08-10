@@ -1808,10 +1808,36 @@ out:
 
 int sync_mailbox_version_check(struct mailbox **mailboxp)
 {
-    if ((*mailboxp)->i.minor_version >= 10)
-	return 0;
+    struct index_record record;
+    uint32_t recno;
+    int r = 0;
 
-    /* index records will not have guids! */
-    mailbox_close(mailboxp);
-    return IMAP_MAILBOX_NOTSUPPORTED;
+    if ((*mailboxp)->i.minor_version < 10) {
+	/* index records will definitely not have guids! */
+	r = IMAP_MAILBOX_NOTSUPPORTED;
+	goto done;
+    }
+
+    /* scan index records to ensure they have guids.  version 10 index records
+     * have this field, but it might have never been initialised.
+     * XXX this might be overkill for versions > 10, but let's be cautious */
+    for (recno = 1; recno < (*mailboxp)->i.num_records; recno++) {
+	r = mailbox_read_index_record(*mailboxp, recno, &record);
+	if (r) goto done;
+
+	if (message_guid_isnull(&record.guid)) {
+	    syslog(LOG_WARNING, "%s: missing guid for record %u -- needs 'reconstruct -G'?",
+				(*mailboxp)->name, recno);
+	    r = IMAP_MAILBOX_NOTSUPPORTED;
+	    goto done;
+	}
+    }
+
+done:
+    if (r) {
+	syslog(LOG_DEBUG, "%s: %s failed version check: %s",
+			  __func__, (*mailboxp)->name, error_message(r));
+	mailbox_close(mailboxp);
+    }
+    return r;
 }
