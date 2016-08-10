@@ -13,7 +13,7 @@ What is Cyrus
 =============
 
 Cyrus is an IMAP server, where IMAP (Internet Message Access Protocol) 
-is a protocol for accessing messages (mail, bboards, news, etc). 
+is a protocol for accessing mail.
 
 The Cyrus IMAP server differs from other IMAP server implementations in 
 that it is generally intended to be run on "sealed" servers, where 
@@ -22,40 +22,56 @@ in parts of the filesystem that are private to the Cyrus IMAP system.
 All user access to mail is through the IMAP, NNTP, or POP3 protocols. 
 
 The private mailbox database design gives the server large advantages in 
-efficiency, scalability, and administratability. Multiple concurrent 
+efficiency, scalability, and administrability. Multiple concurrent 
 read/write connections to the same mailbox are permitted. The server 
 supports access control lists on mailboxes and storage quotas on mailbox 
 hierarchies. 
-
-
 
 Cyrus goals
 ===========
 
 To be the best open source secure, scalable mail server, providing 
 breadth and depth of functionality across email, contacts, calendar 
-and related messaging services.
+and related messaging services!
 
-How to install Cyrus if you're an administrator
+How to get Cyrus
+================
+
+Cyrus comes in three flavours: 
+
+1. Our release source tarballs from ftp://ftp.cyrusimap.org/cyrus-imapd/
+    * Recommended for most users.
+    * These are packaged by the Cyrus team.
+    * The docs are pre-built for you in doc/html.
+    * They're definitively tagged to a particular release version with up to date release notes.
+2. Raw source from https://github.com/cyrusimap/cyrus-imapd
+    * Use this if you need a version of Cyrus that contains an unreleased patch/fix/feature.
+    * These bundles require a lot more dependencies to build than a packaged tarball.
+    * You need to run ``autoreconf -i``, then ``./configure`` then ``make dist`` in order to generate all the artefacts normally available in an official release tarball.
+3. Operating System distribution packages.
+    * Cyrus IMAP packages are shipped with every major distribution, including but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS.
+    * Please be aware that we don't maintain these packages and as such, some distributions are out of date.
+    * If you run into problems with a packed distribution, please contact the source of the distribution.
+
+How to install Cyrus from packaged releases
 ===============================================
 
-PLEASE be sure to read the documentation. The latest version is online 
+Please be sure to read the documentation. The latest version is online 
 at http://www.cyrusimap.org, but the version current for this 
-distribution can be found in the doc/ subdirectory. This is pre-packaged 
-in our release tarballs from http://www.cyrusimap.org, but needs to be 
-built via `make doc-html` from the top level directory if you are using 
-the source from git. 
+distribution can be found in the doc/ subdirectory.
 
-Note that we only provide a source distribution. If you run into 
-problems with any binary distribution, please contact the source of the 
-binary distribution. 
+For Cyrus tarball releases, the basic installation instructions are:
 
-Quick instructions are in the INSTALL file. 
+    $ ./configure
+    $ make
+    $ sudo make install
 
-How to set up Cyrus if you are a contributor
+For more detailed instructions see: doc/html/imap/installation.diy.html#from-tarball 
+
+How to install Cyrus from git source
 ============================================
 
-The latest Cyrus development or stable code is available at:
+The Cyrus source is available at:
 
 https://github.com/cyrusimap/cyrus-imapd
 
@@ -67,22 +83,19 @@ stable is called cyrus-imapd-2.5
 Unlike releases, the git repository doesn't have a pre-built
 ./configure script.  You need to generate it with autoreconf:
 
-    autoreconf -i
+    $ autoreconf -i
+    $ ./configure
+    $ make
+    $ sudo make install
 
-(See the autoreconf(1) man page for other options.)
+If you need to build a local copy of the docs current to the version of the code, these need to be built: see docsrc/README
 
-Read through doc/build/html/imap/developer.html or the latest version is 
-online at http://www.cyrusimap.org/imap/developer.html 
-
-The doc is pre-packaged in our release tarballs from 
-http://www.cyrusimap.org, but needs to be built via `make doc-html` from 
-the top level directory if you are using the source from git. 
-
+Read through doc/build/html/imap/developer.html for more detailed instructions on building and contributing. The latest version is online at http://www.cyrusimap.org/imap/developer.html 
 
 Are you upgrading?
 ==================
 
-Be sure to read doc/legacy/install-upgrade.html
+Read doc/legacy/install-upgrade.html
 
 Think you've found a bug or have a new feature?
 ===============================================
@@ -97,8 +110,6 @@ https://bugzilla.cyrusimap.org/
 Our guide at http://www.cyrusimap.org/feedback-bugs.html has all the 
 information about how to contact us and how best to get your bug filed 
 or your change accepted. 
-
-
 
 Licensing Information
 =====================
