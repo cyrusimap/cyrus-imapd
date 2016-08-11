@@ -12,6 +12,8 @@ When reporting a bug, please provide the following information;
 * If a custom version is used, any options that may have specified during the build process.
 * If relevant, are you using altnamespace, unixhierarchysep, or virtdomains?
 * If relevant, are you in a murder configuration? (In which case please provide information for all hosts) 
+* What did you do?
+* What did you expect to happen, and what actually happened?
 
 .. note::
     **Cyrus IMAP Version**

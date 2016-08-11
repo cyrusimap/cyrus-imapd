@@ -27,4 +27,4 @@ Contribute Code
 
 The Cyrus Team always welcomes patches sent to the appropriate :ref:`Cyrus Mailing Lists <feedback>`
 
-For those looking to develop against Cyrus using their own local repository, see our :ref:`Detailed Contributor Guide <imap-developer>`.
+For those looking to develop against Cyrus using their own local repository so you can send us a github pull request, see our :ref:`Detailed Contributor Guide <imap-developer>`.

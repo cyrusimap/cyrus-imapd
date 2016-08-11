@@ -48,7 +48,6 @@ From there, you:
 5. Wait for review (a quick note to the mailing list can speed this along)
 6. Once approved, it'll be merged into the master.
 
-
 Patches through the mailing list
 --------------------------------
 If you're not planning on regularly submitting changes, you can just send your patch through to the mailing list and one of the regular maintainers will see about incorporating it.
