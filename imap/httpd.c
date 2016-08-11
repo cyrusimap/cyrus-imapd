@@ -3325,21 +3325,30 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
     if ((txn->flags.te & TE_CHUNKED) && txn->flags.ver == VER_1_1) {
         /* HTTP/1.1 chunk */
-        prot_printf(httpd_out, "%x\r\n", outlen);
-        prot_write(httpd_out, buf, outlen);
+        if (outlen) {
+            syslog(LOG_DEBUG, "write_body: chunk(%d)", outlen);
+            prot_printf(httpd_out, "%x\r\n", outlen);
+            prot_write(httpd_out, buf, outlen);
+            prot_puts(httpd_out, "\r\n");
 
-        if (txn->flags.trailer & TRAILER_CMD5) {
-            if (outlen) MD5Update(&ctx, buf, outlen);
-            else if (!len) {
-                /* Trailer */
+            if (txn->flags.trailer & TRAILER_CMD5) MD5Update(&ctx, buf, outlen);
+        }
+        if (!len) {
+            /* Terminate the HTTP/1.1 body with a zero-length chunk */
+            syslog(LOG_DEBUG, "write_body: last chunk");
+            prot_puts(httpd_out, "0\r\n");
+
+            /* Trailer */
+            if (txn->flags.trailer & TRAILER_CMD5) {
+                syslog(LOG_DEBUG, "write_body: trailer");
                 MD5Final(md5, &ctx);
                 content_md5_hdr(txn, md5);
             }
-        }
 
-        if (len || txn->flags.trailer != TRAILER_PROXY) {
-            /* Terminate the chunk/trailer */
-            prot_puts(httpd_out, "\r\n");
+            if (txn->flags.trailer != TRAILER_PROXY) {
+                syslog(LOG_DEBUG, "write_body: CRLF");
+                prot_puts(httpd_out, "\r\n");
+            }
         }
     }
     else {
