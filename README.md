@@ -78,7 +78,7 @@ https://github.com/cyrusimap/cyrus-imapd
 The latest development code is on the branch called 'master',
 and the latest code destined for the stable release is on
 the branch 'cyrus-imapd-$major.$minor'.  So the current
-stable is called cyrus-imapd-2.5
+stable release is called cyrus-imapd-2.5
 
 Unlike releases, the git repository doesn't have a pre-built
 ./configure script.  You need to generate it with autoreconf:
@@ -103,13 +103,16 @@ Think you've found a bug or have a new feature?
 Fantastic! We'd love to hear about it, especially if you have a patch to 
 contribute. 
 
+The best way to make contributions to the project is to fork
+it on github, make your changes on your fork, and then send
+a pull request.
+
 Check https://github.com/cyrusimap/cyrus-imapd/issues/ for any 
 outstanding bugs. Old bugs can be found at 
 https://bugzilla.cyrusimap.org/ 
 
 Our guide at http://www.cyrusimap.org/feedback-bugs.html has all the 
-information about how to contact us and how best to get your bug filed 
-or your change accepted. 
+information about how to contact us and how best to get your change accepted.
 
 Licensing Information
 =====================
