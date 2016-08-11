@@ -509,7 +509,6 @@ static int starthttp2(struct http_connection *conn, struct transaction_t *txn)
         }
 
         /* tell client to start h2c upgrade (RFC 7540) */
-        txn->protocol = NGHTTP2_CLEARTEXT_PROTO_VERSION_ID;
         response_header(HTTP_SWITCH_PROT, txn);
 
         txn->flags.ver = VER_2;
@@ -1247,7 +1246,6 @@ static int starttls(struct transaction_t *txn, int *http2)
 
     if (!https) {
         /* tell client to start TLS upgrade (RFC 2817) */
-        txn->protocol = TLS_VERSION;
         response_header(HTTP_SWITCH_PROT, txn);
     }
 
@@ -1423,7 +1421,8 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
             strstr(hdr[0], TLS_VERSION)) {
             /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
 
-            txn->protocol = TLS_VERSION;
+            txn->flags.conn |= CONN_UPGRADE;
+            txn->flags.upgrade = UPGRADE_TLS;
             return HTTP_UPGRADE;
         }
         else {
@@ -1496,24 +1495,34 @@ static int examine_request(struct transaction_t *txn)
     /* Check for Connection options */
     if ((ret = parse_connection(txn))) return ret;
 
-    syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
-           txn->flags.upgrade, httpd_tls_required);
-    if (txn->flags.upgrade & UPGRADE_TLS) {
-        int http2 = 0;
-        if ((ret = starttls(txn, &http2))) {
-            txn->flags.conn = CONN_CLOSE;
-            return ret;
+    syslog(LOG_DEBUG, "conn flags: %#x  upgrade flags: %#x  tls req: %d",
+           txn->flags.conn, txn->flags.upgrade, httpd_tls_required);
+    if (txn->flags.conn & CONN_UPGRADE) {
+        if (txn->flags.upgrade & UPGRADE_TLS) {
+            int http2 = 0;
+            if ((ret = starttls(txn, &http2))) {
+                txn->flags.conn = CONN_CLOSE;
+                return ret;
+            }
+            if (http2) txn->flags.upgrade |= UPGRADE_HTTP2;
         }
-        if (http2) txn->flags.upgrade |= UPGRADE_HTTP2;
-    }
 
-    syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
-           txn->flags.upgrade, httpd_tls_required);
-    if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
-        if ((ret = starthttp2(txn->conn, httpd_tls_done ? NULL : txn))) {
-            txn->flags.conn = CONN_CLOSE;
-            return ret;
+        syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
+               txn->flags.upgrade, httpd_tls_required);
+        if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
+            if ((ret = starthttp2(txn->conn, httpd_tls_done ? NULL : txn))) {
+                txn->flags.conn = CONN_CLOSE;
+                return ret;
+            }
         }
+
+        txn->flags.conn &= ~CONN_UPGRADE;
+        txn->flags.upgrade = 0;
+    }
+    else if (!httpd_tls_done && txn->flags.ver == VER_1_1) {
+        /* Advertise available upgrade protocols */
+        txn->flags.conn |= CONN_UPGRADE;
+        txn->flags.upgrade = UPGRADE_TLS | UPGRADE_HTTP2;
     }
 
     /* Check message framing */
@@ -1834,7 +1843,6 @@ static void transaction_reset(struct transaction_t *txn)
 
     txn->auth_chal.param = NULL;
     txn->location = NULL;
-    txn->protocol = NULL;
     memset(&txn->error, 0, sizeof(struct error_t));
 
     memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
@@ -2263,6 +2271,11 @@ static int parse_connection(struct transaction_t *txn)
         }
     }
 
+    if (!txn->flags.upgrade) {
+        /* Unknown/unsupported protocol - no upgrade */
+        txn->flags.conn &= ~CONN_UPGRADE;
+    }
+
     return ret;
 }
 
@@ -2590,13 +2603,36 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Connection Management */
-    txn->flags.conn &= ~CONN_UPGRADE;
-
     switch (code) {
     case HTTP_SWITCH_PROT:
-        /* Tell client to start new protocol */
-        simple_hdr(txn, "Upgrade", txn->protocol);
-        simple_hdr(txn, "Connection", "Upgrade");
+    default:
+        /* Final response */
+        auth_chal = &txn->auth_chal;
+        resp_body = &txn->resp_body;
+
+        if (txn->flags.conn && txn->flags.ver != VER_2) {
+            /* Construct Connection header - HTTP/1.x only */
+            const char *conn_tokens[] =
+                { "close", "Upgrade", "Keep-Alive", NULL };
+            const char *upgrade_tokens[] =
+                { TLS_VERSION,
+#ifdef HAVE_NGHTTP2
+                  NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+#endif
+                  NULL };
+
+            comma_list_hdr(txn, "Connection", conn_tokens, txn->flags.conn);
+
+            if (txn->flags.upgrade) {
+                comma_list_hdr(txn, "Upgrade", upgrade_tokens, txn->flags.upgrade);
+            }
+
+            if (txn->flags.conn & CONN_KEEPALIVE) {
+                simple_hdr(txn, "Keep-Alive", "timeout=%d", httpd_timeout);
+            }
+        }
+
+        if (code != HTTP_SWITCH_PROT) break;
 
         /* Fall through as provisional response */
 
@@ -2609,29 +2645,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         prot_flush(httpd_out);
 
         return;
-
-    case HTTP_UPGRADE:
-        txn->flags.conn |= CONN_UPGRADE;
-        simple_hdr(txn, "Upgrade", txn->protocol);
-
-        /* Fall through as final response */
-
-    default:
-        /* Final response */
-        if (txn->flags.conn && txn->flags.ver != VER_2) {
-            /* Construct Connection header - HTTP/1.x only */
-            const char *conn_tokens[] =
-                { "close", "Upgrade", "Keep-Alive", NULL };
-
-            if (txn->flags.conn & CONN_KEEPALIVE) {
-                simple_hdr(txn, "Keep-Alive", "timeout=%d", httpd_timeout);
-            }
-
-            comma_list_hdr(txn, "Connection", conn_tokens, txn->flags.conn);
-        }
-
-        auth_chal = &txn->auth_chal;
-        resp_body = &txn->resp_body;
     }
 
 

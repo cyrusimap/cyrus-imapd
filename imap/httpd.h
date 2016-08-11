@@ -74,7 +74,7 @@
 #define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
 
 /* Supported TLS version for Upgrade */
-#define TLS_VERSION      "TLS/1.0"
+#define TLS_VERSION      "TLS/1.2"
 
 /* Supported HTML DOCTYPE */
 #define HTML_DOCTYPE \
@@ -348,7 +348,6 @@ struct transaction_t {
     struct body_t req_body;             /* Buffered request body */
     struct auth_challenge_t auth_chal;  /* Authentication challenge */
     const char *location;               /* Location of resource */
-    const char *protocol;               /* Upgrade protocol token */
     struct error_t error;               /* Error response meta-data */
     struct resp_body_t resp_body;       /* Response body meta-data */
     struct buf zbuf;                    /* Compression buffer */
