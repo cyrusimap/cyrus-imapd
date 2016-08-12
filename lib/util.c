@@ -627,7 +627,7 @@ EXPORTED int become_cyrus(int is_master)
 
     if (initgroups(cyrus_user, newgid)) {
         syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
-               CYRUS_USER, strerror(errno));
+               cyrus_user, strerror(errno));
         return -1;
     }
 
