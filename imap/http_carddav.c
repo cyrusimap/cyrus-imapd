@@ -354,29 +354,30 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (config_mupdate_server) {
-            /* Find location of INBOX */
-            char *inboxname = mboxname_user_mbox(userid, NULL);
-            mbentry_t *mbentry = NULL;
+        /* Find location of INBOX */
+        char *inboxname = mboxname_user_mbox(userid, NULL);
+        mbentry_t *mbentry = NULL;
 
-            r = http_mlookup(inboxname, &mbentry, NULL);
-            free(inboxname);
-            if (!r && mbentry->server) {
-                proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
-                                 &backend_cached, NULL, NULL, httpd_in);
-                mboxlist_entry_free(&mbentry);
-                goto done;
-            }
+        r = http_mlookup(inboxname, &mbentry, NULL);
+        free(inboxname);
+        if (r == IMAP_MAILBOX_NONEXISTENT) r = IMAP_INVALID_USER;
+        if (!r && mbentry->server) {
+            proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
+                             &backend_cached, NULL, NULL, httpd_in);
             mboxlist_entry_free(&mbentry);
+            goto done;
         }
-        else r = 0;
+        mboxlist_entry_free(&mbentry);
 
-        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_ADDRESSBOOK,
-                                   NULL, 0,
-                                   userid, httpd_authstate,
-                                   0, 0, 0, 0, NULL);
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      mbname_intname(mbname), error_message(r));
+        if (!r) {
+            r = mboxlist_createmailbox(mbname_intname(mbname),
+                                       MBTYPE_ADDRESSBOOK,
+                                       NULL, 0,
+                                       userid, httpd_authstate,
+                                       0, 0, 0, 0, NULL);
+            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                          mbname_intname(mbname), error_message(r));
+        }
     }
     if (r) goto done;
 
@@ -415,6 +416,8 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
 
 static void my_carddav_auth(const char *userid)
 {
+    int r;
+
     if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
@@ -431,7 +434,11 @@ static void my_carddav_auth(const char *userid)
     }
 
     /* Auto-provision an addressbook for 'userid' */
-    carddav_create_defaultaddressbook(userid);
+    r = carddav_create_defaultaddressbook(userid);
+    if (r) {
+        syslog(LOG_ERR, "could not autoprovision addressbook for userid %s: %s",
+                userid, error_message(r));
+    }
 }
 
 

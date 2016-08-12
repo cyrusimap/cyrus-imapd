@@ -710,24 +710,24 @@ int caldav_create_defaultcalendars(const char *userid)
     mailboxname = caldav_mboxname(userid, NULL);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (config_mupdate_server) {
-            /* Find location of INBOX */
-            char *inboxname = mboxname_user_mbox(userid, NULL);
-            mbentry_t *mbentry = NULL;
+        /* Find location of INBOX */
+        char *inboxname = mboxname_user_mbox(userid, NULL);
+        mbentry_t *mbentry = NULL;
 
-            r = http_mlookup(inboxname, &mbentry, NULL);
-            free(inboxname);
-            if (!r && mbentry->server) {
-                proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
-                                 &backend_cached, NULL, NULL, httpd_in);
-                mboxlist_entry_free(&mbentry);
-                free(mailboxname);
-                return r;
-            }
+        r = http_mlookup(inboxname, &mbentry, NULL);
+        free(inboxname);
+        if (r == IMAP_MAILBOX_NONEXISTENT) r = IMAP_INVALID_USER;
+        if (!r && mbentry->server) {
+            proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
+                             &backend_cached, NULL, NULL, httpd_in);
             mboxlist_entry_free(&mbentry);
+            free(mailboxname);
+            return r;
         }
-        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
-                            ACL_ALL | DACL_READFB, DACL_READFB, NULL);
+        mboxlist_entry_free(&mbentry);
+
+        if (!r) r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+                                    ACL_ALL | DACL_READFB, DACL_READFB, NULL);
     }
 
     free(mailboxname);
