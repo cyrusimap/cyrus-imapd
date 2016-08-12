@@ -311,7 +311,7 @@ endif # SIEVE
 
 EXTRA_DIST += \
 	COPYING \
-	README \
+	README.md \
 	SMakefile \
 	xversion.h \
 	com_err/et/et_c.awk \
