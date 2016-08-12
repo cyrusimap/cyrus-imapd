@@ -3469,7 +3469,7 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
     r = mboxlist_lookup(mboxname, &mbrock->mbentry, NULL);
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-               key, error_message(r));
+               mboxname, error_message(r));
         return r;
     }
 
