@@ -1,0 +1,55 @@
+Welcome
+=======
+
+Cyrus IMAPd docs live here.
+
+Packaged Cyrus releases have documentation prebuilt in html, plain text, and
+man page format.
+
+If you are building from git sources, and want to build the same documentation,
+read on.
+
+Building the docs
+=============
+
+If you want to build from source, you'll need sphinx and its dependencies.
+See: http://www.cyrusimap.org/imap/developer/documentation.html for the latest.
+
+Pre-requisites
+------------------
+
+For basic reStructured Text operations, we are using Sphinx version 1.3.6:
+
+- python-sphinx
+- python-sphinxcontrib-programoutput
+- python-sphinxcontrib.actdiag
+- python-sphinxcontrib.blockdiag
+- python-sphinxcontrib.nwdiag
+- python-sphinxcontrib.phpdomain
+- python-sphinxcontrib.seqdiag
+- python-sphinxcontrib.spelling
+
+You will also need the following Perl packages and their dependencies, which
+are used to build some docs from their Perl source:
+
+- Pod::POM::View::Restructured
+
+Building
+-----------
+
+The following targets in the main Cyrus Makefile will (re)build the
+documentation:
+
+- ``make doc-html``     # rebuild the HTML documentation into doc/html/
+- ``make doc-text``     # rebuild the plain text documentation into doc/text/
+- ``make man``          # rebuild man pages into man/
+- ``make doc``          # all of the above
+
+Contact us
+==========
+
+Whether you have a success story to share, or a bug to file, or a
+request for help or a feature to add or some documentation to contribute
+or you'd just like to say hi, we want to hear from you! See
+http://www.cyrusimap.org/feedback.html for various ways you can get hold
+of us.

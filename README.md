@@ -47,7 +47,6 @@ Cyrus comes in three flavours:
 2. Raw source from https://github.com/cyrusimap/cyrus-imapd
     * Use this if you need a version of Cyrus that contains an unreleased patch/fix/feature.
     * These bundles require a lot more dependencies to build than a packaged tarball.
-    * You need to run ``autoreconf -i``, then ``./configure`` then ``make dist`` in order to generate all the artefacts normally available in an official release tarball.
 3. Operating System distribution packages.
     * Cyrus IMAP packages are shipped with every major distribution, including but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS.
     * Please be aware that we don't maintain these packages and as such, some distributions are out of date.
@@ -88,9 +87,9 @@ Unlike releases, the git repository doesn't have a pre-built
     $ make
     $ sudo make install
 
-If you need to build a local copy of the docs current to the version of the code, these need to be built: see docsrc/README
+If you need to build a local copy of the docs current to the version of the code, these need to be built: see doc/README.docs
 
-Read through doc/build/html/imap/developer.html for more detailed instructions on building and contributing. The latest version is online at http://www.cyrusimap.org/imap/developer.html 
+Read through doc/html/imap/developer.html for more detailed instructions on building and contributing. The latest version is online at http://www.cyrusimap.org/imap/developer.html
 
 Are you upgrading?
 ==================
