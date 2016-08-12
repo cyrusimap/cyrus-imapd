@@ -267,7 +267,7 @@ static int http2_begin_headers_cb(nghttp2_session *session,
     txn->meth = METH_UNKNOWN;
     txn->flags.ver = VER_2;
     txn->flags.vary = VARY_AE;
-    txn->req_line.ver = "HTTP/2";
+    txn->req_line.ver = HTTP2_VERSION;
 
     /* Create header cache */
     if (!(txn->req_hdrs = spool_new_hdrcache())) {
@@ -3012,7 +3012,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
         if (*sep == ';') buf_appendcstr(&log, ")");
     }
-    buf_printf(&log, " => \"%s\"", error_message(code));
+    /* Add response */
+    buf_printf(&log, " => \"%s %s\"",
+               txn->flags.ver == VER_2 ? HTTP2_VERSION : HTTP_VERSION,
+               error_message(code));
     /* Add any auxiliary response data */
     if (txn->location) {
         buf_printf(&log, " (location=%s)", txn->location);
