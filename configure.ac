@@ -45,7 +45,7 @@ dnl
 
 
 AC_INIT([cyrus-imapd],
-        m4_esyscmd(printf '%s' $(git describe --dirty=-dirty | sed -e 's/^cyrus-imapd-//')),
+        m4_esyscmd(printf '%s' $(tools/git-version.sh)),
         [https://github.com/cyrusimap/cyrus-imapd/issues],
         ,
         [https://www.cyrusimap.org])
