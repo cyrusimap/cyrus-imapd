@@ -1266,7 +1266,7 @@ endif # AUTOCREATE
 imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
-imap_quota_LDADD = $(LD_UTILITY_ADD)
+imap_quota_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
 imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
