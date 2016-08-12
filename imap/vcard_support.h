@@ -51,7 +51,7 @@
 #include "mailbox.h"
 #include "util.h"
 
-extern struct vparse_card *vcard_parse_string(const char *str);
+extern struct vparse_card *vcard_parse_string(const char *str, int repair);
 extern struct vparse_card *vcard_parse_buf(const struct buf *buf);
 extern struct buf *vcard_as_buf(struct vparse_card *vcard);
 

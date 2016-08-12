@@ -703,7 +703,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Limit returned properties */
             struct vparse_card *vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data, 1);
             prune_properties(vcard->objects, partial);
 
             /* Create vCard data from new vcard component */
@@ -1014,7 +1014,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
             if (fctx->msg_buf.len) {
                 vcard = fctx->obj =
                     vcard_parse_string(buf_cstring(&fctx->msg_buf) +
-                                       fctx->record->header_size);
+                                       fctx->record->header_size, 1);
             }
             if (!vcard) return 0;
         }
