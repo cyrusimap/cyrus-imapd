@@ -364,7 +364,8 @@ int service_main(int argc __attribute__((unused)),
     sync_clienthost = get_clienthost(0, &localip, &remoteip);
     if (!strcmp(sync_clienthost, UNIX_SOCKET)) {
         /* we're not connected to an internet socket! */
-        sync_userid = xstrdup("cyrus");
+        /* XXX todo: support cyrus_user setting and $CYRUS_USER env variable */
+        sync_userid = xstrdup(CYRUS_USER);
         sync_userisadmin = 1;
     }
     else {

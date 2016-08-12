@@ -231,7 +231,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     backupd_clienthost = get_clienthost(0, &localip, &remoteip);
     if (!strcmp(backupd_clienthost, UNIX_SOCKET)) {
         /* we're not connected to an internet socket! */
-        backupd_userid = xstrdup("cyrus");
+        /* XXX todo: support cyrus_user setting and $CYRUS_USER env variable */
+        backupd_userid = xstrdup(CYRUS_USER);
         backupd_userisadmin = 1;
     }
     else {
