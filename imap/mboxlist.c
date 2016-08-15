@@ -2276,7 +2276,7 @@ static int find_p(void *rockp,
             goto nomatch;
     }
 
-    if (mbname_category(rock->mbname, rock->namespace, rock->userid) != rock->mb_category)
+    if (rock->mb_category && mbname_category(rock->mbname, rock->namespace, rock->userid) != rock->mb_category)
         goto nomatch;
 
     /* NOTE: this will all be cleaned up to be much more efficient sooner or later, with
