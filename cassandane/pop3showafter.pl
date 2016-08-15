@@ -43,6 +43,8 @@ use strict;
 use warnings;
 use DateTime;
 use URI::Escape;
+
+use lib '.';
 use Cassandane::Generator;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
 				  from_rfc822

@@ -39,13 +39,15 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Fetch;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Fetch;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
-use Cassandane::Util::Log;
 use IO::Scalar;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::Log;
 
 sub new
 {

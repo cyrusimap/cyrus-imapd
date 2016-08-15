@@ -39,16 +39,17 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Caldav;
 use strict;
 use warnings;
-
-package Cassandane::Cyrus::Caldav;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
-use Cassandane::Util::Log;
 use JSON::XS;
 use Net::CalDAVTalk;
 use Data::Dumper;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::Log;
 
 sub new
 {

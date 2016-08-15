@@ -42,6 +42,8 @@
 use strict;
 use warnings;
 use DateTime;
+
+use lib '.';
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 use Cassandane::MessageStoreFactory;

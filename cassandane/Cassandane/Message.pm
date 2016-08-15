@@ -42,11 +42,13 @@
 package Cassandane::Message;
 use strict;
 use warnings;
+use base qw(Clone Exporter);
+use overload qw("") => \&as_string;
+
+use lib '.';
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc3501);
 use Cassandane::Util::SHA;
-use base qw(Clone Exporter);
-use overload qw("") => \&as_string;
 
 our @EXPORT = qw(base_subject);
 

@@ -39,9 +39,11 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Delete;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Delete;
+
+use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

@@ -39,18 +39,20 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::JMAP;
 use strict;
 use warnings;
-
-package Cassandane::Cyrus::JMAP;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
-use Cassandane::Util::Log;
 use JSON::XS;
 use Net::CalDAVTalk;
 use Net::CardDAVTalk;
 use Mail::JMAPTalk;
 use Data::Dumper;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::Log;
+
 use charnames ':full';
 
 sub new

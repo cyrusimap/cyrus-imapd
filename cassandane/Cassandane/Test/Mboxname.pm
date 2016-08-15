@@ -39,9 +39,11 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Test::Mboxname;
 use strict;
 use warnings;
-package Cassandane::Test::Mboxname;
+
+use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Mboxname;
 use Cassandane::Config;

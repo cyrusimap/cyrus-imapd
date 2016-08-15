@@ -39,12 +39,14 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Nntp;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Nntp;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use News::NNTPClient;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 

@@ -42,8 +42,10 @@
 package Cassandane::MaildirMessageStore;
 use strict;
 use warnings;
-use base qw(Cassandane::MessageStore);
 use File::Path qw(mkpath rmtree);
+
+use lib '.';
+use base qw(Cassandane::MessageStore);
 
 sub new
 {

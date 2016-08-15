@@ -37,14 +37,15 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Admin;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Admin;
+use Data::Dumper;
+
+use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
-
-use Data::Dumper;
 
 sub new
 {

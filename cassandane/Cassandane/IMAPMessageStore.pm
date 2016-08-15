@@ -42,8 +42,10 @@
 package Cassandane::IMAPMessageStore;
 use strict;
 use warnings;
-use base qw(Cassandane::MessageStore);
 use Mail::IMAPTalk;
+
+use lib '.';
+use base qw(Cassandane::MessageStore);
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc822);
 use Cassandane::Util::Socket;

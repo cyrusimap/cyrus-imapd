@@ -39,13 +39,15 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::AnnotatorDaemon;
 use strict;
 use warnings;
-package Cassandane::AnnotatorDaemon;
 use base qw(Cyrus::Annotator::Daemon);
-use Cassandane::Util::Log;
 use Getopt::Long qw(:config no_ignore_case bundling);
 use POSIX;
+
+use lib '.';
+use Cassandane::Util::Log;
 
 set_verbose(1) if $ENV{CASSANDANE_VERBOSE};
 

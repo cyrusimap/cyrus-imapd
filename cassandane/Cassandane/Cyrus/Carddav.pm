@@ -39,18 +39,19 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Carddav;
 use strict;
 use warnings;
-
-package Cassandane::Cyrus::Carddav;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
-use Cassandane::Util::Log;
 use JSON::XS;
 use Net::CardDAVTalk;
 use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 use XML::Spice;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::Log;
 
 sub new
 {

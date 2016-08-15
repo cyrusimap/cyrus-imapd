@@ -39,11 +39,13 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Test::Clone;
 use strict;
 use warnings;
-package Cassandane::Test::Clone;
-use base qw(Cassandane::Unit::TestCase);
 use Clone qw(clone);
+
+use lib '.';
+use base qw(Cassandane::Unit::TestCase);
 
 sub new
 {

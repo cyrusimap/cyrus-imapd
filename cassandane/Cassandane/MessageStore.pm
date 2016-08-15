@@ -42,8 +42,10 @@
 package Cassandane::MessageStore;
 use strict;
 use warnings;
-use Cassandane::Util::Log;
 use overload qw("") => \&as_string;
+
+use lib '.';
+use Cassandane::Util::Log;
 
 sub new
 {

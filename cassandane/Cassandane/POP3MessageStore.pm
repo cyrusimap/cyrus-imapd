@@ -42,8 +42,10 @@
 package Cassandane::POP3MessageStore;
 use strict;
 use warnings;
-use base qw(Cassandane::MessageStore);
 use Net::POP3;
+
+use lib '.';
+use base qw(Cassandane::MessageStore);
 use Cassandane::Util::Log;
 
 sub new

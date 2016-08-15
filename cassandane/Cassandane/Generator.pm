@@ -42,10 +42,12 @@
 package Cassandane::Generator;
 use strict;
 use warnings;
+use Digest::MD5 qw(md5_hex);
+
+use lib '.';
 use Cassandane::Util::DateTime qw(to_rfc822 from_iso8601);
 use Cassandane::Address;
 use Cassandane::Message;
-use Digest::MD5 qw(md5_hex);
 use Cassandane::Util::SHA;
 
 our $admin = 'qa@cyrus.foundation';

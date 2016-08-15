@@ -39,9 +39,11 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Test::MessageStoreFactory;
 use strict;
 use warnings;
-package Cassandane::Test::MessageStoreFactory;
+
+use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::MessageStoreFactory;
 

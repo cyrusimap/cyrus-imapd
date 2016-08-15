@@ -39,12 +39,14 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Pop3;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Pop3;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Net::POP3;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
 Cassandane::Cyrus::TestCase::magic(PopSubFolders => sub {

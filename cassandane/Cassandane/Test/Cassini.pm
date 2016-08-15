@@ -39,12 +39,14 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Test::Cassini;
 use strict;
 use warnings;
-package Cassandane::Test::Cassini;
-use base qw(Cassandane::Unit::TestCase);
 use File::chdir;
 use File::Temp qw(tempdir);
+
+use lib '.';
+use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Cassini;
 use Cassandane::Util::Log;
 

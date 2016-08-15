@@ -42,6 +42,8 @@
 package Cassandane::Service;
 use strict;
 use warnings;
+
+use lib '.';
 use base qw(Cassandane::MasterEntry);
 use Cassandane::Daemon;
 use Cassandane::Util::Log;

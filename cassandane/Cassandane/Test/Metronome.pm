@@ -39,9 +39,11 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Test::Metronome;
 use strict;
 use warnings;
-package Cassandane::Test::Metronome;
+
+use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Metronome;
 use Cassandane::Util::Sample;

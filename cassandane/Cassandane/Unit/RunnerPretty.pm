@@ -42,6 +42,8 @@
 package Cassandane::Unit::RunnerPretty;
 use strict;
 use warnings;
+
+use lib '.';
 use base qw(Cassandane::Unit::Runner);
 
 sub start_test

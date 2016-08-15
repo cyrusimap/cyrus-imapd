@@ -39,14 +39,15 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Unit::TestPlanItem;
 use strict;
 use warnings;
-use Cassandane::Unit::TestCase;
 use IO::Handle;
 use POSIX;
 use Time::HiRes qw(time);
 
-package Cassandane::Unit::TestPlanItem;
+use lib '.';
+use Cassandane::Unit::TestCase;
 
 sub new
 {

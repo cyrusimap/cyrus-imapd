@@ -42,6 +42,8 @@
 use strict;
 use warnings;
 use DateTime;
+
+use lib '.';
 use Cassandane::Generator;
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::MessageStoreFactory;

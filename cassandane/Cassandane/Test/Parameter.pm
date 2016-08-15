@@ -39,11 +39,13 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Test::Parameter;
 use strict;
 use warnings;
-package Cassandane::Test::Parameter;
-use Cassandane::Util::Log;
+
+use lib '.';
 use base qw(Cassandane::Unit::TestCase);
+use Cassandane::Util::Log;
 
 sub new
 {

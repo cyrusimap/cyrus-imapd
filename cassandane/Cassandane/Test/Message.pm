@@ -39,9 +39,11 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Test::Message;
 use strict;
 use warnings;
-package Cassandane::Test::Message;
+
+use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Message;
 use Cassandane::Address;

@@ -39,14 +39,16 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Flags;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Flags;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
+use Data::Dumper;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
-use Data::Dumper;
 
 sub new
 {

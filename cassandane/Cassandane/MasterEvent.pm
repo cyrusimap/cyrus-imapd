@@ -40,9 +40,11 @@
 #
 
 package Cassandane::MasterEvent;
-use base qw(Cassandane::MasterEntry);
 use strict;
 use warnings;
+
+use lib '.';
+use base qw(Cassandane::MasterEntry);
 
 sub new
 {

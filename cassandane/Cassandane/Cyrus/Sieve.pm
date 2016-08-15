@@ -39,11 +39,13 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Sieve;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Sieve;
-use base qw(Cassandane::Cyrus::TestCase);
 use IO::File;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
 sub new

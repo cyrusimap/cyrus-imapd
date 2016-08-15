@@ -39,14 +39,16 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::SearchFuzzy;
 use strict;
 use warnings;
-package Cassandane::Cyrus::SearchFuzzy;
-use base qw(Cassandane::Cyrus::TestCase);
 use Cwd qw(abs_path);
 use DateTime;
-use Cassandane::Util::Log;
 use Data::Dumper;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::Log;
 
 sub new
 {

@@ -39,16 +39,18 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Quota;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Quota;
-use base qw(Cassandane::Cyrus::TestCase);
 use Cwd qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
+use Data::Dumper;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::NetString;
-use Data::Dumper;
 
 
 sub new

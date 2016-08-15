@@ -39,16 +39,18 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::ACL;
 use strict;
 use warnings;
-package Cassandane::Cyrus::ACL;
-use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
+use Data::Dumper;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
-use Data::Dumper;
 
 sub new
 {

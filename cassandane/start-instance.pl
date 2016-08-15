@@ -41,6 +41,8 @@
 
 use strict;
 use warnings;
+
+use lib '.';
 use Cassandane::Util::Setup;
 use Cassandane::Util::Log;
 use Cassandane::Config;

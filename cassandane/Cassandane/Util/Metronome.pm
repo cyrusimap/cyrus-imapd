@@ -43,6 +43,8 @@ package Cassandane::Util::Metronome;
 use strict;
 use warnings;
 use Time::HiRes qw(clock_gettime clock_nanosleep CLOCK_MONOTONIC);
+
+use lib '.';
 use Cassandane::Util::Log;
 
 sub new

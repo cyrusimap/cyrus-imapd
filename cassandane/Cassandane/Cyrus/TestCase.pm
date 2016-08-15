@@ -39,12 +39,14 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::TestCase;
 use strict;
 use warnings;
-package Cassandane::Cyrus::TestCase;
-use base qw(Cassandane::Unit::TestCase);
-use Scalar::Util qw(refaddr);
 use attributes;
+use Scalar::Util qw(refaddr);
+
+use lib '.';
+use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 use Cassandane::Generator;

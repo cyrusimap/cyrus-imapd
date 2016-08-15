@@ -53,6 +53,13 @@ use IO::Socket::UNIX;
 use DateTime;
 use BSD::Resource;
 use Cwd qw(abs_path getcwd);
+use AnyEvent;
+use AnyEvent::Handle;
+use AnyEvent::Socket;
+use AnyEvent::Util;
+use JSON;
+
+use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;
@@ -64,11 +71,7 @@ use Cassandane::Daemon;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
 use Cassandane::Cassini;
-use AnyEvent;
-use AnyEvent::Handle;
-use AnyEvent::Socket;
-use AnyEvent::Util;
-use JSON;
+require Cyrus::DList;
 
 my $__cached_rootdir;
 my $stamp;

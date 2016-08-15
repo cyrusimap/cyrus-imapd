@@ -39,12 +39,14 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::Master;
 use strict;
 use warnings;
-package Cassandane::Cyrus::Master;
-use base qw(Cassandane::Cyrus::TestCase);
 use POSIX qw(getcwd);
 use DateTime;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;
 use Cassandane::Util::Socket;

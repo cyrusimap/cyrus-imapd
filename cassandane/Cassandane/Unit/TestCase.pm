@@ -39,11 +39,14 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Unit::TestCase;
 use strict;
 use warnings;
-package Cassandane::Unit::TestCase;
-# use Cassandane::Util::Log;
+
 use base qw(Test::Unit::TestCase);
+
+# use lib '.';
+# use Cassandane::Util::Log;
 
 my $enabled;
 

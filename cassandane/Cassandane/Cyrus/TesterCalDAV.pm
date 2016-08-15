@@ -37,16 +37,18 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::TesterCalDAV;
 use strict;
 use warnings;
-package Cassandane::Cyrus::TesterCalDAV;
-use base qw(Cassandane::Cyrus::TestCase);
 use Cwd qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
+use JSON::XS;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
-use JSON::XS;
 
 my $basedir;
 my $binary;

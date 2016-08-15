@@ -42,6 +42,8 @@
 use strict;
 use warnings;
 use DateTime;
+
+use lib '.';
 use Cassandane::SequenceGenerator;
 use Cassandane::ThreadedGenerator;
 use Cassandane::MessageStoreFactory;

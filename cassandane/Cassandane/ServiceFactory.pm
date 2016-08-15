@@ -42,6 +42,8 @@
 package Cassandane::ServiceFactory;
 use strict;
 use warnings;
+
+use lib '.';
 use Cassandane::Util::Log;
 use Cassandane::Service;
 use Cassandane::IMAPService;

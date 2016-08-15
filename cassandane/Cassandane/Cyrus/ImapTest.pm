@@ -39,13 +39,15 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Cyrus::ImapTest;
 use strict;
 use warnings;
-package Cassandane::Cyrus::ImapTest;
-use base qw(Cassandane::Cyrus::TestCase);
 use Cwd qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
+
+use lib '.';
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
 

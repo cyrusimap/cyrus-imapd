@@ -42,6 +42,8 @@
 package Cassandane::ThreadedGenerator;
 use strict;
 use warnings;
+
+use lib '.';
 use base qw(Cassandane::Generator);
 use Cassandane::Address;
 use Cassandane::Message;

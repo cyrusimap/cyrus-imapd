@@ -43,14 +43,16 @@ package Cassandane::MessageStoreFactory;
 use strict;
 use warnings;
 use Mail::IMAPTalk;
+use URI;
+use URI::Escape qw(uri_unescape);
+use Exporter ();
+
+use lib '.';
 use Cassandane::MboxMessageStore;
 use Cassandane::MaildirMessageStore;
 use Cassandane::IMAPMessageStore;
 use Cassandane::POP3MessageStore;
-use URI;
-use URI::Escape qw(uri_unescape);
 
-use Exporter ();
 our @ISA = qw(Exporter);
 our @EXPORT = qw(create);
 
