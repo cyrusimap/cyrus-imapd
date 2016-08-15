@@ -45,8 +45,21 @@ all clean install::
 
 PERL=	perl
 all::
+	@echo ./utils/annotator.pl syntax check SKIPPED
 	@ e=0; \
-	for module in testrunner.pl `find Cassandane -type f -name '*.pm'` ; do \
+	for script in `find . -type f -name '*.pl' | grep -v 'utils\/annotator.pl' | sort` ;\
+	do \
+		$(PERL) -c $$script || e=1 ;\
+	done ;\
+	for module in `find . -type f -name '*.pm'| sort` ;\
+	do \
 	    $(PERL) -c $$module || e=1 ;\
 	done ;\
 	exit $$e;
+
+
+# XXX utils/annotator.pl depends on modules installed with Cyrus, which it
+#     will only be able to find when invoked by Cyrus::Instance (which sets
+#     up $PERL5LIB appropriately) or when the system coincidentally also has
+#     a real Cyrus installation on it.  So we can't rely on it to pass a
+#     simple 'perl -c' check.
