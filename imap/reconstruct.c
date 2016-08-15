@@ -335,7 +335,8 @@ int main(int argc, char **argv)
 
     for (i = optind; i < argc; i++) {
         if (dousers) {
-            mboxlist_usermboxtree(argv[i], do_reconstruct_p, NULL, MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
+            mboxlist_usermboxtree(argv[i], do_reconstruct_p, &rrock,
+                                  MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
             continue;
         }
         char *domain = NULL;
