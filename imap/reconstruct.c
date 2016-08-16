@@ -442,9 +442,14 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     char *other;
     struct mailbox *mailbox = NULL;
     char outpath[MAX_MAILBOX_PATH];
-    const char *name = mbname_intname(data->mbname);
+    const char *name = NULL;
+
+    /* ignore partial matches */
+    if (!data->mbname) return 0;
 
     signals_poll();
+
+    name = mbname_intname(data->mbname);
 
     /* don't repeat */
     if (hash_lookup(name, &rrock->visited)) return 0;
