@@ -2935,7 +2935,16 @@ EXPORTED int mboxlist_findone(struct namespace *namespace,
         if (domp) cbrock.domain = domp + 1;
     }
 
+    mbname_t *mbname = mbname_from_intname(intname);
+    glob *g = glob_init(mbname_extname(mbname, namespace, userid),
+                        namespace->hier_sep);
+    ptrarray_append(&cbrock.globs, g);
+    mbname_free(&mbname);
+
     r = cyrusdb_forone(cbrock.db, intname, strlen(intname), &find_p, &find_cb, &cbrock, NULL);
+
+    glob_free(&g);
+    ptrarray_fini(&cbrock.globs);
 
     return r;
 }
