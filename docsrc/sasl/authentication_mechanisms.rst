@@ -1,5 +1,5 @@
-SASL Authentication Mechanisms
-==============================
+Authentication Mechanisms
+=========================
 
 EXTERNAL
 --------

@@ -1,8 +1,8 @@
 .. _imap-features:
 
-=============
-IMAP Features
-=============
+========
+Features
+========
 
 The following documents show the full power of each feature that is included with Cyrus IMAP.
 

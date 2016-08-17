@@ -1,5 +1,5 @@
-SASL Auxiliary Properties
-=========================
+Auxiliary Properties
+====================
 
 Auxiliary Properties and the Glue Layer
 ---------------------------------------
