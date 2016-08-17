@@ -10859,9 +10859,9 @@ static int xfer_initialsync(struct xfer_header *xfer)
 }
 
 /*
- * FIXME sync_mailbox is duplicated (quite differently) in sync_support.c
- * it's not immediately apparent which implementation is the better, nor
- * which alterations need to be merged in from the other
+ * This is similar to do_folders() from sync_support, but for a single mailbox.
+ * It is needed for xfer_finalsync(), which needs to hold a single exclusive
+ * lock on the mailbox for the duration of this operation.
  */
 static int sync_mailbox(struct mailbox *mailbox,
                         struct sync_folder_list *replica_folders,
@@ -10920,6 +10920,8 @@ static int sync_mailbox(struct mailbox *mailbox,
     annots = NULL; /* list took ownership */
 
     mfolder = master_folders->head;
+    /* when mfolder->mailbox is set, sync_update_mailbox will use it rather
+     * than obtaining its own (short-lived) locks */
     mfolder->mailbox = mailbox;
 
     rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
@@ -11011,6 +11013,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
     for (item = xfer->items; item; item = item->next) {
         r = mailbox_open_iwl(item->mbentry->name, &mailbox);
+        if (!r) r = sync_mailbox_version_check(&mailbox);
         if (r) {
             syslog(LOG_ERR,
                    "Failed to open mailbox %s for xfer_final_sync() %s",

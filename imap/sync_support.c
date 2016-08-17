@@ -1668,6 +1668,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_LOCKED ",
                           strlen("IMAP_MAILBOX_LOCKED ")))
             return IMAP_MAILBOX_LOCKED;
+        else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NOTSUPPORTED ",
+                          strlen("IMAP_MAILBOX_NOTSUPPORTED ")))
+            return IMAP_MAILBOX_NOTSUPPORTED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
             return IMAP_SYNC_CHECKSUM;
@@ -1996,6 +1999,40 @@ out:
     return r;
 }
 
+int sync_mailbox_version_check(struct mailbox **mailboxp)
+{
+    int r = 0;
+
+    if ((*mailboxp)->i.minor_version < 10) {
+        /* index records will definitely not have guids! */
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto done;
+    }
+
+    /* scan index records to ensure they have guids.  version 10 index records
+     * have this field, but it might have never been initialised.
+     * XXX this might be overkill for versions > 10, but let's be cautious */
+    const struct index_record *record;
+    struct mailbox_iter *iter = mailbox_iter_init((*mailboxp), 0, 0);
+    while ((record = mailbox_iter_step(iter))) {
+        if (message_guid_isnull(&record->guid)) {
+            syslog(LOG_WARNING, "%s: missing guid for record %u -- needs 'reconstruct -G'?",
+                                (*mailboxp)->name, record->recno);
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+            goto done;
+        }
+    }
+    mailbox_iter_done(&iter);
+
+done:
+    if (r) {
+        syslog(LOG_DEBUG, "%s: %s failed version check: %s",
+                          __func__, (*mailboxp)->name, error_message(r));
+        mailbox_close(mailboxp);
+    }
+    return r;
+}
+
 /* =======================  server-side sync  =========================== */
 
 static void reserve_folder(const char *part, const char *mboxname,
@@ -2009,7 +2046,7 @@ static void reserve_folder(const char *part, const char *mboxname,
 
     /* Open and lock mailbox */
     r = mailbox_open_irl(mboxname, &mailbox);
-
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) return;
 
     /* XXX - this is just on the replica, but still - we shouldn't hold
@@ -2407,6 +2444,7 @@ int sync_apply_mailbox(struct dlist *kin,
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = mboxlist_createsync(mboxname, mbtype, partition,
                                 sstate->userid, sstate->authstate,
@@ -2679,6 +2717,7 @@ static int mailbox_byname(const char *name, void *rock)
      * to safely get read-only access to the annotation and
      * other "side" databases here */
     r = mailbox_open_iwl(name, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT ||
         r == IMAP_MAILBOX_RESERVED) {
@@ -2723,6 +2762,7 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
      * don't have a good way to express that, so we use
      * write locks anyway */
     r = mailbox_open_iwl(kin->sval, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto out;
 
     r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, kl, NULL, 1);
@@ -2947,6 +2987,7 @@ int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
     buf_init_ro(&value, mapval, maplen);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto done;
 
     appendattvalue(&attvalues,
@@ -2996,6 +3037,8 @@ int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r)
+        r = sync_mailbox_version_check(&mailbox);
     if (r)
         goto done;
 
@@ -3255,6 +3298,7 @@ int sync_apply_expunge(struct dlist *kin,
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto done;
 
     /* don't want to expunge the wrong mailbox! */
@@ -3379,6 +3423,7 @@ int sync_restore_mailbox(struct dlist *kin,
 
     /* open/create mailbox */
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     syslog(LOG_DEBUG, "%s: mailbox_open_iwl %s: %s",
            __func__, mboxname, error_message(r));
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -3528,6 +3573,9 @@ static const char *sync_response(int r)
     case IMAP_MAILBOX_LOCKED:
         resp = "NO IMAP_MAILBOX_LOCKED Mailbox locked";
         break;
+    case IMAP_MAILBOX_NOTSUPPORTED:
+        resp = "NO IMAP_MAILBOX_NOTSUPPORTED Operation is not supported on mailbox";
+        break;
     case IMAP_SYNC_CHECKSUM:
         resp = "NO IMAP_SYNC_CHECKSUM Checksum Failure";
         break;
@@ -3591,6 +3639,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
          * USE the value... the whole "add to master folders" actually
          * looks a bit pointless... */
         r = mailbox_open_iwl(mbox->name, &mailbox);
+        if (!r) r = sync_mailbox_version_check(&mailbox);
 
         /* Quietly skip over folders which have been deleted since we
            started working (but record fact in case caller cares) */
@@ -4766,8 +4815,13 @@ static int mailbox_full_update(struct sync_folder *local,
     dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
 
     /* we'll be updating it! */
-    if (local->mailbox) mailbox = local->mailbox;
-    else r = mailbox_open_iwl(local->name, &mailbox);
+    if (local->mailbox) {
+        mailbox = local->mailbox;
+    }
+    else {
+        r = mailbox_open_iwl(local->name, &mailbox);
+        if (!r) r = sync_mailbox_version_check(&mailbox);
+    }
     if (r) goto done;
 
     part_list = sync_reserve_partlist(reserve_list, mailbox->part);
@@ -4954,8 +5008,14 @@ static int update_mailbox_once(struct sync_folder *local,
     struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
     annotate_state_t *astate = NULL;
 
-    if (local->mailbox) mailbox = local->mailbox;
-    else r = mailbox_open_iwl(local->name, &mailbox);
+    if (local->mailbox) {
+        mailbox = local->mailbox;
+    }
+    else {
+        r = mailbox_open_iwl(local->name, &mailbox);
+        if (!r) r = sync_mailbox_version_check(&mailbox);
+    }
+
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* been deleted in the meanwhile... it will get picked up by the
          * delete call later */
@@ -5448,6 +5508,7 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     /* XXX - check for deleted? */
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = 0;
@@ -5728,6 +5789,7 @@ int sync_do_user(char *userid, const char *topart,
 
     char *inbox = mboxname_user_mbox(userid, NULL);
     r = mailbox_open_irl(inbox, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
     free(inbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* user has been removed, RESET server */

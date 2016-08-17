@@ -437,6 +437,10 @@ int apply_annotations(struct mailbox *mailbox,
 int diff_annotations(const struct sync_annot_list *local_annots,
                      const struct sync_annot_list *remote_annots);
 
+/* ====================================================================== */
+
+int sync_mailbox_version_check(struct mailbox **mailboxp);
+
 /* =====================  server-side sync  ============================= */
 
 struct sync_state {
