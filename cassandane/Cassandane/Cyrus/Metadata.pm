@@ -169,9 +169,12 @@ sub list_annotations
     }
 
     my $tmpfile = tmpnam();
+    my $format = $self->{instance}->{config}->get('annotation_db');
+    $format = $format // 'skiplist';
+
     $self->{instance}->run_command({ cyrus => 1 },
 			'cvt_cyrusdb',
-			$mailbox_db, 'skiplist',
+			$mailbox_db, $format,
 			$tmpfile, 'flat');
 
     my @annots;
@@ -2306,21 +2309,24 @@ sub test_cvt_cyrusdb
     my $basedir = $self->{instance}->{basedir};
     my $global_db = "$basedir/conf/annotations.db";
     my $global_flat = "$basedir/xann.txt";
+    my $format = $self->{instance}->{config}->get('annotation_db');
+    $format = $format // 'skiplist';
 
     $self->assert(( ! -f $global_flat ));
     $self->{instance}->run_command({ cyrus => 1 },
 				   'cvt_cyrusdb',
-				   $global_db, 'skiplist',
+				   $global_db, $format,
 				   $global_flat, 'flat');
     $self->assert(( -f $global_flat ));
 
     xlog "Convert the mailbox annotation db to flat";
     my $mailbox_db = "$basedir/data/user/cassandane/cyrus.annotations";
     my $mailbox_flat = "$basedir/xcassann.txt";
+
     $self->assert(( ! -f $mailbox_flat ));
     $self->{instance}->run_command({ cyrus => 1 },
 				   'cvt_cyrusdb',
-				   $mailbox_db, 'skiplist',
+				   $mailbox_db, $format,
 				   $mailbox_flat, 'flat');
     $self->assert(( -f $mailbox_flat ));
 
@@ -2336,14 +2342,14 @@ sub test_cvt_cyrusdb
     $self->{instance}->run_command({ cyrus => 1 },
 				   'cvt_cyrusdb',
 				   $global_flat, 'flat',
-				   $global_db, 'skiplist');
+				   $global_db, $format);
     $self->assert(( -f $global_db ));
 
     xlog "restore the mailbox annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
 				   'cvt_cyrusdb',
 				   $mailbox_flat, 'flat',
-				   $mailbox_db, 'skiplist');
+				   $mailbox_db, $format);
     $self->assert(( -f $mailbox_db ));
 
     xlog "Start the instance up again and reconnect";
