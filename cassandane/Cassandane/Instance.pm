@@ -1819,4 +1819,23 @@ sub install_sieve_script
     xlog "Sieve script installed successfully";
 }
 
+sub install_old_mailbox
+{
+    my ($self, $user, $version) = @_;
+
+    my $data_file = abs_path("data/old-mailboxes/version$version.tar.gz");
+    die "Old mailbox data does not exist: $data_file" if not -f $data_file;
+
+    xlog "installing version $version mailbox for user $user";
+
+    my $dest_dir = "data/user/$user";
+
+    $self->unpackfile($data_file, $dest_dir);
+    $self->run_command({ cyrus => 1 }, 'reconstruct', '-f', '-u', $user);
+
+    xlog "installed version $version mailbox for user $user: user.$user.version$version";
+
+    return "user.$user.version$version";
+}
+
 1;
