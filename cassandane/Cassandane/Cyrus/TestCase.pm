@@ -733,6 +733,10 @@ sub run_replication
     $nmodes++ if $mailbox;
     $nmodes++ if $meta;
 
+    # pass through run_command options
+    my $handlers = delete $opts{handlers};
+    my $redirects = delete $opts{redirects};
+
     # historical default for Cassandane tests is user mode
     $user = 'cassandane' if ($nmodes == 0);
     die "Too many mode options" if ($nmodes > 1);
@@ -757,7 +761,11 @@ sub run_replication
     push(@cmd, '-s') if defined $meta;
     push(@cmd, $mailbox) if defined $mailbox;
 
-    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
+    my %run_options;
+    $run_options{cyrus} = 1;
+    $run_options{handlers} = $handlers if defined $handlers;
+    $run_options{redirects} = $redirects if defined $redirects;
+    $self->{instance}->run_command(\%run_options, @cmd);
 
     $self->_reconnect_all();
 }
