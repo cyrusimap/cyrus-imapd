@@ -641,4 +641,98 @@ EOF
 				$scriptnewcontent);
 }
 
+sub slurp_file {
+    my ($filename) = @_;
+
+    local $/;
+    open my $f, '<', $filename
+        or die "Cannot open $filename for reading: $!\n";
+    my $str = <$f>;
+    close $f;
+
+    return $str;
+}
+
+sub test_replication_mailbox_too_old
+{
+    my ($self) = @_;
+
+    my $user = 'cassandane';
+    my $exit_code;
+
+    my $master_instance = $self->{instance};
+    my $replica_instance = $self->{replica};
+
+    # logs will all be in the master instance, because that's where
+    # sync_client runs from.
+    my $log_base = "$master_instance->{basedir}/$self->{_name}";
+
+    # add a version9 mailbox to the replica only, and try to replicate.
+    # replica will not report its existence, so the replication will
+    # successfully do nothing.
+    $replica_instance->install_old_mailbox($user, 9);
+    $self->run_replication(
+        user => $user,
+    );
+
+    # add the version9 mailbox to the master, and try to replicate.
+    # mailbox will be found and rejected locally, and replication will
+    # fail.
+    $master_instance->install_old_mailbox($user, 9);
+    my $log_localreject = "$log_base-localreject.stderr";
+    $exit_code = 0;
+    $self->run_replication(
+        user => $user,
+        handlers => {
+            exited_abnormally => sub { (undef, $exit_code) = @_; },
+        },
+        redirects => { stderr => $log_localreject },
+    );
+    $self->assert_equals($exit_code, 1);
+    $self->assert(qr/Operation is not supported on mailbox/,
+                  slurp_file($log_localreject));
+
+    # upgrade the version9 mailbox on the master, and try to replicate.
+    # replication will try to create it on the replica instance, which will
+    # reject it because its own copy is too old.
+    $master_instance->run_command({ cyrus => 1 }, qw(reconstruct -V max -u), $user);
+    my $log_remotereject = "$log_base-remotereject.stderr";
+    $exit_code = 0;
+    $self->run_replication(
+        user => $user,
+        handlers => {
+            exited_abnormally => sub { (undef, $exit_code) = @_; },
+        },
+        redirects => { stderr => $log_remotereject },
+    );
+    $self->assert_equals($exit_code, 1);
+    $self->assert(qr/MAILBOX received NO response: IMAP_MAILBOX_NOTSUPPORTED/,
+                  slurp_file($log_remotereject));
+
+    # upgrade the version9 mailbox on the replica, and try to replicate.
+    # replication will succeed because both ends are capable of replication.
+    $replica_instance->run_command({ cyrus => 1 }, qw(reconstruct -V max -u), $user);
+    $self->run_replication(
+        user => $user,
+    );
+}
+
+# XXX need a test for version 10 mailbox without guids in it!
+
+sub test_replication_mailbox_new_enough
+{
+    my ($self) = @_;
+
+    my $user = 'cassandane';
+    my $exit_code = 0;
+
+    # successfully replicate a mailbox new enough to contain guids
+    my $mailbox10 = $self->{instance}->install_old_mailbox($user, 10);
+    $self->run_replication(mailbox => $mailbox10);
+
+    # successfully replicate a mailbox new enough to contain guids
+    my $mailbox12 = $self->{instance}->install_old_mailbox($user, 12);
+    $self->run_replication(mailbox => $mailbox12);
+}
+
 1;
