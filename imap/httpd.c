@@ -3002,6 +3002,34 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%sdestination=%s", sep, hdr[0]);
             sep = "; ";
         }
+        if ((hdr = spool_getheader(txn->req_hdrs, "Lock-Token"))) {
+            buf_printf(&log, "%slock-token=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "If"))) {
+            buf_printf(&log, "%sif=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
+            buf_printf(&log, "%sif-schedule-tag-match=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Match"))) {
+            buf_printf(&log, "%sif-match=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Unmodified-Since"))) {
+            buf_printf(&log, "%sif-unmodified-since=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "If-None-Match"))) {
+            buf_printf(&log, "%sif-none-match=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Modified-Since"))) {
+            buf_printf(&log, "%sif-modified-since=%s", sep, hdr[0]);
+            sep = "; ";
+        }
         if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
             buf_printf(&log, "%stype=%s", sep, hdr[0]);
             sep = "; ";
