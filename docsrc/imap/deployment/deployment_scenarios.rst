@@ -47,8 +47,8 @@ Note that in this type of setup, it is the user authentication that directs the 
 
 .. _cyrus_imap_murder:
 
-Cyrus IMAP Murder
-=================
+Cyrus Murder: Server aggregation
+================================
 
 The Discrete Murder
 -------------------
@@ -80,8 +80,12 @@ The Shared Murder
 -----------------
 .. todo:: What is a Shared Murder?
 
+*To be written*
+
 Cyrus Replication
 =================
+
+*To be written*
 
 .. todo::
    Describe advantages and disadvantages of using replication (rather than how to configure it as this is described in the Administration Guide).
@@ -89,23 +93,8 @@ Cyrus Replication
 Hosted Environments
 ===================
 
+*To be written*
+
 .. todo::
    Describe some of the common ways that hosted Cyrus installations are setup, for example security for admin users, global sieve scripts, etc.
-
-Mailbox Creation Distribution
-=============================
-
-By default, when creating a mailbox in Cyrus IMAP:
-
-* the backend with the most free disk space is selected on the Murder frontend
-* the partition with the most free disk space is selected on the backend
-
-This may not be the most appropriate backend or partition to create the new mailbox on, and Cyrus IMAP therefor allows for a variety of additional modes of calculating and selecting the most appropriate backend and partition. The exact mode for the selection is controlled with the ``imapd.conf`` setting ``serverlist_select_mode`` on the frontend and ``partition_select_mode`` on the backend.
-
-Alternatively, a default backend can be configured with the ``defaultserver`` setting on a frontend, and a default partition can be configured with the ``defaultpartition`` on a backend.
-
-As usual, details and guidelines are available in the Administrator Guide and the Configuration Reference.
-
-.. todo::
-    Make the remark above a general one, and provide a link to the administrator guide and configuration reference ? (how ?)
 

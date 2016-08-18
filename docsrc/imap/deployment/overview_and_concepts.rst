@@ -3,18 +3,6 @@ Overview and Concepts
 
 This chapter gives an overview of several aspects of the Cyrus IMAP server, as they relate to deployment.
 
-Cyrus IMAP
-----------
-
-The Cyrus IMAP (Internet Message Access Protocol) server provides access to personal mail and system-wide bulletin boards through the IMAP protocol. The Cyrus IMAP server is a scalable enterprise mail system designed for use from small to large enterprise environments using technologies based on well-established Open Standards.
-
-A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across one or more nodes. It differs from other IMAP server implementations in that it is run on *sealed nodes*, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system. All user access to mail is through software using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
-
-The private mailbox database design gives the Cyrus IMAP server large advantages in efficiency, scalability, and administratability. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
-
-include::
-supported-platforms.rst
-
 Cyrus IMAP Features
 -------------------
 
@@ -136,7 +124,7 @@ Alternate Namespace
 The Cyrus IMAP server can also use analternate namespace which allows a user's personal mailboxes to appear as if they reside at the same level as that user's <code>INBOX</code> as opposed to children of it. With this feature, it may appear that there are non-unique names for mailboxes between users (2 different users may each have a top level "work" mailbox), but the internal representation is still <code>user.name.work</code>.
 
 Access Control Lists
-""""""""""""""""""""
+--------------------
 
 Access to each mailbox is controlled by each mailbox's access control list. Access Control Lists (ACLs) provide a powerful mechanism for specifying the users or groups of users who have permission to access the mailboxes.
 
@@ -292,7 +280,7 @@ Regardless of the ACL on a mailbox, users who are listed in the "admins" configu
 
 
 Initial ACLs for Newly Created Mailboxes
-----------------------------------------
+""""""""""""""""""""""""""""""""""""""""
 
 When a mailbox is created, its ACL starts off with a copy of the ACL of its closest parent mailbox. When a user is created, the ACL on the user's <code>INBOX</code> starts off with a single entry granting all rights to the user. When a non-user mailbox is created and does not have a parent, its ACL is initialized to the value of the "<code>defaultacl</code>" option in "<code>/etc/imapd.conf</code>".
 
@@ -410,27 +398,22 @@ Quotas and Partitions
 Quota roots are independent of partitions. A single quota root can apply to mailboxes in different partitions.
 
 
-HTML Block that was commented out in XML
-========================================
-
-.. todo:: Looks like this block of HTML never got converted to XML for Publican.
-
-<!--
-<h2><a name="notification">New Mail Notification</a></h2>
+New Mail Notification
+---------------------
 
 The Cyrus IMAP server comes with a notification daemon which
 supports multiple mechanisms for notifying users of new mail.
 Notifications can be configured to be sent upon normal delivery
-(<code>"MAIL"</code> class) and/or sent as requested by a <a
-href=specs.php#sieve>Sieve</a> script (<code>"SIEVE"</code> class).
+(``"MAIL"`` class) and/or sent as requested by a <a
+href=specs.php#sieve>Sieve</a> script (``"SIEVE"`` class).
 
 By default, both types of notifications are disabled.
 Notifications are enabled by using one or both of the following
 configuration options:
 
-* the "``mailnotifier``" option selects the <a href=man/notifyd.8.php>notifyd</a> method to use for "<code>MAIL</code>" class notifications
+* the "``mailnotifier``" option selects the :cyrusman:`notifyd(8)` method to use for "``MAIL``" class notifications
 
-* the "``sievenotifier``" option selects the <a href=man/notifyd.8.php>notifyd</a> method to use for "``SIEVE``" class notifications (when no method is specified by the Sieve action)
+* the "``sievenotifier``" option selects the :cyrusman:`notifyd(8)` method to use for "``SIEVE``" class notifications (when no method is specified by the Sieve action)
 
 
 Partitions
@@ -445,7 +428,8 @@ When an administrator creates a new mailbox, the name of the partition for the m
 
 The optional second argument to the "create" command can usually be given only when using a specialized Cyrus-aware administrative client such as ``cyradm``.
 
-<h3><a name="partitionsrename">Changing Partitions with "<code>rename</code>"</a></h3>
+Changing Partitions with "rename"
+"""""""""""""""""""""""""""""""""
 
 An administrator may change the partition of a mailbox by using the
 rename command with an optional third argument.  When a third argument
@@ -457,14 +441,16 @@ If a third argument to rename is not given and the first argument is
 "<code>INBOX</code>", the newly created mailbox gets the same partition it would
 get from the "<code>create</code>" command.
 
-<h2><A NAME="news">News</a></h2>
+News
+----
 
 Cyrus has the ability to export Usenet via IMAP and/or export shared
 IMAP mailboxes via an NNTP server which is included with Cyrus.  For
 more information on exporting news groups through the IMAP server, see
 <a href="install-netnews.php">install-netnews.php</a>.
 
-<h2><a name="pop3">POP3 Server</a></h2>
+POP3 Server
+-----------
 
 The Cyrus IMAP server software comes with a compatibility POP3 server.
 Due to limitations in the POP3 protocol, the server can only access a
@@ -481,7 +467,8 @@ name and "<code><VAR>realm</VAR></code>" is the server's Kerberos realm.
 When the POP3 server is invoked with the "<code>-k</code>" switch, the
 server exports MIT's KPOP protocol instead of generic POP3.
 
-<h3><a name="syslog">The <code>syslog</code> facility</a></h3>
+The syslog facility
+-------------------
 
 The Cyrus IMAP server software sends log messages to the "<code>local6</code>"
 syslog facility.  The severity levels used are:
@@ -496,13 +483,15 @@ timeouts
 <LI><code>INFO</code> - Mailbox openings, duplicate delivery suppression
 </UL>
 
-<h2><a name="recovery">Mail Directory Recovery</a></h2>
+Mail Directory Recovery
+-----------------------
 
 This section describes the various databases used by the Cyrus IMAP
 server software and what can be done to recover from various
 inconsistencies in these databases.
 
-<h3><a name="recoverymboxdir">Reconstructing Mailbox Directories</a></h3>
+Reconstructing Mailbox Directories
+""""""""""""""""""""""""""""""""""
 
 The largest database is the mailbox directories.  Each
 mailbox directory contains the following files:
@@ -541,17 +530,18 @@ recorded in any quota root files.  After running reconstruct, it is
 advisable to run "<code>quota -f</code>" (described below) in order to fix
 the quota root files.
 
-<h3><a name="recoverymbox">Reconstructing the Mailboxes File</a></h3>
+Reconstructing the Mailboxes File
+"""""""""""""""""""""""""""""""""
 
-<B><I> NOTE: CURRENTLY UNAVAILABLE </I></B>
+**NOTE: CURRENTLY UNAVAILABLE**
 
 The mailboxes file in the configuration directory is the most critical
 file in the entire Cyrus IMAP system.  It contains a sorted list of
 each mailbox on the server, along with the mailboxes quota root and
 ACL.
 
-To reconstruct a corrupted mailboxes file, run the "<code>reconstruct
--m</code>" command.  The "<code>reconstruct</code>" program, when invoked
+To reconstruct a corrupted mailboxes file, run the ``reconstruct
+-m`` command.  The ``reconstruct`` program, when invoked
 with the "<code>-m</code>" switch, scavenges and corrects whatever data it
 can find in the existing mailboxes file.  It then scans all partitions
 listed in the imapd.conf file for additional mailbox directories to
@@ -561,7 +551,8 @@ put in the mailboxes file.
 redundant copy of the mailbox ACL, to be used as a backup when
 rebuilding the mailboxes file.
 
-<h3><a name="recoveryquotas">Reconstructing Quota Roots</a></h3>
+Reconstructing Quota Roots
+""""""""""""""""""""""""""
 
 The subdirectory "<code>quota</code>" of the configuration directory (specified in
 the "<code>configdirectory</code>" configuration option) contains one file per
@@ -572,39 +563,44 @@ files store the quota usage and limits of each of the quota roots.
 switch, recalculates the quota root of each mailbox and the quota
 usage of each <a href="#quotaroots">quota root</a>.
 
-<h4><a name="recoveryquotasrm">Removing Quota Roots</a></h4>
+Removing Quota Roots
+""""""""""""""""""""
 
 To remove a quota root, remove the quota root's file.  Then run
 "<code>quota -f</code>" to make the quota files consistent again.
 
-<h3><a name="recoverysubs">Subscriptions</a></h3>
+Subscriptions
+"""""""""""""
 
 The subdirectory "<code>user</code>" of the configuration directory contains user
 subscriptions.  There is one file per user, with a filename of the
 userid followed by "<code>.sub</code>".  Each file contains a sorted list of
 subscribed mailboxes.
 
-<p>There is no program to recover from damaged subscription files.  A
+There is no program to recover from damaged subscription files.  A
 site may recover from lost subscription files by restoring from backups.
 
-<h2><a name="configdir">Configuration Directory</a></h2>
+Configuration Directory
+-----------------------
 
 Many objects in the configuration directory are discussed in
 the Database Recovery section. This section documents two
 other directories that reside in the configuration directory.
 
-<h3><a name="configdirlog">"<code>log</code>" Directory</a></h3>
+Log Directory
+"""""""""""""
 
 The subdirectory "<code>log</code>" under the configuration directory permits
 administrators to keep protocol telemetry logs on a per-user basis.
 
-<p>If a subdirectory of "<code>log</code>" exists with the same name as a user, the
+If a subdirectory of "<code>log</code>" exists with the same name as a user, the
 IMAP and POP3 servers will keep a telemetry log of protocol sessions
 authenticating as that user.  The telemetry log is stored in the
 subdirectory with a filename of the server process-id and starts with
 the first command following authentication.
 
-<h3><a name="configdirproc">"<code>proc</code>" Directory</a></h3>
+Proc Directory
+""""""""""""""
 
 The subdirectory "<code>proc</code>" under the configuration directory
 contains one file per active server process.  The file name is the ASCII
@@ -620,78 +616,82 @@ tab-separated fields:
 The file may contain arbitrary characters after the first newline
 character.
 
-<p>The "<code>proc</code>" subdirectory is normally be cleaned out on
+The "<code>proc</code>" subdirectory is normally be cleaned out on
 server reboot.
 
-<h2>Message Delivery</h2><a name="messagedelivery"></a>
+Message Delivery
+----------------
 
-<p>Mail transport agents such as Sendmail, Postfix, or Exim communicate
+Mail transport agents such as Sendmail, Postfix, or Exim communicate
 with the Cyrus server via LMTP (the Local Mail Transport Protocol)
 implemented by the LMTP daemon.  This can be done either directly by the
 MTA (prefered, for performance reasons) or via the <code>deliver</code> LMTP
 client.
 
-<h3>Local Mail Transfer Protocol</h3><a name="lmtp"></a>
+Local Mail Transfer Protocol (lmtp)
+"""""""""""""""""""""""""""""""""""
 
-<p>LMTP, the Local Mail Transfer Protocol, is a variant of SMTP design for
+LMTP, the Local Mail Transfer Protocol, is a variant of SMTP design for
 transferring mail to the final message store.  LMTP allows MTAs to deliver
 "local" mail over a network.  This is an easy optimization so that the
 IMAP server doesn't need to maintain a queue of messages or run an
-MTA.</p>
+MTA.
 
-<p>The Cyrus server implements LMTP via the <code>lmtpd</code> daemon.  LMTP
+The Cyrus server implements LMTP via the <code>lmtpd</code> daemon.  LMTP
 can either be used over a network via TCP or local via a UNIX domain
 socket. There are security differnces between these two alternatives; read
-more below</p>
+more below.
 
-<p>For final delivery via LMTP over a TCP socket, it is necessary to use
+For final delivery via LMTP over a TCP socket, it is necessary to use
 LMTP AUTH.  This is accomplished using SASL to authenticate the delivering
 user.  If your mail server is performing delivery via LMTP AUTH (that is,
 using a SASL mechanism), you will want their authentication id to be an
 LMTP admins (either via the <code>admins</code> imapd.conf option or via the
-<code>&lt;service&gt;_admins</code> option, typically <code>lmtp_admins</code>).</p>
+<code>&lt;service&gt;_admins</code> option, typically <code>lmtp_admins</code>).
 
-<p>Alternatively you may deliver via LMTP to a unix domain socket, and the
+Alternatively you may deliver via LMTP to a unix domain socket, and the
 connection will be preauthenticated as an administrative user (and access
-control is accomplished by controlling access to the socket).</p>
+control is accomplished by controlling access to the socket).
 
-<p>Note that if a user has a sieve script, the sieve script runs authorized
+Note that if a user has a sieve script, the sieve script runs authorized
 as *that* user, and the rights of the posting user are ignored for the purposes
-of determining the outcome of the sieve script.</p>
+of determining the outcome of the sieve script.
 
-<h3>Single Instance Store</h3><a name="singleinstance"></a>
+Single Instance Store
+"""""""""""""""""""""
 
-<p>If a delivery attempt mentions several recipients (only possible if
+If a delivery attempt mentions several recipients (only possible if
 the MTA is speaking LMTP to <code>lmtpd</code>), the server attempts to
 store as few copies of a message as possible.  It will store one copy
 of the message per partition, and create hard links for all other
-recipients of the message.</p>
+recipients of the message.
 
-<p>Single instance store can be turned off by using the
-"singleinstancestore" flag in the configuration file.</p>
+Single instance store can be turned off by using the
+"singleinstancestore" flag in the configuration file.
 
-<h3>Duplicate Delivery Suppression</h3><a name="duplicate"></a>
+Duplicate Delivery Suppression
+""""""""""""""""""""""""""""""
 
 A message is considered a duplicate if two copies of a message with
 the same message-id and the same envelope receipient are received.
 Cyrus uses the duplicate delivery database to hold this information,
 and it looks approximately 3 days back in the default install.
 
-<p>Duplicate delivery suppression can be turned off by using the
-"duplicatesuppression" flag in the configuration file.</p>
+Duplicate delivery suppression can be turned off by using the
+"duplicatesuppression" flag in the configuration file.
 
-<h3>Sieve, a Mail Filtering Language</h3><a name="sieve"></a>
+Sieve, a Mail Filtering Language
+--------------------------------
 
 Sieve is a mail filtering language that can filter mail into an appropriate
 IMAP mailbox as it is delivered via lmtp.  For more information, look
 <A HREF="sieve.php">here</a>.
 
-<h3>Cyrus Murder, the IMAP Aggregator</h3><a name="aggregator"></a>
+Cyrus Murder, the IMAP Aggregator
+---------------------------------
 
 Cyrus now supports the distribution of mailboxes across a number of IMAP
 servers to allow for horizontal scalability.  For information on setting
 up this configuration, see <A href="install-murder.php">here</A>.
 
-//    -->
-</chapter>
 
