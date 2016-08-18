@@ -372,7 +372,7 @@ static const struct precond_t {
     /* RSCALE (RFC 7529) preconditions */
     { "supported-rscale", NS_CALDAV },
 
-    /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */
+    /* Time Zones by Reference (RFC 7809) preconditions */
     { "valid-timezone", NS_CALDAV },
 
     /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */

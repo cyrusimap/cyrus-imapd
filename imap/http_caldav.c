@@ -423,7 +423,7 @@ static const struct prop_entry caldav_props[] = {
     { "schedule-calendar-transp", NS_CALDAV, PROP_COLLECTION,
       propfind_caltransp, proppatch_caltransp, NULL },
 
-    /* Calendar Availability (draft-ietf-calext-availability) properties */
+    /* Calendar Availability (RFC 7953) properties */
     { "calendar-availability", NS_CALDAV, PROP_COLLECTION | PROP_PRESCREEN,
       propfind_availability, proppatch_availability, NULL },
 
@@ -431,7 +431,7 @@ static const struct prop_entry caldav_props[] = {
     { "calendar-availability", NS_CS, PROP_COLLECTION | PROP_PRESCREEN,
       propfind_availability, proppatch_availability, NULL },
 
-    /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) properties */
+    /* Time Zones by Reference (RFC 7809) properties */
     { "timezone-service-set", NS_CALDAV, PROP_COLLECTION,
       propfind_tzservset, NULL, NULL },
     { "calendar-timezone-id", NS_CALDAV, PROP_COLLECTION,

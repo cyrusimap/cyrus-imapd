@@ -216,7 +216,7 @@ enum {
     /* RSCALE (RFC 7529) preconditions */
     CALDAV_SUPP_RSCALE,
 
-    /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */
+    /* Time Zones by Reference (RFC 7809) preconditions */
     CALDAV_VALID_TIMEZONE,
 
     /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */
