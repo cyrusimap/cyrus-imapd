@@ -9,6 +9,8 @@
 #include "vparse.h"
 #include "xmalloc.h"
 
+#define DEBUG 0
+
 static char *buf_dup_cstring(struct buf *buf)
 {
     char *ret = xstrndup(buf->s, buf->len);
@@ -1030,7 +1032,7 @@ EXPORTED void vparse_delete_params(struct vparse_entry *entry, const char *name)
     }
 }
 
-#ifdef DEBUG
+#if DEBUG
 static int _dump_card(struct vparse_card *card)
 {
     struct vparse_entry *entry;
@@ -1050,21 +1052,32 @@ static int _dump_card(struct vparse_card *card)
     for (sub = card->objects; sub; sub = sub->next)
         _dump_card(sub);
     printf("end:%s\n", card->type);
+    return 0;
 }
 
 static int _dump(struct vparse_card *card)
 {
     _dump_card(card->objects);
+    return 0;
 }
 
-int main(int argv, const char **argc)
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+int main(int argc, const char **argv)
 {
-    const char *fname = argc[1];
+    const char *fname = argv[1];
     struct stat sbuf;
     int fd = open(fname, O_RDONLY);
     struct vparse_state parser;
     char *data;
     int r;
+
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s fname\n", argv[0]);
+        exit(1);
+    }
 
     memset(&parser, 0, sizeof(struct vparse_state));
 
@@ -1075,7 +1088,7 @@ int main(int argv, const char **argc)
     data[sbuf.st_size] = '\0';
 
     parser.base = data;
-    r = vparse_parse(&parser);
+    r = vparse_parse(&parser, 0);
     if (r) {
         struct vparse_errorpos pos;
         vparse_fillpos(&parser, &pos);
