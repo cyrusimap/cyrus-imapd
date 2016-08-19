@@ -138,6 +138,57 @@ sub new
     return bless $self, $class;
 }
 
+# Class method! Need to be able to interrogate the Cyrus version
+# being tested without actually instantiating a Cassandane::Instance.
+# This also means we have to do a few things here the direct way,
+# rather than using helper methods...
+my %cached_version = ();
+sub get_version
+{
+    my ($class, $installation) = @_;
+    $installation = 'default' if not defined $installation;
+
+    return @{$cached_version{$installation}} if exists $cached_version{$installation};
+
+    my $cassini = Cassandane::Cassini->instance();
+
+    my $cyrus_prefix = $cassini->val("cyrus $installation",
+				     'prefix', '/usr/cyrus');
+    my $cyrus_destdir = $cassini->val("cyrus $installation",
+				      'destdir', '');
+
+    my $cyrus_master;
+    foreach my $d (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
+    {
+	my $try = "$cyrus_destdir$cyrus_prefix/$d/master";
+	if (-x $try) {
+	    $cyrus_master = $try;
+	    last;
+	}
+    }
+
+    die "unable to locate master binary" if not defined $cyrus_master;
+
+    my $version;
+    {
+	open my $fh, '-|', "$cyrus_master -V"
+	    or die "unable to execute '$cyrus_master -V': $!";
+	local $/;
+	$version = <$fh>;
+	close $fh;
+    }
+
+    #cyrus-imapd 3.0.0-beta3-114-g5fa1dbc-dirty
+    if ($version =~ m/^cyrus-imapd (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
+	$cached_version{$installation} = [0 + $1, 0 + $2, 0 + $3, $4];
+    }
+    else {
+	$cached_version{$installation} = [0, 0, 0, q{}];
+    }
+
+    return @{$cached_version{$installation}};
+}
+
 sub _rootdir
 {
     if (!defined $__cached_rootdir)
