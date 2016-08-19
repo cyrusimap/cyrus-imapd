@@ -86,6 +86,7 @@ sub new
 
     my $self = {
 	name => undef,
+	buildinfo => undef,
 	basedir => undef,
 	installation => 'default',
 	cyrus_prefix => undef,
@@ -597,6 +598,12 @@ sub _generate_imapd_conf
 sub _read_buildinfo
 {
     my ($self) = @_;
+
+    # don't choke if we don't have cyr_buildinfo
+    eval {
+	$self->_find_binary('cyr_buildinfo');
+    };
+    return if $@;
 
     my $filename = $self->{basedir} .  "/buildinfo.out";
     $self->run_command({
