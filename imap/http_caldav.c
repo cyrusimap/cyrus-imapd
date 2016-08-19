@@ -3424,7 +3424,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* Perform binary search on sorted icalarray */
             unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
-            ucase(rt.rscale);
+            ucase((char *) rt.rscale);
             while (!found && start < end) {
                 unsigned mid = start + (end - start) / 2;
                 const char **rscale =
