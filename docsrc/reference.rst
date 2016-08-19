@@ -7,6 +7,7 @@ Reference
     :maxdepth: 2
     :glob:
 
+    imap/admin    
     imap/faq  
     imap/admin/commands
     imap/admin/pycommands

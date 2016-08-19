@@ -1,8 +1,8 @@
 .. _imap-admin:
 
-========================
-IMAP Administrator Guide
-========================
+===================
+Administrator Guide
+===================
 
 
 

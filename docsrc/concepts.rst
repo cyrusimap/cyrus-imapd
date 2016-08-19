@@ -9,4 +9,3 @@ Concepts
 
     imap/features
     imap/deployment
-    imap/admin
