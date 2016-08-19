@@ -220,7 +220,7 @@ struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
 
 /* forward declarations */
 int usage(char *name);
-int scan_me(const char *, int, int, void *);
+int scan_me(struct findall_data *, void *);
 unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
                      void *rock);
@@ -314,14 +314,13 @@ int usage(char *name)
     exit(0);
 }
 
-int scan_me(const char *name,
-            int matchlen __attribute__((unused)),
-            int category __attribute__((unused)),
+int scan_me(struct findall_data *data,
             void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox;
     int r;
     struct infected_mbox *i_mbox = NULL;
+    const char *name = mbname_intname(data->mbname);
 
     if (verbose) {
         printf("Working on %s...\n", name);
