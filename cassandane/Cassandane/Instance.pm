@@ -563,6 +563,8 @@ sub _generate_imapd_conf
 {
     my ($self) = @_;
 
+    my ($cyrus_version) = Cassandane::Instance->get_version($self->{installation});
+
     $self->{config}->set_variables(
 		name => $self->{name},
 		basedir => $self->{basedir},
@@ -575,9 +577,17 @@ sub _generate_imapd_conf
                 notifysocket => "dlist:$self->{basedir}/run/notify",
                 imipnotifier => 'imip',
                 event_notifier => 'pusher',
-                event_groups => 'mailbox message flags calendar',
-
     );
+    if ($cyrus_version >= 3) {
+	$self->{config}->set(
+		    event_groups => 'mailbox message flags calendar',
+	);
+    }
+    else {
+	$self->{config}->set(
+		    event_groups => 'mailbox message flags',
+	);
+    }
     if ($self->{buildinfo}->{search}->{xapian}) {
         my %xapian_defaults = (
             search_engine => 'xapian',
