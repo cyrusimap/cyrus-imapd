@@ -55,7 +55,7 @@
 #include "mit-sipb-copyright.h"
 #include "internal.h"
 
-static const char copyright[] =
+static const char copyright[] __attribute__((__unused__)) =
     "Copyright 1986, 1987, 1988 by the Student Information Processing Board\nand the department of Information Systems\nof the Massachusetts Institute of Technology";
 
 static char buffer[25];

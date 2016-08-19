@@ -177,7 +177,7 @@ static void parse_data(const char *data, int datalen, struct seendata *sd)
     sd->lastread = strtol(data, &p, 10); data = p;
     sd->lastuid = strtoll(data, &p, 10); data = p;
     sd->lastchange = strtol(data, &p, 10); data = p;
-    while (p < dend && Uisspace(*p)) p++; data = p;
+    while (p < dend && Uisspace(*p)) { p++; } data = p;
     uidlen = dend - data;
     sd->seenuids = xmalloc(uidlen + 1);
     memcpy(sd->seenuids, data, uidlen);

@@ -47,8 +47,8 @@
 #include "mit-sipb-copyright.h"
 #include "internal.h"
 
-#ifndef	lint
-static const char copyright[] =
+#ifndef lint
+static const char copyright[] __attribute__((__unused__)) =
     "Copyright 1987,1988 by Student Information Processing Board, Massachusetts Institute of Technology";
 #endif
 
