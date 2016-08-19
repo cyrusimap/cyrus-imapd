@@ -4,8 +4,6 @@ Quickstart Guide
 
 
 .. toctree::
-    :maxdepth: 2
-    :glob:
 
     imap/introduction
     

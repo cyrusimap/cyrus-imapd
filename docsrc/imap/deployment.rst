@@ -8,9 +8,7 @@ guide addresses these considerations, to aid in planning the
 successful deployment of Cyrus IMAP.
 
 .. toctree::
-   :maxdepth: 2
 
-   deployment/overview_and_concepts
    deployment/deployment_scenarios
    deployment/mailbox_creation_distribution
    deployment/known_protocol_limitations

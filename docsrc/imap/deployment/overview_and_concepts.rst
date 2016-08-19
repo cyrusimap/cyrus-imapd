@@ -1,5 +1,5 @@
-Overview and Concepts
-=====================
+Overview
+========
 
 This chapter gives an overview of several aspects of the Cyrus IMAP server, as they relate to deployment.
 
@@ -332,7 +332,7 @@ Quotas allow server administrators to limit resources used by hierarchies of mai
 Supports Quotas on Storage
 """"""""""""""""""""""""""
 
-The Cyrus IMAP server supports quotas on storage, which is defined as the number of bytes of the relevant :ref:`822` messages, in kilobytes. Each copy of a message is counted independently, even when the server can conserve disk space use by making hard links to message files. The additional disk space overhead used by mailbox index and cache files is not charged against a quota.
+The Cyrus IMAP server supports quotas on storage, which is defined as the number of bytes of the relevant :rfc:`822` messages, in kilobytes. Each copy of a message is counted independently, even when the server can conserve disk space use by making hard links to message files. The additional disk space overhead used by mailbox index and cache files is not charged against a quota.
 
 Quota Roots
 """""""""""
@@ -421,7 +421,7 @@ Changing Partitions with "rename"
 An administrator may change the partition of a mailbox by using the
 rename command with an optional third argument.  When a third argument
 to rename is given, the first and second arguments can be the
-same &mdash;this changes the partition of a mailbox without changing its
+same; this changes the partition of a mailbox without changing its
 name.  If a third argument to rename is not given and the first
 argument is not ``INBOX``, the partition of a mailbox does not change.
 If a third argument to rename is not given and the first argument is
@@ -429,7 +429,7 @@ If a third argument to rename is not given and the first argument is
 get from the ``create`` command.
 
 News
-----
+-----
 
 Cyrus has the ability to export Usenet via IMAP and/or export shared
 IMAP mailboxes via an NNTP server which is included with Cyrus.  
@@ -478,7 +478,7 @@ The largest database is the mailbox directories.  Each
 mailbox directory contains the following files:
 
 message files
-    There is one file per message, containing the message in RFC 822 format.  Lines in the message are separated by CRLF, not just LF.  The file name of each message is the message's UID followed by a dot (.).
+    There is one file per message, containing the message in :rfc:`822` format.  Lines in the message are separated by CRLF, not just LF.  The file name of each message is the message's UID followed by a dot (.).
 
     In netnews newsgroups, the message files instead follow the format and naming conventions imposed by the netnews software.
 
