@@ -179,8 +179,21 @@ sub get_version
 	close $fh;
     }
 
+    if (not $version) {
+	# Cyrus version might be too old for 'master -V'
+	# Try to squirrel a version out of libcyrus pkgconfig file
+	open my $fh, '<', "$cyrus_destdir$cyrus_prefix/lib/pkgconfig/libcyrus.pc";
+	while (<$fh>) {
+	    $version = $_ if m/^Version:/;
+	}
+	close $fh;
+    }
+
     #cyrus-imapd 3.0.0-beta3-114-g5fa1dbc-dirty
     if ($version =~ m/^cyrus-imapd (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
+	$cached_version{$installation} = [0 + $1, 0 + $2, 0 + $3, $4];
+    }
+    elsif ($version =~ m/^Version: (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
 	$cached_version{$installation} = [0 + $1, 0 + $2, 0 + $3, $4];
     }
     else {
