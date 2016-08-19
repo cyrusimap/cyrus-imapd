@@ -112,14 +112,14 @@ my %runners =
     {
 	my ($plan, $fh) = @_;
 	my $runner = Cassandane::Unit::Runner->new($fh);
-	$runner->filter('x');
+	$runner->filter('x', 'skip_version');
 	return $runner->do_run($plan, 0);
     },
     pretty => sub
     {
 	my ($plan, $fh) = @_;
 	my $runner = Cassandane::Unit::RunnerPretty->new($fh);
-	$runner->filter('x');
+	$runner->filter('x', 'skip_version');
 	return $runner->do_run($plan, 0);
     },
 );
@@ -138,7 +138,7 @@ eval
 		or die "Cannot make output directory \"$output_dir\": $!";
 	}
 	my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
-	$runner->filter('x');
+	$runner->filter('x', 'skip_version');
 	$runner->start($plan);
 	return $runner->all_tests_passed();
     };

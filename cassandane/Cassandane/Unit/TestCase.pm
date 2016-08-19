@@ -44,9 +44,10 @@ use strict;
 use warnings;
 
 use base qw(Test::Unit::TestCase);
+use Data::Dumper;
 
-# use lib '.';
-# use Cassandane::Util::Log;
+use lib '.';
+use Cassandane::Util::Log;
 
 my $enabled;
 
@@ -62,6 +63,43 @@ sub enable_test
     $enabled = $test;
 }
 
+sub _skip_version
+{
+    my ($str) = @_;
+
+    return if not $str =~ m/^(min|max)_version_([\d_]+)$/;
+    my $minmax = $1;
+    my ($lim_major, $lim_minor, $lim_revision) = map { 0 + $_ } split /_/, $2;
+    return if not defined $lim_major;
+
+    my ($major, $minor, $revision) = Cassandane::Instance->get_version();
+
+    if ($minmax eq 'min') {
+	return 1 if $major < $lim_major; # too old, skip!
+	return if $major > $lim_major;   # definitely new enough
+
+	return if not defined $lim_minor; # don't check deeper if caller doesn't care
+	return 1 if $minor < $lim_minor;
+	return if $minor > $lim_minor;
+
+	return if not defined $lim_revision;
+	return 1 if $revision < $lim_revision;
+    }
+    else {
+	return 1 if $major > $lim_major; # too new, skip!
+	return if $major < $lim_major;   # definitely old enough
+
+	return if not defined $lim_minor; # don't check deeper if caller doesn't care
+	return 1 if $minor > $lim_minor;
+	return if $minor < $lim_minor;
+
+	return if not defined $lim_revision;
+	return 1 if $revision > $lim_revision;
+    }
+
+    return;
+}
+
 sub filter
 {
     my ($self) = @_;
@@ -73,7 +111,18 @@ sub filter
 	    $method =~ s/^test_//;
 	    # Only the explicitly enabled test runs
 	    return ($enabled eq $method ? undef : 1);
-	}
+	},
+	skip_version => sub
+	{
+	    return if not exists $self->{_name};
+	    my $sub = $self->can($self->{_name});
+	    return if not defined $sub;
+	    foreach my $attr (attributes::get($sub)) {
+		next if $attr !~ m/^(?:min|max)_version_[\d_]+$/;
+		return 1 if _skip_version($attr);
+	    }
+	    return;
+	},
     };
 }
 

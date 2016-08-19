@@ -245,6 +245,8 @@ sub _run_magic
 	foreach my $a (attributes::get($sub))
 	{
 	    my $m = lc($a);
+	    # ignore min/max version attribution here
+	    next if $a =~ m/^(?:min|max)_version_/;
 	    die "Unknown attribute $a"
 		unless defined $magic_handlers{$m};
 	    next if $seen{$m};
