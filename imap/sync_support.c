@@ -78,6 +78,10 @@
 #include "dlist.h"
 #include "xstrlcat.h"
 
+#ifdef USE_SIEVE
+#include "sieve/sieve_interface.h"
+#endif
+
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
@@ -1005,10 +1009,17 @@ int sync_sieve_upload(const char *userid, const char *name,
     const char *sieve_path = user_sieve_path(userid);
     char tmpname[2048];
     char newname[2048];
+    char *ext;
     FILE *file;
     int   r = 0;
     struct stat sbuf;
     struct utimbuf utimbuf;
+
+    ext = strrchr(name, '.');
+    if (ext && !strcmp(ext, ".bc")) {
+        /* silently ignore attempts to upload compiled bytecode */
+        return 0;
+    }
 
     if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
         if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
@@ -1023,7 +1034,7 @@ int sync_sieve_upload(const char *userid, const char *name,
     snprintf(newname, sizeof(newname), "%s/%s", sieve_path, name);
 
     if ((file=fopen(tmpname, "w")) == NULL) {
-        return(IMAP_IOERROR);
+        return IMAP_IOERROR;
     }
 
     /* XXX - error handling */
@@ -1043,6 +1054,14 @@ int sync_sieve_upload(const char *userid, const char *name,
     if (!r && (rename(tmpname, newname) < 0))
         r = IMAP_IOERROR;
 
+#ifdef USE_SIEVE
+    if (!r) {
+        r = sieve_rebuild(newname, NULL, /*force*/ 1, NULL);
+        if (r == SIEVE_PARSE_ERROR || r == SIEVE_FAIL)
+            r = IMAP_SYNC_BADSIEVE;
+    }
+#endif
+
     sync_log_sieve(userid);
 
     return r;
@@ -1058,6 +1077,15 @@ int sync_sieve_activate(const char *userid, const char *name)
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
     unlink(active);
 
+#ifdef USE_SIEVE
+    char *bc_fname = strconcat(sieve_path, "/", target, NULL);
+    sieve_rebuild(NULL, bc_fname, 0, NULL);
+    free(bc_fname);
+#endif
+
+    /* N.B symlink() does NOT verify target for anything but string validity,
+     * so activation of a nonexistent script will report success.
+     */
     if (symlink(target, active) < 0)
         return(IMAP_IOERROR);
 
@@ -1643,6 +1671,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
             return IMAP_SYNC_CHECKSUM;
+        else if (!strncmp(errmsg.s, "IMAP_SYNC_BADSIEVE ",
+                          strlen("IMAP_SYNC_BADSIEVE ")))
+            return IMAP_SYNC_BADSIEVE;
         else if (!strncmp(errmsg.s, "IMAP_PROTOCOL_ERROR ",
                           strlen("IMAP_PROTOCOL_ERROR ")))
             return IMAP_PROTOCOL_ERROR;
@@ -3499,6 +3530,9 @@ static const char *sync_response(int r)
         break;
     case IMAP_SYNC_CHECKSUM:
         resp = "NO IMAP_SYNC_CHECKSUM Checksum Failure";
+        break;
+    case IMAP_SYNC_BADSIEVE:
+        resp = "NO IMAP_SYNC_BADSIEVE Sieve script compilation failure";
         break;
     case IMAP_PROTOCOL_ERROR:
         resp = "NO IMAP_PROTOCOL_ERROR Protocol error";
@@ -5592,6 +5626,7 @@ int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve
     struct sync_sieve *mitem, *ritem;
     int master_active = 0;
     int replica_active = 0;
+    char *ext;
 
     master_sieve = sync_sieve_list_generate(userid);
     if (!master_sieve) {
@@ -5614,6 +5649,11 @@ int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve
             else if (ritem->last_update >= mitem->last_update)
                 continue; /* changed */
         }
+
+        /* Don't upload compiled bytecode */
+        ext = strrchr(mitem->name, '.');
+        if (ext && !strcmp(ext, ".bc"))
+            continue;
 
         r = sieve_upload(userid, mitem->name, mitem->last_update,
                          sync_be, flags);

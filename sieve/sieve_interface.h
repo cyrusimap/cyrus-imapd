@@ -212,4 +212,23 @@ int sieve_emit_bytecode(int fd, bytecode_info_t *bc);
 /* Free a bytecode_info_t */
 void sieve_free_bytecode(bytecode_info_t **p);
 
+/* Convert filenames between .bc and .script extensions.
+ * Caller must free returned values
+ * Returns NULL if unable to perform conversion
+ */
+char *sieve_getbcfname(const char *script_fname);
+char *sieve_getscriptfname(const char *bc_name);
+
+/* Get path of bc file pointed to by defaultbc symlink.
+ * Caller must free return value
+ * Returns NULL if unable to perform conversion
+ */
+char *sieve_getdefaultbcfname(const char *defaultbc);
+
+/* Rebuild bc_fname from script_fname if needed or forced.
+ * At least one of script_fname or bc_fname must be provided.
+ */
+int sieve_rebuild(const char *script_fname, const char *bc_fname,
+                  int force, char **out_parse_errors);
+
 #endif
