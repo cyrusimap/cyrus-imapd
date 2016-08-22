@@ -19,7 +19,7 @@ struct binary_result
     size_t datalen;
 };
 
-static char *backend = CUNIT_PARAM("skiplist,flat,twoskip");
+static char *backend = CUNIT_PARAM("skiplist,flat,twoskip,lmdb");
 static char *filename;
 static char *filename2;
 
@@ -200,10 +200,25 @@ static char *make_basedir(const char * const *reldirs)
     free(actual); \
 }
 
+static int skiptest()
+{
+    /* cunit.pl doesn't play nice with #ifdef'ed CUNIT_PARAMS */
+    if (!strcmp(backend, "lmdb")) {
+#ifdef HAVE_LMDB
+        return 0;
+#else
+        return 1;
+#endif
+    }
+    return 0;
+}
+
 static void test_openclose(void)
 {
     struct db *db = NULL;
     int r;
+
+    if (skiptest()) return;
 
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
@@ -240,6 +255,8 @@ static void test_multiopen(void)
     static const char DATA2[] = "beard ethical";
     static const char KEY3[] = "leggings";
     static const char DATA3[] = "tumblr salvia";
+
+    if (skiptest()) return;
 
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
@@ -329,6 +346,8 @@ static void test_opentwo(void)
     struct db *db2 = NULL;
     int r;
 
+    if (skiptest()) return;
+
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
     CU_ASSERT_EQUAL(fexists(filename2), -ENOENT);
 
@@ -367,6 +386,8 @@ static void test_readwrite(void)
     static const char KEY[] = "skeleton";
     static const char DATA[] = "dem bones dem bones dem thighbones";
     int r;
+
+    if (skiptest()) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
@@ -412,6 +433,8 @@ static void test_multirw(void)
     static const char DATA1[] = "dem bones";
     static const char DATA2[] = "Dem KneeBones";
     int r;
+
+    if (skiptest()) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
@@ -467,6 +490,8 @@ static void test_readwrite_zerolen(void)
     static const char DATA[] = "";
     int r;
 
+    if (skiptest()) return;
+
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
@@ -514,6 +539,8 @@ static void test_readwrite_null(void)
     static const char EMPTY[] = "";
     int r;
 
+    if (skiptest()) return;
+
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
@@ -558,6 +585,8 @@ static void test_abort(void)
     static const char KEY[] = "yale";
     static const char DATA[] = "standford mit harvard";
     int r;
+
+    if (skiptest()) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
@@ -610,6 +639,8 @@ static void test_delete(void)
     static const char KEY3[] = "bathes";
     static const char DATA3[] = "flax corm naipaul enable herrera fating";
     int r;
+
+    if (skiptest()) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
@@ -732,6 +763,8 @@ static void test_mboxlist(void)
     static const char DATA3[] = "aleut stoic muscovy adonis moe docent";
     int r;
 
+    if (skiptest()) return;
+
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
@@ -825,6 +858,8 @@ static void test_foreach(void)
     static const char KEY3[] = "eulogy";
     static const char DATA3[] = "aleut stoic muscovy adonis moe docent";
     int r;
+
+    if (skiptest()) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
@@ -1004,6 +1039,8 @@ static void test_foreach_changes(void)
     static const char DATA6[] = "annoying push security plenty ending";
     int r;
 
+    if (skiptest()) return;
+
     if (!strcmp(backend, "flat")) return; /* flat concurency is bogus */
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
@@ -1097,6 +1134,8 @@ static void test_binary_keys(void)
     static const char DATA5[] = "farm-to-table";
     struct binary_result *results = NULL;
     int r;
+
+    if (skiptest()) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
@@ -1203,6 +1242,8 @@ static void test_binary_data(void)
                                   0x00/*unused*/};
     struct binary_result *results = NULL;
     int r;
+
+    if (skiptest()) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
@@ -1428,6 +1469,8 @@ static void test_many(void)
 #define MAXN    4095
     unsigned int n;
     int r;
+
+    if (skiptest()) return;
 
     construct_hash_table(&exphash, (MAXN+1)*4, 0);
 
