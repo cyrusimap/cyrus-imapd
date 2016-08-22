@@ -144,12 +144,16 @@ sub new
 # This also means we have to do a few things here the direct way,
 # rather than using helper methods...
 my %cached_version = ();
+my %cached_sversion = ();
 sub get_version
 {
     my ($class, $installation) = @_;
     $installation = 'default' if not defined $installation;
 
-    return @{$cached_version{$installation}} if exists $cached_version{$installation};
+    if (exists $cached_version{$installation}) {
+	return @{$cached_version{$installation}} if wantarray;
+	return $cached_sversion{$installation};
+    }
 
     my $cassini = Cassandane::Cassini->instance();
 
@@ -200,7 +204,13 @@ sub get_version
 	$cached_version{$installation} = [0, 0, 0, q{}];
     }
 
-    return @{$cached_version{$installation}};
+    $cached_sversion{$installation} = join q{.},
+					   @{$cached_version{$installation}}[0..2];
+    $cached_sversion{$installation} .= "-$cached_version{$installation}->[3]"
+	if $cached_version{$installation}->[3];
+
+    return @{$cached_version{$installation}} if wantarray;
+    return $cached_sversion{$installation};
 }
 
 sub _rootdir
