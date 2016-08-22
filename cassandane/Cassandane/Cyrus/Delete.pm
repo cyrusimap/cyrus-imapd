@@ -110,7 +110,7 @@ sub check_folder_ondisk
 }
 
 sub test_repeated_delete
-    :DelayedDelete :DefaultExpunge
+    :DelayedDelete :DefaultExpunge :min_version_3_0
 {
     my ($self) = @_;
 
