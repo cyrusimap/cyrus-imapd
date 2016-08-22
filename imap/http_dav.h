@@ -74,6 +74,7 @@
 #define XML_NS_APPLE    "http://apple.com/ns/ical/"
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
+#define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
 
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"

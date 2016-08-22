@@ -519,7 +519,65 @@ static int webdav_get(struct transaction_t *txn,
     }
 
     /* Get on a user/collection */
-    return HTTP_NO_CONTENT;
+    struct buf *body = &txn->resp_body.payload;
+    unsigned level = 0;
+
+    /* Check ACL for current user */
+    int rights = txn->req_tgt.mbentry->acl ?
+        cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
+    if ((rights & DACL_READ) != DACL_READ) {
+        /* DAV:need-privileges */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = DACL_READ;
+        return HTTP_NO_PRIVS;
+    }
+
+    struct strlist *action = hash_lookup("action", &txn->req_qparams);
+    if (!action) {
+        /* Send HTML with davmount link */
+        buf_reset(body);
+        buf_printf_markup(body, level, HTML_DOCTYPE);
+        buf_printf_markup(body, level++, "<html>");
+        buf_printf_markup(body, level++, "<head>");
+        buf_printf_markup(body, level, "<title>%s</title>", txn->req_tgt.path);
+        buf_printf_markup(body, --level, "</head>");
+        buf_printf_markup(body, level++, "<body>");
+        buf_printf_markup(body, level, "<a href=?action=davmount>%s</a>",
+                          "View this collection in your WebDAV client");
+        buf_printf_markup(body, --level, "</body>");
+        buf_printf_markup(body, --level, "</html>");
+
+        txn->resp_body.type = "text/html; charset=utf-8";
+    }
+    else if (action->next || strcmp(action->s, "davmount")) {
+        return HTTP_BAD_REQUEST;
+    }
+    else {
+        /* Send WebDAV mount request XML */
+        const char *proto = NULL;
+        const char *host = NULL;
+
+        buf_reset(body);
+        buf_printf_markup(body, level, XML_DECLARATION);
+        buf_printf_markup(body, level++,
+                          "<mount xmlns=\"" XML_NS_DAVMOUNT "\">");
+        http_proto_host(txn->req_hdrs, &proto, &host);
+        buf_printf_markup(body, level, "<url>%s://%s%s</url>",
+                          proto, host, txn->req_tgt.path);
+        if (httpd_userid) {
+            txn->flags.cc |= CC_PRIVATE;
+            buf_printf_markup(body, level,
+                              "<username>%s</username>", httpd_userid);
+        }
+        buf_printf_markup(body, --level, "</mount>");
+
+        txn->resp_body.type = "application/davmount+xml; charset=utf-8";
+    }
+
+    write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
+
+    return 0;
 }
 
 
