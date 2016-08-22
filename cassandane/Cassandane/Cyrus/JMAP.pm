@@ -119,6 +119,7 @@ sub tear_down
 }
 
 sub test_setcontacts_multicontact
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -166,6 +167,7 @@ sub test_setcontacts_multicontact
 }
 
 sub test_getcontactupdates
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -288,6 +290,7 @@ sub test_getcontactupdates
 }
 
 sub test_setcontactgroups
+    :min_version_3_0
 {
 
     my ($self) = @_;
@@ -352,7 +355,9 @@ sub test_setcontactgroups
     $self->assert_str_equals($res->[0][1]{list}[0]{contactIds}[1], $contact2);
 }
 
-sub test_getcontactlist {
+sub test_getcontactlist
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -523,6 +528,7 @@ sub test_getcontactlist {
 }
 
 sub test_getcontactgroupupdates
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -655,6 +661,7 @@ sub test_getcontactgroupupdates
 }
 
 sub test_setcontacts
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -969,6 +976,7 @@ sub test_setcontacts
 
 
 sub test_setcontacts_state
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1035,6 +1043,7 @@ sub test_setcontacts_state
 }
 
 sub test_getmailboxes
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1112,6 +1121,7 @@ sub test_getmailboxes
 }
 
 sub test_getmailboxes_specialuse
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1159,6 +1169,7 @@ sub test_getmailboxes_specialuse
 }
 
 sub test_getmailboxes_properties
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1186,6 +1197,7 @@ sub test_getmailboxes_properties
 }
 
 sub test_getmailboxes_ids
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1223,6 +1235,7 @@ sub test_getmailboxes_ids
 }
 
 sub test_getmailboxes_nocalendars
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1254,6 +1267,7 @@ sub test_getmailboxes_nocalendars
 }
 
 sub test_setmailboxes
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1336,6 +1350,7 @@ sub test_setmailboxes
 }
 
 sub test_setmailboxes_name_collision
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1409,6 +1424,7 @@ sub test_setmailboxes_name_collision
 }
 
 sub test_setmailboxes_name_interop
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1464,6 +1480,7 @@ sub test_setmailboxes_name_interop
 }
 
 sub test_setmailboxes_role
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1597,6 +1614,7 @@ sub test_setmailboxes_role
 }
 
 sub test_setmailboxes_parent
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1694,6 +1712,7 @@ sub test_setmailboxes_parent
 }
 
 sub test_getcalendars
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1735,6 +1754,7 @@ sub test_getcalendars
 }
 
 sub test_getcalendars_default
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1749,6 +1769,7 @@ sub test_getcalendars_default
 }
 
 sub test_setcalendars
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1811,6 +1832,7 @@ sub test_setcalendars
 }
 
 sub test_setcalendars_state
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1912,6 +1934,7 @@ sub test_setcalendars_state
 
 
 sub test_getcalendarupdates
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2016,6 +2039,7 @@ sub test_getcalendarupdates
 
 
 sub test_setcalendars_error
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2104,6 +2128,7 @@ sub test_setcalendars_error
 }
 
 sub test_setcalendars_badname
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2127,6 +2152,7 @@ sub test_setcalendars_badname
 }
 
 sub test_setcalendars_destroydefault
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2151,6 +2177,7 @@ sub test_setcalendars_destroydefault
 }
 
 sub test_setcontacts_importance_later
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2185,6 +2212,7 @@ sub test_setcontacts_importance_later
 }
 
 sub test_setcontacts_importance_upfront
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2219,6 +2247,7 @@ sub test_setcontacts_importance_upfront
 }
 
 sub test_setcontacts_importance_multiedit
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2253,6 +2282,7 @@ sub test_setcontacts_importance_multiedit
 }
 
 sub test_setcontacts_importance_zero_multi
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2287,6 +2317,7 @@ sub test_setcontacts_importance_zero_multi
 }
 
 sub test_setcontacts_importance_zero_byself
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2321,6 +2352,7 @@ sub test_setcontacts_importance_zero_byself
 }
 
 sub test_getcalendarevents
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2448,6 +2480,7 @@ EOF
 }
 
 sub test_getcalendarevents_infinite_delegates
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2503,7 +2536,9 @@ EOF
   $self->assert_str_equals($attendees->[1]{rsvp}, "");
 }
 
-sub test_setcalendarevents {
+sub test_setcalendarevents
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -2692,7 +2727,9 @@ sub test_setcalendarevents {
     $self->assert_str_equals($res->[0][1]{notFound}[1], "foo");
 }
 
-sub test_setcalendarevents_update_recurrence {
+sub test_setcalendarevents_update_recurrence
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -2820,7 +2857,9 @@ sub test_setcalendarevents_update_recurrence {
     $self->assert_null($event->{recurrence});
 }
 
-sub test_setcalendarevents_update_inclusions {
+sub test_setcalendarevents_update_inclusions
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -2925,7 +2964,9 @@ sub test_setcalendarevents_update_inclusions {
     $self->assert_null($event->{inclusions});
 }
 
-sub test_setcalendarevents_update_alerts {
+sub test_setcalendarevents_update_alerts
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3015,7 +3056,9 @@ sub test_setcalendarevents_update_alerts {
     $self->assert_null($event->{alerts});
 }
 
-sub test_setcalendarevents_update_exceptions_basic {
+sub test_setcalendarevents_update_exceptions_basic
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3150,7 +3193,9 @@ sub test_setcalendarevents_update_exceptions_basic {
     $self->assert_str_equals($exc->{endTimeZone}, "Australia/Melbourne");
 }
 
-sub test_setcalendarevents_update_exceptions_edge {
+sub test_setcalendarevents_update_exceptions_edge
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3285,7 +3330,9 @@ sub test_setcalendarevents_update_exceptions_edge {
 }
 
 
-sub test_setcalendarevents_update_exceptions_dtstartend {
+sub test_setcalendarevents_update_exceptions_dtstartend
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3347,7 +3394,9 @@ sub test_setcalendarevents_update_exceptions_dtstartend {
 }
 
 
-sub test_setcalendarevents_update_participants {
+sub test_setcalendarevents_update_participants
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3498,7 +3547,9 @@ sub test_setcalendarevents_update_participants {
     $self->assert_null($event->{attendees});
 }
 
-sub test_setcalendarevents_isallday {
+sub test_setcalendarevents_isallday
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3543,7 +3594,9 @@ sub test_setcalendarevents_isallday {
     $self->assert_str_equals($event->{end}, '2015-10-07T00:00:00');
 }
 
-sub test_setcalendarevents_update_attachments {
+sub test_setcalendarevents_update_attachments
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3667,7 +3720,9 @@ sub test_setcalendarevents_update_attachments {
     $self->assert_null($event->{attachments});
 }
 
-sub test_setcalendarevents_move {
+sub test_setcalendarevents_move
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3743,7 +3798,9 @@ sub test_setcalendarevents_move {
     $self->assert_str_equals($event->{calendarId}, $calidB);
 }
 
-sub test_getcalendareventupdates {
+sub test_getcalendareventupdates
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -3920,7 +3977,9 @@ sub test_getcalendareventupdates {
     $state = $res->[0][1]{newState};
 }
 
-sub test_getcalendareventlist {
+sub test_getcalendareventlist
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -4010,7 +4069,9 @@ sub test_getcalendareventlist {
     $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
 }
 
-sub test_setcalendarevents_caldav {
+sub test_setcalendarevents_caldav
+    :min_version_3_0
+{
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
@@ -4142,6 +4203,7 @@ EOF
 }
 
 sub test_getmessages
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4239,6 +4301,7 @@ sub test_getmessages
 
 
 sub test_getmessages_body_both
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4286,6 +4349,7 @@ sub test_getmessages_body_both
 }
 
 sub test_getmessages_body_plain
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4317,6 +4381,7 @@ sub test_getmessages_body_plain
 }
 
 sub test_getmessages_body_html
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4349,6 +4414,7 @@ sub test_getmessages_body_html
 }
 
 sub test_getmessages_preview
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4380,6 +4446,7 @@ sub test_getmessages_preview
 }
 
 sub test_setmessages_draft
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4443,6 +4510,7 @@ sub test_setmessages_draft
 }
 
 sub test_setmessages_flagged
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4479,6 +4547,7 @@ sub test_setmessages_flagged
 }
 
 sub test_setmessages_invalid_mailaddr
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4524,6 +4593,7 @@ sub test_setmessages_invalid_mailaddr
 }
 
 sub test_setmessages_update
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4573,6 +4643,7 @@ sub test_setmessages_update
 }
 
 sub test_setmessages_destroy
+    :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4614,6 +4685,7 @@ sub test_setmessages_destroy
 }
 
 sub test_setcalendarevents_schedule_request
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -4676,6 +4748,7 @@ sub test_setcalendarevents_schedule_request
 }
 
 sub test_setcalendarevents_schedule_reply
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -4739,6 +4812,7 @@ sub test_setcalendarevents_schedule_reply
 }
 
 sub test_setcalendarevents_schedule_cancel
+    :min_version_3_0
 {
     my ($self) = @_;
 
