@@ -444,7 +444,7 @@ static int fetch(struct dbengine *db, const char *key, size_t keylen,
 {
     MDB_val mkey, mdata;
     struct txn *tid;
-    int r, r2, mr;
+    int r, r2 = 0, mr;
 
     PDEBUG("cyrusdb_lmdb(%s): fetch", db->fname);
     assert(db && key);
