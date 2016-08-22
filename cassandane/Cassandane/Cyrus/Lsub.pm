@@ -46,32 +46,18 @@ use DateTime;
 use Data::Dumper;
 
 use lib '.';
-use base qw(Cassandane::Unit::TestCase);
-use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
+use base qw(Cassandane::Cyrus::TestCase);
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service(name => 'imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} = $self->{instance}->get_service('imap')->create_store();
-    $self->{adminstore} = $self->{instance}->get_service('imap')->create_store(username => 'admin');
+    $self->SUPER::set_up();
 
     my $admintalk = $self->{adminstore}->get_client();
 
@@ -94,16 +80,7 @@ sub set_up
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{adminstore}->disconnect()
-	if defined $self->{adminstore};
-    $self->{adminstore} = undef;
-    $self->{instance}->stop();
-    $self->{instance}->cleanup();
-    $self->{instance} = undef;
+    $self->SUPER::tear_down();
 }
 
 #
