@@ -58,4 +58,17 @@ sub test_skip_outside_range
     $self->assert($rev <= 9);
 }
 
+# Don't actually use this device in real tests.  This is meant to exercise the
+# skip mechanism, not as an example of its proper use :)
+sub test_skip_everything
+    :min_version_3_0 :max_version_2_5
+{
+    my ($self) = @_;
+
+    my ($maj, $min, $rev) = Cassandane::Instance->get_version();
+
+    # should never get here -- if we do, we've failed
+    $self->assert(0);
+}
+
 1;
