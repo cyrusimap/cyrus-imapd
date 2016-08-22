@@ -91,7 +91,7 @@ Cassandane::Cyrus::TestCase::magic(ArchiveNow => sub {
 #    isn't available to clients during the archive operation
 #
 sub test_archive_messages
-    :ArchivePartition
+    :ArchivePartition :min_version_3_0
 {
     my ($self) = @_;
 
@@ -150,7 +150,7 @@ sub test_archive_messages
 }
 
 sub test_archivenow_messages
-    :ArchiveNow
+    :ArchiveNow :min_version_3_0
 {
     my ($self) = @_;
 
