@@ -46,36 +46,24 @@ use DateTime;
 use Data::Dumper;
 
 use lib '.';
-use base qw(Cassandane::Unit::TestCase);
-use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
+use base qw(Cassandane::Cyrus::TestCase);
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(altimap_virtdomains => 'userid');
-    $config->set(altimap_unixhierarchysep => 'on');
-    $config->set(altimap_altnamespace => 'yes');
-    $self->{instance} = Cassandane::Instance->new(config => $config);
-    $self->{instance}->add_service(name => 'imap');
-    $self->{instance}->add_service(name => 'altimap');
+    $config->set(virtdomains => 'userid');
+    $config->set(unixhierarchysep => 'on');
+    $config->set(altnamespace => 'yes');
 
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({ config => $config }, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} = $self->{instance}->get_service('altimap')->create_store();
+    $self->SUPER::set_up();
 
     my $imaptalk = $self->{store}->get_client();
 
@@ -91,13 +79,7 @@ sub set_up
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{instance}->stop();
-    $self->{instance}->cleanup();
-    $self->{instance} = undef;
+    $self->SUPER::tear_down();
 }
 
 #
