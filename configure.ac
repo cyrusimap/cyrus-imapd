@@ -419,7 +419,7 @@ if test "$with_lmdb" = "yes"; then
 else
     use_lmdb="no"
 fi
-AM_CONDITIONAL([USE_CYRUSDB_LMDB], [test "x$use_lmdb" = "xyes"]),
+AM_CONDITIONAL([USE_CYRUSDB_LMDB], [test "x$use_lmdb" = "xyes"])
 
 dnl
 dnl Object Store support
