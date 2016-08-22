@@ -1244,7 +1244,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
                    alpn_len, (const char *) alpn);
     }
 
-    syslog(LOG_NOTICE, buf_cstring(&log));
+    syslog(LOG_NOTICE, "%s", buf_cstring(&log));
     buf_free(&log);
 
  done:
