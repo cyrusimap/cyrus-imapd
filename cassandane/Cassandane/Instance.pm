@@ -1026,6 +1026,9 @@ sub start
     {
 	$self->create_user("cassandane");
     }
+
+    xlog "started $self->{description}: cyrus version "
+	. Cassandane::Instance->get_version($self->{installation});
 }
 
 sub _compress_berkeley_crud
