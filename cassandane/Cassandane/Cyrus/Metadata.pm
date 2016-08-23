@@ -271,11 +271,9 @@ sub test_shared
     # we can't entirely predict
     $self->assert_not_null($r->{'/shared/vendor/cmu/cyrus-imapd/uniqueid'});
     delete $r->{'/shared/vendor/cmu/cyrus-imapd/uniqueid'};
-    $self->assert_deep_equals({
+    my %specific_entries = (
 	    '/shared/vendor/cmu/cyrus-imapd/squat' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/size' => '0',
-	    '/shared/vendor/cmu/cyrus-imapd/annotsize' => '0',
-	    '/shared/vendor/cmu/cyrus-imapd/synccrcs' => '0 0',
 	    '/shared/vendor/cmu/cyrus-imapd/sieve' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'false',
 	    '/shared/vendor/cmu/cyrus-imapd/pop3showafter' => undef,
@@ -293,7 +291,14 @@ sub test_shared
 	    '/shared/checkperiod' => undef,
 	    '/shared/check' => undef,
 	    '/shared' => undef,
-	}, $r);
+    );
+    # Note: annotsize/synccrcs new in 3.0
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v >= 3) {
+	$specific_entries{'/shared/vendor/cmu/cyrus-imapd/annotsize'} = '0';
+	$specific_entries{'/shared/vendor/cmu/cyrus-imapd/synccrcs'} = '0 0';
+    }
+    $self->assert_deep_equals(\%specific_entries, $r);
 
     # individual item fetch:
     my $part = $imaptalk->getmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/partition");
