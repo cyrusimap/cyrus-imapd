@@ -469,6 +469,7 @@ static icaltimezone *get_floatingtz(struct mailbox *mailbox)
         }
         icalcomponent_free(comp);
     }
+    buf_free(&buf);
 
     return floatingtz;
 }
