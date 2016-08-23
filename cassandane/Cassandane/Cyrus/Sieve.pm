@@ -246,6 +246,7 @@ EOF
 }
 
 sub test_deliver_specialuse
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -280,6 +281,7 @@ EOF
 }
 
 sub test_deliver_compile
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -551,6 +553,7 @@ EOF
 }
 
 sub test_rfc5490_create
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -601,6 +604,7 @@ EOF
 }
 
 sub test_rfc5490_mailboxexists
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -656,6 +660,7 @@ EOF
 }
 
 sub test_rfc5490_metadata
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -709,6 +714,7 @@ EOF
 }
 
 sub test_rfc5490_metadata_matches
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -765,7 +771,7 @@ EOF
 }
 
 sub test_rfc5490_metadataexists
-    :AnnotationAllowUndefined
+    :min_version_3_0 :AnnotationAllowUndefined
 {
     my ($self) = @_;
 
@@ -819,7 +825,7 @@ EOF
 }
 
 sub test_rfc5490_servermetadata
-    :AnnotationAllowUndefined
+    :min_version_3_0 :AnnotationAllowUndefined
 {
     my ($self) = @_;
 
@@ -877,7 +883,7 @@ EOF
 }
 
 sub test_rfc5490_servermetadataexists
-    :AnnotationAllowUndefined
+    :min_version_3_0 :AnnotationAllowUndefined
 {
     my ($self) = @_;
 
