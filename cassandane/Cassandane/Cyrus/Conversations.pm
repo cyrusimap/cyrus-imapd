@@ -61,9 +61,6 @@ sub new
     return $class->SUPER::new({ config => $config }, @args);
 }
 
-# Disable this whole suite - all the tests fail on ToT
-sub filter { return { x => sub { return 1; } }; }
-
 sub set_up
 {
     my ($self) = @_;
@@ -124,7 +121,7 @@ sub test_append
 #
 # Test APPEND of messages to IMAP which results in a CID clash.
 #
-sub test_append_clash
+sub bogus_test_append_clash
 {
     my ($self) = @_;
     my %exp;
@@ -169,7 +166,7 @@ sub test_append_clash
 #
 # Test APPEND of messages to IMAP which results in multiple CID clashes.
 #
-sub test_double_clash
+sub bogus_test_double_clash
 {
     my ($self) = @_;
     my %exp;
@@ -220,7 +217,7 @@ sub test_double_clash
 #
 # Test that a CID clash resolved on the master is replicated
 #
-sub test_replication_clash
+sub bogus_test_replication_clash
 {
     my ($self) = @_;
     my %exp;
@@ -366,7 +363,7 @@ sub test_xconvfetch
 # the Fastmail webui, which sets the X-ME-Message-ID header to thread
 # conversations but not any of Message-ID, References, or In-Reply-To.
 #
-sub test_fm_webui_draft
+sub bogus_test_fm_webui_draft
 {
     my ($self) = @_;
     my %exp;
@@ -400,7 +397,7 @@ sub test_fm_webui_draft
 #
 # Test a COPY between folders owned by different users
 #
-sub test_cross_user_copy
+sub bogus_test_cross_user_copy
 {
     my ($self) = @_;
     my $bobuser = "bob";
