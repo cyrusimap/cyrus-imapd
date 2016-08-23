@@ -82,7 +82,11 @@ sub set_up
 	url => '/',
 	expandurl => 1,
     );
-    $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
+
+    eval {
+	# this fails on older Cyruses -- but don't crash during set_up!
+	$self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
+    };
 }
 
 sub tear_down
