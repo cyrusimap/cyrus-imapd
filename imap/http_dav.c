@@ -5724,7 +5724,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     /* Output the XML response */
     if (!ret) {
-        if (get_preferences(txn) & PREFER_MIN) ret = HTTP_OK;
+        if (!r && (get_preferences(txn) & PREFER_MIN)) ret = HTTP_OK;
         else xml_response(HTTP_MULTI_STATUS, txn, outdoc);
     }
 
