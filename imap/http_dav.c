@@ -5490,6 +5490,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                     ret = HTTP_SERVER_ERROR;
                     goto done;
                 }
+
+                fctx.mbentry = txn->req_tgt.mbentry;
             }
 
             if (!fctx.req_tgt->resource) xml_add_response(&fctx, 0, 0);
