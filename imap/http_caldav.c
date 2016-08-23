@@ -4994,7 +4994,6 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
                                 struct propstat propstat[],
                                 void *rock __attribute__((unused)))
 {
-    int r = 0;
     unsigned precond = 0;
 
     if (set && (pctx->meth != METH_PROPPATCH)) {
@@ -5023,26 +5022,10 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 
         if (!cur) {
             /* All component types are valid */
-            const char *prop_annot =
-                DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
-            annotate_state_t *astate = NULL;
+            char typestr[(sizeof(unsigned long) * 8) / 3 + 1];
+            sprintf(typestr, "%lu", types);
 
-            buf_reset(&pctx->buf);
-            buf_printf(&pctx->buf, "%lu", types);
-
-            r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-            if (!r) r = annotate_state_writemask(astate, prop_annot,
-                                                 httpd_userid, &pctx->buf);
-
-            if (!r) {
-                xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                             prop->name, prop->ns, NULL, 0);
-            }
-            else {
-                xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-                             &propstat[PROPSTAT_ERROR],
-                             prop->name, prop->ns, NULL, 0);
-            }
+            proppatch_todb(prop, set, pctx, propstat, (void *) typestr);
 
             return 0;
         }
@@ -5281,13 +5264,8 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
                                struct propstat propstat[],
                                void *rock __attribute__((unused)))
 {
-    int r;
-
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
-        const char *prop_annot =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
-        annotate_state_t *astate = NULL;
-        buf_reset(&pctx->buf);
+        const xmlChar *value = NULL;
 
         if (set) {
             xmlNodePtr cur;
@@ -5299,7 +5277,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
                 if (cur->type != XML_ELEMENT_NODE) continue;
                 if (!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
                     !xmlStrcmp(cur->name, BAD_CAST "transparent")) {
-                    buf_setcstr(&pctx->buf, (const char *)cur->name);
+                    value = cur->name;
                     break;
                 }
                 else {
@@ -5315,18 +5293,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
             }
         }
 
-        r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-        if (!r) r = annotate_state_writemask(astate, prop_annot,
-                                             httpd_userid, &pctx->buf);
-        if (!r) {
-            xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
-                         &propstat[PROPSTAT_OK], prop->name, prop->ns, NULL, 0);
-        }
-        else {
-            xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-                         &propstat[PROPSTAT_ERROR],
-                         prop->name, prop->ns, NULL, 0);
-        }
+        proppatch_todb(prop, set, pctx, propstat, (void *) value);
     }
     else {
         xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
