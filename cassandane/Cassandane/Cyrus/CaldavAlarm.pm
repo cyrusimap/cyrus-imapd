@@ -156,6 +156,7 @@ sub tear_down
 }
 
 sub test_simple
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -233,6 +234,7 @@ EOF
 }
 
 sub test_override
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -340,6 +342,7 @@ EOF
 }
 
 sub test_override_exception
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -449,6 +452,7 @@ EOF
 }
 
 sub test_floating_notz
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -520,6 +524,7 @@ EOF
 }
 
 sub test_floating_sametz
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -604,6 +609,7 @@ EOF
 }
 
 sub test_floating_differenttz
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -699,6 +705,7 @@ EOF
 }
 
 sub test_replication_at1
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -831,6 +838,7 @@ EOF
 }
 
 sub test_override_double
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -942,6 +950,7 @@ EOF
 }
 
 sub test_allday_notz
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -1012,6 +1021,7 @@ EOF
 }
 
 sub test_allday_sametz
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
