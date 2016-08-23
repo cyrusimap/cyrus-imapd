@@ -710,7 +710,7 @@ static int init(const char *dbdir __attribute__((unused)),
         }
         /* Check for overflows */
         guard = (size_t) size * factor;
-        if (guard/factor != (size_t) size) myerrno = ERANGE;
+        if (factor != 0 && guard/factor != (size_t) size) myerrno = ERANGE;
 
         /* Validate input */
         if (factor == 0 || myerrno == ERANGE || size < 0) {
