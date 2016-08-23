@@ -3540,7 +3540,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
             }
 
-            const char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+            char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
             if (!strcasecmpsafe(schedule_address, organizer)) {
                 /* Organizer scheduling object resource */
                 if (ret) {
@@ -3566,6 +3566,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 sched_reply(userid, schedule_address, oldical, ical);
             }
+            free(userid);
 
             flags |= NEW_STAG;
         }
@@ -3589,6 +3590,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
   done:
     if (oldical) icalcomponent_free(oldical);
     free(schedule_address);
+    buf_free(&buf);
 
     return ret;
 }
