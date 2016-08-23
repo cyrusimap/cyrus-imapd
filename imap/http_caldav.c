@@ -1496,6 +1496,7 @@ struct cal_info {
     char shortname[MAX_MAILBOX_NAME];
     char displayname[MAX_MAILBOX_NAME];
     unsigned flags;
+    unsigned long types;
 };
 
 enum {
@@ -1526,7 +1527,10 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     static const char *schedtransp_annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+    static const char *calcompset_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     struct buf displayname = BUF_INITIALIZER, schedtransp = BUF_INITIALIZER;
+    struct buf calcompset = BUF_INITIALIZER;
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
@@ -1600,6 +1604,18 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     }
     buf_free(&schedtransp);
 
+    /* Which component types are supported? */
+    r = annotatemore_lookupmask(mbentry->name, calcompset_annot,
+                                httpd_userid, &calcompset);
+    if (!r && buf_len(&calcompset)) {
+        cal->types = strtoul(buf_cstring(&calcompset), NULL, 10);
+    }
+    else {
+        /* ALL component types */
+        cal->types = -1;
+    }
+    buf_free(&calcompset);
+
     lrock->len++;
 
 done:
@@ -1652,6 +1668,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
     struct list_cal_rock lrock;
     const char *proto = NULL;
     const char *host = NULL;
+    const struct cal_comp_t *comp;
 #include "imap/http_caldav_js.h"
 
     /* Check rights */
@@ -1749,25 +1766,42 @@ static int list_calendars(struct transaction_t *txn, int rights)
             buf_reset(body);
         }
 
+        /* Calendar name */
         buf_printf_markup(body, level++, "<tr>");
         buf_printf_markup(body, level, "<td>%s%s%s",
                           (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
                           cal->displayname,
                           (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
 
+        /* Supported components list */
+        buf_printf_markup(body, level++, "<td>");
+        buf_printf_markup(body, level++,
+                          "<select name=comp multiple size=1 disabled>");
+        for (comp = cal_comps; comp->name; comp++) {
+            buf_printf_markup(body, level, "<option%s>%s</option>",
+                              (cal->types & comp->type) ? " selected" : "",
+                              comp->name);
+        }
+        buf_printf_markup(body, --level, "</select>");
+        buf_printf_markup(body, --level, "</td>");
+
+        /* Subscribe link */
         buf_printf_markup(body, level,
                           "<td><a href=\"webcal://%s%s%s\">Subscribe</a></td>",
                           host, base_path, cal->shortname);
 
+        /* Download link */
         buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
                           base_path, cal->shortname);
 
+        /* Delete button */
         buf_printf_markup(body, level,
                           "<td><input type=button%s value='Delete'"
                           " onclick=\"deleteCalendar('%s%s', '%s')\"></td>",
                           !(cal->flags & CAL_CAN_DELETE) ? " disabled" : "",
                           base_path, cal->shortname, cal->displayname);
 
+        /* Public (shared) checkbox */
         buf_printf_markup(body, level,
                           "<td><input type=checkbox%s%s name=share"
                           " onclick=\"shareCalendar('%s%s', this.checked)\">"
@@ -1776,6 +1810,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
                           (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
                           base_path, cal->shortname);
 
+        /* Transparent checkbox */
         buf_printf_markup(body, level,
                           "<td><input type=checkbox%s%s name=transp"
                           " onclick=\"transpCalendar('%s%s', this.checked)\">"
@@ -1794,7 +1829,6 @@ static int list_calendars(struct transaction_t *txn, int rights)
 
     if (rights & DACL_MKCOL) {
         /* Add "create" form */
-        const struct cal_comp_t *comp;
         struct list_tzid_rock tzrock = { body, &level };
 
         buf_printf_markup(body, level, "<p><hr>");
