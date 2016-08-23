@@ -340,7 +340,15 @@ sub _create_instances
 	    $instance_params{description} = "replica instance for test $self->{_name}";
 	    $self->{replica} = Cassandane::Instance->new(%instance_params,
 							 setup_mailbox => 0);
-	    $self->{replica}->add_service(name => 'sync', port => $sync_port);
+	    my ($v) = Cassandane::Instance->get_version($instance_params{installation});
+	    if ($v < 3) {
+		$self->{replica}->add_service(name => 'sync',
+					      port => $sync_port,
+					      argv => ['sync_server']);
+	    }
+	    else {
+		$self->{replica}->add_service(name => 'sync', port => $sync_port);
+	    }
 	    $self->{replica}->add_services(@{$want->{services}});
 	    $self->{replica}->_setup_for_deliver()
 		if ($want->{deliver});
