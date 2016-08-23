@@ -56,6 +56,11 @@ sub create
     die "No name specified"
 	unless defined $name;
 
+    # if caller knows what they're asking for, don't try to guess
+    if (defined $params{argv}) {
+	return Cassandane::Service->new(%params);
+    }
+
     # try and guess some service-specific defaults
     if ($name =~ m/imap/)
     {
@@ -108,9 +113,7 @@ sub create
     }
     else
     {
-	die "No command specified and cannot guess a default"
-	    unless defined $params{argv};
-	return Cassandane::Service->new(%params);
+	die "No command specified and cannot guess a default";
     }
 }
 
