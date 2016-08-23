@@ -11,7 +11,7 @@ This assumes you have already succeeded in getting your :ref:`development enviro
 Installing Cassandane
 =====================
 
-Cassandane is a Perl-based integration test suite for Cyrus.
+Cassandane is a Perl-based integration test suite for Cyrus. `Cassandane documentation <https://github.com/cyrusimap/cassandane/tree/master/doc>`_ includes information on setting up tests and writing new tests.
 
 Why "Cassandane"? Wikipedia indicates that Cassandane_ was the name of
 the consort of King Cyrus the Great of Persia, founder of the Achaemenid
