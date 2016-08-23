@@ -151,6 +151,23 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
         The use of Berkely DB for Cyrus IMAP databases is discouraged,
         and is likely to be obsoleted.
 
+**lmdb** version 0.9.14 or higher
+
+    Lightning Memory-Mapped Database Manager (LMDB) backend for Cyrus IMAP
+    databases, from http://lmdb.tech/.
+
+    LMDB requires database environments to be set to a (user-configurable)
+    maximum size. The Cyrus backend uses 512MB as default size. Cyrus
+    installations may override this by setting the environment variable
+    CYRUSDB_LMDB_MAXSIZE. The value of this variable must be an integer,
+    optionally followed (without space) by "mb" or "gb" to define the
+    maximum size in bytes, megabytes or gigabytes. The size should be a
+    multiple of the OS page size.
+
+    .. NOTE::
+
+        The use of LMDB for Cyrus IMAP databases is experimental.
+
 **db4-utils** or **libdb-utils** version 3.0.55 or higher
 
     .. NOTE::
