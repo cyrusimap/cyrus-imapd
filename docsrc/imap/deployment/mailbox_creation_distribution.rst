@@ -1,6 +1,16 @@
 Mailbox Creation Distribution
 =============================
 
+By default, when creating a mailbox in Cyrus IMAP:
+
+* the backend with the most free disk space is selected on the Murder frontend
+* the partition with the most free disk space is selected on the backend
+
+This may not be the most appropriate backend or partition to create the new mailbox on, and Cyrus IMAP therefor allows for a variety of additional modes of calculating and selecting the most appropriate backend and partition. The exact mode for the selection is controlled with the ``imapd.conf`` setting ``serverlist_select_mode`` on the frontend and ``partition_select_mode`` on the backend.
+
+Alternatively, a default backend can be configured with the ``defaultserver`` setting on a frontend, and a default partition can be configured with the ``defaultpartition`` on a backend.
+
+
 Prior to Cyrus IMAP version 2.5, when creating a mailbox, should no
 target partition have been specified, the mailbox is either created on:
 
@@ -82,7 +92,7 @@ Available Selection Modes
         * 35% for ``part4``
 
 Usage convergence
-=================
+"""""""""""""""""
 
 In ``freespace-percent-weighted`` mode, partitions percentage usages converge towards 100%. So if they have different usages, those differences will stay and only really diminish upon reaching 100% of usage.
 
@@ -97,7 +107,7 @@ Then a weighted choice is performed to select one of those partitions.
 As such, considering the percentages of usage, the more the partition is lagging behind the most used partition (which is the one with the lowest percentage of free space), the more chances it has to be selected.
 
 Computed weight
-===============
+"""""""""""""""
 
 The added 0.5 in partitions weight is so that selection gets smoother when all partitions get close to each other.
 
@@ -123,10 +133,10 @@ The added 0.5 in partitions weight is so that selection gets smoother when all p
     In ``freespace-percent-weighted-delta`` mode, partitions percentage usages converge towards the most used one. And then partitions usages grow equally.
 
 Special cases
-=============
+-------------
 
 What happens when two partitions are equal as most fitting?
------------------------------------------------------------
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Suppose you are using the ``freespace-most`` selection mode, that two (or more) partitions have the same free size, and that this freespace happens to be the biggest one of all configured partitions.
 
@@ -135,7 +145,7 @@ In that case, only one of those partitions will be selected. You may not know in
 Also note that since the selected partition will now have less free space, it shall not be seen as most fitting next time.
 
 What happens when two partitions point to the same device?
-----------------------------------------------------------
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Suppose you are using the ``freespace-most`` or ``freespace-percent-most`` selection mode, and that two (or more) partitions actually point to the same device (that is the device id is the same).
 
@@ -199,7 +209,7 @@ If you tend to use the same service instance for a long lapse of time and perfor
 
 
 Mailbox Creation Distribution Through ``murder frontend``
-=========================================================
+---------------------------------------------------------
 
 Upon creating a user mailbox, if the target server is not given as extra parameter, the mailbox is either created on
 
@@ -208,7 +218,7 @@ Upon creating a user mailbox, if the target server is not given as extra paramet
 
 
 Selection Mode
---------------
+""""""""""""""
 
 Among the backends, how the most fitting one is selected depends on the configured selection mode: ``serverlist_mode`` setting in ``/etc/imapd.conf``.
 
@@ -216,7 +226,7 @@ The principle is similar to the mailbox creation distribution on backend (see <x
 
 
 Available Selection Modes on Frontend
--------------------------------------
+"""""""""""""""""""""""""""""""""""""
 
 * random
 
@@ -297,7 +307,7 @@ Then a weighted choice is performed to select one of the backends.
 
 
 Backends Exclusion
-==================
+------------------
 
 When using a selection mode other than ``random``, backends are automatically excluded if their considered usage percentage is beyond the ``serverlist_mode_soft_usage_limit`` integer setting.
 
@@ -322,7 +332,7 @@ If all backends are beyond the configured value, this feature is automatically d
 
 
 Backends Usage Data Reset
-=========================
+-------------------------
 
 By default backends usage data are retrieved only once upon service initialization. This only concerns selection modes other than ``random``.
 

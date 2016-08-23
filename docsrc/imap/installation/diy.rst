@@ -5,22 +5,9 @@ Do It Yourself
 The following guides outline building Cyrus IMAP from a fresh clone of
 the GIT repository's branches, or a tarball of a released version.
 
-.. WARNING::
-
-    The level of technical difficulty involved with home-brew or DIY
-    Cyrus IMAP versions is **high**.
-
-    You are specifically requested **not** to build your own unless you
-    have an appropriate comprehension of dependencies and building those
-    yourself if you have to.
-
-From GIT
-========
-
-Read our :ref:`Guide to GitHub <github-guide>` for details on how to
-access our GitHub repository, and fork/clone the source.
-
-Continue with :ref:`imap-installation-diy-build-dependencies`.
+Unless you specifically need unreleased patches, the tarball package is
+recommended as it comes with a number of resources pre-built for you,
+such as the documentation.
 
 From Tarball
 ============
@@ -34,6 +21,14 @@ Extract the tarball:
     $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
 	
 .. _latest stable tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
+
+Continue with :ref:`imap-installation-diy-build-dependencies`.
+
+From GIT
+========
+
+Read our :ref:`Guide to GitHub <github-guide>` for details on how to
+access our GitHub repository, and fork/clone the source.
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
 
