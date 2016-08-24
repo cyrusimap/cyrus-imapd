@@ -668,17 +668,21 @@ sub test_replication_mailbox_too_old
     my $log_base = "$master_instance->{basedir}/$self->{_name}";
 
     # add a version9 mailbox to the replica only, and try to replicate.
-    # replica will not report its existence, so the replication will
-    # successfully do nothing.
+    # replication will fail, because the initial GET USER will barf
+    # upon encountering the old mailbox.
     $replica_instance->install_old_mailbox($user, 9);
+    my $log_firstreject = "$log_base-firstreject.stderr";
     $exit_code = 0;
     $self->run_replication(
         user => $user,
         handlers => {
             exited_abnormally => sub { (undef, $exit_code) = @_; },
         },
+	redirects => { stderr => $log_firstreject },
     );
-    $self->assert_equals($exit_code, 0);
+    $self->assert_equals(1, $exit_code);
+    $self->assert(qr/USER received NO response: IMAP_MAILBOX_NOTSUPPORTED/,
+                  slurp_file($log_firstreject));
 
     # add the version9 mailbox to the master, and try to replicate.
     # mailbox will be found and rejected locally, and replication will
@@ -693,13 +697,13 @@ sub test_replication_mailbox_too_old
         },
         redirects => { stderr => $log_localreject },
     );
-    $self->assert_equals($exit_code, 1);
+    $self->assert_equals(1, $exit_code);
     $self->assert(qr/Operation is not supported on mailbox/,
                   slurp_file($log_localreject));
 
     # upgrade the version9 mailbox on the master, and try to replicate.
-    # replication will try to create it on the replica instance, which will
-    # reject it because its own copy is too old.
+    # replication will fail, because the initial GET USER will barf
+    # upon encountering the old mailbox.
     $master_instance->run_command({ cyrus => 1 }, qw(reconstruct -V max -u), $user);
     my $log_remotereject = "$log_base-remotereject.stderr";
     $exit_code = 0;
@@ -710,8 +714,8 @@ sub test_replication_mailbox_too_old
         },
         redirects => { stderr => $log_remotereject },
     );
-    $self->assert_equals($exit_code, 1);
-    $self->assert(qr/MAILBOX received NO response: IMAP_MAILBOX_NOTSUPPORTED/,
+    $self->assert_equals(1, $exit_code);
+    $self->assert(qr/USER received NO response: IMAP_MAILBOX_NOTSUPPORTED/,
                   slurp_file($log_remotereject));
 
     # upgrade the version9 mailbox on the replica, and try to replicate.
@@ -724,7 +728,7 @@ sub test_replication_mailbox_too_old
             exited_abnormally => sub { (undef, $exit_code) = @_; },
         },
     );
-    $self->assert_equals($exit_code, 0);
+    $self->assert_equals(0, $exit_code);
 }
 
 # XXX need a test for version 10 mailbox without guids in it!
