@@ -589,26 +589,26 @@ sub _generate_imapd_conf
     my ($cyrus_version) = Cassandane::Instance->get_version($self->{installation});
 
     $self->{config}->set_variables(
-		name => $self->{name},
-		basedir => $self->{basedir},
-		cyrus_prefix => $self->{cyrus_prefix},
-		prefix => getcwd(),
-	    );
+	name => $self->{name},
+	basedir => $self->{basedir},
+	cyrus_prefix => $self->{cyrus_prefix},
+	prefix => getcwd(),
+    );
     $self->{config}->set(
-		sasl_pwcheck_method => 'saslauthd',
-		sasl_saslauthd_path => "$self->{basedir}/run/mux",
-                notifysocket => "dlist:$self->{basedir}/run/notify",
-                imipnotifier => 'imip',
-                event_notifier => 'pusher',
+	sasl_pwcheck_method => 'saslauthd',
+	sasl_saslauthd_path => "$self->{basedir}/run/mux",
+	notifysocket => "dlist:$self->{basedir}/run/notify",
+	event_notifier => 'pusher',
     );
     if ($cyrus_version >= 3) {
 	$self->{config}->set(
-		    event_groups => 'mailbox message flags calendar',
+	    imipnotifier => 'imip',
+	    event_groups => 'mailbox message flags calendar',
 	);
     }
     else {
 	$self->{config}->set(
-		    event_groups => 'mailbox message flags',
+	    event_groups => 'mailbox message flags',
 	);
     }
     if ($self->{buildinfo}->{search}->{xapian}) {
