@@ -1925,7 +1925,7 @@ sub install_old_mailbox
     my $dest_dir = "data/user/$user";
 
     $self->unpackfile($data_file, $dest_dir);
-    $self->run_command({ cyrus => 1 }, 'reconstruct', '-f', '-u', $user);
+    $self->run_command({ cyrus => 1 }, 'reconstruct', '-f', "user.$user");
 
     xlog "installed version $version mailbox for user $user: user.$user.version$version";
 
