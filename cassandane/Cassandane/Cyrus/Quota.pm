@@ -2531,6 +2531,7 @@ sub test_bug3735
 sub test_rename_withannot
 {
     my ($self) = @_;
+    my ($cyrus_version) = Cassandane::Instance->get_version();
 
     xlog "test resources usage survives rename";
 
@@ -2610,12 +2611,14 @@ sub test_rename_withannot
 	$src => { $vendsize => $expected_storage },
     }, $res);
 
-    xlog "check that the annot size matches";
-    $res = $talk->getmetadata($src, $vendannot);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_deep_equals({
-	$src => { $vendannot => $expected_annotation_storage },
-    }, $res);
+    if ($cyrus_version >= 3) {
+	xlog "check that the annot size matches";
+	$res = $talk->getmetadata($src, $vendannot);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$self->assert_deep_equals({
+	    $src => { $vendannot => $expected_annotation_storage },
+	}, $res);
+    }
 
     xlog "Check the mailbox annotation is still there";
     $res = $talk->getmetadata($src, $fentry);
@@ -2656,12 +2659,14 @@ sub test_rename_withannot
 	$dest => { $vendsize => $expected_storage },
     }, $res);
 
-    xlog "check that the annot size still matches";
-    $res = $talk->getmetadata($dest, $vendannot);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_deep_equals({
-	$dest => { $vendannot => $expected_annotation_storage },
-    }, $res);
+    if ($cyrus_version >= 3) {
+	xlog "check that the annot size still matches";
+	$res = $talk->getmetadata($dest, $vendannot);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$self->assert_deep_equals({
+	    $dest => { $vendannot => $expected_annotation_storage },
+	}, $res);
+    }
 
     xlog "Check the quota usage is still as expected";
     $self->_check_usages(
