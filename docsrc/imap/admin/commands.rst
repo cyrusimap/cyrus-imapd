@@ -1,9 +1,9 @@
-===================================
-Administrative Commands & Utilities
-===================================
+=========
+Man pages
+=========
 
-List of Configuration Files, Formats and Settings
-=================================================
+(5) Configuration Files
+=======================
 
 .. toctree::
     :maxdepth: 1
@@ -12,8 +12,8 @@ List of Configuration Files, Formats and Settings
     configs/imapd.conf
     configs/krb.equiv
 
-List of System Command-line Utilities
-=====================================
+(8) System Commands
+===================
 
 .. toctree::
     :maxdepth: 1
@@ -73,8 +73,8 @@ List of System Command-line Utilities
     systemcommands/tls_prune
     systemcommands/unexpunge
 
-List of User Command-line Utilities
-===================================
+(1) User Commands
+=================
 
 .. toctree::
     :maxdepth: 1
