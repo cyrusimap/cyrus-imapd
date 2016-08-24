@@ -1730,8 +1730,10 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
-    buf_printf(body, "//<![CDATA[\n%.*s//]]>\n",
-               http_caldav_js_len, (const char *) http_caldav_js);
+    buf_appendcstr(body, "//<![CDATA[\n");
+    buf_printf(body, (const char *) http_caldav_js,
+               cyrus_version(), http_caldav_js_len);
+    buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
     buf_printf_markup(body, level, "<i>*** %s ***</i>",
@@ -1776,7 +1778,9 @@ static int list_calendars(struct transaction_t *txn, int rights)
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");
         buf_printf_markup(body, level++,
-                          "<select name=comp multiple size=1 disabled>");
+                          "<select multiple name=comp size=1"
+                          " onChange=\"compsetCalendar('%s%s', '%s', this.options)\">",
+                          base_path, cal->shortname, cal->displayname);
         for (comp = cal_comps; comp->name; comp++) {
             buf_printf_markup(body, level, "<option%s>%s</option>",
                               (cal->types & comp->type) ? " selected" : "",
@@ -4994,9 +4998,20 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
                                 struct propstat propstat[],
                                 void *rock __attribute__((unused)))
 {
-    unsigned precond = 0;
+    unsigned precond = 0, force = 0;
+    xmlChar *attr = xmlGetProp(prop, BAD_CAST "force");
 
-    if (set && (pctx->meth != METH_PROPPATCH)) {
+    /* Check if we want to force changing of a protected property.
+       This is mainly for our list_calendars() JavaScript client. */
+    if (attr) {
+        if (!xmlStrcmp(attr, BAD_CAST "yes") &&
+            mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name)) {
+            force = 1;
+        }
+        xmlFree(attr);
+    }
+
+    if (set && (force || (pctx->meth != METH_PROPPATCH))) {
         /* "Writeable" for MKCOL/MKCALENDAR only */
         xmlNodePtr cur;
         unsigned long types = 0;

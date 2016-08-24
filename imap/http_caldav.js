@@ -45,6 +45,7 @@
 // XML constants for requests
 var XML_DAV_NS = 'DAV:';
 var XML_CALDAV_NS = 'urn:ietf:params:xml:ns:caldav';
+var X_CLIENT = 'Cyrus/%s';  // Version filled in by printf() in http_caldav.c
 
 
 // Calculate hash of a string
@@ -122,9 +123,13 @@ function createCalendar(url) {
         }
     }
 
+    // Reset form
+    document.forms.create.reset();
+
     // Send MKCOL request (minimal response)
     var req = new XMLHttpRequest();
     req.open('MKCOL', url, false);
+    req.setRequestHeader('X-Client', X_CLIENT);
     req.setRequestHeader('Prefer', 'return=minimal');
     req.send(doc);
 
@@ -155,6 +160,7 @@ function shareCalendar(url, share) {
     // Send POST request
     var req = new XMLHttpRequest();
     req.open('POST', url);
+    req.setRequestHeader('X-Client', X_CLIENT);
     req.setRequestHeader('Content-Type', 'application/davsharing+xml');
     req.send(doc);
 }
@@ -187,6 +193,52 @@ function transpCalendar(url, transp) {
     // Send PROPPATCH request (minimal response)
     var req = new XMLHttpRequest();
     req.open('PROPPATCH', url);
+    req.setRequestHeader('X-Client', X_CLIENT);
+    req.setRequestHeader('Prefer', 'return=minimal');
+    req.send(doc);
+}
+
+
+// Adjust supported components on a calendar collection
+function compsetCalendar(url, name, comps) {
+    if (!window.confirm('Are you sure you want to change' +
+                        ' component types on calendar \"' +
+                        name + '\"?')) {
+
+        // Reset selected options
+        for (var i = 0; i < comps.length; i++) {
+            comps[i].selected = comps[i].defaultSelected;
+        }
+        return;
+    }
+
+    // Build PROPPATCH document
+    var doc = document.implementation.createDocument(XML_DAV_NS,
+                                                     "D:propertyupdate", null);
+    var propupdate = doc.documentElement;
+    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
+    var compset = doc.createElementNS(XML_CALDAV_NS,
+                                      "C:supported-calendar-component-set");
+    compset.setAttribute("force", "yes");
+    props.appendChild(compset);
+
+    var op = doc.createElementNS(XML_DAV_NS, "D:set");
+    for (var i = 0; i < comps.length; i++) {
+        if (comps[i].selected) {
+            var comp = doc.createElementNS(XML_CALDAV_NS, "C:comp");
+            comp.setAttribute("name", comps[i].value);
+            compset.appendChild(comp);
+        }
+        comps[i].defaultSelected = comps[i].selected;
+    }
+
+    op.appendChild(props);
+    propupdate.appendChild(op);
+
+    // Send PROPPATCH request (minimal response)
+    var req = new XMLHttpRequest();
+    req.open('PROPPATCH', url);
+    req.setRequestHeader('X-Client', X_CLIENT);
     req.setRequestHeader('Prefer', 'return=minimal');
     req.send(doc);
 }
@@ -199,9 +251,13 @@ function deleteCalendar(url, name) {
         // Send DELETE request
         var req = new XMLHttpRequest();
         req.open('DELETE', url, false);
+        req.setRequestHeader('X-Client', X_CLIENT);
         req.send(null);
 
         // Refresh calendar list
         document.location.reload();
     }
 }
+
+// EOF (%u bytes)
+ 
