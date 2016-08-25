@@ -230,7 +230,7 @@ static const struct prop_entry carddav_props[] = {
 
     /* WebDAV POST (RFC 5995) properties */
     { "add-member", NS_DAV, PROP_COLLECTION,
-      NULL,  /* Until Apple Contacts is fixed */ NULL, NULL },
+      propfind_addmember, NULL, NULL },
 
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV, PROP_COLLECTION,
@@ -296,10 +296,7 @@ static struct meth_params carddav_params = {
 struct namespace_t namespace_addressbook = {
     URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav", 1 /* auth */,
     MBTYPE_ADDRESSBOOK,
-    (ALLOW_READ | ALLOW_WRITE | ALLOW_DELETE |
-#if 0 /* Until Apple Contacts fixes their add-member implementation */
-     ALLOW_POST |
-#endif
+    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CARD),
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
     &dav_premethod,
