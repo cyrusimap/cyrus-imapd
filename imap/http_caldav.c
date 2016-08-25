@@ -1741,10 +1741,73 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf_markup(body, --level, "</noscript>");
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
-    buf_printf_markup(body, level, "<h2>%s</h2>", "Available Calendars");
-    buf_printf_markup(body, level++, "<table border cellpadding=5>");
+
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
+
+    if (rights & DACL_MKCOL) {
+        /* Add "create" form */
+        struct list_tzid_rock tzrock = { body, &level };
+
+        buf_printf_markup(body, level, "<h2>%s</h2>", "Create New Calendar");
+        buf_printf_markup(body, level++, "<form name='create'>");
+        buf_printf_markup(body, level++, "<table cellpadding=5>");
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td align=right>Name:</td>");
+        buf_printf_markup(body, level,
+                          "<td><input name=name size=30 maxlength=40></td>");
+        buf_printf_markup(body, --level, "</tr>");
+
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td align=right>Description:</td>");
+        buf_printf_markup(body, level,
+                          "<td><input name=desc size=75 maxlength=120></td>");
+        buf_printf_markup(body, --level, "</tr>");
+
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td align=right>Components:</td>");
+        buf_printf_markup(body, level++, "<td>");
+        for (comp = cal_comps; comp->name; comp++) {
+            buf_printf_markup(body, level,
+                              "<input type=checkbox%s name=comp value=%s>%s",
+                              !strcmp(comp->name, "VEVENT") ? " checked" : "",
+                              comp->name, comp->name);
+        }
+        buf_printf_markup(body, --level, "</td>");
+        buf_printf_markup(body, --level, "</tr>");
+
+        if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+            buf_printf_markup(body, level++, "<tr>");
+            buf_printf_markup(body, level, "<td align=right>Time Zone:</td>");
+            buf_printf_markup(body, level++, "<td>");
+            buf_printf_markup(body, level++, "<select name=tzid>");
+            buf_printf_markup(body, level, "<option></option>");
+            zoneinfo_find(NULL, 1, 0, &list_tzid_cb, &tzrock);
+            buf_printf_markup(body, --level, "</select>");
+            buf_printf_markup(body, --level, "</td>");
+            buf_printf_markup(body, --level, "</tr>");
+        }
+
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td></td>");
+        buf_printf_markup(body, level,
+                          "<td><br><input type=button value='Create'"
+                          " onclick=\"createCalendar('%s')\">"
+                          " <input type=reset></td>",
+                          base_path);
+        buf_printf_markup(body, --level, "</tr>");
+
+        buf_printf_markup(body, --level, "</table>");
+        buf_printf_markup(body, --level, "</form>");
+
+        buf_printf_markup(body, level, "<br><hr><br>");
+
+        write_body(0, txn, buf_cstring(body), buf_len(body));
+        buf_reset(body);
+    }
+
+    buf_printf_markup(body, level, "<h2>%s</h2>", "Available Calendars");
+    buf_printf_markup(body, level++, "<table border cellpadding=5>");
 
     /* Create base URL for calendars */
     http_proto_host(txn->req_hdrs, &proto, &host);
@@ -1778,7 +1841,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");
         buf_printf_markup(body, level++,
-                          "<select multiple name=comp size=1"
+                          "<select multiple name=comp size=3"
                           " onChange=\"compsetCalendar('%s%s', '%s', this.options)\">",
                           base_path, cal->shortname, cal->displayname);
         for (comp = cal_comps; comp->name; comp++) {
@@ -1830,63 +1893,6 @@ static int list_calendars(struct transaction_t *txn, int rights)
 
     /* Finish list */
     buf_printf_markup(body, --level, "</table>");
-
-    if (rights & DACL_MKCOL) {
-        /* Add "create" form */
-        struct list_tzid_rock tzrock = { body, &level };
-
-        buf_printf_markup(body, level, "<p><hr>");
-        buf_printf_markup(body, level, "<h3>%s</h3>", "Create New Calendar");
-        buf_printf_markup(body, level++, "<form name='create'>");
-        buf_printf_markup(body, level++, "<table cellpadding=5>");
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td align=right>Name:</td>");
-        buf_printf_markup(body, level,
-                          "<td><input name=name size=30 maxlength=40></td>");
-        buf_printf_markup(body, --level, "</tr>");
-
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td align=right>Description:</td>");
-        buf_printf_markup(body, level,
-                          "<td><input name=desc size=75 maxlength=120></td>");
-        buf_printf_markup(body, --level, "</tr>");
-
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td align=right>Components:"
-                          "<br><sub>(default = ALL)</sub></td>");
-        buf_printf_markup(body, level++, "<td>");
-        for (comp = cal_comps; comp->name; comp++) {
-            buf_printf_markup(body, level,
-                              "<input type=checkbox name=comp value=%s>%s",
-                              comp->name, comp->name);
-        }
-        buf_printf_markup(body, --level, "</td>");
-        buf_printf_markup(body, --level, "</tr>");
-
-        if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
-            buf_printf_markup(body, level++, "<tr>");
-            buf_printf_markup(body, level, "<td align=right>Time Zone:</td>");
-            buf_printf_markup(body, level++, "<td>");
-            buf_printf_markup(body, level++, "<select name=tzid>");
-            buf_printf_markup(body, level, "<option></option>");
-            zoneinfo_find(NULL, 1, 0, &list_tzid_cb, &tzrock);
-            buf_printf_markup(body, --level, "</select>");
-            buf_printf_markup(body, --level, "</td>");
-            buf_printf_markup(body, --level, "</tr>");
-        }
-
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td></td>");
-        buf_printf_markup(body, level,
-                          "<td><br><input type=button value='Create'"
-                          " onclick=\"createCalendar('%s')\">"
-                          " <input type=reset></td>",
-                          base_path);
-        buf_printf_markup(body, --level, "</tr>");
-
-        buf_printf_markup(body, --level, "</table>");
-        buf_printf_markup(body, --level, "</form>");
-    }
 
     /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");
