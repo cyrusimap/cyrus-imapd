@@ -248,8 +248,7 @@ an entire folder having been deleted, is one of the following stages;
     trash folder as subsequently been emptied.
 
     Result: The folder hierarchy has been renamed to the deleted
-    namespace and can be retrieved using
-    :ref:`imap-admin-pycommands-undelete-mailbox`.
+    namespace.
 
 .. rubric:: Footnotes
 

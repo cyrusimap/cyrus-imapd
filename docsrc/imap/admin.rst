@@ -6,8 +6,8 @@ Administrator Guide
 
 
 
-Overview
-========
+Architecture
+============
 .. toctree::
     :maxdepth: 2
 
