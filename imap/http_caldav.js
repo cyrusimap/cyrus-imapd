@@ -62,7 +62,7 @@ function strHash(str) {
 
 
 // Create a new calendar collection using data from 'create' form
-function createCalendar(url) {
+function createCalendar(baseurl) {
     var create = document.forms.create.elements;
 
     if (create.name.value.length === 0) {
@@ -72,7 +72,7 @@ function createCalendar(url) {
     // Generate calendar collection name
     var now = new Date();
     var rand = Math.random() * 1000000;
-    url += strHash(url).toString(16) +
+    var url = baseurl + strHash(baseurl).toString(16) +
         '-' + strHash(create.name.value).toString(16) +
         '-' + now.getTime() + '-' + rand.toFixed(0);
 
@@ -123,9 +123,6 @@ function createCalendar(url) {
         }
     }
 
-    // Reset form
-    document.forms.create.reset();
-
     // Send MKCOL request (minimal response)
     var req = new XMLHttpRequest();
     req.open('MKCOL', url, false);
@@ -134,7 +131,7 @@ function createCalendar(url) {
     req.send(doc);
 
     // Refresh calendar list
-    document.location.reload();
+    document.location.replace(baseurl);
 }
 
 
@@ -255,7 +252,8 @@ function deleteCalendar(url, name) {
         req.send(null);
 
         // Refresh calendar list
-        document.location.reload();
+        var baseurl = url.substring(0, url.lastIndexOf("/") + 1);
+        document.location.replace(baseurl);
     }
 }
 
