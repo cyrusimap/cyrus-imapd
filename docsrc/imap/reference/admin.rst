@@ -11,7 +11,7 @@ Architecture
 .. toctree::
     :maxdepth: 2
 
-    developer/architecture
+    architecture
 
 Management
 ==========

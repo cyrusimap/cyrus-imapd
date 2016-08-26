@@ -6,6 +6,6 @@ Concepts
 .. toctree::
     :maxdepth: 2
 
-    imap/features
-    imap/deployment/overview_and_concepts    
-    imap/deployment
+    imap/concepts/features
+    imap/concepts/overview_and_concepts    
+    imap/concepts/deployment

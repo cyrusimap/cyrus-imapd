@@ -63,7 +63,7 @@ Major changes since the 2.5.x series
 *   Added experimental backup service.  See ``docs/install-backup.html`` in the source
     distribution for preliminary installation/configuration/administration documentation.
 
-*   Support for Apple's Push service (XAPPLEPUSH).  See :doc:`/imap/admin/eventsource`
+*   Support for Apple's Push service (XAPPLEPUSH).  See :ref:`Cyrus Eventsource <cyrus-eventsource>`
 
 *   Sieve now supports special use folders.  See :ref:`Cyrus Sieve <cyrus-sieve-specialuse>`
 

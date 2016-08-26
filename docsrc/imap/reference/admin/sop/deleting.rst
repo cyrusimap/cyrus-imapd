@@ -172,10 +172,6 @@ folders in the same mailbox if it was a mailbox with some large folders.
 This is because it's the time that particular folder was deleted, not
 when the first folder was deleted.
 
-Recursively undeleting a mailbox and all subfolders:
-
-    http://git.kolab.org/pykolab/tree/pykolab/imap/cyrus.py.
-
 Undeleting messages in a mailbox
 ================================
 

@@ -5,7 +5,7 @@ Download
 
 .. toctree::
 
-    imap/installation
-    imap/release-notes/index
+    imap/download/installation
+    imap/download/release-notes/index
     
-    imap/admin/packagers
+    imap/download/packagers

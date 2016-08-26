@@ -7,5 +7,5 @@ Support/Community
     :maxdepth: 1
     :glob:
 
-    Support <feedback>
+    Support <imap/support/feedback>
     About <overview/about_cyrus>  

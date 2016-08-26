@@ -27,31 +27,31 @@ Configuration options
 
 These need to be set in :cyrusman:`imapd.conf(5)`.
 
-.. include:: configs/imapd.conf.rst
+.. include:: ../manpages/configs/imapd.conf.rst
         :start-after: startblob event_content_inclusion_mode
         :end-before: endblob event_content_inclusion_mode
         
-.. include:: configs/imapd.conf.rst
+.. include:: ../manpages/configs/imapd.conf.rst
         :start-after: startblob event_content_size
         :end-before: endblob event_content_size
  
-.. include:: configs/imapd.conf.rst
+.. include:: ../manpages/configs/imapd.conf.rst
         :start-after: startblob event_exclude_flags
         :end-before: endblob event_exclude_flags 
 
-.. include:: configs/imapd.conf.rst
+.. include:: ../manpages/configs/imapd.conf.rst
         :start-after: startblob event_exclude_specialuse
         :end-before: endblob event_exclude_specialuse 
 
-.. include:: configs/imapd.conf.rst
+.. include:: ../manpages/configs/imapd.conf.rst
         :start-after: startblob event_extra_params
         :end-before: endblob event_extra_params 
 
-.. include:: configs/imapd.conf.rst
+.. include:: ../manpages/configs/imapd.conf.rst
         :start-after: startblob event_groups
         :end-before: endblob event_groups 
 
-.. include:: configs/imapd.conf.rst
+.. include:: ../manpages/configs/imapd.conf.rst
         :start-after: startblob event_notifier
         :end-before: endblob event_notifier 
 

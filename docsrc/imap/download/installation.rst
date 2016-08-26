@@ -29,7 +29,7 @@ Build and Install Yourself
 .. toctree::
     :hidden:
 
-    mta/index
+    installation/mta/index
     
 External Tools
 ==============

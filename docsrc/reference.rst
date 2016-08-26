@@ -7,8 +7,8 @@ Reference
     :maxdepth: 3
     :glob:
 
-    imap/admin    
-    imap/faq  
-    imap/admin/commands
-    imap/admin/administration-tools
+    imap/reference/admin    
+    imap/reference/faq  
+    imap/reference/manpages/commands
+    imap/reference/administration-tools
     

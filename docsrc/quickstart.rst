@@ -5,7 +5,7 @@ Quickstart Guide
 
 .. toctree::
 
-    imap/introduction
+    imap/quickstart/introduction
     
 Coming Soon
 -----------

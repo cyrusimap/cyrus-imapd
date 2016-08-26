@@ -11,7 +11,7 @@ Cyrus IMAP
 .. toctree::
     :maxdepth: 2
     
-    imap/admin
+    imap/reference/admin
     
 
 Cyrus SASL
