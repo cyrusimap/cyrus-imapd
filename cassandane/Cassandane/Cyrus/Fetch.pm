@@ -115,8 +115,6 @@ sub test_duplicate_headers
     my $bcc2  = Cassandane::Address->new(localpart => 'secondbcc',
 					 domain    => 'example.com');
 
-    $Data::Dumper::Sortkeys = 1;
-
     my $msg = $self->make_message(
 	'subject1',
 	from => $from1,
@@ -131,6 +129,14 @@ sub test_duplicate_headers
 	    [bcc => $bcc2->as_string() ],
 	],
     );
+
+    # Verify that it created duplicate headers, and didn't collate the values.
+    # If it collated the values, this test proves nothing.
+    $self->assert_equals(scalar(grep { $_->{name} eq 'subject' } @{$msg->{headers}}), 2);
+    $self->assert_equals(scalar(grep { $_->{name} eq 'from' } @{$msg->{headers}}), 2);
+    $self->assert_equals(scalar(grep { $_->{name} eq 'to' } @{$msg->{headers}}), 2);
+    $self->assert_equals(scalar(grep { $_->{name} eq 'cc' } @{$msg->{headers}}), 2);
+    $self->assert_equals(scalar(grep { $_->{name} eq 'bcc' } @{$msg->{headers}}), 2);
 
     # XXX Cassandane::Message's add_header() appends rather than prepends.
     # So we currently expect all the "second" values, when we would prefer
