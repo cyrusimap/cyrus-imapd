@@ -48,6 +48,8 @@ use IO::Scalar;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Address;
+use Cassandane::Util::DateTime qw(to_rfc822);
 use Cassandane::Util::Log;
 
 $Data::Dumper::Sortkeys = 1;
@@ -118,6 +120,9 @@ sub test_duplicate_headers
     my $bcc2  = Cassandane::Address->new(localpart => 'secondbcc',
 					 domain    => 'example.com');
 
+    my $date1 = DateTime->from_epoch(epoch => time());
+    my $date2 = DateTime->from_epoch(epoch => time() - 2);
+
     my $msg = $self->make_message(
 	'subject1',
 	from => $from1,
@@ -125,6 +130,7 @@ sub test_duplicate_headers
 	cc => $cc1,
 	bcc => $bcc1,
 	messageid => 'messageid1@example.com',
+	date => $date1,
 	extra_headers => [
 	    [subject => 'subject2'],
 	    [from => $from2->as_string() ],
@@ -132,6 +138,7 @@ sub test_duplicate_headers
 	    [cc => $cc2->as_string() ],
 	    [bcc => $bcc2->as_string() ],
 	    ['message-id' => '<messageid2@example.com>' ],
+	    [date => to_rfc822($date2) ],
 	],
     );
 
@@ -152,7 +159,7 @@ sub test_duplicate_headers
 	To => $rcpt2->address(),
 	Cc => $cc2->address(),
 	Bcc => $bcc2->address(),
-	Date => $msg->get_header('date'),
+	Date => to_rfc822($date2),
 	'Message-ID' => '<messageid2@example.com>',
 	'In-Reply-To' => undef,
     );
