@@ -186,6 +186,10 @@ sub add_header
     push(@$values, $value);
     $self->{headers_by_name}->{$name} = $values;
 
+    # XXX This should probably be unshift rather than push, so that headers
+    # added chronologically later appear at the top rather than the bottom of
+    # the resulting header block.  But changing it also requires changing a
+    # bunch of tests' expected results, so that's a project for another time.
     push(@{$self->{headers}}, { name => $name, value => $value });
 }
 

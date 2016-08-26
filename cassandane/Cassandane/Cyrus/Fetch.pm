@@ -90,4 +90,70 @@ sub test_fetch_header
     $self->assert_matches(qr/^Message-ID: <[^>]+>\s+$/, $body);
 }
 
+# https://github.com/cyrusimap/cyrus-imapd/issues/21
+sub test_duplicate_headers
+{
+    my ($self) = @_;
+
+    my $from1 = Cassandane::Address->new(localpart => 'firstsender',
+					 domain    => 'example.com');
+    my $from2 = Cassandane::Address->new(localpart => 'secondsender',
+					 domain    => 'example.com');
+
+    my $rcpt1 = Cassandane::Address->new(localpart => 'firstrecipient',
+					 domain    => 'example.com');
+    my $rcpt2 = Cassandane::Address->new(localpart => 'secondrecipient',
+					 domain    => 'example.com');
+
+    my $cc1   = Cassandane::Address->new(localpart => 'firstcc',
+					 domain    => 'example.com');
+    my $cc2   = Cassandane::Address->new(localpart => 'secondcc',
+					 domain    => 'example.com');
+
+    my $bcc1  = Cassandane::Address->new(localpart => 'firstbcc',
+					 domain    => 'example.com');
+    my $bcc2  = Cassandane::Address->new(localpart => 'secondbcc',
+					 domain    => 'example.com');
+
+    $Data::Dumper::Sortkeys = 1;
+
+    my $msg = $self->make_message(
+	'subject1',
+	from => $from1,
+	to => $rcpt1,
+	cc => $cc1,
+	bcc => $bcc1,
+	extra_headers => [
+	    [subject => 'subject2'],
+	    [from => $from2->as_string() ],
+	    [to => $rcpt2->as_string() ],
+	    [cc => $cc2->as_string() ],
+	    [bcc => $bcc2->as_string() ],
+	],
+    );
+
+    # XXX Cassandane::Message's add_header() appends rather than prepends.
+    # So we currently expect all the "second" values, when we would prefer
+    # to expect the "first" ones.
+    my %exp = (
+	Subject => 'subject2',
+	From => $from2->address(),
+	To => $rcpt2->address(),
+	Cc => $cc2->address(),
+	Bcc => $bcc2->address(),
+	Date => $msg->get_header('date'),
+	'Message-ID' => $msg->get_header('message-id'),
+	'In-Reply-To' => undef,
+    );
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->fetch('1', 'ENVELOPE');
+
+    # XXX what behaviour do we expect from Sender and Reply-To headers?
+    delete $res->{1}->{envelope}->{Sender};
+    delete $res->{1}->{envelope}->{'Reply-To'};
+
+    $self->assert_deep_equals(\%exp, $res->{1}->{envelope});
+}
+
 1;
