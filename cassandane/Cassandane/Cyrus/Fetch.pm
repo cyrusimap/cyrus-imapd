@@ -42,12 +42,15 @@
 package Cassandane::Cyrus::Fetch;
 use strict;
 use warnings;
+use Data::Dumper;
 use DateTime;
 use IO::Scalar;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+
+$Data::Dumper::Sortkeys = 1;
 
 sub new
 {
@@ -121,12 +124,14 @@ sub test_duplicate_headers
 	to => $rcpt1,
 	cc => $cc1,
 	bcc => $bcc1,
+	messageid => 'messageid1@example.com',
 	extra_headers => [
 	    [subject => 'subject2'],
 	    [from => $from2->as_string() ],
 	    [to => $rcpt2->as_string() ],
 	    [cc => $cc2->as_string() ],
 	    [bcc => $bcc2->as_string() ],
+	    ['message-id' => '<messageid2@example.com>' ],
 	],
     );
 
@@ -148,7 +153,7 @@ sub test_duplicate_headers
 	Cc => $cc2->address(),
 	Bcc => $bcc2->address(),
 	Date => $msg->get_header('date'),
-	'Message-ID' => $msg->get_header('message-id'),
+	'Message-ID' => '<messageid2@example.com>',
 	'In-Reply-To' => undef,
     );
 
