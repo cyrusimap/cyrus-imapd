@@ -46,7 +46,6 @@ This is the highlight reel of Cyrus's full list of features_.
 .. toctree::
     :hidden:
 
-    admin
     imap/index
     preface
     styles

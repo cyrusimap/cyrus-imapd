@@ -1,3 +1,5 @@
+:orphan:
+
 .. note to documentation contributors:
 
     The following is copied from introduction.rst
