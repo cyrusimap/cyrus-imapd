@@ -833,10 +833,6 @@ static int message_parse_headers(struct msg *msg, struct body *body,
                 break;
             case RFC822_X_DELIVEREDINTERNALDATE:
                 /* Explicit x-deliveredinternaldate overrides received: headers */
-                if (body->received_date) {
-                    free(body->received_date);
-                    body->received_date = 0;
-                }
                 message_parse_string(value, &body->received_date);
                 break;
             case RFC822_X_ME_MESSAGE_ID:
@@ -857,12 +853,17 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 }
 
 /*
- * Parse a list of RFC-822 addresses from a header, appending them
- * to the address list pointed to by 'addrp'.
+ * Parse a list of RFC-822 addresses from a header
  */
 static void message_parse_address(const char *hdr, struct address **addrp)
 {
     char *hdrend, hdrendchar = '\0';
+
+    /* If we saw this header already, discard the earlier value */
+    if (*addrp) {
+        parseaddr_free(*addrp);
+        *addrp = NULL;
+    }
 
     /* Find end of header */
     hdrend = (char *)hdr;
@@ -892,8 +893,11 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
     int len;
     const char *p;
 
-    /* Ignore if we already saw one of these headers */
-    if (*hdrp) return;
+    /* If we saw this header already, discard the earlier value */
+    if (*hdrp) {
+        free(*hdrp);
+        *hdrp = NULL;
+    }
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
@@ -986,8 +990,11 @@ static void message_parse_string(const char *hdr, char **hdrp)
     const char *hdrend;
     char *he;
 
-    /* Ignore if we already saw one of these headers */
-    if (*hdrp) return;
+    /* If we saw this header already, discard the earlier value */
+    if (*hdrp) {
+        free(*hdrp);
+        *hdrp = NULL;
+    }
 
     /* Skip initial whitespace */
     while (*hdr == ' ' || *hdr == '\t') hdr++;
@@ -1058,8 +1065,13 @@ static void message_parse_type(const char *hdr, struct body *body)
     const char *subtype;
     int subtypelen;
 
-    /* Ignore if we already saw one of these headers */
-    if (body->type) return;
+    /* If we saw this header already, discard the earlier value */
+    if (body->type) {
+        free(body->type);
+        free(body->subtype);
+        body->type = body->subtype = NULL;
+        param_free(&body->params);
+    }
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
@@ -1115,8 +1127,12 @@ static void message_parse_disposition(const char *hdr, struct body *body)
     const char *disposition;
     int dispositionlen;
 
-    /* Ignore if we already saw one of these headers */
-    if (body->disposition) return;
+    /* If we saw this header already, discard the earlier value */
+    if (body->disposition) {
+        free(body->disposition);
+        body->disposition = NULL;
+        param_free(&body->disposition_params);
+    }
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
@@ -1419,6 +1435,9 @@ static void message_parse_language(const char *hdr, struct param **paramp)
     const char *value;
     int valuelen;
 
+    /* If we saw this header already, discard the earlier value */
+    if (*paramp) param_free(paramp);
+
     for (;;) {
         /* Skip over leading whitespace */
         message_parse_rfc822space(&hdr);
@@ -1703,7 +1722,9 @@ static void message_parse_received_date(const char *hdr, char **hdrp)
 {
   char *curp, *hdrbuf = 0;
 
-  /* Ignore if we already saw one of these headers */
+  /* Ignore if we already saw one of these headers.
+   * We want the date from the first Received header we see.
+   */
   if (*hdrp) return;
 
   /* Copy header to temp buffer */
