@@ -150,6 +150,8 @@ static void message_write_searchaddr(struct buf *buf,
 static int message_need(message_t *m, unsigned int need);
 static void message_yield(message_t *m, unsigned int yield);
 
+static void param_free(struct param **paramp);
+
 /*
  * Convert a string to uppercase.  Returns the string.
  *
@@ -2356,12 +2358,26 @@ static void message_write_searchaddr(struct buf *buf,
     }
 }
 
+static void param_free(struct param **paramp)
+{
+    struct param *param, *nextparam;
+
+    param = *paramp;
+    *paramp = NULL;
+
+    for (; param; param = nextparam) {
+        nextparam = param->next;
+        if (param->attribute) free(param->attribute);
+        if (param->value) free(param->value);
+        free(param);
+    }
+}
+
 /*
  * Free the parsed body-part 'body'
  */
 EXPORTED void message_free_body(struct body *body)
 {
-    struct param *param, *nextparam;
     int part;
 
     if (!body) return;
@@ -2369,12 +2385,7 @@ EXPORTED void message_free_body(struct body *body)
     if (body->type) {
         free(body->type);
         free(body->subtype);
-        for (param = body->params; param; param = nextparam) {
-            nextparam = param->next;
-            free(param->attribute);
-            free(param->value);
-            free(param);
-        }
+        param_free(&body->params);
     }
     if (body->id) free(body->id);
     if (body->description) free(body->description);
@@ -2382,18 +2393,9 @@ EXPORTED void message_free_body(struct body *body)
     if (body->md5) free(body->md5);
     if (body->disposition) {
         free(body->disposition);
-        for (param = body->disposition_params; param; param = nextparam) {
-            nextparam = param->next;
-            free(param->attribute);
-            free(param->value);
-            free(param);
-        }
+        param_free(&body->disposition_params);
     }
-    for (param = body->language; param; param = nextparam) {
-        nextparam = param->next;
-        free(param->value);
-        free(param);
-    }
+    param_free(&body->language);
     if (body->location) free(body->location);
     if (body->date) free(body->date);
     if (body->subject) free(body->subject);
