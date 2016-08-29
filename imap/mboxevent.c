@@ -1142,10 +1142,8 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
     free(extname);
 
-#ifdef WITH_DAV
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
         xstrdup(mboxlist_mbtype_to_string(mailbox->mbtype)));
-#endif
 
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox->acl));
 
