@@ -73,8 +73,11 @@ sub test_rename_toplevel
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))") || die;
-    $imaptalk->rename("INBOX.Junk", "INBOX.Other") || die;
+    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->rename("INBOX.Junk", "INBOX.Other");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 }
 
 sub test_rename_tosub
@@ -83,10 +86,15 @@ sub test_rename_tosub
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))") || die;
-    $imaptalk->create("INBOX.Trash") || die;
+    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->create("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
     # can't rename to a deep folder
-    $imaptalk->rename("INBOX.Junk", "INBOX.Trash.Junk") && die;
+    $imaptalk->rename("INBOX.Junk", "INBOX.Trash.Junk");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
 }
 
 sub test_create_multiple
@@ -95,7 +103,8 @@ sub test_create_multiple
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Rubbish", "(USE (\\Junk \\Trash \\Sent))") || die;
+    $imaptalk->create("INBOX.Rubbish", "(USE (\\Junk \\Trash \\Sent))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 }
 
 sub test_create_dupe
@@ -104,8 +113,11 @@ sub test_create_dupe
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Rubbish", "(USE (\\Trash))") || die;
-    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") && die;
+    $imaptalk->create("INBOX.Rubbish", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
 }
 
 sub test_annot
@@ -114,8 +126,11 @@ sub test_annot
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Trash") || die;
-    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", "\\Trash") || die;
+    $imaptalk->create("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 }
 
 sub test_annot_dupe
@@ -124,9 +139,14 @@ sub test_annot_dupe
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Rubbish", "(USE (\\Trash))") || die;
-    $imaptalk->create("INBOX.Trash") || die;
-    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", "\\Trash") && die;
+    $imaptalk->create("INBOX.Rubbish", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->create("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
 }
 
 sub test_delete_imm
@@ -136,8 +156,11 @@ sub test_delete_imm
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
-    $imaptalk->delete("INBOX.Trash") && die;
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->delete("INBOX.Trash");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
 }
 
 sub test_delete_delay
@@ -147,8 +170,11 @@ sub test_delete_delay
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
-    $imaptalk->delete("INBOX.Trash") && die;
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->delete("INBOX.Trash");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
 }
 
 sub test_delete_removed_imm
@@ -158,9 +184,14 @@ sub test_delete_removed_imm
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
-    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", undef) || die;
-    $imaptalk->delete("INBOX.Trash") || die;
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", undef);
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->delete("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 }
 
 sub test_delete_removed_delay
@@ -170,9 +201,14 @@ sub test_delete_removed_delay
 
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
-    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", undef) || die;
-    $imaptalk->delete("INBOX.Trash") || die;
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", undef);
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->delete("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 }
 
 # compile
