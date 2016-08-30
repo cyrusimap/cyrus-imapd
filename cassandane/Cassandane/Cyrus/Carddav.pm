@@ -291,7 +291,7 @@ EOF
 }
 
 sub test_sharing_samedomain
-    :VirtDomains :FastMailSharing :ReverseACLs
+    :VirtDomains :FastMailSharing :ReverseACLs :min_version_3_0
 {
     my ($self) = @_;
 
@@ -343,7 +343,7 @@ sub test_sharing_samedomain
 }
 
 sub test_sharing_crossdomain
-    :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs
+    :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs :min_version_3_0
 {
     my ($self) = @_;
 
