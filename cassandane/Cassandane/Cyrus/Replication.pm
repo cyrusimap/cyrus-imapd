@@ -671,9 +671,14 @@ sub test_replication_mailbox_too_old
     # replica will not report its existence, so the replication will
     # successfully do nothing.
     $replica_instance->install_old_mailbox($user, 9);
+    $exit_code = 0;
     $self->run_replication(
         user => $user,
+        handlers => {
+            exited_abnormally => sub { (undef, $exit_code) = @_; },
+        },
     );
+    $self->assert_equals($exit_code, 0);
 
     # add the version9 mailbox to the master, and try to replicate.
     # mailbox will be found and rejected locally, and replication will
@@ -712,9 +717,14 @@ sub test_replication_mailbox_too_old
     # upgrade the version9 mailbox on the replica, and try to replicate.
     # replication will succeed because both ends are capable of replication.
     $replica_instance->run_command({ cyrus => 1 }, qw(reconstruct -V max -u), $user);
+    $exit_code = 0;
     $self->run_replication(
         user => $user,
+        handlers => {
+            exited_abnormally => sub { (undef, $exit_code) = @_; },
+        },
     );
+    $self->assert_equals($exit_code, 0);
 }
 
 # XXX need a test for version 10 mailbox without guids in it!
