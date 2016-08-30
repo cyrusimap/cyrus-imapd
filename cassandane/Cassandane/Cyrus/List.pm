@@ -377,7 +377,7 @@ sub test_folder_at_novirtdomains
 }
 
 sub test_crossdomains
-    :UnixHierarchySep :VirtDomains :CrossDomains
+    :UnixHierarchySep :VirtDomains :CrossDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -401,7 +401,7 @@ sub test_crossdomains
 }
 
 sub test_crossdomains_alt
-    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace
+    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :min_version_3_0
 {
     my ($self) = @_;
 
