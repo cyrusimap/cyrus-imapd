@@ -2083,7 +2083,15 @@ int main(int argc, char **argv)
 	    break;
 	case 'V':
 	    /* print version information and exit */
-	    printf("%s %s\n", PACKAGE_NAME, PACKAGE_VERSION);
+	    /* XXX can't just call cyrus_version() because that would require
+	     * XXX linking against libcyrus_imap */
+	    printf("%s %s%s\n", PACKAGE_NAME, PACKAGE_VERSION,
+#ifdef EXTRA_IDENT
+		   "-" EXTRA_IDENT
+#else
+		   ""
+#endif
+	    );
 	    return 0;
 	default:
 	    break;
