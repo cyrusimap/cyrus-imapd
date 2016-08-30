@@ -124,7 +124,7 @@ main(int argc, char **argv)
     fprintf(fp, "attach %d\n", (int)pid);
     fprintf(fp, "shell kill -USR1 %d\n", (int)getpid());
     fprintf(fp, "echo Please set some breakpoints and use the "
-		"\"continue\" command\n");
+		"\"continue\" command\\n\n");
     fclose(fp);
 
     syslog(LOG_ERR, "You have %d seconds to run gdb "
