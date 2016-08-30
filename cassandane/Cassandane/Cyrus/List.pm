@@ -203,8 +203,14 @@ sub test_rfc5258_ex01_list_all
 
     my $alldata = $imaptalk->list("", "*");
 
+    my @inbox_flags = qw( \\HasNoChildren );
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v < 3) {
+        unshift @inbox_flags, qw( \\Noinferiors );
+    }
+
     $self->_assert_list_data($alldata, '/', {
-        'INBOX'                 => [qw( \\HasNoChildren )],
+        'INBOX'                 => \@inbox_flags,
         'Fruit'                 => [qw( \\HasChildren )],
         'Fruit/Apple'           => [qw( \\HasNoChildren )],
         'Fruit/Banana'          => [qw( \\HasNoChildren )],
@@ -233,9 +239,15 @@ sub test_rfc5258_ex02_list_subscribed
 
     my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
 
+    my @inbox_flags = qw( \\Subscribed );
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v < 3) {
+        unshift @inbox_flags, qw( \\Noinferiors );
+    }
+
     xlog(Dumper $subdata);
     $self->_assert_list_data($subdata, '/', {
-        'INBOX'                 => [qw( \\Subscribed )],
+        'INBOX'                 => \@inbox_flags,
         'Fruit/Banana'          => '\\Subscribed',
         'Fruit/Peach'           => [qw( \\NonExistent \\Subscribed )],
         'Vegetable'             => [qw( \\Subscribed \\HasChildren )], # HasChildren not required by spec, but cyrus tells us
@@ -263,8 +275,17 @@ sub test_rfc5258_ex03_children
 	[qw()], "", "%", 'RETURN', [qw(CHILDREN)],
     );
 
+    my @inbox_flags;
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v >= 3) {
+        @inbox_flags = qw( \\HasNoChildren );
+    }
+    else {
+        @inbox_flags = qw( \\Noinferiors );
+    }
+
     $self->_assert_list_data($data, '/', {
-        'INBOX' => [ '\\HasNoChildren' ],
+        'INBOX' => \@inbox_flags,
         'Fruit' => [ '\\HasChildren' ],
         'Tofu'  => [ '\\HasNoChildren' ],
         'Vegetable' => [ '\\HasChildren' ],
@@ -307,8 +328,17 @@ sub test_rfc5258_ex07_multiple_mailbox_patterns
 
     my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
 
+    my @inbox_flags;
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v >= 3) {
+        @inbox_flags = qw( \\HasNoChildren );
+    }
+    else {
+        @inbox_flags = qw( \\Noinferiors );
+    }
+
     $self->_assert_list_data($data, '/', {
-        'INBOX' => [ '\\HasNoChildren' ],
+        'INBOX' => \@inbox_flags,
         'Drafts' => [ '\\HasNoChildren' ],
         'Sent/August2004' => [ '\\HasNoChildren' ],
         'Sent/December2003' => [ '\\HasNoChildren' ],
@@ -329,8 +359,17 @@ sub test_rfc5258_ex08_haschildren_childinfo
 
     my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
 
+    my @inbox_flags;
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v >= 3) {
+        @inbox_flags = qw( \\HasNoChildren );
+    }
+    else {
+        @inbox_flags = qw( \\Noinferiors );
+    }
+
     $self->_assert_list_data($data, '/', {
-        'INBOX' => '\\HasNoChildren',
+        'INBOX' => \@inbox_flags,
         'Foo'   => '\\HasChildren',
         'Moo'   => '\\HasNoChildren',
     });
@@ -370,8 +409,17 @@ sub test_folder_at_novirtdomains
 
     my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
 
+    my @inbox_flags;
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v >= 3) {
+        @inbox_flags = qw( \\HasNoChildren );
+    }
+    else {
+        @inbox_flags = qw( \\Noinferiors );
+    }
+
     $self->_assert_list_data($data, '/', {
-        'INBOX' => '\\HasNoChildren',
+        'INBOX' => \@inbox_flags,
         'foo@bar' => '\\HasNoChildren',
     });
 }
@@ -425,7 +473,7 @@ sub test_crossdomains_alt
 }
 
 sub test_inbox_altnamespace
-    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace
+    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :min_version_3_0
 {
     my ($self) = @_;
 
@@ -649,7 +697,7 @@ sub test_percent
 # mailbox name argument, matching levels of hierarchy
 # are also returned.
 sub test_percent_altns
-    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace
+    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :min_version_3_0
 {
     my ($self) = @_;
 

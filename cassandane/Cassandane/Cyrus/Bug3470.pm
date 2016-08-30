@@ -91,12 +91,16 @@ sub test_list_percent
 
     my $imaptalk = $self->{store}->get_client();
 
+    my @inbox_flags = qw( \\HasNoChildren );
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v < 3) {
+        unshift @inbox_flags, qw( \\Noinferiors );
+    }
+
     my $alldata = $imaptalk->list("", "%");
     $self->assert_deep_equals($alldata, [
           [
-            [
-              '\\HasNoChildren'
-            ],
+            \@inbox_flags,
             '/',
             'INBOX'
           ],
