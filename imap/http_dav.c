@@ -6349,6 +6349,7 @@ int meth_patch(struct transaction_t *txn, void *params)
         buf_init_ro(&buf, buf_base(&msg_buf) + offset,
                     buf_len(&msg_buf) - offset);
         obj = pparams->mime_types[0].to_object(&buf);
+        buf_free(&buf);
 
         if (precond == HTTP_OK) {
             /* Parse, validate, and apply the patch document to the resource */
@@ -6595,6 +6596,7 @@ int meth_put(struct transaction_t *txn, void *params)
             buf_init_ro(&buf, buf_base(&msg_buf) + offset,
                         buf_len(&msg_buf) - offset);
             obj = pparams->mime_types[0].to_object(&buf);
+            buf_free(&buf);
 
             /* Fill in ETag and Last-Modified */
             txn->resp_body.etag = etag;
