@@ -46,6 +46,14 @@ use warnings;
 use lib '.';
 use base qw(Cassandane::Unit::Runner);
 
+sub new
+{
+    my ($class, $params, @args) = @_;
+    my $self = $class->SUPER::new(@args);
+    $self->{_quiet} = 1 if $params->{quiet};
+    return $self;
+}
+
 sub start_test
 {
     my $self = shift;
@@ -92,6 +100,22 @@ sub _getpaddedname
     $res .= ' ' x (72 - length($res));
 
     return $res;
+}
+
+sub print_errors
+{
+    my $self = shift;
+    return if $self->{_quiet};
+
+    return $self->SUPER::print_errors(@_);
+}
+
+sub print_failures
+{
+    my $self = shift;
+    return if $self->{_quiet};
+
+    return $self->SUPER::print_failures(@_);
 }
 
 1;
