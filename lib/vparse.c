@@ -25,7 +25,7 @@ static char *buf_dup_cstring(struct buf *buf)
 #define PUTC(C) buf_putc(&state->buf, C)
 #define INC(I) state->p += I
 #define IS_CTRL(ch) \
-    (ch <= 0x1f && ch != '\r' && ch != '\n' && ch != '\t')
+    (ch >= 0 && ch <= 0x1f && ch != '\r' && ch != '\n' && ch != '\t')
 #define HANDLECTRL(state) \
 { \
     if (IS_CTRL(*state->p)) { \
