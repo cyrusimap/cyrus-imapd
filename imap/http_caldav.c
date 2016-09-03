@@ -3464,7 +3464,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (rrule && rscale_calendars) {
         struct icalrecurrencetype rt = icalproperty_get_rrule(rrule);
 
-        if (rt.rscale) {
+        if (rt.rscale && *rt.rscale) {
             /* Perform binary search on sorted icalarray */
             unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
