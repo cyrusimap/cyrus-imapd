@@ -280,7 +280,9 @@ static struct mime_type_t caldav_mime_types[] = {
 };
 
 static struct patch_doc_t caldav_patch_docs[] = {
-    { "application/calendar-patch; charset=utf-8", &caldav_patch },
+#ifdef HAVE_VPATCH
+    { "text/calendar; component=VPATCH; charset=utf-8", &caldav_patch },
+#endif
     { NULL, NULL }
 };
 
@@ -483,7 +485,10 @@ static struct meth_params caldav_params = {
 struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav", 1 /* auth */,
     MBTYPE_CALENDAR,
-    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE | ALLOW_PATCH |
+    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
+#ifdef HAVE_VPATCH
+     ALLOW_PATCH |
+#endif
 #ifdef HAVE_VAVAILABILITY
      ALLOW_CAL_AVAIL |
 #endif
@@ -868,7 +873,7 @@ static int caldav_parse_path(const char *path,
     }
     else if (tgt->resource) {
         /* Resource in regular calendar collection (POST for managed attach) */
-        tgt->allow |= ALLOW_PATCH | ALLOW_POST;
+        tgt->allow |= (namespace_calendar.allow & ALLOW_PATCH) | ALLOW_POST;
     }
 
     return 0;
@@ -2747,12 +2752,11 @@ static int caldav_post(struct transaction_t *txn)
 }
 
 
+#ifdef HAVE_VPATCH
 enum {
-    ACTION_CREATE = 1,
-    ACTION_UPDATE,
+    ACTION_UPDATE = 1,
     ACTION_DELETE,
-    ACTION_ADD,
-    ACTION_REMOVE
+    ACTION_SETPARAM
 };
 
 enum {
@@ -2761,264 +2765,670 @@ enum {
     SEGMENT_PARAM
 };
 
+union match_criteria_t {
+    struct {
+        char *uid;                /* component UID (optional) */
+        icaltimetype rid;         /* component RECURRENCE-ID (optional) */
+    } comp;
+    struct {
+        char *param;              /* parameter name (optional) */
+        char *value;              /* prop/param value (optional) */
+        unsigned not:1;           /* not equal? */
+    } prop;
+};
+
 struct path_segment_t {
     unsigned type;                    /* Is it comp, prop, or param segment? */
-    unsigned kind;                    /* ical kind of comp, prop, or param */
-    void *data;                       /* type depends on 'type' */
-    union {
-        struct {
-            const char *uid;
-            struct icaltimetype recurid;
-        } comp;
-        struct {
-            unsigned not:1;
-            strarray_t values;
-        } prop;
-    } match;
+    unsigned kind;                    /* libical kind of comp, prop, or param */
+    union match_criteria_t match;     /* match criteria (depends on 'type') */
+    unsigned action;                  /* patch action (create,update,setparam)*/
+    void *data;                       /* patch data (depends on 'action') */
 
-    struct path_segment_t *next;
+    struct path_segment_t *sibling;
+    struct path_segment_t *child;
 };
+
+struct patch_data_t {
+    icalcomponent *patch;             /* component containg patch data */
+    struct path_segment_t *delete;    /* list of PATCH-DELETE actions */
+    struct path_segment_t *setparam;  /* list of PATCH-PARAMETER items */
+};
+
+static int parse_target_path(char *path, struct path_segment_t **path_seg,
+                             unsigned action, void *data,
+                             struct error_t *err)
+{
+    char *p, sep;
+    struct path_segment_t *tail = NULL, *new;
+
+    for (sep = *path++; sep == '/';) {
+        p = path + strcspn(path, "[/#");
+        if ((sep = *p)) *p++ = '\0';
+
+        new = xzmalloc(sizeof(struct path_segment_t));
+        new->type = SEGMENT_COMP;
+        new->kind = icalcomponent_string_to_kind(path);
+        /* Initialize RID as invalid time rather than NULL time
+           since NULL time is used for empty RID (master component) */
+        new->match.comp.rid.year = -1;
+
+        if (!*path_seg) *path_seg = new;
+        else tail->child = new;
+        tail = new;
+
+        path = p;
+
+        if (sep == '[') {
+            /* Parse comp-match */
+            const char *prefix = "UID=";
+            size_t prefix_len = strlen(prefix);
+
+            if (!(p = strchr(path, ']'))) {
+                err->desc = "Badly formatted comp-match";
+                return HTTP_BAD_REQUEST;
+            }
+
+            /* Parse uid-match */
+            if (!strncmp(path, prefix, prefix_len)) {
+                path += prefix_len;
+                *p++ = '\0';
+                new->match.comp.uid = xstrdup(path);
+                sep = *p++;
+                path = p;
+            }
+
+            /* Parse rid-match */
+            if (sep == '[') {
+                prefix = "RID=";
+                prefix_len = strlen(prefix);
+
+                if (strncmp(path, prefix, prefix_len) ||
+                    !(p = strchr(path, ']'))) {
+                    err->desc = "Badly formatted rid-match";
+                    return HTTP_BAD_REQUEST;
+                }
+
+                path += prefix_len;
+                *p++ = '\0';
+                if (*path && strcmp(path, "M")) {
+                    new->match.comp.rid = icaltime_from_string(path);
+                    if (icaltime_is_null_time(new->match.comp.rid)) {
+                        err->desc = "Invalid recurrence-id";
+                        return HTTP_BAD_REQUEST;
+                    }
+                }
+                else new->match.comp.rid = icaltime_null_time();
+
+                sep = *p++;
+                path = p;
+            }
+        }
+    }
+
+    if (sep == '#' && !*path_seg) {
+        /* Parse prop-segment */
+        p = path + strcspn(path, "[;=");
+        if ((sep = *p)) *p++ = '\0';
+
+        new = xzmalloc(sizeof(struct path_segment_t));
+        new->type = SEGMENT_PROP;
+        new->kind = icalproperty_string_to_kind(path);
+
+        if (!*path_seg) *path_seg = new;
+        else tail->child = new;
+        tail = new;
+
+        path = p;
+
+        if (sep == '[') {
+            /* Parse prop-match (MUST start with '=' or '!' or '@') */
+            if (strspn(path, "=!@") != 1 || !(p = strchr(path, ']'))) {
+                err->desc = "Badly formatted prop-match";
+                return HTTP_BAD_REQUEST;
+            }
+
+            *p++ = '\0';
+            if (*path == '@') {
+                /* Parse param-match */
+                size_t namelen = strcspn(++path, "!=");
+                new->match.prop.param = xstrndup(path, namelen);
+                path += namelen;
+            }
+
+            if (*path) {
+                /* Parse prop/param [not]equal value */
+                if (*path++ == '!') new->match.prop.not = 1;
+                new->match.prop.value = xstrdup(path);
+            }
+
+            sep = *p++;
+            path = p;
+        }
+
+        if (sep == ';') {
+            /* Parse param-segment */
+            p = path + strcspn(path, "=");
+            if ((sep = *p)) *p++ = '\0';
+
+            new = xzmalloc(sizeof(struct path_segment_t));
+            new->type = SEGMENT_PARAM;
+            new->kind = icalparameter_string_to_kind(path);
+
+            tail->child = new;
+            tail = new;
+
+            path = p;
+        }
+
+        if (sep == '=' && action == ACTION_DELETE) {
+            /* Parse value-segment */
+            new->data = xstrdup(path);
+        }
+        else if (sep != '\0') {
+            err->desc = "Invalid separator following prop-segment";
+            return HTTP_BAD_REQUEST;
+        }
+    }
+    else if (sep != '\0') {
+        err->desc = "Invalid separator following comp-segment";
+        return HTTP_BAD_REQUEST;
+    }
+
+    tail->action = action;
+    if (!tail->data) tail->data = data;
+
+    return 0;
+}
+
+static void apply_patch(struct path_segment_t *path_seg,
+                        void *parent, int *num_changes);
+
+static char *remove_single_value(const char *oldstr, const char *single)
+{
+    char *newstr = NULL;
+    strarray_t *values = strarray_split(oldstr, ",", STRARRAY_TRIM);
+    int idx = strarray_find(values, single, 0);
+
+    if (idx >= 0) {
+        /* Found the single value, remove it, and create new string */
+        strarray_remove(values, idx);
+        newstr = strarray_join(values, ",");
+    }
+    strarray_free(values);
+
+    return newstr;
+}
+
+/* Apply a patch action to a parameter segment */
+static void apply_patch_parameter(struct path_segment_t *path_seg,
+                                  icalproperty *parent, int *num_changes)
+{
+    icalparameter *param =
+        icalproperty_get_first_parameter(parent, path_seg->kind);
+    if (!param) return;
+
+    if (path_seg->action == ACTION_DELETE) {
+        switch (path_seg->kind) {
+        case ICAL_MEMBER_PARAMETER:
+            /* Multi-valued parameter */
+            if (path_seg->data) {
+                /* Check if entire parameter value == single value */
+                const char *single = (const char *) path_seg->data;
+                const char *param_val = icalparameter_get_value_as_string(param);
+
+                if (strcmp(param_val, single)) {
+                    /* Not an exact match, try to remove single value */
+                    char *newval = remove_single_value(param_val, single);
+                    if (newval) {
+                        *num_changes += 1;
+                        icalparameter_set_member(param, newval);
+                        free(newval);
+                    }
+                    break;
+                }
+            }
+
+            /* Fall through and delete entire parameter */
+
+        default:
+            *num_changes += 1;
+            icalproperty_remove_parameter_by_ref(parent, param);
+            break;
+        }
+    }
+}
+
+static int apply_param_match(icalproperty *prop, union match_criteria_t *match)
+{
+    icalparameter_kind kind;
+    icalparameter *param;
+    int ret = 1;
+
+    /* XXX  Need to handle X- parameters */
+
+    kind = icalparameter_string_to_kind(match->prop.param);
+    param = icalproperty_get_first_parameter(prop, kind);
+    if (!param) {
+        /* property doesn't have this parameter */
+        ret = match->prop.not;
+    }
+    else if (match->prop.value) {
+        const char *param_val = icalparameter_get_value_as_string(param);
+
+        ret = !strcmp(match->prop.value, param_val);
+        if (match->prop.not) ret = !ret;  /* invert */
+    }
+
+    return ret;
+}
+
+/* Apply a patch action to a property segment */
+static void apply_patch_property(struct path_segment_t *path_seg,
+                                 icalcomponent *parent, int *num_changes)
+{
+    icalproperty *prop, *nextprop;
+    icalparameter *param;
+
+    /* Iterate through each property */
+    for (prop = icalcomponent_get_first_property(parent, path_seg->kind);
+         prop; prop = nextprop) {
+        nextprop = icalcomponent_get_next_property(parent, path_seg->kind);
+
+        /* Check prop-match */
+        int match = 1;
+        if (path_seg->match.prop.param) {
+            /* Check param-match */
+            match = apply_param_match(prop, &path_seg->match);
+        }
+        else if (path_seg->match.prop.value) {
+            /* Check prop-[not-]equal */
+            const char *prop_val = icalproperty_get_value_as_string(prop);
+
+            match = !strcmp(path_seg->match.prop.value, prop_val);
+            if (path_seg->match.prop.not) match = !match;  /* invert */
+        }
+        if (!match) continue;
+
+        if (path_seg->child) {
+            /* Recurse into next segment */
+            apply_patch(path_seg->child, prop, num_changes);
+        }
+        else if (path_seg->action == ACTION_DELETE) {
+            /* Delete existing property */
+            switch (path_seg->kind) {
+            case ICAL_RDATE_PROPERTY:
+            case ICAL_EXDATE_PROPERTY:
+            case ICAL_FREEBUSY_PROPERTY:
+            case ICAL_CATEGORIES_PROPERTY:
+            case ICAL_RESOURCES_PROPERTY:
+            case ICAL_ACCEPTRESPONSE_PROPERTY:
+            case ICAL_POLLPROPERTIES_PROPERTY:
+                /* Multi-valued property */
+                if (path_seg->data) {
+                    /* Check if entire property value == single value */
+                    const char *single = (const char *) path_seg->data;
+                    const char *propval = icalproperty_get_value_as_string(prop);
+
+                    if (strcmp(propval, single)) {
+                        /* Not an exact match, try to remove single value */
+                        char *newval = remove_single_value(propval, single);
+                        if (newval) {
+                            *num_changes += 1;
+                            icalproperty_set_value(prop,
+                                                   icalvalue_new_string(newval));
+                            free(newval);
+                        }
+                        break;
+                    }
+                }
+
+                /* Fall through and delete entire property */
+
+            default:
+                *num_changes += 1;
+                icalcomponent_remove_property(parent, prop);
+                icalproperty_free(prop);
+                break;
+            }
+        }
+        else if (path_seg->action == ACTION_SETPARAM) {
+            /* Set parameter(s) from those on PATCH-PARAMETER */
+            icalproperty *pp_prop = (icalproperty *) path_seg->data;
+
+            *num_changes += 1;
+            for (param = icalproperty_get_first_parameter(pp_prop,
+                                                          ICAL_ANY_PARAMETER);
+                 param;
+                 param = icalproperty_get_next_parameter(pp_prop,
+                                                         ICAL_ANY_PARAMETER)) {
+                icalproperty_set_parameter(prop, icalparameter_new_clone(param));
+            }
+        }
+    }
+}
 
 static void create_override(icalcomponent *master, struct icaltime_span *span,
                             void *rock)
 {
     icalcomponent *new;
-    icalproperty *prop;
-    struct icaltimetype dtstart, now;
-    const icaltimezone *tz;
+    icalproperty *prop, *next;
+    struct icaltimetype dtstart, dtend, now;
+    const icaltimezone *tz = NULL;
     const char *tzid;
     int is_date;
 
+    now = icaltime_current_time_with_zone(utc_zone);
+
     new = icalcomponent_new_clone(master);
 
-    dtstart = icalcomponent_get_dtstart(new);
-    tz = icaltime_get_timezone(dtstart);
-    is_date = icaltime_is_date(dtstart);
+    for (prop = icalcomponent_get_first_property(new, ICAL_ANY_PROPERTY);
+         prop; prop = next) {
+        next = icalcomponent_get_next_property(new, ICAL_ANY_PROPERTY);
 
-    dtstart = icaltime_from_timet_with_zone(span->start, is_date, tz);
-    icaltime_set_timezone(&dtstart, tz);
-    icalcomponent_set_dtstart(new, dtstart);
+        switch (icalproperty_isa(prop)) {
+        case ICAL_DTSTART_PROPERTY:
+            /* Set DTSTART for this recurrence */
+            dtstart = icalproperty_get_dtstart(prop);
+            is_date = icaltime_is_date(dtstart);
+            tz = icaltime_get_timezone(dtstart);
 
-    prop = icalcomponent_get_first_property(new, ICAL_DTEND_PROPERTY);
-    if (prop) {
-        struct icaltimetype dtend =
-            icaltime_from_timet_with_zone(span->end, is_date, tz);
+            dtstart = icaltime_from_timet_with_zone(span->start, is_date, tz);
+            icaltime_set_timezone(&dtstart, tz);
+            icalproperty_set_dtstart(prop, dtstart);
 
-        icaltime_set_timezone(&dtend, tz);
-        icalproperty_set_dtend(prop, dtend);
+            /* Add RECURRENCE-ID for this recurrence */
+            prop = icalproperty_new_recurrenceid(dtstart);
+            tzid = icaltimezone_get_tzid((icaltimezone *) tz);
+            if (tzid) {
+                icalproperty_add_parameter(prop, icalparameter_new_tzid(tzid));
+            }
+            icalcomponent_add_property(new, prop);
+            break;
+
+        case ICAL_DTEND_PROPERTY:
+            /* Set DTEND for this recurrence */
+            dtend = icalproperty_get_dtend(prop);
+            is_date = icaltime_is_date(dtend);
+            tz = icaltime_get_timezone(dtend);
+
+            dtend = icaltime_from_timet_with_zone(span->end, is_date, tz);
+            icaltime_set_timezone(&dtend, tz);
+            icalproperty_set_dtend(prop, dtend);
+            break;
+
+        case ICAL_RRULE_PROPERTY:
+        case ICAL_RDATE_PROPERTY:
+        case ICAL_EXDATE_PROPERTY:
+            /* Remove recurrence properties */
+            icalcomponent_remove_property(new, prop);
+            icalproperty_free(prop);
+            break;
+
+        case ICAL_DTSTAMP_PROPERTY:
+            /* Update DTSTAMP */
+            icalproperty_set_dtstamp(prop, now);
+            break;
+
+        case ICAL_CREATED_PROPERTY:
+            /* Update CREATED */
+            icalproperty_set_created(prop, now);
+            break;
+
+        case ICAL_LASTMODIFIED_PROPERTY:
+            /* Update LASTMODIFIED */
+            icalproperty_set_lastmodified(prop, now);
+            break;
+
+        default:
+            break;
+        }
     }
-
-    prop = icalproperty_new_recurrenceid(dtstart);
-    icalcomponent_add_property(new, prop);
-    tzid = icaltimezone_get_tzid((icaltimezone *) tz);
-    if (tzid) icalproperty_add_parameter(prop, icalparameter_new_tzid(tzid));
-
-    prop = icalcomponent_get_first_property(new, ICAL_RRULE_PROPERTY);
-    icalcomponent_remove_property(new, prop);
-    icalproperty_free(prop);
-
-    now = icaltime_current_time_with_zone(utc_zone);
-    icalproperty_set_dtstamp(prop, now);
-
-    prop = icalcomponent_get_first_property(new, ICAL_CREATED_PROPERTY);
-    if (prop) icalproperty_set_created(prop, now);
-
-    prop = icalcomponent_get_first_property(new, ICAL_LASTMODIFIED_PROPERTY);
-    if (prop) icalproperty_set_lastmodified(prop, now);
 
     *((icalcomponent **) rock) = new;
 }
 
+/* Apply property updates */
+static void apply_property_updates(struct patch_data_t *patch,
+                                   icalcomponent *parent, int *num_changes)
+{
+    icalproperty *prop = NULL, *nextprop, *newprop;
+
+    for (newprop = icalcomponent_get_first_property(patch->patch,
+                                                    ICAL_ANY_PROPERTY);
+         newprop;
+         newprop = icalcomponent_get_next_property(patch->patch,
+                                                   ICAL_ANY_PROPERTY)) {
+        icalproperty_kind kind = icalproperty_isa(newprop);
+        icalparameter_patchaction action = ICAL_PATCHACTION_BYNAME;
+        icalparameter *actionp;
+        union match_criteria_t byparam;
+
+        memset(&byparam, 0, sizeof(union match_criteria_t));
+        newprop = icalproperty_new_clone(newprop);
+
+        actionp = icalproperty_get_first_parameter(newprop,
+                                                   ICAL_PATCHACTION_PARAMETER);
+        if (actionp) {
+            action = icalparameter_get_patchaction(actionp);
+            if (action == ICAL_PATCHACTION_X) {
+                /* libical treats DQUOTEd BYPARAM as X value */
+                const char *byparam_prefix = "BYPARAM@";
+                const char *x_val = icalparameter_get_xvalue(actionp);
+                if (!strncmp(x_val, byparam_prefix, strlen(byparam_prefix))) {
+                    /* Parse param-match */
+                    const char *p = x_val + strlen(byparam_prefix);
+                    size_t namelen = strcspn(p, "!=");
+                    byparam.prop.param = xstrndup(p, namelen);
+                    p += namelen;
+
+                    if (*p) {
+                        if (*p++ == '!') byparam.prop.not = 1;
+                        byparam.prop.value = xstrdup(p);
+                    }
+                    action = ICAL_PATCHACTION_BYPARAM;
+                }
+            }
+
+            icalproperty_remove_parameter_by_ref(newprop, actionp);
+            icalparameter_free(actionp);
+        }
+
+        if (action != ICAL_PATCHACTION_CREATE) {
+            /* Delete properties matching those being updated */
+            const char *value = icalproperty_get_value_as_string(newprop);
+
+            for (prop = icalcomponent_get_first_property(parent, kind);
+                 prop; prop = nextprop) {
+                int match = 1;
+
+                nextprop = icalcomponent_get_next_property(parent, kind);
+
+                if (action == ICAL_PATCHACTION_BYVALUE) {
+                    match = !strcmp(value,
+                                    icalproperty_get_value_as_string(prop));
+                }
+                else if (action == ICAL_PATCHACTION_BYPARAM) {
+                    /* Check param-match */
+                    match = apply_param_match(prop, &byparam);
+                    free(byparam.prop.param);
+                    free(byparam.prop.value);
+                }
+                if (!match) continue;
+
+                icalcomponent_remove_property(parent, prop);
+                icalproperty_free(prop);
+            }
+        }
+
+        *num_changes += 1;
+        icalcomponent_add_property(parent, newprop);
+    }
+}
+
+/* Apply property updates */
+static void apply_component_updates(struct patch_data_t *patch,
+                                    icalcomponent *parent, int *num_changes)
+{
+    icalcomponent *comp, *nextcomp, *newcomp;
+
+    for (newcomp = icalcomponent_get_first_component(patch->patch,
+                                                     ICAL_ANY_COMPONENT);
+         newcomp;
+         newcomp = icalcomponent_get_next_component(patch->patch,
+                                                    ICAL_ANY_COMPONENT)){
+        icalcomponent_kind kind = icalcomponent_isa(newcomp);
+        const char *uid = icalcomponent_get_uid(newcomp);
+        icaltimetype rid = icalcomponent_get_recurrenceid(newcomp);
+
+        newcomp = icalcomponent_new_clone(newcomp);
+
+        /* Delete components matching those being updated */
+        for (comp = icalcomponent_get_first_component(parent, kind);
+             comp; comp = nextcomp) {
+
+            nextcomp = icalcomponent_get_next_component(parent, kind);
+
+            if (strcmp(uid, icalcomponent_get_uid(comp)) ||
+                icaltime_compare(rid, icalcomponent_get_recurrenceid(comp))) {
+                /* skip */
+                continue;
+            }
+
+            icalcomponent_remove_component(parent, comp);
+            icalcomponent_free(comp);
+        }
+
+        *num_changes += 1;
+        icalcomponent_add_component(parent, newcomp);
+    }
+}
+
+/* Apply a patch action to a component segment */
+static void apply_patch_component(struct path_segment_t *path_seg,
+                                 icalcomponent *parent, int *num_changes)
+{
+    icalcomponent *comp, *nextcomp, *master = NULL;
+
+    /* Iterate through each component */
+    if (path_seg->kind == ICAL_VCALENDAR_COMPONENT)
+        comp = parent;
+    else
+        comp = icalcomponent_get_first_component(parent, path_seg->kind);
+
+    for (; comp; comp = nextcomp) {
+        nextcomp = icalcomponent_get_next_component(parent, path_seg->kind);
+
+        /* Check comp-match */
+        if (path_seg->match.comp.uid &&
+            strcmp(path_seg->match.comp.uid, icalcomponent_get_uid(comp))) {
+            continue;  /* UID doesn't match */
+        }
+
+        if (icaltime_is_valid_time(path_seg->match.comp.rid)) {
+            icaltimetype recurid =
+                icalcomponent_get_recurrenceid_with_zone(comp);
+
+            if (icaltime_is_null_time(recurid)) master = comp;
+            if (icaltime_compare(recurid, path_seg->match.comp.rid)) {
+                if (!nextcomp && master) {
+                    /* Possibly add an override recurrence.
+                       Set start and end to coincide with recurrence */
+                    icalcomponent *override = NULL;
+                    struct icaltimetype start = path_seg->match.comp.rid;
+                    struct icaltimetype end =
+                        icaltime_add(start, icalcomponent_get_duration(master));
+                    icalcomponent_foreach_recurrence(master, start, end,
+                                                     &create_override,
+                                                     &override);
+                    if (!override) break;  /* Can't override - done */
+
+                    /* Act on new overridden component */
+                    icalcomponent_add_component(parent, override);
+                    comp = override;
+                }
+                else continue;  /* RECURRENCE-ID doesn't match */
+            }
+        }
+
+        if (path_seg->child) {
+            /* Recurse into next segment */
+            apply_patch(path_seg->child, comp, num_changes);
+        }
+        else if (path_seg->action == ACTION_DELETE) {
+            /* Delete existing component */
+            *num_changes += 1;
+            icalcomponent_remove_component(parent, comp);
+            icalcomponent_free(comp);
+        }
+        else if (path_seg->action == ACTION_UPDATE) {
+            /* Patch existing component */
+            struct patch_data_t *patch = (struct patch_data_t *) path_seg->data;
+
+            /* Process all PATCH-DELETEs first */
+            for (path_seg = patch->delete;
+                 path_seg; path_seg = path_seg->child) {
+                apply_patch(path_seg, comp, num_changes);
+            }
+
+            /* Process all PATCH-SETPARAMETERs next */
+            for (path_seg = patch->setparam;
+                 path_seg; path_seg = path_seg->child) {
+                apply_patch(path_seg, comp, num_changes);
+            }
+
+            /* Process all property updates */
+            apply_property_updates(patch, comp, num_changes);
+
+            /* Process all components updates */
+            apply_component_updates(patch, comp, num_changes);
+        }
+    }
+}
+
 /* Apply a patch action to a target segment */
-static void apply_patch_action(struct path_segment_t *path_seg,
-                               void *parent, unsigned action, int *num_changes)
+static void apply_patch(struct path_segment_t *path_seg,
+                        void *parent, int *num_changes)
 {
     switch (path_seg->type) {
-    case SEGMENT_COMP: {
-        /* Iterate through each component */
-        icalcomponent *comp, *next, *master = NULL;
-
-        if (path_seg->kind == ICAL_VCALENDAR_COMPONENT)
-            comp = parent;
-        else
-            comp = icalcomponent_get_first_component(parent, path_seg->kind);
-
-        for (; comp; comp = next) {
-            next = icalcomponent_get_next_component(parent, path_seg->kind);
-
-            /* Check component-match */
-            if (path_seg->match.comp.uid) {
-                if (strcmp(path_seg->match.comp.uid,
-                           icalcomponent_get_uid(comp)))
-                    continue;  /* UID doesn't match */
-
-                if (icaltime_is_valid_time(path_seg->match.comp.recurid)) {
-                    icaltimetype recurid =
-                        icalcomponent_get_recurrenceid_with_zone(comp);
-
-                    if (icaltime_is_null_time(recurid)) master = comp;
-                    if (icaltime_compare(recurid,
-                                         path_seg->match.comp.recurid)) {
-                        if (!next && master) {
-                            /* Possibly add an override recurrence.
-                               Set start and end to coincide with recurrence */
-                            icalcomponent *override = NULL;
-                            struct icaltimetype start =
-                                path_seg->match.comp.recurid;
-                            struct icaltimetype end =
-                                icaltime_add(start,
-                                             icalcomponent_get_duration(master));
-                            icalcomponent_foreach_recurrence(master,
-                                                             start, end,
-                                                             &create_override,
-                                                             &override);
-                            if (!override) break;  /* Can't override - done */
-
-                            /* Act on new overridden component */
-                            icalcomponent_add_component(parent, override);
-                            comp = override;
-                        }
-                        else continue;  /* RECURRENCE-ID doesn't match */
-                    }
-                }
-            }
-
-            if (path_seg->next) {
-                /* Recurse into next segment */
-                apply_patch_action(path_seg->next, comp, action, num_changes);
-            }
-            else {
-                /* Act on this component */
-                icalcomponent *new = (icalcomponent *) path_seg->data;
-
-                switch (action) {
-                case ACTION_CREATE:
-                    *num_changes += 1;
-                    parent = comp;
-                    comp = NULL;
-
-                    /* Fall through and create new component */
-
-                case ACTION_UPDATE:
-                    icalcomponent_add_component(parent,
-                                                icalcomponent_new_clone(new));
-
-                    /* Fall through and delete existing component */
-
-                case ACTION_DELETE:
-                    if (comp) {
-                        *num_changes += 1;
-                        icalcomponent_remove_component(parent, comp);
-                        icalcomponent_free(comp);
-                    }
-                    break;
-                }
-            }
-        }
-
+    case SEGMENT_COMP:
+        apply_patch_component(path_seg, parent, num_changes);
         break;
-    }
 
-    case SEGMENT_PROP: {
-        /* Iterate through each property */
-        icalproperty *prop, *next;
-
-        prop = icalcomponent_get_first_property(parent, path_seg->kind);
-        do {
-            int n;
-
-            next = icalcomponent_get_next_property(parent, path_seg->kind);
-
-            /* Check property-match */
-            if ((n = strarray_size(&path_seg->match.prop.values))) {
-                const char *prop_val = icalproperty_get_value_as_string(prop);
-                strarray_t *values = &path_seg->match.prop.values;
-                int i, match = 0;
-
-                for (i = 0; i < n; i++) {
-                    match = !strcmp(strarray_nth(values, i), prop_val);
-                    if (path_seg->match.prop.not) match = !match;  /* invert */
-                    if (match) {
-                        break;  /* found a match */
-                    }
-                }
-                if (!match) continue;  /* property value doesn't match */
-            }
-
-            if (path_seg->next) {
-                /* Recurse into next segment */
-                apply_patch_action(path_seg->next, prop, action, num_changes);
-            }
-            else {
-                /* Act on this property */
-                icalcomponent *props = (icalcomponent *) path_seg->data;
-                icalproperty *new;
-
-                switch (action) {
-                case ACTION_ADD:
-                case ACTION_CREATE:
-                    prop = NULL;
-
-                    /* Fall through and create new property(s) */
-
-                case ACTION_UPDATE:
-                    *num_changes += 1;
-                    for (new =
-                             icalcomponent_get_first_property(props,
-                                                              ICAL_ANY_PROPERTY);
-                         new;
-                         new =
-                             icalcomponent_get_next_property(props,
-                                                             ICAL_ANY_PROPERTY)) {
-                        icalcomponent_add_property(parent,
-                                                   icalproperty_new_clone(new));
-                    }
-
-                    /* Fall through and delete existing property */
-
-                case ACTION_DELETE:
-                case ACTION_REMOVE:
-                    if (prop) {
-                        *num_changes += 1;
-                        icalcomponent_remove_property(parent, prop);
-                        icalproperty_free(prop);
-                    }
-                    break;
-                }
-            }
-
-        } while ((prop = next));
-
+    case SEGMENT_PROP:
+        apply_patch_property(path_seg, parent, num_changes);
         break;
-    }
 
     case SEGMENT_PARAM:
-        /* Act on this parameter */
-        *num_changes += 1;
-
-        switch (action) {
-        case ACTION_CREATE:
-            icalproperty_add_parameter(parent,
-                                       icalparameter_new_clone(path_seg->data));
-            break;
-
-        case ACTION_UPDATE:
-            icalproperty_set_parameter(parent,
-                                       icalparameter_new_clone(path_seg->data));
-            break;
-
-        case ACTION_DELETE:
-            icalproperty_remove_parameter_by_kind(parent, path_seg->kind);
-            break;
-
-        case ACTION_ADD:
-        case ACTION_REMOVE:
-            break;
-        }
-
+        apply_patch_parameter(path_seg, parent, num_changes);
         break;
     }
 }
+
+static void path_segment_free(struct path_segment_t *path_seg)
+{
+    struct path_segment_t *next;
+
+    for (; path_seg; path_seg = next) {
+        next = path_seg->child;
+
+        switch (path_seg->type) {
+        case SEGMENT_COMP:
+            free(path_seg->match.comp.uid);
+            break;
+
+        case SEGMENT_PROP:
+            free(path_seg->match.prop.param);
+            free(path_seg->match.prop.value);
+            break;
+
+        case SEGMENT_PARAM:
+            break;
+        }
+
+        free(path_seg);
+    }
+}
+
 
 /* Perform a PATCH request
  *
@@ -3027,344 +3437,178 @@ static void apply_patch_action(struct path_segment_t *path_seg,
 static int caldav_patch(struct transaction_t *txn, void *obj)
 {
     icalcomponent *ical = (icalcomponent *) obj;
-    char *line = (char *) buf_cstring(&txn->req_body.payload);
-    char *end = line + buf_len(&txn->req_body.payload);
+    icalcomponent *pdoc, *vpatch, *patch;
+    icalproperty *prop;
     int num_changes = 0;
+    int ret = 0;
 
-    /* Process each line of the patch document */
-    while (line < end) {
-        char *command = NULL, *path = NULL, *data = NULL, *p, sep;
-        struct path_segment_t *path_seg = NULL, *tail = NULL, *new, *next;
-        int r = 0, action = 0;
-
-        if (isspace(*line)) {
-            /* Skip blank lines */
-            path = line;
+    /* Validate the iCal patch */
+    pdoc = ical_string_as_icalcomponent(&txn->req_body.payload);
+    if (!pdoc || (icalcomponent_isa(pdoc) != ICAL_VCALENDAR_COMPONENT)) {
+        txn->error.desc = "Missing VCALENDAR";
+        txn->error.precond = CALDAV_VALID_DATA;
+        ret = HTTP_BAD_REQUEST;
+    }
+    else if (!icalrestriction_check(pdoc) || icalcomponent_count_errors(pdoc)) {
+        if ((txn->error.desc = get_icalcomponent_errstr(pdoc)) ||
+            (txn->error.desc =
+             get_icalcomponent_errstr(icalcomponent_get_first_real_component(pdoc)))) {
+            buf_setcstr(&txn->buf, txn->error.desc);
+            txn->error.desc = buf_cstring(&txn->buf);
         }
-        else {
-            /* Split command and path */
-            command = line;
-            path = strchr(line, ' ');
-            if (!path) {
-                txn->error.desc = "Missing patch path";
-                return HTTP_BAD_REQUEST;
+        txn->error.precond = CALDAV_VALID_DATA;
+        ret = HTTP_BAD_REQUEST;
+    }
+    else if (!(vpatch = icalcomponent_get_first_real_component(pdoc)) ||
+             icalcomponent_isa(vpatch) != ICAL_VPATCH_COMPONENT) {
+        txn->error.desc = "Missing VPATCH";
+        txn->error.precond = CALDAV_VALID_DATA;
+        ret = HTTP_BAD_REQUEST;
+    }
+    else if ((prop =
+              icalcomponent_get_first_property(vpatch,
+                                               ICAL_PATCHVERSION_PROPERTY)) &&
+             strcmp(icalproperty_get_patchversion(prop), "1")) {
+        txn->error.desc = "Unsupported PATCH-VERSION";
+        txn->error.precond = CALDAV_SUPP_DATA;
+        ret = HTTP_BAD_REQUEST;
+    }
+
+    if (ret) goto done;
+
+    /* Process each patch sub-component */
+    for (patch = icalcomponent_get_first_component(vpatch, ICAL_ANY_COMPONENT);
+         patch;
+         patch = icalcomponent_get_next_component(vpatch, ICAL_ANY_COMPONENT)) {
+
+        if (icalcomponent_isa(patch) != ICAL_XPATCH_COMPONENT) {
+            /* Unknown patch action */
+            txn->error.precond = CALDAV_SUPP_COMP;
+            ret = HTTP_BAD_REQUEST;
+            goto done;
+        }
+
+        prop = icalcomponent_get_first_property(patch,
+                                                ICAL_PATCHTARGET_PROPERTY);
+        if (!prop) {
+            txn->error.desc = "Missing TARGET";
+            txn->error.precond = CALDAV_VALID_DATA;
+            ret = HTTP_BAD_REQUEST;
+            goto done;
+        }
+
+        /* Parse PATCH-TARGET */
+        char *path = xstrdup(icalproperty_get_patchtarget(prop));
+        struct path_segment_t *target = NULL, *next;
+        struct patch_data_t patch_data = { patch, NULL, NULL };
+
+        icalcomponent_remove_property(patch, prop);
+        icalproperty_free(prop);
+
+        ret = parse_target_path(path, &target,
+                                ACTION_UPDATE, &patch_data, &txn->error);
+        free(path);
+        if (!ret) {
+            if (!target || target->type != SEGMENT_COMP ||
+                target->kind != ICAL_VCALENDAR_COMPONENT ||
+                target->match.comp.uid) {
+                txn->error.desc = "Initial segment of PATCH-TARGET"
+                    " MUST be an unmatched VCALENDAR";
+                ret = HTTP_BAD_REQUEST;
             }
-            *path++ = '\0';
         }
 
-        /* Trim CRLF and find start of next line */
-        for (p = path; *p; p++) {
-            if (*p == '\r' || *p == '\n') {
-                *p++ = '\0';
-                if (*p == '\r' || *p == '\n') *p++ = '\0';
-                break;
-            }
-        }
-        line = p;
+        if (!ret) {
+            /* Parse and remove all PATCH-DELETEs and PATCH-PARAMETERs */
+            icalproperty *nextprop;
+            for (prop =
+                     icalcomponent_get_first_property(patch, ICAL_ANY_PROPERTY);
+                 !ret && prop; prop = nextprop) {
 
-        /* Sanity check the command */
-        if (!command) continue;
-        else if (!strcmp(command, "version")) {
-            if (atoi(path) != 1) {
-                txn->error.desc = "Bad patch version";
-                return HTTP_BAD_REQUEST;
-            }
-        }
-        else if (!strcmp(command, "create")) {
-            action = ACTION_CREATE;
-        }
-        else if (!strcmp(command, "update")) {
-            action = ACTION_UPDATE;
-        }
-        else if (!strcmp(command, "delete")) {
-            action = ACTION_DELETE;
-        }
-        else if (!strcmp(command, "add")) {
-            action = ACTION_ADD;
-        }
-        else if (!strcmp(command, "remove")) {
-            action = ACTION_REMOVE;
-        }
-        else {
-            txn->error.desc = "Bad patch action";
-            return HTTP_BAD_REQUEST;
-        }
+                icalproperty_kind kind = icalproperty_isa(prop);
+                struct path_segment_t *ppath = NULL;
 
-        if (action != ACTION_DELETE) {
-            /* Mark end of command data and find start of next line */
-            data = line;
+                nextprop =
+                    icalcomponent_get_next_property(patch, ICAL_ANY_PROPERTY);
 
-            p = strstr(data, "\r\n.\r\n");
-            if (!p) {
-                txn->error.desc = "Improperly terminated patch data";
-                return HTTP_BAD_REQUEST;
-            }
+                if (kind == ICAL_PATCHDELETE_PROPERTY) {
+                    path = xstrdup(icalproperty_get_patchdelete(prop));
 
-            p[2] = '\0';
-            line = p + 5;
-        }
+                    icalcomponent_remove_property(patch, prop);
+                    icalproperty_free(prop);
 
-        /* Parse component-segment(s) and create a linked list */
-        for (sep = *path++; sep == '/';) {
-            p = path + strcspn(path, "[/#");
-            if ((sep = *p)) *p++ = '\0';
-
-            new = xzmalloc(sizeof(struct path_segment_t));
-            new->type = SEGMENT_COMP;
-            new->kind = icalcomponent_string_to_kind(path);
-            if (!path_seg) path_seg = new;
-            else tail->next = new;
-            tail = new;
-
-            path = p;
-
-            if (sep == '[') {
-                /* Parse uid-match */
-                const char *prefix = "UID=";
-                size_t prefix_len = strlen(prefix);
-
-                if (strncmp(path, prefix, prefix_len) ||
-                    !(p = strchr(path, ']'))) {
-                    txn->error.desc = "Badly formatted uid-match";
-                    r = HTTP_BAD_REQUEST;
-                    goto done;
-                }
-
-                tail->match.comp.uid = path + prefix_len;
-                *p++ = '\0';
-                sep = *p++;
-                path = p;
-
-                if (sep == '[') {
-                    /* Parse rid-match */
-                    prefix = "RECURRENCE-ID=";
-                    prefix_len = strlen(prefix);
-
-                    if (strncmp(path, prefix, prefix_len) ||
-                        !(p = strchr(path, ']'))) {
-                        txn->error.desc = "Badly formatted rid-match";
-                        r = HTTP_BAD_REQUEST;
-                        goto done;
-                    }
-
-                    path += prefix_len;
-                    *p++ = '\0';
-                    if (*path) {
-                        tail->match.comp.recurid = icaltime_from_string(path);
-                        if (icaltime_is_null_time(tail->match.comp.recurid)) {
-                            txn->error.desc = "Invalid recurrence-id";
-                            r = HTTP_BAD_REQUEST;
-                            goto done;
+                    ret = parse_target_path(path, &ppath,
+                                            ACTION_DELETE, NULL, &txn->error);
+                    free(path);
+                    if (!ret) {
+                        if (!ppath ||
+                            (ppath->type == SEGMENT_COMP &&
+                             ppath->kind == ICAL_VCALENDAR_COMPONENT)) {
+                            txn->error.desc = "Initial segment of PATCH-DELETE"
+                                " MUST NOT be VCALENDAR";
+                            ret = HTTP_BAD_REQUEST;
+                        }
+                        else {
+                            /* Add this delete path to our list */
+                            ppath->sibling = patch_data.delete;
+                            patch_data.delete = ppath;
                         }
                     }
-                    sep = *p++;
-                    path = p;
                 }
-                else {
-                    /* No recurid: flag time as invalid rather than NULL since
-                       NULL time is used for empty recurid (master component) */
-                    tail->match.comp.recurid.year = -1;
-                }
-            }
-        }
+                else if (kind == ICAL_PATCHPARAMETER_PROPERTY) {
+                    path = xstrdup(icalproperty_get_patchparameter(prop));
 
-        if (!path_seg || path_seg->match.comp.uid ||
-            path_seg->kind != ICAL_VCALENDAR_COMPONENT) {
-            txn->error.desc =
-                "Initial component-segment MUST be an unmatched VCALENDAR";
-            r = HTTP_BAD_REQUEST;
-            goto done;
-        }
+                    icalcomponent_remove_property(patch, prop);
 
-        if (sep == '\0') {
-            /* Action is on a component */
-            switch (action) {
-            case ACTION_UPDATE:
-                if (!path_seg->next) {
-                    txn->error.desc = "Can't update VCALENDAR";
-                    r = HTTP_CONFLICT;
-                    goto done;
-                }
-
-                /* Fall through */
-
-            case ACTION_CREATE:
-                /* Parse new/replacement component data */
-                if (!(tail->data = icalcomponent_new_from_string(data))) {
-                    txn->error.desc = "Invalid component data";
-                    r = HTTP_BAD_REQUEST;
-                    goto done;
-                }
-                break;
-
-            case ACTION_DELETE:
-                if (!path_seg->next) {
-                    txn->error.desc = "Can't delete VCALENDAR";
-                    r = HTTP_CONFLICT;
-                    goto done;
-                }
-                break;
-
-            default:
-                txn->error.desc = "ADD/REMOVE not allowed on a component";
-                r = HTTP_BAD_REQUEST;
-                goto done;
-            }
-        }
-        else if (sep == '#') {
-            /* Parse property-segment */
-            p = path + strcspn(path, "[;");
-            if ((sep = *p)) *p++ = '\0';
-
-            new = xzmalloc(sizeof(struct path_segment_t));
-            tail->next = new;
-            tail = new;
-            tail->type = SEGMENT_PROP;
-            tail->kind = icalproperty_string_to_kind(path);
-
-            path = p;
-
-            if (sep == '[') {
-                /* Parse property-match (MUST start with '=' or '!') */
-                if (strspn(path, "=!") != 1 || !(p = strchr(path, ']'))) {
-                    txn->error.desc = "Badly formatted property-match";
-                    r = HTTP_BAD_REQUEST;
-                    goto done;
-                }
-
-                *p++ = '\0';
-                if (*path++ == '!') tail->match.prop.not = 1;
-                strarray_append(&tail->match.prop.values, path);
-                sep = *p++;
-                path = p;
-            }
-
-            if (sep == ';') {
-                /* Parse parameter-segment */
-                new = xzmalloc(sizeof(struct path_segment_t));
-                tail->next = new;
-                tail = new;
-                tail->type = SEGMENT_PARAM;
-                tail->kind = icalparameter_string_to_kind(path);
-
-                if (data) {
-                    /* Skip leading ';' and trim trailing CRLF */
-                    data++;
-                    p = data + strcspn(data, "\r\n");
-                    *p = '\0';
-
-                    /* Parse new/replacement parameter data */
-                    if (!(tail->data =
-                          icalparameter_new_from_string(data))) {
-                        txn->error.desc = "Invalid parameter data";
-                        r = HTTP_BAD_REQUEST;
-                        goto done;
+                    ret = parse_target_path(path, &ppath,
+                                            ACTION_SETPARAM, prop, &txn->error);
+                    free(path);
+                    if (!ret) {
+                        if (!ppath || ppath->type != SEGMENT_PROP) {
+                            txn->error.desc =
+                                "Initial segment of PATCH-PARAMETER"
+                                " MUST be a property";
+                            ret = HTTP_BAD_REQUEST;
+                        }
+                        else {
+                            /* Add this setparam path to our list */
+                            ppath->sibling = patch_data.setparam;
+                            patch_data.setparam = ppath;
+                        }
                     }
                 }
             }
-            else if (sep != '\0') {
-                txn->error.desc =
-                    "Invalid separator following property-segment";
-                r = HTTP_BAD_REQUEST;
-                goto done;
-            }
-            else if (data) {
-                /* Parse new/replacement property data */
-                struct buf buf = BUF_INITIALIZER;
-
-                switch (action) {
-                case ACTION_ADD:
-                case ACTION_CREATE:
-                case ACTION_UPDATE:
-                    /* XXX  This is the same hack that
-                       icalproperty_new_from_string() does for a single prop.
-                       We do it ourselves because we may have multiple props,
-                       and we would only get the first of a multi-valued prop.
-                    */
-                    buf_setcstr(&buf, "BEGIN:VCALENDAR\r\n");
-                    if (action == ACTION_ADD) {
-                        const char *propname =
-                            icalproperty_kind_to_string(tail->kind);
-                        do {
-                            /* Skip leading '=' */
-                            data++;
-                            p = data + strcspn(data, "=");
-                            buf_printf(&buf, "%s:%.*s",
-                                       propname, (int) (p - data), data);
-                            data = p;
-                        } while (*data);
-                    }
-                    else buf_appendcstr(&buf, data);
-                    buf_appendcstr(&buf, "END:VCALENDAR\r\n");
-
-                    tail->data =
-                        icalcomponent_new_from_string(buf_cstring(&buf));
-                    buf_free(&buf);
-                    if (!tail->data) {
-                        txn->error.desc = "Invalid property data";
-                        r = HTTP_BAD_REQUEST;
-                        goto done;
-                    }
-                    break;
-
-                case ACTION_REMOVE:
-                    /* Parse property value(s) into property-match value(s) */
-                    do {
-                        /* Skip leading '=' */
-                        data++;
-                        p = data + strcspn(data, "=");
-
-                        /* Trim trailing CRLF */
-                        if (p[-1] == '\n') p[-1] = '\0';
-                        if (p[-2] == '\r') p[-2] = '\0';
-
-                        strarray_append(&tail->match.prop.values, data);
-                        data = p;
-                    } while (*data);
-                    break;
-                }
-            }
-        }
-        else {
-            txn->error.desc = "Invalid separator following component-segment";
-            r = HTTP_BAD_REQUEST;
-            goto done;
         }
 
-        /* Apply this action to the target segment */
-        apply_patch_action(path_seg, ical, action, &num_changes);
+        /* Apply this patch to the target component */
+        if (!ret) apply_patch(target, ical, &num_changes);
 
-
-      done:
-        /* Cleanup path segment(s) */
-        for (; path_seg; path_seg = next) {
-            next = path_seg->next;
-
-            switch (path_seg->type) {
-            case SEGMENT_PROP:
-                strarray_fini(&path_seg->match.prop.values);
-
-                /* Fall through */
-
-            case SEGMENT_COMP:
-                if (path_seg->data) icalcomponent_free(path_seg->data);
-                break;
-
-            case SEGMENT_PARAM:
-                if (path_seg->data) icalparameter_free(path_seg->data);
-                break;
-            }
-
-            free(path_seg);
+        /* Cleanup target paths */
+        path_segment_free(target);
+        for (target = patch_data.delete; target; target = next) {
+            next = target->sibling;
+            if (target->data) free(target->data);
+            path_segment_free(target);
+        }
+        for (target = patch_data.setparam; target; target = next) {
+            next = target->sibling;
+            if (target->data) icalproperty_free(target->data);
+            path_segment_free(target);
         }
 
-        if (r) return r;
+        if (ret) goto done;
     }
+
+  done:
+    icalcomponent_free(pdoc);
+
+    if (ret) return ret;
 
     /* If no changes are made,
        return HTTP_NO_CONTENT to suppress storing of resource */
     return (!num_changes ? HTTP_NO_CONTENT : 0);
 }
+#endif /* HAVE_VPATCH */
 
 
 /* Perform a PUT request
