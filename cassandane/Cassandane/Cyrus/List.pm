@@ -255,6 +255,46 @@ sub test_rfc5258_ex02_list_subscribed
     });
 }
 
+sub test_list_return_subscribed
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+	[ 'delete' => 'Fruit/Peach' ],
+	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $subdata = $imaptalk->list([qw()], "", "*", 'RETURN', [qw(SUBSCRIBED)]);
+
+    my @inbox_flags = qw( \\Subscribed );
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v < 3) {
+        unshift @inbox_flags, qw( \\Noinferiors );
+    }
+    else {
+	unshift @inbox_flags, qw( \\HasNoChildren );
+    }
+
+    xlog(Dumper $subdata);
+    $self->_assert_list_data($subdata, '/', {
+	'INBOX'                 => \@inbox_flags,
+	'Fruit'                 => [qw( \\HasChildren )],
+	'Fruit/Apple'           => [qw( \\HasNoChildren )],
+	'Fruit/Banana'          => [qw( \\Subscribed \\HasNoChildren )],
+	'Tofu'                  => [qw( \\HasNoChildren )],
+	'Vegetable'             => [qw( \\Subscribed \\HasChildren )],
+	'Vegetable/Broccoli'    => [qw( \\Subscribed \\HasNoChildren )],
+	'Vegetable/Corn'        => [qw( \\HasNoChildren )],
+    });
+}
+
 sub test_rfc5258_ex03_children
     :UnixHierarchySep :AltNamespace
 {
