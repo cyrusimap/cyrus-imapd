@@ -1,6 +1,6 @@
 .. cyrusman:: cyr_sequence(8)
 
-.. _imap-admin-systemcommands-cyr_sequence:
+.. _imap-reference-manpages-systemcommands-cyr_sequence:
 
 ================
 **cyr_sequence**

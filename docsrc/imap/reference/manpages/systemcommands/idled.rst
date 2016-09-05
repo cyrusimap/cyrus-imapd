@@ -1,6 +1,6 @@
 .. cyrusman:: idled(8)
 
-.. _imap-admin-systemcommands-idled:
+.. _imap-reference-manpages-systemcommands-idled:
 
 =========
 **idled**

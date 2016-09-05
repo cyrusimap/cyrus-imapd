@@ -2,7 +2,7 @@
 
 .. cyrusman:: CMDNAME(8)
 
-.. _imap-admin-systemcommands-CMD:
+.. _imap-reference-manpages-systemcommands-CMD:
 
 ==========
 **CMD**

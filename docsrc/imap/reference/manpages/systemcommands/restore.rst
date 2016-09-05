@@ -2,7 +2,7 @@
 
 .. program:: restore
 
-.. _imap-admin-systemcommands-restore:
+.. _imap-reference-manpages-systemcommands-restore:
 
 ===========
 **restore**

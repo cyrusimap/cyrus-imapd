@@ -1,6 +1,6 @@
 .. cyrusman:: cyr_info(8)
 
-.. _imap-admin-systemcommands-cyr_info:
+.. _imap-reference-manpages-systemcommands-cyr_info:
 
 ==============
 **cyr_info**

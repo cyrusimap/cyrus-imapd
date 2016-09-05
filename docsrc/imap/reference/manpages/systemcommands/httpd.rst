@@ -1,6 +1,6 @@
 .. cyrusman:: httpd(8)
 
-.. _imap-admin-systemcommands-httpd:
+.. _imap-reference-manpages-systemcommands-httpd:
 
 =========
 **httpd**

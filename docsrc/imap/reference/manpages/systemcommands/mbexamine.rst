@@ -1,6 +1,6 @@
 .. cyrusman:: mbexamine(8)
 
-.. _imap-admin-systemcommands-mbexamine:
+.. _imap-reference-manpages-systemcommands-mbexamine:
 
 =============
 **mbexamine**

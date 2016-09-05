@@ -1,6 +1,6 @@
 .. cyrusman:: ctl_zoneinfo(8)
 
-.. _imap-admin-systemcommands-**ctl_zoneinfo**:
+.. _imap-reference-manpages-systemcommands-**ctl_zoneinfo**:
 
 ================
 **ctl_zoneinfo**

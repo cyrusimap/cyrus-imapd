@@ -1,6 +1,6 @@
 .. cyrusman:: lmtpproxyd(8)
 
-.. _imap-admin-systemcommands-lmtpproxyd:
+.. _imap-reference-manpages-systemcommands-lmtpproxyd:
 
 ==============
 **lmtpproxyd**

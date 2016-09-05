@@ -37,7 +37,7 @@ settings in :cyrusman:`imapd.conf(5)`.
 
 .. seealso::
 
-    *   :ref:`imap-admin-systemcommands-unexpunge`
+    *   :ref:`imap-reference-manpages-systemcommands-unexpunge`
     *   :ref:`imap-features-delayed-delete`
     *   :ref:`imap-admin-deleted-expired-expunged-purged`
 

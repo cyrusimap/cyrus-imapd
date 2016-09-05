@@ -1,6 +1,6 @@
 .. cyrusman:: squatter(8)
 
-.. _imap-admin-systemcommands-squatter:
+.. _imap-reference-manpages-systemcommands-squatter:
 
 ============
 **squatter**

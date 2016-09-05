@@ -1,6 +1,6 @@
 .. cyrusman:: ctl_conversationsdb(8)
 
-.. _imap-admin-systemcommands-ctl_conversationsdb:
+.. _imap-reference-manpages-systemcommands-ctl_conversationsdb:
 
 =======================
 **ctl_conversationsdb**

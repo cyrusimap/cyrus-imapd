@@ -1,6 +1,6 @@
 .. cyrusman:: ctl_cyrusdb(8)
 
-.. _imap-admin-systemcommands-ctl_cyrusdb:
+.. _imap-reference-manpages-systemcommands-ctl_cyrusdb:
 
 ===============
 **ctl_cyrusdb**

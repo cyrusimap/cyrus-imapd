@@ -1,6 +1,6 @@
 .. cyrusman:: krb.equiv(5)
 
-.. _imap-admin-configs-krb.equiv:
+.. _imap-reference-manpages-configs-krb.equiv:
 
 =============
 **krb.equiv**

@@ -1,6 +1,6 @@
 .. cyrusman:: notifyd(8)
 
-.. _imap-admin-systemcommands-notifyd:
+.. _imap-reference-manpages-systemcommands-notifyd:
 
 ===========
 **notifyd**

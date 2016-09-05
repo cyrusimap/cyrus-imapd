@@ -1,6 +1,6 @@
 .. cyrusman:: pop3test(1)
 
-.. _imap-admin-usercommands-pop3test:
+.. _imap-reference-manpages-usercommands-pop3test:
 
 ============
 **pop3test**

@@ -1,6 +1,6 @@
 .. cyrusman:: cyr_buildinfo(8)
 
-.. _imap-admin-systemcommands-cyr_buildinfo:
+.. _imap-reference-manpages-systemcommands-cyr_buildinfo:
 
 =================
 **cyr_buildinfo**

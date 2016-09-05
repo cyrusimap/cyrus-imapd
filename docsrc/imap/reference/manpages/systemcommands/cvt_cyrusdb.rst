@@ -1,6 +1,6 @@
 .. cyrusman:: cvt_cyrusdb(8)
 
-.. _imap-admin-systemcommands-cvt_cyrusdb:
+.. _imap-reference-manpages-systemcommands-cvt_cyrusdb:
 
 ===============
 **cvt_cyrusdb**

@@ -1,6 +1,6 @@
 .. cyrusman:: lmtptest(1)
 
-.. _imap-admin-usercommands-lmtptest:
+.. _imap-reference-manpages-usercommands-lmtptest:
 
 ============
 **lmtptest**

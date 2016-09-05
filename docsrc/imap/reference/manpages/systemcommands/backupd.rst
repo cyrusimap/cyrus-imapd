@@ -1,6 +1,6 @@
 .. cyrusman:: backupd(8)
 
-.. _imap-admin-systemcommands-backupd:
+.. _imap-reference-manpages-systemcommands-backupd:
 
 ===========
 **backupd**

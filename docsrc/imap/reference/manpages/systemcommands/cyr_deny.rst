@@ -1,6 +1,6 @@
 .. cyrusman:: cyr_deny(8)
 
-.. _imap-admin-systemcommands-cyr_deny:
+.. _imap-reference-manpages-systemcommands-cyr_deny:
 
 ============
 **cyr_deny**

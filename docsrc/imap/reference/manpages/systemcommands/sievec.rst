@@ -1,6 +1,6 @@
 .. cyrusman:: sievec(8)
 
-.. _imap-admin-systemcommands-sievec:
+.. _imap-reference-manpages-systemcommands-sievec:
 
 ==========
 **sievec**

@@ -79,7 +79,7 @@ values:
     The message files as well as the index records are retained for an
     undetermined period of time -- possibly indefinitely.
 
-    A separate job (using :ref:`imap-admin-systemcommands-cyr_expire`) is
+    A separate job (using :ref:`imap-reference-manpages-systemcommands-cyr_expire`) is
     responsible for actually removing index records and message files.
 
 **default**
@@ -141,19 +141,19 @@ individually, can not autonomously be restored by a user, and are gone
 permanently unless ``expunge_mode: delayed`` is used.
 
 Recovering expunged messages requires administrator assistance, who can
-use command-line tools such as :ref:`imap-admin-systemcommands-unexpunge` to
+use command-line tools such as :ref:`imap-reference-manpages-systemcommands-unexpunge` to
 list and restore messages expunged. See the documentation on
-:ref:`imap-admin-systemcommands-unexpunge` for a walk-through on how that
+:ref:`imap-reference-manpages-systemcommands-unexpunge` for a walk-through on how that
 works.
 
 With the use of ``expunge_mode: delayed``, a regular ``EVENT`` (see
 :cyrusman:`cyrus.conf(5)`) is responsible for triggering
-:ref:`imap-admin-systemcommands-cyr_expire`. This utility takes a parameter
+:ref:`imap-reference-manpages-systemcommands-cyr_expire`. This utility takes a parameter
 ``-X <days>`` to delete from the filesystem any messages that had been
 expunged (by the user or the IMAP client) more than ``<days>`` days ago.
 
 In other words, using ``expunge_mode: delayed`` and
-:ref:`imap-admin-systemcommands-cyr_expire` allows an administrator to recover
+:ref:`imap-reference-manpages-systemcommands-cyr_expire` allows an administrator to recover
 messages that have been deleted by the user less than ``<days>`` ago.
 
 .. NOTE::
@@ -189,7 +189,7 @@ The setting holds two values:
     Mailboxes that are being deleted are not deleted from the
     filesystem, but instead renamed to a special mailbox hierarchy under
     the deleted prefix, to be removed later by
-    :ref:`imap-admin-systemcommands-cyr_expire`.
+    :ref:`imap-reference-manpages-systemcommands-cyr_expire`.
 
 **immediate**
 
@@ -217,7 +217,7 @@ an entire folder having been deleted, is one of the following stages;
     expunged.
 
     Result: The message resides in the original folder and can be
-    retrieved using :ref:`imap-admin-systemcommands-unexpunge`.
+    retrieved using :ref:`imap-reference-manpages-systemcommands-unexpunge`.
 
 *   The message has been copied to the trash folder and at least flagged
     ``\Deleted`` in the source folder, and the original message or the
@@ -227,7 +227,7 @@ an entire folder having been deleted, is one of the following stages;
     Similarly, the trash folder may or may not have been "emptied".
 
     Result: A copy of the message still exists in the original folder
-    and can be retrieved using :ref:`imap-admin-systemcommands-unexpunge`.
+    and can be retrieved using :ref:`imap-reference-manpages-systemcommands-unexpunge`.
 
 *   The message was moved in to the trash folder, implying the original
     message is expunged from the source folder -- through ``UID MOVE``
@@ -236,7 +236,7 @@ an entire folder having been deleted, is one of the following stages;
     The trash folder may or may not have been "emptied".
 
     Result: A copy of the message still exists in the original folder
-    and can be retrieved using :ref:`imap-admin-systemcommands-unexpunge`.
+    and can be retrieved using :ref:`imap-reference-manpages-systemcommands-unexpunge`.
 
 *   The folder was moved to a hierarchy in the trash folder, and the
     trash folder has not yet been "emptied".

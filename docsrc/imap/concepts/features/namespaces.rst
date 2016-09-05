@@ -74,7 +74,7 @@ configured:
 .. seealso::
 
     *   Check configuration settings with
-        :ref:`imap-admin-systemcommands-cyr_info`
+        :ref:`imap-reference-manpages-systemcommands-cyr_info`
 
 We'll attempt to create a mailbox for the user
 *John Doe <john@example.org>* using the shorthand qualifier (e.g.
@@ -133,7 +133,7 @@ is configured by setting in :cyrusman:`imapd.conf(5)`:
 .. seealso::
 
     *   Check configuration settings with
-        :ref:`imap-admin-systemcommands-cyr_info`
+        :ref:`imap-reference-manpages-systemcommands-cyr_info`
 
 Restart the **cyrus-imapd** service and attempt to create a mailbox for
 user ``john@example.org`` using the shorthand qualifier (e.g. ``john``),

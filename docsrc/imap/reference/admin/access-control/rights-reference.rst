@@ -87,7 +87,7 @@ Individual Rights Reference
     The ACI subject is permitted to maintain the ACI subject's seen
     state for this folder, or the shared seen state in case the
     ``/vendor/cmu/cyrus-imapd/sharedseen`` has been set to ``1`` (see
-    :ref:`imap-admin-systemcommands-cyradm`).
+    :ref:`imap-reference-manpages-systemcommands-cyradm`).
 
     Additionally, the ``\Recent`` flags are preserved for the ACI
     subject.

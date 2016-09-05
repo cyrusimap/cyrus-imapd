@@ -1714,7 +1714,7 @@ sub readline {
 
 =for pod2rst .. cyrusman:: cyradm(8)
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm:
 
 =head1 NAME
 
@@ -1804,7 +1804,7 @@ The server address to connect to.
     
 =head1 COMMANDS
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-authenticate:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-authenticate:
 
 =head2 authenticate 
 
@@ -1816,7 +1816,7 @@ authenticated once.
 
 aliases: C<auth>, C<login>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-chdir:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-chdir:
 
 =head2 chdir
 
@@ -1827,7 +1827,7 @@ action will run C<pwd> from a shell if invoked.
 
 aliases: C<cd>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-createmailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-createmailbox:
 
 =head2 createmailbox
 
@@ -1881,7 +1881,7 @@ C<virtdomains> setting in imapd.conf(5).
     
 aliases: C<cm>, C<create>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-deleteaclmailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-deleteaclmailbox:
 
 =head2 deleteaclmailbox
 
@@ -1891,7 +1891,7 @@ Remove ACLs from the specified mailbox.
 
 aliases: C<delteacl>, C<dam>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-deletemailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-deletemailbox:
 
 =head2 deletemailbox
 
@@ -1909,7 +1909,7 @@ is reserved for IMSP.
 
 aliases: C<delete>, C<dm>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-disconnect:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-disconnect:
 
 =head2 disconnect
 
@@ -1920,7 +1920,7 @@ This does not quit cyradm.
 
 aliases: C<disc>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-exit:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-exit:
 
 =head2 exit
 
@@ -1931,7 +1931,7 @@ last command will be used if one is not specified.
 
 aliases: C<quit>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-help:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-help:
 
 =head2 help
 
@@ -1941,7 +1941,7 @@ Show help for C<command> or all commands.
 
 aliases: C<?>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-info:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-info:
 
 =head2 info
 
@@ -1949,7 +1949,7 @@ B<info> [I<mailbox>]
 
 Display the mailbox/server metadata.
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-listaclmailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-listaclmailbox:
 
 =head2 listaclmailbox
 
@@ -1959,7 +1959,7 @@ List ACLs on the specified mailbox.
 
 aliases: C<lam>, C<listacl>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-listmailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-listmailbox:
 
 =head2 listmailbox
 
@@ -1980,7 +1980,7 @@ root for other mailboxes, as opposed to a mailbox itself.
 
 aliases: C<list>, C<lm>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-listquota:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-listquota:
 
 =head2 listquota
 
@@ -1992,7 +1992,7 @@ find the quota root for a mailbox.
 
 aliases: C<lq>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-listquotaroot:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-listquotaroot:
 
 =head2 listquotaroot
 
@@ -2002,7 +2002,7 @@ Show quota roots and quotas for mailbox
 
 aliases: C<lqm>, C<lqr>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-mboxconfig:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-mboxconfig:
 
 =head2 mboxconfig
 
@@ -2054,7 +2054,7 @@ Indicates that the mailbox should have a squat index created for it.
 
 aliases: C<mboxcfg>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-reconstruct:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-reconstruct:
 
 =head2 reconstruct
 
@@ -2064,7 +2064,7 @@ Reconstruct the specified mailbox, optionally recursing and reconstructing child
 
 For more information see reconstruct(8).
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-renamemailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-renamemailbox:
 
 =head2 renamemailbox
 
@@ -2078,7 +2078,7 @@ produce an error.
 
 aliases: C<rename>, C<renm>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-server:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-server:
 
 =head2 server
 
@@ -2097,7 +2097,7 @@ of the connected server.
 
 aliases: C<connect>, C<servername>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-setaclmailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-setaclmailbox:
 
 =head2 setaclmailbox
 
@@ -2158,7 +2158,7 @@ Administer (SETACL/DELETEACL/GETACL/LISTRIGHTS)
 
 aliases: C<setacl>, C<sam>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-setinfo:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-setinfo:
 
 =head2 setinfo
 
@@ -2199,7 +2199,7 @@ them (unless overridden by a mailbox annotation).
 
 =back
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-setquota:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-setquota:
 
 =head2 setquota
 
@@ -2212,7 +2212,7 @@ The I<value> may be the special string C<none> which will remove the quota.
 
 aliases: C<sq>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-subscribe:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-subscribe:
 
 =head2 subscribe
 
@@ -2220,7 +2220,7 @@ B<subscribe> I<mailbox>
 
 Subscribe to the given mailbox.
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-unsubscribe:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-unsubscribe:
 
 =head2 unsubscribe
 
@@ -2228,7 +2228,7 @@ B<unsubscribe> I<mailbox>
 
 Unsubscribe to the given mailbox.
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-version:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-version:
 
 =head2 version
 
@@ -2238,7 +2238,7 @@ Display the version info of the current server.
 
 aliases: C<ver>
 
-=for pod2rst .. _imap-admin-systemcommands-cyradm-xfermailbox:
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-xfermailbox:
 
 =head2 xfermailbox
 

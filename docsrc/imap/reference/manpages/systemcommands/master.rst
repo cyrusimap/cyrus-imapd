@@ -1,6 +1,6 @@
 .. cyrusman:: master(8)
 
-.. _imap-admin-systemcommands-master:
+.. _imap-reference-manpages-systemcommands-master:
 
 ==========
 **master**

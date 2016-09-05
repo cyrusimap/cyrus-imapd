@@ -1,6 +1,6 @@
 .. cyrusman:: mupdate(8)
 
-.. _imap-admin-systemcommands-mupdate:
+.. _imap-reference-manpages-systemcommands-mupdate:
 
 ===========
 **mupdate**

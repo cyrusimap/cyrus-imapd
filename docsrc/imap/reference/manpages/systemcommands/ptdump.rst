@@ -1,6 +1,6 @@
 .. cyrusman:: ptdump(8)
 
-.. _imap-admin-systemcommands-ptdump:
+.. _imap-reference-manpages-systemcommands-ptdump:
 
 ==========
 ``ptdump``

@@ -1,6 +1,6 @@
 .. cyrusman:: sync_reset(8)
 
-.. _imap-admin-systemcommands-sync_reset:
+.. _imap-reference-manpages-systemcommands-sync_reset:
 
 ==============
 **sync_reset**

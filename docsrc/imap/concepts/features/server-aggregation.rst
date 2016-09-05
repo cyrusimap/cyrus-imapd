@@ -321,7 +321,7 @@ Murder Backend Startup Process
         .. NOTE::
 
             Additional options to
-            :ref:`imap-admin-systemcommands-ctl_mboxlist` allow the deletion
+            :ref:`imap-reference-manpages-systemcommands-ctl_mboxlist` allow the deletion
             to be prevented.
 
     *   Mailboxes that do not exist locally but exists in MUPDATE as

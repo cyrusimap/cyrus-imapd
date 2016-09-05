@@ -1,6 +1,6 @@
 .. cyrusman:: reconstruct(8)
 
-.. _imap-admin-systemcommands-reconstruct:
+.. _imap-reference-manpages-systemcommands-reconstruct:
 
 ===============
 **reconstruct**

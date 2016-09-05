@@ -1,6 +1,6 @@
 .. cyrusman:: masssievec(8)
 
-.. _imap-admin-systemcommands-masssievec:
+.. _imap-reference-manpages-systemcommands-masssievec:
 
 ==============
 **masssievec**

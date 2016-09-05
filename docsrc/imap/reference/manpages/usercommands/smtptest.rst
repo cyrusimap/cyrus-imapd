@@ -1,6 +1,6 @@
 .. cyrusman:: smtptest(1)
 
-.. _imap-admin-usercommands-smtptest:
+.. _imap-reference-manpages-usercommands-smtptest:
 
 ============
 **smtptest**

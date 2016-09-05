@@ -1,6 +1,6 @@
 .. cyrusman:: rmnews(8)
 
-.. _imap-admin-systemcommands-rmnews:
+.. _imap-reference-manpages-systemcommands-rmnews:
 
 ==========
 **rmnews**

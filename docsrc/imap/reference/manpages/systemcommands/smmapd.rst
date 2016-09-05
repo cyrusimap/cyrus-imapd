@@ -1,6 +1,6 @@
 .. cyrusman:: smmapd(8)
 
-.. _imap-admin-systemcommands-smmapd:
+.. _imap-reference-manpages-systemcommands-smmapd:
 
 ==========
 **smmapd**

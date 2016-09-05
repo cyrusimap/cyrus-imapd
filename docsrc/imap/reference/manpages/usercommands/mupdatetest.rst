@@ -1,6 +1,6 @@
 .. cyrusman:: mupdatetest(1)
 
-.. _imap-admin-usercommands-mupdatetest:
+.. _imap-reference-manpages-usercommands-mupdatetest:
 
 ===============
 **mupdatetest**

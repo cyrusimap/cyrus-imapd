@@ -1,6 +1,6 @@
 .. cyrusman:: synctest(1)
 
-.. _imap-admin-usercommands-synctest:
+.. _imap-reference-manpages-usercommands-synctest:
 
 ============
 **synctest**

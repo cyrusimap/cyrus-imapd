@@ -1,6 +1,6 @@
 .. cyrusman:: cyr_backup(8)
 
-.. _imap-admin-systemcommands-cyr_backup:
+.. _imap-reference-manpages-systemcommands-cyr_backup:
 
 ==============
 **cyr_backup**

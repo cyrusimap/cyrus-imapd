@@ -1,6 +1,6 @@
 .. cyrusman:: mbtool(8)
 
-.. _imap-admin-systemcommands-mbtool:
+.. _imap-reference-manpages-systemcommands-mbtool:
 
 ==========
 **mbtool**

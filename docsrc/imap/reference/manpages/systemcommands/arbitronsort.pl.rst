@@ -1,6 +1,6 @@
 .. cyrusman:: arbitronsort.pl(8)
 
-.. _imap-admin-systemcommands-arbitronsort.pl:
+.. _imap-reference-manpages-systemcommands-arbitronsort.pl:
 
 ===================
 **arbitronsort.pl**

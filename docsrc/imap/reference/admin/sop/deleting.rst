@@ -221,7 +221,7 @@ To unexpunge all the messages and mark them as undeleted as well:
     This isn't recursive. It will only restore the messages in the
     folder specified.
 
-To find other folders, :ref:`imap-admin-systemcommands-ctl_mboxlist` can be
+To find other folders, :ref:`imap-reference-manpages-systemcommands-ctl_mboxlist` can be
 used.
 
 .. parsed-literal::

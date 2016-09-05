@@ -1,6 +1,6 @@
 .. cyrusman:: mbpath(8)
 
-.. _imap-admin-systemcommands-mbpath:
+.. _imap-reference-manpages-systemcommands-mbpath:
 
 ==========
 **mbpath**

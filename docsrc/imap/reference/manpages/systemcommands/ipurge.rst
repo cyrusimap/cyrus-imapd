@@ -1,6 +1,6 @@
 .. cyrusman:: ipurge(8)
 
-.. _imap-admin-systemcommands-ipurge:
+.. _imap-reference-manpages-systemcommands-ipurge:
 
 ==========
 **ipurge**

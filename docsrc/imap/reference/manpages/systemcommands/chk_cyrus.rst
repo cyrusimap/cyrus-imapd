@@ -1,6 +1,6 @@
 .. cyrusman:: chk_cyrus(8)
 
-.. _imap-admin-systemcommands-chk_cyrus:
+.. _imap-reference-manpages-systemcommands-chk_cyrus:
 
 =============
 **chk_cyrus**

@@ -26,16 +26,16 @@ Major changes
 =============
 
 *   Support added for FastMail-style conversations (threaded messages).
-    (See the ``conversations`` options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
+    (See the ``conversations`` options in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
 
 *   Optional Xapian_ integration for faster and shinier search. Note that this requires custom
     patches to Xapian, in this release. (See the ``search_engine`` option in
-    :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
+    :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
 
 *   Archive support has arrived! Requires addition of an archive partition. (See ``archive_*``
-    options in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
+    options in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
 
-*   Basic JMAP_ support. (See ``httpmodules`` in :ref:`imapd.conf <imap-admin-configs-imapd.conf>`)
+*   Basic JMAP_ support. (See ``httpmodules`` in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
 
 *   Optional ClamAV_ integration for AntiVirus support is now working again.
     Requires separate installation of ClamAV_. (See configure.ac ``--with-clamav=DIR``)
@@ -46,7 +46,7 @@ Major changes
     ``--with-cyrus-prefix`` and ``--with-service-path`` in favour of the more conventional
     ``--prefix``, ``--bindir``, ``--sbindir``, and ``--libexecdir``.
 
-*   Binaries executed by the :ref:`master(8) <imap-admin-systemcommands-master>`
+*   Binaries executed by the :ref:`master(8) <imap-reference-manpages-systemcommands-master>`
     service process are now installed to ``--libexecdir``.  Other binaries are installed to
     ``--bindir`` and/or ``--sbindir``.
 

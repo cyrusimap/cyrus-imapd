@@ -1,6 +1,6 @@
 .. cyrusman:: ptloader(8)
 
-.. _imap-admin-systemcommands-ptloader:
+.. _imap-reference-manpages-systemcommands-ptloader:
 
 ============
 ``ptloader``

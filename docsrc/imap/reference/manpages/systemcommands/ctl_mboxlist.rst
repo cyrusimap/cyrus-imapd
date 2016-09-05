@@ -1,6 +1,6 @@
 .. cyrusman:: ctl_mboxlist(8)
 
-.. _imap-admin-systemcommands-ctl_mboxlist:
+.. _imap-reference-manpages-systemcommands-ctl_mboxlist:
 
 ================
 **ctl_mboxlist**

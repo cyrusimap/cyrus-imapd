@@ -1,6 +1,6 @@
 .. cyrusman:: cyr_df(8)
 
-.. _imap-admin-systemcommands-cyr_df:
+.. _imap-reference-manpages-systemcommands-cyr_df:
 
 ==========
 **cyr_df**

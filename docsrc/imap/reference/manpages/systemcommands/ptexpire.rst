@@ -1,6 +1,6 @@
 .. cyrusman:: ptexpire(8)
 
-.. _imap-admin-systemcommands-ptexpire:
+.. _imap-reference-manpages-systemcommands-ptexpire:
 
 ============
 ``ptexpire``

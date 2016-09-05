@@ -1,6 +1,6 @@
 .. cyrusman:: lmtpd(8)
 
-.. _imap-admin-systemcommands-lmtpd:
+.. _imap-reference-manpages-systemcommands-lmtpd:
 
 =========
 **lmtpd**

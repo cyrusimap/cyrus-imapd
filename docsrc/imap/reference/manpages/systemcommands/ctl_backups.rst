@@ -2,7 +2,7 @@
 
 .. program:: ctl_backups
 
-.. _imap-admin-systemcommands-ctl_backups:
+.. _imap-reference-manpages-systemcommands-ctl_backups:
 
 ===============
 **ctl_backups**

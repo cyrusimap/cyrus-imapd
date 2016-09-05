@@ -1,6 +1,6 @@
 .. cyrusman:: nntptest(1)
 
-.. _imap-admin-usercommands-nntptest:
+.. _imap-reference-manpages-usercommands-nntptest:
 
 ============
 **nntptest**

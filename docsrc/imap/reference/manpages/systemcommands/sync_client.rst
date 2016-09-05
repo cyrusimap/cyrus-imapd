@@ -1,6 +1,6 @@
 .. cyrusman:: sync_client(8)
 
-.. _imap-admin-systemcommands-sync_client:
+.. _imap-reference-manpages-systemcommands-sync_client:
 
 ===============
 **sync_client**
