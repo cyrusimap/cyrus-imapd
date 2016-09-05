@@ -215,11 +215,6 @@ static const char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
-static const int max_monthdays[] = {
-    31, 29, 31, 30, 31, 30,
-    31, 31, 30, 31, 30, 31
-};
-
 /* track if we're idling */
 static int idling = 0;
 
