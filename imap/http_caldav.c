@@ -998,7 +998,8 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
     return 0;
 }
 
-static int _scheduling_enabled(struct transaction_t *txn, const struct mailbox *mailbox)
+static int _scheduling_enabled(struct transaction_t *txn,
+                               const struct mailbox *mailbox)
 {
     if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
 
@@ -1254,7 +1255,8 @@ static int caldav_delete_cal(struct transaction_t *txn,
     /* Only process deletes on regular calendar collections */
     if (txn->req_tgt.flags) return 0;
 
-    if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) && cdata->comp_flags.mattach) {
+    if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) &&
+        cdata->comp_flags.mattach) {
         r = manage_attachments(txn, mailbox, NULL,
                                cdata, &ical, &schedule_address);
         if (r) goto done;
@@ -1288,12 +1290,14 @@ static int caldav_delete_cal(struct transaction_t *txn,
             schedule_address = xstrdup(txn->req_tgt.userid);
 
             /* or overridden address-set for target user */
-            const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+            const char *annotname =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
             char *mailboxname = caldav_mboxname(schedule_address, NULL);
             int r = annotatemore_lookupmask(mailboxname, annotname,
                                             schedule_address, &buf);
             free(mailboxname);
-            if (!r && buf.len > 7 && !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
+            if (!r && buf.len > 7 &&
+                !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
                 free(schedule_address);
                 schedule_address = xstrdup(buf_cstring(&buf) + 7);
             }
@@ -1404,7 +1408,8 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookupmask(mailbox->name, displayname_annot, httpd_userid, &attrib);
+    r = annotatemore_lookupmask(mailbox->name, displayname_annot,
+                                httpd_userid, &attrib);
     /* fall back to last part of mailbox name */
     if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
 
@@ -1428,7 +1433,8 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     sep = mime->begin_stream(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
 
     while ((record = mailbox_iter_step(iter))) {
         icalcomponent *ical;
@@ -2012,7 +2018,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
             caldav_store_resource(txn, ical, mailbox,
                                   cdata->dav.resource, caldavdb,
-                                  TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0), userid);
+                                  TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
+                                  userid);
             free(userid);
 
             icalcomponent_free(ical);
@@ -3795,7 +3802,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
 
                 /* Load message containing the resource and parse iCal data */
-                r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+                r = mailbox_find_index_record(mailbox,
+                                              cdata->dav.imap_uid, &record);
                 if (r) {
                     txn->error.desc = "Failed to read record \r\n";
                     ret = HTTP_SERVER_ERROR;
@@ -3807,22 +3815,25 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
             /* allow override of schedule-address per-message (FM specific) */
             if (!schedule_address) {
-                const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
+                const char **hdr =
+                    spool_getheader(txn->req_hdrs, "Schedule-Address");
                 if (hdr) schedule_address = xstrdup(hdr[0]);
             }
 
-            /* find the schedule address based on the destination calendar's user */
+            /* find schedule address based on the destination calendar's user */
             if (!schedule_address) {
                 /* userid corresponding to target */
                 schedule_address = xstrdup(txn->req_tgt.userid);
 
                 /* or overridden address-set for target user */
-                const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+                const char *annotname =
+                    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
                 char *mailboxname = caldav_mboxname(schedule_address, NULL);
                 int r = annotatemore_lookupmask(mailboxname, annotname,
                                                 schedule_address, &buf);
                 free(mailboxname);
-                if (!r && buf.len > 7 && !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
+                if (!r && buf.len > 7 &&
+                    !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
                     free(schedule_address);
                     schedule_address = xstrdup(buf_cstring(&buf) + 7);
                 }
@@ -3873,7 +3884,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     /* Store resource at target */
-    if (!ret) ret = caldav_store_resource(txn, ical, mailbox, resource, db, flags, schedule_address);
+    if (!ret) {
+        ret = caldav_store_resource(txn, ical, mailbox,
+                                    resource, db, flags, schedule_address);
+    }
 
   done:
     if (oldical) icalcomponent_free(oldical);
@@ -4567,7 +4581,8 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
         if (!fctx->record) {
             /* Fetch index record for the resource */
-            r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record);
+            r = mailbox_find_index_record(fctx->mailbox,
+                                          cdata->dav.imap_uid, &record);
             /* XXX  Check errors */
 
             fctx->record = r ? NULL : &record;
@@ -4575,7 +4590,8 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
         if (fctx->record) {
             char *schedule_address = NULL;
-            icalcomponent *ical = record_to_ical(fctx->mailbox, fctx->record, &schedule_address);
+            icalcomponent *ical =
+                record_to_ical(fctx->mailbox, fctx->record, &schedule_address);
             struct transaction_t txn;
 
             if (!ical) {
@@ -5007,7 +5023,9 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                 }
             }
 
-            if (partial->expand) fctx->obj = expand_caldata(&ical, partial->range);
+            if (partial->expand) {
+                fctx->obj = expand_caldata(&ical, partial->range);
+            }
             else limit_caldata(ical, &partial->range);
         }
 
@@ -5120,8 +5138,10 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 
         /* check for renamed calendars - property on the homeset */
         const char *annotname = NULL;
-        if (!strcmp(cal, SCHED_DEFAULT))
-            annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+        if (!strcmp(cal, SCHED_DEFAULT)) {
+            annotname =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+        }
         else if (!strcmp(cal, SCHED_INBOX))
             annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-inbox";
         else if (!strcmp(cal, SCHED_OUTBOX))
@@ -5434,7 +5454,8 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                         name, ns, NULL, 0);
 
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+    const char *annotname =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
     char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
     buf_reset(&fctx->buf);
     int r = annotatemore_lookupmask(mailboxname, annotname,
@@ -6768,7 +6789,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
         const char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
         if (!annotatemore_lookupmask(mboxname, prop_annot,
                                      httpd_userid, &attrib) && attrib.len) {
-            add_vavailability(vavail, icalparser_parse_string(buf_cstring(&attrib)));
+            add_vavailability(vavail,
+                              icalparser_parse_string(buf_cstring(&attrib)));
         }
         free(userid);
     }
@@ -7022,7 +7044,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         return HTTP_FORBIDDEN;
     }
 
-    if (!annotatemore_lookupmask(mailbox->name, prop_annot, httpd_userid, &attrib)
+    if (!annotatemore_lookupmask(mailbox->name,
+                                 prop_annot, httpd_userid, &attrib)
         && attrib.len) {
         unsigned long supp_comp = strtoul(buf_cstring(&attrib), NULL, 10);
 
@@ -7130,7 +7153,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     if (schedule_address) {
         mimehdr = charset_encode_mimeheader(schedule_address, 0);
-        spool_replace_header(xstrdup("X-Schedule-User-Address"), mimehdr, txn->req_hdrs);
+        spool_replace_header(xstrdup("X-Schedule-User-Address"),
+                             mimehdr, txn->req_hdrs);
     }
 
     time_to_rfc822(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
@@ -7152,7 +7176,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     buf_setcstr(&txn->buf, "text/calendar; charset=utf-8");
     if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
-        buf_printf(&txn->buf, "; method=%s", icalproperty_method_to_string(meth));
+        buf_printf(&txn->buf, "; method=%s",
+                   icalproperty_method_to_string(meth));
     }
     buf_printf(&txn->buf, "; component=%s", icalcomponent_kind_to_string(kind));
     spool_replace_header(xstrdup("Content-Type"),
