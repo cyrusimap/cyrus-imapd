@@ -942,4 +942,113 @@ sub test_percent_altns
 
 }
 
+# tests based on rfc 6154 examples:
+# https://tools.ietf.org/html/rfc6154#section-5
+
+# "An IMAP server that supports this extension MAY include any or all of the
+# following attributes in responses to the non-extended IMAP LIST command."
+#
+# Cyrus does not (at least, not at the moment), so this test is disabled.
+sub bogus_test_rfc6154_ex01_list_non_extended
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list("", "%");
+
+    my @inbox_flags = qw( \\HasNoChildren );
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v < 3) {
+        unshift @inbox_flags, qw( \\Noinferiors );
+    }
+
+    $self->_assert_list_data($alldata, '/', {
+        'INBOX'                 => \@inbox_flags,
+	'ToDo'                  => [qw( \\HasNoChildren )],
+	'Projects'              => [qw( \\HasChildren )],
+	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+	'Trash'                 => [qw( \\Trash \\HasNoChildren )],
+    });
+}
+
+sub test_rfc6154_ex02a_list_return_special_use
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list("", "%", 'RETURN', [qw( SPECIAL-USE )]);
+
+    my @inbox_flags = qw( \\HasNoChildren );
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v < 3) {
+        unshift @inbox_flags, qw( \\Noinferiors );
+    }
+
+    $self->_assert_list_data($alldata, '/', {
+        'INBOX'                 => \@inbox_flags,
+	'ToDo'                  => [qw( \\HasNoChildren )],
+	'Projects'              => [qw( \\HasChildren )],
+	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+	'Trash'                 => [qw( \\Trash \\HasNoChildren )],
+    });
+}
+
+sub test_rfc6154_ex02b_list_special_use
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list([qw( SPECIAL-USE )], "", "%");
+
+    $self->_assert_list_data($alldata, '/', {
+	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+	'Trash'                 => [qw( \\Trash \\HasNoChildren )],
+    });
+}
+
 1;
