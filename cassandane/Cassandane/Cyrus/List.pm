@@ -1051,4 +1051,36 @@ sub test_rfc6154_ex02b_list_special_use
     });
 }
 
+sub test_list_special_use_return_subscribed
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+	[ 'subscribe' => [qw( SentMail Trash) ] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list([qw( SPECIAL-USE )], "", "*",
+				  'RETURN', [qw(SUBSCRIBED)]);
+
+    xlog Dumper $alldata;
+    $self->_assert_list_data($alldata, '/', {
+	'SentMail'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+	'Trash'                 => [qw( \\Trash \\HasNoChildren \\Subscribed )],
+    });
+
+}
+
 1;
