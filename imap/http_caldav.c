@@ -283,7 +283,7 @@ static struct patch_doc_t caldav_patch_docs[] = {
 #ifdef HAVE_VPATCH
     { "text/calendar; component=VPATCH; charset=utf-8", &caldav_patch },
 #endif
-    { NULL, NULL }
+    { NULL, &caldav_patch }
 };
 
 /* Array of supported REPORTs */
@@ -3614,6 +3614,13 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
     /* If no changes are made,
        return HTTP_NO_CONTENT to suppress storing of resource */
     return (!num_changes ? HTTP_NO_CONTENT : 0);
+}
+#else
+static int caldav_patch(struct transaction_t *txn __attribute__((unused)),
+                        void *obj __attribute__((unused)))
+
+{
+    fatal("caldav_patch() called, but no VPATCH", EC_SOFTWARE);
 }
 #endif /* HAVE_VPATCH */
 
