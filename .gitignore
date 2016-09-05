@@ -51,9 +51,9 @@ doc/legacy/netnews.png
 doc/text/
 docsrc/.doctrees/
 docsrc/build/
-docsrc/imap/admin/configs/imapd.conf.rst
-docsrc/imap/admin/systemcommands/cyradm.rst
-docsrc/imap/admin/usercommands/sieveshell.rst
+docsrc/imap/reference/manpages/configs/imapd.conf.rst
+docsrc/imap/reference/manpages/systemcommands/cyradm.rst
+docsrc/imap/reference/manpages/usercommands/sieveshell.rst
 imap/arbitron
 imap/calalarmd
 imap/ctl_conversationsdb

@@ -1782,9 +1782,9 @@ clean-sphinx-cache:
 	@$(RM) -r $(SPHINX_CACHE)
 
 if HAVE_SPHINX_BUILD
-GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
-                 docsrc/imap/admin/systemcommands/cyradm.rst \
-                 docsrc/imap/admin/usercommands/sieveshell.rst
+GENERATED_RSTS = docsrc/imap/reference/manpages/configs/imapd.conf.rst \
+                 docsrc/imap/reference/manpages/systemcommands/cyradm.rst \
+                 docsrc/imap/reference/manpages/usercommands/sieveshell.rst
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
