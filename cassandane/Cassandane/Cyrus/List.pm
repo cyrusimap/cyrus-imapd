@@ -52,6 +52,8 @@ use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 
+$Data::Dumper::Sortkeys = 1;
+
 sub new
 {
     my ($class, @args) = @_;
@@ -96,7 +98,7 @@ sub _install_test_data
 
 sub _assert_list_data
 {
-    my ($self, $actual, $expected_hiersep, $expected_mailbox_flags, $msg) = @_;
+    my ($self, $actual, $expected_hiersep, $expected_mailbox_flags, $strict, $msg) = @_;
 
     # rearrange list output into order-agnostic format
     my %actual_hash;
@@ -104,14 +106,14 @@ sub _assert_list_data
         my ($flags, $hiersep, $mailbox) = @{$row};
 
         $actual_hash{$mailbox} = {
-            flags => join(q{ }, sort @{$flags} ),
+            flags => { map { (lc($_) => 1) } @{$flags} },
             hiersep => $hiersep,
             mailbox => $mailbox,
         }
     }
 
     # check that expected data exists
-    foreach my $mailbox (keys %{$expected_mailbox_flags}) {
+    foreach my $mailbox (sort keys %{$expected_mailbox_flags}) {
         xlog "expect mailbox: $mailbox";
         $self->assert(
             exists $actual_hash{$mailbox},
@@ -126,25 +128,57 @@ sub _assert_list_data
                 . "', expected '$expected_hiersep'"
         );
 
-        my $expected_flag_str;
+        my %expected_flags;
         if (ref $expected_mailbox_flags->{$mailbox}) {
-            $expected_flag_str = join q{ }, sort @{$expected_mailbox_flags->{$mailbox}};
+            %expected_flags = map { (lc($_) => 1) }
+                                  @{$expected_mailbox_flags->{$mailbox}};
         }
         else {
-            $expected_flag_str = join q{ }, sort split / /, $expected_mailbox_flags->{$mailbox};
+            %expected_flags = map { (lc($_) => 1) }
+                                  split / /, $expected_mailbox_flags->{$mailbox};
         }
 
-        $self->assert_str_equals(
-            $actual_hash{$mailbox}->{flags},
-            $expected_flag_str,
-            "'$mailbox': got flags '"
-                . $actual_hash{$mailbox}->{flags}
-                . "', expected '$expected_flag_str'"
-        )
+        # look for expected flags
+        foreach my $flag (sort keys %expected_flags) {
+            # https://tools.ietf.org/html/rfc5258#section-3.4:
+            #    \NoInferiors implies \HasNoChildren
+            #    \NonExistent implies \NoSelect
+            if ($flag eq "\\hasnochildren") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\noinferiors"}),
+                    "'$mailbox': missing flag '$flag'"
+                );
+            }
+            elsif ($flag eq "\\noselect") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\nonexistent"}),
+                    "'$mailbox': missing flag '$flag'"
+                );
+            }
+            else {
+                $self->assert(
+                    exists $actual_hash{$mailbox}->{flags}->{$flag},
+                    "'$mailbox': missing flag '$flag'"
+                );
+            }
+        }
+
+        next if not $strict;
+
+        # look for unexpected flags
+        foreach my $flag (sort keys %{$actual_hash{$mailbox}->{flags}}) {
+            # ...
+            $self->assert(
+                exists $expected_flags{$flag},
+                "'$mailbox': found unexected flag '$flag'"
+            );
+        }
     }
 
     # check that unexpected data does not exist
-    foreach my $mailbox (keys %actual_hash) {
+    foreach my $mailbox (sort keys %actual_hash) {
         $self->assert(
             exists $expected_mailbox_flags->{$mailbox},
             "'$mailbox': found unexpected extra mailbox"
@@ -203,14 +237,8 @@ sub test_rfc5258_ex01_list_all
 
     my $alldata = $imaptalk->list("", "*");
 
-    my @inbox_flags = qw( \\HasNoChildren );
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v < 3) {
-        unshift @inbox_flags, qw( \\Noinferiors );
-    }
-
     $self->_assert_list_data($alldata, '/', {
-        'INBOX'                 => \@inbox_flags,
+        'INBOX'                 => [qw( \\HasNoChildren )],
         'Fruit'                 => [qw( \\HasChildren )],
         'Fruit/Apple'           => [qw( \\HasNoChildren )],
         'Fruit/Banana'          => [qw( \\HasNoChildren )],
@@ -239,15 +267,9 @@ sub test_rfc5258_ex02_list_subscribed
 
     my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
 
-    my @inbox_flags = qw( \\Subscribed );
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v < 3) {
-        unshift @inbox_flags, qw( \\Noinferiors );
-    }
-
     xlog(Dumper $subdata);
     $self->_assert_list_data($subdata, '/', {
-        'INBOX'                 => \@inbox_flags,
+        'INBOX'                 => '\\Subscribed',
         'Fruit/Banana'          => '\\Subscribed',
         'Fruit/Peach'           => [qw( \\NonExistent \\Subscribed )],
         'Vegetable'             => [qw( \\Subscribed \\HasChildren )], # HasChildren not required by spec, but cyrus tells us
@@ -273,18 +295,9 @@ sub test_list_return_subscribed
 
     my $subdata = $imaptalk->list([qw()], "", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
-    my @inbox_flags = qw( \\Subscribed );
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v < 3) {
-        unshift @inbox_flags, qw( \\Noinferiors );
-    }
-    else {
-	unshift @inbox_flags, qw( \\HasNoChildren );
-    }
-
     xlog(Dumper $subdata);
     $self->_assert_list_data($subdata, '/', {
-	'INBOX'                 => \@inbox_flags,
+	'INBOX'                 => [qw( \\Subscribed \\HasNoChildren )],
 	'Fruit'                 => [qw( \\HasChildren )],
 	'Fruit/Apple'           => [qw( \\HasNoChildren )],
 	'Fruit/Banana'          => [qw( \\Subscribed \\HasNoChildren )],
@@ -315,17 +328,8 @@ sub test_rfc5258_ex03_children
 	[qw()], "", "%", 'RETURN', [qw(CHILDREN)],
     );
 
-    my @inbox_flags;
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v >= 3) {
-        @inbox_flags = qw( \\HasNoChildren );
-    }
-    else {
-        @inbox_flags = qw( \\Noinferiors );
-    }
-
     $self->_assert_list_data($data, '/', {
-        'INBOX' => \@inbox_flags,
+        'INBOX' => [ '\\HasNoChildren' ],
         'Fruit' => [ '\\HasChildren' ],
         'Tofu'  => [ '\\HasNoChildren' ],
         'Vegetable' => [ '\\HasChildren' ],
@@ -368,17 +372,8 @@ sub test_rfc5258_ex07_multiple_mailbox_patterns
 
     my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
 
-    my @inbox_flags;
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v >= 3) {
-        @inbox_flags = qw( \\HasNoChildren );
-    }
-    else {
-        @inbox_flags = qw( \\Noinferiors );
-    }
-
     $self->_assert_list_data($data, '/', {
-        'INBOX' => \@inbox_flags,
+        'INBOX' => [ '\\HasNoChildren' ],
         'Drafts' => [ '\\HasNoChildren' ],
         'Sent/August2004' => [ '\\HasNoChildren' ],
         'Sent/December2003' => [ '\\HasNoChildren' ],
@@ -399,17 +394,8 @@ sub test_rfc5258_ex08_haschildren_childinfo
 
     my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
 
-    my @inbox_flags;
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v >= 3) {
-        @inbox_flags = qw( \\HasNoChildren );
-    }
-    else {
-        @inbox_flags = qw( \\Noinferiors );
-    }
-
     $self->_assert_list_data($data, '/', {
-        'INBOX' => \@inbox_flags,
+        'INBOX' => '\\HasNoChildren',
         'Foo'   => '\\HasChildren',
         'Moo'   => '\\HasNoChildren',
     });
@@ -449,17 +435,8 @@ sub test_folder_at_novirtdomains
 
     my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
 
-    my @inbox_flags;
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v >= 3) {
-        @inbox_flags = qw( \\HasNoChildren );
-    }
-    else {
-        @inbox_flags = qw( \\Noinferiors );
-    }
-
     $self->_assert_list_data($data, '/', {
-        'INBOX' => \@inbox_flags,
+        'INBOX' => '\\HasNoChildren',
         'foo@bar' => '\\HasNoChildren',
     });
 }
@@ -970,14 +947,8 @@ sub bogus_test_rfc6154_ex01_list_non_extended
 
     my $alldata = $imaptalk->list("", "%");
 
-    my @inbox_flags = qw( \\HasNoChildren );
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v < 3) {
-        unshift @inbox_flags, qw( \\Noinferiors );
-    }
-
     $self->_assert_list_data($alldata, '/', {
-        'INBOX'                 => \@inbox_flags,
+        'INBOX'                 => [qw( \\HasNoChildren )],
 	'ToDo'                  => [qw( \\HasNoChildren )],
 	'Projects'              => [qw( \\HasChildren )],
 	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
@@ -1007,14 +978,8 @@ sub test_rfc6154_ex02a_list_return_special_use
 
     my $alldata = $imaptalk->list("", "%", 'RETURN', [qw( SPECIAL-USE )]);
 
-    my @inbox_flags = qw( \\HasNoChildren );
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v < 3) {
-        unshift @inbox_flags, qw( \\Noinferiors );
-    }
-
     $self->_assert_list_data($alldata, '/', {
-        'INBOX'                 => \@inbox_flags,
+        'INBOX'                 => [qw( \\HasNoChildren )],
 	'ToDo'                  => [qw( \\HasNoChildren )],
 	'Projects'              => [qw( \\HasChildren )],
 	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
