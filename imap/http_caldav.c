@@ -281,7 +281,8 @@ static struct mime_type_t caldav_mime_types[] = {
 
 static struct patch_doc_t caldav_patch_docs[] = {
 #ifdef HAVE_VPATCH
-    { "text/calendar; component=VPATCH; charset=utf-8", &caldav_patch },
+    { "text/calendar; component=VPATCH;"
+      " optinfo=\"PATCH-VERSION:1\"; charset=utf-8", &caldav_patch },
 #endif
     { NULL, &caldav_patch }
 };
