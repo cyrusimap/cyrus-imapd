@@ -16,7 +16,7 @@ The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
 Features
 --------
 
-This is the highlight reel of Cyrus's full list of features_.
+This is the highlight reel of Cyrus's full list of :ref:`features <imap-features>`.
 
 * **Security**: Cyrus runs on sealed servers, where normal users can't log in. Users access mail through IMAP/POP or KPOP.
 * **Performance and scalability**: The mail spool uses a filesystem layout.
@@ -29,8 +29,6 @@ This is the highlight reel of Cyrus's full list of features_.
 .. todo::
     Not sure how many of these are ok?
     * **Antispam**: ?? DNSBL	SURBL	Spamtraps	Greylisting	SPF	DKIM	DMARC	Tarpit	Bayesian filters	Regular expressions	Embedded Antivirus	Embedded Antispam
-
-.. _features: imap/features.html
 
 .. toctree::
     :maxdepth: 3
