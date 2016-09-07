@@ -3378,17 +3378,17 @@ static void apply_patch_component(struct path_segment_t *path_seg,
                 apply_patch(path_seg, comp, num_changes);
             }
 
-            /* Process all PATCH-SETPARAMETERs next */
+            /* Process all PATCH-SETPARAMETERs second */
             for (path_seg = patch->setparam;
                  path_seg; path_seg = path_seg->child) {
                 apply_patch(path_seg, comp, num_changes);
             }
 
-            /* Process all property updates */
-            apply_property_updates(patch, comp, num_changes);
-
-            /* Process all components updates */
+            /* Process all components updates third */
             apply_component_updates(patch, comp, num_changes);
+
+            /* Process all property updates last */
+            apply_property_updates(patch, comp, num_changes);
         }
     }
 }
