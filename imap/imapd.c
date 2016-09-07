@@ -10932,7 +10932,8 @@ static int getlistselopts(char *tag, struct listargs *args)
 	lcase(buf.s);
 
 	if (!strcmp(buf.s, "subscribed")) {
-	    args->sel |= LIST_SEL_SUBSCRIBED | LIST_RET_SUBSCRIBED;
+	    args->sel |= LIST_SEL_SUBSCRIBED;
+	    args->ret |= LIST_RET_SUBSCRIBED;
 	} else if (!strcmp(buf.s, "remote")) {
 	    args->sel |= LIST_SEL_REMOTE;
 	} else if (!strcmp(buf.s, "recursivematch")) {
