@@ -169,11 +169,26 @@ sub _assert_list_data
 
         # look for unexpected flags
         foreach my $flag (sort keys %{$actual_hash{$mailbox}->{flags}}) {
-            # ...
-            $self->assert(
-                exists $expected_flags{$flag},
-                "'$mailbox': found unexected flag '$flag'"
-            );
+	    if ($flag eq "\\noinferiors") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\hasnochildren"}),
+                    "'$mailbox': found unexpected flag '$flag'"
+                );
+	    }
+	    elsif ($flag eq "\\nonexistent") {
+                $self->assert(
+                    (exists $actual_hash{$mailbox}->{flags}->{$flag}
+                     || exists $actual_hash{$mailbox}->{flags}->{"\\noselect"}),
+                    "'$mailbox': found unexpected flag '$flag'"
+                );
+	    }
+	    else {
+		$self->assert(
+		    exists $expected_flags{$flag},
+		    "'$mailbox': found unexected flag '$flag'"
+		);
+	    }
         }
     }
 
