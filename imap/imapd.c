@@ -6531,7 +6531,6 @@ static void getlistargs(char *tag, struct listargs *listargs)
     c = prot_getc(imapd_in);
     if (c == '(') {
 	listargs->cmd = LIST_CMD_EXTENDED;
-	listargs->ret = 0;
 	c = getlistselopts(tag, listargs);
 	if (c == EOF) {
 	    eatline(imapd_in, c);
@@ -6565,7 +6564,6 @@ static void getlistargs(char *tag, struct listargs *listargs)
     c = prot_getc(imapd_in);
     if (c == '(') {
 	listargs->cmd = LIST_CMD_EXTENDED;
-	listargs->ret = 0;
 	for (;;) {
 	    c = getastring(imapd_in, imapd_out, &buf);
 	    if (*buf.s)
@@ -6596,7 +6594,6 @@ static void getlistargs(char *tag, struct listargs *listargs)
     /* Check for and parse LIST-EXTENDED return options */
     if (c == ' ') {
 	listargs->cmd = LIST_CMD_EXTENDED;
-	listargs->ret = 0;
 	c = getlistretopts(tag, listargs);
 	if (c == EOF) {
 	    eatline(imapd_in, c);
@@ -11552,12 +11549,15 @@ static int list_cb(char *name, int matchlen, int maycreate,
 
     list_callback_calls++;
 
+    /* list_response will calculate haschildren/hasnochildren flags later
+     * if they're required but not yet set, but it's a little cheaper to
+     * precalculate them now while we're iterating the mailboxes anyway.
+     */
     if (last_name_is_ancestor)
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
-
-    /* tidy up flags */
     if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
+
     perform_output(name, matchlen, rock);
     if (!maycreate)
 	rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
