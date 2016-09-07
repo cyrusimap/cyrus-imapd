@@ -292,6 +292,64 @@ sub test_rfc5258_ex02_list_subscribed
     });
 }
 
+sub test_list_subscribed_return_children
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+	[ 'delete' => 'Fruit/Peach' ],
+	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+	[ 'subscribe' => [qw( Vegetable )] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "listing...";
+    my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*", "RETURN", [qw(CHILDREN)]);
+
+    xlog "subscribed to: " . Dumper $subdata;
+    $self->_assert_list_data($subdata, '/', {
+        'INBOX'                 => [qw( \\Subscribed \\HasNoChildren )],
+        'Fruit/Banana'          => [qw( \\Subscribed \\HasNoChildren )],
+        'Fruit/Peach'           => [qw( \\NonExistent \\Subscribed \\HasNoChildren )],
+        'Vegetable'             => [qw( \\Subscribed \\HasChildren )],
+    }, 'strict');
+}
+
+sub test_list_subscribed_return_children_noaltns
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( INBOX/Fruit INBOX/Fruit/Apple INBOX/Fruit/Banana
+			   INBOX/Fruit/Peach )] ],
+	[ 'subscribe' => [qw( INBOX/Fruit/Banana INBOX/Fruit/Peach )] ],
+	[ 'delete' => 'INBOX/Fruit/Peach' ],
+	[ 'create' => [qw( INBOX/Tofu INBOX/Vegetable INBOX/Vegetable/Broccoli
+			   INBOX/Vegetable/Corn )] ],
+	[ 'subscribe' => [qw( INBOX/Vegetable )] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "listing...";
+    my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*", "RETURN", [qw(CHILDREN)]);
+
+    xlog "subscribed to: " . Dumper $subdata;
+    $self->_assert_list_data($subdata, '/', {
+        'INBOX'                 => [qw( \\Subscribed \\HasChildren )],
+        'INBOX/Fruit/Banana'    => [qw( \\Subscribed \\HasNoChildren )],
+        'INBOX/Fruit/Peach'     => [qw( \\NonExistent \\Subscribed \\HasNoChildren )],
+        'INBOX/Vegetable'       => [qw( \\Subscribed \\HasChildren )],
+    }, 'strict');
+}
+
 sub test_list_return_subscribed
     :UnixHierarchySep :AltNamespace
 {
