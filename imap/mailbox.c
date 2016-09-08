@@ -4859,6 +4859,13 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
     if (!mailbox_has_conversations(mailbox))
         return 0;
 
+    conv_status_t status = CONV_STATUS_INIT;
+    /* need to add record if it's zero */
+    status.modseq = mailbox->i.highestmodseq;
+
+    r = conversation_setstatus(mailbox->local_cstate, mailbox->name, &status);
+    if (r) return r;
+
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((record = mailbox_iter_step(iter))) {
         /* not assigned, skip */

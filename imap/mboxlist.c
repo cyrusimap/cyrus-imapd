@@ -1061,6 +1061,8 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
                            options, uidvalidity, highestmodseq, &newmailbox);
         if (r) goto done; /* CREATE failed */
+        r = mailbox_add_conversations(newmailbox);
+        if (r) goto done;
     }
 
     /* all is well - activate the mailbox */
