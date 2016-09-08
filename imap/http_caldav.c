@@ -259,9 +259,11 @@ static int report_fb_query(struct transaction_t *txn,
 static const char *begin_icalendar(struct buf *buf);
 static void end_icalendar(struct buf *buf);
 
+#define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
+
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/calendar; charset=utf-8", "2.0", "ics",
+    { ICALENDAR_CONTENT_TYPE, "2.0", "ics",
       (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
       (void * (*)(const struct buf*)) &ical_string_as_icalcomponent,
       (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
@@ -281,10 +283,10 @@ static struct mime_type_t caldav_mime_types[] = {
 
 static struct patch_doc_t caldav_patch_docs[] = {
 #ifdef HAVE_VPATCH
-    { "text/calendar; component=VPATCH;"
-      " optinfo=\"PATCH-VERSION:1\"; charset=utf-8", &caldav_patch },
+    { ICALENDAR_CONTENT_TYPE "; component=VPATCH; optinfo=\"PATCH-VERSION:1\"",
+      &caldav_patch },
 #endif
-    { NULL, &caldav_patch }
+    { NULL, &caldav_patch /* silence compiler when !HAVE_VPATCH */}
 };
 
 /* Array of supported REPORTs */
@@ -4642,7 +4644,7 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
                                    struct propstat propstat[],
                                    void *rock __attribute__((unused)))
 {
-    buf_setcstr(&fctx->buf, "text/calendar; charset=utf-8");
+    buf_setcstr(&fctx->buf, ICALENDAR_CONTENT_TYPE);
 
     if (fctx->data) {
         struct caldav_data *cdata = (struct caldav_data *) fctx->data;
@@ -7182,7 +7184,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     spool_replace_header(xstrdup("Message-ID"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    buf_setcstr(&txn->buf, "text/calendar; charset=utf-8");
+    buf_setcstr(&txn->buf, ICALENDAR_CONTENT_TYPE);
     if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
         buf_printf(&txn->buf, "; method=%s",
                    icalproperty_method_to_string(meth));
@@ -7225,7 +7227,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 static struct mime_type_t freebusy_mime_types[] = {
     /* First item MUST be the default type */
-    { "text/calendar; charset=utf-8", "2.0", "ifb",
+    { ICALENDAR_CONTENT_TYPE, "2.0", "ifb",
       (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
       NULL, NULL, NULL, NULL
     },
