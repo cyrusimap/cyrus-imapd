@@ -3263,16 +3263,6 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
                                         struct index_record *new)
 {
     int r = 0;
-    conversation_t *conv = NULL;
-    int delta_num_records = 0;
-    int delta_exists = 0;
-    int delta_unseen = 0;
-    int is_trash = 0;
-    int delta_size = 0;
-    int *delta_counts = NULL;
-    int i;
-    modseq_t modseq = 0;
-    const struct index_record *record = NULL;
     struct conversations_state *cstate = NULL;
 
     if (!mailbox_has_conversations(mailbox))
@@ -3289,148 +3279,9 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
     if (!old && !new)
         return 0;
 
-    if (old && new) {
-        /* we're always moving forwards */
-        assert(old->uid == new->uid);
-        assert(old->modseq <= new->modseq);
-
-        /* this flag cannot go away */
-        if ((old->system_flags & FLAG_EXPUNGED))
-            assert((new->system_flags & FLAG_EXPUNGED));
-
-        /* we're changing the CID for any reason at all, treat as
-         * a removal and re-add, so cache gets parsed and msgids
-         * updated */
-        if (old->cid != new->cid) {
-            r = mailbox_update_conversations(mailbox, old, NULL);
-            if (r) return r;
-            return mailbox_update_conversations(mailbox, NULL, new);
-        }
-    }
-
-    if (new && !old) {
-        /* add the conversation */
-        r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
-        if (r) return r;
-        r = message_update_conversations(cstate, new, &conv);
-        if (r) return r;
-        record = new;
-        /* possible if silent (i.e. replica) */
-        if (!record->cid) return 0;
-    }
-    else {
-        record = new ? new : old;
-        /* skip out on non-CIDed records */
-        if (!record->cid) return 0;
-
-        r = conversation_load(cstate, record->cid, &conv);
-        if (r) return r;
-        if (!conv) {
-            if (!new) {
-                /* We're trying to delete a conversation that's already
-                 * gone...don't try to hard */
-                syslog(LOG_NOTICE, "conversation "CONV_FMT" already "
-                                   "deleted, ignoring", record->cid);
-                return 0;
-            }
-            conv = conversation_new(cstate);
-        }
-    }
-
-    if (cstate->counted_flags)
-        delta_counts = xzmalloc(sizeof(int) * cstate->counted_flags->count);
-
-    /* IRIS-2534: check if it's the trash folder - XXX - should be separate
-     * conversation root or similar more useful method in future */
-    mbname_t *mbname = mbname_from_intname(mailbox->name);
-    if (!mbname)
-        return IMAP_MAILBOX_BADNAME;
-
-    const strarray_t *boxes = mbname_boxes(mbname);
-    if (strarray_size(boxes) == 1 && !strcmpsafe(strarray_nth(boxes, 0), "Trash"))
-        is_trash = 1;
-
-    mbname_free(&mbname);
-
-    /* calculate the changes */
-    if (old) {
-        /* decrease any relevent counts */
-        if (!(old->system_flags & FLAG_EXPUNGED)) {
-            delta_exists--;
-            delta_size -= old->size;
-            /* drafts don't update the 'unseen' counter so that
-             * they never turn a conversation "unread" */
-            if (!is_trash && !(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-                delta_unseen--;
-            if (cstate->counted_flags) {
-                for (i = 0; i < cstate->counted_flags->count; i++) {
-                    const char *flag = strarray_nth(cstate->counted_flags, i);
-                    if (mailbox_record_hasflag(mailbox, old, flag))
-                        delta_counts[i]--;
-                }
-            }
-        }
-        delta_num_records--;
-        modseq = MAX(modseq, old->modseq);
-    }
-
-    if (new) {
-        /* add any counts */
-        if (!(new->system_flags & FLAG_EXPUNGED)) {
-            delta_exists++;
-            delta_size += new->size;
-            /* drafts don't update the 'unseen' counter so that
-             * they never turn a conversation "unread" */
-            if (!is_trash && !(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-                delta_unseen++;
-            if (cstate->counted_flags) {
-                for (i = 0; i < cstate->counted_flags->count; i++) {
-                    const char *flag = strarray_nth(cstate->counted_flags, i);
-                    if (mailbox_record_hasflag(mailbox, new, flag))
-                        delta_counts[i]++;
-                }
-            }
-        }
-        delta_num_records++;
-        modseq = MAX(modseq, new->modseq);
-    }
-
-    /* XXX - combine this with the earlier cache parsing */
-    if (!mailbox_cacherecord(mailbox, record)) {
-        char *env = NULL;
-        char *envtokens[NUMENVTOKENS];
-        struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL, 0 };
-
-        /* Need to find the sender */
-
-        /* +1 -> skip the leading paren */
-        env = xstrndup(cacheitem_base(record, CACHE_ENVELOPE) + 1,
-                       cacheitem_size(record, CACHE_ENVELOPE) - 1);
-
-        parse_cached_envelope(env, envtokens, VECTOR_SIZE(envtokens));
-
-        if (envtokens[ENV_FROM])
-            message_parse_env_address(envtokens[ENV_FROM], &addr);
-
-        /* XXX - internaldate vs gmtime? */
-        conversation_update_sender(conv,
-                                   addr.name, addr.route,
-                                   addr.mailbox, addr.domain,
-                                   record->gmtime, delta_exists);
-        free(env);
-    }
-
-    conversation_update(cstate, conv, mailbox->name,
-                        delta_num_records,
-                        delta_exists, delta_unseen,
-                        delta_size, delta_counts, modseq);
-
-    r = conversation_save(cstate, record->cid, conv);
-
-    conversation_free(conv);
-    free(delta_counts);
-    return r;
+    return conversations_update_record(cstate, mailbox, old, new);
 }
+
 
 EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
 {

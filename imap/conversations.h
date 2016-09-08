@@ -52,12 +52,16 @@
 #include "arrayu64.h"
 #include "hash.h"
 #include "hashu64.h"
+#include "mailbox.h"
 #include "strarray.h"
 #include "util.h"
 
 typedef bit64   conversation_id_t;
 #define CONV_FMT "%016llx"
 #define NULLCONVERSATION        (0ULL)
+
+struct index_record;
+struct mailbox;
 
 struct conversations_state {
     struct db *db;
@@ -189,6 +193,11 @@ extern int conversation_store(struct conversations_state *state,
  * consistency rules (e.g. the conversation's modseq is the
  * maximum of all the per-folder modseqs).  Sets conv->dirty
  * if any data actually changed.  */
+extern int conversations_update_record(struct conversations_state *cstate,
+                                       struct mailbox *mailbox,
+                                       const struct index_record *old,
+                                       struct index_record *new);
+
 extern void conversation_update(struct conversations_state *state,
                                 conversation_t *conv,
                                 const char *mboxname,
