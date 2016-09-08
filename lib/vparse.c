@@ -832,8 +832,12 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt, int is_m
 
 static void _paramval_to_tgt(const char *value, struct vparse_target *tgt)
 {
+    int seenchar = 0;
     for (; *value; value++) {
-        _checkwrap(*value, tgt);
+        /* XXX - don't wrap on the very first character of a value,
+           because it breaks Mac OS X parser */
+        if (seenchar) _checkwrap(*value, tgt);
+        else seenchar = 1;
         switch (*value) {
         case '\r':
             break;
