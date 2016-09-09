@@ -1441,6 +1441,41 @@ static void _apply_delta(uint32_t *valp, int delta)
     }
 }
 
+static int conversation_set_guid(struct conversations_state *state,
+                                 struct mailbox *mailbox,
+                                 const struct index_record *record,
+                                 int add)
+{
+    int folder = folder_number(state, mailbox->name, /*create*/1);
+    struct buf item = BUF_INITIALIZER;
+    char *key = strconcat("G", message_guid_encode(&record->guid), (char *)NULL);
+    size_t datalen = 0;
+    const char *data;
+    strarray_t *old = NULL;
+
+    int r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
+    if (!r) old = strarray_nsplit(data, datalen, ",", /*flags*/0);
+    if (!old) old = strarray_new();
+
+    buf_printf(&item, "%d:%u", folder, record->uid);
+
+    if (add)
+        strarray_add(old, buf_cstring(&item));
+    else
+        strarray_remove_all(old, buf_cstring(&item));
+
+    char *new = strarray_join(old, ",");
+
+    r = cyrusdb_store(state->db, key, strlen(key), new, strlen(new), &state->txn);
+
+    buf_free(&item);
+    strarray_free(old);
+    free(new);
+    free(key);
+
+    return r;
+}
+
 EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          struct mailbox *mailbox,
                                          const struct index_record *old,
@@ -1541,6 +1576,10 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records--;
         modseq = MAX(modseq, old->modseq);
+        if (!new) {
+            r = conversation_set_guid(cstate, mailbox, old, /*add*/0);
+            if (r) return r;
+        }
     }
 
     if (new) {
@@ -1562,6 +1601,10 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records++;
         modseq = MAX(modseq, new->modseq);
+        if (!old) {
+            r = conversation_set_guid(cstate, mailbox, new, /*add*/1);
+            if (r) return r;
+        }
     }
 
     /* XXX - combine this with the earlier cache parsing */
