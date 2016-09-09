@@ -1176,8 +1176,9 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         mboxevent_expected_param(event->type, EVENT_CONVUNSEEN)) {
         conv_status_t status = CONV_STATUS_INIT;
 
-        if (mailbox->local_cstate)
-            conversation_getstatus(mailbox->local_cstate, mailbox->name, &status);
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+        if (cstate)
+            conversation_getstatus(cstate, mailbox->name, &status);
 
         if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS))
             FILL_UNSIGNED_PARAM(event, EVENT_CONVEXISTS, status.exists);

@@ -651,4 +651,7 @@ extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
 extern int mailbox_has_conversations(struct mailbox *mailbox);
 
+extern struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox);
+
+
 #endif /* INCLUDED_MAILBOX_H */

@@ -160,6 +160,12 @@ extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 
 extern void conversation_normalise_subject(struct buf *);
 
+/* G record */
+extern const strarray_t *conversations_get_folders(struct conversations_state *state);
+extern strarray_t *conversations_get_guid(struct conversations_state *state,
+                                          const char *guidrep);
+
+
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
                                   const char *mboxname,

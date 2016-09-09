@@ -3258,19 +3258,24 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
 #endif // WITH_DAV
 
+EXPORTED struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox)
+{
+    if (!mailbox_has_conversations(mailbox))
+        return NULL;
+
+    mailbox_lock_conversations(mailbox);
+
+    return conversations_get_mbox(mailbox->name);
+}
+
 static int mailbox_update_conversations(struct mailbox *mailbox,
                                         const struct index_record *old,
                                         struct index_record *new)
 {
-    int r = 0;
-    struct conversations_state *cstate = NULL;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
-    if (!mailbox_has_conversations(mailbox))
-        return 0;
-
-    cstate = conversations_get_mbox(mailbox->name);
     if (!cstate)
-        return IMAP_CONVERSATIONS_NOT_OPEN;
+        return 0;
 
     /* handle unlinked items as if they didn't exist */
     if (old && (old->system_flags & FLAG_UNLINKED)) old = NULL;
@@ -3291,13 +3296,10 @@ EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
     if (modseqp)
         *modseqp = 0;
 
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return 0;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) return 0;
 
-    if (!mailbox->local_cstate)
-        return IMAP_INTERNAL;
-
-    r = conversation_getstatus(mailbox->local_cstate, mailbox->name, &status);
+    r = conversation_getstatus(cstate, mailbox->name, &status);
     if (r) return r;
 
     *modseqp = status.modseq;
@@ -3311,18 +3313,15 @@ EXPORTED int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t newmod
     conv_status_t status = CONV_STATUS_INIT;
     int r;
 
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return 0;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) return 0;
 
-    if (!mailbox->local_cstate)
-        return IMAP_INTERNAL;
-
-    r = conversation_getstatus(mailbox->local_cstate, mailbox->name, &status);
+    r = conversation_getstatus(cstate, mailbox->name, &status);
     if (r) return r;
 
     if (newmodseq > status.modseq || (force && newmodseq < status.modseq)) {
         status.modseq = newmodseq;
-        r = conversation_setstatus(mailbox->local_cstate, mailbox->name, &status);
+        r = conversation_setstatus(cstate, mailbox->name, &status);
     }
 
     return r;
@@ -4707,14 +4706,14 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
     const struct index_record *record;
     int r = 0;
 
-    if (!mailbox_has_conversations(mailbox))
-        return 0;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
+    if (!cstate) return 0;
+
+    /* add record for mailbox */
     conv_status_t status = CONV_STATUS_INIT;
-    /* need to add record if it's zero */
     status.modseq = mailbox->i.highestmodseq;
-
-    r = conversation_setstatus(mailbox->local_cstate, mailbox->name, &status);
+    r = conversation_setstatus(cstate, mailbox->name, &status);
     if (r) return r;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
@@ -4741,16 +4740,11 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
 
 static int mailbox_delete_conversations(struct mailbox *mailbox)
 {
-    struct conversations_state *cstate;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     const struct index_record *record;
     int r = 0;
 
-    if (!mailbox_has_conversations(mailbox))
-        return 0;
-
-    cstate = conversations_get_mbox(mailbox->name);
-    if (!cstate)
-        return IMAP_CONVERSATIONS_NOT_OPEN;
+    if (!cstate) return 0;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((record = mailbox_iter_step(iter))) {

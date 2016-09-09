@@ -1441,7 +1441,26 @@ static void _apply_delta(uint32_t *valp, int delta)
     }
 }
 
-static int conversation_set_guid(struct conversations_state *state,
+EXPORTED const strarray_t *conversations_get_folders(struct conversations_state *state)
+{
+    return state->folder_names;
+}
+
+EXPORTED strarray_t *conversations_get_guid(struct conversations_state *state,
+                                            const char *guidrep)
+{
+    char *key = strconcat("G", guidrep, (char *)NULL);
+    strarray_t *res = NULL;
+    size_t datalen = 0;
+    const char *data;
+
+    int r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
+    if (!r) res = strarray_nsplit(data, datalen, ",", /*flags*/0);
+
+    return res;
+}
+
+static int conversations_set_guid(struct conversations_state *state,
                                  struct mailbox *mailbox,
                                  const struct index_record *record,
                                  int add)
@@ -1577,7 +1596,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         delta_num_records--;
         modseq = MAX(modseq, old->modseq);
         if (!new) {
-            r = conversation_set_guid(cstate, mailbox, old, /*add*/0);
+            r = conversations_set_guid(cstate, mailbox, old, /*add*/0);
             if (r) return r;
         }
     }
@@ -1602,7 +1621,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         delta_num_records++;
         modseq = MAX(modseq, new->modseq);
         if (!old) {
-            r = conversation_set_guid(cstate, mailbox, new, /*add*/1);
+            r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
             if (r) return r;
         }
     }
