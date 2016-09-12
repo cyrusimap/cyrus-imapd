@@ -4525,3 +4525,51 @@ jmapical_strerror(int err)
             return "jmapical: unknown error";
     }
 }
+
+/*
+ * Construct a jevent string for an iCalendar component.
+ */
+EXPORTED struct buf *icalcomponent_as_jevent_string(icalcomponent *ical)
+{
+    struct buf *ret;
+    json_t *jcal;
+    size_t flags = JSON_PRESERVE_ORDER;
+    char *buf;
+
+    if (!ical) return NULL;
+
+    jcal = jmapical_tojmap(ical, NULL, NULL);
+
+    flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+    buf = json_dumps(jcal, flags);
+
+    json_decref(jcal);
+
+    ret = buf_new();
+    buf_initm(ret, buf, strlen(buf));
+
+    return ret;
+}
+
+EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
+{
+    json_t *obj;
+    json_error_t jerr;
+    icalcomponent *ical;
+    const char *str = buf_cstring(buf);
+
+    if (!str) return NULL;
+
+    obj = json_loads(str, 0, &jerr);
+    if (!obj) {
+        syslog(LOG_WARNING, "json parse error: '%s'", jerr.text);
+        return NULL;
+    }
+
+    ical = jmapical_toical(obj, NULL, NULL);
+
+    json_decref(obj);
+
+    return ical;
+}
+

@@ -99,6 +99,11 @@ json_t* jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err)
  */
 icalcomponent* jmapical_toical(json_t *obj, icalcomponent *ical, jmapical_err_t *err);
 
+/* for CalDAV content negotiation */
+struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
+icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf);
+
+
 #ifdef __cplusplus
 }
 #endif

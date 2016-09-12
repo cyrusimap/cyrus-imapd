@@ -76,6 +76,7 @@
 #include "http_proxy.h"
 #include "index.h"
 #include "ical_support.h"
+#include "jmapical.h"
 #include "jcal.h"
 #include "xcal.h"
 #include "map.h"
@@ -289,6 +290,11 @@ static struct mime_type_t caldav_mime_types[] = {
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
+    },
+    { "application/event+json; charset=utf-8", NULL, "jevent",
+      (struct buf* (*)(void *)) &icalcomponent_as_jevent_string,
+      (void * (*)(const struct buf*)) &jevent_string_as_icalcomponent,
+      NULL, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
