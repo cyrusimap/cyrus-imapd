@@ -1786,7 +1786,7 @@ GENERATED_RSTS = docsrc/imap/admin/configs/imapd.conf.rst \
                  docsrc/imap/admin/systemcommands/cyradm.rst \
                  docsrc/imap/admin/usercommands/sieveshell.rst
 
-SPHINX_OPTS = -d $(SPHINX_CACHE) -q
+SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
