@@ -3224,7 +3224,7 @@ static void capa_response(int flags)
         if (!(base_capabilities[i].mask & flags))
             continue;
         /* cheap and nasty version of LITERAL- support - just say so */
-        if (lminus && !strcmp(capa, "LITERAL+")
+        if (lminus && !strcmp(capa, "LITERAL+"))
             capa = "LITERAL-";
         /* print the capability */
         if (need_space) prot_putc(' ', imapd_out);
