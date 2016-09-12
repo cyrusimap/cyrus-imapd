@@ -548,6 +548,9 @@ sub normalize_event
     if (not exists $event->{recurrenceRule}) {
         $event->{recurrenceRule} = undef;
     }
+    if (not exists $event->{recurrenceOverrides}) {
+        $event->{recurrenceOverrides} = undef;
+    }
     if (not exists $event->{alerts}) {
         $event->{alerts} = undef;
     }
@@ -621,8 +624,8 @@ PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
 CALSCALE:GREGORIAN
 BEGIN:VEVENT
 TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
+DTSTART:20160928T160000Z
+DTEND:20160928T170000Z
 UID:$id
 RELATED-TO:58ADE31-broken-UID
 DTSTAMP:20150928T132434Z
@@ -646,7 +649,7 @@ EOF
     $self->assert_equals($event->{showAsFree}, JSON::true);
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($event->{start}, "2016-09-28T16:00:00");
-    $self->assert_str_equals($event->{timeZone}, "Europe/Vienna");
+    $self->assert_str_equals($event->{timeZone}, "UTC");
     $self->assert_str_equals($event->{duration}, "PT1H");
     $self->assert_str_equals($event->{created}, "2015-09-28T12:52:12Z");
     $self->assert_str_equals($event->{updated}, "2015-09-28T13:24:34Z");
@@ -782,11 +785,14 @@ ATTENDEE;PARTSTAT=TENTATIVE;DELEGATED-FROM="mailto:lenny\@example.com";CN=Carl C
 ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carl\@example.com";CN=Lenny Leonard:mailto:lenny\@example.com
 ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=DECLINED;X-DTSTAMP=20150929T144423Z;CN=Larry Burns:mailto:larry\@example.com
 ORGANIZER;CN="Monty Burns":mailto:smithers\@example.com
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;X-DTSTAMP=20150929T144423Z;CN=Monty Burns:mailto:smithers\@example.com
 STATUS:TENTATIVE
 END:VEVENT
 END:VCALENDAR
 EOF
     my $event = $self->putandget_vevent($id, $ical);
+    xlog Dumper($event);
+
     $self->assert_not_null($event->{participants});
     $self->assert_num_equals(scalar values %{$event->{participants}}, 5);
     $self->assert_str_equals($event->{participants}{"smithers\@example.com"}{name}, "Monty Burns");
@@ -863,6 +869,98 @@ EOF
                 "day" => "sunday",
                 "nthOfPeriod" => -3,
             }]);
+}
+
+sub test_getcalendarevents_recurrenceoverrides
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
+    my $aid = $id . "-alarmid";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;TZID=Europe/Vienna:20160101T130000
+DURATION:PT1H
+RRULE:RSCALE=GREGORIAN;SKIP=OMIT;FREQ=MONTHLY
+RDATE;TZID=Europe/Vienna:20161224T200000
+RDATE;TZID=Europe/London:20160203T130000
+RDATE:20160204T130000Z
+RDATE;VALUE=PERIOD:20160304T150000Z/20160304T160000Z
+EXDATE:20160201T130000
+EXDATE;TZID=Europe/London:20160701T120000
+EXDATE;TZID=Europe/London:20161101T120000Z
+UID:$id
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:description
+SUMMARY:foo
+X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=title:Titel
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+BEGIN:VEVENT
+TRANSP:OPAQUE
+UID:$id
+SEQUENCE:0
+RECURRENCE-ID;TZID=Europe/Vienna:20160501T130000
+SUMMARY:foobarbazbla
+X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=title:reinerbloedsinn
+DESCRIPTION:description
+DTSTART;TZID=Europe/Vienna:20160501T170000
+DURATION:PT2H
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+BEGIN:VALARM
+UID:$aid
+ACTION:DISPLAY
+DESCRIPTION:yo
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $o;
+
+    $o = $event->{recurrenceOverrides}->{"2016-12-24T20:00:00"};
+    $self->assert_not_null($o);
+
+    $o = $event->{recurrenceOverrides}->{"2016-02-03T14:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals($o->{start}, "2016-02-03T13:00:00");
+    $self->assert_str_equals($o->{timeZone}, "Europe/London");
+
+    $o = $event->{recurrenceOverrides}->{"2016-02-04T14:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals($o->{start}, "2016-02-04T13:00:00");
+    $self->assert_str_equals($o->{timeZone}, "UTC");
+
+    $o = $event->{recurrenceOverrides}->{"2016-03-04T16:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals($o->{duration}, "PT1H");
+
+    $self->assert(exists $event->{recurrenceOverrides}->{"2016-02-01T13:00:00"});
+    $self->assert_null($event->{recurrenceOverrides}->{"2016-02-01T13:00:00"});
+    $self->assert(exists $event->{recurrenceOverrides}->{"2016-11-01T13:00:00"});
+    $self->assert_null($event->{recurrenceOverrides}->{"2016-11-01T13:00:00"});
+
+    $o = $event->{recurrenceOverrides}->{"2016-05-01T13:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals($o->{"title"}, "foobarbazbla");
+    $self->assert_str_equals($o->{"start"}, "2016-05-01T17:00:00");
+    $self->assert_str_equals($o->{"duration"}, "PT2H");
+    $self->assert_str_equals($o->{"translations/de/title"}, "reinerbloedsinn");
+    $self->assert_not_null($o->{alerts}{$aid});
+
+
+
+    # diff={"translations/de/title": "reinerbloedsinn", "created": "2016-09-12T16:22:50Z", "duration": "PT1H", "updated": "2016-09-12T16:23:24Z", "showAsFree": false, "title": "foobarbazbla", "start": "2016-09-13T15:00:00"}
 }
 
 sub test_getcalendarevents_alerts
@@ -1244,7 +1342,7 @@ sub test_setcalendarevents_simple
         "start"=> "2015-11-07T09:00:00",
         "duration"=> "PT5M",
         "sequence"=> 42,
-        "timeZone"=> undef,
+        "timeZone"=> "UTC",
         "isAllDay"=> JSON::false,
         "language" => "en",
         "status" => "tentative",
@@ -1522,9 +1620,8 @@ sub test_setcalendarevents_participants
 
     my $participants = {
         "foo\@local" => {
-            name => "Foo Bar",
+            name => "",
             email => "foo\@local",
-            scheduleStatus => "accepted",
             roles => ["owner"],
         },
         "monty\@local" => {
@@ -1549,6 +1646,7 @@ sub test_setcalendarevents_participants
     };
 
     my $ret = $self->createandget_event($event);
+
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
 
