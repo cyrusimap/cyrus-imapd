@@ -618,7 +618,17 @@ man_pages = [
             8
     ),
 
-        (
+         (
+            'imap/reference/manpages/systemcommands/mknewsgroups',
+            'mknewsgroups',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team'
+                ],
+            8
+    ),
+
+    (
             'imap/reference/manpages/systemcommands/quota',
             'quota',
             u'Cyrus IMAP Documentation',
@@ -697,6 +707,16 @@ man_pages = [
     ),
 
         (
+            'imap/reference/manpages/systemcommands/translatesieve',
+            'translatesieve',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team'
+                ],
+            8
+    ),
+
+    (
             'imap/developer/libraries/imclient',
             'imclient',
             u'Cyrus IMAP Libraries Documentation',
