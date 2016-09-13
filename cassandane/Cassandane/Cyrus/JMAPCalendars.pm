@@ -49,6 +49,7 @@ use Net::CardDAVTalk;
 use Mail::JMAPTalk;
 use Data::Dumper;
 use Storable 'dclone';
+use Cwd qw(abs_path);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::JMAP);
@@ -611,32 +612,27 @@ sub putandget_vevent
     return $event;
 }
 
+sub icalfile
+{
+    my ($self, $name) = @_;
+
+    my $path = abs_path("data/icalendar/$name.ics");
+    $self->assert(-f $path);
+    open(FH, "<$path");
+    local $/ = undef;
+    my $data = <FH>;
+    close(FH);
+    my ($id) = ($data =~ m/^UID:(\S+)$/m);
+    $self->assert($id);
+    return ($id, $data);
+}
+
 sub test_getcalendarevents_simple
     :min_version_3_0
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART:20160928T160000Z
-DTEND:20160928T170000Z
-UID:$id
-RELATED-TO:58ADE31-broken-UID
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:double yo
-SEQUENCE:9
-SUMMARY;LANGUAGE=en:yo
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('simple');
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
@@ -661,27 +657,8 @@ sub test_getcalendarevents_links
 {
     my ($self) = @_;
 
+    my ($id, $ical) = $self->icalfile('links');
     my $uri1 = "http://jmap.io/spec.html#calendar-events";
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:
-SUMMARY:yo
-ATTACH;FMTTYPE=text/html;SIZE=4480:$uri1
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
 
     my $links = {
         $uri1 => {
@@ -701,24 +678,7 @@ sub test_getcalendarevents_rscale
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;VALUE=DATE:20140208
-DURATION:PT1H
-RRULE:RSCALE=HEBREW;FREQ=YEARLY;BYMONTH=5L;BYMONTHDAY=8;SKIP=FORWARD
-SUMMARY:Adar I
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('rscale');
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
@@ -735,23 +695,7 @@ sub test_getcalendarevents_endtimezone
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/London:20160928T130000
-DTEND;TZID=Europe/Vienna:20160928T150000
-SUMMARY:Foo
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('endtimezone');
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
@@ -770,32 +714,8 @@ sub test_getcalendarevents_participants
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:
-SUMMARY:Yep
-LAST-MODIFIED:20150928T132434Z
-ATTENDEE;ROLE=OPT-PARTICIPANT;CN=Homer Simpson;PARTSTAT=ACCEPTED:mailto:homer\@example.com
-ATTENDEE;PARTSTAT=TENTATIVE;DELEGATED-FROM="mailto:lenny\@example.com";CN=Carl Carlson:mailto:carl\@example.com
-ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carl\@example.com";CN=Lenny Leonard:mailto:lenny\@example.com
-ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=DECLINED;X-DTSTAMP=20150929T144423Z;CN=Larry Burns:mailto:larry\@example.com
-ORGANIZER;CN="Monty Burns":mailto:smithers\@example.com
-ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;X-DTSTAMP=20150929T144423Z;CN=Monty Burns:mailto:smithers\@example.com
-STATUS:TENTATIVE
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('participants');
+
     my $event = $self->putandget_vevent($id, $ical);
 
     $self->assert_not_null($event->{participants});
@@ -828,26 +748,8 @@ sub test_getcalendarevents_recurrence
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-RRULE:RSCALE=GREGORIAN;SKIP=OMIT;FREQ=MONTHLY;BYDAY=+2MO,TU,-3SU,+1MO,-2TH,-1SA
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:
-SUMMARY:
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('recurrence');
+
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event->{recurrenceRule});
     $self->assert_str_equals($event->{recurrenceRule}{frequency}, "monthly");
@@ -881,54 +783,8 @@ sub test_getcalendarevents_recurrenceoverrides
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $aid = $id . "-alarmid";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160101T130000
-DURATION:PT1H
-RRULE:RSCALE=GREGORIAN;SKIP=OMIT;FREQ=MONTHLY
-RDATE;TZID=Europe/Vienna:20161224T200000
-RDATE;TZID=Europe/London:20160203T130000
-RDATE:20160204T130000Z
-RDATE;VALUE=PERIOD:20160304T150000Z/20160304T160000Z
-EXDATE:20160201T130000
-EXDATE;TZID=Europe/London:20160701T120000
-EXDATE;TZID=Europe/London:20161101T120000Z
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:description
-SUMMARY:foo
-X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=title:Titel
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-BEGIN:VEVENT
-TRANSP:OPAQUE
-UID:$id
-SEQUENCE:0
-RECURRENCE-ID;TZID=Europe/Vienna:20160501T130000
-SUMMARY:foobarbazbla
-X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=title:reinerbloedsinn
-DESCRIPTION:description
-DTSTART;TZID=Europe/Vienna:20160501T170000
-DURATION:PT2H
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-BEGIN:VALARM
-UID:$aid
-ACTION:DISPLAY
-DESCRIPTION:yo
-TRIGGER:-PT5M
-END:VALARM
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('recurrenceoverrides');
+    my $aid = $id . "-alarmuid";
 
     my $event = $self->putandget_vevent($id, $ical);
     my $o;
@@ -973,43 +829,9 @@ sub test_getcalendarevents_alerts
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
+    my ($id, $ical) = $self->icalfile('alerts');
     my $aid1 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1";
     my $aid2 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-2";
-
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-SUMMARY:Yep
-DESCRIPTION:
-LAST-MODIFIED:20150928T132434Z
-BEGIN:VALARM
-X-WR-ALARMUID:$aid1
-UID:$aid1
-TRIGGER:-PT5M
-ACTION:EMAIL
-ATTENDEE:mailto:foo\@example.com
-SUMMARY:Event alert: 'Yep' starts soon.
-DESCRIPTION:Your event 'Yep' starts soon.
-END:VALARM
-BEGIN:VALARM
-UID:$aid2
-ACTION:DISPLAY
-DESCRIPTION:Your event 'Yep' starts soon.
-TRIGGER;VALUE=DATE-TIME:20160928T150000Z
-END:VALARM
-END:VEVENT
-END:VCALENDAR
-EOF
 
     my $alert1 = {
         relativeTo => "before-start",
@@ -1040,28 +862,7 @@ sub test_getcalendarevents_locations
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $aid = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:Remember the yep.
-LOCATION:On planet Earth
-SEQUENCE:9
-SUMMARY;LANGUAGE=en:Yep
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('locations');
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
@@ -1074,27 +875,7 @@ sub test_getcalendarevents_locations_uri
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:Remember the yep.
-LOCATION;ALTREP="skype:foo":On planet Earth
-SEQUENCE:9
-SUMMARY;LANGUAGE=en:Yep
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('locations-uri');
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
@@ -1108,27 +889,7 @@ sub test_getcalendarevents_locations_geo
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:Remember the yep.
-GEO:37.386013;-122.08293
-SEQUENCE:9
-SUMMARY;LANGUAGE=en:Yep
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('locations-geo');
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
@@ -1141,28 +902,7 @@ sub test_getcalendarevents_locations_apple
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $lid1 = "loc1";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:Remember the yep.
-X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=14140.1607181516;X-TITLE="a place in Vienna":geo:48.208304,16.371602
-SEQUENCE:9
-SUMMARY;LANGUAGE=en:Yep
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
+    my ($id, $ical) = $self->icalfile('locations-apple');
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
@@ -1176,31 +916,8 @@ sub test_getcalendarevents_translations
 {
     my ($self) = @_;
 
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
+    my ($id, $ical) = $self->icalfile('translations');
     my $lid = "loc1";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:description.
-SUMMARY;LANGUAGE=en:title
-LOCATION;X-JMAP-ID=$lid:On planet Earth
-X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=title:Titel
-X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=description:Beschreibung
-X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=locations.name;X-JMAP-ID=$lid:Am Planet Erde
-X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=links.title;X-JMAP-ID=$lid:No such link
-LAST-MODIFIED:20150928T132434Z
-END:VEVENT
-END:VCALENDAR
-EOF
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_str_equals($event->{translations}{de}{title}, "Titel");
