@@ -143,7 +143,7 @@ this.  Shown below are examples for \*nix password file and SASL methods:
     cyrus\@newhost.example.com: userPassword
 
 To enable
-:cyrusman:`saslauthd(8)`, edit ``/etc/default/saslauthd`` and set
+saslauthd, edit ``/etc/default/saslauthd`` and set
 ``START=yes``.  Make sure to change any other settings here as needed.
 
 .. Note::
@@ -152,8 +152,7 @@ To enable
     else to disable ``chroot`` as noted in ``/etc/default/saslauthd``,
     so the Postfix ``smtpd`` daemon can access it.
 
-Start
-:cyrusman:`saslauthd(8)` if needed:
+Start saslauthd if needed:
 
 .. parsed-literal::
 
@@ -161,7 +160,7 @@ Start
     * Starting SASL Authentication Daemon saslauthd              [ OK ]
 
 You should at this moment be able to authenticate against
-:cyrusman:`saslauthd(8)`:
+saslauthd:
 
 .. parsed-literal::
 

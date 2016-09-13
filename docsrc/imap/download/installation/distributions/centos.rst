@@ -34,7 +34,7 @@ Next, set a password for the default administrative user ``cyrus``:
     passwd: all authentication tokens updated successfully.
 
 Start and configure to start when the system boots, the
-:cyrusman:`saslauthd(8)` service:
+saslauthd service:
 
 .. parsed-literal::
 
@@ -43,7 +43,7 @@ Start and configure to start when the system boots, the
     # :command:`chkconfig saslauthd on`
 
 You should at this moment be able to authenticate against
-:cyrusman:`saslauthd(8)`:
+saslauthd:
 
 .. parsed-literal::
 

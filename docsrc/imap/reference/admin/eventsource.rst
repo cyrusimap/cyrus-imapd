@@ -72,5 +72,5 @@ While Cyrus supports the `Apple Push Service`_, each provider needs its own acco
 
 Should you wish to support the Apple Push Service, you will need to write your own notifier daemon with APS support.
 
-.. _Apple Push Service: https://developer.apple.com/library/ios/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/Chapters/ApplePushService.html#//apple_ref/doc/uid/TP40008194-CH100-SW9
+.. _Apple Push Service: https://developer.apple.com/library/ios/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/Chapters/ApplePushService.html#/apple_ref/doc/uid/TP40008194-CH100-SW9
 
