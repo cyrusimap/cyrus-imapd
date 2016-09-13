@@ -1196,6 +1196,7 @@ LOCATION;X-JMAP-ID=$lid:On planet Earth
 X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=title:Titel
 X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=description:Beschreibung
 X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=locations.name;X-JMAP-ID=$lid:Am Planet Erde
+X-JMAP-TRANSLATION;LANGUAGE=de;X-JMAP-PROP=links.title;X-JMAP-ID=$lid:No such link
 LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
@@ -1205,6 +1206,7 @@ EOF
     $self->assert_str_equals($event->{translations}{de}{title}, "Titel");
     $self->assert_str_equals($event->{translations}{de}{description}, "Beschreibung");
     $self->assert_str_equals($event->{translations}{de}{locations}{$lid}{name}, "Am Planet Erde");
+    $self->assert_str_equals($event->{translations}{de}{links}{$lid}{title}, "No such link");
 }
 
 sub test_getcalendarevents_infinite_delegates
@@ -1445,6 +1447,11 @@ sub test_setcalendarevents_translations
             "locations" => {
                 "loc1" => {
                     name => "Am Planet Erde",
+                },
+            },
+            "links" => {
+                "http://foo.local/" => {
+                    title => "A fooish site",
                 },
             },
         },
