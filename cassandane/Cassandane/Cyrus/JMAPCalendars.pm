@@ -649,7 +649,7 @@ EOF
     $self->assert_equals($event->{showAsFree}, JSON::true);
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($event->{start}, "2016-09-28T16:00:00");
-    $self->assert_str_equals($event->{timeZone}, "UTC");
+    $self->assert_str_equals($event->{timeZone}, "Etc/UTC");
     $self->assert_str_equals($event->{duration}, "PT1H");
     $self->assert_str_equals($event->{created}, "2015-09-28T12:52:12Z");
     $self->assert_str_equals($event->{updated}, "2015-09-28T13:24:34Z");
@@ -944,7 +944,7 @@ EOF
     $o = $event->{recurrenceOverrides}->{"2016-02-04T14:00:00"};
     $self->assert_not_null($o);
     $self->assert_str_equals($o->{start}, "2016-02-04T13:00:00");
-    $self->assert_str_equals($o->{timeZone}, "UTC");
+    $self->assert_str_equals($o->{timeZone}, "Etc/UTC");
 
     $o = $event->{recurrenceOverrides}->{"2016-03-04T16:00:00"};
     $self->assert_not_null($o);
@@ -1309,7 +1309,7 @@ sub test_setcalendarevents_simple
         "start"=> "2015-11-07T09:00:00",
         "duration"=> "PT5M",
         "sequence"=> 42,
-        "timeZone"=> "UTC",
+        "timeZone"=> "Etc/UTC",
         "isAllDay"=> JSON::false,
         "language" => "en",
         "status" => "tentative",
