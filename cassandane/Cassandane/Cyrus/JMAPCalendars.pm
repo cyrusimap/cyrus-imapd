@@ -677,16 +677,22 @@ DTSTAMP:20150928T132434Z
 CREATED:20150928T125212Z
 DESCRIPTION:
 SUMMARY:yo
-X-JMAP-LINK;VALUE=URI:$uri1
+ATTACH;FMTTYPE=text/html;SIZE=4480:$uri1
 LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
 
-    my $link1 = { uri => $uri1, };
+    my $links = {
+        $uri1 => {
+            href => $uri1,
+            type => "text/html",
+            size => 4480,
+        }
+    };
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($event->{links}[0], $link1);
+    $self->assert_deep_equals($event->{links}, $links);
 }
 
 
@@ -791,7 +797,6 @@ END:VEVENT
 END:VCALENDAR
 EOF
     my $event = $self->putandget_vevent($id, $ical);
-    xlog Dumper($event);
 
     $self->assert_not_null($event->{participants});
     $self->assert_num_equals(scalar values %{$event->{participants}}, 5);
@@ -1202,46 +1207,6 @@ EOF
     $self->assert_str_equals($event->{translations}{de}{locations}{$lid}{name}, "Am Planet Erde");
 }
 
-sub test_getcalendarevents_attachments
-    :min_version_3_0
-{
-    my ($self) = @_;
-
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $aid = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-CREATED:20150928T125212Z
-DESCRIPTION:Remember the yep.
-SUMMARY;LANGUAGE=en:Yep
-LAST-MODIFIED:20150928T132434Z
-ATTACH;FMTTYPE=application/octet-stream;SIZE=4480:https://www.user.fm/files/v1-123456789abcde
-ATTACH:https://www.user.fm/files/v1-edcba987654321
-END:VEVENT
-END:VCALENDAR
-EOF
-
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_num_equals(scalar @{$event->{attachments}}, 2);
-    $self->assert_str_equals($event->{attachments}[0]{blobId}, "https://www.user.fm/files/v1-123456789abcde");
-    $self->assert_str_equals($event->{attachments}[0]{type}, "application/octet-stream");
-    $self->assert_null($event->{attachments}[0]{name});
-    $self->assert_num_equals($event->{attachments}[0]{size}, 4480);
-    $self->assert_str_equals($event->{attachments}[1]{blobId}, "https://www.user.fm/files/v1-edcba987654321");
-    $self->assert_null($event->{attachments}[1]{type});
-    $self->assert_null($event->{attachments}[1]{name});
-    $self->assert_null($event->{attachments}[1]{size});
-}
-
 sub test_getcalendarevents_infinite_delegates
     :min_version_3_0
 {
@@ -1447,12 +1412,14 @@ sub test_setcalendarevents_links
         "isAllDay"=> JSON::false,
         "description"=> "",
         "showAsFree"=> JSON::false,
-        "links" => [{
-            uri => "http://jmap.io/spec.html#calendar-events",
-            name => "JMAP:spec",
-        }, {
-            uri => "https://tools.ietf.org/html/rfc5545",
-        }],
+        "links" => {
+            "http://jmap.io/spec.html#calendar-events" => {
+                href => "http://jmap.io/spec.html#calendar-events",
+            },
+            "https://tools.ietf.org/html/rfc5545" => {
+               href => "https://tools.ietf.org/html/rfc5545",
+            },
+        },
     };
 
     my $ret;
@@ -1460,15 +1427,6 @@ sub test_setcalendarevents_links
     $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
-    $self->assert_normalized_event_equals($ret, $event);
-
-    $event->{links} = [{ uri => "https://tools.ietf.org/html/rfc4791" }];
-    $ret = $self->updateandget_event({
-            id => $event->{id},
-            calendarId => $event->{calendarId},
-            links => $event->{links},
-
-    });
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -1752,130 +1710,6 @@ sub test_setcalendarevents_isallday
         "#1" => $event,
     }}, "R1"]]);
     $self->assert_not_null($res->[0][1]{created}{"#1"});
-}
-
-sub test_setcalendarevents_attachments
-    :min_version_3_0
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
-
-    xlog "create calendar";
-    my $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
-                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
-             }}}, "R1"]
-    ]);
-    my $calid = $res->[0][1]{created}{"#1"}{id};
-
-    xlog "create event";
-    $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
-                            "calendarId" => $calid,
-                            "title" => "foo",
-                            "description" => "foo's description",
-                            "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "timeZone" => "Australia/Melbourne",
-                            "duration" => "PT15M",
-                            "attachments" => [{
-                                    "blobId" => "https://www.user.fm/files/v1-123456789abcde",
-                                    "type" => "application/octet-stream",
-                                    "name" => undef,
-                                    "size" => 4480
-                            }]
-                        }
-                    }}, "R1"]]);
-
-    my $id = $res->[0][1]{created}{"#1"}{id};
-
-    xlog "get calendar event $id";
-    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    my $event = $res->[0][1]{list}[0];
-    $self->assert_str_equals($event->{id}, $id);
-    $self->assert_num_equals(scalar @{$event->{attachments}}, 1);
-    my $att = $event->{attachments}[0];
-    $self->assert_str_equals($att->{blobId}, "https://www.user.fm/files/v1-123456789abcde");
-    $self->assert_str_equals($att->{type}, "application/octet-stream");
-    $self->assert_null($att->{name});
-    $self->assert_num_equals($att->{size}, 4480);
-
-    xlog "update attachments of event $id";
-    $res = $jmap->Request([['setCalendarEvents', { update => {
-                        "$id" => {
-                            "attachments" => [{
-                                    "blobId" => "https://www.user.fm/files/v1-123456789abcde",
-                                    "type" => undef,
-                                    "name" => undef,
-                                    "size" => undef
-                            }, {
-                                    "blobId" => "https://www.user.fm/files/v1-edcba987654321",
-                                    "type" => "text/html",
-                                    "name" => undef,
-                                    "size" => 8
-                            }]
-                        }
-                    }}, "R1"]]);
-    xlog "get event $id";
-    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    $event = $res->[0][1]{list}[0];
-    $self->assert_num_equals(scalar @{$event->{attachments}}, 2);
-    $att = $event->{attachments}[0];
-    $self->assert_str_equals($att->{blobId}, "https://www.user.fm/files/v1-123456789abcde");
-    $self->assert_null($att->{type});
-    $self->assert_null($att->{name});
-    $self->assert_null($att->{size});
-    $att = $event->{attachments}[1];
-    $self->assert_str_equals($att->{blobId}, "https://www.user.fm/files/v1-edcba987654321");
-    $self->assert_str_equals($att->{type}, "text/html");
-    $self->assert_null($att->{name});
-    $self->assert_num_equals($att->{size}, 8);
-
-    xlog "update attachments of event $id";
-    $res = $jmap->Request([['setCalendarEvents', { update => {
-                        "$id" => {
-                            "attachments" => [{
-                                    "blobId" => "https://www.user.fm/files/v1-123456789abcde",
-                                    "type" => "application/octet-stream",
-                                    "name" => undef,
-                                    "size" => undef
-                            }]
-                        }
-                    }}, "R1"]]);
-    xlog "get event $id";
-    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    $event = $res->[0][1]{list}[0];
-    $self->assert_num_equals(scalar @{$event->{attachments}}, 1);
-    $att = $event->{attachments}[0];
-    $self->assert_str_equals($att->{blobId}, "https://www.user.fm/files/v1-123456789abcde");
-    $self->assert_str_equals($att->{type}, "application/octet-stream");
-    $self->assert_null($att->{name});
-    $self->assert_null($att->{size});
-
-    xlog "do not touch attachments of event $id";
-    $res = $jmap->Request([['setCalendarEvents', { update => {
-                        "$id" => {
-                            "isAllDay" => JSON::false,
-                        }
-                    }}, "R1"]]);
-    xlog "get event $id";
-    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    $event = $res->[0][1]{list}[0];
-    $self->assert_num_equals(scalar @{$event->{attachments}}, 1);
-
-    xlog "remove attachments from event $id";
-    $res = $jmap->Request([['setCalendarEvents', { update => {
-                        "$id" => {
-                            "attachments" => undef
-                        }
-                    }}, "R1"]]);
-    xlog "get event $id";
-    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    $event = $res->[0][1]{list}[0];
-    $self->assert_null($event->{attachments});
 }
 
 sub test_setcalendarevents_move
