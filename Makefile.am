@@ -1786,6 +1786,8 @@ GENERATED_RSTS = docsrc/imap/reference/manpages/configs/imapd.conf.rst \
                  docsrc/imap/reference/manpages/systemcommands/cyradm.rst \
                  docsrc/imap/reference/manpages/usercommands/sieveshell.rst
 
+SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q
+
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
@@ -1800,7 +1802,7 @@ clean-docsrc:
 
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
+	$(AM_V_GEN)$(SPHINX_BUILD) $(SPHINX_OPTS) -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
 clean-man:
@@ -1808,12 +1810,12 @@ clean-man:
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+	$(AM_V_GEN)$(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/text/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) -d $(SPHINX_CACHE) -q -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
+	$(AM_V_GEN)$(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 else
 clean-docsrc:

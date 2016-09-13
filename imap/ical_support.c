@@ -67,6 +67,18 @@ struct recurrence_data {
     icaltime_span span; /* for sorting, etc */
 };
 
+const char *icalparameter_get_value_as_string(icalparameter *param)
+{
+    char *buf;
+
+    buf = icalparameter_as_ical_string_r(param);
+    icalmemory_add_tmp_buffer(buf);
+
+    buf = strchr(buf, '=');
+    if (*++buf == '"') *(strchr(++buf, '"')) = '\0';
+    return buf;
+}
+
 struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop)
 {

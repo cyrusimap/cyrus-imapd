@@ -1124,6 +1124,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    ldap_use_sasl are enabled, ldap_version will be automatically
    set to 3. */
 
+{ "literalminus", 0, SWITCH }
+/* if enabled, CAPABILITIES will reply with LITERAL- rather than
+   LITERAL+ (RFC 7888).  Doesn't actually size-restrict uploads though */
+
 { "lmtp_downcase_rcpt", 1, SWITCH }
 /* If enabled, lmtpd will convert the recipient addresses to lowercase
    (up to a '+' character, if present). */

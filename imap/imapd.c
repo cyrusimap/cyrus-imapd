@@ -3209,17 +3209,23 @@ static void capa_response(int flags)
     int need_space = 0;
     int i;
 
+    int lminus = config_getswitch(IMAPOPT_LITERALMINUS);
+
     for (i = 0; base_capabilities[i].str; i++) {
+        const char *capa = base_capabilities[i].str;
         /* Filter capabilities if requested */
-        if (capa_is_disabled(base_capabilities[i].str))
+        if (capa_is_disabled(capa))
             continue;
         /* Don't show "MAILBOX-REFERRALS" if disabled by config */
         if (config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS) &&
-            !strcmp(base_capabilities[i].str, "MAILBOX-REFERRALS"))
+            !strcmp(capa, "MAILBOX-REFERRALS"))
             continue;
         /* Don't show if they're not shown at this level of login */
         if (!(base_capabilities[i].mask & flags))
             continue;
+        /* cheap and nasty version of LITERAL- support - just say so */
+        if (lminus && !strcmp(capa, "LITERAL+"))
+            capa = "LITERAL-";
         /* print the capability */
         if (need_space) prot_putc(' ', imapd_out);
         else need_space = 1;
