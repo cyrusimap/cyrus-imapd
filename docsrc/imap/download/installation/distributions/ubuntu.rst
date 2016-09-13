@@ -143,7 +143,7 @@ this.  Shown below are examples for \*nix password file and SASL methods:
     cyrus\@newhost.example.com: userPassword
 
 To enable
-saslauthd, edit ``/etc/default/saslauthd`` and set
+:manpage:`saslauthd`, edit ``/etc/default/saslauthd`` and set
 ``START=yes``.  Make sure to change any other settings here as needed.
 
 .. Note::
@@ -152,7 +152,7 @@ saslauthd, edit ``/etc/default/saslauthd`` and set
     else to disable ``chroot`` as noted in ``/etc/default/saslauthd``,
     so the Postfix ``smtpd`` daemon can access it.
 
-Start saslauthd if needed:
+Start :manpage:`saslauthd` if needed:
 
 .. parsed-literal::
 

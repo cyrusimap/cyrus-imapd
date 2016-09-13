@@ -37,7 +37,7 @@ Next, set a password for the default administrative user ``cyrus``:
     passwd: all authentication tokens updated successfully.
 
 Start and configure to start when the system boots, the
-saslauthd service. For Fedora 14 and below:
+:manpage:`saslauthd` service. For Fedora 14 and below:
 
 .. parsed-literal::
 
@@ -53,7 +53,7 @@ or for Fedora 15 and above:
     # :command:`systemctl enable saslauthd`
 
 You should at this moment be able to authenticate against
-saslauthd:
+:manpage:`saslauthd`:
 
 .. parsed-literal::
 

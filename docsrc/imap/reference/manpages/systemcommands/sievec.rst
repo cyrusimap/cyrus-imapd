@@ -34,4 +34,4 @@ Options
 See Also
 ========
 
-:cyrusman:`masssievec(1)`, :cyrusman:`sieved(1)`
+:cyrusman:`masssievec(8)`, :cyrusman:`sieved(8)`

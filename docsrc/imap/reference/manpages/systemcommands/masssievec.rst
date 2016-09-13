@@ -18,7 +18,7 @@ Synopsis
 Description
 ===========
 
-**masssievec** compiles a set of sieve scripts, using :cyrusman:`sievec(1)` based on the files found in the **sievedir**  config from the ``imapd.conf`` file.
+**masssievec** compiles a set of sieve scripts, using :cyrusman:`sievec(8)` based on the files found in the **sievedir**  config from the ``imapd.conf`` file.
 
 It cannot compile scripts stored in user's home directories.
 
@@ -35,4 +35,4 @@ Options
 See Also
 ========
 
-:cyrusman:`sievec(1)`, :cyrusman:`imapd.conf(5)`
+:cyrusman:`sievec(8)`, :cyrusman:`imapd.conf(5)`

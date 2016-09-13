@@ -18,7 +18,7 @@ Synopsis
 Description
 ===========
 
-This script takes the output of :cyrusman:`arbitron(1)` (run without the ``-o`` option)
+This script takes the output of :cyrusman:`arbitron(8)` (run without the ``-o`` option)
 and prints out:
 
 * a ranking of mailboxes by number of people who selected the mailbox
@@ -36,4 +36,4 @@ Example
 See Also
 ========
 
-:cyrusman:`arbitron(1)`
+:cyrusman:`arbitron(8)`

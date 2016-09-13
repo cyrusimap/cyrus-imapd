@@ -107,7 +107,7 @@ Options
 
     Rolling (repeat) replication mode. Pick up a list of actions
     recorded by the :cyrusman:`lmtpd(8)`, :cyrusman:`imapd(8)`,
-    :cyrusman:`popd(8)` and :cyrusman:`nntpd(8)` daemons from the file
+    :cyrusman:`pop3d(8)` and :cyrusman:`nntpd(8)` daemons from the file
     specified in ``sync_log_file``. Repeat until ``sync_shutdown_file``
     appears.
 
