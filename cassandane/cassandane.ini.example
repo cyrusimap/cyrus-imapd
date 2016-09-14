@@ -126,6 +126,14 @@
 ##sasl_mech_list = PLAIN LOGIN DIGEST-MD5
 ##debug_command = @prefix@/utils/gdbtramp %s %d
 
+# This section describes how Cassandane interacts with the Net::CalDAVTalk
+# module.  If the basedir is set, we can test the built in API tests against
+# cyrus's CalDAV support for event+json
+[caldavtalk]
+# The base directory of a copy of Net::CalDAVTalk from CPAN.  If empty,
+# the cpan tests won't be run
+##basedir =
+
 # This section describes how Cassandane interacts with the ImapTest
 # testsuite, which is a test suite for IMAP servers written by the
 # Dovecot team and downloadable from http://www.imapwiki.org/ImapTest/
