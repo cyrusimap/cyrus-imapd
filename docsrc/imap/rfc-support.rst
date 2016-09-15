@@ -1,3 +1,5 @@
+:orphan:
+
 .. _imap-rfc-support:
 
 ============================
@@ -39,7 +41,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`1730`
 
-    Internet Message Access Protocol - version 4, obsoleted by 
+    Internet Message Access Protocol - version 4, obsoleted by
     :rfc:`2060`, :rfc:`2061`, :rfc:`3501`.
 
 :rfc:`1869`
@@ -68,7 +70,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2045`
 
-    Multipurpose Internet Mail Extensions (MIME) Part One: Format of 
+    Multipurpose Internet Mail Extensions (MIME) Part One: Format of
     Internet Message Bodies
 
 :rfc:`2046`
@@ -77,12 +79,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2047`
 
-    MIME (Multipurpose Internet Mail Extensions) Part Three: Message 
+    MIME (Multipurpose Internet Mail Extensions) Part Three: Message
     Header Extensions for Non-ASCII Text
 
 :rfc:`2060`
 
-    Internet Message Access Protocol - Version 4rev1, obsoleted by 
+    Internet Message Access Protocol - Version 4rev1, obsoleted by
     :rfc:`3501`.
 
 :rfc:`2086`
@@ -142,7 +144,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2445`
 
-    Internet Calendaring and Scheduling Core Object Specification 
+    Internet Calendaring and Scheduling Core Object Specification
     (iCalendar)
 
 :rfc:`2449`
@@ -321,7 +323,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`4551`
 
-    IMAP Extension for Conditional STORE Operation or Quick Flag Changes 
+    IMAP Extension for Conditional STORE Operation or Quick Flag Changes
     Resynchronization
 
 :rfc:`4559`
@@ -501,7 +503,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`5593`
 
-    Internet Message Access Protocol (IMAP) - URL Access Identifier 
+    Internet Message Access Protocol (IMAP) - URL Access Identifier
     Extension
 
 :rfc:`5689`
@@ -686,7 +688,7 @@ draft-thomson-hybi-http-timeout
 
 draft-murchison-webdav-prefer
 
-    Use of the Prefer Header Field in Web Distributed Authoring and 
+    Use of the Prefer Header Field in Web Distributed Authoring and
     Versioning (WebDAV)
 
 draft-ietf-calext-availability
@@ -703,7 +705,7 @@ draft-ietf-httpauth-digest
 
 draft-ietf-httpbis-auth-info
 
-    The Hypertext Transfer Protocol (HTTP) Authentication-Info and 
+    The Hypertext Transfer Protocol (HTTP) Authentication-Info and
     Proxy- Authentication-Info Response Header Fields
 
 draft-ietf-httpbis-cice

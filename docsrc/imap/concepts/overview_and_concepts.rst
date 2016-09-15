@@ -3,123 +3,6 @@ Overview
 
 This chapter gives an overview of several aspects of the Cyrus IMAP server, as they relate to deployment.
 
-Mailbox Namespaces
-------------------
-
-By default, the Cyrus IMAP server presents mailboxes using the **netnews** namespace convention. This means that;
-
-* mailbox names are case-sensitive,
-* a mailbox name may not start or end with a ``.`` (dot) character,
-* a mailbox name may not contain two subsequent ``.`` (dot) characters.
-
-While the aforementioned implications of the netnews namespace convention apply under all circumstances, some of the implications imposed by the netnews namespace convention can be influenced by specifying additional configuration options to Cyrus IMAP, such as is the case with the hierarchy seperator.
-
-When using the netnews namespace convention, the default, a user's shorthand qualifier (e.g. `user' for ``user@example.org``) MAY NOT contain a '.' (dot) character, as the character is being used as a hierarchy separator in mailbox names, and would thus create a personal mailbox rather then a user's INBOX.
-
-The same limitation goes for the use of virtual domains. Since a mailbox in a virtual domain typically uses a fully qualified user identifier (e.g. ``user@example.org``, thus including a valid (sub-)domain name), the '.' (dot) character is inherited from the Domain Name System naming convention. This poses a problem without the use of the '.' (dot) character as a mailbox hierarchy separator.
-
-To illustrate the effects on an environment, please examine the following procedure, starting from a clean Cyrus IMAP installation:
-
-Example Effects of the Netnews Namespace Convention
-"""""""""""""""""""""""""""""""""""""""""""""""""""
-
-#. In :cyrusman:`imapd.conf(5)`, set ``unixhierarchysep`` to ``0``.
-
-#. Attempt to create a mailbox for user *bovik@example.org* using the shorthand qualifier (e.g. `bovik`), and the fully qualified user identifier (e.g. ``bovik@example.org``).
-
-::
-
-    $ cyradm -u cyrus localhost
-    verify error:num=18:self signed certificate
-    IMAP Password:
-    localhost.localdomain&gt; lm
-    localhost.localdomain&gt; cm user/bovik
-    createmailbox: Invalid mailbox name
-    localhost.localdomain&gt; cm user.bovik
-    localhost.localdomain&gt; lm
-    user.bovik (\HasNoChildren)
-    localhost.localdomain&gt; lam user.bovik
-    bovik lrswipkxtecda
-
-As you can see, the mailbox has been created succesfully using the shorthand qualifier.
-
-::
-
-    localhost.localdomain&gt; cm user.bovik@example.org
-    createmailbox: Permission denied
-    localhost.localdomain&gt; sam user.bovik cyrus all
-    localhost.localdomain&gt; cm user.bovik@example.org
-    createmailbox: Permission denied
-    localhost.localdomain&gt; dm user.bovik
-    localhost.localdomain&gt; cm user.bovik@example.org
-    createmailbox: Permission denied
-
-
-In :cyrusman:`imapd.conf(5)`, set ``unixhierarchysep`` to ``1``.
-
-Attempt to create a mailbox for user *bovik@example.org* using the shorthand qualifier (e.g. ``bovik``), and the fully qualified user identifier (e.g. ``bovik@example.org``).
-
-::
-
-    $ cyradm -u cyrus localhost
-    verify error:num=18:self signed certificate
-    IMAP Password:
-    localhost.localdomain&gt; lm
-    localhost.localdomain&gt; cm user/bovik
-    localhost.localdomain&gt; lm
-    user/bovik (\HasNoChildren)
-    localhost.localdomain&gt; cm user/bovik@example.org
-    localhost.localdomain&gt; lm
-    user/bovik (\HasNoChildren)
-    user/bovik@example.org (\HasNoChildren)
-    localhost.localdomain&gt; lam user/bovik
-    bovik lrswipkxtecda
-    localhost.localdomain&gt; lam user/bovik@example.org
-    bovik@example.org lrswipkxtecda
-    localhost.localdomain&gt; sam user/bovik cyrus all
-    localhost.localdomain&gt; sam user/bovik@example.org cyrus all
-    localhost.localdomain&gt; dm user/bovik
-    localhost.localdomain&gt; dm user/bovik@example.org
-    localhost.localdomain&gt; lm
-    localhost.localdomain&gt;
-
-As you can see, the mailbox has been created succesfully using the shorthand qualifier, and has been created using the fully qualified user identifier as well.
-
-
-Top-level or Nested Personal Folders
-""""""""""""""""""""""""""""""""""""
-
-Cyrus IMAP allows the use of an alternative namespace for the presentation of personal mailboxes to the client (see the ``altnamespace`` configuration option), and the use of a different hierarchy separator in its presentation of personal mailboxes to the client (see ``unixhierarchysep``). 
-
-When implemented using the default ``netnews`` namespace convention, non-ASCII characters and shell meta-characters are not permitted in mailbox names. Optionally, the server can present mailboxes using the UNIX hierarchy convention - see :ref:`Alternate Namespace <alternate_namespace>` for more information.
-
-Standard (Internal) Namespace
-"""""""""""""""""""""""""""""
-
-All personal mailboxes for user **"bovik"** begin with the string **"user.bovik."**. For example, if user **"bovik"** had a personal **"work"** mailbox, it would be called **"user.bovik.work"**. To user **"bovik"**, however, the prefix **"user.bovik."** normally appears as **"INBOX."**. The mailbox **"user.bovik.work"** would therefore appear as **"INBOX.work"**. If the access control list of the mailbox permitted other users to see that mailbox, it would appear to them as **"user.bovik.work"**.
-
-The mailbox **"user.bovik"** is where the user **"bovik"** normally receives new mail, and normally appears to user **"bovik"** as **"INBOX"**. The mailbox **"user.bovik"** is referred to in this document as user **"bovik"**'s **INBOX**.
-
-Administrators create and delete users by creating and deleting the users' **INBOX**. If a user has an **INBOX**, then they are allowed to subscribe to mailboxes. Only users without dots in their userid are permitted to have an **INBOX**. (A user with a dot in their userid would be able to login but would not be able to receive mail. Note that when using the unix hierarchy seperator, this is not the case, and any user may have a dot in their userid.)
-
-When an administrator deletes a user's **INBOX**, all of the user's personal mailboxes are deleted as well.
-
-With the one notable exception of **INBOX**, all mailbox names are system-wide &mdash;they refer to the same mailbox regardless of the user. Access control lists determine which users can access or see which mailboxes. Using
-
-In contexts which permit relative mailbox names, the mailbox namespace works as follows:
-
-* Names that do not start with **.** (dot) character are fully qualified.
-* Names that start with **.** (dot) character are relative to the current context.
-* Thus, if you are working with folder names and the top of the hierarchy is named **"cmu."**, the name **"comp.infosystems.www"** resolves to **"comp.infosystems.www"** and the name **".comp.infosystems.www"** resolves to **"cmu.comp.infosystems.www"**.
-
-
-.. _alternate_namespace:
-
-Alternate Namespace
-"""""""""""""""""""
-
-The Cyrus IMAP server can also use analternate namespace which allows a user's personal mailboxes to appear as if they reside at the same level as that user's ``INBOX`` as opposed to children of it. With this feature, it may appear that there are non-unique names for mailboxes between users (2 different users may each have a top level "work" mailbox), but the internal representation is still ``user.name.work``.
-
 Access Control Lists
 --------------------
 
@@ -432,7 +315,7 @@ News
 -----
 
 Cyrus has the ability to export Usenet via IMAP and/or export shared
-IMAP mailboxes via an NNTP server which is included with Cyrus.  
+IMAP mailboxes via an NNTP server which is included with Cyrus.
 
 POP3 Server
 -----------
@@ -665,11 +548,10 @@ Sieve, a Mail Filtering Language
 --------------------------------
 
 Sieve is a mail filtering language that can filter mail into an appropriate
-IMAP mailbox as it is delivered via lmtp.  
+IMAP mailbox as it is delivered via lmtp.
 
 Cyrus Murder, the IMAP Aggregator
 ---------------------------------
 
 Cyrus now supports the distribution of mailboxes across a number of IMAP
-servers to allow for horizontal scalability.  
-
+servers to allow for horizontal scalability.

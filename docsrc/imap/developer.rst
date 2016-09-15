@@ -18,12 +18,18 @@ Getting Started
     developer/jmap
     Contributing to documentation <developer/documentation>
 
-.. toctree::    
+.. toctree::
     :hidden:
-    
+
     developer/developer-tips
     developer/install-xapian
-    
+
+System files and Databases
+==========================
+.. toctree::
+
+    developer/namespaces
+
 Resources
 =========
 
@@ -31,5 +37,3 @@ Resources
     :maxdepth: 1
 
     developer/libraries
-
-
