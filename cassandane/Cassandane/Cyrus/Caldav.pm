@@ -2652,7 +2652,7 @@ sub _safeeq {
 
 
 
-sub test_netcaldavtalktests
+sub test_netcaldavtalktests_fromical
     :min_version_3_0
 {
     my ($self) = @_;
@@ -2687,6 +2687,46 @@ sub test_netcaldavtalktests
 
         xlog "put $name as text/calendar and fetch back as JSON";
         $CalDAV->Request("PUT", "$CalendarId/$uid.ics", $ical, 'Content-Type' => 'text/calendar');
+        my $serverapi = $CalDAV->Request("GET", "$CalendarId/$uid.ics", '', 'Accept' => 'application/event+json');
+        my $serverdata = decode_json($serverapi->{content});
+        $self->assert_deep_equals($CalDAV->NormaliseEvent($data->[0]), $CalDAV->NormaliseEvent($serverdata));
+    }
+}
+
+sub test_netcaldavtalktests_fromje
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $cassini = Cassandane::Cassini->instance();
+    my $basedir = $cassini->val('caldavtalk', 'basedir');
+
+    # XXX - handle this more nicely
+    $self->assert($basedir);
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+
+    my $testdir = "$basedir/testdata";
+    opendir(DH, $testdir);
+    my @list;
+    while (my $item = readdir(DH)) {
+        next unless $item =~ m/(.*).ics/;
+        push @list, $1;
+    }
+    closedir(DH);
+
+    foreach my $name (sort @list) {
+        my $api = slurp($testdir, $name, 'je');
+        my $data = decode_json($api);
+        my $uid = $data->[0]{uid};
+
+        xlog "put $name as application/event+json and fetch back as JSON";
+        $CalDAV->Request("PUT", "$CalendarId/$uid.ics", $api, 'Content-Type' => 'application/event+json');
         my $serverapi = $CalDAV->Request("GET", "$CalendarId/$uid.ics", '', 'Accept' => 'application/event+json');
         my $serverdata = decode_json($serverapi->{content});
         $self->assert_deep_equals($CalDAV->NormaliseEvent($data->[0]), $CalDAV->NormaliseEvent($serverdata));
