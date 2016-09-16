@@ -2690,7 +2690,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             simple_hdr(txn, "Access-Control-Max-Age", "3600");
         }
     }
-    if (txn->flags.vary) {
+    if (txn->flags.vary && !(txn->flags.cc & CC_NOCACHE)) {
         /* Construct Vary header */
         const char *vary_hdrs[] =
             { "Accept", "Accept-Encoding", "Brief", "Prefer", NULL };
