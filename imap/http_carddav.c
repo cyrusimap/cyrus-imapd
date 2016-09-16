@@ -100,12 +100,12 @@ static int carddav_parse_path(const char *path,
                               struct request_target_t *tgt, const char **errstr);
 
 static int carddav_copy(struct transaction_t *txn, void *obj,
-                       struct mailbox *mailbox, const char *resource,
-                       void *destdb);
+                        struct mailbox *mailbox, const char *resource,
+                        void *destdb, unsigned flags);
 
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
-                       void *destdb);
+                       void *destdb, unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
                                    struct propfind_ctx *fctx,
@@ -599,7 +599,7 @@ static int store_resource(struct transaction_t *txn,
 
 static int carddav_copy(struct transaction_t *txn, void *obj,
                         struct mailbox *mailbox, const char *resource,
-                        void *destdb)
+                        void *destdb, unsigned flags __attribute__((unused)))
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
@@ -608,7 +608,7 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
 
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
-                       void *destdb)
+                       void *destdb, unsigned flags __attribute__((unused)))
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;

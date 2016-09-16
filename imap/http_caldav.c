@@ -159,7 +159,7 @@ static int caldav_check_precond(struct transaction_t *txn,
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn, void *obj,
                        struct mailbox *dest_mbox, const char *dest_rsrc,
-                       void *destdb);
+                       void *destdb, unsigned flags);
 static int caldav_delete_cal(struct transaction_t *txn,
                              struct mailbox *mailbox,
                              struct index_record *record, void *data);
@@ -169,7 +169,7 @@ static int caldav_post(struct transaction_t *txn);
 static int caldav_patch(struct transaction_t *txn, void *obj);
 static int caldav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *destdb);
+                      void *destdb, unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
                                    struct propfind_ctx *fctx,
@@ -1046,7 +1046,7 @@ static int _scheduling_enabled(struct transaction_t *txn,
  */
 static int caldav_copy(struct transaction_t *txn, void *obj,
                        struct mailbox *dest_mbox, const char *dest_rsrc,
-                       void *destdb)
+                       void *destdb, unsigned flags)
 {
     int r;
     struct caldav_db *db = (struct caldav_db *)destdb;
@@ -1054,7 +1054,6 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
     icalcomponent *comp, *ical = (icalcomponent *) obj;
     const char *organizer = NULL;
     icalproperty *prop;
-    int flags = 0;
 
     if (!ical) {
         txn->error.precond = CALDAV_VALID_DATA;
@@ -2365,7 +2364,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
         /* Store the new/updated attachment using WebDAV callback */
         ret = webdav_params.put.proc(txn, &txn->req_body.payload,
-                                     attachments, uid, webdavdb);
+                                     attachments, uid, webdavdb, 0);
 
         switch (ret) {
         case HTTP_CREATED:
@@ -2561,7 +2560,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Store updated calendar resource */
     ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
-                                caldavdb, 0, schedule_address);
+                                caldavdb, return_rep, schedule_address);
 
     if (ret == HTTP_NO_CONTENT && return_rep) {
         struct buf *data;
@@ -3648,7 +3647,7 @@ static int caldav_patch(struct transaction_t *txn __attribute__((unused)),
  */
 static int caldav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *destdb)
+                      void *destdb, unsigned flags)
 {
     int ret = 0;
     struct caldav_db *db = (struct caldav_db *)destdb;
@@ -3661,7 +3660,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     char *schedule_address = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct caldav_data *cdata;
-    int flags = 0;
 
     /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {

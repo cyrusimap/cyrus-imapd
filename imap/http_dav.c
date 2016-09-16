@@ -4150,7 +4150,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Store the resource at destination */
     ret = cparams->copy.proc(txn, obj,
-                             dest_mbox, dest_tgt.resource, dest_davdb);
+                             dest_mbox, dest_tgt.resource, dest_davdb, 0);
 
     if (dest_mbox != src_mbox) {
         /* Done with destination mailbox */
@@ -5949,7 +5949,7 @@ static int create_notify_collection(const char *userid,
                                     struct mailbox **mailbox);
 static int notify_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *davdb);
+                      void *davdb, unsigned flags);
 
 #define DAVSHARING_CONTENT_TYPE "application/davsharing+xml"
 
@@ -6009,7 +6009,7 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
     spool_cache_header(xstrdup("Content-Type"),
                        xstrdup(DAVNOTIFICATION_CONTENT_TYPE), txn.req_hdrs);
 
-    r = notify_put(&txn, doc, mailbox, resource, webdavdb);
+    r = notify_put(&txn, doc, mailbox, resource, webdavdb, 0);
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR,
                "send_notification: notify_put(%s, %s) failed: %s",
@@ -6457,7 +6457,7 @@ int meth_patch(struct transaction_t *txn, void *params)
     lastmod = oldrecord.internaldate;
 
     /* Check any preferences */
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+    flags = get_preferences(txn);
 
     /* Check any preconditions */
     ret = precond = pparams->check_precond(txn, params, mailbox,
@@ -6494,7 +6494,7 @@ int meth_patch(struct transaction_t *txn, void *params)
             ret = patch_doc->proc(txn, obj);
             if (!ret) {
                 ret = pparams->put.proc(txn, obj, mailbox,
-                                        txn->req_tgt.resource, davdb);
+                                        txn->req_tgt.resource, davdb, flags);
                 if (ret == HTTP_FORBIDDEN) ret = HTTP_UNPROCESSABLE;
             }
         }
@@ -6707,7 +6707,7 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Check any preferences */
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+    flags = get_preferences(txn);
 
     /* Check any preconditions */
     if (txn->meth == METH_POST) {
@@ -6728,7 +6728,8 @@ int meth_put(struct transaction_t *txn, void *params)
     case HTTP_OK:
         /* Parse, validate, and store the resource */
         obj = mime->to_object(&txn->req_body.payload);
-        ret = pparams->put.proc(txn, obj, mailbox, txn->req_tgt.resource, davdb);
+        ret = pparams->put.proc(txn, obj, mailbox,
+                                txn->req_tgt.resource, davdb, flags);
         break;
 
     case HTTP_PRECOND_FAILED:
@@ -9177,7 +9178,7 @@ int notify_post(struct transaction_t *txn)
 /* Perform a PUT request on a WebDAV notification resource */
 static int notify_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *destdb)
+                      void *destdb, unsigned flags __attribute__((unused)))
 {
     struct webdav_db *db = (struct webdav_db *)destdb;
     xmlDocPtr doc = (xmlDocPtr) obj;
