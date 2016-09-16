@@ -2501,12 +2501,12 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-static int get_synctoken(struct mailbox *mailbox, struct buf *buf)
+static int get_synctoken(struct mailbox *mailbox,
+                         struct buf *buf, const char *prefix)
 {
     buf_reset(buf);
-    buf_printf(buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
-               mailbox->i.uidvalidity,
-               mailbox->i.highestmodseq);
+    buf_printf(buf, "%s%u-" MODSEQ_FMT,
+               prefix, mailbox->i.uidvalidity, mailbox->i.highestmodseq);
 
     return 0;
 }
@@ -2517,15 +2517,17 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
                         xmlNodePtr prop __attribute__((unused)),
                         xmlNodePtr resp __attribute__((unused)),
                         struct propstat propstat[],
-                        void *rock __attribute__((unused)))
+                        void *rock)
 {
+    const char *prefix = (const char *) rock;
+
     if (!fctx->req_tgt->collection || /* until we support sync on cal-home */
         !fctx->mailbox || fctx->record) return HTTP_NOT_FOUND;
 
     /* not defined on the top-level collection either (aka #calendars) */
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    get_synctoken(fctx->mailbox, &fctx->buf);
+    get_synctoken(fctx->mailbox, &fctx->buf, prefix);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -8601,7 +8603,7 @@ static const struct prop_entry notify_props[] = {
 
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV, PROP_COLLECTION,
-      propfind_sync_token, NULL, NULL },
+      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
 
     /* WebDAV Notifications (draft-pot-webdav-notifications) properties */
     { "notificationtype", NS_DAV, PROP_RESOURCE,
@@ -8613,7 +8615,7 @@ static const struct prop_entry notify_props[] = {
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, NULL },
+      propfind_sync_token, NULL, "" },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
