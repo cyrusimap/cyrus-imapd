@@ -247,7 +247,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
         (
-            'imap/admin/systemcommands/arbitron',
+            'imap/reference/manpages/systemcommands/arbitron',
             'arbitron',
             u'Cyrus IMAP Documentation',
             [
@@ -259,7 +259,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/backupd',
+            'imap/reference/manpages/systemcommands/backupd',
             'backupd',
             u'Cyrus IMAP Documentation',
             [
@@ -269,7 +269,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/chk_cyrus',
+            'imap/reference/manpages/systemcommands/chk_cyrus',
             'chk_cyrus',
             u'Cyrus IMAP Documentation',
             [
@@ -281,7 +281,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ctl_backups',
+            'imap/reference/manpages/systemcommands/ctl_backups',
             'ctl_backups',
             u'Cyrus IMAP Documentation',
             [
@@ -291,7 +291,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ctl_cyrusdb',
+            'imap/reference/manpages/systemcommands/ctl_cyrusdb',
             'ctl_cyrusdb',
             u'Cyrus IMAP Documentation',
             [
@@ -303,7 +303,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ctl_deliver',
+            'imap/reference/manpages/systemcommands/ctl_deliver',
             'ctl_deliver',
             u'Cyrus IMAP Documentation',
             [
@@ -315,7 +315,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ctl_mboxlist',
+            'imap/reference/manpages/systemcommands/ctl_mboxlist',
             'ctl_mboxlist',
             u'Cyrus IMAP Documentation',
             [
@@ -327,7 +327,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ctl_zoneinfo',
+            'imap/reference/manpages/systemcommands/ctl_zoneinfo',
             'ctl_zoneinfo',
             u'Cyrus IMAP Documentation',
             [
@@ -338,7 +338,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cvt_cyrusdb',
+            'imap/reference/manpages/systemcommands/cvt_cyrusdb',
             'cvt_cyrusdb',
             u'Cyrus IMAP Documentation',
             [
@@ -350,7 +350,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyr_backup',
+            'imap/reference/manpages/systemcommands/cyr_backup',
             'cyr_backup',
             u'Cyrus IMAP Documentation',
             [
@@ -360,7 +360,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyr_dbtool',
+            'imap/reference/manpages/systemcommands/cyr_dbtool',
             'cyr_dbtool',
             u'Cyrus IMAP Documentation',
             [
@@ -372,7 +372,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyr_df',
+            'imap/reference/manpages/systemcommands/cyr_df',
             'cyr_df',
             u'Cyrus IMAP Documentation',
             [
@@ -384,7 +384,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyr_expire',
+            'imap/reference/manpages/systemcommands/cyr_expire',
             'cyr_expire',
             u'Cyrus IMAP Documentation',
             [
@@ -396,7 +396,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyr_info',
+            'imap/reference/manpages/systemcommands/cyr_info',
             'cyr_info',
             u'Cyrus IMAP Documentation',
             [
@@ -408,7 +408,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyradm',
+            'imap/reference/manpages/systemcommands/cyradm',
             'cyradm',
             u'Cyrus IMAP Documentation',
             [
@@ -418,7 +418,7 @@ man_pages = [
     ),
 
     (
-            'imap/admin/systemcommands/cyr_buildinfo',
+            'imap/reference/manpages/systemcommands/cyr_buildinfo',
             'cyr_buildinfo',
             u'Cyrus IMAP Documentation',
             [
@@ -428,7 +428,7 @@ man_pages = [
     ),
 
     (
-            'imap/admin/systemcommands/ipurge',
+            'imap/reference/manpages/systemcommands/ipurge',
             'ipurge',
             u'Cyrus IMAP Documentation',
             [
@@ -440,7 +440,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ptdump',
+            'imap/reference/manpages/systemcommands/ptdump',
             'ptdump',
             u'Cyrus IMAP Documentation',
             [
@@ -451,7 +451,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ptexpire',
+            'imap/reference/manpages/systemcommands/ptexpire',
             'ptexpire',
             u'Cyrus IMAP Documentation',
             [
@@ -462,7 +462,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ptloader',
+            'imap/reference/manpages/systemcommands/ptloader',
             'ptloader',
             u'Cyrus IMAP Documentation',
             [
@@ -473,7 +473,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/restore',
+            'imap/reference/manpages/systemcommands/restore',
             'restore',
             u'Cyrus IMAP Documentation',
             [
@@ -483,7 +483,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/unexpunge',
+            'imap/reference/manpages/systemcommands/unexpunge',
             'unexpunge',
             u'Cyrus IMAP Documentation',
             [
@@ -495,7 +495,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/squatter',
+            'imap/reference/manpages/systemcommands/squatter',
             'squatter',
             u'Cyrus IMAP Documentation',
             [
@@ -506,7 +506,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/ctl_conversationsdb',
+            'imap/reference/manpages/systemcommands/ctl_conversationsdb',
             'ctl_conversationsdb',
             u'Cyrus IMAP Documentation',
             [
@@ -517,7 +517,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/sync_client',
+            'imap/reference/manpages/systemcommands/sync_client',
             'sync_client',
             u'Cyrus IMAP Documentation',
             [
@@ -530,7 +530,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyr_synclog',
+            'imap/reference/manpages/systemcommands/cyr_synclog',
             'cyr_synclog',
             u'Cyrus IMAP Documentation',
             [
@@ -541,7 +541,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/deliver',
+            'imap/reference/manpages/systemcommands/deliver',
             'deliver',
             u'Cyrus IMAP Documentation',
             [
@@ -552,7 +552,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/cyr_deny',
+            'imap/reference/manpages/systemcommands/cyr_deny',
             'cyr_deny',
             u'Cyrus IMAP Documentation',
             [
@@ -563,7 +563,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/master',
+            'imap/reference/manpages/systemcommands/master',
             'master',
             u'Cyrus IMAP Documentation',
             [
@@ -574,7 +574,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/mbexamine',
+            'imap/reference/manpages/systemcommands/mbexamine',
             'mbexamine',
             u'Cyrus IMAP Documentation',
             [
@@ -585,7 +585,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/mbpath',
+            'imap/reference/manpages/systemcommands/mbpath',
             'mbpath',
             u'Cyrus IMAP Documentation',
             [
@@ -596,7 +596,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/mbtool',
+            'imap/reference/manpages/systemcommands/mbtool',
             'mbtool',
             u'Cyrus IMAP Documentation',
             [
@@ -607,7 +607,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/mkimap',
+            'imap/reference/manpages/systemcommands/mkimap',
             'mkimap',
             u'Cyrus IMAP Documentation',
             [
@@ -618,8 +618,18 @@ man_pages = [
             8
     ),
 
-        (
-            'imap/admin/systemcommands/quota',
+         (
+            'imap/reference/manpages/systemcommands/mknewsgroups',
+            'mknewsgroups',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team'
+                ],
+            8
+    ),
+
+    (
+            'imap/reference/manpages/systemcommands/quota',
             'quota',
             u'Cyrus IMAP Documentation',
             [
@@ -631,7 +641,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/reconstruct',
+            'imap/reference/manpages/systemcommands/reconstruct',
             'reconstruct',
             u'Cyrus IMAP Documentation',
             [
@@ -642,7 +652,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/fetchnews',
+            'imap/reference/manpages/systemcommands/fetchnews',
             'fetchnews',
             u'Cyrus IMAP Documentation',
             [
@@ -653,7 +663,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/fud',
+            'imap/reference/manpages/systemcommands/fud',
             'fud',
             u'Cyrus IMAP Documentation',
             [
@@ -664,7 +674,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/httpd',
+            'imap/reference/manpages/systemcommands/httpd',
             'httpd',
             u'Cyrus IMAP Documentation',
             [
@@ -675,7 +685,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/idled',
+            'imap/reference/manpages/systemcommands/idled',
             'idled',
             u'Cyrus IMAP Documentation',
             [
@@ -686,7 +696,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/imapd',
+            'imap/reference/manpages/systemcommands/imapd',
             'imapd',
             u'Cyrus IMAP Documentation',
             [
@@ -697,6 +707,16 @@ man_pages = [
     ),
 
         (
+            'imap/reference/manpages/systemcommands/translatesieve',
+            'translatesieve',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team'
+                ],
+            8
+    ),
+
+    (
             'imap/developer/libraries/imclient',
             'imclient',
             u'Cyrus IMAP Libraries Documentation',
@@ -708,7 +728,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/usercommands/imtest',
+            'imap/reference/manpages/usercommands/imtest',
             'imtest',
             u'Cyrus IMAP Documentation',
             [
@@ -719,7 +739,7 @@ man_pages = [
     ),
 
           (
-            'imap/admin/usercommands/synctest',
+            'imap/reference/manpages/usercommands/synctest',
             'synctest',
             u'Cyrus IMAP Documentation',
             [
@@ -729,7 +749,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/usercommands/dav_reconstruct',
+            'imap/reference/manpages/usercommands/dav_reconstruct',
             'dav_reconstruct',
             u'Cyrus IMAP Documentation',
             [
@@ -739,7 +759,7 @@ man_pages = [
     ),
     
     (
-            'imap/admin/usercommands/installsieve',
+            'imap/reference/manpages/usercommands/installsieve',
             'installsieve',
             u'Cyrus IMAP Documentation',
             [
@@ -750,7 +770,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/usercommands/sieveshell',
+            'imap/reference/manpages/usercommands/sieveshell',
             'sieveshell',
             u'Cyrus IMAP Documentation',
             [
@@ -760,7 +780,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/configs/cyrus.conf',
+            'imap/reference/manpages/configs/cyrus.conf',
             'cyrus.conf',
             u'Cyrus IMAP Documentation',
             [
@@ -771,7 +791,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/configs/imapd.conf',
+            'imap/reference/manpages/configs/imapd.conf',
             'imapd.conf',
             u'Cyrus IMAP Documentation',
             [
@@ -782,7 +802,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/configs/krb.equiv',
+            'imap/reference/manpages/configs/krb.equiv',
             'krb.equiv',
             u'Cyrus IMAP Documentation',
             [
@@ -793,7 +813,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/lmtpd',
+            'imap/reference/manpages/systemcommands/lmtpd',
             'lmtpd',
             u'Cyrus IMAP Documentation',
             [
@@ -804,7 +824,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/lmtpproxyd',
+            'imap/reference/manpages/systemcommands/lmtpproxyd',
             'lmtpproxyd',
             u'Cyrus IMAP Documentation',
             [
@@ -814,7 +834,7 @@ man_pages = [
     ),
 
     (
-            'imap/admin/usercommands/lmtptest',
+            'imap/reference/manpages/usercommands/lmtptest',
             'lmtptest',
             u'Cyrus IMAP Documentation',
             [
@@ -825,7 +845,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/usercommands/mupdatetest',
+            'imap/reference/manpages/usercommands/mupdatetest',
             'mupdatetest',
             u'Cyrus IMAP Documentation',
             [
@@ -836,7 +856,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/mupdate',
+            'imap/reference/manpages/systemcommands/mupdate',
             'mupdate',
             u'Cyrus IMAP Documentation',
             [
@@ -847,7 +867,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/nntpd',
+            'imap/reference/manpages/systemcommands/nntpd',
             'nntpd',
             u'Cyrus IMAP Documentation',
             [
@@ -858,7 +878,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/usercommands/nntptest',
+            'imap/reference/manpages/usercommands/nntptest',
             'nntptest',
             u'Cyrus IMAP Documentation',
             [
@@ -869,7 +889,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/notifyd',
+            'imap/reference/manpages/systemcommands/notifyd',
             'notifyd',
             u'Cyrus IMAP Documentation',
             [
@@ -880,7 +900,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/pop3d',
+            'imap/reference/manpages/systemcommands/pop3d',
             'pop3d',
             u'Cyrus IMAP Documentation',
             [
@@ -891,7 +911,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/pop3proxyd',
+            'imap/reference/manpages/systemcommands/pop3proxyd',
             'pop3proxyd',
             u'Cyrus IMAP Documentation',
             [
@@ -901,7 +921,7 @@ man_pages = [
     ),
 
     (
-            'imap/admin/usercommands/pop3test',
+            'imap/reference/manpages/usercommands/pop3test',
             'pop3test',
             u'Cyrus IMAP Documentation',
             [
@@ -912,7 +932,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/rmnews',
+            'imap/reference/manpages/systemcommands/rmnews',
             'rmnews',
             u'Cyrus IMAP Documentation',
             [
@@ -923,7 +943,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/usercommands/sivtest',
+            'imap/reference/manpages/usercommands/sivtest',
             'sivtest',
             u'Cyrus IMAP Documentation',
             [
@@ -934,7 +954,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/smmapd',
+            'imap/reference/manpages/systemcommands/smmapd',
             'smmapd',
             u'Cyrus IMAP Documentation',
             [
@@ -945,7 +965,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/usercommands/smtptest',
+            'imap/reference/manpages/usercommands/smtptest',
             'smtptest',
             u'Cyrus IMAP Documentation',
             [
@@ -956,7 +976,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/sync_reset',
+            'imap/reference/manpages/systemcommands/sync_reset',
             'sync_reset',
             u'Cyrus IMAP Documentation',
             [
@@ -969,7 +989,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/sync_server',
+            'imap/reference/manpages/systemcommands/sync_server',
             'sync_server',
             u'Cyrus IMAP Documentation',
             [
@@ -982,7 +1002,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/timsieved',
+            'imap/reference/manpages/systemcommands/timsieved',
             'timsieved',
             u'Cyrus IMAP Documentation',
             [
@@ -995,7 +1015,7 @@ man_pages = [
     ),
 
         (
-            'imap/admin/systemcommands/tls_prune',
+            'imap/reference/manpages/systemcommands/tls_prune',
             'tls_prune',
             u'Cyrus IMAP Documentation',
             [

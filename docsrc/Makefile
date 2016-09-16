@@ -57,12 +57,12 @@ clean:
 	rm -rf $(BUILDDIR)/*
     
 init: ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
-	@echo "creating imap/admin/systemcommands/cyradm.rst"
-	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/imap/admin/systemcommands/cyradm.rst
-	@echo "creating imap/admin/usercommands/sieveshell.rst"
-	$(PERL2RST) sieveshell < ../perl/sieve/scripts/sieveshell.pl > $(SOURCEDIR)/imap/admin/usercommands/sieveshell.rst
-	@echo "creating imap/admin/configs/imapd.conf.rst"
-	../tools/config2rst ../lib/imapoptions > $(SOURCEDIR)/imap/admin/configs/imapd.conf.rst
+	@echo "creating imap/reference/manpages/systemcommands/cyradm.rst"
+	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/imap/reference/manpages/systemcommands/cyradm.rst
+	@echo "creating imap/reference/manpages/usercommands/sieveshell.rst"
+	$(PERL2RST) sieveshell < ../perl/sieve/scripts/sieveshell.pl > $(SOURCEDIR)/imap/reference/manpages/usercommands/sieveshell.rst
+	@echo "creating imap/reference/manpages/configs/imapd.conf.rst"
+	../tools/config2rst ../lib/imapoptions > $(SOURCEDIR)/imap/reference/manpages/configs/imapd.conf.rst
 
 html: init
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html

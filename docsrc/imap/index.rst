@@ -1,3 +1,5 @@
+:orphan:
+
 .. note to documentation contributors:
 
     The following is copied from introduction.rst
@@ -10,11 +12,11 @@ The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
 .. toctree::
     :maxdepth: 1
 
-    installation
-    introduction
-    features
-    deployment
-    admin
+    download/installation
+    quickstart/introduction
+    concepts/features
+    concepts/deployment
+    reference/admin
     developer
     
 Cyrus IMAP Release Notes
@@ -31,4 +33,4 @@ Cyrus IMAP Release Notes
     :maxdepth: 1
     :glob:
 
-    release-notes/*
+    download/release-notes/*

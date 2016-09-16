@@ -15,7 +15,6 @@ Getting Started
     developer/installguide
     developer/basicserver
     developer/developer-testing
-    developer/architecture
     developer/jmap
     Contributing to documentation <developer/documentation>
 

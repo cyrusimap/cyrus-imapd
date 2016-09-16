@@ -281,7 +281,7 @@ __END__
 
 =for pod2rst .. cyrusman:: sieveshell(1)
 
-=for pod2rst .. _imap-admin-usercommands-sieveshell:
+=for pod2rst .. _imap-reference-manpages-usercommands-sieveshell:
 
 =head1 NAME
 
