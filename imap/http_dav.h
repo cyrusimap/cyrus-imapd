@@ -400,7 +400,10 @@ enum {
 
 
 /* Function to check headers for preconditions */
-typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
+struct meth_params;
+typedef int (*check_precond_t)(struct transaction_t *txn,
+                               struct meth_params *params,
+                               struct mailbox *mailbox, const void *data,
                                const char *etag, time_t lastmod);
 
 /* Function to insert/update DAV resource in 'data' */
@@ -498,7 +501,6 @@ struct propfind_params {
 };
 
 /* meth_report() parameters */
-struct meth_params;
 typedef int (*report_proc_t)(struct transaction_t *txn,
                              struct meth_params *rparams,
                              xmlNodePtr inroot, struct propfind_ctx *fctx);
@@ -635,7 +637,8 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
 
 int calcarddav_parse_path(const char *path, struct request_target_t *tgt,
                           const char *mboxprefix, const char **errstr);
-int dav_check_precond(struct transaction_t *txn, const void *data,
+int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
+                      struct mailbox *mailbox, const void *data,
                       const char *etag, time_t lastmod);
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,

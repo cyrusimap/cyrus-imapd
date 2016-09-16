@@ -151,7 +151,9 @@ static void my_caldav_shutdown(void);
 static int caldav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr);
 
-static int caldav_check_precond(struct transaction_t *txn, const void *data,
+static int caldav_check_precond(struct transaction_t *txn,
+                                struct meth_params *params,
+                                struct mailbox *mailbox, const void *data,
                                 const char *etag, time_t lastmod);
 
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
@@ -844,7 +846,7 @@ static int caldav_parse_path(const char *path,
     if (r) return r;
 
     /* Set proper Allow bits based on collection */
-    if (tgt->namespace->id == URL_NS_FREEBUSY) {
+    if (tgt->namespace && tgt->namespace->id == URL_NS_FREEBUSY) {
         /* Read-only collections */
         tgt->allow = ALLOW_READ;
     }
@@ -884,7 +886,9 @@ static int caldav_parse_path(const char *path,
 
 
 /* Check headers for any preconditions */
-static int caldav_check_precond(struct transaction_t *txn, const void *data,
+static int caldav_check_precond(struct transaction_t *txn,
+                                struct meth_params *params,
+                                struct mailbox *mailbox, const void *data,
                                 const char *etag, time_t lastmod)
 {
     const struct caldav_data *cdata = (const struct caldav_data *) data;
@@ -893,7 +897,7 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
     int precond;
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
-    precond = dav_check_precond(txn, data, etag, lastmod);
+    precond = dav_check_precond(txn, params, mailbox, data, etag, lastmod);
     if (precond == HTTP_PRECOND_FAILED &&
         cdata->comp_flags.tzbyref && !cdata->organizer && cdata->sched_tag) {
         /* Resource has just had VTIMEZONEs stripped -
@@ -2259,7 +2263,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     kind = icalcomponent_isa(comp);
 
     /* Check any preconditions */
-    precond = caldav_check_precond(txn, cdata, etag, lastmod);
+    precond = caldav_check_precond(txn, &caldav_params,
+                                   calendar, cdata, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
