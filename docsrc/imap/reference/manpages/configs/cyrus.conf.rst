@@ -231,6 +231,10 @@ Examples
         tlsprune      cmd="tls_prune" at=0400
     }
 
+    DAEMON {
+        idled         cmd="idled"
+    }
+
 Access Control
 ==============
 
