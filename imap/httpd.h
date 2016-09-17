@@ -282,6 +282,7 @@ struct resp_body_t {
     unsigned prefs;                     /* Prefer           */
     const char *link;                   /* Link             */
     const char *lock;                   /* Lock-Token       */
+    const char *ctag;                   /* CTag             */
     const char *etag;                   /* ETag             */
     time_t lastmod;                     /* Last-Modified    */
     time_t maxage;                      /* Expires          */

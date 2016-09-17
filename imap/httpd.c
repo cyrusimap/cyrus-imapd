@@ -2846,6 +2846,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         simple_hdr(txn, "Lock-Token", "<%s>", resp_body->lock);
         if (txn->flags.cors) Access_Control_Expose("Lock-Token");
     }
+    if (resp_body->ctag) {
+        simple_hdr(txn, "CTag", "%s", resp_body->ctag);
+        if (txn->flags.cors) Access_Control_Expose("CTag");
+    }
     if (resp_body->stag) {
         simple_hdr(txn, "Schedule-Tag", "\"%s\"", resp_body->stag);
         if (txn->flags.cors) Access_Control_Expose("Schedule-Tag");

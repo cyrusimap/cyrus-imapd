@@ -71,6 +71,7 @@
 #define XML_NS_CARDDAV  "urn:ietf:params:xml:ns:carddav"
 #define XML_NS_ISCHED   "urn:ietf:params:xml:ns:ischedule"
 #define XML_NS_CS       "http://calendarserver.org/ns/"
+#define XML_NS_MM       "http://me.com/_namespace/"
 #define XML_NS_APPLE    "http://apple.com/ns/ical/"
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
@@ -89,9 +90,10 @@ enum {
     NS_CARDDAV,
     NS_ISCHED,
     NS_CS,
+    NS_MM,
     NS_CYRUS,
 };
-#define NUM_NAMESPACE 6
+#define NUM_NAMESPACE 7
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
@@ -222,6 +224,9 @@ enum {
 
     /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */
     CALDAV_VALID_MANAGEDID,
+
+    /* Bulk Change (draft-daboo-calendarserver-bulk-change) preconditions */
+    CALDAV_CTAG_OK,
 
     /* CalDAV Scheduling (RFC 6638) preconditions */
     CALDAV_VALID_SCHED,
@@ -468,12 +473,16 @@ struct mkcol_params {
  */
 typedef int (*post_proc_t)(struct transaction_t *txn);
 
+typedef int (*import_proc_t)(struct transaction_t *txn, void *obj,
+                             struct mailbox *mailbox, void *davdb,
+                             xmlNodePtr root, xmlNsPtr *ns, unsigned flags);
+
 /* POST "mode" bits */
 enum {
     POST_ADDMEMBER = (1<<0),
-    POST_SHARE     = (1<<1)
+    POST_SHARE     = (1<<1),
+    POST_BULK      = (1<<2)
 };
-
 
 /* meth_put() parameters */
 typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
@@ -488,6 +497,7 @@ struct copy_params {
 struct post_params {
     unsigned allowed;                   /* allowed generic POST "modes" */
     post_proc_t proc;                   /* special POST handling (optional) */
+    import_proc_t import;               /* func to import multiple rsrcs (opt) */
 };
 
 struct put_params {
@@ -792,6 +802,11 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
                         struct propfind_ctx *fctx,
                         xmlNodePtr prop, xmlNodePtr resp,
                         struct propstat propstat[], void *rock);
+
+int propfind_bulkrequests(const xmlChar *name, xmlNsPtr ns,
+                          struct propfind_ctx *fctx,
+                          xmlNodePtr prop, xmlNodePtr resp,
+                          struct propstat propstat[], void *rock);
 
 int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
                     struct propfind_ctx *fctx,

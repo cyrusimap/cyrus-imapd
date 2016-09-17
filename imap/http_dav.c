@@ -103,6 +103,7 @@ static const struct dav_namespace_t {
     { XML_NS_CARDDAV, "C" },
     { XML_NS_ISCHED, NULL },
     { XML_NS_CS, "CS" },
+    { XML_NS_MM, "MM" },
     { XML_NS_CYRUS, "CY" },
     { XML_NS_USERFLAG, "UF" },
     { XML_NS_SYSFLAG, "SF" },
@@ -136,6 +137,8 @@ static void my_dav_reset(void);
 static void my_dav_shutdown(void);
 
 static int get_server_info(struct transaction_t *txn);
+static void get_synctoken(struct mailbox *mailbox,
+                          struct buf *buf, const char *prefix);
 
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
@@ -377,6 +380,9 @@ static const struct precond_t {
 
     /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */
     { "valid-managed-id", NS_CALDAV },
+
+    /* Bulk Change (draft-daboo-calendarserver-bulk-change) preconditions */
+    { "ctag-ok", NS_MM },
 
     /* CalDAV Scheduling (RFC 6638) preconditions */
     { "valid-scheduling-message", NS_CALDAV },
@@ -702,9 +708,12 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
             else if (mailbox) {
                 struct buf buf = BUF_INITIALIZER;
 
-                buf_printf(&buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
-                           mailbox->i.uidvalidity, mailbox->i.highestmodseq);
+                get_synctoken(mailbox, &buf, SYNC_TOKEN_URL_SCHEME);
                 r = !strcmp(cond, buf_cstring(&buf));
+                if (!r) {
+                    get_synctoken(mailbox, &buf, XML_NS_MM "ctag/");
+                    r = !strcmp(cond, buf_cstring(&buf));
+                }
                 buf_free(&buf);
             }
         }
@@ -1004,6 +1013,13 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
         prefs |= PREFER_MIN;
     }
 
+    /* Check for X-MobileMe-DAV-Options header */
+    if ((mask & PREFER_REP) &&
+        (hdr = spool_getheader(txn->req_hdrs, "X-MobileMe-DAV-Options")) &&
+        !strcasecmp(hdr[0], "return-changed-data")) {
+        prefs |= PREFER_REP;
+    }
+
     return prefs;
 }
 
@@ -1088,6 +1104,10 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CS))
                     ensure_ns(respNs, NS_CS, root,
+                              (const char *) nsDef->href,
+                              (const char *) nsDef->prefix);
+                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MM))
+                    ensure_ns(respNs, NS_MM, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
@@ -1200,7 +1220,7 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
         xmlNewTextChild(error, NULL, BAD_CAST resp_desc, BAD_CAST err->desc);
     }
 
-    return root;
+    return error;
 }
 
 
@@ -2501,14 +2521,12 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-static int get_synctoken(struct mailbox *mailbox,
-                         struct buf *buf, const char *prefix)
+static void get_synctoken(struct mailbox *mailbox,
+                          struct buf *buf, const char *prefix)
 {
     buf_reset(buf);
     buf_printf(buf, "%s%u-" MODSEQ_FMT,
                prefix, mailbox->i.uidvalidity, mailbox->i.highestmodseq);
-
-    return 0;
 }
 
 /* Callback to fetch DAV:sync-token and CS:getctag */
@@ -2531,6 +2549,33 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+
+    return 0;
+}
+
+
+/* Callback to fetch MM:bulk-requests */
+int propfind_bulkrequests(const xmlChar *name, xmlNsPtr ns,
+                          struct propfind_ctx *fctx,
+                          xmlNodePtr prop __attribute__((unused)),
+                          xmlNodePtr resp __attribute__((unused)),
+                          struct propstat propstat[],
+                          void *rock __attribute__((unused)))
+{
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                                   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    if (fctx->req_tgt->collection && !fctx->req_tgt->flags &&
+        !fctx->req_tgt->resource) {
+        xmlNodePtr type = xmlNewChild(node, NULL, BAD_CAST "simple", NULL);
+        xmlNewChild(type, NULL, BAD_CAST "max-resources", NULL);
+        xmlNewChild(type, NULL, BAD_CAST "max-bytes", NULL);
+#if 0
+        type = xmlNewChild(node, NULL, BAD_CAST "crud", NULL);
+        xmlNewChild(type, NULL, BAD_CAST "max-resources", NULL);
+        xmlNewChild(type, NULL, BAD_CAST "max-bytes", NULL);
+#endif
+    }
 
     return 0;
 }
@@ -5106,7 +5151,12 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         }
     }
 
-    if (!r) ret = HTTP_CREATED;
+    if (!r) {
+        assert(!buf_len(&txn->buf));
+        get_synctoken(mailbox, &txn->buf, "");
+        txn->resp_body.ctag = buf_cstring(&txn->buf);
+        ret = HTTP_CREATED;
+    }
     else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_NO_PRIVS;
     else if (r == IMAP_MAILBOX_EXISTS) {
         txn->error.precond = DAV_RES_EXISTS;
@@ -6282,6 +6332,149 @@ static int dav_post_share(struct transaction_t *txn,
 }
 
 
+static int dav_post_import(struct transaction_t *txn,
+                          struct meth_params *pparams)
+{
+    int ret = 0, r, precond = HTTP_OK, rights;
+    const char **hdr;
+    struct mime_type_t *mime = NULL;
+    struct mailbox *mailbox = NULL;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    void *davdb = NULL, *obj = NULL;
+    xmlDocPtr outdoc = NULL;
+    xmlNodePtr root;
+    xmlNsPtr ns[NUM_NAMESPACE];
+
+    /* Check Content-Type */
+    mime = pparams->mime_types;
+    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+        for (; mime->content_type; mime++) {
+            if (is_mediatype(mime->content_type, hdr[0])) break;
+        }
+        if (!mime->content_type) {
+            txn->error.precond = pparams->put.supp_data_precond;
+            return HTTP_FORBIDDEN;
+        }
+    }
+
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRES)) {
+        /* DAV:need-privileges */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights =
+            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRES;
+        return HTTP_NO_PRIVS;
+    }
+
+    if (txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local mailbox */
+
+    /* Read body */
+    txn->req_body.flags |= BODY_DECODE;
+    r = http_read_body(httpd_in, httpd_out,
+                       txn->req_hdrs, &txn->req_body, &txn->error.desc);
+    if (r) {
+        txn->flags.conn = CONN_CLOSE;
+        return r;
+    }
+
+    /* Check if we can append a new message to mailbox */
+    qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
+    if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
+                          ACL_INSERT, ignorequota ? NULL : qdiffs))) {
+        syslog(LOG_ERR, "append_check(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        txn->error.desc = error_message(r);
+        return HTTP_SERVER_ERROR;
+    }
+
+    /* Open mailbox for writing */
+    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        txn->error.desc = error_message(r);
+        return HTTP_SERVER_ERROR;
+    }
+
+    /* Open the DAV DB corresponding to the mailbox */
+    davdb = pparams->davdb.open_db(mailbox);
+
+    /* Check any preconditions */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%u-%u-%u", mailbox->i.uidvalidity,
+               mailbox->i.last_uid, mailbox->i.exists);
+    ret = precond = pparams->check_precond(txn, pparams, mailbox, NULL,
+                                           buf_cstring(&txn->buf),
+                                           mailbox->index_mtime);
+    buf_reset(&txn->buf);
+
+    switch (precond) {
+    case HTTP_OK:
+        break;
+
+    case HTTP_LOCKED:
+        txn->error.precond = DAV_NEED_LOCK_TOKEN;
+        txn->error.resource = txn->req_tgt.path;
+
+    case HTTP_PRECOND_FAILED:
+    default:
+        /* We failed a precondition */
+        ret = precond;
+        goto done;
+    }
+
+    /* Start construction of our multistatus response */
+    root = init_xml_response("multistatus", NS_DAV, NULL, ns);
+    if (!root) {
+        ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "Unable to create XML response";
+        goto done;
+    }
+    ensure_ns(ns, NS_CS, root, XML_NS_CS, "CS");
+
+    outdoc = root->doc;
+
+    /* Parse, validate, and store the resource */
+    obj = mime->to_object(&txn->req_body.payload);
+    ret = pparams->post.import(txn, obj, mailbox, davdb,
+                               root, ns, get_preferences(txn));
+
+    /* Validators */
+    assert(!buf_len(&txn->buf));
+    get_synctoken(mailbox, &txn->buf, "");
+    txn->resp_body.ctag = buf_cstring(&txn->buf);
+    txn->resp_body.etag = NULL;
+    txn->resp_body.lastmod = 0;
+
+    /* Output the XML response */
+    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+
+  done:
+    if (outdoc) xmlFreeDoc(outdoc);
+    if (obj) {
+        if (pparams->mime_types[0].free) pparams->mime_types[0].free(obj);
+    }
+    if (davdb) pparams->davdb.close_db(davdb);
+    mailbox_close(&mailbox);
+
+    return ret;
+}
+
+
 /* Perform a POST request */
 int meth_post(struct transaction_t *txn, void *params)
 {
@@ -6310,8 +6503,27 @@ int meth_post(struct transaction_t *txn, void *params)
     /* Check for query params */
     action = hash_lookup("action", &txn->req_qparams);
 
-    if (!action && (pparams->post.allowed & POST_SHARE))
-        return dav_post_share(txn, pparams);
+    if (!action) {
+        /* Check Content-Type */
+        const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+
+        if ((pparams->post.allowed & POST_SHARE) && hdr &&
+            is_mediatype(hdr[0], DAVSHARING_CONTENT_TYPE)) {
+            /* Sharing request */
+            return dav_post_share(txn, pparams);
+        }
+        else if ((pparams->post.allowed & POST_BULK) && hdr) {
+            if (is_mediatype(hdr[0], "application/xml")) {
+                /* Bulk CRUD */
+                return HTTP_FORBIDDEN;
+            }
+            else {
+                /* Bulk import */
+                return dav_post_import(txn, pparams);
+            }
+        }
+        else return HTTP_BAD_REQUEST;
+    }
 
     if (!(pparams->post.allowed & POST_ADDMEMBER) ||
         !action || action->next || strcmp(action->s, "add-member")) {
@@ -8640,7 +8852,7 @@ struct meth_params notify_params = {
     &notify_get,
     { 0, 0 },                                   /* No MKCOL handling */
     NULL,                                       /* No PATCH handling */
-    { 0, &notify_post },                        /* No generic POST handling */
+    { 0, &notify_post, NULL },                  /* No generic POST handling */
     { 0, &notify_put },
     { DAV_FINITE_DEPTH, notify_props},
     notify_reports
