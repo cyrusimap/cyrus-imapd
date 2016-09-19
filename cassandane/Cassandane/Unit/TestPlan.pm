@@ -522,13 +522,15 @@ sub _parse_test_spec
 {
     my ($name) = @_;
 
-    my ($neg, $path) = ($name =~ m/^(!?)(.*)$/);
+    my ($neg, $path) = ($name =~ m/^([~!]?)(.*)$/);
     $path =~ s/\.pm$//g;
     $path =~ s/::/\//g;
     $path =~ s/\./\//g;
     $path =~ s/\/+/\//g;
     $path =~ s/^\/*//;
     $path =~ s/\/*$//;
+
+    $neg = '!' if $neg eq '~';
 
     foreach my $root (@test_roots)
     {
