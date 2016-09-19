@@ -3970,6 +3970,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Parse the destination path */
+    dest_tgt.namespace = txn->req_tgt.namespace;
     r = cparams->parse_path(dest_uri->path, &dest_tgt, &txn->error.desc);
     if (r) {
         ret = r;
