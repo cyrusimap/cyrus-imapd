@@ -5113,6 +5113,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         /* Start construction of our mkcol/mkcalendar response */
         buf_appendcstr(&txn->buf, "-response");
         root = init_xml_response(buf_cstring(&txn->buf), NS_REQ_ROOT, root, ns);
+        buf_reset(&txn->buf);
         if (!root) {
             ret = HTTP_SERVER_ERROR;
             txn->error.desc = "Unable to create XML response\r\n";
