@@ -2111,9 +2111,9 @@ product version in the capabilities */
 
 { "timeout", 32, INT }
 /* The length of the IMAP server's inactivity autologout timer,
-   in minutes.  The minimum value is 30, the default.  The default
-   is 32 to allow a bit of leeway for clients that try to NOOP every
-   30 minutes. */
+   in minutes.  The minimum value is 30.  The default is 32 to
+   allow a bit of leeway for clients that try to NOOP every 30
+   minutes. */
 
 { "tls_ca_file", NULL, STRING, "2.5.0", "tls_client_ca_file" }
 /* Deprecated in favor of \fItls_client_ca_file\fR. */
