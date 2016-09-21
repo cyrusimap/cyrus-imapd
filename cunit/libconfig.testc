@@ -259,6 +259,116 @@ static void test_bitfield_invalid(void)
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, "invalid value 'junk' for httpmodules in line 2");
 }
 
+static void test_duration_value_days(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 3d\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 3 * 24 * 60 * 60);
+}
+
+static void test_duration_value_hours(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 3h\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 3 * 60 * 60);
+}
+
+static void test_duration_value_minutes(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 45m\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 45 * 60);
+}
+
+static void test_duration_value_seconds(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 25s\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 25);
+}
+
+static void test_duration_value_combined(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 1h30m\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 1.5 * 60 * 60);
+}
+
+static void test_duration_value_nounits(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 13\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 13);
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+    CU_ASSERT_EQUAL(timeout, 13 * 60);
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 'h');
+    CU_ASSERT_EQUAL(timeout, 13 * 60 * 60);
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 'd');
+    CU_ASSERT_EQUAL(timeout, 13 * 60 * 60 * 24);
+}
+
+static void test_duration_default(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* timeout: 32m (default) */
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 32 * 60);
+}
+
+static void test_duration_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG, "unparsable duration 'junk' for timeout in line 2");
+}
+
 static void test_magic_configdirectory_value(void)
 {
     const char *idlesocket = NULL;
