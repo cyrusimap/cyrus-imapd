@@ -1871,6 +1871,11 @@ product version in the capabilities */
 /* The length of the IMAP server's inactivity autologout timer,
    in minutes.  The minimum value is 30, the default. */
 
+{ "imapidletimeout", 0, INT }
+/* Timeout for idling clients (RFC 2177) in minutes. If set to
+   zero (the default) or less, the value of "timeout" will be
+   used instead. */
+
 { "tls_ca_file", "DEFAULT", STRING }
 /* Deprecated in favor of \fItls_client_ca_file\fR. */
 
