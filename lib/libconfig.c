@@ -178,6 +178,87 @@ EXPORTED unsigned long config_getbitfield(enum imapopt opt)
     return imapopts[opt].val.x;
 }
 
+static int parse_duration(const char *str, int defunit)
+{
+    assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
+
+    const size_t len = strlen(str);
+    const char *p;
+    int accum = 0, duration = 0;
+    char *copy = NULL;
+
+    /* the default default unit is seconds */
+    if (!defunit) defunit = 's';
+
+    /* make a copy and append the default unit if necessary */
+    copy = xzmalloc(len + 2);
+    strncpy(copy, str, len);
+    if (cyrus_isdigit(copy[len-1]))
+        copy[len] = defunit;
+
+    for (p = copy; *p; p++) {
+        if (cyrus_isdigit(*p)) {
+            accum *= 10;
+            accum += (*p - '0');
+        }
+        else {
+            switch (*p) {
+            case 'd':
+                accum *= 24;
+                /* fall through */
+            case 'h':
+                accum *= 60;
+                /* fall through */
+            case 'm':
+                accum *= 60;
+                /* fall through */
+            case 's':
+                duration += accum;
+                accum = 0;
+                break;
+            default:
+                syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
+                                  __func__, *p, str);
+                duration = -1;
+                goto done;
+            }
+        }
+    }
+
+    /* we shouldn't have anything left in the accumulator */
+    assert(accum == 0);
+
+done:
+    if (copy) free(copy);
+    return duration;
+}
+
+/* Get a duration value, converted to seconds.
+ *
+ * defunit is one of 'd', 'h', 'm', 's' and determines how
+ * unitless values are parsed.
+ */
+EXPORTED int config_getduration(enum imapopt opt, int defunit)
+{
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_DURATION);
+    assert_not_deprecated(opt);
+    assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
+
+    int duration = parse_duration(imapopts[opt].val.s, defunit);
+    char errbuf[1024];
+
+    if (duration < 0) {
+        /* should have been rejected by config_read_file, but just in case */
+        snprintf(errbuf, sizeof(errbuf),
+                 "%s: %s: couldn't parse duration '%s'",
+                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
+        fatal(errbuf, EX_CONFIG);
+    }
+
+    return duration;
+}
+
 EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
 {
     char buf[256];
@@ -329,6 +410,7 @@ static void config_option_deprecate(const int dopt)
 
     case OPT_STRINGLIST:
     case OPT_STRING:
+    case OPT_DURATION:
         imapopts[opt].val.s = imapopts[dopt].val.s;
         imapopts[dopt].val.s = NULL;
         break;
@@ -861,6 +943,23 @@ static void config_read_file(const char *filename)
                     q = p;
                 }
 
+                break;
+            }
+            case OPT_DURATION:
+            {
+                /* make sure it's parseable, though we don't know the default units */
+                int duration = parse_duration(p, '\0');
+                if (duration < 0) {
+                    snprintf(errbuf, sizeof(errbuf),
+                             "unparsable duration '%s' for %s in line %d",
+                             p, imapopts[opt].optname, lineno);
+                    fatal(errbuf, EX_CONFIG);
+                }
+
+                /* but then store it unparsed, it will be parsed again by
+                 * config_getduration() where the caller knows the appropriate
+                 * default units */
+                imapopts[opt].val.s = xstrdup(p);
                 break;
             }
             case OPT_NOTOPT:
