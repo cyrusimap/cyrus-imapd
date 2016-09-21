@@ -2115,6 +2115,11 @@ product version in the capabilities */
    allow a bit of leeway for clients that try to NOOP every 30
    minutes. */
 
+{ "imapidletimeout", 0, INT }
+/* Timeout for idling clients (RFC 2177) in minutes. If set to
+   zero (the default) or less, the value of "timeout" will be
+   used instead. */
+
 { "tls_ca_file", NULL, STRING, "2.5.0", "tls_client_ca_file" }
 /* Deprecated in favor of \fItls_client_ca_file\fR. */
 
