@@ -1,0 +1,289 @@
+/* Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. The name "Carnegie Mellon University" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For permission or any legal
+ *    details, please contact
+ *      Carnegie Mellon University
+ *      Center for Technology Transfer and Enterprise Creation
+ *      4615 Forbes Avenue
+ *      Suite 302
+ *      Pittsburgh, PA  15213
+ *      (412) 268-7393, fax: (412) 268-7395
+ *      innovation@andrew.cmu.edu
+ *
+ * 4. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by Computing Services
+ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <unistd.h>
+
+#include "cunit/cunit.h"
+
+#include "lib/libconfig.h"
+#include "lib/retry.h"
+#include "lib/xmalloc.h"
+
+#define DBDIR "test-libconfig-dbdir"
+
+/* XXX dedup this, it's c&p'd everywhere */
+static void config_read_string(const char *s)
+{
+    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
+    int fd = mkstemp(fname);
+    retry_write(fd, s, strlen(s));
+    config_reset();
+    config_read(fname, 0);
+    unlink(fname);
+    free(fname);
+    close(fd);
+}
+
+static int set_up(void)
+{
+    return 0;
+}
+
+static int tear_down(void)
+{
+    return 0;
+}
+
+static void test_int(void)
+{
+    int archive_days = -1;
+    int archive_maxsize = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_days: 9\n"
+        /* archive_maxsize: 1024 (default) */
+    );
+
+    /* test a value that has been set */
+    archive_days = config_getint(IMAPOPT_ARCHIVE_DAYS);
+    CU_ASSERT_EQUAL(archive_days, 9);
+
+    /* test a value that is defaulted */
+    archive_maxsize = config_getint(IMAPOPT_ARCHIVE_MAXSIZE);
+    CU_ASSERT_EQUAL(archive_maxsize, 1024);
+}
+
+static void test_string(void)
+{
+    const char *autocreate_sieve_folders = NULL;
+    const char *autocreate_sieve_script = NULL;
+    const char *addressbookprefix = NULL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreate_sieve_folders: Junk | Trash\n"
+        /* autocreate_sieve_script: NULL (default) */
+        /* addressbookprefix: #addressbooks (default) */
+    );
+
+    /* test a value that has been set */
+    autocreate_sieve_folders = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_FOLDERS);
+    CU_ASSERT_PTR_NOT_NULL(autocreate_sieve_folders);
+    CU_ASSERT_STRING_EQUAL(autocreate_sieve_folders, "Junk | Trash");
+
+    /* test a value that has been defaulted to NULL */
+    autocreate_sieve_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT);
+    CU_ASSERT_PTR_NULL(autocreate_sieve_script);
+
+    /* test a value that has been defaulted */
+    addressbookprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+    CU_ASSERT_PTR_NOT_NULL(addressbookprefix);
+    CU_ASSERT_STRING_EQUAL(addressbookprefix, "#addressbooks");
+}
+
+static void test_switch(void)
+{
+    int allowanonymouslogin = -1;
+    int allowapop = -1;
+    int allownewnews = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "allowanonymouslogin: 1\n"
+        /* allowapop: 1 (default) */
+        /* allownewnews: 0 (default) */
+    );
+
+    /* test a value that has been set */
+    allowanonymouslogin = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
+    CU_ASSERT_EQUAL(allowanonymouslogin, 1);
+
+    /* test a value that has been defaulted to 1 */
+    allowapop = config_getswitch(IMAPOPT_ALLOWAPOP);
+    CU_ASSERT_EQUAL(allowapop, 1);
+
+    /* test a value that has been defaulted to 0 */
+    allownewnews = config_getswitch(IMAPOPT_ALLOWNEWNEWS);
+    CU_ASSERT_EQUAL(allownewnews, 0);
+}
+
+static void test_stringlist_value(void)
+{
+    const char *annotation_db = NULL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "annotation_db: skiplist\n"
+    );
+
+    annotation_db = config_getstring(IMAPOPT_ANNOTATION_DB);
+    CU_ASSERT_PTR_NOT_NULL(annotation_db);
+    CU_ASSERT_STRING_EQUAL(annotation_db, "skiplist");
+}
+
+static void test_stringlist_default(void)
+{
+    const char *annotation_db = NULL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* annotation_db: twoskip (default) */
+    );
+
+    annotation_db = config_getstring(IMAPOPT_ANNOTATION_DB);
+    CU_ASSERT_PTR_NOT_NULL(annotation_db);
+    CU_ASSERT_STRING_EQUAL(annotation_db, "twoskip");
+}
+
+static void test_stringlist_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "annotation_db: junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(75, "invalid value 'junk' for annotation_db in line 2");
+}
+
+static void test_enum_value(void)
+{
+    int delete_mode = -1; /* an int, so we can start with a sentinel */
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "delete_mode: immediate\n"
+    );
+
+    delete_mode = config_getenum(IMAPOPT_DELETE_MODE);
+    CU_ASSERT_EQUAL(delete_mode, IMAP_ENUM_DELETE_MODE_IMMEDIATE);
+}
+
+static void test_enum_default(void)
+{
+    int delete_mode = -1; /* an int, so we can start with a sentinel */
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* delete_mode: delayed (default) */
+    );
+
+    delete_mode = config_getenum(IMAPOPT_DELETE_MODE);
+    CU_ASSERT_EQUAL(delete_mode, IMAP_ENUM_DELETE_MODE_DELAYED);
+}
+
+static void test_enum_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "delete_mode: junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(75, "invalid value 'junk' for delete_mode in line 2");
+}
+
+static void test_bitfield_value(void)
+{
+    unsigned long httpmodules = (unsigned long) -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "httpmodules: carddav freebusy jmap\n"
+    );
+
+    httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
+    CU_ASSERT_EQUAL(httpmodules,
+                    IMAP_ENUM_HTTPMODULES_CARDDAV |
+                    IMAP_ENUM_HTTPMODULES_FREEBUSY |
+                    IMAP_ENUM_HTTPMODULES_JMAP);
+}
+
+static void test_bitfield_default(void)
+{
+    unsigned long httpmodules = (unsigned long) -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* httpmodules: "" (default) */
+    );
+
+    httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
+    CU_ASSERT_EQUAL(httpmodules, 0);
+}
+
+static void test_bitfield_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "httpmodules: caldav junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(75, "invalid value 'junk' for httpmodules in line 2");
+}
+
+static void test_magic_configdirectory_value(void)
+{
+    const char *idlesocket = NULL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "idlesocket: {configdirectory}/some/thing\n"
+    );
+
+    idlesocket = config_getstring(IMAPOPT_IDLESOCKET);
+    CU_ASSERT_PTR_NOT_NULL(idlesocket);
+    CU_ASSERT_STRING_EQUAL(idlesocket, DBDIR"/conf/some/thing");
+}
+
+static void test_magic_configdirectory_default(void)
+{
+    const char *idlesocket = NULL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* idlesocket: {configdirectory}/socket/idle (default) */
+    );
+
+    idlesocket = config_getstring(IMAPOPT_IDLESOCKET);
+    CU_ASSERT_PTR_NOT_NULL(idlesocket);
+    CU_ASSERT_STRING_EQUAL(idlesocket, DBDIR"/conf/socket/idle");
+}
+
+/* vim: set ft=c: */
