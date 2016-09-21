@@ -289,10 +289,9 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "idled", 0, 0);
 
-    /* Set inactivity timer (convert from minutes to seconds) */
-    idle_timeout = config_getint(IMAPOPT_TIMEOUT);
-    if (idle_timeout < 30) idle_timeout = 30;
-    idle_timeout *= 60;
+    /* Set inactivity timer (minimum is 30 minutes) */
+    idle_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+    if (idle_timeout < 30 * 60) idle_timeout = 30 * 60;
 
     /* count the number of mailboxes */
     mboxlist_allmbox("", &mbox_count_cb, &nmbox, /*flags*/0);
