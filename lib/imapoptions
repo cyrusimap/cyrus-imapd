@@ -83,6 +83,13 @@ Blank lines and lines beginning with ``#'' are ignored.
 For boolean and enumerated options, the values ``yes'', ``on'', ``t'',
 ``true'' and ``1'' turn the option on, the values ``no'', ``off'',
 ``f'', ``false'' and ``0'' turn the option off.
+.PP
+Duration options take the form of a number followed by a unit, for example
+\fB32m\fR (32 minutes).  Units are \fBd\fR (days), \fBh\fR (hours), \fBm\fR
+(minutes) and \fBs\fR (seconds).  Multiple units can be combined and will
+be summed together, for example \fB1h30m\fR is equivalent to \fB90m\fR.  If
+no unit is specified, an option-specific backward-compatible default unit
+is assumed (documented on an option-by-option basis).
 .SH FIELD DESCRIPTIONS
 .PP
 The sections below detail options that can be placed in the
