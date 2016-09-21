@@ -307,6 +307,7 @@ EXPORTED void config_reset(void)
         if (imapopts[opt].t == OPT_STRING &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
+              imapopts[opt].val.s != imapopts[opt].def.s &&
               !strncasecmp(imapopts[opt].def.s, "{configdirectory}", 17))))
             free((char *)imapopts[opt].val.s);
         memcpy(&imapopts[opt].val,
