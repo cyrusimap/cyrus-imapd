@@ -255,6 +255,8 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
 
+static void strip_vtimezones(icalcomponent *ical);
+
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams,
                             xmlNodePtr inroot, struct propfind_ctx *fctx);
@@ -2737,13 +2739,40 @@ static void add_timezone(icalparameter *param, void *data)
 
     /* Check if this tz is in our new object */
     if (!icalcomponent_get_timezone(irock->new, tzid)) {
-        /* Fetch tz from old object and add to new */
-        icaltimezone *tz = icalcomponent_get_timezone(irock->old, tzid);
-        if (tz) {
-            icalcomponent *comp = icaltimezone_get_component(tz);
-            icalcomponent_add_component(irock->new,
-                                        icalcomponent_new_clone(comp));
+        icalcomponent *vtz = NULL;
+
+        if (irock->old) {
+            /* Fetch tz from old object and add to new */
+            icaltimezone *tz = icalcomponent_get_timezone(irock->old, tzid);
+            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
         }
+        else {
+            /* Fetch tz from our tzdist repository */
+            struct buf buf = BUF_INITIALIZER;
+            const char *path;
+            int fd;
+
+            /* Open and mmap the timezone file */
+            buf_printf(&buf, "%s%s/%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
+            path = buf_cstring(&buf);
+
+            if ((fd = open(path, O_RDONLY)) != -1) {
+                struct buf data = BUF_INITIALIZER;
+                icalcomponent *ical;
+
+                buf_init_mmap(&data, 1, fd, path, MAP_UNKNOWN_LEN, NULL);
+                ical = ical_string_as_icalcomponent(&data);
+                vtz = icalcomponent_get_first_component(ical,
+                                                        ICAL_VTIMEZONE_COMPONENT);
+                icalcomponent_remove_component(ical, vtz);
+                icalcomponent_free(ical);
+                buf_free(&data);
+                close(fd);
+            }
+            buf_free(&buf);
+        }
+
+        if (vtz) icalcomponent_add_component(irock->new, vtz);
     }
 }
 
@@ -5155,6 +5184,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 {
     struct partial_caldata_t *partial = (struct partial_caldata_t *) rock;
     struct caldav_data *cdata = (struct caldav_data *) fctx->data;
+    static unsigned need_tz = 0;
     const char *data = NULL;
     size_t datalen = 0;
     int r = 0;
@@ -5171,23 +5201,38 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         data = fctx->msg_buf.s + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
 
-        if (!icaltime_is_null_time(partial->range.start)) {
-            icalcomponent *comp, *nextcomp;
+        if (need_tz) {
+            if (cdata->comp_flags.tzbyref) {
+                /* Add VTIMEZONE components for known TZIDs */
+                struct import_rock irock = { NULL, NULL };
+                icalcomponent *comp, *next;
+                icalcomponent_kind kind;
 
+                if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
+                ical = fctx->obj;
+                irock.new = ical;
+
+                comp = icalcomponent_get_first_real_component(ical);
+                kind = icalcomponent_isa(comp);
+                for (; comp; comp = next) {
+                    next = icalcomponent_get_next_component(ical, kind);
+                    icalcomponent_foreach_tzid(comp, &add_timezone, &irock);
+                }
+            }
+        }
+        else if (!cdata->comp_flags.tzbyref &&
+                 (namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
+            /* Strip all VTIMEZONE components for known TZIDs */
             if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
             ical = fctx->obj;
 
-            if (!cdata->comp_flags.tzbyref) {
-                /* Strip all VTIMEZONEs */
-                for (comp = icalcomponent_get_first_component(ical,
-                                                              ICAL_VTIMEZONE_COMPONENT);
-                     comp; comp = nextcomp) {
-                    nextcomp = icalcomponent_get_next_component(ical,
-                                                                ICAL_VTIMEZONE_COMPONENT);
-                    icalcomponent_remove_component(ical, comp);
-                    icalcomponent_free(comp);
-                }
-            }
+            strip_vtimezones(ical);
+        }
+
+        if (!icaltime_is_null_time(partial->range.start)) {
+            /* Expand/limit recurrence set */
+            if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
+            ical = fctx->obj;
 
             if (partial->expand) {
                 fctx->obj = expand_caldata(&ical, partial->range);
@@ -5211,6 +5256,12 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     else if (prop) {
         /* Prescreen "property" request - read partial/expand children */
         xmlNodePtr node;
+
+        /* Check for optional CalDAV-Timezones header */
+        const char **hdr =
+            spool_getheader(fctx->txn->req_hdrs, "CalDAV-Timezones");
+        if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
+        else need_tz = 0;
 
         /* Initialize expand to be "empty" */
         partial->range.start = icaltime_null_time();
@@ -7144,8 +7195,8 @@ static int report_fb_query(struct transaction_t *txn,
 
 
 /* Replace TZID aliases with the actual TZIDs */
-void replace_tzid_aliases(icalcomponent *ical,
-                          struct hash_table *tzid_table)
+static void replace_tzid_aliases(icalcomponent *ical,
+                                 struct hash_table *tzid_table)
 {
     icalproperty *prop;
     for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
@@ -7166,6 +7217,47 @@ void replace_tzid_aliases(icalcomponent *ical,
          comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
         replace_tzid_aliases(comp, tzid_table);
     }
+}
+
+
+/* Strip all VTIMEZONE components for known TZIDs */
+static void strip_vtimezones(icalcomponent *ical)
+{
+    struct hash_table tzid_table;
+    icalcomponent *vtz, *next;
+
+    /* Create hash table for TZID aliases */
+    construct_hash_table(&tzid_table, 10, 1);
+
+    for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+         vtz; vtz = next) {
+
+        next = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT);
+
+        icalproperty *prop =
+            icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+        const char *tzid = icalproperty_get_tzid(prop);
+        struct zoneinfo zi;
+
+        if (!zoneinfo_lookup(tzid, &zi)) {
+            if (zi.type == ZI_LINK) {
+                /* Add this alias to our table */
+                hash_insert(tzid, xstrdup(zi.data->s), &tzid_table);
+            }
+            freestrlist(zi.data);
+
+            icalcomponent_remove_component(ical, vtz);
+            icalcomponent_free(vtz);
+        }
+    }
+
+    if (hash_numrecords(&tzid_table)) {
+        /* Replace all TZID aliases with actual TZIDs.
+           Note: This NEEDS to be done, otherwise looking up the
+           builtin timezone will fail on a TZID mismatch. */
+        replace_tzid_aliases(ical, &tzid_table);
+    }
+    free_hash_table(&tzid_table, free);
 }
 
 
@@ -7244,44 +7336,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Remove all VTIMEZONE components for known TZIDs */
     if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
-        struct hash_table tzid_table;
-        icalcomponent *vtz, *next;
-
-        /* Create hash table for TZID aliases */
-        construct_hash_table(&tzid_table, 10, 1);
-
-        for (vtz = icalcomponent_get_first_component(ical,
-                                                     ICAL_VTIMEZONE_COMPONENT);
-             vtz; vtz = next) {
-
-            next = icalcomponent_get_next_component(ical,
-                                                    ICAL_VTIMEZONE_COMPONENT);
-
-            prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
-
-            const char *tzid = icalproperty_get_tzid(prop);
-            struct zoneinfo zi;
-
-            if (!zoneinfo_lookup(tzid, &zi)) {
-                if (zi.type == ZI_LINK) {
-                    /* Add this alias to our table */
-                    hash_insert(tzid, xstrdup(zi.data->s), &tzid_table);
-                }
-                freestrlist(zi.data);
-
-                icalcomponent_remove_component(ical, vtz);
-                icalcomponent_free(vtz);
-            }
-        }
-
-        if (hash_numrecords(&tzid_table)) {
-            /* Replace all TZID aliases with actual TZIDs.
-               XXX  This needs to be done otherwise looking up the
-               builtin timezone will fail on a TZID mismatch. */
-            replace_tzid_aliases(ical, &tzid_table);
-        }
-        free_hash_table(&tzid_table, free);
-
+        strip_vtimezones(ical);
         tzbyref = 1;
     }
 
