@@ -528,11 +528,11 @@ sub normalize_event
     if (not exists $event->{locations}) {
         $event->{locations} = undef;
     }
-    if (not exists $event->{translations}) {
-        $event->{translations} = undef;
+    if (not exists $event->{localizations}) {
+        $event->{localizations} = undef;
     }
-    if (not exists $event->{language}) {
-        $event->{language} = undef;
+    if (not exists $event->{locale}) {
+        $event->{locale} = undef;
     }
     if (not exists $event->{links}) {
         $event->{links} = undef;
@@ -640,7 +640,7 @@ sub test_getcalendarevents_simple
     $self->assert_deep_equals($event->{relatedTo}, ["58ADE31-broken-UID"]);
     $self->assert_str_equals($event->{title}, "yo");
     $self->assert_str_equals($event->{prodId}, "-//Apple Inc.//Mac OS X 10.9.5//EN");
-    $self->assert_str_equals($event->{language}, "en");
+    $self->assert_str_equals($event->{locale}, "en");
     $self->assert_str_equals($event->{description}, "double yo");
     $self->assert_equals($event->{showAsFree}, JSON::true);
     $self->assert_equals($event->{isAllDay}, JSON::false);
@@ -658,13 +658,15 @@ sub test_getcalendarevents_links
     my ($self) = @_;
 
     my ($id, $ical) = $self->icalfile('links');
-    my $uri1 = "http://jmap.io/spec.html#calendar-events";
+    my $uri = "http://jmap.io/spec.html#calendar-events";
 
     my $links = {
-        $uri1 => {
-            href => $uri1,
+        $uri => {
+            href => $uri,
             type => "text/html",
             size => 4480,
+            title => "the spec",
+            rel => "enclosure",
         }
     };
 
@@ -718,6 +720,9 @@ sub test_getcalendarevents_participants
 
     my $event = $self->putandget_vevent($id, $ical);
 
+    $self->assert_not_null($event->{replyTo});
+    $self->assert_str_equals($event->{replyTo}{imip}, "mailto:smithers\@example.com");
+
     $self->assert_not_null($event->{participants});
     $self->assert_num_equals(scalar values %{$event->{participants}}, 5);
     $self->assert_str_equals($event->{participants}{"smithers\@example.com"}{name}, "Monty Burns");
@@ -728,10 +733,11 @@ sub test_getcalendarevents_participants
     $self->assert_str_equals($event->{participants}{"homer\@example.com"}{schedulePriority}, "optional");
     $self->assert_str_equals($event->{participants}{"homer\@example.com"}{email}, "homer\@example.com");
     $self->assert_str_equals($event->{participants}{"homer\@example.com"}{roles}[0], "attendee");
-    $self->assert_str_equals($event->{participants}{"carl\@example.com"}{name}, "Carl Carlson");
-    $self->assert_str_equals($event->{participants}{"carl\@example.com"}{scheduleStatus}, "tentative");
-    $self->assert_str_equals($event->{participants}{"carl\@example.com"}{email}, "carl\@example.com");
-    $self->assert_str_equals($event->{participants}{"carl\@example.com"}{roles}[0], "attendee");
+    $self->assert_str_equals($event->{participants}{"homer\@example.com"}{locationId}, "loc1");
+    $self->assert_str_equals($event->{participants}{"carl"}{name}, "Carl Carlson");
+    $self->assert_str_equals($event->{participants}{"carl"}{scheduleStatus}, "tentative");
+    $self->assert_str_equals($event->{participants}{"carl"}{email}, "carl\@example.com");
+    $self->assert_str_equals($event->{participants}{"carl"}{roles}[0], "attendee");
     $self->assert_str_equals($event->{participants}{"lenny\@example.com"}{name}, "Lenny Leonard");
     $self->assert_str_equals($event->{participants}{"lenny\@example.com"}{scheduleStatus}, "tentative");
     $self->assert_str_equals($event->{participants}{"lenny\@example.com"}{email}, "lenny\@example.com");
@@ -740,6 +746,7 @@ sub test_getcalendarevents_participants
     $self->assert_str_equals($event->{participants}{"larry\@example.com"}{scheduleStatus}, "declined");
     $self->assert_str_equals($event->{participants}{"larry\@example.com"}{email}, "larry\@example.com");
     $self->assert_str_equals($event->{participants}{"larry\@example.com"}{roles}[0], "attendee");
+    $self->assert_str_equals($event->{participants}{"larry\@example.com"}{memberOf}[0], "projectA\@example.com");
     $self->assert_str_equals($event->{status}, "tentative");
 }
 
@@ -754,29 +761,43 @@ sub test_getcalendarevents_recurrence
     $self->assert_not_null($event->{recurrenceRule});
     $self->assert_str_equals($event->{recurrenceRule}{frequency}, "monthly");
     $self->assert_str_equals($event->{recurrenceRule}{rscale}, "gregorian");
-    $self->assert_str_equals($event->{recurrenceRule}{skip}, "omit");
-    $self->assert_str_equals($event->{recurrenceRule}{firstDayOfWeek}, "monday");
     # This assertion is a bit brittle. It depends on the libical-internal
     # sort order for BYDAY
     $self->assert_deep_equals($event->{recurrenceRule}{byDay}, [{
-                "day" => "monday",
+                "day" => "mo",
                 "nthOfPeriod" => 2,
             }, {
-                "day" => "monday",
+                "day" => "mo",
                 "nthOfPeriod" => 1,
             }, {
-                "day" => "tuesday",
+                "day" => "tu",
             }, {
-                "day" => "thursday",
+                "day" => "th",
                 "nthOfPeriod" => -2,
             }, {
-                "day" => "saturday",
+                "day" => "sa",
                 "nthOfPeriod" => -1,
             }, {
-                "day" => "sunday",
+                "day" => "su",
                 "nthOfPeriod" => -3,
             }]);
 }
+
+sub test_getcalendarevents_rdate_period
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('rdate_period');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $o;
+
+   $o = $event->{recurrenceOverrides}->{"2016-03-04T15:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals($o->{duration}, "PT1H");
+}
+
 
 sub test_getcalendarevents_recurrenceoverrides
     :min_version_3_0
@@ -792,36 +813,20 @@ sub test_getcalendarevents_recurrenceoverrides
     $o = $event->{recurrenceOverrides}->{"2016-12-24T20:00:00"};
     $self->assert_not_null($o);
 
-    $o = $event->{recurrenceOverrides}->{"2016-02-03T14:00:00"};
-    $self->assert_not_null($o);
-    $self->assert_str_equals($o->{start}, "2016-02-03T13:00:00");
-    $self->assert_str_equals($o->{timeZone}, "Europe/London");
-
-    $o = $event->{recurrenceOverrides}->{"2016-02-04T14:00:00"};
-    $self->assert_not_null($o);
-    $self->assert_str_equals($o->{start}, "2016-02-04T13:00:00");
-    $self->assert_str_equals($o->{timeZone}, "Etc/UTC");
-
-    $o = $event->{recurrenceOverrides}->{"2016-03-04T16:00:00"};
-    $self->assert_not_null($o);
-    $self->assert_str_equals($o->{duration}, "PT1H");
-
     $self->assert(exists $event->{recurrenceOverrides}->{"2016-02-01T13:00:00"});
     $self->assert_null($event->{recurrenceOverrides}->{"2016-02-01T13:00:00"});
-    $self->assert(exists $event->{recurrenceOverrides}->{"2016-11-01T13:00:00"});
-    $self->assert_null($event->{recurrenceOverrides}->{"2016-11-01T13:00:00"});
 
     $o = $event->{recurrenceOverrides}->{"2016-05-01T13:00:00"};
     $self->assert_not_null($o);
     $self->assert_str_equals($o->{"title"}, "foobarbazbla");
     $self->assert_str_equals($o->{"start"}, "2016-05-01T17:00:00");
     $self->assert_str_equals($o->{"duration"}, "PT2H");
-    $self->assert_str_equals($o->{"translations/de/title"}, "reinerbloedsinn");
     $self->assert_not_null($o->{alerts}{$aid});
 
-
-
-    # diff={"translations/de/title": "reinerbloedsinn", "created": "2016-09-12T16:22:50Z", "duration": "PT1H", "updated": "2016-09-12T16:23:24Z", "showAsFree": false, "title": "foobarbazbla", "start": "2016-09-13T15:00:00"}
+    $o = $event->{recurrenceOverrides}->{"2016-09-01T13:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals($o->{"title"}, "foobarbazblabam");
+    $self->assert(not exists $o->{"start"});
 }
 
 sub test_getcalendarevents_alerts
@@ -830,9 +835,8 @@ sub test_getcalendarevents_alerts
     my ($self) = @_;
 
     my ($id, $ical) = $self->icalfile('alerts');
-    my $aid1 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1";
-    my $aid2 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-2";
 
+    my $aid1 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1";
     my $alert1 = {
         relativeTo => "before-start",
         offset => "PT5M",
@@ -846,15 +850,32 @@ sub test_getcalendarevents_alerts
             textBody => "Your event 'Yep' starts soon.",
         },
     };
+
+    my $aid2 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-2";
     my $alert2 = {
         relativeTo => "after-start",
         offset => "PT1H",
-        action => { type => "display", },
+        action => {
+            type => "display",
+            acknowledged => "2016-09-28T15:00:05Z",
+        },
+    };
+
+    my $aid3 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3";
+    my $alert3 = {
+        relativeTo => "after-start",
+        offset => "PT1H",
+        action => {
+            type => "display",
+            snoozed => "2016-09-28T15:00:05Z",
+        },
     };
 
     my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_str_equals($event->{useDefaultAlerts}, JSON::true);
     $self->assert_deep_equals($event->{alerts}{$aid1}, $alert1);
     $self->assert_deep_equals($event->{alerts}{$aid2}, $alert2);
+    $self->assert_deep_equals($event->{alerts}{$aid3}, $alert3);
 }
 
 sub test_getcalendarevents_locations
@@ -911,19 +932,27 @@ sub test_getcalendarevents_locations_apple
     $self->assert_str_equals($locations[0]{coordinates}, "geo:48.208304,16.371602");
 }
 
-sub test_getcalendarevents_translations
+sub test_getcalendarevents_localizations
     :min_version_3_0
 {
     my ($self) = @_;
 
-    my ($id, $ical) = $self->icalfile('translations');
-    my $lid = "loc1";
+    my ($id, $ical) = $self->icalfile('localizations');
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_str_equals($event->{translations}{de}{title}, "Titel");
-    $self->assert_str_equals($event->{translations}{de}{description}, "Beschreibung");
-    $self->assert_str_equals($event->{translations}{de}{locations}{$lid}{name}, "Am Planet Erde");
-    $self->assert_str_equals($event->{translations}{de}{links}{$lid}{title}, "No such link");
+
+    my $locs = $event->{localizations};
+    $self->assert_not_null($locs);
+
+    $self->assert_str_equals($locs->{de}{title}, "Titel");
+    $self->assert_str_equals($locs->{de}{description}, "Beschreibung");
+    $self->assert_str_equals($locs->{fr}{description}, "legende");
+    $self->assert_str_equals($locs->{de}{"locations/loc1/name"}, "Am Planet Erde");
+    $self->assert_str_equals($locs->{de}{"links/http:~1~1jmap.io~1spec.html#calendar-events/title"}, "die Spezifikation");
+    $self->assert_str_equals($locs->{de}{"alerts/43910EF2-F4D9-43F9-AEDD-1CADC38B05FB/action/subject"}, "Ihr Alarm");
+
+    my $o = $event->{recurrenceOverrides};
+    $self->assert_str_equals($o->{"2016-09-15T11:15:00"}{"localizations/de/title"}, "eine Ausnahme");
 }
 
 sub test_getcalendarevents_infinite_delegates
@@ -1028,7 +1057,7 @@ sub test_setcalendarevents_simple
         "sequence"=> 42,
         "timeZone"=> "Etc/UTC",
         "isAllDay"=> JSON::false,
-        "language" => "en",
+        "locale" => "en",
         "status" => "tentative",
         "description"=> "",
         "showAsFree"=> JSON::false,
@@ -1109,9 +1138,50 @@ sub test_setcalendarevents_endtimezone
             id => $event->{id},
             calendarId => $event->{calendarId},
             locations => $event->{locations},
-
     });
 
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_setcalendarevents_endtimezone_recurrence
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "locations" => {
+            "loc1" => {
+                "timeZone" => "Europe/Berlin",
+                "rel" => "end",
+            },
+        },
+        "isAllDay"=> JSON::false,
+        "description"=> "",
+        "showAsFree"=> JSON::false,
+        "prodId" => "foo",
+        "recurrenceRule" => {
+            "frequency" => "monthly",
+            count => 12,
+        },
+        "recurrenceOverrides" => {
+            "2015-12-07T09:00:00" => {
+                "locations/loc1/timeZone" => "America/New_York",
+            },
+        },
+    };
+
+    my $ret;
+
+    $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarId} = $ret->{calendarId};
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -1134,9 +1204,15 @@ sub test_setcalendarevents_links
         "links" => {
             "http://jmap.io/spec.html#calendar-events" => {
                 href => "http://jmap.io/spec.html#calendar-events",
+                title => "the spec",
             },
-            "https://tools.ietf.org/html/rfc5545" => {
+            "rfc5545" => {
                href => "https://tools.ietf.org/html/rfc5545",
+               rel => "describedby",
+               properties => {
+                   "https://tools.ietf.org/html/rfc4791/" => "the related CalDAV spec",
+                   "https://tools.ietf.org/html/rfc2445/" => undef,
+               },
             },
         },
     };
@@ -1149,30 +1225,13 @@ sub test_setcalendarevents_links
     $self->assert_normalized_event_equals($ret, $event);
 }
 
-sub test_setcalendarevents_translations
+sub test_setcalendarevents_localizations
     :min_version_3_0
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $calid = "Default";
-
-    my $translations = {
-        de => {
-            title => "Titel",
-            description => "Beschreibung",
-            "locations" => {
-                "loc1" => {
-                    name => "Am Planet Erde",
-                },
-            },
-            "links" => {
-                "http://foo.local/" => {
-                    title => "A fooish site",
-                },
-            },
-        },
-    };
 
     my $event =  {
         "calendarId" => $calid,
@@ -1183,7 +1242,42 @@ sub test_setcalendarevents_translations
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
         "showAsFree"=> JSON::false,
-        "translations" => $translations,
+        "alerts" => {
+            "alert1" => {
+                relativeTo => "before-start",
+                offset => "PT5M",
+                "action" => {
+                    type => "email",
+                    to => [{
+                            email => "foo\@local",
+                            name => "",
+                    }],
+                    subject => "A subject",
+                },
+            },
+        },
+        "locations" => {
+            loc1 => { name => "on planet earth" },
+        },
+        "links" => {
+            "http://info.cern.ch/" => {
+                href => "http://info.cern.ch/",
+                title => "the mother of all websites",
+            },
+        },
+        "localizations" => {
+            de => {
+                title => "Titel",
+                description => "Beschreibung",
+                "alerts/alert1/action/subject" => "Betreff",
+                "links/http:~1~1info.cern.ch~1/title" =>
+                    "die Mutter aller Websites",
+            },
+            fr => {
+                description => "la description",
+                "locations/loc1/name" => "sur la planète terre",
+            }
+        },
     };
 
     my $ret = $self->createandget_event($event);
@@ -1191,11 +1285,11 @@ sub test_setcalendarevents_translations
     $event->{calendarId} = $ret->{calendarId};
     $self->assert_normalized_event_equals($ret, $event);
 
-    $event->{translations} = undef;
+    $event->{localizations} = undef;
     $ret = $self->updateandget_event({
             id => $event->{id},
             calendarId => $event->{calendarId},
-            translations => undef,
+            localizations => undef,
     });
     $self->assert_normalized_event_equals($ret, $event);
 }
@@ -1209,28 +1303,27 @@ sub test_setcalendarevents_locations
     my $calid = "Default";
 
     my $locations = {
-        locA => {
-            "name" => "location A",
-            "address" => {
-                "street" => "107 a street",
-                "locality" => "a town",
-                "region" => "",
-                "postcode" => "4321",
-                "country" => "republic of a",
-            },
-        },
-        locB => {
-            "name" => "location B",
-            "rel" => "start",
-            "uri" => "skype:username",
-        },
-        locC => {
-            "coordinates" => "geo:48.208304,16.371602",
-            "name" => "a place in Vienna",
-        },
-        locD => {
-            "coordinates" => "geo:48.208304,16.371602",
-        },
+	    locA => {
+		    "name" => "location A",
+		    "address" => {
+			    "street" => "107 a street",
+			    "locality" => "a town",
+			    "region" => "",
+			    "postcode" => "4321",
+			    "country" => "republic of a",
+		    },
+	    },
+	    locB => {
+		    "name" => "location B",
+		    "uri" => "skype:username",
+	    },
+	    locC => {
+		    "coordinates" => "geo:48.208304,16.371602",
+		    "name" => "a place in Vienna",
+	    },
+	    locD => {
+		    "coordinates" => "geo:48.208304,16.371602",
+	    },
     };
 
     my $event =  {
@@ -1262,16 +1355,15 @@ sub test_setcalendarevents_recurrence
     my $recurrence = {
         frequency => "monthly",
         interval => 2,
-        firstDayOfWeek => "sunday",
+        firstDayOfWeek => "su",
         count => 1024,
         byDay => [{
-                day => "monday",
+                day => "mo",
                 nthOfPeriod => -2,
             }, {
-                day => "saturday",
+                day => "sa",
         }],
     };
-
 
     my $event =  {
         "calendarId" => $calid,
@@ -1288,7 +1380,79 @@ sub test_setcalendarevents_recurrence
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
-    $recurrence->{skip} = "omit";
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_setcalendarevents_recurrenceoverrides
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $recurrence = {
+        frequency => "monthly",
+        count => 12,
+    };
+
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2016-01-01T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "isAllDay"=> JSON::false,
+        "showAsFree"=> JSON::false,
+        "locations" => {
+            locA => {
+                "name" => "location A",
+                "uri" => "skype:username",
+            },
+            locB => {
+                "coordinates" => "geo:48.208304,16.371602",
+            },
+        },
+        "links" => {
+            "http://jmap.io/spec.html#calendar-events" => {
+                href => "http://jmap.io/spec.html#calendar-events",
+                title => "the spec",
+            },
+            "https://tools.ietf.org/html/rfc5545" => {
+                href => "https://tools.ietf.org/html/rfc5545",
+            },
+        },
+        "recurrenceRule" => $recurrence,
+        "recurrenceOverrides" => {
+            "2016-02-01T09:00:00" => undef,
+            "2016-02-03T09:00:00" => {},
+            "2016-04-01T10:00:00" => {
+                "description" => "don't come in without an April's joke!",
+                "locations/locA/name" => "location A exception",
+                "links/https:~1~1tools.ietf.org~1html~1rfc5545/title" => "RFC 5545",
+            },
+            "2016-05-01T10:00:00" => {
+                "title" => "Labour Day",
+            },
+            "2016-06-01T10:00:00" => {
+                showAsFree => JSON::true,
+            },
+        },
+    };
+
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarId} = $ret->{calendarId};
+    $self->assert_normalized_event_equals($ret, $event);
+
+    $ret = $self->updateandget_event({
+            id => $event->{id},
+            calendarId => $event->{calendarId},
+            title => "updated title",
+    });
+    $event->{title} = "updated title";
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -1305,11 +1469,13 @@ sub test_setcalendarevents_participants
             name => "",
             email => "foo\@local",
             roles => ["owner"],
+            locationId => "locX",
         },
-        "monty\@local" => {
+        "monty" => {
             name => "Monty Burns",
             email => "monty\@local",
             roles => ["attendee"],
+            memberOf => ["bla\@local"],
         },
     };
 
@@ -1323,16 +1489,16 @@ sub test_setcalendarevents_participants
         "isAllDay"=> JSON::false,
         "showAsFree"=> JSON::false,
         "status" => "confirmed",
-        "replyTo" => "foo\@local",
+        "replyTo" => { imip => "mailto:foo\@local" },
         "participants" => $participants,
     };
 
     my $ret = $self->createandget_event($event);
-
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
 
-    $participants->{"monty\@local"}{scheduleStatus} = "needs-action";
+    $participants->{"monty"}{scheduleStatus} = "needs-action";
+    $participants->{"foo\@local"}{scheduleStatus} = "needs-action";
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -1356,12 +1522,58 @@ sub test_setcalendarevents_alerts
                     }],
                 subject => "foo",
                 textBody => "bar",
+                acknowledged => "2015-11-07T08:57:00Z",
             },
         },
         alert2 => {
             relativeTo => "after-start",
             offset => "PT1H",
-            action => { type => "display", },
+            action => {
+                type => "display",
+                snoozed => "2015-11-07T10:05:00Z",
+            },
+        },
+    };
+
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT2H",
+        "timeZone" => "Europe/London",
+        "isAllDay"=> JSON::false,
+        "showAsFree"=> JSON::false,
+        "status" => "confirmed",
+        "alerts" => $alerts,
+        "useDefaultAlerts" => JSON::true,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarId} = $ret->{calendarId};
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_setcalendarevents_participantid
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $participants = {
+        "foo\@local" => {
+            name => "",
+            email => "foo\@local",
+            roles => ["attendee"],
+            locationId => "locX",
+        },
+        "you" => {
+            name => "Cassandane",
+            email => "cassandane\@example.com",
+            roles => ["owner"],
         },
     };
 
@@ -1375,14 +1587,20 @@ sub test_setcalendarevents_alerts
         "isAllDay"=> JSON::false,
         "showAsFree"=> JSON::false,
         "status" => "confirmed",
-        "alerts" => $alerts,
+        "replyTo" => { imip => "mailto:cassandane\@example.com" },
+        "participants" => $participants,
     };
 
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
+    $event->{participantId} = 'you';
+
+    $participants->{"you"}{scheduleStatus} = "needs-action";
+    $participants->{"foo\@local"}{scheduleStatus} = "needs-action";
     $self->assert_normalized_event_equals($ret, $event);
 }
+
 
 sub test_setcalendarevents_isallday
     :min_version_3_0
@@ -1793,9 +2011,8 @@ sub test_setcalendarevents_caldav
                             "showAsFree" => JSON::false,
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-06T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-07T00:00:00",
-                            "endTimeZone" => undef
+                            "duration" => "P1D",
+                            "timeZone" => undef,
                         }
                     }}, "R1"]]);
     my $id = $res->[0][1]{created}{"#1"}{id};
@@ -1862,9 +2079,8 @@ EOF
                             "showAsFree" => JSON::false,
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-10T00:00:00",
-                            "startTimeZone" => undef,
-                            "end" => "2015-10-11T00:00:00",
-                            "endTimeZone" => undef
+                            "duration" => "P1D",
+                            "timeZone" => undef,
                         }
                     }}, "R1"]]);
 
@@ -1932,7 +2148,7 @@ sub test_setcalendarevents_schedule_request
                             "start" => "2015-10-06T16:45:00",
                             "timeZone" => "Australia/Melbourne",
                             "duration" => "PT1H",
-                            "replyTo" => "cassandane\@example.com",
+                            "replyTo" => { imip => "mailto:cassandane\@example.com"},
                             "participants" => $participants,
                         }
                     }}, "R1"]]);
@@ -1947,19 +2163,6 @@ sub test_setcalendarevents_schedule_request
 
     $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
     $self->assert($ical =~ "METHOD:REQUEST");
-
-    my $attendee;
-    # Line breaks are a bit brittle due to iCalendar line folding
-    my @lines = split /\r\n/, $ical;
-    foreach my $line (@lines) {
-        xlog "$line";
-        if ($line =~ /ATTENDEE/) {
-            $attendee = $line;
-            last;
-        }
-    }
-    $self->assert_not_null($attendee);
-    $self->assert($attendee =~ /PARTSTAT=NEEDS-ACTION/);
 }
 
 sub test_setcalendarevents_schedule_reply
@@ -1994,7 +2197,7 @@ sub test_setcalendarevents_schedule_reply
                             "start" => "2015-10-06T16:45:00",
                             "timeZone" => "Australia/Melbourne",
                             "duration" => "PT1H",
-                            "replyTo" => "bugs\@example.com",
+                            "replyTo" => { imip => "mailto:bugs\@example.com" },
                             "participants" => $participants,
                         }
                     }}, "R1"]]);
@@ -2007,7 +2210,7 @@ sub test_setcalendarevents_schedule_reply
     $participants->{att}->{scheduleStatus} = "tentative";
     $res = $jmap->Request([['setCalendarEvents', { update => {
                         "$id" => {
-                            replyTo => "bugs\@example.com",
+                            replyTo => { imip => "mailto:bugs\@example.com" },
                             participants => $participants,
                         }
                     }}, "R1"]]);
@@ -2022,19 +2225,6 @@ sub test_setcalendarevents_schedule_reply
 
     $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
     $self->assert($ical =~ "METHOD:REPLY");
-
-    my $attendee;
-    # Line breaks are a bit brittle due to iCalendar line folding
-    my @lines = split /\r\n/, $ical;
-    foreach my $line (@lines) {
-        xlog "$line";
-        if ($line =~ /ATTENDEE/) {
-            $attendee = $line;
-            last;
-        }
-    }
-    $self->assert_not_null($attendee);
-    $self->assert($attendee =~ /PARTSTAT=TENTATIVE/);
 }
 
 sub test_setcalendarevents_schedule_cancel
@@ -2064,7 +2254,9 @@ sub test_setcalendarevents_schedule_cancel
                             "start" => "2015-10-06T16:45:00",
                             "timeZone" => "Australia/Melbourne",
                             "duration" => "PT15M",
-                            "replyTo" => "cassandane\@example.com",
+                            "replyTo" => {
+                                imip => "mailto:cassandane\@example.com",
+                            },
                             "participants" => {
                                 "org" => {
                                     "name" => "Cassandane",
