@@ -1304,7 +1304,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
 
     resp = xmlNewChild(fctx->root, fctx->ns[NS_DAV], BAD_CAST "response", NULL);
     if (!resp) {
-        fctx->err->desc = "Unable to add response XML element";
+        fctx->txn->error.desc = "Unable to add response XML element";
         *fctx->ret = HTTP_SERVER_ERROR;
         return HTTP_SERVER_ERROR;
     }
@@ -1455,7 +1455,7 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
     if (!propstat) {
         /* Prescreen "property" request */
         if (!mime->content_type) {
-            fctx->err->precond = precond;
+            fctx->txn->error.precond = precond;
             ret = *fctx->ret = HTTP_FORBIDDEN;
         }
     }
@@ -1706,7 +1706,7 @@ int proppatch_restype(xmlNodePtr prop, unsigned set,
     const char *coltype = (const char *) rock;
     unsigned precond = 0;
 
-    if (set && (pctx->meth != METH_PROPPATCH)) {
+    if (set && (pctx->txn->meth != METH_PROPPATCH)) {
         /* "Writeable" for MKCOL/MKCALENDAR only */
         xmlNodePtr cur;
 
@@ -2828,7 +2828,7 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     struct buf value = BUF_INITIALIZER;
     int r;
 
-    if (pctx->req_tgt->resource)
+    if (pctx->txn->req_tgt.resource)
         return proppatch_toresource(prop, set, pctx, propstat, NULL);
 
     buf_reset(&pctx->buf);
@@ -3110,11 +3110,11 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
             unsigned set = 0;
 
             if (!xmlStrcmp(instr->name, BAD_CAST "set")) set = 1;
-            else if ((pctx->meth == METH_PROPPATCH) &&
+            else if ((pctx->txn->meth == METH_PROPPATCH) &&
                      !xmlStrcmp(instr->name, BAD_CAST "remove")) set = 0;
             else {
                 syslog(LOG_INFO, "Unknown PROPPATCH instruction");
-                pctx->err->desc = "Unknown PROPPATCH instruction";
+                pctx->txn->error.desc = "Unknown PROPPATCH instruction";
                 return HTTP_BAD_REQUEST;
             }
 
@@ -3122,7 +3122,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
             for (prop = instr->children;
                  prop && prop->type != XML_ELEMENT_NODE; prop = prop->next);
             if (!prop || xmlStrcmp(prop->name, BAD_CAST "prop")) {
-                pctx->err->desc = "Missing prop element";
+                pctx->txn->error.desc = "Missing prop element";
                 return HTTP_BAD_REQUEST;
             }
 
@@ -5124,14 +5124,12 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         outdoc = root->doc;
 
         /* Populate our proppatch context */
-        pctx.req_tgt = &txn->req_tgt;
-        pctx.meth = txn->meth;
+        pctx.txn = txn;
         pctx.mailbox = mailbox;
         pctx.lprops = mparams->propfind.lprops;
         pctx.root = root;
         pctx.ns = ns;
         pctx.tid = NULL;
-        pctx.err = &txn->error;
         pctx.ret = &r;
 
         /* Execute the property patch instructions */
@@ -5403,7 +5401,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
         syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
                mboxname, error_message(r));
-        fctx->err->desc = error_message(r);
+        fctx->txn->error.desc = error_message(r);
         *fctx->ret = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -5597,9 +5595,9 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     outdoc = root->doc;
 
     /* Populate our propfind context */
+    fctx.txn = txn;
     fctx.req_tgt = &txn->req_tgt;
     fctx.prefer |= get_preferences(txn);
-    fctx.req_hdrs = txn->req_hdrs;
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
@@ -5620,7 +5618,6 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.root = root;
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
-    fctx.err = &txn->error;
     fctx.ret = &ret;
 
     /* Parse the list of properties and build a list of callbacks */
@@ -5872,15 +5869,13 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     xmlNewChild(resp, NULL, BAD_CAST "href", BAD_CAST txn->req_tgt.path);
 
     /* Populate our proppatch context */
-    pctx.req_tgt = &txn->req_tgt;
-    pctx.meth = txn->meth;
+    pctx.txn = txn;
     pctx.mailbox = mailbox;
     pctx.record = NULL;
     pctx.lprops = pparams->propfind.lprops;
     pctx.root = resp;
     pctx.ns = ns;
     pctx.tid = NULL;
-    pctx.err = &txn->error;
     pctx.ret = &r;
 
     if (txn->req_tgt.resource) {
@@ -7069,7 +7064,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
             /* Parse the URI */
             uri = parse_uri(METH_REPORT, (const char *) href,
-                            1 /* path required */, &fctx->err->desc);
+                            1 /* path required */, &fctx->txn->error.desc);
             xmlFree(href);
             if (!uri) {
                 ret = HTTP_FORBIDDEN;
@@ -7080,7 +7075,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             memset(&tgt, 0, sizeof(struct request_target_t));
             tgt.namespace = txn->req_tgt.namespace;
 
-            r = rparams->parse_path(uri->path, &tgt, &fctx->err->desc);
+            r = rparams->parse_path(uri->path, &tgt, &fctx->txn->error.desc);
             xmlFreeURI(uri);
             if (r) {
                 ret = r;
@@ -7200,25 +7195,25 @@ int report_sync_col(struct transaction_t *txn,
                 if (r < 2 || r > 3 ||
                     (uidvalidity != mailbox->i.uidvalidity) ||
                     (syncmodseq > highestmodseq)) {
-                    fctx->err->desc = "Invalid sync-token";
+                    fctx->txn->error.desc = "Invalid sync-token";
                 }
                 else if (r == 3) {
                     /* Previous partial read token */
                     if (basemodseq > highestmodseq) {
-                        fctx->err->desc = "Invalid sync-token";
+                        fctx->txn->error.desc = "Invalid sync-token";
                     }
                     else if (basemodseq < mailbox->i.deletedmodseq) {
-                        fctx->err->desc = "Stale sync-token";
+                        fctx->txn->error.desc = "Stale sync-token";
                     }
                 }
                 else {
                     /* Regular token */
                     if (syncmodseq < mailbox->i.deletedmodseq) {
-                        fctx->err->desc = "Stale sync-token";
+                        fctx->txn->error.desc = "Stale sync-token";
                     }
                 }
 
-                if (fctx->err->desc) {
+                if (fctx->txn->error.desc) {
                     /* DAV:valid-sync-token */
                     txn->error.precond = DAV_SYNC_TOKEN;
                     ret = HTTP_FORBIDDEN;
@@ -7227,13 +7222,13 @@ int report_sync_col(struct transaction_t *txn,
             else if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
                 (str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
                 if (!strcmp((char *) str, "infinity")) {
-                    fctx->err->desc =
+                    fctx->txn->error.desc =
                         "This server DOES NOT support infinite depth requests";
                     ret = HTTP_SERVER_ERROR;
                 }
                 else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
                          (fctx->depth != 1)) {
-                    fctx->err->desc = "Illegal sync-level";
+                    fctx->txn->error.desc = "Illegal sync-level";
                     ret = HTTP_BAD_REQUEST;
                 }
             }
@@ -7257,7 +7252,7 @@ int report_sync_col(struct transaction_t *txn,
 
     /* Check Depth */
     if (!fctx->depth) {
-        fctx->err->desc = "Illegal sync-level";
+        fctx->txn->error.desc = "Illegal sync-level";
         ret = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -7323,7 +7318,7 @@ int report_sync_col(struct transaction_t *txn,
 
         if (!nresp) {
             /* DAV:number-of-matches-within-limits */
-            fctx->err->desc = "Unable to truncate results";
+            fctx->txn->error.desc = "Unable to truncate results";
             txn->error.precond = DAV_OVER_LIMIT;
             ret = HTTP_NO_STORAGE;
             goto done;
@@ -7429,7 +7424,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     fctx->prefer &= ~PREFER_NOROOT;
     if (href) {
         /* Parse the URL */
-        parse_path(href, &req_tgt, &fctx->err->desc);
+        parse_path(href, &req_tgt, &fctx->txn->error.desc);
 
         fctx->req_tgt = &req_tgt;
     }
@@ -7452,7 +7447,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
             if ((r = mailbox_open_irl(fctx->req_tgt->mbentry->name, &mailbox))) {
                 syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
                        fctx->req_tgt->mbentry->name, error_message(r));
-                fctx->err->desc = error_message(r);
+                fctx->txn->error.desc = error_message(r);
                 ret = HTTP_SERVER_ERROR;
                 goto done;
             }
@@ -7562,7 +7557,8 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
 
     /* Allowed properties are for principals, NOT the request URL */
     memset(&req_tgt, 0, sizeof(struct request_target_t));
-    principal_parse_path(buf_cstring(&fctx->buf), &req_tgt, &fctx->err->desc);
+    principal_parse_path(buf_cstring(&fctx->buf), &req_tgt,
+                         &fctx->txn->error.desc);
     fctx->req_tgt = &req_tgt;
     fctx->lprops = principal_props;
     fctx->proc_by_resource = &propfind_by_resource;
@@ -7978,10 +7974,10 @@ int meth_report(struct transaction_t *txn, void *params)
     }
 
     /* Populate our propfind context */
+    fctx.txn = txn;
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
-    fctx.req_hdrs = txn->req_hdrs;
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
@@ -7995,7 +7991,6 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.root = outroot;
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
-    fctx.err = &txn->error;
     fctx.ret = &ret;
 
     /* Parse the list of properties and build a list of callbacks */
@@ -9989,11 +9984,11 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
     tgt.namespace = &namespace_notify;
     notify_parse_path(buf_cstring(&my_fctx.buf), &tgt, &err);
 
+    my_fctx.txn = fctx->txn;
     my_fctx.req_tgt = &tgt;
     my_fctx.mode = fctx->mode;
     my_fctx.depth = fctx->depth;
     my_fctx.prefer = fctx->prefer & PREFER_MIN;
-    my_fctx.req_hdrs = fctx->req_hdrs;
     my_fctx.userid = httpd_userid;
     my_fctx.userisadmin = httpd_userisadmin;
     my_fctx.authstate = httpd_authstate;
@@ -10013,7 +10008,6 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
     my_fctx.root = fctx->root;
     my_fctx.ns = fctx->ns;
     my_fctx.ns_table = fctx->ns_table;
-    my_fctx.err = fctx->err;
     my_fctx.ret = fctx->ret;
 
     /* Parse the list of properties and build a list of callbacks */

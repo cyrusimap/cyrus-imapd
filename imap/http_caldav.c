@@ -5447,7 +5447,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
         xmlFree(attr);
     }
 
-    if (set && (force || (pctx->meth != METH_PROPPATCH))) {
+    if (set && (force || (pctx->txn->meth != METH_PROPPATCH))) {
         /* "Writeable" for MKCOL/MKCALENDAR only */
         xmlNodePtr cur;
         unsigned long types = 0;
@@ -5716,7 +5716,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
                                struct propstat propstat[],
                                void *rock __attribute__((unused)))
 {
-    if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         const xmlChar *value = NULL;
 
         if (set) {
@@ -5837,7 +5837,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
                               struct propstat propstat[],
                               void *rock __attribute__((unused)))
 {
-    if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         xmlChar *type, *ver = NULL, *freeme = NULL;
         const char *tz = NULL;
         struct mime_type_t *mime;
@@ -5998,7 +5998,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
                                   struct propstat propstat[],
                                   void *rock __attribute__((unused)))
 {
-    if (config_allowsched && pctx->req_tgt->flags == TGT_SCHED_INBOX) {
+    if (config_allowsched && pctx->txn->req_tgt.flags == TGT_SCHED_INBOX) {
         const char *avail = NULL;
         xmlChar *type, *ver = NULL, *freeme = NULL;
         struct mime_type_t *mime;
@@ -6099,7 +6099,7 @@ static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
         node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                             name, ns, NULL, 0);
 
-        http_proto_host(fctx->req_hdrs, &proto, &host);
+        http_proto_host(fctx->txn->req_hdrs, &proto, &host);
 
         buf_reset(&fctx->buf);
         buf_printf(&fctx->buf, "%s://%s%s",
@@ -6181,7 +6181,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 {
 #ifdef HAVE_TZ_BY_REF
     if ((namespace_calendar.allow & ALLOW_CAL_NOTZ) &&
-        pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+        pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         xmlChar *freeme = NULL;
         const char *tzid = NULL;
         unsigned valid = 1;
@@ -7519,6 +7519,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
 
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
+    fctx.txn = txn;
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
     fctx.userid = httpd_userid;
@@ -7526,7 +7527,6 @@ static int meth_get_head_fb(struct transaction_t *txn,
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
     fctx.filter_crit = &fbfilter;
-    fctx.err = &txn->error;
     fctx.ret = &ret;
 
     cal = busytime_query_local(txn, &fctx, txn->req_tgt.mbentry->name,

@@ -774,6 +774,7 @@ int sched_busytime_query(struct transaction_t *txn,
     calfilter.flags = CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
+    fctx.txn = txn;
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
     fctx.userid = httpd_userid;
@@ -781,7 +782,6 @@ int sched_busytime_query(struct transaction_t *txn,
     fctx.authstate = org_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
     fctx.filter_crit = &calfilter;
-    fctx.err = &txn->error;
     fctx.ret = &ret;
 
     /* Create hash table for any remote attendee servers */

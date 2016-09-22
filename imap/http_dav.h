@@ -303,11 +303,11 @@ struct fctx_flags_t {
 };
 
 struct propfind_ctx {
-    struct request_target_t *req_tgt;   /* parsed request target URL */
+    struct transaction_t *txn;          /* request transaction */
+    struct request_target_t *req_tgt;   /* parsed target URL */
     unsigned mode;                      /* none, allprop, propname, prop */
     unsigned depth;                     /* 0 = root, 1 = calendar, 2 = resrc */
     unsigned prefer;                    /* bitmask of client preferences */
-    hdrcache_t req_hdrs;                /* Cached HTTP headers */
     const char *userid;                 /* userid client has logged in as */
     int userisadmin;                    /* is userid an admin */
     struct auth_state *authstate;       /* authorization state for userid */
@@ -336,7 +336,6 @@ struct propfind_ctx {
     xmlNsPtr *ns;                       /* Array of our known namespaces */
     struct hash_table *ns_table;        /* Table of all ns attached to resp */
     unsigned prefix_count;              /* Count of new ns added to resp */
-    struct error_t *err;                /* Error info to pass up to caller */
     int *ret;                           /* Return code to pass up to caller */
     struct fctx_flags_t flags;          /* Return flags for this propfind */
     struct buf buf;                     /* Working buffer */
@@ -345,15 +344,13 @@ struct propfind_ctx {
 
 /* Context for patching (writing) properties */
 struct proppatch_ctx {
-    struct request_target_t *req_tgt;   /* parsed request target URL */
-    unsigned meth;                      /* requested Method */
+    struct transaction_t *txn;          /* request transaction */
     struct mailbox *mailbox;            /* mailbox related to the collection */
     struct index_record *record;        /* record of the specific resource */
     const struct prop_entry *lprops;    /* Array of known "live" properties */
     xmlNodePtr root;                    /* root node to add to XML tree */
     xmlNsPtr *ns;                       /* Array of our supported namespaces */
     struct txn *tid;                    /* Transaction ID for annot writes */
-    struct error_t *err;                /* Error info to pass up to caller */
     int *ret;                           /* Return code to pass up to caller */
     struct buf buf;                     /* Working buffer */
 };
