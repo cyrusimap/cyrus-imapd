@@ -3062,10 +3062,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 }
 
 
-EXPORTED void keepalive_response(void)
+EXPORTED void keepalive_response(struct transaction_t *txn)
 {
     if (gotsigalrm) {
-        response_header(HTTP_CONTINUE, NULL);
+        response_header(HTTP_PROCESSING, txn);
         alarm(httpd_keepalive);
     }
 }

@@ -6612,7 +6612,7 @@ static int busytime_by_resource(void *rock, void *data)
     struct freebusy_filter *fbfilter =
         (struct freebusy_filter *) fctx->filter_crit;
 
-    keepalive_response();
+    keepalive_response(fctx->txn);
 
     if (!cdata->dav.imap_uid) return 0;
 

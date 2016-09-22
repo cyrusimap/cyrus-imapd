@@ -5189,7 +5189,7 @@ int propfind_by_resource(void *rock, void *data)
     size_t len;
     int r = 0, ret = 0;
 
-    keepalive_response();
+    keepalive_response(fctx->txn);
 
     /* Append resource name to URL path */
     if (!fctx->req_tgt->resource) {
