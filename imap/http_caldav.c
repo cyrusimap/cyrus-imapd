@@ -1355,7 +1355,7 @@ static void end_icalendar(struct buf *buf)
     buf_setcstr(buf, "END:VCALENDAR\r\n");
 }
 
-static int dump_calendar(struct transaction_t *txn, int rights)
+static int dump_calendar(struct transaction_t *txn)
 {
     int ret = 0, r, precond;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -1369,15 +1369,6 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     struct buf attrib = BUF_INITIALIZER;
     const char **hdr, *sep;
     struct mime_type_t *mime = NULL;
-
-    /* Check rights */
-    if ((rights & DACL_READ) != DACL_READ) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_READ;
-        return HTTP_NO_PRIVS;
-    }
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
@@ -1683,9 +1674,9 @@ int list_tzid_cb(const char *tzid,
 
 
 /* Create a HTML document listing all calendars available to the user */
-static int list_calendars(struct transaction_t *txn, int rights)
+static int list_calendars(struct transaction_t *txn)
 {
-    int ret = 0, precond;
+    int ret = 0, precond, rights;
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     time_t lastmod;
@@ -1697,15 +1688,6 @@ static int list_calendars(struct transaction_t *txn, int rights)
     const char *host = NULL;
     const struct cal_comp_t *comp;
 #include "imap/http_caldav_js.h"
-
-    /* Check rights */
-    if ((rights & DACL_READ) != DACL_READ) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_READ;
-        return HTTP_NO_PRIVS;
-    }
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -1771,6 +1753,9 @@ static int list_calendars(struct transaction_t *txn, int rights)
 
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
+
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
 
     if (rights & DACL_MKCOL) {
         /* Add "create" form */
@@ -1992,7 +1977,7 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data)
 {
-    int r, rights;
+    int r;
 
     if (!(txn->req_tgt.collection || txn->req_tgt.userid))
         return HTTP_NO_CONTENT;
@@ -2071,17 +2056,13 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
     /* Local Mailbox */
 
-    /* Check ACL for current user */
-    rights = txn->req_tgt.mbentry->acl ?
-        cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
-
     if (txn->req_tgt.collection) {
         /* Download an entire calendar collection */
-        return dump_calendar(txn, rights);
+        return dump_calendar(txn);
     }
     else if (txn->req_tgt.userid) {
         /* GET a list of calendars under calendar-home-set */
-        return list_calendars(txn, rights);
+        return list_calendars(txn);
     }
 
     /* Unknown action */

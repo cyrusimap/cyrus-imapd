@@ -4589,6 +4589,16 @@ int meth_get_head(struct transaction_t *txn, void *params)
         return HTTP_NO_CONTENT;
     }
 
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    if ((rights & DACL_READ) != DACL_READ) {
+        /* DAV:need-privileges */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = DACL_READ;
+        return HTTP_NO_PRIVS;
+    }
+
     if (!txn->req_tgt.resource) {
         /* Do any collection processing */
         if (gparams->get) return gparams->get(txn, NULL, NULL, NULL);
@@ -4604,16 +4614,6 @@ int meth_get_head(struct transaction_t *txn, void *params)
             mime = get_accept_type(hdr, gparams->mime_types);
         else mime = gparams->mime_types;
         if (!mime) return HTTP_NOT_ACCEPTABLE;
-    }
-
-    /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
-    if (!(rights & DACL_READ)) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_READ;
-        return HTTP_NO_PRIVS;
     }
 
     if (txn->req_tgt.mbentry->server) {
