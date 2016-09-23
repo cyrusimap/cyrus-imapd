@@ -4563,7 +4563,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     struct meth_params *gparams = (struct meth_params *) params;
     const char **hdr;
     struct mime_type_t *mime = NULL;
-    int ret = 0, r, precond, rights;
+    int ret = 0, r = 0, precond, rights;
     const char *data = NULL;
     unsigned long datalen = 0, offset = 0;
     struct buf msg_buf = BUF_INITIALIZER;
@@ -4653,11 +4653,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     if (ddata->imap_uid) {
         /* Mapped URL - Fetch index record for the resource */
         r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
-        if (r) {
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
+        if (r) goto done;
 
         txn->flags.ranges = 1;
         etag = message_guid_encode(&record.guid);
@@ -4694,11 +4690,10 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
     /* Do any special processing */
     if (gparams->get) {
-        r = gparams->get(txn, mailbox, &record, ddata);
-        if (r != HTTP_CONTINUE) {
-            ret = r;
-            goto done;
-        }
+        ret = gparams->get(txn, mailbox, &record, ddata);
+        if (ret != HTTP_CONTINUE) goto done;
+
+        ret = 0;
     }
 
     if (record.uid) {
