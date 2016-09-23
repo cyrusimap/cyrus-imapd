@@ -3190,7 +3190,8 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 {
     unsigned is_dynamic = code ? (txn->flags.te & TE_CHUNKED) : 1;
     unsigned outlen = len, offset = 0;
-    int do_md5 = config_getswitch(IMAPOPT_HTTPCONTENTMD5);
+    int do_md5 = (txn->meth == METH_HEAD) ? 0 :
+        config_getswitch(IMAPOPT_HTTPCONTENTMD5);
     static MD5_CTX ctx;
     static unsigned char md5[MD5_DIGEST_LENGTH];
 
